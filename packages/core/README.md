@@ -1,4 +1,4 @@
-# @gocell/core
+# @rss/core
 
 Shared application shell and design foundation: tokens, theme, i18n,
 accessibility primitives, empty navigation, and command palette.

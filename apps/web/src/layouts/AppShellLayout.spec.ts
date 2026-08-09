@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { mount } from '@vue/test-utils'
 import AppShellLayout from './AppShellLayout.vue'
 
-vi.mock('@gocell/core', () => ({
+vi.mock('@rss/core', () => ({
   AppShell: { name: 'AppShell', template: '<div data-testid="shell"><slot /></div>' },
 }))
 vi.mock('../composables/useGlobalShortcuts', () => ({ useGlobalShortcuts: vi.fn() }))

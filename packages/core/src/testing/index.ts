@@ -1,5 +1,5 @@
 /**
- * @gocell/core/testing — 测试工具（仅在测试代码中引用，不进入 production bundle）
+ * @rss/core/testing — 测试工具（仅在测试代码中引用，不进入 production bundle）
  *
  * 提供：
  * - createTestPinia: 基于 @pinia/testing createTestingPinia 的工厂，统一默认配置
@@ -7,7 +7,7 @@
  *
  * 使用：
  *   import { vi } from 'vitest'
- *   import { createTestPinia, createTestRouter } from '@gocell/core/testing'
+ *   import { createTestPinia, createTestRouter } from '@rss/core/testing'
  *   const pinia = createTestPinia({ createSpy: vi.fn })
  */
 

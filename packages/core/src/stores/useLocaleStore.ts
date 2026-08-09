@@ -3,7 +3,7 @@ import { ref, watch } from 'vue'
 
 export type AppLocale = 'zh-CN' | 'en-US'
 
-const STORAGE_KEY = 'gocell-locale'
+const STORAGE_KEY = 'rss-locale'
 
 function isAppLocale(value: unknown): value is AppLocale {
   return value === 'zh-CN' || value === 'en-US'
@@ -18,9 +18,9 @@ function readInitialLocale(): AppLocale {
 /**
  * useLocaleStore — manages application locale state.
  *
- * Persists to localStorage under 'gocell-locale'.
+ * Persists to localStorage under 'rss-locale'.
  * Drives vue-i18n locale + AntD ConfigProvider locale via watchers
- * registered by createGocellI18n() / App.vue.
+ * registered by createRssI18n() / App.vue.
  *
  * Store id: 'core.locale' (point-namespaced to avoid DevTools conflicts)
  */

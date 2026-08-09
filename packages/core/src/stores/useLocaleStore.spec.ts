@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useLocaleStore } from './useLocaleStore'
 
-const STORAGE_KEY = 'gocell-locale'
+const STORAGE_KEY = 'rss-locale'
 
 describe('useLocaleStore', () => {
   beforeEach(() => {

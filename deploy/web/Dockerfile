@@ -21,7 +21,7 @@ RUN pnpm install --frozen-lockfile
 
 # 依赖层落定后，复制源码并构建
 COPY . .
-RUN pnpm -F @gocell/web build
+RUN pnpm -F @rss/web build
 
 # ── 运行阶段 ───────────────────────────────────────────────────────────────
 FROM nginx:1.27-alpine AS runtime

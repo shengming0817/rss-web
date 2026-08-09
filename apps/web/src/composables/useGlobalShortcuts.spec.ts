@@ -4,7 +4,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useGlobalShortcuts } from './useGlobalShortcuts'
-import { useThemeStore } from '@gocell/core'
+import { useThemeStore } from '@rss/core'
 import { useUiStore } from '../stores/useUiStore'
 
 // Mock onScopeDispose to avoid "getCurrentInstance is null" warning in test env

@@ -1,5 +1,5 @@
 import type { AxiosError } from 'axios'
-import type { GoCellRequestError } from './types'
+import type { RssRequestError } from './types'
 
 interface ErrorEnvelope {
   error: { code: string }
@@ -17,13 +17,13 @@ function isAxiosError(err: unknown): err is AxiosError {
  * Type guard for caught `unknown` errors originating from the `http` instance.
  * Lets callers narrow before reading `.i18nKey` / `.response` instead of an
  * unchecked `as` cast (every interceptor-rejected error carries `i18nKey`,
- * which is optional on the type, so an AxiosError satisfies GoCellRequestError).
+ * which is optional on the type, so an AxiosError satisfies RssRequestError).
  */
-export function isGoCellRequestError(err: unknown): err is GoCellRequestError {
+export function isRssRequestError(err: unknown): err is RssRequestError {
   return isAxiosError(err)
 }
 
-function isGoCellErrorEnvelope(data: unknown): data is ErrorEnvelope {
+function isRssErrorEnvelope(data: unknown): data is ErrorEnvelope {
   return (
     typeof data === 'object' &&
     data !== null &&
@@ -45,7 +45,7 @@ export function toI18nKey(err: unknown): string {
   }
 
   const data: unknown = err.response.data
-  if (isGoCellErrorEnvelope(data)) {
+  if (isRssErrorEnvelope(data)) {
     const safeCode = data.error.code.replace(/[^A-Z0-9_]/g, '_')
     return `errors.${safeCode}`
   }

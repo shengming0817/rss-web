@@ -1,5 +1,5 @@
 import { onScopeDispose } from 'vue'
-import { useThemeStore } from '@gocell/core'
+import { useThemeStore } from '@rss/core'
 import { useUiStore } from '../stores/useUiStore'
 
 /**

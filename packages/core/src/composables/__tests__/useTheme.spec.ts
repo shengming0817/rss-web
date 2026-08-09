@@ -39,7 +39,7 @@ describe('useTheme', () => {
 
   describe('initial theme resolution', () => {
     it('reads theme from localStorage when set to light', async () => {
-      localStorage.setItem('gocell-theme', 'light')
+      localStorage.setItem('rss-theme', 'light')
       const mod = await import('../useTheme')
       const { theme } = mod.useTheme()
       expect(theme.value).toBe('light')
@@ -47,7 +47,7 @@ describe('useTheme', () => {
     })
 
     it('reads theme from localStorage when set to dark', async () => {
-      localStorage.setItem('gocell-theme', 'dark')
+      localStorage.setItem('rss-theme', 'dark')
       const mod = await import('../useTheme')
       const { theme } = mod.useTheme()
       expect(theme.value).toBe('dark')
@@ -78,7 +78,7 @@ describe('useTheme', () => {
     })
 
     it('ignores invalid localStorage value and falls back to matchMedia', async () => {
-      localStorage.setItem('gocell-theme', 'invalid-value')
+      localStorage.setItem('rss-theme', 'invalid-value')
       mockMatchMedia(true)
       const mod = await import('../useTheme')
       const { theme } = mod.useTheme()
@@ -98,7 +98,7 @@ describe('useTheme', () => {
       const mod = await import('../useTheme')
       const { setTheme } = mod.useTheme()
       setTheme('dark')
-      expect(localStorage.getItem('gocell-theme')).toBe('dark')
+      expect(localStorage.getItem('rss-theme')).toBe('dark')
     })
 
     it('updates the theme ref', async () => {
@@ -109,30 +109,30 @@ describe('useTheme', () => {
     })
 
     it('can switch from dark back to light', async () => {
-      localStorage.setItem('gocell-theme', 'dark')
+      localStorage.setItem('rss-theme', 'dark')
       const mod = await import('../useTheme')
       const { theme, setTheme } = mod.useTheme()
       expect(theme.value).toBe('dark')
       setTheme('light')
       expect(theme.value).toBe('light')
       expect(document.documentElement.dataset['theme']).toBe('light')
-      expect(localStorage.getItem('gocell-theme')).toBe('light')
+      expect(localStorage.getItem('rss-theme')).toBe('light')
     })
   })
 
   describe('toggleTheme', () => {
     it('toggles from light to dark', async () => {
-      localStorage.setItem('gocell-theme', 'light')
+      localStorage.setItem('rss-theme', 'light')
       const mod = await import('../useTheme')
       const { theme, toggleTheme } = mod.useTheme()
       toggleTheme()
       expect(theme.value).toBe('dark')
       expect(document.documentElement.dataset['theme']).toBe('dark')
-      expect(localStorage.getItem('gocell-theme')).toBe('dark')
+      expect(localStorage.getItem('rss-theme')).toBe('dark')
     })
 
     it('toggles from dark to light', async () => {
-      localStorage.setItem('gocell-theme', 'dark')
+      localStorage.setItem('rss-theme', 'dark')
       const mod = await import('../useTheme')
       const { theme, toggleTheme } = mod.useTheme()
       toggleTheme()

@@ -9,7 +9,7 @@
 import { watch } from 'vue'
 import { ConfigProvider } from 'ant-design-vue'
 import { useI18n } from 'vue-i18n'
-import { useTheme, useThemeTokens, useLocaleStore } from '@gocell/core'
+import { useTheme, useThemeTokens, useLocaleStore } from '@rss/core'
 
 // Initialize theme (applies data-theme to <html>)
 useTheme()

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AppShell } from '@gocell/core'
+import { AppShell } from '@rss/core'
 import { useUiStore } from '../stores/useUiStore'
 import { useGlobalShortcuts } from '../composables/useGlobalShortcuts'
 
