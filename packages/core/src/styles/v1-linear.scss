@@ -1,0 +1,443 @@
+// ============================================================
+// V1 — Linear-style minimal — reusable design system layer
+// Only tokens.css CSS variables used; no inline colors or magic numbers.
+// Page-specific selectors belong in per-page SCSS files.
+// ============================================================
+
+// ---------- a11y utilities ----------
+// Visually hidden but reachable by screen readers / aria-live announcers.
+// Use for sr-only labels and password strength / check announcements.
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+// ---------- typography ----------
+.v1-h1 {
+  font-family: var(--font-serif);
+  font-size: 28px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  margin: 0 0 3px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.v1-h1-count {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg-faint);
+  letter-spacing: 0.02em;
+}
+
+.v1-h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.v1-sub {
+  color: var(--fg-muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+.v1-link {
+  color: var(--accent);
+  border-bottom: 1px dotted var(--accent);
+  cursor: pointer;
+}
+
+.v1-mono {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.v1-mute {
+  color: var(--fg-faint);
+  font-size: 12px;
+}
+
+.v1-name {
+  font-weight: 500;
+  color: var(--fg);
+}
+
+// ---------- surface / card ----------
+.v1-card {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--bg-raised);
+}
+
+// ---------- button ----------
+.v1-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  height: 30px;
+  white-space: nowrap;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg-raised);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+  box-shadow: var(--shadow-sm);
+
+  &:hover {
+    border-color: var(--fg-faint);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+.v1-btn-primary {
+  background: var(--fg);
+  color: var(--bg);
+  border-color: var(--fg);
+
+  &:hover {
+    background: oklch(from var(--fg) calc(l + 0.08) c h);
+    border-color: var(--fg);
+  }
+}
+
+.v1-ghost {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  color: var(--fg-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover {
+    background: var(--line-soft);
+    color: var(--fg);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+.v1-link-btn {
+  font-size: 12.5px;
+  color: var(--fg-muted);
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+
+  &:hover {
+    color: var(--fg);
+    background: var(--line-soft);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+// ---------- segmented control ----------
+.v1-seg {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+
+  button {
+    padding: 3px 10px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--fg-muted);
+    border-radius: var(--r-sm);
+    font-family: var(--font-mono);
+    letter-spacing: 0.01em;
+
+    &[data-active] {
+      background: var(--bg-raised);
+      color: var(--fg);
+      box-shadow: var(--shadow-sm);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+  }
+}
+
+// ---------- input ----------
+.v1-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  height: 30px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  width: 240px;
+
+  &:focus-within {
+    border-color: var(--accent);
+  }
+
+  .v1-input-ico {
+    color: var(--fg-faint);
+    display: flex;
+  }
+
+  input {
+    flex: 1;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    font-size: 13px;
+    min-width: 0;
+  }
+}
+
+.v1-kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  color: var(--fg-faint);
+  background: var(--bg);
+}
+
+// ---------- badge / pill / chip ----------
+.v1-chip {
+  display: inline-block;
+  padding: 1px 7px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  letter-spacing: 0.01em;
+}
+
+.v1-brand-env {
+  margin-left: 2px;
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+
+// ---------- status dots ----------
+.v1-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--fg-faint);
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.v1-dot-ok {
+  background: var(--ok);
+  box-shadow: 0 0 0 2px oklch(from var(--ok) l c h / 0.18);
+}
+.v1-dot-warn {
+  background: var(--warn);
+  box-shadow: 0 0 0 2px oklch(from var(--warn) l c h / 0.18);
+}
+.v1-dot-err {
+  background: var(--err);
+  box-shadow: 0 0 0 2px oklch(from var(--err) l c h / 0.18);
+}
+
+// ---------- table base ----------
+.v1-table {
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--bg-raised);
+  overflow: hidden;
+}
+
+.v1-tr {
+  display: grid;
+  align-items: center;
+  padding: 0 12px;
+  height: 44px;
+  border-bottom: 1px solid var(--line-soft);
+  text-align: left;
+  width: 100%;
+  font-size: 13px;
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+.v1-th {
+  height: 34px;
+  background: var(--bg-sunken);
+  color: var(--fg-faint);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 500;
+}
+
+.v1-tr-row {
+  &:hover {
+    background: var(--line-soft);
+    cursor: pointer;
+  }
+}
+
+.v1-td {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+
+  > * {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.v1-td-act {
+  color: var(--fg-faint);
+  justify-content: flex-end;
+
+  &:hover {
+    color: var(--fg);
+  }
+}
+
+// ---------- avatar ----------
+.v1-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-fg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.v1-avatar-sm {
+  width: 22px;
+  height: 22px;
+  font-size: 10px;
+}
+
+// ---------- thin line divider ----------
+.v1-divider {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 0;
+}
+
+.v1-divider-soft {
+  border: none;
+  border-top: 1px solid var(--line-soft);
+  margin: 0;
+}
+
+// ---------- page head ----------
+.v1-page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.v1-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+// ---------- switch toggle ----------
+.v1-switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+
+  input {
+    // Visually-hidden: keeps keyboard and screen-reader reachability
+    // while removing the native checkbox from the visual flow.
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    clip: rect(0, 0, 0, 0);
+    pointer-events: none;
+  }
+
+  span {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--r-pill);
+    background: var(--line);
+    transition: 0.2s;
+
+    &::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--bg-raised);
+      transition: 0.2s;
+      box-shadow: var(--shadow-sm);
+    }
+  }
+
+  input:checked + span {
+    background: var(--accent);
+  }
+
+  input:checked + span::after {
+    left: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v1-switch span,
+  .v1-switch span::after {
+    transition: none;
+  }
+}

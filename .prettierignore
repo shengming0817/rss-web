@@ -1,0 +1,19 @@
+# Codegen 生成物（只读，不 format）
+packages/contracts/src/
+packages/devboard/src/manifest/cells.generated.ts
+
+# 构建产物
+**/dist/
+**/coverage/
+
+# pnpm lockfile
+pnpm-lock.yaml
+
+# Worktree 工作区
+worktrees/
+
+# 设计稿 / 文档 / 规划工件 / 协作配置——prose 与参考资料，不强制 prettier 代码风格
+docs/
+specs/
+.claude/
+**/*.md

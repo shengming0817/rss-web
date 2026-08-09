@@ -1,0 +1,11 @@
+# Pinned ghbvf/gocell backend commit that `pnpm codegen` + `pnpm cell-manifest` derive from.
+# CI checks out THIS exact SHA (not the backend's develop HEAD), so backend movement
+# can never red gocell-web CI without an explicit frontend change. See ADR
+# docs/adr/20260618-01-pin-backend-contract-ref.md.
+#
+# To absorb backend contract / cell changes (deliberate, reviewed):
+#   1. bump the SHA below to the desired ghbvf/gocell commit
+#   2. GOCELL_CONTRACTS_DIR=<gocell>/contracts pnpm codegen
+#   3. GOCELL_CELLS_DIR=<gocell>/corecells pnpm cell-manifest
+#   4. commit the regenerated packages/contracts/src/ + packages/devboard/src/manifest/
+0a3e1c5489a6a39799125c25a42aa2f44ba6c1e6

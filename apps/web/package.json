@@ -1,0 +1,40 @@
+{
+  "name": "@gocell/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit && vue-tsc --noEmit -p tsconfig.node.json",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "vue": "catalog:",
+    "vue-router": "catalog:",
+    "pinia": "catalog:",
+    "ant-design-vue": "catalog:",
+    "@ant-design/icons-vue": "catalog:",
+    "@gocell/core": "workspace:*",
+    "@gocell/access": "workspace:*",
+    "@gocell/audit": "workspace:*",
+    "@gocell/config": "workspace:*",
+    "@gocell/devboard": "workspace:*",
+    "@gocell/observability": "workspace:*",
+    "@gocell/request": "workspace:*",
+    "vue-i18n": "catalog:"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "catalog:",
+    "@types/node": "catalog:",
+    "vite": "catalog:",
+    "sass": "catalog:",
+    "vitest": "catalog:",
+    "@vue/test-utils": "catalog:",
+    "@pinia/testing": "catalog:",
+    "jsdom": "catalog:",
+    "@vitest/coverage-v8": "catalog:"
+  }
+}

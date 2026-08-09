@@ -1,0 +1,40 @@
+{
+  "name": "@gocell/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./composables": "./src/composables/index.ts",
+    "./stores": "./src/stores/index.ts",
+    "./components": "./src/components/index.ts",
+    "./ui": "./src/ui/index.ts",
+    "./i18n": "./src/i18n/index.ts",
+    "./styles/tokens.css": "./src/styles/tokens.css",
+    "./styles/v1-linear.scss": "./src/styles/v1-linear.scss",
+    "./testing": "./src/testing/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "vue": "catalog:",
+    "vue-router": "catalog:",
+    "pinia": "catalog:",
+    "ant-design-vue": "catalog:",
+    "vue-i18n": "catalog:"
+  },
+  "devDependencies": {
+    "vitest": "catalog:",
+    "@vue/test-utils": "catalog:",
+    "@pinia/testing": "catalog:",
+    "@vitejs/plugin-vue": "catalog:",
+    "jsdom": "catalog:",
+    "@vitest/coverage-v8": "catalog:"
+  }
+}

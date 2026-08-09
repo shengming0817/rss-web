@@ -1,0 +1,145 @@
+/* ============================================================
+   GoCell Admin — shared design tokens
+   Single source of truth for all design variables.
+   ============================================================ */
+
+:root {
+  /* type */
+  --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', 'JetBrains Mono', ui-monospace, monospace;
+  --font-serif: 'Instrument Serif', Georgia, serif;
+
+  /* font-size ladder (theme-invariant) */
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-lg: 14px;
+  --text-xl: 18px;
+  --text-2xl: 20px;
+  --text-3xl: 26px;
+
+  /* light palette — nearly white with subtle cool tint */
+  --bg: oklch(0.995 0.002 270);
+  --bg-sunken: oklch(0.975 0.003 270);
+  --bg-raised: oklch(1 0 0);
+  --line: oklch(0.92 0.004 270);
+  --line-soft: oklch(0.95 0.003 270);
+  --fg: oklch(0.18 0.008 270);
+  --fg-muted: oklch(0.45 0.008 270);
+  --fg-faint: oklch(0.62 0.006 270);
+  /* Hover shade of --fg for solid/inverted buttons — references --fg lazily so it
+     tracks the theme. Replaces ad-hoc oklch(from var(--fg) ...) in button hovers. */
+  --fg-hover: oklch(from var(--fg) calc(l + 0.08) c h);
+
+  /* single accent */
+  --accent: oklch(0.58 0.19 268);
+  --accent-soft: oklch(0.95 0.04 268);
+  --accent-fg: oklch(0.98 0.01 268);
+
+  /* semantic */
+  --ok: oklch(0.62 0.16 150);
+  --warn: oklch(0.72 0.16 75);
+  --err: oklch(0.58 0.22 25);
+  /* High-contrast error: darker in light theme so it clears WCAG AA both as text
+     on light surfaces and (with inverted --bg text) as a filled danger button. */
+  --err-strong: oklch(0.47 0.2 25);
+
+  /* radii / shadow */
+  --r-sm: 4px;
+  --r: 6px;
+  --r-lg: 10px;
+  --r-xl: 14px;
+  --r-pill: 999px;
+  --shadow-sm: 0 1px 0 rgba(17, 17, 26, 0.03), 0 0 0 1px rgba(17, 17, 26, 0.04);
+  --shadow: 0 1px 2px rgba(17, 17, 26, 0.04), 0 4px 12px rgba(17, 17, 26, 0.06);
+  --shadow-lg: 0 8px 28px rgba(17, 17, 26, 0.1), 0 2px 4px rgba(17, 17, 26, 0.04);
+
+  /* interaction states */
+  --opacity-disabled: 0.4;
+
+  /* layout dimensions */
+  --sidebar-width: 232px;
+  --sidebar-collapsed-width: 52px;
+  --topbar-height: 44px;
+
+  /* stacking layers */
+  --z-modal: 1000;
+
+  /* overlay backdrop */
+  --overlay-bg: oklch(0 0 0 / 0.35);
+}
+
+[data-theme='dark'] {
+  --bg: oklch(0.14 0.006 270);
+  --bg-sunken: oklch(0.11 0.006 270);
+  --bg-raised: oklch(0.175 0.007 270);
+  --line: oklch(0.28 0.008 270);
+  --line-soft: oklch(0.22 0.007 270);
+  --fg: oklch(0.96 0.004 270);
+  --fg-muted: oklch(0.68 0.008 270);
+  --fg-faint: oklch(0.48 0.008 270);
+  /* Dark theme: --fg is near-white, so lightening for hover is imperceptible —
+     darken instead for a visible hover on solid (--fg-backed) buttons. */
+  --fg-hover: oklch(from var(--fg) calc(l - 0.06) c h);
+
+  --accent: oklch(0.72 0.17 268);
+  --accent-soft: oklch(0.28 0.08 268);
+  --accent-fg: oklch(0.14 0.006 270);
+
+  /* Lighter in dark theme: high contrast as text on dark surfaces and (with
+     inverted --bg text) as a filled danger button. */
+  --err-strong: oklch(0.72 0.18 25);
+
+  --shadow-sm: 0 1px 0 rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.35);
+
+  --overlay-bg: oklch(0 0 0 / 0.5);
+}
+
+/* ---------- reset ---------- */
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+body {
+  font-family: var(--font-sans);
+  color: var(--fg);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'cv11', 'ss01';
+}
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* thin scrollbars inside artboards */
+.gc-artboard ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.gc-artboard ::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 8px;
+}
+.gc-artboard ::-webkit-scrollbar-track {
+  background: transparent;
+}

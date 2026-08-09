@@ -1,0 +1,338 @@
+/* ============================================================
+   develop @ edafbb0b updates — overlay styles
+   Loaded LAST so it can adjust dev-cell / dev-extras / dev-reserved.
+   ============================================================ */
+
+/* ---------- Durability badge (cell header) ---------- */
+.devc-dur {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 11px;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 3px;
+  border: 1px solid var(--line);
+}
+.devc-dur-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor;
+}
+.devc-dur-durable {
+  color: oklch(0.42 0.16 145);
+  background: oklch(0.96 0.04 145);
+  border-color: oklch(0.85 0.08 145);
+}
+.devc-dur-demo {
+  color: oklch(0.45 0.14 60);
+  background: oklch(0.96 0.05 80);
+  border-color: oklch(0.85 0.08 80);
+}
+[data-theme="dark"] .devc-dur-durable {
+  color: oklch(0.85 0.14 145);
+  background: oklch(0.25 0.06 145);
+  border-color: oklch(0.35 0.08 145);
+}
+[data-theme="dark"] .devc-dur-demo {
+  color: oklch(0.85 0.14 80);
+  background: oklch(0.25 0.06 60);
+  border-color: oklch(0.35 0.08 60);
+}
+
+/* ---------- Develop banner ---------- */
+.devc-isp-banner {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 1px solid oklch(0.85 0.08 250);
+  background: oklch(0.97 0.03 250);
+  border-radius: 6px;
+  display: flex; align-items: flex-start; gap: 12px;
+  font-size: 13px; line-height: 1.45;
+}
+.devc-isp-banner b { font-weight: 600; }
+.devc-isp-banner-tag {
+  flex: 0 0 auto;
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 3px;
+  background: oklch(0.55 0.16 250);
+  color: #fff;
+  white-space: nowrap;
+}
+.devc-wire-banner {
+  border-color: oklch(0.85 0.1 30);
+  background: oklch(0.97 0.03 30);
+}
+.devc-wire-banner .devc-isp-banner-tag {
+  background: oklch(0.55 0.18 30);
+}
+[data-theme="dark"] .devc-isp-banner {
+  background: oklch(0.22 0.04 250);
+  border-color: oklch(0.35 0.08 250);
+}
+[data-theme="dark"] .devc-wire-banner {
+  background: oklch(0.22 0.05 30);
+  border-color: oklch(0.35 0.08 30);
+}
+
+/* ---------- Interfaces tab — ISP card grid ---------- */
+.devc-isp-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.devc-isp-card { padding: 14px 16px; }
+.devc-isp-card-h {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 4px;
+}
+.devc-isp-name {
+  font-size: 14px; font-weight: 600;
+  color: var(--fg);
+}
+.devc-isp-narrow {
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.05em; text-transform: uppercase;
+  padding: 1px 7px; border-radius: 3px;
+  background: oklch(0.93 0.04 270);
+  color: oklch(0.4 0.14 270);
+}
+[data-theme="dark"] .devc-isp-narrow {
+  background: oklch(0.3 0.06 270);
+  color: oklch(0.85 0.12 270);
+}
+.devc-isp-tbl {
+  width: 100%; border-collapse: collapse;
+  font-size: 12px;
+}
+.devc-isp-tbl td {
+  padding: 5px 6px;
+  border-bottom: 1px dashed var(--line);
+  vertical-align: top;
+}
+.devc-isp-tbl tr:last-child td { border-bottom: 0; }
+.devc-isp-tbl td:first-child { color: var(--fg); }
+.devc-isp-tbl td:nth-child(2) { color: var(--fg-faint); width: 110px; }
+.devc-isp-sample { color: var(--fg-muted); text-align: right; }
+
+.devc-isp-composite {
+  padding: 14px 16px;
+}
+.devc-isp-code {
+  font-family: var(--font-mono); font-size: 12px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin: 4px 0 10px;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+/* ---------- Wiring tab — sealed marker flow ---------- */
+.devc-wire-flow {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto 1fr;
+  gap: 0;
+  align-items: stretch;
+  margin-bottom: 16px;
+  padding: 16px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.devc-wire-col { display: flex; flex-direction: column; gap: 10px; }
+.devc-wire-col-h {
+  font-family: var(--font-mono); font-size: 10.5px;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--fg-faint);
+  margin-bottom: 2px;
+}
+.devc-wire-box {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 8px 10px;
+  background: var(--bg);
+  display: flex; flex-direction: column; gap: 2px;
+  font-size: 12.5px;
+}
+.devc-wire-box-raw { border-style: dashed; }
+.devc-wire-box-sealed {
+  border-color: oklch(0.7 0.14 250);
+  background: oklch(0.98 0.02 250);
+  position: relative;
+}
+[data-theme="dark"] .devc-wire-box-sealed {
+  background: oklch(0.25 0.05 250);
+  border-color: oklch(0.5 0.14 250);
+}
+.devc-wire-box-cell {
+  border-color: oklch(0.7 0.14 145);
+  background: oklch(0.98 0.02 145);
+}
+[data-theme="dark"] .devc-wire-box-cell {
+  background: oklch(0.25 0.05 145);
+  border-color: oklch(0.5 0.14 145);
+}
+.devc-wire-box .v1-mute { color: var(--fg-faint); font-size: 11px; }
+.devc-wire-seal {
+  position: absolute; top: -8px; right: 8px;
+  font-family: var(--font-mono); font-size: 9.5px;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 1px 6px; border-radius: 3px;
+  background: oklch(0.55 0.16 250); color: #fff;
+}
+.devc-wire-arrow {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  color: var(--fg-faint);
+  padding: 0 8px;
+}
+.devc-wire-arrow-label {
+  font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase;
+  margin-top: 4px;
+  color: oklch(0.55 0.16 250);
+}
+
+.devc-wire-defense {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+.devc-wire-card { padding: 12px 14px; }
+.devc-wire-rules {
+  margin: 6px 0 0; padding-left: 16px;
+}
+.devc-wire-rules li { margin: 4px 0; }
+
+/* ---------- Typed Response Envelope (Contract registry aside) ---------- */
+.devr-tre {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px 12px 6px;
+  margin-top: 14px;
+  background: var(--bg-sunken);
+}
+.devr-tre-h {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 500;
+  margin-bottom: 8px;
+}
+.devr-tre-tag {
+  font-family: var(--font-mono); font-size: 9.5px;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 1px 6px; border-radius: 3px;
+  background: oklch(0.55 0.16 250); color: #fff;
+  margin-left: auto;
+}
+.devr-tre-row {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 8px;
+  font-family: var(--font-mono); font-size: 11.5px;
+  padding: 4px 0;
+  border-top: 1px dashed var(--line);
+}
+.devr-tre-row:first-of-type { border-top: 0; }
+.devr-tre-status {
+  font-weight: 600;
+  padding: 1px 6px; border-radius: 3px;
+  text-align: center;
+  height: fit-content;
+}
+.devr-tre-2xx { background: oklch(0.93 0.06 150); color: oklch(0.36 0.16 150); }
+.devr-tre-4xx { background: oklch(0.93 0.06 60);  color: oklch(0.42 0.16 60); }
+.devr-tre-5xx { background: oklch(0.93 0.06 25);  color: oklch(0.4 0.16 25); }
+[data-theme="dark"] .devr-tre-2xx { background: oklch(0.25 0.05 150); color: oklch(0.85 0.14 150); }
+[data-theme="dark"] .devr-tre-4xx { background: oklch(0.25 0.05 60);  color: oklch(0.85 0.14 60); }
+[data-theme="dark"] .devr-tre-5xx { background: oklch(0.25 0.05 25);  color: oklch(0.85 0.14 25); }
+.devr-tre-obj { color: var(--fg); }
+.devr-tre-obj-mute { color: var(--fg-faint); font-size: 11px; display: block; margin-top: 1px; }
+.devr-tre-foot {
+  font-size: 11px; color: var(--fg-muted);
+  margin: 8px 0 4px; line-height: 1.45;
+}
+
+/* ---------- CH-06 governance gate row ---------- */
+.devr-gates {
+  margin: 14px 0 18px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.devr-gates-h {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg-sunken);
+  border-bottom: 1px solid var(--line);
+  font-size: 12.5px; font-weight: 500;
+}
+.devr-gate {
+  display: grid;
+  grid-template-columns: 130px 1fr 90px 80px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-top: 1px dashed var(--line);
+  font-size: 12.5px;
+}
+.devr-gate:first-of-type { border-top: 0; }
+.devr-gate-id { font-family: var(--font-mono); font-weight: 500; }
+.devr-gate-pass, .devr-gate-fail, .devr-gate-warn {
+  font-family: var(--font-mono); font-size: 11px;
+  letter-spacing: 0.05em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 3px;
+  text-align: center;
+}
+.devr-gate-pass { background: oklch(0.92 0.06 150); color: oklch(0.36 0.16 150); }
+.devr-gate-fail { background: oklch(0.92 0.06 25);  color: oklch(0.4 0.16 25); }
+.devr-gate-warn { background: oklch(0.93 0.06 80);  color: oklch(0.42 0.16 80); }
+[data-theme="dark"] .devr-gate-pass { background: oklch(0.25 0.05 150); color: oklch(0.85 0.14 150); }
+[data-theme="dark"] .devr-gate-fail { background: oklch(0.25 0.05 25);  color: oklch(0.85 0.14 25); }
+[data-theme="dark"] .devr-gate-warn { background: oklch(0.25 0.05 80);  color: oklch(0.85 0.14 80); }
+.devr-gate-cnt { font-family: var(--font-mono); color: var(--fg-faint); font-size: 11.5px; text-align: right; }
+.devr-gate-new {
+  font-family: var(--font-mono); font-size: 9.5px;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 1px 5px; border-radius: 3px;
+  background: oklch(0.55 0.16 250); color: #fff;
+  margin-left: 6px;
+}
+
+/* ---------- Pipeline: ConsumerBase + Sweeper cards ---------- */
+.devr-build-cards {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin: 0 0 18px;
+}
+.devr-build-card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 14px 16px;
+  background: var(--bg);
+}
+.devr-build-card-h {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; font-weight: 600;
+  margin-bottom: 8px;
+}
+.devr-build-card-h .devr-gate-new { margin-left: auto; }
+.devr-build-pre {
+  font-family: var(--font-mono); font-size: 11.5px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 10px 12px; margin: 6px 0 4px;
+  white-space: pre; overflow-x: auto;
+}
+.devr-build-note {
+  font-size: 11.5px; color: var(--fg-muted);
+  margin: 4px 0 0; line-height: 1.5;
+}
+.devr-build-list { list-style: none; padding: 0; margin: 4px 0 0; }
+.devr-build-list li {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 4px 0;
+  border-top: 1px dashed var(--line);
+  font-size: 12px;
+}
+.devr-build-list li:first-child { border-top: 0; }
+.devr-build-list .v1-mono { color: var(--fg); }
+.devr-build-list span:last-child { color: var(--fg-faint); flex: 1; }

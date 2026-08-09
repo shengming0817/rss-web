@@ -1,0 +1,7 @@
+export { default as AppShell } from './AppShell.vue'
+export { default as Sidebar } from './Sidebar.vue'
+export { default as TopBar } from './TopBar.vue'
+export { default as CommandPalette } from './CommandPalette.vue'
+export { default as AIBottomBar } from './AIBottomBar.vue'
+export { NAV_GROUPS } from './navConfig'
+export type { NavGroup, NavItem, NavPill } from './navConfig'

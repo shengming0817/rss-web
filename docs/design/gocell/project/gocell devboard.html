@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>gocell · dev platform</title>
+<link rel="stylesheet" href="tokens.css"/>
+<link rel="stylesheet" href="v1-linear.css"/>
+<link rel="stylesheet" href="v1-deep.css"/>
+<link rel="stylesheet" href="dev-pages.css"/>
+<link rel="stylesheet" href="dev-extras.css"/>
+<link rel="stylesheet" href="dev-extras2.css"/>
+<link rel="stylesheet" href="dev-extras3.css"/>
+<link rel="stylesheet" href="dev-cell.css"/>
+<link rel="stylesheet" href="dev-cell2.css"/>
+<link rel="stylesheet" href="dev-cell3.css"/>
+<link rel="stylesheet" href="dev-inbox.css"/>
+<link rel="stylesheet" href="dev-wave3.css"/>
+<link rel="stylesheet" href="dev-wave4.css"/>
+<link rel="stylesheet" href="dev-wave5.css"/>
+<link rel="stylesheet" href="dev-wave6.css"/>
+<link rel="stylesheet" href="dev-reserved.css"/>
+<link rel="stylesheet" href="dev-observe.css"/>
+<link rel="stylesheet" href="dev-audit.css"/>
+<link rel="stylesheet" href="dev-develop.css"/>
+<link rel="stylesheet" href="dev-coverage.css"/>
+<style>
+  html, body, #root { height: 100%; margin: 0; }
+  #root { display: flex; }
+  .v1-root { flex: 1; }
+  /* sidebar group label */
+  .dev-nav-group {
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--fg-faint);
+    padding: 14px 14px 6px;
+  }
+  .dev-nav-badge {
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 1px 6px; border-radius: 3px;
+    background: oklch(0.55 0.17 150 / 0.15);
+    color: oklch(0.45 0.16 150);
+    margin-left: auto;
+  }
+  [data-theme="dark"] .dev-nav-badge { color: oklch(0.85 0.16 150); }
+  /* hide content padding from v1 base since pages own their padding */
+  .v1-content { overflow: hidden !important; }
+
+  /* ---- AI Shell layout: don't cover sidebar user-card, and reserve 32px below content ---- */
+  .v1-root { --side-w: 232px; }
+  .v1-root:has(.v1-side[data-collapsed]) { --side-w: 56px; }
+  /* Strip (min) and docked shell start AFTER the sidebar so the user card stays visible */
+  .devai-strip,
+  .devai-shell.devai-shell-dock { left: var(--side-w) !important; }
+  /* Main column reserves 32px so the AI Studio composer + page actions aren't hidden */
+  .v1-main { padding-bottom: 32px; }
+  /* Full-screen takeover keeps left:0 (intentionally covers sidebar) */
+  .devai-shell.devai-shell-full { left: 0 !important; }
+
+  /* ---- Sandbox detail: primary CTA to start/resume the AI session ---- */
+  .devw4-sd-actions .devw4-sd-resume {
+    background: var(--accent); color: var(--accent-fg, #fff);
+    border-color: var(--accent);
+  }
+  .devw4-sd-actions .devw4-sd-resume:hover { filter: brightness(1.05); }
+  .devw4-conv-cta {
+    display: flex; align-items: center; gap: 10px;
+    margin: 12px 0 4px; padding: 10px 12px;
+    border: 1px dashed var(--line); border-radius: 6px;
+    background: var(--bg-sunken);
+  }
+  .devw4-conv-cta-text { flex: 1; color: var(--fg-muted); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script src="data.js"></script>
+<script src="dev-data.js"></script>
+<script type="text/babel" src="dev-pages.jsx"></script>
+<script type="text/babel" src="dev-extras.jsx"></script>
+<script type="text/babel" src="dev-extras2.jsx"></script>
+<script type="text/babel" src="dev-extras3.jsx"></script>
+<script type="text/babel" src="dev-cell.jsx"></script>
+<script type="text/babel" src="dev-cell2.jsx"></script>
+<script type="text/babel" src="dev-cell3.jsx"></script>
+<script type="text/babel" src="dev-inbox.jsx"></script>
+<script type="text/babel" src="dev-wave3.jsx"></script>
+<script type="text/babel" src="dev-wave4.jsx"></script>
+<script type="text/babel" src="dev-wave5.jsx"></script>
+<script type="text/babel" src="dev-wave6.jsx"></script>
+<script type="text/babel" src="dev-reserved.jsx"></script>
+<script type="text/babel" src="dev-observe.jsx"></script>
+<script type="text/babel" src="dev-audit.jsx"></script>
+<script type="text/babel" src="dev-develop.jsx"></script>
+<script type="text/babel" src="dev-coverage.jsx"></script>
+<script type="text/babel" src="dev-shell.jsx"></script>
+<script type="text/babel" data-presets="react">
+  ReactDOM.createRoot(document.getElementById('root')).render(<window.DevShell/>);
+</script>
+</body>
+</html>

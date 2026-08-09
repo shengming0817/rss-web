@@ -1,0 +1,11 @@
+**/node_modules
+**/dist
+**/coverage
+worktrees
+.git
+playwright-report
+test-results
+.playwright
+**/*.log
+.DS_Store
+.specify
