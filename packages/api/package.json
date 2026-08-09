@@ -1,5 +1,5 @@
 {
-  "name": "@rss/request",
+  "name": "@rss/api",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -15,8 +15,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "axios": "catalog:",
-    "@rss/shared": "workspace:*"
+    "axios": "catalog:"
   },
   "devDependencies": {
     "vitest": "catalog:",

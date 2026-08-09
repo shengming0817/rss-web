@@ -30,7 +30,15 @@ const enUS = {
     title: 'RSS Web foundation',
     subtitle: 'Product capabilities will be enabled after alignment with RSS contracts.',
   },
-  errors: { unknown: 'Unknown error', network: 'Network error' },
+  errors: {
+    unknown: 'Unknown error',
+    network: 'Network error',
+    validation: 'Check the submitted values',
+    invalidResponse: 'The server returned an invalid response',
+    invalidRequest: 'The request could not be created',
+    requestAborted: 'Request cancelled',
+    requestTimeout: 'Request timed out',
+  },
 } satisfies MessageSchema
 
 export default enUS

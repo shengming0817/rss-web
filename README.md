@@ -4,11 +4,15 @@ RSS Web is the browser client for RSS. It is being migrated through small,
 independent pull requests from a verified historical source snapshot.
 
 The current repository is intentionally a product-neutral frontend foundation:
-application shell, theme, i18n, accessibility, tests, and an unconfigured HTTP
-primitive. All historical business routes, backend calls, generated contracts,
+application shell, theme, i18n, accessibility, tests, and a narrow HTTP transport
+in `@rss/api`. All historical business routes, backend calls, generated contracts,
 administration screens, observability screens, Devboard, and old generation
 tools have been physically removed. RSS capabilities return only through later
 issues backed by selected RSS contracts.
+
+The reviewed RSS contract selection is pinned in
+[`docs/contracts/20260809-current-rss-baseline.md`](docs/contracts/20260809-current-rss-baseline.md).
+It is audit evidence, not a runtime registry or a copy of backend contracts.
 
 The repository uses the single `@rss/*` workspace namespace and RSS Web product
 identity. Legacy aliases, storage-key fallbacks, and dual-backend modes are not

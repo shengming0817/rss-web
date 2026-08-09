@@ -21,24 +21,17 @@ describe('ESLint package boundaries', () => {
     ).not.toContain('no-restricted-imports')
   })
 
-  it('allows request to own axios', async () => {
+  it('allows api to own axios', async () => {
     expect(
       await ruleIds(
         "import axios from 'axios'\nexport const x = axios\n",
-        'packages/request/src/http.ts',
+        'packages/api/src/transport.ts',
       ),
     ).not.toContain('no-restricted-imports')
   })
 
-  it('blocks core from depending on request or removed business packages', async () => {
-    for (const dependency of [
-      'request',
-      'access',
-      'audit',
-      'config',
-      'contracts',
-      'observability',
-    ]) {
+  it('blocks core from depending on api or removed business packages', async () => {
+    for (const dependency of ['api', 'access', 'audit', 'config', 'contracts', 'observability']) {
       expect(
         await ruleIds(
           `import { x } from '@rss/${dependency}'\nexport const y = x\n`,
@@ -48,12 +41,12 @@ describe('ESLint package boundaries', () => {
     }
   })
 
-  it('blocks request from depending on UI or removed business packages', async () => {
+  it('blocks api from depending on UI or removed business packages', async () => {
     for (const dependency of ['core', 'access', 'audit', 'config', 'contracts', 'observability']) {
       expect(
         await ruleIds(
           `import { x } from '@rss/${dependency}'\nexport const y = x\n`,
-          'packages/request/src/http.ts',
+          'packages/api/src/transport.ts',
         ),
       ).toContain('no-restricted-imports')
     }
