@@ -52,6 +52,40 @@ describe('ESLint package boundaries', () => {
     }
   })
 
+  it('allows identity to use only the API seam and its endpoint coordinates', async () => {
+    for (const dependency of ['@rss/api', '@rss/api/endpoints/identity']) {
+      expect(
+        await ruleIds(
+          `import { x } from '${dependency}'\nexport const y = x\n`,
+          'packages/identity/src/api/client.ts',
+        ),
+      ).not.toContain('no-restricted-imports')
+    }
+    for (const dependency of ['@rss/core', '@rss/shared', '@rss/api/endpoints/settings']) {
+      expect(
+        await ruleIds(
+          `import { x } from '${dependency}'\nexport const y = x\n`,
+          'packages/identity/src/api/client.ts',
+        ),
+      ).toContain('no-restricted-imports')
+    }
+  })
+
+  it('blocks Axios in identity and endpoint coordinates in the web app', async () => {
+    expect(
+      await ruleIds(
+        "import axios from 'axios'\nexport const x = axios\n",
+        'packages/identity/src/api/client.ts',
+      ),
+    ).toContain('no-restricted-imports')
+    expect(
+      await ruleIds(
+        "import { identityEndpoints } from '@rss/api/endpoints/identity'\nexport const x = identityEndpoints\n",
+        'apps/web/src/main.ts',
+      ),
+    ).toContain('no-restricted-imports')
+  })
+
   it('blocks package deep imports', async () => {
     expect(
       await ruleIds(

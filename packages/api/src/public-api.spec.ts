@@ -7,5 +7,6 @@ describe('@rss/api public surface', () => {
     expect(publicApi).not.toHaveProperty('axios')
     expect(publicApi).not.toHaveProperty('http')
     expect(publicApi).not.toHaveProperty('AxiosResponse')
+    expect(publicApi).not.toHaveProperty('identityEndpoints')
   })
 })

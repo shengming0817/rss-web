@@ -24,7 +24,7 @@ describe('RSS-only foundation boundary', () => {
     expect(tracked(path)).toBe('')
   })
 
-  it('ships only the reusable package foundation', () => {
+  it('ships the reusable foundation and selected identity adapter', () => {
     for (const name of ['api', 'core', 'shared']) {
       expect(existsSync(resolve(root, 'packages', name, 'package.json'))).toBe(true)
     }
@@ -37,6 +37,10 @@ describe('RSS-only foundation boundary', () => {
       'packages/api/schemas',
       'packages/api/codegen',
       'packages/api/registry',
+      'packages/identity/contracts',
+      'packages/identity/schemas',
+      'packages/identity/codegen',
+      'packages/identity/registry',
     ]) {
       expect(tracked(path)).toBe('')
     }
@@ -58,8 +62,28 @@ describe('RSS-only foundation boundary', () => {
       .split('\n')
       .filter(Boolean)
       .filter((line) => !line.includes('.spec.ts:'))
-      .filter((line) => !line.startsWith('packages/api/'))
+      .filter((line) => !line.startsWith('packages/api/src/transport.ts:'))
+      .filter((line) => !line.startsWith('packages/api/src/endpoints/identity.ts:'))
     expect(violations).toEqual([])
+  })
+
+  it('does not log Identity production data', () => {
+    let output = ''
+    try {
+      output = execFileSync(
+        '/usr/bin/git',
+        ['grep', '-n', '-E', 'console\\.|logger\\.', '--', 'packages/identity/src'],
+        { cwd: root, encoding: 'utf8' },
+      )
+    } catch (error) {
+      const status = (error as { status?: number }).status
+      if (status !== 1) throw error
+    }
+    const productionMatches = output
+      .split('\n')
+      .filter(Boolean)
+      .filter((line) => !line.includes('.spec.ts:'))
+    expect(productionMatches).toEqual([])
   })
 
   it('exposes only the neutral home route', () => {

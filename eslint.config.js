@@ -67,6 +67,11 @@ const NO_AXIOS_PATH = {
   message: 'HTTP 单点：禁止在业务包直接 import axios。请通过 @rss/api 的 transport 发请求。',
 }
 
+const INTERNAL_ENDPOINT_PATTERN = {
+  regex: '^@rss/api/endpoints/',
+  message: '应用层禁止绕过 domain adapter 使用 endpoint coordinates。',
+}
+
 /** Helper: create a no-restricted-imports rule config combining all given patterns + paths */
 function boundaryRule(extraPatterns = [], extraPaths = []) {
   return [
@@ -216,6 +221,23 @@ export default tseslint.config(
     },
   },
 
+  // ── 边界锁: packages/identity ─────────────────────────────────────────────
+  // identity 只依赖 api seam；endpoint subpath 是其唯一 raw-coordinate owner。
+  {
+    files: ['packages/identity/**/*.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex: '^@rss/(?!api(?:$|/endpoints/identity$))',
+            message: '@rss/identity 只允许依赖 @rss/api 及其 Identity endpoint。',
+          },
+        ],
+        [NO_AXIOS_PATH],
+      ),
+    },
+  },
+
   // ── 边界锁: apps/web ──────────────────────────────────────────────────────
   // apps/web 可依赖所有 @rss/* 包；但禁深路径和 axios
   {
@@ -224,7 +246,7 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
-          patterns: [DEEP_PATH_PATTERN],
+          patterns: [DEEP_PATH_PATTERN, INTERNAL_ENDPOINT_PATTERN],
           paths: [NO_AXIOS_PATH],
         },
       ],

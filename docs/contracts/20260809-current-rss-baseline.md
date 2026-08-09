@@ -57,3 +57,12 @@ and the declared 500 schema SHA-256 is
 The transport implements only protocol mechanics. Domain DTOs, endpoint
 adapters, authentication, tenant headers, retries, and UI behavior belong to
 their explicit follow-up issues.
+
+## Consumption status
+
+The handwritten adapters for `identity.login`, `identity.refresh`,
+`identity.profile`, `identity.logout`, and `identity.logout-all` were enabled by
+WEB-PR-005. At implementation time the read-only RSS checkout was at
+`475bfa88e17769899916b69f357261160000b01b`; a Git tree comparison confirmed
+that all five contract and schema files were byte-identical to this document's
+pinned `b513d3390d73d4f291bb31afc588ca1307ce19af` evidence.
