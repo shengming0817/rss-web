@@ -1,11 +1,9 @@
 # @gocell/contracts
 
-> 由 codegen 从后端 *.schema.json 单向派生的 TS 类型（只读，业务包禁手改）
+This package temporarily retains only the historical types consumed by the
+preserved authentication, authorization, audit, configuration, and request
+code. It is frozen migration input, not the RSS contract source of truth.
 
-- **对应后端 cell**：../gocell/contracts/
-- **对外 exports**：`.` → `src/index.ts`（唯一收口；未列出路径外部不可访问）
-- **依赖 contract**：（待 Batch 实施时补全）
-
-## 边界
-
-依赖规则见仓库根 `CLAUDE.md` §依赖规则。本包为 `tools/codegen` 只读派生产物，无运行时依赖；业务包**不得手改** `src/`，CI `git diff --exit-code` 守门拦截。
+There is deliberately no generator or drift workflow. Issue #4 replaces this
+baseline with adapters for explicitly selected RSS contracts; until then, do
+not add types copied from the former GoCell backend.

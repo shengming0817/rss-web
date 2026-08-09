@@ -3,7 +3,7 @@
  * AppShellLayout — dashboard chrome (Sidebar + TopBar + CommandPalette).
  *
  * Parent route for every authenticated/in-shell page; its <RouterView/> renders
- * the matched child. Standalone full-screen routes (login, first-run-setup) are
+ * the matched child. The standalone login route is
  * NOT children of this layout — they render directly in App.vue's RouterView,
  * so the layout fork is structural (route tree), not a runtime meta flag.
  *

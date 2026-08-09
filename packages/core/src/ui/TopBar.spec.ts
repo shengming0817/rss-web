@@ -12,8 +12,6 @@ function makeRouter(initialPath = '/') {
     { path: '/', component: { template: '<div/>' } },
     { path: '/audit', component: { template: '<div/>' } },
     { path: '/access/identities', component: { template: '<div/>' } },
-    { path: '/cells', component: { template: '<div/>' } },
-    { path: '/deps', component: { template: '<div/>' } },
   ]
   const router = createRouter({ history: createMemoryHistory(), routes })
   if (initialPath !== '/') {

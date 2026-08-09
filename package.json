@@ -20,8 +20,6 @@
     "test:coverage": "vitest run --coverage --project '!root'",
     "test:boundary": "vitest run --project root",
     "test:e2e": "playwright test",
-    "codegen": "pnpm -F @gocell/codegen generate",
-    "cell-manifest": "pnpm -F @gocell/cell-manifest generate",
     "prepare": "husky"
   },
   "lint-staged": {

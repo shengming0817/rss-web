@@ -6,6 +6,7 @@
   "include": [
     "eslint.config.js",
     "eslint.config.spec.ts",
+    "scope-removal.spec.ts",
     "vitest.config.ts",
     "vitest.workspace.ts",
     "playwright.config.ts",

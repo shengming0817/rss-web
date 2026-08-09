@@ -1,12 +1,7 @@
 /**
- * system.ts — system info API (BR-002 GET /api/v1/admin/system).
+ * Runtime system information used by the retained RSS health foundation.
  *
- * Backend endpoint not yet implemented; calls 404 until BR-002 is delivered.
- * Callers must degrade gracefully on failure.
- *
- * Local types — backend has no system schema yet; once codegen derives
- * HttpAdminSystemV1Response, delete these interfaces and import from
- * @gocell/contracts instead.
+ * The migration endpoint may be unavailable; callers degrade gracefully.
  */
 import { http } from '@gocell/request'
 
@@ -58,8 +53,7 @@ export interface SystemInfoResponse {
  * Throws if the top-level required fields are absent, directing the store to
  * 'unavailable' rather than silently rendering empty data.
  *
- * TODO: replace with codegen-derived Zod schema once
- * HttpAdminSystemV1Response is available in @gocell/contracts.
+ * Issue #4 replaces this provisional shape with a selected RSS contract.
  */
 function assertSystemShape(data: unknown): asserts data is SystemInfoResponse {
   if (data === null || typeof data !== 'object' || !('build' in data) || !('runtime' in data)) {

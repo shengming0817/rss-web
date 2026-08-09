@@ -7,10 +7,8 @@
     ".": "./src/index.ts",
     "./stores": "./src/stores/index.ts",
     "./views/login": "./src/views/LoginView.vue",
-    "./views/first-run": "./src/views/FirstRunSetupView.vue",
     "./views/identities": "./src/views/IdentitiesView.vue",
-    "./views/policies": "./src/views/PoliciesView.vue",
-    "./views/coming-soon": "./src/views/AccessComingSoonView.vue"
+    "./views/policies": "./src/views/PoliciesView.vue"
   },
   "files": [
     "src"

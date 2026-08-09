@@ -28,13 +28,8 @@ const userUrl = (id: string): string => `${USERS_URL}/${encodeURIComponent(id)}`
 export type Identity = HttpAuthUserGetV1Response['data']
 
 /**
- * BR-005 pending: `http.auth.user.list` is not yet delivered by the backend
- * (see docs/backend-requirements/BR-005-user-list.md — the `/users` route group
- * registers 8 handlers, no `list`). The envelope mirrors the established
- * cursor-pagination convention shared by HttpAuditListV1Response and
- * HttpAuthRoleListV1Response (`{ data, nextCursor, hasMore }`). Once the backend
- * ships the schema and `pnpm codegen` derives HttpAuthUserListV1Response, delete
- * this interface and import the generated type instead.
+ * Provisional list envelope retained until issue #4 selects the RSS contract.
+ * It mirrors the cursor pagination already consumed by the migration UI.
  */
 export interface UserListPage {
   data: Identity[]

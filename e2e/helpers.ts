@@ -11,13 +11,7 @@ import { expect, type Page } from '@playwright/test'
  * post-login redirect rather than a second `page.goto`.
  */
 
-const STATUS_URL = '**/api/v1/access/setup/status'
 const LOGIN_URL = '**/api/v1/access/sessions/login'
-
-/** Stub the first-run gate as "setup already done" so guards let protected routes through. */
-export async function stubSetupDone(page: Page): Promise<void> {
-  await page.route(STATUS_URL, (route) => route.fulfill({ json: { data: { hasAdmin: true } } }))
-}
 
 /**
  * Stub the Landing health/system polls as 404 (→ degraded). Any test that lands
@@ -47,8 +41,7 @@ export interface LoginOptions {
  * in-memory token survives (a second `page.goto` would reload the app and wipe
  * it, bouncing back to /login).
  *
- * Caller must have stubbed setup status (`stubSetupDone`) and any data
- * endpoints the target view polls before calling this.
+ * Caller must stub any data endpoints the target view polls before calling this.
  */
 export async function loginAs(page: Page, options: LoginOptions = {}): Promise<void> {
   const { target = '/', username = 'admin', password = 'SecretPass!23' } = options

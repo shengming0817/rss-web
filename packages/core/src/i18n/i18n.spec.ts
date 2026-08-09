@@ -83,13 +83,10 @@ describe('zh-CN messages', () => {
     expect(zhCN.errors.ERR_VALIDATION).toBeTruthy()
   })
 
-  it('has all 6 nav group labels', () => {
-    expect(zhCN.nav.group.meta).toBeTruthy()
-    expect(zhCN.nav.group.plan).toBeTruthy()
-    expect(zhCN.nav.group.build).toBeTruthy()
+  it('has only the retained nav group labels', () => {
     expect(zhCN.nav.group.access).toBeTruthy()
     expect(zhCN.nav.group.operate).toBeTruthy()
-    expect(zhCN.nav.group.reserved).toBeTruthy()
+    expect(Object.keys(zhCN.nav.group)).toEqual(['access', 'operate'])
   })
 
   it('has shell.brand key', () => {
@@ -112,10 +109,6 @@ describe('zh-CN messages', () => {
     expect(zhCN.shell.ai.label).toBeTruthy()
     expect(zhCN.shell.ai.expand).toBeTruthy()
     expect(zhCN.shell.ai.collapse).toBeTruthy()
-  })
-
-  it('has nav.ai key', () => {
-    expect(zhCN.nav.ai).toBeTruthy()
   })
 })
 
@@ -187,17 +180,12 @@ describe('observability namespaces (Batch 7)', () => {
       )
   }
 
-  it('zh-CN exposes the landing + observe namespaces', () => {
+  it('zh-CN exposes the retained landing namespace', () => {
     expect(zhCN.landing.title).toBeTruthy()
-    expect(zhCN.observe.tabs.overview).toBeTruthy()
   })
 
   it('landing leaf-key tree is identical across locales', () => {
     expect(leafKeys(enUS.landing).sort()).toEqual(leafKeys(zhCN.landing).sort())
-  })
-
-  it('observe leaf-key tree is identical across locales', () => {
-    expect(leafKeys(enUS.observe).sort()).toEqual(leafKeys(zhCN.observe).sort())
   })
 
   // Guards the recalled i18n-missing-key blind spot: t('a.b.c') for a key absent
@@ -225,29 +213,6 @@ describe('observability namespaces (Batch 7)', () => {
     'landing.deploys.title',
     'landing.deploys.unavailable',
     'landing.kpi.title',
-    'landing.kpi.openObserve',
-    'observe.title',
-    'observe.tablistLabel',
-    'observe.unavailable.title',
-    'observe.unavailable.message',
-    'observe.unavailable.retry',
-    'observe.boundary.title',
-    'observe.boundary.message',
-    'observe.tabs.overview',
-    'observe.tabs.logs',
-    'observe.tabs.traces',
-    'observe.tabs.anomalies',
-    'observe.tabs.whatChanged',
-    'observe.tabs.serviceGraph',
-    'observe.tabs.sliceHealth',
-    'observe.overview.qps',
-    'observe.overview.empty',
-    'observe.logs.empty',
-    'observe.logs.searchLabel',
-    'observe.logs.tableCaption',
-    'observe.traces.empty',
-    'observe.traces.searchLabel',
-    'observe.traces.tableCaption',
   ] as const
 
   it.each(REQUIRED_KEYS)('zh-CN key "%s" resolves to a non-empty string', (key) => {

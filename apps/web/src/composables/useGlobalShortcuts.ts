@@ -7,16 +7,11 @@ import { useUiStore } from '../stores/useUiStore'
  * G-prefix navigation map: second key → route path.
  * Sequence: press G then one of these keys within G_TIMEOUT_MS.
  *
- * PRD §5.2 偏差说明：
- *  - G→S 映射 /coverage（PRD 写 Settings，Batch 0 无 /settings 路由）。
- *    TODO: Batch 7+ 补 /settings 路由后改回 PRD 原意。
  */
 const G_NAV: Record<string, string> = {
   u: '/access/identities',
   a: '/audit',
   c: '/config',
-  f: '/flags',
-  s: '/coverage', // Batch 0 临时映射 Coverage；PRD §5.2 原意是 Settings，待 Batch 7+ 对齐
 }
 
 /** How long to wait for the second key after G press (ms). */
@@ -66,8 +61,6 @@ function isInputFocused(): boolean {
  *   G then U      → /access/identities
  *   G then A      → /audit
  *   G then C      → /config
- *   G then F      → /flags
- *   G then S      → /coverage (Batch 0 临时；PRD §5.2 原意是 Settings)
  */
 export function useGlobalShortcuts(): () => void {
   const router = useRouter()

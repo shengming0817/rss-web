@@ -6,9 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./stores": "./src/stores/index.ts",
-    "./composables": "./src/composables/index.ts",
-    "./views/config": "./src/views/ConfigView.vue",
-    "./views/flags": "./src/views/FlagsView.vue"
+    "./views/config": "./src/views/ConfigView.vue"
   },
   "files": [
     "src"

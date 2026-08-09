@@ -184,22 +184,6 @@ describe('useGlobalShortcuts', () => {
     expect(mockPush).toHaveBeenCalledWith('/config')
   })
 
-  it('G then F navigates to /flags', async () => {
-    setup()
-    fireKey('g')
-    fireKey('f')
-    await new Promise((r) => setTimeout(r, 0))
-    expect(mockPush).toHaveBeenCalledWith('/flags')
-  })
-
-  it('G then S navigates to /coverage', async () => {
-    setup()
-    fireKey('g')
-    fireKey('s')
-    await new Promise((r) => setTimeout(r, 0))
-    expect(mockPush).toHaveBeenCalledWith('/coverage')
-  })
-
   it('G-prefix is ignored when input is focused', async () => {
     setup()
     const input = document.createElement('input')

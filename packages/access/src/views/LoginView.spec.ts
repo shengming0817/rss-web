@@ -63,13 +63,13 @@ describe('LoginView', () => {
   })
 
   it('redirects to query.redirect after a successful login', async () => {
-    routeQuery = { redirect: '/cells' }
+    routeQuery = { redirect: '/audit' }
     const { wrapper, auth } = mountView()
     vi.mocked(auth.login).mockResolvedValue(undefined)
     await fill(wrapper)
     await wrapper.find('form').trigger('submit')
     await flushPromises()
-    expect(push).toHaveBeenCalledWith('/cells')
+    expect(push).toHaveBeenCalledWith('/audit')
   })
 
   it('redirects to / when there is no redirect query', async () => {

@@ -1,5 +1,5 @@
 // ─── stores ──────────────────────────────────────────────────────────────────
-export { useHealthStore, useObserveStore } from './stores'
+export { useHealthStore } from './stores'
 
 // ─── composables ─────────────────────────────────────────────────────────────
 export { useHealthPoll } from './composables'
@@ -23,8 +23,4 @@ export type {
   EnvironmentInfo,
 } from './api/system'
 
-export type { MetricSeries, LogLine, TraceSummary, TimeRange } from './api/observe'
-
-// ─── lib types ────────────────────────────────────────────────────────────────
-export type { RangePreset } from './lib/timeRange'
 export type { HealthVariant, HealthRollup } from './lib/healthStatus'

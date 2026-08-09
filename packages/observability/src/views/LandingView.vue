@@ -12,7 +12,6 @@
  * no magic numbers, no emoji, no gradient.
  */
 import { computed } from 'vue'
-import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useHealthStore } from '../stores/useHealthStore'
 import { useHealthPoll } from '../composables/useHealthPoll'
@@ -168,9 +167,6 @@ function formatTs(iso: string): string {
       <section class="landing__placeholder-card" :aria-labelledby="kpiHeadingId">
         <h2 :id="kpiHeadingId" class="landing__section-h">{{ t('landing.kpi.title') }}</h2>
         <UnavailablePanel :message="t('landing.kpi.unavailable')" />
-        <RouterLink to="/observe" class="landing__observe-link">
-          {{ t('landing.kpi.openObserve') }}
-        </RouterLink>
       </section>
     </div>
   </div>
@@ -335,24 +331,5 @@ function formatTs(iso: string): string {
   background: var(--bg-raised);
   border: 1px solid var(--line);
   border-radius: var(--r);
-}
-
-/* ─── observe link ───────────────────────────────────────────────────────── */
-.landing__observe-link {
-  align-self: flex-start;
-  margin-top: 10px;
-  font-size: var(--text-base);
-  color: var(--accent);
-  text-decoration: none;
-}
-
-.landing__observe-link:hover {
-  text-decoration: underline;
-}
-
-.landing__observe-link:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: var(--r-sm);
 }
 </style>

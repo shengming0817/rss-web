@@ -1,6 +1,5 @@
-# Codegen 生成物（只读，不 format）
+# Frozen migration types (do not mechanically reformat)
 packages/contracts/src/
-packages/devboard/src/manifest/cells.generated.ts
 
 # 构建产物
 **/dist/

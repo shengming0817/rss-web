@@ -21,7 +21,6 @@
     "@gocell/access": "workspace:*",
     "@gocell/audit": "workspace:*",
     "@gocell/config": "workspace:*",
-    "@gocell/devboard": "workspace:*",
     "@gocell/observability": "workspace:*",
     "@gocell/request": "workspace:*",
     "vue-i18n": "catalog:"

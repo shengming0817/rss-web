@@ -74,12 +74,6 @@ describe('ESLint 边界锁 — 合规代码（应 0 个 boundary error）', () =
     expect(boundaryRuleIds(results)).toEqual([])
   })
 
-  it('devboard import access (PDP 例外) — 合规', async () => {
-    const code = `import { } from '@gocell/access'\nexport const x = 1\n`
-    const results = await lint(code, wt('packages/devboard/src/index.ts'))
-    expect(boundaryRuleIds(results)).toEqual([])
-  })
-
   it('request import axios (HTTP 单点例外) — 合规', async () => {
     const code = `import axios from 'axios'\nexport const x = 1\n`
     const results = await lint(code, wt('packages/request/src/http.ts'))
@@ -149,12 +143,6 @@ describe('ESLint 边界锁 — 违规代码（必须被报错）', () => {
     expect(ruleIds(results)).toContain('no-restricted-imports')
   })
 
-  it('access import @gocell/devboard — 被拦', async () => {
-    const code = `import { } from '@gocell/devboard'\nexport const x = 1\n`
-    const results = await lint(code, wt('packages/access/src/index.ts'))
-    expect(ruleIds(results)).toContain('no-restricted-imports')
-  })
-
   it('core import @gocell/access — 被拦', async () => {
     const code = `import { } from '@gocell/access'\nexport const x = 1\n`
     const results = await lint(code, wt('packages/core/src/index.ts'))
@@ -164,24 +152,6 @@ describe('ESLint 边界锁 — 违规代码（必须被报错）', () => {
   it('core import @gocell/audit — 被拦', async () => {
     const code = `import { } from '@gocell/audit'\nexport const x = 1\n`
     const results = await lint(code, wt('packages/core/src/index.ts'))
-    expect(ruleIds(results)).toContain('no-restricted-imports')
-  })
-
-  it('devboard import @gocell/audit — 被拦（非 access 例外）', async () => {
-    const code = `import { } from '@gocell/audit'\nexport const x = 1\n`
-    const results = await lint(code, wt('packages/devboard/src/index.ts'))
-    expect(ruleIds(results)).toContain('no-restricted-imports')
-  })
-
-  it('devboard import @gocell/config — 被拦', async () => {
-    const code = `import { } from '@gocell/config'\nexport const x = 1\n`
-    const results = await lint(code, wt('packages/devboard/src/index.ts'))
-    expect(ruleIds(results)).toContain('no-restricted-imports')
-  })
-
-  it('devboard import @gocell/observability — 被拦', async () => {
-    const code = `import { } from '@gocell/observability'\nexport const x = 1\n`
-    const results = await lint(code, wt('packages/devboard/src/index.ts'))
     expect(ruleIds(results)).toContain('no-restricted-imports')
   })
 
@@ -283,25 +253,7 @@ describe('ESLint 边界锁 — 违规代码（必须被报错）', () => {
     expect(ruleIds(results)).toContain('no-restricted-imports')
   })
 
-  it('tools/codegen import @gocell/web — 被拦', async () => {
-    const code = `import { } from '@gocell/web'\nexport const x = 1\n`
-    const results = await lint(code, wt('tools/codegen/src/index.ts'))
-    expect(ruleIds(results)).toContain('no-restricted-imports')
-  })
-
   // ── tools 禁止 @gocell/* ──────────────────────────────────────────────────
-
-  it('tools/codegen import @gocell/core — 被拦', async () => {
-    const code = `import { something } from '@gocell/core'\nexport const x = 1\n`
-    const results = await lint(code, wt('tools/codegen/src/index.ts'))
-    expect(ruleIds(results)).toContain('no-restricted-imports')
-  })
-
-  it('tools/codegen import @gocell/contracts — 被拦', async () => {
-    const code = `import { something } from '@gocell/contracts'\nexport const x = 1\n`
-    const results = await lint(code, wt('tools/codegen/src/index.ts'))
-    expect(ruleIds(results)).toContain('no-restricted-imports')
-  })
 
   // ── axios 单点锁 ──────────────────────────────────────────────────────────
 
@@ -325,13 +277,5 @@ describe('边界锁规则加载验证（配置 parse 成功）', () => {
     const results = await lint(code, wt('packages/access/src/index.ts'))
     const ids = ruleIds(results).filter((id) => id === 'no-restricted-imports')
     expect(ids).toEqual([])
-  })
-
-  it('devboard import access 不被边界锁拦截（PDP 例外正确豁免）', async () => {
-    const code = `import { useDecision } from '@gocell/access'\nexport const x = 1\n`
-    const results = await lint(code, wt('packages/devboard/src/index.ts'))
-    // 只检查 no-restricted-imports，其他规则不关心
-    const boundaryErrors = ruleIds(results).filter((id) => id === 'no-restricted-imports')
-    expect(boundaryErrors).toEqual([])
   })
 })

@@ -27,7 +27,7 @@ declare module 'axios' {
      * neither onRefresh nor onAuthFail fire.
      *
      * Set on authentication-establishing calls whose own 401 is a *credential*
-     * verdict, not an expired session: login (`/sessions/login`) and first-run
+     * verdict, not an expired session: login (`/sessions/login`)
      * bootstrap (`/setup/admin`). Without it, a wrong-credentials 401 on those
      * endpoints would spuriously attempt a refresh and bounce the operator to
      * /login instead of surfacing the inline error.

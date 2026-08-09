@@ -1,12 +1,20 @@
 /**
  * identityValidation.ts — pure validators for the identity operation modals.
  *
- * Same contract as lib/validation.ts: validators return i18n KEY strings (never
- * display text) or `null` when valid, so views map them through `t()` and the
- * functions stay trivially unit-testable. Username/email rules + password checks
- * are reused from lib/validation.ts (single source for those regexes).
+ * Validators return i18n key strings or `null`, keeping display text in the
+ * locale catalogs and the rules independently testable.
  */
-import { pwChecks, EMAIL_RE, USERNAME_RE } from './validation'
+const USERNAME_RE = /^[a-z0-9_.-]{3,32}$/i
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHAR_RE = /[\x00-\x08\x0e-\x1f\x7f]/
+
+function passwordChecks(password: string): { len: boolean; ctrl: boolean } {
+  return {
+    len: password.length >= 8 && password.length <= 72,
+    ctrl: password.length > 0 && !CONTROL_CHAR_RE.test(password),
+  }
+}
 
 export interface CreateIdentityForm {
   username: string
@@ -32,7 +40,7 @@ export function validateCreateIdentity({
   if (!email) out.email = 'access.identities.form.email.required'
   else if (!EMAIL_RE.test(email)) out.email = 'access.identities.form.email.format'
 
-  const checks = pwChecks(password)
+  const checks = passwordChecks(password)
   if (!password) out.password = 'access.identities.form.password.required'
   else if (!checks.len) out.password = 'access.identities.form.password.tooShort'
   else if (!checks.ctrl) out.password = 'access.identities.form.password.controlChar'
@@ -83,7 +91,7 @@ export function validateChangePassword({
 
   if (!oldPassword) out.oldPassword = 'access.identities.password.oldRequired'
 
-  const checks = pwChecks(newPassword)
+  const checks = passwordChecks(newPassword)
   if (!newPassword) out.newPassword = 'access.identities.password.newRequired'
   else if (!checks.len) out.newPassword = 'access.identities.password.newTooShort'
   else if (!checks.ctrl) out.newPassword = 'access.identities.password.newControlChar'

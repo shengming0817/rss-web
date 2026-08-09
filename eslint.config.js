@@ -82,15 +82,14 @@ function boundaryRule(extraPatterns = [], extraPaths = []) {
 
 /** Message for cross-cell boundary violation */
 function cellMsg(from, forbidden) {
-  return `@gocell/${from} 禁止 import @gocell/${forbidden}。跨域请走 @gocell/contracts + @gocell/request。参见 .claude/rules/gocellweb/package-boundaries.md`
+  return `@gocell/${from} 禁止 import @gocell/${forbidden}。跨域请走 @gocell/contracts + @gocell/request。参见 AGENTS.md`
 }
 
 export default tseslint.config(
   // ── Global ignores ──────────────────────────────────────────────────────────
   {
     ignores: [
-      'packages/contracts/src/**', // codegen-生成物，不 lint
-      'packages/devboard/src/manifest/cells.generated.ts', // cell-manifest 生成物，不 lint
+      'packages/contracts/src/**', // frozen migration types
       '**/dist/**',
       '**/coverage/**',
       'pnpm-lock.yaml',
@@ -205,9 +204,9 @@ export default tseslint.config(
     rules: {
       'no-restricted-imports': boundaryRule([
         {
-          regex: '^@gocell/(access|audit|config|observability|devboard)(/|$)',
+          regex: '^@gocell/(access|audit|config|observability)(/|$)',
           message:
-            '@gocell/core 禁止 import 业务 cell（access/audit/config/observability/devboard）。参见 .claude/rules/gocellweb/package-boundaries.md',
+            '@gocell/core 禁止 import 业务包（access/audit/config/observability）。参见 AGENTS.md',
         },
       ]),
     },
@@ -221,9 +220,9 @@ export default tseslint.config(
     rules: {
       'no-restricted-imports': boundaryRule([
         {
-          regex: '^@gocell/(core|access|audit|config|observability|devboard)(/|$)',
+          regex: '^@gocell/(core|access|audit|config|observability)(/|$)',
           message:
-            '@gocell/request 只允许依赖 @gocell/contracts 和 @gocell/shared，禁止 import core/业务 cell。参见 .claude/rules/gocellweb/package-boundaries.md',
+            '@gocell/request 只允许依赖 @gocell/contracts 和 @gocell/shared，禁止 import core/业务包。参见 AGENTS.md',
         },
       ]),
     },
@@ -236,8 +235,8 @@ export default tseslint.config(
       'no-restricted-imports': boundaryRule(
         [
           {
-            regex: '^@gocell/(audit|config|observability|devboard)(/|$)',
-            message: cellMsg('access', 'audit/config/observability/devboard'),
+            regex: '^@gocell/(audit|config|observability)(/|$)',
+            message: cellMsg('access', 'audit/config/observability'),
           },
         ],
         [NO_AXIOS_PATH],
@@ -252,8 +251,8 @@ export default tseslint.config(
       'no-restricted-imports': boundaryRule(
         [
           {
-            regex: '^@gocell/(access|config|observability|devboard)(/|$)',
-            message: cellMsg('audit', 'access/config/observability/devboard'),
+            regex: '^@gocell/(access|config|observability)(/|$)',
+            message: cellMsg('audit', 'access/config/observability'),
           },
         ],
         [NO_AXIOS_PATH],
@@ -268,8 +267,8 @@ export default tseslint.config(
       'no-restricted-imports': boundaryRule(
         [
           {
-            regex: '^@gocell/(access|audit|observability|devboard)(/|$)',
-            message: cellMsg('config', 'access/audit/observability/devboard'),
+            regex: '^@gocell/(access|audit|observability)(/|$)',
+            message: cellMsg('config', 'access/audit/observability'),
           },
         ],
         [NO_AXIOS_PATH],
@@ -284,26 +283,8 @@ export default tseslint.config(
       'no-restricted-imports': boundaryRule(
         [
           {
-            regex: '^@gocell/(access|audit|config|devboard)(/|$)',
-            message: cellMsg('observability', 'access/audit/config/devboard'),
-          },
-        ],
-        [NO_AXIOS_PATH],
-      ),
-    },
-  },
-
-  // ── 边界锁: packages/devboard ─────────────────────────────────────────────
-  // 设计性例外：devboard 可依赖 access（消费其 PDP client 实现）；<Can>/useDecision 本身来自 @gocell/core
-  {
-    files: ['packages/devboard/**/*.{ts,vue}'],
-    rules: {
-      'no-restricted-imports': boundaryRule(
-        [
-          {
-            regex: '^@gocell/(audit|config|observability)(/|$)',
-            message:
-              '@gocell/devboard 禁止 import @gocell/audit/config/observability。设计性例外仅 @gocell/access（PDP client 实现；<Can>/useDecision 走 @gocell/core）。参见 .claude/rules/gocellweb/package-boundaries.md',
+            regex: '^@gocell/(access|audit|config)(/|$)',
+            message: cellMsg('observability', 'access/audit/config'),
           },
         ],
         [NO_AXIOS_PATH],
@@ -321,7 +302,7 @@ export default tseslint.config(
         {
           regex: '^@gocell/',
           message:
-            '@gocell/contracts 是纯类型包（codegen 派生），禁止 import 任何其他 @gocell/* 包。参见 .claude/rules/gocellweb/package-boundaries.md',
+            '@gocell/contracts 是冻结的纯类型包，禁止 import 任何其他 @gocell/* 包。参见 AGENTS.md',
         },
       ]),
     },
@@ -339,21 +320,6 @@ export default tseslint.config(
           paths: [NO_AXIOS_PATH],
         },
       ],
-    },
-  },
-
-  // ── 边界锁: tools/codegen ─────────────────────────────────────────────────
-  // tools 禁止 import 任何 @gocell/* + 反向依赖 @gocell/web
-  {
-    files: ['tools/**/*.ts'],
-    rules: {
-      'no-restricted-imports': boundaryRule([
-        {
-          regex: '^@gocell/',
-          message:
-            'tools/codegen 禁止 import @gocell/* 包。参见 .claude/rules/gocellweb/package-boundaries.md',
-        },
-      ]),
     },
   },
 
@@ -384,26 +350,6 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/consistent-type-imports': 'off',
       '@typescript-eslint/no-explicit-any': 'warn',
-    },
-  },
-
-  // ── tools/codegen vitest.config.ts ────────────────────────────────────────
-  {
-    files: ['tools/codegen/vitest.config.ts'],
-    languageOptions: {
-      parserOptions: {
-        project: path.resolve(__dirname, 'tools/codegen/tsconfig.json'),
-      },
-    },
-  },
-
-  // ── tools/cell-manifest vitest.config.ts ──────────────────────────────────
-  {
-    files: ['tools/cell-manifest/vitest.config.ts'],
-    languageOptions: {
-      parserOptions: {
-        project: path.resolve(__dirname, 'tools/cell-manifest/tsconfig.json'),
-      },
     },
   },
 

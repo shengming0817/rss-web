@@ -48,10 +48,7 @@ type HealthState = {
 }
 
 function mountView(state: HealthState = {}) {
-  const router: Router = createTestRouter([
-    { path: '/', name: 'landing', component: LandingView },
-    { path: '/observe', name: 'observe', component: { template: '<div />' } },
-  ])
+  const router: Router = createTestRouter([{ path: '/', name: 'landing', component: LandingView }])
 
   const wrapper = mount(LandingView, {
     global: {
@@ -114,12 +111,6 @@ describe('LandingView · page structure', () => {
     const { wrapper } = mountView({ healthStatus: 'loaded' })
     expect(wrapper.text()).toContain('landing.kpi.title')
     expect(wrapper.text()).toContain('landing.kpi.unavailable')
-  })
-
-  it('renders a RouterLink to /observe inside the KPI section', () => {
-    const { wrapper } = mountView({ healthStatus: 'loaded' })
-    const link = wrapper.find('a[href="/observe"]')
-    expect(link.exists()).toBe(true)
   })
 })
 

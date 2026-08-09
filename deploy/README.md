@@ -27,8 +27,7 @@ docker run -d --name gocell-web -p 8081:80 \
 ### 验证
 
 ```bash
-curl http://localhost:8081/                              # SPA → 200
-curl http://localhost:8081/api/v1/access/setup/status    # 经反代 → 后端 200
+curl http://localhost:8081/ # SPA → 200
 ```
 
 ## 本地开发（HMR，非容器）
@@ -39,5 +38,5 @@ pnpm -F @gocell/web dev   # → http://localhost:5173，vite proxy /api → 127.
 
 ## 说明
 
-- 契约类型已入库（`packages/contracts/src`），镜像构建期**不需要**后端或 `pnpm codegen`。
-- Batch 0 暂无登录页（PR-07），`/` 公开，部署后表现为「连后端读 setup 状态 → 渲染骨架首页」。
+- 迁移期类型已入库（`packages/contracts/src`），镜像构建期不访问后端。
+- `/login` 是公开入口，其余当前产品路由要求已恢复的会话。

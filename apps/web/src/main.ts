@@ -30,7 +30,7 @@ app.use(router)
 const pdpClient = createPdpClient({ decide: createHttpDecide() })
 app.provide(PDP_INJECTION_KEY, pdpClient)
 
-// 5. Route guards (three-stage: first-run → auth → PDP). PDP deny → push the
+// 5. Route guards (auth → PDP). PDP deny → push the
 //    reasonCode into useUiStore; AppShellLayout localises it (useI18n) and
 //    announces it in an aria-live region. Keeps the guard free of i18n/UI.
 registerGuards(router, app, pdpClient, (reasonCode: string) => {

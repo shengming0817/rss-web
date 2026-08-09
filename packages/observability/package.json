@@ -7,8 +7,7 @@
     ".": "./src/index.ts",
     "./stores": "./src/stores/index.ts",
     "./composables": "./src/composables/index.ts",
-    "./views/landing": "./src/views/LandingView.vue",
-    "./views/observe": "./src/views/ObserveView.vue"
+    "./views/landing": "./src/views/LandingView.vue"
   },
   "files": [
     "src"
@@ -19,7 +18,6 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@gocell/contracts": "workspace:*",
     "@gocell/core": "workspace:*",
     "@gocell/request": "workspace:*",
     "pinia": "catalog:",

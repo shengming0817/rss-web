@@ -1,36 +1,32 @@
 # RSS Web
 
-RSS Web is the browser client for RSS. This repository is being rebuilt from a
-verified `gocell-web` source snapshot, then reduced and migrated through small,
-reviewable pull requests.
+RSS Web is the browser client for RSS. It is being migrated through small,
+independent pull requests from a verified historical source snapshot.
 
-The imported tree is a historical engineering baseline, not a compatibility
-promise. GoCell product behavior, routes, contracts, package names, and backend
-assumptions remain only until the explicitly sequenced cleanup and RSS migration
-issues remove or replace them. The project does not support a dual GoCell/RSS
-mode.
+The current retained foundation provides the application shell, theme, i18n,
+accessibility, request handling, login/session recovery, local identity and
+policy administration, audit, configuration, and health overview. Devboard,
+cell scanning, coverage/groups, hosted observability, feature flags, first-run
+provisioning, old generation tools, and placeholder product routes are outside
+this repository and have been physically removed.
 
-## Migration sequence
+The remaining `@gocell/*` names and UI branding are temporary and are renamed in
+issue #3. `packages/contracts` contains a minimal frozen type bridge needed by
+the retained code; issue #4 replaces it with selected RSS contracts. Neither is
+a compatibility promise, and the project has no dual GoCell/RSS mode.
 
-1. Import the verified source snapshot without semantic edits.
-2. Delete product surfaces and static fact sources outside RSS scope.
-3. Rename the retained workspace and product surface from GoCell to RSS.
-4. Replace retained domain capabilities with adapters for active RSS contracts.
-
-Source identity, exclusions, and the verification boundary are recorded in
+Source provenance is immutable under
 [`docs/migration/20260809-001-gocell-web-source-baseline.md`](docs/migration/20260809-001-gocell-web-source-baseline.md).
 
-## Baseline verification
+## Verification
 
 Use Node.js 22 and pnpm 11.4.0:
 
 ```bash
 pnpm install --frozen-lockfile
 pnpm typecheck
+pnpm lint
+pnpm format:check
 pnpm test
 pnpm build
 ```
-
-The imported GoCell workflows and contract-generation paths are transitional.
-Passing them proves the imported baseline is internally consistent; it does not
-prove compatibility with RSS contracts.

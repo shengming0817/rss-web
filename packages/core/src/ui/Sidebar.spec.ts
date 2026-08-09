@@ -12,23 +12,10 @@ function makeRouter(initialPath = '/') {
   // Create a router with a route for every nav item (so RouterLink resolves)
   const routes = [
     { path: '/', component: { template: '<div/>' } },
-    { path: '/coverage', component: { template: '<div/>' } },
     { path: '/access/identities', component: { template: '<div/>' } },
     { path: '/access/policies', component: { template: '<div/>' } },
-    { path: '/access/decisions', component: { template: '<div/>' } },
-    { path: '/access/reviews', component: { template: '<div/>' } },
     { path: '/audit', component: { template: '<div/>' } },
     { path: '/config', component: { template: '<div/>' } },
-    { path: '/flags', component: { template: '<div/>' } },
-    { path: '/cells', component: { template: '<div/>' } },
-    { path: '/groups', component: { template: '<div/>' } },
-    { path: '/deps', component: { template: '<div/>' } },
-    { path: '/contracts', component: { template: '<div/>' } },
-    { path: '/observe', component: { template: '<div/>' } },
-    { path: '/billing', component: { template: '<div/>' } },
-    { path: '/secrets', component: { template: '<div/>' } },
-    { path: '/workflow', component: { template: '<div/>' } },
-    { path: '/ai', component: { template: '<div/>' } },
   ]
   const router = createRouter({ history: createMemoryHistory(), routes })
   if (initialPath !== '/') {
@@ -70,7 +57,7 @@ describe('Sidebar.vue', () => {
   })
 
   describe('group rendering', () => {
-    it('renders 6 nav groups (PRD §5.1.1)', () => {
+    it('renders every configured navigation group', () => {
       const wrapper = mountSidebar()
       const groups = wrapper.findAll('.sidebar__group')
       expect(groups.length).toBe(NAV_GROUPS.length)
@@ -93,8 +80,7 @@ describe('Sidebar.vue', () => {
 
     it('renders item labels', () => {
       const wrapper = mountSidebar()
-      // Coverage item should be visible
-      expect(wrapper.text()).toContain('覆盖率')
+      expect(wrapper.text()).toContain('身份')
     })
   })
 
@@ -157,10 +143,10 @@ describe('Sidebar.vue', () => {
       }
     })
 
-    it('applies pill--new class for new items', () => {
+    it('does not render migration-status pills', () => {
       const wrapper = mountSidebar()
       const newPill = wrapper.find('.sidebar__pill--new')
-      expect(newPill.exists()).toBe(true)
+      expect(newPill.exists()).toBe(false)
     })
   })
 
