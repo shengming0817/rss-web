@@ -57,11 +57,6 @@ describe('AppShell.vue', () => {
     expect(wrapper.find('.topbar').exists()).toBe(true)
   })
 
-  it('renders AI bottom bar', () => {
-    const wrapper = mountShell()
-    expect(wrapper.find('.ai-bar').exists()).toBe(true)
-  })
-
   it('renders default slot content', () => {
     const wrapper = mountShell()
     expect(wrapper.find('[data-testid="content"]').exists()).toBe(true)

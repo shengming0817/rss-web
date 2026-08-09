@@ -1,42 +1,12 @@
-# 部署
+# RSS Web deployment foundation
 
-## 前端容器（生产形态）
-
-多阶段镜像：`node:22` 构建 monorepo → `nginx:1.27` 托管 SPA 并反代 `/api` 到后端。
-
-```bash
-# 在 deploy/web/ 下（构建上下文自动取仓库根）
-docker compose up -d --build
-# → http://localhost:8081
-```
-
-或手动：
+The current image serves only the static SPA. It deliberately has no backend
+proxy or runtime API configuration until a later issue defines the RSS edge
+contract.
 
 ```bash
-docker build -f deploy/web/Dockerfile -t gocell-web:local .   # 在仓库根
-docker run -d --name gocell-web -p 8081:80 \
-  --add-host host.docker.internal:host-gateway gocell-web:local
+docker compose -f deploy/web/docker-compose.yml up -d --build
 ```
 
-### 后端对接
-
-- 后端 `gocell corebundle` 作为独立 compose 项目运行，在 host 发布 `127.0.0.1:8080`。
-- nginx 把 `/api/*` 反代到 `host.docker.internal:8080`（保留 `/api/v1/...` 完整路径，与契约一致）。
-- 若后端地址不同，改 `deploy/web/nginx.conf` 的 `proxy_pass`。
-
-### 验证
-
-```bash
-curl http://localhost:8081/ # SPA → 200
-```
-
-## 本地开发（HMR，非容器）
-
-```bash
-pnpm -F @gocell/web dev   # → http://localhost:5173，vite proxy /api → 127.0.0.1:8080
-```
-
-## 说明
-
-- 迁移期类型已入库（`packages/contracts/src`），镜像构建期不访问后端。
-- `/login` 是公开入口，其余当前产品路由要求已恢复的会话。
+Open `http://localhost:8081`. The nginx health check verifies the static root;
+it does not represent RSS backend health.

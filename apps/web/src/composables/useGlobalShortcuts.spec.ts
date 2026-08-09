@@ -16,18 +16,6 @@ vi.mock('vue', async (importOriginal) => {
   }
 })
 
-// Mock router
-vi.mock('vue-router', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('vue-router')>()
-  return {
-    ...actual,
-    useRouter: vi.fn(() => mockRouter),
-  }
-})
-
-const mockPush = vi.fn().mockResolvedValue(undefined)
-const mockRouter = { push: mockPush }
-
 function fireKey(key: string, opts: Partial<KeyboardEventInit> = {}): void {
   const event = new KeyboardEvent('keydown', {
     key,
@@ -155,62 +143,6 @@ describe('useGlobalShortcuts', () => {
     expect(uiStore.commandPaletteOpen).toBe(false)
 
     document.body.removeChild(input)
-  })
-
-  // ─── G-prefix navigation ──────────────────────────────────────────────────
-
-  it('G then U navigates to /access/identities', async () => {
-    setup()
-    fireKey('g')
-    fireKey('u')
-    // Allow the state-machine timeout to resolve
-    await new Promise((r) => setTimeout(r, 0))
-    expect(mockPush).toHaveBeenCalledWith('/access/identities')
-  })
-
-  it('G then A navigates to /audit', async () => {
-    setup()
-    fireKey('g')
-    fireKey('a')
-    await new Promise((r) => setTimeout(r, 0))
-    expect(mockPush).toHaveBeenCalledWith('/audit')
-  })
-
-  it('G then C navigates to /config', async () => {
-    setup()
-    fireKey('g')
-    fireKey('c')
-    await new Promise((r) => setTimeout(r, 0))
-    expect(mockPush).toHaveBeenCalledWith('/config')
-  })
-
-  it('G-prefix is ignored when input is focused', async () => {
-    setup()
-    const input = document.createElement('input')
-    document.body.appendChild(input)
-    input.focus()
-
-    fireKey('g')
-    fireKey('u')
-    await new Promise((r) => setTimeout(r, 0))
-    expect(mockPush).not.toHaveBeenCalled()
-
-    document.body.removeChild(input)
-  })
-
-  it('G-prefix times out after 1000ms — second key no longer navigates', async () => {
-    vi.useFakeTimers()
-    setup()
-
-    fireKey('g')
-    // Advance past timeout
-    vi.advanceTimersByTime(1001)
-    fireKey('u')
-
-    await vi.runAllTimersAsync()
-    expect(mockPush).not.toHaveBeenCalled()
-
-    vi.useRealTimers()
   })
 
   // ─── / key (command palette) ──────────────────────────────────────────────

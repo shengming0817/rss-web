@@ -24,7 +24,6 @@
  *    字符串，转发后的 consumer 侧不受约束（已知盲区，需 review 补偿）
  * 5. 相对路径绕过：`import '../../packages/audit/src/x'` — monorepo 内相对路径
  *    跨包在实践中不可达（tsconfig paths 不做这种映射），可接受
- * 6. `packages/contracts/src/**` 被 ignore，其内部深路径不受 no-internal-modules 检查
  * ─────────────────────────────────────────────────────────────────────────────
  *
  * 反向自检测试：eslint.config.spec.ts (vitest, ESLint Node API)
@@ -80,16 +79,10 @@ function boundaryRule(extraPatterns = [], extraPaths = []) {
   ]
 }
 
-/** Message for cross-cell boundary violation */
-function cellMsg(from, forbidden) {
-  return `@gocell/${from} 禁止 import @gocell/${forbidden}。跨域请走 @gocell/contracts + @gocell/request。参见 AGENTS.md`
-}
-
 export default tseslint.config(
   // ── Global ignores ──────────────────────────────────────────────────────────
   {
     ignores: [
-      'packages/contracts/src/**', // frozen migration types
       '**/dist/**',
       '**/coverage/**',
       'pnpm-lock.yaml',
@@ -198,111 +191,29 @@ export default tseslint.config(
   },
 
   // ── 边界锁: packages/core ──────────────────────────────────────────────────
-  // 禁止 import 业务 cell；允许 contracts/shared/request/vue 等
+  // 纯 UI 基座只允许依赖 shared；HTTP 由应用层经 request 使用。
   {
     files: ['packages/core/**/*.{ts,vue}'],
     rules: {
       'no-restricted-imports': boundaryRule([
         {
-          regex: '^@gocell/(access|audit|config|observability)(/|$)',
-          message:
-            '@gocell/core 禁止 import 业务包（access/audit/config/observability）。参见 AGENTS.md',
+          regex: '^@gocell/(?!shared(?:/|$))',
+          message: '@gocell/core 只允许依赖 @gocell/shared。',
         },
       ]),
     },
   },
 
   // ── 边界锁: packages/request ──────────────────────────────────────────────
-  // 只许 contracts/shared；禁业务 cell + core
+  // request 只允许依赖 shared；request 是 HTTP 单点，允许 import axios。
   // request 是 HTTP 单点，允许 import axios（不加 NO_AXIOS_PATH）
   {
     files: ['packages/request/**/*.ts'],
     rules: {
       'no-restricted-imports': boundaryRule([
         {
-          regex: '^@gocell/(core|access|audit|config|observability)(/|$)',
-          message:
-            '@gocell/request 只允许依赖 @gocell/contracts 和 @gocell/shared，禁止 import core/业务包。参见 AGENTS.md',
-        },
-      ]),
-    },
-  },
-
-  // ── 边界锁: packages/access ───────────────────────────────────────────────
-  {
-    files: ['packages/access/**/*.{ts,vue}'],
-    rules: {
-      'no-restricted-imports': boundaryRule(
-        [
-          {
-            regex: '^@gocell/(audit|config|observability)(/|$)',
-            message: cellMsg('access', 'audit/config/observability'),
-          },
-        ],
-        [NO_AXIOS_PATH],
-      ),
-    },
-  },
-
-  // ── 边界锁: packages/audit ────────────────────────────────────────────────
-  {
-    files: ['packages/audit/**/*.{ts,vue}'],
-    rules: {
-      'no-restricted-imports': boundaryRule(
-        [
-          {
-            regex: '^@gocell/(access|config|observability)(/|$)',
-            message: cellMsg('audit', 'access/config/observability'),
-          },
-        ],
-        [NO_AXIOS_PATH],
-      ),
-    },
-  },
-
-  // ── 边界锁: packages/config ───────────────────────────────────────────────
-  {
-    files: ['packages/config/**/*.{ts,vue}'],
-    rules: {
-      'no-restricted-imports': boundaryRule(
-        [
-          {
-            regex: '^@gocell/(access|audit|observability)(/|$)',
-            message: cellMsg('config', 'access/audit/observability'),
-          },
-        ],
-        [NO_AXIOS_PATH],
-      ),
-    },
-  },
-
-  // ── 边界锁: packages/observability ────────────────────────────────────────
-  {
-    files: ['packages/observability/**/*.{ts,vue}'],
-    rules: {
-      'no-restricted-imports': boundaryRule(
-        [
-          {
-            regex: '^@gocell/(access|audit|config)(/|$)',
-            message: cellMsg('observability', 'access/audit/config'),
-          },
-        ],
-        [NO_AXIOS_PATH],
-      ),
-    },
-  },
-
-  // ── 边界锁: packages/contracts ────────────────────────────────────────────
-  // contracts/src/** 已在 global ignores 排除（codegen 生成物）
-  // 此规则防止手写的非生成文件（如 tests/utils）反向依赖业务包
-  {
-    files: ['packages/contracts/**/*.ts'],
-    rules: {
-      'no-restricted-imports': boundaryRule([
-        {
-          regex: '^@gocell/',
-          message:
-            '@gocell/contracts 是冻结的纯类型包，禁止 import 任何其他 @gocell/* 包。参见 AGENTS.md',
+          regex: '^@gocell/(?!shared(?:/|$))',
+          message: '@gocell/request 只允许依赖 @gocell/shared。',
         },
       ]),
     },

@@ -41,21 +41,4 @@ describe('useUiStore', () => {
     store.toggleSidebar()
     expect(store.sidebarCollapsed).toBe(false)
   })
-
-  it('starts with accessDeniedReasonCode=null', () => {
-    expect(useUiStore().accessDeniedReasonCode).toBeNull()
-  })
-
-  it('notifyAccessDenied sets the reasonCode', () => {
-    const store = useUiStore()
-    store.notifyAccessDenied('role-missing')
-    expect(store.accessDeniedReasonCode).toBe('role-missing')
-  })
-
-  it('clearAccessDenied resets the reasonCode to null', () => {
-    const store = useUiStore()
-    store.notifyAccessDenied('error')
-    store.clearAccessDenied()
-    expect(store.accessDeniedReasonCode).toBeNull()
-  })
 })

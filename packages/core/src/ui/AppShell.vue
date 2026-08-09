@@ -4,13 +4,12 @@ import { useI18n } from 'vue-i18n'
 import Sidebar from './Sidebar.vue'
 import TopBar from './TopBar.vue'
 import CommandPalette from './CommandPalette.vue'
-import AIBottomBar from './AIBottomBar.vue'
 
 /**
  * AppShell — root layout component.
  *
  * CSS grid: sidebar (232px fixed) | main area (flex: 1)
- * Main area: topbar (44px) | content (flex: 1) | AIBottomBar (32px)
+ * Main area: topbar (44px) | content (flex: 1)
  *
  * Sidebar collapsed state and command palette open state are managed internally.
  * Both can be controlled externally via v-model:sidebarCollapsed and
@@ -108,8 +107,6 @@ function setSidebarCollapsed(value: boolean): void {
       <main id="shell-content" class="shell__content" tabindex="-1">
         <slot />
       </main>
-
-      <AIBottomBar />
     </div>
 
     <CommandPalette

@@ -3,17 +3,16 @@
 RSS Web is the browser client for RSS. It is being migrated through small,
 independent pull requests from a verified historical source snapshot.
 
-The current retained foundation provides the application shell, theme, i18n,
-accessibility, request handling, login/session recovery, local identity and
-policy administration, audit, configuration, and health overview. Devboard,
-cell scanning, coverage/groups, hosted observability, feature flags, first-run
-provisioning, old generation tools, and placeholder product routes are outside
-this repository and have been physically removed.
+The current repository is intentionally a product-neutral frontend foundation:
+application shell, theme, i18n, accessibility, tests, and an unconfigured HTTP
+primitive. All historical business routes, backend calls, generated contracts,
+administration screens, observability screens, Devboard, and old generation
+tools have been physically removed. RSS capabilities return only through later
+issues backed by selected RSS contracts.
 
 The remaining `@gocell/*` names and UI branding are temporary and are renamed in
-issue #3. `packages/contracts` contains a minimal frozen type bridge needed by
-the retained code; issue #4 replaces it with selected RSS contracts. Neither is
-a compatibility promise, and the project has no dual GoCell/RSS mode.
+issue #3. They are not a compatibility promise, and the project has no dual
+GoCell/RSS mode.
 
 Source provenance is immutable under
 [`docs/migration/20260809-001-gocell-web-source-baseline.md`](docs/migration/20260809-001-gocell-web-source-baseline.md).

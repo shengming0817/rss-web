@@ -4,59 +4,90 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const root = resolve(import.meta.dirname)
-
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8')
 const tracked = (path: string) =>
   execFileSync('/usr/bin/git', ['ls-files', '--', path], { cwd: root, encoding: 'utf8' }).trim()
 
-describe('RSS Web scope boundary', () => {
-  it.each([
-    'packages/devboard',
-    'tools/cell-manifest',
-    'tools/codegen',
-    '.github/workflows/cell-manifest-diff.yml',
-    '.github/workflows/codegen-diff.yml',
-  ])('does not ship removed product surface: %s', (path) => {
+const removed = [
+  'packages/access',
+  'packages/audit',
+  'packages/config',
+  'packages/contracts',
+  'packages/devboard',
+  'packages/observability',
+  'tools/cell-manifest',
+  'tools/codegen',
+]
+
+describe('RSS-only foundation boundary', () => {
+  it.each(removed)('does not track removed product surface: %s', (path) => {
     expect(tracked(path)).toBe('')
-    if (path.endsWith('.yml')) expect(existsSync(resolve(root, path))).toBe(false)
   })
 
-  it('does not expose removed routes or navigation entries', () => {
+  it('ships only the reusable package foundation', () => {
+    for (const name of ['core', 'request', 'shared']) {
+      expect(existsSync(resolve(root, 'packages', name, 'package.json'))).toBe(true)
+    }
+  })
+
+  it('exposes only the neutral home route', () => {
     const router = read('apps/web/src/router/index.ts')
-    const nav = read('packages/core/src/ui/navConfig.ts')
-    const removedPaths = [
-      '/first-run-setup',
+    expect(router).toContain("path: '/'")
+    for (const path of [
+      '/access',
+      '/config',
       '/flags',
+      '/admin',
+      '/observability',
       '/observe',
-      '/cells',
-      '/contracts',
-      '/deps',
-      '/coverage',
-      '/groups',
-    ]
-
-    for (const path of removedPaths) {
+      '/audit',
+    ]) {
       expect(router).not.toContain(path)
-      expect(nav).not.toContain(path)
     }
   })
 
-  it('does not retain removed tooling or package dependencies', () => {
-    const rootPackage = JSON.parse(read('package.json')) as {
-      scripts: Record<string, string>
+  it('has no production calls to historical backends', () => {
+    let output = ''
+    try {
+      output = execFileSync(
+        '/usr/bin/git',
+        [
+          'grep',
+          '-n',
+          '-E',
+          '/api/v1/(access|config|admin|observability)|/internal/v1',
+          '--',
+          'apps',
+          'packages',
+        ],
+        { cwd: root, encoding: 'utf8' },
+      )
+    } catch (error) {
+      const status = (error as { status?: number }).status
+      if (status !== 1) throw error
     }
-    const webPackage = JSON.parse(read('apps/web/package.json')) as {
-      dependencies: Record<string, string>
-    }
-
-    expect(rootPackage.scripts).not.toHaveProperty('codegen')
-    expect(rootPackage.scripts).not.toHaveProperty('cell-manifest')
-    expect(webPackage.dependencies).not.toHaveProperty('@gocell/devboard')
+    const productionMatches = output
+      .split('\n')
+      .filter(Boolean)
+      .filter((line) => !line.includes('.spec.ts:'))
+    expect(productionMatches).toEqual([])
   })
 
-  it('does not export removed first-run, flag, or hosted-observe views', () => {
-    expect(read('packages/access/package.json')).not.toContain('./views/first-run')
-    expect(read('packages/config/package.json')).not.toContain('./views/flags')
-    expect(read('packages/observability/package.json')).not.toContain('./views/observe')
+  it('does not retain obsolete workflows or package dependencies', () => {
+    for (const workflow of [
+      '.github/workflows/cell-manifest-diff.yml',
+      '.github/workflows/codegen-diff.yml',
+    ]) {
+      expect(tracked(workflow)).toBe('')
+    }
+    const dependencies = JSON.parse(read('apps/web/package.json')).dependencies as Record<
+      string,
+      string
+    >
+    expect(
+      Object.keys(dependencies).filter((name) =>
+        removed.some((path) => name.endsWith(path.split('/').at(-1)!)),
+      ),
+    ).toEqual([])
   })
 })

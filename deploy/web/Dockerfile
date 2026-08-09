@@ -15,14 +15,8 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc* ./
 COPY apps/web/package.json apps/web/package.json
 COPY packages/core/package.json packages/core/package.json
 COPY packages/shared/package.json packages/shared/package.json
-COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/request/package.json packages/request/package.json
-COPY packages/access/package.json packages/access/package.json
-COPY packages/audit/package.json packages/audit/package.json
-COPY packages/config/package.json packages/config/package.json
-COPY packages/observability/package.json packages/observability/package.json
 
-# The frozen migration types are committed; the image build needs no backend.
 RUN pnpm install --frozen-lockfile
 
 # 依赖层落定后，复制源码并构建
