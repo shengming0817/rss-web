@@ -1,0 +1,50 @@
+services:
+  primary:
+    image: node:22-alpine
+    command: ['node', '/fixture/fixture-server.mjs', 'primary', '9000']
+    volumes:
+      - ./fixture-server.mjs:/fixture/fixture-server.mjs:ro
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:9000/__ready').then(r=>{if(!r.ok)process.exit(1)})",
+        ]
+      interval: 1s
+      timeout: 1s
+      retries: 30
+
+  admin:
+    image: node:22-alpine
+    command: ['node', '/fixture/fixture-server.mjs', 'admin', '9001']
+    volumes:
+      - ./fixture-server.mjs:/fixture/fixture-server.mjs:ro
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:9001/__ready').then(r=>{if(!r.ok)process.exit(1)})",
+        ]
+      interval: 1s
+      timeout: 1s
+      retries: 30
+
+  edge:
+    build:
+      context: ../..
+      dockerfile: deploy/web/Dockerfile
+    environment:
+      RSS_WEB_TENANT_ID: f47ac10b-58cc-4372-a567-0e02b2c3d479
+      RSS_WEB_PRIMARY_HOST: primary
+      RSS_WEB_PRIMARY_PORT: '9000'
+      RSS_WEB_ADMIN_HOST: admin
+      RSS_WEB_ADMIN_PORT: '9001'
+    ports:
+      - '127.0.0.1:${RSS_EDGE_TEST_PORT}:80'
+    depends_on:
+      primary: { condition: service_healthy }
+      admin: { condition: service_healthy }
