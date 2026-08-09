@@ -73,6 +73,24 @@ describe('RSS-only foundation boundary', () => {
     expect(productionMatches).toEqual([])
   })
 
+  it('does not retain historical authentication or PDP route contracts', () => {
+    const forbidden = ['requiresAuth', 'requiredAction', 'requiredResource', 'PDP_INJECTION_KEY']
+    for (const token of forbidden) {
+      let output = ''
+      try {
+        output = execFileSync(
+          '/usr/bin/git',
+          ['grep', '-n', token, '--', 'apps/web/src', 'packages/core/src'],
+          { cwd: root, encoding: 'utf8' },
+        )
+      } catch (error) {
+        const status = (error as { status?: number }).status
+        if (status !== 1) throw error
+      }
+      expect(output).toBe('')
+    }
+  })
+
   it('does not retain obsolete workflows or package dependencies', () => {
     for (const workflow of [
       '.github/workflows/cell-manifest-diff.yml',

@@ -51,14 +51,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DEEP_PATH_PATTERN = {
   regex: '^@gocell/[^/]+/src/',
   message:
-    '深路径 import 被禁止。请只用 package.json#exports 暴露的入口（如 @gocell/foo, @gocell/foo/composables）。参见 .claude/rules/gocellweb/package-boundaries.md',
+    '深路径 import 被禁止。请只用 package.json#exports 暴露的入口。参见 AGENTS.md 和 CLAUDE.md。',
 }
 
 /** Reverse-dependency ban: no package/* or tools/* may import the app layer */
 const NO_WEB_PATTERN = {
   regex: '^@gocell/web(/|$)',
   message:
-    'packages/* 和 tools/* 禁止反向 import @gocell/web（应用层）。参见 .claude/rules/gocellweb/package-boundaries.md',
+    'packages/* 和 tools/* 禁止反向 import @gocell/web（应用层）。参见 AGENTS.md 和 CLAUDE.md。',
 }
 
 /** Axios ban: only @gocell/request may import axios */
@@ -183,8 +183,7 @@ export default tseslint.config(
       'no-restricted-imports': boundaryRule([
         {
           regex: '^@gocell/',
-          message:
-            '@gocell/shared 不允许依赖任何 @gocell/* 包（含 contracts/core）。参见 .claude/rules/gocellweb/package-boundaries.md',
+          message: '@gocell/shared 不允许依赖任何 @gocell/* 包。参见 AGENTS.md 和 CLAUDE.md。',
         },
       ]),
     },
