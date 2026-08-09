@@ -270,6 +270,19 @@ importers:
         specifier: 'catalog:'
         version: 3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(sass@1.100.0)(yaml@2.6.1)
 
+  packages/identity:
+    dependencies:
+      '@rss/api':
+        specifier: workspace:*
+        version: link:../api
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 'catalog:'
+        version: 3.2.6(vitest@3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(sass@1.100.0)(yaml@2.6.1))
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(sass@1.100.0)(yaml@2.6.1)
+
   packages/shared: {}
 
 packages:

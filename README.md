@@ -14,6 +14,11 @@ The reviewed RSS contract selection is pinned in
 [`docs/contracts/20260809-current-rss-baseline.md`](docs/contracts/20260809-current-rss-baseline.md).
 It is audit evidence, not a runtime registry or a copy of backend contracts.
 
+`@rss/identity` currently provides strict DTO decoding and an injected API
+adapter for login, refresh, profile, logout, and logout-all. It does not create
+session authority, store tokens, add tenant/authentication headers, or provide
+UI behavior.
+
 The repository uses the single `@rss/*` workspace namespace and RSS Web product
 identity. Legacy aliases, storage-key fallbacks, and dual-backend modes are not
 supported.

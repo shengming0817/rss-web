@@ -49,12 +49,20 @@ describe('RSS-only product identity', () => {
       'apps/web/package.json',
       'packages/api/package.json',
       'packages/core/package.json',
+      'packages/identity/package.json',
       'packages/shared/package.json',
     ]
     const names = packageFiles.map(
       (path) => JSON.parse(readFileSync(resolve(root, path), 'utf8')).name,
     )
-    expect(names).toEqual(['rss-web', '@rss/web', '@rss/api', '@rss/core', '@rss/shared'])
+    expect(names).toEqual([
+      'rss-web',
+      '@rss/web',
+      '@rss/api',
+      '@rss/core',
+      '@rss/identity',
+      '@rss/shared',
+    ])
   })
 
   it('rejects legacy identity embedded in binary build output', () => {

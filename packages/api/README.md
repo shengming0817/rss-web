@@ -9,3 +9,7 @@ Axios instances or responses.
 Domain adapters own endpoint methods, paths, success statuses, and DTO decoders.
 This package does not inject authentication or tenant headers, retry requests,
 load contracts at runtime, or log request/response bodies.
+
+Selected endpoint coordinates may be exposed through reviewed `./endpoints/*`
+subpaths for their owning domain adapter. They are static coordinates, not a
+runtime contract registry, and applications must consume the domain adapter.
