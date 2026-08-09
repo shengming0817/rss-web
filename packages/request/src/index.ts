@@ -1,3 +1,3 @@
-export { http, setupAxios } from './http'
+export { http } from './http'
 export { toI18nKey, isGoCellRequestError } from './errors'
-export type { SetupAxiosOptions, GoCellRequestError } from './types'
+export type { GoCellRequestError } from './types'

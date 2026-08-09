@@ -33,17 +33,7 @@
       "@gocell/core/i18n": ["packages/core/src/i18n/index.ts"],
       "@gocell/core/testing": ["packages/core/src/testing/index.ts"],
       "@gocell/shared": ["packages/shared/src/index.ts"],
-      "@gocell/contracts": ["packages/contracts/src/index.ts"],
-      "@gocell/request": ["packages/request/src/index.ts"],
-      "@gocell/access": ["packages/access/src/index.ts"],
-      "@gocell/audit": ["packages/audit/src/index.ts"],
-      "@gocell/config": ["packages/config/src/index.ts"],
-      "@gocell/config/composables": ["packages/config/src/composables/index.ts"],
-      "@gocell/config/stores": ["packages/config/src/stores/index.ts"],
-      "@gocell/config/views/config": ["packages/config/src/views/ConfigView.vue"],
-      "@gocell/config/views/flags": ["packages/config/src/views/FlagsView.vue"],
-      "@gocell/observability": ["packages/observability/src/index.ts"],
-      "@gocell/devboard": ["packages/devboard/src/index.ts"]
+      "@gocell/request": ["packages/request/src/index.ts"]
     }
   }
 }

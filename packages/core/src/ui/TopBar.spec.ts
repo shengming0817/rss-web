@@ -12,8 +12,6 @@ function makeRouter(initialPath = '/') {
     { path: '/', component: { template: '<div/>' } },
     { path: '/audit', component: { template: '<div/>' } },
     { path: '/access/identities', component: { template: '<div/>' } },
-    { path: '/cells', component: { template: '<div/>' } },
-    { path: '/deps', component: { template: '<div/>' } },
   ]
   const router = createRouter({ history: createMemoryHistory(), routes })
   if (initialPath !== '/') {
@@ -55,48 +53,9 @@ describe('TopBar.vue', () => {
   })
 
   describe('breadcrumb', () => {
-    it('always shows root "gocell" breadcrumb', () => {
+    it('always shows the RSS Web root breadcrumb', () => {
       const { wrapper } = mountTopBar('/')
-      expect(wrapper.find('.topbar__crumbs').text()).toContain('gocell')
-    })
-
-    it('shows group + page breadcrumbs for /audit', async () => {
-      const router = makeRouter('/audit')
-      await router.isReady()
-      const i18n = makeI18n()
-      const pinia = createPinia()
-      setActivePinia(pinia)
-
-      const wrapper = mount(TopBar, {
-        global: { plugins: [router, i18n, pinia] },
-        attachTo: document.body,
-      })
-
-      await router.isReady()
-
-      const text = wrapper.find('.topbar__crumbs').text()
-      // Should contain group (Operate) and item (audit log)
-      expect(text).toContain('Operate')
-      expect(text).toContain('审计日志')
-    })
-
-    it('shows group + page breadcrumbs for /access/identities', async () => {
-      const router = makeRouter('/access/identities')
-      await router.isReady()
-      const i18n = makeI18n()
-      const pinia = createPinia()
-      setActivePinia(pinia)
-
-      const wrapper = mount(TopBar, {
-        global: { plugins: [router, i18n, pinia] },
-        attachTo: document.body,
-      })
-
-      await router.isReady()
-
-      const text = wrapper.find('.topbar__crumbs').text()
-      expect(text).toContain('Access')
-      expect(text).toContain('身份')
+      expect(wrapper.find('.topbar__crumbs').text()).toContain('RSS Web')
     })
   })
 

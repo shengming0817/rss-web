@@ -6,6 +6,9 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     include: ['src/**/*.spec.ts'],
+    // Cold dynamic imports can exceed Vitest's 5s default while all workspace
+    // projects execute concurrently on CI runners.
+    testTimeout: 10_000,
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts', 'src/**/*.vue'],

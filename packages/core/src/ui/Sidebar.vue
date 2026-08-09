@@ -1,9 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRoute, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { NAV_GROUPS } from './navConfig'
-import type { NavPill } from './navConfig'
 
 const props = defineProps<{
   collapsed: boolean
@@ -15,18 +12,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const route = useRoute()
-
-/** Map nav pill → CSS class modifier */
-function pillClass(pill: NavPill): string {
-  return `sidebar__pill--${pill}`
-}
-
-/** Whether a given route path matches the current route */
-function isActive(to: string): boolean {
-  // Exact match or prefix match for nested routes
-  return route.path === to || route.path.startsWith(to + '/')
-}
 
 /** Derived: initials from route for a11y current label */
 const toggleLabel = computed(() =>
@@ -105,82 +90,7 @@ function openCommandPalette(): void {
       <kbd class="v1-kbd">{{ t('shell.search.shortcut') }}</kbd>
     </button>
 
-    <!-- Navigation groups -->
-    <nav class="sidebar__nav" :aria-label="t('shell.nav.label')">
-      <template v-for="group in NAV_GROUPS" :key="group.groupKey">
-        <div class="sidebar__group" role="group" :aria-label="t(group.labelKey)">
-          <div
-            v-if="!collapsed"
-            :id="`sidebar-group-${group.groupKey}`"
-            class="sidebar__group-label"
-          >
-            {{ t(group.labelKey) }}
-          </div>
-
-          <template v-for="item in group.items" :key="item.key">
-            <!-- Reserved items: non-interactive span (keyboard Enter must not activate) -->
-            <span
-              v-if="item.pill === 'reserved'"
-              class="sidebar__item sidebar__item--reserved"
-              :aria-label="t(item.labelKey)"
-              aria-disabled="true"
-            >
-              <span v-if="!collapsed" class="sidebar__item-label">
-                {{ t(item.labelKey) }}
-              </span>
-              <span
-                v-if="!collapsed"
-                class="sidebar__pill"
-                :class="pillClass('reserved')"
-                aria-hidden="true"
-              >
-                {{ t('nav.pill.reserved') }}
-              </span>
-            </span>
-
-            <!-- Live / preview / new items: real RouterLink -->
-            <RouterLink
-              v-else
-              :to="item.to"
-              class="sidebar__item"
-              :class="{
-                'sidebar__item--active': isActive(item.to),
-              }"
-              :aria-label="t(item.labelKey)"
-              :aria-current="isActive(item.to) ? 'page' : undefined"
-            >
-              <span v-if="!collapsed" class="sidebar__item-label">
-                {{ t(item.labelKey) }}
-              </span>
-              <span
-                v-if="!collapsed && item.pill && item.pill !== 'live'"
-                class="sidebar__pill"
-                :class="pillClass(item.pill)"
-                aria-hidden="true"
-              >
-                {{ t(`nav.pill.${item.pill}`) }}
-              </span>
-            </RouterLink>
-          </template>
-        </div>
-      </template>
-    </nav>
-
-    <!-- User card -->
-    <div class="sidebar__foot">
-      <slot name="user-card">
-        <div v-if="!collapsed" class="sidebar__user">
-          <div class="v1-avatar" aria-hidden="true">GC</div>
-          <div class="sidebar__user-meta">
-            <div class="sidebar__user-name">{{ t('shell.user.guest') }}</div>
-            <div class="sidebar__user-role">{{ t('shell.user.role') }}</div>
-          </div>
-        </div>
-        <div v-else class="sidebar__user-icon">
-          <div class="v1-avatar" aria-hidden="true">GC</div>
-        </div>
-      </slot>
-    </div>
+    <nav class="sidebar__nav" :aria-label="t('shell.nav.label')" />
   </aside>
 </template>
 

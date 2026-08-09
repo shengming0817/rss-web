@@ -1,26 +1,6 @@
 import { onScopeDispose } from 'vue'
-import { useRouter } from 'vue-router'
 import { useThemeStore } from '@gocell/core'
 import { useUiStore } from '../stores/useUiStore'
-
-/**
- * G-prefix navigation map: second key → route path.
- * Sequence: press G then one of these keys within G_TIMEOUT_MS.
- *
- * PRD §5.2 偏差说明：
- *  - G→S 映射 /coverage（PRD 写 Settings，Batch 0 无 /settings 路由）。
- *    TODO: Batch 7+ 补 /settings 路由后改回 PRD 原意。
- */
-const G_NAV: Record<string, string> = {
-  u: '/access/identities',
-  a: '/audit',
-  c: '/config',
-  f: '/flags',
-  s: '/coverage', // Batch 0 临时映射 Coverage；PRD §5.2 原意是 Settings，待 Batch 7+ 对齐
-}
-
-/** How long to wait for the second key after G press (ms). */
-const G_TIMEOUT_MS = 1000
 
 /**
  * ARIA interactive widget roles that accept text input — shortcuts must be
@@ -63,27 +43,10 @@ function isInputFocused(): boolean {
  *   ⌘\ / Ctrl+\  → toggle sidebar
  *   Esc           → close command palette (works even when input/select focused)
  *   /             → open command palette (Batch 0 临时；PRD §5.2 原意是聚焦页内搜索)
- *   G then U      → /access/identities
- *   G then A      → /audit
- *   G then C      → /config
- *   G then F      → /flags
- *   G then S      → /coverage (Batch 0 临时；PRD §5.2 原意是 Settings)
  */
 export function useGlobalShortcuts(): () => void {
-  const router = useRouter()
   const themeStore = useThemeStore()
   const uiStore = useUiStore()
-
-  let gPrefixActive = false
-  let gPrefixTimer: ReturnType<typeof setTimeout> | null = null
-
-  function clearGPrefix(): void {
-    gPrefixActive = false
-    if (gPrefixTimer !== null) {
-      clearTimeout(gPrefixTimer)
-      gPrefixTimer = null
-    }
-  }
 
   function handleKeydown(event: KeyboardEvent): void {
     const isMod = event.metaKey || event.ctrlKey
@@ -95,13 +58,11 @@ export function useGlobalShortcuts(): () => void {
         uiStore.closeCommandPalette()
         event.preventDefault()
       }
-      clearGPrefix()
       return
     }
 
     // All other shortcuts: ignore when an input/textarea/contenteditable is focused
     if (isInputFocused()) {
-      clearGPrefix()
       return
     }
 
@@ -109,7 +70,6 @@ export function useGlobalShortcuts(): () => void {
     if (isMod && key === 'k') {
       event.preventDefault()
       uiStore.openCommandPalette()
-      clearGPrefix()
       return
     }
 
@@ -117,7 +77,6 @@ export function useGlobalShortcuts(): () => void {
     if (isMod && key === 'j') {
       event.preventDefault()
       themeStore.toggleTheme()
-      clearGPrefix()
       return
     }
 
@@ -125,7 +84,6 @@ export function useGlobalShortcuts(): () => void {
     if (isMod && key === '\\') {
       event.preventDefault()
       uiStore.toggleSidebar()
-      clearGPrefix()
       return
     }
 
@@ -135,31 +93,7 @@ export function useGlobalShortcuts(): () => void {
     if (key === '/' && !isMod) {
       event.preventDefault()
       uiStore.openCommandPalette()
-      clearGPrefix()
       return
-    }
-
-    // G-prefix navigation state machine (no modifier)
-    if (!isMod) {
-      if (gPrefixActive) {
-        // Second key of G-sequence
-        const dest = G_NAV[key]
-        clearGPrefix()
-        if (dest) {
-          event.preventDefault()
-          router.push(dest).catch(() => {
-            // Navigation failures are silently swallowed
-          })
-        }
-        return
-      }
-
-      if (key === 'g') {
-        // Begin G-prefix sequence
-        gPrefixActive = true
-        gPrefixTimer = setTimeout(clearGPrefix, G_TIMEOUT_MS)
-        return
-      }
     }
   }
 
@@ -167,7 +101,6 @@ export function useGlobalShortcuts(): () => void {
 
   function cleanup(): void {
     window.removeEventListener('keydown', handleKeydown)
-    clearGPrefix()
   }
 
   // Auto-cleanup when the owning scope (component or effect scope) is disposed.

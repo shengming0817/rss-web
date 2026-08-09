@@ -3,7 +3,7 @@
  * App root — global concerns only (theme, i18n locale sync, AntD theme provider).
  *
  * Renders a bare <RouterView/>: the dashboard chrome lives in AppShellLayout
- * (a parent route), so standalone full-screen pages (login, first-run-setup)
+ * (a parent route), so the standalone login page
  * render here without any shell wrapper.
  */
 import { watch } from 'vue'

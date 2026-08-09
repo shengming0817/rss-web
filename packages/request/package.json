@@ -16,7 +16,6 @@
   },
   "dependencies": {
     "axios": "catalog:",
-    "@gocell/contracts": "workspace:*",
     "@gocell/shared": "workspace:*"
   },
   "devDependencies": {

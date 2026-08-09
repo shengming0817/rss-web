@@ -1,6 +1,5 @@
 # syntax=docker/dockerfile:1
-# gocell-web 生产镜像：多阶段（node 构建 monorepo → nginx 托管 SPA + 反代 /api）。
-# 构建上下文 = 仓库根（pnpm workspace 需全量 packages/apps/tools + lockfile）。
+# Web production image: build the pnpm workspace, then serve the SPA with nginx.
 
 # ── 构建阶段 ───────────────────────────────────────────────────────────────
 FROM node:22-slim AS build
@@ -16,16 +15,8 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc* ./
 COPY apps/web/package.json apps/web/package.json
 COPY packages/core/package.json packages/core/package.json
 COPY packages/shared/package.json packages/shared/package.json
-COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/request/package.json packages/request/package.json
-COPY packages/access/package.json packages/access/package.json
-COPY packages/audit/package.json packages/audit/package.json
-COPY packages/config/package.json packages/config/package.json
-COPY packages/observability/package.json packages/observability/package.json
-COPY packages/devboard/package.json packages/devboard/package.json
-COPY tools/codegen/package.json tools/codegen/package.json
 
-# 契约已生成并入库（packages/contracts/src），构建期无需后端、无需 codegen。
 RUN pnpm install --frozen-lockfile
 
 # 依赖层落定后，复制源码并构建

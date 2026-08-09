@@ -1,6 +1,9 @@
 import type { AxiosError } from 'axios'
-import type { GoCellHTTPErrorResponse } from '@gocell/contracts'
 import type { GoCellRequestError } from './types'
+
+interface ErrorEnvelope {
+  error: { code: string }
+}
 
 function isAxiosError(err: unknown): err is AxiosError {
   return (
@@ -20,14 +23,14 @@ export function isGoCellRequestError(err: unknown): err is GoCellRequestError {
   return isAxiosError(err)
 }
 
-function isGoCellErrorEnvelope(data: unknown): data is GoCellHTTPErrorResponse {
+function isGoCellErrorEnvelope(data: unknown): data is ErrorEnvelope {
   return (
     typeof data === 'object' &&
     data !== null &&
     'error' in data &&
     typeof (data as Record<string, unknown>)['error'] === 'object' &&
     (data as Record<string, unknown>)['error'] !== null &&
-    typeof (data as GoCellHTTPErrorResponse).error.code === 'string'
+    typeof (data as ErrorEnvelope).error.code === 'string'
   )
 }
 

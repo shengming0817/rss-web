@@ -1,36 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useThemeStore } from '../stores/useThemeStore'
 import { useLocaleStore } from '../stores/useLocaleStore'
-import { NAV_GROUPS } from './navConfig'
 
 const emit = defineEmits<{
   (e: 'open-command-palette'): void
 }>()
 
 const { t } = useI18n()
-const route = useRoute()
 const themeStore = useThemeStore()
 const localeStore = useLocaleStore()
-
-/**
- * Derive breadcrumb from current route path + NAV_GROUPS.
- * Returns { group, page } where group is the group label key
- * and page is the item label key, or null if not found.
- */
-const breadcrumb = computed<{ groupKey: string; itemKey: string } | null>(() => {
-  const path = route.path
-  for (const group of NAV_GROUPS) {
-    for (const item of group.items) {
-      if (path === item.to || path.startsWith(item.to + '/')) {
-        return { groupKey: group.labelKey, itemKey: item.labelKey }
-      }
-    }
-  }
-  return null
-})
 
 const themeToggleLabel = computed(() =>
   themeStore.theme === 'light' ? t('shell.theme.dark') : t('shell.theme.light'),
@@ -59,12 +39,6 @@ function openCommandPalette(): void {
     <nav class="topbar__crumbs" :aria-label="t('shell.breadcrumb.root')">
       <ol class="topbar__crumb-list">
         <li class="topbar__crumb topbar__crumb--faint">{{ t('shell.breadcrumb.root') }}</li>
-        <template v-if="breadcrumb">
-          <li class="topbar__sep" aria-hidden="true">/</li>
-          <li class="topbar__crumb topbar__crumb--faint">{{ t(breadcrumb.groupKey) }}</li>
-          <li class="topbar__sep" aria-hidden="true">/</li>
-          <li class="topbar__crumb" aria-current="page">{{ t(breadcrumb.itemKey) }}</li>
-        </template>
       </ol>
     </nav>
 
