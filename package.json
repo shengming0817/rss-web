@@ -1,0 +1,57 @@
+{
+  "name": "gocell-web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.4.0",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=11.4.0"
+  },
+  "scripts": {
+    "dev": "pnpm -F @gocell/web dev",
+    "build": "pnpm -F @gocell/web build",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage --project '!root'",
+    "test:boundary": "vitest run --project root",
+    "test:e2e": "playwright test",
+    "codegen": "pnpm -F @gocell/codegen generate",
+    "cell-manifest": "pnpm -F @gocell/cell-manifest generate",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,vue}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,css,scss,yaml,yml}": [
+      "prettier --write"
+    ]
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vue-tsc": "catalog:",
+    "vitest": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "@vue/test-utils": "catalog:",
+    "jsdom": "catalog:",
+    "@playwright/test": "catalog:",
+    "eslint": "catalog:",
+    "@eslint/js": "catalog:",
+    "typescript-eslint": "catalog:",
+    "eslint-plugin-vue": "catalog:",
+    "vue-eslint-parser": "catalog:",
+    "eslint-plugin-import-x": "catalog:",
+    "eslint-import-resolver-typescript": "catalog:",
+    "eslint-plugin-vuejs-accessibility": "catalog:",
+    "eslint-config-prettier": "catalog:",
+    "prettier": "catalog:",
+    "husky": "catalog:",
+    "lint-staged": "catalog:"
+  }
+}

@@ -1,0 +1,137 @@
+/* V1 Deep — modals, command palette, toast, drawer extras */
+
+.v1d-cmdk {
+  position: fixed; inset: 0; z-index: 80;
+  background: oklch(0.12 0 0 / 0.45); backdrop-filter: blur(4px);
+  display: flex; justify-content: center; align-items: flex-start;
+  padding-top: 12vh;
+}
+.v1d-cmdk-panel {
+  width: 580px; max-width: 92%;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: v1dfade 0.16s ease;
+}
+@keyframes v1dfade { from { transform: translateY(-8px); opacity: 0; } }
+.v1d-cmdk-inp {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.v1d-cmdk-inp input {
+  flex: 1; border: 0; outline: 0; background: transparent;
+  font-size: 14.5px; color: var(--fg);
+}
+.v1d-cmdk-body { padding: 6px 0 10px; max-height: 400px; overflow: auto; }
+.v1d-cmdk-group {
+  padding: 10px 18px 4px;
+  font-family: var(--font-mono); font-size: 10.5px;
+  letter-spacing: 0.08em; color: var(--fg-faint);
+  text-transform: uppercase;
+}
+.v1d-cmdk-row {
+  width: 100%;
+  display: flex; align-items: center; gap: 12px;
+  padding: 7px 18px;
+  font-size: 13px; color: var(--fg);
+  text-align: left;
+  white-space: nowrap;
+}
+.v1d-cmdk-row > span:nth-child(2) {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.v1d-cmdk-row:hover { background: var(--line-soft); }
+.v1d-cmdk-row:first-of-type { background: var(--line-soft); }
+.v1d-cmdk-ico { color: var(--fg-muted); display: flex; width: 16px; }
+.v1d-cmdk-hint { margin-left: auto; }
+.v1d-cmdk-empty { padding: 22px 18px; color: var(--fg-faint); font-size: 13px; text-align: center; }
+
+.v1d-modal {
+  position: fixed; inset: 0; z-index: 80;
+  background: oklch(0.12 0 0 / 0.45); backdrop-filter: blur(4px);
+  display: flex; justify-content: center; align-items: flex-start;
+  padding-top: 14vh;
+}
+.v1d-modal-panel {
+  width: 460px; max-width: 92%;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: v1dfade 0.16s ease;
+}
+.v1d-modal-head {
+  padding: 18px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--line-soft);
+}
+.v1d-modal-body { padding: 18px 20px 22px; }
+.v1d-field {
+  display: flex; flex-direction: column; gap: 6px;
+  margin-bottom: 14px;
+}
+.v1d-field span {
+  font-size: 12px; font-weight: 500;
+  color: var(--fg-muted);
+}
+.v1d-field input, .v1d-field select {
+  height: 34px; padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg-raised);
+  color: var(--fg);
+  font-size: 13.5px;
+}
+.v1d-field input:focus, .v1d-field select:focus {
+  outline: 0; border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.v1d-field-hint {
+  padding: 10px 12px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r);
+  font-size: 12.5px; color: var(--fg-muted);
+}
+.v1d-field-hint b { color: var(--fg); font-weight: 600; }
+.v1d-modal-foot {
+  padding: 12px 20px;
+  background: var(--bg-sunken);
+  border-top: 1px solid var(--line-soft);
+  display: flex; align-items: center; justify-content: space-between;
+}
+
+.v1d-toasts {
+  position: fixed; right: 20px; bottom: 20px; z-index: 90;
+  display: flex; flex-direction: column; gap: 8px;
+  pointer-events: none;
+}
+.v1d-toast {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+  animation: v1dtoast 0.22s ease;
+}
+@keyframes v1dtoast { from { transform: translateX(20px); opacity: 0; } }
+
+.v1d-drawer-label {
+  font-size: 10.5px; letter-spacing: 0.08em;
+  color: var(--fg-faint); font-weight: 600;
+  padding: 14px 20px 6px;
+}
+.v1d-drawer-acts { padding: 0 20px 10px; }
+.v1d-act {
+  display: flex; gap: 10px; padding: 5px 0;
+  font-size: 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.v1d-act:last-child { border-bottom: 0; }

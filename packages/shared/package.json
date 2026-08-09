@@ -1,0 +1,15 @@
+{
+  "name": "@gocell/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit"
+  }
+}

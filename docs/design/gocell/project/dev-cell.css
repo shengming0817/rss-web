@@ -1,0 +1,204 @@
+/* dev-cell.css — Cell-centric inspector */
+
+.devcell-list tbody tr { cursor: pointer; }
+.devcell-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  vertical-align: middle;
+}
+
+/* detail head */
+.devcell-detail {
+  display: flex; flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+.devcell-head {
+  padding: 24px 32px 0;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--bg);
+}
+.devcell-head-row {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+  margin-bottom: 14px;
+}
+
+/* tabs */
+.devcell-tabs {
+  display: flex; gap: 0;
+  padding: 0 32px;
+  border-bottom: 1px solid var(--line-soft);
+  overflow-x: auto;
+  background: var(--bg);
+}
+.devcell-tabs button {
+  padding: 10px 16px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--fg-muted);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  margin-bottom: -1px;
+  white-space: nowrap;
+}
+.devcell-tabs button:hover { color: var(--fg); }
+.devcell-tabs button[data-active] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.devcell-body {
+  flex: 1;
+  padding: 22px 32px 32px;
+  overflow: auto;
+  background: var(--bg-sunken);
+}
+
+/* grid + cards */
+.devcell-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.devcell-span-2 { grid-column: span 2; }
+.devcell-span-3 { grid-column: span 3; }
+
+.devcell-card {
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 14px 16px;
+}
+.devcell-card-h {
+  display: flex; align-items: center;
+  font-size: 11px; letter-spacing: 0.06em;
+  color: var(--fg-faint); font-weight: 600;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+/* kv blocks */
+.devcell-kv {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px;
+}
+.devcell-kv > div {
+  display: flex; justify-content: space-between;
+  font-size: 12.5px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.devcell-kv > div:last-child { border-bottom: 0; }
+.devcell-kv span { color: var(--fg-muted); }
+.devcell-kv b { font-weight: 500; }
+
+/* health */
+.devcell-health { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+.devcell-health-num { font-size: 36px; font-weight: 200; line-height: 1; letter-spacing: -0.02em; }
+.devcell-health-label { font-size: 12.5px; color: var(--fg-muted); }
+.devcell-bar {
+  height: 6px; background: var(--bg-sunken); border-radius: 3px; overflow: hidden;
+}
+.devcell-bar > div { height: 100%; transition: width 0.3s; }
+
+/* timeline */
+.devcell-timeline {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.devcell-timeline li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 0;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.devcell-timeline li:last-child { border-bottom: 0; }
+.devcell-act {
+  font-family: var(--font-mono); font-size: 9.5px;
+  padding: 1px 6px; border-radius: 3px;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  background: var(--bg-sunken); color: var(--fg-muted);
+  min-width: 64px; text-align: center;
+}
+.devcell-act-deploy   { background: oklch(0.95 0.04 270); color: oklch(0.42 0.15 270); }
+.devcell-act-review   { background: oklch(0.95 0.04 200); color: oklch(0.42 0.15 200); }
+.devcell-act-contract { background: oklch(0.95 0.04 70);  color: oklch(0.45 0.13 70); }
+.devcell-act-task     { background: oklch(0.96 0.03 30);  color: oklch(0.45 0.13 30); }
+.devcell-act-incident { background: oklch(0.94 0.05 25);  color: var(--err); }
+[data-theme="dark"] .devcell-act-deploy   { background: oklch(0.22 0.04 270); color: oklch(0.85 0.15 270); }
+[data-theme="dark"] .devcell-act-review   { background: oklch(0.22 0.04 200); color: oklch(0.85 0.15 200); }
+[data-theme="dark"] .devcell-act-contract { background: oklch(0.22 0.04 70);  color: oklch(0.85 0.13 70); }
+[data-theme="dark"] .devcell-act-task     { background: oklch(0.22 0.03 30);  color: oklch(0.85 0.13 30); }
+[data-theme="dark"] .devcell-act-incident { background: oklch(0.22 0.05 25);  color: oklch(0.85 0.16 25); }
+
+/* inventory tab */
+.devcell-inv {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px;
+}
+.devcell-inv-section {
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 12px 16px;
+}
+.devcell-inv-head {
+  font-size: 11px; letter-spacing: 0.06em;
+  color: var(--fg-faint); font-weight: 600;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.devcell-inv table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.devcell-inv td { padding: 4px 0; border-bottom: 1px solid var(--line-soft); }
+.devcell-inv td:first-child { color: var(--fg-muted); }
+.devcell-inv td:last-child  { text-align: right; font-weight: 500; }
+.devcell-inv tr:last-child td { border-bottom: 0; }
+
+/* contract tables embedded in tabs */
+.devcell-tbl thead th {
+  position: static !important;
+  background: transparent !important;
+  border-bottom: 1px solid var(--line) !important;
+}
+.devcell-tbl tbody tr:hover { background: var(--bg-sunken); }
+
+/* imports list */
+.devcell-imports {
+  list-style: none; padding: 0; margin: 0;
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 12px;
+}
+.devcell-imports li {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12.5px;
+  padding: 4px 0;
+}
+
+/* slice cards */
+.devcell-slices {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;
+}
+.devcell-slice {
+  background: var(--bg-sunken);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r);
+  padding: 10px 12px;
+}
+
+/* pill */
+.devcell-pill {
+  font-family: var(--font-mono); font-size: 10px;
+  padding: 1px 6px; border-radius: 3px;
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
+.devcell-pill-static { background: var(--bg-sunken); color: var(--fg-muted); border: 1px solid var(--line-soft); }
+.devcell-pill-smart  { background: oklch(0.94 0.05 80); color: oklch(0.45 0.15 70); }
+[data-theme="dark"] .devcell-pill-smart { background: oklch(0.22 0.04 80); color: oklch(0.85 0.15 80); }
+
+/* link button */
+.v1-link {
+  background: transparent; border: 0;
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+.v1-link:hover { text-decoration: underline; }

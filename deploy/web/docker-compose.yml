@@ -1,0 +1,19 @@
+# gocell-web 前端容器（nginx 托管 SPA + 反代 /api 到后端）。
+# 后端（gocell corebundle）作为独立 compose 项目运行并在 host 发布 8080；
+# 本服务经 host.docker.internal 反代到它，不耦合后端内部网络拓扑。
+#
+# 用法（在 deploy/web/ 下）：
+#   docker compose up -d --build
+#   打开 http://localhost:8081
+services:
+  web:
+    build:
+      context: ../.. # 仓库根（pnpm workspace 需全量源码 + lockfile）
+      dockerfile: deploy/web/Dockerfile
+    image: gocell-web:local
+    container_name: gocell-web
+    ports:
+      - '8081:80'
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    restart: unless-stopped
