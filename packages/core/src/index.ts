@@ -14,5 +14,5 @@ export { UnavailablePanel } from './components/index'
 export { AppShell, Sidebar, TopBar, CommandPalette } from './ui/index'
 
 // i18n
-export { createGocellI18n } from './i18n/index'
+export { createRssI18n } from './i18n/index'
 export type { MessageSchema } from './i18n/index'

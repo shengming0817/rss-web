@@ -15,7 +15,7 @@ describe('ESLint package boundaries', () => {
   it('allows core to depend on shared', async () => {
     expect(
       await ruleIds(
-        "import { invariant } from '@gocell/shared'\nexport const x = invariant\n",
+        "import { invariant } from '@rss/shared'\nexport const x = invariant\n",
         'packages/core/src/index.ts',
       ),
     ).not.toContain('no-restricted-imports')
@@ -41,7 +41,7 @@ describe('ESLint package boundaries', () => {
     ]) {
       expect(
         await ruleIds(
-          `import { x } from '@gocell/${dependency}'\nexport const y = x\n`,
+          `import { x } from '@rss/${dependency}'\nexport const y = x\n`,
           'packages/core/src/index.ts',
         ),
       ).toContain('no-restricted-imports')
@@ -52,7 +52,7 @@ describe('ESLint package boundaries', () => {
     for (const dependency of ['core', 'access', 'audit', 'config', 'contracts', 'observability']) {
       expect(
         await ruleIds(
-          `import { x } from '@gocell/${dependency}'\nexport const y = x\n`,
+          `import { x } from '@rss/${dependency}'\nexport const y = x\n`,
           'packages/request/src/http.ts',
         ),
       ).toContain('no-restricted-imports')
@@ -62,7 +62,7 @@ describe('ESLint package boundaries', () => {
   it('blocks package deep imports', async () => {
     expect(
       await ruleIds(
-        "import { x } from '@gocell/core/src/internal'\nexport const y = x\n",
+        "import { x } from '@rss/core/src/internal'\nexport const y = x\n",
         'apps/web/src/main.ts',
       ),
     ).toContain('no-restricted-imports')

@@ -2,9 +2,9 @@
 
 Read `README.md` and the current migration issue before changing this repository.
 
-- Treat the imported GoCell tree as a historical source baseline, not as the RSS
+- Treat the imported source tree as a historical baseline, not as the RSS
   product or contract truth.
-- Do not add backward-compatibility aliases, a dual GoCell/RSS mode, or silent
+- Do not add backward-compatibility aliases, a dual-backend mode, or silent
   fallback between old and new behavior.
 - Delete out-of-scope behavior instead of hiding it behind flags.
 - Consume RSS only through explicitly selected active contracts; do not create a

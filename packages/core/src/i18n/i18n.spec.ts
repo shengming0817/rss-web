@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createI18n } from 'vue-i18n'
-import { createGocellI18n } from './index'
+import { createRssI18n } from './index'
 import zhCN from './messages/zh-CN'
 import enUS from './messages/en-US'
 
@@ -17,18 +17,18 @@ function leafKeys(value: Record<string, unknown>, prefix = ''): string[] {
   })
 }
 
-describe('createGocellI18n', () => {
+describe('createRssI18n', () => {
   beforeEach(() => localStorage.clear())
 
   it('defaults to zh-CN and accepts a persisted supported locale', () => {
-    expect(asComposer(createGocellI18n()).locale.value).toBe('zh-CN')
-    localStorage.setItem('gocell-locale', 'en-US')
-    expect(asComposer(createGocellI18n()).locale.value).toBe('en-US')
+    expect(asComposer(createRssI18n()).locale.value).toBe('zh-CN')
+    localStorage.setItem('rss-locale', 'en-US')
+    expect(asComposer(createRssI18n()).locale.value).toBe('en-US')
   })
 
   it('rejects unsupported persisted locales', () => {
-    localStorage.setItem('gocell-locale', 'de-DE')
-    expect(asComposer(createGocellI18n()).locale.value).toBe('zh-CN')
+    localStorage.setItem('rss-locale', 'de-DE')
+    expect(asComposer(createRssI18n()).locale.value).toBe('zh-CN')
   })
 
   it('keeps both locale schemas identical', () => {

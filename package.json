@@ -1,5 +1,5 @@
 {
-  "name": "gocell-web",
+  "name": "rss-web",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -9,8 +9,9 @@
     "pnpm": ">=11.4.0"
   },
   "scripts": {
-    "dev": "pnpm -F @gocell/web dev",
-    "build": "pnpm -F @gocell/web build",
+    "dev": "pnpm -F @rss/web dev",
+    "build": "pnpm -F @rss/web build && pnpm check:identity:build",
+    "check:identity:build": "node scripts/check-built-identity.mjs apps/web/dist",
     "typecheck": "pnpm -r --if-present typecheck",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

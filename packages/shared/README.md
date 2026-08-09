@@ -1,4 +1,4 @@
-# @gocell/shared
+# @rss/shared
 
 > 跨包纯工具函数 / 常量 / 类型（无业务、无 store、无 UI）
 
@@ -8,4 +8,4 @@
 
 ## 边界
 
-依赖规则见仓库根 `CLAUDE.md` §依赖规则。本包为最底层工具包，**禁止依赖任何 `@gocell/*` 包**（含 contracts/request）；消费方经 `workspace:*` 引用本包。
+依赖规则见仓库根 `CLAUDE.md` §依赖规则。本包为最底层工具包，**禁止依赖任何 `@rss/*` 包**（含 contracts/request）；消费方经 `workspace:*` 引用本包。

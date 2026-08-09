@@ -129,7 +129,7 @@ describe('useThemeTokens', () => {
 
   describe('algorithm switching', () => {
     it('uses defaultAlgorithm for light theme', () => {
-      localStorage.setItem('gocell-theme', 'light')
+      localStorage.setItem('rss-theme', 'light')
 
       setupGetComputedStyle({
         '--accent': 'rgb(59, 130, 246)',
@@ -150,7 +150,7 @@ describe('useThemeTokens', () => {
     })
 
     it('uses darkAlgorithm for dark theme', () => {
-      localStorage.setItem('gocell-theme', 'dark')
+      localStorage.setItem('rss-theme', 'dark')
 
       setupGetComputedStyle({
         '--accent': 'rgb(100, 160, 255)',
@@ -171,7 +171,7 @@ describe('useThemeTokens', () => {
     })
 
     it('switches algorithm when theme changes', () => {
-      localStorage.setItem('gocell-theme', 'light')
+      localStorage.setItem('rss-theme', 'light')
 
       setupGetComputedStyle({
         '--accent': 'rgb(59, 130, 246)',
@@ -197,7 +197,7 @@ describe('useThemeTokens', () => {
     })
 
     it('CSS token values update when switching from light to dark', () => {
-      localStorage.setItem('gocell-theme', 'light')
+      localStorage.setItem('rss-theme', 'light')
 
       // Light mode CSS vars
       setupGetComputedStyle({

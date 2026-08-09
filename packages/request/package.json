@@ -1,5 +1,5 @@
 {
-  "name": "@gocell/request",
+  "name": "@rss/request",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "axios": "catalog:",
-    "@gocell/shared": "workspace:*"
+    "@rss/shared": "workspace:*"
   },
   "devDependencies": {
     "vitest": "catalog:",

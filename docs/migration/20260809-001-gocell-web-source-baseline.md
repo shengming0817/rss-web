@@ -57,6 +57,13 @@ In particular, success of the imported codegen and cell-manifest workflows only
 proves consistency with the historical source. It must not be reported as RSS
 contract compatibility evidence.
 
+## Legacy identity exception
+
+This provenance record and the exact README link to its filename are the only
+tracked locations allowed to retain the historical product identity. Production
+source, package metadata, tests, deployment configuration, and other governance
+documents must use RSS-only naming.
+
 ## Verification
 
 The clean baseline is verified with:

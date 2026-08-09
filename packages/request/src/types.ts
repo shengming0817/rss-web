@@ -1,5 +1,5 @@
 import type { AxiosError } from 'axios'
 
-export interface GoCellRequestError extends AxiosError {
+export interface RssRequestError extends AxiosError {
   i18nKey?: string
 }

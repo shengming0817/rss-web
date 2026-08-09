@@ -21,7 +21,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'pnpm -F @gocell/web dev',
+    command: 'pnpm -F @rss/web dev',
     port: 5173,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

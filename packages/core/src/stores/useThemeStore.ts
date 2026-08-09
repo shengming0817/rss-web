@@ -58,7 +58,7 @@ function buildSeedTokens(currentTheme: 'light' | 'dark'): ThemeConfig['token'] {
   }
 }
 
-const STORAGE_KEY = 'gocell-theme'
+const STORAGE_KEY = 'rss-theme'
 
 function isTheme(value: unknown): value is Theme {
   return value === 'light' || value === 'dark'

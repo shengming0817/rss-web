@@ -1,5 +1,5 @@
 {
-  "name": "@gocell/core",
+  "name": "@rss/core",
   "version": "0.0.0",
   "private": true,
   "type": "module",

@@ -1,5 +1,5 @@
 /**
- * ESLint flat config — gocell-web
+ * ESLint flat config — rss-web
  * AI-robust Hard: 边界锁 (T022)
  *
  * ── 边界锁方案说明 ────────────────────────────────────────────────────────────
@@ -49,23 +49,22 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 /** Deep-path ban: all packages must use package.json#exports, not src/ paths */
 const DEEP_PATH_PATTERN = {
-  regex: '^@gocell/[^/]+/src/',
+  regex: '^@rss/[^/]+/src/',
   message:
     '深路径 import 被禁止。请只用 package.json#exports 暴露的入口。参见 AGENTS.md 和 CLAUDE.md。',
 }
 
 /** Reverse-dependency ban: no package/* or tools/* may import the app layer */
 const NO_WEB_PATTERN = {
-  regex: '^@gocell/web(/|$)',
+  regex: '^@rss/web(/|$)',
   message:
-    'packages/* 和 tools/* 禁止反向 import @gocell/web（应用层）。参见 AGENTS.md 和 CLAUDE.md。',
+    'packages/* 和 tools/* 禁止反向 import @rss/web（应用层）。参见 AGENTS.md 和 CLAUDE.md。',
 }
 
-/** Axios ban: only @gocell/request may import axios */
+/** Axios ban: only @rss/request may import axios */
 const NO_AXIOS_PATH = {
   name: 'axios',
-  message:
-    'HTTP 单点：禁止在业务包直接 import axios。请通过 @gocell/request 暴露的 http 实例发请求。',
+  message: 'HTTP 单点：禁止在业务包直接 import axios。请通过 @rss/request 暴露的 http 实例发请求。',
 }
 
 /** Helper: create a no-restricted-imports rule config combining all given patterns + paths */
@@ -163,7 +162,7 @@ export default tseslint.config(
       'import-x/no-cycle': ['error', { maxDepth: 3 }],
 
       // ── 全局: 深路径禁止 (Hard) ────────────────────────────────────────────
-      // 禁止 @gocell/*/src/** 深路径，强制走 package.json#exports 入口
+      // 禁止 @rss/*/src/** 深路径，强制走 package.json#exports 入口
       // 使用 no-restricted-imports regex 匹配 specifier 字符串，不依赖 resolver
       // NOTE: 每个包的 per-package config 也包含此规则，以防被后续 config 块覆盖
       'no-restricted-imports': [
@@ -176,14 +175,14 @@ export default tseslint.config(
   },
 
   // ── 边界锁: packages/shared ────────────────────────────────────────────────
-  // 禁止 import 任何 @gocell/*（包括 contracts、core、request）
+  // 禁止 import 任何 @rss/*（包括 contracts、core、request）
   {
     files: ['packages/shared/**/*.{ts,vue}'],
     rules: {
       'no-restricted-imports': boundaryRule([
         {
-          regex: '^@gocell/',
-          message: '@gocell/shared 不允许依赖任何 @gocell/* 包。参见 AGENTS.md 和 CLAUDE.md。',
+          regex: '^@rss/',
+          message: '@rss/shared 不允许依赖任何 @rss/* 包。参见 AGENTS.md 和 CLAUDE.md。',
         },
       ]),
     },
@@ -196,8 +195,8 @@ export default tseslint.config(
     rules: {
       'no-restricted-imports': boundaryRule([
         {
-          regex: '^@gocell/(?!shared(?:/|$))',
-          message: '@gocell/core 只允许依赖 @gocell/shared。',
+          regex: '^@rss/(?!shared(?:/|$))',
+          message: '@rss/core 只允许依赖 @rss/shared。',
         },
       ]),
     },
@@ -211,15 +210,15 @@ export default tseslint.config(
     rules: {
       'no-restricted-imports': boundaryRule([
         {
-          regex: '^@gocell/(?!shared(?:/|$))',
-          message: '@gocell/request 只允许依赖 @gocell/shared。',
+          regex: '^@rss/(?!shared(?:/|$))',
+          message: '@rss/request 只允许依赖 @rss/shared。',
         },
       ]),
     },
   },
 
   // ── 边界锁: apps/web ──────────────────────────────────────────────────────
-  // apps/web 可依赖所有 @gocell/* 包；但禁深路径和 axios
+  // apps/web 可依赖所有 @rss/* 包；但禁深路径和 axios
   {
     files: ['apps/web/**/*.{ts,vue}'],
     rules: {

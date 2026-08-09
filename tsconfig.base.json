@@ -25,15 +25,15 @@
     "types": [],
     "baseUrl": ".",
     "paths": {
-      "@gocell/core": ["packages/core/src/index.ts"],
-      "@gocell/core/composables": ["packages/core/src/composables/index.ts"],
-      "@gocell/core/stores": ["packages/core/src/stores/index.ts"],
-      "@gocell/core/components": ["packages/core/src/components/index.ts"],
-      "@gocell/core/ui": ["packages/core/src/ui/index.ts"],
-      "@gocell/core/i18n": ["packages/core/src/i18n/index.ts"],
-      "@gocell/core/testing": ["packages/core/src/testing/index.ts"],
-      "@gocell/shared": ["packages/shared/src/index.ts"],
-      "@gocell/request": ["packages/request/src/index.ts"]
+      "@rss/core": ["packages/core/src/index.ts"],
+      "@rss/core/composables": ["packages/core/src/composables/index.ts"],
+      "@rss/core/stores": ["packages/core/src/stores/index.ts"],
+      "@rss/core/components": ["packages/core/src/components/index.ts"],
+      "@rss/core/ui": ["packages/core/src/ui/index.ts"],
+      "@rss/core/i18n": ["packages/core/src/i18n/index.ts"],
+      "@rss/core/testing": ["packages/core/src/testing/index.ts"],
+      "@rss/shared": ["packages/shared/src/index.ts"],
+      "@rss/request": ["packages/request/src/index.ts"]
     }
   }
 }

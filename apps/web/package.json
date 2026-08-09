@@ -1,5 +1,5 @@
 {
-  "name": "@gocell/web",
+  "name": "@rss/web",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -17,7 +17,7 @@
     "pinia": "catalog:",
     "ant-design-vue": "catalog:",
     "@ant-design/icons-vue": "catalog:",
-    "@gocell/core": "workspace:*",
+    "@rss/core": "workspace:*",
     "vue-i18n": "catalog:"
   },
   "devDependencies": {

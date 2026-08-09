@@ -10,9 +10,9 @@ administration screens, observability screens, Devboard, and old generation
 tools have been physically removed. RSS capabilities return only through later
 issues backed by selected RSS contracts.
 
-The remaining `@gocell/*` names and UI branding are temporary and are renamed in
-issue #3. They are not a compatibility promise, and the project has no dual
-GoCell/RSS mode.
+The repository uses the single `@rss/*` workspace namespace and RSS Web product
+identity. Legacy aliases, storage-key fallbacks, and dual-backend modes are not
+supported.
 
 Source provenance is immutable under
 [`docs/migration/20260809-001-gocell-web-source-baseline.md`](docs/migration/20260809-001-gocell-web-source-baseline.md).

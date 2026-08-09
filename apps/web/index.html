@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GoCell</title>
+    <title>RSS</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -14,7 +14,7 @@
       // FOUC barrier: apply theme before any CSS/JS loads to prevent flash.
       // Must be a non-module synchronous script so it runs before first paint.
       ;(function () {
-        var stored = localStorage.getItem('gocell-theme')
+        var stored = localStorage.getItem('rss-theme')
         var theme =
           stored === 'light' || stored === 'dark'
             ? stored

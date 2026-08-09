@@ -48,7 +48,10 @@ jobs:
         run: pnpm test:boundary
 
       - name: Build web
-        run: pnpm -F @gocell/web build
+        run: pnpm -F @rss/web build
+
+      - name: Verify RSS-only build identity
+        run: pnpm check:identity:build
 
   # ── Playwright 冒烟（shell + 主题切换，无后端依赖） ─────────────────────────
   e2e:
