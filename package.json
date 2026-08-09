@@ -10,7 +10,8 @@
   },
   "scripts": {
     "dev": "pnpm -F @rss/web dev",
-    "build": "pnpm -F @rss/web build",
+    "build": "pnpm -F @rss/web build && pnpm check:identity:build",
+    "check:identity:build": "node scripts/check-built-identity.mjs apps/web/dist",
     "typecheck": "pnpm -r --if-present typecheck",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
