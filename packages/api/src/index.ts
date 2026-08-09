@@ -1,6 +1,6 @@
 export { createHttpTransport } from './transport'
 export { decodeCursorPage } from './cursor'
-export { RssApiError } from './wire-error'
+export { isRssApiError } from './wire-error'
 export type {
   CursorPage,
   Decoder,
@@ -9,7 +9,9 @@ export type {
   NoContentRequest,
   QueryValue,
   RequestOptions,
+  RssApiError,
   RssApiErrorCause,
+  RssApiMessageKey,
   SafeDetail,
   SuccessStatus,
 } from './types'

@@ -2,7 +2,7 @@ import axios from 'axios'
 import AxiosMockAdapter from 'axios-mock-adapter'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createHttpTransport } from './transport'
-import { RssApiError } from './wire-error'
+import { isRssApiError } from './wire-error'
 
 const decodeObject = (value: unknown): { ok: boolean } => {
   if (typeof value !== 'object' || value === null || (value as { ok?: unknown }).ok !== true) {
@@ -84,6 +84,9 @@ describe('createHttpTransport', () => {
     '/healthz',
     '/api/v1/x?raw=true',
     '/api/v1/x#fragment',
+    '/api/../internal/x',
+    '/api/%2e%2e/internal/x',
+    '/api/%2Finternal/x',
   ])('rejects unsafe or non-API path %s before sending', async (path) => {
     const { mock, transport } = setup()
     await expect(
@@ -92,14 +95,19 @@ describe('createHttpTransport', () => {
     expect(mock.history.get).toHaveLength(0)
   })
 
-  it.each(['https://evil.example', '//evil.example', 'edge', '/edge?raw=true', '/edge#fragment'])(
-    'rejects unsafe base URL %s',
-    (baseURL) => {
-      expect(() => createHttpTransport({ baseURL, defaultTimeoutMs: 5_000 })).toThrowError(
-        expect.objectContaining({ cause: 'client' }),
-      )
-    },
-  )
+  it.each([
+    'https://evil.example',
+    '//evil.example',
+    'edge',
+    '/edge?raw=true',
+    '/edge#fragment',
+    '/edge/../internal',
+    '/edge/%2e%2e/internal',
+  ])('rejects unsafe base URL %s', (baseURL) => {
+    expect(() => createHttpTransport({ baseURL, defaultTimeoutMs: 5_000 })).toThrowError(
+      expect.objectContaining({ cause: 'client' }),
+    )
+  })
 
   it('rejects unresolved or extra path parameters', async () => {
     const { transport } = setup()
@@ -111,6 +119,17 @@ describe('createHttpTransport', () => {
         decode: decodeObject,
       }),
     ).rejects.toMatchObject({ cause: 'client' })
+    for (const id of ['.', '..']) {
+      await expect(
+        transport.request({
+          method: 'GET',
+          path: '/api/v1/items/{id}',
+          pathParams: { id },
+          successStatus: 200,
+          decode: decodeObject,
+        }),
+      ).rejects.toMatchObject({ cause: 'client' })
+    }
     await expect(
       transport.request({
         method: 'GET',
@@ -178,7 +197,7 @@ describe('createHttpTransport', () => {
         decode: decodeObject,
       })
       .catch((error: unknown) => error)
-    expect(caught).toBeInstanceOf(RssApiError)
+    expect(isRssApiError(caught)).toBe(true)
     expect(caught).toMatchObject({ cause: 'network', retryable: false })
     expect(caught).not.toHaveProperty('response')
     expect(caught).not.toHaveProperty('config')

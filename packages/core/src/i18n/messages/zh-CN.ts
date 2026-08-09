@@ -28,7 +28,15 @@ const zhCN = {
     title: 'RSS Web 基座',
     subtitle: '业务能力将在完成 RSS 契约对齐后逐步启用。',
   },
-  errors: { unknown: '未知错误', network: '网络错误' },
+  errors: {
+    unknown: '未知错误',
+    network: '网络错误',
+    validation: '请检查提交的内容',
+    invalidResponse: '服务返回了无效响应',
+    invalidRequest: '无法创建请求',
+    requestAborted: '请求已取消',
+    requestTimeout: '请求超时',
+  },
 } as const
 
 export default zhCN

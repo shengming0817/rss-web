@@ -38,4 +38,20 @@ describe('createRssI18n', () => {
   it('contains only reusable shell and foundation namespaces', () => {
     expect(Object.keys(zhCN).sort()).toEqual(['command', 'errors', 'home', 'shell'])
   })
+
+  it('contains every API transport message in both locales', () => {
+    const keys = [
+      'unknown',
+      'network',
+      'validation',
+      'invalidResponse',
+      'invalidRequest',
+      'requestAborted',
+      'requestTimeout',
+    ] as const
+    for (const key of keys) {
+      expect(enUS.errors[key]).not.toBe(`errors.${key}`)
+      expect(zhCN.errors[key]).not.toBe(`errors.${key}`)
+    }
+  })
 })

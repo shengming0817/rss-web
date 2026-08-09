@@ -1,7 +1,17 @@
-import type { RssApiErrorCause, RssApiErrorInit, SafeDetail } from './types'
+import type {
+  RssApiError,
+  RssApiErrorCause,
+  RssApiErrorInit,
+  RssApiMessageKey,
+  SafeDetail,
+} from './types'
 
 const WIRE_ERROR_KEYS = ['code', 'details', 'message', 'requestId', 'retryable'] as const
 const ERROR_CODE = /^ERR_[A-Z0-9_]+$/
+const WIRE_MESSAGE_KEYS: Readonly<Record<string, RssApiMessageKey>> = {
+  ERR_CORE_VALIDATION: 'errors.validation',
+  ERR_CORE_INTERNAL: 'errors.unknown',
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -31,10 +41,11 @@ function decodeDetails(value: unknown): SafeDetail[] | null {
   return details
 }
 
-export class RssApiError extends Error {
+class RssApiErrorImpl extends Error implements RssApiError {
+  override readonly name = 'RssApiError' as const
   override readonly cause: RssApiErrorCause
   readonly code: string
-  readonly messageKey: string
+  readonly messageKey: RssApiMessageKey
   readonly retryable: boolean
   readonly safeDetails: readonly SafeDetail[]
   declare readonly status?: number
@@ -42,7 +53,6 @@ export class RssApiError extends Error {
 
   constructor(init: RssApiErrorInit) {
     super(init.messageKey)
-    this.name = 'RssApiError'
     this.cause = init.cause
     this.code = init.code
     this.messageKey = init.messageKey
@@ -53,8 +63,17 @@ export class RssApiError extends Error {
   }
 }
 
-function genericError(cause: RssApiErrorCause, code: string, messageKey: string, status?: number) {
-  return new RssApiError({
+export function isRssApiError(value: unknown): value is RssApiError {
+  return value instanceof RssApiErrorImpl
+}
+
+function genericError(
+  cause: RssApiErrorCause,
+  code: string,
+  messageKey: RssApiMessageKey,
+  status?: number,
+) {
+  return new RssApiErrorImpl({
     cause,
     code,
     messageKey,
@@ -104,10 +123,10 @@ export function decodeWireError(status: number, value: unknown): RssApiError {
     return protocolError(status)
   }
 
-  return new RssApiError({
+  return new RssApiErrorImpl({
     cause: 'wire',
     code,
-    messageKey: `errors.${code}`,
+    messageKey: WIRE_MESSAGE_KEYS[code] ?? 'errors.unknown',
     retryable,
     status,
     requestId,

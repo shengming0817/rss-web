@@ -3,7 +3,7 @@ import { decodeWireError, protocolError } from './wire-error'
 
 const envelope = (overrides: Record<string, unknown> = {}) => ({
   error: {
-    code: 'ERR_VALIDATION',
+    code: 'ERR_CORE_VALIDATION',
     message: 'server-owned message',
     retryable: false,
     details: [{ field: 'username' }, { limit: 10 }, { active: false }],
@@ -18,8 +18,8 @@ describe('decodeWireError', () => {
     expect(error).toMatchObject({
       cause: 'wire',
       status: 400,
-      code: 'ERR_VALIDATION',
-      messageKey: 'errors.ERR_VALIDATION',
+      code: 'ERR_CORE_VALIDATION',
+      messageKey: 'errors.validation',
       retryable: false,
       requestId: 'rid-1',
       safeDetails: [{ field: 'username' }, { limit: 10 }, { active: false }],
@@ -41,6 +41,16 @@ describe('decodeWireError', () => {
     expect(
       decodeWireError(429, envelope({ code: 'ERR_TOO_MANY_REQUESTS', retryable: true })),
     ).toMatchObject({ retryable: true, requestId: 'rid-1' })
+  })
+
+  it('maps only reviewed wire codes and falls back safely for unknown codes', () => {
+    expect(decodeWireError(400, envelope()).messageKey).toBe('errors.validation')
+    expect(decodeWireError(500, envelope({ code: 'ERR_CORE_INTERNAL' })).messageKey).toBe(
+      'errors.unknown',
+    )
+    expect(decodeWireError(409, envelope({ code: 'ERR_FUTURE_CODE' })).messageKey).toBe(
+      'errors.unknown',
+    )
   })
 
   it.each([401, 403, 409, 429])('keeps %s as a wire-error coordinate', (status) => {

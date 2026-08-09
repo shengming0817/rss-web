@@ -40,10 +40,30 @@ export type SafeDetail = Readonly<Record<string, SafeDetailValue>>
 
 export type RssApiErrorCause = 'wire' | 'aborted' | 'timeout' | 'network' | 'protocol' | 'client'
 
+export type RssApiMessageKey =
+  | 'errors.unknown'
+  | 'errors.network'
+  | 'errors.validation'
+  | 'errors.invalidResponse'
+  | 'errors.invalidRequest'
+  | 'errors.requestAborted'
+  | 'errors.requestTimeout'
+
+export interface RssApiError extends Error {
+  readonly name: 'RssApiError'
+  readonly cause: RssApiErrorCause
+  readonly code: string
+  readonly messageKey: RssApiMessageKey
+  readonly retryable: boolean
+  readonly safeDetails: readonly SafeDetail[]
+  readonly status?: number
+  readonly requestId?: string
+}
+
 export interface RssApiErrorInit {
   cause: RssApiErrorCause
   code: string
-  messageKey: string
+  messageKey: RssApiMessageKey
   retryable: boolean
   safeDetails?: readonly SafeDetail[]
   status?: number

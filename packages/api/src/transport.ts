@@ -2,10 +2,10 @@ import axios from 'axios'
 import type { AxiosInstance, AxiosRequestConfig } from 'axios'
 import type { HttpTransport, NoContentRequest, QueryValue, RequestOptions } from './types'
 import {
-  RssApiError,
   abortedError,
   clientError,
   decodeWireError,
+  isRssApiError,
   networkError,
   protocolError,
   timeoutError,
@@ -17,6 +17,8 @@ export interface HttpTransportConfig {
 }
 
 const PATH_PARAM = /\{([A-Za-z][A-Za-z0-9]*)\}/g
+const ENCODED_PATH_SEPARATOR = /%(?:2e|2f|5c)/i
+const URL_BASE = 'https://rss-web.invalid'
 
 function positiveTimeout(value: number): boolean {
   return Number.isSafeInteger(value) && value > 0
@@ -36,13 +38,17 @@ function hasUnsafeUrlCharacter(value: string): boolean {
 }
 
 function validBaseURL(value: string): boolean {
-  return (
-    value === '' ||
-    (value.startsWith('/') &&
-      !value.startsWith('//') &&
-      !value.includes('://') &&
-      !hasUnsafeUrlCharacter(value))
-  )
+  if (value === '') return true
+  if (
+    !value.startsWith('/') ||
+    value.startsWith('//') ||
+    value.includes('://') ||
+    hasUnsafeUrlCharacter(value) ||
+    ENCODED_PATH_SEPARATOR.test(value)
+  ) {
+    return false
+  }
+  return new URL(value, URL_BASE).pathname === value
 }
 
 function resolvePath(path: string, params: Readonly<Record<string, string | number>> = {}): string {
@@ -50,7 +56,8 @@ function resolvePath(path: string, params: Readonly<Record<string, string | numb
     !path.startsWith('/api/') ||
     path.startsWith('//') ||
     path.includes('://') ||
-    hasUnsafeUrlCharacter(path)
+    hasUnsafeUrlCharacter(path) ||
+    ENCODED_PATH_SEPARATOR.test(path)
   )
     throw clientError()
   const used = new Set<string>()
@@ -63,11 +70,13 @@ function resolvePath(path: string, params: Readonly<Record<string, string | numb
     ) {
       throw clientError()
     }
+    if (raw === '.' || raw === '..') throw clientError()
     used.add(key)
     return encodeURIComponent(String(raw))
   })
   if (resolved.includes('{') || resolved.includes('}')) throw clientError()
   if (Object.keys(params).some((key) => !used.has(key))) throw clientError()
+  if (new URL(resolved, URL_BASE).pathname !== resolved) throw clientError()
   return resolved
 }
 
@@ -119,7 +128,7 @@ async function execute<T>(
       throw protocolError(response.status)
     }
   } catch (error: unknown) {
-    if (error instanceof RssApiError) throw error
+    if (isRssApiError(error)) throw error
     if (axios.isCancel(error) || (axios.isAxiosError(error) && error.code === 'ERR_CANCELED')) {
       throw abortedError()
     }
