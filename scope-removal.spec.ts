@@ -25,9 +25,41 @@ describe('RSS-only foundation boundary', () => {
   })
 
   it('ships only the reusable package foundation', () => {
-    for (const name of ['core', 'request', 'shared']) {
+    for (const name of ['api', 'core', 'shared']) {
       expect(existsSync(resolve(root, 'packages', name, 'package.json'))).toBe(true)
     }
+  })
+
+  it('keeps one API seam without contract copies or the retired request package', () => {
+    expect(tracked('packages/request')).toBe('')
+    for (const path of [
+      'packages/api/contracts',
+      'packages/api/schemas',
+      'packages/api/codegen',
+      'packages/api/registry',
+    ]) {
+      expect(tracked(path)).toBe('')
+    }
+  })
+
+  it('keeps Axios and production API paths behind @rss/api', () => {
+    let output = ''
+    try {
+      output = execFileSync(
+        '/usr/bin/git',
+        ['grep', '-n', '-E', 'from [\'"]axios[\'"]|[\'"]/api/', '--', 'apps', 'packages'],
+        { cwd: root, encoding: 'utf8' },
+      )
+    } catch (error) {
+      const status = (error as { status?: number }).status
+      if (status !== 1) throw error
+    }
+    const violations = output
+      .split('\n')
+      .filter(Boolean)
+      .filter((line) => !line.includes('.spec.ts:'))
+      .filter((line) => !line.startsWith('packages/api/'))
+    expect(violations).toEqual([])
   })
 
   it('exposes only the neutral home route', () => {

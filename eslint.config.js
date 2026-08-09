@@ -61,10 +61,10 @@ const NO_WEB_PATTERN = {
     'packages/* 和 tools/* 禁止反向 import @rss/web（应用层）。参见 AGENTS.md 和 CLAUDE.md。',
 }
 
-/** Axios ban: only @rss/request may import axios */
+/** Axios ban: only @rss/api may import axios */
 const NO_AXIOS_PATH = {
   name: 'axios',
-  message: 'HTTP 单点：禁止在业务包直接 import axios。请通过 @rss/request 暴露的 http 实例发请求。',
+  message: 'HTTP 单点：禁止在业务包直接 import axios。请通过 @rss/api 的 transport 发请求。',
 }
 
 /** Helper: create a no-restricted-imports rule config combining all given patterns + paths */
@@ -175,7 +175,7 @@ export default tseslint.config(
   },
 
   // ── 边界锁: packages/shared ────────────────────────────────────────────────
-  // 禁止 import 任何 @rss/*（包括 contracts、core、request）
+  // 禁止 import 任何 @rss/*（包括 api、core）
   {
     files: ['packages/shared/**/*.{ts,vue}'],
     rules: {
@@ -189,7 +189,7 @@ export default tseslint.config(
   },
 
   // ── 边界锁: packages/core ──────────────────────────────────────────────────
-  // 纯 UI 基座只允许依赖 shared；HTTP 由应用层经 request 使用。
+  // 纯 UI 基座只允许依赖 shared；HTTP 由应用层经 api 使用。
   {
     files: ['packages/core/**/*.{ts,vue}'],
     rules: {
@@ -202,16 +202,15 @@ export default tseslint.config(
     },
   },
 
-  // ── 边界锁: packages/request ──────────────────────────────────────────────
-  // request 只允许依赖 shared；request 是 HTTP 单点，允许 import axios。
-  // request 是 HTTP 单点，允许 import axios（不加 NO_AXIOS_PATH）
+  // ── 边界锁: packages/api ──────────────────────────────────────────────────
+  // api 只允许依赖 shared；api 是 HTTP 单点，允许 import axios。
   {
-    files: ['packages/request/**/*.ts'],
+    files: ['packages/api/**/*.ts'],
     rules: {
       'no-restricted-imports': boundaryRule([
         {
           regex: '^@rss/(?!shared(?:/|$))',
-          message: '@rss/request 只允许依赖 @rss/shared。',
+          message: '@rss/api 只允许依赖 @rss/shared。',
         },
       ]),
     },

@@ -33,7 +33,7 @@
       "@rss/core/i18n": ["packages/core/src/i18n/index.ts"],
       "@rss/core/testing": ["packages/core/src/testing/index.ts"],
       "@rss/shared": ["packages/shared/src/index.ts"],
-      "@rss/request": ["packages/request/src/index.ts"]
+      "@rss/api": ["packages/api/src/index.ts"]
     }
   }
 }
