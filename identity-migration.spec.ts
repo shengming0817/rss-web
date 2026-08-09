@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -17,6 +17,7 @@ function trackedFiles(): string[] {
     .trim()
     .split('\n')
     .filter(Boolean)
+    .filter((path) => existsSync(resolve(root, path)))
 }
 
 describe('RSS-only product identity', () => {

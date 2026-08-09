@@ -21,6 +21,7 @@
     "test:coverage": "vitest run --coverage --project '!root'",
     "test:boundary": "vitest run --project root",
     "test:e2e": "playwright test",
+    "test:edge": "node e2e/edge/smoke.mjs",
     "prepare": "husky"
   },
   "lint-staged": {

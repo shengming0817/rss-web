@@ -19,6 +19,11 @@ adapter for login, refresh, profile, logout, and logout-all. It does not create
 session authority, store tokens, add tenant/authentication headers, or provide
 UI behavior.
 
+The production Nginx image is a minimal same-origin Edge with a closed
+Primary/Admin route table. It removes browser tenant headers and injects the
+deployment-fixed tenant only for login and refresh. See the
+[`same-origin Edge ADR`](docs/architecture/20260809-006-same-origin-edge-tenant-bootstrap.md).
+
 The repository uses the single `@rss/*` workspace namespace and RSS Web product
 identity. Legacy aliases, storage-key fallbacks, and dual-backend modes are not
 supported.
