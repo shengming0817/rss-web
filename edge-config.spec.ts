@@ -32,7 +32,9 @@ describe('RSS Web edge configuration', () => {
       ['RSS_WEB_TENANT_ID', 'F47AC10B-58CC-4372-A567-0E02B2C3D479'],
       ['RSS_WEB_TENANT_ID', '00000000-0000-0000-0000-000000000000'],
       ['RSS_WEB_TENANT_ID', 'f47ac10b58cc4372a5670e02b2c3d479'],
+      ['RSS_WEB_TENANT_ID', 'f47ac10b-58cc-4372-a567-0e02b2c3d479\n"; include /tmp/evil; #'],
       ['RSS_WEB_PRIMARY_HOST', 'primary; include /tmp/evil'],
+      ['RSS_WEB_PRIMARY_HOST', 'rss-primary\nrss-admin'],
       ['RSS_WEB_ADMIN_HOST', 'https://admin.example'],
       ['RSS_WEB_PRIMARY_PORT', '0'],
       ['RSS_WEB_ADMIN_PORT', '65536'],
@@ -42,6 +44,9 @@ describe('RSS Web edge configuration', () => {
     }
     expect(
       validate({ RSS_WEB_ADMIN_HOST: 'rss-primary', RSS_WEB_ADMIN_PORT: '8080' }).status,
+    ).not.toBe(0)
+    expect(
+      validate({ RSS_WEB_ADMIN_HOST: 'RSS-PRIMARY', RSS_WEB_ADMIN_PORT: '8080' }).status,
     ).not.toBe(0)
   })
 
@@ -56,13 +61,17 @@ describe('RSS Web edge configuration', () => {
       expect(template).toContain(route)
     }
     expect(template).toContain('default "";')
-    expect(template).toContain('"/api/v1/identity/login" "${RSS_WEB_TENANT_ID}";')
-    expect(template).toContain('"/api/v1/identity/refresh" "${RSS_WEB_TENANT_ID}";')
+    expect(template).toContain('~^/api/v1/identity/login(?:\\?.*)?$ "${RSS_WEB_TENANT_ID}";')
+    expect(template).toContain('~^/api/v1/identity/refresh(?:\\?.*)?$ "${RSS_WEB_TENANT_ID}";')
     expect(template.match(/"\$\{RSS_WEB_TENANT_ID\}"/g)).toHaveLength(2)
     expect(template).toContain('location ^~ /internal/')
     expect(template).toContain('location ^~ /health/')
     expect(template).toContain('location = /metrics')
     expect(template).toContain('location ^~ /api/ { return 404; }')
+    for (const exactPath of ['/api', '/internal', '/health']) {
+      expect(template).toContain(`location = ${exactPath} { return 404; }`)
+    }
+    expect(template).toContain('location ^~ /metrics/')
     expect(read('deploy/web/proxy-common.conf')).toContain('proxy_next_upstream off;')
   })
 

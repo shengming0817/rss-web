@@ -78,6 +78,8 @@ try {
   expectFailure(['-e', 'RSS_WEB_TENANT_ID=F47AC10B-58CC-4372-A567-0E02B2C3D479'], {})
   expectFailure(['-e', 'RSS_WEB_TENANT_ID=00000000-0000-0000-0000-000000000000'], {})
   expectFailure(['-e', 'RSS_WEB_PRIMARY_PORT=0'], {})
+  expectFailure(['-e', `RSS_WEB_TENANT_ID=${tenant}\n"; include /tmp/evil; #`], {})
+  expectFailure(['-e', 'RSS_WEB_PRIMARY_HOST=primary\nadmin'], {})
 
   result = docker(['up', '-d', '--wait', '--wait-timeout', '120'], {
     env: environment,
@@ -139,6 +141,17 @@ try {
     }
   }
 
+  for (const path of [
+    '/api/v1/identity/LOGIN',
+    '/api/v1/identity/Login',
+    '/api/v1/identity/login/',
+    '/api/v1/identity/%6cogin',
+  ]) {
+    const response = await request(port, path, { method: 'POST', headers: { 'X-Tenant-ID': 'x' } })
+    assert.equal(response.status, 200)
+    assert.deepEqual(response.json.tenantHeaders, [])
+  }
+
   const safeBody = JSON.stringify({ value: 'fixture' })
   const bodyResponse = await request(port, '/api/v1/settings/configs?cursor=next', {
     method: 'POST',
@@ -164,6 +177,10 @@ try {
     '/health/v1/readyz',
     '/health/v1/metrics',
     '/metrics',
+    '/metrics/',
+    '/api',
+    '/internal',
+    '/health',
     '/api/v1/runtime/other',
     '/api/v1/unknown',
   ]) {

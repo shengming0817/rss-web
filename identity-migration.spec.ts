@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -17,7 +17,14 @@ function trackedFiles(): string[] {
     .trim()
     .split('\n')
     .filter(Boolean)
-    .filter((path) => existsSync(resolve(root, path)))
+}
+
+function readTrackedContent(path: string, worktreeRoot = root): Buffer {
+  try {
+    return readFileSync(resolve(worktreeRoot, path))
+  } catch {
+    return execFileSync('/usr/bin/git', ['show', `:${path}`], { cwd: root })
+  }
 }
 
 describe('RSS-only product identity', () => {
@@ -33,7 +40,7 @@ describe('RSS-only product identity', () => {
       if (path !== provenance && legacyIdentity.test(path)) return [`${path}:filename`]
       if (path === provenance) return []
 
-      let text = readFileSync(resolve(root, path)).toString('latin1')
+      let text = readTrackedContent(path).toString('latin1')
       if (path === 'README.md') {
         const parts = text.split(provenanceLink)
         if (parts.length !== 2) return [`${path}:provenance-link`]
@@ -42,6 +49,17 @@ describe('RSS-only product identity', () => {
       return legacyIdentity.test(text) ? [`${path}:content`] : []
     })
     expect(violations).toEqual([])
+  })
+
+  it('falls back to the index when tracked worktree content is unavailable', () => {
+    const absentWorktree = mkdtempSync(resolve(tmpdir(), 'rss-web-absent-worktree-'))
+    try {
+      expect(readTrackedContent('package.json', absentWorktree)).toEqual(
+        execFileSync('/usr/bin/git', ['show', ':package.json'], { cwd: root }),
+      )
+    } finally {
+      rmSync(absentWorktree, { recursive: true })
+    }
   })
 
   it('uses one closed workspace namespace', () => {

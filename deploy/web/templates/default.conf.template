@@ -1,7 +1,7 @@
-map $uri $rss_tenant_header {
+map $request_uri $rss_tenant_header {
   default "";
-  "/api/v1/identity/login" "${RSS_WEB_TENANT_ID}";
-  "/api/v1/identity/refresh" "${RSS_WEB_TENANT_ID}";
+  ~^/api/v1/identity/login(?:\?.*)?$ "${RSS_WEB_TENANT_ID}";
+  ~^/api/v1/identity/refresh(?:\?.*)?$ "${RSS_WEB_TENANT_ID}";
 }
 
 upstream rss_primary {
@@ -43,11 +43,17 @@ server {
     proxy_pass http://rss_admin;
   }
 
+  location = /api { return 404; }
+  location = /internal { return 404; }
   location ^~ /internal/ { return 404; }
+  location = /health { return 404; }
   location ^~ /health/ { return 404; }
   location = /metrics { return 404; }
+  location ^~ /metrics/ { return 404; }
   location = /healthz { return 404; }
+  location ^~ /healthz/ { return 404; }
   location = /readyz { return 404; }
+  location ^~ /readyz/ { return 404; }
   location ^~ /api/ { return 404; }
 
   location /assets/ {

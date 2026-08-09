@@ -1,5 +1,10 @@
 #!/bin/sh
 set -eu
+export LC_ALL=C
+
+newline='
+'
+carriage_return=$(printf '\r')
 
 fail() {
   echo "rss-web edge configuration is invalid" >&2
@@ -9,6 +14,9 @@ fail() {
 required() {
   eval "value=\${$1-}"
   [ -n "$value" ] || fail
+  case $value in
+    *"$newline"*|*"$carriage_return"*) fail ;;
+  esac
 }
 
 valid_host() {
@@ -52,5 +60,7 @@ valid_host "$RSS_WEB_ADMIN_HOST" || fail
 valid_port "$RSS_WEB_PRIMARY_PORT" || fail
 valid_port "$RSS_WEB_ADMIN_PORT" || fail
 
-[ "$RSS_WEB_PRIMARY_HOST:$RSS_WEB_PRIMARY_PORT" != \
-  "$RSS_WEB_ADMIN_HOST:$RSS_WEB_ADMIN_PORT" ] || fail
+primary_host_key=$(printf '%s' "$RSS_WEB_PRIMARY_HOST" | tr '[:upper:]' '[:lower:]')
+admin_host_key=$(printf '%s' "$RSS_WEB_ADMIN_HOST" | tr '[:upper:]' '[:lower:]')
+[ "$primary_host_key:$RSS_WEB_PRIMARY_PORT" != \
+  "$admin_host_key:$RSS_WEB_ADMIN_PORT" ] || fail
