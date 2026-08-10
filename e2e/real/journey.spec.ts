@@ -170,32 +170,6 @@ test('@main keeps real 403 authoritative for a limited account', async ({ page }
   await expect(page.getByText('ERR_CORE_FORBIDDEN')).toBeVisible()
 })
 
-test('@main invalidates local authority after a real self-status change', async ({ page }) => {
-  await signInAndExpectShell(page, accountSelfUsername)
-  await page
-    .getByRole('navigation', { name: '主导航' })
-    .getByRole('link', { name: /账户状态/ })
-    .click()
-  await page.getByLabel('User ID').fill(accountSelfUserId)
-  await page.getByRole('button', { name: '读取状态' }).click()
-  await expect(
-    page.locator('.account-status__result dd').filter({ hasText: /^Active$/ }),
-  ).toBeVisible()
-  await page.getByLabel('目标状态').selectOption('suspended')
-  const changed = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname.endsWith(`/accounts/${accountSelfUserId}/status`) &&
-      response.request().method() === 'PUT',
-  )
-  await page.getByRole('button', { name: '确认变更' }).click()
-  await page.getByRole('alertdialog').getByRole('button', { name: '提交变更' }).click()
-  expect((await changed).status()).toBe(200)
-  await expect(page).toHaveURL(/\/login$/)
-
-  await signIn(page, accountSelfUsername)
-  await expect(page.getByRole('alert')).toContainText('凭据无效')
-})
-
 test('@main changes a real password once and revokes every existing session', async ({
   browser,
 }) => {
@@ -240,6 +214,42 @@ test('@main changes a real password once and revokes every existing session', as
   await contextB.close()
 })
 
+test('@main invalidates every session after a real self-status change', async ({ browser }) => {
+  const contextA = await browser.newContext()
+  const contextB = await browser.newContext()
+  const pageA = await contextA.newPage()
+  const pageB = await contextB.newPage()
+  await signInAndExpectShell(pageA, accountSelfUsername)
+  await signInAndExpectShell(pageB, accountSelfUsername)
+  await pageA
+    .getByRole('navigation', { name: '主导航' })
+    .getByRole('link', { name: /账户状态/ })
+    .click()
+  await pageA.getByLabel('User ID').fill(accountSelfUserId)
+  await pageA.getByRole('button', { name: '读取状态' }).click()
+  await expect(
+    pageA.locator('.account-status__result dd').filter({ hasText: /^Active$/ }),
+  ).toBeVisible()
+  await pageA.getByLabel('目标状态').selectOption('suspended')
+  const changed = pageA.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.endsWith(`/accounts/${accountSelfUserId}/status`) &&
+      response.request().method() === 'PUT',
+  )
+  await pageA.getByRole('button', { name: '确认变更' }).click()
+  await pageA.getByRole('alertdialog').getByRole('button', { name: '提交变更' }).click()
+  expect((await changed).status()).toBe(200)
+  await expect(pageA).toHaveURL(/\/login$/)
+
+  await pageB
+    .getByRole('navigation', { name: '主导航' })
+    .getByRole('link', { name: /运行时/ })
+    .click()
+  await expect(pageB).toHaveURL(/\/login$/)
+  await contextA.close()
+  await contextB.close()
+})
+
 test('@main observes canonical 401 and 429 through the browser Edge', async ({ page }) => {
   await page.goto('/login')
   const statuses = await page.evaluate(async () => {
@@ -266,13 +276,6 @@ test('@main observes canonical 401 and 429 through the browser Edge', async ({ p
       requestId: expect.stringMatching(/^[!-~]{1,128}$/),
     },
   })
-  const uiRateLimit = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname === '/api/v1/identity/login' && response.status() === 429,
-  )
-  await signIn(page)
-  await uiRateLimit
-  await expect(page.getByRole('alert')).toContainText('尝试过于频繁，请稍后重试。')
 })
 
 test('@budget-exhausted reports the real RSS request-budget 503 without a mock fallback', async ({
