@@ -49,6 +49,8 @@ must attach their reviewed error-coordinate policy; undeclared statuses or drift
 fail closed as protocol errors. Idempotent panel retry is user-triggered only.
 
 The opt-in real RSS harness may read a user-supplied RSS checkout only through a pinned `git archive`
-and may mutate only its own temporary snapshot, Compose project, disposable volumes, and fixture rows.
-It must keep browser traffic behind the production Edge, classify environment failures separately,
-avoid logging fixture credentials or response bodies, and always tear down its exact resources.
+and must build the Web Edge from an archived, clean Web HEAD rather than the live worktree. It may
+mutate only its own temporary snapshot, Compose project, disposable volumes, and fixture rows. It
+must keep browser traffic behind the production Edge, fence phase readiness, classify environment
+failures separately, avoid logging fixture credentials or response bodies, and treat cleanup failure
+as a failed receipt. SIGINT/SIGTERM are handled; SIGKILL cannot carry a cleanup guarantee.

@@ -51,8 +51,14 @@ test('@main completes tenant bootstrap, verified profile, Admin facts, refresh, 
   await expect(auditPanel.getByText('浏览器未验证').first()).toBeVisible()
 
   expect(browserHeaders.every((headers) => !headers.includes('x-tenant-id'))).toBe(true)
+  const loggedOut = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === '/api/v1/identity/logout',
+  )
   await page.getByTestId('logout-current').click()
   await expect(page).toHaveURL(/\/login/)
+  const logoutResponse = await loggedOut
+  expect(logoutResponse.status()).toBe(200)
+  expect(await logoutResponse.json()).toEqual({ data: { loggedOut: true } })
 })
 
 test('@main keeps real 403 authoritative for a limited account', async ({ page }) => {
@@ -73,12 +79,28 @@ test('@main observes canonical 401 and 429 through the browser Edge', async ({ p
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username: 'invalid', password: 'invalid' }),
         }),
-      ),
+      ).then(async (response) => ({ status: response.status, body: await response.json() })),
     )
-    return { unauthorized: unauthorized.status, attempts: attempts.map((item) => item.status) }
+    return { unauthorized: unauthorized.status, attempts }
   })
   expect(statuses.unauthorized).toBe(401)
-  expect(statuses.attempts).toContain(429)
+  const rateLimited = statuses.attempts.find((attempt) => attempt.status === 429)
+  expect(rateLimited?.body).toEqual({
+    error: {
+      code: 'ERR_CORE_TOO_MANY_REQUESTS',
+      message: 'too many requests',
+      retryable: true,
+      details: [],
+      requestId: expect.stringMatching(/^[!-~]{1,128}$/),
+    },
+  })
+  const uiRateLimit = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/api/v1/identity/login' && response.status() === 429,
+  )
+  await signIn(page)
+  await uiRateLimit
+  await expect(page.getByRole('alert')).toContainText('尝试过于频繁，请稍后重试。')
 })
 
 test('@budget-exhausted reports the real RSS request-budget 503 without a mock fallback', async ({
@@ -88,7 +110,17 @@ test('@budget-exhausted reports the real RSS request-budget 503 without a mock f
     (response) => new URL(response.url()).pathname === '/api/v1/identity/login',
   )
   await signIn(page)
-  expect((await unavailable).status()).toBe(503)
+  const response = await unavailable
+  expect(response.status()).toBe(503)
+  expect(await response.json()).toEqual({
+    error: {
+      code: 'ERR_CORE_UNAVAILABLE',
+      message: 'service unavailable',
+      retryable: false,
+      details: [],
+      requestId: expect.stringMatching(/^[!-~]{1,128}$/),
+    },
+  })
   await expect(page.getByRole('alert')).toContainText('身份服务暂时不可用')
   await expect(page.getByRole('navigation', { name: '主导航' })).toHaveCount(0)
 })

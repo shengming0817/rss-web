@@ -83,6 +83,32 @@ describe('decodeEndpointError', () => {
     })
   })
 
+  it('preserves only the canonical shared request-budget coordinate', () => {
+    const canonical = envelope({
+      code: 'ERR_CORE_UNAVAILABLE',
+      message: 'service unavailable',
+      retryable: false,
+      details: [],
+    })
+    expect(decodeEndpointError(503, canonical)).toMatchObject({
+      cause: 'wire',
+      status: 503,
+      code: 'ERR_CORE_UNAVAILABLE',
+      retryable: false,
+    })
+    for (const error of [
+      { ...canonical.error, code: 'ERR_CORE_PROVIDER_UNAVAILABLE' },
+      { ...canonical.error, message: 'drifted' },
+      { ...canonical.error, retryable: true },
+      { ...canonical.error, details: [{ leaked: true }] },
+    ]) {
+      expect(decodeEndpointError(503, { error })).toMatchObject({
+        cause: 'protocol',
+        status: 503,
+      })
+    }
+  })
+
   it.each([
     envelope({
       code: 'ERR_TOO_MANY_REQUESTS',

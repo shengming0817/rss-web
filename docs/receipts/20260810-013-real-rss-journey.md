@@ -6,6 +6,8 @@
   `b7f3e1d0bcc5b2e59639a81b4f37937914b53f00`.
 - Web source before this PR: `25693fb6e059bbbfd1f814fd793e42f26db4014b`.
 - Tested implementation commit: `d00956a38df0f0e92f9d04dfa2558f61ce65fe68`.
+- The runner rejects a dirty Web tree and builds the Edge from an archived Web HEAD, so receipt
+  `webRevision` names the actual build input rather than a mutable Docker context.
 - The runner resolves the exact commit and uses `/usr/bin/git archive` into a temporary directory. It
   never checks out, pulls, builds in, seeds, or cleans the user's RSS working tree.
 - The RSS production runtime assembly runs with real PostgreSQL, Redis, RabbitMQ, Vault, and MinIO
@@ -49,7 +51,8 @@ Machine receipt:
     { "name": "budget-exhausted", "status": "passed" },
     { "name": "admin-down", "status": "passed" },
     { "name": "primary-down", "status": "passed" }
-  ]
+  ],
+  "cleanup": { "status": "passed", "project": "rss-web-real-<pid>" }
 }
 ```
 
@@ -65,9 +68,11 @@ Machine receipt:
   permissions and proves the 403 boundary.
 - No tokens, passwords, tenant headers, response bodies, server messages, or PII enter the receipt.
   JavaScript secrets remain memory-only and test credentials are synthetic, fixed fixture values.
-- Every exit path runs Compose `down --volumes --remove-orphans` and removes the temporary archive.
-  Failures are recorded as `environment:*` or `product:*`, so registry, Docker, toolchain, readiness,
-  and seed failures cannot be reported as Web regressions.
+- Normal completion and handled SIGINT/SIGTERM run Compose `down --volumes --remove-orphans` with a
+  deadline. A cleanup failure changes the receipt and exit status to failure and preserves the
+  project/recovery path; SIGKILL cannot carry a cleanup guarantee. Preflight, browser/toolchain,
+  readiness, timeout, seed, and cleanup failures are recorded as `environment:*`, while assertion
+  failures with a journey-spec source location are `product:*`.
 
 ## Four-principle check
 
@@ -77,9 +82,9 @@ Machine receipt:
   backend, fallback, old endpoint, or “latest” compatibility claim.
 - Simple: the harness composes existing RSS and Web production images with a single override and one
   browser suite; it introduces no runtime registry, mock provider SPI, or application-side gateway.
-- AI-HARD: pinned archive resolution, exact 429 policy, no-interception guard, phase grep, safe receipt
-  schema, explicit failure class, generated disposable fixture, and unconditional teardown make the
-  boundary executable.
+- AI-HARD: pinned RSS and Web archives, clean-tree rejection, exact shared 429/503 policies,
+  no-interception/header guards, phase readiness, bounded subprocesses, safe receipt lifecycle,
+  generated disposable fixture, and checked teardown make the boundary executable.
 
 ## Reproduction and rollback
 
