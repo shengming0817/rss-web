@@ -407,7 +407,15 @@ function printPlan() {
       pinnedRevision: revision,
       tenantBootstrap: 'edge-deployment-fixed',
       browserNetwork: 'edge-only',
-      phases: ['main', 'budget-exhausted', 'admin-down', 'primary-down'],
+      phases: [
+        'main',
+        'password-change',
+        'account-status-self',
+        'rate-limited',
+        'budget-exhausted',
+        'admin-down',
+        'primary-down',
+      ],
       malformedResponseEvidence: 'isolated-playwright-smoke',
       cleanup: 'compose-down-volumes-and-temporary-snapshot',
     })}\n`,
@@ -543,6 +551,19 @@ try {
   )
 
   await playwright('main')
+
+  const isolatedMainPhases = ['password-change', 'account-status-self', 'rate-limited']
+  for (const phase of isolatedMainPhases) {
+    await compose(['up', '-d', '--no-deps', '--force-recreate', 'server'], {
+      stage: `environment:${phase}-server`,
+    })
+    await compose(['up', '-d', '--no-deps', '--force-recreate', 'edge'], {
+      stage: `environment:${phase}-edge`,
+    })
+    await waitReady()
+    await waitPhaseReady({ requireServer: true })
+    await playwright(phase)
+  }
 
   environment.RSS_WEB_REAL_REQUEST_BUDGET_MS = '1'
   await compose(['up', '-d', '--no-deps', '--force-recreate', 'server'], {

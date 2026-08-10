@@ -170,7 +170,7 @@ test('@main keeps real 403 authoritative for a limited account', async ({ page }
   await expect(page.getByText('ERR_CORE_FORBIDDEN')).toBeVisible()
 })
 
-test('@main changes a real password once and revokes every existing session', async ({
+test('@password-change changes a real password once and revokes every existing session', async ({
   browser,
 }) => {
   const contextA = await browser.newContext()
@@ -214,7 +214,9 @@ test('@main changes a real password once and revokes every existing session', as
   await contextB.close()
 })
 
-test('@main invalidates every session after a real self-status change', async ({ browser }) => {
+test('@account-status-self invalidates every session after a real self-status change', async ({
+  browser,
+}) => {
   const contextA = await browser.newContext()
   const contextB = await browser.newContext()
   const pageA = await contextA.newPage()
@@ -250,7 +252,9 @@ test('@main invalidates every session after a real self-status change', async ({
   await contextB.close()
 })
 
-test('@main observes canonical 401 and 429 through the browser Edge', async ({ page }) => {
+test('@rate-limited observes canonical 401 and 429 through the browser Edge and UI', async ({
+  page,
+}) => {
   await page.goto('/login')
   const statuses = await page.evaluate(async () => {
     const unauthorized = await fetch('/api/v1/identity/profile')
