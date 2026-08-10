@@ -10,20 +10,37 @@ export function isCleanWebStatus(output) {
 
 export function classifyPlaywrightReport(report) {
   if (report?.stats?.unexpected === 0) return 'passed'
-  const locations = []
+  let productFailure = false
   const visit = (value) => {
     if (Array.isArray(value)) {
       value.forEach(visit)
       return
     }
     if (value === null || typeof value !== 'object') return
-    if (typeof value.location?.file === 'string') locations.push(value.location.file)
+    if (
+      typeof value.file === 'string' &&
+      value.file.endsWith('e2e/real/journey.spec.ts') &&
+      Array.isArray(value.tests) &&
+      value.tests.some(
+        (test) =>
+          test?.status === 'unexpected' ||
+          test?.results?.some(
+            (result) => result?.status === 'failed' || result?.status === 'timedOut',
+          ),
+      )
+    ) {
+      productFailure = true
+    }
+    if (
+      typeof value.location?.file === 'string' &&
+      value.location.file.endsWith('e2e/real/journey.spec.ts')
+    ) {
+      productFailure = true
+    }
     Object.values(value).forEach(visit)
   }
   visit(report?.suites)
-  return locations.some((file) => file.endsWith('e2e/real/journey.spec.ts'))
-    ? 'product'
-    : 'environment'
+  return productFailure ? 'product' : 'environment'
 }
 
 export function finalizeOutcome(outcome, cleanup) {

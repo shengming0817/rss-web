@@ -78,8 +78,8 @@ test('@main observes canonical 401 and 429 through the browser Edge', async ({ p
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username: 'invalid', password: 'invalid' }),
-        }),
-      ).then(async (response) => ({ status: response.status, body: await response.json() })),
+        }).then(async (response) => ({ status: response.status, body: await response.json() })),
+      ),
     )
     return { unauthorized: unauthorized.status, attempts }
   })

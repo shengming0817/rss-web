@@ -87,5 +87,20 @@ describe('real RSS journey harness', () => {
         ],
       }),
     ).toBe('product')
+    expect(
+      classifyPlaywrightReport({
+        stats: { unexpected: 1 },
+        suites: [
+          {
+            specs: [
+              {
+                file: 'e2e/real/journey.spec.ts',
+                tests: [{ status: 'unexpected', results: [{ status: 'failed' }] }],
+              },
+            ],
+          },
+        ],
+      }),
+    ).toBe('product')
   })
 })
