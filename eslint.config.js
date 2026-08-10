@@ -78,6 +78,12 @@ const APP_TEST_INTERNAL_PATTERN = {
   message: '应用测试不得绕过 domain adapter 使用 endpoint coordinates 或 session capability。',
 }
 
+const PREVIEW_AUTHORIZATION_PATTERN = {
+  regex: '^@rss/authorization/preview$',
+  message:
+    '生产应用禁止导入 UX-only Preview authorization。Preview 只能由后续显式 dev/test/demo composition owner 启用。',
+}
+
 /** Helper: create a no-restricted-imports rule config combining all given patterns + paths */
 function boundaryRule(extraPatterns = [], extraPaths = []) {
   return [
@@ -244,6 +250,23 @@ export default tseslint.config(
     },
   },
 
+  // ── 边界锁: packages/authorization ───────────────────────────────────────
+  // UX hint capability is framework-neutral and has zero runtime dependencies.
+  {
+    files: ['packages/authorization/**/*.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex: '^@rss/',
+            message: '@rss/authorization 不允许依赖其它 @rss/* 包。',
+          },
+        ],
+        [NO_AXIOS_PATH],
+      ),
+    },
+  },
+
   // The bearer/recovery capability has exactly one production owner.
   {
     files: ['packages/identity/src/session/controller.ts'],
@@ -280,12 +303,12 @@ export default tseslint.config(
   // ── 边界锁: apps/web ──────────────────────────────────────────────────────
   // apps/web 可依赖所有 @rss/* 包；但禁深路径和 axios
   {
-    files: ['apps/web/**/*.{ts,vue}'],
+    files: ['apps/web/**/*.{js,mjs,cjs,ts,tsx,vue}'],
     rules: {
       'no-restricted-imports': [
         'error',
         {
-          patterns: [DEEP_PATH_PATTERN, INTERNAL_ENDPOINT_PATTERN],
+          patterns: [DEEP_PATH_PATTERN, INTERNAL_ENDPOINT_PATTERN, PREVIEW_AUTHORIZATION_PATTERN],
           paths: [NO_AXIOS_PATH],
         },
       ],

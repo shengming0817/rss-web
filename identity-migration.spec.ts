@@ -66,6 +66,7 @@ describe('RSS-only product identity', () => {
     const packageFiles = [
       'package.json',
       'apps/web/package.json',
+      'packages/authorization/package.json',
       'packages/api/package.json',
       'packages/core/package.json',
       'packages/identity/package.json',
@@ -77,6 +78,7 @@ describe('RSS-only product identity', () => {
     expect(names).toEqual([
       'rss-web',
       '@rss/web',
+      '@rss/authorization',
       '@rss/api',
       '@rss/core',
       '@rss/identity',

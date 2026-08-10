@@ -21,3 +21,10 @@ the branded verified profile is available. Reload intentionally returns to
 The Nginx same-origin Edge is the sole listener-routing and pre-auth tenant
 bootstrap boundary. Do not add browser-selectable tenants, client runtime API
 origins, listener discovery, proxy fallbacks, or Internal/Health routes.
+
+`@rss/authorization` is a closed UX-hint capability, not a PDP. Production code uses its server
+mode, which always defers authority to the real request. Do not add policies, ABAC evaluation,
+tenant/principal inputs, caches, wildcard matching, or external provider implementations. The
+Preview subpath remains forbidden in production Web source unless a later issue names one explicit
+composition owner; Preview results are permanently non-authoritative and never short-circuit a
+request.

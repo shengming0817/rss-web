@@ -25,7 +25,7 @@ describe('RSS-only foundation boundary', () => {
   })
 
   it('ships the reusable foundation and selected identity adapter', () => {
-    for (const name of ['api', 'core', 'identity', 'shared']) {
+    for (const name of ['api', 'authorization', 'core', 'identity', 'shared']) {
       expect(existsSync(resolve(root, 'packages', name, 'package.json'))).toBe(true)
     }
   })
