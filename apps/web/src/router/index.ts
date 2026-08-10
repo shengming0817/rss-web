@@ -1,7 +1,10 @@
 import { createRouter, type RouteRecordRaw, type RouterHistory } from 'vue-router'
 import type { AuthorizationIntent } from '@rss/authorization'
 import type { IdentitySession } from '@rss/identity'
+import { RSS_SOURCE } from '@rss/shared'
+import type { SourceMeta } from '@rss/shared'
 import type { AuthorizationExperience } from '../features/authorization/authorization-context'
+import type { NavigationMessageKey } from './navigation'
 import { registerAuthorizationRouting, registerRouterA11y, registerSessionRouting } from './guards'
 
 declare module 'vue-router' {
@@ -9,6 +12,11 @@ declare module 'vue-router' {
     sessionAccess: 'anonymous' | 'authenticated'
     focusTarget: 'login-content' | 'shell-content'
     authorizationIntent?: AuthorizationIntent
+    navigation?: {
+      readonly labelKey: NavigationMessageKey
+      readonly order: number
+      readonly source: SourceMeta
+    }
   }
 }
 
@@ -28,6 +36,16 @@ const routes: RouteRecordRaw[] = [
         path: '',
         name: 'home',
         component: () => import('../views/HomeView.vue'),
+        meta: {
+          sessionAccess: 'authenticated',
+          focusTarget: 'shell-content',
+          navigation: { labelKey: 'navigation.home', order: 0, source: RSS_SOURCE },
+        },
+      },
+      {
+        path: ':pathMatch(.*)*',
+        name: 'not-found',
+        component: () => import('../views/ErrorView.vue'),
         meta: { sessionAccess: 'authenticated', focusTarget: 'shell-content' },
       },
     ],

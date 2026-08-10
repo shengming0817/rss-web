@@ -36,7 +36,15 @@ describe('createRssI18n', () => {
   })
 
   it('contains only reusable shell and foundation namespaces', () => {
-    expect(Object.keys(zhCN).sort()).toEqual(['command', 'errors', 'home', 'shell'])
+    expect(Object.keys(zhCN).sort()).toEqual([
+      'command',
+      'contentState',
+      'errorPage',
+      'errors',
+      'home',
+      'shell',
+      'source',
+    ])
   })
 
   it('contains every API transport message in both locales', () => {

@@ -6,6 +6,7 @@ type Widen<T> = T extends string
     : T
 
 const enUS = {
+  navigation: { home: 'Home' },
   identity: {
     login: {
       title: 'Sign in',

@@ -104,6 +104,28 @@ test.describe('RSS Web Identity UX', () => {
     await expect(page.getByRole('navigation', { name: '主导航' })).toHaveCount(0)
   })
 
+  test('shows only implemented RSS navigation and protects the unknown-route 404', async ({
+    page,
+  }) => {
+    await page.goto('/removed-capability')
+    await expect(page).toHaveURL(/\/login$/)
+
+    await installIdentityMocks(page)
+    await page.getByLabel('用户名').fill('alice')
+    await page.getByLabel('密码').fill('test-password')
+    await page.getByRole('button', { name: '登录', exact: true }).click()
+    const navigation = page.getByRole('navigation', { name: '主导航' })
+    await expect(navigation.getByRole('link')).toHaveCount(1)
+    await expect(navigation.getByRole('link', { name: /首页/ })).toContainText('RSS')
+
+    await page.evaluate(() => {
+      window.history.pushState({}, '', '/removed-capability')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+    await expect(page.getByRole('heading', { name: '页面不存在' })).toBeVisible()
+    await expect(page.getByText('WEB_NOT_FOUND')).toBeVisible()
+  })
+
   test('logout and confirmed logout-all invalidate local authority immediately', async ({
     page,
   }) => {

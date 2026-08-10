@@ -86,10 +86,13 @@ describe('RSS-only foundation boundary', () => {
     expect(productionMatches).toEqual([])
   })
 
-  it('exposes only the Identity login and authenticated home routes', () => {
+  it('exposes only Identity login, authenticated home, and the protected catch-all', () => {
     const router = read('apps/web/src/router/index.ts')
     expect(router).toContain("path: '/'")
     expect(router).toContain("path: '/login'")
+    expect(router).toContain("path: ':pathMatch(.*)*'")
+    expect(router.match(/navigation:/g)).toHaveLength(1)
+    expect(router).toContain("labelKey: 'navigation.home'")
     for (const path of [
       '/access',
       '/config',
@@ -179,5 +182,24 @@ describe('RSS-only foundation boundary', () => {
         removed.some((path) => name.endsWith(path.split('/').at(-1)!)),
       ),
     ).toEqual([])
+  })
+
+  it('keeps authoritative RSS source labels at reviewed production owners', () => {
+    const output = execFileSync(
+      '/usr/bin/git',
+      ['grep', '-l', 'RSS_SOURCE', '--', 'apps/web/src', 'packages'],
+      { cwd: root, encoding: 'utf8' },
+    )
+    const productionOwners = output
+      .trim()
+      .split('\n')
+      .filter((path) => !path.endsWith('.spec.ts'))
+      .filter((path) => !path.endsWith('.typecheck.ts'))
+      .filter((path) => path !== 'packages/shared/src/index.ts')
+      .sort()
+    expect(productionOwners).toEqual([
+      'apps/web/src/router/index.ts',
+      'apps/web/src/views/HomeView.vue',
+    ])
   })
 })

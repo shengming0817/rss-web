@@ -4,6 +4,7 @@ import { mount } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { createI18n } from 'vue-i18n'
 import { createPinia, setActivePinia } from 'pinia'
+import { RSS_SOURCE } from '@rss/shared'
 import AppShell from './AppShell.vue'
 import zhCN from '../i18n/messages/zh-CN'
 import enUS from '../i18n/messages/en-US'
@@ -30,6 +31,9 @@ function mountShell() {
   const pinia = createPinia()
   setActivePinia(pinia)
   return mount(AppShell, {
+    props: {
+      navigationItems: [{ id: 'home', label: 'Home', to: '/', source: RSS_SOURCE }],
+    },
     slots: { default: '<div data-testid="content">slot content</div>' },
     global: { plugins: [makeRouter(), makeI18n(), pinia] },
     attachTo: document.body,
@@ -50,6 +54,22 @@ describe('AppShell.vue', () => {
   it('renders sidebar', () => {
     const wrapper = mountShell()
     expect(wrapper.find('.sidebar').exists()).toBe(true)
+  })
+
+  it('passes one navigation source to both sidebar and command palette', async () => {
+    const wrapper = mountShell()
+    expect(wrapper.findAll('.sidebar__item')).toHaveLength(1)
+    await wrapper.get('.sidebar__search').trigger('click')
+    expect(document.body.querySelectorAll('.cmd-result')).toHaveLength(1)
+  })
+
+  it('navigates from the command palette and closes it', async () => {
+    const wrapper = mountShell()
+    await wrapper.get('.sidebar__search').trigger('click')
+    const result = document.body.querySelector('.cmd-result') as HTMLButtonElement
+    result.click()
+    await nextTick()
+    expect(wrapper.findComponent({ name: 'CommandPalette' }).props('open')).toBe(false)
   })
 
   it('renders topbar', () => {

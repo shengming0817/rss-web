@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { createI18n } from 'vue-i18n'
+import { RSS_SOURCE } from '@rss/shared'
 import CommandPalette from './CommandPalette.vue'
 import zhCN from '../i18n/messages/zh-CN'
 import enUS from '../i18n/messages/en-US'
@@ -21,9 +22,11 @@ function makeI18n() {
  * CommandPalette uses <Teleport to="body">, so rendered content is in document.body,
  * not inside the wrapper element. We query document.body directly.
  */
+const navigationItems = [{ id: 'home', label: 'Home', to: '/', source: RSS_SOURCE }]
+
 function mountPalette(open = false) {
   const wrapper = mount(CommandPalette, {
-    props: { open },
+    props: { open, navigationItems },
     global: { plugins: [makeI18n()] },
     attachTo: document.body,
   })
@@ -115,6 +118,19 @@ describe('CommandPalette.vue', () => {
       expect(input!.type).toBe('text')
     })
 
+    it('uses honest search semantics instead of an incomplete combobox contract', async () => {
+      mountPalette(true)
+      await nextTick()
+      const input = queryBody('.cmd-input') as HTMLInputElement
+      expect(input.getAttribute('role')).toBeNull()
+      expect(input.getAttribute('aria-expanded')).toBeNull()
+      expect(queryBody('[role="listbox"]')).toBeNull()
+      expect(queryBody('[role="option"]')).toBeNull()
+      const results = queryBody('.cmd-results') as HTMLElement
+      expect(results.id).toBe('')
+      expect(results.getAttribute('aria-label')).toBeNull()
+    })
+
     it('search input exists and is a text input when palette opens', async () => {
       // Focus behavior depends on jsdom's autofocus support; we verify the input exists
       // and that the watch+focus code path runs without error.
@@ -125,6 +141,17 @@ describe('CommandPalette.vue', () => {
       expect(input).not.toBeNull()
       expect(input!.type).toBe('text')
     })
+  })
+
+  it('uses the supplied navigation items and closes after selection', async () => {
+    const wrapper = mountPalette(true)
+    await nextTick()
+    const result = queryBody('.cmd-result') as HTMLButtonElement
+    expect(result.textContent).toContain('Home')
+    result.click()
+    await nextTick()
+    expect(wrapper.emitted('navigate')?.[0]?.[0]).toEqual(navigationItems[0])
+    expect(wrapper.emitted('update:open')).toContainEqual([false])
   })
 
   describe('accessibility', () => {
@@ -208,9 +235,13 @@ describe('CommandPalette.vue', () => {
     })
   })
 
-  describe('placeholder content', () => {
-    it('shows hint text when open', async () => {
+  describe('empty content', () => {
+    it('shows empty text when the query matches no implemented route', async () => {
       mountPalette(true)
+      await nextTick()
+      const input = queryBody('.cmd-input') as HTMLInputElement
+      input.value = 'missing'
+      input.dispatchEvent(new Event('input', { bubbles: true }))
       await nextTick()
       const hint = queryBody('.cmd-empty-text')
       expect(hint).not.toBeNull()

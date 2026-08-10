@@ -1,13 +1,17 @@
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
+import SourceBadge from '../components/SourceBadge.vue'
+import type { ShellNavigationItem } from './navigation'
 
 const props = defineProps<{
   open: boolean
+  navigationItems?: readonly ShellNavigationItem[]
 }>()
 
 const emit = defineEmits<{
   (e: 'update:open', value: boolean): void
+  (e: 'navigate', item: ShellNavigationItem): void
 }>()
 
 const { t } = useI18n()
@@ -16,6 +20,18 @@ const searchQuery = ref('')
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const triggerRef = ref<HTMLElement | null>(null)
 const overlayRef = ref<HTMLDivElement | null>(null)
+const filteredItems = computed(() => {
+  const query = searchQuery.value.trim().toLocaleLowerCase()
+  const items = props.navigationItems ?? []
+  return query === ''
+    ? items
+    : items.filter((item) => item.label.toLocaleLowerCase().includes(query))
+})
+
+function navigate(item: ShellNavigationItem): void {
+  emit('navigate', item)
+  closePalette()
+}
 
 /**
  * Store a reference to the element that triggered the palette open,
@@ -124,10 +140,6 @@ defineExpose({ open: openPalette, close: closePalette })
               class="cmd-input"
               :placeholder="t('command.placeholder')"
               :aria-label="t('command.searchLabel')"
-              role="combobox"
-              aria-controls="cmd-listbox"
-              aria-expanded="false"
-              aria-autocomplete="list"
               autocomplete="off"
               autocorrect="off"
               autocapitalize="off"
@@ -145,15 +157,21 @@ defineExpose({ open: openPalette, close: closePalette })
 
           <hr class="v1-divider" />
 
-          <!-- Results area (placeholder) -->
-          <div
-            id="cmd-listbox"
-            class="cmd-results"
-            role="listbox"
-            :aria-label="t('command.resultsLabel')"
-          >
-            <div class="cmd-empty">
-              <span class="cmd-empty-text">{{ t('command.hint') }}</span>
+          <div class="cmd-results">
+            <button
+              v-for="item in filteredItems"
+              :key="item.id"
+              type="button"
+              class="cmd-result"
+              @click="navigate(item)"
+            >
+              <span>{{ item.label }}</span>
+              <SourceBadge :source="item.source" />
+            </button>
+            <div v-if="filteredItems.length === 0" class="cmd-empty">
+              <span class="cmd-empty-text">{{
+                searchQuery ? t('command.empty') : t('command.hint')
+              }}</span>
             </div>
           </div>
         </div>
@@ -236,6 +254,26 @@ defineExpose({ open: openPalette, close: closePalette })
 .cmd-empty-text {
   font-size: 13px;
   color: var(--fg-faint);
+}
+
+.cmd-result {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+}
+
+.cmd-result:hover,
+.cmd-result:focus-visible {
+  background: var(--accent-soft);
+  outline: none;
 }
 
 /* ------ Transition ------ */

@@ -8,6 +8,7 @@ import type {
 
 const WIRE_ERROR_KEYS = ['code', 'details', 'message', 'requestId', 'retryable'] as const
 const ERROR_CODE = /^ERR_[A-Z0-9_]+$/
+const REQUEST_ID = /^[\x21-\x7e]{1,128}$/
 const WIRE_MESSAGE_KEYS: Readonly<Record<string, RssApiMessageKey>> = {
   ERR_CORE_VALIDATION: 'errors.validation',
   ERR_CORE_INTERNAL: 'errors.unknown',
@@ -117,7 +118,7 @@ export function decodeWireError(status: number, value: unknown): RssApiError {
     typeof message !== 'string' ||
     typeof retryable !== 'boolean' ||
     typeof requestId !== 'string' ||
-    requestId.trim().length === 0 ||
+    !REQUEST_ID.test(requestId) ||
     safeDetails === null
   ) {
     return protocolError(status)

@@ -1,4 +1,5 @@
 const zhCN = {
+  navigation: { home: '首页' },
   identity: {
     login: {
       title: '登录',

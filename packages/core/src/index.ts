@@ -8,10 +8,12 @@ export { useLocaleStore } from './stores/index'
 export type { AppLocale } from './stores/index'
 
 // Components
-export { ModalShell, UnavailablePanel } from './components/index'
+export { ContentState, ErrorPage, ModalShell, SourceBadge } from './components/index'
+export type { SafeErrorKind, SafeErrorPresentation } from './components/index'
 
 // UI Shell
 export { AppShell, Sidebar, TopBar, CommandPalette } from './ui/index'
+export type { ShellNavigationItem } from './ui/index'
 
 // i18n
 export { createRssI18n } from './i18n/index'

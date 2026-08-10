@@ -31,3 +31,11 @@ request. The Web authorization context is the only UI coordination owner: it may
 exact hint only after `wire / 403 / ERR_CORE_FORBIDDEN`, must rethrow the same server error, and must
 clear UX outcomes when verified session authority changes. Do not add a second 401 handler or infer
 authorization from route, button, profile kind, JWT, tenant, or a local receipt.
+
+Production shell navigation is derived only from implemented route metadata. Do not add placeholder,
+draft, unavailable, or future capability routes/menu items. `@rss/shared` owns the closed SourceMeta
+union and its sealed constants; source labels describe display provenance only and never grant request,
+tenant, principal, or business authority. New RSS source-label owners require an explicit boundary-test
+update. Mock/manual/external/unavailable sources remain non-authoritative, and real failures never
+fall back to them. Safe error presentation may expose only the reviewed kind, code, retryability, and
+requestId; backend messages/details and transport behavior stay outside reusable UI components.

@@ -1,3 +1,13 @@
+import type { SourceKind } from '@rss/shared'
+
+const sourceLabels = {
+  rss: 'RSS',
+  mock: '模拟',
+  manual: '手动',
+  external: '外部',
+  unavailable: '不可用',
+} satisfies Record<SourceKind, string>
+
 const zhCN = {
   shell: {
     brand: 'RSS Web',
@@ -22,7 +32,33 @@ const zhCN = {
     placeholder: '输入命令或搜索…',
     empty: '无结果',
     hint: '输入内容以搜索',
-    resultsLabel: '搜索结果',
+  },
+  source: {
+    label: '数据来源：{source}',
+    ...sourceLabels,
+  },
+  contentState: {
+    loading: { title: '正在加载', message: '正在获取最新数据。' },
+    empty: { title: '暂无数据', message: '当前没有可显示的内容。' },
+    unavailable: { title: '暂时不可用', message: '当前无法获取此内容。' },
+    retry: '重试',
+  },
+  errorPage: {
+    unauthorized: { title: '需要登录', message: '请重新登录后继续。' },
+    forbidden: { title: '访问被拒绝', message: '服务端拒绝了这项操作。' },
+    notFound: { title: '页面不存在', message: '请求的页面不存在或尚未实现。' },
+    conflict: { title: '状态已变化', message: '请刷新状态后再次确认。' },
+    rateLimited: { title: '请求过于频繁', message: '请稍后再试。' },
+    serviceUnavailable: { title: '服务暂时不可用', message: '服务当前无法完成请求。' },
+    invalidResponse: { title: '响应无效', message: '服务返回了无法安全使用的响应。' },
+    unknown: { title: '操作失败', message: '请求未能完成。' },
+    requestId: '请求 ID',
+    copyRequestId: '复制请求 ID',
+    copied: '请求 ID 已复制',
+    failed: '无法复制请求 ID',
+    retryable: '可以安全地由用户重试',
+    notRetryable: '不要自动重试',
+    recovery: { signIn: '前往登录', retry: '重试', home: '返回首页' },
   },
   home: {
     title: 'RSS Web 基座',

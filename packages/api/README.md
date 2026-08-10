@@ -5,6 +5,8 @@ transport factory, typed success decoders, cursor decoding, and sanitized
 `RssApiError` values recognized through `isRssApiError`. Error construction is
 internal so consumers cannot bypass WireError sanitization. It never exports
 Axios instances or responses.
+Copyable WireError request IDs are restricted to 1–128 printable ASCII characters; malformed
+diagnostic coordinates fail closed as protocol errors rather than entering UI or clipboard output.
 
 Domain adapters own endpoint methods, paths, success statuses, and DTO decoders.
 The restricted `@rss/api/session` subpath provides the one reviewed transport
