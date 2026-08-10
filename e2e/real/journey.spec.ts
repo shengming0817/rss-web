@@ -2,13 +2,20 @@ import { expect, test, type Page } from '@playwright/test'
 
 const username = 'rss-web-real-user'
 const limitedUsername = 'rss-web-limited-user'
+const passwordUsername = 'rss-web-password-user'
 const password = 'rss-web-real-e2e-password'
+const replacementPassword = 'rss-web-replacement-password'
 
-async function signIn(page: Page, login = username): Promise<void> {
+async function signIn(page: Page, login = username, credential = password): Promise<void> {
   await page.goto('/')
   await page.getByLabel('用户名').fill(login)
-  await page.getByLabel('密码').fill(password)
+  await page.getByLabel('密码').fill(credential)
   await page.getByRole('button', { name: '登录', exact: true }).click()
+}
+
+async function signInAndExpectShell(page: Page, login = username, credential = password) {
+  await signIn(page, login, credential)
+  await expect(page.getByRole('navigation', { name: '主导航' })).toBeVisible()
 }
 
 test('@main completes tenant bootstrap, verified profile, Admin facts, refresh, and logout', async ({
@@ -21,8 +28,10 @@ test('@main completes tenant bootstrap, verified profile, Admin facts, refresh, 
     }
   })
 
-  await signIn(page)
+  await signInAndExpectShell(page)
+  await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: /身份/ }).click()
   await expect(page.getByRole('heading', { name: '已验证身份' })).toBeVisible()
+  await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: /首页/ }).click()
   const runtimePanel = page.getByRole('region', { name: '运行时摘要' })
   const auditPanel = page.getByRole('region', { name: '首批审计条目' })
   await expect(runtimePanel.locator('[data-source="rss"]')).toBeVisible()
@@ -78,10 +87,53 @@ test('@main completes tenant bootstrap, verified profile, Admin facts, refresh, 
 })
 
 test('@main keeps real 403 authoritative for a limited account', async ({ page }) => {
-  await signIn(page, limitedUsername)
-  await expect(page.getByRole('heading', { name: '已验证身份' })).toBeVisible()
+  await signInAndExpectShell(page, limitedUsername)
   await expect(page.locator('[data-source="unavailable"]')).toHaveCount(2)
   await expect(page.getByText('ERR_CORE_FORBIDDEN')).toHaveCount(2)
+})
+
+test('@main changes a real password once and revokes every existing session', async ({
+  browser,
+}) => {
+  const contextA = await browser.newContext()
+  const contextB = await browser.newContext()
+  const pageA = await contextA.newPage()
+  const pageB = await contextB.newPage()
+  const passwordRequests: string[] = []
+  pageA.on('request', (request) => {
+    if (new URL(request.url()).pathname === '/api/v1/identity/password/change') {
+      passwordRequests.push(request.method())
+      expect(request.headers()['x-tenant-id']).toBeUndefined()
+    }
+  })
+
+  await signInAndExpectShell(pageA, passwordUsername)
+  await signInAndExpectShell(pageB, passwordUsername)
+  await pageA
+    .getByRole('navigation', { name: '主导航' })
+    .getByRole('link', { name: /身份/ })
+    .click()
+  await pageA.getByLabel('当前密码').fill(password)
+  await pageA.getByLabel('新密码', { exact: true }).fill(replacementPassword)
+  await pageA.getByLabel('确认新密码').fill(replacementPassword)
+  await pageA.getByRole('button', { name: '修改密码', exact: true }).click()
+  await expect(pageA).toHaveURL(/\/login$/)
+  expect(passwordRequests).toEqual(['POST'])
+
+  await pageB
+    .getByRole('navigation', { name: '主导航' })
+    .getByRole('link', { name: /运行时/ })
+    .click()
+  await expect(pageB).toHaveURL(/\/login$/)
+
+  await pageA.getByLabel('用户名').fill(passwordUsername)
+  await pageA.getByLabel('密码').fill(password)
+  await pageA.getByRole('button', { name: '登录', exact: true }).click()
+  await expect(pageA.getByRole('alert')).toContainText('凭据无效')
+  await signInAndExpectShell(pageA, passwordUsername, replacementPassword)
+
+  await contextA.close()
+  await contextB.close()
 })
 
 test('@main observes canonical 401 and 429 through the browser Edge', async ({ page }) => {
@@ -144,8 +196,7 @@ test('@budget-exhausted reports the real RSS request-budget 503 without a mock f
 test('@admin-down keeps Primary login and shell available while Admin panels fail', async ({
   page,
 }) => {
-  await signIn(page)
-  await expect(page.getByRole('heading', { name: '已验证身份' })).toBeVisible()
+  await signInAndExpectShell(page)
   await expect(page.locator('[data-source="unavailable"]')).toHaveCount(2)
   await expect(page.getByRole('navigation', { name: '主导航' })).toBeVisible()
 })

@@ -7,6 +7,7 @@ import {
 import { createIdentityApi } from '../api/client'
 import type { LoginData, ProfileData, RefreshData } from '../api/types'
 import { sessionError } from './errors'
+import { classifyPasswordChangeFailure } from './password-change-failure'
 import type {
   IdentitySession,
   IdentitySessionConfig,
@@ -106,6 +107,7 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
   let epoch = 0
   let lifecycle = new AbortController()
   let refreshFlight: Promise<SessionCredential> | undefined
+  let passwordChangeFlight: Promise<void> | undefined
 
   function publish(next: IdentitySessionState): void {
     const published = Object.freeze(next)
@@ -137,14 +139,17 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
     }
   }
 
-  function clear(next: 'anonymous' | 'expired'): void {
+  function clear(next: 'anonymous' | 'expired', reason?: 'password-change-outcome-unknown'): void {
     if (state.status === next && secrets === undefined && refreshFlight === undefined) return
     epoch += 1
     lifecycle.abort()
     lifecycle = new AbortController()
     secrets = undefined
     refreshFlight = undefined
-    publish({ status: next })
+    passwordChangeFlight = undefined
+    publish(
+      next === 'expired' && reason !== undefined ? { status: next, reason } : { status: next },
+    )
   }
 
   function beginAuthentication(): { authenticationEpoch: number; operationLifecycle: AbortSignal } {
@@ -153,6 +158,7 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
     lifecycle = new AbortController()
     secrets = undefined
     refreshFlight = undefined
+    passwordChangeFlight = undefined
     const authenticationEpoch = epoch
     const operationLifecycle = lifecycle.signal
     publish({ status: 'authenticating' })
@@ -343,6 +349,52 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
     else await remote.logout(signalOption(options))
   }
 
+  function changePassword(
+    request: Parameters<IdentitySession['changePassword']>[0],
+    options?: SessionOperationOptions,
+  ): Promise<void> {
+    if (passwordChangeFlight !== undefined) return Promise.reject(sessionError('SESSION_BUSY'))
+    if (state.status !== 'authenticated' || secrets === undefined) {
+      return Promise.reject(sessionError('SESSION_UNAVAILABLE'))
+    }
+    const operationEpoch = epoch
+    const operationLifecycle = lifecycle
+    const flight = Promise.resolve().then(async () => {
+      try {
+        const response = await createIdentityApi(transport).changePassword(
+          request,
+          signalOption(options, operationLifecycle.signal),
+        )
+        if (
+          epoch !== operationEpoch ||
+          lifecycle !== operationLifecycle ||
+          operationLifecycle.signal.aborted
+        ) {
+          throw sessionError('SESSION_INVALIDATED')
+        }
+        if (!response.data.changed) throw sessionError('PASSWORD_CHANGE_OUTCOME_UNKNOWN')
+        clear('anonymous')
+      } catch (error: unknown) {
+        const failure = classifyPasswordChangeFailure(error)
+        if (epoch === operationEpoch && !failure.preserveAuthority) {
+          clear(
+            'expired',
+            failure.kind === 'outcome-unknown' || failure.kind === 'aborted'
+              ? 'password-change-outcome-unknown'
+              : undefined,
+          )
+        }
+        throw error
+      }
+    })
+    passwordChangeFlight = flight
+    const release = () => {
+      if (passwordChangeFlight === flight) passwordChangeFlight = undefined
+    }
+    void flight.then(release, release)
+    return flight
+  }
+
   return Object.freeze({
     transport,
     getState: () => state,
@@ -353,5 +405,6 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
     login,
     logout: (options?: SessionOperationOptions) => endSession(false, options),
     logoutAll: (options?: SessionOperationOptions) => endSession(true, options),
+    changePassword,
   })
 }

@@ -36,4 +36,14 @@ describe('web Identity composition boundary', () => {
     )
     expect(text).not.toContain('name="tenant"')
   })
+
+  it('keeps password mutation behind the injected session owner', () => {
+    const text = sources(resolve(webSource, 'features/identity'))
+      .map((path) => readFileSync(path, 'utf8'))
+      .join('\n')
+    expect(text).not.toMatch(/createIdentityApi|session\.transport|@rss\/api\/endpoints\/identity/)
+    expect(
+      readFileSync(resolve(webSource, 'features/identity/PasswordChangeForm.vue'), 'utf8'),
+    ).toContain('session.changePassword')
+  })
 })

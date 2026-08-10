@@ -18,6 +18,10 @@ The Web bootstrap is the only composition root. Keep Identity Vue components in
 `apps/web`, do not add a Pinia session mirror, and never enter the shell before
 the branded verified profile is available. Reload intentionally returns to
 `/login` because credentials are memory-only.
+Password change is a non-idempotent operation owned only by the same Identity session controller. It
+uses the no-replay policy, never calls logout-all as compensation, and clears local authority after
+confirmed success or a commit-unknown result. Password values remain component-local and must not be
+persisted, logged, copied into routes, or exposed through errors.
 The Nginx same-origin Edge is the sole listener-routing and pre-auth tenant
 bootstrap boundary. Do not add browser-selectable tenants, client runtime API
 origins, listener discovery, proxy fallbacks, or Internal/Health routes.

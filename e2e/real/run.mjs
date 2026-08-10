@@ -131,6 +131,7 @@ function seedSql() {
     'identity:profile:read',
     'identity:profile:field:subject',
     'identity:profile:field:tenant_id',
+    'identity:profile:write',
     'identity:session:logout-current',
     'runtime:inventory:read',
     'audit:read',
@@ -143,16 +144,20 @@ function seedSql() {
   return `BEGIN;
 INSERT INTO credentials (tenant_id,user_id,login,password_hash,version) VALUES
 ('${tenant}'::uuid,'11111111-1111-4111-8111-111111111111'::uuid,'rss-web-real-user','${passwordHash}',1),
-('${tenant}'::uuid,'22222222-2222-4222-8222-222222222222'::uuid,'rss-web-limited-user','${passwordHash}',1);
+('${tenant}'::uuid,'22222222-2222-4222-8222-222222222222'::uuid,'rss-web-limited-user','${passwordHash}',1),
+('${tenant}'::uuid,'33333333-3333-4333-8333-333333333333'::uuid,'rss-web-password-user','${passwordHash}',1);
 INSERT INTO account_security_states (tenant_id,user_id,status,authn_epoch,version,status_changed_at,updated_at) VALUES
 ('${tenant}'::uuid,'11111111-1111-4111-8111-111111111111'::uuid,'active',0,1,now(),now()),
-('${tenant}'::uuid,'22222222-2222-4222-8222-222222222222'::uuid,'active',0,1,now(),now());
+('${tenant}'::uuid,'22222222-2222-4222-8222-222222222222'::uuid,'active',0,1,now(),now()),
+('${tenant}'::uuid,'33333333-3333-4333-8333-333333333333'::uuid,'active',0,1,now(),now());
 INSERT INTO roles (tenant_id,id,name,permissions) VALUES
 ('${tenant}'::uuid,'rss-web-real','RSS Web real journey',${array(fullPermissions)}),
-('${tenant}'::uuid,'rss-web-limited','RSS Web limited journey',${array(limitedPermissions)});
+('${tenant}'::uuid,'rss-web-limited','RSS Web limited journey',${array(limitedPermissions)}),
+('${tenant}'::uuid,'rss-web-password','RSS Web password journey',${array(fullPermissions)});
 INSERT INTO role_bindings (tenant_id,role_id,subject) VALUES
 ('${tenant}'::uuid,'rss-web-real','11111111-1111-4111-8111-111111111111'),
-('${tenant}'::uuid,'rss-web-limited','22222222-2222-4222-8222-222222222222');
+('${tenant}'::uuid,'rss-web-limited','22222222-2222-4222-8222-222222222222'),
+('${tenant}'::uuid,'rss-web-password','33333333-3333-4333-8333-333333333333');
 INSERT INTO abac_policies
   (tenant_id,id,version,contract_id,permission,effective_from,rules)
 VALUES (
@@ -316,13 +321,28 @@ async function playwright(phase) {
     throw error
   }
   let classification = 'environment'
+  let report
   try {
-    classification = classifyPlaywrightReport(JSON.parse(result.stdout))
+    report = JSON.parse(result.stdout)
+    classification = classifyPlaywrightReport(report)
   } catch {
     classification = 'environment'
   }
   if (result.status !== 0 || classification !== 'passed') {
     if (result.stderr) process.stderr.write(result.stderr)
+    if (report !== undefined) {
+      const failedTitles = report.suites
+        .flatMap((suite) => suite.specs ?? [])
+        .filter((spec) =>
+          (spec.tests ?? []).some((test) =>
+            (test.results ?? []).some((testResult) => testResult.status !== 'passed'),
+          ),
+        )
+        .map((spec) => spec.title)
+      if (failedTitles.length > 0) {
+        process.stderr.write(`[real-e2e] failed specs: ${failedTitles.join(' | ')}\n`)
+      }
+    }
     const error = new Error(`Playwright ${phase} failed`)
     error.stage = `${classification === 'product' ? 'product' : 'environment'}:${phase}`
     throw error

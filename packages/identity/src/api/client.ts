@@ -5,6 +5,7 @@ import {
   decodeLogoutAllResponse,
   decodeLogoutResponse,
   decodeProfileResponse,
+  decodePasswordChangeResponse,
   decodeRefreshResponse,
 } from './decoders'
 import type {
@@ -13,6 +14,8 @@ import type {
   LoginResponse,
   LogoutAllResponse,
   LogoutResponse,
+  PasswordChangeRequest,
+  PasswordChangeResponse,
   ProfileResponse,
   RefreshRequest,
   RefreshResponse,
@@ -24,6 +27,10 @@ export interface IdentityApi {
   profile(options?: IdentityCallOptions): Promise<ProfileResponse>
   logout(options?: IdentityCallOptions): Promise<LogoutResponse>
   logoutAll(options?: IdentityCallOptions): Promise<LogoutAllResponse>
+  changePassword(
+    request: PasswordChangeRequest,
+    options?: IdentityCallOptions,
+  ): Promise<PasswordChangeResponse>
 }
 
 function signalOption(options?: IdentityCallOptions): { signal?: AbortSignal } {
@@ -71,6 +78,18 @@ export function createIdentityApi(transport: HttpTransport): IdentityApi {
         body: {},
         decode: decodeLogoutAllResponse,
         session: 'required',
+        ...signalOption(options),
+      })
+    },
+    changePassword(request: PasswordChangeRequest, options?: IdentityCallOptions) {
+      return transport.request({
+        ...identityEndpoints.passwordChange,
+        body: {
+          currentPassword: request.currentPassword,
+          newPassword: request.newPassword,
+        },
+        decode: decodePasswordChangeResponse,
+        session: 'required-no-replay',
         ...signalOption(options),
       })
     },

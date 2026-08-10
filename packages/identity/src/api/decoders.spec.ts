@@ -4,12 +4,14 @@ import {
   decodeLogoutAllResponse,
   decodeLogoutResponse,
   decodeProfileResponse,
+  decodePasswordChangeResponse,
   decodeRefreshResponse,
 } from './decoders'
 import { loginResponseFixture } from '../../test/fixtures/login'
 import { refreshResponseFixture } from '../../test/fixtures/refresh'
 import { profileResponseFixture } from '../../test/fixtures/profile'
 import { logoutAllResponseFixture, logoutResponseFixture } from '../../test/fixtures/logout'
+import { passwordChangeResponseFixture } from '../../test/fixtures/password-change'
 
 describe('Identity response decoders', () => {
   it('decodes login and refresh as distinct exact envelopes', () => {
@@ -73,5 +75,24 @@ describe('Identity response decoders', () => {
   ])('rejects malformed logout responses %#', (value) => {
     expect(() => decodeLogoutResponse(value)).toThrow()
     expect(() => decodeLogoutAllResponse(value)).toThrow()
+  })
+
+  it('decodes the password-change response as an exact envelope', () => {
+    expect(decodePasswordChangeResponse(passwordChangeResponseFixture)).toEqual(
+      passwordChangeResponseFixture,
+    )
+    expect(decodePasswordChangeResponse({ data: { changed: false } })).toEqual({
+      data: { changed: false },
+    })
+  })
+
+  it.each([
+    {},
+    { data: {} },
+    { data: { changed: 'true' } },
+    { data: { changed: true, extra: true } },
+    { data: { changed: true }, extra: true },
+  ])('rejects malformed password-change responses %#', (value) => {
+    expect(() => decodePasswordChangeResponse(value)).toThrow()
   })
 })

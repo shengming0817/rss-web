@@ -93,3 +93,13 @@ operation with non-idempotent HTTP semantics: each explicitly submitted page is 
 without prefetch, automatic retry, 401 replay, client-side SuperAdmin inference, or runtime schema
 loading. The target tenant is only a canonical path coordinate and never becomes a browser-authored
 tenant header.
+
+WEB-PR-016 enables `identity.password-change` against the same read-only RSS revision
+`b7f3e1d0bcc5b2e59639a81b4f37937914b53f00`. The contract, request, and response SHA-256 values are
+`6798727427fbdfffa1f226b2734cbe808341d772b4413465d5376c3e3fa7eeb1`,
+`055b9ef6fb6eceed4b2770f42a23bf29d70d2271475c6418cc8337fddce49602`, and
+`6e518a5eb318c0979189babca8ed856c7b39cdf68d004cdbf724893cc8940fe9`. The Web sends this
+non-idempotent OutboxFact command exactly once through the protected no-replay session policy. A
+confirmed change clears all local authority before resolving; credential drift and commit-unknown
+results fail closed. RSS remains authoritative for Unicode normalization, length, compromised-secret
+policy, grant-family revocation, and transaction outcome; schemas are neither copied nor loaded.

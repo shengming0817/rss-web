@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { decodeEndpointError, decodeWireError, protocolError } from './wire-error'
 import { auditEndpoints } from './endpoints/audit'
+import { identityEndpoints } from './endpoints/identity'
 
 const envelope = (overrides: Record<string, unknown> = {}) => ({
   error: {
@@ -67,6 +68,34 @@ describe('decodeEndpointError', () => {
       cause: 'wire',
       status,
     })
+  })
+
+  it.each([
+    [400, 'ERR_CORE_VALIDATION', 'validation error', false, [{ field: 'newPassword' }]],
+    [404, 'ERR_CORE_NOT_FOUND', 'not found', false, []],
+    [409, 'ERR_CORE_VERSION_CONFLICT', 'version conflict', true, []],
+    [500, 'ERR_CORE_INTERNAL', 'internal error', false, []],
+  ] as const)(
+    'accepts the pinned password-change %s coordinate',
+    (status, code, message, retryable, details) => {
+      expect(
+        decodeEndpointError(
+          status,
+          envelope({ code, message, retryable, details }),
+          identityEndpoints.passwordChange.errorPolicy,
+        ),
+      ).toMatchObject({ cause: 'wire', status, code, retryable })
+    },
+  )
+
+  it.each([
+    [400, envelope({ message: 'validation failed' })],
+    [409, envelope({ code: 'ERR_CORE_VERSION_CONFLICT', message: 'version conflict' })],
+    [418, envelope({ details: [] })],
+  ] as const)('fails closed for drifting password-change coordinates %#', (status, body) => {
+    expect(
+      decodeEndpointError(status, body, identityEndpoints.passwordChange.errorPolicy),
+    ).toMatchObject({ cause: 'protocol', status })
   })
 
   it.each([

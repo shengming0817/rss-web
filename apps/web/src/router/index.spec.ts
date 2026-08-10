@@ -189,13 +189,19 @@ describe('session-owned router', () => {
     },
   )
 
-  it('derives navigation from the implemented Home, Runtime, and Audit routes', () => {
+  it('derives navigation from the implemented Home, Identity, Runtime, and Audit routes', () => {
     const router = appRouter(sessionFixture({ status: 'anonymous' }))
     expect(createShellNavigation(router, (key) => key)).toEqual([
       {
         id: 'home',
         label: 'navigation.home',
         to: { name: 'home' },
+        source: RSS_SOURCE,
+      },
+      {
+        id: 'identity',
+        label: 'navigation.identity',
+        to: { name: 'identity' },
         source: RSS_SOURCE,
       },
       {
@@ -224,7 +230,7 @@ describe('session-owned router', () => {
         contractId: 'audit.list-entries',
         permission: 'audit:read',
       },
-      navigation: { labelKey: 'navigation.audit', order: 20, source: RSS_SOURCE },
+      navigation: { labelKey: 'navigation.audit', order: 30, source: RSS_SOURCE },
     })
   })
 
@@ -239,8 +245,20 @@ describe('session-owned router', () => {
         contractId: 'runtime.inventory',
         permission: 'runtime:inventory:read',
       },
-      navigation: { labelKey: 'navigation.runtime', order: 10, source: RSS_SOURCE },
+      navigation: { labelKey: 'navigation.runtime', order: 20, source: RSS_SOURCE },
     })
+  })
+
+  it('keeps the Identity self-service route session-only while its command owns authorization', () => {
+    const router = appRouter(sessionFixture({ status: 'anonymous' }))
+    const route = router.resolve('/identity')
+    expect(route.name).toBe('identity')
+    expect(route.meta).toMatchObject({
+      sessionAccess: 'authenticated',
+      focusTarget: 'shell-content',
+      navigation: { labelKey: 'navigation.identity', order: 10, source: RSS_SOURCE },
+    })
+    expect(route.meta.authorizationIntent).toBeUndefined()
   })
 
   it('keeps unknown paths behind session authority and shows 404 after authentication', async () => {

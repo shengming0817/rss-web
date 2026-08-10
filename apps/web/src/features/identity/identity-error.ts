@@ -1,5 +1,5 @@
 import { isRssApiError } from '@rss/api'
-import { isIdentitySessionError } from '@rss/identity'
+import { classifyPasswordChangeFailure, isIdentitySessionError } from '@rss/identity'
 
 export type IdentityErrorKey =
   | 'identity.errors.invalidCredentials'
@@ -13,6 +13,17 @@ export type IdentityErrorKey =
   | 'identity.errors.profileVerificationFailed'
   | 'identity.errors.alreadySubmitting'
   | 'identity.errors.unknown'
+
+export type PasswordChangeErrorKey =
+  | 'identity.passwordChange.errors.required'
+  | 'identity.passwordChange.errors.mismatch'
+  | 'identity.passwordChange.errors.policy'
+  | 'identity.passwordChange.errors.forbidden'
+  | 'identity.passwordChange.errors.sessionChanged'
+  | 'identity.passwordChange.errors.rateLimited'
+  | 'identity.passwordChange.errors.serviceUnavailable'
+  | 'identity.passwordChange.errors.outcomeUnknown'
+  | 'identity.passwordChange.errors.unknown'
 
 export function identityErrorKey(error: unknown): IdentityErrorKey | undefined {
   if (isIdentitySessionError(error)) {
@@ -36,4 +47,23 @@ export function identityErrorKey(error: unknown): IdentityErrorKey | undefined {
     return 'identity.errors.serviceUnavailable'
   }
   return 'identity.errors.unknown'
+}
+
+export function passwordChangeErrorKey(error: unknown): PasswordChangeErrorKey | undefined {
+  if (isIdentitySessionError(error) && error.code === 'SESSION_BUSY') {
+    return 'identity.passwordChange.errors.unknown'
+  }
+  const keyByKind = {
+    policy: 'identity.passwordChange.errors.policy',
+    forbidden: 'identity.passwordChange.errors.forbidden',
+    'session-changed': 'identity.passwordChange.errors.sessionChanged',
+    'rate-limited': 'identity.passwordChange.errors.rateLimited',
+    'service-unavailable': 'identity.passwordChange.errors.serviceUnavailable',
+    aborted: undefined,
+    'outcome-unknown': 'identity.passwordChange.errors.outcomeUnknown',
+  } as const satisfies Record<
+    ReturnType<typeof classifyPasswordChangeFailure>['kind'],
+    PasswordChangeErrorKey | undefined
+  >
+  return keyByKind[classifyPasswordChangeFailure(error).kind]
 }

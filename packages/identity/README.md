@@ -1,7 +1,7 @@
 # @rss/identity
 
 Handwritten DTOs, strict response decoders, and an injected API adapter for the
-selected RSS Identity contracts. The five response envelopes remain distinct;
+selected RSS Identity contracts. Response envelopes remain distinct;
 in particular, refresh data is not a complete login session.
 
 The package depends on `@rss/api`, never Axios. Its framework-neutral session
@@ -11,6 +11,11 @@ pass authority validation before the controller creates an immutable branded
 `VerifiedProfile`. Protected requests share one generation-fenced refresh and
 retry at most once; failure aborts pending requests and atomically clears the
 credential/profile state.
+
+Password change is owned by the same controller and uses the protected no-replay policy. A confirmed
+change clears all local authority before resolving; credential drift and commit-unknown results fail
+closed rather than retrying a non-idempotent command. Vue code cannot call a second session mutation
+path.
 
 The controller never persists or logs credentials, parses JWT claims, authors
 tenant headers, or implements UI/Pinia behavior. JavaScript strings cannot be

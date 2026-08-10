@@ -5,6 +5,10 @@ import { loginRequestFixture, loginResponseFixture } from '../../test/fixtures/l
 import { refreshRequestFixture, refreshResponseFixture } from '../../test/fixtures/refresh'
 import { profileResponseFixture } from '../../test/fixtures/profile'
 import { logoutAllResponseFixture, logoutResponseFixture } from '../../test/fixtures/logout'
+import {
+  passwordChangeRequestFixture,
+  passwordChangeResponseFixture,
+} from '../../test/fixtures/password-change'
 
 type RecordedRequest = NoContentRequest | RequestOptions<unknown>
 
@@ -20,13 +24,14 @@ function recordingTransport(responses: unknown[]) {
 }
 
 describe('createIdentityApi', () => {
-  it('maps the five contract methods without adding authority headers', async () => {
+  it('maps the six contract methods without adding authority headers', async () => {
     const { calls, transport } = recordingTransport([
       loginResponseFixture,
       refreshResponseFixture,
       profileResponseFixture,
       logoutResponseFixture,
       logoutAllResponseFixture,
+      passwordChangeResponseFixture,
     ])
     const api = createIdentityApi(transport)
     const loginWithExtra = { ...loginRequestFixture, extra: 'must-not-be-sent' }
@@ -36,6 +41,9 @@ describe('createIdentityApi', () => {
     await expect(api.profile()).resolves.toEqual(profileResponseFixture)
     await expect(api.logout()).resolves.toEqual(logoutResponseFixture)
     await expect(api.logoutAll()).resolves.toEqual(logoutAllResponseFixture)
+    await expect(api.changePassword(passwordChangeRequestFixture)).resolves.toEqual(
+      passwordChangeResponseFixture,
+    )
 
     expect(
       calls.map(({ method, path, successStatus, body, headers, session, signal }) => ({
@@ -93,6 +101,15 @@ describe('createIdentityApi', () => {
         session: 'required',
         signal: undefined,
       },
+      {
+        method: 'POST',
+        path: '/api/v1/identity/password/change',
+        successStatus: 200,
+        body: passwordChangeRequestFixture,
+        headers: undefined,
+        session: 'required-no-replay',
+        signal: undefined,
+      },
     ])
   })
 
@@ -104,6 +121,7 @@ describe('createIdentityApi', () => {
       profileResponseFixture,
       logoutResponseFixture,
       logoutAllResponseFixture,
+      passwordChangeResponseFixture,
     ])
     const api = createIdentityApi(transport)
 
@@ -112,6 +130,7 @@ describe('createIdentityApi', () => {
     await api.profile({ signal: controller.signal })
     await api.logout({ signal: controller.signal })
     await api.logoutAll({ signal: controller.signal })
+    await api.changePassword(passwordChangeRequestFixture, { signal: controller.signal })
 
     expect(calls.map(({ signal, session }) => ({ signal, session }))).toEqual([
       { signal: controller.signal, session: undefined },
@@ -119,6 +138,7 @@ describe('createIdentityApi', () => {
       { signal: controller.signal, session: 'required' },
       { signal: controller.signal, session: 'required' },
       { signal: controller.signal, session: 'required' },
+      { signal: controller.signal, session: 'required-no-replay' },
     ])
   })
 

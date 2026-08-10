@@ -45,6 +45,16 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'identity',
+        name: 'identity',
+        component: () => import('../features/identity/IdentitySelfServiceView.vue'),
+        meta: {
+          sessionAccess: 'authenticated',
+          focusTarget: 'shell-content',
+          navigation: { labelKey: 'navigation.identity', order: 10, source: RSS_SOURCE },
+        },
+      },
+      {
         path: 'runtime',
         name: 'runtime',
         component: () => import('../features/runtime/RuntimeDetailsView.vue'),
@@ -52,7 +62,7 @@ const routes: RouteRecordRaw[] = [
           sessionAccess: 'authenticated',
           focusTarget: 'shell-content',
           authorizationIntent: RUNTIME_INVENTORY_INTENT,
-          navigation: { labelKey: 'navigation.runtime', order: 10, source: RSS_SOURCE },
+          navigation: { labelKey: 'navigation.runtime', order: 20, source: RSS_SOURCE },
         },
       },
       {
@@ -63,7 +73,7 @@ const routes: RouteRecordRaw[] = [
           sessionAccess: 'authenticated',
           focusTarget: 'shell-content',
           authorizationIntent: AUDIT_AMBIENT_INTENT,
-          navigation: { labelKey: 'navigation.audit', order: 20, source: RSS_SOURCE },
+          navigation: { labelKey: 'navigation.audit', order: 30, source: RSS_SOURCE },
         },
       },
       {

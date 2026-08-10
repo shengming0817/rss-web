@@ -1,5 +1,5 @@
 import type { HttpTransport } from '@rss/api'
-import type { LoginRequest, ProfileKind } from '../api/types'
+import type { LoginRequest, PasswordChangeRequest, ProfileKind } from '../api/types'
 
 declare const VERIFIED_PROFILE: unique symbol
 
@@ -28,7 +28,10 @@ export type IdentitySessionState =
       sessionExpiresAt: number
       accessExpiresAt: number
     }>
-  | Readonly<{ status: 'expired' }>
+  | Readonly<{
+      status: 'expired'
+      reason?: 'password-change-outcome-unknown'
+    }>
 
 export interface SessionOperationOptions {
   readonly signal?: AbortSignal
@@ -43,6 +46,7 @@ export interface IdentitySession {
   login(request: LoginRequest, options?: SessionOperationOptions): Promise<VerifiedProfile>
   logout(options?: SessionOperationOptions): Promise<void>
   logoutAll(options?: SessionOperationOptions): Promise<void>
+  changePassword(request: PasswordChangeRequest, options?: SessionOperationOptions): Promise<void>
 }
 
 export interface IdentitySessionConfig {
@@ -55,6 +59,7 @@ export type IdentitySessionErrorCode =
   | 'SESSION_UNAVAILABLE'
   | 'PROFILE_NOT_AUTHORITATIVE'
   | 'SESSION_INVALIDATED'
+  | 'PASSWORD_CHANGE_OUTCOME_UNKNOWN'
   | 'SESSION_OPERATION_ABORTED'
 
 export interface IdentitySessionError extends Error {
