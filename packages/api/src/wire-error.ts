@@ -4,6 +4,7 @@ import type {
   RssApiErrorInit,
   RssApiMessageKey,
   SafeDetail,
+  EndpointErrorPolicy,
 } from './types'
 
 const WIRE_ERROR_KEYS = ['code', 'details', 'message', 'requestId', 'retryable'] as const
@@ -133,4 +134,29 @@ export function decodeWireError(status: number, value: unknown): RssApiError {
     requestId,
     safeDetails: status >= 500 ? [] : safeDetails,
   })
+}
+
+export function decodeEndpointError(
+  status: number,
+  value: unknown,
+  policy?: EndpointErrorPolicy,
+): RssApiError {
+  if (policy === undefined || status === 401 || status === 403)
+    return decodeWireError(status, value)
+  const rule = policy[status]
+  if (rule === undefined) return protocolError(status)
+  const decoded = decodeWireError(status, value)
+  if (
+    decoded.cause !== 'wire' ||
+    decoded.code !== rule.code ||
+    decoded.retryable !== rule.retryable ||
+    !isRecord(value) ||
+    !isRecord(value.error) ||
+    value.error.message !== rule.message
+  )
+    return protocolError(status)
+  const wire = isRecord(value) && isRecord(value.error) ? value.error : undefined
+  if (rule.details === 'empty' && (!Array.isArray(wire?.details) || wire.details.length !== 0))
+    return protocolError(status)
+  return decoded
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decodeWireError, protocolError } from './wire-error'
+import { decodeEndpointError, decodeWireError, protocolError } from './wire-error'
 
 const envelope = (overrides: Record<string, unknown> = {}) => ({
   error: {
@@ -10,6 +10,63 @@ const envelope = (overrides: Record<string, unknown> = {}) => ({
     requestId: 'rid-1',
     ...overrides,
   },
+})
+
+describe('decodeEndpointError', () => {
+  const policy = {
+    500: {
+      code: 'ERR_CORE_INTERNAL',
+      message: 'internal error',
+      retryable: false,
+      details: 'empty',
+    },
+    503: {
+      code: 'ERR_CORE_PROVIDER_UNAVAILABLE',
+      message: 'provider unavailable',
+      retryable: true,
+      details: 'empty',
+    },
+  } as const
+
+  it('accepts only an endpoint-declared error coordinate', () => {
+    expect(
+      decodeEndpointError(
+        503,
+        envelope({
+          code: 'ERR_CORE_PROVIDER_UNAVAILABLE',
+          message: 'provider unavailable',
+          retryable: true,
+          details: [],
+        }),
+        policy,
+      ),
+    ).toMatchObject({ cause: 'wire', status: 503, code: 'ERR_CORE_PROVIDER_UNAVAILABLE' })
+  })
+
+  it.each([
+    [502, envelope({ details: [] })],
+    [503, envelope({ code: 'ERR_CORE_INTERNAL', retryable: true, details: [] })],
+    [
+      503,
+      envelope({
+        code: 'ERR_CORE_PROVIDER_UNAVAILABLE',
+        message: 'drifted',
+        retryable: true,
+        details: [],
+      }),
+    ],
+    [503, envelope({ code: 'ERR_CORE_PROVIDER_UNAVAILABLE', retryable: false, details: [] })],
+    [503, envelope({ code: 'ERR_CORE_PROVIDER_UNAVAILABLE', retryable: true })],
+  ] as const)('fails closed for undeclared or drifting endpoint errors %#', (status, body) => {
+    expect(decodeEndpointError(status, body, policy)).toMatchObject({ cause: 'protocol', status })
+  })
+
+  it.each([401, 403])('preserves the shared authenticated %s path', (status) => {
+    expect(decodeEndpointError(status, envelope(), policy)).toMatchObject({
+      cause: 'wire',
+      status,
+    })
+  })
 })
 
 describe('decodeWireError', () => {

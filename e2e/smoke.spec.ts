@@ -16,8 +16,63 @@ const profileResponse = {
     kind: 'user',
   },
 }
+const digest = `sha256:${'a'.repeat(64)}`
+const runtimeResponse = {
+  data: {
+    schemaVersion: 1,
+    assemblyFingerprint: digest,
+    runtimePlanFingerprint: digest,
+    activatedWorkflows: [],
+    domains: ['identity', 'audit'],
+    listeners: [],
+    providerPosture: [{ id: 'ledger', state: 'unobserved' }],
+    placements: [],
+  },
+}
+const auditResponse = {
+  data: [
+    {
+      seq: 0,
+      tenantId: '<redacted>',
+      actor: '<redacted>',
+      actorKind: 'user',
+      action: 'identity.login',
+      resourceKind: 'session',
+      resourceId: '<redacted>',
+      outcome: 'success',
+      recordedAt: 1_800_000_000,
+      entryHash: 'opaque-fixture',
+    },
+  ],
+  hasMore: false,
+}
 
-async function installIdentityMocks(page: Page, profileStatus = 200): Promise<void> {
+async function installAdminMocks(
+  page: Page,
+  auditStatus = 200,
+  runtimeStatus = 200,
+): Promise<void> {
+  await page.route('**/api/v1/runtime/inventory', async (route) => {
+    expect(route.request().headers().authorization?.startsWith('Bearer ')).toBe(true)
+    expect(route.request().headers()['x-tenant-id']).toBeUndefined()
+    if (runtimeStatus === 200) await route.fulfill({ status: 200, json: runtimeResponse })
+    else await route.fulfill({ status: runtimeStatus, body: '<html>gateway unavailable</html>' })
+  })
+  await page.route('**/api/v1/audit/entries**', async (route) => {
+    expect(route.request().headers().authorization?.startsWith('Bearer ')).toBe(true)
+    expect(route.request().headers()['x-tenant-id']).toBeUndefined()
+    if (auditStatus === 200) await route.fulfill({ status: 200, json: auditResponse })
+    else await route.fulfill({ status: auditStatus, body: '<html>gateway unavailable</html>' })
+  })
+}
+
+async function installIdentityMocks(
+  page: Page,
+  profileStatus = 200,
+  auditStatus = 200,
+  runtimeStatus = 200,
+): Promise<void> {
+  await installAdminMocks(page, auditStatus, runtimeStatus)
   await page.route('**/api/v1/identity/login', async (route) => {
     expect(route.request().headers()['x-tenant-id']).toBeUndefined()
     await route.fulfill({ status: 201, json: loginResponse })
@@ -90,6 +145,42 @@ test.describe('RSS Web Identity UX', () => {
     await page.reload()
     await expect(page).toHaveURL(/\/login$/)
     await expect(page.getByRole('heading', { name: '登录' })).toBeVisible()
+  })
+
+  test('loads Runtime and first Audit facts from the protected Admin routes', async ({ page }) => {
+    await installIdentityMocks(page)
+    await signIn(page)
+    await expect(page.getByRole('heading', { name: '运行时摘要' })).toBeVisible()
+    await expect(page.getByText(digest).first()).toBeVisible()
+    await expect(page.getByText('opaque-fixture')).toBeVisible()
+    await expect(page.getByText('浏览器未验证')).toBeVisible()
+    await expect(
+      page.getByText('已验证身份，并独立加载 Runtime 与 Audit 的服务端事实。'),
+    ).toBeVisible()
+    await expect(page.getByText('<redacted>')).toHaveCount(0)
+  })
+
+  test('keeps the Runtime panel and shell available when Audit is unavailable', async ({
+    page,
+  }) => {
+    await installIdentityMocks(page, 200, 502)
+    await signIn(page)
+    await expect(page.getByText(digest).first()).toBeVisible()
+    await expect(page.getByText('INVALID_RESPONSE')).toBeVisible()
+    await expect(page.getByText('gateway unavailable')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: '重试' })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: '主导航' })).toBeVisible()
+  })
+
+  test('keeps the Audit panel and shell available when Runtime is unavailable', async ({
+    page,
+  }) => {
+    await installIdentityMocks(page, 200, 200, 504)
+    await signIn(page)
+    await expect(page.getByText('opaque-fixture')).toBeVisible()
+    await expect(page.getByText('INVALID_RESPONSE')).toBeVisible()
+    await expect(page.getByRole('button', { name: '重试' })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: '主导航' })).toBeVisible()
   })
 
   test('profile denial leaves no half-valid shell or raw server message', async ({ page }) => {

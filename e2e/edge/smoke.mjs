@@ -170,7 +170,6 @@ try {
   assert.equal(errorResponse.headers['x-fixture-listener'], 'admin')
 
   const primaryBefore = (await request(port, '/api/v1/identity/__fixture-count')).json.requestCount
-  const adminBefore = (await request(port, '/api/v1/audit/__fixture-count')).json.requestCount
   for (const path of [
     '/internal/v1/secret',
     '/health/v1/healthz',
@@ -182,6 +181,8 @@ try {
     '/internal',
     '/health',
     '/api/v1/runtime/other',
+    '/api/v1/audit/other',
+    '/api/v1/audit/tenants/f47ac10b-58cc-4372-a567-0e02b2c3d479/entries',
     '/api/v1/unknown',
   ]) {
     assert.equal((await request(port, path)).status, 404, path)
@@ -189,10 +190,6 @@ try {
   assert.equal(
     (await request(port, '/api/v1/identity/__fixture-count')).json.requestCount,
     primaryBefore,
-  )
-  assert.equal(
-    (await request(port, '/api/v1/audit/__fixture-count')).json.requestCount,
-    adminBefore,
   )
 
   result = docker(['stop', 'admin'], { env: environment })

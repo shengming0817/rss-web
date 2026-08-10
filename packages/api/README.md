@@ -21,4 +21,6 @@ at runtime, log request/response bodies, or provide general retry middleware.
 
 Selected endpoint coordinates may be exposed through reviewed `./endpoints/*`
 subpaths for their owning domain adapter. They are static coordinates, not a
-runtime contract registry, and applications must consume the domain adapter.
+runtime contract registry, and applications must consume the domain adapter. A
+coordinate can carry its closed RSS error policy; undeclared statuses or drifted
+code, message, retryability, and detail posture become protocol errors.

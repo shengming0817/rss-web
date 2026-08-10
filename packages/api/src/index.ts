@@ -4,6 +4,7 @@ export { isRssApiError } from './wire-error'
 export type {
   CursorPage,
   Decoder,
+  EndpointErrorPolicy,
   HttpMethod,
   HttpTransport,
   NoContentRequest,

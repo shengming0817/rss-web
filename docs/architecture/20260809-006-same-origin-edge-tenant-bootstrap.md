@@ -11,7 +11,7 @@ relative `/api/...` paths to two listeners of one RSS `runtime` assembly:
 | --- | --- | --- |
 | `/api/v1/identity/**` | Primary | cleared, except exact login and refresh |
 | `/api/v1/settings/**` | Primary | cleared |
-| `/api/v1/audit/**` | Admin | cleared |
+| exact `/api/v1/audit/entries` | Admin | cleared |
 | exact `/api/v1/runtime/inventory` | Admin | cleared |
 
 Exact login and refresh requests receive one deployment-fixed canonical tenant
@@ -31,14 +31,15 @@ stops the container before Nginx starts. Arbitrary upstream URLs are not accepte
 
 ## Reviewed RSS evidence
 
-The route table was reviewed against RSS revision
-`475bfa88e17769899916b69f357261160000b01b`:
+The currently consumed route table was re-reviewed for WEB-PR-012 against RSS revision
+`b7f3e1d0bcc5b2e59639a81b4f37937914b53f00`:
 
-- `assemblies/runtime/assembly.toml`: `86013539f14d26dffc9e83a35e6cec95b2d764f55001cdd06b0f133fa9743463`
-- `assemblies/runtime/runtime-plan.json`: `6f2d970a4be08ba9a15febc19d0134fda3495ad7b93d930141f2235be14227cb`
-- `assemblies/runtime/assembly.lock.json`: `d25961002433c97ed8eecdbd309cf22e6c5c6643b16ef580c6af1c1522df39a9`
-- lock manifest digest: `sha256:92c2175bc6443934e068f6977f7f41927a92f7e62e13c3d0001bbfee475b220f`
-- assembly fingerprint: `sha256:c1108a3f19948eb46cb8e6f883b6ffa04520df0a61d69f18a26b270789bc6a36`
+- `assemblies/runtime/assembly.toml`: `4fbe9262515845ec94cdd42ead7d8e78333361520b46ab538e50a6e52580b092`
+- `assemblies/runtime/runtime-plan.json`: `b59231e06dde78efff866df4efa636f3a261d2bfd35a1be78dfa1bc99d33c425`
+- `assemblies/runtime/assembly.lock.json`: `6088747ce9f2219164d26fa6dfcea0f758b5986ccad4b2550da05bf62b36ea45`
+
+The original WEB-PR-006 evidence at `475bfa88e17769899916b69f357261160000b01b`
+remains historical provenance, not the current consumption claim.
 
 Primary owns Identity and Settings. Admin owns Audit and the framework
 `runtime.inventory` contract. Internal and Health listeners are deliberately not

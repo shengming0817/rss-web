@@ -9,12 +9,16 @@ import App from './App.vue'
 import { createWebRuntime } from './bootstrap'
 import { authorizationExperiencePlugin } from './features/authorization/authorization-context'
 import { identitySessionPlugin } from './features/identity/session-context'
+import { auditApiPlugin } from './features/audit/audit-context'
+import { runtimeApiPlugin } from './features/runtime/runtime-context'
 
 const app = createApp(App)
-const { authorization, router, session } = createWebRuntime()
+const { audit, authorization, router, runtime, session } = createWebRuntime()
 app.use(createPinia())
 app.use(createWebI18n())
 app.use(router)
 app.use(identitySessionPlugin(session))
 app.use(authorizationExperiencePlugin(authorization))
+app.use(auditApiPlugin(audit))
+app.use(runtimeApiPlugin(runtime))
 app.mount('#app')

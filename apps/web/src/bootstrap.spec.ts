@@ -3,15 +3,20 @@ import { describe, expect, it, vi } from 'vitest'
 const createHttpTransport = vi.fn(() => ({ request: vi.fn() }))
 const createServerAuthorizationPort = vi.fn(() => ({ preview: vi.fn() }))
 const createIdentitySession = vi.fn(() => ({
+  transport: { request: vi.fn() },
   getState: () => ({ status: 'anonymous' }),
   subscribe: () => () => undefined,
 }))
 const createAuthorizationExperience = vi.fn(() => ({ getHint: vi.fn() }))
 const createAppRouter = vi.fn(() => ({ install: vi.fn() }))
+const createAuditApi = vi.fn(() => ({ listEntries: vi.fn() }))
+const createRuntimeApi = vi.fn(() => ({ inventory: vi.fn() }))
 
 vi.mock('@rss/api', () => ({ createHttpTransport }))
 vi.mock('@rss/authorization', () => ({ createServerAuthorizationPort }))
 vi.mock('@rss/identity', () => ({ createIdentitySession }))
+vi.mock('@rss/audit', () => ({ createAuditApi }))
+vi.mock('@rss/runtime', () => ({ createRuntimeApi }))
 vi.mock('./features/authorization/authorization-context', () => ({
   createAuthorizationExperience,
 }))
@@ -29,6 +34,9 @@ describe('web composition root', () => {
       transport: createHttpTransport.mock.results[0]?.value,
     })
     expect(createServerAuthorizationPort).toHaveBeenCalledOnce()
+    const session = createIdentitySession.mock.results[0]?.value
+    expect(createAuditApi).toHaveBeenCalledWith(session?.transport)
+    expect(createRuntimeApi).toHaveBeenCalledWith(session?.transport)
     expect(createAuthorizationExperience).toHaveBeenCalledWith({
       port: createServerAuthorizationPort.mock.results[0]?.value,
       session: createIdentitySession.mock.results[0]?.value,
@@ -39,5 +47,7 @@ describe('web composition root', () => {
       expect.anything(),
     )
     expect(runtime.authorization).toBe(createAuthorizationExperience.mock.results[0]?.value)
+    expect(runtime.audit).toBe(createAuditApi.mock.results[0]?.value)
+    expect(runtime.runtime).toBe(createRuntimeApi.mock.results[0]?.value)
   })
 })

@@ -39,8 +39,15 @@ as request or permission authority. Generic content/error presentation accepts o
 code, retryability, and requestId coordinates—never backend messages or details. Unknown protected
 paths use the authenticated catch-all; anonymous requests still reach Login first.
 
+`@rss/runtime` and `@rss/audit` provide strict, framework-neutral clients for the selected Admin
+listener reads. The authenticated Home composes both over the single session transport and degrades
+each panel independently. Runtime shows a small facts-only summary; Audit shows the first
+server-ordered page and explicitly does not claim it is a latest/tail view. Safe idempotent reads
+offer only an explicit user retry after network, timeout, or gateway failure. No tenant selector,
+cross-tenant read, listener discovery, hash verification, schema copy, or fallback source exists.
+
 The production Nginx image is a minimal same-origin Edge with a closed
-Primary/Admin route table. It removes browser tenant headers and injects the
+Primary/Admin route table; Audit exposes only the ambient-tenant entries path. It removes browser tenant headers and injects the
 deployment-fixed tenant only for login and refresh. See the
 [`same-origin Edge ADR`](docs/architecture/20260809-006-same-origin-edge-tenant-bootstrap.md).
 
