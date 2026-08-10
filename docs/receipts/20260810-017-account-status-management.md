@@ -24,8 +24,10 @@
   authority, principal authority, or fields outside the closed desired-state envelope.
 - GET and idempotent PUT use the one protected session transport. Exact 401 recovery remains owned by
   that transport, but network, timeout, conflict, server, and protocol outcomes are never
-  automatically retried. Two reviewed RSS 409 wire coordinates share one endpoint status without a
-  permissive fallback; every undeclared or drifted coordinate fails closed.
+  automatically retried. The one exception is the session owner's exact 401 recovery and one replay,
+  which is safe only because the RSS contract explicitly marks this desired-state PUT idempotent. Two
+  reviewed RSS 409 wire coordinates share one endpoint status without a permissive fallback; every
+  undeclared or drifted coordinate fails closed.
 - The Web operation begins request-free, accepts one explicitly typed `userId`, clears old facts when
   the coordinate changes or an error occurs, requires an alertdialog confirmation, and submits one
   desired-state PUT without an optimistic update or reconciliation GET.
