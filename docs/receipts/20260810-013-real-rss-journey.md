@@ -5,6 +5,7 @@
 - RSS source: read-only local checkout, pinned commit
   `b7f3e1d0bcc5b2e59639a81b4f37937914b53f00`.
 - Web source before this PR: `25693fb6e059bbbfd1f814fd793e42f26db4014b`.
+- Tested implementation commit: `d00956a38df0f0e92f9d04dfa2558f61ce65fe68`.
 - The runner resolves the exact commit and uses `/usr/bin/git archive` into a temporary directory. It
   never checks out, pulls, builds in, seeds, or cleans the user's RSS working tree.
 - The RSS production runtime assembly runs with real PostgreSQL, Redis, RabbitMQ, Vault, and MinIO
@@ -40,7 +41,7 @@ Machine receipt:
   "schemaVersion": 1,
   "status": "passed",
   "rssRevision": "b7f3e1d0bcc5b2e59639a81b4f37937914b53f00",
-  "webRevision": "25693fb6e059bbbfd1f814fd793e42f26db4014b",
+  "webRevision": "d00956a38df0f0e92f9d04dfa2558f61ce65fe68",
   "tenantBootstrap": "edge-deployment-fixed",
   "backend": "real-rss-archive",
   "phases": [
