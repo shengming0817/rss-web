@@ -2,6 +2,7 @@ import type {
   LoginResponse,
   LogoutAllResponse,
   LogoutResponse,
+  PasswordChangeResponse,
   ProfileKind,
   ProfileResponse,
   RefreshResponse,
@@ -107,4 +108,10 @@ export function decodeLogoutResponse(value: unknown): LogoutResponse {
 
 export function decodeLogoutAllResponse(value: unknown): LogoutAllResponse {
   return { data: { loggedOut: decodeLoggedOut(value) } }
+}
+
+export function decodePasswordChangeResponse(value: unknown): PasswordChangeResponse {
+  const envelope = exactRecord(value, ['data'])
+  const data = exactRecord(envelope.data, ['changed'])
+  return { data: { changed: booleanField(data, 'changed') } }
 }

@@ -1,5 +1,5 @@
 const zhCN = {
-  navigation: { home: '首页', runtime: '运行时', audit: '审计' },
+  navigation: { home: '首页', identity: '身份', runtime: '运行时', audit: '审计' },
   home: { subtitle: '已验证身份，并独立加载 Runtime 与 Audit 的服务端事实。' },
   runtimeSummary: {
     title: '运行时摘要',
@@ -76,6 +76,11 @@ const zhCN = {
     },
   },
   identity: {
+    selfService: {
+      title: '身份与安全',
+      subtitle: '管理已验证身份、会话和密码。服务端是最终事实源。',
+      sessions: '会话操作',
+    },
     login: {
       title: '登录',
       subtitle: '使用 RSS Identity 凭据继续。租户由可信部署配置确定。',
@@ -112,6 +117,27 @@ const zhCN = {
       description: '这将撤销当前账户的所有会话，包括其他设备。',
       cancel: '取消',
       confirm: '退出全部',
+    },
+    passwordChange: {
+      title: '修改密码',
+      description: '成功后会撤销当前账户的所有会话，并要求重新登录。',
+      policyHint: '新密码策略由 RSS 服务端最终校验。',
+      current: '当前密码',
+      new: '新密码',
+      confirm: '确认新密码',
+      submit: '修改密码',
+      submitting: '正在修改…',
+      errors: {
+        required: '请填写全部密码字段。',
+        mismatch: '两次输入的新密码不一致。',
+        policy: '新密码不符合安全策略，请修改后重试。',
+        forbidden: '无法确认当前密码或当前账户无权执行此操作。',
+        sessionChanged: '会话或凭据状态已变化，请重新登录。',
+        rateLimited: '尝试过于频繁，请稍后重试。',
+        serviceUnavailable: '身份服务暂时不可用，请稍后重试。',
+        outcomeUnknown: '修改结果无法确认。为安全起见，请重新登录。',
+        unknown: '无法修改密码，请重试。',
+      },
     },
   },
 } as const

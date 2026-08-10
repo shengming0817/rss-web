@@ -1,5 +1,5 @@
 import type { HttpTransport } from '@rss/api'
-import type { LoginRequest, ProfileKind } from '../api/types'
+import type { LoginRequest, PasswordChangeRequest, ProfileKind } from '../api/types'
 
 declare const VERIFIED_PROFILE: unique symbol
 
@@ -43,6 +43,7 @@ export interface IdentitySession {
   login(request: LoginRequest, options?: SessionOperationOptions): Promise<VerifiedProfile>
   logout(options?: SessionOperationOptions): Promise<void>
   logoutAll(options?: SessionOperationOptions): Promise<void>
+  changePassword(request: PasswordChangeRequest, options?: SessionOperationOptions): Promise<void>
 }
 
 export interface IdentitySessionConfig {

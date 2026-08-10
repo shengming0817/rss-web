@@ -60,3 +60,16 @@ export interface LogoutAllData {
 export interface LogoutAllResponse {
   readonly data: LogoutAllData
 }
+
+export interface PasswordChangeRequest {
+  readonly currentPassword: string
+  readonly newPassword: string
+}
+
+export interface PasswordChangeData {
+  readonly changed: boolean
+}
+
+export interface PasswordChangeResponse {
+  readonly data: PasswordChangeData
+}

@@ -3,6 +3,7 @@ import type {
   IdentitySession,
   LoginResponse,
   RefreshResponse,
+  PasswordChangeRequest,
   VerifiedProfile,
 } from './index'
 
@@ -21,9 +22,13 @@ void refresh.data.expiresAt
 void api.profile({ headers: { Authorization: 'fixture' } })
 
 declare const session: IdentitySession
+declare const passwordChange: PasswordChangeRequest
 declare const verified: VerifiedProfile
 void verified.subject
 void session.transport
+void session.changePassword(passwordChange)
+// @ts-expect-error Password change does not accept caller-authored headers.
+void session.changePassword(passwordChange, { headers: { Authorization: 'fixture' } })
 // @ts-expect-error Session state never exposes bearer credentials.
 void session.getState().accessToken
 // @ts-expect-error Refresh is internal to the protected transport single-flight.

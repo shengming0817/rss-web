@@ -6,7 +6,7 @@ type Widen<T> = T extends string
     : T
 
 const enUS = {
-  navigation: { home: 'Home', runtime: 'Runtime', audit: 'Audit' },
+  navigation: { home: 'Home', identity: 'Identity', runtime: 'Runtime', audit: 'Audit' },
   home: { subtitle: 'Verified identity with independently loaded Runtime and Audit facts.' },
   runtimeSummary: {
     title: 'Runtime summary',
@@ -86,6 +86,11 @@ const enUS = {
     },
   },
   identity: {
+    selfService: {
+      title: 'Identity and security',
+      subtitle: 'Manage verified identity, sessions, and password. The server is authoritative.',
+      sessions: 'Session actions',
+    },
     login: {
       title: 'Sign in',
       subtitle: 'Continue with RSS Identity credentials. Tenant is fixed by trusted deployment.',
@@ -123,6 +128,27 @@ const enUS = {
       description: 'This revokes every session for this account, including other devices.',
       cancel: 'Cancel',
       confirm: 'Sign out all',
+    },
+    passwordChange: {
+      title: 'Change password',
+      description: 'Success revokes every session for this account and requires sign-in again.',
+      policyHint: 'RSS performs the authoritative new-password policy check.',
+      current: 'Current password',
+      new: 'New password',
+      confirm: 'Confirm new password',
+      submit: 'Change password',
+      submitting: 'Changing password…',
+      errors: {
+        required: 'Complete every password field.',
+        mismatch: 'The new password entries do not match.',
+        policy: 'The new password does not meet the security policy. Revise it and try again.',
+        forbidden: 'The current password could not be confirmed or this account is not allowed.',
+        sessionChanged: 'The session or credential state changed. Sign in again.',
+        rateLimited: 'Too many attempts. Try again later.',
+        serviceUnavailable: 'The identity service is temporarily unavailable. Try again later.',
+        outcomeUnknown: 'The change could not be confirmed. Sign in again for safety.',
+        unknown: 'The password could not be changed. Try again.',
+      },
     },
   },
 } satisfies Widen<WebMessageSchema>

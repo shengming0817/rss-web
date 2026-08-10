@@ -4,6 +4,7 @@ import {
   type SessionCredential,
   type SessionTransportHooks,
 } from '@rss/api/session'
+import { isRssApiError } from '@rss/api'
 import { createIdentityApi } from '../api/client'
 import type { LoginData, ProfileData, RefreshData } from '../api/types'
 import { sessionError } from './errors'
@@ -106,6 +107,7 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
   let epoch = 0
   let lifecycle = new AbortController()
   let refreshFlight: Promise<SessionCredential> | undefined
+  let passwordChangeFlight: Promise<void> | undefined
 
   function publish(next: IdentitySessionState): void {
     const published = Object.freeze(next)
@@ -144,6 +146,7 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
     lifecycle = new AbortController()
     secrets = undefined
     refreshFlight = undefined
+    passwordChangeFlight = undefined
     publish({ status: next })
   }
 
@@ -153,6 +156,7 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
     lifecycle = new AbortController()
     secrets = undefined
     refreshFlight = undefined
+    passwordChangeFlight = undefined
     const authenticationEpoch = epoch
     const operationLifecycle = lifecycle.signal
     publish({ status: 'authenticating' })
@@ -343,6 +347,52 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
     else await remote.logout(signalOption(options))
   }
 
+  function passwordFailurePreservesAuthority(error: unknown): boolean {
+    return (
+      isRssApiError(error) &&
+      error.cause === 'wire' &&
+      (error.status === 400 || error.status === 403 || error.status === 429 || error.status === 503)
+    )
+  }
+
+  function changePassword(
+    request: Parameters<IdentitySession['changePassword']>[0],
+    options?: SessionOperationOptions,
+  ): Promise<void> {
+    if (passwordChangeFlight !== undefined) return Promise.reject(sessionError('SESSION_BUSY'))
+    if (state.status !== 'authenticated' || secrets === undefined) {
+      return Promise.reject(sessionError('SESSION_UNAVAILABLE'))
+    }
+    const operationEpoch = epoch
+    const operationLifecycle = lifecycle
+    const flight = Promise.resolve().then(async () => {
+      try {
+        const response = await createIdentityApi(transport).changePassword(
+          request,
+          signalOption(options, operationLifecycle.signal),
+        )
+        if (
+          epoch !== operationEpoch ||
+          lifecycle !== operationLifecycle ||
+          operationLifecycle.signal.aborted
+        ) {
+          throw sessionError('SESSION_INVALIDATED')
+        }
+        if (!response.data.changed) throw sessionError('SESSION_INVALIDATED')
+        clear('anonymous')
+      } catch (error: unknown) {
+        if (epoch === operationEpoch && !passwordFailurePreservesAuthority(error)) clear('expired')
+        throw error
+      }
+    })
+    passwordChangeFlight = flight
+    const release = () => {
+      if (passwordChangeFlight === flight) passwordChangeFlight = undefined
+    }
+    void flight.then(release, release)
+    return flight
+  }
+
   return Object.freeze({
     transport,
     getState: () => state,
@@ -353,5 +403,6 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
     login,
     logout: (options?: SessionOperationOptions) => endSession(false, options),
     logoutAll: (options?: SessionOperationOptions) => endSession(true, options),
+    changePassword,
   })
 }

@@ -99,6 +99,29 @@ try {
     assert.equal(response.json.authorizationPresent, true)
   }
 
+  const passwordBody = JSON.stringify({
+    currentPassword: 'fixture-current',
+    newPassword: 'fixture-replacement',
+  })
+  const passwordChange = await request(port, '/api/v1/identity/password/change', {
+    method: 'POST',
+    headers: {
+      'X-Tenant-ID': 'attacker',
+      Authorization: 'Bearer fixture',
+      'Content-Type': 'application/json',
+      'Content-Length': String(Buffer.byteLength(passwordBody)),
+    },
+    body: passwordBody,
+  })
+  assert.equal(passwordChange.status, 200)
+  assert.equal(passwordChange.json.listener, 'primary')
+  assert.deepEqual(passwordChange.json.tenantHeaders, [])
+  assert.equal(passwordChange.json.authorizationPresent, true)
+  assert.equal(
+    passwordChange.json.bodySha256,
+    createHash('sha256').update(passwordBody).digest('hex'),
+  )
+
   for (const path of ['/api/v1/audit/entries', '/api/v1/runtime/inventory']) {
     const response = await request(port, path, { headers: { 'X-Tenant-ID': 'attacker' } })
     assert.equal(response.status, 200)

@@ -200,6 +200,11 @@ async function installIdentityMocks(
   await page.route('**/api/v1/identity/logout-all', (route) =>
     route.fulfill({ status: 200, json: { data: { loggedOut: true } } }),
   )
+  await page.route('**/api/v1/identity/password/change', async (route) => {
+    expect(route.request().headers().authorization?.startsWith('Bearer ')).toBe(true)
+    expect(route.request().headers()['x-tenant-id']).toBeUndefined()
+    await route.fulfill({ status: 200, json: { data: { changed: true } } })
+  })
 }
 
 async function signIn(page: Page): Promise<void> {
@@ -207,7 +212,7 @@ async function signIn(page: Page): Promise<void> {
   await page.getByLabel('用户名').fill('alice')
   await page.getByLabel('密码').fill('test-password')
   await page.getByRole('button', { name: '登录', exact: true }).click()
-  await expect(page.getByRole('heading', { name: '已验证身份' })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: '主导航' })).toBeVisible()
 }
 
 test.describe('RSS Web Identity UX', () => {
@@ -236,6 +241,10 @@ test.describe('RSS Web Identity UX', () => {
   }) => {
     await installIdentityMocks(page)
     await signIn(page)
+    await page
+      .getByRole('navigation', { name: '主导航' })
+      .getByRole('link', { name: /身份/ })
+      .click()
     const profile = page.getByRole('region', { name: '已验证身份' })
     await expect(profile.getByText('verified-subject')).toBeVisible()
     await expect(profile.getByText('f47ac10b-58cc-4372-a567-0e02b2c3d479')).toBeVisible()
@@ -319,7 +328,7 @@ test.describe('RSS Web Identity UX', () => {
     await page.getByLabel('密码').fill('test-password')
     await page.getByRole('button', { name: '登录', exact: true }).click()
     const navigation = page.getByRole('navigation', { name: '主导航' })
-    await expect(navigation.getByRole('link')).toHaveCount(3)
+    await expect(navigation.getByRole('link')).toHaveCount(4)
     await expect(navigation.getByRole('link', { name: /首页/ })).toContainText('RSS')
     await navigation.getByRole('link', { name: /运行时/ }).click()
     await expect(page).toHaveURL(/\/runtime$/)
@@ -336,6 +345,34 @@ test.describe('RSS Web Identity UX', () => {
     })
     await expect(page.getByRole('heading', { name: '页面不存在' })).toBeVisible()
     await expect(page.getByText('WEB_NOT_FOUND')).toBeVisible()
+  })
+
+  test('changes password once, releases secret fields, and clears local authority', async ({
+    page,
+  }) => {
+    let passwordRequests = 0
+    page.on('request', (request) => {
+      if (new URL(request.url()).pathname === '/api/v1/identity/password/change') {
+        passwordRequests += 1
+        expect(request.headers()['x-tenant-id']).toBeUndefined()
+      }
+    })
+    await installIdentityMocks(page)
+    await signIn(page)
+    await page
+      .getByRole('navigation', { name: '主导航' })
+      .getByRole('link', { name: /身份/ })
+      .click()
+    await page.getByLabel('当前密码').fill('current-browser-secret')
+    await page.getByLabel('新密码', { exact: true }).fill('replacement-browser-secret')
+    await page.getByLabel('确认新密码').fill('replacement-browser-secret')
+    await page.getByRole('button', { name: '修改密码', exact: true }).click()
+
+    await expect(page).toHaveURL(/\/login$/)
+    await expect(page.getByRole('heading', { name: '登录' })).toBeVisible()
+    expect(passwordRequests).toBe(1)
+    await expect(page.getByText('current-browser-secret')).toHaveCount(0)
+    await expect(page.getByText('replacement-browser-secret')).toHaveCount(0)
   })
 
   test('queries target Audit only on explicit actions without leaking target authority or PII', async ({

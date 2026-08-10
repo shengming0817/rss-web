@@ -96,7 +96,7 @@ describe('RSS-only foundation boundary', () => {
     expect(productionMatches).toEqual([])
   })
 
-  it('exposes only implemented Home, Runtime, and Audit navigation with the protected catch-all', () => {
+  it('exposes only implemented Home, Identity, Runtime, and Audit navigation with the protected catch-all', () => {
     const router = read('apps/web/src/router/index.ts')
     const runtimeIntent = read('apps/web/src/features/runtime/runtime-intent.ts')
     const auditIntent = read('apps/web/src/features/audit/audit-intent.ts')
@@ -105,7 +105,7 @@ describe('RSS-only foundation boundary', () => {
     expect(router).toContain("path: ':pathMatch(.*)*'")
     expect(
       [...router.matchAll(/labelKey: '(navigation\.[^']+)'/g)].map((match) => match[1]),
-    ).toEqual(['navigation.home', 'navigation.runtime', 'navigation.audit'])
+    ).toEqual(['navigation.home', 'navigation.identity', 'navigation.runtime', 'navigation.audit'])
     expect(router).toContain('authorizationIntent: RUNTIME_INVENTORY_INTENT')
     expect(runtimeIntent).toContain("contractId: 'runtime.inventory'")
     expect(runtimeIntent).toContain("permission: 'runtime:inventory:read'")
@@ -197,11 +197,10 @@ describe('RSS-only foundation boundary', () => {
   })
 
   it('keeps authoritative RSS source labels at reviewed production owners', () => {
-    const output = execFileSync(
-      '/usr/bin/git',
-      ['grep', '-l', 'RSS_SOURCE', '--', 'apps/web/src', 'packages'],
-      { cwd: root, encoding: 'utf8' },
-    )
+    const output = execFileSync('rg', ['-l', 'RSS_SOURCE', 'apps/web/src', 'packages'], {
+      cwd: root,
+      encoding: 'utf8',
+    })
     const productionOwners = output
       .trim()
       .split('\n')
@@ -212,6 +211,7 @@ describe('RSS-only foundation boundary', () => {
     expect(productionOwners).toEqual([
       'apps/web/src/features/audit/AuditEntriesView.vue',
       'apps/web/src/features/audit/HomeAuditEntries.vue',
+      'apps/web/src/features/identity/IdentitySelfServiceView.vue',
       'apps/web/src/features/runtime/HomeRuntimeSummary.vue',
       'apps/web/src/features/runtime/RuntimeDetailsView.vue',
       'apps/web/src/router/index.ts',
