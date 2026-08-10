@@ -58,18 +58,21 @@
 - Docker/Nginx Edge smoke passed with exact GET/PUT method, path, body hash, bearer pass-through,
   tenant stripping, Primary routing, outage isolation, and complete teardown.
 - The opt-in runner archived clean Web implementation commit
-  `1f4aae35270fdb52e5aa7bc9ae6b157eb04dd450` and the pinned RSS revision. Main, request-budget,
-  Admin-down, and Primary-down phases passed; cleanup passed. The real main phase covered explicit
-  active read, same-state `changed:false`, transition to suspended, illegal transition 409, missing
-  account 404, limited-user 403, and self suspension followed by local redirect plus rejection of an
-  already-authenticated sibling session.
+  `5bf5a8b6205275256f51048853f405d5e2a1c46f` and the pinned RSS revision. Main, password-change,
+  account-status-self, rate-limited, budget-exhausted, Admin-down, and Primary-down phases passed;
+  cleanup passed. The real phases covered explicit active read, same-state `changed:false`, transition
+  to suspended, illegal transition 409, missing account 404, limited-user 403, self suspension followed
+  by local redirect plus rejection of an already-authenticated sibling session, and an exact 429
+  envelope rendered through the localized accessible login alert.
 - A pre-final implementation run at `30abbfe` reported the pre-existing two-session password journey
   as `product:main` and completed cleanup. Later review runs also remained honestly classified as
   `product:main` while Account Status and rate-limit journeys still shared mutable login-budget state;
-  every failed attempt completed checked cleanup. The final implementation isolated self-revocation
-  with two pre-authenticated contexts and retained the deterministic raw 429 proof without a second
-  rate-limited UI login. It then passed all four phases and cleanup; failed receipts remain under
-  `/tmp` during review rather than being relabelled as environment success.
+  every failed attempt completed checked cleanup. A later review run at `6523aa0` confirmed the same
+  coupling when a password profile request received 429 before the rate-limit test. The final harness
+  restarts the RSS server and Edge before each stateful Identity phase, keeps self-revocation in two
+  pre-authenticated contexts, and verifies both the raw 429 envelope and localized UI decoder in its
+  own phase. All seven phases and cleanup then passed; failed receipts remain under `/tmp` during
+  review rather than being relabelled as environment success.
 
 ## Review remediation
 
@@ -81,8 +84,8 @@
 - The form uses localized validation rather than native browser validation; malformed, uppercase, and
   nil UUIDs focus the field and issue zero requests in both component and Chromium coverage.
 - Confirmation keeps a stable busy focus target while the modal opener is absent, then moves focus to
-  the result panel heading. The real journey uses isolated authenticated contexts so ordering cannot
-  silently change account or rate-limit evidence.
+  the result panel heading. Stateful real Identity journeys restart their server/Edge rate-budget
+  owner between phases, so test ordering cannot silently change password, account, or 429 UI evidence.
 
 ## Four-principle check
 
@@ -99,10 +102,10 @@
 ## Changed-line classification
 
 - Semantic handwritten code and locale content: 814 additions / 14 deletions.
-- Unit/type/boundary/browser/Edge/real tests and harness diagnostics: 1,011 additions / 18 deletions.
+- Unit/type/boundary/browser/Edge/real tests and harness diagnostics: 1,058 additions / 16 deletions.
 - Documentation and governance: 28 additions / 2 deletions.
 - Generated and lockfile: 0 lines.
-- Implementation total: 1,853 additions / 34 deletions.
+- Implementation total: 1,900 additions / 32 deletions.
 
 ## Rollback
 
