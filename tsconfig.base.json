@@ -25,6 +25,8 @@
     "types": [],
     "baseUrl": ".",
     "paths": {
+      "@rss/authorization": ["packages/authorization/src/index.ts"],
+      "@rss/authorization/preview": ["packages/authorization/src/preview.ts"],
       "@rss/core": ["packages/core/src/index.ts"],
       "@rss/core/composables": ["packages/core/src/composables/index.ts"],
       "@rss/core/stores": ["packages/core/src/stores/index.ts"],

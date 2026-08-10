@@ -142,4 +142,30 @@ describe('ESLint package boundaries', () => {
       await ruleIds("import axios from 'axios'\nexport const x = axios\n", 'apps/web/src/main.ts'),
     ).toContain('no-restricted-imports')
   })
+
+  it('blocks Preview authorization imports in production app source', async () => {
+    for (const file of [
+      'apps/web/src/bootstrap.ts',
+      'apps/web/src/bootstrap.js',
+      'apps/web/src/bootstrap.mjs',
+    ]) {
+      expect(
+        await ruleIds(
+          "import { createPreviewAuthorizationPort } from '@rss/authorization/preview'\nexport const x = createPreviewAuthorizationPort\n",
+          file,
+        ),
+      ).toContain('no-restricted-imports')
+    }
+  })
+
+  it('keeps authorization independent from HTTP and other workspace packages', async () => {
+    for (const dependency of ['@rss/api', '@rss/core', '@rss/identity', 'axios']) {
+      expect(
+        await ruleIds(
+          `import { x } from '${dependency}'\nexport const y = x\n`,
+          'packages/authorization/src/index.ts',
+        ),
+      ).toContain('no-restricted-imports')
+    }
+  })
 })

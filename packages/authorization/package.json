@@ -1,0 +1,22 @@
+{
+  "name": "@rss/authorization",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./preview": "./src/preview.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "vitest": "catalog:",
+    "@vitest/coverage-v8": "catalog:"
+  }
+}

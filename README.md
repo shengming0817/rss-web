@@ -23,6 +23,11 @@ same-origin session, routes anonymous reloads to `/login`, and enters the shell
 only after verified profile authority exists. Login accepts no tenant input;
 logout and logout-all clear local authority before remote confirmation.
 
+`@rss/authorization` provides closed, non-authoritative UX hints. Its production mode always
+defers to the real RSS request, and its separate Preview entry can only supply explicitly enabled
+dev/test/demo scenarios. It does not evaluate ABAC, create request authority, or override a real
+403.
+
 The production Nginx image is a minimal same-origin Edge with a closed
 Primary/Admin route table. It removes browser tenant headers and injects the
 deployment-fixed tenant only for login and refresh. See the
