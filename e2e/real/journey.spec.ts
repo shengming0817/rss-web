@@ -252,7 +252,7 @@ test('@account-status-self invalidates every session after a real self-status ch
   await contextB.close()
 })
 
-test('@roles lists opaque permissions and records assign/revoke commands without a binding view', async ({
+test('@roles keeps the RSS user authority boundary for list, assign, and revoke', async ({
   page,
 }) => {
   await signInAndExpectShell(page)
@@ -263,8 +263,24 @@ test('@roles lists opaque permissions and records assign/revoke commands without
       expect(request.headers()['x-tenant-id']).toBeUndefined()
     }
   })
+  const catalogResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      new URL(response.url()).pathname === '/api/v1/identity/roles',
+  )
   await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: /角色/ }).click()
-  await expect(page.getByText('identity:role:assign')).toBeVisible()
+  const catalog = await catalogResponse
+  expect(catalog.status()).toBe(403)
+  expect(await catalog.json()).toEqual({
+    error: {
+      code: 'ERR_CORE_FORBIDDEN',
+      message: 'forbidden',
+      retryable: false,
+      details: [],
+      requestId: expect.stringMatching(/^[!-~]{1,128}$/),
+    },
+  })
+  await expect(page.getByText('FORBIDDEN')).toBeVisible()
 
   await page.getByLabel('Role ID').fill('rss-web-real')
   await page.getByLabel('Subject').fill('roles-target@example.test')
@@ -275,25 +291,24 @@ test('@roles lists opaque permissions and records assign/revoke commands without
       new URL(response.url()).pathname === '/api/v1/identity/roles/rss-web-real/bindings',
   )
   await page.getByRole('alertdialog').getByRole('button', { name: '提交命令' }).click()
-  expect((await assign).status()).toBe(201)
-  await expect(page.getByText(/本次 assign receipt：是/)).toBeVisible()
+  expect((await assign).status()).toBe(403)
+  await expect(page.getByText('FORBIDDEN')).toHaveCount(2)
   await expect(page.getByText('roles-target@example.test')).toHaveCount(0)
 
-  for (const expected of ['是', '否']) {
-    await page.getByLabel('Subject').fill('roles-target@example.test')
-    await page.getByRole('button', { name: 'Revoke', exact: true }).click()
-    const revoke = page.waitForResponse(
-      (response) =>
-        response.request().method() === 'DELETE' &&
-        new URL(response.url()).pathname.endsWith(
-          '/roles/rss-web-real/bindings/roles-target%40example.test',
-        ),
-    )
-    await page.getByRole('alertdialog').getByRole('button', { name: '提交命令' }).click()
-    expect((await revoke).status()).toBe(200)
-    await expect(page.getByText(new RegExp(`本次 revoke receipt：${expected}`))).toBeVisible()
-  }
-  expect(roleRequests).toEqual(['GET', 'POST', 'DELETE', 'DELETE'])
+  await page.getByLabel('Subject').fill('roles-target@example.test')
+  await page.getByRole('button', { name: 'Revoke', exact: true }).click()
+  const revoke = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'DELETE' &&
+      new URL(response.url()).pathname.endsWith(
+        '/roles/rss-web-real/bindings/roles-target%40example.test',
+      ),
+  )
+  await page.getByRole('alertdialog').getByRole('button', { name: '提交命令' }).click()
+  expect((await revoke).status()).toBe(403)
+  await expect(page.getByText('FORBIDDEN')).toHaveCount(2)
+  expect(roleRequests).toEqual(['GET', 'POST', 'DELETE'])
+  await expect(page.getByText(/本次 (?:assign|revoke) receipt/)).toHaveCount(0)
   await expect(page.getByText(/已绑定|未绑定/)).toHaveCount(0)
 })
 

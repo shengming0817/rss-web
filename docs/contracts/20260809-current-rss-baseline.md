@@ -123,3 +123,11 @@ remain those recorded in the baseline table. List cursor and permission strings 
 non-idempotent and uses the no-replay session policy; list and idempotent revoke may use only the
 session owner's exact 401 recovery. Subject is explicit PII input, and command receipts never become
 an authoritative binding read model.
+
+The pinned runtime's browser login issues only RSS `user` access tokens, while the Identity contract
+authorizer admits these three role routes only for an `admin` principal before checking role
+permissions. The real-browser acceptance therefore locks the current server-authoritative 403 for
+list, assign, and revoke (including no receipt or binding inference); adapter, component, and Edge
+tests cover the success contracts and exact routing without inventing an Admin bearer or weakening
+RSS. A future consumable Admin authority must be established by an explicit RSS baseline change, not
+by Web-side kind inference or a test-only production bypass.
