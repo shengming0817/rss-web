@@ -91,13 +91,16 @@ describe('IdentitySession password change', () => {
   })
 
   it.each([new Error('network result unknown'), { data: { changed: false } }])(
-    'expires on an untrusted or commit-unknown result',
+    'expires with a safe outcome-unknown reason for an untrusted result',
     async (result) => {
       const { session } = await authenticated(result)
       await expect(
         session.changePassword({ currentPassword: 'current', newPassword: 'replacement' }),
       ).rejects.toBeDefined()
-      expect(session.getState()).toMatchObject({ status: 'expired' })
+      expect(session.getState()).toEqual({
+        status: 'expired',
+        reason: 'password-change-outcome-unknown',
+      })
     },
   )
 

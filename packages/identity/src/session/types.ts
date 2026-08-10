@@ -59,6 +59,7 @@ export type IdentitySessionErrorCode =
   | 'SESSION_UNAVAILABLE'
   | 'PROFILE_NOT_AUTHORITATIVE'
   | 'SESSION_INVALIDATED'
+  | 'PASSWORD_CHANGE_OUTCOME_UNKNOWN'
   | 'SESSION_OPERATION_ABORTED'
 
 export interface IdentitySessionError extends Error {

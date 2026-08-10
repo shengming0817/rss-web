@@ -30,7 +30,9 @@ const OUTCOME_UNKNOWN = disposition('outcome-unknown', false)
 
 /** Closed product semantics shared by the session owner and Web presentation. */
 export function classifyPasswordChangeFailure(error: unknown): PasswordChangeFailureDisposition {
-  if (isIdentitySessionError(error)) return SESSION_CHANGED
+  if (isIdentitySessionError(error)) {
+    return error.code === 'PASSWORD_CHANGE_OUTCOME_UNKNOWN' ? OUTCOME_UNKNOWN : SESSION_CHANGED
+  }
   if (!isRssApiError(error)) return OUTCOME_UNKNOWN
   if (error.cause === 'aborted') return ABORTED
   if (error.cause !== 'wire') return OUTCOME_UNKNOWN

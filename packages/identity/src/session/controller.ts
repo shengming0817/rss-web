@@ -372,7 +372,7 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
         ) {
           throw sessionError('SESSION_INVALIDATED')
         }
-        if (!response.data.changed) throw sessionError('SESSION_INVALIDATED')
+        if (!response.data.changed) throw sessionError('PASSWORD_CHANGE_OUTCOME_UNKNOWN')
         clear('anonymous')
       } catch (error: unknown) {
         const failure = classifyPasswordChangeFailure(error)
