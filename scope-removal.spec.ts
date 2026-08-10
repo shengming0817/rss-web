@@ -96,27 +96,24 @@ describe('RSS-only foundation boundary', () => {
     expect(productionMatches).toEqual([])
   })
 
-  it('exposes only implemented Home and Runtime navigation with the protected catch-all', () => {
+  it('exposes only implemented Home, Runtime, and Audit navigation with the protected catch-all', () => {
     const router = read('apps/web/src/router/index.ts')
     const runtimeIntent = read('apps/web/src/features/runtime/runtime-intent.ts')
+    const auditIntent = read('apps/web/src/features/audit/audit-intent.ts')
     expect(router).toContain("path: '/'")
     expect(router).toContain("path: '/login'")
     expect(router).toContain("path: ':pathMatch(.*)*'")
     expect(
       [...router.matchAll(/labelKey: '(navigation\.[^']+)'/g)].map((match) => match[1]),
-    ).toEqual(['navigation.home', 'navigation.runtime'])
+    ).toEqual(['navigation.home', 'navigation.runtime', 'navigation.audit'])
     expect(router).toContain('authorizationIntent: RUNTIME_INVENTORY_INTENT')
     expect(runtimeIntent).toContain("contractId: 'runtime.inventory'")
     expect(runtimeIntent).toContain("permission: 'runtime:inventory:read'")
-    for (const path of [
-      '/access',
-      '/config',
-      '/flags',
-      '/admin',
-      '/observability',
-      '/observe',
-      '/audit',
-    ]) {
+    expect(router).toContain('authorizationIntent: AUDIT_AMBIENT_INTENT')
+    expect(auditIntent).toContain("contractId: 'audit.list-entries'")
+    expect(auditIntent).toContain("contractId: 'audit.list-tenant-entries'")
+    expect(auditIntent).toContain("permission: 'audit:read'")
+    for (const path of ['/access', '/config', '/flags', '/admin', '/observability', '/observe']) {
       expect(router).not.toContain(path)
     }
   })
@@ -213,10 +210,23 @@ describe('RSS-only foundation boundary', () => {
       .filter((path) => path !== 'packages/shared/src/index.ts')
       .sort()
     expect(productionOwners).toEqual([
+      'apps/web/src/features/audit/AuditEntriesView.vue',
       'apps/web/src/features/audit/HomeAuditEntries.vue',
       'apps/web/src/features/runtime/HomeRuntimeSummary.vue',
       'apps/web/src/features/runtime/RuntimeDetailsView.vue',
       'apps/web/src/router/index.ts',
     ])
+  })
+
+  it('keeps target-tenant Audit explicit, headerless, and non-replayable', () => {
+    const client = read('packages/audit/src/api/client.ts')
+    const page = read('apps/web/src/features/audit/AuditEntriesView.vue')
+    const session = read('packages/api/src/session.ts')
+    expect(client).toContain("session: 'required-no-replay'")
+    expect(client).not.toContain('headers:')
+    expect(page).toContain('audit.listTenantEntries')
+    expect(page).not.toMatch(/profile\.kind|superAdmin|SuperAdmin/)
+    expect(session).toContain("request.session === 'required-no-replay'")
+    expect(session).toContain('hooks.invalidate(initial.generation)')
   })
 })

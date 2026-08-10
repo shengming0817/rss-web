@@ -1,5 +1,5 @@
 const zhCN = {
-  navigation: { home: '首页', runtime: '运行时' },
+  navigation: { home: '首页', runtime: '运行时', audit: '审计' },
   home: { subtitle: '已验证身份，并独立加载 Runtime 与 Audit 的服务端事实。' },
   runtimeSummary: {
     title: '运行时摘要',
@@ -39,6 +39,39 @@ const zhCN = {
     fingerprint: '不透明指纹',
     notVerified: '浏览器未验证',
     refresh: '刷新首批条目',
+  },
+  auditPage: {
+    title: '审计查询',
+    subtitle: '按服务端 cursor 显式加载；跨租户每页查询都会产生持久审计。',
+    ambientTitle: '当前租户',
+    ambientDescription: '使用会话租户读取，不接受 tenant 参数。',
+    crossTitle: '显式跨租户查询',
+    crossDescription: '目标 tenant 只是资源坐标；RSS 403 是最终权限决定。',
+    targetTenant: '目标 tenant ID',
+    targetHint: '请输入 canonical lowercase UUID。不会发送 X-Tenant-ID。',
+    query: '查询目标 tenant',
+    next: '显式加载下一页',
+    loading: '正在读取审计页…',
+    empty: '当前页没有审计条目。',
+    auditedWarning: '每次查询和下一页操作都是新的 audited operation；不会自动重试或预取。',
+    fields: {
+      actor: 'Actor（PII）',
+      tenant: 'Tenant ID（敏感坐标）',
+      resource: 'Resource ID（PII）',
+      actorKind: 'Actor 类型',
+      resourceKind: 'Resource 类型',
+      outcome: '结果',
+      recordedAt: '记录时间',
+      fingerprint: '不透明指纹',
+    },
+    notVerified: '浏览器未验证；不用于去重或授权',
+    sensitive: {
+      reveal: '显示 {label}',
+      hide: '隐藏 {label}',
+      copy: '复制 {label}',
+      copied: '字段已复制。',
+      failed: '无法复制字段。',
+    },
   },
   identity: {
     login: {

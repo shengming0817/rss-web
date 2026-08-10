@@ -5,7 +5,7 @@ import { auditApiPlugin, useAuditApi } from './audit-context'
 
 describe('Audit API context', () => {
   it('provides only the audit capability', () => {
-    const api = { listEntries: vi.fn() }
+    const api = { listEntries: vi.fn(), listTenantEntries: vi.fn() }
     const Consumer = defineComponent({
       setup: () => ({ same: useAuditApi() === api }),
       template: '<span>{{ same }}</span>',

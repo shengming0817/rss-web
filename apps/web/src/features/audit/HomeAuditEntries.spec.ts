@@ -27,7 +27,7 @@ const page = {
 function mountEntries(listEntries: () => Promise<typeof page>) {
   return mount(HomeAuditEntries, {
     global: {
-      plugins: [createWebI18n(), auditApiPlugin({ listEntries })],
+      plugins: [createWebI18n(), auditApiPlugin({ listEntries, listTenantEntries: vi.fn() })],
     },
   })
 }

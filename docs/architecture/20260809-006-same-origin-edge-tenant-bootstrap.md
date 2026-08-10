@@ -12,6 +12,7 @@ relative `/api/...` paths to two listeners of one RSS `runtime` assembly:
 | `/api/v1/identity/**` | Primary | cleared, except exact login and refresh |
 | `/api/v1/settings/**` | Primary | cleared |
 | exact `/api/v1/audit/entries` | Admin | cleared |
+| exact canonical `/api/v1/audit/tenants/{tenantId}/entries` | Admin | cleared |
 | exact `/api/v1/runtime/inventory` | Admin | cleared |
 
 Exact login and refresh requests receive one deployment-fixed canonical tenant
@@ -24,6 +25,12 @@ All other `/api`, `/internal`, `/health`, and metrics paths return 404 without
 upstream traffic. Primary and Admin have no fallback to each other. The Edge
 does not implement authentication, session state, retries, DTO decoding, policy,
 or backend discovery.
+
+WEB-PR-015 adds only the canonical lowercase, non-nil UUID target-Audit route. Uppercase, nil,
+malformed, encoded-slash, trailing-segment, and trailing-slash variants remain 404. The target UUID
+is a resource coordinate, not tenant authority, and the browser header is still removed. Because the
+RSS contract is non-idempotent and durably audits every authorized page request, neither the Edge nor
+the Web session transport retries or replays it.
 
 Deployment requires a non-nil canonical lowercase-hyphenated tenant UUID and
 separate typed host/port fields for both listeners. Invalid or incomplete input
@@ -60,5 +67,5 @@ enforce this fixed route/header transformation without adding a second authority
 or transport implementation. Mixing separate RSS assemblies was rejected because
 it is not the reviewed two-listener runtime topology.
 
-Rollback is an atomic revert of this Edge change. Partial rollback, dual routing,
+Rollback is an atomic revert of the owning Edge change. Partial rollback, dual routing,
 header aliases, and browser runtime base URLs are not supported.

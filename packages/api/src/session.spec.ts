@@ -16,6 +16,13 @@ const request: RequestOptions<{ ok: true }> = {
   decode: () => ({ ok: true }),
 }
 
+const noReplayRequest: RequestOptions<{ ok: true }> = {
+  ...request,
+  path: '/api/v1/audit/tenants/{tenantId}/entries',
+  pathParams: { tenantId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479' },
+  session: 'required-no-replay',
+}
+
 const wire401 = (code = 'ERR_CORE_UNAUTHENTICATED') =>
   decodeWireError(401, {
     error: { code, message: 'not exposed', retryable: false, details: [], requestId: 'request-1' },
@@ -96,6 +103,44 @@ describe('createSessionHttpTransport', () => {
     expect(sessionHooks.recover).toHaveBeenCalledWith(1, undefined)
     expect(delegate.request).toHaveBeenCalledTimes(2)
     expect(sessionHooks.invalidate).not.toHaveBeenCalled()
+  })
+
+  it('invalidates but never recovers or replays a protected no-replay request after 401', async () => {
+    const calls: object[] = []
+    const failure = wire401()
+    const delegate = {
+      request: vi.fn((options: object) => {
+        calls.push(options)
+        return Promise.reject(failure)
+      }),
+    } as unknown as HttpTransport
+    const sessionHooks = hooks()
+
+    await expect(
+      createSessionHttpTransport(delegate, sessionHooks).request(noReplayRequest),
+    ).rejects.toBe(failure)
+
+    expect(calls.map(bearerFrom)).toEqual(['access-old'])
+    expect(delegate.request).toHaveBeenCalledOnce()
+    expect(sessionHooks.recover).not.toHaveBeenCalled()
+    expect(sessionHooks.invalidate).toHaveBeenCalledWith(1)
+  })
+
+  it('injects a one-shot credential for a no-replay request', async () => {
+    const calls: object[] = []
+    const delegate = {
+      request: vi.fn((options: object) => {
+        calls.push(options)
+        return Promise.resolve({ ok: true })
+      }),
+    } as unknown as HttpTransport
+
+    await expect(
+      createCredentialHttpTransport(delegate, credential('access-once', 1)).request(
+        noReplayRequest,
+      ),
+    ).resolves.toEqual({ ok: true })
+    expect(calls.map(bearerFrom)).toEqual(['access-once'])
   })
 
   it('does not recover malformed, unknown-code, forbidden or network failures', async () => {

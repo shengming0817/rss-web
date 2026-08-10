@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { auditEndpoints } from './audit'
 
 describe('Audit endpoint coordinates', () => {
-  it('owns only the ambient-tenant list coordinate for this slice', () => {
+  it('owns the ambient and explicit-target list coordinates', () => {
     expect(auditEndpoints.listEntries).toEqual({
       method: 'GET',
       path: '/api/v1/audit/entries',
@@ -23,5 +23,11 @@ describe('Audit endpoint coordinates', () => {
       },
     })
     expect(Object.isFrozen(auditEndpoints.listEntries)).toBe(true)
+    expect(auditEndpoints.listTenantEntries).toEqual({
+      method: 'GET',
+      path: '/api/v1/audit/tenants/{tenantId}/entries',
+      successStatus: 200,
+    })
+    expect(Object.isFrozen(auditEndpoints.listTenantEntries)).toBe(true)
   })
 })

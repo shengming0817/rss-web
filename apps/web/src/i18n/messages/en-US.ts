@@ -6,7 +6,7 @@ type Widen<T> = T extends string
     : T
 
 const enUS = {
-  navigation: { home: 'Home', runtime: 'Runtime' },
+  navigation: { home: 'Home', runtime: 'Runtime', audit: 'Audit' },
   home: { subtitle: 'Verified identity with independently loaded Runtime and Audit facts.' },
   runtimeSummary: {
     title: 'Runtime summary',
@@ -47,6 +47,41 @@ const enUS = {
     fingerprint: 'Opaque fingerprint',
     notVerified: 'not verified in the browser',
     refresh: 'Refresh first entries',
+  },
+  auditPage: {
+    title: 'Audit queries',
+    subtitle:
+      'Load explicit server cursors; every cross-tenant page creates a durable audit record.',
+    ambientTitle: 'Current tenant',
+    ambientDescription: 'Reads the session tenant and accepts no tenant parameter.',
+    crossTitle: 'Explicit cross-tenant query',
+    crossDescription: 'The target tenant is only a resource coordinate; RSS 403 is final.',
+    targetTenant: 'Target tenant ID',
+    targetHint: 'Enter a canonical lowercase UUID. X-Tenant-ID is never sent.',
+    query: 'Query target tenant',
+    next: 'Explicitly load next page',
+    loading: 'Loading audit page…',
+    empty: 'This page has no audit entries.',
+    auditedWarning:
+      'Every query and next-page action is a new audited operation; no automatic retry or prefetch occurs.',
+    fields: {
+      actor: 'Actor (PII)',
+      tenant: 'Tenant ID (sensitive coordinate)',
+      resource: 'Resource ID (PII)',
+      actorKind: 'Actor kind',
+      resourceKind: 'Resource kind',
+      outcome: 'Outcome',
+      recordedAt: 'Recorded at',
+      fingerprint: 'Opaque fingerprint',
+    },
+    notVerified: 'not verified in the browser; never used for deduplication or authority',
+    sensitive: {
+      reveal: 'Reveal {label}',
+      hide: 'Hide {label}',
+      copy: 'Copy {label}',
+      copied: 'Field copied.',
+      failed: 'Field could not be copied.',
+    },
   },
   identity: {
     login: {

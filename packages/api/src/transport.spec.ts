@@ -98,6 +98,21 @@ describe('createHttpTransport', () => {
     expect(mock.history.get).toHaveLength(0)
   })
 
+  it('rejects a protected no-replay request that bypasses the session transport', async () => {
+    const { mock, transport } = setup()
+    await expect(
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/audit/tenants/{tenantId}/entries',
+        pathParams: { tenantId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479' },
+        session: 'required-no-replay',
+        successStatus: 200,
+        decode: decodeObject,
+      }),
+    ).rejects.toMatchObject({ cause: 'client' })
+    expect(mock.history.get).toHaveLength(0)
+  })
+
   it('returns void for 204 without touching an unexpected body', async () => {
     const { mock, transport } = setup()
     mock.onDelete('/api/v1/settings/configs/key').reply(204, '<not-json>')

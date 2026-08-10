@@ -20,4 +20,9 @@ export const auditEndpoints = Object.freeze({
       }),
     }),
   }),
+  listTenantEntries: defineEndpoint({
+    method: 'GET',
+    path: '/api/v1/audit/tenants/{tenantId}/entries',
+    successStatus: 200,
+  }),
 })

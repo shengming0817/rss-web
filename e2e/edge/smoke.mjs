@@ -106,6 +106,16 @@ try {
     assert.deepEqual(response.json.tenantHeaders, [])
   }
 
+  const targetAudit = await request(
+    port,
+    '/api/v1/audit/tenants/f47ac10b-58cc-4372-a567-0e02b2c3d479/entries?cursor=opaque',
+    { headers: { 'X-Tenant-ID': 'attacker', Authorization: 'Bearer fixture' } },
+  )
+  assert.equal(targetAudit.status, 200)
+  assert.equal(targetAudit.json.listener, 'admin')
+  assert.deepEqual(targetAudit.json.tenantHeaders, [])
+  assert.equal(targetAudit.json.authorizationPresent, true)
+
   for (const path of ['/api/v1/identity/login', '/api/v1/identity/refresh']) {
     for (const headers of [
       undefined,
@@ -182,7 +192,12 @@ try {
     '/health',
     '/api/v1/runtime/other',
     '/api/v1/audit/other',
-    '/api/v1/audit/tenants/f47ac10b-58cc-4372-a567-0e02b2c3d479/entries',
+    '/api/v1/audit/tenants/F47AC10B-58CC-4372-A567-0E02B2C3D479/entries',
+    '/api/v1/audit/tenants/00000000-0000-0000-0000-000000000000/entries',
+    '/api/v1/audit/tenants/f47ac10b-58cc-4372-a567-0e02b2c3d479/entries/',
+    '/api/v1/audit/tenants/f47ac10b-58cc-4372-a567-0e02b2c3d479/entries/extra',
+    '/api/v1/audit/tenants/not-a-tenant/entries',
+    '/api/v1/audit/tenants/f47ac10b-58cc-4372-a567-0e02b2c3d479%2Fentries',
     '/api/v1/unknown',
   ]) {
     assert.equal((await request(port, path)).status, 404, path)

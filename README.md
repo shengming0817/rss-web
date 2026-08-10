@@ -31,8 +31,8 @@ final UX outcome. The separate Preview entry is test/demo input and remains forb
 Web source. No browser ABAC evaluation, request authority, or legacy access endpoint exists.
 
 The authenticated shell derives Sidebar and command-palette navigation from implemented route
-metadata; currently that closed production set contains Home and the implemented Runtime details
-page. Removed and future capabilities
+metadata; currently that closed production set contains Home, Runtime details, and Audit queries.
+Removed and future capabilities
 do not receive placeholder routes or menu entries. `@rss/shared` owns a discriminated `SourceMeta`
 model with sealed, frozen display constants; direct object-literal construction is rejected. Reusable
 badges make RSS, mock, manual, external, and unavailable sources visible without using source metadata
@@ -43,14 +43,17 @@ paths use the authenticated catch-all; anonymous requests still reach Login firs
 `@rss/runtime` and `@rss/audit` provide strict, framework-neutral clients for the selected Admin
 listener reads. The authenticated Home composes both over the single session transport and degrades
 each panel independently. Runtime shows a small facts-only summary and links to a full reviewed-facts
-page; Audit shows the first
-server-ordered page and explicitly does not claim it is a latest/tail view. Safe idempotent reads
-offer only an explicit user retry after network, timeout, or gateway failure. No tenant selector,
-cross-tenant read, listener discovery, deployment-coordinate exposure, hash verification, schema
-copy, or fallback source exists.
+page. Audit exposes explicit cursor pagination for the ambient session tenant and a separately
+labelled target-tenant operation. Target tenant IDs are resource coordinates, never browser tenant
+authority; each target page is an audited non-idempotent operation with no prefetch, automatic retry,
+or 401 replay. PII fields remain absent until individually revealed and copied. Entry hashes stay
+opaque and unverified. Safe idempotent reads offer only an explicit user retry after network, timeout,
+or gateway failure. No listener discovery, deployment-coordinate exposure, hash verification, schema
+copy, bulk export, or fallback source exists.
 
 The production Nginx image is a minimal same-origin Edge with a closed
-Primary/Admin route table; Audit exposes only the ambient-tenant entries path. It removes browser tenant headers and injects the
+Primary/Admin route table; Audit exposes the ambient entries path plus the exact canonical target-tenant
+path. It removes browser tenant headers and injects the
 deployment-fixed tenant only for login and refresh. See the
 [`same-origin Edge ADR`](docs/architecture/20260809-006-same-origin-edge-tenant-bootstrap.md).
 
