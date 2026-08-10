@@ -59,8 +59,8 @@
 ## Changed-line classification
 
 - Semantic handwritten: 912 changed lines.
-- Tests, type checks, and boundary guards: 803 changed lines.
-- Documentation, package, deployment, and boundary support: 256 changed lines.
+- Tests, type checks, and boundary guards: 804 changed lines.
+- Documentation, package, deployment, and boundary support: 259 changed lines.
 - Lockfile: 32 mechanical workspace-importer lines.
 - Generated: 0 lines.
 - Pure deletion: 0 lines.
