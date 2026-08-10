@@ -1,6 +1,7 @@
 import { nextTick } from 'vue'
 import type { RouteLocationNormalized, Router } from 'vue-router'
 import type { IdentitySession, IdentitySessionState } from '@rss/identity'
+import type { AuthorizationExperience } from '../features/authorization/authorization-context'
 
 function hasAuthority(state: IdentitySessionState): boolean {
   return state.status === 'authenticated' || state.status === 'refreshing'
@@ -30,6 +31,17 @@ export function registerSessionRouting(router: Router, session: IdentitySession)
     removeCommitGuard()
     unsubscribe()
   }
+}
+
+export function registerAuthorizationRouting(
+  router: Router,
+  authorization: AuthorizationExperience,
+): () => void {
+  return router.beforeEach((to) => {
+    const intent = to.meta.authorizationIntent
+    if (intent === undefined) return true
+    return authorization.getHint(intent).decision === 'deny' ? { name: 'home' } : true
+  })
 }
 
 /** Restore keyboard and screen-reader focus after an SPA route transition. */

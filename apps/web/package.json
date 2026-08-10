@@ -18,6 +18,7 @@
     "ant-design-vue": "catalog:",
     "@ant-design/icons-vue": "catalog:",
     "@rss/api": "workspace:*",
+    "@rss/authorization": "workspace:*",
     "@rss/core": "workspace:*",
     "@rss/identity": "workspace:*",
     "vue-i18n": "catalog:"

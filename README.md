@@ -23,10 +23,12 @@ same-origin session, routes anonymous reloads to `/login`, and enters the shell
 only after verified profile authority exists. Login accepts no tenant input;
 logout and logout-all clear local authority before remote confirmation.
 
-`@rss/authorization` provides closed, non-authoritative UX hints. Its production mode always
-defers to the real RSS request, and its separate Preview entry can only supply explicitly enabled
-dev/test/demo scenarios. It does not evaluate ABAC, create request authority, or override a real
-403.
+`@rss/authorization` provides closed, non-authoritative UX hints. The Web composition root installs
+only its server mode, which always defers to the real RSS request. A Web-owned context lets future
+routes and controls consume hints without treating them as security: operations still execute once,
+and an exact sanitized RSS forbidden response invalidates the matching local hint and becomes the
+final UX outcome. The separate Preview entry is test/demo input and remains forbidden in production
+Web source. No browser ABAC evaluation, request authority, or legacy access endpoint exists.
 
 The production Nginx image is a minimal same-origin Edge with a closed
 Primary/Admin route table. It removes browser tenant headers and injects the

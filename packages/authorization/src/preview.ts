@@ -1,4 +1,5 @@
 import { createAuthorizationPort, type AuthorizationPort } from './port'
+import { authorizationIntentKey, isExactRecord } from './intent'
 import type { AuthorizationDecision, AuthorizationIntent, PreviewAuthorizationHint } from './types'
 
 export interface PreviewAuthorizationScenario {
@@ -12,59 +13,8 @@ export interface PreviewAuthorizationOptions {
   readonly scenarios: readonly PreviewAuthorizationScenario[]
 }
 
-const CONTRACT_ID = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/
 const SCENARIO_ID = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/
 const DECISIONS: ReadonlySet<AuthorizationDecision> = new Set(['allow', 'deny', 'unknown'])
-
-function isExactRecord(
-  value: unknown,
-  requiredKeys: readonly string[],
-  optionalKeys: readonly string[] = [],
-): value is Record<string, unknown> {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false
-
-  const keys = Reflect.ownKeys(value)
-  const allowedKeys = new Set([...requiredKeys, ...optionalKeys])
-  return (
-    requiredKeys.every((key) => Object.hasOwn(value, key)) &&
-    keys.every((key) => typeof key === 'string' && allowedKeys.has(key))
-  )
-}
-
-function validPermission(value: unknown): value is string {
-  const hasUnsafeCharacter =
-    typeof value === 'string' &&
-    Array.from(value).some((character) => {
-      const codePoint = character.codePointAt(0) ?? 0
-      return character === '*' || /\s/u.test(character) || codePoint <= 31 || codePoint === 127
-    })
-
-  return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    value.length <= 256 &&
-    value === value.trim() &&
-    !hasUnsafeCharacter
-  )
-}
-
-function validIntent(intent: unknown): intent is AuthorizationIntent {
-  return (
-    isExactRecord(intent, ['contractId', 'permission'], ['resourceId']) &&
-    typeof intent.contractId === 'string' &&
-    CONTRACT_ID.test(intent.contractId) &&
-    validPermission(intent.permission) &&
-    (intent.resourceId === undefined ||
-      (typeof intent.resourceId === 'string' &&
-        intent.resourceId.length > 0 &&
-        intent.resourceId === intent.resourceId.trim()))
-  )
-}
-
-function selector(intent: unknown): string | undefined {
-  if (!validIntent(intent)) return undefined
-  return JSON.stringify([intent.contractId, intent.permission, intent.resourceId ?? null])
-}
 
 function unmatched(): PreviewAuthorizationHint {
   return Object.freeze({
@@ -104,11 +54,12 @@ export function createPreviewAuthorizationPort(
 
   const scenarios = new Map<string, PreviewAuthorizationHint>()
   const scenarioIds = new Set<string>()
+  const invalidated = new Set<string>()
   for (const scenario of options.scenarios) {
     if (!isExactRecord(scenario, ['id', 'intent', 'decision'])) {
       throw new Error('Preview authorization scenario must have an exact shape')
     }
-    const key = selector(scenario.intent)
+    const key = authorizationIntentKey(scenario.intent)
     if (
       typeof scenario.id !== 'string' ||
       !SCENARIO_ID.test(scenario.id) ||
@@ -134,10 +85,23 @@ export function createPreviewAuthorizationPort(
     )
   }
 
-  return createAuthorizationPort((intent) => {
-    const key = selector(intent)
-    return key === undefined ? unmatched() : (scenarios.get(key) ?? unmatched())
-  })
+  return createAuthorizationPort(
+    (intent) => {
+      const key = authorizationIntentKey(intent)
+      return key === undefined || invalidated.has(key)
+        ? unmatched()
+        : (scenarios.get(key) ?? unmatched())
+    },
+    {
+      invalidate(intent) {
+        const key = authorizationIntentKey(intent)
+        if (key !== undefined && scenarios.has(key)) invalidated.add(key)
+      },
+      reset() {
+        invalidated.clear()
+      },
+    },
+  )
 }
 
 export type { AuthorizationDecision, AuthorizationIntent } from './types'

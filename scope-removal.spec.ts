@@ -131,21 +131,36 @@ describe('RSS-only foundation boundary', () => {
   })
 
   it('does not retain historical authentication or PDP route contracts', () => {
-    const forbidden = ['requiresAuth', 'requiredAction', 'requiredResource', 'PDP_INJECTION_KEY']
+    const forbidden = [
+      '/api/v1/access/decide',
+      'createPdpClient',
+      'permissionMap',
+      'requiresAuth',
+      'requiredAction',
+      'requiredResource',
+      'PDP_INJECTION_KEY',
+    ]
     for (const token of forbidden) {
       let output = ''
       try {
         output = execFileSync(
           '/usr/bin/git',
-          ['grep', '-n', token, '--', 'apps/web/src', 'packages/core/src'],
+          ['grep', '-n', token, '--', 'apps/web/src', 'packages'],
           { cwd: root, encoding: 'utf8' },
         )
       } catch (error) {
         const status = (error as { status?: number }).status
         if (status !== 1) throw error
       }
-      expect(output).toBe('')
+      const productionMatches = output
+        .split('\n')
+        .filter(Boolean)
+        .filter((line) => !line.includes('.spec.ts:'))
+        .filter((line) => !line.includes('.typecheck.ts:'))
+      expect(productionMatches).toEqual([])
     }
+
+    expect(read('packages/core/vitest.config.ts')).not.toContain('src/pdp/')
   })
 
   it('does not retain obsolete workflows or package dependencies', () => {

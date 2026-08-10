@@ -1,11 +1,14 @@
 import { createRouter, type RouteRecordRaw, type RouterHistory } from 'vue-router'
+import type { AuthorizationIntent } from '@rss/authorization'
 import type { IdentitySession } from '@rss/identity'
-import { registerRouterA11y, registerSessionRouting } from './guards'
+import type { AuthorizationExperience } from '../features/authorization/authorization-context'
+import { registerAuthorizationRouting, registerRouterA11y, registerSessionRouting } from './guards'
 
 declare module 'vue-router' {
   interface RouteMeta {
     sessionAccess: 'anonymous' | 'authenticated'
     focusTarget: 'login-content' | 'shell-content'
+    authorizationIntent?: AuthorizationIntent
   }
 }
 
@@ -31,13 +34,18 @@ const routes: RouteRecordRaw[] = [
   },
 ]
 
-export function createAppRouter(session: IdentitySession, history: RouterHistory) {
+export function createAppRouter(
+  session: IdentitySession,
+  authorization: AuthorizationExperience,
+  history: RouterHistory,
+) {
   const router = createRouter({
     history,
     routes,
     scrollBehavior: () => ({ top: 0 }),
   })
   registerSessionRouting(router, session)
+  registerAuthorizationRouting(router, authorization)
   registerRouterA11y(router)
   return router
 }
