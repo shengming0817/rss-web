@@ -197,13 +197,16 @@ describe('RSS-only foundation boundary', () => {
   })
 
   it('keeps authoritative RSS source labels at reviewed production owners', () => {
-    const output = execFileSync('rg', ['-l', 'RSS_SOURCE', 'apps/web/src', 'packages'], {
-      cwd: root,
-      encoding: 'utf8',
-    })
-    const productionOwners = output
+    const candidates = execFileSync(
+      '/usr/bin/git',
+      ['ls-files', '--cached', '--others', '--exclude-standard', '--', 'apps/web/src', 'packages'],
+      { cwd: root, encoding: 'utf8' },
+    )
       .trim()
       .split('\n')
+      .filter(Boolean)
+    const productionOwners = candidates
+      .filter((path) => read(path).includes('RSS_SOURCE'))
       .filter((path) => !path.endsWith('.spec.ts'))
       .filter((path) => !path.endsWith('.typecheck.ts'))
       .filter((path) => path !== 'packages/shared/src/index.ts')

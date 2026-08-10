@@ -17,7 +17,7 @@ export const identityEndpoints = Object.freeze({
     errorPolicy: Object.freeze({
       400: Object.freeze({
         code: 'ERR_CORE_VALIDATION',
-        message: 'validation failed',
+        message: 'validation error',
         retryable: false,
         details: 'public',
       }),
@@ -30,7 +30,7 @@ export const identityEndpoints = Object.freeze({
       409: Object.freeze({
         code: 'ERR_CORE_VERSION_CONFLICT',
         message: 'version conflict',
-        retryable: false,
+        retryable: true,
         details: 'empty',
       }),
       500: Object.freeze({

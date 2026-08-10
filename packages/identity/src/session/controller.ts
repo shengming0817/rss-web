@@ -4,10 +4,10 @@ import {
   type SessionCredential,
   type SessionTransportHooks,
 } from '@rss/api/session'
-import { isRssApiError } from '@rss/api'
 import { createIdentityApi } from '../api/client'
 import type { LoginData, ProfileData, RefreshData } from '../api/types'
 import { sessionError } from './errors'
+import { classifyPasswordChangeFailure } from './password-change-failure'
 import type {
   IdentitySession,
   IdentitySessionConfig,
@@ -139,7 +139,7 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
     }
   }
 
-  function clear(next: 'anonymous' | 'expired'): void {
+  function clear(next: 'anonymous' | 'expired', reason?: 'password-change-outcome-unknown'): void {
     if (state.status === next && secrets === undefined && refreshFlight === undefined) return
     epoch += 1
     lifecycle.abort()
@@ -147,7 +147,9 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
     secrets = undefined
     refreshFlight = undefined
     passwordChangeFlight = undefined
-    publish({ status: next })
+    publish(
+      next === 'expired' && reason !== undefined ? { status: next, reason } : { status: next },
+    )
   }
 
   function beginAuthentication(): { authenticationEpoch: number; operationLifecycle: AbortSignal } {
@@ -347,14 +349,6 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
     else await remote.logout(signalOption(options))
   }
 
-  function passwordFailurePreservesAuthority(error: unknown): boolean {
-    return (
-      isRssApiError(error) &&
-      error.cause === 'wire' &&
-      (error.status === 400 || error.status === 403 || error.status === 429 || error.status === 503)
-    )
-  }
-
   function changePassword(
     request: Parameters<IdentitySession['changePassword']>[0],
     options?: SessionOperationOptions,
@@ -381,7 +375,15 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
         if (!response.data.changed) throw sessionError('SESSION_INVALIDATED')
         clear('anonymous')
       } catch (error: unknown) {
-        if (epoch === operationEpoch && !passwordFailurePreservesAuthority(error)) clear('expired')
+        const failure = classifyPasswordChangeFailure(error)
+        if (epoch === operationEpoch && !failure.preserveAuthority) {
+          clear(
+            'expired',
+            failure.kind === 'outcome-unknown' || failure.kind === 'aborted'
+              ? 'password-change-outcome-unknown'
+              : undefined,
+          )
+        }
         throw error
       }
     })

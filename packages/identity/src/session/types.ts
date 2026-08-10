@@ -28,7 +28,10 @@ export type IdentitySessionState =
       sessionExpiresAt: number
       accessExpiresAt: number
     }>
-  | Readonly<{ status: 'expired' }>
+  | Readonly<{
+      status: 'expired'
+      reason?: 'password-change-outcome-unknown'
+    }>
 
 export interface SessionOperationOptions {
   readonly signal?: AbortSignal

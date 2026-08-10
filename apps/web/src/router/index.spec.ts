@@ -249,19 +249,16 @@ describe('session-owned router', () => {
     })
   })
 
-  it('owns the Identity self-service route with the password-change server intent', () => {
+  it('keeps the Identity self-service route session-only while its command owns authorization', () => {
     const router = appRouter(sessionFixture({ status: 'anonymous' }))
     const route = router.resolve('/identity')
     expect(route.name).toBe('identity')
     expect(route.meta).toMatchObject({
       sessionAccess: 'authenticated',
       focusTarget: 'shell-content',
-      authorizationIntent: {
-        contractId: 'identity.password-change',
-        permission: 'identity:profile:write',
-      },
       navigation: { labelKey: 'navigation.identity', order: 10, source: RSS_SOURCE },
     })
+    expect(route.meta.authorizationIntent).toBeUndefined()
   })
 
   it('keeps unknown paths behind session authority and shows 404 after authentication', async () => {

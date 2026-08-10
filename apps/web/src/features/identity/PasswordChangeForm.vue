@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthorizationIntent } from '../authorization/authorization-context'
 import { passwordChangeErrorKey, type PasswordChangeErrorKey } from './identity-error'
@@ -7,7 +7,7 @@ import { PASSWORD_CHANGE_INTENT } from './password-change-intent'
 import { useIdentitySession } from './session-context'
 
 const { t } = useI18n()
-const { session } = useIdentitySession()
+const { session, state } = useIdentitySession()
 const authorization = useAuthorizationIntent(PASSWORD_CHANGE_INTENT)
 const currentPassword = ref('')
 const newPassword = ref('')
@@ -17,6 +17,8 @@ const newInput = ref<HTMLInputElement>()
 const confirmationInput = ref<HTMLInputElement>()
 const errorAlert = ref<HTMLElement>()
 const busy = ref(false)
+const refreshing = computed(() => state.value.status === 'refreshing')
+const unavailable = computed(() => busy.value || refreshing.value)
 const errorKey = ref<PasswordChangeErrorKey>()
 let operation: AbortController | undefined
 
@@ -27,7 +29,7 @@ function clearFields(): void {
 }
 
 async function submit(): Promise<void> {
-  if (busy.value || operation !== undefined) return
+  if (unavailable.value || operation !== undefined) return
   if (currentPassword.value.length === 0) {
     errorKey.value = 'identity.passwordChange.errors.required'
     currentInput.value?.focus()
@@ -83,7 +85,8 @@ onBeforeUnmount(() => {
     <p v-if="errorKey" ref="errorAlert" role="alert" tabindex="-1">
       {{ t(errorKey) }}
     </p>
-    <form novalidate :aria-busy="busy" @submit.prevent="submit">
+    <p v-if="refreshing" role="status">{{ t('identity.passwordChange.refreshing') }}</p>
+    <form novalidate :aria-busy="unavailable" @submit.prevent="submit">
       <label for="password-current">{{ t('identity.passwordChange.current') }}</label>
       <input
         id="password-current"
@@ -92,7 +95,7 @@ onBeforeUnmount(() => {
         name="currentPassword"
         type="password"
         autocomplete="current-password"
-        :disabled="busy"
+        :disabled="unavailable"
         required
       />
       <label for="password-new">{{ t('identity.passwordChange.new') }}</label>
@@ -103,7 +106,7 @@ onBeforeUnmount(() => {
         name="newPassword"
         type="password"
         autocomplete="new-password"
-        :disabled="busy"
+        :disabled="unavailable"
         required
       />
       <label for="password-confirm">{{ t('identity.passwordChange.confirm') }}</label>
@@ -114,10 +117,10 @@ onBeforeUnmount(() => {
         name="passwordConfirmation"
         type="password"
         autocomplete="new-password"
-        :disabled="busy"
+        :disabled="unavailable"
         required
       />
-      <button type="submit" class="v1-btn" :disabled="busy" :aria-busy="busy">
+      <button type="submit" class="v1-btn" :disabled="unavailable" :aria-busy="unavailable">
         {{ busy ? t('identity.passwordChange.submitting') : t('identity.passwordChange.submit') }}
       </button>
     </form>

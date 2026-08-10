@@ -1,5 +1,6 @@
 export { createIdentitySession } from './controller'
 export { isIdentitySessionError } from './errors'
+export { classifyPasswordChangeFailure } from './password-change-failure'
 export type {
   IdentitySession,
   IdentitySessionConfig,
@@ -11,3 +12,7 @@ export type {
   VerifiedProfile,
   VerifiedProfileKind,
 } from './types'
+export type {
+  PasswordChangeFailureDisposition,
+  PasswordChangeFailureKind,
+} from './password-change-failure'

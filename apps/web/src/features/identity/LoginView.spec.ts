@@ -139,6 +139,15 @@ describe('LoginView', () => {
     expect(wrapper.html()).not.toContain('password-secret')
   })
 
+  it('explains a password-change commit-unknown expiry without exposing error details', async () => {
+    const { fixture, wrapper } = await mountLogin()
+    fixture.publish({ status: 'expired', reason: 'password-change-outcome-unknown' })
+    await flushPromises()
+
+    expect(wrapper.get('[role="status"]').text()).toContain('当前密码或新密码')
+    expect(wrapper.get('[role="status"]').text()).not.toContain('requestId')
+  })
+
   it('aborts a pending login when the route component unmounts', async () => {
     const { fixture, wrapper } = await mountLogin()
     const pending = deferred<VerifiedProfile>()

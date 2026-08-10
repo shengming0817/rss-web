@@ -120,6 +120,8 @@ const enUS = {
       logoutUnconfirmed:
         'The local session was cleared, but server sign-out could not be confirmed.',
       sessionExpired: 'The session expired. Sign in again.',
+      passwordChangeOutcomeUnknown:
+        'The password change could not be confirmed. Sign in with the current or new password.',
     },
     profile: { title: 'Verified identity', subject: 'Subject', tenant: 'Tenant', kind: 'Kind' },
     actions: { logout: 'Sign out', logoutAll: 'Sign out all sessions' },
@@ -138,6 +140,7 @@ const enUS = {
       confirm: 'Confirm new password',
       submit: 'Change password',
       submitting: 'Changing password…',
+      refreshing: 'The session is refreshing securely. Password change will be available shortly.',
       errors: {
         required: 'Complete every password field.',
         mismatch: 'The new password entries do not match.',

@@ -109,6 +109,7 @@ const zhCN = {
       signedOut: '已安全退出。',
       logoutUnconfirmed: '本地会话已清除，但服务端退出确认不可用。',
       sessionExpired: '会话已失效，请重新登录。',
+      passwordChangeOutcomeUnknown: '密码修改结果无法确认。请使用当前密码或新密码重新登录。',
     },
     profile: { title: '已验证身份', subject: '主体', tenant: '租户', kind: '类型' },
     actions: { logout: '退出', logoutAll: '退出所有会话' },
@@ -127,6 +128,7 @@ const zhCN = {
       confirm: '确认新密码',
       submit: '修改密码',
       submitting: '正在修改…',
+      refreshing: '正在安全刷新会话，完成后可修改密码。',
       errors: {
         required: '请填写全部密码字段。',
         mismatch: '两次输入的新密码不一致。',

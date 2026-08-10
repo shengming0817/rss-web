@@ -38,6 +38,12 @@ const noticeKey = computed(() => {
   if (signOutNotice.value === 'signed-out') return 'identity.notice.signedOut'
   if (route.query.notice === 'logout-unconfirmed') return 'identity.notice.logoutUnconfirmed'
   if (route.query.notice === 'signed-out') return 'identity.notice.signedOut'
+  if (
+    state.value.status === 'expired' &&
+    state.value.reason === 'password-change-outcome-unknown'
+  ) {
+    return 'identity.notice.passwordChangeOutcomeUnknown'
+  }
   if (state.value.status === 'expired') return 'identity.notice.sessionExpired'
   return undefined
 })

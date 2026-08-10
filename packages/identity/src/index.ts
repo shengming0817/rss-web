@@ -1,5 +1,9 @@
 export { createIdentityApi } from './api'
-export { createIdentitySession, isIdentitySessionError } from './session'
+export {
+  classifyPasswordChangeFailure,
+  createIdentitySession,
+  isIdentitySessionError,
+} from './session'
 export type {
   IdentityApi,
   IdentityCallOptions,
@@ -30,4 +34,6 @@ export type {
   SessionOperationOptions,
   VerifiedProfile,
   VerifiedProfileKind,
+  PasswordChangeFailureDisposition,
+  PasswordChangeFailureKind,
 } from './session'

@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
-import { ref } from 'vue'
+import { readonly, ref } from 'vue'
 import { createWebI18n } from '../../i18n'
 
 const changePassword = vi.fn()
 const execute = vi.fn((operation: () => Promise<unknown>) => operation())
+const sessionState = ref({ status: 'authenticated' })
 
 vi.mock('./session-context', () => ({
-  useIdentitySession: () => ({ session: { changePassword } }),
+  useIdentitySession: () => ({ session: { changePassword }, state: readonly(sessionState) }),
 }))
 vi.mock('../authorization/authorization-context', () => ({
   useAuthorizationIntent: () => ({ execute, hint: ref({}), outcome: ref({ status: 'idle' }) }),
@@ -27,6 +28,7 @@ describe('PasswordChangeForm', () => {
   beforeEach(() => {
     changePassword.mockReset()
     execute.mockClear()
+    sessionState.value = { status: 'authenticated' }
   })
 
   it('uses local secret fields and sends no confirmation or authority input', async () => {
@@ -109,5 +111,27 @@ describe('PasswordChangeForm', () => {
     await wrapper.get('form').trigger('submit')
     wrapper.unmount()
     expect(signal?.aborted).toBe(true)
+  })
+
+  it('keeps the form stable but unavailable during session refresh', async () => {
+    const wrapper = mount(PasswordChangeForm, {
+      global: { plugins: [createWebI18n()] },
+    })
+    await wrapper.get('#password-current').setValue('current-secret')
+    sessionState.value = { status: 'refreshing' }
+    await flushPromises()
+
+    expect(wrapper.get('[role="status"]').text()).toContain('刷新会话')
+    expect(wrapper.get('#password-current').attributes('disabled')).toBeDefined()
+    expect((wrapper.get('#password-current').element as HTMLInputElement).value).toBe(
+      'current-secret',
+    )
+    await wrapper.get('form').trigger('submit')
+    expect(changePassword).not.toHaveBeenCalled()
+
+    sessionState.value = { status: 'authenticated' }
+    await flushPromises()
+    expect(wrapper.find('[role="status"]').exists()).toBe(false)
+    expect(wrapper.get('#password-current').attributes('disabled')).toBeUndefined()
   })
 })

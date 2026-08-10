@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { HttpTransport, NoContentRequest, RequestOptions } from '@rss/api'
 import { createIdentitySession } from './index'
-import { decodeWireErrorForTest } from '@rss/api/testing'
+import {
+  decodeWireErrorForTest,
+  networkErrorForTest,
+  protocolErrorForTest,
+  timeoutErrorForTest,
+} from '@rss/api/testing'
 
 type RecordedRequest = NoContentRequest | RequestOptions<unknown>
 const now = 1_800_000_000
@@ -11,6 +16,9 @@ function fixture(passwordResult: unknown = { data: { changed: true } }) {
   const transport = {
     request: vi.fn(async (request: RecordedRequest) => {
       calls.push(request)
+      if (request.path === '/api/v1/identity/password/change' && passwordResult instanceof Error) {
+        throw passwordResult
+      }
       const wire = await (request.path === '/api/v1/identity/login'
         ? {
             data: {
@@ -41,6 +49,18 @@ async function authenticated(passwordResult?: unknown) {
   const session = createIdentitySession({ transport: result.transport, nowEpochSeconds: () => now })
   await session.login({ username: 'alice', password: 'login-secret' })
   return { ...result, session }
+}
+
+function wire(status: number, code: string, retryable = false) {
+  return decodeWireErrorForTest(status, {
+    error: {
+      code,
+      message: 'reviewed-coordinate',
+      retryable,
+      details: [],
+      requestId: `password-${status}`,
+    },
+  })
 }
 
 describe('IdentitySession password change', () => {
@@ -77,9 +97,42 @@ describe('IdentitySession password change', () => {
       await expect(
         session.changePassword({ currentPassword: 'current', newPassword: 'replacement' }),
       ).rejects.toBeDefined()
-      expect(session.getState()).toEqual({ status: 'expired' })
+      expect(session.getState()).toMatchObject({ status: 'expired' })
     },
   )
+
+  it.each([
+    ['policy', wire(400, 'ERR_CORE_VALIDATION')],
+    ['forbidden', wire(403, 'ERR_CORE_FORBIDDEN')],
+    ['rate limit', wire(429, 'ERR_CORE_TOO_MANY_REQUESTS', true)],
+    ['request budget', wire(503, 'ERR_CORE_UNAVAILABLE')],
+  ])('preserves authority after a definite %s response', async (_label, error) => {
+    const { session, calls } = await authenticated(error)
+    await expect(
+      session.changePassword({ currentPassword: 'current', newPassword: 'replacement' }),
+    ).rejects.toBe(error)
+    expect(session.getState().status).toBe('authenticated')
+    expect(calls.filter(({ path }) => path === '/api/v1/identity/password/change')).toHaveLength(1)
+  })
+
+  it.each([
+    ['401', wire(401, 'ERR_CORE_UNAUTHENTICATED'), undefined],
+    ['404', wire(404, 'ERR_CORE_NOT_FOUND'), undefined],
+    ['409', wire(409, 'ERR_CORE_VERSION_CONFLICT', true), undefined],
+    ['500', wire(500, 'ERR_CORE_INTERNAL'), 'password-change-outcome-unknown'],
+    ['network', networkErrorForTest(), 'password-change-outcome-unknown'],
+    ['timeout', timeoutErrorForTest(), 'password-change-outcome-unknown'],
+    ['protocol', protocolErrorForTest(200), 'password-change-outcome-unknown'],
+  ])('expires authority after a %s failure without replay', async (_label, error, reason) => {
+    const { session, calls } = await authenticated(error)
+    await expect(
+      session.changePassword({ currentPassword: 'current', newPassword: 'replacement' }),
+    ).rejects.toBe(error)
+    expect(session.getState()).toEqual(
+      reason === undefined ? { status: 'expired' } : { status: 'expired', reason },
+    )
+    expect(calls.filter(({ path }) => path === '/api/v1/identity/password/change')).toHaveLength(1)
+  })
 
   it('invalidates after one exact 401 without refresh or replay', async () => {
     let passwordCalls = 0

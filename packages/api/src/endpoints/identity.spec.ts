@@ -16,7 +16,7 @@ describe('Identity endpoint coordinates', () => {
         errorPolicy: {
           400: {
             code: 'ERR_CORE_VALIDATION',
-            message: 'validation failed',
+            message: 'validation error',
             retryable: false,
             details: 'public',
           },
@@ -29,7 +29,7 @@ describe('Identity endpoint coordinates', () => {
           409: {
             code: 'ERR_CORE_VERSION_CONFLICT',
             message: 'version conflict',
-            retryable: false,
+            retryable: true,
             details: 'empty',
           },
           500: {

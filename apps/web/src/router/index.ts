@@ -6,7 +6,6 @@ import type { SourceMeta } from '@rss/shared'
 import type { AuthorizationExperience } from '../features/authorization/authorization-context'
 import { AUDIT_AMBIENT_INTENT } from '../features/audit/audit-intent'
 import { RUNTIME_INVENTORY_INTENT } from '../features/runtime/runtime-intent'
-import { PASSWORD_CHANGE_INTENT } from '../features/identity/password-change-intent'
 import type { NavigationMessageKey } from './navigation'
 import { registerAuthorizationRouting, registerRouterA11y, registerSessionRouting } from './guards'
 
@@ -52,7 +51,6 @@ const routes: RouteRecordRaw[] = [
         meta: {
           sessionAccess: 'authenticated',
           focusTarget: 'shell-content',
-          authorizationIntent: PASSWORD_CHANGE_INTENT,
           navigation: { labelKey: 'navigation.identity', order: 10, source: RSS_SOURCE },
         },
       },
