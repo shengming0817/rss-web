@@ -14,6 +14,12 @@ const WIRE_MESSAGE_KEYS: Readonly<Record<string, RssApiMessageKey>> = {
   ERR_CORE_VALIDATION: 'errors.validation',
   ERR_CORE_INTERNAL: 'errors.unknown',
 }
+const SHARED_RATE_LIMIT = {
+  code: 'ERR_CORE_TOO_MANY_REQUESTS',
+  message: 'too many requests',
+  retryable: true,
+  details: 'empty',
+} as const
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -141,10 +147,19 @@ export function decodeEndpointError(
   value: unknown,
   policy?: EndpointErrorPolicy,
 ): RssApiError {
+  if (status === 429) return decodeAgainstRule(status, value, SHARED_RATE_LIMIT)
   if (policy === undefined || status === 401 || status === 403)
     return decodeWireError(status, value)
   const rule = policy[status]
   if (rule === undefined) return protocolError(status)
+  return decodeAgainstRule(status, value, rule)
+}
+
+function decodeAgainstRule(
+  status: number,
+  value: unknown,
+  rule: NonNullable<EndpointErrorPolicy[number]>,
+): RssApiError {
   const decoded = decodeWireError(status, value)
   if (
     decoded.cause !== 'wire' ||

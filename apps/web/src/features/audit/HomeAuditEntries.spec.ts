@@ -78,4 +78,20 @@ describe('HomeAuditEntries', () => {
     wrapper.unmount()
     expect(capturedSignal?.aborted).toBe(true)
   })
+
+  it('offers an explicit refresh that re-reads the first server-ordered page', async () => {
+    const refreshed = {
+      ...page,
+      data: [{ ...page.data[0], seq: 1, entryHash: 'refreshed-opaque' }],
+    }
+    const listEntries = vi.fn().mockResolvedValueOnce(page).mockResolvedValueOnce(refreshed)
+    const wrapper = mountEntries(listEntries)
+    await flushPromises()
+
+    await wrapper.get('[data-action="refresh-audit"]').trigger('click')
+    await flushPromises()
+
+    expect(listEntries).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('refreshed-opaque')
+  })
 })

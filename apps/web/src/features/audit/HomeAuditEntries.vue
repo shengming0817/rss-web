@@ -60,6 +60,15 @@ function recordedAt(seconds: number): { readonly datetime?: string; readonly tex
       <SourceBadge v-else-if="state.status === 'error'" :source="UNAVAILABLE_SOURCE" />
     </header>
     <p class="v1-sub">{{ t('auditEntries.firstPageNotice') }}</p>
+    <button
+      v-if="state.status === 'ready'"
+      type="button"
+      class="btn btn-secondary"
+      data-action="refresh-audit"
+      @click="load"
+    >
+      {{ t('auditEntries.refresh') }}
+    </button>
     <p v-if="state.status === 'loading'" role="status" aria-busy="true">
       {{ t('auditEntries.loading') }}
     </p>

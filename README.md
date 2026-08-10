@@ -70,3 +70,16 @@ pnpm format:check
 pnpm test
 pnpm build
 ```
+
+The bounded real-backend acceptance is opt-in because it builds an ephemeral RSS demo stack and
+requires Docker plus a local RSS checkout containing the pinned revision. It reads that checkout
+only through `git archive`, seeds only disposable PostgreSQL volumes, sends the browser exclusively
+through the production Nginx Edge, and tears down the exact Compose project and volumes:
+
+```bash
+RSS_SOURCE_DIR=/absolute/path/to/rss pnpm test:e2e:real
+```
+
+The command distinguishes environment/setup failures from product-phase failures and can write a
+machine receipt outside the repository with `RSS_WEB_REAL_RECEIPT=/absolute/path/receipt.json`.
+See the [WEB-PR-013 receipt](docs/receipts/20260810-013-real-rss-journey.md).
