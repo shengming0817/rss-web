@@ -40,6 +40,59 @@ describe('Identity endpoint coordinates', () => {
           },
         },
       },
+      accountStatusGet: {
+        method: 'GET',
+        path: '/api/v1/identity/accounts/{userId}/status',
+        successStatus: 200,
+        errorPolicy: {
+          404: {
+            code: 'ERR_CORE_NOT_FOUND',
+            message: 'not found',
+            retryable: false,
+            details: 'empty',
+          },
+          500: {
+            code: 'ERR_CORE_INTERNAL',
+            message: 'internal error',
+            retryable: false,
+            details: 'empty',
+          },
+        },
+      },
+      accountStatusSet: {
+        method: 'PUT',
+        path: '/api/v1/identity/accounts/{userId}/status',
+        successStatus: 200,
+        errorPolicy: {
+          400: {
+            code: 'ERR_CORE_VALIDATION',
+            message: 'validation error',
+            retryable: false,
+            details: 'public',
+          },
+          404: {
+            code: 'ERR_CORE_NOT_FOUND',
+            message: 'not found',
+            retryable: false,
+            details: 'empty',
+          },
+          409: [
+            { code: 'ERR_CORE_CONFLICT', message: 'conflict', retryable: false, details: 'empty' },
+            {
+              code: 'ERR_CORE_VERSION_CONFLICT',
+              message: 'version conflict',
+              retryable: true,
+              details: 'empty',
+            },
+          ],
+          500: {
+            code: 'ERR_CORE_INTERNAL',
+            message: 'internal error',
+            retryable: false,
+            details: 'empty',
+          },
+        },
+      },
     })
     expect(Object.isFrozen(identityEndpoints)).toBe(true)
     for (const coordinate of Object.values(identityEndpoints)) {

@@ -1,5 +1,21 @@
 export { createIdentityApi } from './api'
 export {
+  ACCOUNT_STATUSES,
+  ACCOUNT_STATUS_USER_ID_PATTERN,
+  createAccountStatusApi,
+  isAccountStatusUserId,
+} from './account-status'
+export type {
+  AccountStatus,
+  AccountStatusApi,
+  AccountStatusCallOptions,
+  AccountStatusGetData,
+  AccountStatusGetResponse,
+  AccountStatusSetData,
+  AccountStatusSetRequest,
+  AccountStatusSetResponse,
+} from './account-status'
+export {
   classifyPasswordChangeFailure,
   createIdentitySession,
   isIdentitySessionError,

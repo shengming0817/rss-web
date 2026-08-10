@@ -26,6 +26,10 @@ The implemented Identity self-service route reuses the verified profile and sess
 one password-change form. Password fields remain component-local and are released immediately after
 submission. The non-idempotent command is sent once; confirmed success or an unknown commit result
 clears local authority instead of replaying or calling logout-all as compensation.
+The separate Account Status route accepts only an explicit canonical `userId`, then reads or submits a
+closed desired state to RSS. It has no directory/provider/mock seam and never treats the resource ID as
+tenant or principal authority. Self-target non-active changes and uncertain write outcomes clear local
+session authority rather than preserving a possibly revoked bearer.
 
 `@rss/authorization` provides closed, non-authoritative UX hints. The Web composition root installs
 only its server mode, which always defers to the real RSS request. A Web-owned context lets future
@@ -35,8 +39,8 @@ final UX outcome. The separate Preview entry is test/demo input and remains forb
 Web source. No browser ABAC evaluation, request authority, or legacy access endpoint exists.
 
 The authenticated shell derives Sidebar and command-palette navigation from implemented route
-metadata; currently that closed production set contains Home, Identity self-service, Runtime details,
-and Audit queries.
+metadata; currently that closed production set contains Home, Identity self-service, Account Status,
+Runtime details, and Audit queries.
 Removed and future capabilities
 do not receive placeholder routes or menu entries. `@rss/shared` owns a discriminated `SourceMeta`
 model with sealed, frozen display constants; direct object-literal construction is rejected. Reusable

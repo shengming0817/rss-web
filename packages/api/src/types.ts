@@ -10,7 +10,9 @@ export interface EndpointErrorRule {
   readonly details: 'empty' | 'public'
 }
 
-export type EndpointErrorPolicy = Readonly<Record<number, EndpointErrorRule>>
+export type EndpointErrorPolicy = Readonly<
+  Record<number, EndpointErrorRule | readonly EndpointErrorRule[]>
+>
 
 interface RequestBase {
   method: HttpMethod

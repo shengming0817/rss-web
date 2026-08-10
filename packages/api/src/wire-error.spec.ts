@@ -99,6 +99,34 @@ describe('decodeEndpointError', () => {
   })
 
   it.each([
+    ['ERR_CORE_CONFLICT', 'conflict', false],
+    ['ERR_CORE_VERSION_CONFLICT', 'version conflict', true],
+  ] as const)('accepts reviewed Account Status 409 alternative %s', (code, message, retryable) => {
+    expect(
+      decodeEndpointError(
+        409,
+        envelope({ code, message, retryable, details: [] }),
+        identityEndpoints.accountStatusSet.errorPolicy,
+      ),
+    ).toMatchObject({ cause: 'wire', status: 409, code, retryable })
+  })
+
+  it.each([
+    envelope({ code: 'ERR_CORE_CONFLICT', message: 'version conflict', details: [] }),
+    envelope({ code: 'ERR_CORE_VERSION_CONFLICT', message: 'version conflict', details: [] }),
+    envelope({
+      code: 'ERR_CORE_VERSION_CONFLICT',
+      message: 'conflict',
+      retryable: true,
+      details: [],
+    }),
+  ])('fails closed for Account Status 409 coordinate drift %#', (body) => {
+    expect(
+      decodeEndpointError(409, body, identityEndpoints.accountStatusSet.errorPolicy),
+    ).toMatchObject({ cause: 'protocol', status: 409 })
+  })
+
+  it.each([
     [400, 'ERR_CORE_VALIDATION', 'validation error'],
     [500, 'ERR_CORE_INTERNAL', 'internal error'],
     [501, 'ERR_CORE_NOT_IMPLEMENTED', 'not implemented'],

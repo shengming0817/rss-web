@@ -46,4 +46,15 @@ describe('web Identity composition boundary', () => {
       readFileSync(resolve(webSource, 'features/identity/PasswordChangeForm.vue'), 'utf8'),
     ).toContain('session.changePassword')
   })
+
+  it('keeps Account Status userId ephemeral and free of provider or authority inference', () => {
+    const text = [
+      readFileSync(resolve(webSource, 'features/identity/AccountStatusView.vue'), 'utf8'),
+      readFileSync(resolve(webSource, 'features/identity/account-status-operation.ts'), 'utf8'),
+    ].join('\n')
+    expect(text).not.toMatch(
+      /KnownSubjectProvider|subject-provider|picker|resolver|localStorage|sessionStorage|X-Tenant-ID|profile\.kind|superAdmin/i,
+    )
+    expect(text).not.toMatch(/console\.|logger\.|analytics/)
+  })
 })

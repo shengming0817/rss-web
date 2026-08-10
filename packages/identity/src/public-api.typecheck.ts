@@ -1,4 +1,5 @@
 import type {
+  AccountStatusApi,
   IdentityApi,
   IdentitySession,
   LoginResponse,
@@ -27,6 +28,11 @@ declare const verified: VerifiedProfile
 void verified.subject
 void session.transport
 void session.changePassword(passwordChange)
+declare const accountStatus: AccountStatusApi
+void accountStatus.get('f47ac10b-58cc-4372-a567-0e02b2c3d479')
+void session.invalidateForAccountStatusChange('f47ac10b-58cc-4372-a567-0e02b2c3d479', 'locked')
+// @ts-expect-error Account Status does not accept caller-authored headers.
+void accountStatus.get('f47ac10b-58cc-4372-a567-0e02b2c3d479', { headers: { Authorization: 'x' } })
 // @ts-expect-error Password change does not accept caller-authored headers.
 void session.changePassword(passwordChange, { headers: { Authorization: 'fixture' } })
 // @ts-expect-error Session state never exposes bearer credentials.
