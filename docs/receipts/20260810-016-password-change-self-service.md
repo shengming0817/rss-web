@@ -20,11 +20,15 @@
   most once. A confirmed `changed:true` clears secrets, verified profile, refresh state, lifecycle,
   and authority before resolving. It never calls logout or logout-all as compensation.
 - Credential drift, `changed:false`, and commit-unknown network/timeout/protocol/500 outcomes fail
-  closed to expired. Definite policy/forbidden/rate-limit/pre-handler-unavailable responses remain
-  available for a corrected explicit submission and are never automatically retried.
+  closed to expired. A closed, memory-only expiry reason carries the safe “current or new password”
+  guidance to Login without raw error or request data. Definite
+  policy/forbidden/rate-limit/pre-handler-unavailable responses remain available for a corrected
+  explicit submission and are never automatically retried.
 - The authenticated `/identity` route reuses `VerifiedProfilePanel` and `SessionActions`; Home no
-  longer duplicates the verified profile owner. Authorization metadata remains a UX hint and every
-  password change still reaches the real RSS endpoint exactly once.
+  longer duplicates the verified profile owner. The route remains session-only so a password-change
+  hint cannot hide profile or logout; the form owns the exact authorization intent and every command
+  still reaches the real RSS endpoint exactly once. During session refresh the stable form is disabled
+  with a live status instead of accepting a submission that cannot run.
 - Current, replacement, and confirmation values exist only in local component refs. Submission
   snapshots the two wire fields, immediately clears all inputs, excludes confirmation, and releases
   every reference again on completion or unmount. No password reaches state, routes, logs, telemetry,
@@ -44,13 +48,13 @@
 
 ## Verification
 
-- Frozen install, workspace typecheck, lint, format check, 577 unit/root tests, 530 coverage tests,
-  46 boundary tests, production build, and built-identity scan passed.
+- Frozen install, workspace typecheck, lint, format check, 597 unit/root tests, 550 coverage tests,
+  47 boundary tests, production build, and built-identity scan passed.
 - Fourteen Chromium journeys passed, including exact single POST, no tenant header, immediate field
   removal, local authority loss, and closed four-route navigation.
 - Docker/Nginx Edge smoke passed with password POST routed only to Primary and complete teardown.
 - The opt-in runner archived clean Web implementation commit
-  `5ce6b8825637bb6f83f9ac57291016d4b51cdbf8` and the pinned RSS revision. Main, request-budget,
+  `af986aefd7bc8e9bb6d7565db2e9b44069496767` and the pinned RSS revision. Main, request-budget,
   Admin-down, and Primary-down phases passed; cleanup passed. An isolated user held two real browser
   sessions: one password change redirected locally to Login, the other grant became unusable, the old
   password failed, and the replacement password established a newly verified session.
@@ -67,13 +71,24 @@
 - AI-HARD: exact DTOs, closed session policy, single-flight/call-count tests, epoch/lifecycle fences,
   source scans, DOM/log negatives, real Nginx evidence, and archived RSS evidence enforce the boundary.
 
+## Review remediation
+
+- Corrected the pinned RSS error coordinates to `validation error` and retryable version conflict,
+  and added positive/drift endpoint tests plus table-driven session disposition tests.
+- Replaced parallel Web/session failure status sets with one exported closed Identity classifier.
+- Preserved commit-unknown guidance across the fail-closed redirect using a closed, non-sensitive
+  in-memory expiry reason; no backend text, request ID, password, or query value is carried.
+- Kept `/identity` session-only and made the form unavailable with live status while refreshing.
+- Replaced the unavailable CI `rg` dependency with `/usr/bin/git ls-files`, while still scanning both
+  tracked and untracked reviewed source owners.
+
 ## Changed-line classification
 
-- Semantic handwritten code and locale content: 403 additions / 21 deletions.
-- Unit/type/boundary/browser/real tests and harness diagnostics: 617 additions / 12 deletions.
-- Documentation and governance: 47 additions / 10 deletions.
+- Semantic handwritten code and locale content: 538 additions / 20 deletions.
+- Unit/type/boundary/browser/real tests and harness diagnostics: 688 additions / 24 deletions.
+- Documentation and governance: 26 additions / 2 deletions.
 - Generated and lockfile: 0 lines.
-- Implementation total: 1,067 additions / 43 deletions.
+- Implementation total: 1,252 additions / 46 deletions.
 
 ## Rollback
 
