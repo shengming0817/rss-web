@@ -185,6 +185,8 @@ describe('LoginView', () => {
 
     await wrapper.get('[data-testid="begin-sign-out"]').trigger('click')
     expect(wrapper.get('.login__submit').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.login__submit').text()).toContain('正在安全退出')
+    expect(wrapper.get('[role="status"]').text()).toContain('正在安全退出')
     await wrapper.get('#identity-username').setValue('alice')
     await wrapper.get('#identity-password').setValue('secret')
     await wrapper.get('form').trigger('submit')

@@ -8,6 +8,7 @@ const zhCN = {
       submit: '登录',
       authenticating: '正在验证登录…',
       verifyingProfile: '正在验证身份…',
+      signingOut: '正在安全退出…',
     },
     errors: {
       required: '请填写用户名和密码。',

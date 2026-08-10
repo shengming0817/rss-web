@@ -15,6 +15,7 @@ const enUS = {
       submit: 'Sign in',
       authenticating: 'Checking sign-in…',
       verifyingProfile: 'Verifying identity…',
+      signingOut: 'Signing out safely…',
     },
     errors: {
       required: 'Enter your username and password.',

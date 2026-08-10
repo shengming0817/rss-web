@@ -27,9 +27,11 @@ const busy = computed(
     state.value.status === 'verifying',
 )
 const statusKey = computed(() =>
-  state.value.status === 'verifying'
-    ? 'identity.login.verifyingProfile'
-    : 'identity.login.authenticating',
+  signOutPending.value
+    ? 'identity.login.signingOut'
+    : state.value.status === 'verifying'
+      ? 'identity.login.verifyingProfile'
+      : 'identity.login.authenticating',
 )
 const noticeKey = computed(() => {
   if (signOutNotice.value === 'logout-unconfirmed') return 'identity.notice.logoutUnconfirmed'
@@ -107,6 +109,7 @@ onMounted(() => void nextTick(() => usernameInput.value?.focus()))
       <h1>{{ t('identity.login.title') }}</h1>
       <p class="login__subtitle">{{ t('identity.login.subtitle') }}</p>
       <p v-if="noticeKey" class="login__notice" role="status">{{ t(noticeKey) }}</p>
+      <p v-if="signOutPending" class="login__notice" role="status">{{ t(statusKey) }}</p>
       <p v-if="errorKey" ref="errorAlert" class="login__error" role="alert" tabindex="-1">
         {{ t(errorKey) }}
       </p>
