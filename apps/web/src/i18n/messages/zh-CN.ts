@@ -18,6 +18,7 @@ const zhCN = {
     recordedAt: '记录时间',
     fingerprint: '不透明指纹',
     notVerified: '浏览器未验证',
+    refresh: '刷新首批条目',
   },
   identity: {
     login: {

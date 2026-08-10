@@ -78,4 +78,46 @@ describe('HomeAuditEntries', () => {
     wrapper.unmount()
     expect(capturedSignal?.aborted).toBe(true)
   })
+
+  it('offers an explicit refresh that re-reads the first server-ordered page', async () => {
+    const refreshed = {
+      ...page,
+      data: [{ ...page.data[0], seq: 1, entryHash: 'refreshed-opaque' }],
+    }
+    const listEntries = vi.fn().mockResolvedValueOnce(page).mockResolvedValueOnce(refreshed)
+    const wrapper = mountEntries(listEntries)
+    await flushPromises()
+
+    await wrapper.get('[data-action="refresh-audit"]').trigger('click')
+    await flushPromises()
+
+    expect(listEntries).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('refreshed-opaque')
+  })
+
+  it('keeps the reviewed button and keyboard focus while refresh is pending', async () => {
+    let resolveRefresh: ((value: typeof page) => void) | undefined
+    const listEntries = vi
+      .fn()
+      .mockResolvedValueOnce(page)
+      .mockImplementationOnce(
+        () => new Promise<typeof page>((resolve) => (resolveRefresh = resolve)),
+      )
+    const wrapper = mountEntries(listEntries)
+    document.body.append(wrapper.element)
+    await flushPromises()
+
+    const button = wrapper.get<HTMLButtonElement>('[data-action="refresh-audit"]')
+    button.element.focus()
+    await button.trigger('click')
+
+    expect(button.classes()).toContain('v1-btn')
+    expect(button.attributes('disabled')).toBeDefined()
+    expect(button.attributes('aria-busy')).toBe('true')
+    expect(document.activeElement).toBe(button.element)
+    resolveRefresh?.(page)
+    await flushPromises()
+    expect(button.attributes('disabled')).toBeUndefined()
+    wrapper.unmount()
+  })
 })

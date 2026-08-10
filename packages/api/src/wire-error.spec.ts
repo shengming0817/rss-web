@@ -67,6 +67,79 @@ describe('decodeEndpointError', () => {
       status,
     })
   })
+
+  it('preserves only the canonical shared rate-limit coordinate', () => {
+    const canonical = envelope({
+      code: 'ERR_CORE_TOO_MANY_REQUESTS',
+      message: 'too many requests',
+      retryable: true,
+      details: [],
+    })
+    expect(decodeEndpointError(429, canonical, policy)).toMatchObject({
+      cause: 'wire',
+      status: 429,
+      code: 'ERR_CORE_TOO_MANY_REQUESTS',
+      retryable: true,
+    })
+  })
+
+  it('preserves only the canonical shared request-budget coordinate', () => {
+    const canonical = envelope({
+      code: 'ERR_CORE_UNAVAILABLE',
+      message: 'service unavailable',
+      retryable: false,
+      details: [],
+    })
+    expect(decodeEndpointError(503, canonical)).toMatchObject({
+      cause: 'wire',
+      status: 503,
+      code: 'ERR_CORE_UNAVAILABLE',
+      retryable: false,
+    })
+    for (const error of [
+      { ...canonical.error, code: 'ERR_CORE_PROVIDER_UNAVAILABLE' },
+      { ...canonical.error, message: 'drifted' },
+      { ...canonical.error, retryable: true },
+      { ...canonical.error, details: [{ leaked: true }] },
+    ]) {
+      expect(decodeEndpointError(503, { error })).toMatchObject({
+        cause: 'protocol',
+        status: 503,
+      })
+    }
+  })
+
+  it.each([
+    envelope({
+      code: 'ERR_TOO_MANY_REQUESTS',
+      message: 'too many requests',
+      retryable: true,
+      details: [],
+    }),
+    envelope({
+      code: 'ERR_CORE_TOO_MANY_REQUESTS',
+      message: 'drifted',
+      retryable: true,
+      details: [],
+    }),
+    envelope({
+      code: 'ERR_CORE_TOO_MANY_REQUESTS',
+      message: 'too many requests',
+      retryable: false,
+      details: [],
+    }),
+    envelope({
+      code: 'ERR_CORE_TOO_MANY_REQUESTS',
+      message: 'too many requests',
+      retryable: true,
+      details: [{ retryAfter: 1 }],
+    }),
+  ])('fails closed for a drifting shared 429 coordinate %#', (body) => {
+    expect(decodeEndpointError(429, body, policy)).toMatchObject({
+      cause: 'protocol',
+      status: 429,
+    })
+  })
 })
 
 describe('decodeWireError', () => {

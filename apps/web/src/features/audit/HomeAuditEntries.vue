@@ -15,20 +15,25 @@ type State =
 const { locale, t } = useI18n()
 const audit = useAuditApi()
 const state = ref<State>({ status: 'loading' })
+const refreshing = ref(false)
 let generation = 0
 let controller: AbortController | undefined
 
 async function load(): Promise<void> {
   const current = ++generation
+  const preservesReadyPage = state.value.status === 'ready'
   controller?.abort()
   controller = new AbortController()
-  state.value = { status: 'loading' }
+  if (preservesReadyPage) refreshing.value = true
+  else state.value = { status: 'loading' }
   try {
     const page = await audit.listEntries({ limit: 10, signal: controller.signal })
     if (current === generation) state.value = { status: 'ready', page }
   } catch (error) {
     if (current === generation && !controller.signal.aborted)
       state.value = { status: 'error', error: toSafeReadErrorPresentation(error) }
+  } finally {
+    if (current === generation) refreshing.value = false
   }
 }
 
@@ -60,6 +65,17 @@ function recordedAt(seconds: number): { readonly datetime?: string; readonly tex
       <SourceBadge v-else-if="state.status === 'error'" :source="UNAVAILABLE_SOURCE" />
     </header>
     <p class="v1-sub">{{ t('auditEntries.firstPageNotice') }}</p>
+    <button
+      v-if="state.status === 'ready'"
+      type="button"
+      class="v1-btn"
+      data-action="refresh-audit"
+      :disabled="refreshing"
+      :aria-busy="refreshing"
+      @click="load"
+    >
+      {{ t('auditEntries.refresh') }}
+    </button>
     <p v-if="state.status === 'loading'" role="status" aria-busy="true">
       {{ t('auditEntries.loading') }}
     </p>

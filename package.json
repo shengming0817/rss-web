@@ -22,6 +22,7 @@
     "test:boundary": "vitest run --project root",
     "test:e2e": "playwright test",
     "test:edge": "node e2e/edge/smoke.mjs",
+    "test:e2e:real": "node e2e/real/run.mjs",
     "prepare": "husky"
   },
   "lint-staged": {

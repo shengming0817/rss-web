@@ -14,6 +14,18 @@ const WIRE_MESSAGE_KEYS: Readonly<Record<string, RssApiMessageKey>> = {
   ERR_CORE_VALIDATION: 'errors.validation',
   ERR_CORE_INTERNAL: 'errors.unknown',
 }
+const SHARED_RATE_LIMIT = {
+  code: 'ERR_CORE_TOO_MANY_REQUESTS',
+  message: 'too many requests',
+  retryable: true,
+  details: 'empty',
+} as const
+const SHARED_REQUEST_BUDGET = {
+  code: 'ERR_CORE_UNAVAILABLE',
+  message: 'service unavailable',
+  retryable: false,
+  details: 'empty',
+} as const
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -141,10 +153,24 @@ export function decodeEndpointError(
   value: unknown,
   policy?: EndpointErrorPolicy,
 ): RssApiError {
-  if (policy === undefined || status === 401 || status === 403)
-    return decodeWireError(status, value)
+  if (status === 429) return decodeAgainstRule(status, value, SHARED_RATE_LIMIT)
+  if (status === 503) {
+    const budget = decodeAgainstRule(status, value, SHARED_REQUEST_BUDGET)
+    if (budget.cause === 'wire') return budget
+  }
+  if (status === 401 || status === 403) return decodeWireError(status, value)
+  if (policy === undefined)
+    return status === 503 ? protocolError(status) : decodeWireError(status, value)
   const rule = policy[status]
   if (rule === undefined) return protocolError(status)
+  return decodeAgainstRule(status, value, rule)
+}
+
+function decodeAgainstRule(
+  status: number,
+  value: unknown,
+  rule: NonNullable<EndpointErrorPolicy[number]>,
+): RssApiError {
   const decoded = decodeWireError(status, value)
   if (
     decoded.cause !== 'wire' ||

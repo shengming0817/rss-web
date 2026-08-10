@@ -25,6 +25,7 @@ const enUS = {
     recordedAt: 'Recorded at',
     fingerprint: 'Opaque fingerprint',
     notVerified: 'not verified in the browser',
+    refresh: 'Refresh first entries',
   },
   identity: {
     login: {

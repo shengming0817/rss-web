@@ -70,3 +70,22 @@ pnpm format:check
 pnpm test
 pnpm build
 ```
+
+The bounded real-backend acceptance is opt-in because it builds an ephemeral RSS demo stack and
+requires Docker plus a local RSS checkout containing the pinned revision. It reads that checkout
+only through `git archive`; it also requires a clean Web checkout and builds an archived Web HEAD
+rather than live working-tree bytes. The runner seeds only disposable PostgreSQL volumes, sends the
+browser exclusively through the production Nginx Edge, and verifies teardown of the exact Compose
+project and volumes:
+
+```bash
+RSS_SOURCE_DIR=/absolute/path/to/rss pnpm test:e2e:real
+```
+
+The command has a 30-minute setup/product deadline, phase/listener readiness fences, and handled
+SIGINT/SIGTERM cleanup. Teardown has its own 120-second recovery budget so the main deadline cannot
+prevent cleanup. It
+distinguishes preflight/runner/cleanup failures from product assertions and can write a machine
+receipt outside the repository with `RSS_WEB_REAL_RECEIPT=/absolute/path/receipt.json`. A failed
+cleanup exits non-zero and records the Compose project plus recovery path instead of claiming pass.
+See the [WEB-PR-013 receipt](docs/receipts/20260810-013-real-rss-journey.md).
