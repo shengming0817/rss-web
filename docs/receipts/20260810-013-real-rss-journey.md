@@ -68,8 +68,10 @@ Machine receipt:
   permissions and proves the 403 boundary.
 - No tokens, passwords, tenant headers, response bodies, server messages, or PII enter the receipt.
   JavaScript secrets remain memory-only and test credentials are synthetic, fixed fixture values.
-- Normal completion and handled SIGINT/SIGTERM run Compose `down --volumes --remove-orphans` with a
-  deadline. A cleanup failure changes the receipt and exit status to failure and preserves the
+- Normal completion and handled SIGINT/SIGTERM terminate the active asynchronous child, then run
+  Compose `down --volumes --remove-orphans` and remove both snapshots before writing the receipt.
+  Setup/product work has a 30-minute total deadline; teardown has an independent 120-second budget
+  so expiry cannot suppress cleanup. A cleanup failure changes the receipt and exit status and preserves the
   project/recovery path; SIGKILL cannot carry a cleanup guarantee. Preflight, browser/toolchain,
   readiness, timeout, seed, and cleanup failures are recorded as `environment:*`, while assertion
   failures with a journey-spec source location are `product:*`.

@@ -82,7 +82,9 @@ project and volumes:
 RSS_SOURCE_DIR=/absolute/path/to/rss pnpm test:e2e:real
 ```
 
-The command has a bounded deadline, readiness fences, and handled SIGINT/SIGTERM cleanup. It
+The command has a 30-minute setup/product deadline, phase/listener readiness fences, and handled
+SIGINT/SIGTERM cleanup. Teardown has its own 120-second recovery budget so the main deadline cannot
+prevent cleanup. It
 distinguishes preflight/runner/cleanup failures from product assertions and can write a machine
 receipt outside the repository with `RSS_WEB_REAL_RECEIPT=/absolute/path/receipt.json`. A failed
 cleanup exits non-zero and records the Compose project plus recovery path instead of claiming pass.

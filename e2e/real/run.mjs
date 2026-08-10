@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { spawnSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { createServer } from 'node:net'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -30,43 +30,75 @@ let composeFiles = []
 let environment
 let webRevision = ''
 let cleanupAttempted = false
-let signalHandling = false
+let activeChild
+let receivedSignal
 const phases = []
 
-function run(command, args, options = {}) {
-  const timeout = boundedTimeout(deadlineMs, options.timeoutMs ?? 15 * 60_000)
+function interruptedError() {
+  const error = new Error(`real journey interrupted by ${receivedSignal}`)
+  error.stage = `environment:signal-${receivedSignal}`
+  return error
+}
+
+async function execute(command, args, options = {}) {
+  const timeout = options.ignoreDeadline
+    ? (options.timeoutMs ?? 15 * 60_000)
+    : boundedTimeout(deadlineMs, options.timeoutMs ?? 15 * 60_000)
   if (timeout === 0) {
     const error = new Error('real journey total deadline exhausted')
     error.stage = 'environment:total-timeout'
     throw error
   }
-  const result = spawnSync(command, args, {
-    cwd: options.cwd ?? root,
-    env: options.env ?? process.env,
-    encoding: 'utf8',
-    input: options.input,
-    stdio: options.stdio ?? ['pipe', 'inherit', 'inherit'],
-    timeout,
-    killSignal: 'SIGTERM',
+  if (receivedSignal && !options.ignoreInterrupt) throw interruptedError()
+  return await new Promise((resolveProcess, rejectProcess) => {
+    const child = spawn(command, args, {
+      cwd: options.cwd ?? root,
+      env: options.env ?? process.env,
+      stdio: options.stdio ?? ['pipe', 'inherit', 'inherit'],
+    })
+    activeChild = child
+    let stdout = ''
+    let stderr = ''
+    child.stdout?.setEncoding('utf8')
+    child.stderr?.setEncoding('utf8')
+    child.stdout?.on('data', (chunk) => (stdout += chunk))
+    child.stderr?.on('data', (chunk) => (stderr += chunk))
+    if (options.input !== undefined) child.stdin?.end(options.input)
+    else child.stdin?.end()
+    const timer = setTimeout(() => child.kill('SIGTERM'), timeout)
+    child.once('error', (cause) => {
+      clearTimeout(timer)
+      if (activeChild === child) activeChild = undefined
+      const error = new Error(`${options.stage ?? command} failed: ${cause.message}`)
+      error.stage = options.stage ?? 'environment'
+      rejectProcess(error)
+    })
+    child.once('close', (status, signal) => {
+      clearTimeout(timer)
+      if (activeChild === child) activeChild = undefined
+      if (receivedSignal && !options.ignoreInterrupt) {
+        rejectProcess(interruptedError())
+        return
+      }
+      resolveProcess({ status, signal, stdout, stderr, timedOut: signal === 'SIGTERM' })
+    })
   })
-  if (result.error) {
-    const error = new Error(`${options.stage ?? command} failed: ${result.error.message}`)
-    const stage = options.stage ?? command
-    error.stage =
-      result.error.code === 'ETIMEDOUT'
-        ? `${stage.startsWith('environment:') ? stage : `environment:${stage}`}-timeout`
-        : stage
-    throw error
-  }
-  if (result.status !== 0) {
-    const error = new Error(`${options.stage ?? command} failed`)
-    error.stage = options.stage ?? 'environment'
-    throw error
-  }
-  return result.stdout ?? ''
 }
 
-function compose(args, options = {}) {
+async function run(command, args, options = {}) {
+  const result = await execute(command, args, options)
+  if (result.status !== 0) {
+    const error = new Error(`${options.stage ?? command} failed`)
+    const stage = options.stage ?? command
+    error.stage = result.timedOut
+      ? `${stage.startsWith('environment:') ? stage : `environment:${stage}`}-timeout`
+      : stage
+    throw error
+  }
+  return result.stdout
+}
+
+async function compose(args, options = {}) {
   return run('docker', ['compose', '-p', project, ...composeFiles, ...args], {
     ...options,
     env: environment,
@@ -81,6 +113,17 @@ async function freePort() {
   const port = address.port
   await new Promise((resolveClose) => server.close(resolveClose))
   return port
+}
+
+async function boundedSleep(requestedMs) {
+  const timeout = boundedTimeout(deadlineMs, requestedMs)
+  if (timeout === 0) {
+    const error = new Error('real journey total deadline exhausted')
+    error.stage = 'environment:total-timeout'
+    throw error
+  }
+  await new Promise((resolveWait) => setTimeout(resolveWait, timeout))
+  if (receivedSignal) throw interruptedError()
 }
 
 function seedSql() {
@@ -148,7 +191,13 @@ function writeReceipt(outcome) {
 
 async function waitReady() {
   for (let attempt = 0; attempt < 90; attempt += 1) {
-    const result = spawnSync(
+    const timeout = boundedTimeout(deadlineMs, 5_000)
+    if (timeout === 0) {
+      const error = new Error('real journey total deadline exhausted during readiness')
+      error.stage = 'environment:total-timeout'
+      throw error
+    }
+    const result = await execute(
       'docker',
       [
         'compose',
@@ -164,10 +213,10 @@ async function waitReady() {
         '-qO-',
         'http://server:8083/health/v1/readyz',
       ],
-      { env: environment, encoding: 'utf8', timeout: 5_000, killSignal: 'SIGTERM' },
+      { env: environment, stdio: 'pipe', timeoutMs: timeout },
     )
     if (result.status === 0) return
-    await new Promise((resolveWait) => setTimeout(resolveWait, 2_000))
+    await boundedSleep(2_000)
   }
   const error = new Error('RSS readiness timed out')
   error.stage = 'environment'
@@ -176,47 +225,83 @@ async function waitReady() {
 
 async function waitPhaseReady({ requireServer = false } = {}) {
   for (let attempt = 0; attempt < 60; attempt += 1) {
-    const services = compose(['ps', '--status', 'running', '--services'], {
-      stdio: 'pipe',
-      timeoutMs: 10_000,
-      stage: 'environment:phase-readiness',
-    })
+    const services = (
+      await compose(['ps', '--status', 'running', '--services'], {
+        stdio: 'pipe',
+        timeoutMs: 10_000,
+        stage: 'environment:phase-readiness',
+      })
+    )
       .trim()
       .split('\n')
     const servicesReady =
       services.includes('edge') && (!requireServer || services.includes('server'))
     if (servicesReady) {
       try {
+        const requestTimeout = boundedTimeout(deadlineMs, 2_000)
+        if (requestTimeout === 0) {
+          const error = new Error('real journey total deadline exhausted during readiness')
+          error.stage = 'environment:total-timeout'
+          throw error
+        }
         const response = await fetch(`http://127.0.0.1:${environment.RSS_WEB_REAL_EDGE_PORT}/`, {
-          signal: AbortSignal.timeout(2_000),
+          signal: AbortSignal.timeout(requestTimeout),
         })
         if (response.status === 200) return
-      } catch {
+      } catch (error) {
+        if (error?.stage === 'environment:total-timeout') throw error
         // The bounded environment readiness loop owns transient startup failures.
       }
     }
-    await new Promise((resolveWait) => setTimeout(resolveWait, 500))
+    await boundedSleep(500)
   }
   const error = new Error('Web Edge phase readiness timed out')
   error.stage = 'environment:phase-readiness'
   throw error
 }
 
-function playwright(phase) {
+async function waitServerListening(port) {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const result = await execute(
+      'docker',
+      [
+        'compose',
+        '-p',
+        project,
+        ...composeFiles,
+        'exec',
+        '-T',
+        'edge',
+        'nc',
+        '-z',
+        '-w',
+        '1',
+        'server',
+        String(port),
+      ],
+      { env: environment, stdio: 'pipe', timeoutMs: 5_000 },
+    )
+    if (result.status === 0) return
+    await boundedSleep(500)
+  }
+  const error = new Error(`RSS listener ${port} readiness timed out`)
+  error.stage = 'environment:rss-listener-readiness'
+  throw error
+}
+
+async function playwright(phase) {
   const timeout = boundedTimeout(deadlineMs, 3 * 60_000)
   if (timeout === 0) {
     const error = new Error('real journey total deadline exhausted')
     error.stage = 'environment:total-timeout'
     throw error
   }
-  const result = spawnSync(
+  const result = await execute(
     'pnpm',
     ['exec', 'playwright', 'test', '-c', 'playwright.real.config.ts', '--reporter=json'],
     {
       cwd: root,
-      encoding: 'utf8',
-      timeout,
-      killSignal: 'SIGTERM',
+      timeoutMs: timeout,
       stdio: 'pipe',
       env: {
         ...environment,
@@ -225,12 +310,9 @@ function playwright(phase) {
       },
     },
   )
-  if (result.error) {
-    const error = new Error(`Playwright ${phase} failed: ${result.error.message}`)
-    error.stage =
-      result.error.code === 'ETIMEDOUT'
-        ? 'environment:playwright-timeout'
-        : 'environment:playwright-runner'
+  if (result.timedOut) {
+    const error = new Error(`Playwright ${phase} timed out`)
+    error.stage = 'environment:playwright-timeout'
     throw error
   }
   let classification = 'environment'
@@ -248,7 +330,7 @@ function playwright(phase) {
   phases.push({ name: phase, status: 'passed' })
 }
 
-function preflightPlaywright() {
+async function preflightPlaywright() {
   const preflightEnvironment = {
     env: {
       ...environment,
@@ -256,12 +338,12 @@ function preflightPlaywright() {
       RSS_WEB_REAL_PHASE: 'main',
     },
   }
-  run(
+  await run(
     'node',
     [
       '--input-type=module',
       '-e',
-      "import { accessSync } from 'node:fs'; import { chromium } from '@playwright/test'; accessSync(chromium.executablePath())",
+      "import { chromium } from '@playwright/test'; const browser = await chromium.launch({ headless: true }); await browser.close()",
     ],
     {
       ...preflightEnvironment,
@@ -270,7 +352,7 @@ function preflightPlaywright() {
       stage: 'environment:playwright-browser',
     },
   )
-  run('pnpm', ['exec', 'playwright', 'test', '-c', 'playwright.real.config.ts', '--list'], {
+  await run('pnpm', ['exec', 'playwright', 'test', '-c', 'playwright.real.config.ts', '--list'], {
     ...preflightEnvironment,
     stdio: 'pipe',
     timeoutMs: 30_000,
@@ -299,41 +381,39 @@ if (process.argv.includes('--print-plan')) {
   process.exit(0)
 }
 
-function teardown() {
-  if (cleanupAttempted || composeFiles.length === 0 || environment === undefined)
-    return { status: 'passed', project }
+async function teardown() {
+  if (cleanupAttempted) return { status: 'passed', project }
   cleanupAttempted = true
-  const result = spawnSync(
-    'docker',
-    ['compose', '-p', project, ...composeFiles, 'down', '--volumes', '--remove-orphans'],
-    {
-      env: environment,
-      stdio: 'inherit',
-      timeout: 120_000,
-      killSignal: 'SIGTERM',
-    },
-  )
-  if (result.error || result.status !== 0) {
+  if (composeFiles.length > 0 && environment !== undefined) {
+    try {
+      const result = await execute(
+        'docker',
+        ['compose', '-p', project, ...composeFiles, 'down', '--volumes', '--remove-orphans'],
+        {
+          env: environment,
+          stdio: 'inherit',
+          timeoutMs: 120_000,
+          ignoreDeadline: true,
+          ignoreInterrupt: true,
+        },
+      )
+      if (result.status !== 0) return { status: 'failed', project, recoveryPath: temp }
+    } catch {
+      return { status: 'failed', project, recoveryPath: temp }
+    }
+  }
+  try {
+    rmSync(temp, { recursive: true, force: true })
+  } catch {
     return { status: 'failed', project, recoveryPath: temp }
   }
   return { status: 'passed', project }
 }
 
 function handleSignal(signal) {
-  if (signalHandling) return
-  signalHandling = true
-  const cleanup = teardown()
-  const outcome = finalizeOutcome(
-    {
-      status: 'failed',
-      failure: { stage: `environment:signal-${signal}`, classification: 'environment' },
-    },
-    cleanup,
-  )
-  writeReceipt(outcome)
-  if (cleanup.status === 'passed') rmSync(temp, { recursive: true, force: true })
-  else process.stderr.write(`[real-e2e] cleanup recovery: ${cleanup.recoveryPath}\n`)
-  process.exit(signal === 'SIGINT' ? 130 : 143)
+  if (receivedSignal) return
+  receivedSignal = signal
+  activeChild?.kill('SIGTERM')
 }
 
 const signalHandlers = {
@@ -345,13 +425,15 @@ process.once('SIGTERM', signalHandlers.SIGTERM)
 
 let outcome = { status: 'passed' }
 try {
-  run('docker', ['version'], { stdio: 'pipe', stage: 'environment:docker' })
-  webRevision = run('/usr/bin/git', ['rev-parse', 'HEAD'], {
-    cwd: root,
-    stdio: 'pipe',
-    stage: 'environment:web-revision',
-  }).trim()
-  const webStatus = run('/usr/bin/git', ['status', '--porcelain', '--untracked-files=all'], {
+  await run('docker', ['version'], { stdio: 'pipe', stage: 'environment:docker' })
+  webRevision = (
+    await run('/usr/bin/git', ['rev-parse', 'HEAD'], {
+      cwd: root,
+      stdio: 'pipe',
+      stage: 'environment:web-revision',
+    })
+  ).trim()
+  const webStatus = await run('/usr/bin/git', ['status', '--porcelain', '--untracked-files=all'], {
     cwd: root,
     stdio: 'pipe',
     stage: 'environment:web-cleanliness',
@@ -361,32 +443,34 @@ try {
     error.stage = 'environment:web-dirty'
     throw error
   }
-  const resolvedRevision = run('/usr/bin/git', ['rev-parse', `${revision}^{commit}`], {
-    cwd: source,
-    stdio: 'pipe',
-    stage: 'environment:rss-revision',
-  }).trim()
+  const resolvedRevision = (
+    await run('/usr/bin/git', ['rev-parse', `${revision}^{commit}`], {
+      cwd: source,
+      stdio: 'pipe',
+      stage: 'environment:rss-revision',
+    })
+  ).trim()
   assert.equal(resolvedRevision, revision)
 
   mkdirSync(snapshot)
   const archivePath = resolve(temp, 'rss.tar')
-  run('/usr/bin/git', ['archive', '--output', archivePath, revision], {
+  await run('/usr/bin/git', ['archive', '--output', archivePath, revision], {
     cwd: source,
     stage: 'environment:rss-archive',
   })
-  run('tar', ['-x', '-f', archivePath, '-C', snapshot], {
+  await run('tar', ['-x', '-f', archivePath, '-C', snapshot], {
     stage: 'environment:rss-archive-extract',
   })
   mkdirSync(webSnapshot)
   const webArchivePath = resolve(temp, 'web.tar')
-  run('/usr/bin/git', ['archive', '--output', webArchivePath, webRevision], {
+  await run('/usr/bin/git', ['archive', '--output', webArchivePath, webRevision], {
     cwd: root,
     stage: 'environment:web-archive',
   })
-  run('tar', ['-x', '-f', webArchivePath, '-C', webSnapshot], {
+  await run('tar', ['-x', '-f', webArchivePath, '-C', webSnapshot], {
     stage: 'environment:web-archive-extract',
   })
-  run('bash', ['deploy/demo-tls/generate-demo-cas.sh'], {
+  await run('bash', ['deploy/demo-tls/generate-demo-cas.sh'], {
     cwd: snapshot,
     stage: 'environment:demo-tls',
   })
@@ -407,11 +491,11 @@ try {
     resolve(webSnapshot, 'e2e/real/compose.override.yml'),
   ]
 
-  preflightPlaywright()
-  compose(['up', '--build', '-d'], { stage: 'environment:compose-up' })
+  await preflightPlaywright()
+  await compose(['up', '--build', '-d'], { stage: 'environment:compose-up' })
   await waitReady()
   await waitPhaseReady({ requireServer: true })
-  compose(
+  await compose(
     ['exec', '-T', 'postgres', 'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', 'rss'],
     {
       input: seedSql(),
@@ -419,42 +503,43 @@ try {
     },
   )
 
-  playwright('main')
+  await playwright('main')
 
   environment.RSS_WEB_REAL_REQUEST_BUDGET_MS = '1'
-  compose(['up', '-d', '--no-deps', '--force-recreate', 'server'], {
+  await compose(['up', '-d', '--no-deps', '--force-recreate', 'server'], {
     stage: 'environment:budget-fault-server',
   })
-  compose(['up', '-d', '--no-deps', '--force-recreate', 'edge'], {
+  await compose(['up', '-d', '--no-deps', '--force-recreate', 'edge'], {
     stage: 'environment:budget-fault-edge',
   })
   await waitPhaseReady({ requireServer: true })
-  playwright('budget-exhausted')
+  await waitServerListening(8080)
+  await playwright('budget-exhausted')
 
   environment.RSS_WEB_REAL_REQUEST_BUDGET_MS = '30000'
-  compose(['up', '-d', '--no-deps', '--force-recreate', 'server'], {
+  await compose(['up', '-d', '--no-deps', '--force-recreate', 'server'], {
     stage: 'environment:restore-server-budget',
   })
-  compose(['up', '-d', '--no-deps', '--force-recreate', 'edge'], {
+  await compose(['up', '-d', '--no-deps', '--force-recreate', 'edge'], {
     stage: 'environment:restore-budget-edge',
   })
   await waitReady()
   await waitPhaseReady({ requireServer: true })
 
   environment.RSS_WEB_REAL_ADMIN_PORT = '9'
-  compose(['up', '-d', '--no-deps', '--force-recreate', 'edge'], {
+  await compose(['up', '-d', '--no-deps', '--force-recreate', 'edge'], {
     stage: 'environment:admin-fault-edge',
   })
   await waitPhaseReady({ requireServer: true })
-  playwright('admin-down')
+  await playwright('admin-down')
 
   environment.RSS_WEB_REAL_ADMIN_PORT = '8082'
   environment.RSS_WEB_REAL_PRIMARY_PORT = '9'
-  compose(['up', '-d', '--no-deps', '--force-recreate', 'edge'], {
+  await compose(['up', '-d', '--no-deps', '--force-recreate', 'edge'], {
     stage: 'environment:primary-fault-edge',
   })
   await waitPhaseReady({ requireServer: true })
-  playwright('primary-down')
+  await playwright('primary-down')
 } catch (error) {
   const stage = typeof error?.stage === 'string' ? error.stage : 'environment:unknown'
   const classification = stage.startsWith('product:') ? 'product' : 'environment'
@@ -464,11 +549,12 @@ try {
 } finally {
   process.removeListener('SIGINT', signalHandlers.SIGINT)
   process.removeListener('SIGTERM', signalHandlers.SIGTERM)
-  const cleanup = teardown()
+  const cleanup = await teardown()
   outcome = finalizeOutcome(outcome, cleanup)
   writeReceipt(outcome)
   process.stderr.write(`[real-e2e] receipt: ${receiptPath}\n`)
-  if (cleanup.status === 'passed') rmSync(temp, { recursive: true, force: true })
-  else process.stderr.write(`[real-e2e] cleanup recovery: ${cleanup.recoveryPath}\n`)
-  if (outcome.status !== 'passed') process.exitCode = 1
+  if (cleanup.status === 'failed')
+    process.stderr.write(`[real-e2e] cleanup recovery: ${cleanup.recoveryPath}\n`)
+  if (receivedSignal) process.exitCode = receivedSignal === 'SIGINT' ? 130 : 143
+  else if (outcome.status !== 'passed') process.exitCode = 1
 }

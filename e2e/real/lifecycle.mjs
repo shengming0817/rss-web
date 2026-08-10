@@ -11,12 +11,21 @@ export function isCleanWebStatus(output) {
 export function classifyPlaywrightReport(report) {
   if (report?.stats?.unexpected === 0) return 'passed'
   let productFailure = false
+  let environmentFailure = false
   const visit = (value) => {
     if (Array.isArray(value)) {
       value.forEach(visit)
       return
     }
     if (value === null || typeof value !== 'object') return
+    if (
+      typeof value.message === 'string' &&
+      /(?:net::ERR_|ECONNREFUSED|browser.*(?:closed|launch)|executable doesn't exist|missing dependencies|target page.*closed)/i.test(
+        value.message,
+      )
+    ) {
+      environmentFailure = true
+    }
     if (
       typeof value.file === 'string' &&
       value.file.endsWith('e2e/real/journey.spec.ts') &&
@@ -40,6 +49,7 @@ export function classifyPlaywrightReport(report) {
     Object.values(value).forEach(visit)
   }
   visit(report?.suites)
+  if (environmentFailure) return 'environment'
   return productFailure ? 'product' : 'environment'
 }
 

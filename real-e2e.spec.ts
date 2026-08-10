@@ -42,6 +42,11 @@ describe('real RSS journey harness', () => {
     expect(runner).toContain("['archive', '--output', archivePath, revision]")
     expect(runner).toContain("['archive', '--output', webArchivePath, webRevision]")
     expect(runner).toContain("'down', '--volumes', '--remove-orphans'")
+    expect(runner).not.toContain('spawnSync')
+    expect(runner).toContain("activeChild?.kill('SIGTERM')")
+    expect(runner).toContain('await chromium.launch({ headless: true })')
+    expect(runner).toContain('await waitServerListening(8080)')
+    expect(runner).toContain('await boundedSleep(500)')
     expect(defaultPlaywright).toContain("testIgnore: 'real/**'")
   })
 
@@ -102,5 +107,30 @@ describe('real RSS journey harness', () => {
         ],
       }),
     ).toBe('product')
+    expect(
+      classifyPlaywrightReport({
+        stats: { unexpected: 1 },
+        suites: [
+          {
+            specs: [
+              {
+                file: 'e2e/real/journey.spec.ts',
+                tests: [
+                  {
+                    status: 'unexpected',
+                    results: [
+                      {
+                        status: 'failed',
+                        error: { message: 'page.goto: net::ERR_CONNECTION_REFUSED' },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      }),
+    ).toBe('environment')
   })
 })
