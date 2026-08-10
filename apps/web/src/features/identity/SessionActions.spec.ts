@@ -5,6 +5,7 @@ import { createWebI18n } from '../../i18n'
 import type { IdentitySession, IdentitySessionState, VerifiedProfile } from '@rss/identity'
 import SessionActions from './SessionActions.vue'
 import { identitySessionPlugin } from './session-context'
+import { registerSessionRouting } from '../../router/guards'
 
 const profile = {
   subject: 'subject',
@@ -36,12 +37,23 @@ async function mountActions() {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/login', name: 'login', component: { template: '<div />' } },
-      { path: '/', name: 'home', component: { template: '<div />' } },
+      {
+        path: '/login',
+        name: 'login',
+        component: { template: '<div />' },
+        meta: { sessionAccess: 'anonymous', focusTarget: 'login-content' },
+      },
+      {
+        path: '/',
+        name: 'home',
+        component: { template: '<div />' },
+        meta: { sessionAccess: 'authenticated', focusTarget: 'shell-content' },
+      },
     ],
   })
   await router.push('/')
   await router.isReady()
+  registerSessionRouting(router, session)
   const wrapper = mount(SessionActions, {
     attachTo: document.body,
     global: { plugins: [createWebI18n(), router, identitySessionPlugin(session)] },
@@ -61,7 +73,25 @@ describe('SessionActions', () => {
     expect(session.getState()).toEqual({ status: 'anonymous' })
     await flushPromises()
     expect(router.currentRoute.value.name).toBe('login')
-    expect(router.currentRoute.value.query.notice).toBe('logout-unconfirmed')
+    expect(router.currentRoute.value.query.notice).toBeUndefined()
+  })
+
+  it('keeps login disabled until a pending logout-all settles', async () => {
+    const { publish, session, wrapper } = await mountActions()
+    let settle!: () => void
+    vi.mocked(session.logoutAll).mockImplementation(() => {
+      publish({ status: 'anonymous' })
+      return new Promise<void>((resolve) => {
+        settle = resolve
+      })
+    })
+
+    await wrapper.get('[data-testid="logout-all"]').trigger('click')
+    await wrapper.get('[data-testid="confirm-logout-all"]').trigger('click')
+
+    expect(session.logoutAll).toHaveBeenCalledOnce()
+    settle()
+    await flushPromises()
   })
 
   it('requires an alertdialog confirmation before logout-all', async () => {

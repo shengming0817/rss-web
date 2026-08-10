@@ -9,7 +9,7 @@ import { useIdentitySession } from './session-context'
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const { session, state } = useIdentitySession()
+const { session, signOutNotice, signOutPending, state } = useIdentitySession()
 const themeStore = useThemeStore()
 const localeStore = useLocaleStore()
 const username = ref('')
@@ -21,7 +21,10 @@ const errorKey = ref<IdentityErrorKey | 'identity.errors.required'>()
 let operation: AbortController | undefined
 
 const busy = computed(
-  () => state.value.status === 'authenticating' || state.value.status === 'verifying',
+  () =>
+    signOutPending.value ||
+    state.value.status === 'authenticating' ||
+    state.value.status === 'verifying',
 )
 const statusKey = computed(() =>
   state.value.status === 'verifying'
@@ -29,6 +32,8 @@ const statusKey = computed(() =>
     : 'identity.login.authenticating',
 )
 const noticeKey = computed(() => {
+  if (signOutNotice.value === 'logout-unconfirmed') return 'identity.notice.logoutUnconfirmed'
+  if (signOutNotice.value === 'signed-out') return 'identity.notice.signedOut'
   if (route.query.notice === 'logout-unconfirmed') return 'identity.notice.logoutUnconfirmed'
   if (route.query.notice === 'signed-out') return 'identity.notice.signedOut'
   if (state.value.status === 'expired') return 'identity.notice.sessionExpired'

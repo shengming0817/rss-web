@@ -1,42 +1,26 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
 import { ModalShell } from '@rss/core'
 import { useIdentitySession } from './session-context'
 
 const { t } = useI18n()
-const router = useRouter()
-const { session, state } = useIdentitySession()
+const { signOut, signOutPending, state } = useIdentitySession()
 const confirmAll = ref(false)
-const busy = ref(false)
 const profile = computed(() =>
   state.value.status === 'authenticated' || state.value.status === 'refreshing'
     ? state.value.profile
     : undefined,
 )
 
-async function finish(remote: Promise<void>): Promise<void> {
-  busy.value = true
-  void router.replace({ name: 'login' })
-  try {
-    await remote
-    await router.replace({ name: 'login', query: { notice: 'signed-out' } })
-  } catch {
-    await router.replace({ name: 'login', query: { notice: 'logout-unconfirmed' } })
-  } finally {
-    busy.value = false
-  }
-}
-
 function logout(): void {
-  if (!busy.value) void finish(session.logout())
+  void signOut(false)
 }
 
 function logoutAll(): void {
-  if (busy.value) return
+  if (signOutPending.value) return
   confirmAll.value = false
-  void finish(session.logoutAll())
+  void signOut(true)
 }
 </script>
 
@@ -47,7 +31,7 @@ function logoutAll(): void {
       type="button"
       class="v1-ghost"
       data-testid="logout-current"
-      :disabled="busy"
+      :disabled="signOutPending"
       @click="logout"
     >
       {{ t('identity.actions.logout') }}
@@ -56,7 +40,7 @@ function logoutAll(): void {
       type="button"
       class="v1-ghost"
       data-testid="logout-all"
-      :disabled="busy"
+      :disabled="signOutPending"
       @click="confirmAll = true"
     >
       {{ t('identity.actions.logoutAll') }}

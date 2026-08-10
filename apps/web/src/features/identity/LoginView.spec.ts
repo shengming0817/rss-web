@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { defineComponent } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { createPinia } from 'pinia'
 import { createWebI18n } from '../../i18n'
 import type { IdentitySession, IdentitySessionState, VerifiedProfile } from '@rss/identity'
 import LoginView from './LoginView.vue'
-import { identitySessionPlugin } from './session-context'
+import { identitySessionPlugin, useIdentitySession } from './session-context'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -152,5 +153,46 @@ describe('LoginView', () => {
     wrapper.unmount()
 
     expect(signal?.aborted).toBe(true)
+  })
+
+  it('blocks a new login until the application-owned logout-all operation settles', async () => {
+    const fixture = sessionFixture()
+    const pending = deferred<void>()
+    vi.mocked(fixture.session.logoutAll).mockReturnValue(pending.promise)
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/login', name: 'login', component: LoginView },
+        { path: '/', name: 'home', component: { template: '<div>home</div>' } },
+      ],
+    })
+    await router.push('/login')
+    await router.isReady()
+    const Harness = defineComponent({
+      components: { LoginView },
+      setup() {
+        return useIdentitySession()
+      },
+      template:
+        '<button data-testid="begin-sign-out" @click="signOut(true)">sign out</button><LoginView />',
+    })
+    const wrapper = mount(Harness, {
+      attachTo: document.body,
+      global: {
+        plugins: [createPinia(), createWebI18n(), router, identitySessionPlugin(fixture.session)],
+      },
+    })
+
+    await wrapper.get('[data-testid="begin-sign-out"]').trigger('click')
+    expect(wrapper.get('.login__submit').attributes('disabled')).toBeDefined()
+    await wrapper.get('#identity-username').setValue('alice')
+    await wrapper.get('#identity-password').setValue('secret')
+    await wrapper.get('form').trigger('submit')
+    expect(fixture.session.login).not.toHaveBeenCalled()
+
+    pending.resolve()
+    await flushPromises()
+    expect(wrapper.get('.login__submit').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('[role="status"]').text()).toContain('已安全退出')
   })
 })

@@ -98,6 +98,46 @@ describe('session-owned router', () => {
     await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('login'))
   })
 
+  it('rechecks authority before committing a pending protected navigation', async () => {
+    const profile = {
+      subject: 'subject',
+      tenantId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+      kind: 'user',
+    } as never
+    const fixture = sessionFixture({
+      status: 'authenticated',
+      profile,
+      sessionExpiresAt: 2,
+      accessExpiresAt: 1,
+    })
+    let componentRequested!: () => void
+    const requested = new Promise<void>((resolve) => {
+      componentRequested = resolve
+    })
+    let resolveComponent!: (component: { template: string }) => void
+    const pendingComponent = new Promise<{ template: string }>((resolve) => {
+      resolveComponent = resolve
+    })
+    const router = createAppRouter(fixture.session, createMemoryHistory())
+    router.addRoute({
+      path: '/pending',
+      name: 'pending',
+      component: () => {
+        componentRequested()
+        return pendingComponent
+      },
+      meta: { sessionAccess: 'authenticated', focusTarget: 'shell-content' },
+    })
+
+    const navigation = router.push('/pending')
+    await requested
+    fixture.publish({ status: 'expired' })
+    resolveComponent({ template: '<div />' })
+    await navigation
+
+    expect(router.currentRoute.value.name).toBe('login')
+  })
+
   it.each(['/access', '/config', '/flags', '/admin', '/observability', '/observe', '/audit'])(
     'does not resolve the removed route %s',
     (path) => {
