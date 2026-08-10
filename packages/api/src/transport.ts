@@ -107,9 +107,9 @@ function requestConfig(
   })
   if (
     controlHeader ||
-    (options.session === 'required' && authorization === undefined) ||
+    (options.session !== undefined && authorization === undefined) ||
     (authorization !== undefined &&
-      (options.session !== 'required' || authorization.trim().length === 0))
+      (options.session === undefined || authorization.trim().length === 0))
   ) {
     throw clientError()
   }

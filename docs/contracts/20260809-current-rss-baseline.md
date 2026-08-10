@@ -84,5 +84,12 @@ complete current wire schema, while its public projection discards listener/plac
 SPIFFE identities after validation. The page treats build metadata as a launch declaration rather
 than browser-verified artifact provenance and renders `unobserved` as a known current state.
 
-`audit.list-tenant-entries` remains selected baseline evidence but is not enabled by WEB-PR-012: it
-is a non-idempotent, audited SuperAdmin operation reserved for its explicit follow-up issue.
+WEB-PR-015 enables `audit.list-tenant-entries` against the same read-only RSS revision
+`b7f3e1d0bcc5b2e59639a81b4f37937914b53f00`. Its contract TOML is
+`c60d51a58ca33da3b3d74e4779ca53250239d93c0a921d0163c44fc0f9dc5b79`; the request and response
+schema hashes remain `36c75a1ecba6ecd027be66f5819bb02785b18007bd20674435a1e4e2705e81c0` and
+`c3f0b3e61b9574fc822262d4b1052045cae714b4c15570e239537b48d6f358c7`. It is an audited SuperAdmin
+operation with non-idempotent HTTP semantics: each explicitly submitted page is sent exactly once,
+without prefetch, automatic retry, 401 replay, client-side SuperAdmin inference, or runtime schema
+loading. The target tenant is only a canonical path coordinate and never becomes a browser-authored
+tenant header.

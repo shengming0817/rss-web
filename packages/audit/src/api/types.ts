@@ -20,3 +20,9 @@ export interface ListAuditEntriesOptions {
   readonly cursor?: string
   readonly signal?: AbortSignal
 }
+
+export interface ListTenantAuditEntriesOptions {
+  readonly limit?: number
+  readonly cursor?: string
+  readonly signal?: AbortSignal
+}

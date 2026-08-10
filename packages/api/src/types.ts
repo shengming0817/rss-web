@@ -21,7 +21,7 @@ interface RequestBase {
   body?: unknown
   signal?: AbortSignal
   timeoutMs?: number
-  session?: 'required'
+  session?: 'required' | 'required-no-replay'
   errorPolicy?: EndpointErrorPolicy
 }
 

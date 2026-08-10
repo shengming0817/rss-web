@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { decodeEndpointError, decodeWireError, protocolError } from './wire-error'
+import { auditEndpoints } from './endpoints/audit'
 
 const envelope = (overrides: Record<string, unknown> = {}) => ({
   error: {
@@ -66,6 +67,40 @@ describe('decodeEndpointError', () => {
       cause: 'wire',
       status,
     })
+  })
+
+  it.each([
+    [400, 'ERR_CORE_VALIDATION', 'validation error'],
+    [500, 'ERR_CORE_INTERNAL', 'internal error'],
+    [501, 'ERR_CORE_NOT_IMPLEMENTED', 'not implemented'],
+  ] as const)('accepts the reviewed target Audit %s coordinate', (status, code, message) => {
+    expect(
+      decodeEndpointError(
+        status,
+        envelope({ code, message, retryable: false, details: [] }),
+        auditEndpoints.listTenantEntries.errorPolicy,
+      ),
+    ).toMatchObject({ cause: 'wire', status, code })
+  })
+
+  it.each([
+    [418, envelope({ details: [] })],
+    [400, envelope({ code: 'ERR_CORE_INTERNAL', message: 'validation error', details: [] })],
+    [500, envelope({ code: 'ERR_CORE_INTERNAL', message: 'drifted', details: [] })],
+    [
+      501,
+      envelope({
+        code: 'ERR_CORE_NOT_IMPLEMENTED',
+        message: 'not implemented',
+        retryable: true,
+        details: [],
+      }),
+    ],
+    [501, envelope({ code: 'ERR_CORE_NOT_IMPLEMENTED', message: 'not implemented' })],
+  ] as const)('fails closed for target Audit undeclared or drifting errors %#', (status, body) => {
+    expect(
+      decodeEndpointError(status, body, auditEndpoints.listTenantEntries.errorPolicy),
+    ).toMatchObject({ cause: 'protocol', status })
   })
 
   it('preserves only the canonical shared rate-limit coordinate', () => {

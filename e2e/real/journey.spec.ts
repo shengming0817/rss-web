@@ -50,6 +50,22 @@ test('@main completes tenant bootstrap, verified profile, Admin facts, refresh, 
     .toBeGreaterThan(0)
   await expect(auditPanel.getByText('浏览器未验证').first()).toBeVisible()
 
+  let targetRequests = 0
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname.includes('/api/v1/audit/tenants/')) targetRequests += 1
+  })
+  await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: /审计/ }).click()
+  await page.getByLabel('目标 tenant ID').fill('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
+  const targetDenied = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname ===
+      '/api/v1/audit/tenants/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/entries',
+  )
+  await page.getByRole('button', { name: '查询目标 tenant' }).click()
+  expect((await targetDenied).status()).toBe(403)
+  await expect(page.getByText('ERR_CORE_FORBIDDEN')).toBeVisible()
+  expect(targetRequests).toBe(1)
+
   expect(browserHeaders.every((headers) => !headers.includes('x-tenant-id'))).toBe(true)
   const loggedOut = page.waitForResponse(
     (response) => new URL(response.url()).pathname === '/api/v1/identity/logout',

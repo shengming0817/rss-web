@@ -70,11 +70,30 @@ const auditResponse = {
   ],
   hasMore: false,
 }
+const targetAuditResponse = {
+  data: [
+    {
+      seq: 41,
+      tenantId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      actor: 'target-sensitive-actor',
+      actorKind: 'admin',
+      action: 'settings.config-get',
+      resourceKind: 'config',
+      resourceId: 'target-sensitive-resource',
+      outcome: 'success',
+      recordedAt: 1_800_000_100,
+      entryHash: 'opaque-target-fixture',
+    },
+  ],
+  hasMore: true,
+  nextCursor: 'opaque-next-page',
+}
 
 async function installAdminMocks(
   page: Page,
   auditStatus = 200,
   runtimeStatus = 200,
+  targetAuditStatus = 200,
 ): Promise<void> {
   await page.route('**/api/v1/runtime/inventory', async (route) => {
     expect(route.request().headers().authorization?.startsWith('Bearer ')).toBe(true)
@@ -101,6 +120,47 @@ async function installAdminMocks(
     if (auditStatus === 200) await route.fulfill({ status: 200, json: auditResponse })
     else await route.fulfill({ status: auditStatus, body: '<html>gateway unavailable</html>' })
   })
+  await page.route('**/api/v1/audit/tenants/*/entries**', async (route) => {
+    expect(route.request().headers().authorization?.startsWith('Bearer ')).toBe(true)
+    expect(route.request().headers()['x-tenant-id']).toBeUndefined()
+    if (targetAuditStatus === 200) {
+      const cursor = new URL(route.request().url()).searchParams.get('cursor')
+      await route.fulfill({
+        status: 200,
+        json:
+          cursor === null
+            ? targetAuditResponse
+            : { data: [{ ...targetAuditResponse.data[0], seq: 42 }], hasMore: false },
+      })
+    } else if (targetAuditStatus === 403) {
+      await route.fulfill({
+        status: 403,
+        json: {
+          error: {
+            code: 'ERR_CORE_FORBIDDEN',
+            message: 'target audit secret denial must not render',
+            retryable: false,
+            details: [],
+            requestId: 'target-audit-denied',
+          },
+        },
+      })
+    } else if (targetAuditStatus === 401) {
+      await route.fulfill({
+        status: 401,
+        json: {
+          error: {
+            code: 'ERR_CORE_UNAUTHENTICATED',
+            message: 'target audit authentication expired',
+            retryable: false,
+            details: [],
+            requestId: 'target-audit-expired',
+          },
+        },
+      })
+    } else
+      await route.fulfill({ status: targetAuditStatus, body: '<html>target unavailable</html>' })
+  })
 }
 
 async function installIdentityMocks(
@@ -108,8 +168,9 @@ async function installIdentityMocks(
   profileStatus = 200,
   auditStatus = 200,
   runtimeStatus = 200,
+  targetAuditStatus = 200,
 ): Promise<void> {
-  await installAdminMocks(page, auditStatus, runtimeStatus)
+  await installAdminMocks(page, auditStatus, runtimeStatus, targetAuditStatus)
   await page.route('**/api/v1/identity/login', async (route) => {
     expect(route.request().headers()['x-tenant-id']).toBeUndefined()
     await route.fulfill({ status: 201, json: loginResponse })
@@ -258,7 +319,7 @@ test.describe('RSS Web Identity UX', () => {
     await page.getByLabel('密码').fill('test-password')
     await page.getByRole('button', { name: '登录', exact: true }).click()
     const navigation = page.getByRole('navigation', { name: '主导航' })
-    await expect(navigation.getByRole('link')).toHaveCount(2)
+    await expect(navigation.getByRole('link')).toHaveCount(3)
     await expect(navigation.getByRole('link', { name: /首页/ })).toContainText('RSS')
     await navigation.getByRole('link', { name: /运行时/ }).click()
     await expect(page).toHaveURL(/\/runtime$/)
@@ -275,6 +336,85 @@ test.describe('RSS Web Identity UX', () => {
     })
     await expect(page.getByRole('heading', { name: '页面不存在' })).toBeVisible()
     await expect(page.getByText('WEB_NOT_FOUND')).toBeVisible()
+  })
+
+  test('queries target Audit only on explicit actions without leaking target authority or PII', async ({
+    page,
+  }) => {
+    const targetRequests: string[] = []
+    page.on('request', (request) => {
+      if (new URL(request.url()).pathname.includes('/api/v1/audit/tenants/'))
+        targetRequests.push(request.url())
+    })
+    await installIdentityMocks(page)
+    await signIn(page)
+    await page
+      .getByRole('navigation', { name: '主导航' })
+      .getByRole('link', { name: /审计/ })
+      .click()
+    await expect(page).toHaveURL(/\/audit$/)
+    expect(targetRequests).toHaveLength(0)
+
+    await page.getByLabel('目标 tenant ID').fill('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
+    await page.getByRole('button', { name: '查询目标 tenant' }).click()
+    const targetPanel = page.getByRole('region', { name: '显式跨租户查询' })
+    await expect(targetPanel.getByText('opaque-target-fixture')).toBeVisible()
+    expect(targetRequests).toHaveLength(1)
+    await expect(targetPanel.getByText('target-sensitive-actor')).toHaveCount(0)
+    await targetPanel.getByRole('button', { name: '显示 Actor（PII）' }).click()
+    await expect(targetPanel.getByText('target-sensitive-actor')).toBeVisible()
+
+    const next = targetPanel.getByRole('button', { name: '显式加载下一页' })
+    await next.click()
+    await expect(page.getByText('#42 · settings.config-get')).toBeVisible()
+    expect(targetRequests).toHaveLength(2)
+    expect(new URL(targetRequests[1]!).searchParams.get('cursor')).toBe('opaque-next-page')
+  })
+
+  test('keeps one target Audit 403 final without retry, fallback, or raw message', async ({
+    page,
+  }) => {
+    let targetRequests = 0
+    page.on('request', (request) => {
+      if (new URL(request.url()).pathname.includes('/api/v1/audit/tenants/')) targetRequests += 1
+    })
+    await installIdentityMocks(page, 200, 200, 200, 403)
+    await signIn(page)
+    await page
+      .getByRole('navigation', { name: '主导航' })
+      .getByRole('link', { name: /审计/ })
+      .click()
+    await page.getByLabel('目标 tenant ID').fill('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
+    await page.getByRole('button', { name: '查询目标 tenant' }).click()
+    await expect(page.getByText('ERR_CORE_FORBIDDEN')).toBeVisible()
+    await expect(page.getByText('target-audit-denied')).toBeVisible()
+    await expect(page.getByText('target audit secret denial must not render')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: '重试' })).toHaveCount(0)
+    expect(targetRequests).toBe(1)
+  })
+
+  test('invalidates the session after one target Audit 401 without refresh or replay', async ({
+    page,
+  }) => {
+    let targetRequests = 0
+    let refreshRequests = 0
+    page.on('request', (request) => {
+      const path = new URL(request.url()).pathname
+      if (path.includes('/api/v1/audit/tenants/')) targetRequests += 1
+      if (path === '/api/v1/identity/refresh') refreshRequests += 1
+    })
+    await installIdentityMocks(page, 200, 200, 200, 401)
+    await signIn(page)
+    await page
+      .getByRole('navigation', { name: '主导航' })
+      .getByRole('link', { name: /审计/ })
+      .click()
+    await page.getByLabel('目标 tenant ID').fill('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
+    await page.getByRole('button', { name: '查询目标 tenant' }).click()
+    await expect(page).toHaveURL(/\/login$/)
+    await expect(page.getByRole('heading', { name: '登录' })).toBeVisible()
+    expect(targetRequests).toBe(1)
+    expect(refreshRequests).toBe(0)
   })
 
   test('logout and confirmed logout-all invalidate local authority immediately', async ({

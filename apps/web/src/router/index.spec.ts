@@ -180,7 +180,7 @@ describe('session-owned router', () => {
     expect(router.currentRoute.value.name).toBe('login')
   })
 
-  it.each(['/access', '/config', '/flags', '/admin', '/observability', '/observe', '/audit'])(
+  it.each(['/access', '/config', '/flags', '/admin', '/observability', '/observe'])(
     'routes the removed path %s only to the protected catch-all',
     (path) => {
       const fixture = sessionFixture({ status: 'anonymous' })
@@ -189,7 +189,7 @@ describe('session-owned router', () => {
     },
   )
 
-  it('derives navigation from the implemented Home and Runtime routes', () => {
+  it('derives navigation from the implemented Home, Runtime, and Audit routes', () => {
     const router = appRouter(sessionFixture({ status: 'anonymous' }))
     expect(createShellNavigation(router, (key) => key)).toEqual([
       {
@@ -204,7 +204,28 @@ describe('session-owned router', () => {
         to: { name: 'runtime' },
         source: RSS_SOURCE,
       },
+      {
+        id: 'audit',
+        label: 'navigation.audit',
+        to: { name: 'audit' },
+        source: RSS_SOURCE,
+      },
     ])
+  })
+
+  it('owns the Audit page with ambient route intent and no client-side SuperAdmin gate', () => {
+    const router = appRouter(sessionFixture({ status: 'anonymous' }))
+    const route = router.resolve('/audit')
+    expect(route.name).toBe('audit')
+    expect(route.meta).toMatchObject({
+      sessionAccess: 'authenticated',
+      focusTarget: 'shell-content',
+      authorizationIntent: {
+        contractId: 'audit.list-entries',
+        permission: 'audit:read',
+      },
+      navigation: { labelKey: 'navigation.audit', order: 20, source: RSS_SOURCE },
+    })
   })
 
   it('owns the Runtime details route with session and server-authoritative intent metadata', () => {

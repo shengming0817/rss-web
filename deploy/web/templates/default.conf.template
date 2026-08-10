@@ -4,6 +4,11 @@ map $request_uri $rss_tenant_header {
   ~^/api/v1/identity/refresh(?:\?.*)?$ "${RSS_WEB_TENANT_ID}";
 }
 
+map $request_uri $rss_target_audit_raw_path {
+  default 0;
+  "~^/api/v1/audit/tenants/(?!00000000-0000-0000-0000-000000000000)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/entries(?:\?.*)?$" 1;
+}
+
 upstream rss_primary {
   server ${RSS_WEB_PRIMARY_HOST}:${RSS_WEB_PRIMARY_PORT};
 }
@@ -43,6 +48,12 @@ server {
     proxy_pass http://rss_admin;
   }
 
+  location ~ "^/api/v1/audit/tenants/(?!00000000-0000-0000-0000-000000000000)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/entries$" {
+    if ($rss_target_audit_raw_path = 0) { return 404; }
+    include /etc/nginx/snippets/rss-proxy-common.conf;
+    proxy_pass http://rss_admin;
+  }
+
   location = /api { return 404; }
   location = /internal { return 404; }
   location ^~ /internal/ { return 404; }
@@ -54,7 +65,7 @@ server {
   location ^~ /healthz/ { return 404; }
   location = /readyz { return 404; }
   location ^~ /readyz/ { return 404; }
-  location ^~ /api/ { return 404; }
+  location /api/ { return 404; }
 
   location /assets/ {
     expires 1y;

@@ -59,13 +59,27 @@ async function protectedRequest<T>(
   }
 }
 
+async function protectedNoReplayRequest<T>(
+  delegate: HttpTransport,
+  hooks: SessionTransportHooks,
+  request: NoContentRequest | RequestOptions<T>,
+): Promise<T | void> {
+  const initial = await hooks.authorize(request.signal)
+  try {
+    return await delegate.request(authorized(request, initial) as RequestOptions<T>)
+  } catch (error: unknown) {
+    if (exactUnauthenticated(error)) hooks.invalidate(initial.generation)
+    throw error
+  }
+}
+
 export function createCredentialHttpTransport(
   delegate: HttpTransport,
   credential: SessionCredential,
 ): HttpTransport {
   return {
     request<T>(request: NoContentRequest | RequestOptions<T>): Promise<T | void> {
-      if (request.session !== 'required') return delegate.request(request as RequestOptions<T>)
+      if (request.session === undefined) return delegate.request(request as RequestOptions<T>)
       return delegate.request(authorized(request, credential) as RequestOptions<T>)
     },
   } as HttpTransport
@@ -77,7 +91,9 @@ export function createSessionHttpTransport(
 ): HttpTransport {
   return {
     request<T>(request: NoContentRequest | RequestOptions<T>): Promise<T | void> {
-      if (request.session !== 'required') return delegate.request(request as RequestOptions<T>)
+      if (request.session === undefined) return delegate.request(request as RequestOptions<T>)
+      if (request.session === 'required-no-replay')
+        return protectedNoReplayRequest(delegate, hooks, request)
       return protectedRequest(delegate, hooks, request)
     },
   } as HttpTransport
