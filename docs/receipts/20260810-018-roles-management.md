@@ -36,6 +36,9 @@
 - The production `/roles` route is session-protected and carries exact list/assign/revoke UX intents.
   There is no subject picker, directory lookup, role-binding provider, client-side policy evaluator,
   profile-kind gate, tenant input, or real-failure fallback.
+- The page explicitly states that RSS Admin authority is required and that the current User session
+  receives the final server 403. This is disclosure, not a client-side authorization inference or
+  synthetic elevation path.
 
 ## RSS authority finding
 
@@ -53,36 +56,57 @@
 
 ## Security, tenant, and Edge review
 
-- Subject is PII and exists only in component-local input, the confirmed request coordinate/body, and
-  the modal while open. It is cleared before transport completion and never enters a receipt, URL
-  query, persistence, logs, telemetry, source metadata, or authorization selector.
+- Subject is PII. The active revoke contract necessarily sends it as an encoded path coordinate, so
+  the UI now states that fact rather than promising URL invisibility. It is cleared from the page
+  before transport completion and never enters a receipt, persistence, Web telemetry, source
+  metadata, or authorization selector. The production Edge access-log format omits the request URI;
+  browser network tooling and RSS-owned upstream logging remain outside that narrower guarantee.
 - Browser code cannot author bearer or tenant headers. Nginx routes all three operations to Primary,
   strips forged `X-Tenant-ID`, retains `proxy_next_upstream off`, and injects the deployment tenant
-  only for exact login/refresh.
+  only for exact login/refresh. Its reviewed access-log format records method/status/bytes/request ID
+  but never request URI; Docker smoke verifies raw and encoded opaque subjects do not appear in logs.
 - RSS remains authoritative for principal kind, permissions, role existence, conflict handling,
   command effects, and the returned boolean. Opaque permissions are display facts only.
 
+## Review remediation
+
+- A single branded `RoleId` parser now owns the 1–128 byte grammar across strict decoders, client
+  methods, operation state, and Vue input validation. Unparsed strings cannot enter command methods.
+- Repeated endpoint error coordinates were collapsed into internal frozen atoms. Roles behavior tests
+  prove reviewed coordinates remain wire errors while undeclared status or field drift fails closed.
+- Session integration proves list/revoke perform exactly one refresh and one replay after an exact 401,
+  while assign performs one request, zero refreshes, zero replay, and expires local authority.
+- Initial catalog loading no longer steals focus. Validation messages are programmatically associated,
+  modal cancel restores the opener, and submit retains a focused busy state before moving to the result
+  heading. Both actions are disabled while the command is in flight.
+- Edge smoke covers reserved characters and Unicode in the opaque revoke subject, checked Compose
+  teardown, safe access logging, exact encoded forwarding, and absence of subject material in logs.
+
 ## Verification
 
-- Frozen install, workspace typecheck, lint, format check, 691 unit/root tests, 640 coverage tests, 51
+- Frozen install, workspace typecheck, lint, format check, 705 unit/root tests, 654 coverage tests, 51
   boundary tests, production build, built-identity scan, and diff check passed.
 - Sixteen default Chromium journeys passed, including exact successful catalog/assign/revoke mock
   shapes, confirmation, no binding-view inference, and closed navigation.
 - Docker/Nginx Edge smoke passed with exact GET/POST/DELETE routing, encoded role/subject coordinates,
-  body hash, bearer pass-through, tenant stripping, Primary/Admin outage isolation, and complete
-  teardown.
+  body hash, bearer pass-through, tenant stripping, safe URI-free access logging, Primary/Admin outage
+  isolation, and checked complete teardown.
 - The opt-in real runner archived clean Web implementation
-  `aea2ad67bf090a474c01508e087b3fb1e07c674d` and the pinned RSS revision. Main,
+  `427feebbc961b3c72c329e2d83b8f84d4bb4a07f` and the pinned RSS revision. Main,
   password-change, account-status-self, roles, rate-limited, budget-exhausted, Admin-down, and
   Primary-down phases passed; checked cleanup passed. The Roles phase locks the current User-to-Admin
   authority denial instead of claiming an unavailable success path.
+- Two preflight attempts were classified as environment failures with cleanup passed: one transient
+  Docker probe and one invocation without the explicit sibling RSS source. The final invocation used
+  the reviewed read-only RSS path and passed all eight phases; no failed attempt was reported as a Web
+  regression.
 
 ## Four-principle check
 
 - Thorough: all three active contracts, status/error policies, strict DTOs, cursor behavior, command
   confirmation, no-replay semantics, safe errors, Edge routes, browser behavior, and current real RSS
   authority close together.
-- Breaking: there is one explicit real adapter and no old GoCell surface, provider/picker/mock, alias,
+- Breaking: there is one explicit real adapter and no legacy product surface, provider/picker/mock, alias,
   dual authority mode, compatibility fallback, synthetic Admin token, or binding read model.
 - Simple: the change reuses `@rss/api`, `@rss/identity`, the single session transport, authorization UX
   context, router metadata, modal/error/source components, and existing Identity Edge prefix.
@@ -92,11 +116,11 @@
 
 ## Changed-line classification
 
-- Semantic handwritten code and locale content: 951 additions / 5 deletions.
-- Unit/type/boundary/browser/Edge/real tests and harness diagnostics: 689 additions / 5 deletions.
+- Semantic handwritten code and locale content: 1,019 additions / 83 deletions.
+- Unit/type/boundary/browser/Edge/real tests and harness diagnostics: 958 additions / 6 deletions.
 - Documentation and governance: 39 additions / 1 deletion.
 - Generated and lockfile: 0 lines.
-- Implementation total: 1,679 additions / 11 deletions.
+- Implementation total excluding this receipt: 2,016 additions / 90 deletions.
 
 ## Rollback
 
