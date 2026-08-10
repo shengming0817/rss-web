@@ -68,8 +68,9 @@ const NO_AXIOS_PATH = {
 }
 
 const INTERNAL_ENDPOINT_PATTERN = {
-  regex: '^@rss/api/endpoints/',
-  message: '应用层禁止绕过 domain adapter 使用 endpoint coordinates。',
+  regex: '^@rss/api/(?:endpoints/|session$|testing$)',
+  message:
+    '应用层禁止绕过 domain adapter 使用 endpoint coordinates、session capability 或测试工厂。',
 }
 
 /** Helper: create a no-restricted-imports rule config combining all given patterns + paths */
@@ -229,8 +230,25 @@ export default tseslint.config(
       'no-restricted-imports': boundaryRule(
         [
           {
-            regex: '^@rss/(?!api(?:$|/endpoints/identity$))',
-            message: '@rss/identity 只允许依赖 @rss/api 及其 Identity endpoint。',
+            regex: '^@rss/(?!api(?:$|/endpoints/identity$|/session$))',
+            message: '@rss/identity 只允许依赖 @rss/api、Identity endpoint 与 session capability。',
+          },
+        ],
+        [NO_AXIOS_PATH],
+      ),
+    },
+  },
+
+  // Identity behavior tests may mint the real sanitized error class. Production
+  // sources remain unable to import the test-only factory.
+  {
+    files: ['packages/identity/**/*.spec.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex: '^@rss/(?!api(?:$|/endpoints/identity$|/session$|/testing$))',
+            message: '@rss/identity 测试只允许依赖 API seam 与测试工厂。',
           },
         ],
         [NO_AXIOS_PATH],
