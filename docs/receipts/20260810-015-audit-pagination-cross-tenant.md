@@ -46,17 +46,18 @@
 
 ## Verification
 
-- Frozen install, workspace typecheck, lint, format check, 534 unit/root tests, 488 coverage tests,
+- Frozen install, workspace typecheck, lint, format check, 548 unit/root tests, 502 coverage tests,
   46 root boundary tests, production build, and built-identity scan passed.
-- Twelve Chromium journeys passed. They cover initial target idleness, explicit target submit/next,
+- Thirteen Chromium journeys passed. They cover initial target idleness, explicit target submit/next,
   no browser tenant header, PII reveal boundary, exact single-call 403, no raw message, and the closed
   three-route navigation set.
 - The Docker/Nginx Edge smoke passed with canonical target routing plus every negative path above and
   complete Compose teardown.
 - The opt-in real RSS runner archived clean Web implementation commit
-  `b4a76018c2dd2fcebe82d1c2c3c1d61d3ecbff15` and the pinned RSS revision. Main, request-budget
+  `91bb191b31e1eeee17dfb21ffd8e5ca615166f69` and the pinned RSS revision. Main, request-budget
   exhaustion, Admin-down, and Primary-down phases all passed; cleanup passed. The real standard user
-  target query produced one authoritative 403 through the production Edge without a second request.
+  query against a different canonical target tenant produced one authoritative 403 through the
+  production Edge without a second request.
 
 ## Four-principle check
 
@@ -72,11 +73,23 @@
 
 ## Changed-line classification
 
-- Semantic handwritten code, locale content, and Edge configuration: 738 additions / 15 deletions.
-- Tests, browser journeys, and boundary guards: 683 additions / 20 deletions.
+- Semantic handwritten code, locale content, and Edge configuration: 836 additions / 15 deletions.
+- Tests, browser journeys, and boundary guards: 864 additions / 20 deletions.
 - Documentation and governance: 40 additions / 17 deletions.
 - Generated and lockfile: 0 lines.
-- Implementation total: 1,461 additions / 52 deletions.
+- Implementation total: 1,740 additions / 52 deletions.
+
+## Review remediation
+
+- Built-in review found six unique in-scope gaps: the target endpoint accepted undeclared error
+  coordinates; pagination did not fully lock cursor/sequence continuity; normalized Nginx paths could
+  admit non-canonical raw encodings; real evidence used the ambient tenant and lacked browser-level
+  exact-401 proof; and reveal/hide, terminal pagination, and retry controls lost keyboard focus.
+- One concentrated fix attached exact frozen 400/500/501 policies with drift negatives, closed cursor
+  and contiguous-sequence checks, added a raw `$request_uri` target allowlist plus upstream-count
+  negatives, used a distinct real target tenant, proved one 401 causes zero refresh/replay, and added
+  focus transfer/live status behavior. The complete local CI, Chromium, Edge smoke, and archived real
+  RSS journey were rerun after that fix.
 
 ## Rollback
 
