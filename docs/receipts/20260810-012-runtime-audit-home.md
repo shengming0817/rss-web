@@ -67,5 +67,8 @@
 
 ## Rollback
 
-Revert this PR as one unit. Rollback removes both new packages and Home panels without changing the
-Identity session, same-origin Edge, contract-history evidence, or restoring any historical surface.
+Do not restore the former `/api/v1/audit/**` Edge prefix. A feature rollback may remove the Runtime
+and Audit packages, composition, and Home panels, but must retain the exact Audit entries location,
+its negative Edge smoke/guard, and the current RSS assembly evidence in the Edge ADR. Run
+`pnpm test:edge` after that scoped rollback; reverting this PR as one unit is unsafe because it would
+re-expose the cross-tenant Audit route.
