@@ -52,14 +52,32 @@ describe('ESLint package boundaries', () => {
     }
   })
 
-  it('allows identity to use only the API seam and its endpoint coordinates', async () => {
-    for (const dependency of ['@rss/api', '@rss/api/endpoints/identity', '@rss/api/session']) {
+  it('allows identity to use the API seam and only the controller to use session capability', async () => {
+    for (const dependency of ['@rss/api', '@rss/api/endpoints/identity']) {
       expect(
         await ruleIds(
           `import { x } from '${dependency}'\nexport const y = x\n`,
           'packages/identity/src/api/client.ts',
         ),
       ).not.toContain('no-restricted-imports')
+    }
+    expect(
+      await ruleIds(
+        "import { createSessionHttpTransport } from '@rss/api/session'\nexport const x = createSessionHttpTransport\n",
+        'packages/identity/src/session/controller.ts',
+      ),
+    ).not.toContain('no-restricted-imports')
+    for (const file of [
+      'packages/identity/src/api/client.ts',
+      'packages/identity/src/index.ts',
+      'packages/identity/src/session/types.ts',
+    ]) {
+      expect(
+        await ruleIds(
+          "import { createSessionHttpTransport } from '@rss/api/session'\nexport const x = createSessionHttpTransport\n",
+          file,
+        ),
+      ).toContain('no-restricted-imports')
     }
     for (const dependency of ['@rss/core', '@rss/shared', '@rss/api/endpoints/settings']) {
       expect(

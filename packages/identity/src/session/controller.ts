@@ -70,8 +70,16 @@ function verifyProfile(data: ProfileData): VerifiedProfile {
   }) as VerifiedProfile
 }
 
-function signalOption(options?: SessionOperationOptions): { signal?: AbortSignal } {
-  return options?.signal === undefined ? {} : { signal: options.signal }
+function signalOption(
+  options?: SessionOperationOptions,
+  operationLifecycle?: AbortSignal,
+): { signal?: AbortSignal } {
+  const caller = options?.signal
+  if (operationLifecycle === undefined) return caller === undefined ? {} : { signal: caller }
+  return {
+    signal:
+      caller === undefined ? operationLifecycle : AbortSignal.any([caller, operationLifecycle]),
+  }
 }
 
 function waitForCredential(
@@ -91,6 +99,8 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
   const nowEpochSeconds = config.nowEpochSeconds ?? (() => Math.floor(Date.now() / 1_000))
   const rawIdentity = createIdentityApi(config.transport)
   const listeners = new Set<IdentitySessionListener>()
+  const notifications: IdentitySessionState[] = []
+  let notifying = false
   let state: IdentitySessionState = Object.freeze({ status: 'anonymous' })
   let secrets: Secrets | undefined
   let epoch = 0
@@ -98,13 +108,24 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
   let refreshFlight: Promise<SessionCredential> | undefined
 
   function publish(next: IdentitySessionState): void {
-    state = Object.freeze(next)
-    for (const listener of listeners) {
-      try {
-        listener(state)
-      } catch (error: unknown) {
-        void error
+    const published = Object.freeze(next)
+    state = published
+    notifications.push(published)
+    if (notifying) return
+    notifying = true
+    try {
+      while (notifications.length > 0) {
+        const notification = notifications.shift()!
+        for (const listener of [...listeners]) {
+          try {
+            listener(notification)
+          } catch (error: unknown) {
+            void error
+          }
+        }
       }
+    } finally {
+      notifying = false
     }
   }
 
@@ -117,6 +138,7 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
   }
 
   function clear(next: 'anonymous' | 'expired'): void {
+    if (state.status === next && secrets === undefined && refreshFlight === undefined) return
     epoch += 1
     lifecycle.abort()
     lifecycle = new AbortController()
@@ -125,14 +147,16 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
     publish({ status: next })
   }
 
-  function beginAuthentication(): number {
+  function beginAuthentication(): { authenticationEpoch: number; operationLifecycle: AbortSignal } {
     epoch += 1
     lifecycle.abort()
     lifecycle = new AbortController()
     secrets = undefined
     refreshFlight = undefined
+    const authenticationEpoch = epoch
+    const operationLifecycle = lifecycle.signal
     publish({ status: 'authenticating' })
-    return epoch
+    return { authenticationEpoch, operationLifecycle }
   }
 
   async function rotate(failedGeneration: number): Promise<SessionCredential> {
@@ -142,24 +166,40 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
     if (refreshFlight !== undefined) return refreshFlight
 
     const rotationEpoch = epoch
+    const operationLifecycle = lifecycle
     const priorState = state
     if (priorState.status !== 'authenticated' && priorState.status !== 'refreshing') {
       throw sessionError('SESSION_UNAVAILABLE')
     }
-    publish({
-      status: 'refreshing',
-      profile: priorState.profile,
-      sessionExpiresAt: current.sessionExpiresAt,
-      accessExpiresAt: current.accessExpiresAt,
-    })
-
-    const flight = (async () => {
+    const flight = Promise.resolve().then(async () => {
       try {
+        if (
+          epoch !== rotationEpoch ||
+          secrets !== current ||
+          lifecycle !== operationLifecycle ||
+          operationLifecycle.signal.aborted
+        ) {
+          throw sessionError('SESSION_INVALIDATED')
+        }
+        publish({
+          status: 'refreshing',
+          profile: priorState.profile,
+          sessionExpiresAt: current.sessionExpiresAt,
+          accessExpiresAt: current.accessExpiresAt,
+        })
+        if (
+          epoch !== rotationEpoch ||
+          secrets !== current ||
+          lifecycle !== operationLifecycle ||
+          operationLifecycle.signal.aborted
+        ) {
+          throw sessionError('SESSION_INVALIDATED')
+        }
         const response = await rawIdentity.refresh(
           { refreshToken: current.refreshToken },
-          { signal: lifecycle.signal },
+          { signal: operationLifecycle.signal },
         )
-        if (epoch !== rotationEpoch || secrets !== current) {
+        if (epoch !== rotationEpoch || secrets !== current || lifecycle !== operationLifecycle) {
           throw sessionError('SESSION_INVALIDATED')
         }
         const now = nowEpochSeconds()
@@ -180,12 +220,15 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
           sessionExpiresAt: next.sessionExpiresAt,
           accessExpiresAt: next.accessExpiresAt,
         })
+        if (epoch !== rotationEpoch || secrets !== next || lifecycle !== operationLifecycle) {
+          throw sessionError('SESSION_INVALIDATED')
+        }
         return credential(next)
       } catch (error: unknown) {
         if (epoch === rotationEpoch) clear('expired')
         throw error
       }
-    })()
+    })
     refreshFlight = flight
     const clearFlight = () => {
       if (refreshFlight === flight) refreshFlight = undefined
@@ -227,10 +270,15 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
     if (state.status !== 'anonymous' && state.status !== 'expired') {
       throw sessionError('SESSION_BUSY')
     }
-    const loginEpoch = beginAuthentication()
+    const { authenticationEpoch: loginEpoch, operationLifecycle } = beginAuthentication()
     try {
-      const response = await rawIdentity.login(request, signalOption(options))
-      if (epoch !== loginEpoch) throw sessionError('SESSION_INVALIDATED')
+      if (epoch !== loginEpoch || lifecycle.signal !== operationLifecycle) {
+        throw sessionError('SESSION_INVALIDATED')
+      }
+      const response = await rawIdentity.login(request, signalOption(options, operationLifecycle))
+      if (epoch !== loginEpoch || lifecycle.signal !== operationLifecycle) {
+        throw sessionError('SESSION_INVALIDATED')
+      }
       const now = nowEpochSeconds()
       if (!validLogin(response.data, now)) throw sessionError('SESSION_INVALIDATED')
       const candidate: Secrets = {
@@ -242,10 +290,21 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
       }
       secrets = candidate
       publish({ status: 'verifying' })
+      if (
+        epoch !== loginEpoch ||
+        secrets !== candidate ||
+        lifecycle.signal !== operationLifecycle
+      ) {
+        throw sessionError('SESSION_INVALIDATED')
+      }
       const profileResponse = await createIdentityApi(
         createCredentialHttpTransport(config.transport, credential(candidate)),
-      ).profile(signalOption(options))
-      if (epoch !== loginEpoch || secrets !== candidate) {
+      ).profile(signalOption(options, operationLifecycle))
+      if (
+        epoch !== loginEpoch ||
+        secrets !== candidate ||
+        lifecycle.signal !== operationLifecycle
+      ) {
         throw sessionError('SESSION_INVALIDATED')
       }
       const profile = verifyProfile(profileResponse.data)
@@ -255,6 +314,13 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
         sessionExpiresAt: candidate.sessionExpiresAt,
         accessExpiresAt: candidate.accessExpiresAt,
       })
+      if (
+        epoch !== loginEpoch ||
+        secrets !== candidate ||
+        lifecycle.signal !== operationLifecycle
+      ) {
+        throw sessionError('SESSION_INVALIDATED')
+      }
       return profile
     } catch (error: unknown) {
       if (epoch === loginEpoch) clear(secrets === undefined ? 'anonymous' : 'expired')

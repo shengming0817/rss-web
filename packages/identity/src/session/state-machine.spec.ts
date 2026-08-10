@@ -236,6 +236,127 @@ describe('createIdentitySession state machine', () => {
     expect(session.getState()).toEqual({ status: 'anonymous' })
   })
 
+  it('invalidates login when a listener logs out and does not recurse on anonymous', async () => {
+    const { calls, transport } = fakeTransport({
+      '/api/v1/identity/login': () => loginWire,
+    })
+    const session = createIdentitySession({ transport, nowEpochSeconds: () => now })
+    const states: string[] = []
+    session.subscribe((state) => {
+      states.push(state.status)
+      if (state.status === 'authenticating' || state.status === 'anonymous') void session.logout()
+    })
+
+    await expect(session.login({ username: 'alice', password: 'secret' })).rejects.toMatchObject({
+      code: 'SESSION_INVALIDATED',
+    })
+    expect(states).toEqual(['authenticating', 'anonymous'])
+    expect(calls).toEqual([])
+    expect(session.getState()).toEqual({ status: 'anonymous' })
+  })
+
+  it('does not return verified authority after an authenticated listener logs out', async () => {
+    const { transport } = fakeTransport({
+      '/api/v1/identity/login': () => loginWire,
+      '/api/v1/identity/profile': () => profileWire,
+      '/api/v1/identity/logout': () => ({ data: { loggedOut: true } }),
+    })
+    const session = createIdentitySession({ transport, nowEpochSeconds: () => now })
+    session.subscribe((state) => {
+      if (state.status === 'authenticated') void session.logout()
+    })
+
+    await expect(session.login({ username: 'alice', password: 'secret' })).rejects.toMatchObject({
+      code: 'SESSION_INVALIDATED',
+    })
+    expect(session.getState()).toEqual({ status: 'anonymous' })
+  })
+
+  it('does not send refresh when a refreshing listener invalidates the session', async () => {
+    let currentTime = now
+    let refreshCalls = 0
+    let protectedCalls = 0
+    const { transport } = fakeTransport({
+      '/api/v1/identity/login': () => loginWire,
+      '/api/v1/identity/profile': () => profileWire,
+      '/api/v1/identity/refresh': () => {
+        refreshCalls += 1
+        return {
+          data: {
+            accessToken: 'access-secret-2',
+            refreshToken: 'refresh-secret-2',
+            accessExpiresAt: currentTime + 60,
+          },
+        }
+      },
+      '/api/v1/identity/logout': () => ({ data: { loggedOut: true } }),
+      '/api/v1/settings/configs/key': () => {
+        protectedCalls += 1
+        return { ok: true }
+      },
+    })
+    const session = createIdentitySession({ transport, nowEpochSeconds: () => currentTime })
+    await session.login({ username: 'alice', password: 'secret' })
+    session.subscribe((state) => {
+      if (state.status === 'refreshing') void session.logout()
+    })
+    currentTime = loginWire.data.accessExpiresAt
+
+    await expect(
+      session.transport.request({
+        method: 'GET',
+        path: '/api/v1/settings/configs/key',
+        session: 'required',
+        successStatus: 200,
+        decode: (value) => value,
+      }),
+    ).rejects.toMatchObject({ code: 'SESSION_INVALIDATED' })
+    expect(refreshCalls).toBe(0)
+    expect(protectedCalls).toBe(0)
+    expect(session.getState()).toEqual({ status: 'anonymous' })
+  })
+
+  it('does not retry with rotated credentials after an authenticated listener logs out', async () => {
+    let currentTime = now
+    let refreshing = false
+    let protectedCalls = 0
+    const { transport } = fakeTransport({
+      '/api/v1/identity/login': () => loginWire,
+      '/api/v1/identity/profile': () => profileWire,
+      '/api/v1/identity/refresh': () => ({
+        data: {
+          accessToken: 'access-secret-2',
+          refreshToken: 'refresh-secret-2',
+          accessExpiresAt: currentTime + 60,
+        },
+      }),
+      '/api/v1/identity/logout': () => ({ data: { loggedOut: true } }),
+      '/api/v1/settings/configs/key': () => {
+        protectedCalls += 1
+        return { ok: true }
+      },
+    })
+    const session = createIdentitySession({ transport, nowEpochSeconds: () => currentTime })
+    await session.login({ username: 'alice', password: 'secret' })
+    session.subscribe((state) => {
+      if (state.status === 'refreshing') refreshing = true
+      if (refreshing && state.status === 'authenticated') void session.logout()
+    })
+    currentTime = loginWire.data.accessExpiresAt
+
+    await expect(
+      session.transport.request({
+        method: 'GET',
+        path: '/api/v1/settings/configs/key',
+        session: 'required',
+        successStatus: 200,
+        decode: (value) => value,
+      }),
+    ).rejects.toMatchObject({ code: 'SESSION_INVALIDATED' })
+    expect(protectedCalls).toBe(0)
+    expect(session.getState()).toEqual({ status: 'anonymous' })
+  })
+
   it('returns to anonymous after login failure and rejects concurrent login deterministically', async () => {
     let rejectLogin: ((error: Error) => void) | undefined
     const pendingLogin = new Promise<never>((_resolve, reject) => {

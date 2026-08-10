@@ -223,15 +223,31 @@ export default tseslint.config(
   },
 
   // ── 边界锁: packages/identity ─────────────────────────────────────────────
-  // identity 只依赖 api seam；endpoint subpath 是其唯一 raw-coordinate owner。
+  // identity 默认只依赖 api seam；endpoint subpath 是其唯一 raw-coordinate owner。
   {
     files: ['packages/identity/**/*.ts'],
     rules: {
       'no-restricted-imports': boundaryRule(
         [
           {
+            regex: '^@rss/(?!api(?:$|/endpoints/identity$))',
+            message: '@rss/identity 默认只允许依赖 @rss/api 与 Identity endpoint。',
+          },
+        ],
+        [NO_AXIOS_PATH],
+      ),
+    },
+  },
+
+  // The bearer/recovery capability has exactly one production owner.
+  {
+    files: ['packages/identity/src/session/controller.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
             regex: '^@rss/(?!api(?:$|/endpoints/identity$|/session$))',
-            message: '@rss/identity 只允许依赖 @rss/api、Identity endpoint 与 session capability。',
+            message: 'Identity session controller 只允许依赖 API seam 与 session capability。',
           },
         ],
         [NO_AXIOS_PATH],
@@ -247,7 +263,7 @@ export default tseslint.config(
       'no-restricted-imports': boundaryRule(
         [
           {
-            regex: '^@rss/(?!api(?:$|/endpoints/identity$|/session$|/testing$))',
+            regex: '^@rss/(?!api(?:$|/endpoints/identity$|/testing$))',
             message: '@rss/identity 测试只允许依赖 API seam 与测试工厂。',
           },
         ],
