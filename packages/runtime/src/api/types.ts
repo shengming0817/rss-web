@@ -27,12 +27,6 @@ export type RuntimeListenerKind = (typeof RUNTIME_LISTENER_KINDS)[number]
 export type RuntimeAuthScheme = (typeof RUNTIME_AUTH_SCHEMES)[number]
 export type ProviderPostureState = (typeof PROVIDER_POSTURE_STATES)[number]
 
-export interface RuntimeEndpoint {
-  readonly scheme: 'http' | 'https'
-  readonly host: string
-  readonly port: number
-}
-
 export interface RuntimeBuildMetadata {
   readonly sourceRevision: string
   readonly imageDigest: string
@@ -41,7 +35,6 @@ export interface RuntimeBuildMetadata {
 export interface RuntimeListener {
   readonly id: string
   readonly kind: RuntimeListenerKind
-  readonly endpoint: RuntimeEndpoint
   readonly authScheme: RuntimeAuthScheme
 }
 
@@ -72,12 +65,10 @@ export interface RuntimePlacement {
   readonly domain: RuntimeDomain
   readonly workload: string
   readonly mode: (typeof PLACEMENT_MODES)[number]
-  readonly endpoint?: RuntimeEndpoint
-  readonly spiffeIdentity?: string
   readonly readiness: (typeof PLACEMENT_READINESS)[number]
 }
 
-export interface RuntimeInventoryData {
+export interface RuntimeInventoryFacts {
   readonly schemaVersion: 1
   readonly assemblyFingerprint: string
   readonly buildMetadata?: RuntimeBuildMetadata
@@ -90,7 +81,7 @@ export interface RuntimeInventoryData {
 }
 
 export interface RuntimeInventoryResponse {
-  readonly data: RuntimeInventoryData
+  readonly data: RuntimeInventoryFacts
 }
 
 export interface RuntimeCallOptions {

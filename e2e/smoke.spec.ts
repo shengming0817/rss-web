@@ -22,11 +22,35 @@ const runtimeResponse = {
     schemaVersion: 1,
     assemblyFingerprint: digest,
     runtimePlanFingerprint: digest,
-    activatedWorkflows: [],
+    activatedWorkflows: [
+      {
+        mode: 'projection',
+        id: 'audit-log',
+        definitionVersion: 'v1',
+        definitionSchemaDigest: digest,
+        activation: 'shadow',
+      },
+    ],
     domains: ['identity', 'audit'],
-    listeners: [],
+    listeners: [
+      {
+        id: 'admin-main',
+        kind: 'admin',
+        endpoint: { scheme: 'http', host: 'hidden.internal', port: 8082 },
+        authScheme: 'rssAccessToken',
+      },
+    ],
     providerPosture: [{ id: 'ledger', state: 'unobserved' }],
-    placements: [],
+    placements: [
+      {
+        domain: 'audit',
+        workload: 'audit',
+        mode: 'remote',
+        endpoint: { scheme: 'https', host: 'hidden-placement.internal', port: 443 },
+        spiffeIdentity: 'spiffe://hidden/runtime',
+        readiness: 'ready',
+      },
+    ],
   },
 }
 const auditResponse = {
@@ -56,7 +80,20 @@ async function installAdminMocks(
     expect(route.request().headers().authorization?.startsWith('Bearer ')).toBe(true)
     expect(route.request().headers()['x-tenant-id']).toBeUndefined()
     if (runtimeStatus === 200) await route.fulfill({ status: 200, json: runtimeResponse })
-    else await route.fulfill({ status: runtimeStatus, body: '<html>gateway unavailable</html>' })
+    else if (runtimeStatus === 403) {
+      await route.fulfill({
+        status: 403,
+        json: {
+          error: {
+            code: 'ERR_CORE_FORBIDDEN',
+            message: 'runtime secret denial must not render',
+            retryable: false,
+            details: [],
+            requestId: 'runtime-denied',
+          },
+        },
+      })
+    } else await route.fulfill({ status: runtimeStatus, body: '<html>gateway unavailable</html>' })
   })
   await page.route('**/api/v1/audit/entries**', async (route) => {
     expect(route.request().headers().authorization?.startsWith('Bearer ')).toBe(true)
@@ -183,6 +220,21 @@ test.describe('RSS Web Identity UX', () => {
     await expect(page.getByRole('navigation', { name: '主导航' })).toBeVisible()
   })
 
+  test('keeps the shell and sanitizes a final Runtime forbidden result', async ({ page }) => {
+    await installIdentityMocks(page, 200, 200, 403)
+    await signIn(page)
+    await page
+      .getByRole('navigation', { name: '主导航' })
+      .getByRole('link', { name: /运行时/ })
+      .click()
+    await expect(page).toHaveURL(/\/runtime$/)
+    await expect(page.getByText('ERR_CORE_FORBIDDEN')).toBeVisible()
+    await expect(page.getByText('runtime-denied')).toBeVisible()
+    await expect(page.getByText('runtime secret denial must not render')).toHaveCount(0)
+    await expect(page.getByRole('navigation', { name: '主导航' })).toBeVisible()
+    await expect(page.locator('main')).toHaveCount(1)
+  })
+
   test('profile denial leaves no half-valid shell or raw server message', async ({ page }) => {
     await installIdentityMocks(page, 403)
     await page.goto('/')
@@ -206,8 +258,16 @@ test.describe('RSS Web Identity UX', () => {
     await page.getByLabel('密码').fill('test-password')
     await page.getByRole('button', { name: '登录', exact: true }).click()
     const navigation = page.getByRole('navigation', { name: '主导航' })
-    await expect(navigation.getByRole('link')).toHaveCount(1)
+    await expect(navigation.getByRole('link')).toHaveCount(2)
     await expect(navigation.getByRole('link', { name: /首页/ })).toContainText('RSS')
+    await navigation.getByRole('link', { name: /运行时/ }).click()
+    await expect(page).toHaveURL(/\/runtime$/)
+    await expect(page.getByRole('heading', { name: '运行时详情' })).toBeVisible()
+    await expect(page.getByText('admin-main')).toBeVisible()
+    await expect(page.getByText('audit-log')).toBeVisible()
+    await expect(page.getByText('hidden.internal')).toHaveCount(0)
+    await expect(page.getByText('hidden-placement.internal')).toHaveCount(0)
+    await expect(page.getByText('spiffe://hidden/runtime')).toHaveCount(0)
 
     await page.evaluate(() => {
       window.history.pushState({}, '', '/removed-capability')

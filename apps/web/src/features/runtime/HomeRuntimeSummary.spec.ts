@@ -23,6 +23,7 @@ function mountSummary(inventory: () => Promise<typeof response>) {
   return mount(HomeRuntimeSummary, {
     global: {
       plugins: [createWebI18n(), runtimeApiPlugin({ inventory })],
+      stubs: { RouterLink: true },
     },
   })
 }

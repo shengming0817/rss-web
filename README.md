@@ -31,7 +31,8 @@ final UX outcome. The separate Preview entry is test/demo input and remains forb
 Web source. No browser ABAC evaluation, request authority, or legacy access endpoint exists.
 
 The authenticated shell derives Sidebar and command-palette navigation from implemented route
-metadata; currently that closed production set contains only Home. Removed and future capabilities
+metadata; currently that closed production set contains Home and the implemented Runtime details
+page. Removed and future capabilities
 do not receive placeholder routes or menu entries. `@rss/shared` owns a discriminated `SourceMeta`
 model with sealed, frozen display constants; direct object-literal construction is rejected. Reusable
 badges make RSS, mock, manual, external, and unavailable sources visible without using source metadata
@@ -41,10 +42,12 @@ paths use the authenticated catch-all; anonymous requests still reach Login firs
 
 `@rss/runtime` and `@rss/audit` provide strict, framework-neutral clients for the selected Admin
 listener reads. The authenticated Home composes both over the single session transport and degrades
-each panel independently. Runtime shows a small facts-only summary; Audit shows the first
+each panel independently. Runtime shows a small facts-only summary and links to a full reviewed-facts
+page; Audit shows the first
 server-ordered page and explicitly does not claim it is a latest/tail view. Safe idempotent reads
 offer only an explicit user retry after network, timeout, or gateway failure. No tenant selector,
-cross-tenant read, listener discovery, hash verification, schema copy, or fallback source exists.
+cross-tenant read, listener discovery, deployment-coordinate exposure, hash verification, schema
+copy, or fallback source exists.
 
 The production Nginx image is a minimal same-origin Edge with a closed
 Primary/Admin route table; Audit exposes only the ambient-tenant entries path. It removes browser tenant headers and injects the

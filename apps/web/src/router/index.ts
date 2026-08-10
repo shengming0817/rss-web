@@ -4,6 +4,7 @@ import type { IdentitySession } from '@rss/identity'
 import { RSS_SOURCE } from '@rss/shared'
 import type { SourceMeta } from '@rss/shared'
 import type { AuthorizationExperience } from '../features/authorization/authorization-context'
+import { RUNTIME_INVENTORY_INTENT } from '../features/runtime/runtime-intent'
 import type { NavigationMessageKey } from './navigation'
 import { registerAuthorizationRouting, registerRouterA11y, registerSessionRouting } from './guards'
 
@@ -40,6 +41,17 @@ const routes: RouteRecordRaw[] = [
           sessionAccess: 'authenticated',
           focusTarget: 'shell-content',
           navigation: { labelKey: 'navigation.home', order: 0, source: RSS_SOURCE },
+        },
+      },
+      {
+        path: 'runtime',
+        name: 'runtime',
+        component: () => import('../features/runtime/RuntimeDetailsView.vue'),
+        meta: {
+          sessionAccess: 'authenticated',
+          focusTarget: 'shell-content',
+          authorizationIntent: RUNTIME_INVENTORY_INTENT,
+          navigation: { labelKey: 'navigation.runtime', order: 10, source: RSS_SOURCE },
         },
       },
       {

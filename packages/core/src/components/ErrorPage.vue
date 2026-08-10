@@ -9,8 +9,9 @@ const props = withDefaults(
     readonly headingLevel?: 1 | 2 | 3
     readonly headingId?: string
     readonly showRecovery?: boolean
+    readonly recoveryBusy?: boolean
   }>(),
-  { headingLevel: 1, showRecovery: true },
+  { headingLevel: 1, showRecovery: true, recoveryBusy: false },
 )
 defineEmits<{ recover: [] }>()
 const { t } = useI18n()
@@ -73,6 +74,8 @@ async function copyRequestId(): Promise<void> {
       type="button"
       class="v1-btn"
       data-action="recover"
+      :disabled="recoveryBusy"
+      :aria-busy="recoveryBusy"
       @click="$emit('recover')"
     >
       {{ t(`errorPage.recovery.${error.recovery}`) }}

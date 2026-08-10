@@ -11,7 +11,6 @@ import {
   type RuntimeAuthScheme,
   type RuntimeBuildMetadata,
   type RuntimeDomain,
-  type RuntimeEndpoint,
   type RuntimeInventoryResponse,
   type RuntimeListener,
   type RuntimeListenerKind,
@@ -61,13 +60,13 @@ function array(value: unknown): unknown[] {
   return value
 }
 
-function unique<T>(values: readonly T[]): readonly T[] {
-  const keys = values.map((value) => JSON.stringify(value))
+function uniqueBy<T>(values: readonly T[], keyOf: (value: T) => string): readonly T[] {
+  const keys = values.map(keyOf)
   if (new Set(keys).size !== keys.length) invalid()
   return values
 }
 
-function endpoint(value: unknown): RuntimeEndpoint {
+function endpoint(value: unknown): void {
   const item = record(value, ['scheme', 'host', 'port'])
   const scheme = enumValue(item.scheme, new Set(['http', 'https'] as const))
   const host = text(item.host)
@@ -80,7 +79,7 @@ function endpoint(value: unknown): RuntimeEndpoint {
     port > 65535
   )
     invalid()
-  return { scheme, host, port }
+  void scheme
 }
 
 function buildMetadata(value: unknown): RuntimeBuildMetadata {
@@ -117,10 +116,10 @@ function workflow(value: unknown): ActivatedWorkflow {
 
 function listener(value: unknown): RuntimeListener {
   const item = record(value, ['id', 'kind', 'endpoint', 'authScheme'])
+  endpoint(item.endpoint)
   return {
     id: text(item.id),
     kind: enumValue(item.kind, LISTENER_KINDS),
-    endpoint: endpoint(item.endpoint),
     authScheme: enumValue(item.authScheme, AUTH_SCHEMES),
   }
 }
@@ -138,12 +137,12 @@ function placement(value: unknown): RuntimePlacement {
   )
   const mode = enumValue(item.mode, new Set(PLACEMENT_MODES))
   const readiness = enumValue(item.readiness, new Set(PLACEMENT_READINESS))
+  if (item.endpoint !== undefined) endpoint(item.endpoint)
+  if (item.spiffeIdentity !== undefined) text(item.spiffeIdentity)
   return {
     domain: enumValue(item.domain, DOMAINS),
     workload: text(item.workload),
     mode,
-    ...(item.endpoint === undefined ? {} : { endpoint: endpoint(item.endpoint) }),
-    ...(item.spiffeIdentity === undefined ? {} : { spiffeIdentity: text(item.spiffeIdentity) }),
     readiness,
   }
 }
@@ -165,7 +164,10 @@ export function decodeRuntimeInventoryResponse(value: unknown): RuntimeInventory
     ['buildMetadata'],
   )
   if (data.schemaVersion !== 1) invalid()
-  const domains = unique(array(data.domains).map((item) => enumValue(item, DOMAINS)))
+  const domains = uniqueBy(
+    array(data.domains).map((item) => enumValue(item, DOMAINS)),
+    (domain) => domain,
+  )
   if (domains.length === 0) invalid()
   return {
     data: {
@@ -175,11 +177,17 @@ export function decodeRuntimeInventoryResponse(value: unknown): RuntimeInventory
         ? {}
         : { buildMetadata: buildMetadata(data.buildMetadata) }),
       runtimePlanFingerprint: text(data.runtimePlanFingerprint, FINGERPRINT),
-      activatedWorkflows: unique(array(data.activatedWorkflows).map(workflow)),
+      activatedWorkflows: uniqueBy(
+        array(data.activatedWorkflows).map(workflow),
+        (item) => `${item.mode}:${item.id}`,
+      ),
       domains,
-      listeners: unique(array(data.listeners).map(listener)),
-      providerPosture: unique(array(data.providerPosture).map(posture)),
-      placements: unique(array(data.placements).map(placement)),
+      listeners: uniqueBy(array(data.listeners).map(listener), (item) => item.id),
+      providerPosture: uniqueBy(array(data.providerPosture).map(posture), (item) => item.id),
+      placements: uniqueBy(
+        array(data.placements).map(placement),
+        (item) => `${item.domain}:${item.workload}`,
+      ),
     },
   }
 }

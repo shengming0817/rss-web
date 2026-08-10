@@ -78,5 +78,11 @@ remained byte-identical to the original evidence. Runtime's request remained
 `2f50c56345873186e668b4f0795203c92d259a4da864934999291cf63324c170`. The decoder intentionally
 adopts the current `providerPosture.state=unobserved` value without an old-enum alias.
 
+WEB-PR-014 extends that same pinned `runtime.inventory` consumption into a dedicated facts page. It
+does not change the selected contract or introduce another baseline: the strict decoder consumes the
+complete current wire schema, while its public projection discards listener/placement endpoints and
+SPIFFE identities after validation. The page treats build metadata as a launch declaration rather
+than browser-verified artifact provenance and renders `unobserved` as a known current state.
+
 `audit.list-tenant-entries` remains selected baseline evidence but is not enabled by WEB-PR-012: it
 is a non-idempotent, audited SuperAdmin operation reserved for its explicit follow-up issue.

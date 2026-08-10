@@ -42,7 +42,9 @@ requestId; backend messages/details and transport behavior stay outside reusable
 
 `@rss/runtime` and `@rss/audit` are framework-neutral Admin-listener adapters over the one protected
 session transport. Vue composition belongs in `apps/web`. Runtime inventory is facts only; do not use
-it for listener discovery or deployment authority. Ambient-tenant Audit is server ordered and its
+it for listener discovery or deployment authority. Validate but discard listener/placement endpoints
+and SPIFFE identities at the Runtime adapter boundary; the public DTO and UI must not expose or copy
+them. Ambient-tenant Audit is server ordered and its
 entry hash is opaque. Do not call the non-idempotent cross-tenant Audit endpoint, send tenant headers,
 claim the first page is latest, or fall back from a real failure to another source. Domain adapters
 must attach their reviewed error-coordinate policy; undeclared statuses or drifted WireError fields
