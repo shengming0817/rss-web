@@ -3,6 +3,15 @@ export type SuccessStatus = 200 | 201 | 204
 export type QueryValue = string | number | boolean | undefined
 export type Decoder<T> = (value: unknown) => T
 
+export interface EndpointErrorRule {
+  readonly code: `ERR_${string}`
+  readonly message: string
+  readonly retryable: boolean
+  readonly details: 'empty' | 'public'
+}
+
+export type EndpointErrorPolicy = Readonly<Record<number, EndpointErrorRule>>
+
 interface RequestBase {
   method: HttpMethod
   path: string
@@ -13,6 +22,7 @@ interface RequestBase {
   signal?: AbortSignal
   timeoutMs?: number
   session?: 'required'
+  errorPolicy?: EndpointErrorPolicy
 }
 
 export interface RequestOptions<T> extends RequestBase {
@@ -31,9 +41,9 @@ export interface HttpTransport {
 }
 
 export interface CursorPage<T> {
-  data: T[]
-  hasMore: boolean
-  nextCursor?: string
+  readonly data: readonly T[]
+  readonly hasMore: boolean
+  readonly nextCursor?: string
 }
 
 export type SafeDetailValue = string | number | boolean

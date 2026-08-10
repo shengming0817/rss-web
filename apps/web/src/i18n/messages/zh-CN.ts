@@ -1,5 +1,6 @@
 const zhCN = {
   navigation: { home: '首页' },
+  home: { subtitle: '已验证身份，并独立加载 Runtime 与 Audit 的服务端事实。' },
   runtimeSummary: {
     title: '运行时摘要',
     loading: '正在读取运行时事实…',
@@ -13,6 +14,10 @@ const zhCN = {
     firstPageNotice: '按服务端顺序显示首批条目；这不是“最新”视图。',
     loading: '正在读取审计条目…',
     hasMore: '服务端还有后续条目。',
+    outcome: '结果',
+    recordedAt: '记录时间',
+    fingerprint: '不透明指纹',
+    notVerified: '浏览器未验证',
   },
   identity: {
     login: {

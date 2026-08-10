@@ -5,7 +5,7 @@ import {
   timeoutErrorForTest,
   decodeWireErrorForTest,
 } from '@rss/api/testing'
-import { toSafeErrorPresentation } from './rss-error'
+import { toSafeErrorPresentation, toSafeReadErrorPresentation } from './rss-error'
 
 function wire(status: number, code: string) {
   return decodeWireErrorForTest(status, {
@@ -62,6 +62,25 @@ describe('safe RSS error presentation', () => {
     expect(toSafeErrorPresentation(new Error('raw secret'))).toEqual({
       kind: 'unknown',
       code: 'WEB_UNKNOWN',
+      retryable: false,
+      recovery: 'home',
+    })
+  })
+
+  it.each([
+    networkErrorForTest(),
+    timeoutErrorForTest(),
+    protocolErrorForTest(502),
+    protocolErrorForTest(504),
+  ])('offers only user-triggered retry for transient idempotent read failures', (error) => {
+    expect(toSafeReadErrorPresentation(error)).toMatchObject({
+      retryable: true,
+      recovery: 'retry',
+    })
+  })
+
+  it('does not broaden manual retry to unrelated protocol failures', () => {
+    expect(toSafeReadErrorPresentation(protocolErrorForTest(503))).toMatchObject({
       retryable: false,
       recovery: 'home',
     })

@@ -7,6 +7,7 @@ type Widen<T> = T extends string
 
 const enUS = {
   navigation: { home: 'Home' },
+  home: { subtitle: 'Verified identity with independently loaded Runtime and Audit facts.' },
   runtimeSummary: {
     title: 'Runtime summary',
     loading: 'Loading runtime facts…',
@@ -20,6 +21,10 @@ const enUS = {
     firstPageNotice: 'Shows the first server-ordered entries; this is not a latest view.',
     loading: 'Loading audit entries…',
     hasMore: 'More entries are available from the server.',
+    outcome: 'Outcome',
+    recordedAt: 'Recorded at',
+    fingerprint: 'Opaque fingerprint',
+    notVerified: 'not verified in the browser',
   },
   identity: {
     login: {

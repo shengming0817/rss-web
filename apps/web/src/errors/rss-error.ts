@@ -45,3 +45,17 @@ export function toSafeErrorPresentation(error: unknown): SafeErrorPresentation {
     error.requestId === undefined ? base : { ...base, requestId: error.requestId },
   )
 }
+
+/** Recovery policy for user-triggered, idempotent reads. Never authorizes automatic retry. */
+export function toSafeReadErrorPresentation(error: unknown): SafeErrorPresentation {
+  const presentation = toSafeErrorPresentation(error)
+  if (!isRssApiError(error)) return presentation
+  const safeToRetry =
+    presentation.recovery === 'retry' ||
+    error.cause === 'network' ||
+    error.cause === 'timeout' ||
+    (error.cause === 'protocol' && (error.status === 502 || error.status === 504))
+  return safeToRetry
+    ? Object.freeze({ ...presentation, retryable: true, recovery: 'retry' as const })
+    : presentation
+}

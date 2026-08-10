@@ -1,3 +1,5 @@
+import type { CursorPage } from '@rss/api'
+
 export interface AuditEntry {
   readonly seq: number
   readonly tenantId: string
@@ -11,11 +13,7 @@ export interface AuditEntry {
   readonly entryHash: string
 }
 
-export interface AuditEntriesPage {
-  readonly data: readonly AuditEntry[]
-  readonly hasMore: boolean
-  readonly nextCursor?: string
-}
+export type AuditEntriesPage = CursorPage<AuditEntry>
 
 export interface ListAuditEntriesOptions {
   readonly limit?: number

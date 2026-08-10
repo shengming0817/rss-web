@@ -1,36 +1,31 @@
-import type {
-  ActivatedWorkflow,
-  ProviderPostureState,
-  RuntimeAuthScheme,
-  RuntimeBuildMetadata,
-  RuntimeDomain,
-  RuntimeEndpoint,
-  RuntimeInventoryResponse,
-  RuntimeListener,
-  RuntimeListenerKind,
-  RuntimePlacement,
-  RuntimeProviderPosture,
+import {
+  PLACEMENT_MODES,
+  PLACEMENT_READINESS,
+  PROVIDER_POSTURE_STATES,
+  RUNTIME_AUTH_SCHEMES,
+  RUNTIME_DOMAINS,
+  RUNTIME_LISTENER_KINDS,
+  WORKFLOW_ACTIVATIONS,
+  type ActivatedWorkflow,
+  type ProviderPostureState,
+  type RuntimeAuthScheme,
+  type RuntimeBuildMetadata,
+  type RuntimeDomain,
+  type RuntimeEndpoint,
+  type RuntimeInventoryResponse,
+  type RuntimeListener,
+  type RuntimeListenerKind,
+  type RuntimePlacement,
+  type RuntimeProviderPosture,
 } from './types'
 
 const FINGERPRINT = /^sha256:[0-9a-f]{64}$/
 const REVISION = /^([0-9a-f]{40}|[0-9a-f]{64})$/
 const VERSION = /^v[0-9]+$/
-const DOMAINS = new Set<RuntimeDomain>([
-  'identity',
-  'settings',
-  'audit',
-  'contractreg',
-  'syshealth',
-])
-const LISTENER_KINDS = new Set<RuntimeListenerKind>(['primary', 'internal', 'health', 'admin'])
-const AUTH_SCHEMES = new Set<RuntimeAuthScheme>([
-  'noAuth',
-  'rssAccessToken',
-  'federatedAccessToken',
-  'mtls',
-  'serviceToken',
-])
-const POSTURES = new Set<ProviderPostureState>(['unobserved', 'ready', 'degraded', 'unavailable'])
+const DOMAINS = new Set<RuntimeDomain>(RUNTIME_DOMAINS)
+const LISTENER_KINDS = new Set<RuntimeListenerKind>(RUNTIME_LISTENER_KINDS)
+const AUTH_SCHEMES = new Set<RuntimeAuthScheme>(RUNTIME_AUTH_SCHEMES)
+const POSTURES = new Set<ProviderPostureState>(PROVIDER_POSTURE_STATES)
 
 function invalid(): never {
   throw new Error('invalid runtime inventory response')
@@ -110,14 +105,13 @@ function workflow(value: unknown): ActivatedWorkflow {
     definitionSchemaDigest: text(item.definitionSchemaDigest, FINGERPRINT),
   }
   if (item.mode === 'projection') {
-    const activation = enumValue(
-      item.activation,
-      new Set(['capture-only', 'shadow', 'active'] as const),
-    )
+    const activation = enumValue(item.activation, new Set(WORKFLOW_ACTIVATIONS.projection))
     return { mode: 'projection', ...common, activation }
   }
-  if (item.mode === 'saga' && item.activation === 'active')
-    return { mode: 'saga', ...common, activation: 'active' }
+  if (item.mode === 'saga') {
+    const activation = enumValue(item.activation, new Set(WORKFLOW_ACTIVATIONS.saga))
+    return { mode: 'saga', ...common, activation }
+  }
   return invalid()
 }
 
@@ -142,11 +136,8 @@ function placement(value: unknown): RuntimePlacement {
     ['domain', 'workload', 'mode', 'readiness'],
     ['endpoint', 'spiffeIdentity'],
   )
-  const mode = enumValue(item.mode, new Set(['local', 'remote'] as const))
-  const readiness = enumValue(
-    item.readiness,
-    new Set(['ready', 'mtls-source-unavailable'] as const),
-  )
+  const mode = enumValue(item.mode, new Set(PLACEMENT_MODES))
+  const readiness = enumValue(item.readiness, new Set(PLACEMENT_READINESS))
   return {
     domain: enumValue(item.domain, DOMAINS),
     workload: text(item.workload),

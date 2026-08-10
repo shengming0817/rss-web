@@ -17,6 +17,17 @@ describe('ErrorPage', () => {
     expect(wrapper.get('section').attributes('aria-labelledby')).toBe('runtime-error')
     expect(wrapper.find('h1').exists()).toBe(false)
   })
+  it('supports a nested status heading below a panel heading', () => {
+    const wrapper = mount(ErrorPage, {
+      props: {
+        error: { kind: 'unknown', code: 'WEB_UNKNOWN', retryable: false, recovery: 'home' },
+        headingLevel: 3,
+      },
+      global: { plugins: [createRssI18n()] },
+    })
+    expect(wrapper.get('h3')).toBeTruthy()
+    expect(wrapper.find('h2').exists()).toBe(false)
+  })
   it('shows only reviewed coordinates and copies the sanitized request id', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })

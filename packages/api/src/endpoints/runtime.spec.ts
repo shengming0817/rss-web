@@ -7,7 +7,22 @@ describe('Runtime endpoint coordinates', () => {
       method: 'GET',
       path: '/api/v1/runtime/inventory',
       successStatus: 200,
+      errorPolicy: {
+        500: {
+          code: 'ERR_CORE_INTERNAL',
+          message: 'internal error',
+          retryable: false,
+          details: 'empty',
+        },
+        503: {
+          code: 'ERR_CORE_PROVIDER_UNAVAILABLE',
+          message: 'provider unavailable',
+          retryable: true,
+          details: 'empty',
+        },
+      },
     })
     expect(Object.isFrozen(runtimeEndpoints.inventory)).toBe(true)
+    expect(Object.isFrozen(runtimeEndpoints.inventory.errorPolicy)).toBe(true)
   })
 })

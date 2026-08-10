@@ -101,7 +101,7 @@ describe('RSS Web edge configuration', () => {
     for (const route of [
       '/api/v1/identity/',
       '/api/v1/settings/',
-      '/api/v1/audit/',
+      '/api/v1/audit/entries',
       '/api/v1/runtime/inventory',
     ]) {
       expect(template).toContain(route)
@@ -114,6 +114,7 @@ describe('RSS Web edge configuration', () => {
     expect(template).toContain('location ^~ /health/')
     expect(template).toContain('location = /metrics')
     expect(template).toContain('location ^~ /api/ { return 404; }')
+    expect(template).not.toContain('location ^~ /api/v1/audit/')
     for (const exactPath of ['/api', '/internal', '/health']) {
       expect(template).toContain(`location = ${exactPath} { return 404; }`)
     }
@@ -157,10 +158,10 @@ describe('RSS Web edge configuration', () => {
   it('pins the reviewed RSS runtime assembly evidence', () => {
     const adr = read('docs/architecture/20260809-006-same-origin-edge-tenant-bootstrap.md')
     for (const evidence of [
-      '475bfa88e17769899916b69f357261160000b01b',
-      '86013539f14d26dffc9e83a35e6cec95b2d764f55001cdd06b0f133fa9743463',
-      '6f2d970a4be08ba9a15febc19d0134fda3495ad7b93d930141f2235be14227cb',
-      'd25961002433c97ed8eecdbd309cf22e6c5c6643b16ef580c6af1c1522df39a9',
+      'b7f3e1d0bcc5b2e59639a81b4f37937914b53f00',
+      '4fbe9262515845ec94cdd42ead7d8e78333361520b46ab538e50a6e52580b092',
+      'b59231e06dde78efff866df4efa636f3a261d2bfd35a1be78dfa1bc99d33c425',
+      '6088747ce9f2219164d26fa6dfcea0f758b5986ccad4b2550da05bf62b36ea45',
     ]) {
       expect(adr).toContain(evidence)
     }

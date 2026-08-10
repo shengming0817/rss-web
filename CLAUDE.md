@@ -44,4 +44,6 @@ requestId; backend messages/details and transport behavior stay outside reusable
 session transport. Vue composition belongs in `apps/web`. Runtime inventory is facts only; do not use
 it for listener discovery or deployment authority. Ambient-tenant Audit is server ordered and its
 entry hash is opaque. Do not call the non-idempotent cross-tenant Audit endpoint, send tenant headers,
-claim the first page is latest, or fall back from a real failure to another source.
+claim the first page is latest, or fall back from a real failure to another source. Domain adapters
+must attach their reviewed error-coordinate policy; undeclared statuses or drifted WireError fields
+fail closed as protocol errors. Idempotent panel retry is user-triggered only.

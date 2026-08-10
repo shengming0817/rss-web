@@ -4,16 +4,16 @@ import { useI18n } from 'vue-i18n'
 import type { AuditEntriesPage } from '@rss/audit'
 import { ContentState, ErrorPage, SourceBadge } from '@rss/core'
 import { RSS_SOURCE, UNAVAILABLE_SOURCE } from '@rss/shared'
-import { toSafeErrorPresentation } from '../../errors/rss-error'
-import { useAdminClients } from '../admin/admin-context'
+import { toSafeReadErrorPresentation } from '../../errors/rss-error'
+import { useAuditApi } from './audit-context'
 
 type State =
   | { readonly status: 'loading' }
   | { readonly status: 'ready'; readonly page: AuditEntriesPage }
-  | { readonly status: 'error'; readonly error: ReturnType<typeof toSafeErrorPresentation> }
+  | { readonly status: 'error'; readonly error: ReturnType<typeof toSafeReadErrorPresentation> }
 
-const { t } = useI18n()
-const { audit } = useAdminClients()
+const { locale, t } = useI18n()
+const audit = useAuditApi()
 const state = ref<State>({ status: 'loading' })
 let generation = 0
 let controller: AbortController | undefined
@@ -28,7 +28,7 @@ async function load(): Promise<void> {
     if (current === generation) state.value = { status: 'ready', page }
   } catch (error) {
     if (current === generation && !controller.signal.aborted)
-      state.value = { status: 'error', error: toSafeErrorPresentation(error) }
+      state.value = { status: 'error', error: toSafeReadErrorPresentation(error) }
   }
 }
 
@@ -37,6 +37,19 @@ onBeforeUnmount(() => {
   generation += 1
   controller?.abort()
 })
+
+function recordedAt(seconds: number): { readonly datetime?: string; readonly text: string } {
+  const date = new Date(seconds * 1_000)
+  if (Number.isNaN(date.getTime())) return { text: `${seconds} UTC` }
+  return {
+    datetime: date.toISOString(),
+    text: new Intl.DateTimeFormat(locale.value, {
+      dateStyle: 'medium',
+      timeStyle: 'medium',
+      timeZone: 'UTC',
+    }).format(date),
+  }
+}
 </script>
 
 <template>
@@ -58,8 +71,27 @@ onBeforeUnmount(() => {
       <ol class="audit-list">
         <li v-for="entry in state.page.data" :key="entry.seq">
           <strong>#{{ entry.seq }} · {{ entry.action }}</strong>
-          <span>{{ entry.outcome }} · {{ entry.recordedAt }}</span>
-          <code>{{ entry.entryHash }}</code>
+          <dl class="audit-facts">
+            <div>
+              <dt>{{ t('auditEntries.outcome') }}</dt>
+              <dd>{{ entry.outcome }}</dd>
+            </div>
+            <div>
+              <dt>{{ t('auditEntries.recordedAt') }}</dt>
+              <dd>
+                <time :datetime="recordedAt(entry.recordedAt).datetime">
+                  {{ recordedAt(entry.recordedAt).text }} UTC
+                </time>
+              </dd>
+            </div>
+            <div>
+              <dt>{{ t('auditEntries.fingerprint') }}</dt>
+              <dd>
+                <code>{{ entry.entryHash }}</code>
+                <span> — {{ t('auditEntries.notVerified') }}</span>
+              </dd>
+            </div>
+          </dl>
         </li>
       </ol>
       <p v-if="state.page.hasMore">{{ t('auditEntries.hasMore') }}</p>
@@ -67,7 +99,7 @@ onBeforeUnmount(() => {
     <ErrorPage
       v-else
       :error="state.error"
-      :heading-level="2"
+      :heading-level="3"
       :show-recovery="state.error.recovery === 'retry'"
       @recover="load"
     />

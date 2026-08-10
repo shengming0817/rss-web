@@ -1,18 +1,23 @@
-import type { HttpMethod, SuccessStatus } from '../types'
-
-interface EndpointCoordinate {
-  readonly method: HttpMethod
-  readonly path: `/api/${string}`
-  readonly successStatus: SuccessStatus
-}
-
-const endpoint = <T extends EndpointCoordinate>(coordinate: T): Readonly<T> =>
-  Object.freeze(coordinate)
+import { defineEndpoint } from './coordinate'
 
 export const runtimeEndpoints = Object.freeze({
-  inventory: endpoint({
+  inventory: defineEndpoint({
     method: 'GET',
     path: '/api/v1/runtime/inventory',
     successStatus: 200,
+    errorPolicy: Object.freeze({
+      500: Object.freeze({
+        code: 'ERR_CORE_INTERNAL',
+        message: 'internal error',
+        retryable: false,
+        details: 'empty',
+      }),
+      503: Object.freeze({
+        code: 'ERR_CORE_PROVIDER_UNAVAILABLE',
+        message: 'provider unavailable',
+        retryable: true,
+        details: 'empty',
+      }),
+    }),
   }),
 })

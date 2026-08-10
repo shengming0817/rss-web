@@ -5,7 +5,7 @@ import { authorizationFrom } from './internal/authorization'
 import {
   abortedError,
   clientError,
-  decodeWireError,
+  decodeEndpointError,
   isRssApiError,
   networkError,
   protocolError,
@@ -137,7 +137,8 @@ async function execute<T>(
   if (options.signal?.aborted === true) throw abortedError()
   try {
     const response = await instance.request(requestConfig(options, defaultTimeoutMs))
-    if (response.status >= 400) throw decodeWireError(response.status, response.data)
+    if (response.status >= 400)
+      throw decodeEndpointError(response.status, response.data, options.errorPolicy)
     if (response.status !== options.successStatus) throw protocolError(response.status)
     if (options.successStatus === 204) return undefined
     try {

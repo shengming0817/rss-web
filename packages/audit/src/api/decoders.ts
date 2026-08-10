@@ -1,4 +1,5 @@
 import type { AuditEntriesPage, AuditEntry } from './types'
+import { decodeCursorPage } from '@rss/api'
 
 function invalid(): never {
   throw new Error('invalid audit entries response')
@@ -23,7 +24,7 @@ function integer(value: unknown): number {
   return value
 }
 
-function entry(value: unknown): AuditEntry {
+function decodeAuditEntry(value: unknown): AuditEntry {
   const item = record(value, [
     'seq',
     'tenantId',
@@ -51,13 +52,9 @@ function entry(value: unknown): AuditEntry {
 }
 
 export function decodeAuditEntriesPage(value: unknown): AuditEntriesPage {
-  const page = record(value, ['data', 'hasMore'], ['nextCursor'])
-  if (!Array.isArray(page.data) || typeof page.hasMore !== 'boolean') invalid()
-  if (page.hasMore && typeof page.nextCursor !== 'string') invalid()
-  if (!page.hasMore && page.nextCursor !== undefined) invalid()
-  return {
-    data: page.data.map(entry),
-    hasMore: page.hasMore,
-    ...(page.nextCursor === undefined ? {} : { nextCursor: text(page.nextCursor) }),
+  try {
+    return decodeCursorPage(decodeAuditEntry)(value)
+  } catch {
+    return invalid()
   }
 }

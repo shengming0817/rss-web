@@ -47,9 +47,7 @@ describe('web composition root', () => {
       expect.anything(),
     )
     expect(runtime.authorization).toBe(createAuthorizationExperience.mock.results[0]?.value)
-    expect(runtime.admin).toEqual({
-      audit: createAuditApi.mock.results[0]?.value,
-      runtime: createRuntimeApi.mock.results[0]?.value,
-    })
+    expect(runtime.audit).toBe(createAuditApi.mock.results[0]?.value)
+    expect(runtime.runtime).toBe(createRuntimeApi.mock.results[0]?.value)
   })
 })

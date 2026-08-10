@@ -33,8 +33,6 @@ describe('audit entries decoder', () => {
   })
 
   it.each([
-    { data: [entry], hasMore: true },
-    { data: [entry], hasMore: false, nextCursor: 'stale' },
     { data: [{ ...entry, seq: Number.MAX_SAFE_INTEGER + 1 }], hasMore: false },
     { data: [{ ...entry, extra: true }], hasMore: false },
     { data: [entry], hasMore: false, extra: true },

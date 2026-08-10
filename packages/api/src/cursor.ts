@@ -8,7 +8,11 @@ export function decodeCursorPage<T>(decodeItem: Decoder<T>): Decoder<CursorPage<
   return (value) => {
     if (!isRecord(value)) throw new Error('invalid cursor page')
     const keys = Object.keys(value)
-    if (keys.some((key) => !['data', 'hasMore', 'nextCursor'].includes(key))) {
+    if (
+      !Object.hasOwn(value, 'data') ||
+      !Object.hasOwn(value, 'hasMore') ||
+      keys.some((key) => !['data', 'hasMore', 'nextCursor'].includes(key))
+    ) {
       throw new Error('invalid cursor page')
     }
     if (!Array.isArray(value.data) || typeof value.hasMore !== 'boolean') {
@@ -21,7 +25,6 @@ export function decodeCursorPage<T>(decodeItem: Decoder<T>): Decoder<CursorPage<
       data: value.data.map((item) => decodeItem(item)),
       hasMore: value.hasMore,
     }
-    if (value.nextCursor !== undefined) page.nextCursor = value.nextCursor
-    return page
+    return value.nextCursor === undefined ? page : { ...page, nextCursor: value.nextCursor }
   }
 }

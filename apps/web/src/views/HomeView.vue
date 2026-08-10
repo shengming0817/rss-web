@@ -3,8 +3,6 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import VerifiedProfilePanel from '../features/identity/VerifiedProfilePanel.vue'
 import { useIdentitySession } from '../features/identity/session-context'
-import { SourceBadge } from '@rss/core'
-import { RSS_SOURCE } from '@rss/shared'
 import HomeRuntimeSummary from '../features/runtime/HomeRuntimeSummary.vue'
 import HomeAuditEntries from '../features/audit/HomeAuditEntries.vue'
 
@@ -21,7 +19,6 @@ const profile = computed(() =>
   <section class="home" aria-labelledby="home-title">
     <h1 id="home-title" class="v1-h1">{{ t('home.title') }}</h1>
     <p class="v1-sub">{{ t('home.subtitle') }}</p>
-    <SourceBadge :source="RSS_SOURCE" />
     <VerifiedProfilePanel v-if="profile" :profile="profile" />
     <div class="home-grid">
       <HomeRuntimeSummary />

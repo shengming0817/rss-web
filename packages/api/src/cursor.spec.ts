@@ -22,6 +22,12 @@ describe('decodeCursorPage', () => {
       nextCursor: 'next',
     })
     expect(decode({ data: [], hasMore: false })).toEqual({ data: [], hasMore: false })
+    expect(decode({ data: [], hasMore: true })).toEqual({ data: [], hasMore: true })
+    expect(decode({ data: [], hasMore: false, nextCursor: 'opaque' })).toEqual({
+      data: [],
+      hasMore: false,
+      nextCursor: 'opaque',
+    })
   })
 
   it.each([

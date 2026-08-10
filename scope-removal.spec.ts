@@ -210,7 +210,6 @@ describe('RSS-only foundation boundary', () => {
       'apps/web/src/features/audit/HomeAuditEntries.vue',
       'apps/web/src/features/runtime/HomeRuntimeSummary.vue',
       'apps/web/src/router/index.ts',
-      'apps/web/src/views/HomeView.vue',
     ])
   })
 })

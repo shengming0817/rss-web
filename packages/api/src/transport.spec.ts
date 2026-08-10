@@ -3,6 +3,8 @@ import AxiosMockAdapter from 'axios-mock-adapter'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createHttpTransport } from './transport'
 import { isRssApiError } from './wire-error'
+import { auditEndpoints } from './endpoints/audit'
+import { runtimeEndpoints } from './endpoints/runtime'
 
 const decodeObject = (value: unknown): { ok: boolean } => {
   if (typeof value !== 'object' || value === null || (value as { ok?: unknown }).ok !== true) {
@@ -250,5 +252,38 @@ describe('createHttpTransport', () => {
     })
     controller.abort()
     await expect(pending).rejects.toMatchObject({ cause: 'aborted', retryable: false })
+  })
+
+  it('enforces endpoint-declared error status, code, retryability and detail posture', async () => {
+    const envelope = (
+      code: string,
+      message: string,
+      retryable: boolean,
+      details: unknown[] = [],
+    ) => ({
+      error: { code, message, retryable, details, requestId: 'policy-fixture' },
+    })
+    const { mock, transport } = setup()
+    mock
+      .onGet('/api/v1/runtime/inventory')
+      .replyOnce(503, envelope('ERR_CORE_PROVIDER_UNAVAILABLE', 'provider unavailable', true))
+      .onGet('/api/v1/runtime/inventory')
+      .replyOnce(
+        503,
+        envelope('ERR_CORE_PROVIDER_UNAVAILABLE', 'provider unavailable', true, [{ leaked: true }]),
+      )
+    mock
+      .onGet('/api/v1/audit/entries')
+      .replyOnce(503, envelope('ERR_CORE_PROVIDER_UNAVAILABLE', 'provider unavailable', true))
+
+    await expect(
+      transport.request({ ...runtimeEndpoints.inventory, decode: decodeObject }),
+    ).rejects.toMatchObject({ cause: 'wire', code: 'ERR_CORE_PROVIDER_UNAVAILABLE' })
+    await expect(
+      transport.request({ ...runtimeEndpoints.inventory, decode: decodeObject }),
+    ).rejects.toMatchObject({ cause: 'protocol', status: 503 })
+    await expect(
+      transport.request({ ...auditEndpoints.listEntries, decode: decodeObject }),
+    ).rejects.toMatchObject({ cause: 'protocol', status: 503 })
   })
 })

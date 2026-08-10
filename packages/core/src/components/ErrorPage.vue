@@ -6,7 +6,7 @@ import type { SafeErrorPresentation } from './error-presentation'
 const props = withDefaults(
   defineProps<{
     readonly error: SafeErrorPresentation
-    readonly headingLevel?: 1 | 2
+    readonly headingLevel?: 1 | 2 | 3
     readonly headingId?: string
     readonly showRecovery?: boolean
   }>(),
@@ -17,7 +17,7 @@ const { t } = useI18n()
 const copyState = ref<'idle' | 'copied' | 'failed'>('idle')
 const generatedHeadingId = `error-page-${useId()}`
 const headingId = computed(() => props.headingId ?? generatedHeadingId)
-const headingTag = computed(() => (props.headingLevel === 1 ? 'h1' : 'h2'))
+const headingTag = computed(() => `h${props.headingLevel}` as const)
 let copyGeneration = 0
 const title = computed(() => t(`errorPage.${props.error.kind}.title`))
 const message = computed(() => t(`errorPage.${props.error.kind}.message`))

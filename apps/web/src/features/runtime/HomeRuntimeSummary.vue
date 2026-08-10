@@ -4,16 +4,16 @@ import { useI18n } from 'vue-i18n'
 import type { RuntimeInventoryData } from '@rss/runtime'
 import { ErrorPage, SourceBadge } from '@rss/core'
 import { RSS_SOURCE, UNAVAILABLE_SOURCE } from '@rss/shared'
-import { toSafeErrorPresentation } from '../../errors/rss-error'
-import { useAdminClients } from '../admin/admin-context'
+import { toSafeReadErrorPresentation } from '../../errors/rss-error'
+import { useRuntimeApi } from './runtime-context'
 
 type State =
   | { readonly status: 'loading' }
   | { readonly status: 'ready'; readonly data: RuntimeInventoryData }
-  | { readonly status: 'error'; readonly error: ReturnType<typeof toSafeErrorPresentation> }
+  | { readonly status: 'error'; readonly error: ReturnType<typeof toSafeReadErrorPresentation> }
 
 const { t } = useI18n()
-const { runtime } = useAdminClients()
+const runtime = useRuntimeApi()
 const state = ref<State>({ status: 'loading' })
 let generation = 0
 let controller: AbortController | undefined
@@ -28,7 +28,7 @@ async function load(): Promise<void> {
     if (current === generation) state.value = { status: 'ready', data: response.data }
   } catch (error) {
     if (current === generation && !controller.signal.aborted)
-      state.value = { status: 'error', error: toSafeErrorPresentation(error) }
+      state.value = { status: 'error', error: toSafeReadErrorPresentation(error) }
   }
 }
 
@@ -74,7 +74,7 @@ onBeforeUnmount(() => {
     <ErrorPage
       v-else
       :error="state.error"
-      :heading-level="2"
+      :heading-level="3"
       :show-recovery="state.error.recovery === 'retry'"
       @recover="load"
     />

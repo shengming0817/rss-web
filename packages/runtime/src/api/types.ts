@@ -1,12 +1,31 @@
-export type RuntimeDomain = 'identity' | 'settings' | 'audit' | 'contractreg' | 'syshealth'
-export type RuntimeListenerKind = 'primary' | 'internal' | 'health' | 'admin'
-export type RuntimeAuthScheme =
-  | 'noAuth'
-  | 'rssAccessToken'
-  | 'federatedAccessToken'
-  | 'mtls'
-  | 'serviceToken'
-export type ProviderPostureState = 'unobserved' | 'ready' | 'degraded' | 'unavailable'
+export const RUNTIME_DOMAINS = [
+  'identity',
+  'settings',
+  'audit',
+  'contractreg',
+  'syshealth',
+] as const
+export const RUNTIME_LISTENER_KINDS = ['primary', 'internal', 'health', 'admin'] as const
+export const RUNTIME_AUTH_SCHEMES = [
+  'noAuth',
+  'rssAccessToken',
+  'federatedAccessToken',
+  'mtls',
+  'serviceToken',
+] as const
+export const PROVIDER_POSTURE_STATES = ['unobserved', 'ready', 'degraded', 'unavailable'] as const
+export const PROJECTION_ACTIVATIONS = ['capture-only', 'shadow', 'active'] as const
+export const WORKFLOW_ACTIVATIONS = {
+  projection: PROJECTION_ACTIVATIONS,
+  saga: ['active'] as const,
+} as const
+export const PLACEMENT_MODES = ['local', 'remote'] as const
+export const PLACEMENT_READINESS = ['ready', 'mtls-source-unavailable'] as const
+
+export type RuntimeDomain = (typeof RUNTIME_DOMAINS)[number]
+export type RuntimeListenerKind = (typeof RUNTIME_LISTENER_KINDS)[number]
+export type RuntimeAuthScheme = (typeof RUNTIME_AUTH_SCHEMES)[number]
+export type ProviderPostureState = (typeof PROVIDER_POSTURE_STATES)[number]
 
 export interface RuntimeEndpoint {
   readonly scheme: 'http' | 'https'
@@ -39,12 +58,12 @@ interface ActivatedWorkflowBase {
 
 export interface ActivatedProjection extends ActivatedWorkflowBase {
   readonly mode: 'projection'
-  readonly activation: 'capture-only' | 'shadow' | 'active'
+  readonly activation: (typeof WORKFLOW_ACTIVATIONS.projection)[number]
 }
 
 export interface ActivatedSaga extends ActivatedWorkflowBase {
   readonly mode: 'saga'
-  readonly activation: 'active'
+  readonly activation: (typeof WORKFLOW_ACTIVATIONS.saga)[number]
 }
 
 export type ActivatedWorkflow = ActivatedProjection | ActivatedSaga
@@ -52,10 +71,10 @@ export type ActivatedWorkflow = ActivatedProjection | ActivatedSaga
 export interface RuntimePlacement {
   readonly domain: RuntimeDomain
   readonly workload: string
-  readonly mode: 'local' | 'remote'
+  readonly mode: (typeof PLACEMENT_MODES)[number]
   readonly endpoint?: RuntimeEndpoint
   readonly spiffeIdentity?: string
-  readonly readiness: 'ready' | 'mtls-source-unavailable'
+  readonly readiness: (typeof PLACEMENT_READINESS)[number]
 }
 
 export interface RuntimeInventoryData {
