@@ -5,7 +5,7 @@
 - RSS source: read-only local checkout, pinned commit
   `b7f3e1d0bcc5b2e59639a81b4f37937914b53f00`.
 - Web source before this PR: `25693fb6e059bbbfd1f814fd793e42f26db4014b`.
-- Tested implementation commit: `d00956a38df0f0e92f9d04dfa2558f61ce65fe68`.
+- Tested implementation commit: `a1ca15b5a813db20530355b806830c96bfb3e849`.
 - The runner rejects a dirty Web tree and builds the Edge from an archived Web HEAD, so receipt
   `webRevision` names the actual build input rather than a mutable Docker context.
 - The runner resolves the exact commit and uses `/usr/bin/git archive` into a temporary directory. It
@@ -43,7 +43,7 @@ Machine receipt:
   "schemaVersion": 1,
   "status": "passed",
   "rssRevision": "b7f3e1d0bcc5b2e59639a81b4f37937914b53f00",
-  "webRevision": "d00956a38df0f0e92f9d04dfa2558f61ce65fe68",
+  "webRevision": "a1ca15b5a813db20530355b806830c96bfb3e849",
   "tenantBootstrap": "edge-deployment-fixed",
   "backend": "real-rss-archive",
   "phases": [
