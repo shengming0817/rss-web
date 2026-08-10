@@ -14,8 +14,8 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc* ./
 # 复制各子包的 package.json（保持相对路径，pnpm workspace 解析需要）
 COPY apps/web/package.json apps/web/package.json
 COPY packages/core/package.json packages/core/package.json
-COPY packages/shared/package.json packages/shared/package.json
 COPY packages/api/package.json packages/api/package.json
+COPY packages/authorization/package.json packages/authorization/package.json
 COPY packages/identity/package.json packages/identity/package.json
 
 RUN pnpm install --frozen-lockfile

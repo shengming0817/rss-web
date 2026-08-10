@@ -173,6 +173,9 @@ importers:
       '@rss/api':
         specifier: workspace:*
         version: link:../../packages/api
+      '@rss/authorization':
+        specifier: workspace:*
+        version: link:../../packages/authorization
       '@rss/core':
         specifier: workspace:*
         version: link:../../packages/core

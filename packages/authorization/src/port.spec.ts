@@ -47,6 +47,24 @@ describe('server-authoritative authorization port', () => {
   it('does not expose the Preview constructor from the production root', () => {
     expect(authorization).not.toHaveProperty('createPreviewAuthorizationPort')
   })
+
+  it('keeps invalidation and reset as no-ops in server mode', () => {
+    port.invalidate(intent)
+    port.reset()
+
+    expect(port.preview(intent)).toEqual({
+      decision: 'unknown',
+      source: { kind: 'server', authority: 'deferred-to-request' },
+    })
+  })
+
+  it('matches only exact, valid intent coordinates at runtime', () => {
+    expect(port.matches(intent, { ...intent })).toBe(true)
+    expect(port.matches(intent, { ...intent, resourceId: 'policy-2' })).toBe(false)
+    expect(
+      port.matches(intent, { ...intent, tenantId: 'authority-field' } as AuthorizationIntent),
+    ).toBe(false)
+  })
 })
 
 describe('explicit Preview authorization port', () => {
@@ -105,6 +123,26 @@ describe('explicit Preview authorization port', () => {
       decision: 'unknown',
       source: { kind: 'preview', authoritative: false, reason: 'unmatched' },
     })
+  })
+
+  it('invalidates only the exact Preview selector and can reset session-scoped invalidations', () => {
+    const otherResource = { ...intent, resourceId: 'policy-2' }
+    const scoped = createPreviewAuthorizationPort({
+      enabled: true,
+      scenarios: [
+        { id: 'policy-one', intent, decision: 'allow' },
+        { id: 'policy-two', intent: otherResource, decision: 'allow' },
+      ],
+    })
+
+    scoped.invalidate(intent)
+    scoped.invalidate({ ...intent, tenantId: 'authority-field' } as AuthorizationIntent)
+
+    expect(scoped.preview(intent)).toMatchObject({ decision: 'unknown' })
+    expect(scoped.preview(otherResource)).toMatchObject({ decision: 'allow' })
+
+    scoped.reset()
+    expect(scoped.preview(intent)).toMatchObject({ decision: 'allow' })
   })
 
   assertExecutePassthrough(port)

@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory } from 'vue-router'
+import { createServerAuthorizationPort } from '@rss/authorization'
+import { createPreviewAuthorizationPort } from '@rss/authorization/preview'
+import type { AuthorizationPort } from '@rss/authorization'
 import type { IdentitySession, IdentitySessionState } from '@rss/identity'
+import { createAuthorizationExperience } from '../features/authorization/authorization-context'
 import { createAppRouter } from './index'
 
 window.scrollTo = vi.fn()
@@ -27,10 +31,46 @@ function sessionFixture(initial: IdentitySessionState) {
   }
 }
 
+function appRouter(
+  fixture: ReturnType<typeof sessionFixture>,
+  port: AuthorizationPort = createServerAuthorizationPort(),
+) {
+  const authorization = createAuthorizationExperience({
+    port,
+    session: fixture.session,
+  })
+  return createAppRouter(fixture.session, authorization, createMemoryHistory())
+}
+
 describe('session-owned router', () => {
+  it('applies the session gate before a Preview-only route hint', async () => {
+    const intent = { contractId: 'runtime.inventory', permission: 'runtime:read' }
+    const fixture = sessionFixture({ status: 'anonymous' })
+    const port = createPreviewAuthorizationPort({
+      enabled: true,
+      scenarios: [{ id: 'deny-runtime', intent, decision: 'deny' }],
+    })
+    const router = appRouter(fixture, port)
+    router.addRoute({
+      path: '/runtime',
+      name: 'runtime',
+      component: { template: '<div />' },
+      meta: {
+        authorizationIntent: intent,
+        sessionAccess: 'authenticated',
+        focusTarget: 'shell-content',
+      },
+    })
+
+    await router.push('/runtime')
+    await router.isReady()
+
+    expect(router.currentRoute.value.name).toBe('login')
+  })
+
   it('redirects an initial anonymous shell navigation to standalone login', async () => {
     const fixture = sessionFixture({ status: 'anonymous' })
-    const router = createAppRouter(fixture.session, createMemoryHistory())
+    const router = appRouter(fixture)
 
     await router.push('/')
     await router.isReady()
@@ -50,7 +90,7 @@ describe('session-owned router', () => {
       { status: 'refreshing', profile, sessionExpiresAt: 2, accessExpiresAt: 1 },
     ] satisfies IdentitySessionState[]) {
       const fixture = sessionFixture(state)
-      const router = createAppRouter(fixture.session, createMemoryHistory())
+      const router = appRouter(fixture)
       await router.push('/')
       await router.isReady()
       expect(router.currentRoute.value.name).toBe('home')
@@ -59,7 +99,7 @@ describe('session-owned router', () => {
 
   it('keeps transitional states out of shell and redirects verified sessions away from login', async () => {
     const transitional = sessionFixture({ status: 'verifying' })
-    const anonymousRouter = createAppRouter(transitional.session, createMemoryHistory())
+    const anonymousRouter = appRouter(transitional)
     await anonymousRouter.push('/')
     await anonymousRouter.isReady()
     expect(anonymousRouter.currentRoute.value.name).toBe('login')
@@ -90,7 +130,7 @@ describe('session-owned router', () => {
       sessionExpiresAt: 2,
       accessExpiresAt: 1,
     })
-    const router = createAppRouter(fixture.session, createMemoryHistory())
+    const router = appRouter(fixture)
     await router.push('/')
     await router.isReady()
 
@@ -118,7 +158,7 @@ describe('session-owned router', () => {
     const pendingComponent = new Promise<{ template: string }>((resolve) => {
       resolveComponent = resolve
     })
-    const router = createAppRouter(fixture.session, createMemoryHistory())
+    const router = appRouter(fixture)
     router.addRoute({
       path: '/pending',
       name: 'pending',
@@ -142,7 +182,7 @@ describe('session-owned router', () => {
     'does not resolve the removed route %s',
     (path) => {
       const fixture = sessionFixture({ status: 'anonymous' })
-      const router = createAppRouter(fixture.session, createMemoryHistory())
+      const router = appRouter(fixture)
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
       expect(router.resolve(path).name).toBeUndefined()
       warn.mockRestore()

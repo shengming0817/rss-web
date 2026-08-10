@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -12,6 +12,52 @@ const validEnv = {
   RSS_WEB_PRIMARY_PORT: '8080',
   RSS_WEB_ADMIN_HOST: 'rss-admin',
   RSS_WEB_ADMIN_PORT: '8081',
+}
+
+interface PackageManifest {
+  readonly name: string
+  readonly dependencies?: Readonly<Record<string, string>>
+  readonly devDependencies?: Readonly<Record<string, string>>
+  readonly optionalDependencies?: Readonly<Record<string, string>>
+  readonly peerDependencies?: Readonly<Record<string, string>>
+}
+
+function workspaceDependencyClosure(
+  rootName: string,
+  manifests: ReadonlyMap<string, PackageManifest>,
+): ReadonlySet<string> {
+  const closure = new Set<string>()
+  const visit = (name: string): void => {
+    const manifest = manifests.get(name)
+    if (manifest === undefined) throw new Error(`Missing workspace manifest for ${name}`)
+    const dependencies = {
+      ...manifest.dependencies,
+      ...manifest.devDependencies,
+      ...manifest.optionalDependencies,
+      ...manifest.peerDependencies,
+    }
+    for (const [dependency, version] of Object.entries(dependencies)) {
+      if (!version.startsWith('workspace:') || closure.has(dependency)) continue
+      closure.add(dependency)
+      visit(dependency)
+    }
+  }
+  visit(rootName)
+  closure.delete(rootName)
+  return closure
+}
+
+function repositoryWorkspaceManifests(): ReadonlyMap<string, PackageManifest> {
+  const manifests = new Map<string, PackageManifest>()
+  const add = (path: string): void => {
+    const manifest = JSON.parse(read(path)) as PackageManifest
+    manifests.set(manifest.name, manifest)
+  }
+  add('apps/web/package.json')
+  for (const entry of readdirSync(resolve(root, 'packages'), { withFileTypes: true })) {
+    if (entry.isDirectory()) add(`packages/${entry.name}/package.json`)
+  }
+  return manifests
 }
 
 function validate(overrides: Record<string, string | undefined> = {}) {
@@ -79,6 +125,33 @@ describe('RSS Web edge configuration', () => {
     expect(read('apps/web/env.d.ts')).not.toContain('VITE_API_BASE')
     expect(read('deploy/web/Dockerfile')).toContain('/etc/nginx/templates/default.conf.template')
     expect(read('deploy/web/Dockerfile')).toContain('/docker-entrypoint.d/15-validate-edge-env.sh')
+  })
+
+  it('installs every Web workspace dependency in the cached Docker dependency layer', () => {
+    const dockerfile = read('deploy/web/Dockerfile')
+    const manifests = repositoryWorkspaceManifests()
+    const expected = [...workspaceDependencyClosure('@rss/web', manifests)].sort()
+    const copied = [
+      ...dockerfile.matchAll(
+        /^COPY packages\/([^/]+)\/package\.json packages\/\1\/package\.json$/gm,
+      ),
+    ]
+      .map((match) => manifests.get(`@rss/${match[1]}`)?.name)
+      .filter((name): name is string => name !== undefined)
+      .sort()
+    expect(copied).toEqual(expected)
+  })
+
+  it('computes transitive workspace dependencies rather than direct dependencies only', () => {
+    const manifests = new Map<string, PackageManifest>([
+      ['@rss/web', { name: '@rss/web', dependencies: { '@rss/a': 'workspace:*' } }],
+      ['@rss/a', { name: '@rss/a', dependencies: { '@rss/b': 'workspace:*' } }],
+      ['@rss/b', { name: '@rss/b' }],
+    ])
+    expect([...workspaceDependencyClosure('@rss/web', manifests)].sort()).toEqual([
+      '@rss/a',
+      '@rss/b',
+    ])
   })
 
   it('pins the reviewed RSS runtime assembly evidence', () => {

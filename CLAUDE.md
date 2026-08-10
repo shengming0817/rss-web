@@ -27,4 +27,7 @@ mode, which always defers authority to the real request. Do not add policies, AB
 tenant/principal inputs, caches, wildcard matching, or external provider implementations. The
 Preview subpath remains forbidden in production Web source unless a later issue names one explicit
 composition owner; Preview results are permanently non-authoritative and never short-circuit a
-request.
+request. The Web authorization context is the only UI coordination owner: it may invalidate an
+exact hint only after `wire / 403 / ERR_CORE_FORBIDDEN`, must rethrow the same server error, and must
+clear UX outcomes when verified session authority changes. Do not add a second 401 handler or infer
+authorization from route, button, profile kind, JWT, tenant, or a local receipt.

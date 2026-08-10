@@ -7,12 +7,14 @@ import { createPinia } from 'pinia'
 import { createWebI18n } from './i18n'
 import App from './App.vue'
 import { createWebRuntime } from './bootstrap'
+import { authorizationExperiencePlugin } from './features/authorization/authorization-context'
 import { identitySessionPlugin } from './features/identity/session-context'
 
 const app = createApp(App)
-const { router, session } = createWebRuntime()
+const { authorization, router, session } = createWebRuntime()
 app.use(createPinia())
 app.use(createWebI18n())
 app.use(router)
 app.use(identitySessionPlugin(session))
+app.use(authorizationExperiencePlugin(authorization))
 app.mount('#app')

@@ -20,13 +20,11 @@ export default defineConfig({
         'src/components/index.ts',
         'src/composables/index.ts',
         'src/stores/index.ts',
-        'src/pdp/index.ts',
         'src/ui/index.ts',
         // Pure data / type files — v8 over-counts branches on `as const` expressions
         'src/i18n/messages/zh-CN.ts',
         'src/i18n/messages/en-US.ts',
         'src/ui/navConfig.ts',
-        'src/pdp/types.ts',
       ],
       thresholds: {
         lines: 90,
