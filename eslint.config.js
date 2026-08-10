@@ -250,6 +250,37 @@ export default tseslint.config(
     },
   },
 
+  // Runtime and Audit are framework-neutral domain adapters. Their exact endpoint
+  // subpaths are the sole raw-coordinate owners for these domains.
+  {
+    files: ['packages/runtime/**/*.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex: '^@rss/(?!api(?:$|/endpoints/runtime$))',
+            message: '@rss/runtime 只允许依赖 @rss/api 与 Runtime endpoint。',
+          },
+        ],
+        [NO_AXIOS_PATH],
+      ),
+    },
+  },
+  {
+    files: ['packages/audit/**/*.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex: '^@rss/(?!api(?:$|/endpoints/audit$))',
+            message: '@rss/audit 只允许依赖 @rss/api 与 Audit endpoint。',
+          },
+        ],
+        [NO_AXIOS_PATH],
+      ),
+    },
+  },
+
   // ── 边界锁: packages/authorization ───────────────────────────────────────
   // UX hint capability is framework-neutral and has zero runtime dependencies.
   {

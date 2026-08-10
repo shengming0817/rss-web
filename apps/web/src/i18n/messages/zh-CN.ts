@@ -1,5 +1,19 @@
 const zhCN = {
   navigation: { home: '首页' },
+  runtimeSummary: {
+    title: '运行时摘要',
+    loading: '正在读取运行时事实…',
+    schemaVersion: '模式版本',
+    assembly: 'Assembly 指纹',
+    plan: 'Runtime plan 指纹',
+    domains: '领域',
+  },
+  auditEntries: {
+    title: '首批审计条目',
+    firstPageNotice: '按服务端顺序显示首批条目；这不是“最新”视图。',
+    loading: '正在读取审计条目…',
+    hasMore: '服务端还有后续条目。',
+  },
   identity: {
     login: {
       title: '登录',

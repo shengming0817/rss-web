@@ -9,12 +9,14 @@ import App from './App.vue'
 import { createWebRuntime } from './bootstrap'
 import { authorizationExperiencePlugin } from './features/authorization/authorization-context'
 import { identitySessionPlugin } from './features/identity/session-context'
+import { adminClientsPlugin } from './features/admin/admin-context'
 
 const app = createApp(App)
-const { authorization, router, session } = createWebRuntime()
+const { admin, authorization, router, session } = createWebRuntime()
 app.use(createPinia())
 app.use(createWebI18n())
 app.use(router)
 app.use(identitySessionPlugin(session))
 app.use(authorizationExperiencePlugin(authorization))
+app.use(adminClientsPlugin(admin))
 app.mount('#app')

@@ -66,3 +66,17 @@ WEB-PR-005. At implementation time the read-only RSS checkout was at
 `475bfa88e17769899916b69f357261160000b01b`; a Git tree comparison confirmed
 that all five contract and schema files were byte-identical to this document's
 pinned `b513d3390d73d4f291bb31afc588ca1307ce19af` evidence.
+
+WEB-PR-012 enabled handwritten clients for `runtime.inventory` and ambient-tenant
+`audit.list-entries` against the clean, read-only RSS revision
+`b7f3e1d0bcc5b2e59639a81b4f37937914b53f00`. Audit's contract, request, response, 400, and 500 files
+remained byte-identical to the original evidence. Runtime's request remained
+`e7f8d09e8d049eef78bbcb5234808dcfba9a832ea57733c2960ad2305742a571`; the current contract TOML is
+`5e9e8df12de3fa2962b08a13f64716209f303d12465f6a851bb112e8256ddce5`, response schema is
+`b6f6f369a34ec843124ec5b331d7a5126369a6990167b53bdacd9af318f6dbec`, declared 500 schema is
+`086c3fb0936f05965729ef7b7ec331c5eae54318078092219c56a164d5ab4765`, and declared 503 schema is
+`2f50c56345873186e668b4f0795203c92d259a4da864934999291cf63324c170`. The decoder intentionally
+adopts the current `providerPosture.state=unobserved` value without an old-enum alias.
+
+`audit.list-tenant-entries` remains selected baseline evidence but is not enabled by WEB-PR-012: it
+is a non-idempotent, audited SuperAdmin operation reserved for its explicit follow-up issue.

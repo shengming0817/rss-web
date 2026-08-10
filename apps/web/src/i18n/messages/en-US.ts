@@ -7,6 +7,20 @@ type Widen<T> = T extends string
 
 const enUS = {
   navigation: { home: 'Home' },
+  runtimeSummary: {
+    title: 'Runtime summary',
+    loading: 'Loading runtime facts…',
+    schemaVersion: 'Schema version',
+    assembly: 'Assembly fingerprint',
+    plan: 'Runtime plan fingerprint',
+    domains: 'Domains',
+  },
+  auditEntries: {
+    title: 'First audit entries',
+    firstPageNotice: 'Shows the first server-ordered entries; this is not a latest view.',
+    loading: 'Loading audit entries…',
+    hasMore: 'More entries are available from the server.',
+  },
   identity: {
     login: {
       title: 'Sign in',

@@ -39,3 +39,9 @@ tenant, principal, or business authority. New RSS source-label owners require an
 update. Mock/manual/external/unavailable sources remain non-authoritative, and real failures never
 fall back to them. Safe error presentation may expose only the reviewed kind, code, retryability, and
 requestId; backend messages/details and transport behavior stay outside reusable UI components.
+
+`@rss/runtime` and `@rss/audit` are framework-neutral Admin-listener adapters over the one protected
+session transport. Vue composition belongs in `apps/web`. Runtime inventory is facts only; do not use
+it for listener discovery or deployment authority. Ambient-tenant Audit is server ordered and its
+entry hash is opaque. Do not call the non-idempotent cross-tenant Audit endpoint, send tenant headers,
+claim the first page is latest, or fall back from a real failure to another source.

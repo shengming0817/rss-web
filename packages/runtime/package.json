@@ -1,15 +1,10 @@
 {
-  "name": "@rss/api",
+  "name": "@rss/runtime",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./endpoints/audit": "./src/endpoints/audit.ts",
-    "./endpoints/identity": "./src/endpoints/identity.ts",
-    "./endpoints/runtime": "./src/endpoints/runtime.ts",
-    "./session": "./src/session.ts",
-    "./testing": "./src/testing.ts"
+    ".": "./src/index.ts"
   },
   "files": [
     "src"
@@ -20,11 +15,10 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "axios": "catalog:"
+    "@rss/api": "workspace:*"
   },
   "devDependencies": {
     "vitest": "catalog:",
-    "axios-mock-adapter": "catalog:",
     "@vitest/coverage-v8": "catalog:"
   }
 }

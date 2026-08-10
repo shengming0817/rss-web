@@ -10,7 +10,6 @@ const tracked = (path: string) =>
 
 const removed = [
   'packages/access',
-  'packages/audit',
   'packages/config',
   'packages/contracts',
   'packages/devboard',
@@ -25,7 +24,7 @@ describe('RSS-only foundation boundary', () => {
   })
 
   it('ships the reusable foundation and selected identity adapter', () => {
-    for (const name of ['api', 'authorization', 'core', 'identity', 'shared']) {
+    for (const name of ['api', 'audit', 'authorization', 'core', 'identity', 'runtime', 'shared']) {
       expect(existsSync(resolve(root, 'packages', name, 'package.json'))).toBe(true)
     }
   })
@@ -41,6 +40,14 @@ describe('RSS-only foundation boundary', () => {
       'packages/identity/schemas',
       'packages/identity/codegen',
       'packages/identity/registry',
+      'packages/audit/contracts',
+      'packages/audit/schemas',
+      'packages/audit/codegen',
+      'packages/audit/registry',
+      'packages/runtime/contracts',
+      'packages/runtime/schemas',
+      'packages/runtime/codegen',
+      'packages/runtime/registry',
     ]) {
       expect(tracked(path)).toBe('')
     }
@@ -64,6 +71,8 @@ describe('RSS-only foundation boundary', () => {
       .filter((line) => !line.includes('.spec.ts:'))
       .filter((line) => !line.startsWith('packages/api/src/transport.ts:'))
       .filter((line) => !line.startsWith('packages/api/src/endpoints/identity.ts:'))
+      .filter((line) => !line.startsWith('packages/api/src/endpoints/audit.ts:'))
+      .filter((line) => !line.startsWith('packages/api/src/endpoints/runtime.ts:'))
     expect(violations).toEqual([])
   })
 
@@ -198,6 +207,8 @@ describe('RSS-only foundation boundary', () => {
       .filter((path) => path !== 'packages/shared/src/index.ts')
       .sort()
     expect(productionOwners).toEqual([
+      'apps/web/src/features/audit/HomeAuditEntries.vue',
+      'apps/web/src/features/runtime/HomeRuntimeSummary.vue',
       'apps/web/src/router/index.ts',
       'apps/web/src/views/HomeView.vue',
     ])

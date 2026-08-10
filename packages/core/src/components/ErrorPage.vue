@@ -1,12 +1,23 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { SafeErrorPresentation } from './error-presentation'
 
-const props = defineProps<{ readonly error: SafeErrorPresentation }>()
+const props = withDefaults(
+  defineProps<{
+    readonly error: SafeErrorPresentation
+    readonly headingLevel?: 1 | 2
+    readonly headingId?: string
+    readonly showRecovery?: boolean
+  }>(),
+  { headingLevel: 1, showRecovery: true },
+)
 defineEmits<{ recover: [] }>()
 const { t } = useI18n()
 const copyState = ref<'idle' | 'copied' | 'failed'>('idle')
+const generatedHeadingId = `error-page-${useId()}`
+const headingId = computed(() => props.headingId ?? generatedHeadingId)
+const headingTag = computed(() => (props.headingLevel === 1 ? 'h1' : 'h2'))
 let copyGeneration = 0
 const title = computed(() => t(`errorPage.${props.error.kind}.title`))
 const message = computed(() => t(`errorPage.${props.error.kind}.message`))
@@ -39,9 +50,9 @@ async function copyRequestId(): Promise<void> {
 </script>
 
 <template>
-  <section class="error-page" aria-labelledby="error-page-title">
+  <section class="error-page" :aria-labelledby="headingId">
     <p class="error-page__code">{{ error.code }}</p>
-    <h1 id="error-page-title">{{ title }}</h1>
+    <component :is="headingTag" :id="headingId">{{ title }}</component>
     <p>{{ message }}</p>
     <p class="error-page__retryable">
       {{ error.retryable ? t('errorPage.retryable') : t('errorPage.notRetryable') }}
@@ -57,7 +68,13 @@ async function copyRequestId(): Promise<void> {
     <p class="error-page__announcement" role="status" aria-live="polite">
       {{ copyState === 'idle' ? '' : t(`errorPage.${copyState}`) }}
     </p>
-    <button type="button" class="v1-btn" data-action="recover" @click="$emit('recover')">
+    <button
+      v-if="showRecovery"
+      type="button"
+      class="v1-btn"
+      data-action="recover"
+      @click="$emit('recover')"
+    >
       {{ t(`errorPage.recovery.${error.recovery}`) }}
     </button>
   </section>
