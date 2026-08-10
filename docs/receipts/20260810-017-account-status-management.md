@@ -51,21 +51,38 @@
 
 ## Verification
 
-- Frozen install, workspace typecheck, lint, format check, 646 unit/root tests, 597 coverage tests,
+- Frozen install, workspace typecheck, lint, format check, 649 unit/root tests, 600 coverage tests,
   49 boundary tests, production build, built-identity scan, and diff check passed.
 - Fifteen default Chromium journeys passed. They prove no initial Account Status request, explicit GET,
   confirmed single PUT, closed navigation, and no browser tenant header.
 - Docker/Nginx Edge smoke passed with exact GET/PUT method, path, body hash, bearer pass-through,
   tenant stripping, Primary routing, outage isolation, and complete teardown.
 - The opt-in runner archived clean Web implementation commit
-  `8b7e531d74afcd4f3c440513566ced834b9f4709` and the pinned RSS revision. Main, request-budget,
+  `1f4aae35270fdb52e5aa7bc9ae6b157eb04dd450` and the pinned RSS revision. Main, request-budget,
   Admin-down, and Primary-down phases passed; cleanup passed. The real main phase covered explicit
   active read, same-state `changed:false`, transition to suspended, illegal transition 409, missing
-  account 404, limited-user 403, and self suspension followed by local redirect and rejected login.
+  account 404, limited-user 403, and self suspension followed by local redirect plus rejection of an
+  already-authenticated sibling session.
 - A pre-final implementation run at `30abbfe` reported the pre-existing two-session password journey
-  as `product:main` and completed cleanup. The final implementation added only credential-safe
-  response/location diagnostics to that helper and then passed all phases; the failed receipt remains
-  under `/tmp` during review rather than being relabelled as an environment success.
+  as `product:main` and completed cleanup. Later review runs also remained honestly classified as
+  `product:main` while Account Status and rate-limit journeys still shared mutable login-budget state;
+  every failed attempt completed checked cleanup. The final implementation isolated self-revocation
+  with two pre-authenticated contexts and retained the deterministic raw 429 proof without a second
+  rate-limited UI login. It then passed all four phases and cleanup; failed receipts remain under
+  `/tmp` during review rather than being relabelled as environment success.
+
+## Review remediation
+
+- Documentation and an integrated real-session test now lock the sole automatic write replay: one
+  exact authenticated 401 recovery and one replay for this explicitly idempotent PUT. No other error
+  or write path is retried automatically.
+- A deferred-refresh race proves self invalidation aborts the in-flight lifecycle, moves immediately
+  to `expired`, and prevents a late token rotation from restoring authority.
+- The form uses localized validation rather than native browser validation; malformed, uppercase, and
+  nil UUIDs focus the field and issue zero requests in both component and Chromium coverage.
+- Confirmation keeps a stable busy focus target while the modal opener is absent, then moves focus to
+  the result panel heading. The real journey uses isolated authenticated contexts so ordering cannot
+  silently change account or rate-limit evidence.
 
 ## Four-principle check
 
@@ -81,11 +98,11 @@
 
 ## Changed-line classification
 
-- Semantic handwritten code and locale content: 812 additions / 14 deletions.
-- Unit/type/boundary/browser/Edge/real tests and harness diagnostics: 831 additions / 11 deletions.
-- Documentation and governance: 27 additions / 2 deletions.
+- Semantic handwritten code and locale content: 814 additions / 14 deletions.
+- Unit/type/boundary/browser/Edge/real tests and harness diagnostics: 1,011 additions / 18 deletions.
+- Documentation and governance: 28 additions / 2 deletions.
 - Generated and lockfile: 0 lines.
-- Implementation total: 1,670 additions / 27 deletions.
+- Implementation total: 1,853 additions / 34 deletions.
 
 ## Rollback
 
