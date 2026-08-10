@@ -13,7 +13,11 @@ authenticated profile path may mint branded verified authority. Do not expose
 credentials through state, parse JWT claims, add persistence, author tenant
 headers, create a second refresh/retry path, or add UI behavior there.
 `@rss/api/session` is restricted to this controller; applications must consume
-the Identity session rather than importing the low-level capability.
+the injected Identity session rather than importing the low-level capability.
+The Web bootstrap is the only composition root. Keep Identity Vue components in
+`apps/web`, do not add a Pinia session mirror, and never enter the shell before
+the branded verified profile is available. Reload intentionally returns to
+`/login` because credentials are memory-only.
 The Nginx same-origin Edge is the sole listener-routing and pre-auth tenant
 bootstrap boundary. Do not add browser-selectable tenants, client runtime API
 origins, listener discovery, proxy fallbacks, or Internal/Health routes.

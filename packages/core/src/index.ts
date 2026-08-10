@@ -8,7 +8,7 @@ export { useLocaleStore } from './stores/index'
 export type { AppLocale } from './stores/index'
 
 // Components
-export { UnavailablePanel } from './components/index'
+export { ModalShell, UnavailablePanel } from './components/index'
 
 // UI Shell
 export { AppShell, Sidebar, TopBar, CommandPalette } from './ui/index'

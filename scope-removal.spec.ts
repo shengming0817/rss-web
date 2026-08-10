@@ -86,9 +86,10 @@ describe('RSS-only foundation boundary', () => {
     expect(productionMatches).toEqual([])
   })
 
-  it('exposes only the neutral home route', () => {
+  it('exposes only the Identity login and authenticated home routes', () => {
     const router = read('apps/web/src/router/index.ts')
     expect(router).toContain("path: '/'")
+    expect(router).toContain("path: '/login'")
     for (const path of [
       '/access',
       '/config',

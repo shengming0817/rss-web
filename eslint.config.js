@@ -73,6 +73,11 @@ const INTERNAL_ENDPOINT_PATTERN = {
     '应用层禁止绕过 domain adapter 使用 endpoint coordinates、session capability 或测试工厂。',
 }
 
+const APP_TEST_INTERNAL_PATTERN = {
+  regex: '^@rss/api/(?:endpoints/|session$)',
+  message: '应用测试不得绕过 domain adapter 使用 endpoint coordinates 或 session capability。',
+}
+
 /** Helper: create a no-restricted-imports rule config combining all given patterns + paths */
 function boundaryRule(extraPatterns = [], extraPaths = []) {
   return [
@@ -281,6 +286,20 @@ export default tseslint.config(
         'error',
         {
           patterns: [DEEP_PATH_PATTERN, INTERNAL_ENDPOINT_PATTERN],
+          paths: [NO_AXIOS_PATH],
+        },
+      ],
+    },
+  },
+
+  // App behavior tests may mint sanitized errors; production sources cannot.
+  {
+    files: ['apps/web/**/*.spec.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [DEEP_PATH_PATTERN, APP_TEST_INTERNAL_PATTERN],
           paths: [NO_AXIOS_PATH],
         },
       ],
