@@ -5,7 +5,7 @@ import {
   decodeRoleRevokeResponse,
   decodeRolesListResponse,
 } from './decoders'
-import { isRoleId } from './role-id'
+import { isRoleId, type RoleId } from './role-id'
 import type {
   RoleAssignRequest,
   RoleAssignResponse,
@@ -18,11 +18,11 @@ import type {
 export interface RolesApi {
   list(request?: RolesListRequest, options?: RolesCallOptions): Promise<RolesListResponse>
   assign(
-    roleId: string,
+    roleId: RoleId,
     request: RoleAssignRequest,
     options?: RolesCallOptions,
   ): Promise<RoleAssignResponse>
-  revoke(roleId: string, subject: string, options?: RolesCallOptions): Promise<RoleRevokeResponse>
+  revoke(roleId: RoleId, subject: string, options?: RolesCallOptions): Promise<RoleRevokeResponse>
 }
 
 function reject(message: string): Promise<never> {
@@ -65,7 +65,7 @@ export function createRolesApi(transport: HttpTransport): RolesApi {
         ...signal(options),
       })
     },
-    assign(roleId: string, request: RoleAssignRequest, options?: RolesCallOptions) {
+    assign(roleId: RoleId, request: RoleAssignRequest, options?: RolesCallOptions) {
       if (!isRoleId(roleId)) return reject('invalid roleId')
       if (
         typeof request !== 'object' ||
@@ -85,7 +85,7 @@ export function createRolesApi(transport: HttpTransport): RolesApi {
         ...signal(options),
       })
     },
-    revoke(roleId: string, subject: string, options?: RolesCallOptions) {
+    revoke(roleId: RoleId, subject: string, options?: RolesCallOptions) {
       if (!isRoleId(roleId)) return reject('invalid roleId')
       if (!validSubject(subject)) return reject('invalid subject')
       return transport.request({

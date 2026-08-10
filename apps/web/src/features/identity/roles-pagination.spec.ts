@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RolesListResponse } from '@rss/identity'
+import { parseRoleId, type RolesListResponse } from '@rss/identity'
 import { createRolesPagination } from './roles-pagination'
 
-const role = (roleId: string) => ({ roleId, name: roleId, permissions: [`permission:${roleId}`] })
+const role = (value: string) => ({
+  roleId: parseRoleId(value)!,
+  name: value,
+  permissions: [`permission:${value}`],
+})
 
 describe('roles pagination', () => {
   it('loads the first page and appends only on explicit next', async () => {

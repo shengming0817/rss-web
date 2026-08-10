@@ -1,4 +1,5 @@
 import { defineEndpoint } from './coordinate'
+import { INTERNAL_EMPTY } from './error-rules'
 
 export const runtimeEndpoints = Object.freeze({
   inventory: defineEndpoint({
@@ -6,12 +7,7 @@ export const runtimeEndpoints = Object.freeze({
     path: '/api/v1/runtime/inventory',
     successStatus: 200,
     errorPolicy: Object.freeze({
-      500: Object.freeze({
-        code: 'ERR_CORE_INTERNAL',
-        message: 'internal error',
-        retryable: false,
-        details: 'empty',
-      }),
+      500: INTERNAL_EMPTY,
       503: Object.freeze({
         code: 'ERR_CORE_PROVIDER_UNAVAILABLE',
         message: 'provider unavailable',

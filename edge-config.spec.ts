@@ -123,6 +123,13 @@ describe('RSS Web edge configuration', () => {
     expect(template).toContain('if ($rss_target_audit_raw_path = 0) { return 404; }')
     expect(template).not.toContain('location ^~ /api/ { return 404; }')
     expect(template).not.toContain('location ^~ /api/v1/audit/')
+    expect(template).toContain(
+      "log_format rss_safe '$request_method $status $body_bytes_sent request_id=$request_id';",
+    )
+    expect(template).toContain('access_log /var/log/nginx/access.log rss_safe;')
+    expect(template).not.toMatch(
+      /log_format rss_safe[^;]*\$(?:request_uri|uri|request)(?:\s|['"]|;)/,
+    )
     for (const exactPath of ['/api', '/internal', '/health']) {
       expect(template).toContain(`location = ${exactPath} { return 404; }`)
     }

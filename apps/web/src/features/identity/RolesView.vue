@@ -28,6 +28,7 @@ const commandHeading = ref<HTMLElement>()
 const roleIdField = ref<HTMLInputElement>()
 const subjectField = ref<HTMLInputElement>()
 const busyStatus = ref<HTMLElement>()
+let catalogFocusRequested = false
 
 const pagination = createRolesPagination((cursor, signal) =>
   listAuthorization.execute(() =>
@@ -37,7 +38,8 @@ const pagination = createRolesPagination((cursor, signal) =>
 const catalog = shallowRef<RolesPaginationState>(pagination.getState())
 const unsubscribeCatalog = pagination.subscribe((state) => {
   catalog.value = state
-  if (state.status === 'ready' || state.status === 'error') {
+  if (catalogFocusRequested && (state.status === 'ready' || state.status === 'error')) {
+    catalogFocusRequested = false
     void nextTick(() => catalogHeading.value?.focus())
   }
 })
@@ -90,9 +92,20 @@ function prepare(action: RoleBindingAction) {
 }
 
 function confirm() {
+  attempted.value = false
   subjectInput.value = ''
   void operation.confirm()
   void nextTick(() => busyStatus.value?.focus())
+}
+
+function nextCatalogPage() {
+  catalogFocusRequested = true
+  void pagination.next()
+}
+
+function recoverCatalog() {
+  catalogFocusRequested = true
+  void pagination.start()
 }
 
 onMounted(() => void pagination.start())
@@ -111,6 +124,7 @@ onBeforeUnmount(() => {
     <header>
       <h1 id="roles-title" class="v1-h1">{{ t('roles.title') }}</h1>
       <p class="v1-sub">{{ t('roles.subtitle') }}</p>
+      <p>{{ t('roles.authority') }}</p>
     </header>
 
     <section class="roles-panel" aria-labelledby="roles-catalog-title">
@@ -150,7 +164,7 @@ onBeforeUnmount(() => {
         v-if="catalog.status === 'ready' && catalog.hasMore"
         type="button"
         class="v1-btn"
-        @click="pagination.next()"
+        @click="nextCatalogPage"
       >
         {{ t('roles.catalog.next') }}
       </button>
@@ -158,7 +172,7 @@ onBeforeUnmount(() => {
         v-if="catalogError"
         :error="catalogError"
         :heading-level="3"
-        @recover="pagination.start()"
+        @recover="recoverCatalog"
       />
     </section>
 
@@ -167,7 +181,7 @@ onBeforeUnmount(() => {
         {{ t('roles.command.title') }}
       </h2>
       <p>{{ t('roles.command.warning') }}</p>
-      <form novalidate @submit.prevent>
+      <form novalidate :aria-busy="commandBusy" @submit.prevent>
         <label for="roles-role-id">{{ t('roles.command.roleId') }}</label>
         <input
           id="roles-role-id"
@@ -177,8 +191,11 @@ onBeforeUnmount(() => {
           spellcheck="false"
           :disabled="commandBusy"
           :aria-invalid="invalidRoleId"
+          :aria-describedby="invalidRoleId ? 'roles-role-id-error' : undefined"
         />
-        <p v-if="invalidRoleId" role="alert">{{ t('roles.command.invalidRoleId') }}</p>
+        <p v-if="invalidRoleId" id="roles-role-id-error" role="alert">
+          {{ t('roles.command.invalidRoleId') }}
+        </p>
         <label for="roles-subject">{{ t('roles.command.subject') }}</label>
         <input
           id="roles-subject"
@@ -188,14 +205,19 @@ onBeforeUnmount(() => {
           spellcheck="false"
           :disabled="commandBusy"
           :aria-invalid="invalidSubject"
+          :aria-describedby="
+            invalidSubject ? 'roles-subject-hint roles-subject-error' : 'roles-subject-hint'
+          "
         />
         <p id="roles-subject-hint">{{ t('roles.command.subjectHint') }}</p>
-        <p v-if="invalidSubject" role="alert">{{ t('roles.command.invalidSubject') }}</p>
+        <p v-if="invalidSubject" id="roles-subject-error" role="alert">
+          {{ t('roles.command.invalidSubject') }}
+        </p>
         <div class="roles-actions">
-          <button type="button" class="v1-btn" @click="prepare('assign')">
+          <button type="button" class="v1-btn" :disabled="commandBusy" @click="prepare('assign')">
             {{ t('roles.command.assign') }}
           </button>
-          <button type="button" class="v1-ghost" @click="prepare('revoke')">
+          <button type="button" class="v1-ghost" :disabled="commandBusy" @click="prepare('revoke')">
             {{ t('roles.command.revoke') }}
           </button>
         </div>

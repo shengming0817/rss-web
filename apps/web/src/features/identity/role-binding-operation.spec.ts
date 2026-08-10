@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RolesApi } from '@rss/identity'
+import { parseRoleId, type RolesApi } from '@rss/identity'
 import { createRoleBindingOperation } from './role-binding-operation'
 
 function api() {
@@ -10,11 +10,14 @@ function api() {
   } as unknown as RolesApi
 }
 
+const opsRoleId = parseRoleId('ops:admin')!
+const roleId = parseRoleId('ops')!
+
 describe('role binding operation', () => {
   it('confirms an exact snapshot and retains only a non-authoritative receipt after assign', async () => {
     const roles = api()
     const operation = createRoleBindingOperation(roles)
-    operation.prepare('assign', 'ops:admin', 'target@example.test')
+    operation.prepare('assign', opsRoleId, 'target@example.test')
     expect(operation.getState()).toEqual({
       status: 'confirming',
       action: 'assign',
@@ -23,7 +26,7 @@ describe('role binding operation', () => {
     })
     await operation.confirm()
     expect(roles.assign).toHaveBeenCalledWith(
-      'ops:admin',
+      opsRoleId,
       { subject: 'target@example.test' },
       { signal: expect.any(AbortSignal) },
     )
@@ -37,7 +40,7 @@ describe('role binding operation', () => {
 
   it('keeps revoked false as a command result without creating binding state', async () => {
     const operation = createRoleBindingOperation(api())
-    operation.prepare('revoke', 'ops', 'opaque-subject')
+    operation.prepare('revoke', roleId, 'opaque-subject')
     await operation.confirm()
     expect(operation.getState()).toEqual({ status: 'receipt', action: 'revoke', result: false })
     expect(operation.getState()).not.toHaveProperty('bindings')
@@ -46,10 +49,10 @@ describe('role binding operation', () => {
   it('cancels without a request and coalesces duplicate confirms', async () => {
     const roles = api()
     const operation = createRoleBindingOperation(roles)
-    operation.prepare('assign', 'ops', 'target')
+    operation.prepare('assign', roleId, 'target')
     operation.cancel()
     expect(roles.assign).not.toHaveBeenCalled()
-    operation.prepare('assign', 'ops', 'target')
+    operation.prepare('assign', roleId, 'target')
     const first = operation.confirm()
     expect(operation.confirm()).toBe(first)
     await first
@@ -63,7 +66,7 @@ describe('role binding operation', () => {
       () => new Promise((_, rejectPromise) => (reject = rejectPromise)),
     )
     const operation = createRoleBindingOperation(roles)
-    operation.prepare('assign', 'ops', 'sensitive')
+    operation.prepare('assign', roleId, 'sensitive')
     const pending = operation.confirm()
     const signal = vi.mocked(roles.assign).mock.calls[0]?.[2]?.signal
     operation.dispose()

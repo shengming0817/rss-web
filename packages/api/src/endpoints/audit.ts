@@ -1,4 +1,5 @@
 import { defineEndpoint } from './coordinate'
+import { INTERNAL_EMPTY, VALIDATION_EMPTY } from './error-rules'
 
 export const auditEndpoints = Object.freeze({
   listEntries: defineEndpoint({
@@ -6,18 +7,8 @@ export const auditEndpoints = Object.freeze({
     path: '/api/v1/audit/entries',
     successStatus: 200,
     errorPolicy: Object.freeze({
-      400: Object.freeze({
-        code: 'ERR_CORE_VALIDATION',
-        message: 'validation error',
-        retryable: false,
-        details: 'empty',
-      }),
-      500: Object.freeze({
-        code: 'ERR_CORE_INTERNAL',
-        message: 'internal error',
-        retryable: false,
-        details: 'empty',
-      }),
+      400: VALIDATION_EMPTY,
+      500: INTERNAL_EMPTY,
     }),
   }),
   listTenantEntries: defineEndpoint({
@@ -25,18 +16,8 @@ export const auditEndpoints = Object.freeze({
     path: '/api/v1/audit/tenants/{tenantId}/entries',
     successStatus: 200,
     errorPolicy: Object.freeze({
-      400: Object.freeze({
-        code: 'ERR_CORE_VALIDATION',
-        message: 'validation error',
-        retryable: false,
-        details: 'empty',
-      }),
-      500: Object.freeze({
-        code: 'ERR_CORE_INTERNAL',
-        message: 'internal error',
-        retryable: false,
-        details: 'empty',
-      }),
+      400: VALIDATION_EMPTY,
+      500: INTERNAL_EMPTY,
       501: Object.freeze({
         code: 'ERR_CORE_NOT_IMPLEMENTED',
         message: 'not implemented',

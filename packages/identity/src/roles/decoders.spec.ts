@@ -26,6 +26,7 @@ describe('Roles decoders', () => {
     { ...page, extra: true },
     { ...page, data: [{ ...page.data[0], extra: true }] },
     { ...page, data: [{ ...page.data[0], permissions: [1] }] },
+    { ...page, data: [{ ...page.data[0], roleId: 'bad/path' }] },
     { ...page, hasMore: 'true' },
     { ...page, nextCursor: 1 },
   ])('rejects drifted list response %#', (value) => {

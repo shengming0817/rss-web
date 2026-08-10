@@ -1,7 +1,8 @@
 import type { CursorPage } from '@rss/api'
+import type { RoleId } from './role-id'
 
 export interface RoleView {
-  readonly roleId: string
+  readonly roleId: RoleId
   readonly name: string
   readonly permissions: readonly string[]
 }

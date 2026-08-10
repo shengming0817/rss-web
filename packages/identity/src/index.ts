@@ -1,5 +1,5 @@
 export { createIdentityApi } from './api'
-export { createRolesApi, isRoleId, ROLE_ID_PATTERN } from './roles'
+export { createRolesApi, isRoleId, parseRoleId, ROLE_ID_PATTERN } from './roles'
 export {
   ACCOUNT_STATUSES,
   ACCOUNT_STATUS_USER_ID_PATTERN,
@@ -19,6 +19,7 @@ export type {
 export type {
   RoleAssignRequest,
   RoleAssignResponse,
+  RoleId,
   RoleRevokeResponse,
   RolesApi,
   RolesCallOptions,

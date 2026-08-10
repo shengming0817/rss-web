@@ -1,4 +1,5 @@
 import { decodeCursorPage } from '@rss/api'
+import { parseRoleId } from './role-id'
 import type { RoleAssignResponse, RoleRevokeResponse, RolesListResponse, RoleView } from './types'
 
 function invalid(kind: 'roles list' | 'role command'): never {
@@ -25,8 +26,10 @@ function text(value: unknown): string {
 function role(value: unknown): RoleView {
   const record = exactRecord(value, ['roleId', 'name', 'permissions'], 'roles list')
   if (!Array.isArray(record.permissions)) invalid('roles list')
+  const roleId = parseRoleId(record.roleId)
+  if (roleId === undefined) invalid('roles list')
   return Object.freeze({
-    roleId: text(record.roleId),
+    roleId,
     name: text(record.name),
     permissions: Object.freeze(record.permissions.map(text)),
   })

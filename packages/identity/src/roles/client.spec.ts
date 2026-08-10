@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { HttpTransport, NoContentRequest, RequestOptions } from '@rss/api'
 import { createRolesApi } from './client'
+import { parseRoleId, type RoleId } from './role-id'
 
 type RecordedRequest = NoContentRequest | RequestOptions<unknown>
+const opsRoleId = parseRoleId('ops:admin')!
+const roleId = parseRoleId('ops')!
 
 function fixture() {
   const calls: RecordedRequest[] = []
@@ -25,8 +28,8 @@ describe('RolesApi', () => {
   it('maps list, non-replayed assign, and idempotent revoke through one session transport', async () => {
     const { api, calls } = fixture()
     await api.list({ limit: 50, cursor: 'opaque' })
-    await api.assign('ops:admin', { subject: 'target@example.test' })
-    await api.revoke('ops:admin', 'target@example.test')
+    await api.assign(opsRoleId, { subject: 'target@example.test' })
+    await api.revoke(opsRoleId, 'target@example.test')
 
     expect(calls).toEqual([
       expect.objectContaining({
@@ -59,21 +62,21 @@ describe('RolesApi', () => {
     'rejects invalid roleId %j before transport',
     async (roleId) => {
       const { api, transport } = fixture()
-      await expect(api.assign(roleId, { subject: 'target' })).rejects.toThrow('roleId')
+      await expect(api.assign(roleId as RoleId, { subject: 'target' })).rejects.toThrow('roleId')
       expect(transport.request).not.toHaveBeenCalled()
     },
   )
 
   it('rejects an empty subject before transport', async () => {
     const { api, transport } = fixture()
-    await expect(api.assign('ops', { subject: '' })).rejects.toThrow('subject')
-    await expect(api.revoke('ops', '')).rejects.toThrow('subject')
+    await expect(api.assign(roleId, { subject: '' })).rejects.toThrow('subject')
+    await expect(api.revoke(roleId, '')).rejects.toThrow('subject')
     expect(transport.request).not.toHaveBeenCalled()
   })
 
   it('preserves an opaque subject without trimming or normalization', async () => {
     const { api, calls } = fixture()
-    await api.assign('ops', { subject: ' target ' })
+    await api.assign(roleId, { subject: ' target ' })
     expect(calls[0]).toMatchObject({ body: { subject: ' target ' } })
   })
 
@@ -86,7 +89,7 @@ describe('RolesApi', () => {
   it('passes an exact transport error through once without fallback', async () => {
     const failure = new Error('sanitized failure')
     const transport = { request: vi.fn().mockRejectedValue(failure) } as unknown as HttpTransport
-    await expect(createRolesApi(transport).assign('ops', { subject: 'target' })).rejects.toBe(
+    await expect(createRolesApi(transport).assign(roleId, { subject: 'target' })).rejects.toBe(
       failure,
     )
     expect(transport.request).toHaveBeenCalledOnce()

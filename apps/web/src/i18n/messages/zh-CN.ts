@@ -181,6 +181,8 @@ const zhCN = {
   roles: {
     title: '角色与绑定命令',
     subtitle: '读取 RSS 角色目录，并显式提交 assign/revoke 命令。',
+    authority:
+      '这些操作需要 RSS Admin authority；当前 User 会话会收到服务端最终 403，Web 不会据此伪造或提升权限。',
     yes: '是',
     no: '否',
     catalog: {
@@ -198,7 +200,8 @@ const zhCN = {
       warning: 'Subject 不会从目录或当前会话推断；receipt 只描述本次命令结果。',
       roleId: 'Role ID',
       subject: 'Subject',
-      subjectHint: '请输入不透明 subject。该值不会保存到历史、URL 或日志。',
+      subjectHint:
+        '请输入不透明 subject。Revoke 会将其作为编码后的 path 坐标发送；提交后不会保留在页面、receipt 或本地历史中。',
       invalidRoleId: '请输入 1–128 字节的有效 Role ID。',
       invalidSubject: '请输入非空 Subject。',
       assign: 'Assign',

@@ -1,5 +1,6 @@
 export { createRolesApi } from './client'
-export { isRoleId, ROLE_ID_PATTERN } from './role-id'
+export { isRoleId, parseRoleId, ROLE_ID_PATTERN } from './role-id'
+export type { RoleId } from './role-id'
 export type { RolesApi } from './client'
 export type {
   RoleAssignRequest,

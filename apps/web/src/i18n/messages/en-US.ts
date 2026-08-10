@@ -194,6 +194,8 @@ const enUS = {
   roles: {
     title: 'Roles and binding commands',
     subtitle: 'Read the RSS role catalog and explicitly submit assign or revoke commands.',
+    authority:
+      'These operations require RSS Admin authority. The current User session receives the final server 403; Web never fabricates or elevates authority.',
     yes: 'Yes',
     no: 'No',
     catalog: {
@@ -213,7 +215,8 @@ const enUS = {
         'Subject is not inferred from a directory or session; the receipt describes only this command.',
       roleId: 'Role ID',
       subject: 'Subject',
-      subjectHint: 'Enter an opaque subject. It is not stored in history, URLs, or logs.',
+      subjectHint:
+        'Enter an opaque subject. Revoke sends it as an encoded path coordinate; after submission it is not retained in the page, receipt, or local history.',
       invalidRoleId: 'Enter a valid 1–128 byte Role ID.',
       invalidSubject: 'Enter a non-empty Subject.',
       assign: 'Assign',

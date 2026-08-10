@@ -1,4 +1,4 @@
-import type { RolesApi } from '@rss/identity'
+import type { RoleId, RolesApi } from '@rss/identity'
 
 export type RoleBindingAction = 'assign' | 'revoke'
 export type RoleBindingOperationState =
@@ -6,7 +6,7 @@ export type RoleBindingOperationState =
   | {
       readonly status: 'confirming'
       readonly action: RoleBindingAction
-      readonly roleId: string
+      readonly roleId: RoleId
       readonly subject: string
     }
   | { readonly status: 'submitting'; readonly action: RoleBindingAction }
@@ -16,7 +16,7 @@ export type RoleBindingOperationState =
 export interface RoleBindingOperation {
   getState(): RoleBindingOperationState
   subscribe(listener: (state: RoleBindingOperationState) => void): () => void
-  prepare(action: RoleBindingAction, roleId: string, subject: string): void
+  prepare(action: RoleBindingAction, roleId: RoleId, subject: string): void
   cancel(): void
   confirm(): Promise<void>
   reset(): void
@@ -25,10 +25,12 @@ export interface RoleBindingOperation {
 
 const IDLE: RoleBindingOperationState = Object.freeze({ status: 'idle' })
 
-export function createRoleBindingOperation(api: RolesApi): RoleBindingOperation {
+type RoleCommandPort = Pick<RolesApi, 'assign' | 'revoke'>
+
+export function createRoleBindingOperation(api: RoleCommandPort): RoleBindingOperation {
   const listeners = new Set<(state: RoleBindingOperationState) => void>()
   let state = IDLE
-  let snapshot: { action: RoleBindingAction; roleId: string; subject: string } | undefined
+  let snapshot: { action: RoleBindingAction; roleId: RoleId; subject: string } | undefined
   let controller: AbortController | undefined
   let inFlight: Promise<void> | undefined
   let generation = 0
@@ -55,7 +57,7 @@ export function createRoleBindingOperation(api: RolesApi): RoleBindingOperation 
       listeners.add(listener)
       return () => listeners.delete(listener)
     },
-    prepare(action: RoleBindingAction, roleId: string, subject: string) {
+    prepare(action: RoleBindingAction, roleId: RoleId, subject: string) {
       if (disposed || inFlight !== undefined) return
       snapshot = Object.freeze({ action, roleId, subject })
       publish({ status: 'confirming', ...snapshot })

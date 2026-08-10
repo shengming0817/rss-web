@@ -1,4 +1,10 @@
 import { defineEndpoint } from './coordinate'
+import {
+  INTERNAL_EMPTY,
+  NOT_FOUND_EMPTY,
+  OUTBOX_FACT_CONFLICT_EMPTY,
+  VALIDATION_PUBLIC,
+} from './error-rules'
 
 export const identityEndpoints = Object.freeze({
   login: defineEndpoint({ method: 'POST', path: '/api/v1/identity/login', successStatus: 201 }),
@@ -15,30 +21,15 @@ export const identityEndpoints = Object.freeze({
     path: '/api/v1/identity/password/change',
     successStatus: 200,
     errorPolicy: Object.freeze({
-      400: Object.freeze({
-        code: 'ERR_CORE_VALIDATION',
-        message: 'validation error',
-        retryable: false,
-        details: 'public',
-      }),
-      404: Object.freeze({
-        code: 'ERR_CORE_NOT_FOUND',
-        message: 'not found',
-        retryable: false,
-        details: 'empty',
-      }),
+      400: VALIDATION_PUBLIC,
+      404: NOT_FOUND_EMPTY,
       409: Object.freeze({
         code: 'ERR_CORE_VERSION_CONFLICT',
         message: 'version conflict',
         retryable: true,
         details: 'empty',
       }),
-      500: Object.freeze({
-        code: 'ERR_CORE_INTERNAL',
-        message: 'internal error',
-        retryable: false,
-        details: 'empty',
-      }),
+      500: INTERNAL_EMPTY,
     }),
   }),
   accountStatusGet: defineEndpoint({
@@ -46,18 +37,8 @@ export const identityEndpoints = Object.freeze({
     path: '/api/v1/identity/accounts/{userId}/status',
     successStatus: 200,
     errorPolicy: Object.freeze({
-      404: Object.freeze({
-        code: 'ERR_CORE_NOT_FOUND',
-        message: 'not found',
-        retryable: false,
-        details: 'empty',
-      }),
-      500: Object.freeze({
-        code: 'ERR_CORE_INTERNAL',
-        message: 'internal error',
-        retryable: false,
-        details: 'empty',
-      }),
+      404: NOT_FOUND_EMPTY,
+      500: INTERNAL_EMPTY,
     }),
   }),
   accountStatusSet: defineEndpoint({
@@ -65,18 +46,8 @@ export const identityEndpoints = Object.freeze({
     path: '/api/v1/identity/accounts/{userId}/status',
     successStatus: 200,
     errorPolicy: Object.freeze({
-      400: Object.freeze({
-        code: 'ERR_CORE_VALIDATION',
-        message: 'validation error',
-        retryable: false,
-        details: 'public',
-      }),
-      404: Object.freeze({
-        code: 'ERR_CORE_NOT_FOUND',
-        message: 'not found',
-        retryable: false,
-        details: 'empty',
-      }),
+      400: VALIDATION_PUBLIC,
+      404: NOT_FOUND_EMPTY,
       409: Object.freeze([
         Object.freeze({
           code: 'ERR_CORE_CONFLICT',
@@ -91,12 +62,7 @@ export const identityEndpoints = Object.freeze({
           details: 'empty',
         }),
       ]),
-      500: Object.freeze({
-        code: 'ERR_CORE_INTERNAL',
-        message: 'internal error',
-        retryable: false,
-        details: 'empty',
-      }),
+      500: INTERNAL_EMPTY,
     }),
   }),
   rolesList: defineEndpoint({
@@ -104,18 +70,8 @@ export const identityEndpoints = Object.freeze({
     path: '/api/v1/identity/roles',
     successStatus: 200,
     errorPolicy: Object.freeze({
-      400: Object.freeze({
-        code: 'ERR_CORE_VALIDATION',
-        message: 'validation error',
-        retryable: false,
-        details: 'public',
-      }),
-      500: Object.freeze({
-        code: 'ERR_CORE_INTERNAL',
-        message: 'internal error',
-        retryable: false,
-        details: 'empty',
-      }),
+      400: VALIDATION_PUBLIC,
+      500: INTERNAL_EMPTY,
     }),
   }),
   rolesAssign: defineEndpoint({
@@ -123,30 +79,10 @@ export const identityEndpoints = Object.freeze({
     path: '/api/v1/identity/roles/{roleId}/bindings',
     successStatus: 201,
     errorPolicy: Object.freeze({
-      400: Object.freeze({
-        code: 'ERR_CORE_VALIDATION',
-        message: 'validation error',
-        retryable: false,
-        details: 'public',
-      }),
-      404: Object.freeze({
-        code: 'ERR_CORE_NOT_FOUND',
-        message: 'not found',
-        retryable: false,
-        details: 'empty',
-      }),
-      409: Object.freeze({
-        code: 'ERR_CORE_OUTBOX_FACT_CONFLICT',
-        message: 'outbox fact conflict',
-        retryable: false,
-        details: 'empty',
-      }),
-      500: Object.freeze({
-        code: 'ERR_CORE_INTERNAL',
-        message: 'internal error',
-        retryable: false,
-        details: 'empty',
-      }),
+      400: VALIDATION_PUBLIC,
+      404: NOT_FOUND_EMPTY,
+      409: OUTBOX_FACT_CONFLICT_EMPTY,
+      500: INTERNAL_EMPTY,
     }),
   }),
   rolesRevoke: defineEndpoint({
@@ -154,24 +90,9 @@ export const identityEndpoints = Object.freeze({
     path: '/api/v1/identity/roles/{roleId}/bindings/{subject}',
     successStatus: 200,
     errorPolicy: Object.freeze({
-      400: Object.freeze({
-        code: 'ERR_CORE_VALIDATION',
-        message: 'validation error',
-        retryable: false,
-        details: 'public',
-      }),
-      409: Object.freeze({
-        code: 'ERR_CORE_OUTBOX_FACT_CONFLICT',
-        message: 'outbox fact conflict',
-        retryable: false,
-        details: 'empty',
-      }),
-      500: Object.freeze({
-        code: 'ERR_CORE_INTERNAL',
-        message: 'internal error',
-        retryable: false,
-        details: 'empty',
-      }),
+      400: VALIDATION_PUBLIC,
+      409: OUTBOX_FACT_CONFLICT_EMPTY,
+      500: INTERNAL_EMPTY,
     }),
   }),
 })
