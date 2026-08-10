@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory } from 'vue-router'
+import { RSS_SOURCE } from '@rss/shared'
 import { createServerAuthorizationPort } from '@rss/authorization'
 import { createPreviewAuthorizationPort } from '@rss/authorization/preview'
 import type { AuthorizationPort } from '@rss/authorization'
 import type { IdentitySession, IdentitySessionState } from '@rss/identity'
 import { createAuthorizationExperience } from '../features/authorization/authorization-context'
 import { createAppRouter } from './index'
+import { createShellNavigation } from './navigation'
 
 window.scrollTo = vi.fn()
 
@@ -179,13 +181,47 @@ describe('session-owned router', () => {
   })
 
   it.each(['/access', '/config', '/flags', '/admin', '/observability', '/observe', '/audit'])(
-    'does not resolve the removed route %s',
+    'routes the removed path %s only to the protected catch-all',
     (path) => {
       const fixture = sessionFixture({ status: 'anonymous' })
       const router = appRouter(fixture)
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-      expect(router.resolve(path).name).toBeUndefined()
-      warn.mockRestore()
+      expect(router.resolve(path).name).toBe('not-found')
     },
   )
+
+  it('derives production navigation only from the implemented Home route', () => {
+    const router = appRouter(sessionFixture({ status: 'anonymous' }))
+    expect(createShellNavigation(router, (key) => key)).toEqual([
+      {
+        id: 'home',
+        label: 'navigation.home',
+        to: { name: 'home' },
+        source: RSS_SOURCE,
+      },
+    ])
+  })
+
+  it('keeps unknown paths behind session authority and shows 404 after authentication', async () => {
+    const anonymous = appRouter(sessionFixture({ status: 'anonymous' }))
+    await anonymous.push('/unknown')
+    await anonymous.isReady()
+    expect(anonymous.currentRoute.value.name).toBe('login')
+
+    const profile = {
+      subject: 'subject',
+      tenantId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+      kind: 'user',
+    } as never
+    const authenticated = appRouter(
+      sessionFixture({
+        status: 'authenticated',
+        profile,
+        sessionExpiresAt: 2,
+        accessExpiresAt: 1,
+      }),
+    )
+    await authenticated.push('/unknown')
+    await authenticated.isReady()
+    expect(authenticated.currentRoute.value.name).toBe('not-found')
+  })
 })

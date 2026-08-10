@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import SourceBadge from '../components/SourceBadge.vue'
+import type { ShellNavigationItem } from './navigation'
 
 const props = defineProps<{
   collapsed: boolean
+  navigationItems?: readonly ShellNavigationItem[]
 }>()
 
 const emit = defineEmits<{
@@ -90,7 +93,20 @@ function openCommandPalette(): void {
       <kbd class="v1-kbd">{{ t('shell.search.shortcut') }}</kbd>
     </button>
 
-    <nav class="sidebar__nav" :aria-label="t('shell.nav.label')" />
+    <nav class="sidebar__nav" :aria-label="t('shell.nav.label')">
+      <RouterLink
+        v-for="item in navigationItems ?? []"
+        :key="item.id"
+        class="sidebar__item"
+        exact-active-class="sidebar__item--active"
+        :to="item.to"
+        :title="collapsed ? item.label : undefined"
+      >
+        <span class="sidebar__item-mark" aria-hidden="true" />
+        <span v-if="!collapsed" class="sidebar__item-label">{{ item.label }}</span>
+        <SourceBadge v-if="!collapsed" :source="item.source" />
+      </RouterLink>
+    </nav>
   </aside>
 </template>
 
@@ -242,6 +258,14 @@ function openCommandPalette(): void {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sidebar__item-mark {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
 }
 
 /* ------ Pill badges ------ */

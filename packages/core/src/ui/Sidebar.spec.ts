@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { createI18n } from 'vue-i18n'
 import { createPinia } from 'pinia'
+import { RSS_SOURCE } from '@rss/shared'
 import Sidebar from './Sidebar.vue'
 import zhCN from '../i18n/messages/zh-CN'
 import enUS from '../i18n/messages/en-US'
@@ -42,6 +43,7 @@ function mountSidebar(props: { collapsed?: boolean } = {}, path = '/') {
   return mount(Sidebar, {
     props: {
       collapsed: props.collapsed ?? false,
+      navigationItems: [{ id: 'home', label: 'Home', to: '/', source: RSS_SOURCE }],
     },
     global: {
       plugins: [router, i18n, pinia],
@@ -55,10 +57,11 @@ describe('Sidebar.vue', () => {
     document.body.innerHTML = ''
   })
 
-  it('keeps business navigation empty until RSS routes are implemented', () => {
+  it('renders only the supplied implemented navigation with a visible source', () => {
     const wrapper = mountSidebar()
-    expect(wrapper.findAll('.sidebar__item')).toHaveLength(0)
-    expect(wrapper.find('.sidebar__nav').exists()).toBe(true)
+    expect(wrapper.findAll('.sidebar__item')).toHaveLength(1)
+    expect(wrapper.get('.sidebar__item').text()).toContain('Home')
+    expect(wrapper.get('[data-source="rss"]').text()).toBeTruthy()
   })
 
   describe('collapse behavior', () => {

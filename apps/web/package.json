@@ -21,6 +21,7 @@
     "@rss/authorization": "workspace:*",
     "@rss/core": "workspace:*",
     "@rss/identity": "workspace:*",
+    "@rss/shared": "workspace:*",
     "vue-i18n": "catalog:"
   },
   "devDependencies": {

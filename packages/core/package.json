@@ -23,6 +23,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@rss/shared": "workspace:*",
     "vue": "catalog:",
     "vue-router": "catalog:",
     "pinia": "catalog:",

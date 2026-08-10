@@ -30,6 +30,15 @@ and an exact sanitized RSS forbidden response invalidates the matching local hin
 final UX outcome. The separate Preview entry is test/demo input and remains forbidden in production
 Web source. No browser ABAC evaluation, request authority, or legacy access endpoint exists.
 
+The authenticated shell derives Sidebar and command-palette navigation from implemented route
+metadata; currently that closed production set contains only Home. Removed and future capabilities
+do not receive placeholder routes or menu entries. `@rss/shared` owns a discriminated `SourceMeta`
+model with sealed, frozen display constants; direct object-literal construction is rejected. Reusable
+badges make RSS, mock, manual, external, and unavailable sources visible without using source metadata
+as request or permission authority. Generic content/error presentation accepts only reviewed status,
+code, retryability, and requestId coordinates—never backend messages or details. Unknown protected
+paths use the authenticated catch-all; anonymous requests still reach Login first.
+
 The production Nginx image is a minimal same-origin Edge with a closed
 Primary/Admin route table. It removes browser tenant headers and injects the
 deployment-fixed tenant only for login and refresh. See the

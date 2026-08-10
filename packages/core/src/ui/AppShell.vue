@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import Sidebar from './Sidebar.vue'
 import TopBar from './TopBar.vue'
 import CommandPalette from './CommandPalette.vue'
+import type { ShellNavigationItem } from './navigation'
 
 /**
  * AppShell — root layout component.
@@ -20,12 +22,16 @@ import CommandPalette from './CommandPalette.vue'
  * to prevent AT/keyboard from reaching content behind the dialog (ARIA APG).
  */
 
-const props = defineProps<{
-  /** External control for command palette open state (v-model:commandPaletteOpen). */
-  commandPaletteOpen?: boolean
-  /** External control for sidebar collapsed state (v-model:sidebarCollapsed). */
-  sidebarCollapsed?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    /** External control for command palette open state (v-model:commandPaletteOpen). */
+    commandPaletteOpen?: boolean
+    /** External control for sidebar collapsed state (v-model:sidebarCollapsed). */
+    sidebarCollapsed?: boolean
+    navigationItems?: readonly ShellNavigationItem[]
+  }>(),
+  { navigationItems: () => [] },
+)
 
 const emit = defineEmits<{
   (e: 'update:commandPaletteOpen', value: boolean): void
@@ -33,6 +39,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const router = useRouter()
 
 // Internal state — authoritative when no external prop is supplied
 const sidebarCollapsed = ref(false)
@@ -86,6 +93,10 @@ function setSidebarCollapsed(value: boolean): void {
   sidebarCollapsed.value = value
   emit('update:sidebarCollapsed', value)
 }
+
+function navigate(item: ShellNavigationItem): void {
+  void router.push(item.to)
+}
 </script>
 
 <template>
@@ -94,6 +105,7 @@ function setSidebarCollapsed(value: boolean): void {
 
     <Sidebar
       :collapsed="sidebarCollapsed"
+      :navigation-items="navigationItems ?? []"
       :inert="backgroundInert"
       @update:collapsed="setSidebarCollapsed($event)"
       @open-command-palette="openCommandPalette"
@@ -114,7 +126,9 @@ function setSidebarCollapsed(value: boolean): void {
     <CommandPalette
       ref="commandPaletteRef"
       :open="commandPaletteOpen"
+      :navigation-items="navigationItems ?? []"
       @update:open="setCommandPaletteOpen"
+      @navigate="navigate"
     />
   </div>
 </template>
