@@ -98,14 +98,16 @@ describe('RSS-only foundation boundary', () => {
 
   it('exposes only implemented Home and Runtime navigation with the protected catch-all', () => {
     const router = read('apps/web/src/router/index.ts')
+    const runtimeIntent = read('apps/web/src/features/runtime/runtime-intent.ts')
     expect(router).toContain("path: '/'")
     expect(router).toContain("path: '/login'")
     expect(router).toContain("path: ':pathMatch(.*)*'")
     expect(
       [...router.matchAll(/labelKey: '(navigation\.[^']+)'/g)].map((match) => match[1]),
     ).toEqual(['navigation.home', 'navigation.runtime'])
-    expect(router).toContain("contractId: 'runtime.inventory'")
-    expect(router).toContain("permission: 'runtime:inventory:read'")
+    expect(router).toContain('authorizationIntent: RUNTIME_INVENTORY_INTENT')
+    expect(runtimeIntent).toContain("contractId: 'runtime.inventory'")
+    expect(runtimeIntent).toContain("permission: 'runtime:inventory:read'")
     for (const path of [
       '/access',
       '/config',
@@ -213,6 +215,7 @@ describe('RSS-only foundation boundary', () => {
     expect(productionOwners).toEqual([
       'apps/web/src/features/audit/HomeAuditEntries.vue',
       'apps/web/src/features/runtime/HomeRuntimeSummary.vue',
+      'apps/web/src/features/runtime/RuntimeDetailsView.vue',
       'apps/web/src/router/index.ts',
     ])
   })

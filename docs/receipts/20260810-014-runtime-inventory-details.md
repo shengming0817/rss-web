@@ -22,9 +22,12 @@
   `providerPosture.state=unobserved` value. Build metadata is labelled as a launch declaration, not
   browser verification of an artifact.
 - Home links to the page through the existing route-metadata navigation. The route uses the existing
-  server-authoritative authorization hint and the single protected session transport.
+  server-authoritative authorization intent for both navigation and the actual request, so an exact
+  sanitized 403 invalidates the matching local hint and records the final denial. It continues to use
+  the single protected session transport.
 - Loading, malformed/error, cancellation, source labelling, and explicit user retry reuse the existing
-  closed Web states. No stale, mock, or manual fallback is retained.
+  closed Web states. A retry keeps its control mounted, disabled, busy, and focused while pending,
+  then focuses the page heading after success. No stale, mock, or manual fallback is retained.
 
 ## Security and tenant review
 
@@ -49,21 +52,32 @@
 
 ## Verification
 
-- Frozen install, full workspace typecheck/lint, 506 unit tests, 461 coverage tests, 45 root
+- Frozen install, full workspace typecheck/lint, 508 unit tests, 463 coverage tests, 45 root
   boundary tests, production build and built-identity scan all passed.
-- Nine Chromium browser journeys passed, including Runtime navigation and absence of the raw fixture
-  endpoint/SPIFFE coordinates. The Docker/Nginx Edge routing smoke passed without an Edge change.
-- The first combined run found only Prettier drift in the newly edited root boundary assertion; it was
-  formatted, then `pnpm format:check` and `git diff --check` passed. No behavioral correction was
-  required after the full run.
+- Ten Chromium browser journeys passed, including Runtime navigation, exact forbidden sanitization,
+  one shell main landmark, and absence of the raw fixture endpoint/SPIFFE coordinates. The
+  Docker/Nginx Edge routing smoke passed without an Edge change.
+- The pre-commit combined run found only Prettier drift, but its `git grep` owner guard could not see
+  the then-untracked page. Post-commit CI and review exposed that evidence gap. The final tracked-head
+  combined run passed frozen install, every gate above, Edge teardown, format, and diff checks.
+
+## Review remediation
+
+- The built-in review found four in-scope gaps: the new RSS source owner was absent from the closed
+  owner list; the page nested a second main landmark; retry removed its focused control; and the
+  request did not yet pass through the route's authorization intent owner.
+- One concentrated fix registered the exact source owner, changed the page root to a labelled
+  section, added recovery busy/focus behavior, and introduced one frozen Runtime intent consumed by
+  both router and request execution. Component, boundary, browser, and final full validation were
+  rerun on the corrected head.
 
 ## Changed-line classification
 
-- Semantic handwritten code and locale content: 310 additions / 50 deletions.
-- Tests, compile-time proofs, browser coverage, and boundary guards: 198 additions / 12 deletions.
-- Documentation and governance: 93 additions / 4 deletions.
+- Semantic handwritten code and locale content: 340 additions / 51 deletions.
+- Tests, compile-time proofs, browser coverage, and boundary guards: 338 additions / 13 deletions.
+- Documentation and governance: 107 additions / 4 deletions.
 - Generated and lockfile: 0 lines.
-- Total: 601 additions / 66 deletions.
+- Total: 785 additions / 68 deletions.
 
 ## Rollback
 

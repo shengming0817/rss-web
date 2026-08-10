@@ -80,7 +80,20 @@ async function installAdminMocks(
     expect(route.request().headers().authorization?.startsWith('Bearer ')).toBe(true)
     expect(route.request().headers()['x-tenant-id']).toBeUndefined()
     if (runtimeStatus === 200) await route.fulfill({ status: 200, json: runtimeResponse })
-    else await route.fulfill({ status: runtimeStatus, body: '<html>gateway unavailable</html>' })
+    else if (runtimeStatus === 403) {
+      await route.fulfill({
+        status: 403,
+        json: {
+          error: {
+            code: 'ERR_CORE_FORBIDDEN',
+            message: 'runtime secret denial must not render',
+            retryable: false,
+            details: [],
+            requestId: 'runtime-denied',
+          },
+        },
+      })
+    } else await route.fulfill({ status: runtimeStatus, body: '<html>gateway unavailable</html>' })
   })
   await page.route('**/api/v1/audit/entries**', async (route) => {
     expect(route.request().headers().authorization?.startsWith('Bearer ')).toBe(true)
@@ -205,6 +218,21 @@ test.describe('RSS Web Identity UX', () => {
     await expect(page.getByText('INVALID_RESPONSE')).toBeVisible()
     await expect(page.getByRole('button', { name: '重试' })).toBeVisible()
     await expect(page.getByRole('navigation', { name: '主导航' })).toBeVisible()
+  })
+
+  test('keeps the shell and sanitizes a final Runtime forbidden result', async ({ page }) => {
+    await installIdentityMocks(page, 200, 200, 403)
+    await signIn(page)
+    await page
+      .getByRole('navigation', { name: '主导航' })
+      .getByRole('link', { name: /运行时/ })
+      .click()
+    await expect(page).toHaveURL(/\/runtime$/)
+    await expect(page.getByText('ERR_CORE_FORBIDDEN')).toBeVisible()
+    await expect(page.getByText('runtime-denied')).toBeVisible()
+    await expect(page.getByText('runtime secret denial must not render')).toHaveCount(0)
+    await expect(page.getByRole('navigation', { name: '主导航' })).toBeVisible()
+    await expect(page.locator('main')).toHaveCount(1)
   })
 
   test('profile denial leaves no half-valid shell or raw server message', async ({ page }) => {

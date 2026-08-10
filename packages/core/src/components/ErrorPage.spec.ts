@@ -67,6 +67,24 @@ describe('ErrorPage', () => {
     expect(wrapper.emitted('recover')).toHaveLength(1)
   })
 
+  it('keeps recovery control mounted and exposes its pending state', async () => {
+    const wrapper = mount(ErrorPage, {
+      props: {
+        error: {
+          kind: 'serviceUnavailable',
+          code: 'WEB_NETWORK',
+          retryable: true,
+          recovery: 'retry',
+        },
+        recoveryBusy: true,
+      },
+      global: { plugins: [createRssI18n()] },
+    })
+    const recovery = wrapper.get('[data-action="recover"]')
+    expect(recovery.attributes('disabled')).toBeDefined()
+    expect(recovery.attributes('aria-busy')).toBe('true')
+  })
+
   it('reports clipboard failure without exposing another error channel', async () => {
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,

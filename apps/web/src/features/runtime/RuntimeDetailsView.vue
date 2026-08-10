@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { RuntimeInventoryFacts } from '@rss/runtime'
 import { ErrorPage, SourceBadge } from '@rss/core'
 import { RSS_SOURCE, UNAVAILABLE_SOURCE } from '@rss/shared'
 import { toSafeReadErrorPresentation } from '../../errors/rss-error'
+import { useAuthorizationIntent } from '../authorization/authorization-context'
 import { useRuntimeApi } from './runtime-context'
+import { RUNTIME_INVENTORY_INTENT } from './runtime-intent'
 
 type State =
   | { readonly status: 'loading' }
@@ -14,21 +16,38 @@ type State =
 
 const { t } = useI18n()
 const runtime = useRuntimeApi()
+const authorization = useAuthorizationIntent(RUNTIME_INVENTORY_INTENT)
 const state = ref<State>({ status: 'loading' })
+const retrying = ref(false)
+const title = ref<HTMLHeadingElement>()
 let generation = 0
 let controller: AbortController | undefined
 
 async function load(): Promise<void> {
   const current = ++generation
+  const isRecovery = state.value.status === 'error'
   controller?.abort()
-  controller = new AbortController()
-  state.value = { status: 'loading' }
+  const requestController = new AbortController()
+  controller = requestController
+  if (isRecovery) retrying.value = true
+  else state.value = { status: 'loading' }
   try {
-    const response = await runtime.inventory({ signal: controller.signal })
-    if (current === generation) state.value = { status: 'ready', facts: response.data }
+    const response = await authorization.execute(() =>
+      runtime.inventory({ signal: requestController.signal }),
+    )
+    if (current === generation) {
+      state.value = { status: 'ready', facts: response.data }
+      retrying.value = false
+      if (isRecovery) {
+        await nextTick()
+        title.value?.focus()
+      }
+    }
   } catch (error) {
-    if (current === generation && !controller.signal.aborted)
+    if (current === generation && !requestController.signal.aborted) {
       state.value = { status: 'error', error: toSafeReadErrorPresentation(error) }
+      retrying.value = false
+    }
   }
 }
 
@@ -40,10 +59,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="runtime-details" aria-labelledby="runtime-details-title">
+  <section class="runtime-details" aria-labelledby="runtime-details-title">
     <header class="runtime-details__header">
       <div>
-        <h1 id="runtime-details-title" class="v1-h1">{{ t('runtimeDetails.title') }}</h1>
+        <h1 id="runtime-details-title" ref="title" class="v1-h1" tabindex="-1">
+          {{ t('runtimeDetails.title') }}
+        </h1>
         <p class="v1-sub">{{ t('runtimeDetails.subtitle') }}</p>
       </div>
       <SourceBadge v-if="state.status === 'ready'" :source="RSS_SOURCE" />
@@ -161,9 +182,10 @@ onBeforeUnmount(() => {
       :error="state.error"
       :heading-level="2"
       :show-recovery="state.error.recovery === 'retry'"
+      :recovery-busy="retrying"
       @recover="load"
     />
-  </main>
+  </section>
 </template>
 
 <style scoped>
