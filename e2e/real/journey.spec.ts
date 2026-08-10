@@ -11,6 +11,10 @@ async function signIn(page: Page, login = username, credential = password): Prom
   await page.getByLabel('用户名').fill(login)
   await page.getByLabel('密码').fill(credential)
   await page.getByRole('button', { name: '登录', exact: true }).click()
+}
+
+async function signInAndExpectShell(page: Page, login = username, credential = password) {
+  await signIn(page, login, credential)
   await expect(page.getByRole('navigation', { name: '主导航' })).toBeVisible()
 }
 
@@ -24,7 +28,7 @@ test('@main completes tenant bootstrap, verified profile, Admin facts, refresh, 
     }
   })
 
-  await signIn(page)
+  await signInAndExpectShell(page)
   await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: /身份/ }).click()
   await expect(page.getByRole('heading', { name: '已验证身份' })).toBeVisible()
   await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: /首页/ }).click()
@@ -83,7 +87,7 @@ test('@main completes tenant bootstrap, verified profile, Admin facts, refresh, 
 })
 
 test('@main keeps real 403 authoritative for a limited account', async ({ page }) => {
-  await signIn(page, limitedUsername)
+  await signInAndExpectShell(page, limitedUsername)
   await expect(page.locator('[data-source="unavailable"]')).toHaveCount(2)
   await expect(page.getByText('ERR_CORE_FORBIDDEN')).toHaveCount(2)
 })
@@ -103,8 +107,8 @@ test('@main changes a real password once and revokes every existing session', as
     }
   })
 
-  await signIn(pageA, passwordUsername)
-  await signIn(pageB, passwordUsername)
+  await signInAndExpectShell(pageA, passwordUsername)
+  await signInAndExpectShell(pageB, passwordUsername)
   await pageA
     .getByRole('navigation', { name: '主导航' })
     .getByRole('link', { name: /身份/ })
@@ -126,7 +130,7 @@ test('@main changes a real password once and revokes every existing session', as
   await pageA.getByLabel('密码').fill(password)
   await pageA.getByRole('button', { name: '登录', exact: true }).click()
   await expect(pageA.getByRole('alert')).toContainText('凭据无效')
-  await signIn(pageA, passwordUsername, replacementPassword)
+  await signInAndExpectShell(pageA, passwordUsername, replacementPassword)
 
   await contextA.close()
   await contextB.close()
@@ -192,8 +196,7 @@ test('@budget-exhausted reports the real RSS request-budget 503 without a mock f
 test('@admin-down keeps Primary login and shell available while Admin panels fail', async ({
   page,
 }) => {
-  await signIn(page)
-  await expect(page.getByRole('heading', { name: '已验证身份' })).toBeVisible()
+  await signInAndExpectShell(page)
   await expect(page.locator('[data-source="unavailable"]')).toHaveCount(2)
   await expect(page.getByRole('navigation', { name: '主导航' })).toBeVisible()
 })
