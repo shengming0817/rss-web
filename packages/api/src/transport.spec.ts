@@ -65,6 +65,37 @@ describe('createHttpTransport', () => {
     ).resolves.toEqual({ ok: true })
   })
 
+  it.each(['Authorization', 'authorization', 'X-Tenant-ID', 'x-tenant-id'])(
+    'rejects browser-authored control header %s before sending',
+    async (header) => {
+      const { mock, transport } = setup()
+      await expect(
+        transport.request({
+          method: 'GET',
+          path: '/api/v1/identity/profile',
+          headers: { [header]: 'forged' },
+          successStatus: 200,
+          decode: decodeObject,
+        }),
+      ).rejects.toMatchObject({ cause: 'client', code: 'INVALID_REQUEST' })
+      expect(mock.history.get).toHaveLength(0)
+    },
+  )
+
+  it('rejects a protected request that bypasses the session transport', async () => {
+    const { mock, transport } = setup()
+    await expect(
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/identity/profile',
+        session: 'required',
+        successStatus: 200,
+        decode: decodeObject,
+      }),
+    ).rejects.toMatchObject({ cause: 'client' })
+    expect(mock.history.get).toHaveLength(0)
+  })
+
   it('returns void for 204 without touching an unexpected body', async () => {
     const { mock, transport } = setup()
     mock.onDelete('/api/v1/settings/configs/key').reply(204, '<not-json>')

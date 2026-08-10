@@ -68,8 +68,9 @@ const NO_AXIOS_PATH = {
 }
 
 const INTERNAL_ENDPOINT_PATTERN = {
-  regex: '^@rss/api/endpoints/',
-  message: '应用层禁止绕过 domain adapter 使用 endpoint coordinates。',
+  regex: '^@rss/api/(?:endpoints/|session$|testing$)',
+  message:
+    '应用层禁止绕过 domain adapter 使用 endpoint coordinates、session capability 或测试工厂。',
 }
 
 /** Helper: create a no-restricted-imports rule config combining all given patterns + paths */
@@ -222,7 +223,7 @@ export default tseslint.config(
   },
 
   // ── 边界锁: packages/identity ─────────────────────────────────────────────
-  // identity 只依赖 api seam；endpoint subpath 是其唯一 raw-coordinate owner。
+  // identity 默认只依赖 api seam；endpoint subpath 是其唯一 raw-coordinate owner。
   {
     files: ['packages/identity/**/*.ts'],
     rules: {
@@ -230,7 +231,40 @@ export default tseslint.config(
         [
           {
             regex: '^@rss/(?!api(?:$|/endpoints/identity$))',
-            message: '@rss/identity 只允许依赖 @rss/api 及其 Identity endpoint。',
+            message: '@rss/identity 默认只允许依赖 @rss/api 与 Identity endpoint。',
+          },
+        ],
+        [NO_AXIOS_PATH],
+      ),
+    },
+  },
+
+  // The bearer/recovery capability has exactly one production owner.
+  {
+    files: ['packages/identity/src/session/controller.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex: '^@rss/(?!api(?:$|/endpoints/identity$|/session$))',
+            message: 'Identity session controller 只允许依赖 API seam 与 session capability。',
+          },
+        ],
+        [NO_AXIOS_PATH],
+      ),
+    },
+  },
+
+  // Identity behavior tests may mint the real sanitized error class. Production
+  // sources remain unable to import the test-only factory.
+  {
+    files: ['packages/identity/**/*.spec.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex: '^@rss/(?!api(?:$|/endpoints/identity$|/testing$))',
+            message: '@rss/identity 测试只允许依赖 API seam 与测试工厂。',
           },
         ],
         [NO_AXIOS_PATH],

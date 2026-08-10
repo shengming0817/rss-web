@@ -12,6 +12,7 @@ interface RequestBase {
   body?: unknown
   signal?: AbortSignal
   timeoutMs?: number
+  session?: 'required'
 }
 
 export interface RequestOptions<T> extends RequestBase {

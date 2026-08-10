@@ -1,4 +1,10 @@
-import type { IdentityApi, LoginResponse, RefreshResponse } from './index'
+import type {
+  IdentityApi,
+  IdentitySession,
+  LoginResponse,
+  RefreshResponse,
+  VerifiedProfile,
+} from './index'
 
 declare const api: IdentityApi
 declare const login: LoginResponse
@@ -13,3 +19,15 @@ void refresh.data.sessionId
 void refresh.data.expiresAt
 // @ts-expect-error Identity adapters do not accept browser-authored authority headers.
 void api.profile({ headers: { Authorization: 'fixture' } })
+
+declare const session: IdentitySession
+declare const verified: VerifiedProfile
+void verified.subject
+void session.transport
+// @ts-expect-error Session state never exposes bearer credentials.
+void session.getState().accessToken
+// @ts-expect-error Refresh is internal to the protected transport single-flight.
+void session.refresh()
+// @ts-expect-error A decoded profile DTO cannot be promoted to verified authority.
+const forged: VerifiedProfile = { subject: 'x', tenantId: 'x', kind: 'user' }
+void forged

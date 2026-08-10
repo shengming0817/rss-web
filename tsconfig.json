@@ -9,6 +9,7 @@
     "edge-config.spec.ts",
     "identity-migration.spec.ts",
     "scope-removal.spec.ts",
+    "session-security.spec.ts",
     "vitest.config.ts",
     "vitest.workspace.ts",
     "playwright.config.ts",

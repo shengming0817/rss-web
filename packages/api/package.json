@@ -5,7 +5,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./endpoints/identity": "./src/endpoints/identity.ts"
+    "./endpoints/identity": "./src/endpoints/identity.ts",
+    "./session": "./src/session.ts",
+    "./testing": "./src/testing.ts"
   },
   "files": [
     "src"

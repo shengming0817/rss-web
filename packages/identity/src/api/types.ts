@@ -3,6 +3,10 @@ export interface LoginRequest {
   readonly password: string
 }
 
+export interface IdentityCallOptions {
+  readonly signal?: AbortSignal
+}
+
 export interface LoginData {
   readonly sessionId: string
   readonly expiresAt: number

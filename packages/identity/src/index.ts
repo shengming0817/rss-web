@@ -1,6 +1,8 @@
 export { createIdentityApi } from './api'
+export { createIdentitySession, isIdentitySessionError } from './session'
 export type {
   IdentityApi,
+  IdentityCallOptions,
   LoginData,
   LoginRequest,
   LoginResponse,
@@ -15,3 +17,14 @@ export type {
   RefreshRequest,
   RefreshResponse,
 } from './api'
+export type {
+  IdentitySession,
+  IdentitySessionConfig,
+  IdentitySessionError,
+  IdentitySessionErrorCode,
+  IdentitySessionListener,
+  IdentitySessionState,
+  SessionOperationOptions,
+  VerifiedProfile,
+  VerifiedProfileKind,
+} from './session'

@@ -14,10 +14,13 @@ The reviewed RSS contract selection is pinned in
 [`docs/contracts/20260809-current-rss-baseline.md`](docs/contracts/20260809-current-rss-baseline.md).
 It is audit evidence, not a runtime registry or a copy of backend contracts.
 
-`@rss/identity` currently provides strict DTO decoding and an injected API
-adapter for login, refresh, profile, logout, and logout-all. It does not create
-session authority, store tokens, add tenant/authentication headers, or provide
-UI behavior.
+`@rss/identity` provides strict DTO decoding, an injected API adapter, and a
+framework-neutral memory-only session controller. Only a successful
+authenticated profile verification creates subject/tenant/kind authority.
+Concurrent protected-request 401s share one refresh rotation and retry once;
+terminal failures atomically clear the in-memory session. Tokens are never
+persisted or exposed through public state. UI and router integration remain a
+later issue.
 
 The production Nginx image is a minimal same-origin Edge with a closed
 Primary/Admin route table. It removes browser tenant headers and injects the

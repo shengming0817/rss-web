@@ -38,12 +38,14 @@ describe('createIdentityApi', () => {
     await expect(api.logoutAll()).resolves.toEqual(logoutAllResponseFixture)
 
     expect(
-      calls.map(({ method, path, successStatus, body, headers }) => ({
+      calls.map(({ method, path, successStatus, body, headers, session, signal }) => ({
         method,
         path,
         successStatus,
         body,
         headers,
+        session,
+        signal,
       })),
     ).toEqual([
       {
@@ -52,6 +54,8 @@ describe('createIdentityApi', () => {
         successStatus: 201,
         body: loginRequestFixture,
         headers: undefined,
+        session: undefined,
+        signal: undefined,
       },
       {
         method: 'POST',
@@ -59,6 +63,8 @@ describe('createIdentityApi', () => {
         successStatus: 201,
         body: refreshRequestFixture,
         headers: undefined,
+        session: undefined,
+        signal: undefined,
       },
       {
         method: 'GET',
@@ -66,6 +72,8 @@ describe('createIdentityApi', () => {
         successStatus: 200,
         body: undefined,
         headers: undefined,
+        session: 'required',
+        signal: undefined,
       },
       {
         method: 'POST',
@@ -73,6 +81,8 @@ describe('createIdentityApi', () => {
         successStatus: 200,
         body: {},
         headers: undefined,
+        session: 'required',
+        signal: undefined,
       },
       {
         method: 'POST',
@@ -80,7 +90,35 @@ describe('createIdentityApi', () => {
         successStatus: 200,
         body: {},
         headers: undefined,
+        session: 'required',
+        signal: undefined,
       },
+    ])
+  })
+
+  it('accepts only a caller cancellation signal and marks protected methods', async () => {
+    const controller = new AbortController()
+    const { calls, transport } = recordingTransport([
+      loginResponseFixture,
+      refreshResponseFixture,
+      profileResponseFixture,
+      logoutResponseFixture,
+      logoutAllResponseFixture,
+    ])
+    const api = createIdentityApi(transport)
+
+    await api.login(loginRequestFixture, { signal: controller.signal })
+    await api.refresh(refreshRequestFixture, { signal: controller.signal })
+    await api.profile({ signal: controller.signal })
+    await api.logout({ signal: controller.signal })
+    await api.logoutAll({ signal: controller.signal })
+
+    expect(calls.map(({ signal, session }) => ({ signal, session }))).toEqual([
+      { signal: controller.signal, session: undefined },
+      { signal: controller.signal, session: undefined },
+      { signal: controller.signal, session: 'required' },
+      { signal: controller.signal, session: 'required' },
+      { signal: controller.signal, session: 'required' },
     ])
   })
 

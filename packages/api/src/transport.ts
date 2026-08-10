@@ -1,6 +1,7 @@
 import axios from 'axios'
 import type { AxiosInstance, AxiosRequestConfig } from 'axios'
 import type { HttpTransport, NoContentRequest, QueryValue, RequestOptions } from './types'
+import { authorizationFrom } from './internal/authorization'
 import {
   abortedError,
   clientError,
@@ -99,13 +100,30 @@ function requestConfig(
 ): AxiosRequestConfig {
   const timeout = options.timeoutMs ?? defaultTimeoutMs
   if (!positiveTimeout(timeout)) throw clientError()
+  const authorization = authorizationFrom(options)
+  const controlHeader = Object.keys(options.headers ?? {}).some((header) => {
+    const normalized = header.toLowerCase()
+    return normalized === 'authorization' || normalized === 'x-tenant-id'
+  })
+  if (
+    controlHeader ||
+    (options.session === 'required' && authorization === undefined) ||
+    (authorization !== undefined &&
+      (options.session !== 'required' || authorization.trim().length === 0))
+  ) {
+    throw clientError()
+  }
+  const headers = {
+    ...(options.headers ?? {}),
+    ...(authorization === undefined ? {} : { Authorization: `Bearer ${authorization}` }),
+  }
   return {
     method: options.method,
     url: resolvePath(options.path, options.pathParams),
     timeout,
     validateStatus: () => true,
     ...(options.query === undefined ? {} : { params: resolveQuery(options.query) }),
-    ...(options.headers === undefined ? {} : { headers: { ...options.headers } }),
+    ...(Object.keys(headers).length === 0 ? {} : { headers }),
     ...(options.body === undefined ? {} : { data: options.body }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
   }
