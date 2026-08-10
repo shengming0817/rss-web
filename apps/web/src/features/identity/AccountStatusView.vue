@@ -28,6 +28,8 @@ const userIdInput = ref('')
 const targetStatus = ref<AccountStatus>('active')
 const attempted = ref(false)
 const panelHeading = ref<HTMLElement>()
+const userIdField = ref<HTMLInputElement>()
+const busyStatus = ref<HTMLElement>()
 
 const operation = createAccountStatusOperation({
   get: (userId, options) => readAuthorization.execute(() => api.get(userId, options)),
@@ -61,7 +63,11 @@ watch(userIdInput, (value) => {
 function read(): void {
   attempted.value = true
   const userId = userIdInput.value.trim()
-  if (!isAccountStatusUserId(userId) || busy.value) return
+  if (!isAccountStatusUserId(userId)) {
+    void nextTick(() => userIdField.value?.focus())
+    return
+  }
+  if (busy.value) return
   void operation.read(userId)
 }
 
@@ -71,6 +77,7 @@ function beginSet(): void {
 
 function confirmSet(): void {
   void operation.confirmSet()
+  void nextTick(() => busyStatus.value?.focus())
 }
 
 onBeforeUnmount(() => {
@@ -97,10 +104,11 @@ onBeforeUnmount(() => {
       </header>
 
       <p>{{ t('accountStatus.explicitWarning') }}</p>
-      <form @submit.prevent="read">
+      <form novalidate @submit.prevent="read">
         <label for="account-status-user-id">{{ t('accountStatus.userId') }}</label>
         <input
           id="account-status-user-id"
+          ref="userIdField"
           v-model="userIdInput"
           name="userId"
           :pattern="ACCOUNT_STATUS_USER_ID_PATTERN"
@@ -123,7 +131,7 @@ onBeforeUnmount(() => {
         </button>
       </form>
 
-      <p v-if="busy" role="status" aria-live="polite">
+      <p v-if="busy" ref="busyStatus" role="status" tabindex="-1" aria-live="polite">
         {{ t(state.status === 'writing' ? 'accountStatus.writing' : 'accountStatus.reading') }}
       </p>
 

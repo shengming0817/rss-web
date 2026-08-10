@@ -408,6 +408,18 @@ test.describe('RSS Web Identity UX', () => {
     await expect(page).toHaveURL(/\/account-status$/)
     expect(requests).toEqual([])
 
+    for (const invalid of [
+      'not-a-user',
+      'F47AC10B-58CC-4372-A567-0E02B2C3D479',
+      '00000000-0000-0000-0000-000000000000',
+    ]) {
+      await page.getByLabel('User ID').fill(invalid)
+      await page.getByRole('button', { name: '读取状态' }).click()
+      await expect(page.getByRole('alert')).toContainText('canonical non-nil UUID')
+      await expect(page.getByLabel('User ID')).toBeFocused()
+      expect(requests).toEqual([])
+    }
+
     await page.getByLabel('User ID').fill(accountStatusUserId)
     await page.getByRole('button', { name: '读取状态' }).click()
     await expect(

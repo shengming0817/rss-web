@@ -6,6 +6,14 @@ type RecordedRequest = NoContentRequest | RequestOptions<unknown>
 const now = 1_800_000_000
 const subject = 'f47ac10b-58cc-4372-a567-0e02b2c3d479'
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
+}
+
 async function authenticated() {
   const transport = {
     request: vi.fn(async (request: RecordedRequest) => {
@@ -60,5 +68,59 @@ describe('IdentitySession Account Status invalidation', () => {
     ).toBe(false)
     expect(session.invalidateForAccountStatusChange('not-a-user', 'deactivated')).toBe(false)
     expect(session.getState().status).toBe('authenticated')
+  })
+
+  it('aborts an in-flight refresh and fences its late completion for a self change', async () => {
+    let currentTime = now
+    const rotation = deferred<unknown>()
+    let refreshSignal: AbortSignal | undefined
+    const transport = {
+      request: vi.fn(async (request: RecordedRequest) => {
+        let wire: unknown
+        if (request.path === '/api/v1/identity/login') {
+          wire = {
+            data: {
+              sessionId: 'session-secret',
+              expiresAt: currentTime + 3_600,
+              accessToken: 'access-old',
+              refreshToken: 'refresh-old',
+              accessExpiresAt: currentTime + 1,
+            },
+          }
+        } else if (request.path === '/api/v1/identity/profile') {
+          wire = { data: { subject, tenantId: subject, kind: 'user' } }
+        } else if (request.path === '/api/v1/identity/refresh') {
+          refreshSignal = request.signal
+          wire = await rotation.promise
+        } else {
+          wire = { ok: true }
+        }
+        return request.successStatus === 204 ? undefined : request.decode(wire)
+      }),
+    } as unknown as HttpTransport
+    const session = createIdentitySession({ transport, nowEpochSeconds: () => currentTime })
+    await session.login({ username: 'manager', password: 'secret' })
+    currentTime += 2
+    const request = session.transport.request({
+      method: 'GET',
+      path: '/api/v1/settings/configs/key',
+      session: 'required',
+      successStatus: 200,
+      decode: (value) => value,
+    })
+    await vi.waitFor(() => expect(session.getState().status).toBe('refreshing'))
+
+    expect(session.invalidateForAccountStatusChange(subject, 'locked')).toBe(true)
+    expect(refreshSignal?.aborted).toBe(true)
+    expect(session.getState()).toEqual({ status: 'expired' })
+    rotation.resolve({
+      data: {
+        accessToken: 'access-new',
+        refreshToken: 'refresh-new',
+        accessExpiresAt: currentTime + 60,
+      },
+    })
+    await expect(request).rejects.toMatchObject({ code: 'SESSION_INVALIDATED' })
+    expect(session.getState()).toEqual({ status: 'expired' })
   })
 })

@@ -22,6 +22,14 @@ import AccountStatusView from './AccountStatusView.vue'
 
 const userId = 'f47ac10b-58cc-4372-a567-0e02b2c3d479'
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
+}
+
 function mountView() {
   return mount(AccountStatusView, {
     attachTo: document.body,
@@ -52,6 +60,8 @@ describe('AccountStatusView', () => {
     await wrapper.get('form').trigger('submit')
     expect(get).not.toHaveBeenCalled()
     expect(wrapper.get('[role="alert"]').text()).toContain('canonical non-nil UUID')
+    await flushPromises()
+    expect(document.activeElement).toBe(wrapper.get('#account-status-user-id').element)
     wrapper.unmount()
   })
 
@@ -89,6 +99,26 @@ describe('AccountStatusView', () => {
     )
     expect(get).toHaveBeenCalledOnce()
     expect(wrapper.text()).toContain('本次是否变更')
+    wrapper.unmount()
+  })
+
+  it('moves focus from confirmation to a stable busy status and then the panel heading', async () => {
+    const pending = deferred<{ data: { status: 'suspended'; changed: true } }>()
+    set.mockReturnValue(pending.promise)
+    const wrapper = mountView()
+    await load(wrapper)
+    await wrapper.get('[data-action="prepare-account-status"]').trigger('click')
+    const confirm = wrapper.get('[data-action="confirm-account-status"]')
+    ;(confirm.element as HTMLElement).focus()
+    await confirm.trigger('click')
+    await flushPromises()
+
+    const status = wrapper.get('[role="status"]')
+    expect(document.activeElement).toBe(status.element)
+    expect(status.attributes('tabindex')).toBe('-1')
+    pending.resolve({ data: { status: 'suspended', changed: true } })
+    await flushPromises()
+    expect(document.activeElement).toBe(wrapper.get('#account-status-operation-title').element)
     wrapper.unmount()
   })
 

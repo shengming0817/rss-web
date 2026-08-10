@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { HttpTransport, NoContentRequest, RequestOptions } from '@rss/api'
+import { decodeWireErrorForTest } from '@rss/api/testing'
+import { createIdentitySession } from '../session'
 import { createAccountStatusApi } from './client'
 
 type RecordedRequest = NoContentRequest | RequestOptions<unknown>
@@ -77,4 +79,62 @@ describe('AccountStatusApi', () => {
       expect(transport.request).not.toHaveBeenCalled()
     },
   )
+
+  it('uses one exact 401 recovery and one idempotent PUT replay', async () => {
+    const now = 1_800_000_000
+    let accountCalls = 0
+    let refreshCalls = 0
+    const transport = {
+      request: vi.fn(async (request: RecordedRequest) => {
+        let wire: unknown
+        if (request.path === '/api/v1/identity/login') {
+          wire = {
+            data: {
+              sessionId: 'session-secret',
+              expiresAt: now + 3_600,
+              accessToken: 'access-old',
+              refreshToken: 'refresh-old',
+              accessExpiresAt: now + 60,
+            },
+          }
+        } else if (request.path === '/api/v1/identity/profile') {
+          wire = { data: { subject: userId, tenantId: userId, kind: 'user' } }
+        } else if (request.path === '/api/v1/identity/refresh') {
+          refreshCalls += 1
+          wire = {
+            data: {
+              accessToken: 'access-new',
+              refreshToken: 'refresh-new',
+              accessExpiresAt: now + 120,
+            },
+          }
+        } else if (request.path === '/api/v1/identity/accounts/{userId}/status') {
+          accountCalls += 1
+          if (accountCalls === 1) {
+            throw decodeWireErrorForTest(401, {
+              error: {
+                code: 'ERR_CORE_UNAUTHENTICATED',
+                message: 'unauthenticated',
+                retryable: false,
+                details: [],
+                requestId: 'account-status-401',
+              },
+            })
+          }
+          wire = { data: { status: 'suspended', changed: true } }
+        } else {
+          throw new Error(`unexpected path ${request.path}`)
+        }
+        return request.successStatus === 204 ? undefined : request.decode(wire)
+      }),
+    } as unknown as HttpTransport
+    const session = createIdentitySession({ transport, nowEpochSeconds: () => now })
+    await session.login({ username: 'manager', password: 'secret' })
+
+    await expect(
+      createAccountStatusApi(session.transport).set(userId, { targetStatus: 'suspended' }),
+    ).resolves.toEqual({ data: { status: 'suspended', changed: true } })
+    expect(accountCalls).toBe(2)
+    expect(refreshCalls).toBe(1)
+  })
 })

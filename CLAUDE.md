@@ -24,9 +24,10 @@ confirmed success or a commit-unknown result. Password values remain component-l
 persisted, logged, copied into routes, or exposed through errors.
 Account Status accepts only an explicit canonical non-nil `userId` resource path and a closed desired
 state. Do not add subject/directory providers, pickers, mocks, tenant/principal inference, optimistic
-facts, automatic write retry, or fallback sources. A self-target non-active confirmed or
-commit-unknown write must clear authority through the single Identity session controller; do not call
-logout as compensation.
+facts, or fallback sources. The idempotent PUT may use only the session owner's exact 401
+single-recovery/replay; never automatically retry network, timeout, conflict, server, or protocol
+outcomes. A self-target non-active confirmed or commit-unknown write must clear authority through the
+single Identity session controller; do not call logout as compensation.
 The Nginx same-origin Edge is the sole listener-routing and pre-auth tenant
 bootstrap boundary. Do not add browser-selectable tenants, client runtime API
 origins, listener discovery, proxy fallbacks, or Internal/Health routes.
