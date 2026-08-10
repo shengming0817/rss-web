@@ -64,7 +64,7 @@ export function createAuditPagination(loadPage: PageLoader): AuditPagination {
       try {
         const page = await loadPage(cursor, requestController.signal)
         if (current !== generation || disposed) return
-        if (page.hasMore && (page.nextCursor === undefined || page.nextCursor.length === 0)) {
+        if (page.nextCursor === '' || page.hasMore !== (page.nextCursor !== undefined)) {
           fail(paginationError())
           return
         }
@@ -73,12 +73,20 @@ export function createAuditPagination(loadPage: PageLoader): AuditPagination {
           return
         }
         const pageSequences = new Set<number>()
-        let duplicateSequence = false
+        let sequenceBreak = false
+        let previousSequence = previous.at(-1)?.seq
         for (const entry of page.data) {
-          if (pageSequences.has(entry.seq) || seenSequences.has(entry.seq)) duplicateSequence = true
+          if (
+            pageSequences.has(entry.seq) ||
+            seenSequences.has(entry.seq) ||
+            (previousSequence !== undefined && entry.seq !== previousSequence + 1)
+          ) {
+            sequenceBreak = true
+          }
           pageSequences.add(entry.seq)
+          previousSequence = entry.seq
         }
-        if (duplicateSequence) {
+        if (sequenceBreak) {
           fail(paginationError())
           return
         }

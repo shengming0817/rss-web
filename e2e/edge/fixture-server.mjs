@@ -25,6 +25,11 @@ const server = createServer((request, response) => {
     response.end(JSON.stringify({ listener, requestCount }))
     return
   }
+  if (request.url?.includes('fixture-count=1')) {
+    response.setHeader('Content-Type', 'application/json')
+    response.end(JSON.stringify({ listener, requestCount }))
+    return
+  }
 
   const chunks = []
   request.on('data', (chunk) => chunks.push(chunk))

@@ -145,6 +145,19 @@ async function installAdminMocks(
           },
         },
       })
+    } else if (targetAuditStatus === 401) {
+      await route.fulfill({
+        status: 401,
+        json: {
+          error: {
+            code: 'ERR_CORE_UNAUTHENTICATED',
+            message: 'target audit authentication expired',
+            retryable: false,
+            details: [],
+            requestId: 'target-audit-expired',
+          },
+        },
+      })
     } else
       await route.fulfill({ status: targetAuditStatus, body: '<html>target unavailable</html>' })
   })
@@ -378,6 +391,30 @@ test.describe('RSS Web Identity UX', () => {
     await expect(page.getByText('target audit secret denial must not render')).toHaveCount(0)
     await expect(page.getByRole('button', { name: '重试' })).toHaveCount(0)
     expect(targetRequests).toBe(1)
+  })
+
+  test('invalidates the session after one target Audit 401 without refresh or replay', async ({
+    page,
+  }) => {
+    let targetRequests = 0
+    let refreshRequests = 0
+    page.on('request', (request) => {
+      const path = new URL(request.url()).pathname
+      if (path.includes('/api/v1/audit/tenants/')) targetRequests += 1
+      if (path === '/api/v1/identity/refresh') refreshRequests += 1
+    })
+    await installIdentityMocks(page, 200, 200, 200, 401)
+    await signIn(page)
+    await page
+      .getByRole('navigation', { name: '主导航' })
+      .getByRole('link', { name: /审计/ })
+      .click()
+    await page.getByLabel('目标 tenant ID').fill('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
+    await page.getByRole('button', { name: '查询目标 tenant' }).click()
+    await expect(page).toHaveURL(/\/login$/)
+    await expect(page.getByRole('heading', { name: '登录' })).toBeVisible()
+    expect(targetRequests).toBe(1)
+    expect(refreshRequests).toBe(0)
   })
 
   test('logout and confirmed logout-all invalidate local authority immediately', async ({

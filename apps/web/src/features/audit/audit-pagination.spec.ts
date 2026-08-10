@@ -37,6 +37,18 @@ describe('audit pagination controller', () => {
   it.each([
     { first: { data: [row(1)], hasMore: true }, reason: 'missing next cursor' },
     {
+      first: { data: [row(1)], hasMore: false, nextCursor: 'stale' },
+      reason: 'terminal page with stale cursor',
+    },
+    {
+      first: { data: [row(1), row(3)], hasMore: false },
+      reason: 'within-page sequence gap',
+    },
+    {
+      first: { data: [row(2), row(1)], hasMore: false },
+      reason: 'out-of-order page',
+    },
+    {
       first: { data: [row(1)], hasMore: true, nextCursor: 'same' },
       second: { data: [row(2)], hasMore: true, nextCursor: 'same' },
       reason: 'repeated cursor',
@@ -45,6 +57,11 @@ describe('audit pagination controller', () => {
       first: { data: [row(1)], hasMore: true, nextCursor: 'next' },
       second: { data: [row(1)], hasMore: false },
       reason: 'duplicate sequence',
+    },
+    {
+      first: { data: [row(1)], hasMore: true, nextCursor: 'next' },
+      second: { data: [row(3)], hasMore: false },
+      reason: 'cross-page sequence gap',
     },
   ] satisfies Array<{
     first: AuditEntriesPage

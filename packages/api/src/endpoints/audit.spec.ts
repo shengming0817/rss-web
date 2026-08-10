@@ -27,7 +27,28 @@ describe('Audit endpoint coordinates', () => {
       method: 'GET',
       path: '/api/v1/audit/tenants/{tenantId}/entries',
       successStatus: 200,
+      errorPolicy: {
+        400: {
+          code: 'ERR_CORE_VALIDATION',
+          message: 'validation error',
+          retryable: false,
+          details: 'empty',
+        },
+        500: {
+          code: 'ERR_CORE_INTERNAL',
+          message: 'internal error',
+          retryable: false,
+          details: 'empty',
+        },
+        501: {
+          code: 'ERR_CORE_NOT_IMPLEMENTED',
+          message: 'not implemented',
+          retryable: false,
+          details: 'empty',
+        },
+      },
     })
     expect(Object.isFrozen(auditEndpoints.listTenantEntries)).toBe(true)
+    expect(Object.isFrozen(auditEndpoints.listTenantEntries.errorPolicy)).toBe(true)
   })
 })

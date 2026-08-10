@@ -117,6 +117,7 @@ describe('AuditEntriesView', () => {
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     const next = wrapper.get('[data-action="next-target-audit"]')
+    ;(next.element as HTMLElement).focus()
     await next.trigger('click')
     await next.trigger('click')
     expect(listTenantEntries).toHaveBeenCalledTimes(2)
@@ -124,6 +125,54 @@ describe('AuditEntriesView', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('action-2')
     expect(wrapper.text()).toContain('action-3')
+    expect(wrapper.text()).toContain('已加载最后一页审计条目。')
+    expect(document.activeElement).toBe(wrapper.get('#target-audit-title').element)
+    wrapper.unmount()
+  })
+
+  it('keeps ambient recovery focused while pending and moves focus to the panel after success', async () => {
+    let resolveRetry!: (value: unknown) => void
+    const listEntries = vi
+      .fn()
+      .mockRejectedValueOnce(networkErrorForTest())
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveRetry = resolve
+          }),
+      )
+    const { wrapper } = mountView({ listEntries })
+    await flushPromises()
+    const ambient = wrapper.get('[data-section="ambient-audit"]')
+    const recover = ambient.get('[data-action="recover"]')
+    ;(recover.element as HTMLElement).focus()
+    await recover.trigger('click')
+    expect(document.activeElement).toBe(recover.element)
+    expect(recover.attributes('disabled')).toBeDefined()
+    expect(recover.attributes('aria-busy')).toBe('true')
+    resolveRetry({ data: [entry(1)], hasMore: false })
+    await flushPromises()
+    expect(document.activeElement).toBe(wrapper.get('#ambient-audit-title').element)
+    expect(ambient.text()).toContain('已加载最后一页审计条目。')
+    wrapper.unmount()
+  })
+
+  it('moves focus to the target panel after an explicit next-page failure', async () => {
+    const listTenantEntries = vi
+      .fn()
+      .mockResolvedValueOnce({ data: [entry(2)], hasMore: true, nextCursor: 'next' })
+      .mockRejectedValueOnce(networkErrorForTest())
+    const { wrapper } = mountView({ listTenantEntries })
+    await flushPromises()
+    await wrapper.get('[data-field="target-tenant"]').setValue(tenant)
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    const next = wrapper.get('[data-action="next-target-audit"]')
+    ;(next.element as HTMLElement).focus()
+    await next.trigger('click')
+    await flushPromises()
+    expect(document.activeElement).toBe(wrapper.get('#target-audit-title').element)
+    expect(wrapper.get('[data-section="target-audit"]').text()).toContain('NETWORK_ERROR')
     wrapper.unmount()
   })
 

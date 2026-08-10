@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
@@ -9,6 +9,8 @@ const props = defineProps<{
 const { t } = useI18n()
 const revealed = ref(false)
 const copyState = ref<'idle' | 'copied' | 'failed'>('idle')
+const revealButton = ref<HTMLButtonElement>()
+const copyButton = ref<HTMLButtonElement>()
 let generation = 0
 
 watch(
@@ -25,10 +27,18 @@ onBeforeUnmount(() => {
   generation += 1
 })
 
-function hide(): void {
+async function reveal(): Promise<void> {
+  revealed.value = true
+  await nextTick()
+  copyButton.value?.focus()
+}
+
+async function hide(): Promise<void> {
   generation += 1
   revealed.value = false
   copyState.value = 'idle'
+  await nextTick()
+  revealButton.value?.focus()
 }
 
 async function copy(): Promise<void> {
@@ -52,16 +62,23 @@ async function copy(): Promise<void> {
     <span>{{ label }}</span>
     <button
       v-if="!revealed"
+      ref="revealButton"
       type="button"
       class="v1-btn"
       data-action="reveal-sensitive"
-      @click="revealed = true"
+      @click="reveal"
     >
       {{ t('auditPage.sensitive.reveal', { label }) }}
     </button>
     <template v-else>
       <code>{{ value }}</code>
-      <button type="button" class="v1-btn" data-action="copy-sensitive" @click="copy">
+      <button
+        ref="copyButton"
+        type="button"
+        class="v1-btn"
+        data-action="copy-sensitive"
+        @click="copy"
+      >
         {{ t('auditPage.sensitive.copy', { label }) }}
       </button>
       <button type="button" class="v1-btn" data-action="hide-sensitive" @click="hide">

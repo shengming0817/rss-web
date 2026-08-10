@@ -51,6 +51,8 @@ const zhCN = {
     targetHint: '请输入 canonical lowercase UUID。不会发送 X-Tenant-ID。',
     query: '查询目标 tenant',
     next: '显式加载下一页',
+    pageLoaded: '已追加一页审计条目。',
+    endReached: '已加载最后一页审计条目。',
     loading: '正在读取审计页…',
     empty: '当前页没有审计条目。',
     auditedWarning: '每次查询和下一页操作都是新的 audited operation；不会自动重试或预取。',

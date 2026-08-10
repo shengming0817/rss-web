@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ErrorPage, SourceBadge } from '@rss/core'
 import { AUDIT_TARGET_TENANT_PATTERN, isAuditTargetTenantId } from '@rss/audit'
@@ -15,6 +15,12 @@ const { t } = useI18n()
 const audit = useAuditApi()
 const targetInput = ref('')
 const submittedTarget = ref('')
+const ambientHeading = ref<HTMLElement>()
+const targetHeading = ref<HTMLElement>()
+const ambientNotice = ref('')
+const targetNotice = ref('')
+const ambientRetrying = ref(false)
+const heldAmbientError = shallowRef<ReturnType<typeof toSafeReadErrorPresentation>>()
 let targetForRequest = ''
 
 const ambientAuthorization = useAuthorizationIntent(AUDIT_AMBIENT_INTENT)
@@ -41,9 +47,11 @@ const unsubscribeAmbient = ambientPagination.subscribe((state) => (ambientState.
 const unsubscribeTarget = targetPagination.subscribe((state) => (targetState.value = state))
 
 const ambientError = computed(() =>
-  ambientState.value.status === 'error'
-    ? toSafeReadErrorPresentation(ambientState.value.error)
-    : undefined,
+  ambientRetrying.value
+    ? heldAmbientError.value
+    : ambientState.value.status === 'error'
+      ? toSafeReadErrorPresentation(ambientState.value.error)
+      : undefined,
 )
 const targetError = computed(() =>
   targetState.value.status === 'error'
@@ -77,6 +85,41 @@ function submitTarget(): void {
   submittedTarget.value = target
   void targetPagination.start()
 }
+
+async function settlePage(
+  heading: HTMLElement | undefined,
+  state: AuditPaginationState,
+  notice: { value: string },
+): Promise<void> {
+  if (state.status === 'ready') {
+    notice.value = t(state.hasMore ? 'auditPage.pageLoaded' : 'auditPage.endReached')
+  } else {
+    notice.value = ''
+  }
+  await nextTick()
+  heading?.focus()
+}
+
+async function nextAmbient(): Promise<void> {
+  await ambientPagination.next()
+  await settlePage(ambientHeading.value, ambientState.value, ambientNotice)
+}
+
+async function nextTarget(): Promise<void> {
+  await targetPagination.next()
+  await settlePage(targetHeading.value, targetState.value, targetNotice)
+}
+
+async function retryAmbient(): Promise<void> {
+  const error = ambientError.value
+  if (error === undefined || ambientRetrying.value) return
+  heldAmbientError.value = error
+  ambientRetrying.value = true
+  await ambientPagination.start()
+  ambientRetrying.value = false
+  heldAmbientError.value = undefined
+  await settlePage(ambientHeading.value, ambientState.value, ambientNotice)
+}
 </script>
 
 <template>
@@ -86,10 +129,12 @@ function submitTarget(): void {
       <p class="v1-sub">{{ t('auditPage.subtitle') }}</p>
     </header>
 
-    <section class="audit-panel" aria-labelledby="ambient-audit-title">
+    <section data-section="ambient-audit" class="audit-panel" aria-labelledby="ambient-audit-title">
       <header class="audit-panel__header">
         <div>
-          <h2 id="ambient-audit-title">{{ t('auditPage.ambientTitle') }}</h2>
+          <h2 id="ambient-audit-title" ref="ambientHeading" tabindex="-1">
+            {{ t('auditPage.ambientTitle') }}
+          </h2>
           <p>{{ t('auditPage.ambientDescription') }}</p>
         </div>
         <SourceBadge v-if="ambientState.status === 'ready'" :source="RSS_SOURCE" />
@@ -110,23 +155,27 @@ function submitTarget(): void {
         data-action="next-ambient-audit"
         :disabled="ambientState.status === 'loading'"
         :aria-busy="ambientState.status === 'loading'"
-        @click="ambientPagination.next"
+        @click="nextAmbient"
       >
         {{ t('auditPage.next') }}
       </button>
+      <p role="status" aria-live="polite">{{ ambientNotice }}</p>
       <ErrorPage
         v-if="ambientError"
         :error="ambientError"
         :heading-level="3"
         :show-recovery="ambientError.recovery === 'retry'"
-        @recover="ambientPagination.start"
+        :recovery-busy="ambientRetrying"
+        @recover="retryAmbient"
       />
     </section>
 
     <section data-section="target-audit" class="audit-panel" aria-labelledby="target-audit-title">
       <header class="audit-panel__header">
         <div>
-          <h2 id="target-audit-title">{{ t('auditPage.crossTitle') }}</h2>
+          <h2 id="target-audit-title" ref="targetHeading" tabindex="-1">
+            {{ t('auditPage.crossTitle') }}
+          </h2>
           <p>{{ t('auditPage.crossDescription') }}</p>
         </div>
         <SourceBadge v-if="targetState.status === 'ready'" :source="RSS_SOURCE" />
@@ -170,10 +219,11 @@ function submitTarget(): void {
         data-action="next-target-audit"
         :disabled="targetState.status === 'loading'"
         :aria-busy="targetState.status === 'loading'"
-        @click="targetPagination.next"
+        @click="nextTarget"
       >
         {{ t('auditPage.next') }}
       </button>
+      <p role="status" aria-live="polite">{{ targetNotice }}</p>
       <ErrorPage
         v-if="targetError"
         :error="targetError"

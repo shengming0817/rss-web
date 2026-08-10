@@ -118,8 +118,9 @@ describe('RSS Web edge configuration', () => {
       'location ~ "^/api/v1/audit/tenants/(?!00000000-0000-0000-0000-000000000000)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/entries$"',
     )
     expect(template).toContain('location /api/ { return 404; }')
-    expect(template).toContain('~*^/api/.*%2f 1;')
-    expect(template).toContain('if ($rss_invalid_api_path) { return 404; }')
+    expect(template).toContain('map $request_uri $rss_target_audit_raw_path')
+    expect(template).toContain('"~^/api/v1/audit/tenants/(?!00000000-0000-0000-0000-000000000000)')
+    expect(template).toContain('if ($rss_target_audit_raw_path = 0) { return 404; }')
     expect(template).not.toContain('location ^~ /api/ { return 404; }')
     expect(template).not.toContain('location ^~ /api/v1/audit/')
     for (const exactPath of ['/api', '/internal', '/health']) {

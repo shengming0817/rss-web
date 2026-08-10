@@ -60,6 +60,8 @@ const enUS = {
     targetHint: 'Enter a canonical lowercase UUID. X-Tenant-ID is never sent.',
     query: 'Query target tenant',
     next: 'Explicitly load next page',
+    pageLoaded: 'One audit page was appended.',
+    endReached: 'The final audit page is loaded.',
     loading: 'Loading audit page…',
     empty: 'This page has no audit entries.',
     auditedWarning:

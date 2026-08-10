@@ -6,14 +6,22 @@ import AuditSensitiveField from './AuditSensitiveField.vue'
 describe('AuditSensitiveField', () => {
   it('keeps PII out of the DOM until an explicit per-field reveal', async () => {
     const wrapper = mount(AuditSensitiveField, {
+      attachTo: document.body,
       props: { label: 'Actor', value: 'sensitive-actor' },
       global: { plugins: [createWebI18n()] },
     })
     expect(wrapper.html()).not.toContain('sensitive-actor')
-    await wrapper.get('[data-action="reveal-sensitive"]').trigger('click')
+    const reveal = wrapper.get('[data-action="reveal-sensitive"]')
+    ;(reveal.element as HTMLElement).focus()
+    await reveal.trigger('click')
     expect(wrapper.text()).toContain('sensitive-actor')
-    await wrapper.get('[data-action="hide-sensitive"]').trigger('click')
+    expect(document.activeElement).toBe(wrapper.get('[data-action="copy-sensitive"]').element)
+    const hide = wrapper.get('[data-action="hide-sensitive"]')
+    ;(hide.element as HTMLElement).focus()
+    await hide.trigger('click')
     expect(wrapper.html()).not.toContain('sensitive-actor')
+    expect(document.activeElement).toBe(wrapper.get('[data-action="reveal-sensitive"]').element)
+    wrapper.unmount()
   })
 
   it('copies only the explicitly revealed field and reports failure without raw errors', async () => {
