@@ -44,6 +44,8 @@ function openCommandPalette(): void {
 
     <!-- Actions -->
     <div class="topbar__actions">
+      <slot name="actions" />
+
       <!-- Command palette button -->
       <button
         type="button"

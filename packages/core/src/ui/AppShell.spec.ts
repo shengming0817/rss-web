@@ -63,6 +63,17 @@ describe('AppShell.vue', () => {
     expect(wrapper.find('[data-testid="content"]').text()).toBe('slot content')
   })
 
+  it('forwards topbar actions without depending on business packages', () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const wrapper = mount(AppShell, {
+      slots: { 'topbar-actions': '<button data-testid="identity-action">Profile</button>' },
+      global: { plugins: [makeRouter(), makeI18n(), pinia] },
+    })
+
+    expect(wrapper.find('[data-testid="identity-action"]').text()).toBe('Profile')
+  })
+
   it('sidebar starts expanded', () => {
     const wrapper = mountShell()
     expect(wrapper.find('.sidebar').classes()).not.toContain('sidebar--collapsed')

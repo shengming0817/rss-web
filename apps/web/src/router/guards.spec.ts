@@ -3,19 +3,28 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { registerRouterA11y } from './guards'
 
 describe('router accessibility', () => {
-  it('moves focus to shell content after navigation', async () => {
+  it.each([
+    { path: '/login', focusTarget: 'login-content' },
+    { path: '/', focusTarget: 'shell-content' },
+  ] as const)('moves focus to the closed route target for $path', async ({ path, focusTarget }) => {
     const main = document.createElement('main')
-    main.id = 'shell-content'
+    main.id = focusTarget
     main.tabIndex = -1
     document.body.append(main)
     const focus = vi.spyOn(main, 'focus')
     const router = createRouter({
       history: createMemoryHistory(),
-      routes: [{ path: '/', component: { template: '<div />' } }],
+      routes: [
+        {
+          path,
+          component: { template: '<div />' },
+          meta: { focusTarget, sessionAccess: 'anonymous' },
+        },
+      ],
     })
     registerRouterA11y(router)
 
-    await router.push('/')
+    await router.push(path)
     await router.isReady()
     await Promise.resolve()
 

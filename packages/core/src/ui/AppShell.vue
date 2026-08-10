@@ -100,7 +100,9 @@ function setSidebarCollapsed(value: boolean): void {
     />
 
     <div class="shell__main" :inert="backgroundInert">
-      <TopBar @open-command-palette="openCommandPalette" />
+      <TopBar @open-command-palette="openCommandPalette">
+        <template #actions><slot name="topbar-actions" /></template>
+      </TopBar>
 
       <!-- tabindex="-1" allows programmatic focus from router afterEach (SPA a11y focus management) -->
       <!-- See apps/web/src/router/guards.ts afterEach — focus is moved here on each navigation -->

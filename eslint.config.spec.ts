@@ -116,6 +116,12 @@ describe('ESLint package boundaries', () => {
     ).toContain('no-restricted-imports')
     expect(
       await ruleIds(
+        "import { decodeWireErrorForTest } from '@rss/api/testing'\nexport const x = decodeWireErrorForTest\n",
+        'apps/web/src/features/identity/identity-error.spec.ts',
+      ),
+    ).not.toContain('no-restricted-imports')
+    expect(
+      await ruleIds(
         "import { identityEndpoints } from '@rss/api/endpoints/identity'\nexport const x = identityEndpoints\n",
         'apps/web/src/main.ts',
       ),

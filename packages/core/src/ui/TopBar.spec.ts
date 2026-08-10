@@ -136,6 +136,17 @@ describe('TopBar.vue', () => {
     })
   })
 
+  it('renders generic application actions without owning identity behavior', () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const wrapper = mount(TopBar, {
+      slots: { actions: '<button data-testid="identity-action">Profile</button>' },
+      global: { plugins: [makeRouter('/'), makeI18n(), pinia] },
+    })
+
+    expect(wrapper.find('[data-testid="identity-action"]').text()).toBe('Profile')
+  })
+
   describe('theme toggle label', () => {
     it('shows dark label when in light mode', async () => {
       const pinia = createPinia()

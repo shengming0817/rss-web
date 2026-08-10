@@ -170,9 +170,15 @@ importers:
       '@ant-design/icons-vue':
         specifier: 'catalog:'
         version: 7.0.1(vue@3.5.35(typescript@5.7.3))
+      '@rss/api':
+        specifier: workspace:*
+        version: link:../../packages/api
       '@rss/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@rss/identity':
+        specifier: workspace:*
+        version: link:../../packages/identity
       ant-design-vue:
         specifier: 'catalog:'
         version: 4.2.6(vue@3.5.35(typescript@5.7.3))
