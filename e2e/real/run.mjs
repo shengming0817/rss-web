@@ -321,13 +321,28 @@ async function playwright(phase) {
     throw error
   }
   let classification = 'environment'
+  let report
   try {
-    classification = classifyPlaywrightReport(JSON.parse(result.stdout))
+    report = JSON.parse(result.stdout)
+    classification = classifyPlaywrightReport(report)
   } catch {
     classification = 'environment'
   }
   if (result.status !== 0 || classification !== 'passed') {
     if (result.stderr) process.stderr.write(result.stderr)
+    if (report !== undefined) {
+      const failedTitles = report.suites
+        .flatMap((suite) => suite.specs ?? [])
+        .filter((spec) =>
+          (spec.tests ?? []).some((test) =>
+            (test.results ?? []).some((testResult) => testResult.status !== 'passed'),
+          ),
+        )
+        .map((spec) => spec.title)
+      if (failedTitles.length > 0) {
+        process.stderr.write(`[real-e2e] failed specs: ${failedTitles.join(' | ')}\n`)
+      }
+    }
     const error = new Error(`Playwright ${phase} failed`)
     error.stage = `${classification === 'product' ? 'product' : 'environment'}:${phase}`
     throw error
