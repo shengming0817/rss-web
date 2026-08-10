@@ -54,10 +54,14 @@
   removal, local authority loss, and closed four-route navigation.
 - Docker/Nginx Edge smoke passed with password POST routed only to Primary and complete teardown.
 - The opt-in runner archived clean Web implementation commit
-  `af986aefd7bc8e9bb6d7565db2e9b44069496767` and the pinned RSS revision. Main, request-budget,
+  `3d0ec09e2b1eb46dca5541d8c47401ab5c1d6642` and the pinned RSS revision. Main, request-budget,
   Admin-down, and Primary-down phases passed; cleanup passed. An isolated user held two real browser
   sessions: one password change redirected locally to Login, the other grant became unusable, the old
   password failed, and the replacement password established a newly verified session.
+- The first final-implementation runner attempt reported the pre-existing browser 401/429 timing
+  journey as `product:main` and completed cleanup. An immediate clean, fully isolated rerun of the
+  same archived Web/RSS revisions passed all four phases and cleanup; both machine receipts were
+  retained under `/tmp` during review rather than relabeling the failed attempt.
 
 ## Four-principle check
 
@@ -78,17 +82,19 @@
 - Replaced parallel Web/session failure status sets with one exported closed Identity classifier.
 - Preserved commit-unknown guidance across the fail-closed redirect using a closed, non-sensitive
   in-memory expiry reason; no backend text, request ID, password, or query value is carried.
+- Classified a decoded `changed:false` success envelope as the same explicit outcome-unknown state,
+  so this malformed-success branch cannot degrade to a generic session-expired notice.
 - Kept `/identity` session-only and made the form unavailable with live status while refreshing.
 - Replaced the unavailable CI `rg` dependency with `/usr/bin/git ls-files`, while still scanning both
   tracked and untracked reviewed source owners.
 
 ## Changed-line classification
 
-- Semantic handwritten code and locale content: 538 additions / 20 deletions.
-- Unit/type/boundary/browser/real tests and harness diagnostics: 688 additions / 24 deletions.
+- Semantic handwritten code and locale content: 541 additions / 20 deletions.
+- Unit/type/boundary/browser/real tests and harness diagnostics: 691 additions / 24 deletions.
 - Documentation and governance: 26 additions / 2 deletions.
 - Generated and lockfile: 0 lines.
-- Implementation total: 1,252 additions / 46 deletions.
+- Implementation total: 1,258 additions / 46 deletions.
 
 ## Rollback
 
