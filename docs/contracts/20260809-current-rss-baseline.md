@@ -113,3 +113,21 @@ non-nil `userId` path coordinate and the closed four-value lifecycle. It does no
 lookup, mock/provider fallback, tenant input, or optimistic facts. A self-target non-active result or
 commit-unknown write atomically clears local authority; the idempotent PUT is never automatically
 retried after network, timeout, conflict, or server failure.
+
+WEB-PR-018 enables `identity.roles-list`, `identity.roles-assign`, and `identity.roles-revoke` against
+the same read-only RSS revision `b7f3e1d0bcc5b2e59639a81b4f37937914b53f00`. Their contract TOML
+hashes are `4a4e0d7b4f246b4d90f61948afb6eee164beb11a8b60f09f735e5389936271a7`,
+`7bff2f144aa5bd51ba67b7a04446c961f9791e28ac06e566cef48789f21fa79d`, and
+`f091730db197aa51b4672f37f119453577da4317d0fdfed7c6297cbf10db0da9`; request and response hashes
+remain those recorded in the baseline table. List cursor and permission strings stay opaque. Assign is
+non-idempotent and uses the no-replay session policy; list and idempotent revoke may use only the
+session owner's exact 401 recovery. Subject is explicit PII input, and command receipts never become
+an authoritative binding read model.
+
+The pinned runtime's browser login issues only RSS `user` access tokens, while the Identity contract
+authorizer admits these three role routes only for an `admin` principal before checking role
+permissions. The real-browser acceptance therefore locks the current server-authoritative 403 for
+list, assign, and revoke (including no receipt or binding inference); adapter, component, and Edge
+tests cover the success contracts and exact routing without inventing an Admin bearer or weakening
+RSS. A future consumable Admin authority must be established by an explicit RSS baseline change, not
+by Web-side kind inference or a test-only production bypass.

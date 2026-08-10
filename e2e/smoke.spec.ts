@@ -89,6 +89,16 @@ const targetAuditResponse = {
   nextCursor: 'opaque-next-page',
 }
 const accountStatusUserId = 'f47ac10b-58cc-4372-a567-0e02b2c3d479'
+const rolesResponse = {
+  data: [
+    {
+      roleId: 'ops:admin',
+      name: 'Operations administrator',
+      permissions: ['identity:role:read', 'settings.config-get'],
+    },
+  ],
+  hasMore: false,
+}
 
 async function installAdminMocks(
   page: Page,
@@ -193,6 +203,21 @@ async function installIdentityMocks(
           },
         },
       })
+    }
+  })
+  await page.route('**/api/v1/identity/roles**', async (route) => {
+    expect(route.request().headers().authorization?.startsWith('Bearer ')).toBe(true)
+    expect(route.request().headers()['x-tenant-id']).toBeUndefined()
+    const url = new URL(route.request().url())
+    if (route.request().method() === 'GET' && url.pathname === '/api/v1/identity/roles') {
+      await route.fulfill({ status: 200, json: rolesResponse })
+    } else if (route.request().method() === 'POST') {
+      expect(route.request().postDataJSON()).toEqual({ subject: 'target@example.test' })
+      await route.fulfill({ status: 201, json: { data: { assigned: true } } })
+    } else if (route.request().method() === 'DELETE') {
+      await route.fulfill({ status: 200, json: { data: { revoked: false } } })
+    } else {
+      await route.abort()
     }
   })
   await page.route('**/api/v1/identity/logout', (route) =>
@@ -345,8 +370,9 @@ test.describe('RSS Web Identity UX', () => {
     await page.getByLabel('密码').fill('test-password')
     await page.getByRole('button', { name: '登录', exact: true }).click()
     const navigation = page.getByRole('navigation', { name: '主导航' })
-    await expect(navigation.getByRole('link')).toHaveCount(5)
+    await expect(navigation.getByRole('link')).toHaveCount(6)
     await expect(navigation.getByRole('link', { name: /首页/ })).toContainText('RSS')
+    await expect(navigation.getByRole('link', { name: /角色/ })).toContainText('RSS')
     await navigation.getByRole('link', { name: /运行时/ }).click()
     await expect(page).toHaveURL(/\/runtime$/)
     await expect(page.getByRole('heading', { name: '运行时详情' })).toBeVisible()
@@ -436,6 +462,43 @@ test.describe('RSS Web Identity UX', () => {
       page.locator('.account-status__result dd').filter({ hasText: /^Suspended$/ }),
     ).toBeVisible()
     expect(requests).toEqual(['GET', 'PUT'])
+  })
+
+  test('lists opaque Roles and submits explicit assign/revoke receipts without a binding view', async ({
+    page,
+  }) => {
+    const requests: string[] = []
+    page.on('request', (request) => {
+      if (new URL(request.url()).pathname.startsWith('/api/v1/identity/roles')) {
+        requests.push(request.method())
+        expect(request.headers()['x-tenant-id']).toBeUndefined()
+      }
+    })
+    await installIdentityMocks(page)
+    await signIn(page)
+    await page
+      .getByRole('navigation', { name: '主导航' })
+      .getByRole('link', { name: /角色/ })
+      .click()
+    await expect(page).toHaveURL(/\/roles$/)
+    await expect(page.getByText('settings.config-get')).toBeVisible()
+    expect(requests).toEqual(['GET'])
+
+    await page.getByLabel('Role ID').fill('ops:admin')
+    await page.getByLabel('Subject').fill('target@example.test')
+    await page.getByRole('button', { name: 'Assign', exact: true }).click()
+    const assignDialog = page.getByRole('alertdialog')
+    await expect(assignDialog).toContainText('target@example.test')
+    await assignDialog.getByRole('button', { name: '提交命令' }).click()
+    await expect(page.getByText(/本次 assign receipt：是/)).toBeVisible()
+    await expect(page.getByText('target@example.test')).toHaveCount(0)
+
+    await page.getByLabel('Subject').fill('target@example.test')
+    await page.getByRole('button', { name: 'Revoke', exact: true }).click()
+    await page.getByRole('alertdialog').getByRole('button', { name: '提交命令' }).click()
+    await expect(page.getByText(/本次 revoke receipt：否/)).toBeVisible()
+    expect(requests).toEqual(['GET', 'POST', 'DELETE'])
+    await expect(page.getByText(/已绑定|未绑定/)).toHaveCount(0)
   })
 
   test('queries target Audit only on explicit actions without leaking target authority or PII', async ({

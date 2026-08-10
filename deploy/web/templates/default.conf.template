@@ -17,11 +17,14 @@ upstream rss_admin {
   server ${RSS_WEB_ADMIN_HOST}:${RSS_WEB_ADMIN_PORT};
 }
 
+log_format rss_safe '$request_method $status $body_bytes_sent request_id=$request_id';
+
 server {
   listen 80;
   server_name _;
   root /usr/share/nginx/html;
   index index.html;
+  access_log /var/log/nginx/access.log rss_safe;
 
   gzip on;
   gzip_types text/css application/javascript application/json image/svg+xml;

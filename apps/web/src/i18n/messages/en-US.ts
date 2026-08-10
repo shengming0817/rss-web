@@ -10,6 +10,7 @@ const enUS = {
     home: 'Home',
     identity: 'Identity',
     accountStatus: 'Account status',
+    roles: 'Roles',
     runtime: 'Runtime',
     audit: 'Audit',
   },
@@ -188,6 +189,46 @@ const enUS = {
       suspended: 'Suspended',
       locked: 'Locked',
       deactivated: 'Deactivated',
+    },
+  },
+  roles: {
+    title: 'Roles and binding commands',
+    subtitle: 'Read the RSS role catalog and explicitly submit assign or revoke commands.',
+    authority:
+      'These operations require RSS Admin authority. The current User session receives the final server 403; Web never fabricates or elevates authority.',
+    yes: 'Yes',
+    no: 'No',
+    catalog: {
+      title: 'Role catalog',
+      warning:
+        'Permissions are opaque server strings, not the effective authority of this user or target subject.',
+      loading: 'Loading roles…',
+      empty: 'No roles are available.',
+      roleId: 'Role ID',
+      permissions: 'Opaque permissions',
+      useRoleId: 'Use this Role ID',
+      next: 'Explicitly load next page',
+    },
+    command: {
+      title: 'Explicit binding command',
+      warning:
+        'Subject is not inferred from a directory or session; the receipt describes only this command.',
+      roleId: 'Role ID',
+      subject: 'Subject',
+      subjectHint:
+        'Enter an opaque subject. Revoke sends it as an encoded path coordinate; after submission it is not retained in the page, receipt, or local history.',
+      invalidRoleId: 'Enter a valid 1–128 byte Role ID.',
+      invalidSubject: 'Enter a non-empty Subject.',
+      assign: 'Assign',
+      revoke: 'Revoke',
+      submitting: 'Submitting command…',
+      assignedReceipt: 'Assign receipt: {result}. This is not a current binding view.',
+      revokedReceipt: 'Revoke receipt: {result}. This is not a current binding view.',
+      confirmTitle: 'Confirm role binding command?',
+      confirmDescription:
+        'Run {action} for Role {roleId} and Subject {subject}. RSS is authoritative.',
+      cancel: 'Cancel',
+      confirm: 'Submit command',
     },
   },
 } satisfies Widen<WebMessageSchema>

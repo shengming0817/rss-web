@@ -30,6 +30,13 @@ The separate Account Status route accepts only an explicit canonical `userId`, t
 closed desired state to RSS. It has no directory/provider/mock seam and never treats the resource ID as
 tenant or principal authority. Self-target non-active changes and uncertain write outcomes clear local
 session authority rather than preserving a possibly revoked bearer.
+The Roles route requests an opaque server role catalog and accepts only explicit roleId/subject
+binding commands. Assign is non-idempotent and never replayed; revoke is idempotent. Permissions are
+display facts rather than effective authority, and command receipts never become a current binding
+view or local history. The pinned RSS browser-login authority is `user`, while these routes require
+`admin`, so the real journey records the current server-authoritative 403 instead of fabricating an
+Admin bearer; success shapes remain covered at the adapter, component, and Edge boundaries. No
+subject directory, picker, provider, tenant input, or mock fallback exists.
 
 `@rss/authorization` provides closed, non-authoritative UX hints. The Web composition root installs
 only its server mode, which always defers to the real RSS request. A Web-owned context lets future
@@ -40,7 +47,7 @@ Web source. No browser ABAC evaluation, request authority, or legacy access endp
 
 The authenticated shell derives Sidebar and command-palette navigation from implemented route
 metadata; currently that closed production set contains Home, Identity self-service, Account Status,
-Runtime details, and Audit queries.
+Roles, Runtime details, and Audit queries.
 Removed and future capabilities
 do not receive placeholder routes or menu entries. `@rss/shared` owns a discriminated `SourceMeta`
 model with sealed, frozen display constants; direct object-literal construction is rejected. Reusable

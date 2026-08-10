@@ -1,4 +1,5 @@
 export { createIdentityApi } from './api'
+export { createRolesApi, isRoleId, parseRoleId, ROLE_ID_PATTERN } from './roles'
 export {
   ACCOUNT_STATUSES,
   ACCOUNT_STATUS_USER_ID_PATTERN,
@@ -15,6 +16,17 @@ export type {
   AccountStatusSetRequest,
   AccountStatusSetResponse,
 } from './account-status'
+export type {
+  RoleAssignRequest,
+  RoleAssignResponse,
+  RoleId,
+  RoleRevokeResponse,
+  RolesApi,
+  RolesCallOptions,
+  RolesListRequest,
+  RolesListResponse,
+  RoleView,
+} from './roles'
 export {
   classifyPasswordChangeFailure,
   createIdentitySession,

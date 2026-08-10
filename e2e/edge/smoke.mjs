@@ -156,6 +156,73 @@ try {
     createHash('sha256').update(accountBody).digest('hex'),
   )
 
+  const rolesList = await request(port, '/api/v1/identity/roles?limit=50', {
+    headers: { 'X-Tenant-ID': 'attacker', Authorization: 'Bearer fixture' },
+  })
+  assert.equal(rolesList.status, 200)
+  assert.equal(rolesList.json.listener, 'primary')
+  assert.equal(rolesList.json.method, 'GET')
+  assert.deepEqual(rolesList.json.tenantHeaders, [])
+  assert.equal(rolesList.json.authorizationPresent, true)
+
+  const roleBody = JSON.stringify({ subject: 'target@example.test' })
+  const roleAssign = await request(port, '/api/v1/identity/roles/ops%3Aadmin/bindings', {
+    method: 'POST',
+    headers: {
+      'X-Tenant-ID': 'attacker',
+      Authorization: 'Bearer fixture',
+      'Content-Type': 'application/json',
+      'Content-Length': String(Buffer.byteLength(roleBody)),
+    },
+    body: roleBody,
+  })
+  assert.equal(roleAssign.status, 200)
+  assert.equal(roleAssign.json.listener, 'primary')
+  assert.equal(roleAssign.json.method, 'POST')
+  assert.deepEqual(roleAssign.json.tenantHeaders, [])
+  assert.equal(roleAssign.json.authorizationPresent, true)
+  assert.equal(roleAssign.json.bodySha256, createHash('sha256').update(roleBody).digest('hex'))
+
+  const roleRevoke = await request(
+    port,
+    '/api/v1/identity/roles/ops%3Aadmin/bindings/target%40example.test',
+    {
+      method: 'DELETE',
+      headers: { 'X-Tenant-ID': 'attacker', Authorization: 'Bearer fixture' },
+    },
+  )
+  assert.equal(roleRevoke.status, 200)
+  assert.equal(roleRevoke.json.listener, 'primary')
+  assert.equal(roleRevoke.json.method, 'DELETE')
+  assert.deepEqual(roleRevoke.json.tenantHeaders, [])
+  assert.equal(roleRevoke.json.authorizationPresent, true)
+
+  const opaqueSubject = 'target/with ?#%/雪'
+  const encodedSubject = encodeURIComponent(opaqueSubject)
+  const opaqueRoleRevoke = await request(
+    port,
+    `/api/v1/identity/roles/ops%3Aadmin/bindings/${encodedSubject}`,
+    {
+      method: 'DELETE',
+      headers: { 'X-Tenant-ID': 'attacker', Authorization: 'Bearer fixture' },
+    },
+  )
+  assert.equal(opaqueRoleRevoke.status, 200)
+  assert.equal(opaqueRoleRevoke.json.listener, 'primary')
+  assert.equal(opaqueRoleRevoke.json.method, 'DELETE')
+  assert.equal(
+    opaqueRoleRevoke.json.url,
+    `/api/v1/identity/roles/ops%3Aadmin/bindings/${encodedSubject}`,
+  )
+  assert.deepEqual(opaqueRoleRevoke.json.tenantHeaders, [])
+  assert.equal(opaqueRoleRevoke.json.authorizationPresent, true)
+
+  const edgeLogs = docker(['logs', 'edge'], { env: environment })
+  assert.equal(edgeLogs.status, 0)
+  const accessOutput = `${edgeLogs.stdout}${edgeLogs.stderr}`
+  assert(!accessOutput.includes(opaqueSubject))
+  assert(!accessOutput.includes(encodedSubject))
+
   for (const path of ['/api/v1/audit/entries', '/api/v1/runtime/inventory']) {
     const response = await request(port, path, { headers: { 'X-Tenant-ID': 'attacker' } })
     assert.equal(response.status, 200)
@@ -285,5 +352,9 @@ try {
   assertGatewayUnavailable((await request(port, '/api/v1/identity/profile')).status)
   assert.equal((await request(port, '/api/v1/audit/entries')).status, 200)
 } finally {
-  docker(['down', '--volumes', '--remove-orphans'], { env: environment, stdio: 'inherit' })
+  const cleanup = docker(['down', '--volumes', '--remove-orphans'], {
+    env: environment,
+    stdio: 'inherit',
+  })
+  assert.equal(cleanup.status, 0, `edge fixture cleanup failed for project ${project}`)
 }

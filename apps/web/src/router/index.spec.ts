@@ -211,6 +211,12 @@ describe('session-owned router', () => {
         source: RSS_SOURCE,
       },
       {
+        id: 'roles',
+        label: 'navigation.roles',
+        to: { name: 'roles' },
+        source: RSS_SOURCE,
+      },
+      {
         id: 'runtime',
         label: 'navigation.runtime',
         to: { name: 'runtime' },
@@ -236,7 +242,7 @@ describe('session-owned router', () => {
         contractId: 'audit.list-entries',
         permission: 'audit:read',
       },
-      navigation: { labelKey: 'navigation.audit', order: 40, source: RSS_SOURCE },
+      navigation: { labelKey: 'navigation.audit', order: 50, source: RSS_SOURCE },
     })
   })
 
@@ -251,7 +257,7 @@ describe('session-owned router', () => {
         contractId: 'runtime.inventory',
         permission: 'runtime:inventory:read',
       },
-      navigation: { labelKey: 'navigation.runtime', order: 30, source: RSS_SOURCE },
+      navigation: { labelKey: 'navigation.runtime', order: 40, source: RSS_SOURCE },
     })
   })
 
@@ -275,6 +281,18 @@ describe('session-owned router', () => {
       sessionAccess: 'authenticated',
       focusTarget: 'shell-content',
       navigation: { labelKey: 'navigation.accountStatus', order: 20, source: RSS_SOURCE },
+    })
+    expect(route.meta.authorizationIntent).toBeUndefined()
+  })
+
+  it('keeps Roles session-only while list, assign, and revoke own independent authorization', () => {
+    const router = appRouter(sessionFixture({ status: 'anonymous' }))
+    const route = router.resolve('/roles')
+    expect(route.name).toBe('roles')
+    expect(route.meta).toMatchObject({
+      sessionAccess: 'authenticated',
+      focusTarget: 'shell-content',
+      navigation: { labelKey: 'navigation.roles', order: 30, source: RSS_SOURCE },
     })
     expect(route.meta.authorizationIntent).toBeUndefined()
   })

@@ -28,6 +28,14 @@ facts, or fallback sources. The idempotent PUT may use only the session owner's 
 single-recovery/replay; never automatically retry network, timeout, conflict, server, or protocol
 outcomes. A self-target non-active confirmed or commit-unknown write must clear authority through the
 single Identity session controller; do not call logout as compensation.
+Roles accepts only explicit roleId and opaque subject coordinates. Do not add a subject directory,
+provider, picker, resolver, binding history/read model, permission evaluator, tenant inference, or
+fallback source. Non-idempotent assign must use `required-no-replay`; idempotent revoke and list may
+use only the session owner's exact 401 recovery. Permissions remain opaque display facts, and boolean
+receipts never authorize or construct current bindings.
+The pinned RSS login mints only `user` access tokens and the role routes admit only `admin`; preserve
+the real-browser 403 evidence until a reviewed RSS baseline exposes consumable Admin authority. Never
+mint, infer, or inject an Admin bearer in Web production or acceptance code to force a success path.
 The Nginx same-origin Edge is the sole listener-routing and pre-auth tenant
 bootstrap boundary. Do not add browser-selectable tenants, client runtime API
 origins, listener discovery, proxy fallbacks, or Internal/Health routes.

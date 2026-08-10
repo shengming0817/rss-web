@@ -8,6 +8,7 @@ const createIdentitySession = vi.fn(() => ({
   subscribe: () => () => undefined,
 }))
 const createAccountStatusApi = vi.fn(() => ({ get: vi.fn(), set: vi.fn() }))
+const createRolesApi = vi.fn(() => ({ list: vi.fn(), assign: vi.fn(), revoke: vi.fn() }))
 const createAuthorizationExperience = vi.fn(() => ({ getHint: vi.fn() }))
 const createAppRouter = vi.fn(() => ({ install: vi.fn() }))
 const createAuditApi = vi.fn(() => ({ listEntries: vi.fn() }))
@@ -15,7 +16,7 @@ const createRuntimeApi = vi.fn(() => ({ inventory: vi.fn() }))
 
 vi.mock('@rss/api', () => ({ createHttpTransport }))
 vi.mock('@rss/authorization', () => ({ createServerAuthorizationPort }))
-vi.mock('@rss/identity', () => ({ createAccountStatusApi, createIdentitySession }))
+vi.mock('@rss/identity', () => ({ createAccountStatusApi, createIdentitySession, createRolesApi }))
 vi.mock('@rss/audit', () => ({ createAuditApi }))
 vi.mock('@rss/runtime', () => ({ createRuntimeApi }))
 vi.mock('./features/authorization/authorization-context', () => ({
@@ -37,6 +38,7 @@ describe('web composition root', () => {
     expect(createServerAuthorizationPort).toHaveBeenCalledOnce()
     const session = createIdentitySession.mock.results[0]?.value
     expect(createAccountStatusApi).toHaveBeenCalledWith(session?.transport)
+    expect(createRolesApi).toHaveBeenCalledWith(session?.transport)
     expect(createAuditApi).toHaveBeenCalledWith(session?.transport)
     expect(createRuntimeApi).toHaveBeenCalledWith(session?.transport)
     expect(createAuthorizationExperience).toHaveBeenCalledWith({
@@ -51,6 +53,7 @@ describe('web composition root', () => {
     expect(runtime.authorization).toBe(createAuthorizationExperience.mock.results[0]?.value)
     expect(runtime.accountStatus).toBe(createAccountStatusApi.mock.results[0]?.value)
     expect(runtime.audit).toBe(createAuditApi.mock.results[0]?.value)
+    expect(runtime.roles).toBe(createRolesApi.mock.results[0]?.value)
     expect(runtime.runtime).toBe(createRuntimeApi.mock.results[0]?.value)
   })
 })

@@ -57,4 +57,15 @@ describe('web Identity composition boundary', () => {
     )
     expect(text).not.toMatch(/console\.|logger\.|analytics/)
   })
+
+  it('keeps Roles subject ephemeral and free of provider or binding inference', () => {
+    const text = [
+      readFileSync(resolve(webSource, 'features/identity/RolesView.vue'), 'utf8'),
+      readFileSync(resolve(webSource, 'features/identity/role-binding-operation.ts'), 'utf8'),
+    ].join('\n')
+    expect(text).not.toMatch(
+      /KnownSubjectProvider|subject-provider|picker|resolver|localStorage|sessionStorage|X-Tenant-ID|profile\.kind|superAdmin/i,
+    )
+    expect(text).not.toMatch(/console\.|logger\.|analytics|bindingHistory|bindingMap/)
+  })
 })

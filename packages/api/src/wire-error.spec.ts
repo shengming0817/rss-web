@@ -160,6 +160,54 @@ describe('decodeEndpointError', () => {
     ).toMatchObject({ cause: 'protocol', status })
   })
 
+  it.each([
+    [identityEndpoints.rolesList.errorPolicy, 400, 'ERR_CORE_VALIDATION', 'validation error'],
+    [identityEndpoints.rolesList.errorPolicy, 500, 'ERR_CORE_INTERNAL', 'internal error'],
+    [identityEndpoints.rolesAssign.errorPolicy, 404, 'ERR_CORE_NOT_FOUND', 'not found'],
+    [
+      identityEndpoints.rolesAssign.errorPolicy,
+      409,
+      'ERR_CORE_OUTBOX_FACT_CONFLICT',
+      'outbox fact conflict',
+    ],
+    [identityEndpoints.rolesRevoke.errorPolicy, 500, 'ERR_CORE_INTERNAL', 'internal error'],
+  ] as const)('accepts a reviewed Roles coordinate %#', (endpointPolicy, status, code, message) => {
+    expect(
+      decodeEndpointError(
+        status,
+        envelope({ code, message, retryable: false, details: [] }),
+        endpointPolicy,
+      ),
+    ).toMatchObject({ cause: 'wire', status, code })
+  })
+
+  it.each([
+    [identityEndpoints.rolesList.errorPolicy, 418, envelope({ details: [] })],
+    [
+      identityEndpoints.rolesAssign.errorPolicy,
+      409,
+      envelope({
+        code: 'ERR_CORE_OUTBOX_FACT_CONFLICT',
+        message: 'outbox fact conflict',
+        retryable: true,
+        details: [],
+      }),
+    ],
+    [
+      identityEndpoints.rolesRevoke.errorPolicy,
+      404,
+      envelope({ code: 'ERR_CORE_NOT_FOUND', message: 'not found', details: [] }),
+    ],
+  ] as const)(
+    'fails closed for an undeclared or drifting Roles coordinate %#',
+    (endpointPolicy, status, body) => {
+      expect(decodeEndpointError(status, body, endpointPolicy)).toMatchObject({
+        cause: 'protocol',
+        status,
+      })
+    },
+  )
+
   it('preserves only the canonical shared rate-limit coordinate', () => {
     const canonical = envelope({
       code: 'ERR_CORE_TOO_MANY_REQUESTS',
