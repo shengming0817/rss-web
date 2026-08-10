@@ -156,6 +156,47 @@ try {
     createHash('sha256').update(accountBody).digest('hex'),
   )
 
+  const rolesList = await request(port, '/api/v1/identity/roles?limit=50', {
+    headers: { 'X-Tenant-ID': 'attacker', Authorization: 'Bearer fixture' },
+  })
+  assert.equal(rolesList.status, 200)
+  assert.equal(rolesList.json.listener, 'primary')
+  assert.equal(rolesList.json.method, 'GET')
+  assert.deepEqual(rolesList.json.tenantHeaders, [])
+  assert.equal(rolesList.json.authorizationPresent, true)
+
+  const roleBody = JSON.stringify({ subject: 'target@example.test' })
+  const roleAssign = await request(port, '/api/v1/identity/roles/ops%3Aadmin/bindings', {
+    method: 'POST',
+    headers: {
+      'X-Tenant-ID': 'attacker',
+      Authorization: 'Bearer fixture',
+      'Content-Type': 'application/json',
+      'Content-Length': String(Buffer.byteLength(roleBody)),
+    },
+    body: roleBody,
+  })
+  assert.equal(roleAssign.status, 200)
+  assert.equal(roleAssign.json.listener, 'primary')
+  assert.equal(roleAssign.json.method, 'POST')
+  assert.deepEqual(roleAssign.json.tenantHeaders, [])
+  assert.equal(roleAssign.json.authorizationPresent, true)
+  assert.equal(roleAssign.json.bodySha256, createHash('sha256').update(roleBody).digest('hex'))
+
+  const roleRevoke = await request(
+    port,
+    '/api/v1/identity/roles/ops%3Aadmin/bindings/target%40example.test',
+    {
+      method: 'DELETE',
+      headers: { 'X-Tenant-ID': 'attacker', Authorization: 'Bearer fixture' },
+    },
+  )
+  assert.equal(roleRevoke.status, 200)
+  assert.equal(roleRevoke.json.listener, 'primary')
+  assert.equal(roleRevoke.json.method, 'DELETE')
+  assert.deepEqual(roleRevoke.json.tenantHeaders, [])
+  assert.equal(roleRevoke.json.authorizationPresent, true)
+
   for (const path of ['/api/v1/audit/entries', '/api/v1/runtime/inventory']) {
     const response = await request(port, path, { headers: { 'X-Tenant-ID': 'attacker' } })
     assert.equal(response.status, 200)

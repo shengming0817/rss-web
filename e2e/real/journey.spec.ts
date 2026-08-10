@@ -252,6 +252,51 @@ test('@account-status-self invalidates every session after a real self-status ch
   await contextB.close()
 })
 
+test('@roles lists opaque permissions and records assign/revoke commands without a binding view', async ({
+  page,
+}) => {
+  await signInAndExpectShell(page)
+  const roleRequests: string[] = []
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname.startsWith('/api/v1/identity/roles')) {
+      roleRequests.push(request.method())
+      expect(request.headers()['x-tenant-id']).toBeUndefined()
+    }
+  })
+  await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: /角色/ }).click()
+  await expect(page.getByText('identity:role:assign')).toBeVisible()
+
+  await page.getByLabel('Role ID').fill('rss-web-real')
+  await page.getByLabel('Subject').fill('roles-target@example.test')
+  await page.getByRole('button', { name: 'Assign', exact: true }).click()
+  const assign = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      new URL(response.url()).pathname === '/api/v1/identity/roles/rss-web-real/bindings',
+  )
+  await page.getByRole('alertdialog').getByRole('button', { name: '提交命令' }).click()
+  expect((await assign).status()).toBe(201)
+  await expect(page.getByText(/本次 assign receipt：是/)).toBeVisible()
+  await expect(page.getByText('roles-target@example.test')).toHaveCount(0)
+
+  for (const expected of ['是', '否']) {
+    await page.getByLabel('Subject').fill('roles-target@example.test')
+    await page.getByRole('button', { name: 'Revoke', exact: true }).click()
+    const revoke = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'DELETE' &&
+        new URL(response.url()).pathname.endsWith(
+          '/roles/rss-web-real/bindings/roles-target%40example.test',
+        ),
+    )
+    await page.getByRole('alertdialog').getByRole('button', { name: '提交命令' }).click()
+    expect((await revoke).status()).toBe(200)
+    await expect(page.getByText(new RegExp(`本次 revoke receipt：${expected}`))).toBeVisible()
+  }
+  expect(roleRequests).toEqual(['GET', 'POST', 'DELETE', 'DELETE'])
+  await expect(page.getByText(/已绑定|未绑定/)).toHaveCount(0)
+})
+
 test('@rate-limited observes canonical 401 and 429 through the browser Edge and UI', async ({
   page,
 }) => {

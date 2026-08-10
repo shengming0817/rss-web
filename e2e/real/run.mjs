@@ -135,6 +135,9 @@ function seedSql() {
     'identity:session:logout-current',
     'identity:account-security:read',
     'identity:account-security:write',
+    'identity:role:read',
+    'identity:role:assign',
+    'identity:role:revoke',
     'runtime:inventory:read',
     'audit:read',
     'audit:field:actor',
@@ -411,6 +414,7 @@ function printPlan() {
         'main',
         'password-change',
         'account-status-self',
+        'roles',
         'rate-limited',
         'budget-exhausted',
         'admin-down',
@@ -552,7 +556,7 @@ try {
 
   await playwright('main')
 
-  const isolatedMainPhases = ['password-change', 'account-status-self', 'rate-limited']
+  const isolatedMainPhases = ['password-change', 'account-status-self', 'roles', 'rate-limited']
   for (const phase of isolatedMainPhases) {
     await compose(['up', '-d', '--no-deps', '--force-recreate', 'server'], {
       stage: `environment:${phase}-server`,

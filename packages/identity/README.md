@@ -23,6 +23,11 @@ owns the narrow self-target invalidation seam so a non-active confirmed or commi
 leave stale bearer authority alive. No subject provider, directory lookup, tenant input, or mock
 fallback exists.
 
+Roles exposes one strict cursor list plus assign/revoke command adapters. Role permissions and cursors
+are opaque RSS facts; explicit subjects are never resolved through a directory. Non-idempotent assign
+uses the protected no-replay policy, while idempotent revoke may use the session owner's one exact 401
+recovery. Boolean command receipts describe only that request and never create a binding projection.
+
 The controller never persists or logs credentials, parses JWT claims, authors
 tenant headers, or implements UI/Pinia behavior. JavaScript strings cannot be
 zeroized; clearing means immediate reference removal, lifecycle abort, and an

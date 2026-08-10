@@ -6,6 +6,7 @@ import type {
   RefreshResponse,
   PasswordChangeRequest,
   VerifiedProfile,
+  RolesApi,
 } from './index'
 
 declare const api: IdentityApi
@@ -31,6 +32,14 @@ void session.changePassword(passwordChange)
 declare const accountStatus: AccountStatusApi
 void accountStatus.get('f47ac10b-58cc-4372-a567-0e02b2c3d479')
 void session.invalidateForAccountStatusChange('f47ac10b-58cc-4372-a567-0e02b2c3d479', 'locked')
+declare const roles: RolesApi
+void roles.list({ limit: 50 })
+void roles.assign('ops:admin', { subject: 'target@example.test' })
+void roles.revoke('ops:admin', 'target@example.test')
+// @ts-expect-error Roles commands do not accept browser-authored authority headers.
+void roles.assign('ops', { subject: 'target' }, { headers: { Authorization: 'x' } })
+// @ts-expect-error A command receipt has no authoritative binding projection.
+void (await roles.assign('ops', { subject: 'target' })).data.bindings
 // @ts-expect-error Account Status does not accept caller-authored headers.
 void accountStatus.get('f47ac10b-58cc-4372-a567-0e02b2c3d479', { headers: { Authorization: 'x' } })
 // @ts-expect-error Password change does not accept caller-authored headers.

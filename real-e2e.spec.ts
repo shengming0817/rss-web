@@ -28,6 +28,7 @@ describe('real RSS journey harness', () => {
         'main',
         'password-change',
         'account-status-self',
+        'roles',
         'rate-limited',
         'budget-exhausted',
         'admin-down',

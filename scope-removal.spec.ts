@@ -109,6 +109,7 @@ describe('RSS-only foundation boundary', () => {
       'navigation.home',
       'navigation.identity',
       'navigation.accountStatus',
+      'navigation.roles',
       'navigation.runtime',
       'navigation.audit',
     ])
@@ -222,6 +223,7 @@ describe('RSS-only foundation boundary', () => {
       'apps/web/src/features/audit/HomeAuditEntries.vue',
       'apps/web/src/features/identity/AccountStatusView.vue',
       'apps/web/src/features/identity/IdentitySelfServiceView.vue',
+      'apps/web/src/features/identity/RolesView.vue',
       'apps/web/src/features/runtime/HomeRuntimeSummary.vue',
       'apps/web/src/features/runtime/RuntimeDetailsView.vue',
       'apps/web/src/router/index.ts',
@@ -251,5 +253,19 @@ describe('RSS-only foundation boundary', () => {
     )
     expect(production).not.toMatch(/headers:|X-Tenant-ID|profile\.kind|superAdmin/i)
     expect(read('packages/identity/src/account-status/client.ts')).toContain("session: 'required'")
+  })
+
+  it('keeps Roles explicit, command-only, and non-replayable for assign', () => {
+    const client = read('packages/identity/src/roles/client.ts')
+    const page = read('apps/web/src/features/identity/RolesView.vue')
+    const operation = read('apps/web/src/features/identity/role-binding-operation.ts')
+    const production = [client, page, operation].join('\n')
+    expect(client).toContain("session: 'required-no-replay'")
+    expect(client).toContain("session: 'required'")
+    expect(client).not.toContain('headers:')
+    expect(production).not.toMatch(
+      /KnownSubjectProvider|subject-provider|SubjectPicker|directory|bindingHistory|bindingMap|profile\.kind|superAdmin/i,
+    )
+    expect(operation).not.toMatch(/bindings|currentBinding|effectiveRole/)
   })
 })
