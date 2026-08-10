@@ -22,11 +22,35 @@ const runtimeResponse = {
     schemaVersion: 1,
     assemblyFingerprint: digest,
     runtimePlanFingerprint: digest,
-    activatedWorkflows: [],
+    activatedWorkflows: [
+      {
+        mode: 'projection',
+        id: 'audit-log',
+        definitionVersion: 'v1',
+        definitionSchemaDigest: digest,
+        activation: 'shadow',
+      },
+    ],
     domains: ['identity', 'audit'],
-    listeners: [],
+    listeners: [
+      {
+        id: 'admin-main',
+        kind: 'admin',
+        endpoint: { scheme: 'http', host: 'hidden.internal', port: 8082 },
+        authScheme: 'rssAccessToken',
+      },
+    ],
     providerPosture: [{ id: 'ledger', state: 'unobserved' }],
-    placements: [],
+    placements: [
+      {
+        domain: 'audit',
+        workload: 'audit',
+        mode: 'remote',
+        endpoint: { scheme: 'https', host: 'hidden-placement.internal', port: 443 },
+        spiffeIdentity: 'spiffe://hidden/runtime',
+        readiness: 'ready',
+      },
+    ],
   },
 }
 const auditResponse = {
@@ -206,8 +230,16 @@ test.describe('RSS Web Identity UX', () => {
     await page.getByLabel('密码').fill('test-password')
     await page.getByRole('button', { name: '登录', exact: true }).click()
     const navigation = page.getByRole('navigation', { name: '主导航' })
-    await expect(navigation.getByRole('link')).toHaveCount(1)
+    await expect(navigation.getByRole('link')).toHaveCount(2)
     await expect(navigation.getByRole('link', { name: /首页/ })).toContainText('RSS')
+    await navigation.getByRole('link', { name: /运行时/ }).click()
+    await expect(page).toHaveURL(/\/runtime$/)
+    await expect(page.getByRole('heading', { name: '运行时详情' })).toBeVisible()
+    await expect(page.getByText('admin-main')).toBeVisible()
+    await expect(page.getByText('audit-log')).toBeVisible()
+    await expect(page.getByText('hidden.internal')).toHaveCount(0)
+    await expect(page.getByText('hidden-placement.internal')).toHaveCount(0)
+    await expect(page.getByText('spiffe://hidden/runtime')).toHaveCount(0)
 
     await page.evaluate(() => {
       window.history.pushState({}, '', '/removed-capability')

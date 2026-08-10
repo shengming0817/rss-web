@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { RuntimeInventoryData } from '@rss/runtime'
+import type { RuntimeInventoryFacts } from '@rss/runtime'
 import { ErrorPage, SourceBadge } from '@rss/core'
 import { RSS_SOURCE, UNAVAILABLE_SOURCE } from '@rss/shared'
 import { toSafeReadErrorPresentation } from '../../errors/rss-error'
@@ -9,7 +9,7 @@ import { useRuntimeApi } from './runtime-context'
 
 type State =
   | { readonly status: 'loading' }
-  | { readonly status: 'ready'; readonly data: RuntimeInventoryData }
+  | { readonly status: 'ready'; readonly data: RuntimeInventoryFacts }
   | { readonly status: 'error'; readonly error: ReturnType<typeof toSafeReadErrorPresentation> }
 
 const { t } = useI18n()
@@ -49,28 +49,33 @@ onBeforeUnmount(() => {
     <p v-if="state.status === 'loading'" role="status" aria-busy="true">
       {{ t('runtimeSummary.loading') }}
     </p>
-    <dl v-else-if="state.status === 'ready'" class="facts">
-      <div>
-        <dt>{{ t('runtimeSummary.schemaVersion') }}</dt>
-        <dd>{{ state.data.schemaVersion }}</dd>
-      </div>
-      <div>
-        <dt>{{ t('runtimeSummary.assembly') }}</dt>
-        <dd>
-          <code>{{ state.data.assemblyFingerprint }}</code>
-        </dd>
-      </div>
-      <div>
-        <dt>{{ t('runtimeSummary.plan') }}</dt>
-        <dd>
-          <code>{{ state.data.runtimePlanFingerprint }}</code>
-        </dd>
-      </div>
-      <div>
-        <dt>{{ t('runtimeSummary.domains') }}</dt>
-        <dd>{{ state.data.domains.join(', ') }}</dd>
-      </div>
-    </dl>
+    <template v-else-if="state.status === 'ready'">
+      <dl class="facts">
+        <div>
+          <dt>{{ t('runtimeSummary.schemaVersion') }}</dt>
+          <dd>{{ state.data.schemaVersion }}</dd>
+        </div>
+        <div>
+          <dt>{{ t('runtimeSummary.assembly') }}</dt>
+          <dd>
+            <code>{{ state.data.assemblyFingerprint }}</code>
+          </dd>
+        </div>
+        <div>
+          <dt>{{ t('runtimeSummary.plan') }}</dt>
+          <dd>
+            <code>{{ state.data.runtimePlanFingerprint }}</code>
+          </dd>
+        </div>
+        <div>
+          <dt>{{ t('runtimeSummary.domains') }}</dt>
+          <dd>{{ state.data.domains.join(', ') }}</dd>
+        </div>
+      </dl>
+      <RouterLink :to="{ name: 'runtime' }" class="v1-btn">
+        {{ t('runtimeSummary.details') }}
+      </RouterLink>
+    </template>
     <ErrorPage
       v-else
       :error="state.error"

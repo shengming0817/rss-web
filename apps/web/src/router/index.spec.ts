@@ -189,7 +189,7 @@ describe('session-owned router', () => {
     },
   )
 
-  it('derives production navigation only from the implemented Home route', () => {
+  it('derives navigation from the implemented Home and Runtime routes', () => {
     const router = appRouter(sessionFixture({ status: 'anonymous' }))
     expect(createShellNavigation(router, (key) => key)).toEqual([
       {
@@ -198,7 +198,28 @@ describe('session-owned router', () => {
         to: { name: 'home' },
         source: RSS_SOURCE,
       },
+      {
+        id: 'runtime',
+        label: 'navigation.runtime',
+        to: { name: 'runtime' },
+        source: RSS_SOURCE,
+      },
     ])
+  })
+
+  it('owns the Runtime details route with session and server-authoritative intent metadata', () => {
+    const router = appRouter(sessionFixture({ status: 'anonymous' }))
+    const route = router.resolve('/runtime')
+    expect(route.name).toBe('runtime')
+    expect(route.meta).toMatchObject({
+      sessionAccess: 'authenticated',
+      focusTarget: 'shell-content',
+      authorizationIntent: {
+        contractId: 'runtime.inventory',
+        permission: 'runtime:inventory:read',
+      },
+      navigation: { labelKey: 'navigation.runtime', order: 10, source: RSS_SOURCE },
+    })
   })
 
   it('keeps unknown paths behind session authority and shows 404 after authentication', async () => {

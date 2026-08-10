@@ -1,5 +1,5 @@
 const zhCN = {
-  navigation: { home: '首页' },
+  navigation: { home: '首页', runtime: '运行时' },
   home: { subtitle: '已验证身份，并独立加载 Runtime 与 Audit 的服务端事实。' },
   runtimeSummary: {
     title: '运行时摘要',
@@ -8,6 +8,26 @@ const zhCN = {
     assembly: 'Assembly 指纹',
     plan: 'Runtime plan 指纹',
     domains: '领域',
+    details: '查看运行时详情',
+  },
+  runtimeDetails: {
+    title: '运行时详情',
+    subtitle: '来自 RSS Runtime Inventory 的当前事实；部署坐标不会在浏览器中显示。',
+    loading: '正在读取运行时详情…',
+    sourceRevision: '源码 revision',
+    imageDigest: '镜像摘要',
+    buildDeclaration: 'launch 声明；浏览器未验证制品来源。',
+    buildAbsent: '当前实例未声明 build metadata。',
+    none: '无已报告项目。',
+    unobserved: '未提供动态健康证据，不可作为 readiness 放行依据',
+    sections: {
+      version: '版本与指纹',
+      domains: '领域',
+      listeners: '监听器',
+      providers: 'Provider 状态',
+      workflows: '已激活工作流',
+      placements: 'Placement',
+    },
   },
   auditEntries: {
     title: '首批审计条目',

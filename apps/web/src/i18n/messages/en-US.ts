@@ -6,7 +6,7 @@ type Widen<T> = T extends string
     : T
 
 const enUS = {
-  navigation: { home: 'Home' },
+  navigation: { home: 'Home', runtime: 'Runtime' },
   home: { subtitle: 'Verified identity with independently loaded Runtime and Audit facts.' },
   runtimeSummary: {
     title: 'Runtime summary',
@@ -15,6 +15,27 @@ const enUS = {
     assembly: 'Assembly fingerprint',
     plan: 'Runtime plan fingerprint',
     domains: 'Domains',
+    details: 'View runtime details',
+  },
+  runtimeDetails: {
+    title: 'Runtime details',
+    subtitle:
+      'Current RSS Runtime Inventory facts; deployment coordinates are not shown in the browser.',
+    loading: 'Loading runtime details…',
+    sourceRevision: 'Source revision',
+    imageDigest: 'Image digest',
+    buildDeclaration: 'Launch declaration; artifact provenance is not verified in the browser.',
+    buildAbsent: 'This instance did not declare build metadata.',
+    none: 'No reported items.',
+    unobserved: 'No dynamic health evidence; this is not a readiness signal',
+    sections: {
+      version: 'Version and fingerprints',
+      domains: 'Domains',
+      listeners: 'Listeners',
+      providers: 'Provider posture',
+      workflows: 'Activated workflows',
+      placements: 'Placements',
+    },
   },
   auditEntries: {
     title: 'First audit entries',

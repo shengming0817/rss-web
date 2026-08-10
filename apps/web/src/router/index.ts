@@ -43,6 +43,20 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'runtime',
+        name: 'runtime',
+        component: () => import('../features/runtime/RuntimeDetailsView.vue'),
+        meta: {
+          sessionAccess: 'authenticated',
+          focusTarget: 'shell-content',
+          authorizationIntent: {
+            contractId: 'runtime.inventory',
+            permission: 'runtime:inventory:read',
+          },
+          navigation: { labelKey: 'navigation.runtime', order: 10, source: RSS_SOURCE },
+        },
+      },
+      {
         path: ':pathMatch(.*)*',
         name: 'not-found',
         component: () => import('../views/ErrorView.vue'),

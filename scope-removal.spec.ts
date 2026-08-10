@@ -96,13 +96,16 @@ describe('RSS-only foundation boundary', () => {
     expect(productionMatches).toEqual([])
   })
 
-  it('exposes only Identity login, authenticated home, and the protected catch-all', () => {
+  it('exposes only implemented Home and Runtime navigation with the protected catch-all', () => {
     const router = read('apps/web/src/router/index.ts')
     expect(router).toContain("path: '/'")
     expect(router).toContain("path: '/login'")
     expect(router).toContain("path: ':pathMatch(.*)*'")
-    expect(router.match(/navigation:/g)).toHaveLength(1)
-    expect(router).toContain("labelKey: 'navigation.home'")
+    expect(
+      [...router.matchAll(/labelKey: '(navigation\.[^']+)'/g)].map((match) => match[1]),
+    ).toEqual(['navigation.home', 'navigation.runtime'])
+    expect(router).toContain("contractId: 'runtime.inventory'")
+    expect(router).toContain("permission: 'runtime:inventory:read'")
     for (const path of [
       '/access',
       '/config',

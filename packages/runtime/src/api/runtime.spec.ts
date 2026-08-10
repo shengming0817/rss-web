@@ -42,7 +42,12 @@ const valid = {
 
 describe('runtime inventory decoder', () => {
   it('strictly decodes the current schema including unobserved', () => {
-    expect(decodeRuntimeInventoryResponse(valid)).toEqual(valid)
+    expect(decodeRuntimeInventoryResponse(valid)).toEqual({
+      data: {
+        ...valid.data,
+        listeners: [{ id: 'admin-main', kind: 'admin', authScheme: 'rssAccessToken' }],
+      },
+    })
   })
 
   it('decodes optional absence and reviewed remote placement coordinates', () => {
@@ -63,7 +68,22 @@ describe('runtime inventory decoder', () => {
         ],
       },
     } as const
-    expect(decodeRuntimeInventoryResponse(fixture)).toEqual(fixture)
+    expect(decodeRuntimeInventoryResponse(fixture)).toEqual({
+      data: {
+        ...withoutBuild,
+        listeners: [{ id: 'admin-main', kind: 'admin', authScheme: 'rssAccessToken' }],
+        placements: [
+          {
+            domain: 'audit',
+            workload: 'remote-audit',
+            mode: 'remote',
+            readiness: 'mtls-source-unavailable',
+          },
+        ],
+      },
+    })
+    expect(JSON.stringify(decodeRuntimeInventoryResponse(fixture))).not.toContain('audit.internal')
+    expect(JSON.stringify(decodeRuntimeInventoryResponse(fixture))).not.toContain('spiffe://')
   })
 
   it.each([
@@ -96,6 +116,15 @@ describe('runtime inventory decoder', () => {
     { data: { ...valid.data, domains: [] } },
     { data: { ...valid.data, domains: ['audit', 'audit'] } },
     { data: { ...valid.data, listeners: 'not-an-array' } },
+    {
+      data: {
+        ...valid.data,
+        listeners: [
+          valid.data.listeners[0],
+          { ...valid.data.listeners[0], endpoint: { scheme: 'http', host: 'other', port: 8082 } },
+        ],
+      },
+    },
     { data: { ...valid.data, buildMetadata: { sourceRevision: 'bad', imageDigest: digest } } },
   ])('fails closed for schema drift %#', (fixture) => {
     expect(() => decodeRuntimeInventoryResponse(fixture)).toThrow(
@@ -109,7 +138,12 @@ describe('runtime client', () => {
     const signal = new AbortController().signal
     const request = vi.fn(async (options: RequestOptions<unknown>) => options.decode(valid))
     const api = createRuntimeApi({ request } as unknown as HttpTransport)
-    await expect(api.inventory({ signal })).resolves.toEqual(valid)
+    await expect(api.inventory({ signal })).resolves.toEqual({
+      data: {
+        ...valid.data,
+        listeners: [{ id: 'admin-main', kind: 'admin', authScheme: 'rssAccessToken' }],
+      },
+    })
     expect(request).toHaveBeenCalledWith(
       expect.objectContaining({
         method: 'GET',
