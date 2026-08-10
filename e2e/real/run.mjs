@@ -133,6 +133,8 @@ function seedSql() {
     'identity:profile:field:tenant_id',
     'identity:profile:write',
     'identity:session:logout-current',
+    'identity:account-security:read',
+    'identity:account-security:write',
     'runtime:inventory:read',
     'audit:read',
     'audit:field:actor',
@@ -145,19 +147,25 @@ function seedSql() {
 INSERT INTO credentials (tenant_id,user_id,login,password_hash,version) VALUES
 ('${tenant}'::uuid,'11111111-1111-4111-8111-111111111111'::uuid,'rss-web-real-user','${passwordHash}',1),
 ('${tenant}'::uuid,'22222222-2222-4222-8222-222222222222'::uuid,'rss-web-limited-user','${passwordHash}',1),
-('${tenant}'::uuid,'33333333-3333-4333-8333-333333333333'::uuid,'rss-web-password-user','${passwordHash}',1);
+('${tenant}'::uuid,'33333333-3333-4333-8333-333333333333'::uuid,'rss-web-password-user','${passwordHash}',1),
+('${tenant}'::uuid,'44444444-4444-4444-8444-444444444444'::uuid,'rss-web-account-target','${passwordHash}',1),
+('${tenant}'::uuid,'55555555-5555-4555-8555-555555555555'::uuid,'rss-web-account-self','${passwordHash}',1);
 INSERT INTO account_security_states (tenant_id,user_id,status,authn_epoch,version,status_changed_at,updated_at) VALUES
 ('${tenant}'::uuid,'11111111-1111-4111-8111-111111111111'::uuid,'active',0,1,now(),now()),
 ('${tenant}'::uuid,'22222222-2222-4222-8222-222222222222'::uuid,'active',0,1,now(),now()),
-('${tenant}'::uuid,'33333333-3333-4333-8333-333333333333'::uuid,'active',0,1,now(),now());
+('${tenant}'::uuid,'33333333-3333-4333-8333-333333333333'::uuid,'active',0,1,now(),now()),
+('${tenant}'::uuid,'44444444-4444-4444-8444-444444444444'::uuid,'active',0,1,now(),now()),
+('${tenant}'::uuid,'55555555-5555-4555-8555-555555555555'::uuid,'active',0,1,now(),now());
 INSERT INTO roles (tenant_id,id,name,permissions) VALUES
 ('${tenant}'::uuid,'rss-web-real','RSS Web real journey',${array(fullPermissions)}),
 ('${tenant}'::uuid,'rss-web-limited','RSS Web limited journey',${array(limitedPermissions)}),
-('${tenant}'::uuid,'rss-web-password','RSS Web password journey',${array(fullPermissions)});
+('${tenant}'::uuid,'rss-web-password','RSS Web password journey',${array(fullPermissions)}),
+('${tenant}'::uuid,'rss-web-account-self','RSS Web account self journey',${array(fullPermissions)});
 INSERT INTO role_bindings (tenant_id,role_id,subject) VALUES
 ('${tenant}'::uuid,'rss-web-real','11111111-1111-4111-8111-111111111111'),
 ('${tenant}'::uuid,'rss-web-limited','22222222-2222-4222-8222-222222222222'),
-('${tenant}'::uuid,'rss-web-password','33333333-3333-4333-8333-333333333333');
+('${tenant}'::uuid,'rss-web-password','33333333-3333-4333-8333-333333333333'),
+('${tenant}'::uuid,'rss-web-account-self','55555555-5555-4555-8555-555555555555');
 INSERT INTO abac_policies
   (tenant_id,id,version,contract_id,permission,effective_from,rules)
 VALUES (
@@ -342,6 +350,17 @@ async function playwright(phase) {
       if (failedTitles.length > 0) {
         process.stderr.write(`[real-e2e] failed specs: ${failedTitles.join(' | ')}\n`)
       }
+      const failedLocations = report.suites
+        .flatMap((suite) => suite.specs ?? [])
+        .flatMap((spec) => spec.tests ?? [])
+        .flatMap((test) => test.results ?? [])
+        .flatMap((testResult) => testResult.errors ?? [])
+        .map((error) => error.location)
+        .filter((location) => location?.file !== undefined && location?.line !== undefined)
+        .map((location) => `${location.file}:${location.line}`)
+      if (failedLocations.length > 0) {
+        process.stderr.write(`[real-e2e] failed locations: ${failedLocations.join(' | ')}\n`)
+      }
     }
     const error = new Error(`Playwright ${phase} failed`)
     error.stage = `${classification === 'product' ? 'product' : 'environment'}:${phase}`
@@ -388,7 +407,15 @@ function printPlan() {
       pinnedRevision: revision,
       tenantBootstrap: 'edge-deployment-fixed',
       browserNetwork: 'edge-only',
-      phases: ['main', 'budget-exhausted', 'admin-down', 'primary-down'],
+      phases: [
+        'main',
+        'password-change',
+        'account-status-self',
+        'rate-limited',
+        'budget-exhausted',
+        'admin-down',
+        'primary-down',
+      ],
       malformedResponseEvidence: 'isolated-playwright-smoke',
       cleanup: 'compose-down-volumes-and-temporary-snapshot',
     })}\n`,
@@ -524,6 +551,19 @@ try {
   )
 
   await playwright('main')
+
+  const isolatedMainPhases = ['password-change', 'account-status-self', 'rate-limited']
+  for (const phase of isolatedMainPhases) {
+    await compose(['up', '-d', '--no-deps', '--force-recreate', 'server'], {
+      stage: `environment:${phase}-server`,
+    })
+    await compose(['up', '-d', '--no-deps', '--force-recreate', 'edge'], {
+      stage: `environment:${phase}-edge`,
+    })
+    await waitReady()
+    await waitPhaseReady({ requireServer: true })
+    await playwright(phase)
+  }
 
   environment.RSS_WEB_REAL_REQUEST_BUDGET_MS = '1'
   await compose(['up', '-d', '--no-deps', '--force-recreate', 'server'], {

@@ -96,7 +96,7 @@ describe('RSS-only foundation boundary', () => {
     expect(productionMatches).toEqual([])
   })
 
-  it('exposes only implemented Home, Identity, Runtime, and Audit navigation with the protected catch-all', () => {
+  it('exposes only implemented production navigation with the protected catch-all', () => {
     const router = read('apps/web/src/router/index.ts')
     const runtimeIntent = read('apps/web/src/features/runtime/runtime-intent.ts')
     const auditIntent = read('apps/web/src/features/audit/audit-intent.ts')
@@ -105,7 +105,13 @@ describe('RSS-only foundation boundary', () => {
     expect(router).toContain("path: ':pathMatch(.*)*'")
     expect(
       [...router.matchAll(/labelKey: '(navigation\.[^']+)'/g)].map((match) => match[1]),
-    ).toEqual(['navigation.home', 'navigation.identity', 'navigation.runtime', 'navigation.audit'])
+    ).toEqual([
+      'navigation.home',
+      'navigation.identity',
+      'navigation.accountStatus',
+      'navigation.runtime',
+      'navigation.audit',
+    ])
     expect(router).toContain('authorizationIntent: RUNTIME_INVENTORY_INTENT')
     expect(runtimeIntent).toContain("contractId: 'runtime.inventory'")
     expect(runtimeIntent).toContain("permission: 'runtime:inventory:read'")
@@ -214,6 +220,7 @@ describe('RSS-only foundation boundary', () => {
     expect(productionOwners).toEqual([
       'apps/web/src/features/audit/AuditEntriesView.vue',
       'apps/web/src/features/audit/HomeAuditEntries.vue',
+      'apps/web/src/features/identity/AccountStatusView.vue',
       'apps/web/src/features/identity/IdentitySelfServiceView.vue',
       'apps/web/src/features/runtime/HomeRuntimeSummary.vue',
       'apps/web/src/features/runtime/RuntimeDetailsView.vue',
@@ -231,5 +238,18 @@ describe('RSS-only foundation boundary', () => {
     expect(page).not.toMatch(/profile\.kind|superAdmin|SuperAdmin/)
     expect(session).toContain("request.session === 'required-no-replay'")
     expect(session).toContain('hooks.invalidate(initial.generation)')
+  })
+
+  it('keeps Account Status explicit and removes the retired provider design', () => {
+    const production = [
+      read('packages/identity/src/account-status/client.ts'),
+      read('apps/web/src/features/identity/AccountStatusView.vue'),
+      read('apps/web/src/features/identity/account-status-operation.ts'),
+    ].join('\n')
+    expect(production).not.toMatch(
+      /KnownSubjectProvider|subject-provider|SubjectPicker|account-status-resolver|mock.*account.*status/i,
+    )
+    expect(production).not.toMatch(/headers:|X-Tenant-ID|profile\.kind|superAdmin/i)
+    expect(read('packages/identity/src/account-status/client.ts')).toContain("session: 'required'")
   })
 })

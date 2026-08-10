@@ -55,6 +55,16 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'account-status',
+        name: 'account-status',
+        component: () => import('../features/identity/AccountStatusView.vue'),
+        meta: {
+          sessionAccess: 'authenticated',
+          focusTarget: 'shell-content',
+          navigation: { labelKey: 'navigation.accountStatus', order: 20, source: RSS_SOURCE },
+        },
+      },
+      {
         path: 'runtime',
         name: 'runtime',
         component: () => import('../features/runtime/RuntimeDetailsView.vue'),
@@ -62,7 +72,7 @@ const routes: RouteRecordRaw[] = [
           sessionAccess: 'authenticated',
           focusTarget: 'shell-content',
           authorizationIntent: RUNTIME_INVENTORY_INTENT,
-          navigation: { labelKey: 'navigation.runtime', order: 20, source: RSS_SOURCE },
+          navigation: { labelKey: 'navigation.runtime', order: 30, source: RSS_SOURCE },
         },
       },
       {
@@ -73,7 +83,7 @@ const routes: RouteRecordRaw[] = [
           sessionAccess: 'authenticated',
           focusTarget: 'shell-content',
           authorizationIntent: AUDIT_AMBIENT_INTENT,
-          navigation: { labelKey: 'navigation.audit', order: 30, source: RSS_SOURCE },
+          navigation: { labelKey: 'navigation.audit', order: 40, source: RSS_SOURCE },
         },
       },
       {

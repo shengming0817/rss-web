@@ -6,6 +6,8 @@ import {
 } from '@rss/api/session'
 import { createIdentityApi } from '../api/client'
 import type { LoginData, ProfileData, RefreshData } from '../api/types'
+import { isAccountStatusUserId } from '../account-status/user-id'
+import type { AccountStatus } from '../account-status/types'
 import { sessionError } from './errors'
 import { classifyPasswordChangeFailure } from './password-change-failure'
 import type {
@@ -395,6 +397,19 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
     return flight
   }
 
+  function invalidateForAccountStatusChange(userId: string, status: AccountStatus): boolean {
+    if (!isAccountStatusUserId(userId) || status === 'active') return false
+    const current = state
+    if (
+      (current.status !== 'authenticated' && current.status !== 'refreshing') ||
+      current.profile.subject !== userId
+    ) {
+      return false
+    }
+    clear('expired')
+    return true
+  }
+
   return Object.freeze({
     transport,
     getState: () => state,
@@ -406,5 +421,6 @@ export function createIdentitySession(config: IdentitySessionConfig): IdentitySe
     logout: (options?: SessionOperationOptions) => endSession(false, options),
     logoutAll: (options?: SessionOperationOptions) => endSession(true, options),
     changePassword,
+    invalidateForAccountStatusChange,
   })
 }

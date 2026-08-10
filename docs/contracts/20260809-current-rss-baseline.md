@@ -103,3 +103,13 @@ non-idempotent OutboxFact command exactly once through the protected no-replay s
 confirmed change clears all local authority before resolving; credential drift and commit-unknown
 results fail closed. RSS remains authoritative for Unicode normalization, length, compromised-secret
 policy, grant-family revocation, and transaction outcome; schemas are neither copied nor loaded.
+
+WEB-PR-017 enables `identity.account-status-get` and `identity.account-status-set` against the same
+read-only RSS revision `b7f3e1d0bcc5b2e59639a81b4f37937914b53f00`. Their contract TOML hashes are
+`f16b94f6991e9fa319d3f87d753bd85509258587144434d191a95c81ee2d942f` and
+`6b5c5996b1852b72d571adc766b1fdd0d108919f901ef55800b14feda35b7c70`; request and response hashes
+remain those recorded in the baseline table. The Web accepts only an explicitly submitted canonical
+non-nil `userId` path coordinate and the closed four-value lifecycle. It does not provide directory
+lookup, mock/provider fallback, tenant input, or optimistic facts. A self-target non-active result or
+commit-unknown write atomically clears local authority; the idempotent PUT is never automatically
+retried after network, timeout, conflict, or server failure.

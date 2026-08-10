@@ -22,6 +22,12 @@ Password change is a non-idempotent operation owned only by the same Identity se
 uses the no-replay policy, never calls logout-all as compensation, and clears local authority after
 confirmed success or a commit-unknown result. Password values remain component-local and must not be
 persisted, logged, copied into routes, or exposed through errors.
+Account Status accepts only an explicit canonical non-nil `userId` resource path and a closed desired
+state. Do not add subject/directory providers, pickers, mocks, tenant/principal inference, optimistic
+facts, or fallback sources. The idempotent PUT may use only the session owner's exact 401
+single-recovery/replay; never automatically retry network, timeout, conflict, server, or protocol
+outcomes. A self-target non-active confirmed or commit-unknown write must clear authority through the
+single Identity session controller; do not call logout as compensation.
 The Nginx same-origin Edge is the sole listener-routing and pre-auth tenant
 bootstrap boundary. Do not add browser-selectable tenants, client runtime API
 origins, listener discovery, proxy fallbacks, or Internal/Health routes.

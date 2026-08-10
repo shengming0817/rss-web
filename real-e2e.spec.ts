@@ -24,7 +24,15 @@ describe('real RSS journey harness', () => {
       pinnedRevision: 'b7f3e1d0bcc5b2e59639a81b4f37937914b53f00',
       tenantBootstrap: 'edge-deployment-fixed',
       browserNetwork: 'edge-only',
-      phases: ['main', 'budget-exhausted', 'admin-down', 'primary-down'],
+      phases: [
+        'main',
+        'password-change',
+        'account-status-self',
+        'rate-limited',
+        'budget-exhausted',
+        'admin-down',
+        'primary-down',
+      ],
       malformedResponseEvidence: 'isolated-playwright-smoke',
       cleanup: 'compose-down-volumes-and-temporary-snapshot',
     })

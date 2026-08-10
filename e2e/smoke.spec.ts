@@ -88,6 +88,7 @@ const targetAuditResponse = {
   hasMore: true,
   nextCursor: 'opaque-next-page',
 }
+const accountStatusUserId = 'f47ac10b-58cc-4372-a567-0e02b2c3d479'
 
 async function installAdminMocks(
   page: Page,
@@ -204,6 +205,22 @@ async function installIdentityMocks(
     expect(route.request().headers().authorization?.startsWith('Bearer ')).toBe(true)
     expect(route.request().headers()['x-tenant-id']).toBeUndefined()
     await route.fulfill({ status: 200, json: { data: { changed: true } } })
+  })
+  await page.route('**/api/v1/identity/accounts/*/status', async (route) => {
+    expect(route.request().headers().authorization?.startsWith('Bearer ')).toBe(true)
+    expect(route.request().headers()['x-tenant-id']).toBeUndefined()
+    expect(new URL(route.request().url()).pathname).toBe(
+      `/api/v1/identity/accounts/${accountStatusUserId}/status`,
+    )
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ status: 200, json: { data: { status: 'active' } } })
+    } else {
+      expect(route.request().postDataJSON()).toEqual({ targetStatus: 'suspended' })
+      await route.fulfill({
+        status: 200,
+        json: { data: { status: 'suspended', changed: true } },
+      })
+    }
   })
 }
 
@@ -328,7 +345,7 @@ test.describe('RSS Web Identity UX', () => {
     await page.getByLabel('密码').fill('test-password')
     await page.getByRole('button', { name: '登录', exact: true }).click()
     const navigation = page.getByRole('navigation', { name: '主导航' })
-    await expect(navigation.getByRole('link')).toHaveCount(4)
+    await expect(navigation.getByRole('link')).toHaveCount(5)
     await expect(navigation.getByRole('link', { name: /首页/ })).toContainText('RSS')
     await navigation.getByRole('link', { name: /运行时/ }).click()
     await expect(page).toHaveURL(/\/runtime$/)
@@ -373,6 +390,52 @@ test.describe('RSS Web Identity UX', () => {
     expect(passwordRequests).toBe(1)
     await expect(page.getByText('current-browser-secret')).toHaveCount(0)
     await expect(page.getByText('replacement-browser-secret')).toHaveCount(0)
+  })
+
+  test('reads and confirms Account Status only for an explicit userId', async ({ page }) => {
+    const requests: string[] = []
+    page.on('request', (request) => {
+      if (new URL(request.url()).pathname.includes('/api/v1/identity/accounts/')) {
+        requests.push(request.method())
+      }
+    })
+    await installIdentityMocks(page)
+    await signIn(page)
+    await page
+      .getByRole('navigation', { name: '主导航' })
+      .getByRole('link', { name: /账户状态/ })
+      .click()
+    await expect(page).toHaveURL(/\/account-status$/)
+    expect(requests).toEqual([])
+
+    for (const invalid of [
+      'not-a-user',
+      'F47AC10B-58CC-4372-A567-0E02B2C3D479',
+      '00000000-0000-0000-0000-000000000000',
+    ]) {
+      await page.getByLabel('User ID').fill(invalid)
+      await page.getByRole('button', { name: '读取状态' }).click()
+      await expect(page.getByRole('alert')).toContainText('canonical non-nil UUID')
+      await expect(page.getByLabel('User ID')).toBeFocused()
+      expect(requests).toEqual([])
+    }
+
+    await page.getByLabel('User ID').fill(accountStatusUserId)
+    await page.getByRole('button', { name: '读取状态' }).click()
+    await expect(
+      page.locator('.account-status__result dd').filter({ hasText: /^Active$/ }),
+    ).toBeVisible()
+    expect(requests).toEqual(['GET'])
+
+    await page.getByLabel('目标状态').selectOption('suspended')
+    await page.getByRole('button', { name: '确认变更' }).click()
+    const dialog = page.getByRole('alertdialog')
+    await expect(dialog).toContainText(accountStatusUserId)
+    await dialog.getByRole('button', { name: '提交变更' }).click()
+    await expect(
+      page.locator('.account-status__result dd').filter({ hasText: /^Suspended$/ }),
+    ).toBeVisible()
+    expect(requests).toEqual(['GET', 'PUT'])
   })
 
   test('queries target Audit only on explicit actions without leaking target authority or PII', async ({

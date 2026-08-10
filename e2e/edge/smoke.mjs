@@ -122,6 +122,40 @@ try {
     createHash('sha256').update(passwordBody).digest('hex'),
   )
 
+  const accountUserId = '11111111-1111-4111-8111-111111111111'
+  const accountPath = `/api/v1/identity/accounts/${accountUserId}/status`
+  const accountStatus = await request(port, accountPath, {
+    headers: { 'X-Tenant-ID': 'attacker', Authorization: 'Bearer fixture' },
+  })
+  assert.equal(accountStatus.status, 200)
+  assert.equal(accountStatus.json.listener, 'primary')
+  assert.equal(accountStatus.json.method, 'GET')
+  assert.equal(accountStatus.json.url, accountPath)
+  assert.deepEqual(accountStatus.json.tenantHeaders, [])
+  assert.equal(accountStatus.json.authorizationPresent, true)
+
+  const accountBody = JSON.stringify({ targetStatus: 'suspended' })
+  const accountStatusSet = await request(port, accountPath, {
+    method: 'PUT',
+    headers: {
+      'X-Tenant-ID': 'attacker',
+      Authorization: 'Bearer fixture',
+      'Content-Type': 'application/json',
+      'Content-Length': String(Buffer.byteLength(accountBody)),
+    },
+    body: accountBody,
+  })
+  assert.equal(accountStatusSet.status, 200)
+  assert.equal(accountStatusSet.json.listener, 'primary')
+  assert.equal(accountStatusSet.json.method, 'PUT')
+  assert.equal(accountStatusSet.json.url, accountPath)
+  assert.deepEqual(accountStatusSet.json.tenantHeaders, [])
+  assert.equal(accountStatusSet.json.authorizationPresent, true)
+  assert.equal(
+    accountStatusSet.json.bodySha256,
+    createHash('sha256').update(accountBody).digest('hex'),
+  )
+
   for (const path of ['/api/v1/audit/entries', '/api/v1/runtime/inventory']) {
     const response = await request(port, path, { headers: { 'X-Tenant-ID': 'attacker' } })
     assert.equal(response.status, 200)

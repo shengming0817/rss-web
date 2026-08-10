@@ -189,7 +189,7 @@ describe('session-owned router', () => {
     },
   )
 
-  it('derives navigation from the implemented Home, Identity, Runtime, and Audit routes', () => {
+  it('derives navigation from only implemented production routes', () => {
     const router = appRouter(sessionFixture({ status: 'anonymous' }))
     expect(createShellNavigation(router, (key) => key)).toEqual([
       {
@@ -202,6 +202,12 @@ describe('session-owned router', () => {
         id: 'identity',
         label: 'navigation.identity',
         to: { name: 'identity' },
+        source: RSS_SOURCE,
+      },
+      {
+        id: 'account-status',
+        label: 'navigation.accountStatus',
+        to: { name: 'account-status' },
         source: RSS_SOURCE,
       },
       {
@@ -230,7 +236,7 @@ describe('session-owned router', () => {
         contractId: 'audit.list-entries',
         permission: 'audit:read',
       },
-      navigation: { labelKey: 'navigation.audit', order: 30, source: RSS_SOURCE },
+      navigation: { labelKey: 'navigation.audit', order: 40, source: RSS_SOURCE },
     })
   })
 
@@ -245,7 +251,7 @@ describe('session-owned router', () => {
         contractId: 'runtime.inventory',
         permission: 'runtime:inventory:read',
       },
-      navigation: { labelKey: 'navigation.runtime', order: 20, source: RSS_SOURCE },
+      navigation: { labelKey: 'navigation.runtime', order: 30, source: RSS_SOURCE },
     })
   })
 
@@ -257,6 +263,18 @@ describe('session-owned router', () => {
       sessionAccess: 'authenticated',
       focusTarget: 'shell-content',
       navigation: { labelKey: 'navigation.identity', order: 10, source: RSS_SOURCE },
+    })
+    expect(route.meta.authorizationIntent).toBeUndefined()
+  })
+
+  it('keeps Account Status session-only while read and write commands own authorization', () => {
+    const router = appRouter(sessionFixture({ status: 'anonymous' }))
+    const route = router.resolve('/account-status')
+    expect(route.name).toBe('account-status')
+    expect(route.meta).toMatchObject({
+      sessionAccess: 'authenticated',
+      focusTarget: 'shell-content',
+      navigation: { labelKey: 'navigation.accountStatus', order: 20, source: RSS_SOURCE },
     })
     expect(route.meta.authorizationIntent).toBeUndefined()
   })

@@ -6,7 +6,13 @@ type Widen<T> = T extends string
     : T
 
 const enUS = {
-  navigation: { home: 'Home', identity: 'Identity', runtime: 'Runtime', audit: 'Audit' },
+  navigation: {
+    home: 'Home',
+    identity: 'Identity',
+    accountStatus: 'Account status',
+    runtime: 'Runtime',
+    audit: 'Audit',
+  },
   home: { subtitle: 'Verified identity with independently loaded Runtime and Audit facts.' },
   runtimeSummary: {
     title: 'Runtime summary',
@@ -152,6 +158,36 @@ const enUS = {
         outcomeUnknown: 'The change could not be confirmed. Sign in again for safety.',
         unknown: 'The password could not be changed. Try again.',
       },
+    },
+  },
+  accountStatus: {
+    title: 'Account status management',
+    subtitle: 'Read or set real RSS account status only for an explicitly entered userId.',
+    operationTitle: 'Explicit account coordinate',
+    explicitWarning:
+      'No directory search, current-user inference, or mock is used. RSS 403/404/409 is final.',
+    userId: 'User ID',
+    userIdHint: 'Enter a canonical lowercase UUID. It is used only as a request-path resource.',
+    invalidUserId: 'Enter a valid canonical non-nil UUID.',
+    read: 'Read status',
+    reading: 'Reading account status…',
+    writing: 'Submitting account status…',
+    resultUserId: 'Submitted User ID',
+    currentStatus: 'Server status',
+    changed: 'Changed by this request',
+    yes: 'Yes',
+    no: 'No',
+    targetStatus: 'Target status',
+    prepare: 'Review change',
+    confirmTitle: 'Confirm account status change?',
+    confirmDescription: 'Set User ID {userId} to {status}. RSS makes the final decision.',
+    cancel: 'Cancel',
+    confirm: 'Submit change',
+    status: {
+      active: 'Active',
+      suspended: 'Suspended',
+      locked: 'Locked',
+      deactivated: 'Deactivated',
     },
   },
 } satisfies Widen<WebMessageSchema>

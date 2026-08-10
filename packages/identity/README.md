@@ -17,6 +17,12 @@ change clears all local authority before resolving; credential drift and commit-
 closed rather than retrying a non-idempotent command. Vue code cannot call a second session mutation
 path.
 
+Account Status exposes strict GET/PUT adapters for an explicit canonical `userId`. The desired-state
+PUT is idempotent, but the Web does not automatically retry uncertain outcomes. The session controller
+owns the narrow self-target invalidation seam so a non-active confirmed or commit-unknown result cannot
+leave stale bearer authority alive. No subject provider, directory lookup, tenant input, or mock
+fallback exists.
+
 The controller never persists or logs credentials, parses JWT claims, authors
 tenant headers, or implements UI/Pinia behavior. JavaScript strings cannot be
 zeroized; clearing means immediate reference removal, lifecycle abort, and an
