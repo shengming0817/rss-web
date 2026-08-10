@@ -276,6 +276,22 @@ test('@main observes canonical 401 and 429 through the browser Edge', async ({ p
       requestId: expect.stringMatching(/^[!-~]{1,128}$/),
     },
   })
+  const uiRateLimit = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/api/v1/identity/login' && response.status() === 429,
+  )
+  await signIn(page)
+  const uiResponse = await uiRateLimit
+  expect(await uiResponse.json()).toEqual({
+    error: {
+      code: 'ERR_CORE_TOO_MANY_REQUESTS',
+      message: 'too many requests',
+      retryable: true,
+      details: [],
+      requestId: expect.stringMatching(/^[!-~]{1,128}$/),
+    },
+  })
+  await expect(page.getByRole('alert')).toContainText('尝试过于频繁，请稍后重试。')
 })
 
 test('@budget-exhausted reports the real RSS request-budget 503 without a mock fallback', async ({
