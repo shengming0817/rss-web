@@ -100,6 +100,7 @@ describe('RSS-only foundation boundary', () => {
     const router = read('apps/web/src/router/index.ts')
     const runtimeIntent = read('apps/web/src/features/runtime/runtime-intent.ts')
     const auditIntent = read('apps/web/src/features/audit/audit-intent.ts')
+    const policiesIntent = read('apps/web/src/features/identity/policies-intent.ts')
     expect(router).toContain("path: '/'")
     expect(router).toContain("path: '/login'")
     expect(router).toContain("path: ':pathMatch(.*)*'")
@@ -109,6 +110,7 @@ describe('RSS-only foundation boundary', () => {
       'navigation.identity',
       'navigation.accountStatus',
       'navigation.roles',
+      'navigation.policies',
       'navigation.runtime',
       'navigation.audit',
     ])
@@ -122,6 +124,10 @@ describe('RSS-only foundation boundary', () => {
     expect(auditIntent).toContain("contractId: 'audit.list-entries'")
     expect(auditIntent).toContain("contractId: 'audit.list-tenant-entries'")
     expect(auditIntent).toContain("permission: 'audit:read'")
+    expect(router).toContain('authorizationIntent: POLICIES_LIST_INTENT')
+    expect(policiesIntent).toContain("contractId: 'identity.policies-list'")
+    expect(policiesIntent).toContain("contractId: 'identity.policies-get'")
+    expect(policiesIntent).toContain("permission: 'identity:policy:read'")
     for (const path of ['/access', '/config', '/flags', '/admin', '/observability', '/observe']) {
       expect(router).not.toContain(path)
     }
@@ -225,6 +231,7 @@ describe('RSS-only foundation boundary', () => {
       'apps/web/src/features/audit/HomeAuditEntries.vue',
       'apps/web/src/features/identity/AccountStatusView.vue',
       'apps/web/src/features/identity/IdentitySelfServiceView.vue',
+      'apps/web/src/features/identity/PoliciesView.vue',
       'apps/web/src/features/identity/RolesView.vue',
       'apps/web/src/features/runtime/HomeRuntimeSummary.vue',
       'apps/web/src/features/runtime/RuntimeDetailsView.vue',
@@ -269,5 +276,18 @@ describe('RSS-only foundation boundary', () => {
       /KnownSubjectProvider|subject-provider|SubjectPicker|directory|bindingHistory|bindingMap|profile\.kind|superAdmin/i,
     )
     expect(operation).not.toMatch(/bindings|currentBinding|effectiveRole/)
+  })
+
+  it('keeps Policies read-only, server-authoritative, and free of local ABAC evaluation', () => {
+    const client = read('packages/identity/src/policies/client.ts')
+    const page = read('apps/web/src/features/identity/PoliciesView.vue')
+    const rules = read('apps/web/src/features/identity/PolicyRuleList.vue')
+    const production = [client, page, rules].join('\n')
+    expect(client.match(/session: 'required'/g)).toHaveLength(2)
+    expect(client).not.toContain('headers:')
+    expect(production).not.toMatch(
+      /evaluatePolicy|policyDecision|isAllowed|grantAuthority|profile\.kind|superAdmin|localStorage|sessionStorage|X-Tenant-ID|mock|preview|fallback/i,
+    )
+    expect(production).not.toMatch(/console\.|logger\.|analytics/)
   })
 })

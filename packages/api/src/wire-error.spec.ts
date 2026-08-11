@@ -127,6 +127,37 @@ describe('decodeEndpointError', () => {
   })
 
   it.each([
+    ['list', 400, 'ERR_CORE_VALIDATION', 'validation error', false, [{ field: 'limit' }]],
+    ['list', 500, 'ERR_CORE_INTERNAL', 'internal error', false, []],
+    ['get', 400, 'ERR_CORE_VALIDATION', 'validation error', false, [{ field: 'policyId' }]],
+    ['get', 404, 'ERR_CORE_NOT_FOUND', 'not found', false, []],
+    ['get', 500, 'ERR_CORE_INTERNAL', 'internal error', false, []],
+  ] as const)(
+    'accepts only the reviewed Policies %s %s coordinate',
+    (endpoint, status, code, message, retryable, details) => {
+      expect(
+        decodeEndpointError(
+          status,
+          envelope({ code, message, retryable, details }),
+          endpoint === 'list'
+            ? identityEndpoints.policiesList.errorPolicy
+            : identityEndpoints.policiesGet.errorPolicy,
+        ),
+      ).toMatchObject({ cause: 'wire', status, code, retryable })
+    },
+  )
+
+  it.each([
+    [418, envelope({ details: [] })],
+    [404, envelope({ code: 'ERR_CORE_NOT_FOUND', message: 'missing', details: [] })],
+    [500, envelope({ code: 'ERR_CORE_INTERNAL', message: 'internal error', details: [{ x: 1 }] })],
+  ] as const)('fails closed for undeclared or drifting Policies coordinates %#', (status, body) => {
+    expect(
+      decodeEndpointError(status, body, identityEndpoints.policiesGet.errorPolicy),
+    ).toMatchObject({ cause: 'protocol', status })
+  })
+
+  it.each([
     [400, 'ERR_CORE_VALIDATION', 'validation error'],
     [500, 'ERR_CORE_INTERNAL', 'internal error'],
     [501, 'ERR_CORE_NOT_IMPLEMENTED', 'not implemented'],

@@ -38,6 +38,13 @@ view or local history. The pinned RSS browser-login authority is `user`, while t
 Admin bearer; success shapes remain covered at the adapter, component, and Edge boundaries. No
 subject directory, picker, provider, tenant input, or mock fallback exists.
 
+The Policies route consumes the active list/detail reads through the same protected session transport.
+It uses strict handwritten DTOs for the current family/predicate/typed-operand ABAC shape, explicit
+cursor pagination, and a distinct server detail request after selection. Policy content, profile kind,
+and displayed obligations are facts only: the browser never evaluates them or derives effective
+authority. Unknown schema fields, enum values, operand-family mismatches, or unsafe integer values fail
+closed, with no legacy operator aliases, schema copies, mock fallback, or runtime registry.
+
 Role Bindings Preview is a separate app-local, static experience and is disabled by default. To
 inspect its synthetic, permanently non-authoritative fixtures in development, run
 `VITE_ROLE_BINDINGS_PREVIEW=true pnpm dev`. The route and navigation are registered only in the
@@ -53,7 +60,7 @@ Web source. No browser ABAC evaluation, request authority, or legacy access endp
 
 The authenticated shell derives Sidebar and command-palette navigation from implemented route
 metadata; currently that closed production set contains Home, Identity self-service, Account Status,
-Roles, Runtime details, and Audit queries.
+Roles, Policies, Runtime details, and Audit queries.
 Removed and future capabilities
 do not receive placeholder routes or menu entries. `@rss/shared` owns a discriminated `SourceMeta`
 model with sealed, frozen display constants; direct object-literal construction is rejected. Reusable

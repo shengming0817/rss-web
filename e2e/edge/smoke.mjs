@@ -165,6 +165,21 @@ try {
   assert.deepEqual(rolesList.json.tenantHeaders, [])
   assert.equal(rolesList.json.authorizationPresent, true)
 
+  for (const path of [
+    '/api/v1/identity/policies?limit=50',
+    '/api/v1/identity/policies/rss-web-policy-read',
+  ]) {
+    const response = await request(port, path, {
+      headers: { 'X-Tenant-ID': 'attacker', Authorization: 'Bearer fixture' },
+    })
+    assert.equal(response.status, 200)
+    assert.equal(response.json.listener, 'primary')
+    assert.equal(response.json.method, 'GET')
+    assert.equal(response.json.url, path)
+    assert.deepEqual(response.json.tenantHeaders, [])
+    assert.equal(response.json.authorizationPresent, true)
+  }
+
   const roleBody = JSON.stringify({ subject: 'target@example.test' })
   const roleAssign = await request(port, '/api/v1/identity/roles/ops%3Aadmin/bindings', {
     method: 'POST',

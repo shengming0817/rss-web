@@ -8,6 +8,8 @@ import type {
   PasswordChangeRequest,
   VerifiedProfile,
   RolesApi,
+  PoliciesApi,
+  PolicyView,
 } from './index'
 
 declare const api: IdentityApi
@@ -38,6 +40,14 @@ const roleId = parseRoleId('ops:admin')!
 void roles.list({ limit: 50 })
 void roles.assign(roleId, { subject: 'target@example.test' })
 void roles.revoke(roleId, 'target@example.test')
+declare const policies: PoliciesApi
+declare const policy: PolicyView
+void policies.list({ limit: 50 })
+void policies.get(policy.policyId)
+// @ts-expect-error Policies reads do not accept browser-authored authority headers.
+void policies.list(undefined, { headers: { Authorization: 'x' } })
+// @ts-expect-error Policy coordinates must originate from a strictly decoded PolicyView.
+void policies.get('policy-fixture')
 // @ts-expect-error Roles commands do not accept browser-authored authority headers.
 void roles.assign(roleId, { subject: 'target' }, { headers: { Authorization: 'x' } })
 // @ts-expect-error A command receipt has no authoritative binding projection.

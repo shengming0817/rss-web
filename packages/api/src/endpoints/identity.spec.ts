@@ -168,6 +168,50 @@ describe('Identity endpoint coordinates', () => {
           },
         },
       },
+      policiesList: {
+        method: 'GET',
+        path: '/api/v1/identity/policies',
+        successStatus: 200,
+        errorPolicy: {
+          400: {
+            code: 'ERR_CORE_VALIDATION',
+            message: 'validation error',
+            retryable: false,
+            details: 'public',
+          },
+          500: {
+            code: 'ERR_CORE_INTERNAL',
+            message: 'internal error',
+            retryable: false,
+            details: 'empty',
+          },
+        },
+      },
+      policiesGet: {
+        method: 'GET',
+        path: '/api/v1/identity/policies/{policyId}',
+        successStatus: 200,
+        errorPolicy: {
+          400: {
+            code: 'ERR_CORE_VALIDATION',
+            message: 'validation error',
+            retryable: false,
+            details: 'public',
+          },
+          404: {
+            code: 'ERR_CORE_NOT_FOUND',
+            message: 'not found',
+            retryable: false,
+            details: 'empty',
+          },
+          500: {
+            code: 'ERR_CORE_INTERNAL',
+            message: 'internal error',
+            retryable: false,
+            details: 'empty',
+          },
+        },
+      },
     })
     expect(Object.isFrozen(identityEndpoints)).toBe(true)
     for (const coordinate of Object.values(identityEndpoints)) {

@@ -33,6 +33,11 @@ provider, picker, resolver, binding history/read model, permission evaluator, te
 fallback source. Non-idempotent assign must use `required-no-replay`; idempotent revoke and list may
 use only the session owner's exact 401 recovery. Permissions remain opaque display facts, and boolean
 receipts never authorize or construct current bindings.
+Policies list/detail are read-only RSS facts over the protected session transport. Keep the current
+family/predicate/typed-operand shape strict and fail closed; do not add old operator aliases, browser
+ABAC evaluation, effective-permission inference, profile-kind gates, schema copies, runtime registries,
+mock fallbacks, or a second policy source. Cursor loading is explicit and detail is fetched only after
+the user selects a decoded policy coordinate.
 Issue #27 adds one app-local, static Role Bindings Preview only. It is registered only when a closed
 development/test/demo mode and the exact build-time flag explicitly enable it; production remains
 disabled. Every row is synthetic `MOCK_SOURCE` data and permanently non-authoritative. The Preview

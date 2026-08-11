@@ -218,6 +218,12 @@ describe('session-owned router', () => {
         source: RSS_SOURCE,
       },
       {
+        id: 'policies',
+        label: 'navigation.policies',
+        to: { name: 'policies' },
+        source: RSS_SOURCE,
+      },
+      {
         id: 'runtime',
         label: 'navigation.runtime',
         to: { name: 'runtime' },

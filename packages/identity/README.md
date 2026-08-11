@@ -28,6 +28,11 @@ are opaque RSS facts; explicit subjects are never resolved through a directory. 
 uses the protected no-replay policy, while idempotent revoke may use the session owner's one exact 401
 recovery. Boolean command receipts describe only that request and never create a binding projection.
 
+Policies exposes strict active list/detail reads. The decoder preserves the reviewed equality,
+ordering, membership, and string operator families with their typed operands, obligations, and
+effective window, while rejecting additional fields and invalid combinations. It does not evaluate
+ABAC, infer authority, load RSS schemas, or keep a compatibility representation of retired operators.
+
 The controller never persists or logs credentials, parses JWT claims, authors
 tenant headers, or implements UI/Pinia behavior. JavaScript strings cannot be
 zeroized; clearing means immediate reference removal, lifecycle abort, and an

@@ -131,3 +131,14 @@ list, assign, and revoke (including no receipt or binding inference); adapter, c
 tests cover the success contracts and exact routing without inventing an Admin bearer or weakening
 RSS. A future consumable Admin authority must be established by an explicit RSS baseline change, not
 by Web-side kind inference or a test-only production bypass.
+
+WEB-PR-020 enables `identity.policies-list` and `identity.policies-get` against the clean, read-only
+RSS revision `27113ade636d41d065b2789f82326965cd0ea9ec`. Their contract TOML hashes are
+`29fef99b450243aeab0a51d1fbffdadcc1a1ac3b26c1af90d24766b4926d0f95` and
+`57e225e48f71b344db1c0f08f647cb07948b6427d834ff1c51631b8110231898`; request and response hashes
+remain those recorded in the baseline table, and the referenced common operator remains
+`0a124adb46ca042dae2f3ebcc5baa44e3340da7d6999b6f3c4ee0e9f5405604b`. The Web consumes the current
+family/predicate/typed-operand discriminated shape without schema copies or legacy aliases, validates
+effective int64 values as safe JavaScript integers, and performs explicit cursor loading plus a
+separate detail read. Policy rules and obligations are displayed RSS facts only; neither the Identity
+package nor Vue evaluates ABAC or derives effective authority.

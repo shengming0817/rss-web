@@ -179,6 +179,22 @@ VALUES (
   'audit:read',
   to_timestamp(0),
   '{"rules":[{"condition":{"attribute":"principal.id","operator":{"family":"equality","predicate":"eq","operand":{"kind":"literal","valueType":"string","value":"11111111-1111-4111-8111-111111111111"}}},"effect":"allow"}]}'::jsonb
+), (
+  '${tenant}'::uuid,
+  'rss-web-real-policies-list-read',
+  1,
+  'identity.policies-list',
+  'identity:policy:read',
+  to_timestamp(0),
+  '{"rules":[{"condition":{"attribute":"principal.id","operator":{"family":"equality","predicate":"eq","operand":{"kind":"literal","valueType":"string","value":"11111111-1111-4111-8111-111111111111"}}},"effect":"allow"}]}'::jsonb
+), (
+  '${tenant}'::uuid,
+  'rss-web-real-policies-get-read',
+  1,
+  'identity.policies-get',
+  'identity:policy:read',
+  to_timestamp(0),
+  '{"rules":[{"condition":{"attribute":"principal.id","operator":{"family":"equality","predicate":"eq","operand":{"kind":"literal","valueType":"string","value":"11111111-1111-4111-8111-111111111111"}}},"effect":"allow"}]}'::jsonb
 );
 COMMIT;`
 }
