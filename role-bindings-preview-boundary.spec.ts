@@ -23,6 +23,10 @@ describe('Role Bindings Preview boundary', () => {
     const bootstrap = read('apps/web/src/bootstrap.ts')
     const router = read('apps/web/src/router/index.ts')
     expect(bootstrap.match(/VITE_ROLE_BINDINGS_PREVIEW/g)).toHaveLength(1)
+    expect(bootstrap).not.toMatch(/WebRuntimeOptions|options\?\.roleBindingsPreview/)
+    expect(bootstrap).toContain(
+      'isRoleBindingsPreviewEnabled(\n    import.meta.env.MODE,\n    import.meta.env.VITE_ROLE_BINDINGS_PREVIEW',
+    )
     expect(router).toContain('if (options.roleBindingsPreview)')
     expect(router).toContain('source: MOCK_SOURCE')
     expect(router).not.toContain('authorizationIntent: ROLE_BINDINGS')

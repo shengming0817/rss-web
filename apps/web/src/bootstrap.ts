@@ -10,11 +10,7 @@ import { createAppRouter } from './router'
 
 export const DEFAULT_HTTP_TIMEOUT_MS = 10_000
 
-export interface WebRuntimeOptions {
-  readonly roleBindingsPreview?: boolean
-}
-
-export function createWebRuntime(history?: RouterHistory, options?: WebRuntimeOptions) {
+export function createWebRuntime(history?: RouterHistory) {
   const transport = createHttpTransport({ baseURL: '', defaultTimeoutMs: DEFAULT_HTTP_TIMEOUT_MS })
   const session = createIdentitySession({ transport })
   const accountStatus = createAccountStatusApi(session.transport)
@@ -23,9 +19,10 @@ export function createWebRuntime(history?: RouterHistory, options?: WebRuntimeOp
   const runtime = createRuntimeApi(session.transport)
   const port = createServerAuthorizationPort()
   const authorization = createAuthorizationExperience({ port, session })
-  const roleBindingsPreview =
-    options?.roleBindingsPreview ??
-    isRoleBindingsPreviewEnabled(import.meta.env.MODE, import.meta.env.VITE_ROLE_BINDINGS_PREVIEW)
+  const roleBindingsPreview = isRoleBindingsPreviewEnabled(
+    import.meta.env.MODE,
+    import.meta.env.VITE_ROLE_BINDINGS_PREVIEW,
+  )
   const router = createAppRouter(
     session,
     authorization,

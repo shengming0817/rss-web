@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const createHttpTransport = vi.fn(() => ({ request: vi.fn() }))
 const createServerAuthorizationPort = vi.fn(() => ({ preview: vi.fn() }))
@@ -25,6 +25,8 @@ vi.mock('./features/authorization/authorization-context', () => ({
 vi.mock('./router', () => ({ createAppRouter }))
 
 describe('web composition root', () => {
+  afterEach(() => vi.unstubAllEnvs())
+
   it('creates one memory session over the same-origin transport', async () => {
     const { createWebRuntime } = await import('./bootstrap')
     const runtime = createWebRuntime()
@@ -60,12 +62,23 @@ describe('web composition root', () => {
 
   it('passes only an explicitly enabled closed Preview composition to the router', async () => {
     const { createWebRuntime } = await import('./bootstrap')
-    createWebRuntime(undefined, { roleBindingsPreview: true })
+    vi.stubEnv('MODE', 'test')
+    vi.stubEnv('VITE_ROLE_BINDINGS_PREVIEW', 'true')
+    createWebRuntime()
     expect(createAppRouter).toHaveBeenLastCalledWith(
       expect.anything(),
       expect.anything(),
       expect.anything(),
       { roleBindingsPreview: true },
+    )
+
+    vi.stubEnv('MODE', 'production')
+    createWebRuntime()
+    expect(createAppRouter).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      { roleBindingsPreview: false },
     )
   })
 })
