@@ -124,17 +124,35 @@ describe('RSS Web edge configuration', () => {
     expect(template).not.toContain('location ^~ /api/ { return 404; }')
     expect(template).not.toContain('location ^~ /api/v1/audit/')
     expect(template).toContain(
-      "log_format rss_safe '$request_method $status $body_bytes_sent request_id=$request_id';",
+      "log_format rss_safe '$request_method $status request_id=$request_id';",
     )
     expect(template).toContain('access_log /var/log/nginx/access.log rss_safe;')
     expect(template).not.toMatch(
       /log_format rss_safe[^;]*\$(?:request_uri|uri|request)(?:\s|['"]|;)/,
+    )
+    expect(template).not.toMatch(
+      /log_format rss_safe[^;]*\$(?:body_bytes_sent|bytes_sent|request_length|content_length)/,
     )
     for (const exactPath of ['/api', '/internal', '/health']) {
       expect(template).toContain(`location = ${exactPath} { return 404; }`)
     }
     expect(template).toContain('location ^~ /metrics/')
     expect(read('deploy/web/proxy-common.conf')).toContain('proxy_next_upstream off;')
+  })
+
+  it('gives only the exact secret material route a non-buffered no-store response', () => {
+    const template = read('deploy/web/templates/default.conf.template')
+    const materialLocation = 'location ~ ^/api/v1/settings/secrets/[^/]+/material$ {'
+
+    expect(template).toContain(materialLocation)
+    expect(template).toContain('proxy_buffering off;')
+    expect(template).toContain('proxy_hide_header Cache-Control;')
+    expect(template).toContain('add_header Cache-Control "no-store" always;')
+    expect(template).toContain('location /api/v1/settings/ {')
+    expect(template).not.toContain('location ^~ /api/v1/settings/ {')
+    expect(template.match(/proxy_buffering off;/g)).toHaveLength(1)
+    expect(template.match(/proxy_hide_header Cache-Control;/g)).toHaveLength(1)
+    expect(template.match(/add_header Cache-Control "no-store" always;/g)).toHaveLength(1)
   })
 
   it('uses server-side same-origin configuration only', () => {

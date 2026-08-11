@@ -104,6 +104,7 @@ describe('RSS-only foundation boundary', () => {
     const policiesIntent = read('apps/web/src/features/identity/policies-intent.ts')
     const configIntent = read('apps/web/src/features/settings/config-intent.ts')
     const secretPublishIntent = read('apps/web/src/features/settings/secret-publish-intent.ts')
+    const secretResolveIntent = read('apps/web/src/features/settings/secret-resolve-intent.ts')
     expect(router).toContain("path: '/'")
     expect(router).toContain("path: '/login'")
     expect(router).toContain("path: ':pathMatch(.*)*'")
@@ -123,6 +124,7 @@ describe('RSS-only foundation boundary', () => {
       'navigation.policies',
       'navigation.settings',
       'navigation.secretReference',
+      'navigation.secretMaterial',
       'navigation.runtime',
       'navigation.audit',
     ])
@@ -162,6 +164,9 @@ describe('RSS-only foundation boundary', () => {
     expect(router).toContain('authorizationIntent: SECRET_PUBLISH_INTENT')
     expect(secretPublishIntent).toContain("contractId: 'settings.secret-publish'")
     expect(secretPublishIntent).toContain("permission: 'settings.secret-publish'")
+    expect(router).toContain('authorizationIntent: SECRET_RESOLVE_INTENT')
+    expect(secretResolveIntent).toContain("contractId: 'settings.secret-resolve'")
+    expect(secretResolveIntent).toContain("permission: 'settings.secret-resolve'")
     expect(router).not.toContain("path: 'config'")
     for (const path of ['/access', '/flags', '/admin', '/observability', '/observe']) {
       expect(router).not.toContain(path)
@@ -272,6 +277,7 @@ describe('RSS-only foundation boundary', () => {
       'apps/web/src/features/runtime/HomeRuntimeSummary.vue',
       'apps/web/src/features/runtime/RuntimeDetailsView.vue',
       'apps/web/src/features/settings/ConfigView.vue',
+      'apps/web/src/features/settings/SecretMaterialRevealView.vue',
       'apps/web/src/features/settings/SecretPublishView.vue',
       'apps/web/src/router/index.ts',
     ])

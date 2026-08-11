@@ -25,6 +25,7 @@ describe('Settings config security boundary', () => {
     const client = read('packages/settings/src/client.ts')
     expect(client).toContain("session: 'required-no-replay'")
     expect(client).toContain("session: 'required'")
+    expect(client).toContain('...settingsEndpoints.secretResolve')
     expect(client).not.toContain('headers:')
     expect(client).not.toMatch(/retry|fallback|X-Tenant-ID/)
     expect(client).not.toMatch(/history|candidate|preview/i)
@@ -55,16 +56,29 @@ describe('Settings config security boundary', () => {
     ])
   })
 
-  it('keeps secret material, discovery, persistence, query, and diagnostics out of production', () => {
-    const production = [
-      ...settingsProductionOwners().map(read),
-      read('packages/api/src/endpoints/settings.ts'),
-    ].join('\n')
-    expect(production).not.toMatch(
-      /settings\.secret-resolve|\/api\/v1\/settings\/secrets\/[^'"`\s]+\/material|materialBase64|secretMaterial|resolveSecret/i,
-    )
+  it('keeps secret material in an exact production owner set without persistence or diagnostics', () => {
+    const materialOwners = applicationProductionOwners()
+      .filter((path) =>
+        /settings\.secret-resolve|\/api\/v1\/settings\/secrets\/[^'"`\s]+\/material|materialBase64|\bresolveSecret\b/i.test(
+          read(path),
+        ),
+      )
+      .sort()
+
+    expect(materialOwners).toEqual([
+      'apps/web/src/features/settings/SecretMaterialRevealView.vue',
+      'apps/web/src/features/settings/secret-material-reveal-operation.ts',
+      'apps/web/src/features/settings/secret-resolve-intent.ts',
+      'packages/api/src/endpoints/settings.ts',
+      'packages/settings/src/client.ts',
+      'packages/settings/src/secret/decoders.ts',
+      'packages/settings/src/secret/index.ts',
+      'packages/settings/src/secret/types.ts',
+    ])
+    const production = materialOwners.map(read).join('\n')
     expect(production).not.toMatch(
       /localStorage|sessionStorage|indexedDB|console\.|logger\.|analytics|route\.query|location\.(?:search|hash)|URLSearchParams/,
     )
+    expect(production).not.toMatch(/fallback|auto.?retry/i)
   })
 })
