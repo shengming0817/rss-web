@@ -40,7 +40,7 @@ function close() {
 async function confirm() {
   const selected = candidate.value
   if (selected === undefined) return
-  props.configCatalogDraft.stage(selected)
+  if (!props.configCatalogDraft.stage(selected)) return
   candidate.value = undefined
   await router.push({ name: 'settings' })
 }
