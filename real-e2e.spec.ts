@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
@@ -14,29 +14,39 @@ import { executeBounded } from './e2e/real/process.mjs'
 const root = resolve(import.meta.dirname)
 
 describe('real RSS journey harness', () => {
-  it('pins an archived RSS source and keeps every browser phase behind the Web Edge', () => {
+  it('pins archived sources and assigns the exact browser phases to one reviewed artifact mode', () => {
     const output = execFileSync('node', ['e2e/real/run.mjs', '--print-plan'], {
       cwd: root,
       encoding: 'utf8',
     })
+    const productionPhases = [
+      'main',
+      'password-change',
+      'account-status-self',
+      'roles',
+      'policies-write',
+      'settings-config',
+      'rate-limited',
+      'budget-exhausted',
+      'admin-down',
+      'primary-down',
+    ]
+    const phases = [...productionPhases, 'preview-isolation']
+
     expect(JSON.parse(output)).toEqual({
       sourceMode: 'git-archive',
       webSourceMode: 'git-archive-clean-head',
       pinnedRevision: 'b7f3e1d0bcc5b2e59639a81b4f37937914b53f00',
       tenantBootstrap: 'edge-deployment-fixed',
       browserNetwork: 'edge-only',
-      phases: [
-        'main',
-        'password-change',
-        'account-status-self',
-        'roles',
-        'policies-write',
-        'settings-config',
-        'rate-limited',
-        'budget-exhausted',
-        'admin-down',
-        'primary-down',
-      ],
+      faultTransport: 'none',
+      phases,
+      artifactModes: {
+        production: productionPhases,
+        'demo-preview': ['preview-isolation'],
+      },
+      previewArtifactSource: 'archived-clean-web-head',
+      receiptPhaseEvidence: 'artifactMode',
       malformedResponseEvidence: 'isolated-playwright-smoke',
       cleanup: 'compose-down-volumes-and-temporary-snapshot',
     })
@@ -66,6 +76,21 @@ describe('real RSS journey harness', () => {
     expect(policyGrant).toContain('"effect":"allow"')
     expect(policyGrant).not.toContain('"obligations"')
     expect(defaultPlaywright).toContain("testIgnore: 'real/**'")
+  })
+
+  it('keeps one real runner and one Playwright failure classifier', () => {
+    const packageJson = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as {
+      scripts?: Record<string, string>
+    }
+    expect(packageJson.scripts?.['test:e2e:real']).toBe('node e2e/real/run.mjs')
+
+    const classifierOwners = readdirSync(resolve(root, 'e2e/real'), { recursive: true })
+      .filter((entry) => /\.(?:mjs|ts)$/.test(entry))
+      .filter((entry) => {
+        const source = readFileSync(resolve(root, 'e2e/real', entry), 'utf8')
+        return /\bfunction\s+classifyPlaywrightReport\s*\(/.test(source)
+      })
+    expect(classifierOwners).toEqual(['lifecycle.mjs'])
   })
 
   it('fails closed for cleanup, total deadlines, and non-assertion Playwright failures', () => {
