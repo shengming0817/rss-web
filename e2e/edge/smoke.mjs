@@ -173,6 +173,7 @@ try {
     'edge-secret-ref-marker',
     'edge-secret-version-marker',
   ]
+  const secretMaterialKeyMarker = 'edge-secret-material-key-marker'
   const secretPublishBody = JSON.stringify({
     key: secretCoordinateMarkers[0],
     storeId: secretCoordinateMarkers[1],
@@ -208,6 +209,48 @@ try {
     assert.equal(response.json.authorizationPresent, true)
     if (body !== undefined)
       assert.equal(response.json.bodySha256, createHash('sha256').update(body).digest('hex'))
+  }
+
+  const secretMaterialPath = `/api/v1/settings/secrets/${secretMaterialKeyMarker}/material`
+  const secretMaterial = await request(port, `${secretMaterialPath}?fixture-cache=public`, {
+    headers: { 'X-Tenant-ID': 'attacker', Authorization: 'Bearer fixture' },
+  })
+  assert.equal(secretMaterial.status, 200)
+  assert.equal(secretMaterial.headers['cache-control'], 'no-store')
+  assert.equal(secretMaterial.json.listener, 'primary')
+  assert.equal(secretMaterial.json.method, 'GET')
+  assert.equal(secretMaterial.json.url, `${secretMaterialPath}?fixture-cache=public`)
+  assert.deepEqual(secretMaterial.json.tenantHeaders, [])
+  assert.equal(secretMaterial.json.authorizationPresent, true)
+  assert.equal(secretMaterial.json.bodyBytes, 0)
+
+  const encodedSeparatorPath =
+    '/api/v1/settings/secrets/edge-secret%2Fmaterial-key/material?fixture-cache=public'
+  const encodedSeparator = await request(port, encodedSeparatorPath, {
+    headers: { 'X-Tenant-ID': 'attacker', Authorization: 'Bearer fixture' },
+  })
+  assert.equal(encodedSeparator.status, 200)
+  assert.equal(encodedSeparator.headers['cache-control'], 'no-store')
+  assert.equal(encodedSeparator.json.listener, 'primary')
+  assert.equal(encodedSeparator.json.method, 'GET')
+  assert.equal(encodedSeparator.json.url, encodedSeparatorPath)
+  assert.deepEqual(encodedSeparator.json.tenantHeaders, [])
+  assert.equal(encodedSeparator.json.authorizationPresent, true)
+  assert.equal(encodedSeparator.json.bodyBytes, 0)
+
+  for (const path of [
+    `/api/v1/settings/secrets/${secretMaterialKeyMarker}/Material?fixture-cache=public`,
+    `/api/v1/settings/secrets/${secretMaterialKeyMarker}/material/extra?fixture-cache=public`,
+    '/api/v1/settings/secrets//material?fixture-cache=public',
+  ]) {
+    const nearMiss = await request(port, path, {
+      headers: { 'X-Tenant-ID': 'attacker', Authorization: 'Bearer fixture' },
+    })
+    assert.equal(nearMiss.status, 200)
+    assert.equal(nearMiss.headers['cache-control'], 'public, max-age=3600')
+    assert.equal(nearMiss.json.listener, 'primary')
+    assert.deepEqual(nearMiss.json.tenantHeaders, [])
+    assert.equal(nearMiss.json.authorizationPresent, true)
   }
 
   for (const path of [
@@ -330,7 +373,8 @@ try {
   const accessOutput = `${edgeLogs.stdout}${edgeLogs.stderr}`
   assert(!accessOutput.includes(opaqueSubject))
   assert(!accessOutput.includes(encodedSubject))
-  for (const marker of secretCoordinateMarkers) assert(!accessOutput.includes(marker))
+  for (const marker of [...secretCoordinateMarkers, secretMaterialKeyMarker])
+    assert(!accessOutput.includes(marker))
 
   for (const path of ['/api/v1/audit/entries', '/api/v1/runtime/inventory']) {
     const response = await request(port, path, { headers: { 'X-Tenant-ID': 'attacker' } })

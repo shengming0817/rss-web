@@ -237,6 +237,12 @@ describe('session-owned router', () => {
         source: RSS_SOURCE,
       },
       {
+        id: 'secret-material-reveal',
+        label: 'navigation.secretMaterial',
+        to: { name: 'secret-material-reveal' },
+        source: RSS_SOURCE,
+      },
+      {
         id: 'runtime',
         label: 'navigation.runtime',
         to: { name: 'runtime' },
@@ -373,7 +379,7 @@ describe('session-owned router', () => {
         contractId: 'runtime.inventory',
         permission: 'runtime:inventory:read',
       },
-      navigation: { labelKey: 'navigation.runtime', order: 40, source: RSS_SOURCE },
+      navigation: { labelKey: 'navigation.runtime', order: 41, source: RSS_SOURCE },
     })
   })
 
@@ -394,6 +400,26 @@ describe('session-owned router', () => {
         source: RSS_SOURCE,
       },
     })
+  })
+
+  it('owns Secret Material Reveal as a distinct protected route and intent', () => {
+    const router = appRouter(sessionFixture({ status: 'anonymous' }))
+    const route = router.resolve('/settings/secret-material')
+    expect(route.name).toBe('secret-material-reveal')
+    expect(route.meta).toMatchObject({
+      sessionAccess: 'authenticated',
+      focusTarget: 'shell-content',
+      authorizationIntent: {
+        contractId: 'settings.secret-resolve',
+        permission: 'settings.secret-resolve',
+      },
+      navigation: {
+        labelKey: 'navigation.secretMaterial',
+        order: 40,
+        source: RSS_SOURCE,
+      },
+    })
+    expect(route.fullPath).not.toContain('key=')
   })
 
   it('keeps the Identity self-service route session-only while its command owns authorization', () => {

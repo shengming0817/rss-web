@@ -55,6 +55,9 @@ const server = createServer((request, response) => {
     response.writeHead(status, {
       'Content-Type': 'application/json',
       'X-Fixture-Listener': listener,
+      ...(request.url?.includes('fixture-cache=public')
+        ? { 'Cache-Control': 'public, max-age=3600' }
+        : {}),
     })
     response.end(JSON.stringify(payload))
   })

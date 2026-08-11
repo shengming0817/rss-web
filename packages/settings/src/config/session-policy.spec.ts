@@ -76,6 +76,11 @@ describe('Settings session policy', () => {
       response: undefined,
       invoke: (api: ReturnType<typeof createSettingsApi>) => api.delete('app.k'),
     },
+    {
+      name: 'secret resolve',
+      response: { data: { materialBase64: 'bWF0ZXJpYWw=' } },
+      invoke: (api: ReturnType<typeof createSettingsApi>) => api.resolveSecret('vault.db'),
+    },
   ])(
     'recovers and replays one idempotent $name after an exact 401',
     async ({ response, invoke }) => {

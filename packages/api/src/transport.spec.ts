@@ -67,6 +67,40 @@ describe('createHttpTransport', () => {
     ).resolves.toEqual({ ok: true })
   })
 
+  it('owns the closed no-store request cache directive', async () => {
+    const { mock, transport } = setup()
+    mock.onGet('/api/v1/settings/secrets/vault.db/material').reply((config) => {
+      expect(config.headers?.['Cache-Control']).toBe('no-store')
+      expect(config.headers?.Pragma).toBeUndefined()
+      return [200, { ok: true }]
+    })
+
+    await expect(
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/settings/secrets/{key}/material',
+        pathParams: { key: 'vault.db' },
+        cache: 'no-store',
+        successStatus: 200,
+        decode: decodeObject,
+      }),
+    ).resolves.toEqual({ ok: true })
+  })
+
+  it('rejects a forged cache directive before sending', async () => {
+    const { mock, transport } = setup()
+    await expect(
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/settings/secrets/key/material',
+        cache: 'reload',
+        successStatus: 200,
+        decode: decodeObject,
+      } as never),
+    ).rejects.toMatchObject({ cause: 'client', code: 'INVALID_REQUEST' })
+    expect(mock.history.get).toHaveLength(0)
+  })
+
   it.each(['Authorization', 'authorization', 'X-Tenant-ID', 'x-tenant-id'])(
     'rejects browser-authored control header %s before sending',
     async (header) => {
@@ -76,6 +110,23 @@ describe('createHttpTransport', () => {
           method: 'GET',
           path: '/api/v1/identity/profile',
           headers: { [header]: 'forged' },
+          successStatus: 200,
+          decode: decodeObject,
+        }),
+      ).rejects.toMatchObject({ cause: 'client', code: 'INVALID_REQUEST' })
+      expect(mock.history.get).toHaveLength(0)
+    },
+  )
+
+  it.each(['Cache-Control', 'cache-control', 'Pragma', 'pragma'])(
+    'rejects browser-authored cache control header %s before sending',
+    async (header) => {
+      const { mock, transport } = setup()
+      await expect(
+        transport.request({
+          method: 'GET',
+          path: '/api/v1/settings/secrets/key/material',
+          headers: { [header]: 'no-store' },
           successStatus: 200,
           decode: decodeObject,
         }),

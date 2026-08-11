@@ -1,7 +1,7 @@
 import type { HttpTransport, RequestOptions } from '@rss/api'
 import { describe, expect, it, vi } from 'vitest'
 import { createSettingsApi } from '../client'
-import { decodeSecretPublishResponse } from './decoders'
+import { decodeSecretPublishResponse, decodeSecretResolveResponse } from './decoders'
 
 describe('Settings secret decoder', () => {
   it('strictly decodes a positive safe receipt', () => {
@@ -20,9 +20,62 @@ describe('Settings secret decoder', () => {
   ])('rejects malformed secret receipt %#', (value) => {
     expect(() => decodeSecretPublishResponse(value)).toThrow('invalid settings secret response')
   })
+
+  it.each(['', 'bWF0ZXJpYWw=', 'AAECAw=='])('strictly decodes canonical Base64 %j', (value) => {
+    expect(decodeSecretResolveResponse({ data: { materialBase64: value } })).toEqual({
+      data: { materialBase64: value },
+    })
+  })
+
+  it.each([
+    {},
+    { data: {} },
+    { data: { materialBase64: 1 } },
+    { data: { materialBase64: 'bWF0ZXJpYWw' } },
+    { data: { materialBase64: 'bWF0ZXJpYWw===' } },
+    { data: { materialBase64: 'AB==' } },
+    { data: { materialBase64: 'AAB=' } },
+    { data: { materialBase64: 'bWF0 ZXJpYWw=' } },
+    { data: { materialBase64: 'bWF0ZXJpYWw_' } },
+    { data: { materialBase64: 'bWF0ZXJpYWw=', extra: true } },
+    { data: { materialBase64: 'bWF0ZXJpYWw=' }, extra: true },
+  ])('rejects a malformed secret material response %#', (value) => {
+    expect(() => decodeSecretResolveResponse(value)).toThrow('invalid settings secret response')
+  })
 })
 
 describe('Settings secret client', () => {
+  it('sends one exact required no-store resolve and exposes no body, query, or headers', async () => {
+    let call: RequestOptions<unknown> | undefined
+    const transport = {
+      request: vi.fn(async (request: RequestOptions<unknown>) => {
+        call = request
+        return request.decode({ data: { materialBase64: 'AAECAw==' } })
+      }),
+    } as unknown as HttpTransport
+
+    await expect(createSettingsApi(transport).resolveSecret('vault.db')).resolves.toEqual({
+      data: { materialBase64: 'AAECAw==' },
+    })
+    expect(call).toMatchObject({
+      method: 'GET',
+      path: '/api/v1/settings/secrets/{key}/material',
+      pathParams: { key: 'vault.db' },
+      successStatus: 200,
+      session: 'required',
+      cache: 'no-store',
+    })
+    expect(call).not.toHaveProperty('body')
+    expect(call).not.toHaveProperty('query')
+    expect(call).not.toHaveProperty('headers')
+  })
+
+  it('rejects an empty resolve key before transport without reflecting it', () => {
+    const transport = { request: vi.fn() } as unknown as HttpTransport
+    expect(() => createSettingsApi(transport).resolveSecret('')).toThrow('invalid config key')
+    expect(transport.request).not.toHaveBeenCalled()
+  })
+
   it.each([
     [
       'versioned',

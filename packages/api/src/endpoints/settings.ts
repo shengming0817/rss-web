@@ -1,5 +1,6 @@
 import { defineEndpoint } from './coordinate'
 import {
+  FORBIDDEN_EMPTY,
   INTERNAL_EMPTY,
   NOT_FOUND_EMPTY,
   OUTBOX_FACT_CONFLICT_EMPTY,
@@ -18,6 +19,18 @@ export const settingsEndpoints = Object.freeze({
       400: VALIDATION_EMPTY,
       409: VERSION_CONFLICT_EMPTY,
       413: PAYLOAD_TOO_LARGE_EMPTY,
+      500: INTERNAL_EMPTY,
+    }),
+  }),
+  secretResolve: defineEndpoint({
+    method: 'GET',
+    path: '/api/v1/settings/secrets/{key}/material',
+    successStatus: 200,
+    cache: 'no-store',
+    errorPolicy: Object.freeze({
+      400: VALIDATION_EMPTY,
+      403: FORBIDDEN_EMPTY,
+      404: NOT_FOUND_EMPTY,
       500: INTERNAL_EMPTY,
     }),
   }),

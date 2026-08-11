@@ -458,7 +458,7 @@ test.describe('RSS Web Identity UX', () => {
     await page.getByLabel('密码').fill('test-password')
     await page.getByRole('button', { name: '登录', exact: true }).click()
     const navigation = page.getByRole('navigation', { name: '主导航' })
-    await expect(navigation.getByRole('link')).toHaveCount(9)
+    await expect(navigation.getByRole('link')).toHaveCount(10)
     await expect(navigation.getByRole('link', { name: /Bindings Preview/ })).toHaveCount(0)
     await expect(navigation.locator('[data-source="mock"]')).toHaveCount(0)
     await expect(navigation.getByRole('link', { name: /首页/ })).toContainText('RSS')
@@ -466,6 +466,9 @@ test.describe('RSS Web Identity UX', () => {
     await expect(navigation.getByRole('link', { name: /^策略/ })).toContainText('RSS')
     await expect(navigation.getByRole('link', { name: /^配置/ })).toContainText('RSS')
     await expect(navigation.getByRole('link', { name: /Secret 引用发布/ })).toContainText('RSS')
+    await expect(navigation.getByRole('link', { name: /Secret Material Reveal/ })).toContainText(
+      'RSS',
+    )
     await navigation.getByRole('link', { name: /运行时/ }).click()
     await expect(page).toHaveURL(/\/runtime$/)
     await expect(page.getByRole('heading', { name: '运行时详情' })).toBeVisible()
@@ -707,6 +710,63 @@ test.describe('RSS Web Identity UX', () => {
       { method: 'POST', path: '/api/v1/settings/configs/app.browser/rollbacks' },
       { method: 'DELETE', path: '/api/v1/settings/configs/app.browser' },
     ])
+  })
+
+  test('reveals Base64 once through the protected no-store browser path and clears it', async ({
+    page,
+  }) => {
+    const material = 'AAECAwQ='
+    const key = 'vault.browser'
+    const requests: string[] = []
+    await page.route('**/api/v1/settings/secrets/*/material', async (route) => {
+      const request = route.request()
+      requests.push(new URL(request.url()).pathname)
+      expect(request.method()).toBe('GET')
+      expect(request.postData()).toBeNull()
+      expect(request.headers()['cache-control']).toBe('no-store')
+      expect(request.headers().authorization?.startsWith('Bearer ')).toBe(true)
+      expect(request.headers()['x-tenant-id']).toBeUndefined()
+      await route.fulfill({
+        status: 200,
+        headers: { 'Cache-Control': 'no-store' },
+        json: { data: { materialBase64: material } },
+      })
+    })
+    await installIdentityMocks(page)
+    await signIn(page)
+    await page
+      .getByRole('navigation', { name: '主导航' })
+      .getByRole('link', { name: /Secret Material Reveal/ })
+      .click()
+    await expect(page).toHaveURL(/\/settings\/secret-material$/)
+    expect(requests).toEqual([])
+
+    await page.getByLabel('Secret 配置 key').fill(key)
+    await page.getByRole('button', { name: '准备危险 Reveal' }).click()
+    expect(requests).toEqual([])
+    await page.getByRole('alertdialog').getByRole('button', { name: '确认并 Reveal 一次' }).click()
+    await expect(page.locator('[data-secret-material-active]')).toHaveText(material)
+    expect(requests).toEqual([`/api/v1/settings/secrets/${key}/material`])
+    expect(page.url()).not.toContain(key)
+    expect(
+      await page.evaluate(() =>
+        JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }),
+      ),
+    ).not.toContain(material)
+
+    await page.getByRole('button', { name: '立即隐藏并释放页面引用' }).click()
+    await expect(page.getByText(material, { exact: true })).toHaveCount(0)
+
+    await page.getByLabel('Secret 配置 key').fill(key)
+    await page.getByRole('button', { name: '准备危险 Reveal' }).click()
+    await page.getByRole('alertdialog').getByRole('button', { name: '确认并 Reveal 一次' }).click()
+    await expect(page.locator('[data-secret-material-active]')).toHaveText(material)
+    await page
+      .getByRole('navigation', { name: '主导航' })
+      .getByRole('link', { name: /^配置/ })
+      .click()
+    await expect(page.getByText(material, { exact: true })).toHaveCount(0)
+    expect(requests).toHaveLength(2)
   })
 
   test('queries target Audit only on explicit actions without leaking target authority or PII', async ({

@@ -516,6 +516,41 @@ test('@settings-config keeps Settings writes server-authoritative', async ({ pag
   }
   for (const coordinate of secretCoordinates)
     await expect(page.getByText(coordinate)).toHaveCount(0)
+
+  const secretMaterialKey = 'rss-web.real.secret-material-key'
+  const secretMaterialPath = `/api/v1/settings/secrets/${secretMaterialKey}/material`
+  await page.locator('a[href="/settings/secret-material"]').click()
+  await page.locator('#secret-material-key').fill(secretMaterialKey)
+  await page.locator('[data-action="prepare-secret-material"]').click()
+  const materialDenied = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      new URL(response.url()).pathname === secretMaterialPath,
+  )
+  await page.locator('[data-action="confirm-secret-material"]').click()
+  const materialResponse = await materialDenied
+  expect(materialResponse.status()).toBe(403)
+  expect(materialResponse.request().method()).toBe('GET')
+  expect(materialResponse.request().postData()).toBeNull()
+  expect(materialResponse.request().headers()['cache-control']).toBe('no-store')
+  expect(materialResponse.request().headers()['x-tenant-id']).toBeUndefined()
+  expect(materialResponse.headers()['cache-control']).toBe('no-store')
+  expect(await materialResponse.json()).toEqual({
+    error: {
+      code: 'ERR_CORE_FORBIDDEN',
+      message: 'forbidden',
+      retryable: false,
+      details: [],
+      requestId: expect.stringMatching(/^[!-~]{1,128}$/),
+    },
+  })
+  await expect(page.getByText('ERR_CORE_FORBIDDEN')).toBeVisible()
+  await page.waitForTimeout(250)
+  expect(materialRequests).toEqual([secretMaterialPath])
+  await expect(page.locator('[data-secret-material-active]')).toHaveCount(0)
+  await expect(page.getByText('materialBase64')).toHaveCount(0)
+  await page.locator('a[href="/settings"]').click()
+  await expect(page.locator('[data-secret-material-view]')).toHaveCount(0)
 })
 
 test('@rate-limited observes canonical 401 and 429 through the browser Edge and UI', async ({

@@ -23,6 +23,7 @@ interface RequestBase {
   body?: unknown
   signal?: AbortSignal
   timeoutMs?: number
+  cache?: 'no-store'
   session?: 'required' | 'required-no-replay'
   errorPolicy?: EndpointErrorPolicy
 }

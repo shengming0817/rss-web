@@ -15,6 +15,7 @@ const enUS = {
     policies: 'Policies',
     settings: 'Settings',
     secretReference: 'Secret reference publish',
+    secretMaterial: 'Secret Material Reveal',
     configCatalogPreview: 'Config Catalog Preview',
     configHistoryPreview: 'Config History Preview',
     runtime: 'Runtime',
@@ -96,6 +97,36 @@ const enUS = {
       'This write cannot be replayed automatically. Confirmation immediately clears every input, and the browser never reads secret content.',
     cancel: 'Cancel',
     confirm: 'Confirm and publish once',
+  },
+  secretMaterialReveal: {
+    title: 'Secret Material Reveal',
+    subtitle:
+      'Fresh-resolve one high-risk Secret material value from RSS, fully separate from reference publishing.',
+    draftTitle: 'Manual resolve draft',
+    key: 'Secret config key',
+    keyHint:
+      'The key is used for one explicit read and never enters the page URL, history, or persistence.',
+    required: 'Enter a Secret config key.',
+    prepare: 'Prepare dangerous reveal',
+    resolving: 'Resolving Secret material from RSS; the key was cleared…',
+    activeTitle: 'Active Secret Material View',
+    activeWarning: 'High risk: the value below is raw Base64 material from RSS, not UTF-8 text.',
+    lease:
+      'This active view is removed after 30 seconds. Leaving, hiding the page, or pressing Escape removes it immediately.',
+    materialLabel: 'Raw Base64 Secret material',
+    clipboardWarning:
+      'Copying hands material to the system clipboard. Hiding or expiry cannot recall clipboard content; handle it under your device policy.',
+    copy: 'Copy Base64 to system clipboard',
+    hide: 'Hide now and release page reference',
+    copied: 'Base64 material was copied to the system clipboard.',
+    copyFailed: 'Copy failed; no underlying clipboard error was exposed.',
+    expired: 'Secret material expired and was removed from the active view.',
+    cleared: 'Secret material was removed from the active view.',
+    confirmTitle: 'Confirm high-risk Secret Material Reveal',
+    confirmDescription:
+      'Confirmation sends one fresh resolve to RSS and clears the key. Raw Base64 appears only in the active view for 30 seconds. The system clipboard and browser may retain independent copies; this page does not claim physical erasure of JavaScript string memory.',
+    cancel: 'Cancel',
+    confirm: 'Confirm and reveal once',
   },
   configCatalogPreview: {
     title: 'Config Catalog Preview',
