@@ -8,7 +8,7 @@
 - Contract TOML SHA-256 values for create, update, and deactivate are respectively
   `66d5105d3a846d525d1cbd742064b98eb6c5adaf078df95d3a855cde4e2c7dfe`,
   `4f1c18ae74a4e963c3d9ad83b47645618d93e22411ce347ad5a12b21b9c56e2e`, and
-  `cde7f396e645ad0794c10466457783023eb7485710ece79c8786d24f205732ea`.
+  `cde7f396da804bfa7fd151cfd43fe2ad7c3c2481de830a5ac3502b952ff16084`.
 - Request/response hashes remain the selected baseline values. No RSS schema copy, runtime parser,
   policy evaluator, provider SPI, mock fallback, or backend issue was added.
 
@@ -21,12 +21,18 @@
   the existing protected session transport and its one exact-401 refresh/replay policy.
 - The Web editor preserves typed literal/attribute/set/pattern operands, individual set and field-mask
   elements, obligations, and effective windows. It validates structure only and never evaluates ABAC.
-- Update and deactivate capture `expectedVersion` only from a decoded detail snapshot. The version has
-  no editable field. Every write requires confirmation and emits no optimistic authority or policy
+- Update and deactivate capture an opaque `PolicyVersion` only from a decoded detail snapshot. Raw
+  numeric versions cannot enter the public write API, and the version has no editable field. Every
+  write requires confirmation with the target coordinate and emits no optimistic authority or policy
   projection.
 - Exact 409 becomes a retained conflict draft. Network, timeout, protocol, internal, and other
   commit-unknown outcomes retain the draft without success or automatic replay. Reconciliation is an
-  explicit list/detail re-read and never overwrites or resubmits the draft.
+  explicit list/detail re-read. Conflict and unknown states cannot be reset, replaced, or navigated
+  away through catalog controls; the stable editor retains its draft until a matching detail read
+  succeeds, and never overwrites or resubmits it automatically.
+- Success is an action-specific receipt. Deactivate retains its command target long enough to re-read
+  that exact policy, while field validation identifies, describes, and focuses the first invalid
+  editor control.
 
 ## Authority and security
 
@@ -40,15 +46,19 @@
 
 ## Verification and evidence history
 
-- Frozen install, workspace typecheck, lint, format check, 837 unit/root tests, 782 coverage tests, 55
+- Frozen install, workspace typecheck, lint, format check, 847 unit/root tests, 791 coverage tests, 56
   boundary tests, production build, built-identity scan, and diff check passed.
 - Seventeen default Chromium journeys passed, including a confirmed update success fixture and no
   browser-authored tenant header.
 - Docker/Nginx Edge smoke passed the three exact write routes and checked teardown.
 - The final real runner archived clean Web implementation
-  `ad6ba4ab88772a646ce75106d9b354e8e622596c`. Main, password-change, account-status-self, roles,
+  `6c9f8abb300807f84c01c5053311bd6e042ff178`. Main, password-change, account-status-self, roles,
   policies-write, rate-limited, budget-exhausted, Admin-down, and Primary-down phases passed; cleanup
-  passed. Machine receipt: `/tmp/rss-web-29-real-receipt-3.json`.
+  passed. Machine receipt: `/tmp/rss-web-29-review-real-receipt.json`.
+- Review closure added the decoder-owned version brand, action-result discrimination, stable draft
+  ownership, exact deactivate refresh, field-level accessibility, shared error rules, and a bounded
+  child-process funnel that escalates SIGTERM to SIGKILL. The final real run used the resulting clean
+  implementation commit, not the pre-review receipt.
 - An initial invocation from the nested worktree used the runner's default sibling path and failed as
   `environment:rss-revision`; explicit `RSS_SOURCE_DIR` fixed only source location. The first product
   run exposed a fuzzy accessible-label selector and cleaned up. The next run showed that adding three
@@ -69,10 +79,10 @@
 
 ## Changed-line classification
 
-- Semantic handwritten code, locales, and docs: 1,222 additions / 22 deletions.
-- Unit/type/boundary/browser/Edge/real tests and harness: 927 additions / 16 deletions.
+- Semantic handwritten code, locales, and docs: 1,494 additions / 44 deletions.
+- Unit/type/boundary/browser/Edge/real tests and harness: 1,185 additions / 57 deletions.
 - Generated and lockfile: 0 lines.
-- Implementation total excluding this receipt: 2,149 additions / 38 deletions.
+- Implementation total excluding this receipt: 2,679 additions / 101 deletions.
 
 ## Rollback
 
