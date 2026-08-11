@@ -182,6 +182,31 @@ describe('ESLint package boundaries', () => {
         'packages/core/src/components/DegradedState.vue',
       ),
     ).toContain('no-restricted-globals')
+
+    expect(
+      await ruleIds(
+        "import { createWebRuntime } from './bootstrap'\nvoid createWebRuntime\n",
+        'apps/web/src/release-meta.ts',
+      ),
+    ).toContain('no-restricted-imports')
+    expect(
+      await ruleIds(
+        '<script setup lang="ts">\nimport { useRuntimeApi } from \'../features/runtime/runtime-context\'\nvoid useRuntimeApi\n</script>\n<template><p /></template>',
+        'apps/web/src/views/AboutView.vue',
+      ),
+    ).toContain('no-restricted-imports')
+    expect(
+      await ruleIds(
+        '<script setup lang="ts">\nimport type { WebReleaseMeta } from \'../release-meta\'\nvoid (undefined as unknown as WebReleaseMeta)\n</script>\n<template><p /></template>',
+        'apps/web/src/views/AboutView.vue',
+      ),
+    ).not.toContain('no-restricted-imports')
+    expect(
+      await ruleIds(
+        '<script setup lang="ts">\nimport { createWebRuntime } from \'../../../../apps/web/src/bootstrap\'\nvoid createWebRuntime\n</script>\n<template><p /></template>',
+        'packages/core/src/components/DegradedState.vue',
+      ),
+    ).toContain('no-restricted-imports')
   })
 
   it('blocks Preview authorization imports in production app source', async () => {

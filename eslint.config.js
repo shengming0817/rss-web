@@ -90,6 +90,21 @@ const STATIC_DIAGNOSTICS_DEPENDENCY_PATTERN = {
     'Static release diagnostics cannot import transport, session, domain, authorization, or runtime discovery seams.',
 }
 
+const NO_RELATIVE_RELEASE_META_PATTERN = {
+  regex: '^\\.',
+  message: 'Release metadata must remain a leaf over sealed source constants.',
+}
+
+const ABOUT_RELEASE_META_ONLY_PATTERN = {
+  regex: '^(?!\\.\\./release-meta$)\\.',
+  message: 'About may consume only the injected release metadata module.',
+}
+
+const NO_CROSS_CORE_TRAVERSAL_PATTERN = {
+  regex: '^(?:\\.\\./){3}',
+  message: 'Core presentation cannot traverse into another workspace package or app.',
+}
+
 const NO_STATIC_DIAGNOSTICS_NETWORK = [
   { name: 'fetch', message: 'Static release diagnostics cannot access the network.' },
   { name: 'XMLHttpRequest', message: 'Static release diagnostics cannot access the network.' },
@@ -114,6 +129,22 @@ function boundaryRule(extraPatterns = [], extraPaths = []) {
     {
       patterns: [DEEP_PATH_PATTERN, NO_WEB_PATTERN, ...extraPatterns],
       paths: [...extraPaths],
+    },
+  ]
+}
+
+function staticDiagnosticsImportRule(relativePattern) {
+  return [
+    'error',
+    {
+      patterns: [
+        DEEP_PATH_PATTERN,
+        INTERNAL_ENDPOINT_PATTERN,
+        PREVIEW_AUTHORIZATION_PATTERN,
+        STATIC_DIAGNOSTICS_DEPENDENCY_PATTERN,
+        relativePattern,
+      ],
+      paths: [NO_AXIOS_PATH],
     },
   ]
 }
@@ -418,20 +449,17 @@ export default tseslint.config(
   // boundaries prevent a domain/runtime client from becoming a second diagnostics seam;
   // global guards close direct browser-network bypasses.
   {
-    files: ['apps/web/src/release-meta.ts', 'apps/web/src/views/AboutView.vue'],
+    files: ['apps/web/src/release-meta.ts'],
     rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            DEEP_PATH_PATTERN,
-            INTERNAL_ENDPOINT_PATTERN,
-            PREVIEW_AUTHORIZATION_PATTERN,
-            STATIC_DIAGNOSTICS_DEPENDENCY_PATTERN,
-          ],
-          paths: [NO_AXIOS_PATH],
-        },
-      ],
+      'no-restricted-imports': staticDiagnosticsImportRule(NO_RELATIVE_RELEASE_META_PATTERN),
+      'no-restricted-globals': ['error', ...NO_STATIC_DIAGNOSTICS_NETWORK],
+      'no-restricted-properties': ['error', ...NO_STATIC_DIAGNOSTICS_NETWORK_PROPERTIES],
+    },
+  },
+  {
+    files: ['apps/web/src/views/AboutView.vue'],
+    rules: {
+      'no-restricted-imports': staticDiagnosticsImportRule(ABOUT_RELEASE_META_ONLY_PATTERN),
       'no-restricted-globals': ['error', ...NO_STATIC_DIAGNOSTICS_NETWORK],
       'no-restricted-properties': ['error', ...NO_STATIC_DIAGNOSTICS_NETWORK_PROPERTIES],
     },
@@ -447,6 +475,7 @@ export default tseslint.config(
           regex: '^@rss/(?!shared(?:/|$))',
           message: 'DegradedState can depend only on sealed source metadata.',
         },
+        NO_CROSS_CORE_TRAVERSAL_PATTERN,
       ]),
       'no-restricted-globals': ['error', ...NO_STATIC_DIAGNOSTICS_NETWORK],
       'no-restricted-properties': ['error', ...NO_STATIC_DIAGNOSTICS_NETWORK_PROPERTIES],
