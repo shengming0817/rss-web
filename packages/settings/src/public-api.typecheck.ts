@@ -1,4 +1,4 @@
-import type { SecretVersion, SettingsApi } from './index'
+import type { SecretMaterialBase64, SecretVersion, SettingsApi } from './index'
 
 declare const api: SettingsApi
 // @ts-expect-error callers cannot provide headers or tenant authority
@@ -24,3 +24,14 @@ api.publishSecret(
 // @ts-expect-error the server-decoded version brand cannot be forged from a number
 const forgedSecretVersion: SecretVersion = 1
 void forgedSecretVersion
+
+const resolvedMaterial: SecretMaterialBase64 = (await api.resolveSecret('vault.db')).data
+  .materialBase64
+void resolvedMaterial
+// @ts-expect-error material is minted only by the strict response decoder
+const forgedMaterial: SecretMaterialBase64 = 'bWF0ZXJpYWw='
+void forgedMaterial
+// @ts-expect-error callers cannot override the endpoint-owned no-store posture
+api.resolveSecret('vault.db', { cache: 'no-store' })
+// @ts-expect-error callers cannot provide transport or authority headers
+api.resolveSecret('vault.db', { headers: { Authorization: 'forged' } })

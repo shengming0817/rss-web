@@ -54,6 +54,38 @@ describe('Settings endpoints', () => {
         },
       },
     })
+    expect(settingsEndpoints.secretResolve).toMatchObject({
+      method: 'GET',
+      path: '/api/v1/settings/secrets/{key}/material',
+      successStatus: 200,
+      cache: 'no-store',
+      errorPolicy: {
+        400: {
+          code: 'ERR_CORE_VALIDATION',
+          message: 'validation error',
+          retryable: false,
+          details: 'empty',
+        },
+        403: {
+          code: 'ERR_CORE_FORBIDDEN',
+          message: 'forbidden',
+          retryable: false,
+          details: 'empty',
+        },
+        404: {
+          code: 'ERR_CORE_NOT_FOUND',
+          message: 'not found',
+          retryable: false,
+          details: 'empty',
+        },
+        500: {
+          code: 'ERR_CORE_INTERNAL',
+          message: 'internal error',
+          retryable: false,
+          details: 'empty',
+        },
+      },
+    })
     expect(settingsEndpoints.configRollback.errorPolicy).toEqual({
       400: expect.objectContaining({ code: 'ERR_CORE_VALIDATION' }),
       404: expect.objectContaining({ code: 'ERR_CORE_NOT_FOUND' }),

@@ -12,8 +12,12 @@ import type {
   ConfigRollbackRequest,
   ConfigRollbackResponse,
 } from './config/types'
-import { decodeSecretPublishResponse } from './secret/decoders'
-import type { SecretPublishRequest, SecretPublishResponse } from './secret/types'
+import { decodeSecretPublishResponse, decodeSecretResolveResponse } from './secret/decoders'
+import type {
+  SecretPublishRequest,
+  SecretPublishResponse,
+  SecretResolveResponse,
+} from './secret/types'
 import type { SettingsCallOptions } from './types'
 
 export interface SettingsApi {
@@ -21,6 +25,7 @@ export interface SettingsApi {
     request: SecretPublishRequest,
     options?: SettingsCallOptions,
   ): Promise<SecretPublishResponse>
+  resolveSecret(key: string, options?: SettingsCallOptions): Promise<SecretResolveResponse>
   publish(
     request: ConfigPublishRequest,
     options?: SettingsCallOptions,
@@ -113,6 +118,16 @@ export function createSettingsApi(transport: HttpTransport): SettingsApi {
           return response
         },
         session: 'required-no-replay',
+        ...signal(options),
+      })
+    },
+    resolveSecret(rawKey: string, options?: SettingsCallOptions) {
+      const requestKey = key(rawKey)
+      return transport.request({
+        ...settingsEndpoints.secretResolve,
+        pathParams: { key: requestKey },
+        decode: decodeSecretResolveResponse,
+        session: 'required',
         ...signal(options),
       })
     },

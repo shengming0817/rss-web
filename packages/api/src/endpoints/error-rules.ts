@@ -25,6 +25,13 @@ export const NOT_FOUND_EMPTY = rule({
   details: 'empty',
 })
 
+export const FORBIDDEN_EMPTY = rule({
+  code: 'ERR_CORE_FORBIDDEN',
+  message: 'forbidden',
+  retryable: false,
+  details: 'empty',
+})
+
 export const OUTBOX_FACT_CONFLICT_EMPTY = rule({
   code: 'ERR_CORE_OUTBOX_FACT_CONFLICT',
   message: 'outbox fact conflict',

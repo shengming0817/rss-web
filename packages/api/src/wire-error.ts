@@ -159,7 +159,8 @@ export function decodeEndpointError(
     const budget = decodeAgainstRule(status, value, SHARED_REQUEST_BUDGET)
     if (budget.cause === 'wire') return budget
   }
-  if (status === 401 || status === 403) return decodeWireError(status, value)
+  if (status === 401 || (status === 403 && policy?.[status] === undefined))
+    return decodeWireError(status, value)
   if (policy === undefined)
     return status === 503 ? protocolError(status) : decodeWireError(status, value)
   const rule = policy[status]

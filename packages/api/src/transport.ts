@@ -101,12 +101,18 @@ function requestConfig(
   const timeout = options.timeoutMs ?? defaultTimeoutMs
   if (!positiveTimeout(timeout)) throw clientError()
   const authorization = authorizationFrom(options)
-  const controlHeader = Object.keys(options.headers ?? {}).some((header) => {
+  const reservedHeader = Object.keys(options.headers ?? {}).some((header) => {
     const normalized = header.toLowerCase()
-    return normalized === 'authorization' || normalized === 'x-tenant-id'
+    return (
+      normalized === 'authorization' ||
+      normalized === 'x-tenant-id' ||
+      normalized === 'cache-control' ||
+      normalized === 'pragma'
+    )
   })
   if (
-    controlHeader ||
+    reservedHeader ||
+    (options.cache !== undefined && options.cache !== 'no-store') ||
     (options.session !== undefined && authorization === undefined) ||
     (authorization !== undefined &&
       (options.session === undefined || authorization.trim().length === 0))
@@ -115,6 +121,7 @@ function requestConfig(
   }
   const headers = {
     ...(options.headers ?? {}),
+    ...(options.cache === 'no-store' ? { 'Cache-Control': 'no-store' } : {}),
     ...(authorization === undefined ? {} : { Authorization: `Bearer ${authorization}` }),
   }
   return {

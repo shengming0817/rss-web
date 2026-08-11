@@ -71,6 +71,40 @@ describe('decodeEndpointError', () => {
     })
   })
 
+  it('lets an endpoint narrow 403 to an exact empty-details policy', () => {
+    const exactForbidden = {
+      403: {
+        code: 'ERR_CORE_FORBIDDEN',
+        message: 'forbidden',
+        retryable: false,
+        details: 'empty',
+      },
+    } as const
+    const canonical = envelope({
+      code: 'ERR_CORE_FORBIDDEN',
+      message: 'forbidden',
+      retryable: false,
+      details: [],
+    })
+    expect(decodeEndpointError(403, canonical, exactForbidden)).toMatchObject({
+      cause: 'wire',
+      status: 403,
+      code: 'ERR_CORE_FORBIDDEN',
+    })
+    expect(
+      decodeEndpointError(
+        403,
+        envelope({
+          code: 'ERR_CORE_FORBIDDEN',
+          message: 'forbidden',
+          retryable: false,
+          details: [{ materialBase64: 'bGVhaw==' }],
+        }),
+        exactForbidden,
+      ),
+    ).toMatchObject({ cause: 'protocol', status: 403 })
+  })
+
   it.each([
     [400, 'ERR_CORE_VALIDATION', 'validation error', false, [{ field: 'newPassword' }]],
     [404, 'ERR_CORE_NOT_FOUND', 'not found', false, []],
