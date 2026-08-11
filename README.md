@@ -86,6 +86,15 @@ as request or permission authority. Generic content/error presentation accepts o
 code, retryability, and requestId coordinates—never backend messages or details. Unknown protected
 paths use the authenticated catch-all; anonymous requests still reach Login first.
 
+The authenticated About page is a zero-network view of frozen build evidence: the Web image revision,
+the reviewed RSS contract-baseline identity, and only the Preview experiences explicitly enabled by
+the already production-gated composition flags. Build and baseline facts are External; Preview facts
+remain Mock and non-authoritative. It does not discover runtime contracts, providers, listeners,
+compatibility, or health. Degraded domain panels reuse one pure presentation component, while each
+domain keeps its own operation state and must explicitly choose whether a user-triggered idempotent
+read retry is allowed. Writes, audited target reads, unknown outcomes, and Secret Material never gain
+a generic retry path.
+
 `@rss/settings` provides the strict framework-neutral client for explicit Config publish, get,
 delete, and rollback coordinates plus reference-only Secret publish and one-time Secret Material
 resolve. Vue composition remains in
