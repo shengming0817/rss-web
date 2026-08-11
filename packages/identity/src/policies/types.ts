@@ -104,6 +104,31 @@ export type PoliciesListResponse = CursorPage<PolicyView>
 export interface PolicyGetResponse {
   readonly data: PolicyView
 }
+export interface PolicyWriteFields {
+  readonly contractId: string
+  readonly permission: string
+  readonly effectiveFrom: number
+  readonly effectiveUntil?: number
+  readonly rules: readonly PolicyRuleView[]
+}
+export interface PolicyCreateRequest extends PolicyWriteFields {
+  readonly policyId: PolicyId
+}
+export interface PolicyUpdateRequest extends PolicyWriteFields {
+  readonly expectedVersion: number
+}
+export interface PolicyCreateResponse {
+  readonly data: PolicyView
+}
+export interface PolicyUpdateResponse {
+  readonly data: PolicyView
+}
+export interface PolicyDeactivateRequest {
+  readonly expectedVersion: number
+}
+export interface PolicyDeactivateResponse {
+  readonly data: Readonly<{ deactivated: boolean; version: number }>
+}
 export interface PoliciesListRequest {
   readonly limit?: number
   readonly cursor?: string

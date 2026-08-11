@@ -281,6 +281,41 @@ const enUS = {
       fieldMask: 'Field mask',
       none: 'None',
     },
+    write: {
+      title: 'Policy writes',
+      authority:
+        'Writes require RSS Admin and target-scope management authority. The current User session receives the final server 403.',
+      structureOnly:
+        'The editor validates current structure only. It never simulates ABAC allow/deny or overwrites conflicts automatically.',
+      policyId: 'Policy ID',
+      operandAttribute: 'Referenced attribute',
+      setValue: 'Set element {number}',
+      fieldMaskValue: 'Field mask element {number}',
+      addValue: 'Add set element',
+      removeValue: 'Remove element',
+      addFieldMask: 'Add field mask',
+      addRule: 'Add rule',
+      removeRule: 'Remove rule',
+      create: 'Prepare create',
+      update: 'Prepare update',
+      deactivate: 'Prepare deactivate',
+      snapshotVersion:
+        'This CAS uses decoded server version {version}; it cannot be edited manually.',
+      validation:
+        'The policy draft does not match the current RSS contract structure. Check fields and typed operands.',
+      confirmTitle: 'Confirm policy write',
+      confirmDescription:
+        'Submit {action}. Only the RSS response proves success, and conflicts are never overwritten automatically.',
+      confirm: 'Confirm submission',
+      cancel: 'Cancel',
+      submitting: 'Submitting; duplicate actions are disabled…',
+      success: 'RSS confirmed {action} succeeded.',
+      conflict:
+        'Server state changed. The draft is retained; reload and merge manually. It will not be resubmitted automatically.',
+      unknown:
+        'The request outcome is unknown. The draft is retained; explicitly reload to reconcile. It will not be replayed automatically.',
+      reload: 'Reload server state',
+    },
   },
 } satisfies Widen<WebMessageSchema>
 

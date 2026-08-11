@@ -183,6 +183,57 @@ test('@main completes tenant bootstrap, verified profile, Admin facts, refresh, 
   expect(await logoutResponse.json()).toEqual({ data: { loggedOut: true } })
 })
 
+test('@policies-write keeps all real policy writes server-authoritative', async ({ page }) => {
+  await signInAndExpectShell(page, username)
+  await page
+    .getByRole('navigation', { name: '主导航' })
+    .getByRole('link', { name: /^策略/ })
+    .click()
+  const policyButton = page.getByRole('button', { name: /rss-web-real-policies-list-read/ })
+  await expect(policyButton).toBeVisible()
+  await policyButton.click()
+  await expect(page.getByRole('region', { name: '准备更新' })).toBeVisible()
+
+  const createPanel = page.getByRole('region', { name: '准备创建' })
+  await createPanel.getByLabel('Policy ID').fill('rss-web-real-policy-write-denied')
+  await createPanel.getByLabel('Contract ID').fill('identity.policies-list')
+  await createPanel.getByLabel('Permission').fill('identity:policy:read')
+  await createPanel.getByLabel('生效起点（epoch seconds）').fill('1700000000')
+  await createPanel.getByLabel('Attribute', { exact: true }).fill('principal.kind')
+  await createPanel.getByLabel('Operand value').fill('admin')
+  const createDenied = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      new URL(response.url()).pathname === '/api/v1/identity/policies',
+  )
+  await createPanel.getByRole('button', { name: '准备创建', exact: true }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: '确认提交' }).click()
+  expect((await createDenied).status()).toBe(403)
+  await expect(page.getByText('ERR_CORE_FORBIDDEN')).toBeVisible()
+
+  const updateDenied = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PUT' &&
+      new URL(response.url()).pathname ===
+        '/api/v1/identity/policies/rss-web-real-policies-list-read',
+  )
+  await page.getByRole('button', { name: '准备更新', exact: true }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: '确认提交' }).click()
+  expect((await updateDenied).status()).toBe(403)
+  await expect(page.getByText('ERR_CORE_FORBIDDEN')).toBeVisible()
+
+  const deactivateDenied = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      new URL(response.url()).pathname ===
+        '/api/v1/identity/policies/rss-web-real-policies-list-read/deactivate',
+  )
+  await page.getByRole('button', { name: '准备停用', exact: true }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: '确认提交' }).click()
+  expect((await deactivateDenied).status()).toBe(403)
+  await expect(page.getByText('ERR_CORE_FORBIDDEN')).toBeVisible()
+})
+
 test('@main keeps real 403 authoritative for a limited account', async ({ page }) => {
   await signInAndExpectShell(page, limitedUsername)
   await expect(page.locator('[data-source="unavailable"]')).toHaveCount(2)

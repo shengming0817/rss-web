@@ -20,7 +20,11 @@ function unauthenticated() {
 }
 
 async function fixture(
-  targetPath: '/api/v1/identity/policies' | '/api/v1/identity/policies/{policyId}',
+  targetPath:
+    | '/api/v1/identity/policies'
+    | '/api/v1/identity/policies/{policyId}'
+    | '/api/v1/identity/policies/{policyId}/deactivate',
+  targetMethod: 'GET' | 'POST' | 'PUT' = 'GET',
 ) {
   let targetCalls = 0
   let refreshCalls = 0
@@ -60,10 +64,12 @@ async function fixture(
           break
         default:
           expect(request.path).toBe(targetPath)
+          expect(request.method).toBe(targetMethod)
           targetCalls += 1
           if (targetCalls === 1) throw unauthenticated()
-          wire =
-            targetPath === '/api/v1/identity/policies'
+          wire = targetPath.endsWith('/deactivate')
+            ? { data: { deactivated: true, version: 2 } }
+            : targetPath === '/api/v1/identity/policies' && targetMethod === 'GET'
               ? { data: [], hasMore: false }
               : {
                   data: {
@@ -104,6 +110,49 @@ describe('Policies session request policy', () => {
           data: { policyId: 'policy-fixture' },
         })
       }
+      expect(counts()).toEqual({ refreshCalls: 1, targetCalls: 2 })
+      expect(session.getState().status).toBe('authenticated')
+    },
+  )
+
+  it.each(['create', 'update', 'deactivate'] as const)(
+    'refreshes once and replays idempotent %s once after exact 401',
+    async (action) => {
+      const path =
+        action === 'create'
+          ? '/api/v1/identity/policies'
+          : action === 'update'
+            ? '/api/v1/identity/policies/{policyId}'
+            : '/api/v1/identity/policies/{policyId}/deactivate'
+      const method = action === 'update' ? 'PUT' : 'POST'
+      const { api, counts, session } = await fixture(path, method)
+      const policyId = 'policy-fixture' as never
+      const fields = {
+        contractId: 'settings.config-get',
+        permission: 'settings.config-get',
+        effectiveFrom: NOW - 60,
+        rules: [
+          {
+            condition: {
+              attribute: 'principal.kind',
+              operator: {
+                family: 'equality' as const,
+                predicate: 'eq' as const,
+                operand: {
+                  kind: 'literal' as const,
+                  valueType: 'string' as const,
+                  value: 'admin',
+                },
+              },
+            },
+            effect: 'allow' as const,
+          },
+        ],
+      }
+      if (action === 'create') await api.create({ policyId, ...fields })
+      else if (action === 'update') await api.update(policyId, { expectedVersion: 1, ...fields })
+      else await api.deactivate(policyId, { expectedVersion: 1 })
+
       expect(counts()).toEqual({ refreshCalls: 1, targetCalls: 2 })
       expect(session.getState().status).toBe('authenticated')
     },

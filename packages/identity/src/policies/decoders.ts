@@ -3,6 +3,8 @@ import { parsePolicyId } from './policy-id'
 import type {
   PoliciesListResponse,
   PolicyAttributeOperand,
+  PolicyCreateResponse,
+  PolicyDeactivateResponse,
   PolicyGetResponse,
   PolicyLiteralOperand,
   PolicyNumericOperand,
@@ -11,6 +13,7 @@ import type {
   PolicyPatternOperand,
   PolicyRuleView,
   PolicySetOperand,
+  PolicyUpdateResponse,
   PolicyView,
 } from './types'
 import {
@@ -221,7 +224,7 @@ function rule(value: unknown): PolicyRuleView {
   })
 }
 
-function policy(value: unknown): PolicyView {
+export function decodePolicyView(value: unknown): PolicyView {
   const input = record(
     value,
     ['policyId', 'version', 'contractId', 'permission', 'effectiveFrom', 'rules'],
@@ -242,7 +245,7 @@ function policy(value: unknown): PolicyView {
   })
 }
 
-const decodePage = decodeCursorPage(policy)
+const decodePage = decodeCursorPage(decodePolicyView)
 
 export function decodePoliciesListResponse(value: unknown): PoliciesListResponse {
   try {
@@ -259,5 +262,25 @@ export function decodePoliciesListResponse(value: unknown): PoliciesListResponse
 
 export function decodePolicyGetResponse(value: unknown): PolicyGetResponse {
   const envelope = record(value, ['data'])
-  return Object.freeze({ data: policy(envelope.data) })
+  return Object.freeze({ data: decodePolicyView(envelope.data) })
+}
+
+export function decodePolicyCreateResponse(value: unknown): PolicyCreateResponse {
+  return decodePolicyGetResponse(value)
+}
+
+export function decodePolicyUpdateResponse(value: unknown): PolicyUpdateResponse {
+  return decodePolicyGetResponse(value)
+}
+
+export function decodePolicyDeactivateResponse(value: unknown): PolicyDeactivateResponse {
+  const envelope = record(value, ['data'])
+  const data = record(envelope.data, ['deactivated', 'version'])
+  if (typeof data.deactivated !== 'boolean') invalid('policy')
+  return Object.freeze({
+    data: Object.freeze({
+      deactivated: data.deactivated,
+      version: integer(data.version, 1, INT32_MAX),
+    }),
+  })
 }

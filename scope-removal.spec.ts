@@ -128,6 +128,12 @@ describe('RSS-only foundation boundary', () => {
     expect(policiesIntent).toContain("contractId: 'identity.policies-list'")
     expect(policiesIntent).toContain("contractId: 'identity.policies-get'")
     expect(policiesIntent).toContain("permission: 'identity:policy:read'")
+    expect(policiesIntent).toContain("contractId: 'identity.policies-create'")
+    expect(policiesIntent).toContain("permission: 'identity:policy:create'")
+    expect(policiesIntent).toContain("contractId: 'identity.policies-update'")
+    expect(policiesIntent).toContain("permission: 'identity:policy:update'")
+    expect(policiesIntent).toContain("contractId: 'identity.policies-deactivate'")
+    expect(policiesIntent).toContain("permission: 'identity:policy:deactivate'")
     for (const path of ['/access', '/config', '/flags', '/admin', '/observability', '/observe']) {
       expect(router).not.toContain(path)
     }
@@ -278,13 +284,17 @@ describe('RSS-only foundation boundary', () => {
     expect(operation).not.toMatch(/bindings|currentBinding|effectiveRole/)
   })
 
-  it('keeps Policies read-only, server-authoritative, and free of local ABAC evaluation', () => {
+  it('keeps Policies server-authoritative and free of local ABAC evaluation', () => {
     const client = read('packages/identity/src/policies/client.ts')
     const page = read('apps/web/src/features/identity/PoliciesView.vue')
     const rules = read('apps/web/src/features/identity/PolicyRuleList.vue')
-    const production = [client, page, rules].join('\n')
-    expect(client.match(/session: 'required'/g)).toHaveLength(2)
+    const editor = read('apps/web/src/features/identity/PolicyEditor.vue')
+    const operation = read('apps/web/src/features/identity/policy-write-operation.ts')
+    const production = [client, page, rules, editor, operation].join('\n')
+    expect(client.match(/session: 'required'/g)).toHaveLength(5)
     expect(client).not.toContain('headers:')
+    expect(operation).toContain("status: 'conflict' | 'unknown' | 'error'")
+    expect(operation).not.toMatch(/retry|replay|autoSubmit|overwrite/i)
     expect(production).not.toMatch(
       /evaluatePolicy|policyDecision|isAllowed|grantAuthority|profile\.kind|superAdmin|localStorage|sessionStorage|X-Tenant-ID|mock|preview|fallback/i,
     )

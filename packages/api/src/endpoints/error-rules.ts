@@ -32,6 +32,20 @@ export const OUTBOX_FACT_CONFLICT_EMPTY = rule({
   details: 'empty',
 })
 
+export const CONFLICT_EMPTY = rule({
+  code: 'ERR_CORE_CONFLICT',
+  message: 'conflict',
+  retryable: false,
+  details: 'empty',
+})
+
+export const VERSION_CONFLICT_EMPTY = rule({
+  code: 'ERR_CORE_VERSION_CONFLICT',
+  message: 'version conflict',
+  retryable: true,
+  details: 'empty',
+})
+
 export const INTERNAL_EMPTY = rule({
   code: 'ERR_CORE_INTERNAL',
   message: 'internal error',

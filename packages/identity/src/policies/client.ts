@@ -1,17 +1,45 @@
 import type { HttpTransport } from '@rss/api'
 import { identityEndpoints } from '@rss/api/endpoints/identity'
-import { decodePoliciesListResponse, decodePolicyGetResponse } from './decoders'
+import {
+  decodePoliciesListResponse,
+  decodePolicyCreateResponse,
+  decodePolicyDeactivateResponse,
+  decodePolicyGetResponse,
+  decodePolicyUpdateResponse,
+} from './decoders'
+import {
+  parsePolicyCreateRequest,
+  parsePolicyDeactivateRequest,
+  parsePolicyUpdateRequest,
+} from './authoring'
 import type { PolicyId } from './policy-id'
 import type {
   PoliciesCallOptions,
   PoliciesListRequest,
   PoliciesListResponse,
+  PolicyCreateRequest,
+  PolicyCreateResponse,
+  PolicyDeactivateRequest,
+  PolicyDeactivateResponse,
   PolicyGetResponse,
+  PolicyUpdateRequest,
+  PolicyUpdateResponse,
 } from './types'
 
 export interface PoliciesApi {
   list(request?: PoliciesListRequest, options?: PoliciesCallOptions): Promise<PoliciesListResponse>
   get(policyId: PolicyId, options?: PoliciesCallOptions): Promise<PolicyGetResponse>
+  create(request: PolicyCreateRequest, options?: PoliciesCallOptions): Promise<PolicyCreateResponse>
+  update(
+    policyId: PolicyId,
+    request: PolicyUpdateRequest,
+    options?: PoliciesCallOptions,
+  ): Promise<PolicyUpdateResponse>
+  deactivate(
+    policyId: PolicyId,
+    request: PolicyDeactivateRequest,
+    options?: PoliciesCallOptions,
+  ): Promise<PolicyDeactivateResponse>
 }
 
 function reject(): Promise<never> {
@@ -57,6 +85,50 @@ export function createPoliciesApi(transport: HttpTransport): PoliciesApi {
           if (response.data.policyId !== policyId) throw new Error('invalid policy response')
           return response
         },
+        session: 'required',
+        ...signal(options),
+      })
+    },
+    create(request: PolicyCreateRequest, options?: PoliciesCallOptions) {
+      const body = parsePolicyCreateRequest(request)
+      return transport.request({
+        ...identityEndpoints.policiesCreate,
+        body,
+        decode(value) {
+          const response = decodePolicyCreateResponse(value)
+          if (response.data.policyId !== body.policyId) throw new Error('invalid policy response')
+          return response
+        },
+        session: 'required',
+        ...signal(options),
+      })
+    },
+    update(policyId: PolicyId, request: PolicyUpdateRequest, options?: PoliciesCallOptions) {
+      const body = parsePolicyUpdateRequest(request)
+      return transport.request({
+        ...identityEndpoints.policiesUpdate,
+        pathParams: { policyId },
+        body,
+        decode(value) {
+          const response = decodePolicyUpdateResponse(value)
+          if (response.data.policyId !== policyId) throw new Error('invalid policy response')
+          return response
+        },
+        session: 'required',
+        ...signal(options),
+      })
+    },
+    deactivate(
+      policyId: PolicyId,
+      request: PolicyDeactivateRequest,
+      options?: PoliciesCallOptions,
+    ) {
+      const body = parsePolicyDeactivateRequest(request)
+      return transport.request({
+        ...identityEndpoints.policiesDeactivate,
+        pathParams: { policyId },
+        body,
+        decode: decodePolicyDeactivateResponse,
         session: 'required',
         ...signal(options),
       })

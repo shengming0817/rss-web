@@ -1,9 +1,11 @@
 import { defineEndpoint } from './coordinate'
 import {
+  CONFLICT_EMPTY,
   INTERNAL_EMPTY,
   NOT_FOUND_EMPTY,
   OUTBOX_FACT_CONFLICT_EMPTY,
   VALIDATION_PUBLIC,
+  VERSION_CONFLICT_EMPTY,
 } from './error-rules'
 
 export const identityEndpoints = Object.freeze({
@@ -111,6 +113,38 @@ export const identityEndpoints = Object.freeze({
     errorPolicy: Object.freeze({
       400: VALIDATION_PUBLIC,
       404: NOT_FOUND_EMPTY,
+      500: INTERNAL_EMPTY,
+    }),
+  }),
+  policiesCreate: defineEndpoint({
+    method: 'POST',
+    path: '/api/v1/identity/policies',
+    successStatus: 201,
+    errorPolicy: Object.freeze({
+      400: VALIDATION_PUBLIC,
+      409: Object.freeze([CONFLICT_EMPTY, OUTBOX_FACT_CONFLICT_EMPTY]),
+      500: INTERNAL_EMPTY,
+    }),
+  }),
+  policiesUpdate: defineEndpoint({
+    method: 'PUT',
+    path: '/api/v1/identity/policies/{policyId}',
+    successStatus: 200,
+    errorPolicy: Object.freeze({
+      400: VALIDATION_PUBLIC,
+      404: NOT_FOUND_EMPTY,
+      409: Object.freeze([VERSION_CONFLICT_EMPTY, OUTBOX_FACT_CONFLICT_EMPTY]),
+      500: INTERNAL_EMPTY,
+    }),
+  }),
+  policiesDeactivate: defineEndpoint({
+    method: 'POST',
+    path: '/api/v1/identity/policies/{policyId}/deactivate',
+    successStatus: 200,
+    errorPolicy: Object.freeze({
+      400: VALIDATION_PUBLIC,
+      404: NOT_FOUND_EMPTY,
+      409: Object.freeze([VERSION_CONFLICT_EMPTY, OUTBOX_FACT_CONFLICT_EMPTY]),
       500: INTERNAL_EMPTY,
     }),
   }),

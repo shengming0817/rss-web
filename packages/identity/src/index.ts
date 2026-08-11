@@ -1,10 +1,25 @@
 export { createIdentityApi } from './api'
-export { createPoliciesApi } from './policies'
+export {
+  createPoliciesApi,
+  parsePolicyCreateRequest,
+  parsePolicyDeactivateRequest,
+  parsePolicyUpdateRequest,
+  POLICY_ATTRIBUTES,
+  POLICY_EQUALITY_PREDICATES,
+  POLICY_MEMBERSHIP_PREDICATES,
+  POLICY_ORDERING_PREDICATES,
+  POLICY_ROW_SCOPES,
+  POLICY_STRING_PREDICATES,
+} from './policies'
 export type {
   PoliciesApi,
   PoliciesCallOptions,
   PoliciesListRequest,
   PoliciesListResponse,
+  PolicyCreateRequest,
+  PolicyCreateResponse,
+  PolicyDeactivateRequest,
+  PolicyDeactivateResponse,
   PolicyAttributeOperand,
   PolicyGetResponse,
   PolicyId,
@@ -16,6 +31,9 @@ export type {
   PolicyRuleView,
   PolicySetOperand,
   PolicyView,
+  PolicyUpdateRequest,
+  PolicyUpdateResponse,
+  PolicyWriteFields,
 } from './policies'
 export { createRolesApi, isRoleId, parseRoleId, ROLE_ID_PATTERN } from './roles'
 export {

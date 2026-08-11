@@ -142,3 +142,14 @@ family/predicate/typed-operand discriminated shape without schema copies or lega
 effective int64 values as safe JavaScript integers, and performs explicit cursor loading plus a
 separate detail read. Policy rules and obligations are displayed RSS facts only; neither the Identity
 package nor Vue evaluates ABAC or derives effective authority.
+
+WEB-PR-021 additionally consumes `identity.policies-create`, `identity.policies-update`, and
+`identity.policies-deactivate` against the same reviewed RSS tree. Their contract TOML hashes are
+`66d5105d3a846d525d1cbd742064b98eb6c5adaf078df95d3a855cde4e2c7dfe`,
+`4f1c18ae74a4e963c3d9ad83b47645618d93e22411ce347ad5a12b21b9c56e2e`, and
+`cde7f396e645ad0794c10466457783023eb7485710ece79c8786d24f205732ea`; request and response hashes
+remain those recorded in the baseline table. All three contracts are idempotent and use the sole
+session transport's exact-401 recovery. Other failures are never auto-replayed: CAS conflicts and
+commit-unknown outcomes retain the local draft until an explicit server re-read. The current browser
+login authority remains User, so real RSS acceptance records final 403 for all three writes instead of
+fabricating Admin authority. No schema copy, evaluator, or policy provider is introduced.
