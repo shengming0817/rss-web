@@ -1,4 +1,4 @@
-import type { SettingsApi } from '@rss/settings'
+import type { SecretMaterialBase64, SettingsApi } from '@rss/settings'
 import type { SafeErrorPresentation } from '@rss/core'
 import { toSafeReadErrorPresentation } from '../../errors/rss-error'
 
@@ -27,7 +27,7 @@ export interface SecretMaterialRevealOperation {
   cancel(): void
   confirm(): Promise<void>
   renderActiveInto(target: HTMLElement): boolean
-  copy(writeText: (text: string) => Promise<void>): Promise<boolean>
+  copy(writeText: (text: SecretMaterialBase64) => Promise<void>): Promise<boolean>
   clear(reason: SecretMaterialClearReason): void
   dispose(): void
 }
@@ -38,7 +38,7 @@ export function createSecretMaterialRevealOperation(
   const listeners = new Set<(state: SecretMaterialRevealState) => void>()
   let state: SecretMaterialRevealState = Object.freeze({ status: 'idle' })
   let preparedKey: string | undefined
-  let activeMaterial: string | undefined
+  let activeMaterial: SecretMaterialBase64 | undefined
   let controller: AbortController | undefined
   let leaseTimer: ReturnType<typeof setTimeout> | undefined
   let generation = 0
@@ -120,30 +120,30 @@ export function createSecretMaterialRevealOperation(
     return true
   }
 
-  async function copy(writeText: (text: string) => Promise<void>): Promise<boolean> {
-    if (state.status !== 'active' || activeMaterial === undefined) return false
-    const material = activeMaterial
+  function copy(writeText: (text: SecretMaterialBase64) => Promise<void>): Promise<boolean> {
+    if (state.status !== 'active' || activeMaterial === undefined) return Promise.resolve(false)
     const current = generation
     if (state.copy !== 'idle') publish({ status: 'active', copy: 'idle' })
+    let pending: Promise<void>
     try {
-      await writeText(material)
-      if (
-        !disposed &&
-        current === generation &&
-        state.status === 'active' &&
-        activeMaterial === material
-      )
-        publish({ status: 'active', copy: 'copied' })
+      pending = writeText(activeMaterial)
     } catch {
-      if (
-        !disposed &&
-        current === generation &&
-        state.status === 'active' &&
-        activeMaterial === material
-      )
+      if (!disposed && current === generation && state.status === 'active')
         publish({ status: 'active', copy: 'failed' })
+      return Promise.resolve(true)
     }
-    return true
+    return pending.then(
+      () => {
+        if (!disposed && current === generation && state.status === 'active')
+          publish({ status: 'active', copy: 'copied' })
+        return true
+      },
+      () => {
+        if (!disposed && current === generation && state.status === 'active')
+          publish({ status: 'active', copy: 'failed' })
+        return true
+      },
+    )
   }
 
   return Object.freeze({

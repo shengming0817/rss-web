@@ -224,6 +224,20 @@ try {
   assert.equal(secretMaterial.json.authorizationPresent, true)
   assert.equal(secretMaterial.json.bodyBytes, 0)
 
+  const encodedSeparatorPath =
+    '/api/v1/settings/secrets/edge-secret%2Fmaterial-key/material?fixture-cache=public'
+  const encodedSeparator = await request(port, encodedSeparatorPath, {
+    headers: { 'X-Tenant-ID': 'attacker', Authorization: 'Bearer fixture' },
+  })
+  assert.equal(encodedSeparator.status, 200)
+  assert.equal(encodedSeparator.headers['cache-control'], 'no-store')
+  assert.equal(encodedSeparator.json.listener, 'primary')
+  assert.equal(encodedSeparator.json.method, 'GET')
+  assert.equal(encodedSeparator.json.url, encodedSeparatorPath)
+  assert.deepEqual(encodedSeparator.json.tenantHeaders, [])
+  assert.equal(encodedSeparator.json.authorizationPresent, true)
+  assert.equal(encodedSeparator.json.bodyBytes, 0)
+
   for (const path of [
     `/api/v1/settings/secrets/${secretMaterialKeyMarker}/Material?fixture-cache=public`,
     `/api/v1/settings/secrets/${secretMaterialKeyMarker}/material/extra?fixture-cache=public`,

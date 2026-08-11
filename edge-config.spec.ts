@@ -142,7 +142,7 @@ describe('RSS Web edge configuration', () => {
 
   it('gives only the exact secret material route a non-buffered no-store response', () => {
     const template = read('deploy/web/templates/default.conf.template')
-    const materialLocation = 'location ~ ^/api/v1/settings/secrets/[^/]+/material$ {'
+    const materialLocation = 'location ~ ^/api/v1/settings/secrets/[^/]+(?:/[^/]+)*/material$ {'
 
     expect(template).toContain(materialLocation)
     expect(template).toContain('proxy_buffering off;')
