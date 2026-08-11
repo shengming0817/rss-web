@@ -25,7 +25,8 @@ const enUS = {
     operationTitle: 'Config operation',
     manualDraft: 'Manual draft',
     key: 'Config key',
-    keyHint: 'The key is only a resource coordinate; it never becomes tenant or authority.',
+    keyHint:
+      'The key is sent byte-for-byte as a resource coordinate; it never becomes tenant or authority.',
     keyRequired: 'Enter a config key.',
     value: 'Config value',
     valueHint: 'The sensitive value never enters URLs, logs, persistence, or operation receipts.',

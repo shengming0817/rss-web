@@ -17,7 +17,7 @@ const zhCN = {
     operationTitle: 'Config 操作',
     manualDraft: '手动草稿',
     key: '配置 key',
-    keyHint: 'key 仅作为资源坐标发送；不会成为 tenant 或 authority。',
+    keyHint: 'key 会按输入的原始字节作为资源坐标发送；不会成为 tenant 或 authority。',
     keyRequired: '请输入配置 key。',
     value: '配置 value',
     valueHint: '敏感值不会进入 URL、日志、持久化或操作回执。',

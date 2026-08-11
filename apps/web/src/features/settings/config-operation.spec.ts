@@ -1,8 +1,21 @@
 import type { ConfigEntry, SettingsApi } from '@rss/settings'
+import {
+  abortedErrorForTest,
+  decodeWireErrorForTest,
+  networkErrorForTest,
+  protocolErrorForTest,
+  timeoutErrorForTest,
+} from '@rss/api/testing'
 import { describe, expect, it, vi } from 'vitest'
 import { createConfigOperation } from './config-operation'
 
 const entry: ConfigEntry = { key: 'app.k', value: 'sensitive-v', version: 2 as never }
+
+function wire(status: number, code: string, message: string, retryable = false) {
+  return decodeWireErrorForTest(status, {
+    error: { code, message, retryable, details: [], requestId: `config-${status}` },
+  })
+}
 
 function api(overrides: Partial<SettingsApi> = {}): SettingsApi {
   return {
@@ -35,7 +48,7 @@ describe('Config operation', () => {
   })
 
   it('turns publish transport ambiguity into value-free unknown and never replays', async () => {
-    const failure = Object.assign(new Error('network'), { cause: 'network' })
+    const failure = networkErrorForTest()
     const publish = vi.fn().mockRejectedValue(failure)
     const operation = createConfigOperation(api({ publish }))
     operation.beginPublish('app.k')
@@ -43,6 +56,42 @@ describe('Config operation', () => {
     expect(publish).toHaveBeenCalledOnce()
     expect(operation.getState()).toEqual({ status: 'unknown', key: 'app.k', error: failure })
     expect(JSON.stringify(operation.getState())).not.toContain('must-disappear')
+    expect(operation.beginPublish('app.k')).toBe(false)
+    expect(operation.beginDelete('app.k')).toBe(false)
+    expect(operation.reset()).toBe(false)
+    await operation.read('app.k')
+    expect(operation.getState()).toEqual({ status: 'ready', entry })
+  })
+
+  it.each([
+    [401, wire(401, 'ERR_CORE_UNAUTHENTICATED', 'unauthenticated')],
+    [403, wire(403, 'ERR_CORE_FORBIDDEN', 'forbidden')],
+    [409, wire(409, 'ERR_CORE_VERSION_CONFLICT', 'version conflict', true)],
+    [503, wire(503, 'ERR_CORE_PROVIDER_UNAVAILABLE', 'provider unavailable', true)],
+  ])('keeps final wire %s publish failures out of reconciliation', async (_status, failure) => {
+    const operation = createConfigOperation(api({ publish: vi.fn().mockRejectedValue(failure) }))
+    operation.beginPublish('app.k')
+    await operation.confirmPublish('secret')
+    expect(operation.getState()).toEqual({
+      status: 'error',
+      action: 'publish',
+      key: 'app.k',
+      error: failure,
+    })
+  })
+
+  it.each([
+    ['network', networkErrorForTest()],
+    ['timeout', timeoutErrorForTest()],
+    ['protocol', protocolErrorForTest(201)],
+    ['aborted', abortedErrorForTest()],
+    ['internal', wire(500, 'ERR_CORE_INTERNAL', 'internal error')],
+    ['budget', wire(503, 'ERR_CORE_UNAVAILABLE', 'service unavailable')],
+  ])('requires reconciliation for a %s publish outcome', async (_name, failure) => {
+    const operation = createConfigOperation(api({ publish: vi.fn().mockRejectedValue(failure) }))
+    operation.beginPublish('app.k')
+    await operation.confirmPublish('secret')
+    expect(operation.getState()).toEqual({ status: 'unknown', key: 'app.k', error: failure })
   })
 
   it('confirms delete and fences stale reads after reset', async () => {

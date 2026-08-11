@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -15,11 +16,26 @@ describe('Settings config security boundary', () => {
   })
 
   it('keeps sensitive values out of persistence and diagnostics owners', () => {
-    const production = [
-      read('apps/web/src/features/settings/ConfigView.vue'),
-      read('apps/web/src/features/settings/config-operation.ts'),
-      read('packages/settings/src/config/client.ts'),
-    ].join('\n')
+    const owners = execFileSync(
+      '/usr/bin/git',
+      [
+        'ls-files',
+        '--cached',
+        '--others',
+        '--exclude-standard',
+        '--',
+        'apps/web/src/features/settings',
+        'packages/settings/src',
+      ],
+      { cwd: root, encoding: 'utf8' },
+    )
+      .trim()
+      .split('\n')
+      .filter(Boolean)
+      .filter((path) => !path.endsWith('.spec.ts') && !path.endsWith('.typecheck.ts'))
+    expect(owners).toContain('apps/web/src/features/settings/ConfigView.vue')
+    expect(owners).toContain('packages/settings/src/config/client.ts')
+    const production = owners.map(read).join('\n')
     expect(production).not.toMatch(
       /localStorage|sessionStorage|indexedDB|console\.|logger\.|analytics/,
     )

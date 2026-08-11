@@ -44,9 +44,11 @@ const unsubscribe = operation.subscribe((next) => {
   }
 })
 
-const key = computed(() => keyInput.value.trim())
+const key = computed(() => keyInput.value)
 const invalidKey = computed(() => attempted.value && key.value.length === 0)
 const busy = computed(() => ['reading', 'publishing', 'deleting'].includes(state.value.status))
+const reconciliationRequired = computed(() => state.value.status === 'unknown')
+const controlsLocked = computed(() => busy.value || reconciliationRequired.value)
 const error = computed(() => {
   const current = state.value
   if (current.status !== 'error' && current.status !== 'unknown') return undefined
@@ -61,6 +63,7 @@ const confirmation = computed(() =>
 )
 
 watch(keyInput, () => {
+  if (reconciliationRequired.value) return
   attempted.value = false
   revealValue.value = false
   operation.reset()
@@ -96,8 +99,9 @@ function beginDelete() {
 }
 
 function reconcile() {
+  if (state.value.status !== 'unknown') return
   revealValue.value = false
-  void operation.read(key.value)
+  void operation.read(state.value.key)
 }
 
 onBeforeUnmount(() => {
@@ -139,7 +143,7 @@ onBeforeUnmount(() => {
           v-model="keyInput"
           autocomplete="off"
           spellcheck="false"
-          :disabled="busy"
+          :disabled="controlsLocked"
           :aria-invalid="invalidKey"
           aria-describedby="config-key-hint"
         />
@@ -149,19 +153,22 @@ onBeforeUnmount(() => {
         <textarea
           id="config-value"
           v-model="valueInput"
-          :disabled="busy"
+          :disabled="controlsLocked"
           autocomplete="off"
+          autocapitalize="off"
+          autocorrect="off"
+          spellcheck="false"
           aria-describedby="config-value-hint"
         />
         <p id="config-value-hint">{{ t('settingsConfig.valueHint') }}</p>
         <div class="config-actions">
-          <button type="button" class="v1-btn" :disabled="busy" @click="read">
+          <button type="button" class="v1-btn" :disabled="controlsLocked" @click="read">
             {{ t('settingsConfig.read') }}
           </button>
-          <button type="button" class="v1-btn" :disabled="busy" @click="beginPublish">
+          <button type="button" class="v1-btn" :disabled="controlsLocked" @click="beginPublish">
             {{ t('settingsConfig.preparePublish') }}
           </button>
-          <button type="button" class="v1-ghost" :disabled="busy" @click="beginDelete">
+          <button type="button" class="v1-ghost" :disabled="controlsLocked" @click="beginDelete">
             {{ t('settingsConfig.prepareDelete') }}
           </button>
         </div>

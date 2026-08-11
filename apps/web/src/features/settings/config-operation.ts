@@ -29,18 +29,22 @@ export interface ConfigOperation {
   beginDelete(key: string): boolean
   cancelDelete(): void
   confirmDelete(): Promise<void>
-  reset(): void
+  reset(): boolean
   dispose(): void
 }
 
-const DEFINITE_PUBLISH = new Set([400, 403, 409, 413, 429, 503])
-
 function publishUnknown(error: unknown): boolean {
-  return !(
-    isRssApiError(error) &&
-    error.cause === 'wire' &&
-    error.status !== undefined &&
-    DEFINITE_PUBLISH.has(error.status)
+  if (!isRssApiError(error)) return true
+  if (
+    error.cause === 'network' ||
+    error.cause === 'timeout' ||
+    error.cause === 'protocol' ||
+    error.cause === 'aborted'
+  )
+    return true
+  if (error.cause !== 'wire') return false
+  return (
+    error.status === 500 || (error.status === 503 && error.code !== 'ERR_CORE_PROVIDER_UNAVAILABLE')
   )
 }
 
@@ -80,7 +84,8 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
   }
 
   function beginPublish(key: string) {
-    if (state.status === 'publishing' || state.status === 'deleting') return false
+    if (state.status === 'publishing' || state.status === 'deleting' || state.status === 'unknown')
+      return false
     publish({ status: 'confirming-publish', key })
     return true
   }
@@ -114,7 +119,8 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
   }
 
   function beginDelete(key: string) {
-    if (state.status === 'publishing' || state.status === 'deleting') return false
+    if (state.status === 'publishing' || state.status === 'deleting' || state.status === 'unknown')
+      return false
     publish({ status: 'confirming-delete', key })
     return true
   }
@@ -144,8 +150,10 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
   }
 
   function reset() {
+    if (state.status === 'unknown') return false
     abort()
     publish({ status: 'idle' })
+    return true
   }
 
   return Object.freeze({
@@ -164,7 +172,8 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
     reset,
     dispose() {
       listeners.clear()
-      reset()
+      abort()
+      state = Object.freeze({ status: 'idle' })
     },
   })
 }

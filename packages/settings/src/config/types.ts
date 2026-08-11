@@ -1,4 +1,6 @@
-export type ConfigVersion = number & { readonly __configVersion: unique symbol }
+declare const configVersionBrand: unique symbol
+
+export type ConfigVersion = number & { readonly [configVersionBrand]: true }
 
 export interface ConfigPublishRequest {
   readonly key: string

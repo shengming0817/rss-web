@@ -661,9 +661,19 @@ test.describe('RSS Web Identity UX', () => {
     await publishDialog.getByRole('button', { name: '确认' }).click()
     await expect(page.getByText(/RSS 已确认发布 app\.browser，版本 3/)).toBeVisible()
     await expect(page.getByText('browser-secret')).toHaveCount(0)
+    expect(page.url()).not.toContain('browser-secret')
+    expect(
+      await page.evaluate(() =>
+        JSON.stringify({
+          local: { ...localStorage },
+          session: { ...sessionStorage },
+        }),
+      ),
+    ).not.toContain('browser-secret')
 
     await page.getByRole('button', { name: '读取当前配置' }).click()
     await expect(page.getByText('server-secret')).toHaveCount(0)
+    expect(page.url()).not.toContain('server-secret')
     await page.getByRole('button', { name: '显示敏感 value' }).click()
     await expect(page.getByText('server-secret')).toBeVisible()
     await page.getByRole('button', { name: '隐藏敏感 value' }).click()
