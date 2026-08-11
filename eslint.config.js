@@ -84,6 +84,29 @@ const PREVIEW_AUTHORIZATION_PATTERN = {
     '生产应用禁止导入 UX-only Preview authorization。Preview 只能由后续显式 dev/test/demo composition owner 启用。',
 }
 
+const STATIC_DIAGNOSTICS_DEPENDENCY_PATTERN = {
+  regex: '^@rss/(?:api|audit|authorization|identity|runtime|settings)(?:/|$)',
+  message:
+    'Static release diagnostics cannot import transport, session, domain, authorization, or runtime discovery seams.',
+}
+
+const NO_STATIC_DIAGNOSTICS_NETWORK = [
+  { name: 'fetch', message: 'Static release diagnostics cannot access the network.' },
+  { name: 'XMLHttpRequest', message: 'Static release diagnostics cannot access the network.' },
+  { name: 'WebSocket', message: 'Static release diagnostics cannot access the network.' },
+  { name: 'EventSource', message: 'Static release diagnostics cannot access the network.' },
+]
+
+const NO_STATIC_DIAGNOSTICS_NETWORK_PROPERTIES = [
+  { object: 'globalThis', property: 'fetch', message: 'Static release diagnostics are offline.' },
+  { object: 'window', property: 'fetch', message: 'Static release diagnostics are offline.' },
+  {
+    object: 'navigator',
+    property: 'sendBeacon',
+    message: 'Static release diagnostics are offline.',
+  },
+]
+
 /** Helper: create a no-restricted-imports rule config combining all given patterns + paths */
 function boundaryRule(extraPatterns = [], extraPaths = []) {
   return [
@@ -388,6 +411,45 @@ export default tseslint.config(
           paths: [NO_AXIOS_PATH],
         },
       ],
+    },
+  },
+
+  // About and its build metadata input are static presentation only. Import
+  // boundaries prevent a domain/runtime client from becoming a second diagnostics seam;
+  // global guards close direct browser-network bypasses.
+  {
+    files: ['apps/web/src/release-meta.ts', 'apps/web/src/views/AboutView.vue'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            DEEP_PATH_PATTERN,
+            INTERNAL_ENDPOINT_PATTERN,
+            PREVIEW_AUTHORIZATION_PATTERN,
+            STATIC_DIAGNOSTICS_DEPENDENCY_PATTERN,
+          ],
+          paths: [NO_AXIOS_PATH],
+        },
+      ],
+      'no-restricted-globals': ['error', ...NO_STATIC_DIAGNOSTICS_NETWORK],
+      'no-restricted-properties': ['error', ...NO_STATIC_DIAGNOSTICS_NETWORK_PROPERTIES],
+    },
+  },
+
+  // The shared degraded presenter remains a pure UI emitter. Domain operations
+  // continue to own request, retry, abort, and generation state.
+  {
+    files: ['packages/core/src/components/DegradedState.vue'],
+    rules: {
+      'no-restricted-imports': boundaryRule([
+        {
+          regex: '^@rss/(?!shared(?:/|$))',
+          message: 'DegradedState can depend only on sealed source metadata.',
+        },
+      ]),
+      'no-restricted-globals': ['error', ...NO_STATIC_DIAGNOSTICS_NETWORK],
+      'no-restricted-properties': ['error', ...NO_STATIC_DIAGNOSTICS_NETWORK_PROPERTIES],
     },
   },
 

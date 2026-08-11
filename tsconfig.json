@@ -7,7 +7,6 @@
     "eslint.config.js",
     "eslint.config.spec.ts",
     "edge-config.spec.ts",
-    "diagnostics-boundary.spec.ts",
     "config-preview-boundary.spec.ts",
     "real-e2e.spec.ts",
     "role-bindings-preview-boundary.spec.ts",

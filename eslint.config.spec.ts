@@ -152,6 +152,38 @@ describe('ESLint package boundaries', () => {
     ).toContain('no-restricted-imports')
   })
 
+  it('keeps static release diagnostics outside runtime and network seams', async () => {
+    for (const file of ['apps/web/src/release-meta.ts', 'apps/web/src/views/AboutView.vue']) {
+      const source = (body: string) =>
+        file.endsWith('.vue')
+          ? `<script setup lang="ts">\n${body}</script>\n<template><p /></template>`
+          : body
+      expect(
+        await ruleIds(
+          source("import { createRuntimeApi } from '@rss/runtime'\nvoid createRuntimeApi\n"),
+          file,
+        ),
+      ).toContain('no-restricted-imports')
+      expect(await ruleIds(source('void fetch\n'), file)).toContain('no-restricted-globals')
+      expect(await ruleIds(source('void globalThis.fetch\n'), file)).toContain(
+        'no-restricted-properties',
+      )
+    }
+
+    expect(
+      await ruleIds(
+        '<script setup lang="ts">\nimport { createRuntimeApi } from \'@rss/runtime\'\nvoid createRuntimeApi\n</script>\n<template><p /></template>',
+        'packages/core/src/components/DegradedState.vue',
+      ),
+    ).toContain('no-restricted-imports')
+    expect(
+      await ruleIds(
+        '<script setup lang="ts">\nvoid fetch\n</script>\n<template><p /></template>',
+        'packages/core/src/components/DegradedState.vue',
+      ),
+    ).toContain('no-restricted-globals')
+  })
+
   it('blocks Preview authorization imports in production app source', async () => {
     for (const file of [
       'apps/web/src/bootstrap.ts',

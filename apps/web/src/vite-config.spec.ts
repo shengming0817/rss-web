@@ -5,21 +5,13 @@ import { resolveWebBuildRevision } from '../vite.config'
 
 describe('Web build revision resolver', () => {
   it('prefers and validates the explicit archive/image revision', () => {
-    expect(resolveWebBuildRevision('a'.repeat(40), () => 'b'.repeat(40), 'production')).toBe(
-      'a'.repeat(40),
-    )
-    expect(() => resolveWebBuildRevision('main', () => 'b'.repeat(40), 'production')).toThrow(
-      'RSS_WEB_REVISION',
-    )
+    expect(resolveWebBuildRevision('a'.repeat(40), 'production')).toBe('a'.repeat(40))
+    expect(() => resolveWebBuildRevision('main', 'production')).toThrow('RSS_WEB_REVISION')
   })
 
-  it('uses a strict checkout revision and fails closed in production when absent', () => {
-    expect(resolveWebBuildRevision(undefined, () => 'b'.repeat(40), 'production')).toBe(
-      'b'.repeat(40),
-    )
-    expect(() => resolveWebBuildRevision(undefined, () => undefined, 'production')).toThrow(
-      'Web build revision',
-    )
-    expect(resolveWebBuildRevision(undefined, () => undefined, 'development')).toBe('development')
+  it('requires an explicit production revision and uses a fixed non-production identity', () => {
+    expect(() => resolveWebBuildRevision(undefined, 'production')).toThrow('RSS_WEB_REVISION')
+    expect(resolveWebBuildRevision(undefined, 'development')).toBe('development')
+    expect(resolveWebBuildRevision(undefined, 'test')).toBe('development')
   })
 })
