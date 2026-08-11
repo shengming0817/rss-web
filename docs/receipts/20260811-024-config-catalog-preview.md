@@ -3,7 +3,7 @@
 ## Scope and provenance
 
 - Issue: #32
-- Implementation commit: `c9a3cc8ce3baaa8d1f5d59d1927601f926fc8293`
+- Implementation commit: `656eb896a610bf683656421bef73077f2dfc789c`
 - RSS contracts consumed: none. The current RSS baseline has no active Config Catalog/List contract.
 - Source: fixed `preview.example.*` metadata in `@rss/settings/preview`, each row sealed as
   `mock`, `authoritative=false`, `preview=true`.
@@ -49,10 +49,10 @@ root TypeScript project. The include was added, then the full gate above was rer
 
 ## Changed lines and rollback
 
-- semantic/config: +370 / -11
-- tests: +234 / -7
+- semantic/config: +378 / -11
+- tests/type proofs: +242 / -7
 - README/CLAUDE: +11 / -0
-- implementation total: +615 / -18
+- implementation total: +631 / -18
 - generated: 0
 
 Rollback is one revert of the PR. It removes the package Preview subpath, flag, conditional route,
