@@ -72,9 +72,11 @@ as request or permission authority. Generic content/error presentation accepts o
 code, retryability, and requestId coordinates—never backend messages or details. Unknown protected
 paths use the authenticated catch-all; anonymous requests still reach Login first.
 
-`@rss/settings` provides the strict framework-neutral client for explicit Config publish, get, and
-delete coordinates. Vue composition remains in `apps/web`. Publish is a one-shot non-idempotent
-operation; an uncertain result drops the value draft and requires an explicit server read. Config
+`@rss/settings` provides the strict framework-neutral client for explicit Config publish, get,
+delete, and rollback coordinates. Vue composition remains in `apps/web`. Publish and rollback are
+one-shot non-idempotent operations; an uncertain result requires an explicit server read, and publish
+also drops the value draft. Rollback accepts only a manually entered source version and never infers
+or previews history. Config
 values are never placed in URLs, storage, logs, errors, receipts, or source metadata. There is no
 catalog, history, recent-key list, mock fallback, tenant selector, or direct Axios path.
 

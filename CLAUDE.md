@@ -82,8 +82,10 @@ must attach their reviewed error-coordinate policy; undeclared statuses or drift
 fail closed as protocol errors. Idempotent panel retry is user-triggered only.
 
 `@rss/settings` is the framework-neutral owner for the selected Config DTOs and adapter; all Vue
-composition stays in `apps/web`. Config publish is protected no-replay. Any uncertain publish result
-must release the value draft and require an explicit GET before the user decides what to do next.
+composition stays in `apps/web`. Config publish and rollback are protected no-replay. Any uncertain
+result must require an explicit GET before the user decides what to do next; publish also releases the
+value draft. Rollback uses only a manually entered key/source-version coordinate and must not infer or
+preview history.
 Config get/delete may use only the session owner's exact-401 recovery, and delete never parses a 204
 body. Config values must not enter URLs, storage, logs, telemetry, errors, receipts, or SourceMeta.
 Do not add catalog/history/recent-key providers, mock fallback, tenant inputs, schema loading, or a

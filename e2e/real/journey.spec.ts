@@ -405,7 +405,7 @@ test('@roles keeps the RSS user authority boundary for list, assign, and revoke'
   await expect(page.getByText(/已绑定|未绑定/)).toHaveCount(0)
 })
 
-test('@settings-config keeps Config get, publish, and delete server-authoritative', async ({
+test('@settings-config keeps Config get, publish, delete, and rollback server-authoritative', async ({
   page,
 }) => {
   await signInAndExpectShell(page, limitedUsername)
@@ -435,6 +435,17 @@ test('@settings-config keeps Config get, publish, and delete server-authoritativ
   expect((await publishDenied).status()).toBe(403)
   await expect(page.getByText('ERR_CORE_FORBIDDEN')).toBeVisible()
   await expect(page.getByText('real-config-secret')).toHaveCount(0)
+
+  await page.getByLabel('回滚源版本').fill('1')
+  const rollbackDenied = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      new URL(response.url()).pathname === '/api/v1/settings/configs/rss-web.real.config/rollbacks',
+  )
+  await page.getByRole('button', { name: '准备回滚' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: '确认' }).click()
+  expect((await rollbackDenied).status()).toBe(403)
+  await expect(page.getByText('ERR_CORE_FORBIDDEN')).toBeVisible()
 
   const deleteDenied = page.waitForResponse(
     (response) =>

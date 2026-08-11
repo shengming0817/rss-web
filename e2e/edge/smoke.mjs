@@ -166,10 +166,12 @@ try {
   assert.equal(rolesList.json.authorizationPresent, true)
 
   const configBody = JSON.stringify({ key: 'app.k', value: 'edge-sensitive-fixture' })
+  const rollbackBody = JSON.stringify({ toVersion: 1 })
   for (const [method, path, body] of [
     ['GET', '/api/v1/settings/configs/app.k', undefined],
     ['POST', '/api/v1/settings/configs', configBody],
     ['DELETE', '/api/v1/settings/configs/app.k', undefined],
+    ['POST', '/api/v1/settings/configs/app.k/rollbacks', rollbackBody],
   ]) {
     const response = await request(port, path, {
       method,

@@ -7,12 +7,13 @@ const root = resolve(import.meta.dirname)
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8')
 
 describe('Settings config security boundary', () => {
-  it('keeps publish non-replayable and 204 decoder-free', () => {
+  it('keeps publish and rollback non-replayable and 204 decoder-free', () => {
     const client = read('packages/settings/src/config/client.ts')
     expect(client).toContain("session: 'required-no-replay'")
     expect(client).toContain("session: 'required'")
     expect(client).not.toContain('headers:')
     expect(client).not.toMatch(/retry|fallback|X-Tenant-ID/)
+    expect(client).not.toMatch(/history|candidate|preview/i)
   })
 
   it('keeps sensitive values out of persistence and diagnostics owners', () => {
