@@ -1,5 +1,6 @@
 import { decodeCursorPage } from '@rss/api'
 import { parsePolicyId } from './policy-id'
+import { isValidPolicyVersion } from './policy-version'
 import type { PolicyVersion } from './policy-version'
 import type {
   PoliciesListResponse,
@@ -29,7 +30,6 @@ import {
 
 const encoder = new TextEncoder()
 const DECIMAL = /^(?:0|-?[1-9][0-9]*|(?:-?0|-?[1-9][0-9]*)\.[0-9]*[1-9])$/
-const INT32_MAX = 2_147_483_647
 
 function isOneOf<const Values extends readonly string[]>(
   value: unknown,
@@ -263,9 +263,10 @@ export function decodePolicyView(value: unknown): PolicyView {
     ...(input.effectiveUntil === undefined ? {} : { effectiveUntil: input.effectiveUntil }),
     rules: input.rules,
   })
+  if (!isValidPolicyVersion(input.version)) invalid('policy')
   return Object.freeze({
     policyId,
-    version: integer(input.version, 1, INT32_MAX) as PolicyVersion,
+    version: input.version as PolicyVersion,
     ...fields,
   })
 }
@@ -302,10 +303,11 @@ export function decodePolicyDeactivateResponse(value: unknown): PolicyDeactivate
   const envelope = record(value, ['data'])
   const data = record(envelope.data, ['deactivated', 'version'])
   if (typeof data.deactivated !== 'boolean') invalid('policy')
+  if (!isValidPolicyVersion(data.version)) invalid('policy')
   return Object.freeze({
     data: Object.freeze({
       deactivated: data.deactivated,
-      version: integer(data.version, 1, INT32_MAX) as PolicyVersion,
+      version: data.version as PolicyVersion,
     }),
   })
 }

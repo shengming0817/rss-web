@@ -1,5 +1,6 @@
 import { decodePolicyWriteFields } from './decoders'
 import { parsePolicyId } from './policy-id'
+import { isValidPolicyVersion } from './policy-version'
 import type {
   PolicyCreateRequest,
   PolicyDeactivateRequest,
@@ -7,8 +8,6 @@ import type {
   PolicyWriteFields,
   PolicyView,
 } from './types'
-
-const INT32_MAX = 2_147_483_647
 
 function exactRecord(
   value: unknown,
@@ -27,13 +26,6 @@ function exactRecord(
     throw new Error('invalid policy write input')
   }
   return input
-}
-
-function positiveInt32(value: unknown): number {
-  if (!Number.isInteger(value) || (value as number) < 1 || (value as number) > INT32_MAX) {
-    throw new Error('invalid policy write input')
-  }
-  return value as number
 }
 
 function writeFields(
@@ -72,11 +64,11 @@ export function createPolicyUpdateRequest(
   snapshot: PolicyView,
   fields: PolicyWriteFields,
 ): PolicyUpdateRequest {
-  positiveInt32(snapshot.version)
+  if (!isValidPolicyVersion(snapshot.version)) throw new Error('invalid policy write input')
   return Object.freeze({ expectedVersion: snapshot.version, ...writeFields(fields) })
 }
 
 export function createPolicyDeactivateRequest(snapshot: PolicyView): PolicyDeactivateRequest {
-  positiveInt32(snapshot.version)
+  if (!isValidPolicyVersion(snapshot.version)) throw new Error('invalid policy write input')
   return Object.freeze({ expectedVersion: snapshot.version })
 }

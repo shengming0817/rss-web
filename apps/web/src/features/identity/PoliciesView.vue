@@ -143,6 +143,7 @@ const unsubscribeWrite = writeOperation.subscribe((state) => {
     void nextTick(() => writeHeading.value?.focus())
   }
   if (state.status === 'success') {
+    reconciledVersion.value = undefined
     void pagination.start()
     const policyId = state.action === 'deactivate' ? state.command.policyId : state.result.policyId
     writeBasis.value = undefined
@@ -185,6 +186,7 @@ function prepareWrite(command: PolicyWriteCommand) {
 
 function prepareDeactivate() {
   if (writeBasis.value !== undefined) {
+    reconciledVersion.value = undefined
     writeOperation.prepare(createPolicyDeactivateCommand(writeBasis.value))
   }
 }

@@ -10,6 +10,7 @@ import {
 } from './decoders'
 import { parsePolicyCreateRequest } from './authoring'
 import type { PolicyId } from './policy-id'
+import { isValidPolicyVersion } from './policy-version'
 import type {
   PoliciesCallOptions,
   PoliciesListRequest,
@@ -70,13 +71,9 @@ function updateBody(request: PolicyUpdateRequest): PolicyUpdateRequest {
     'effectiveUntil',
     'rules',
   ])
-  if (
-    keys.some((key) => typeof key !== 'string' || !allowed.has(key)) ||
-    !Number.isInteger(request.expectedVersion) ||
-    request.expectedVersion < 1 ||
-    request.expectedVersion > 2_147_483_647
-  )
+  if (keys.some((key) => typeof key !== 'string' || !allowed.has(key)))
     throw new Error('invalid policy write input')
+  if (!isValidPolicyVersion(request.expectedVersion)) throw new Error('invalid policy write input')
   return Object.freeze({
     expectedVersion: request.expectedVersion,
     ...decodePolicyWriteFields(
@@ -93,13 +90,9 @@ function updateBody(request: PolicyUpdateRequest): PolicyUpdateRequest {
 }
 
 function deactivateBody(request: PolicyDeactivateRequest): PolicyDeactivateRequest {
-  if (
-    Reflect.ownKeys(request).some((key) => key !== 'expectedVersion') ||
-    !Number.isInteger(request.expectedVersion) ||
-    request.expectedVersion < 1 ||
-    request.expectedVersion > 2_147_483_647
-  )
+  if (Reflect.ownKeys(request).some((key) => key !== 'expectedVersion'))
     throw new Error('invalid policy write input')
+  if (!isValidPolicyVersion(request.expectedVersion)) throw new Error('invalid policy write input')
   return Object.freeze({ expectedVersion: request.expectedVersion })
 }
 

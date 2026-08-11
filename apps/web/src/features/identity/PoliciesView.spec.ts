@@ -336,6 +336,11 @@ describe('PoliciesView', () => {
     expect(wrapper.text()).toContain('草稿仍保留')
     expect(document.activeElement).toBe(wrapper.get('#policy-write-title').element)
     expect(wrapper.get('.policy-catalog__item').attributes('disabled')).toBeUndefined()
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '准备停用')!
+      .trigger('click')
+    expect(wrapper.text()).not.toContain('草稿仍保留')
     wrapper.unmount()
   })
 
