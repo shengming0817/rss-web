@@ -1,10 +1,10 @@
-import { isRssApiError } from '@rss/api'
 import type {
   ConfigCoordinate,
   ConfigEntry,
   ConfigRollbackReceipt,
   SettingsApi,
 } from '@rss/settings'
+import { isWriteOutcomeUnknown } from '../../errors/write-outcome'
 
 type ConfigUnknownState =
   | Readonly<{ status: 'unknown'; action: 'publish'; key: string; error: unknown }>
@@ -54,22 +54,9 @@ export interface ConfigOperation {
   dispose(): void
 }
 
-function writeOutcomeUnknown(error: unknown): boolean {
-  if (!isRssApiError(error)) return true
-  if (
-    error.cause === 'network' ||
-    error.cause === 'timeout' ||
-    error.cause === 'protocol' ||
-    error.cause === 'aborted'
-  )
-    return true
-  if (error.cause !== 'wire') return false
-  return (
-    error.status === 500 || (error.status === 503 && error.code !== 'ERR_CORE_PROVIDER_UNAVAILABLE')
-  )
-}
+type ConfigOperationApi = Pick<SettingsApi, 'get' | 'publish' | 'delete' | 'rollback'>
 
-export function createConfigOperation(api: SettingsApi): ConfigOperation {
+export function createConfigOperation(api: ConfigOperationApi): ConfigOperation {
   const listeners = new Set<(state: ConfigOperationState) => void>()
   let state: ConfigOperationState = Object.freeze({ status: 'idle' })
   let generation = 0
@@ -148,7 +135,7 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
     } catch (error: unknown) {
       if (current !== generation) return
       controller = undefined
-      const unknown = writeOutcomeUnknown(error)
+      const unknown = isWriteOutcomeUnknown(error)
       const next: ConfigOperationState = unknown
         ? { status: 'unknown', action: 'publish', key, error }
         : { status: 'error', action: 'publish', key, error }
@@ -213,7 +200,7 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
     } catch (error: unknown) {
       if (current !== generation) return
       controller = undefined
-      const unknown = writeOutcomeUnknown(error)
+      const unknown = isWriteOutcomeUnknown(error)
       const next: ConfigOperationState = unknown
         ? { status: 'unknown', action: 'rollback', key, toVersion, error }
         : { status: 'error', action: 'rollback', key, error }

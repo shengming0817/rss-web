@@ -1,1 +1,5 @@
+export { createSettingsApi } from './client'
+export type { SettingsApi } from './client'
+export type { SettingsCallOptions } from './types'
 export * from './config'
+export * from './secret'

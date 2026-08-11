@@ -4,17 +4,23 @@ import {
   decodeConfigGetResponse,
   decodeConfigPublishResponse,
   decodeConfigRollbackResponse,
-} from './decoders'
+} from './config/decoders'
 import type {
   ConfigGetResponse,
   ConfigPublishRequest,
   ConfigPublishResponse,
   ConfigRollbackRequest,
   ConfigRollbackResponse,
-  SettingsCallOptions,
-} from './types'
+} from './config/types'
+import { decodeSecretPublishResponse } from './secret/decoders'
+import type { SecretPublishRequest, SecretPublishResponse } from './secret/types'
+import type { SettingsCallOptions } from './types'
 
 export interface SettingsApi {
+  publishSecret(
+    request: SecretPublishRequest,
+    options?: SettingsCallOptions,
+  ): Promise<SecretPublishResponse>
   publish(
     request: ConfigPublishRequest,
     options?: SettingsCallOptions,
@@ -26,6 +32,30 @@ export interface SettingsApi {
     request: ConfigRollbackRequest,
     options?: SettingsCallOptions,
   ): Promise<ConfigRollbackResponse>
+}
+
+function exactSecretPublishRequest(value: SecretPublishRequest): boolean {
+  if (typeof value !== 'object' || value === null) return false
+  const keys = Reflect.ownKeys(value)
+  const hasVersion = Object.hasOwn(value, 'refVersion')
+  return (
+    Object.hasOwn(value, 'key') &&
+    Object.hasOwn(value, 'storeId') &&
+    Object.hasOwn(value, 'refKey') &&
+    keys.length === (hasVersion ? 4 : 3) &&
+    keys.every(
+      (entry) =>
+        typeof entry === 'string' &&
+        ['key', 'storeId', 'refKey', ...(hasVersion ? ['refVersion'] : [])].includes(entry),
+    ) &&
+    typeof value.key === 'string' &&
+    value.key.length > 0 &&
+    typeof value.storeId === 'string' &&
+    value.storeId.length > 0 &&
+    typeof value.refKey === 'string' &&
+    value.refKey.length > 0 &&
+    (!hasVersion || typeof value.refVersion === 'string')
+  )
 }
 
 function key(value: string): string {
@@ -62,6 +92,30 @@ function signal(options?: SettingsCallOptions) {
 
 export function createSettingsApi(transport: HttpTransport): SettingsApi {
   return Object.freeze({
+    publishSecret(request: SecretPublishRequest, options?: SettingsCallOptions) {
+      if (!exactSecretPublishRequest(request))
+        return Promise.reject(new Error('invalid secret publish input'))
+      const requestKey = request.key
+      const body = Object.freeze({
+        key: requestKey,
+        storeId: request.storeId,
+        refKey: request.refKey,
+        ...(request.refVersion === undefined || request.refVersion.length === 0
+          ? {}
+          : { refVersion: request.refVersion }),
+      })
+      return transport.request({
+        ...settingsEndpoints.secretPublish,
+        body,
+        decode(value) {
+          const response = decodeSecretPublishResponse(value)
+          if (response.data.key !== requestKey) throw new Error('invalid settings secret response')
+          return response
+        },
+        session: 'required-no-replay',
+        ...signal(options),
+      })
+    },
     publish(request: ConfigPublishRequest, options?: SettingsCallOptions) {
       if (!exactPublishRequest(request))
         return Promise.reject(new Error('invalid config publish input'))

@@ -10,6 +10,7 @@ import {
   type PolicyView,
   type PolicyWriteFields,
 } from '@rss/identity'
+import { isWriteOutcomeUnknown } from '../../errors/write-outcome'
 
 declare const commandBrand: unique symbol
 
@@ -90,17 +91,7 @@ export function createPolicyDeactivateCommand(snapshot: PolicyView): PolicyWrite
 export function classifyPolicyWriteFailure(error: unknown): 'conflict' | 'unknown' | 'error' {
   if (!isRssApiError(error)) return 'unknown'
   if (error.cause === 'wire' && error.status === 409) return 'conflict'
-  if (
-    error.cause === 'network' ||
-    error.cause === 'timeout' ||
-    error.cause === 'protocol' ||
-    error.cause === 'aborted' ||
-    (error.cause === 'wire' &&
-      (error.status === 500 ||
-        (error.status === 503 && error.code !== 'ERR_CORE_PROVIDER_UNAVAILABLE')))
-  ) {
-    return 'unknown'
-  }
+  if (isWriteOutcomeUnknown(error)) return 'unknown'
   return 'error'
 }
 

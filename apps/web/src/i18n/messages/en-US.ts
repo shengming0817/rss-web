@@ -14,6 +14,7 @@ const enUS = {
     roleBindingsPreview: 'Bindings Preview',
     policies: 'Policies',
     settings: 'Settings',
+    secretReference: 'Secret reference publish',
     configCatalogPreview: 'Config Catalog Preview',
     configHistoryPreview: 'Config History Preview',
     runtime: 'Runtime',
@@ -67,6 +68,34 @@ const enUS = {
       'A Mock suggestion was copied into a Manual draft. No RSS request was sent; explicitly select “Read current config”.',
     historyDraftNotice:
       'A Mock candidate was copied into an unsubmitted Manual rollback draft. Version existence is unverified; you must still select “Prepare rollback” and confirm again.',
+  },
+  secretReferencePublish: {
+    title: 'Secret Reference Publish',
+    subtitle:
+      'Publish only an explicit external store reference to RSS; the browser never reads or displays secret content.',
+    draftTitle: 'Manual reference draft',
+    key: 'Secret config key',
+    keyHint:
+      'Sent as the raw entered bytes; the browser does not trim or infer a format, and RSS performs final validation.',
+    storeId: 'Store ID',
+    storeIdHint: 'A sensitive store coordinate held only by this form and one request.',
+    refKey: 'Reference key',
+    refKeyHint: 'A sensitive reference coordinate held only by this form and one request.',
+    refVersion: 'Reference version (optional)',
+    refVersionHint: 'When empty, this field is omitted; the browser does not infer a version.',
+    required: 'This field is required.',
+    reveal: 'Reveal reference coordinates',
+    hide: 'Hide reference coordinates',
+    prepare: 'Prepare Secret reference publish',
+    publishing: 'Publishing the Secret reference; sensitive fields were cleared…',
+    published: 'RSS confirmed Secret reference publish for {key}, version {version}.',
+    unknown:
+      'Publish outcome is unknown. Every reference field was cleared, and this page will not retry or reset. Verify through a trusted server-side channel before leaving and starting again.',
+    confirmTitle: 'Confirm Secret reference publish',
+    confirmDescription:
+      'This write cannot be replayed automatically. Confirmation immediately clears every input, and the browser never reads secret content.',
+    cancel: 'Cancel',
+    confirm: 'Confirm and publish once',
   },
   configCatalogPreview: {
     title: 'Config Catalog Preview',

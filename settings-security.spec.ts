@@ -5,10 +5,24 @@ import { describe, expect, it } from 'vitest'
 
 const root = resolve(import.meta.dirname)
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8')
+const productionOwners = (...paths: string[]) =>
+  execFileSync(
+    '/usr/bin/git',
+    ['ls-files', '--cached', '--others', '--exclude-standard', '--', ...paths],
+    { cwd: root, encoding: 'utf8' },
+  )
+    .trim()
+    .split('\n')
+    .filter(Boolean)
+    .filter((path) => !path.endsWith('.spec.ts') && !path.endsWith('.typecheck.ts'))
+const settingsProductionOwners = () =>
+  productionOwners('apps/web/src/features/settings', 'packages/settings/src')
+const applicationProductionOwners = () =>
+  productionOwners('apps', 'packages').filter((path) => /\.(?:ts|vue)$/.test(path))
 
 describe('Settings config security boundary', () => {
   it('keeps publish and rollback non-replayable and 204 decoder-free', () => {
-    const client = read('packages/settings/src/config/client.ts')
+    const client = read('packages/settings/src/client.ts')
     expect(client).toContain("session: 'required-no-replay'")
     expect(client).toContain("session: 'required'")
     expect(client).not.toContain('headers:')
@@ -17,29 +31,40 @@ describe('Settings config security boundary', () => {
   })
 
   it('keeps sensitive values out of persistence and diagnostics owners', () => {
-    const owners = execFileSync(
-      '/usr/bin/git',
-      [
-        'ls-files',
-        '--cached',
-        '--others',
-        '--exclude-standard',
-        '--',
-        'apps/web/src/features/settings',
-        'packages/settings/src',
-      ],
-      { cwd: root, encoding: 'utf8' },
-    )
-      .trim()
-      .split('\n')
-      .filter(Boolean)
-      .filter((path) => !path.endsWith('.spec.ts') && !path.endsWith('.typecheck.ts'))
+    const owners = settingsProductionOwners()
     expect(owners).toContain('apps/web/src/features/settings/ConfigView.vue')
-    expect(owners).toContain('packages/settings/src/config/client.ts')
+    expect(owners).toContain('packages/settings/src/client.ts')
     const production = owners.map(read).join('\n')
     expect(production).not.toMatch(
       /localStorage|sessionStorage|indexedDB|console\.|logger\.|analytics/,
     )
     expect(production).not.toMatch(/query:|headers:|location\.|route\.query/)
+  })
+
+  it('keeps secret coordinates in a closed production owner set', () => {
+    const coordinateOwners = applicationProductionOwners()
+      .filter((path) => /\b(?:storeId|refKey|refVersion)\b/.test(read(path)))
+      .sort()
+
+    expect(coordinateOwners).toEqual([
+      'apps/web/src/features/settings/SecretPublishView.vue',
+      'apps/web/src/i18n/messages/en-US.ts',
+      'apps/web/src/i18n/messages/zh-CN.ts',
+      'packages/settings/src/client.ts',
+      'packages/settings/src/secret/types.ts',
+    ])
+  })
+
+  it('keeps secret material, discovery, persistence, query, and diagnostics out of production', () => {
+    const production = [
+      ...settingsProductionOwners().map(read),
+      read('packages/api/src/endpoints/settings.ts'),
+    ].join('\n')
+    expect(production).not.toMatch(
+      /settings\.secret-resolve|\/api\/v1\/settings\/secrets\/[^'"`\s]+\/material|materialBase64|secretMaterial|resolveSecret/i,
+    )
+    expect(production).not.toMatch(
+      /localStorage|sessionStorage|indexedDB|console\.|logger\.|analytics|route\.query|location\.(?:search|hash)|URLSearchParams/,
+    )
   })
 })

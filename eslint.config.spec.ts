@@ -173,7 +173,7 @@ describe('ESLint package boundaries', () => {
     for (const [domain, endpoint, client] of [
       ['runtime', 'runtime', 'api/client.ts'],
       ['audit', 'audit', 'api/client.ts'],
-      ['settings', 'settings', 'config/client.ts'],
+      ['settings', 'settings', 'client.ts'],
     ] as const) {
       expect(
         await ruleIds(

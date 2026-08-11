@@ -2,7 +2,7 @@ import type { HttpTransport } from '@rss/api'
 import { createSessionHttpTransport, type SessionTransportHooks } from '@rss/api/session'
 import { decodeWireErrorForTest } from '@rss/api/testing'
 import { describe, expect, it, vi } from 'vitest'
-import { createSettingsApi } from './client'
+import { createSettingsApi } from '../client'
 
 const unauthenticated = () =>
   decodeWireErrorForTest(401, {
@@ -44,6 +44,11 @@ describe('Settings session policy', () => {
     [
       'rollback',
       (api: ReturnType<typeof createSettingsApi>) => api.rollback('app.k', { toVersion: 1 }),
+    ],
+    [
+      'secret publish',
+      (api: ReturnType<typeof createSettingsApi>) =>
+        api.publishSecret({ key: 'vault.db', storeId: 'vault', refKey: 'app/db' }),
     ],
   ])('never recovers or replays a %s after an exact 401', async (_name, invoke) => {
     const delegate = {

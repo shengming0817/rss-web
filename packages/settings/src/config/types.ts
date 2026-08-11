@@ -35,7 +35,3 @@ export interface ConfigRollbackReceipt extends ConfigCoordinate {
 export interface ConfigRollbackResponse {
   readonly data: ConfigRollbackReceipt
 }
-
-export interface SettingsCallOptions {
-  readonly signal?: AbortSignal
-}
