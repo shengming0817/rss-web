@@ -6,6 +6,7 @@ import type { SourceMeta } from '@rss/shared'
 import type { AuthorizationExperience } from '../features/authorization/authorization-context'
 import { AUDIT_AMBIENT_INTENT } from '../features/audit/audit-intent'
 import { RUNTIME_INVENTORY_INTENT } from '../features/runtime/runtime-intent'
+import { POLICIES_LIST_INTENT } from '../features/identity/policies-intent'
 import type { NavigationMessageKey } from './navigation'
 import { registerAuthorizationRouting, registerRouterA11y, registerSessionRouting } from './guards'
 
@@ -72,6 +73,17 @@ const baseRoutes: RouteRecordRaw[] = [
           sessionAccess: 'authenticated',
           focusTarget: 'shell-content',
           navigation: { labelKey: 'navigation.roles', order: 30, source: RSS_SOURCE },
+        },
+      },
+      {
+        path: 'policies',
+        name: 'policies',
+        component: () => import('../features/identity/PoliciesView.vue'),
+        meta: {
+          sessionAccess: 'authenticated',
+          focusTarget: 'shell-content',
+          authorizationIntent: POLICIES_LIST_INTENT,
+          navigation: { labelKey: 'navigation.policies', order: 35, source: RSS_SOURCE },
         },
       },
       {

@@ -56,6 +56,12 @@ describe('real RSS journey harness', () => {
     expect(runner).toContain('await chromium.launch({ headless: true })')
     expect(runner).toContain('await waitServerListening(8080)')
     expect(runner).toContain('await boundedSleep(500)')
+    const policyGrant = runner.slice(
+      runner.indexOf("'rss-web-real-policies-list-read'"),
+      runner.indexOf("'rss-web-real-policies-get-read'"),
+    )
+    expect(policyGrant).toContain('"effect":"allow"')
+    expect(policyGrant).not.toContain('"obligations"')
     expect(defaultPlaywright).toContain("testIgnore: 'real/**'")
   })
 

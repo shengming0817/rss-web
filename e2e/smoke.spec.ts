@@ -99,6 +99,28 @@ const rolesResponse = {
   ],
   hasMore: false,
 }
+const policyFixture = {
+  policyId: 'rss-web-policy-read',
+  version: 2,
+  contractId: 'identity.policies-list',
+  permission: 'identity:policy:read',
+  effectiveFrom: 1_700_000_000,
+  rules: [
+    {
+      condition: {
+        attribute: 'principal.id',
+        operator: {
+          family: 'equality',
+          predicate: 'eq',
+          operand: { kind: 'attribute', valueType: 'string', attribute: 'principal.id' },
+        },
+      },
+      effect: 'allow',
+      obligations: { rowScope: 'tenant', fieldMask: ['subject'] },
+    },
+  ],
+}
+const policiesResponse = { data: [policyFixture], hasMore: false }
 
 async function installAdminMocks(
   page: Page,
@@ -216,6 +238,18 @@ async function installIdentityMocks(
       await route.fulfill({ status: 201, json: { data: { assigned: true } } })
     } else if (route.request().method() === 'DELETE') {
       await route.fulfill({ status: 200, json: { data: { revoked: false } } })
+    } else {
+      await route.abort()
+    }
+  })
+  await page.route('**/api/v1/identity/policies**', async (route) => {
+    expect(route.request().headers().authorization?.startsWith('Bearer ')).toBe(true)
+    expect(route.request().headers()['x-tenant-id']).toBeUndefined()
+    const url = new URL(route.request().url())
+    if (url.pathname === '/api/v1/identity/policies') {
+      await route.fulfill({ status: 200, json: policiesResponse })
+    } else if (url.pathname === `/api/v1/identity/policies/${policyFixture.policyId}`) {
+      await route.fulfill({ status: 200, json: { data: policyFixture } })
     } else {
       await route.abort()
     }
@@ -370,11 +404,12 @@ test.describe('RSS Web Identity UX', () => {
     await page.getByLabel('密码').fill('test-password')
     await page.getByRole('button', { name: '登录', exact: true }).click()
     const navigation = page.getByRole('navigation', { name: '主导航' })
-    await expect(navigation.getByRole('link')).toHaveCount(6)
+    await expect(navigation.getByRole('link')).toHaveCount(7)
     await expect(navigation.getByRole('link', { name: /Bindings Preview/ })).toHaveCount(0)
     await expect(navigation.locator('[data-source="mock"]')).toHaveCount(0)
     await expect(navigation.getByRole('link', { name: /首页/ })).toContainText('RSS')
     await expect(navigation.getByRole('link', { name: /角色/ })).toContainText('RSS')
+    await expect(navigation.getByRole('link', { name: /^策略/ })).toContainText('RSS')
     await navigation.getByRole('link', { name: /运行时/ }).click()
     await expect(page).toHaveURL(/\/runtime$/)
     await expect(page.getByRole('heading', { name: '运行时详情' })).toBeVisible()
@@ -507,6 +542,37 @@ test.describe('RSS Web Identity UX', () => {
     await expect(page.getByText(/本次 revoke receipt：否/)).toBeVisible()
     expect(requests).toEqual(['GET', 'POST', 'DELETE'])
     await expect(page.getByText(/已绑定|未绑定/)).toHaveCount(0)
+  })
+
+  test('loads Policies detail only after explicit selection and never claims browser evaluation', async ({
+    page,
+  }) => {
+    const requests: string[] = []
+    page.on('request', (request) => {
+      const path = new URL(request.url()).pathname
+      if (path.startsWith('/api/v1/identity/policies')) {
+        requests.push(path)
+        expect(request.headers()['x-tenant-id']).toBeUndefined()
+      }
+    })
+    await installIdentityMocks(page)
+    await signIn(page)
+    await page
+      .getByRole('navigation', { name: '主导航' })
+      .getByRole('link', { name: /^策略/ })
+      .click()
+    await expect(page).toHaveURL(/\/policies$/)
+    await expect(page.getByText('rss-web-policy-read')).toBeVisible()
+    expect(requests).toEqual(['/api/v1/identity/policies'])
+    await page.getByRole('button', { name: /rss-web-policy-read/ }).click()
+    await expect(page.getByRole('heading', { name: 'ABAC rules' })).toBeVisible()
+    await expect(page.getByText('equality')).toBeVisible()
+    await expect(page.getByText('tenant')).toBeVisible()
+    await expect(page.getByText('本页面只展示结构，不在浏览器求值 ABAC')).toBeVisible()
+    expect(requests).toEqual([
+      '/api/v1/identity/policies',
+      '/api/v1/identity/policies/rss-web-policy-read',
+    ])
   })
 
   test('queries target Audit only on explicit actions without leaking target authority or PII', async ({

@@ -95,4 +95,23 @@ export const identityEndpoints = Object.freeze({
       500: INTERNAL_EMPTY,
     }),
   }),
+  policiesList: defineEndpoint({
+    method: 'GET',
+    path: '/api/v1/identity/policies',
+    successStatus: 200,
+    errorPolicy: Object.freeze({
+      400: VALIDATION_PUBLIC,
+      500: INTERNAL_EMPTY,
+    }),
+  }),
+  policiesGet: defineEndpoint({
+    method: 'GET',
+    path: '/api/v1/identity/policies/{policyId}',
+    successStatus: 200,
+    errorPolicy: Object.freeze({
+      400: VALIDATION_PUBLIC,
+      404: NOT_FOUND_EMPTY,
+      500: INTERNAL_EMPTY,
+    }),
+  }),
 })

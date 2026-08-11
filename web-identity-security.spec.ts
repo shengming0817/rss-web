@@ -68,4 +68,17 @@ describe('web Identity composition boundary', () => {
     )
     expect(text).not.toMatch(/console\.|logger\.|analytics|bindingHistory|bindingMap/)
   })
+
+  it('keeps Policies facts read-only and never evaluates ABAC in the browser', () => {
+    const text = [
+      readFileSync(resolve(webSource, 'features/identity/PoliciesView.vue'), 'utf8'),
+      readFileSync(resolve(webSource, 'features/identity/PolicyRuleList.vue'), 'utf8'),
+      readFileSync(resolve(webSource, 'features/identity/policies-pagination.ts'), 'utf8'),
+      readFileSync(resolve(webSource, 'features/identity/policy-detail.ts'), 'utf8'),
+    ].join('\n')
+    expect(text).not.toMatch(
+      /evaluatePolicy|policyDecision|isAllowed|grantAuthority|profile\.kind|superAdmin|localStorage|sessionStorage|X-Tenant-ID|mock|preview|fallback/i,
+    )
+    expect(text).not.toMatch(/console\.|logger\.|analytics/)
+  })
 })

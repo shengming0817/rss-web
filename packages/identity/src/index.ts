@@ -1,4 +1,22 @@
 export { createIdentityApi } from './api'
+export { createPoliciesApi } from './policies'
+export type {
+  PoliciesApi,
+  PoliciesCallOptions,
+  PoliciesListRequest,
+  PoliciesListResponse,
+  PolicyAttributeOperand,
+  PolicyGetResponse,
+  PolicyId,
+  PolicyLiteralOperand,
+  PolicyNumericOperand,
+  PolicyObligations,
+  PolicyOperator,
+  PolicyPatternOperand,
+  PolicyRuleView,
+  PolicySetOperand,
+  PolicyView,
+} from './policies'
 export { createRolesApi, isRoleId, parseRoleId, ROLE_ID_PATTERN } from './roles'
 export {
   ACCOUNT_STATUSES,

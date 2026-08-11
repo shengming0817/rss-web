@@ -140,6 +140,38 @@ test('@main completes tenant bootstrap, verified profile, Admin facts, refresh, 
   await expect(page.getByText('ERR_CORE_NOT_FOUND')).toBeVisible()
   expect(accountRequests).toBe(5)
 
+  const policyRequests: string[] = []
+  page.on('request', (request) => {
+    const path = new URL(request.url()).pathname
+    if (path.startsWith('/api/v1/identity/policies')) {
+      policyRequests.push(path)
+      expect(request.headers()['x-tenant-id']).toBeUndefined()
+    }
+  })
+  const policiesList = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === '/api/v1/identity/policies',
+  )
+  await page
+    .getByRole('navigation', { name: '主导航' })
+    .getByRole('link', { name: /^策略/ })
+    .click()
+  expect((await policiesList).status()).toBe(200)
+  const policyButton = page.getByRole('button', { name: /rss-web-real-policies-list-read/ })
+  await expect(policyButton).toBeVisible()
+  const policyDetail = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname ===
+      '/api/v1/identity/policies/rss-web-real-policies-list-read',
+  )
+  await policyButton.click()
+  expect((await policyDetail).status()).toBe(200)
+  await expect(page.getByText('principal.id').first()).toBeVisible()
+  await expect(page.getByText('本页面只展示结构，不在浏览器求值 ABAC')).toBeVisible()
+  expect(policyRequests).toEqual([
+    '/api/v1/identity/policies',
+    '/api/v1/identity/policies/rss-web-real-policies-list-read',
+  ])
+
   expect(browserHeaders.every((headers) => !headers.includes('x-tenant-id'))).toBe(true)
   const loggedOut = page.waitForResponse(
     (response) => new URL(response.url()).pathname === '/api/v1/identity/logout',
@@ -167,6 +199,16 @@ test('@main keeps real 403 authoritative for a limited account', async ({ page }
   )
   await page.getByRole('button', { name: '读取状态' }).click()
   expect((await denied).status()).toBe(403)
+  await expect(page.getByText('ERR_CORE_FORBIDDEN')).toBeVisible()
+
+  const policiesDenied = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === '/api/v1/identity/policies',
+  )
+  await page
+    .getByRole('navigation', { name: '主导航' })
+    .getByRole('link', { name: /^策略/ })
+    .click()
+  expect((await policiesDenied).status()).toBe(403)
   await expect(page.getByText('ERR_CORE_FORBIDDEN')).toBeVisible()
 })
 
