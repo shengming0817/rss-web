@@ -20,6 +20,8 @@ const createAppRouter = vi.fn(
 const createAuditApi = vi.fn(() => ({ listEntries: vi.fn() }))
 const createRuntimeApi = vi.fn(() => ({ inventory: vi.fn() }))
 const createSettingsApi = vi.fn(() => ({ get: vi.fn(), publish: vi.fn(), delete: vi.fn() }))
+const releaseMeta = Object.freeze({ id: 'release-meta-fixture' })
+const createCurrentWebReleaseMeta = vi.fn(() => releaseMeta)
 
 vi.mock('@rss/api', () => ({ createHttpTransport }))
 vi.mock('@rss/authorization', () => ({ createServerAuthorizationPort }))
@@ -36,6 +38,7 @@ vi.mock('./features/authorization/authorization-context', () => ({
   createAuthorizationExperience,
 }))
 vi.mock('./router', () => ({ createAppRouter }))
+vi.mock('./release-meta', () => ({ createCurrentWebReleaseMeta }))
 
 describe('web composition root', () => {
   afterEach(() => vi.unstubAllEnvs())
@@ -62,6 +65,11 @@ describe('web composition root', () => {
       port: createServerAuthorizationPort.mock.results[0]?.value,
       session: createIdentitySession.mock.results[0]?.value,
     })
+    expect(createCurrentWebReleaseMeta).toHaveBeenCalledWith({
+      configCatalogPreview: false,
+      configHistoryPreview: false,
+      roleBindingsPreview: false,
+    })
     expect(createAppRouter).toHaveBeenCalledWith(
       createIdentitySession.mock.results[0]?.value,
       createAuthorizationExperience.mock.results[0]?.value,
@@ -69,6 +77,7 @@ describe('web composition root', () => {
       {
         configCatalogPreview: false,
         configHistoryPreview: false,
+        releaseMeta,
         roleBindingsPreview: false,
       },
     )
@@ -97,6 +106,7 @@ describe('web composition root', () => {
       expect(options).toMatchObject({
         configCatalogPreview,
         configHistoryPreview,
+        releaseMeta,
         roleBindingsPreview: false,
       })
       if (configCatalogPreview || configHistoryPreview) {
@@ -117,8 +127,14 @@ describe('web composition root', () => {
       {
         configCatalogPreview: false,
         configHistoryPreview: false,
+        releaseMeta,
         roleBindingsPreview: false,
       },
     )
+    expect(createCurrentWebReleaseMeta).toHaveBeenLastCalledWith({
+      configCatalogPreview: false,
+      configHistoryPreview: false,
+      roleBindingsPreview: false,
+    })
   })
 })

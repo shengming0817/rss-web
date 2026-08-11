@@ -16,6 +16,7 @@ import { createConfigPreviewDraftHandoff } from './features/settings/config-prev
 import { isConfigCatalogPreviewEnabled } from './features/settings/config-catalog-preview'
 import { isConfigHistoryPreviewEnabled } from './features/settings/config-history-preview'
 import { createAppRouter } from './router'
+import { createCurrentWebReleaseMeta } from './release-meta'
 
 export const DEFAULT_HTTP_TIMEOUT_MS = 10_000
 
@@ -39,6 +40,11 @@ export function createWebRuntime(history?: RouterHistory) {
   const configHistoryPreview =
     import.meta.env.MODE !== 'production' &&
     isConfigHistoryPreviewEnabled(import.meta.env.MODE, import.meta.env.VITE_CONFIG_HISTORY_PREVIEW)
+  const releaseMeta = createCurrentWebReleaseMeta({
+    roleBindingsPreview,
+    configCatalogPreview,
+    configHistoryPreview,
+  })
   const configPreviewDraft =
     configCatalogPreview || configHistoryPreview ? createConfigPreviewDraftHandoff() : undefined
   const router = createAppRouter(
@@ -50,9 +56,15 @@ export function createWebRuntime(history?: RouterHistory) {
           configCatalogPreview,
           configHistoryPreview,
           configPreviewDraft,
+          releaseMeta,
           roleBindingsPreview,
         }
-      : { configCatalogPreview: false, configHistoryPreview: false, roleBindingsPreview },
+      : {
+          configCatalogPreview: false,
+          configHistoryPreview: false,
+          releaseMeta,
+          roleBindingsPreview,
+        },
   )
   return Object.freeze({
     accountStatus,

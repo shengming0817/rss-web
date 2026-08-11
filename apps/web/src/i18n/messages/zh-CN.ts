@@ -13,8 +13,33 @@ const zhCN = {
     configHistoryPreview: 'Config History Preview',
     runtime: '运行时',
     audit: '审计',
+    about: '关于',
   },
   home: { subtitle: '已验证身份，并独立加载 Runtime 与 Audit 的服务端事实。' },
+  about: {
+    title: '关于与发布信息',
+    subtitle: '此页面只显示随 Web 构建固定的发布元数据，不会请求网络或发现运行时能力。',
+    web: {
+      title: 'Web 构建',
+      revision: '源码 revision',
+    },
+    rss: {
+      title: 'RSS Contract 基线',
+      baseline: '基线标识',
+      sourceRevision: 'RSS 源码 revision',
+      notice: '这是 Web 构建时固定的 contract 依据，不代表当前 RSS 实例的运行时版本。',
+    },
+    preview: {
+      title: 'Preview 来源',
+      none: '此构建未启用 Preview 来源。',
+      notice: 'Mock Preview 永久非权威，不代表 RSS 数据、能力或可用性。',
+      sources: {
+        'role-bindings': 'Role Bindings Preview',
+        'config-catalog': 'Config Catalog Preview',
+        'config-history': 'Config History Preview',
+      },
+    },
+  },
   settingsConfig: {
     title: '配置管理',
     subtitle: '按显式 key 读取、发布、删除或回滚 RSS 配置；不提供目录或历史推断。',

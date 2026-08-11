@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory } from 'vue-router'
-import { MOCK_SOURCE, RSS_SOURCE } from '@rss/shared'
+import { EXTERNAL_SOURCE, MOCK_SOURCE, RSS_SOURCE } from '@rss/shared'
 import { createServerAuthorizationPort } from '@rss/authorization'
 import { createPreviewAuthorizationPort } from '@rss/authorization/preview'
 import type { AuthorizationPort } from '@rss/authorization'
@@ -9,8 +9,16 @@ import { createAuthorizationExperience } from '../features/authorization/authori
 import { createAppRouter, type AppRouterOptions } from './index'
 import { createShellNavigation } from './navigation'
 import { createConfigPreviewDraftHandoff } from '../features/settings/config-preview-draft-context'
+import { createWebReleaseMeta } from '../release-meta'
 
 window.scrollTo = vi.fn()
+
+const releaseMeta = createWebReleaseMeta({
+  webRevision: '1234567890abcdef1234567890abcdef12345678',
+  roleBindingsPreview: false,
+  configCatalogPreview: false,
+  configHistoryPreview: false,
+})
 
 function sessionFixture(initial: IdentitySessionState) {
   let state = initial
@@ -43,7 +51,17 @@ function appRouter(
     port,
     session: fixture.session,
   })
-  return createAppRouter(fixture.session, authorization, createMemoryHistory(), options)
+  return createAppRouter(
+    fixture.session,
+    authorization,
+    createMemoryHistory(),
+    options ?? {
+      configCatalogPreview: false,
+      configHistoryPreview: false,
+      releaseMeta,
+      roleBindingsPreview: false,
+    },
+  )
 }
 
 describe('session-owned router', () => {
@@ -254,6 +272,12 @@ describe('session-owned router', () => {
         to: { name: 'audit' },
         source: RSS_SOURCE,
       },
+      {
+        id: 'about',
+        label: 'navigation.about',
+        to: { name: 'about' },
+        source: EXTERNAL_SOURCE,
+      },
     ])
   })
 
@@ -270,6 +294,7 @@ describe('session-owned router', () => {
     const preview = appRouter(fixture, createServerAuthorizationPort(), {
       configCatalogPreview: false,
       configHistoryPreview: false,
+      releaseMeta,
       roleBindingsPreview: true,
     })
     expect(preview.resolve('/preview/role-bindings')).toMatchObject({
@@ -300,6 +325,7 @@ describe('session-owned router', () => {
       configCatalogPreview: true,
       configHistoryPreview: false,
       configPreviewDraft: catalogDraft,
+      releaseMeta,
       roleBindingsPreview: false,
     })
     expect(catalog.resolve('/preview/config-catalog')).toMatchObject({
@@ -322,6 +348,7 @@ describe('session-owned router', () => {
       configCatalogPreview: false,
       configHistoryPreview: true,
       configPreviewDraft: historyDraft,
+      releaseMeta,
       roleBindingsPreview: false,
     })
     expect(history.resolve('/preview/config-catalog').name).toBe('not-found')
@@ -337,6 +364,7 @@ describe('session-owned router', () => {
       configCatalogPreview: true,
       configHistoryPreview: true,
       configPreviewDraft: sharedDraft,
+      releaseMeta,
       roleBindingsPreview: false,
     })
     expect(both.resolve('/preview/config-history')).toMatchObject({
@@ -381,6 +409,25 @@ describe('session-owned router', () => {
       },
       navigation: { labelKey: 'navigation.runtime', order: 41, source: RSS_SOURCE },
     })
+  })
+
+  it('owns About as authenticated static release evidence with one injected metadata object', async () => {
+    const anonymous = appRouter(sessionFixture({ status: 'anonymous' }))
+    const route = anonymous.resolve('/about')
+    expect(route.name).toBe('about')
+    expect(route.meta).toMatchObject({
+      sessionAccess: 'authenticated',
+      focusTarget: 'shell-content',
+      navigation: { labelKey: 'navigation.about', order: 60, source: EXTERNAL_SOURCE },
+    })
+    expect(route.meta.authorizationIntent).toBeUndefined()
+    expect(anonymous.getRoutes().find((entry) => entry.name === 'about')?.props.default).toEqual({
+      releaseMeta,
+    })
+
+    await anonymous.push('/about')
+    await anonymous.isReady()
+    expect(anonymous.currentRoute.value.name).toBe('login')
   })
 
   it('owns Secret Reference publish with one exact server-authoritative intent', () => {

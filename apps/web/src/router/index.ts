@@ -1,7 +1,7 @@
 import { createRouter, type RouteRecordRaw, type RouterHistory } from 'vue-router'
 import type { AuthorizationIntent } from '@rss/authorization'
 import type { IdentitySession } from '@rss/identity'
-import { MOCK_SOURCE, RSS_SOURCE } from '@rss/shared'
+import { EXTERNAL_SOURCE, MOCK_SOURCE, RSS_SOURCE } from '@rss/shared'
 import type { SourceMeta } from '@rss/shared'
 import type { AuthorizationExperience } from '../features/authorization/authorization-context'
 import { AUDIT_AMBIENT_INTENT } from '../features/audit/audit-intent'
@@ -13,6 +13,7 @@ import { SECRET_RESOLVE_INTENT } from '../features/settings/secret-resolve-inten
 import type { NavigationMessageKey } from './navigation'
 import type { ConfigPreviewDraftHandoff } from '../features/settings/config-preview-draft-context'
 import { registerAuthorizationRouting, registerRouterA11y, registerSessionRouting } from './guards'
+import type { WebReleaseMeta } from '../release-meta'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -154,6 +155,16 @@ const baseRoutes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'about',
+        name: 'about',
+        component: () => import('../views/AboutView.vue'),
+        meta: {
+          sessionAccess: 'authenticated',
+          focusTarget: 'shell-content',
+          navigation: { labelKey: 'navigation.about', order: 60, source: EXTERNAL_SOURCE },
+        },
+      },
+      {
         path: ':pathMatch(.*)*',
         name: 'not-found',
         component: () => import('../views/ErrorView.vue'),
@@ -178,6 +189,7 @@ type ConfigPreviewRouterOptions =
 
 export type AppRouterOptions = {
   readonly roleBindingsPreview: boolean
+  readonly releaseMeta: WebReleaseMeta
 } & ConfigPreviewRouterOptions
 
 function routes(options: AppRouterOptions): RouteRecordRaw[] {
@@ -185,6 +197,8 @@ function routes(options: AppRouterOptions): RouteRecordRaw[] {
     if (route.path !== '/' || route.children === undefined) return route
     const catchAll = route.children.at(-1)!
     const children = route.children.slice(0, -1)
+    const about = children.findIndex((child) => child.name === 'about')
+    children[about] = { ...children[about]!, props: { releaseMeta: options.releaseMeta } }
     if (options.configCatalogPreview || options.configHistoryPreview) {
       const settings = children.findIndex((child) => child.name === 'settings')
       children[settings] = {
@@ -251,11 +265,7 @@ export function createAppRouter(
   session: IdentitySession,
   authorization: AuthorizationExperience,
   history: RouterHistory,
-  options: AppRouterOptions = {
-    configCatalogPreview: false,
-    configHistoryPreview: false,
-    roleBindingsPreview: false,
-  },
+  options: AppRouterOptions,
 ) {
   const router = createRouter({
     history,
