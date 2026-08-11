@@ -277,6 +277,11 @@ describe('decodeEndpointError', () => {
   it.each([
     [settingsEndpoints.configPublish.errorPolicy, 404, envelope({ details: [] })],
     [
+      settingsEndpoints.secretPublish.errorPolicy,
+      404,
+      envelope({ code: 'ERR_CORE_NOT_FOUND', message: 'not found', details: [] }),
+    ],
+    [
       settingsEndpoints.configPublish.errorPolicy,
       413,
       envelope({

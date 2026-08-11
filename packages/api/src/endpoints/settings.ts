@@ -16,7 +16,6 @@ export const settingsEndpoints = Object.freeze({
     successStatus: 201,
     errorPolicy: Object.freeze({
       400: VALIDATION_EMPTY,
-      404: NOT_FOUND_EMPTY,
       409: VERSION_CONFLICT_EMPTY,
       413: PAYLOAD_TOO_LARGE_EMPTY,
       500: INTERNAL_EMPTY,

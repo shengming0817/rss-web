@@ -62,7 +62,7 @@ describe('Secret publish operation', () => {
     })
   })
 
-  it.each([400, 401, 403, 404, 409, 413, 429])(
+  it.each([400, 401, 403, 409, 413, 429])(
     'treats exact wire %s as a definite safe error',
     async (status) => {
       const failure = wire(status)
