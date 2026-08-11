@@ -4,6 +4,7 @@
 
 - Issue: #34
 - Implementation commit: `f55041eccb9ec7faacab0214bcfd73ae3a306fda`
+- Archived real-journey Web revision: `c418b788d9e0067ac065d6db3b9ab34192b94e03`
 - Web contract baseline: `b513d3390d73d4f291bb31afc588ca1307ce19af`
 - Real journey RSS archive: `b7f3e1d0bcc5b2e59639a81b4f37937914b53f00`
 - Independently inspected RSS object: `2fa78c4da110f60e1c0cc112b72f852c30f1dc9d`
@@ -73,13 +74,13 @@ Final implementation commit verification completed locally from a clean worktree
 - Docker/Nginx Edge routing smoke and checked teardown: passed
 - archived Web + pinned RSS real journey: all 10 phases passed, including the isolated
   `settings-config` phase proving one Secret POST, exact real 403, zero material requests, released
-  DOM fields, no replay, and cleanup passed (`/tmp/rss-web-34-review-real-receipt.json`)
+  DOM fields, no replay, and cleanup passed (`/tmp/rss-web-34-final-real-receipt.json`)
 - `git diff --check`: passed
 
-Two earlier canonical real-run attempts stopped in the pre-existing limited-account `main` journey
-and both completed checked cleanup; the final run on the identical Web/RSS revisions passed every
-phase. An earlier invocation with a misspelled source environment variable failed before setup as an
-environment revision error and also cleaned up.
+Two earlier runs of the pre-review implementation stopped in the pre-existing limited-account
+`main` journey and both completed checked cleanup. The archived final Web revision named above then
+passed every phase against the same pinned RSS revision. One invocation without the explicit RSS
+source-directory override failed before setup as an environment revision error and also cleaned up.
 
 ## Changed lines and rollback
 
