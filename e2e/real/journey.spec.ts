@@ -761,35 +761,36 @@ test('@admin-down keeps Primary login and shell available while Admin panels fai
 
   const retry = runtimePanel.getByRole('button', { name: '重试' })
   await retry.evaluate((button) => {
-    const observations: Array<{ busy: string | null; disabled: boolean; focused: boolean }> = []
+    const observations: Array<{ attribute: string; oldValue: string | null }> = []
     ;(
       window as typeof window & { __runtimeRetryObservations?: typeof observations }
     ).__runtimeRetryObservations = observations
-    new MutationObserver(() => {
-      observations.push({
-        busy: button.getAttribute('aria-busy'),
-        disabled: (button as HTMLButtonElement).disabled,
-        focused: document.activeElement === button,
-      })
-    }).observe(button, { attributes: true, attributeFilter: ['aria-busy', 'disabled'] })
+    new MutationObserver((records) => {
+      observations.push(
+        ...records.map((record) => ({
+          attribute: record.attributeName ?? '',
+          oldValue: record.oldValue,
+        })),
+      )
+    }).observe(button, {
+      attributes: true,
+      attributeOldValue: true,
+      attributeFilter: ['aria-busy', 'disabled'],
+    })
     ;(button as HTMLButtonElement).focus()
   })
+  await expect(retry).toBeFocused()
   await retry.click()
-  expect(
-    await page.evaluate(() =>
+  const observations = await page.evaluate(
+    () =>
       (
         window as typeof window & {
-          __runtimeRetryObservations?: Array<{
-            busy: string | null
-            disabled: boolean
-            focused: boolean
-          }>
+          __runtimeRetryObservations?: Array<{ attribute: string; oldValue: string | null }>
         }
-      ).__runtimeRetryObservations?.some(
-        (observation) => observation.busy === 'true' && observation.disabled && observation.focused,
-      ),
-    ),
-  ).toBe(true)
+      ).__runtimeRetryObservations ?? [],
+  )
+  expect(observations).toContainEqual({ attribute: 'aria-busy', oldValue: 'false' })
+  expect(observations).toContainEqual({ attribute: 'disabled', oldValue: null })
   await expect(runtimePanel.locator('[data-source="unavailable"]')).toBeVisible()
   await expect(runtimePanel.getByRole('heading', { name: '运行时摘要' })).toBeFocused()
   expect(runtimeRequests).toBe(2)
