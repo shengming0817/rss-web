@@ -178,3 +178,21 @@ the protected no-replay session policy. The request is an explicit positive safe
 abort, protocol, malformed success, internal failure, and budget-unavailable outcomes remain locked
 until an explicit same-key GET succeeds. No history read, candidate provider, value preview,
 automatic selection, retry, or fallback is introduced.
+
+WEB-PR-026 enables `settings.secret-publish` against the pinned read-only RSS revision
+`b7f3e1d0bcc5b2e59639a81b4f37937914b53f00`. Its contract TOML SHA-256 is
+`1bf3e4f3e3d1661f37d284e007c182f85109908b48233280b4155241ca08e8bd`; request and response hashes
+remain those recorded in the baseline table. It is a non-idempotent reference-only write through the
+protected no-replay session policy. Store/reference coordinates are released before awaiting the
+request, success contains only the correlated server key/version, and uncertain outcomes remain a
+terminal state without material resolution or invented reconciliation.
+
+WEB-PR-027 enables `settings.secret-resolve` against the same real-journey RSS revision and confirms
+the selected v7 files are byte-identical at the read-only RSS revision
+`1f6c131f0759f921551a81e12e0adb0071346927`. The contract TOML SHA-256 is
+`c2b2a2b80464a020c57e7901b73e200c6891486ba5dbd5c042ba73c438b4ffa1`; request and response hashes
+remain those recorded in the baseline table. The strict adapter accepts canonical Base64 without
+UTF-8 conversion and uses the sole session owner's exact-401 recovery plus a closed no-store request
+mode. The independent Web route keeps material in one private 30-second active lease, and the exact
+Edge response is non-buffered and no-store. Material is never persisted, logged, placed in a URL or
+public state, inferred from Preview, or automatically fetched from the publish flow.

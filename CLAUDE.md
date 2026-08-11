@@ -97,7 +97,18 @@ enter URL/query/history, storage, logs, telemetry, errors, receipts, or public o
 network, timeout, abort, protocol, malformed-success, or internal outcome is terminal unknown: do not
 retry, reset, call secret-resolve, fetch material, or manufacture a reconciliation source. Success may
 show only the strictly decoded server key/version receipt. Do not add store/catalog discovery,
-material reveal, tenant inputs, or a second Settings client.
+tenant inputs, or a second Settings client. The publish route itself never resolves or displays
+material; Issue #35 owns the only separate reveal route.
+Issue #35 adds a high-risk, one-time Secret Material Reveal through the same `@rss/settings` client.
+It accepts only strict canonical Base64 and never decodes UTF-8. Material may exist only in the
+route-scoped operation's private lexical reference and active DOM for one 30-second lease. It must not
+enter public state, Vue reactive data, URLs, storage, logs, telemetry, errors, receipts, SourceMeta, or
+Preview. Confirm clears the Manual key before the request; timeout, hide, Escape, hidden/pagehide,
+route leave, session navigation, and unmount all release app-owned references through one fenced
+clear path. Copy is explicit and the UI must state that JavaScript memory and the OS clipboard cannot
+be physically erased by the app. The exact API request and Edge response are no-store; do not add
+prefetch, fallback, automatic non-401 retry, material download/export, publish-to-resolve handoff,
+store discovery, tenant inputs, or a second Settings client.
 Issue #32 adds one concrete Config Catalog Preview under `@rss/settings/preview`. It is registered only
 for an exact development/test/demo build-time flag and production remains disabled. Fixtures are
 synthetic Mock metadata only; there is no provider SPI, remote adapter, catalog contract, value/version,

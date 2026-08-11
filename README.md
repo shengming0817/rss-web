@@ -87,7 +87,8 @@ code, retryability, and requestId coordinates—never backend messages or detail
 paths use the authenticated catch-all; anonymous requests still reach Login first.
 
 `@rss/settings` provides the strict framework-neutral client for explicit Config publish, get,
-delete, and rollback coordinates plus reference-only Secret publish. Vue composition remains in
+delete, and rollback coordinates plus reference-only Secret publish and one-time Secret Material
+resolve. Vue composition remains in
 `apps/web`. Config publish and rollback are one-shot non-idempotent operations; an uncertain result
 requires an explicit server read, and publish also drops the value draft. Rollback accepts only an
 explicit Manual key/source-version coordinate, whether typed by the user or copied from the
@@ -95,8 +96,12 @@ non-authoritative Preview, and never infers real history. Secret publish has its
 terminal unknown-outcome state because no safe metadata read exists: it never resolves material,
 replays a request, or invents reconciliation. Submitted Config values and Secret reference
 coordinates are released and never placed in URLs, storage, logs, errors, receipts, or source
-metadata. There is no active catalog/history contract, provider, recent-key list, mock fallback,
-tenant selector, secret-store discovery, or direct Axios path.
+metadata. A separate high-risk reveal route requires an explicit confirmation, displays only the
+strictly decoded Base64 for a 30-second lease, forces request and response no-store, and releases all
+app-owned references on hide, expiry, navigation, hidden/pagehide, and unmount. Explicit clipboard
+copy is outside the app's cleanup boundary; the app does not claim JavaScript zeroization. There is
+no active catalog/history contract, provider, recent-key list, mock fallback, tenant selector,
+secret-store discovery, automatic publish-to-resolve handoff, or direct Axios path.
 
 `@rss/runtime` and `@rss/audit` provide strict, framework-neutral clients for the selected Admin
 listener reads. The authenticated Home composes both over the single session transport and degrades
