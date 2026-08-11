@@ -158,6 +158,59 @@ describe('decodeEndpointError', () => {
   })
 
   it.each([
+    ['create', 400, 'ERR_CORE_VALIDATION', 'validation error', false, [{ reason: 'invalidRegex' }]],
+    ['create', 409, 'ERR_CORE_CONFLICT', 'conflict', false, []],
+    ['create', 409, 'ERR_CORE_OUTBOX_FACT_CONFLICT', 'outbox fact conflict', false, []],
+    ['update', 404, 'ERR_CORE_NOT_FOUND', 'not found', false, []],
+    ['update', 409, 'ERR_CORE_VERSION_CONFLICT', 'version conflict', true, []],
+    ['update', 409, 'ERR_CORE_OUTBOX_FACT_CONFLICT', 'outbox fact conflict', false, []],
+    ['deactivate', 409, 'ERR_CORE_VERSION_CONFLICT', 'version conflict', true, []],
+    ['deactivate', 500, 'ERR_CORE_INTERNAL', 'internal error', false, []],
+  ] as const)(
+    'accepts reviewed Policies %s write %s coordinate',
+    (endpoint, status, code, message, retryable, details) => {
+      const policy =
+        endpoint === 'create'
+          ? identityEndpoints.policiesCreate.errorPolicy
+          : endpoint === 'update'
+            ? identityEndpoints.policiesUpdate.errorPolicy
+            : identityEndpoints.policiesDeactivate.errorPolicy
+      expect(
+        decodeEndpointError(status, envelope({ code, message, retryable, details }), policy),
+      ).toMatchObject({ cause: 'wire', status, code, retryable })
+    },
+  )
+
+  it.each([
+    [
+      identityEndpoints.policiesCreate.errorPolicy,
+      404,
+      envelope({ code: 'ERR_CORE_NOT_FOUND', message: 'not found', details: [] }),
+    ],
+    [
+      identityEndpoints.policiesUpdate.errorPolicy,
+      409,
+      envelope({
+        code: 'ERR_CORE_VERSION_CONFLICT',
+        message: 'version conflict',
+        retryable: false,
+        details: [],
+      }),
+    ],
+    [
+      identityEndpoints.policiesDeactivate.errorPolicy,
+      500,
+      envelope({
+        code: 'ERR_CORE_INTERNAL',
+        message: 'internal error',
+        details: [{ leaked: true }],
+      }),
+    ],
+  ] as const)('fails closed for drifting Policies write coordinate %#', (policy, status, body) => {
+    expect(decodeEndpointError(status, body, policy)).toMatchObject({ cause: 'protocol', status })
+  })
+
+  it.each([
     [400, 'ERR_CORE_VALIDATION', 'validation error'],
     [500, 'ERR_CORE_INTERNAL', 'internal error'],
     [501, 'ERR_CORE_NOT_IMPLEMENTED', 'not implemented'],

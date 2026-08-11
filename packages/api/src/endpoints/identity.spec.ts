@@ -212,6 +212,112 @@ describe('Identity endpoint coordinates', () => {
           },
         },
       },
+      policiesCreate: {
+        method: 'POST',
+        path: '/api/v1/identity/policies',
+        successStatus: 201,
+        errorPolicy: {
+          400: {
+            code: 'ERR_CORE_VALIDATION',
+            message: 'validation error',
+            retryable: false,
+            details: 'public',
+          },
+          409: [
+            { code: 'ERR_CORE_CONFLICT', message: 'conflict', retryable: false, details: 'empty' },
+            {
+              code: 'ERR_CORE_OUTBOX_FACT_CONFLICT',
+              message: 'outbox fact conflict',
+              retryable: false,
+              details: 'empty',
+            },
+          ],
+          500: {
+            code: 'ERR_CORE_INTERNAL',
+            message: 'internal error',
+            retryable: false,
+            details: 'empty',
+          },
+        },
+      },
+      policiesUpdate: {
+        method: 'PUT',
+        path: '/api/v1/identity/policies/{policyId}',
+        successStatus: 200,
+        errorPolicy: {
+          400: {
+            code: 'ERR_CORE_VALIDATION',
+            message: 'validation error',
+            retryable: false,
+            details: 'public',
+          },
+          404: {
+            code: 'ERR_CORE_NOT_FOUND',
+            message: 'not found',
+            retryable: false,
+            details: 'empty',
+          },
+          409: [
+            {
+              code: 'ERR_CORE_VERSION_CONFLICT',
+              message: 'version conflict',
+              retryable: true,
+              details: 'empty',
+            },
+            {
+              code: 'ERR_CORE_OUTBOX_FACT_CONFLICT',
+              message: 'outbox fact conflict',
+              retryable: false,
+              details: 'empty',
+            },
+          ],
+          500: {
+            code: 'ERR_CORE_INTERNAL',
+            message: 'internal error',
+            retryable: false,
+            details: 'empty',
+          },
+        },
+      },
+      policiesDeactivate: {
+        method: 'POST',
+        path: '/api/v1/identity/policies/{policyId}/deactivate',
+        successStatus: 200,
+        errorPolicy: {
+          400: {
+            code: 'ERR_CORE_VALIDATION',
+            message: 'validation error',
+            retryable: false,
+            details: 'public',
+          },
+          404: {
+            code: 'ERR_CORE_NOT_FOUND',
+            message: 'not found',
+            retryable: false,
+            details: 'empty',
+          },
+          409: [
+            {
+              code: 'ERR_CORE_VERSION_CONFLICT',
+              message: 'version conflict',
+              retryable: true,
+              details: 'empty',
+            },
+            {
+              code: 'ERR_CORE_OUTBOX_FACT_CONFLICT',
+              message: 'outbox fact conflict',
+              retryable: false,
+              details: 'empty',
+            },
+          ],
+          500: {
+            code: 'ERR_CORE_INTERNAL',
+            message: 'internal error',
+            retryable: false,
+            details: 'empty',
+          },
+        },
+      },
     })
     expect(Object.isFrozen(identityEndpoints)).toBe(true)
     for (const coordinate of Object.values(identityEndpoints)) {

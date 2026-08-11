@@ -9,6 +9,7 @@ import type {
   VerifiedProfile,
   RolesApi,
   PoliciesApi,
+  PoliciesCallOptions,
   PolicyView,
 } from './index'
 
@@ -44,8 +45,36 @@ declare const policies: PoliciesApi
 declare const policy: PolicyView
 void policies.list({ limit: 50 })
 void policies.get(policy.policyId)
+void policies.create({
+  policyId: policy.policyId,
+  contractId: policy.contractId,
+  permission: policy.permission,
+  effectiveFrom: policy.effectiveFrom,
+  rules: policy.rules,
+})
+void policies.update(policy.policyId, {
+  expectedVersion: policy.version,
+  contractId: policy.contractId,
+  permission: policy.permission,
+  effectiveFrom: policy.effectiveFrom,
+  rules: policy.rules,
+})
+void policies.deactivate(policy.policyId, { expectedVersion: policy.version })
+// @ts-expect-error CAS versions can only originate from a decoded policy snapshot.
+void policies.deactivate(policy.policyId, { expectedVersion: 1 })
+void policies.update(policy.policyId, {
+  // @ts-expect-error Update cannot accept a caller-minted numeric CAS version.
+  expectedVersion: 1,
+  contractId: policy.contractId,
+  permission: policy.permission,
+  effectiveFrom: policy.effectiveFrom,
+  rules: policy.rules,
+})
 // @ts-expect-error Policies reads do not accept browser-authored authority headers.
 void policies.list(undefined, { headers: { Authorization: 'x' } })
+// @ts-expect-error Policies writes do not accept browser-authored authority headers.
+const forgedPoliciesOptions: PoliciesCallOptions = { headers: { Authorization: 'x' } }
+void forgedPoliciesOptions
 // @ts-expect-error Policy coordinates must originate from a strictly decoded PolicyView.
 void policies.get('policy-fixture')
 // @ts-expect-error Roles commands do not accept browser-authored authority headers.

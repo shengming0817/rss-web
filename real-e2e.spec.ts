@@ -9,6 +9,7 @@ import {
   finalizeOutcome,
   isCleanWebStatus,
 } from './e2e/real/lifecycle.mjs'
+import { executeBounded } from './e2e/real/process.mjs'
 
 const root = resolve(import.meta.dirname)
 
@@ -29,6 +30,7 @@ describe('real RSS journey harness', () => {
         'password-change',
         'account-status-self',
         'roles',
+        'policies-write',
         'rate-limited',
         'budget-exhausted',
         'admin-down',
@@ -52,7 +54,7 @@ describe('real RSS journey harness', () => {
     expect(runner).toContain("['archive', '--output', webArchivePath, webRevision]")
     expect(runner).toContain("'down', '--volumes', '--remove-orphans'")
     expect(runner).not.toContain('spawnSync')
-    expect(runner).toContain("activeChild?.kill('SIGTERM')")
+    expect(runner).toContain('activeChild?.terminate()')
     expect(runner).toContain('await chromium.launch({ headless: true })')
     expect(runner).toContain('await waitServerListening(8080)')
     expect(runner).toContain('await boundedSleep(500)')
@@ -147,5 +149,16 @@ describe('real RSS journey harness', () => {
         ],
       }),
     ).toBe('environment')
+  })
+
+  it('escalates a process tree that ignores SIGTERM and settles within the hard timeout', async () => {
+    const startedAt = Date.now()
+    const result = await executeBounded(
+      process.execPath,
+      [resolve(root, 'e2e/real/ignore-term.mjs')],
+      { timeoutMs: 100, graceMs: 100, stdio: ['ignore', 'pipe', 'pipe'] },
+    )
+    expect(result).toMatchObject({ signal: 'SIGKILL', timedOut: true })
+    expect(Date.now() - startedAt).toBeLessThan(2_000)
   })
 })

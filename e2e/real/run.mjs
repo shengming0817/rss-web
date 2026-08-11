@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict'
-import { spawn } from 'node:child_process'
 import { createServer } from 'node:net'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -12,6 +11,7 @@ import {
   finalizeOutcome,
   isCleanWebStatus,
 } from './lifecycle.mjs'
+import { executeBounded } from './process.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const source = resolve(process.env.RSS_SOURCE_DIR ?? resolve(root, '..'))
@@ -50,39 +50,26 @@ async function execute(command, args, options = {}) {
     throw error
   }
   if (receivedSignal && !options.ignoreInterrupt) throw interruptedError()
-  return await new Promise((resolveProcess, rejectProcess) => {
-    const child = spawn(command, args, {
+  try {
+    const result = await executeBounded(command, args, {
       cwd: options.cwd ?? root,
       env: options.env ?? process.env,
       stdio: options.stdio ?? ['pipe', 'inherit', 'inherit'],
+      input: options.input,
+      timeoutMs: timeout,
+      onChild: (child, terminate) => (activeChild = { child, terminate }),
+      onRelease: (child) => {
+        if (activeChild?.child === child) activeChild = undefined
+      },
     })
-    activeChild = child
-    let stdout = ''
-    let stderr = ''
-    child.stdout?.setEncoding('utf8')
-    child.stderr?.setEncoding('utf8')
-    child.stdout?.on('data', (chunk) => (stdout += chunk))
-    child.stderr?.on('data', (chunk) => (stderr += chunk))
-    if (options.input !== undefined) child.stdin?.end(options.input)
-    else child.stdin?.end()
-    const timer = setTimeout(() => child.kill('SIGTERM'), timeout)
-    child.once('error', (cause) => {
-      clearTimeout(timer)
-      if (activeChild === child) activeChild = undefined
-      const error = new Error(`${options.stage ?? command} failed: ${cause.message}`)
-      error.stage = options.stage ?? 'environment'
-      rejectProcess(error)
-    })
-    child.once('close', (status, signal) => {
-      clearTimeout(timer)
-      if (activeChild === child) activeChild = undefined
-      if (receivedSignal && !options.ignoreInterrupt) {
-        rejectProcess(interruptedError())
-        return
-      }
-      resolveProcess({ status, signal, stdout, stderr, timedOut: signal === 'SIGTERM' })
-    })
-  })
+    if (receivedSignal && !options.ignoreInterrupt) throw interruptedError()
+    return result
+  } catch (cause) {
+    if (receivedSignal && !options.ignoreInterrupt) throw interruptedError()
+    const error = new Error(`${options.stage ?? command} failed: ${cause.message}`)
+    error.stage = options.stage ?? 'environment'
+    throw error
+  }
 }
 
 async function run(command, args, options = {}) {
@@ -431,6 +418,7 @@ function printPlan() {
         'password-change',
         'account-status-self',
         'roles',
+        'policies-write',
         'rate-limited',
         'budget-exhausted',
         'admin-down',
@@ -480,7 +468,7 @@ async function teardown() {
 function handleSignal(signal) {
   if (receivedSignal) return
   receivedSignal = signal
-  activeChild?.kill('SIGTERM')
+  activeChild?.terminate()
 }
 
 const signalHandlers = {
@@ -572,7 +560,13 @@ try {
 
   await playwright('main')
 
-  const isolatedMainPhases = ['password-change', 'account-status-self', 'roles', 'rate-limited']
+  const isolatedMainPhases = [
+    'password-change',
+    'account-status-self',
+    'roles',
+    'policies-write',
+    'rate-limited',
+  ]
   for (const phase of isolatedMainPhases) {
     await compose(['up', '-d', '--no-deps', '--force-recreate', 'server'], {
       stage: `environment:${phase}-server`,

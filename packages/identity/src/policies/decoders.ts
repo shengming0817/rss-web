@@ -1,8 +1,12 @@
 import { decodeCursorPage } from '@rss/api'
 import { parsePolicyId } from './policy-id'
+import { isValidPolicyVersion } from './policy-version'
+import type { PolicyVersion } from './policy-version'
 import type {
   PoliciesListResponse,
   PolicyAttributeOperand,
+  PolicyCreateResponse,
+  PolicyDeactivateResponse,
   PolicyGetResponse,
   PolicyLiteralOperand,
   PolicyNumericOperand,
@@ -11,7 +15,9 @@ import type {
   PolicyPatternOperand,
   PolicyRuleView,
   PolicySetOperand,
+  PolicyUpdateResponse,
   PolicyView,
+  PolicyWriteFields,
 } from './types'
 import {
   POLICY_ATTRIBUTES,
@@ -24,7 +30,6 @@ import {
 
 const encoder = new TextEncoder()
 const DECIMAL = /^(?:0|-?[1-9][0-9]*|(?:-?0|-?[1-9][0-9]*)\.[0-9]*[1-9])$/
-const INT32_MAX = 2_147_483_647
 
 function isOneOf<const Values extends readonly string[]>(
   value: unknown,
@@ -221,17 +226,18 @@ function rule(value: unknown): PolicyRuleView {
   })
 }
 
-function policy(value: unknown): PolicyView {
+export function decodePolicyWriteFields(
+  value: unknown,
+  options: Readonly<{ requireRules?: boolean }> = {},
+): PolicyWriteFields {
   const input = record(
     value,
-    ['policyId', 'version', 'contractId', 'permission', 'effectiveFrom', 'rules'],
+    ['contractId', 'permission', 'effectiveFrom', 'rules'],
     ['effectiveUntil'],
   )
-  const policyId = parsePolicyId(input.policyId)
-  if (policyId === undefined || !Array.isArray(input.rules)) invalid('policy')
+  if (!Array.isArray(input.rules) || (options.requireRules === true && input.rules.length === 0))
+    invalid('policy')
   return Object.freeze({
-    policyId,
-    version: integer(input.version, 1, INT32_MAX),
     contractId: text(input.contractId),
     permission: text(input.permission),
     effectiveFrom: integer(input.effectiveFrom),
@@ -242,7 +248,30 @@ function policy(value: unknown): PolicyView {
   })
 }
 
-const decodePage = decodeCursorPage(policy)
+export function decodePolicyView(value: unknown): PolicyView {
+  const input = record(
+    value,
+    ['policyId', 'version', 'contractId', 'permission', 'effectiveFrom', 'rules'],
+    ['effectiveUntil'],
+  )
+  const policyId = parsePolicyId(input.policyId)
+  if (policyId === undefined) invalid('policy')
+  const fields = decodePolicyWriteFields({
+    contractId: input.contractId,
+    permission: input.permission,
+    effectiveFrom: input.effectiveFrom,
+    ...(input.effectiveUntil === undefined ? {} : { effectiveUntil: input.effectiveUntil }),
+    rules: input.rules,
+  })
+  if (!isValidPolicyVersion(input.version)) invalid('policy')
+  return Object.freeze({
+    policyId,
+    version: input.version as PolicyVersion,
+    ...fields,
+  })
+}
+
+const decodePage = decodeCursorPage(decodePolicyView)
 
 export function decodePoliciesListResponse(value: unknown): PoliciesListResponse {
   try {
@@ -259,5 +288,26 @@ export function decodePoliciesListResponse(value: unknown): PoliciesListResponse
 
 export function decodePolicyGetResponse(value: unknown): PolicyGetResponse {
   const envelope = record(value, ['data'])
-  return Object.freeze({ data: policy(envelope.data) })
+  return Object.freeze({ data: decodePolicyView(envelope.data) })
+}
+
+export function decodePolicyCreateResponse(value: unknown): PolicyCreateResponse {
+  return decodePolicyGetResponse(value)
+}
+
+export function decodePolicyUpdateResponse(value: unknown): PolicyUpdateResponse {
+  return decodePolicyGetResponse(value)
+}
+
+export function decodePolicyDeactivateResponse(value: unknown): PolicyDeactivateResponse {
+  const envelope = record(value, ['data'])
+  const data = record(envelope.data, ['deactivated', 'version'])
+  if (typeof data.deactivated !== 'boolean') invalid('policy')
+  if (!isValidPolicyVersion(data.version)) invalid('policy')
+  return Object.freeze({
+    data: Object.freeze({
+      deactivated: data.deactivated,
+      version: data.version as PolicyVersion,
+    }),
+  })
 }

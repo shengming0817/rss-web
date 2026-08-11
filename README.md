@@ -38,12 +38,15 @@ view or local history. The pinned RSS browser-login authority is `user`, while t
 Admin bearer; success shapes remain covered at the adapter, component, and Edge boundaries. No
 subject directory, picker, provider, tenant input, or mock fallback exists.
 
-The Policies route consumes the active list/detail reads through the same protected session transport.
+The Policies route consumes active list/detail reads and create/update/deactivate writes through the
+same protected session transport.
 It uses strict handwritten DTOs for the current family/predicate/typed-operand ABAC shape, explicit
 cursor pagination, and a distinct server detail request after selection. Policy content, profile kind,
 and displayed obligations are facts only: the browser never evaluates them or derives effective
-authority. Unknown schema fields, enum values, operand-family mismatches, or unsafe integer values fail
-closed, with no legacy operator aliases, schema copies, mock fallback, or runtime registry.
+authority. Update/deactivate use versions captured from decoded server detail; a 409 or unknown outcome
+retains the draft for explicit reconciliation and is never auto-submitted. Unknown schema fields, enum
+values, operand-family mismatches, or unsafe integer values fail closed, with no legacy operator
+aliases, schema copies, mock fallback, or runtime registry.
 
 Role Bindings Preview is a separate app-local, static experience and is disabled by default. To
 inspect its synthetic, permanently non-authoritative fixtures in development, run

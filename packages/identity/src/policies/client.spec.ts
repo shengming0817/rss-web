@@ -60,4 +60,84 @@ describe('Policies API', () => {
 
     await expect(api.get(parsePolicyId('policy-a')!)).rejects.toThrow('invalid policy response')
   })
+
+  it('uses exact protected create, update and deactivate coordinates', async () => {
+    const request = vi.fn().mockResolvedValue({ data: {} })
+    const api = createPoliciesApi({ request } as unknown as HttpTransport)
+    const policyId = parsePolicyId('policy-write')!
+    const fields = {
+      contractId: 'identity.policies-list',
+      permission: 'identity:policy:read',
+      effectiveFrom: 1,
+      rules: [
+        {
+          condition: {
+            attribute: 'principal.kind',
+            operator: {
+              family: 'equality' as const,
+              predicate: 'eq' as const,
+              operand: { kind: 'literal' as const, valueType: 'string' as const, value: 'admin' },
+            },
+          },
+          effect: 'allow' as const,
+        },
+      ],
+    }
+
+    await api.create({ policyId, ...fields })
+    await api.update(policyId, { expectedVersion: 1 as never, ...fields })
+    await api.deactivate(policyId, { expectedVersion: 2 as never })
+
+    expect(request).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        method: 'POST',
+        path: '/api/v1/identity/policies',
+        successStatus: 201,
+        body: { policyId, ...fields },
+        session: 'required',
+      }),
+    )
+    expect(request).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        method: 'PUT',
+        path: '/api/v1/identity/policies/{policyId}',
+        pathParams: { policyId },
+        successStatus: 200,
+        body: { expectedVersion: 1, ...fields },
+        session: 'required',
+      }),
+    )
+    expect(request).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        method: 'POST',
+        path: '/api/v1/identity/policies/{policyId}/deactivate',
+        pathParams: { policyId },
+        successStatus: 200,
+        body: { expectedVersion: 2 },
+        session: 'required',
+      }),
+    )
+  })
+
+  it('rejects malformed CAS bodies before transport without minting a version', async () => {
+    const request = vi.fn()
+    const api = createPoliciesApi({ request } as unknown as HttpTransport)
+    const policyId = parsePolicyId('policy-write')!
+    const fields = {
+      contractId: 'identity.policies-list',
+      permission: 'identity:policy:read',
+      effectiveFrom: 1,
+      rules: [],
+    }
+    expect(() => api.update(policyId, { expectedVersion: 0 as never, ...fields })).toThrow(
+      'invalid policy write input',
+    )
+    expect(() => api.deactivate(policyId, { expectedVersion: 0 as never })).toThrow(
+      'invalid policy write input',
+    )
+    expect(request).not.toHaveBeenCalled()
+  })
 })

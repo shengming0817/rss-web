@@ -5,7 +5,7 @@ import { createPolicyDetail } from './policy-detail'
 const response = (policyId: PolicyId): PolicyGetResponse => ({
   data: {
     policyId,
-    version: 1,
+    version: 1 as never,
     contractId: 'identity.policies-get',
     permission: 'identity:policy:read',
     effectiveFrom: 1,

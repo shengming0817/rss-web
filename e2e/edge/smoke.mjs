@@ -180,6 +180,54 @@ try {
     assert.equal(response.json.authorizationPresent, true)
   }
 
+  for (const [method, path, body] of [
+    [
+      'POST',
+      '/api/v1/identity/policies',
+      JSON.stringify({
+        policyId: 'rss-web-policy-write',
+        contractId: 'identity.policies-list',
+        permission: 'identity:policy:read',
+        effectiveFrom: 1700000000,
+        rules: [],
+      }),
+    ],
+    [
+      'PUT',
+      '/api/v1/identity/policies/rss-web-policy-write',
+      JSON.stringify({
+        expectedVersion: 1,
+        contractId: 'identity.policies-list',
+        permission: 'identity:policy:read',
+        effectiveFrom: 1700000000,
+        rules: [],
+      }),
+    ],
+    [
+      'POST',
+      '/api/v1/identity/policies/rss-web-policy-write/deactivate',
+      JSON.stringify({ expectedVersion: 2 }),
+    ],
+  ]) {
+    const response = await request(port, path, {
+      method,
+      headers: {
+        'X-Tenant-ID': 'attacker',
+        Authorization: 'Bearer fixture',
+        'Content-Type': 'application/json',
+        'Content-Length': String(Buffer.byteLength(body)),
+      },
+      body,
+    })
+    assert.equal(response.status, 200)
+    assert.equal(response.json.listener, 'primary')
+    assert.equal(response.json.method, method)
+    assert.equal(response.json.url, path)
+    assert.deepEqual(response.json.tenantHeaders, [])
+    assert.equal(response.json.authorizationPresent, true)
+    assert.equal(response.json.bodySha256, createHash('sha256').update(body).digest('hex'))
+  }
+
   const roleBody = JSON.stringify({ subject: 'target@example.test' })
   const roleAssign = await request(port, '/api/v1/identity/roles/ops%3Aadmin/bindings', {
     method: 'POST',

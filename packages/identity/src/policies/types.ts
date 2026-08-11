@@ -1,5 +1,6 @@
 import type { CursorPage } from '@rss/api'
 import type { PolicyId } from './policy-id'
+import type { PolicyVersion } from './policy-version'
 
 export const POLICY_ATTRIBUTES = Object.freeze([
   'principal.kind',
@@ -92,7 +93,7 @@ export interface PolicyRuleView {
 
 export interface PolicyView {
   readonly policyId: PolicyId
-  readonly version: number
+  readonly version: PolicyVersion
   readonly contractId: string
   readonly permission: string
   readonly effectiveFrom: number
@@ -103,6 +104,31 @@ export interface PolicyView {
 export type PoliciesListResponse = CursorPage<PolicyView>
 export interface PolicyGetResponse {
   readonly data: PolicyView
+}
+export interface PolicyWriteFields {
+  readonly contractId: string
+  readonly permission: string
+  readonly effectiveFrom: number
+  readonly effectiveUntil?: number
+  readonly rules: readonly PolicyRuleView[]
+}
+export interface PolicyCreateRequest extends PolicyWriteFields {
+  readonly policyId: PolicyId
+}
+export interface PolicyUpdateRequest extends PolicyWriteFields {
+  readonly expectedVersion: PolicyVersion
+}
+export interface PolicyCreateResponse {
+  readonly data: PolicyView
+}
+export interface PolicyUpdateResponse {
+  readonly data: PolicyView
+}
+export interface PolicyDeactivateRequest {
+  readonly expectedVersion: PolicyVersion
+}
+export interface PolicyDeactivateResponse {
+  readonly data: Readonly<{ deactivated: boolean; version: PolicyVersion }>
 }
 export interface PoliciesListRequest {
   readonly limit?: number
