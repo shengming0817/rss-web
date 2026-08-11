@@ -99,11 +99,12 @@ describe('Settings config client', () => {
     await expect(api.rollback('app.k', { toVersion: 1, extra: true } as never)).rejects.toThrow()
   })
 
-  it('fails closed when rollback response coordinates drift', async () => {
+  it.each([
+    ['key', { key: 'other', version: 3, sourceVersion: 1 }],
+    ['source version', { key: 'app.k', version: 3, sourceVersion: 2 }],
+  ])('fails closed when rollback response %s drifts', async (_name, data) => {
     const transport: HttpTransport = {
-      request: vi.fn(async (request: RequestOptions<unknown>) =>
-        request.decode({ data: { key: 'other', version: 3, sourceVersion: 2 } }),
-      ),
+      request: vi.fn(async (request: RequestOptions<unknown>) => request.decode({ data })),
     } as unknown as HttpTransport
     await expect(createSettingsApi(transport).rollback('app.k', { toVersion: 1 })).rejects.toThrow()
   })

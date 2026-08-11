@@ -54,7 +54,7 @@ export interface ConfigOperation {
   dispose(): void
 }
 
-function publishUnknown(error: unknown): boolean {
+function writeOutcomeUnknown(error: unknown): boolean {
   if (!isRssApiError(error)) return true
   if (
     error.cause === 'network' ||
@@ -87,6 +87,15 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
     controller = undefined
   }
 
+  function writesLocked() {
+    return (
+      state.status === 'publishing' ||
+      state.status === 'deleting' ||
+      state.status === 'rolling-back' ||
+      unresolved !== undefined
+    )
+  }
+
   async function read(key: string) {
     const pendingUnresolved = unresolved
     const reconciling = pendingUnresolved !== undefined
@@ -114,13 +123,7 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
   }
 
   function beginPublish(key: string) {
-    if (
-      state.status === 'publishing' ||
-      state.status === 'deleting' ||
-      state.status === 'rolling-back' ||
-      unresolved !== undefined
-    )
-      return false
+    if (writesLocked()) return false
     publish({ status: 'confirming-publish', key })
     return true
   }
@@ -145,7 +148,7 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
     } catch (error: unknown) {
       if (current !== generation) return
       controller = undefined
-      const unknown = publishUnknown(error)
+      const unknown = writeOutcomeUnknown(error)
       const next: ConfigOperationState = unknown
         ? { status: 'unknown', action: 'publish', key, error }
         : { status: 'error', action: 'publish', key, error }
@@ -155,13 +158,7 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
   }
 
   function beginDelete(key: string) {
-    if (
-      state.status === 'publishing' ||
-      state.status === 'deleting' ||
-      state.status === 'rolling-back' ||
-      unresolved !== undefined
-    )
-      return false
+    if (writesLocked()) return false
     publish({ status: 'confirming-delete', key })
     return true
   }
@@ -191,15 +188,7 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
   }
 
   function beginRollback(key: string, toVersion: number) {
-    if (
-      !Number.isSafeInteger(toVersion) ||
-      toVersion < 1 ||
-      state.status === 'publishing' ||
-      state.status === 'deleting' ||
-      state.status === 'rolling-back' ||
-      unresolved !== undefined
-    )
-      return false
+    if (!Number.isSafeInteger(toVersion) || toVersion < 1 || writesLocked()) return false
     publish({ status: 'confirming-rollback', key, toVersion })
     return true
   }
@@ -224,7 +213,7 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
     } catch (error: unknown) {
       if (current !== generation) return
       controller = undefined
-      const unknown = publishUnknown(error)
+      const unknown = writeOutcomeUnknown(error)
       const next: ConfigOperationState = unknown
         ? { status: 'unknown', action: 'rollback', key, toVersion, error }
         : { status: 'error', action: 'rollback', key, error }
