@@ -9,6 +9,7 @@ import { RUNTIME_INVENTORY_INTENT } from '../features/runtime/runtime-intent'
 import { POLICIES_LIST_INTENT } from '../features/identity/policies-intent'
 import { CONFIG_GET_INTENT } from '../features/settings/config-intent'
 import { SECRET_PUBLISH_INTENT } from '../features/settings/secret-publish-intent'
+import { SECRET_RESOLVE_INTENT } from '../features/settings/secret-resolve-intent'
 import type { NavigationMessageKey } from './navigation'
 import type { ConfigPreviewDraftHandoff } from '../features/settings/config-preview-draft-context'
 import { registerAuthorizationRouting, registerRouterA11y, registerSessionRouting } from './guards'
@@ -116,6 +117,21 @@ const baseRoutes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'settings/secret-material',
+        name: 'secret-material-reveal',
+        component: () => import('../features/settings/SecretMaterialRevealView.vue'),
+        meta: {
+          sessionAccess: 'authenticated',
+          focusTarget: 'shell-content',
+          authorizationIntent: SECRET_RESOLVE_INTENT,
+          navigation: {
+            labelKey: 'navigation.secretMaterial',
+            order: 40,
+            source: RSS_SOURCE,
+          },
+        },
+      },
+      {
         path: 'runtime',
         name: 'runtime',
         component: () => import('../features/runtime/RuntimeDetailsView.vue'),
@@ -123,7 +139,7 @@ const baseRoutes: RouteRecordRaw[] = [
           sessionAccess: 'authenticated',
           focusTarget: 'shell-content',
           authorizationIntent: RUNTIME_INVENTORY_INTENT,
-          navigation: { labelKey: 'navigation.runtime', order: 40, source: RSS_SOURCE },
+          navigation: { labelKey: 'navigation.runtime', order: 41, source: RSS_SOURCE },
         },
       },
       {
