@@ -148,3 +148,13 @@ mutate only its own temporary snapshot, Compose project, disposable volumes, and
 must keep browser traffic behind the production Edge, fence phase readiness, classify environment
 failures separately, avoid logging fixture credentials or response bodies, and treat cleanup failure
 as a failed receipt. SIGINT/SIGTERM are handled; SIGKILL cannot carry a cleanup guarantee.
+Its bounded browser evidence keeps production and explicitly enabled Preview artifacts distinct. The
+ten production phases continue to use the archived production Web image; the final Preview-isolation
+phase builds the demo artifact from that same archived clean Web revision and mounts it into the same
+production Nginx Edge in front of the same real RSS archive. Preview fixtures must remain Mock,
+non-authoritative, and request-free until a user explicitly crosses into an existing Manual flow;
+the resulting real RSS response is final and must never fall back to the fixture. Synthetic browser
+failure evidence is labelled synthetic and must not be reported as real-backend coverage. Do not add
+a fault proxy, interception to the real journey, a second runner/classifier, or a domain-by-status
+matrix. Failure postures such as rate limiting must be isolated to their named phase so shared harness
+state cannot contaminate unrelated product evidence.
