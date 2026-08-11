@@ -44,6 +44,7 @@ const enUS = {
     unavailable: { title: 'Temporarily unavailable', message: 'This content is unavailable.' },
     retry: 'Retry',
   },
+  degradedState: { label: 'Unavailable state' },
   errorPage: {
     unauthorized: { title: 'Sign-in required', message: 'Sign in again to continue.' },
     forbidden: { title: 'Access denied', message: 'The server denied this operation.' },

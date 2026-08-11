@@ -37,6 +37,8 @@ services:
     build:
       context: ../..
       dockerfile: deploy/web/Dockerfile
+      args:
+        RSS_WEB_BUILD_REVISION: ${RSS_WEB_BUILD_REVISION:?40-character Web revision required}
     environment:
       RSS_WEB_TENANT_ID: f47ac10b-58cc-4372-a567-0e02b2c3d479
       RSS_WEB_PRIMARY_HOST: primary

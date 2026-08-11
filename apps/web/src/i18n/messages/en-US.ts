@@ -20,8 +20,36 @@ const enUS = {
     configHistoryPreview: 'Config History Preview',
     runtime: 'Runtime',
     audit: 'Audit',
+    about: 'About',
   },
   home: { subtitle: 'Verified identity with independently loaded Runtime and Audit facts.' },
+  about: {
+    title: 'About and release information',
+    subtitle:
+      'This page shows only release metadata fixed into the Web build; it makes no network requests or runtime capability discovery.',
+    web: {
+      title: 'Web build',
+      revision: 'Source revision',
+    },
+    rss: {
+      title: 'RSS contract baseline',
+      baseline: 'Baseline identifier',
+      sourceRevision: 'RSS source revision',
+      notice:
+        'This is the contract evidence fixed at Web build time, not the runtime version of the current RSS instance.',
+    },
+    preview: {
+      title: 'Preview sources',
+      none: 'No Preview source is enabled in this build.',
+      notice:
+        'Mock Preview is permanently non-authoritative and proves no RSS data, capability, or availability.',
+      sources: {
+        'role-bindings': 'Role Bindings Preview',
+        'config-catalog': 'Config Catalog Preview',
+        'config-history': 'Config History Preview',
+      },
+    },
+  },
   settingsConfig: {
     title: 'Configuration',
     subtitle:

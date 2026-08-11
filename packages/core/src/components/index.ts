@@ -1,5 +1,7 @@
 export { default as ModalShell } from './ModalShell.vue'
 export { default as ContentState } from './ContentState.vue'
+export { default as DegradedState } from './DegradedState.vue'
+export type { DegradedRecovery } from './DegradedState.vue'
 export { default as ErrorPage } from './ErrorPage.vue'
 export { default as SourceBadge } from './SourceBadge.vue'
 export type { SafeErrorKind, SafeErrorPresentation } from './error-presentation'

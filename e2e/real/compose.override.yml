@@ -18,6 +18,8 @@ services:
     build:
       context: ${RSS_WEB_ROOT:?RSS_WEB_ROOT is required}
       dockerfile: deploy/web/Dockerfile
+      args:
+        RSS_WEB_BUILD_REVISION: ${RSS_WEB_BUILD_REVISION:?Web build revision is required}
     environment:
       RSS_WEB_TENANT_ID: ${RSS_WEB_REAL_TENANT_ID:?RSS_WEB_REAL_TENANT_ID is required}
       RSS_WEB_PRIMARY_HOST: server

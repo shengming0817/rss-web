@@ -75,6 +75,21 @@ update. Mock/manual/external/unavailable sources remain non-authoritative, and r
 fall back to them. Safe error presentation may expose only the reviewed kind, code, retryability, and
 requestId; backend messages/details and transport behavior stay outside reusable UI components.
 
+The shared degraded presentation is a pure composition of the existing Unavailable source badge and
+safe ErrorPage. Every caller must explicitly select either no recovery or one user-triggered
+idempotent-read retry; server retryability never authorizes a write, audited target read, unknown
+outcome, or Secret Material replay. Domain operations continue to own loading, abort, generation,
+reconciliation, and focus. Do not add a diagnostics store, raw-error history, global retry budget, or
+second session/authorization handler.
+
+The authenticated About route consumes one frozen build-time release metadata object from the Web
+bootstrap. It may show only the strict Web build revision, the reviewed RSS contract-baseline identity,
+and Preview experiences already enabled by the production-gated composition flags. Build/baseline
+facts are External; enabled Preview facts are Mock and non-authoritative. About must not fetch, inspect
+Runtime Inventory, discover providers/listeners/contracts, read env flags again, or treat release facts
+as request, tenant, principal, compatibility, or health authority. The Web image revision, reviewed RSS
+contract baseline, and opt-in real-harness RSS archive revision remain separate identities.
+
 `@rss/runtime` and `@rss/audit` are framework-neutral Admin-listener adapters over the one protected
 session transport. Vue composition belongs in `apps/web`. Runtime inventory is facts only; do not use
 it for listener discovery or deployment authority. Validate but discard listener/placement endpoints

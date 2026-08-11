@@ -216,6 +216,39 @@ describe('RSS Web edge configuration', () => {
     expect(read('deploy/web/Dockerfile')).toMatch(/rm -rf \/usr\/share\/nginx\/html(?:\s|;|&)/)
   })
 
+  it('carries one explicit Web revision through every production image build', () => {
+    const dockerfile = read('deploy/web/Dockerfile')
+    const deployment = read('deploy/web/docker-compose.yml')
+    const edge = read('e2e/edge/compose.yml')
+    const real = read('e2e/real/compose.override.yml')
+    const runner = read('e2e/real/run.mjs')
+    const workflow = read('.github/workflows/test.yml')
+
+    expect(dockerfile.match(/^ARG RSS_WEB_BUILD_REVISION$/gm)).toHaveLength(2)
+    expect(dockerfile).toContain(
+      'RSS_WEB_REVISION="$RSS_WEB_BUILD_REVISION" pnpm -F @rss/web build',
+    )
+    expect(dockerfile).toContain('LABEL org.opencontainers.image.revision=$RSS_WEB_BUILD_REVISION')
+    for (const compose of [deployment, edge, real]) {
+      expect(compose).toContain('RSS_WEB_BUILD_REVISION: ${RSS_WEB_BUILD_REVISION:?')
+    }
+    expect(runner).toContain('RSS_WEB_BUILD_REVISION: webRevision')
+    expect(runner).toContain('GIT_SHA: revision')
+    expect(runner).not.toContain('RSS_WEB_BUILD_REVISION: revision')
+    expect(workflow).toContain('RSS_WEB_REVISION: ${{ github.sha }}')
+  })
+
+  it('rejects a dirty Edge build context before attesting the HEAD revision', () => {
+    const smoke = read('e2e/edge/smoke.mjs')
+
+    expect(smoke).toContain("['status', '--porcelain', '--untracked-files=all']")
+    expect(smoke).toContain('isCleanWebStatus(sourceStatus.stdout)')
+    expect(smoke).toContain('Edge source must be clean before the provenance build')
+    expect(smoke.indexOf("['status', '--porcelain', '--untracked-files=all']")).toBeLessThan(
+      smoke.indexOf("docker(['build', 'edge']"),
+    )
+  })
+
   it('installs every Web workspace dependency in the cached Docker dependency layer', () => {
     const dockerfile = read('deploy/web/Dockerfile')
     const manifests = repositoryWorkspaceManifests()

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ErrorPage, SourceBadge } from '@rss/core'
+import { DegradedState, SourceBadge } from '@rss/core'
 import { AUDIT_TARGET_TENANT_PATTERN, isAuditTargetTenantId } from '@rss/audit'
-import { RSS_SOURCE, UNAVAILABLE_SOURCE } from '@rss/shared'
+import { RSS_SOURCE } from '@rss/shared'
 import { toSafeErrorPresentation, toSafeReadErrorPresentation } from '../../errors/rss-error'
 import { useAuthorizationIntent } from '../authorization/authorization-context'
 import AuditEntriesTable from './AuditEntriesTable.vue'
@@ -138,7 +138,6 @@ async function retryAmbient(): Promise<void> {
           <p>{{ t('auditPage.ambientDescription') }}</p>
         </div>
         <SourceBadge v-if="ambientState.status === 'ready'" :source="RSS_SOURCE" />
-        <SourceBadge v-else-if="ambientState.status === 'error'" :source="UNAVAILABLE_SOURCE" />
       </header>
       <p v-if="ambientState.status === 'loading'" role="status" aria-busy="true">
         {{ t('auditPage.loading') }}
@@ -160,13 +159,13 @@ async function retryAmbient(): Promise<void> {
         {{ t('auditPage.next') }}
       </button>
       <p role="status" aria-live="polite">{{ ambientNotice }}</p>
-      <ErrorPage
+      <DegradedState
         v-if="ambientError"
         :error="ambientError"
         :heading-level="3"
-        :show-recovery="ambientError.recovery === 'retry'"
+        :recovery="ambientError.recovery === 'retry' ? 'retryRead' : 'none'"
         :recovery-busy="ambientRetrying"
-        @recover="retryAmbient"
+        @retry-read="retryAmbient"
       />
     </section>
 
@@ -179,7 +178,6 @@ async function retryAmbient(): Promise<void> {
           <p>{{ t('auditPage.crossDescription') }}</p>
         </div>
         <SourceBadge v-if="targetState.status === 'ready'" :source="RSS_SOURCE" />
-        <SourceBadge v-else-if="targetState.status === 'error'" :source="UNAVAILABLE_SOURCE" />
       </header>
       <p>{{ t('auditPage.auditedWarning') }}</p>
       <form @submit.prevent="submitTarget">
@@ -224,12 +222,7 @@ async function retryAmbient(): Promise<void> {
         {{ t('auditPage.next') }}
       </button>
       <p role="status" aria-live="polite">{{ targetNotice }}</p>
-      <ErrorPage
-        v-if="targetError"
-        :error="targetError"
-        :heading-level="3"
-        :show-recovery="false"
-      />
+      <DegradedState v-if="targetError" :error="targetError" recovery="none" :heading-level="3" />
     </section>
   </section>
 </template>

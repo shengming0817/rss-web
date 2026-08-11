@@ -127,6 +127,7 @@ describe('RSS-only foundation boundary', () => {
       'navigation.secretMaterial',
       'navigation.runtime',
       'navigation.audit',
+      'navigation.about',
     ])
     expect(labels.filter((label) => label === 'navigation.roleBindingsPreview')).toHaveLength(1)
     expect(labels.filter((label) => label === 'navigation.configCatalogPreview')).toHaveLength(1)

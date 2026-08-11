@@ -1,14 +1,18 @@
 # RSS Web 前端与 same-origin Edge。
 #
 # 用法（在 deploy/web/ 下）：
-#   RSS_WEB_TENANT_ID=<canonical-tenant-uuid> docker compose up -d --build
+#   RSS_WEB_BUILD_REVISION=<40-character-clean-Web-SHA> \
+#     RSS_WEB_TENANT_ID=<canonical-tenant-uuid> docker compose up -d --build
 #   打开 http://localhost:8088
+# revision 必须对应干净 build context 的提交；不得复用 RSS GIT_SHA。
 # host.docker.internal 与端口默认值仅用于本地开发；生产部署必须显式固定。
 services:
   web:
     build:
       context: ../.. # 仓库根（pnpm workspace 需全量源码 + lockfile）
       dockerfile: deploy/web/Dockerfile
+      args:
+        RSS_WEB_BUILD_REVISION: ${RSS_WEB_BUILD_REVISION:?40-character Web revision required}
     image: rss-web:local
     container_name: rss-web
     ports:

@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ErrorPage, ModalShell, SourceBadge } from '@rss/core'
+import { DegradedState, ModalShell, SourceBadge } from '@rss/core'
 import {
   ACCOUNT_STATUSES,
   ACCOUNT_STATUS_USER_ID_PATTERN,
   isAccountStatusUserId,
   type AccountStatus,
 } from '@rss/identity'
-import { RSS_SOURCE, UNAVAILABLE_SOURCE } from '@rss/shared'
+import { RSS_SOURCE } from '@rss/shared'
 import { toSafeErrorPresentation } from '../../errors/rss-error'
 import { useAuthorizationIntent } from '../authorization/authorization-context'
 import { useAccountStatusApi } from './account-status-context'
@@ -100,7 +100,6 @@ onBeforeUnmount(() => {
           {{ t('accountStatus.operationTitle') }}
         </h2>
         <SourceBadge v-if="state.status === 'ready'" :source="RSS_SOURCE" />
-        <SourceBadge v-else-if="state.status === 'unavailable'" :source="UNAVAILABLE_SOURCE" />
       </header>
 
       <p>{{ t('accountStatus.explicitWarning') }}</p>
@@ -157,7 +156,7 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <ErrorPage v-if="error" :error="error" :heading-level="3" :show-recovery="false" />
+      <DegradedState v-if="error" :error="error" recovery="none" :heading-level="3" />
     </section>
 
     <ModalShell

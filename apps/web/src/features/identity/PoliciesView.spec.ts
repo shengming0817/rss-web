@@ -128,7 +128,7 @@ describe('PoliciesView', () => {
       },
     })
     await flushPromises()
-    expect(listFailure.get('.error-page').attributes('role')).toBe('alert')
+    expect(listFailure.get('.degraded-state').attributes('role')).toBe('alert')
     expect(
       listFailure
         .find('[aria-labelledby="policies-catalog-title"] [data-source="unavailable"]')
@@ -154,7 +154,7 @@ describe('PoliciesView', () => {
     await detailFailure.get('.policy-catalog__item').trigger('click')
     await flushPromises()
     const detailPanel = detailFailure.get('[aria-labelledby="policy-detail-title"]')
-    expect(detailPanel.get('.error-page').attributes('role')).toBe('alert')
+    expect(detailPanel.get('.degraded-state').attributes('role')).toBe('alert')
     expect(detailPanel.find('[data-source="unavailable"]').exists()).toBe(true)
     detailFailure.unmount()
   })

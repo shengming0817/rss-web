@@ -43,6 +43,7 @@ const zhCN = {
     unavailable: { title: '暂时不可用', message: '当前无法获取此内容。' },
     retry: '重试',
   },
+  degradedState: { label: '不可用状态' },
   errorPage: {
     unauthorized: { title: '需要登录', message: '请重新登录后继续。' },
     forbidden: { title: '访问被拒绝', message: '服务端拒绝了这项操作。' },

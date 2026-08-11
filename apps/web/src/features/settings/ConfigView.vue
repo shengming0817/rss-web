@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ErrorPage, ModalShell, SourceBadge } from '@rss/core'
-import { MANUAL_SOURCE, RSS_SOURCE, UNAVAILABLE_SOURCE } from '@rss/shared'
+import { DegradedState, ModalShell, SourceBadge } from '@rss/core'
+import { MANUAL_SOURCE, RSS_SOURCE } from '@rss/shared'
 import { toSafeErrorPresentation, toSafeReadErrorPresentation } from '../../errors/rss-error'
 import { useAuthorizationIntent } from '../authorization/authorization-context'
 import { createConfigOperation, type ConfigOperationState } from './config-operation'
@@ -218,10 +218,6 @@ onBeforeUnmount(() => {
           {{ t('settingsConfig.operationTitle') }}
         </h2>
         <SourceBadge v-if="state.status === 'ready'" :source="RSS_SOURCE" />
-        <SourceBadge
-          v-else-if="state.status === 'error' || state.status === 'unknown'"
-          :source="UNAVAILABLE_SOURCE"
-        />
       </header>
 
       <div class="config-draft">
@@ -341,13 +337,7 @@ onBeforeUnmount(() => {
           )
         }}
       </p>
-      <ErrorPage
-        v-if="error"
-        :error="error"
-        :heading-level="3"
-        :show-recovery="false"
-        role="alert"
-      />
+      <DegradedState v-if="error" :error="error" recovery="none" :heading-level="3" role="alert" />
       <button v-if="state.status === 'unknown'" type="button" class="v1-btn" @click="reconcile">
         {{ t('settingsConfig.reconcile') }}
       </button>

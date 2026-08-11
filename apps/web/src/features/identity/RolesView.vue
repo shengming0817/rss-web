@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ErrorPage, ModalShell, SourceBadge } from '@rss/core'
+import { DegradedState, ErrorPage, ModalShell, SourceBadge } from '@rss/core'
 import { isRoleId, type RoleView } from '@rss/identity'
-import { RSS_SOURCE, UNAVAILABLE_SOURCE } from '@rss/shared'
+import { RSS_SOURCE } from '@rss/shared'
 import { toSafeErrorPresentation, toSafeReadErrorPresentation } from '../../errors/rss-error'
 import { useAuthorizationIntent } from '../authorization/authorization-context'
 import {
@@ -28,6 +28,8 @@ const commandHeading = ref<HTMLElement>()
 const roleIdField = ref<HTMLInputElement>()
 const subjectField = ref<HTMLInputElement>()
 const busyStatus = ref<HTMLElement>()
+const catalogRetrying = ref(false)
+const catalogRecoveryError = ref<ReturnType<typeof toSafeReadErrorPresentation>>()
 let catalogFocusRequested = false
 
 const pagination = createRolesPagination((cursor, signal) =>
@@ -40,6 +42,8 @@ const unsubscribeCatalog = pagination.subscribe((state) => {
   catalog.value = state
   if (catalogFocusRequested && (state.status === 'ready' || state.status === 'error')) {
     catalogFocusRequested = false
+    catalogRetrying.value = false
+    catalogRecoveryError.value = undefined
     void nextTick(() => catalogHeading.value?.focus())
   }
 })
@@ -62,6 +66,9 @@ const unsubscribeCommand = operation.subscribe((state) => {
 
 const catalogError = computed(() =>
   catalog.value.status === 'error' ? toSafeReadErrorPresentation(catalog.value.error) : undefined,
+)
+const displayedCatalogError = computed(() =>
+  catalogRetrying.value ? catalogRecoveryError.value : catalogError.value,
 )
 const commandError = computed(() =>
   command.value.status === 'error' ? toSafeErrorPresentation(command.value.error) : undefined,
@@ -104,6 +111,10 @@ function nextCatalogPage() {
 }
 
 function recoverCatalog() {
+  const error = catalogError.value
+  if (error === undefined || catalogRetrying.value) return
+  catalogRecoveryError.value = error
+  catalogRetrying.value = true
   catalogFocusRequested = true
   void pagination.start()
 }
@@ -133,7 +144,6 @@ onBeforeUnmount(() => {
           {{ t('roles.catalog.title') }}
         </h2>
         <SourceBadge v-if="catalog.status === 'ready'" :source="RSS_SOURCE" />
-        <SourceBadge v-else-if="catalog.status === 'error'" :source="UNAVAILABLE_SOURCE" />
       </header>
       <p>{{ t('roles.catalog.warning') }}</p>
       <p v-if="catalog.status === 'loading'" role="status" aria-live="polite">
@@ -168,11 +178,13 @@ onBeforeUnmount(() => {
       >
         {{ t('roles.catalog.next') }}
       </button>
-      <ErrorPage
-        v-if="catalogError"
-        :error="catalogError"
+      <DegradedState
+        v-if="displayedCatalogError"
+        :error="displayedCatalogError"
+        :recovery="displayedCatalogError.recovery === 'retry' ? 'retryRead' : 'none'"
         :heading-level="3"
-        @recover="recoverCatalog"
+        :recovery-busy="catalogRetrying"
+        @retry-read="recoverCatalog"
       />
     </section>
 

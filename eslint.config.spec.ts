@@ -152,6 +152,82 @@ describe('ESLint package boundaries', () => {
     ).toContain('no-restricted-imports')
   })
 
+  it('keeps static release diagnostics outside runtime and network seams', async () => {
+    for (const file of ['apps/web/src/release-meta.ts', 'apps/web/src/views/AboutView.vue']) {
+      const source = (body: string) =>
+        file.endsWith('.vue')
+          ? `<script setup lang="ts">\n${body}</script>\n<template><p /></template>`
+          : body
+      expect(
+        await ruleIds(
+          source("import { createRuntimeApi } from '@rss/runtime'\nvoid createRuntimeApi\n"),
+          file,
+        ),
+      ).toContain('no-restricted-imports')
+      expect(await ruleIds(source('void fetch\n'), file)).toContain('no-restricted-globals')
+      expect(await ruleIds(source('void globalThis.fetch\n'), file)).toContain(
+        'no-restricted-properties',
+      )
+    }
+
+    expect(
+      await ruleIds(
+        '<script setup lang="ts">\nimport { createRuntimeApi } from \'@rss/runtime\'\nvoid createRuntimeApi\n</script>\n<template><p /></template>',
+        'packages/core/src/components/DegradedState.vue',
+      ),
+    ).toContain('no-restricted-imports')
+    expect(
+      await ruleIds(
+        '<script setup lang="ts">\nvoid fetch\n</script>\n<template><p /></template>',
+        'packages/core/src/components/DegradedState.vue',
+      ),
+    ).toContain('no-restricted-globals')
+
+    expect(
+      await ruleIds(
+        "import { createWebRuntime } from './bootstrap'\nvoid createWebRuntime\n",
+        'apps/web/src/release-meta.ts',
+      ),
+    ).toContain('no-restricted-imports')
+    expect(
+      await ruleIds(
+        '<script setup lang="ts">\nimport { useRuntimeApi } from \'../features/runtime/runtime-context\'\nvoid useRuntimeApi\n</script>\n<template><p /></template>',
+        'apps/web/src/views/AboutView.vue',
+      ),
+    ).toContain('no-restricted-imports')
+    expect(
+      await ruleIds(
+        '<script setup lang="ts">\nimport type { WebReleaseMeta } from \'../release-meta\'\nvoid (undefined as unknown as WebReleaseMeta)\n</script>\n<template><p /></template>',
+        'apps/web/src/views/AboutView.vue',
+      ),
+    ).not.toContain('no-restricted-imports')
+    expect(
+      await ruleIds(
+        '<script setup lang="ts">\nimport { createWebRuntime } from \'../../../../apps/web/src/bootstrap\'\nvoid createWebRuntime\n</script>\n<template><p /></template>',
+        'packages/core/src/components/DegradedState.vue',
+      ),
+    ).toContain('no-restricted-imports')
+    for (const bypass of [
+      './../../../../apps/web/src/bootstrap',
+      '.././../../../apps/web/src/bootstrap',
+    ]) {
+      expect(
+        await ruleIds(
+          `<script setup lang="ts">\nimport { createWebRuntime } from '${bypass}'\nvoid createWebRuntime\n</script>\n<template><p /></template>`,
+          'packages/core/src/components/DegradedState.vue',
+        ),
+      ).toContain('no-restricted-imports')
+    }
+    for (const localImport of ['./error-presentation', './ErrorPage.vue', './SourceBadge.vue']) {
+      expect(
+        await ruleIds(
+          `<script setup lang="ts">\nimport value from '${localImport}'\nvoid value\n</script>\n<template><p /></template>`,
+          'packages/core/src/components/DegradedState.vue',
+        ),
+      ).not.toContain('no-restricted-imports')
+    }
+  })
+
   it('blocks Preview authorization imports in production app source', async () => {
     for (const file of [
       'apps/web/src/bootstrap.ts',

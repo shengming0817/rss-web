@@ -8,8 +8,8 @@ export { useLocaleStore } from './stores/index'
 export type { AppLocale } from './stores/index'
 
 // Components
-export { ContentState, ErrorPage, ModalShell, SourceBadge } from './components/index'
-export type { SafeErrorKind, SafeErrorPresentation } from './components/index'
+export { ContentState, DegradedState, ErrorPage, ModalShell, SourceBadge } from './components/index'
+export type { DegradedRecovery, SafeErrorKind, SafeErrorPresentation } from './components/index'
 
 // UI Shell
 export { AppShell, Sidebar, TopBar, CommandPalette } from './ui/index'
