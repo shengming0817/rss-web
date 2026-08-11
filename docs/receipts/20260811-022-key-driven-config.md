@@ -46,15 +46,15 @@
 
 ## Verification and evidence history
 
-- Frozen install, workspace typecheck, lint, format check, 890 unit/root tests, 832 coverage tests, 58
+- Frozen install, workspace typecheck, lint, format check, 891 unit/root tests, 833 coverage tests, 58
   boundary tests, production build, built-identity scan, and diff check passed.
 - Eighteen default Chromium journeys passed, including publish, explicit read/reveal/hide, and 204
   delete with no retained publish value or browser-authored tenant header.
 - Docker/Nginx Edge smoke passed the exact Config routes and checked teardown.
 - The final post-review real runner archived clean Web implementation
-  `4e0985227df0e3b51c4a08609b2f16378240d68c`. Main, password-change, account-status-self, roles,
+  `746c83e493bf935c82915c0512fa28274dca64ad`. Main, password-change, account-status-self, roles,
   policies-write, settings-config, rate-limited, budget-exhausted, Admin-down, and Primary-down phases
-  passed; cleanup passed. Machine receipt: `/tmp/rss-web-30-review-real-receipt.json`.
+  passed; cleanup passed. Machine receipt: `/tmp/rss-web-30-check-real-receipt.json`.
 - The first Config real phase reused the account changed by the earlier password phase and failed at
   login; it cleaned up successfully. The phase was corrected to use its own unchanged limited account,
   without weakening final 403 assertions. The first full gate then exposed only a missing
@@ -65,6 +65,10 @@
   all writes until explicit GET reconciliation. It also preserved key bytes exactly, sealed the
   Config version brand, expanded production-owner leakage discovery, and disabled text assistance on
   the value input. The complete gate and archived real journey were rerun after these changes.
+- Review check then proved that a failed reconciliation had to retain the unresolved write fence.
+  The state machine now accepts only the original key while unresolved, keeps all writes locked after
+  a failed GET, and unlocks only after an authoritative GET succeeds; its focused tests and the final
+  archived journey were rerun again.
 
 ## Four-principle check
 
@@ -80,10 +84,10 @@
 
 ## Changed-line classification
 
-- Semantic handwritten code, locales, and docs: 955 additions / 4 deletions.
-- Unit/type/boundary/browser/Edge/real tests and harness: 714 additions / 8 deletions.
+- Semantic handwritten code, locales, and docs: 962 additions / 4 deletions.
+- Unit/type/boundary/browser/Edge/real tests and harness: 753 additions / 8 deletions.
 - Lockfile: 16 additions / 0 deletions; generated code: 0 lines.
-- Implementation total excluding this receipt: 1,685 additions / 12 deletions.
+- Implementation total excluding this receipt: 1,731 additions / 12 deletions.
 
 ## Rollback
 
