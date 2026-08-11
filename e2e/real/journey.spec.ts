@@ -776,11 +776,13 @@ test('@admin-down keeps Primary login and shell available while Admin panels fai
     button.setAttribute = (name, value) => {
       setAttribute(name, value)
       if (name === 'aria-busy' && value === 'true') {
-        busySnapshots.push({
-          busy: button.getAttribute('aria-busy'),
-          disabled: (button as HTMLButtonElement).disabled,
-          focused: document.activeElement === button,
-        })
+        queueMicrotask(() =>
+          busySnapshots.push({
+            busy: button.getAttribute('aria-busy'),
+            disabled: (button as HTMLButtonElement).disabled,
+            focused: document.activeElement === button,
+          }),
+        )
       }
     }
     new MutationObserver((records) => {
