@@ -46,19 +46,20 @@
 
 ## Verification and evidence history
 
-- Frozen install, workspace typecheck, lint, format check, 847 unit/root tests, 791 coverage tests, 56
+- Frozen install, workspace typecheck, lint, format check, 849 unit/root tests, 793 coverage tests, 56
   boundary tests, production build, built-identity scan, and diff check passed.
 - Seventeen default Chromium journeys passed, including a confirmed update success fixture and no
   browser-authored tenant header.
 - Docker/Nginx Edge smoke passed the three exact write routes and checked teardown.
 - The final real runner archived clean Web implementation
-  `6c9f8abb300807f84c01c5053311bd6e042ff178`. Main, password-change, account-status-self, roles,
+  `10684c8b4980863b5f904cdc40d4cd2c4151c59b`. Main, password-change, account-status-self, roles,
   policies-write, rate-limited, budget-exhausted, Admin-down, and Primary-down phases passed; cleanup
-  passed. Machine receipt: `/tmp/rss-web-29-review-real-receipt.json`.
+  passed. Machine receipt: `/tmp/rss-web-29-final-real-receipt.json`.
 - Review closure added the decoder-owned version brand, action-result discrimination, stable draft
-  ownership, exact deactivate refresh, field-level accessibility, shared error rules, and a bounded
-  child-process funnel that escalates SIGTERM to SIGKILL. The final real run used the resulting clean
-  implementation commit, not the pre-review receipt.
+  ownership, exact deactivate refresh, field-level accessibility, shared error rules, decoder-only
+  version minting, reconciliation recovery/focus, and a bounded process-group funnel that escalates
+  SIGTERM to SIGKILL. The final real run used the resulting clean implementation commit, not the
+  pre-review receipt.
 - An initial invocation from the nested worktree used the runner's default sibling path and failed as
   `environment:rss-revision`; explicit `RSS_SOURCE_DIR` fixed only source location. The first product
   run exposed a fuzzy accessible-label selector and cleaned up. The next run showed that adding three
@@ -79,10 +80,10 @@
 
 ## Changed-line classification
 
-- Semantic handwritten code, locales, and docs: 1,494 additions / 44 deletions.
-- Unit/type/boundary/browser/Edge/real tests and harness: 1,185 additions / 57 deletions.
+- Semantic handwritten code, locales, and docs: 1,538 additions / 45 deletions.
+- Unit/type/boundary/browser/Edge/real tests and harness: 1,289 additions / 59 deletions.
 - Generated and lockfile: 0 lines.
-- Implementation total excluding this receipt: 2,679 additions / 101 deletions.
+- Implementation total excluding this receipt: 2,827 additions / 104 deletions.
 
 ## Rollback
 
