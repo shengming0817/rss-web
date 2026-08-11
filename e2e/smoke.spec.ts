@@ -345,6 +345,21 @@ async function signIn(page: Page): Promise<void> {
   await expect(page.getByRole('navigation', { name: '主导航' })).toBeVisible()
 }
 
+async function browserLeakSurface(page: Page): Promise<string> {
+  return page.evaluate(() =>
+    JSON.stringify({
+      dom: document.documentElement.outerHTML,
+      fields: [
+        ...document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input,textarea'),
+      ].map((field) => field.value),
+      href: window.location.href,
+      history: window.history.state,
+      local: { ...window.localStorage },
+      session: { ...window.sessionStorage },
+    }),
+  )
+}
+
 test.describe('RSS Web Identity UX', () => {
   test('starts anonymous on login without backend bootstrap traffic', async ({ page }) => {
     const apiRequests: string[] = []
@@ -826,6 +841,85 @@ test.describe('RSS Web Identity UX', () => {
       { method: 'POST', path: '/api/v1/settings/configs/app.browser/rollbacks' },
       { method: 'DELETE', path: '/api/v1/settings/configs/app.browser' },
     ])
+  })
+
+  test('synthetic Chromium failure keeps Secret publish terminal unknown and coordinate-free', async ({
+    page,
+  }) => {
+    const coordinates = [
+      'synthetic-secret-key-marker',
+      'synthetic-store-marker',
+      'synthetic/ref-key-marker',
+      'synthetic-version-marker',
+    ] as const
+    const rawFailure = 'synthetic raw upstream failure marker'
+    const consoleMessages: string[] = []
+    let publishRequests = 0
+    let materialRequests = 0
+    page.on('console', (message) => consoleMessages.push(message.text()))
+    page.on('request', (request) => {
+      const path = new URL(request.url()).pathname
+      if (path === '/api/v1/settings/secrets') publishRequests += 1
+      if (path.startsWith('/api/v1/settings/secrets/') && path.endsWith('/material')) {
+        materialRequests += 1
+      }
+    })
+    await page.route('**/api/v1/settings/secrets', async (route) => {
+      expect(route.request().method()).toBe('POST')
+      expect(route.request().postDataJSON()).toEqual({
+        key: coordinates[0],
+        storeId: coordinates[1],
+        refKey: coordinates[2],
+        refVersion: coordinates[3],
+      })
+      await route.fulfill({
+        status: 503,
+        json: {
+          error: {
+            code: 'ERR_CORE_UNAVAILABLE',
+            message: rawFailure,
+            retryable: true,
+            details: [],
+            requestId: 'synthetic-secret-unknown',
+          },
+        },
+      })
+    })
+    await installIdentityMocks(page)
+    await signIn(page)
+    await page.locator('a[href="/settings/secret-reference"]').click()
+    await page.locator('#secret-key').fill(coordinates[0])
+    await page.locator('#secret-store-id').fill(coordinates[1])
+    await page.locator('#secret-ref-key').fill(coordinates[2])
+    await page.locator('#secret-ref-version').fill(coordinates[3])
+
+    await page.locator('[data-action="prepare-secret-publish"]').click()
+    expect(publishRequests).toBe(0)
+    const dialog = page.getByRole('alertdialog')
+    for (const coordinate of coordinates) await expect(dialog).not.toContainText(coordinate)
+    await dialog.locator('[data-action="confirm-secret-publish"]').click()
+
+    await expect(page.getByText(/发布结果未知；全部引用字段已清除/)).toBeVisible()
+    await page.waitForTimeout(250)
+    expect(publishRequests).toBe(1)
+    expect(materialRequests).toBe(0)
+    for (const selector of [
+      '#secret-key',
+      '#secret-store-id',
+      '#secret-ref-key',
+      '#secret-ref-version',
+    ]) {
+      await expect(page.locator(selector)).toHaveValue('')
+    }
+    await expect(page.locator('[data-action="prepare-secret-publish"]')).toBeDisabled()
+    await expect(page.locator('[data-action="retry-secret-publish"]')).toHaveCount(0)
+    await expect(page.locator('[data-action="reset-secret-publish"]')).toHaveCount(0)
+    await expect(page.locator('main [data-source="mock"]')).toHaveCount(0)
+    await expect(page.getByText(rawFailure)).toHaveCount(0)
+
+    const leakSurface = `${await browserLeakSurface(page)}\n${consoleMessages.join('\n')}`
+    for (const coordinate of coordinates) expect(leakSurface).not.toContain(coordinate)
+    expect(leakSurface).not.toContain(rawFailure)
   })
 
   test('reveals Base64 once through the protected no-store browser path and clears it', async ({

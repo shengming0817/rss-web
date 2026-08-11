@@ -29,6 +29,21 @@ async function signInAndExpectShell(page: Page, login = username, credential = p
   await expect(page.getByRole('navigation', { name: '主导航' })).toBeVisible()
 }
 
+async function browserLeakSurface(page: Page): Promise<string> {
+  return page.evaluate(() =>
+    JSON.stringify({
+      dom: document.documentElement.outerHTML,
+      fields: [
+        ...document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input,textarea'),
+      ].map((field) => field.value),
+      href: window.location.href,
+      history: window.history.state,
+      local: { ...window.localStorage },
+      session: { ...window.sessionStorage },
+    }),
+  )
+}
+
 test('@main completes tenant bootstrap, verified profile, Admin facts, refresh, and logout', async ({
   page,
 }) => {
@@ -45,8 +60,14 @@ test('@main completes tenant bootstrap, verified profile, Admin facts, refresh, 
   await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: /首页/ }).click()
   const runtimePanel = page.getByRole('region', { name: '运行时摘要' })
   const auditPanel = page.getByRole('region', { name: '首批审计条目' })
-  await expect(runtimePanel.locator('[data-source="rss"]')).toBeVisible()
-  await expect(auditPanel.locator('[data-source="rss"]')).toBeVisible()
+  for (const badge of [
+    runtimePanel.locator('[data-source="rss"]'),
+    auditPanel.locator('[data-source="rss"]'),
+  ]) {
+    await expect(badge).toBeVisible()
+    await expect(badge).toHaveAttribute('data-authoritative', 'true')
+    await expect(badge).toHaveAttribute('data-preview', 'false')
+  }
 
   await page.waitForTimeout(2_500)
   const refreshed = page.waitForResponse(
@@ -171,6 +192,13 @@ test('@main completes tenant bootstrap, verified profile, Admin facts, refresh, 
     '/api/v1/identity/policies',
     '/api/v1/identity/policies/rss-web-real-policies-list-read',
   ])
+
+  const navigation = page.getByRole('navigation', { name: '主导航' })
+  await expect(navigation.locator('a[href^="/preview/"]')).toHaveCount(0)
+  await navigation.getByRole('link', { name: /关于/ }).click()
+  await expect(page).toHaveURL(/\/about$/)
+  await expect(page.locator('[data-release-preview-source]')).toHaveCount(0)
+  await expect(page.locator('main [data-source="mock"]')).toHaveCount(0)
 
   expect(browserHeaders.every((headers) => !headers.includes('x-tenant-id'))).toBe(true)
   const loggedOut = page.waitForResponse(
@@ -406,6 +434,8 @@ test('@roles keeps the RSS user authority boundary for list, assign, and revoke'
 })
 
 test('@settings-config keeps Settings writes server-authoritative', async ({ page }) => {
+  const consoleMessages: string[] = []
+  page.on('console', (message) => consoleMessages.push(message.text()))
   await signInAndExpectShell(page, limitedUsername)
   await page
     .getByRole('navigation', { name: '主导航' })
@@ -551,6 +581,89 @@ test('@settings-config keeps Settings writes server-authoritative', async ({ pag
   await expect(page.getByText('materialBase64')).toHaveCount(0)
   await page.locator('a[href="/settings"]').click()
   await expect(page.locator('[data-secret-material-view]')).toHaveCount(0)
+
+  const leakSurface = `${await browserLeakSurface(page)}\n${consoleMessages.join('\n')}`
+  for (const marker of [
+    'real-config-secret',
+    ...secretCoordinates,
+    secretMaterialKey,
+    'materialBase64',
+  ]) {
+    expect(leakSurface).not.toContain(marker)
+  }
+})
+
+test('@preview-isolation keeps demo fixtures local and real RSS final', async ({ page }) => {
+  await signInAndExpectShell(page)
+  const runtimePanel = page.getByRole('region', { name: '运行时摘要' })
+  const auditPanel = page.getByRole('region', { name: '首批审计条目' })
+  await expect(runtimePanel.locator('[data-source="rss"]')).toBeVisible()
+  await expect(auditPanel.locator('[data-source="rss"]')).toBeVisible()
+
+  const businessRequests: string[] = []
+  page.on('request', (request) => {
+    const path = new URL(request.url()).pathname
+    if (path.startsWith('/api/')) businessRequests.push(`${request.method()} ${path}`)
+  })
+
+  await page.locator('a[href="/preview/role-bindings"]').click()
+  await expect(page.getByRole('heading', { name: 'Role Bindings Preview' })).toBeVisible()
+  const roleSource = page.locator('main [data-source="mock"]')
+  await expect(roleSource).toHaveAttribute('data-authoritative', 'false')
+  await expect(roleSource).toHaveAttribute('data-preview', 'true')
+  expect(businessRequests).toEqual([])
+
+  await page.locator('a[href="/preview/config-history"]').click()
+  await expect(page.getByRole('heading', { name: 'Config History Preview' })).toBeVisible()
+  const historySources = page.locator('[data-history-row] [data-source="mock"]')
+  expect(await historySources.count()).toBeGreaterThan(0)
+  await expect(historySources.first()).toHaveAttribute('data-authoritative', 'false')
+  await expect(historySources.first()).toHaveAttribute('data-preview', 'true')
+  expect(businessRequests).toEqual([])
+
+  await page.locator('a[href="/preview/config-catalog"]').click()
+  await expect(page.getByRole('heading', { name: 'Config Catalog Preview' })).toBeVisible()
+  const candidate = page.locator('.catalog-preview__rows > li').first()
+  const candidateKey = (await candidate.locator('code').textContent())?.trim()
+  if (candidateKey === undefined) throw new Error('missing Config Catalog Preview candidate key')
+  expect(candidateKey).toMatch(/^preview\.example\./)
+  const catalogSource = candidate.locator('[data-source="mock"]')
+  await expect(catalogSource).toHaveAttribute('data-authoritative', 'false')
+  await expect(catalogSource).toHaveAttribute('data-preview', 'true')
+  expect(businessRequests).toEqual([])
+
+  await candidate.getByRole('button', { name: '准备复制到 Manual 草稿' }).click()
+  const handoff = page.getByRole('alertdialog')
+  await expect(handoff).toContainText(candidateKey)
+  expect(businessRequests).toEqual([])
+  await handoff.getByRole('button', { name: '复制并前往配置页' }).click()
+  await expect(page).toHaveURL(/\/settings$/)
+  await expect(page.getByLabel('配置 key')).toHaveValue(candidateKey)
+  await expect(page.getByText(/Mock 建议已复制为 Manual 草稿/)).toBeVisible()
+  const manualSource = page.locator('main [data-source="manual"]')
+  await expect(manualSource).toHaveAttribute('data-authoritative', 'false')
+  await expect(manualSource).toHaveAttribute('data-preview', 'false')
+  expect(businessRequests).toEqual([])
+
+  const denied = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      new URL(response.url()).pathname === `/api/v1/settings/configs/${candidateKey}` &&
+      response.status() === 403,
+  )
+  await page.getByRole('button', { name: '读取当前配置' }).click()
+  expect((await denied).status()).toBe(403)
+  await expect(page.getByText('ERR_CORE_FORBIDDEN')).toBeVisible()
+  await expect(page.locator('main [data-source="unavailable"]')).toHaveAttribute(
+    'data-authoritative',
+    'false',
+  )
+  await expect(page.locator('main [data-source="mock"]')).toHaveCount(0)
+  expect(
+    businessRequests.filter(
+      (request) => request === `GET /api/v1/settings/configs/${candidateKey}`,
+    ),
+  ).toHaveLength(1)
 })
 
 test('@rate-limited observes canonical 401 and 429 through the browser Edge and UI', async ({
@@ -624,8 +737,62 @@ test('@budget-exhausted reports the real RSS request-budget 503 without a mock f
 test('@admin-down keeps Primary login and shell available while Admin panels fail', async ({
   page,
 }) => {
+  let runtimeRequests = 0
+  let auditRequests = 0
+  page.on('request', (request) => {
+    const path = new URL(request.url()).pathname
+    if (path === '/api/v1/runtime/inventory') runtimeRequests += 1
+    if (path === '/api/v1/audit/entries') auditRequests += 1
+  })
   await signInAndExpectShell(page)
-  await expect(page.locator('[data-source="unavailable"]')).toHaveCount(2)
+  const runtimePanel = page.getByRole('region', { name: '运行时摘要' })
+  const auditPanel = page.getByRole('region', { name: '首批审计条目' })
+  await expect(runtimePanel.locator('[data-source="unavailable"]')).toHaveAttribute(
+    'data-authoritative',
+    'false',
+  )
+  await expect(auditPanel.locator('[data-source="unavailable"]')).toHaveAttribute(
+    'data-authoritative',
+    'false',
+  )
+  expect(runtimeRequests).toBe(1)
+  expect(auditRequests).toBe(1)
+
+  const retry = runtimePanel.getByRole('button', { name: '重试' })
+  await retry.evaluate((button) => {
+    const observations: Array<{ busy: string | null; disabled: boolean; focused: boolean }> = []
+    ;(
+      window as typeof window & { __runtimeRetryObservations?: typeof observations }
+    ).__runtimeRetryObservations = observations
+    new MutationObserver(() => {
+      observations.push({
+        busy: button.getAttribute('aria-busy'),
+        disabled: (button as HTMLButtonElement).disabled,
+        focused: document.activeElement === button,
+      })
+    }).observe(button, { attributes: true, attributeFilter: ['aria-busy', 'disabled'] })
+    ;(button as HTMLButtonElement).focus()
+  })
+  await retry.click()
+  expect(
+    await page.evaluate(() =>
+      (
+        window as typeof window & {
+          __runtimeRetryObservations?: Array<{
+            busy: string | null
+            disabled: boolean
+            focused: boolean
+          }>
+        }
+      ).__runtimeRetryObservations?.some(
+        (observation) => observation.busy === 'true' && observation.disabled && observation.focused,
+      ),
+    ),
+  ).toBe(true)
+  await expect(runtimePanel.locator('[data-source="unavailable"]')).toBeVisible()
+  await expect(runtimePanel.getByRole('heading', { name: '运行时摘要' })).toBeFocused()
+  expect(runtimeRequests).toBe(2)
+  expect(auditRequests).toBe(1)
   await expect(page.getByRole('navigation', { name: '主导航' })).toBeVisible()
 })
 
