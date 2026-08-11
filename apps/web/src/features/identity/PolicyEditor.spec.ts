@@ -6,7 +6,7 @@ import PolicyEditor from './PolicyEditor.vue'
 
 const snapshot = {
   policyId: 'policy-edit' as never,
-  version: 7,
+  version: 7 as never,
   contractId: 'identity.policies-get',
   permission: 'identity:policy:read',
   effectiveFrom: 1_700_000_000,
@@ -75,7 +75,29 @@ describe('PolicyEditor', () => {
     ).toBe(true)
     await wrapper.setProps({ busy: false })
     await wrapper.get('form').trigger('submit')
-    expect(wrapper.get('[role="alert"]').text()).not.toBe('')
+    expect(wrapper.get('[role="alert"]').text()).toContain('contractId')
+    const invalid = wrapper.get('[data-field-path="contractId"]')
+    expect(invalid.attributes('aria-invalid')).toBe('true')
+    expect(invalid.attributes('aria-describedby')).toBe(
+      wrapper.get('[role="alert"]').attributes('id'),
+    )
     expect(wrapper.emitted('prepare')).toBeUndefined()
+  })
+
+  it('associates a dynamic typed-operand error with the first invalid control', async () => {
+    const wrapper = mount(PolicyEditor, {
+      attachTo: document.body,
+      props: { mode: 'update', snapshot },
+      global: { plugins: [createWebI18n()] },
+    })
+    const values = wrapper.findAll('.policy-editor__set input')
+    await values[1]!.setValue('a,b')
+    await wrapper.get('form').trigger('submit')
+    const invalid = wrapper.get('[data-field-path="rules.0.values.1"]')
+    expect(invalid.attributes('aria-invalid')).toBe('true')
+    expect(document.activeElement).toBe(invalid.element)
+    expect(wrapper.get('[role="alert"]').text()).toContain('rules.0.values.1')
+    expect(wrapper.emitted('prepare')).toBeUndefined()
+    wrapper.unmount()
   })
 })

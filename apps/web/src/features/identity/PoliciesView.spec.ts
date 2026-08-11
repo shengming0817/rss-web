@@ -10,7 +10,7 @@ import PoliciesView from './PoliciesView.vue'
 
 const policy = {
   policyId: 'policy-read' as never,
-  version: 2,
+  version: 2 as never,
   contractId: 'identity.policies-get',
   permission: 'identity:policy:read',
   effectiveFrom: 1_700_000_000,
@@ -192,6 +192,80 @@ describe('PoliciesView', () => {
     wrapper.unmount()
   })
 
+  it('locks catalog navigation while a write may already be committing', async () => {
+    let resolveUpdate!: (value: { data: PolicyView }) => void
+    const pending = new Promise<{ data: PolicyView }>((resolve) => {
+      resolveUpdate = resolve
+    })
+    const get = vi.fn().mockResolvedValue({ data: policy })
+    const wrapper = mount(PoliciesView, {
+      global: {
+        plugins: [
+          createWebI18n(),
+          policiesApiPlugin(
+            policiesApi({
+              list: vi.fn().mockResolvedValue({ data: [policy], hasMore: false }),
+              get,
+              update: vi.fn().mockReturnValue(pending),
+            }),
+          ),
+          authorizationExperiencePlugin(authorization),
+        ],
+      },
+    })
+    await flushPromises()
+    await wrapper.get('.policy-catalog__item').trigger('click')
+    await flushPromises()
+    await wrapper.findAll('form')[1]!.trigger('submit')
+    await wrapper.get('[role="alertdialog"]').findAll('button').at(-1)!.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('.policy-catalog__item').attributes('disabled')).toBeDefined()
+    await wrapper.get('.policy-catalog__item').trigger('click')
+    expect(get).toHaveBeenCalledOnce()
+    expect(wrapper.text()).toContain('正在提交')
+    resolveUpdate({ data: { ...policy, version: 3 as never } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('已由 RSS 确认成功')
+    wrapper.unmount()
+  })
+
+  it('re-reads the selected policy after deactivate instead of retaining stale detail', async () => {
+    const get = vi
+      .fn()
+      .mockResolvedValueOnce({ data: policy })
+      .mockResolvedValueOnce({ data: { ...policy, version: 3 as never } })
+    const wrapper = mount(PoliciesView, {
+      global: {
+        plugins: [
+          createWebI18n(),
+          policiesApiPlugin(
+            policiesApi({
+              list: vi.fn().mockResolvedValue({ data: [policy], hasMore: false }),
+              get,
+              deactivate: vi.fn().mockResolvedValue({ data: { deactivated: true, version: 3 } }),
+            }),
+          ),
+          authorizationExperiencePlugin(authorization),
+        ],
+      },
+    })
+    await flushPromises()
+    await wrapper.get('.policy-catalog__item').trigger('click')
+    await flushPromises()
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '准备停用')!
+      .trigger('click')
+    const description = wrapper.get('#policy-write-confirm-description').text()
+    expect(description).toContain('policy-read')
+    expect(description).toContain('2')
+    await wrapper.get('[role="alertdialog"]').findAll('button').at(-1)!.trigger('click')
+    await flushPromises()
+    expect(get).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('版本 3')
+    wrapper.unmount()
+  })
+
   it('keeps a conflicted draft and re-reads only after the explicit reconcile action', async () => {
     const conflict = decodeWireErrorForTest(409, {
       error: {
@@ -203,7 +277,11 @@ describe('PoliciesView', () => {
       },
     })
     const list = vi.fn().mockResolvedValue({ data: [policy], hasMore: false })
-    const get = vi.fn().mockResolvedValue({ data: policy })
+    let resolveReconciliation!: (value: { data: PolicyView }) => void
+    const reconciliation = new Promise<{ data: PolicyView }>((resolve) => {
+      resolveReconciliation = resolve
+    })
+    const get = vi.fn().mockResolvedValueOnce({ data: policy }).mockReturnValueOnce(reconciliation)
     const update = vi.fn().mockRejectedValue(conflict)
     const wrapper = mount(PoliciesView, {
       global: {
@@ -217,6 +295,10 @@ describe('PoliciesView', () => {
     await flushPromises()
     await wrapper.get('.policy-catalog__item').trigger('click')
     await flushPromises()
+    const permission = wrapper.get(
+      '[aria-labelledby="policy-update-title"] [data-field-path="permission"]',
+    )
+    await permission.setValue('identity:policy:draft-retained')
     await wrapper.findAll('form')[1]!.trigger('submit')
     await wrapper.get('[role="alertdialog"]').findAll('button').at(-1)!.trigger('click')
     await flushPromises()
@@ -232,5 +314,24 @@ describe('PoliciesView', () => {
     expect(update).toHaveBeenCalledOnce()
     expect(list).toHaveBeenCalledTimes(2)
     expect(get).toHaveBeenCalledTimes(2)
+    expect(
+      (
+        wrapper.get('[aria-labelledby="policy-update-title"] [data-field-path="permission"]')
+          .element as HTMLInputElement
+      ).value,
+    ).toBe('identity:policy:draft-retained')
+    expect(wrapper.get('.policy-catalog__item').attributes('disabled')).toBeDefined()
+    resolveReconciliation({ data: { ...policy, version: 3 as never } })
+    await flushPromises()
+    expect(
+      (
+        wrapper.get('[aria-labelledby="policy-update-title"] [data-field-path="permission"]')
+          .element as HTMLInputElement
+      ).value,
+    ).toBe('identity:policy:draft-retained')
+    expect(wrapper.text()).toContain('版本 3')
+    expect(wrapper.text()).not.toContain('草稿已保留')
+    expect(wrapper.get('.policy-catalog__item').attributes('disabled')).toBeUndefined()
+    wrapper.unmount()
   })
 })

@@ -1,9 +1,9 @@
 export { createIdentityApi } from './api'
 export {
   createPoliciesApi,
+  createPolicyDeactivateRequest,
+  createPolicyUpdateRequest,
   parsePolicyCreateRequest,
-  parsePolicyDeactivateRequest,
-  parsePolicyUpdateRequest,
   POLICY_ATTRIBUTES,
   POLICY_EQUALITY_PREDICATES,
   POLICY_MEMBERSHIP_PREDICATES,
@@ -33,6 +33,7 @@ export type {
   PolicyView,
   PolicyUpdateRequest,
   PolicyUpdateResponse,
+  PolicyVersion,
   PolicyWriteFields,
 } from './policies'
 export { createRolesApi, isRoleId, parseRoleId, ROLE_ID_PATTERN } from './roles'

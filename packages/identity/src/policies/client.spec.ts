@@ -85,8 +85,8 @@ describe('Policies API', () => {
     }
 
     await api.create({ policyId, ...fields })
-    await api.update(policyId, { expectedVersion: 1, ...fields })
-    await api.deactivate(policyId, { expectedVersion: 2 })
+    await api.update(policyId, { expectedVersion: 1 as never, ...fields })
+    await api.deactivate(policyId, { expectedVersion: 2 as never })
 
     expect(request).toHaveBeenNthCalledWith(
       1,

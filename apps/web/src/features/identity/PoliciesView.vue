@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ErrorPage, ModalShell, SourceBadge } from '@rss/core'
-import type { PolicyId } from '@rss/identity'
+import type { PolicyId, PolicyView } from '@rss/identity'
 import { RSS_SOURCE, UNAVAILABLE_SOURCE } from '@rss/shared'
 import { toSafeErrorPresentation, toSafeReadErrorPresentation } from '../../errors/rss-error'
 import { useAuthorizationIntent } from '../authorization/authorization-context'
@@ -62,8 +62,24 @@ const detail = createPolicyDetail((policyId, signal) =>
   getAuthorization.execute(() => api.get(policyId, { signal })),
 )
 const detailState = shallowRef<PolicyDetailState>(detail.getState())
+const writeBasis = shallowRef<PolicyView>()
+let reconciliation: PolicyWriteCommand | undefined
 const unsubscribeDetail = detail.subscribe((state) => {
   detailState.value = state
+  if (state.status === 'ready') {
+    writeBasis.value = state.policy
+    if (
+      reconciliation !== undefined &&
+      (reconciliation.action === 'create'
+        ? reconciliation.request.policyId === state.policy.policyId
+        : reconciliation.policyId === state.policy.policyId)
+    ) {
+      writeOperation.reconciled(reconciliation)
+      reconciliation = undefined
+    }
+  } else if (state.status === 'error' && reconciliation !== undefined) {
+    reconciliation = undefined
+  }
   if (detailRetrying.value && (state.status === 'ready' || state.status === 'error')) {
     detailRetrying.value = false
     detailRecoveryError.value = undefined
@@ -87,20 +103,28 @@ const displayedDetailError = computed(() =>
 
 const writeOperation = createPolicyWriteOperation(async (command, signal) => {
   switch (command.action) {
-    case 'create':
-      return (await createAuthorization.execute(() => api.create(command.request, { signal }))).data
-    case 'update':
-      return (
+    case 'create': {
+      const result = (
+        await createAuthorization.execute(() => api.create(command.request, { signal }))
+      ).data
+      return Object.freeze({ action: 'create' as const, command, result })
+    }
+    case 'update': {
+      const result = (
         await updateAuthorization.execute(() =>
           api.update(command.policyId, command.request, { signal }),
         )
       ).data
-    case 'deactivate':
-      return (
+      return Object.freeze({ action: 'update' as const, command, result })
+    }
+    case 'deactivate': {
+      const result = (
         await deactivateAuthorization.execute(() =>
           api.deactivate(command.policyId, command.request, { signal }),
         )
       ).data
+      return Object.freeze({ action: 'deactivate' as const, command, result })
+    }
   }
 })
 const writeState = shallowRef<PolicyWriteState>(writeOperation.getState())
@@ -117,7 +141,9 @@ const unsubscribeWrite = writeOperation.subscribe((state) => {
   }
   if (state.status === 'success') {
     void pagination.start()
-    if ('policyId' in state.result) void detail.select(state.result.policyId)
+    const policyId = state.action === 'deactivate' ? state.command.policyId : state.result.policyId
+    writeBasis.value = undefined
+    void detail.select(policyId)
   }
 })
 const confirmation = computed(() =>
@@ -126,10 +152,23 @@ const confirmation = computed(() =>
 const writeError = computed(() =>
   writeState.value.status === 'error' ? toSafeErrorPresentation(writeState.value.error) : undefined,
 )
-const writeIsBusy = computed(() => writeState.value.status === 'submitting')
+const writeNavigationLocked = computed(
+  () =>
+    writeState.value.status === 'confirming' ||
+    writeState.value.status === 'submitting' ||
+    writeState.value.status === 'conflict' ||
+    writeState.value.status === 'unknown',
+)
+const writeEditorLocked = computed(
+  () =>
+    writeState.value.status === 'submitting' ||
+    writeState.value.status === 'conflict' ||
+    writeState.value.status === 'unknown',
+)
 
 async function selectPolicy(policyId: PolicyId) {
-  writeOperation.reset()
+  if (writeNavigationLocked.value || !writeOperation.reset()) return
+  writeBasis.value = undefined
   await detail.select(policyId)
   await nextTick()
   detailHeading.value?.focus()
@@ -140,21 +179,23 @@ function prepareWrite(command: PolicyWriteCommand) {
 }
 
 function prepareDeactivate() {
-  if (detailState.value.status === 'ready') {
-    writeOperation.prepare(createPolicyDeactivateCommand(detailState.value.policy))
+  if (writeBasis.value !== undefined) {
+    writeOperation.prepare(createPolicyDeactivateCommand(writeBasis.value))
   }
 }
 
-function reconcileWrite() {
+async function reconcileWrite() {
   const state = writeState.value
   if (state.status !== 'conflict' && state.status !== 'unknown') return
   const command = state.command
+  reconciliation = command
   void pagination.start()
-  if (command.action === 'create') void detail.select(command.request.policyId)
-  else void detail.select(command.policyId)
+  if (command.action === 'create') await detail.select(command.request.policyId)
+  else await detail.select(command.policyId)
 }
 
 function nextPage() {
+  if (writeNavigationLocked.value) return
   catalogFocusRequested = true
   void pagination.next()
 }
@@ -233,6 +274,7 @@ onBeforeUnmount(() => {
             <button
               type="button"
               class="policy-catalog__item"
+              :disabled="writeNavigationLocked"
               @click="selectPolicy(policy.policyId)"
             >
               <strong>{{ policy.policyId }}</strong>
@@ -252,7 +294,7 @@ onBeforeUnmount(() => {
           v-if="(catalog.status === 'ready' || catalog.status === 'loading') && catalog.hasMore"
           type="button"
           class="v1-btn"
-          :disabled="catalog.status === 'loading'"
+          :disabled="catalog.status === 'loading' || writeNavigationLocked"
           :aria-busy="catalog.status === 'loading'"
           @click="nextPage"
         >
@@ -316,20 +358,25 @@ onBeforeUnmount(() => {
 
       <section aria-labelledby="policy-create-title">
         <h3 id="policy-create-title">{{ t('policies.write.create') }}</h3>
-        <PolicyEditor mode="create" :busy="writeIsBusy" @prepare="prepareWrite" />
+        <PolicyEditor mode="create" :busy="writeEditorLocked" @prepare="prepareWrite" />
       </section>
 
-      <section v-if="detailState.status === 'ready'" aria-labelledby="policy-update-title">
+      <section v-if="writeBasis !== undefined" aria-labelledby="policy-update-title">
         <h3 id="policy-update-title">{{ t('policies.write.update') }}</h3>
-        <p>{{ t('policies.write.snapshotVersion', { version: detailState.policy.version }) }}</p>
+        <p>{{ t('policies.write.snapshotVersion', { version: writeBasis.version }) }}</p>
         <PolicyEditor
-          :key="detailState.policy.policyId"
+          :key="writeBasis.policyId"
           mode="update"
-          :snapshot="detailState.policy"
-          :busy="writeIsBusy"
+          :snapshot="writeBasis"
+          :busy="writeEditorLocked"
           @prepare="prepareWrite"
         />
-        <button type="button" class="v1-ghost" :disabled="writeIsBusy" @click="prepareDeactivate">
+        <button
+          type="button"
+          class="v1-ghost"
+          :disabled="writeEditorLocked"
+          @click="prepareDeactivate"
+        >
           {{ t('policies.write.deactivate') }}
         </button>
       </section>
@@ -370,6 +417,14 @@ onBeforeUnmount(() => {
         {{
           t('policies.write.confirmDescription', {
             action: confirmation ? t(`policies.write.${confirmation.command.action}`) : '',
+            policyId:
+              confirmation?.command.action === 'create'
+                ? confirmation.command.request.policyId
+                : (confirmation?.command.policyId ?? ''),
+            version:
+              confirmation?.command.action === 'create'
+                ? '—'
+                : (confirmation?.command.request.expectedVersion ?? '—'),
           })
         }}
       </p>

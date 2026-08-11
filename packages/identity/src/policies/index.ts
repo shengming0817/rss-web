@@ -1,8 +1,8 @@
 export { createPoliciesApi } from './client'
 export {
+  createPolicyDeactivateRequest,
+  createPolicyUpdateRequest,
   parsePolicyCreateRequest,
-  parsePolicyDeactivateRequest,
-  parsePolicyUpdateRequest,
 } from './authoring'
 export {
   POLICY_ATTRIBUTES,
@@ -14,6 +14,7 @@ export {
 } from './types'
 export type { PoliciesApi } from './client'
 export type { PolicyId } from './policy-id'
+export type { PolicyVersion } from './policy-version'
 export type {
   PoliciesCallOptions,
   PoliciesListRequest,

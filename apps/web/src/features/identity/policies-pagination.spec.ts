@@ -5,7 +5,7 @@ import { createPoliciesPagination, type PoliciesPaginationState } from './polici
 const policy = (id: string) =>
   ({
     policyId: id as PolicyId,
-    version: 1,
+    version: 1 as never,
     contractId: 'identity.policies-list',
     permission: 'identity:policy:read',
     effectiveFrom: 1,

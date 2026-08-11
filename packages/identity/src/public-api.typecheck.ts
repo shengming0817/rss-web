@@ -60,6 +60,16 @@ void policies.update(policy.policyId, {
   rules: policy.rules,
 })
 void policies.deactivate(policy.policyId, { expectedVersion: policy.version })
+// @ts-expect-error CAS versions can only originate from a decoded policy snapshot.
+void policies.deactivate(policy.policyId, { expectedVersion: 1 })
+void policies.update(policy.policyId, {
+  // @ts-expect-error Update cannot accept a caller-minted numeric CAS version.
+  expectedVersion: 1,
+  contractId: policy.contractId,
+  permission: policy.permission,
+  effectiveFrom: policy.effectiveFrom,
+  rules: policy.rules,
+})
 // @ts-expect-error Policies reads do not accept browser-authored authority headers.
 void policies.list(undefined, { headers: { Authorization: 'x' } })
 // @ts-expect-error Policies writes do not accept browser-authored authority headers.

@@ -281,9 +281,10 @@ const zhCN = {
       update: '准备更新',
       deactivate: '准备停用',
       snapshotVersion: '本次 CAS 使用已读取的服务端版本 {version}，不可手工修改。',
-      validation: 'Policy 草稿不符合当前 RSS contract 结构，请检查字段与 typed operand。',
+      validation: '字段 {field} 不符合当前 RSS contract 结构。请检查该字段与 typed operand。',
       confirmTitle: '确认 Policy 写操作',
-      confirmDescription: '将提交 {action}；RSS 响应是唯一成功事实，冲突不会自动覆盖。',
+      confirmDescription:
+        '将提交 {action}；目标 Policy：{policyId}；CAS 版本：{version}。RSS 响应是唯一成功事实，冲突不会自动覆盖。',
       confirm: '确认提交',
       cancel: '取消',
       submitting: '正在提交，禁止重复操作…',

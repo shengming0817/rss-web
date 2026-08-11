@@ -83,4 +83,22 @@ describe('Policy editor model', () => {
       ),
     ).toThrow('invalid policy editor value')
   })
+
+  it.each(['-1', '0', String(Number.MAX_SAFE_INTEGER)])(
+    'round-trips signed safe int64 time %s',
+    (effectiveFrom) => {
+      expect(policyEditorFields({ ...draft(), effectiveFrom }).effectiveFrom).toBe(
+        Number(effectiveFrom),
+      )
+    },
+  )
+
+  it.each(['-0', String(Number.MAX_SAFE_INTEGER + 1)])(
+    'rejects non-canonical or unsafe time %s',
+    (effectiveFrom) => {
+      expect(() => policyEditorFields({ ...draft(), effectiveFrom })).toThrow(
+        'invalid policy editor value',
+      )
+    },
+  )
 })

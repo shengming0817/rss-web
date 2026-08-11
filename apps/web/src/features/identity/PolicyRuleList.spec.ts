@@ -8,7 +8,7 @@ describe('PolicyRuleList', () => {
   it('exposes operator discriminants, effect and obligations without evaluating them', () => {
     const policy = {
       policyId: 'policy' as never,
-      version: 1,
+      version: 1 as never,
       contractId: 'contract',
       permission: 'permission',
       effectiveFrom: 1,
@@ -49,7 +49,7 @@ describe('PolicyRuleList', () => {
   it('preserves typed set element boundaries', () => {
     const policy = {
       policyId: 'policy' as never,
-      version: 1,
+      version: 1 as never,
       contractId: 'contract',
       permission: 'permission',
       effectiveFrom: 1,

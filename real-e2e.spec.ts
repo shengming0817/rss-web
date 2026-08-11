@@ -9,6 +9,7 @@ import {
   finalizeOutcome,
   isCleanWebStatus,
 } from './e2e/real/lifecycle.mjs'
+import { executeBounded } from './e2e/real/process.mjs'
 
 const root = resolve(import.meta.dirname)
 
@@ -148,5 +149,16 @@ describe('real RSS journey harness', () => {
         ],
       }),
     ).toBe('environment')
+  })
+
+  it('escalates a child that ignores SIGTERM and settles within the hard timeout', async () => {
+    const startedAt = Date.now()
+    const result = await executeBounded(
+      process.execPath,
+      [resolve(root, 'e2e/real/ignore-term.mjs')],
+      { timeoutMs: 100, graceMs: 100, stdio: ['ignore', 'pipe', 'pipe'] },
+    )
+    expect(result).toMatchObject({ signal: 'SIGKILL', timedOut: true })
+    expect(Date.now() - startedAt).toBeLessThan(2_000)
   })
 })

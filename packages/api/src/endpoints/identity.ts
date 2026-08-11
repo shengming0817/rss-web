@@ -25,12 +25,7 @@ export const identityEndpoints = Object.freeze({
     errorPolicy: Object.freeze({
       400: VALIDATION_PUBLIC,
       404: NOT_FOUND_EMPTY,
-      409: Object.freeze({
-        code: 'ERR_CORE_VERSION_CONFLICT',
-        message: 'version conflict',
-        retryable: true,
-        details: 'empty',
-      }),
+      409: VERSION_CONFLICT_EMPTY,
       500: INTERNAL_EMPTY,
     }),
   }),
@@ -50,20 +45,7 @@ export const identityEndpoints = Object.freeze({
     errorPolicy: Object.freeze({
       400: VALIDATION_PUBLIC,
       404: NOT_FOUND_EMPTY,
-      409: Object.freeze([
-        Object.freeze({
-          code: 'ERR_CORE_CONFLICT',
-          message: 'conflict',
-          retryable: false,
-          details: 'empty',
-        }),
-        Object.freeze({
-          code: 'ERR_CORE_VERSION_CONFLICT',
-          message: 'version conflict',
-          retryable: true,
-          details: 'empty',
-        }),
-      ]),
+      409: Object.freeze([CONFLICT_EMPTY, VERSION_CONFLICT_EMPTY]),
       500: INTERNAL_EMPTY,
     }),
   }),

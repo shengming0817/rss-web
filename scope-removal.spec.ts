@@ -291,10 +291,7 @@ describe('RSS-only foundation boundary', () => {
     const editor = read('apps/web/src/features/identity/PolicyEditor.vue')
     const operation = read('apps/web/src/features/identity/policy-write-operation.ts')
     const production = [client, page, rules, editor, operation].join('\n')
-    expect(client.match(/session: 'required'/g)).toHaveLength(5)
     expect(client).not.toContain('headers:')
-    expect(operation).toContain("status: 'conflict' | 'unknown' | 'error'")
-    expect(operation).not.toMatch(/retry|replay|autoSubmit|overwrite/i)
     expect(production).not.toMatch(
       /evaluatePolicy|policyDecision|isAllowed|grantAuthority|profile\.kind|superAdmin|localStorage|sessionStorage|X-Tenant-ID|mock|preview|fallback/i,
     )

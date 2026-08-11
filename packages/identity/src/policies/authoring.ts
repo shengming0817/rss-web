@@ -1,10 +1,12 @@
-import { decodePolicyView } from './decoders'
+import { decodePolicyWriteFields } from './decoders'
 import { parsePolicyId } from './policy-id'
+import { sealPolicyVersion } from './policy-version'
 import type {
   PolicyCreateRequest,
   PolicyDeactivateRequest,
   PolicyUpdateRequest,
   PolicyWriteFields,
+  PolicyView,
 } from './types'
 
 const INT32_MAX = 2_147_483_647
@@ -35,24 +37,17 @@ function positiveInt32(value: unknown): number {
   return value as number
 }
 
-function writeFields(input: Record<string, unknown>, policyId: string): PolicyWriteFields {
-  const decoded = decodePolicyView({
-    policyId,
-    version: 1,
-    contractId: input.contractId,
-    permission: input.permission,
-    effectiveFrom: input.effectiveFrom,
-    ...(input.effectiveUntil === undefined ? {} : { effectiveUntil: input.effectiveUntil }),
-    rules: input.rules,
-  })
-  if (decoded.rules.length === 0) throw new Error('invalid policy write input')
-  return Object.freeze({
-    contractId: decoded.contractId,
-    permission: decoded.permission,
-    effectiveFrom: decoded.effectiveFrom,
-    ...(decoded.effectiveUntil === undefined ? {} : { effectiveUntil: decoded.effectiveUntil }),
-    rules: decoded.rules,
-  })
+function writeFields(input: Record<string, unknown>): PolicyWriteFields {
+  return decodePolicyWriteFields(
+    {
+      contractId: input.contractId,
+      permission: input.permission,
+      effectiveFrom: input.effectiveFrom,
+      ...(input.effectiveUntil === undefined ? {} : { effectiveUntil: input.effectiveUntil }),
+      rules: input.rules,
+    },
+    { requireRules: true },
+  )
 }
 
 export function parsePolicyCreateRequest(value: unknown): PolicyCreateRequest {
@@ -63,22 +58,33 @@ export function parsePolicyCreateRequest(value: unknown): PolicyCreateRequest {
   )
   const policyId = parsePolicyId(input.policyId)
   if (policyId === undefined) throw new Error('invalid policy write input')
-  return Object.freeze({ policyId, ...writeFields(input, policyId) })
+  return Object.freeze({ policyId, ...writeFields(input) })
 }
 
-export function parsePolicyUpdateRequest(value: unknown): PolicyUpdateRequest {
+export function parsePolicyUpdateRequestInternal(value: unknown): PolicyUpdateRequest {
   const input = exactRecord(
     value,
     ['expectedVersion', 'contractId', 'permission', 'effectiveFrom', 'rules'],
     ['effectiveUntil'],
   )
   return Object.freeze({
-    expectedVersion: positiveInt32(input.expectedVersion),
-    ...writeFields(input, 'policy-write-validation'),
+    expectedVersion: sealPolicyVersion(positiveInt32(input.expectedVersion)),
+    ...writeFields(input),
   })
 }
 
-export function parsePolicyDeactivateRequest(value: unknown): PolicyDeactivateRequest {
+export function parsePolicyDeactivateRequestInternal(value: unknown): PolicyDeactivateRequest {
   const input = exactRecord(value, ['expectedVersion'])
-  return Object.freeze({ expectedVersion: positiveInt32(input.expectedVersion) })
+  return Object.freeze({ expectedVersion: sealPolicyVersion(positiveInt32(input.expectedVersion)) })
+}
+
+export function createPolicyUpdateRequest(
+  snapshot: PolicyView,
+  fields: PolicyWriteFields,
+): PolicyUpdateRequest {
+  return parsePolicyUpdateRequestInternal({ expectedVersion: snapshot.version, ...fields })
+}
+
+export function createPolicyDeactivateRequest(snapshot: PolicyView): PolicyDeactivateRequest {
+  return Object.freeze({ expectedVersion: snapshot.version })
 }

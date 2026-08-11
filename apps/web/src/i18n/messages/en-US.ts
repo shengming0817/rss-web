@@ -302,10 +302,10 @@ const enUS = {
       snapshotVersion:
         'This CAS uses decoded server version {version}; it cannot be edited manually.',
       validation:
-        'The policy draft does not match the current RSS contract structure. Check fields and typed operands.',
+        'Field {field} does not match the current RSS contract structure. Check that field and its typed operand.',
       confirmTitle: 'Confirm policy write',
       confirmDescription:
-        'Submit {action}. Only the RSS response proves success, and conflicts are never overwritten automatically.',
+        'Submit {action}. Target policy: {policyId}; CAS version: {version}. Only the RSS response proves success, and conflicts are never overwritten automatically.',
       confirm: 'Confirm submission',
       cancel: 'Cancel',
       submitting: 'Submitting; duplicate actions are disabled…',

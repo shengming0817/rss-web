@@ -9,8 +9,8 @@ import {
 } from './decoders'
 import {
   parsePolicyCreateRequest,
-  parsePolicyDeactivateRequest,
-  parsePolicyUpdateRequest,
+  parsePolicyDeactivateRequestInternal,
+  parsePolicyUpdateRequestInternal,
 } from './authoring'
 import type { PolicyId } from './policy-id'
 import type {
@@ -104,7 +104,7 @@ export function createPoliciesApi(transport: HttpTransport): PoliciesApi {
       })
     },
     update(policyId: PolicyId, request: PolicyUpdateRequest, options?: PoliciesCallOptions) {
-      const body = parsePolicyUpdateRequest(request)
+      const body = parsePolicyUpdateRequestInternal(request)
       return transport.request({
         ...identityEndpoints.policiesUpdate,
         pathParams: { policyId },
@@ -123,7 +123,7 @@ export function createPoliciesApi(transport: HttpTransport): PoliciesApi {
       request: PolicyDeactivateRequest,
       options?: PoliciesCallOptions,
     ) {
-      const body = parsePolicyDeactivateRequest(request)
+      const body = parsePolicyDeactivateRequestInternal(request)
       return transport.request({
         ...identityEndpoints.policiesDeactivate,
         pathParams: { policyId },

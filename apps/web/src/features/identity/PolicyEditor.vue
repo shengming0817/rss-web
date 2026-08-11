@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, reactive, ref } from 'vue'
+import { nextTick, reactive, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   POLICY_ATTRIBUTES,
@@ -19,6 +19,7 @@ import {
   emptyPolicyRule,
   policyEditorDraft,
   policyEditorFields,
+  PolicyEditorValidationError,
   type EditablePolicyRule,
 } from './policy-editor-model'
 
@@ -30,8 +31,14 @@ const props = defineProps<{
 const emit = defineEmits<{ prepare: [command: PolicyWriteCommand] }>()
 const { t } = useI18n()
 const draft = reactive(policyEditorDraft(props.snapshot))
-const error = ref(false)
+const errorPath = ref<string>()
 const errorBox = ref<HTMLElement>()
+const form = ref<HTMLFormElement>()
+const errorId = `policy-editor-error-${useId()}`
+
+function fieldA11y(path: string) {
+  return errorPath.value === path ? { 'aria-invalid': true, 'aria-describedby': errorId } : {}
+}
 
 function predicates(rule: EditablePolicyRule): readonly string[] {
   switch (rule.family) {
@@ -66,7 +73,7 @@ function addRule() {
 }
 
 function submit() {
-  error.value = false
+  errorPath.value = undefined
   try {
     const fields = policyEditorFields(draft)
     const command =
@@ -77,44 +84,89 @@ function submit() {
           : createPolicyUpdateCommand(props.snapshot, fields)
     if (command === undefined) throw new Error('missing policy snapshot')
     emit('prepare', command)
-  } catch {
-    error.value = true
-    void nextTick(() => errorBox.value?.focus())
+  } catch (error: unknown) {
+    errorPath.value =
+      error instanceof PolicyEditorValidationError
+        ? error.path
+        : props.mode === 'create'
+          ? 'policyId'
+          : 'contractId'
+    void nextTick(() => {
+      const field = form.value?.querySelector<HTMLElement>(`[data-field-path="${errorPath.value}"]`)
+      ;(field ?? errorBox.value)?.focus()
+    })
   }
 }
 </script>
 
 <template>
-  <form class="policy-editor" :aria-busy="busy" @submit.prevent="submit">
-    <p v-if="error" ref="errorBox" class="v1-alert" role="alert" tabindex="-1">
-      {{ t('policies.write.validation') }}
+  <form ref="form" class="policy-editor" :aria-busy="busy" @submit.prevent="submit">
+    <p v-if="errorPath" :id="errorId" ref="errorBox" class="v1-alert" role="alert" tabindex="-1">
+      {{ t('policies.write.validation', { field: errorPath }) }}
     </p>
     <label v-if="mode === 'create'">
       {{ t('policies.write.policyId') }}
-      <input v-model="draft.policyId" required :disabled="busy" />
+      <input
+        v-model="draft.policyId"
+        data-field-path="policyId"
+        required
+        :disabled="busy"
+        v-bind="fieldA11y('policyId')"
+      />
     </label>
     <label>
       {{ t('policies.detail.contractId') }}
-      <input v-model="draft.contractId" required :disabled="busy" />
+      <input
+        v-model="draft.contractId"
+        data-field-path="contractId"
+        required
+        :disabled="busy"
+        v-bind="fieldA11y('contractId')"
+      />
     </label>
     <label>
       {{ t('policies.detail.permission') }}
-      <input v-model="draft.permission" required :disabled="busy" />
+      <input
+        v-model="draft.permission"
+        data-field-path="permission"
+        required
+        :disabled="busy"
+        v-bind="fieldA11y('permission')"
+      />
     </label>
     <label>
       {{ t('policies.detail.effectiveFrom') }}
-      <input v-model="draft.effectiveFrom" inputmode="numeric" required :disabled="busy" />
+      <input
+        v-model="draft.effectiveFrom"
+        data-field-path="effectiveFrom"
+        inputmode="numeric"
+        required
+        :disabled="busy"
+        v-bind="fieldA11y('effectiveFrom')"
+      />
     </label>
     <label>
       {{ t('policies.detail.effectiveUntil') }}
-      <input v-model="draft.effectiveUntil" inputmode="numeric" :disabled="busy" />
+      <input
+        v-model="draft.effectiveUntil"
+        data-field-path="effectiveUntil"
+        inputmode="numeric"
+        :disabled="busy"
+        v-bind="fieldA11y('effectiveUntil')"
+      />
     </label>
 
     <fieldset v-for="(rule, index) in draft.rules" :key="index" class="policy-editor__rule">
       <legend>{{ t('policies.detail.rule', { number: index + 1 }) }}</legend>
       <label>
         {{ t('policies.detail.attribute') }}
-        <input v-model="rule.attribute" required :disabled="busy" />
+        <input
+          v-model="rule.attribute"
+          :data-field-path="`rules.${index}.attribute`"
+          required
+          :disabled="busy"
+          v-bind="fieldA11y(`rules.${index}.attribute`)"
+        />
       </label>
       <label>
         {{ t('policies.detail.family') }}
@@ -127,7 +179,12 @@ function submit() {
       </label>
       <label>
         {{ t('policies.detail.predicate') }}
-        <select v-model="rule.predicate" :disabled="busy">
+        <select
+          v-model="rule.predicate"
+          :data-field-path="`rules.${index}.predicate`"
+          :disabled="busy"
+          v-bind="fieldA11y(`rules.${index}.predicate`)"
+        >
           <option v-for="predicate in predicates(rule)" :key="predicate" :value="predicate">
             {{ predicate }}
           </option>
@@ -142,7 +199,12 @@ function submit() {
       </label>
       <label v-if="rule.family !== 'string' && rule.operandKind !== 'attribute'">
         {{ t('policies.detail.valueType') }}
-        <select v-model="rule.valueType" :disabled="busy">
+        <select
+          v-model="rule.valueType"
+          :data-field-path="`rules.${index}.valueType`"
+          :disabled="busy"
+          v-bind="fieldA11y(`rules.${index}.valueType`)"
+        >
           <option value="string">string</option>
           <option value="boolean">boolean</option>
           <option value="integer">integer</option>
@@ -151,7 +213,12 @@ function submit() {
       </label>
       <label v-if="rule.operandKind === 'attribute'">
         {{ t('policies.write.operandAttribute') }}
-        <select v-model="rule.value" :disabled="busy">
+        <select
+          v-model="rule.value"
+          :data-field-path="`rules.${index}.operand`"
+          :disabled="busy"
+          v-bind="fieldA11y(`rules.${index}.operand`)"
+        >
           <option v-for="attribute in POLICY_ATTRIBUTES" :key="attribute" :value="attribute">
             {{ attribute }}
           </option>
@@ -165,7 +232,13 @@ function submit() {
         >
           <label>
             {{ t('policies.write.setValue', { number: valueIndex + 1 }) }}
-            <input v-model="rule.values[valueIndex]" required :disabled="busy" />
+            <input
+              v-model="rule.values[valueIndex]"
+              :data-field-path="`rules.${index}.values.${valueIndex}`"
+              required
+              :disabled="busy"
+              v-bind="fieldA11y(`rules.${index}.values.${valueIndex}`)"
+            />
           </label>
           <button
             type="button"
@@ -187,7 +260,13 @@ function submit() {
       </template>
       <label v-else>
         {{ t('policies.detail.operandValue') }}
-        <input v-model="rule.value" required :disabled="busy" />
+        <input
+          v-model="rule.value"
+          :data-field-path="`rules.${index}.operand`"
+          required
+          :disabled="busy"
+          v-bind="fieldA11y(`rules.${index}.operand`)"
+        />
       </label>
       <label>
         {{ t('policies.detail.effect') }}
@@ -214,7 +293,13 @@ function submit() {
         >
           <label>
             {{ t('policies.write.fieldMaskValue', { number: fieldIndex + 1 }) }}
-            <input v-model="rule.fieldMask[fieldIndex]" required :disabled="busy" />
+            <input
+              v-model="rule.fieldMask[fieldIndex]"
+              :data-field-path="`rules.${index}.fieldMask.${fieldIndex}`"
+              required
+              :disabled="busy"
+              v-bind="fieldA11y(`rules.${index}.fieldMask.${fieldIndex}`)"
+            />
           </label>
           <button
             type="button"

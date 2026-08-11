@@ -150,8 +150,9 @@ describe('Policies session request policy', () => {
         ],
       }
       if (action === 'create') await api.create({ policyId, ...fields })
-      else if (action === 'update') await api.update(policyId, { expectedVersion: 1, ...fields })
-      else await api.deactivate(policyId, { expectedVersion: 1 })
+      else if (action === 'update')
+        await api.update(policyId, { expectedVersion: 1 as never, ...fields })
+      else await api.deactivate(policyId, { expectedVersion: 1 as never })
 
       expect(counts()).toEqual({ refreshCalls: 1, targetCalls: 2 })
       expect(session.getState().status).toBe('authenticated')

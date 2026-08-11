@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  createPolicyDeactivateRequest,
+  createPolicyUpdateRequest,
   parsePolicyCreateRequest,
-  parsePolicyDeactivateRequest,
-  parsePolicyUpdateRequest,
+  parsePolicyDeactivateRequestInternal,
+  parsePolicyUpdateRequestInternal,
 } from './authoring'
+import { decodePolicyView } from './decoders'
 
 const rule = (operand: object = { kind: 'literal', valueType: 'string', value: 'admin' }) => ({
   condition: {
@@ -82,22 +85,22 @@ describe('Policy authoring boundary', () => {
   })
 
   it('requires a positive int32 expectedVersion owned by the detail snapshot', () => {
-    const fields = create()
+    const snapshot = decodePolicyView(create({ version: 2 }))
     const writeFields = {
-      contractId: fields.contractId,
-      permission: fields.permission,
-      effectiveFrom: fields.effectiveFrom,
-      rules: fields.rules,
+      contractId: snapshot.contractId,
+      permission: snapshot.permission,
+      effectiveFrom: snapshot.effectiveFrom,
+      rules: snapshot.rules,
     }
-    expect(parsePolicyUpdateRequest({ expectedVersion: 2, ...writeFields })).toMatchObject({
+    expect(createPolicyUpdateRequest(snapshot, writeFields)).toMatchObject({
       expectedVersion: 2,
     })
-    expect(parsePolicyDeactivateRequest({ expectedVersion: 2 })).toEqual({ expectedVersion: 2 })
+    expect(createPolicyDeactivateRequest(snapshot)).toEqual({ expectedVersion: 2 })
     for (const expectedVersion of [0, 2_147_483_648, 1.5]) {
-      expect(() => parsePolicyUpdateRequest({ expectedVersion, ...writeFields })).toThrow(
+      expect(() => parsePolicyUpdateRequestInternal({ expectedVersion, ...writeFields })).toThrow(
         'invalid policy write input',
       )
-      expect(() => parsePolicyDeactivateRequest({ expectedVersion })).toThrow(
+      expect(() => parsePolicyDeactivateRequestInternal({ expectedVersion })).toThrow(
         'invalid policy write input',
       )
     }

@@ -147,7 +147,7 @@ WEB-PR-021 additionally consumes `identity.policies-create`, `identity.policies-
 `identity.policies-deactivate` against the same reviewed RSS tree. Their contract TOML hashes are
 `66d5105d3a846d525d1cbd742064b98eb6c5adaf078df95d3a855cde4e2c7dfe`,
 `4f1c18ae74a4e963c3d9ad83b47645618d93e22411ce347ad5a12b21b9c56e2e`, and
-`cde7f396e645ad0794c10466457783023eb7485710ece79c8786d24f205732ea`; request and response hashes
+`cde7f396da804bfa7fd151cfd43fe2ad7c3c2481de830a5ac3502b952ff16084`; request and response hashes
 remain those recorded in the baseline table. All three contracts are idempotent and use the sole
 session transport's exact-401 recovery. Other failures are never auto-replayed: CAS conflicts and
 commit-unknown outcomes retain the local draft until an explicit server re-read. The current browser

@@ -1,7 +1,8 @@
 import { isRssApiError } from '@rss/api'
 import {
+  createPolicyDeactivateRequest,
+  createPolicyUpdateRequest,
   parsePolicyCreateRequest,
-  parsePolicyUpdateRequest,
   type PolicyCreateRequest,
   type PolicyDeactivateResponse,
   type PolicyId,
@@ -27,23 +28,38 @@ export type PolicyWriteCommand =
   | Readonly<{
       action: 'deactivate'
       policyId: PolicyId
-      request: Readonly<{ expectedVersion: number }>
+      request: ReturnType<typeof createPolicyDeactivateRequest>
       [commandBrand]: true
     }>
 
-export type PolicyWriteResult = PolicyView | PolicyDeactivateResponse['data']
+export type PolicyWriteReceipt =
+  | Readonly<{
+      action: 'create'
+      command: Extract<PolicyWriteCommand, { action: 'create' }>
+      result: PolicyView
+    }>
+  | Readonly<{
+      action: 'update'
+      command: Extract<PolicyWriteCommand, { action: 'update' }>
+      result: PolicyView
+    }>
+  | Readonly<{
+      action: 'deactivate'
+      command: Extract<PolicyWriteCommand, { action: 'deactivate' }>
+      result: PolicyDeactivateResponse['data']
+    }>
 export type PolicyWriteState =
   | Readonly<{ status: 'idle' }>
   | Readonly<{ status: 'confirming'; command: PolicyWriteCommand }>
   | Readonly<{ status: 'submitting'; command: PolicyWriteCommand }>
-  | Readonly<{ status: 'success'; action: PolicyWriteCommand['action']; result: PolicyWriteResult }>
+  | (Readonly<{ status: 'success' }> & PolicyWriteReceipt)
   | Readonly<{
       status: 'conflict' | 'unknown' | 'error'
       command: PolicyWriteCommand
       error: unknown
     }>
 
-type Execute = (command: PolicyWriteCommand, signal: AbortSignal) => Promise<PolicyWriteResult>
+type Execute = (command: PolicyWriteCommand, signal: AbortSignal) => Promise<PolicyWriteReceipt>
 
 export function createPolicyCreateCommand(value: unknown): PolicyWriteCommand {
   return Object.freeze({
@@ -59,7 +75,7 @@ export function createPolicyUpdateCommand(
   return Object.freeze({
     action: 'update',
     policyId: snapshot.policyId,
-    request: parsePolicyUpdateRequest({ expectedVersion: snapshot.version, ...fields }),
+    request: createPolicyUpdateRequest(snapshot, fields),
   }) as PolicyWriteCommand
 }
 
@@ -67,7 +83,7 @@ export function createPolicyDeactivateCommand(snapshot: PolicyView): PolicyWrite
   return Object.freeze({
     action: 'deactivate',
     policyId: snapshot.policyId,
-    request: Object.freeze({ expectedVersion: snapshot.version }),
+    request: createPolicyDeactivateRequest(snapshot),
   }) as PolicyWriteCommand
 }
 
@@ -108,7 +124,13 @@ export function createPolicyWriteOperation(execute: Execute) {
       return () => listeners.delete(listener)
     },
     prepare(command: PolicyWriteCommand) {
-      if (disposed || state.status === 'submitting') return
+      if (
+        disposed ||
+        state.status === 'submitting' ||
+        state.status === 'conflict' ||
+        state.status === 'unknown'
+      )
+        return
       publish({ status: 'confirming', command })
     },
     cancel() {
@@ -121,20 +143,34 @@ export function createPolicyWriteOperation(execute: Execute) {
       controller = new AbortController()
       publish({ status: 'submitting', command })
       try {
-        const result = await execute(command, controller.signal)
-        if (current === generation && !disposed)
-          publish({ status: 'success', action: command.action, result })
+        const receipt = await execute(command, controller.signal)
+        if (current === generation && !disposed) publish({ status: 'success', ...receipt })
       } catch (error: unknown) {
         if (current === generation && !disposed) {
           publish({ status: classifyPolicyWriteFailure(error), command, error })
         }
       }
     },
+    reconciled(command: PolicyWriteCommand) {
+      if (
+        (state.status === 'conflict' || state.status === 'unknown') &&
+        state.command === command
+      ) {
+        publish({ status: 'idle' })
+      }
+    },
     reset() {
+      if (
+        state.status === 'submitting' ||
+        state.status === 'conflict' ||
+        state.status === 'unknown'
+      )
+        return false
       generation += 1
       controller?.abort()
       controller = undefined
       if (!disposed) publish({ status: 'idle' })
+      return true
     },
     dispose() {
       if (disposed) return
