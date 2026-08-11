@@ -76,8 +76,8 @@ Web source. No browser ABAC evaluation, request authority, or legacy access endp
 
 The authenticated shell derives Sidebar and command-palette navigation from implemented route
 metadata; currently that closed production set contains Home, Identity self-service, Account Status,
-Roles, Policies, key-driven Settings Config, Secret Reference publish, Runtime details, and Audit
-queries.
+Roles, Policies, key-driven Settings Config, Secret Reference publish, Secret Material reveal,
+Runtime details, Audit queries, and About release evidence.
 Removed and future capabilities
 do not receive placeholder routes or menu entries. `@rss/shared` owns a discriminated `SourceMeta`
 model with sealed, frozen display constants; direct object-literal construction is rejected. Reusable
