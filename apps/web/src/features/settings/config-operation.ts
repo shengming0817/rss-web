@@ -66,6 +66,9 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
   }
 
   async function read(key: string) {
+    const unresolvedKey = state.status === 'unknown' ? state.key : undefined
+    const reconciling = unresolvedKey !== undefined
+    if (reconciling && key !== unresolvedKey) return
     abort()
     const current = generation
     controller = new AbortController()
@@ -79,7 +82,11 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
     } catch (error: unknown) {
       if (current !== generation || signal.aborted) return
       controller = undefined
-      publish({ status: 'error', action: 'read', key, error })
+      publish(
+        reconciling
+          ? { status: 'unknown', key, error }
+          : { status: 'error', action: 'read', key, error },
+      )
     }
   }
 

@@ -63,6 +63,35 @@ describe('Config operation', () => {
     expect(operation.getState()).toEqual({ status: 'ready', entry })
   })
 
+  it('keeps writes locked when reconciliation fails and only unlocks after an authoritative GET', async () => {
+    const reconciliationFailure = networkErrorForTest()
+    const get = vi
+      .fn()
+      .mockRejectedValueOnce(reconciliationFailure)
+      .mockResolvedValueOnce({ data: entry })
+    const operation = createConfigOperation(
+      api({ get, publish: vi.fn().mockRejectedValue(networkErrorForTest()) }),
+    )
+    operation.beginPublish('app.k')
+    await operation.confirmPublish('secret')
+
+    await operation.read('different.k')
+    expect(get).not.toHaveBeenCalled()
+    await operation.read('app.k')
+    expect(operation.getState()).toEqual({
+      status: 'unknown',
+      key: 'app.k',
+      error: reconciliationFailure,
+    })
+    expect(operation.beginPublish('app.k')).toBe(false)
+    expect(operation.beginDelete('app.k')).toBe(false)
+    expect(operation.reset()).toBe(false)
+
+    await operation.read('app.k')
+    expect(get).toHaveBeenCalledTimes(2)
+    expect(operation.getState()).toEqual({ status: 'ready', entry })
+  })
+
   it.each([
     [401, wire(401, 'ERR_CORE_UNAUTHENTICATED', 'unauthenticated')],
     [403, wire(403, 'ERR_CORE_FORBIDDEN', 'forbidden')],

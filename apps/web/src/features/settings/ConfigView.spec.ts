@@ -90,7 +90,11 @@ describe('ConfigView', () => {
   })
 
   it('locks every write control after an unknown publish until explicit GET succeeds', async () => {
-    const settings = api({ publish: vi.fn().mockRejectedValue(networkErrorForTest()) })
+    const get = vi
+      .fn()
+      .mockRejectedValueOnce(networkErrorForTest())
+      .mockResolvedValueOnce({ data: { key: 'app.k', value: 'sensitive', version: 2 } })
+    const settings = api({ get, publish: vi.fn().mockRejectedValue(networkErrorForTest()) })
     const wrapper = mount(ConfigView, {
       global: {
         plugins: [
@@ -124,6 +128,12 @@ describe('ConfigView', () => {
     await wrapper.get('button.v1-btn:not([disabled])').trigger('click')
     await flushPromises()
     expect(settings.get).toHaveBeenCalledOnce()
+    expect(wrapper.text()).toContain('发布结果未知')
+    expect(wrapper.get('#config-key').attributes('disabled')).toBeDefined()
+
+    await wrapper.get('button.v1-btn:not([disabled])').trigger('click')
+    await flushPromises()
+    expect(settings.get).toHaveBeenCalledTimes(2)
     expect(wrapper.get('#config-key').attributes('disabled')).toBeUndefined()
     wrapper.unmount()
   })
