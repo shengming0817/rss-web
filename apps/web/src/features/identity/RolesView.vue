@@ -28,6 +28,8 @@ const commandHeading = ref<HTMLElement>()
 const roleIdField = ref<HTMLInputElement>()
 const subjectField = ref<HTMLInputElement>()
 const busyStatus = ref<HTMLElement>()
+const catalogRetrying = ref(false)
+const catalogRecoveryError = ref<ReturnType<typeof toSafeReadErrorPresentation>>()
 let catalogFocusRequested = false
 
 const pagination = createRolesPagination((cursor, signal) =>
@@ -40,6 +42,8 @@ const unsubscribeCatalog = pagination.subscribe((state) => {
   catalog.value = state
   if (catalogFocusRequested && (state.status === 'ready' || state.status === 'error')) {
     catalogFocusRequested = false
+    catalogRetrying.value = false
+    catalogRecoveryError.value = undefined
     void nextTick(() => catalogHeading.value?.focus())
   }
 })
@@ -62,6 +66,9 @@ const unsubscribeCommand = operation.subscribe((state) => {
 
 const catalogError = computed(() =>
   catalog.value.status === 'error' ? toSafeReadErrorPresentation(catalog.value.error) : undefined,
+)
+const displayedCatalogError = computed(() =>
+  catalogRetrying.value ? catalogRecoveryError.value : catalogError.value,
 )
 const commandError = computed(() =>
   command.value.status === 'error' ? toSafeErrorPresentation(command.value.error) : undefined,
@@ -104,6 +111,10 @@ function nextCatalogPage() {
 }
 
 function recoverCatalog() {
+  const error = catalogError.value
+  if (error === undefined || catalogRetrying.value) return
+  catalogRecoveryError.value = error
+  catalogRetrying.value = true
   catalogFocusRequested = true
   void pagination.start()
 }
@@ -168,10 +179,11 @@ onBeforeUnmount(() => {
         {{ t('roles.catalog.next') }}
       </button>
       <DegradedState
-        v-if="catalogError"
-        :error="catalogError"
-        :recovery="catalogError.recovery === 'retry' ? 'retryRead' : 'none'"
+        v-if="displayedCatalogError"
+        :error="displayedCatalogError"
+        :recovery="displayedCatalogError.recovery === 'retry' ? 'retryRead' : 'none'"
         :heading-level="3"
+        :recovery-busy="catalogRetrying"
         @retry-read="recoverCatalog"
       />
     </section>

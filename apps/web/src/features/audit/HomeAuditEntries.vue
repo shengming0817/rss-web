@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AuditEntriesPage } from '@rss/audit'
 import { ContentState, DegradedState, SourceBadge } from '@rss/core'
@@ -16,24 +16,36 @@ const { locale, t } = useI18n()
 const audit = useAuditApi()
 const state = ref<State>({ status: 'loading' })
 const refreshing = ref(false)
+const retrying = ref(false)
+const heading = ref<HTMLHeadingElement>()
 let generation = 0
 let controller: AbortController | undefined
 
 async function load(): Promise<void> {
   const current = ++generation
   const preservesReadyPage = state.value.status === 'ready'
+  const isRecovery = state.value.status === 'error'
   controller?.abort()
-  controller = new AbortController()
+  const requestController = new AbortController()
+  controller = requestController
   if (preservesReadyPage) refreshing.value = true
+  else if (isRecovery) retrying.value = true
   else state.value = { status: 'loading' }
   try {
-    const page = await audit.listEntries({ limit: 10, signal: controller.signal })
+    const page = await audit.listEntries({ limit: 10, signal: requestController.signal })
     if (current === generation) state.value = { status: 'ready', page }
   } catch (error) {
-    if (current === generation && !controller.signal.aborted)
+    if (current === generation && !requestController.signal.aborted)
       state.value = { status: 'error', error: toSafeReadErrorPresentation(error) }
   } finally {
-    if (current === generation) refreshing.value = false
+    if (current === generation) {
+      refreshing.value = false
+      if (isRecovery) {
+        retrying.value = false
+        await nextTick()
+        heading.value?.focus()
+      }
+    }
   }
 }
 
@@ -60,7 +72,9 @@ function recordedAt(seconds: number): { readonly datetime?: string; readonly tex
 <template>
   <section class="home-panel" aria-labelledby="audit-entries-title">
     <header class="home-panel__header">
-      <h2 id="audit-entries-title">{{ t('auditEntries.title') }}</h2>
+      <h2 id="audit-entries-title" ref="heading" tabindex="-1">
+        {{ t('auditEntries.title') }}
+      </h2>
       <SourceBadge v-if="state.status === 'ready'" :source="RSS_SOURCE" />
     </header>
     <p class="v1-sub">{{ t('auditEntries.firstPageNotice') }}</p>
@@ -116,6 +130,7 @@ function recordedAt(seconds: number): { readonly datetime?: string; readonly tex
       :error="state.error"
       :heading-level="3"
       :recovery="state.error.recovery === 'retry' ? 'retryRead' : 'none'"
+      :recovery-busy="retrying"
       @retry-read="load"
     />
   </section>

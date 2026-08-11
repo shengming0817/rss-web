@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { networkErrorForTest } from '@rss/api/testing'
 import { createWebI18n } from '../../i18n'
 
 const list = vi.fn()
@@ -18,8 +19,12 @@ import RolesView from './RolesView.vue'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((resolvePromise) => (resolve = resolvePromise))
-  return { promise, resolve }
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, reject, resolve }
 }
 
 function button(wrapper: ReturnType<typeof mountView>, text: string) {
@@ -86,6 +91,43 @@ describe('RolesView', () => {
 
     expect(wrapper.find('[data-source="unavailable"]').exists()).toBe(true)
     expect(wrapper.find('[data-action="recover"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('keeps catalog retry focus while pending and focuses its heading after settle', async () => {
+    const pending = deferred<{ data: []; hasMore: false }>()
+    list.mockRejectedValueOnce(networkErrorForTest()).mockReturnValueOnce(pending.promise)
+    const wrapper = mountView()
+    await flushPromises()
+
+    const recovery = wrapper.get<HTMLButtonElement>('[data-action="recover"]')
+    recovery.element.focus()
+    await recovery.trigger('click')
+
+    expect(wrapper.get('[data-action="recover"]').element).toBe(recovery.element)
+    expect(recovery.attributes('disabled')).toBeDefined()
+    expect(recovery.attributes('aria-busy')).toBe('true')
+    expect(document.activeElement).toBe(recovery.element)
+    expect(list).toHaveBeenCalledTimes(2)
+
+    pending.resolve({ data: [], hasMore: false })
+    await flushPromises()
+    expect(document.activeElement).toBe(wrapper.get('#roles-catalog-title').element)
+    wrapper.unmount()
+  })
+
+  it('focuses the catalog heading when a deferred recovery fails', async () => {
+    const pending = deferred<{ data: []; hasMore: false }>()
+    list.mockRejectedValueOnce(networkErrorForTest()).mockReturnValueOnce(pending.promise)
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.get('[data-action="recover"]').trigger('click')
+    pending.reject(networkErrorForTest())
+    await flushPromises()
+
+    expect(wrapper.find('[data-action="recover"]').exists()).toBe(true)
+    expect(document.activeElement).toBe(wrapper.get('#roles-catalog-title').element)
     wrapper.unmount()
   })
 

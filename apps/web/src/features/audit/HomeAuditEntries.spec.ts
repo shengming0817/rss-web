@@ -66,6 +66,53 @@ describe('HomeAuditEntries', () => {
     expect(wrapper.text()).toContain('opaque')
   })
 
+  it('keeps retry focus while recovery is pending and moves it to the panel heading on settle', async () => {
+    let resolveRetry!: (value: typeof page) => void
+    const retry = new Promise<typeof page>((resolve) => (resolveRetry = resolve))
+    const listEntries = vi
+      .fn()
+      .mockRejectedValueOnce(networkErrorForTest())
+      .mockReturnValueOnce(retry)
+    const wrapper = mountEntries(listEntries)
+    document.body.append(wrapper.element)
+    await flushPromises()
+
+    const recovery = wrapper.get<HTMLButtonElement>('[data-action="recover"]')
+    recovery.element.focus()
+    await recovery.trigger('click')
+
+    expect(wrapper.get('[data-action="recover"]').element).toBe(recovery.element)
+    expect(recovery.attributes('disabled')).toBeDefined()
+    expect(recovery.attributes('aria-busy')).toBe('true')
+    expect(document.activeElement).toBe(recovery.element)
+    expect(listEntries).toHaveBeenCalledTimes(2)
+
+    resolveRetry(page)
+    await flushPromises()
+    expect(document.activeElement).toBe(wrapper.get('#audit-entries-title').element)
+    wrapper.unmount()
+  })
+
+  it('focuses the panel heading when a deferred recovery fails', async () => {
+    let rejectRetry!: (error: unknown) => void
+    const retry = new Promise<typeof page>((_resolve, reject) => (rejectRetry = reject))
+    const listEntries = vi
+      .fn()
+      .mockRejectedValueOnce(networkErrorForTest())
+      .mockReturnValueOnce(retry)
+    const wrapper = mountEntries(listEntries)
+    document.body.append(wrapper.element)
+    await flushPromises()
+
+    await wrapper.get('[data-action="recover"]').trigger('click')
+    rejectRetry(networkErrorForTest())
+    await flushPromises()
+
+    expect(wrapper.find('[data-action="recover"]').exists()).toBe(true)
+    expect(document.activeElement).toBe(wrapper.get('#audit-entries-title').element)
+    wrapper.unmount()
+  })
+
   it('aborts the active read when the panel unmounts', async () => {
     let capturedSignal: AbortSignal | undefined
     const listEntries = vi.fn(({ signal }: { signal?: AbortSignal } = {}) => {

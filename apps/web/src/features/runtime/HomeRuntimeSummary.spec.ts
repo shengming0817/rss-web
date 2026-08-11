@@ -65,6 +65,65 @@ describe('HomeRuntimeSummary', () => {
     expect(wrapper.get('[data-source="rss"]')).toBeTruthy()
   })
 
+  it('keeps retry focus while recovery is pending and moves it to the panel heading on settle', async () => {
+    let resolveRetry!: (value: typeof response) => void
+    const retry = new Promise<typeof response>((resolve) => (resolveRetry = resolve))
+    const error = decodeWireErrorForTest(503, {
+      error: {
+        code: 'ERR_CORE_PROVIDER_UNAVAILABLE',
+        message: 'unavailable',
+        retryable: true,
+        details: [],
+        requestId: 'runtime-retry',
+      },
+    })
+    const inventory = vi.fn().mockRejectedValueOnce(error).mockReturnValueOnce(retry)
+    const wrapper = mountSummary(inventory)
+    document.body.append(wrapper.element)
+    await flushPromises()
+
+    const recovery = wrapper.get<HTMLButtonElement>('[data-action="recover"]')
+    recovery.element.focus()
+    await recovery.trigger('click')
+
+    expect(wrapper.get('[data-action="recover"]').element).toBe(recovery.element)
+    expect(recovery.attributes('disabled')).toBeDefined()
+    expect(recovery.attributes('aria-busy')).toBe('true')
+    expect(document.activeElement).toBe(recovery.element)
+    expect(inventory).toHaveBeenCalledTimes(2)
+
+    resolveRetry(response)
+    await flushPromises()
+    expect(document.activeElement).toBe(wrapper.get('#runtime-summary-title').element)
+    wrapper.unmount()
+  })
+
+  it('focuses the panel heading when a deferred recovery fails', async () => {
+    let rejectRetry!: (error: unknown) => void
+    const retry = new Promise<typeof response>((_resolve, reject) => (rejectRetry = reject))
+    const error = decodeWireErrorForTest(503, {
+      error: {
+        code: 'ERR_CORE_PROVIDER_UNAVAILABLE',
+        message: 'unavailable',
+        retryable: true,
+        details: [],
+        requestId: 'runtime-retry-failed',
+      },
+    })
+    const inventory = vi.fn().mockRejectedValueOnce(error).mockReturnValueOnce(retry)
+    const wrapper = mountSummary(inventory)
+    document.body.append(wrapper.element)
+    await flushPromises()
+
+    await wrapper.get('[data-action="recover"]').trigger('click')
+    rejectRetry(error)
+    await flushPromises()
+
+    expect(wrapper.find('[data-action="recover"]').exists()).toBe(true)
+    expect(document.activeElement).toBe(wrapper.get('#runtime-summary-title').element)
+    wrapper.unmount()
+  })
+
   it('offers manual recovery for a transient read failure and aborts on unmount', async () => {
     let capturedSignal: AbortSignal | undefined
     const inventory = vi.fn(({ signal }: { signal?: AbortSignal } = {}) => {

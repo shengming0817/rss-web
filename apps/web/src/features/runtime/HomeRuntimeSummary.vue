@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { RuntimeInventoryFacts } from '@rss/runtime'
 import { DegradedState, SourceBadge } from '@rss/core'
@@ -15,20 +15,31 @@ type State =
 const { t } = useI18n()
 const runtime = useRuntimeApi()
 const state = ref<State>({ status: 'loading' })
+const retrying = ref(false)
+const heading = ref<HTMLHeadingElement>()
 let generation = 0
 let controller: AbortController | undefined
 
 async function load(): Promise<void> {
   const current = ++generation
+  const isRecovery = state.value.status === 'error'
   controller?.abort()
-  controller = new AbortController()
-  state.value = { status: 'loading' }
+  const requestController = new AbortController()
+  controller = requestController
+  if (isRecovery) retrying.value = true
+  else state.value = { status: 'loading' }
   try {
-    const response = await runtime.inventory({ signal: controller.signal })
+    const response = await runtime.inventory({ signal: requestController.signal })
     if (current === generation) state.value = { status: 'ready', data: response.data }
   } catch (error) {
-    if (current === generation && !controller.signal.aborted)
+    if (current === generation && !requestController.signal.aborted)
       state.value = { status: 'error', error: toSafeReadErrorPresentation(error) }
+  } finally {
+    if (current === generation && isRecovery) {
+      retrying.value = false
+      await nextTick()
+      heading.value?.focus()
+    }
   }
 }
 
@@ -42,7 +53,9 @@ onBeforeUnmount(() => {
 <template>
   <section class="home-panel" aria-labelledby="runtime-summary-title">
     <header class="home-panel__header">
-      <h2 id="runtime-summary-title">{{ t('runtimeSummary.title') }}</h2>
+      <h2 id="runtime-summary-title" ref="heading" tabindex="-1">
+        {{ t('runtimeSummary.title') }}
+      </h2>
       <SourceBadge v-if="state.status === 'ready'" :source="RSS_SOURCE" />
     </header>
     <p v-if="state.status === 'loading'" role="status" aria-busy="true">
@@ -80,6 +93,7 @@ onBeforeUnmount(() => {
       :error="state.error"
       :heading-level="3"
       :recovery="state.error.recovery === 'retry' ? 'retryRead' : 'none'"
+      :recovery-busy="retrying"
       @retry-read="load"
     />
   </section>
