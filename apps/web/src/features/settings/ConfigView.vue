@@ -22,9 +22,12 @@ const deleteAuthorization = useAuthorizationIntent(CONFIG_DELETE_INTENT)
 const rollbackAuthorization = useAuthorizationIntent(CONFIG_ROLLBACK_INTENT)
 const keyInput = ref('')
 const valueInput = ref('')
+const rollbackVersionInput = ref('')
 const revealValue = ref(false)
 const attempted = ref(false)
+const rollbackAttempted = ref(false)
 const keyField = ref<HTMLInputElement>()
+const rollbackVersionField = ref<HTMLInputElement>()
 const panelHeading = ref<HTMLElement>()
 const busyStatus = ref<HTMLElement>()
 
@@ -42,19 +45,35 @@ const unsubscribe = operation.subscribe((next) => {
     next.status === 'ready' ||
     next.status === 'published' ||
     next.status === 'deleted' ||
+    next.status === 'rolled-back' ||
     next.status === 'error' ||
     next.status === 'unknown'
   ) {
     void nextTick(() => panelHeading.value?.focus())
   }
-  if (next.status === 'publishing' || next.status === 'deleting' || next.status === 'reading') {
+  if (
+    next.status === 'publishing' ||
+    next.status === 'deleting' ||
+    next.status === 'rolling-back' ||
+    next.status === 'reading'
+  ) {
     void nextTick(() => busyStatus.value?.focus())
   }
 })
 
 const key = computed(() => keyInput.value)
 const invalidKey = computed(() => attempted.value && key.value.length === 0)
-const busy = computed(() => ['reading', 'publishing', 'deleting'].includes(state.value.status))
+const rollbackVersion = computed(() => {
+  if (!/^[1-9]\d*$/.test(rollbackVersionInput.value)) return undefined
+  const parsed = Number(rollbackVersionInput.value)
+  return Number.isSafeInteger(parsed) ? parsed : undefined
+})
+const invalidRollbackVersion = computed(
+  () => rollbackAttempted.value && rollbackVersion.value === undefined,
+)
+const busy = computed(() =>
+  ['reading', 'publishing', 'deleting', 'rolling-back'].includes(state.value.status),
+)
 const reconciliationRequired = computed(() => state.value.status === 'unknown')
 const controlsLocked = computed(() => busy.value || reconciliationRequired.value)
 const error = computed(() => {
@@ -65,14 +84,33 @@ const error = computed(() => {
     : toSafeErrorPresentation(current.error)
 })
 const confirmation = computed(() =>
-  state.value.status === 'confirming-publish' || state.value.status === 'confirming-delete'
+  state.value.status === 'confirming-publish' ||
+  state.value.status === 'confirming-delete' ||
+  state.value.status === 'confirming-rollback'
     ? state.value
     : undefined,
 )
+const confirmationDescription = computed(() => {
+  const current = confirmation.value
+  if (!current) return ''
+  switch (current.status) {
+    case 'confirming-publish':
+      return t('settingsConfig.confirmPublish', { key: current.key })
+    case 'confirming-delete':
+      return t('settingsConfig.confirmDelete', { key: current.key })
+    case 'confirming-rollback':
+      return t('settingsConfig.confirmRollback', {
+        key: current.key,
+        toVersion: current.toVersion,
+      })
+  }
+  return ''
+})
 
 watch(keyInput, () => {
   if (reconciliationRequired.value) return
   attempted.value = false
+  rollbackAttempted.value = false
   revealValue.value = false
   operation.reset()
 })
@@ -104,6 +142,46 @@ function confirmPublish() {
 function beginDelete() {
   if (!validateKey() || busy.value) return
   operation.beginDelete(key.value)
+}
+
+function beginRollback() {
+  rollbackAttempted.value = true
+  if (!validateKey() || busy.value) return
+  if (rollbackVersion.value === undefined) {
+    void nextTick(() => rollbackVersionField.value?.focus())
+    return
+  }
+  operation.beginRollback(key.value, rollbackVersion.value)
+}
+
+function closeConfirmation() {
+  const current = confirmation.value
+  if (!current) return
+  switch (current.status) {
+    case 'confirming-publish':
+      operation.cancelPublish()
+      break
+    case 'confirming-delete':
+      operation.cancelDelete()
+      break
+    case 'confirming-rollback':
+      operation.cancelRollback()
+  }
+}
+
+function confirmOperation() {
+  const current = confirmation.value
+  if (!current) return
+  switch (current.status) {
+    case 'confirming-publish':
+      confirmPublish()
+      break
+    case 'confirming-delete':
+      void operation.confirmDelete()
+      break
+    case 'confirming-rollback':
+      void operation.confirmRollback()
+  }
 }
 
 function reconcile() {
@@ -169,6 +247,22 @@ onBeforeUnmount(() => {
           aria-describedby="config-value-hint"
         />
         <p id="config-value-hint">{{ t('settingsConfig.valueHint') }}</p>
+        <label for="config-rollback-version">{{ t('settingsConfig.rollbackVersion') }}</label>
+        <input
+          id="config-rollback-version"
+          ref="rollbackVersionField"
+          v-model="rollbackVersionInput"
+          inputmode="numeric"
+          autocomplete="off"
+          spellcheck="false"
+          :disabled="controlsLocked"
+          :aria-invalid="invalidRollbackVersion"
+          aria-describedby="config-rollback-version-hint"
+        />
+        <p id="config-rollback-version-hint">{{ t('settingsConfig.rollbackVersionHint') }}</p>
+        <p v-if="invalidRollbackVersion" role="alert">
+          {{ t('settingsConfig.rollbackVersionRequired') }}
+        </p>
         <div class="config-actions">
           <button type="button" class="v1-btn" :disabled="controlsLocked" @click="read">
             {{ t('settingsConfig.read') }}
@@ -178,6 +272,9 @@ onBeforeUnmount(() => {
           </button>
           <button type="button" class="v1-ghost" :disabled="controlsLocked" @click="beginDelete">
             {{ t('settingsConfig.prepareDelete') }}
+          </button>
+          <button type="button" class="v1-ghost" :disabled="controlsLocked" @click="beginRollback">
+            {{ t('settingsConfig.prepareRollback') }}
           </button>
         </div>
       </div>
@@ -210,7 +307,24 @@ onBeforeUnmount(() => {
       <p v-if="state.status === 'deleted'" role="status">
         {{ t('settingsConfig.deleted', { key: state.key }) }}
       </p>
-      <p v-if="state.status === 'unknown'" role="alert">{{ t('settingsConfig.unknown') }}</p>
+      <p v-if="state.status === 'rolled-back'" role="status">
+        {{
+          t('settingsConfig.rolledBack', {
+            key: state.receipt.key,
+            sourceVersion: state.receipt.sourceVersion,
+            version: state.receipt.version,
+          })
+        }}
+      </p>
+      <p v-if="state.status === 'unknown'" role="alert">
+        {{
+          t(
+            state.action === 'rollback'
+              ? 'settingsConfig.rollbackUnknown'
+              : 'settingsConfig.publishUnknown',
+          )
+        }}
+      </p>
       <ErrorPage
         v-if="error"
         :error="error"
@@ -228,45 +342,15 @@ onBeforeUnmount(() => {
       role="alertdialog"
       title-id="config-confirm-title"
       description-id="config-confirm-description"
-      @close="
-        confirmation?.status === 'confirming-publish'
-          ? operation.cancelPublish()
-          : operation.cancelDelete()
-      "
+      @close="closeConfirmation"
     >
       <h2 id="config-confirm-title">{{ t('settingsConfig.confirmTitle') }}</h2>
-      <p id="config-confirm-description">
-        {{
-          t(
-            confirmation?.status === 'confirming-publish'
-              ? 'settingsConfig.confirmPublish'
-              : 'settingsConfig.confirmDelete',
-            { key: confirmation?.key },
-          )
-        }}
-      </p>
+      <p id="config-confirm-description">{{ confirmationDescription }}</p>
       <div class="config-actions">
-        <button
-          type="button"
-          class="v1-ghost"
-          @click="
-            confirmation?.status === 'confirming-publish'
-              ? operation.cancelPublish()
-              : operation.cancelDelete()
-          "
-        >
+        <button type="button" class="v1-ghost" @click="closeConfirmation">
           {{ t('settingsConfig.cancel') }}
         </button>
-        <button
-          type="button"
-          class="v1-btn"
-          data-action="confirm-config"
-          @click="
-            confirmation?.status === 'confirming-publish'
-              ? confirmPublish()
-              : operation.confirmDelete()
-          "
-        >
+        <button type="button" class="v1-btn" data-action="confirm-config" @click="confirmOperation">
           {{ t('settingsConfig.confirm') }}
         </button>
       </div>

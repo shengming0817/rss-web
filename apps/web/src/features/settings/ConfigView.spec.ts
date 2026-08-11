@@ -21,6 +21,7 @@ function api(overrides: Partial<SettingsApi> = {}): SettingsApi {
     get: vi.fn().mockResolvedValue({ data: { key: 'app.k', value: 'sensitive', version: 2 } }),
     publish: vi.fn().mockResolvedValue({ data: { key: 'app.k', version: 3 } }),
     delete: vi.fn().mockResolvedValue(undefined),
+    rollback: vi.fn().mockResolvedValue({ data: { key: 'app.k', version: 4, sourceVersion: 1 } }),
     ...overrides,
   } as SettingsApi
 }
@@ -116,7 +117,8 @@ describe('ConfigView', () => {
     expect(wrapper.text()).toContain('发布结果未知')
     expect(wrapper.get('#config-key').attributes('disabled')).toBeDefined()
     expect(wrapper.get('#config-value').attributes('disabled')).toBeDefined()
-    for (const label of ['读取当前配置', '准备发布', '准备删除']) {
+    expect(wrapper.get('#config-rollback-version').attributes('disabled')).toBeDefined()
+    for (const label of ['读取当前配置', '准备发布', '准备删除', '准备回滚']) {
       expect(
         wrapper
           .findAll('button')
@@ -135,6 +137,50 @@ describe('ConfigView', () => {
     await flushPromises()
     expect(settings.get).toHaveBeenCalledTimes(2)
     expect(wrapper.get('#config-key').attributes('disabled')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('accepts only a canonical explicit rollback coordinate and confirms without a history preview', async () => {
+    const settings = api()
+    const wrapper = mount(ConfigView, {
+      attachTo: document.body,
+      global: {
+        plugins: [
+          createWebI18n(),
+          settingsApiPlugin(settings),
+          authorizationExperiencePlugin(authorization),
+        ],
+      },
+    })
+    await wrapper.get('#config-key').setValue('app.k')
+    const prepare = () =>
+      wrapper
+        .findAll('button')
+        .find((button) => button.text() === '准备回滚')!
+        .trigger('click')
+
+    for (const invalid of ['', '0', '-1', '1.5', '1e3', '9007199254740992']) {
+      await wrapper.get('#config-rollback-version').setValue(invalid)
+      await prepare()
+      expect(wrapper.find('[role="alertdialog"]').exists()).toBe(false)
+    }
+
+    await wrapper.get('#config-rollback-version').setValue('1')
+    await wrapper.get('#config-value').setValue('must-not-enter-confirmation')
+    await prepare()
+    const dialog = wrapper.get('[role="alertdialog"]')
+    expect(dialog.text()).toContain('app.k')
+    expect(dialog.text()).toContain('1')
+    expect(dialog.text()).not.toContain('must-not-enter-confirmation')
+    await dialog.get('[data-action="confirm-config"]').trigger('click')
+    await flushPromises()
+    expect(settings.rollback).toHaveBeenCalledWith(
+      'app.k',
+      { toVersion: 1 },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
+    expect(wrapper.text()).toContain('源版本 1')
+    expect(wrapper.text()).toContain('新版本 4')
     wrapper.unmount()
   })
 })
