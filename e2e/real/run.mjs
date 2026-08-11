@@ -535,6 +535,7 @@ try {
   environment = {
     ...process.env,
     RSS_WEB_ROOT: webSnapshot,
+    RSS_WEB_BUILD_REVISION: webRevision,
     RSS_WEB_REAL_TENANT_ID: tenant,
     RSS_WEB_REAL_EDGE_PORT: String(edgePort),
     GIT_SHA: revision,

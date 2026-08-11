@@ -26,10 +26,14 @@ RUN pnpm install --frozen-lockfile
 
 # 依赖层落定后，复制源码并构建
 COPY . .
-RUN pnpm -F @rss/web build
+ARG RSS_WEB_BUILD_REVISION
+RUN printf '%s\n' "$RSS_WEB_BUILD_REVISION" | grep -Eq '^[0-9a-f]{40}$' \
+  && RSS_WEB_REVISION="$RSS_WEB_BUILD_REVISION" pnpm -F @rss/web build
 
 # ── 运行阶段 ───────────────────────────────────────────────────────────────
 FROM nginx:1.27-alpine AS runtime
+ARG RSS_WEB_BUILD_REVISION
+LABEL org.opencontainers.image.revision=$RSS_WEB_BUILD_REVISION
 ENV NGINX_ENVSUBST_FILTER=^RSS_WEB_
 RUN rm -rf /usr/share/nginx/html && mkdir -p /etc/nginx/snippets
 COPY deploy/web/templates/default.conf.template /etc/nginx/templates/default.conf.template

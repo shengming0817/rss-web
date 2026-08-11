@@ -25,7 +25,7 @@ function assertSecurityHeaders(response) {
   assert.equal(response.headers['strict-transport-security'], undefined)
 }
 
-async function browserSecuritySmoke(port) {
+async function browserSecuritySmoke(port, webRevision) {
   const browser = await chromium.launch({ headless: true })
   try {
     const context = await browser.newContext()
@@ -89,6 +89,9 @@ async function browserSecuritySmoke(port) {
     await page.getByLabel('密码').fill('edge-password')
     await page.getByRole('button', { name: '登录', exact: true }).click()
     await page.getByRole('navigation', { name: '主导航' }).waitFor()
+    await page.locator('a[href="/about"]').click()
+    await page.waitForURL(/\/about$/)
+    assert.equal(await page.locator('[data-release-web-revision]').textContent(), webRevision)
     const paletteButton = page.getByRole('button', { name: '打开命令面板' })
     await paletteButton.focus()
     await page.keyboard.press('Enter')
@@ -111,6 +114,7 @@ const directory = dirname(fileURLToPath(import.meta.url))
 const root = resolve(directory, '../..')
 const composeFile = resolve(directory, 'compose.yml')
 const project = `rss-web-edge-${process.pid}`
+const edgeImage = `${project}-edge`
 const tenant = 'f47ac10b-58cc-4372-a567-0e02b2c3d479'
 
 function docker(args, options = {}) {
@@ -119,6 +123,10 @@ function docker(args, options = {}) {
     encoding: 'utf8',
     ...options,
   })
+}
+
+function dockerEngine(args, options = {}) {
+  return spawnSync('docker', args, { cwd: root, encoding: 'utf8', ...options })
 }
 
 async function freePort() {
@@ -168,11 +176,35 @@ function assertGatewayUnavailable(status) {
 }
 
 const port = await freePort()
-const environment = { ...process.env, RSS_EDGE_TEST_PORT: String(port) }
+const revisionResult = spawnSync('/usr/bin/git', ['rev-parse', 'HEAD'], {
+  cwd: root,
+  encoding: 'utf8',
+})
+assert.equal(revisionResult.status, 0, 'Web revision lookup failed')
+const webRevision = revisionResult.stdout.trim()
+assert.match(webRevision, /^[0-9a-f]{40}$/)
+const environment = {
+  ...process.env,
+  RSS_EDGE_TEST_PORT: String(port),
+  RSS_WEB_BUILD_REVISION: webRevision,
+}
 
 try {
   let result = docker(['build', 'edge'], { env: environment, stdio: 'inherit' })
   assert.equal(result.status, 0, 'edge image build failed')
+
+  const imageRevision = dockerEngine(
+    [
+      'image',
+      'inspect',
+      '--format',
+      '{{ index .Config.Labels "org.opencontainers.image.revision" }}',
+      edgeImage,
+    ],
+    { env: environment },
+  )
+  assert.equal(imageRevision.status, 0, `edge image inspection failed: ${imageRevision.stderr}`)
+  assert.equal(imageRevision.stdout.trim(), webRevision)
 
   expectFailure(['-e', 'RSS_WEB_TENANT_ID='], {})
   expectFailure(['-e', 'RSS_WEB_TENANT_ID=F47AC10B-58CC-4372-A567-0E02B2C3D479'], {})
@@ -196,7 +228,7 @@ try {
   assertSecurityHeaders(rootResponse)
   assert.equal(findInlineScriptTags(rootResponse.text).length, 0)
   assert(!rootResponse.headers['content-security-policy'].match(/sha(?:256|384|512)-/))
-  await browserSecuritySmoke(port)
+  await browserSecuritySmoke(port, webRevision)
 
   for (const path of ['/index.html', '/theme-init.js', '/settings/secret-material']) {
     const shell = await request(port, path)

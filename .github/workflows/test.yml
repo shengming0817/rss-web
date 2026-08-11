@@ -2,6 +2,9 @@
 # on PR + push develop
 name: test
 
+env:
+  RSS_WEB_REVISION: ${{ github.sha }}
+
 on:
   pull_request:
   push:
