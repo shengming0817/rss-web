@@ -47,16 +47,31 @@
   route. The fixture was corrected by removing that invalid obligation, not by weakening RSS or adding
   a Web fallback. The final archived run then passed all phases.
 
+## Review remediation
+
+- Detail decoding now correlates the returned branded `policyId` with the requested path coordinate at
+  the Identity adapter boundary. A shape-valid response for another policy fails closed before Web
+  state can publish it.
+- Contract vocabulary now has one typed carrier for every attribute, predicate family, and row scope;
+  exhaustive fixtures cover every current predicate and operand variant. Policy version is also closed
+  to the active positive-int32 range.
+- Membership operands retain element boundaries as semantic lists, including strings containing commas.
+  Catalog and detail failures are announced, and the independent detail panel reports RSS or
+  Unavailable provenance from its own request state.
+- Cursor, policy-identity, generation, abort, restart, dispose, late resolve, and late reject fences now
+  have independent regression cases. Edge smoke also proves the exact upstream list/detail URL,
+  including the list query and detail coordinate.
+
 ## Verification
 
-- Frozen install, workspace typecheck, lint, format check, 747 unit/root tests, 692 coverage tests, 55
+- Frozen install, workspace typecheck, lint, format check, 791 unit/root tests, 736 coverage tests, 55
   boundary tests, production build, built-identity scan, and diff check passed.
 - Seventeen default Chromium journeys passed, including list-to-detail success, explicit next/detail
   interaction, closed navigation, safe source metadata, and final 403 handling.
 - Docker/Nginx Edge smoke passed exact list/get methods and paths, bearer pass-through, forged tenant
   removal, Primary routing, listener isolation, and checked teardown.
 - The opt-in real runner archived clean Web implementation
-  `91eca4d2246483818ba590e27c670a08e2cef70c` and pinned RSS revision
+  `dbf3f0fd6b6977777944894cd4bcbfb0272acce0` and pinned RSS revision
   `b7f3e1d0bcc5b2e59639a81b4f37937914b53f00`. Main, password-change,
   account-status-self, roles, rate-limited, budget-exhausted, Admin-down, and Primary-down phases passed;
   checked cleanup passed.
@@ -77,11 +92,11 @@
 
 ## Changed-line classification
 
-- Semantic handwritten code and locale content: 1,151 additions / 3 deletions.
-- Unit/type/boundary/browser/Edge/real tests and harness: 792 additions / 2 deletions.
+- Semantic handwritten code and locale content: 1,211 additions / 3 deletions.
+- Unit/type/boundary/browser/Edge/real tests and harness: 1,117 additions / 2 deletions.
 - Documentation and governance: 29 additions / 1 deletion.
 - Generated and lockfile: 0 lines.
-- Implementation total excluding this receipt: 1,972 additions / 6 deletions.
+- Implementation total excluding this receipt: 2,357 additions / 6 deletions.
 
 ## Rollback
 
