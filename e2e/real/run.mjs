@@ -573,6 +573,8 @@ try {
     RSS_WEB_REAL_TENANT_ID: tenant,
     RSS_WEB_REAL_EDGE_PORT: String(edgePort),
     RSS_WEB_REAL_PREVIEW_DIST: previewDist,
+    RSS_WEB_REAL_RATE_LIMIT_PER_SECOND: '100',
+    RSS_WEB_REAL_RATE_LIMIT_BURST: '200',
     GIT_SHA: revision,
     BUILD_DATE: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
   }
@@ -606,6 +608,9 @@ try {
     'rate-limited',
   ]
   for (const phase of isolatedMainPhases) {
+    const rateLimited = phase === 'rate-limited'
+    environment.RSS_WEB_REAL_RATE_LIMIT_PER_SECOND = rateLimited ? '5' : '100'
+    environment.RSS_WEB_REAL_RATE_LIMIT_BURST = rateLimited ? '10' : '200'
     await compose(['up', '-d', '--no-deps', '--force-recreate', 'server'], {
       stage: `environment:${phase}-server`,
     })
@@ -617,6 +622,8 @@ try {
     await playwright(phase)
   }
 
+  environment.RSS_WEB_REAL_RATE_LIMIT_PER_SECOND = '100'
+  environment.RSS_WEB_REAL_RATE_LIMIT_BURST = '200'
   environment.RSS_WEB_REAL_REQUEST_BUDGET_MS = '1'
   await compose(['up', '-d', '--no-deps', '--force-recreate', 'server'], {
     stage: 'environment:budget-fault-server',
