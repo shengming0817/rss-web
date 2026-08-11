@@ -371,6 +371,8 @@ test.describe('RSS Web Identity UX', () => {
     await page.getByRole('button', { name: '登录', exact: true }).click()
     const navigation = page.getByRole('navigation', { name: '主导航' })
     await expect(navigation.getByRole('link')).toHaveCount(6)
+    await expect(navigation.getByRole('link', { name: /Bindings Preview/ })).toHaveCount(0)
+    await expect(navigation.locator('[data-source="mock"]')).toHaveCount(0)
     await expect(navigation.getByRole('link', { name: /首页/ })).toContainText('RSS')
     await expect(navigation.getByRole('link', { name: /角色/ })).toContainText('RSS')
     await navigation.getByRole('link', { name: /运行时/ }).click()
@@ -381,6 +383,12 @@ test.describe('RSS Web Identity UX', () => {
     await expect(page.getByText('hidden.internal')).toHaveCount(0)
     await expect(page.getByText('hidden-placement.internal')).toHaveCount(0)
     await expect(page.getByText('spiffe://hidden/runtime')).toHaveCount(0)
+
+    await page.evaluate(() => {
+      window.history.pushState({}, '', '/preview/role-bindings')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+    await expect(page.getByRole('heading', { name: '页面不存在' })).toBeVisible()
 
     await page.evaluate(() => {
       window.history.pushState({}, '', '/removed-capability')

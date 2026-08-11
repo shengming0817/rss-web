@@ -11,6 +11,7 @@ const enUS = {
     identity: 'Identity',
     accountStatus: 'Account status',
     roles: 'Roles',
+    roleBindingsPreview: 'Bindings Preview',
     runtime: 'Runtime',
     audit: 'Audit',
   },
@@ -230,6 +231,14 @@ const enUS = {
       cancel: 'Cancel',
       confirm: 'Submit command',
     },
+  },
+  roleBindingsPreview: {
+    title: 'Role Bindings Preview',
+    subtitle: 'Available only in explicitly enabled development, test, or demo experiences.',
+    warning:
+      'This is a static synthetic Mock / non-authoritative Preview. It is not current binding state and never triggers a real request or command.',
+    bySubject: 'View by Subject',
+    byRole: 'View by Role',
   },
 } satisfies Widen<WebMessageSchema>
 

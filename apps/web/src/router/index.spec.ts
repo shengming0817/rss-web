@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory } from 'vue-router'
-import { RSS_SOURCE } from '@rss/shared'
+import { MOCK_SOURCE, RSS_SOURCE } from '@rss/shared'
 import { createServerAuthorizationPort } from '@rss/authorization'
 import { createPreviewAuthorizationPort } from '@rss/authorization/preview'
 import type { AuthorizationPort } from '@rss/authorization'
@@ -36,12 +36,13 @@ function sessionFixture(initial: IdentitySessionState) {
 function appRouter(
   fixture: ReturnType<typeof sessionFixture>,
   port: AuthorizationPort = createServerAuthorizationPort(),
+  options?: { readonly roleBindingsPreview: boolean },
 ) {
   const authorization = createAuthorizationExperience({
     port,
     session: fixture.session,
   })
-  return createAppRouter(fixture.session, authorization, createMemoryHistory())
+  return createAppRouter(fixture.session, authorization, createMemoryHistory(), options)
 }
 
 describe('session-owned router', () => {
@@ -229,6 +230,41 @@ describe('session-owned router', () => {
         source: RSS_SOURCE,
       },
     ])
+  })
+
+  it('omits the Preview route and navigation unless composition explicitly enables it', async () => {
+    const fixture = sessionFixture({ status: 'anonymous' })
+    const production = appRouter(fixture)
+    expect(production.resolve('/preview/role-bindings').name).toBe('not-found')
+    expect(createShellNavigation(production, (key) => key)).not.toContainEqual(
+      expect.objectContaining({ id: 'role-bindings-preview' }),
+    )
+
+    const preview = appRouter(fixture, createServerAuthorizationPort(), {
+      roleBindingsPreview: true,
+    })
+    expect(preview.resolve('/preview/role-bindings')).toMatchObject({
+      name: 'role-bindings-preview',
+      meta: {
+        sessionAccess: 'authenticated',
+        focusTarget: 'shell-content',
+        navigation: {
+          labelKey: 'navigation.roleBindingsPreview',
+          source: MOCK_SOURCE,
+        },
+      },
+    })
+    expect(preview.resolve('/preview/role-bindings').meta).not.toHaveProperty('authorizationIntent')
+    expect(createShellNavigation(preview, (key) => key)).toContainEqual({
+      id: 'role-bindings-preview',
+      label: 'navigation.roleBindingsPreview',
+      to: { name: 'role-bindings-preview' },
+      source: MOCK_SOURCE,
+    })
+
+    await preview.push('/preview/role-bindings')
+    await preview.isReady()
+    expect(preview.currentRoute.value.name).toBe('login')
   })
 
   it('owns the Audit page with ambient route intent and no client-side SuperAdmin gate', () => {

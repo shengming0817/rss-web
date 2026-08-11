@@ -12,6 +12,8 @@ const label = computed(() => t(`source.${props.source.kind}`))
   <span
     class="source-badge"
     :data-source="source.kind"
+    :data-authoritative="source.authoritative"
+    :data-preview="source.preview"
     :aria-label="t('source.label', { source: label })"
   >
     {{ label }}

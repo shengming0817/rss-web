@@ -8,6 +8,7 @@
     "eslint.config.spec.ts",
     "edge-config.spec.ts",
     "real-e2e.spec.ts",
+    "role-bindings-preview-boundary.spec.ts",
     "identity-migration.spec.ts",
     "scope-removal.spec.ts",
     "session-security.spec.ts",

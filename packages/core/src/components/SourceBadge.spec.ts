@@ -27,6 +27,8 @@ describe('SourceBadge', () => {
     })
     expect(wrapper.text()).toBeTruthy()
     expect(wrapper.attributes('data-source')).toBe(source.kind)
+    expect(wrapper.attributes('data-authoritative')).toBe(String(source.authoritative))
+    expect(wrapper.attributes('data-preview')).toBe(String(source.preview))
     expect(wrapper.attributes('aria-label')).toContain(wrapper.text())
   })
 })

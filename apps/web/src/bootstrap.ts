@@ -5,11 +5,16 @@ import { createAuditApi } from '@rss/audit'
 import { createRuntimeApi } from '@rss/runtime'
 import { createWebHistory, type RouterHistory } from 'vue-router'
 import { createAuthorizationExperience } from './features/authorization/authorization-context'
+import { isRoleBindingsPreviewEnabled } from './features/identity/role-bindings-preview'
 import { createAppRouter } from './router'
 
 export const DEFAULT_HTTP_TIMEOUT_MS = 10_000
 
-export function createWebRuntime(history?: RouterHistory) {
+export interface WebRuntimeOptions {
+  readonly roleBindingsPreview?: boolean
+}
+
+export function createWebRuntime(history?: RouterHistory, options?: WebRuntimeOptions) {
   const transport = createHttpTransport({ baseURL: '', defaultTimeoutMs: DEFAULT_HTTP_TIMEOUT_MS })
   const session = createIdentitySession({ transport })
   const accountStatus = createAccountStatusApi(session.transport)
@@ -18,10 +23,14 @@ export function createWebRuntime(history?: RouterHistory) {
   const runtime = createRuntimeApi(session.transport)
   const port = createServerAuthorizationPort()
   const authorization = createAuthorizationExperience({ port, session })
+  const roleBindingsPreview =
+    options?.roleBindingsPreview ??
+    isRoleBindingsPreviewEnabled(import.meta.env.MODE, import.meta.env.VITE_ROLE_BINDINGS_PREVIEW)
   const router = createAppRouter(
     session,
     authorization,
     history ?? createWebHistory(import.meta.env.BASE_URL),
+    { roleBindingsPreview },
   )
   return Object.freeze({ accountStatus, audit, authorization, roles, router, runtime, session })
 }

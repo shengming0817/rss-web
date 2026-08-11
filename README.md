@@ -38,6 +38,12 @@ view or local history. The pinned RSS browser-login authority is `user`, while t
 Admin bearer; success shapes remain covered at the adapter, component, and Edge boundaries. No
 subject directory, picker, provider, tenant input, or mock fallback exists.
 
+Role Bindings Preview is a separate app-local, static experience and is disabled by default. To
+inspect its synthetic, permanently non-authoritative fixtures in development, run
+`VITE_ROLE_BINDINGS_PREVIEW=true pnpm dev`. The route and navigation are registered only in the
+closed `development`, `test`, or `demo` modes; production ignores the flag. Preview data never calls
+RSS and never derives state from Roles command receipts.
+
 `@rss/authorization` provides closed, non-authoritative UX hints. The Web composition root installs
 only its server mode, which always defers to the real RSS request. A Web-owned context lets future
 routes and controls consume hints without treating them as security: operations still execute once,

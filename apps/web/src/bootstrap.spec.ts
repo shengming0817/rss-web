@@ -49,11 +49,23 @@ describe('web composition root', () => {
       createIdentitySession.mock.results[0]?.value,
       createAuthorizationExperience.mock.results[0]?.value,
       expect.anything(),
+      { roleBindingsPreview: false },
     )
     expect(runtime.authorization).toBe(createAuthorizationExperience.mock.results[0]?.value)
     expect(runtime.accountStatus).toBe(createAccountStatusApi.mock.results[0]?.value)
     expect(runtime.audit).toBe(createAuditApi.mock.results[0]?.value)
     expect(runtime.roles).toBe(createRolesApi.mock.results[0]?.value)
     expect(runtime.runtime).toBe(createRuntimeApi.mock.results[0]?.value)
+  })
+
+  it('passes only an explicitly enabled closed Preview composition to the router', async () => {
+    const { createWebRuntime } = await import('./bootstrap')
+    createWebRuntime(undefined, { roleBindingsPreview: true })
+    expect(createAppRouter).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      { roleBindingsPreview: true },
+    )
   })
 })
