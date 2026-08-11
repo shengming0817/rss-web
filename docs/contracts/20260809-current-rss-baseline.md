@@ -153,3 +153,18 @@ session transport's exact-401 recovery. Other failures are never auto-replayed: 
 commit-unknown outcomes retain the local draft until an explicit server re-read. The current browser
 login authority remains User, so real RSS acceptance records final 403 for all three writes instead of
 fabricating Admin authority. No schema copy, evaluator, or policy provider is introduced.
+
+WEB-PR-022 enables `settings.config-publish`, `settings.config-get`, and `settings.config-delete`
+against the pinned read-only RSS revision `b7f3e1d0bcc5b2e59639a81b4f37937914b53f00`; the same
+contract and schema bytes remain present at the reviewed current RSS revision
+`d68d21b2d7866bff2d962e098f2a07ae985d50a2`. Their contract TOML hashes are
+`263986f861f65d2f0d51d37cad83d2829776b0d6991d23396b4666d631e4dab0`,
+`1c80e3394db279cc4bf1a5170030b978331721e81bd4108ab4ad9d4d09070fe4`, and
+`1793c84bcc12999c6d0cd92557d25d6fdd08e117e7b1a21fec1965b4b52abe64`; request and response hashes
+remain those recorded in the baseline table. Publish is
+non-idempotent and uses the protected no-replay session policy. A network, timeout, abort, protocol,
+or malformed-success result is an unknown outcome: the value draft is released and reconciliation is
+an explicit GET. Get and delete are idempotent and may use only the session owner's exact-401
+recovery; delete accepts exact 204 and never decodes a body. Config values never enter URLs, browser
+storage, logs, telemetry, errors, receipts, or source metadata. This slice does not add catalog,
+history, recent-key, mock/provider, tenant-selection, schema-copy, or runtime-discovery behavior.

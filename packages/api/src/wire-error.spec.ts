@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { decodeEndpointError, decodeWireError, protocolError } from './wire-error'
 import { auditEndpoints } from './endpoints/audit'
 import { identityEndpoints } from './endpoints/identity'
+import { settingsEndpoints } from './endpoints/settings'
 
 const envelope = (overrides: Record<string, unknown> = {}) => ({
   error: {
@@ -242,6 +243,59 @@ describe('decodeEndpointError', () => {
     expect(
       decodeEndpointError(status, body, auditEndpoints.listTenantEntries.errorPolicy),
     ).toMatchObject({ cause: 'protocol', status })
+  })
+
+  it.each([
+    ['publish', 400, 'ERR_CORE_VALIDATION', 'validation error', false, [{ field: 'key' }]],
+    ['publish', 409, 'ERR_CORE_VERSION_CONFLICT', 'version conflict', true, []],
+    ['publish', 409, 'ERR_CORE_OUTBOX_FACT_CONFLICT', 'outbox fact conflict', false, []],
+    ['publish', 413, 'ERR_CORE_PAYLOAD_TOO_LARGE', 'payload too large', false, []],
+    ['get', 404, 'ERR_CORE_NOT_FOUND', 'not found', false, []],
+    ['delete', 409, 'ERR_CORE_VERSION_CONFLICT', 'version conflict', true, []],
+    ['delete', 500, 'ERR_CORE_INTERNAL', 'internal error', false, []],
+  ] as const)(
+    'accepts reviewed Settings %s %s coordinate',
+    (endpoint, status, code, message, retryable, details) => {
+      const policy =
+        endpoint === 'publish'
+          ? settingsEndpoints.configPublish.errorPolicy
+          : endpoint === 'get'
+            ? settingsEndpoints.configGet.errorPolicy
+            : settingsEndpoints.configDelete.errorPolicy
+      expect(
+        decodeEndpointError(status, envelope({ code, message, retryable, details }), policy),
+      ).toMatchObject({ cause: 'wire', status, code, retryable })
+    },
+  )
+
+  it.each([
+    [settingsEndpoints.configPublish.errorPolicy, 404, envelope({ details: [] })],
+    [
+      settingsEndpoints.configPublish.errorPolicy,
+      413,
+      envelope({
+        code: 'ERR_CORE_PAYLOAD_TOO_LARGE',
+        message: 'payload too large',
+        retryable: true,
+        details: [],
+      }),
+    ],
+    [
+      settingsEndpoints.configGet.errorPolicy,
+      404,
+      envelope({ code: 'ERR_CORE_NOT_FOUND', message: 'missing', details: [] }),
+    ],
+    [
+      settingsEndpoints.configDelete.errorPolicy,
+      500,
+      envelope({
+        code: 'ERR_CORE_INTERNAL',
+        message: 'internal error',
+        details: [{ leaked: true }],
+      }),
+    ],
+  ] as const)('fails closed for drifting Settings coordinate %#', (policy, status, body) => {
+    expect(decodeEndpointError(status, body, policy)).toMatchObject({ cause: 'protocol', status })
   })
 
   it.each([

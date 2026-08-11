@@ -74,6 +74,7 @@ describe('RSS-only foundation boundary', () => {
       .filter((line) => !line.startsWith('packages/api/src/endpoints/identity.ts:'))
       .filter((line) => !line.startsWith('packages/api/src/endpoints/audit.ts:'))
       .filter((line) => !line.startsWith('packages/api/src/endpoints/runtime.ts:'))
+      .filter((line) => !line.startsWith('packages/api/src/endpoints/settings.ts:'))
     expect(violations).toEqual([])
   })
 
@@ -101,6 +102,7 @@ describe('RSS-only foundation boundary', () => {
     const runtimeIntent = read('apps/web/src/features/runtime/runtime-intent.ts')
     const auditIntent = read('apps/web/src/features/audit/audit-intent.ts')
     const policiesIntent = read('apps/web/src/features/identity/policies-intent.ts')
+    const configIntent = read('apps/web/src/features/settings/config-intent.ts')
     expect(router).toContain("path: '/'")
     expect(router).toContain("path: '/login'")
     expect(router).toContain("path: ':pathMatch(.*)*'")
@@ -111,6 +113,7 @@ describe('RSS-only foundation boundary', () => {
       'navigation.accountStatus',
       'navigation.roles',
       'navigation.policies',
+      'navigation.settings',
       'navigation.runtime',
       'navigation.audit',
     ])
@@ -134,7 +137,12 @@ describe('RSS-only foundation boundary', () => {
     expect(policiesIntent).toContain("permission: 'identity:policy:update'")
     expect(policiesIntent).toContain("contractId: 'identity.policies-deactivate'")
     expect(policiesIntent).toContain("permission: 'identity:policy:deactivate'")
-    for (const path of ['/access', '/config', '/flags', '/admin', '/observability', '/observe']) {
+    expect(router).toContain('authorizationIntent: CONFIG_GET_INTENT')
+    expect(configIntent).toContain("contractId: 'settings.config-get'")
+    expect(configIntent).toContain("contractId: 'settings.config-publish'")
+    expect(configIntent).toContain("contractId: 'settings.config-delete'")
+    expect(router).not.toContain("path: 'config'")
+    for (const path of ['/access', '/flags', '/admin', '/observability', '/observe']) {
       expect(router).not.toContain(path)
     }
   })
@@ -241,6 +249,7 @@ describe('RSS-only foundation boundary', () => {
       'apps/web/src/features/identity/RolesView.vue',
       'apps/web/src/features/runtime/HomeRuntimeSummary.vue',
       'apps/web/src/features/runtime/RuntimeDetailsView.vue',
+      'apps/web/src/features/settings/ConfigView.vue',
       'apps/web/src/router/index.ts',
     ])
   })

@@ -81,6 +81,14 @@ failure to another source. Domain adapters
 must attach their reviewed error-coordinate policy; undeclared statuses or drifted WireError fields
 fail closed as protocol errors. Idempotent panel retry is user-triggered only.
 
+`@rss/settings` is the framework-neutral owner for the selected Config DTOs and adapter; all Vue
+composition stays in `apps/web`. Config publish is protected no-replay. Any uncertain publish result
+must release the value draft and require an explicit GET before the user decides what to do next.
+Config get/delete may use only the session owner's exact-401 recovery, and delete never parses a 204
+body. Config values must not enter URLs, storage, logs, telemetry, errors, receipts, or SourceMeta.
+Do not add catalog/history/recent-key providers, mock fallback, tenant inputs, schema loading, or a
+second HTTP/session seam.
+
 The opt-in real RSS harness may read a user-supplied RSS checkout only through a pinned `git archive`
 and must build the Web Edge from an archived, clean Web HEAD rather than the live worktree. It may
 mutate only its own temporary snapshot, Compose project, disposable volumes, and fixture rows. It

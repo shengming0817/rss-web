@@ -8,6 +8,7 @@ import {
 } from '@rss/identity'
 import { createAuditApi } from '@rss/audit'
 import { createRuntimeApi } from '@rss/runtime'
+import { createSettingsApi } from '@rss/settings'
 import { createWebHistory, type RouterHistory } from 'vue-router'
 import { createAuthorizationExperience } from './features/authorization/authorization-context'
 import { isRoleBindingsPreviewEnabled } from './features/identity/role-bindings-preview'
@@ -23,6 +24,7 @@ export function createWebRuntime(history?: RouterHistory) {
   const policies = createPoliciesApi(session.transport)
   const audit = createAuditApi(session.transport)
   const runtime = createRuntimeApi(session.transport)
+  const settings = createSettingsApi(session.transport)
   const port = createServerAuthorizationPort()
   const authorization = createAuthorizationExperience({ port, session })
   const roleBindingsPreview = isRoleBindingsPreviewEnabled(
@@ -43,6 +45,7 @@ export function createWebRuntime(history?: RouterHistory) {
     roles,
     router,
     runtime,
+    settings,
     session,
   })
 }

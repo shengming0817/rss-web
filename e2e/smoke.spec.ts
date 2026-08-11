@@ -299,6 +299,33 @@ async function installIdentityMocks(
       })
     }
   })
+  await page.route('**/api/v1/settings/configs**', async (route) => {
+    expect(route.request().headers().authorization?.startsWith('Bearer ')).toBe(true)
+    expect(route.request().headers()['x-tenant-id']).toBeUndefined()
+    const url = new URL(route.request().url())
+    if (route.request().method() === 'POST' && url.pathname === '/api/v1/settings/configs') {
+      expect(route.request().postDataJSON()).toEqual({
+        key: 'app.browser',
+        value: 'browser-secret',
+      })
+      await route.fulfill({ status: 201, json: { data: { key: 'app.browser', version: 3 } } })
+    } else if (
+      route.request().method() === 'GET' &&
+      url.pathname === '/api/v1/settings/configs/app.browser'
+    ) {
+      await route.fulfill({
+        status: 200,
+        json: { data: { key: 'app.browser', value: 'server-secret', version: 3 } },
+      })
+    } else if (
+      route.request().method() === 'DELETE' &&
+      url.pathname === '/api/v1/settings/configs/app.browser'
+    ) {
+      await route.fulfill({ status: 204 })
+    } else {
+      await route.abort()
+    }
+  })
 }
 
 async function signIn(page: Page): Promise<void> {
@@ -422,12 +449,13 @@ test.describe('RSS Web Identity UX', () => {
     await page.getByLabel('密码').fill('test-password')
     await page.getByRole('button', { name: '登录', exact: true }).click()
     const navigation = page.getByRole('navigation', { name: '主导航' })
-    await expect(navigation.getByRole('link')).toHaveCount(7)
+    await expect(navigation.getByRole('link')).toHaveCount(8)
     await expect(navigation.getByRole('link', { name: /Bindings Preview/ })).toHaveCount(0)
     await expect(navigation.locator('[data-source="mock"]')).toHaveCount(0)
     await expect(navigation.getByRole('link', { name: /首页/ })).toContainText('RSS')
     await expect(navigation.getByRole('link', { name: /角色/ })).toContainText('RSS')
     await expect(navigation.getByRole('link', { name: /^策略/ })).toContainText('RSS')
+    await expect(navigation.getByRole('link', { name: /^配置/ })).toContainText('RSS')
     await navigation.getByRole('link', { name: /运行时/ }).click()
     await expect(page).toHaveURL(/\/runtime$/)
     await expect(page.getByRole('heading', { name: '运行时详情' })).toBeVisible()
@@ -602,6 +630,63 @@ test.describe('RSS Web Identity UX', () => {
     await page.getByRole('alertdialog').getByRole('button', { name: '确认提交' }).click()
     expect((await updateRequest).postDataJSON()).toMatchObject({ expectedVersion: 2 })
     await expect(page.getByText(/已由 RSS 确认成功/)).toBeVisible()
+  })
+
+  test('publishes, explicitly reads, and deletes one Config key without retaining the value', async ({
+    page,
+  }) => {
+    const requests: Array<{ method: string; path: string }> = []
+    page.on('request', (request) => {
+      const url = new URL(request.url())
+      if (url.pathname.startsWith('/api/v1/settings/configs')) {
+        requests.push({ method: request.method(), path: url.pathname })
+        expect(request.headers()['x-tenant-id']).toBeUndefined()
+      }
+    })
+    await installIdentityMocks(page)
+    await signIn(page)
+    await page
+      .getByRole('navigation', { name: '主导航' })
+      .getByRole('link', { name: /^配置/ })
+      .click()
+    await expect(page).toHaveURL(/\/settings$/)
+    expect(requests).toEqual([])
+
+    await page.getByLabel('配置 key').fill('app.browser')
+    await page.getByLabel('配置 value').fill('browser-secret')
+    await page.getByRole('button', { name: '准备发布' }).click()
+    const publishDialog = page.getByRole('alertdialog')
+    await expect(publishDialog).toContainText('app.browser')
+    await expect(publishDialog).not.toContainText('browser-secret')
+    await publishDialog.getByRole('button', { name: '确认' }).click()
+    await expect(page.getByText(/RSS 已确认发布 app\.browser，版本 3/)).toBeVisible()
+    await expect(page.getByText('browser-secret')).toHaveCount(0)
+    expect(page.url()).not.toContain('browser-secret')
+    expect(
+      await page.evaluate(() =>
+        JSON.stringify({
+          local: { ...localStorage },
+          session: { ...sessionStorage },
+        }),
+      ),
+    ).not.toContain('browser-secret')
+
+    await page.getByRole('button', { name: '读取当前配置' }).click()
+    await expect(page.getByText('server-secret')).toHaveCount(0)
+    expect(page.url()).not.toContain('server-secret')
+    await page.getByRole('button', { name: '显示敏感 value' }).click()
+    await expect(page.getByText('server-secret')).toBeVisible()
+    await page.getByRole('button', { name: '隐藏敏感 value' }).click()
+    await expect(page.getByText('server-secret')).toHaveCount(0)
+
+    await page.getByRole('button', { name: '准备删除' }).click()
+    await page.getByRole('alertdialog').getByRole('button', { name: '确认' }).click()
+    await expect(page.getByText(/RSS 已确认删除 app\.browser/)).toBeVisible()
+    expect(requests).toEqual([
+      { method: 'POST', path: '/api/v1/settings/configs' },
+      { method: 'GET', path: '/api/v1/settings/configs/app.browser' },
+      { method: 'DELETE', path: '/api/v1/settings/configs/app.browser' },
+    ])
   })
 
   test('queries target Audit only on explicit actions without leaking target authority or PII', async ({

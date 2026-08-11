@@ -419,6 +419,7 @@ function printPlan() {
         'account-status-self',
         'roles',
         'policies-write',
+        'settings-config',
         'rate-limited',
         'budget-exhausted',
         'admin-down',
@@ -565,6 +566,7 @@ try {
     'account-status-self',
     'roles',
     'policies-write',
+    'settings-config',
     'rate-limited',
   ]
   for (const phase of isolatedMainPhases) {

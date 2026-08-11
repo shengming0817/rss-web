@@ -405,6 +405,48 @@ test('@roles keeps the RSS user authority boundary for list, assign, and revoke'
   await expect(page.getByText(/已绑定|未绑定/)).toHaveCount(0)
 })
 
+test('@settings-config keeps Config get, publish, and delete server-authoritative', async ({
+  page,
+}) => {
+  await signInAndExpectShell(page, limitedUsername)
+  await page
+    .getByRole('navigation', { name: '主导航' })
+    .getByRole('link', { name: /^配置/ })
+    .click()
+  await page.getByLabel('配置 key').fill('rss-web.real.config')
+
+  const getDenied = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      new URL(response.url()).pathname === '/api/v1/settings/configs/rss-web.real.config',
+  )
+  await page.getByRole('button', { name: '读取当前配置' }).click()
+  expect((await getDenied).status()).toBe(403)
+  await expect(page.getByText('ERR_CORE_FORBIDDEN')).toBeVisible()
+
+  await page.getByLabel('配置 value').fill('real-config-secret')
+  await page.getByRole('button', { name: '准备发布' }).click()
+  const publishDenied = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      new URL(response.url()).pathname === '/api/v1/settings/configs',
+  )
+  await page.getByRole('alertdialog').getByRole('button', { name: '确认' }).click()
+  expect((await publishDenied).status()).toBe(403)
+  await expect(page.getByText('ERR_CORE_FORBIDDEN')).toBeVisible()
+  await expect(page.getByText('real-config-secret')).toHaveCount(0)
+
+  const deleteDenied = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'DELETE' &&
+      new URL(response.url()).pathname === '/api/v1/settings/configs/rss-web.real.config',
+  )
+  await page.getByRole('button', { name: '准备删除' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: '确认' }).click()
+  expect((await deleteDenied).status()).toBe(403)
+  await expect(page.getByText('ERR_CORE_FORBIDDEN')).toBeVisible()
+})
+
 test('@rate-limited observes canonical 401 and 429 through the browser Edge and UI', async ({
   page,
 }) => {

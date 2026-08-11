@@ -20,6 +20,7 @@ COPY packages/audit/package.json packages/audit/package.json
 COPY packages/authorization/package.json packages/authorization/package.json
 COPY packages/identity/package.json packages/identity/package.json
 COPY packages/runtime/package.json packages/runtime/package.json
+COPY packages/settings/package.json packages/settings/package.json
 
 RUN pnpm install --frozen-lockfile
 

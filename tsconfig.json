@@ -12,6 +12,7 @@
     "identity-migration.spec.ts",
     "scope-removal.spec.ts",
     "session-security.spec.ts",
+    "settings-security.spec.ts",
     "web-identity-security.spec.ts",
     "vitest.config.ts",
     "vitest.workspace.ts",
