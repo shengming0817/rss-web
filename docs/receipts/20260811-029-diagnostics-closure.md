@@ -4,7 +4,7 @@
 
 - Issue: #37. All declared blockers #22–#26, #28, and #30–#36 were closed before
   implementation.
-- Implementation commit: `013c0c33665573edac8018a0538243166fdaf4eb`.
+- Final implementation commit: `aed9d45a7583d86262307e697fe698277b3f284a`.
 - Base Web revision: `167ddb5ed89a8965f1f42c9367d56f8f19dba8e4`.
 - Reviewed RSS contract baseline: `b513d3390d73d4f291bb31afc588ca1307ce19af`.
 - Optional real-harness RSS archive: `b7f3e1d0bcc5b2e59639a81b4f37937914b53f00`.
@@ -54,15 +54,17 @@
 Final implementation verification:
 
 - workspace typecheck, lint, and format check: passed
-- unit/root aggregate: 114 files / 1,070 tests passed
-- coverage suites: 103 files / 989 tests passed
-- root boundary: 11 files / 81 tests passed
+- unit/root aggregate: 113 files / 1,074 tests passed
+- coverage suites: 103 files / 995 tests passed
+- root boundary: 10 files / 79 tests passed
 - production build plus identity and Preview artifact scans: passed
 - Chromium smoke: 20 passed; the authenticated navigation includes About, production
   shows no Mock sources, and its Web revision is a full 40-character SHA
 - Docker/Nginx Edge smoke: passed; Chromium About revision, build argument, and OCI
-  image label all equal `013c0c33665573edac8018a0538243166fdaf4eb`, with checked
+  image label all equal `aed9d45a7583d86262307e697fe698277b3f284a`, with checked
   teardown
+- the Edge provenance runner rejects tracked or untracked dirty source before build;
+  manual Compose deployment requires the same explicit clean Web revision
 - `git diff --check`: passed
 
 The single full local sequence initially reported one bounded browser regression: the
@@ -70,9 +72,10 @@ closed production navigation count still expected ten links after About became t
 eleventh. The expectation and About assertions were updated together; the final full
 Chromium suite passed 20/20. No product retry or session behavior changed.
 
-The optional archived real journey was run from the clean implementation commit and
+The optional archived real journey was run from the clean pre-review implementation
+commit `013c0c33665573edac8018a0538243166fdaf4eb` and
 wrote `/tmp/rss-web-37-final-real-receipt.json`. It archived the exact Web revision
-above and RSS `b7f3e1d0bcc5b2e59639a81b4f37937914b53f00`, but stopped in the
+for that commit and RSS `b7f3e1d0bcc5b2e59639a81b4f37937914b53f00`, but stopped in the
 pre-existing `@main keeps real 403 authoritative for a limited account` scenario before
 the Issue #37-specific phases. The machine receipt reports `product:main` failed and
 cleanup passed for Compose project `rss-web-real-95365`; this is not claimed as passing
@@ -80,10 +83,10 @@ evidence and does not replace the required unit, Chromium, and real-Edge gates.
 
 ## Changed lines and rollback
 
-- semantic/application/build: +414 / -75
-- tests and executable evidence: +429 / -8
-- documentation and rules: +24 / -0
-- implementation total: +867 / -83
+- semantic/application/build: +442 / -89
+- tests and executable evidence: +611 / -11
+- documentation and rules: +39 / -4
+- implementation total: +1,092 / -104
 - generated files and dependency lock changes: 0
 
 Rollback is one revert of this PR. It removes the About route, static release metadata,
