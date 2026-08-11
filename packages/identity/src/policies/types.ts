@@ -1,16 +1,37 @@
 import type { CursorPage } from '@rss/api'
 import type { PolicyId } from './policy-id'
 
+export const POLICY_ATTRIBUTES = Object.freeze([
+  'principal.kind',
+  'principal.id',
+  'tenant.id',
+  'contract.id',
+  'permission',
+  'resource.id',
+] as const)
+export const POLICY_EQUALITY_PREDICATES = Object.freeze(['eq', 'ne'] as const)
+export const POLICY_ORDERING_PREDICATES = Object.freeze(['gt', 'ge', 'lt', 'le'] as const)
+export const POLICY_MEMBERSHIP_PREDICATES = Object.freeze(['in', 'notIn'] as const)
+export const POLICY_STRING_PREDICATES = Object.freeze([
+  'startsWith',
+  'endsWith',
+  'contains',
+  'glob',
+  'regex',
+] as const)
+export const POLICY_ROW_SCOPES = Object.freeze(['selfOnly', 'device', 'tenant'] as const)
+
+export type PolicyAttribute = (typeof POLICY_ATTRIBUTES)[number]
+export type PolicyEqualityPredicate = (typeof POLICY_EQUALITY_PREDICATES)[number]
+export type PolicyOrderingPredicate = (typeof POLICY_ORDERING_PREDICATES)[number]
+export type PolicyMembershipPredicate = (typeof POLICY_MEMBERSHIP_PREDICATES)[number]
+export type PolicyStringPredicate = (typeof POLICY_STRING_PREDICATES)[number]
+export type PolicyRowScope = (typeof POLICY_ROW_SCOPES)[number]
+
 export type PolicyAttributeOperand = Readonly<{
   kind: 'attribute'
   valueType: 'string'
-  attribute:
-    | 'principal.kind'
-    | 'principal.id'
-    | 'tenant.id'
-    | 'contract.id'
-    | 'permission'
-    | 'resource.id'
+  attribute: PolicyAttribute
 }>
 
 export type PolicyLiteralOperand =
@@ -39,27 +60,27 @@ export type PolicyPatternOperand = Readonly<{
 export type PolicyOperator =
   | Readonly<{
       family: 'equality'
-      predicate: 'eq' | 'ne'
+      predicate: PolicyEqualityPredicate
       operand: PolicyLiteralOperand | PolicyAttributeOperand
     }>
   | Readonly<{
       family: 'ordering'
-      predicate: 'gt' | 'ge' | 'lt' | 'le'
+      predicate: PolicyOrderingPredicate
       operand: PolicyNumericOperand
     }>
   | Readonly<{
       family: 'membership'
-      predicate: 'in' | 'notIn'
+      predicate: PolicyMembershipPredicate
       operand: PolicySetOperand
     }>
   | Readonly<{
       family: 'string'
-      predicate: 'startsWith' | 'endsWith' | 'contains' | 'glob' | 'regex'
+      predicate: PolicyStringPredicate
       operand: PolicyPatternOperand
     }>
 
 export interface PolicyObligations {
-  readonly rowScope?: 'selfOnly' | 'device' | 'tenant'
+  readonly rowScope?: PolicyRowScope
   readonly fieldMask: readonly string[]
 }
 

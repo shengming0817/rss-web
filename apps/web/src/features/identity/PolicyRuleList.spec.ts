@@ -45,4 +45,33 @@ describe('PolicyRuleList', () => {
     }
     expect(wrapper.html()).not.toContain('v-html')
   })
+
+  it('preserves typed set element boundaries', () => {
+    const policy = {
+      policyId: 'policy' as never,
+      version: 1,
+      contractId: 'contract',
+      permission: 'permission',
+      effectiveFrom: 1,
+      rules: [
+        {
+          condition: {
+            attribute: 'resource.tags',
+            operator: {
+              family: 'membership',
+              predicate: 'in',
+              operand: { kind: 'set', valueType: 'string', values: ['a,b', 'c'] },
+            },
+          },
+          effect: 'allow',
+        },
+      ],
+    } satisfies PolicyView
+    const wrapper = mount(PolicyRuleList, {
+      props: { policy },
+      global: { plugins: [createWebI18n()] },
+    })
+
+    expect(wrapper.findAll('.policy-set li').map((item) => item.text())).toEqual(['a,b', 'c'])
+  })
 })

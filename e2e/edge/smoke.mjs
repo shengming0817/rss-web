@@ -175,6 +175,7 @@ try {
     assert.equal(response.status, 200)
     assert.equal(response.json.listener, 'primary')
     assert.equal(response.json.method, 'GET')
+    assert.equal(response.json.url, path)
     assert.deepEqual(response.json.tenantHeaders, [])
     assert.equal(response.json.authorizationPresent, true)
   }

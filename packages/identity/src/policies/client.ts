@@ -52,7 +52,11 @@ export function createPoliciesApi(transport: HttpTransport): PoliciesApi {
       return transport.request({
         ...identityEndpoints.policiesGet,
         pathParams: { policyId },
-        decode: decodePolicyGetResponse,
+        decode(value) {
+          const response = decodePolicyGetResponse(value)
+          if (response.data.policyId !== policyId) throw new Error('invalid policy response')
+          return response
+        },
         session: 'required',
         ...signal(options),
       })

@@ -134,6 +134,7 @@ onBeforeUnmount(() => {
       </p>
       <ErrorPage
         v-else-if="displayedCatalogError && (catalog.status === 'error' || catalogRetrying)"
+        role="alert"
         :error="displayedCatalogError"
         :heading-level="3"
         :show-recovery="displayedCatalogError.recovery === 'retry'"
@@ -181,15 +182,22 @@ onBeforeUnmount(() => {
     </section>
 
     <section class="policies-panel" aria-labelledby="policy-detail-title">
-      <h2 id="policy-detail-title" ref="detailHeading" tabindex="-1">
-        {{ t('policies.detail.title') }}
-      </h2>
+      <div class="policies-panel__heading">
+        <h2 id="policy-detail-title" ref="detailHeading" tabindex="-1">
+          {{ t('policies.detail.title') }}
+        </h2>
+        <SourceBadge
+          v-if="detailState.status === 'ready' || detailState.status === 'error'"
+          :source="detailState.status === 'error' ? UNAVAILABLE_SOURCE : RSS_SOURCE"
+        />
+      </div>
       <p v-if="detailState.status === 'idle'">{{ t('policies.detail.select') }}</p>
       <p v-else-if="detailState.status === 'loading'" role="status" aria-live="polite">
         {{ t('policies.detail.loading') }}
       </p>
       <ErrorPage
         v-else-if="displayedDetailError && (detailState.status === 'error' || detailRetrying)"
+        role="alert"
         :error="displayedDetailError"
         :heading-level="3"
         :show-recovery="displayedDetailError.recovery === 'retry'"

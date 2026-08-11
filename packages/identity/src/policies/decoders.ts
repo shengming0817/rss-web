@@ -13,17 +13,25 @@ import type {
   PolicySetOperand,
   PolicyView,
 } from './types'
+import {
+  POLICY_ATTRIBUTES,
+  POLICY_EQUALITY_PREDICATES,
+  POLICY_MEMBERSHIP_PREDICATES,
+  POLICY_ORDERING_PREDICATES,
+  POLICY_ROW_SCOPES,
+  POLICY_STRING_PREDICATES,
+} from './types'
 
 const encoder = new TextEncoder()
 const DECIMAL = /^(?:0|-?[1-9][0-9]*|(?:-?0|-?[1-9][0-9]*)\.[0-9]*[1-9])$/
-const ATTRIBUTES = new Set([
-  'principal.kind',
-  'principal.id',
-  'tenant.id',
-  'contract.id',
-  'permission',
-  'resource.id',
-])
+const INT32_MAX = 2_147_483_647
+
+function isOneOf<const Values extends readonly string[]>(
+  value: unknown,
+  values: Values,
+): value is Values[number] {
+  return typeof value === 'string' && values.some((candidate) => candidate === value)
+}
 
 function invalid(kind: 'policy' | 'policies list'): never {
   throw new Error(`invalid ${kind} response`)
@@ -56,8 +64,12 @@ function text(value: unknown, maxBytes?: number): string {
   return value
 }
 
-function integer(value: unknown, minimum?: number): number {
-  if (!Number.isSafeInteger(value) || (minimum !== undefined && (value as number) < minimum))
+function integer(value: unknown, minimum?: number, maximum?: number): number {
+  if (
+    !Number.isSafeInteger(value) ||
+    (minimum !== undefined && (value as number) < minimum) ||
+    (maximum !== undefined && (value as number) > maximum)
+  )
     invalid('policy')
   return value as number
 }
@@ -68,6 +80,8 @@ function decimal(value: unknown): string {
   return result
 }
 
+function literal(value: unknown, numericOnly: true): PolicyNumericOperand
+function literal(value: unknown, numericOnly?: false): PolicyLiteralOperand
 function literal(value: unknown, numericOnly = false): PolicyLiteralOperand | PolicyNumericOperand {
   const input = record(value, ['kind', 'valueType', 'value'])
   if (input.kind !== 'literal') invalid('policy')
@@ -93,14 +107,14 @@ function attribute(value: unknown): PolicyAttributeOperand {
     input.kind !== 'attribute' ||
     input.valueType !== 'string' ||
     typeof input.attribute !== 'string' ||
-    !ATTRIBUTES.has(input.attribute)
+    !isOneOf(input.attribute, POLICY_ATTRIBUTES)
   ) {
     invalid('policy')
   }
   return Object.freeze({
     kind: 'attribute',
     valueType: 'string',
-    attribute: input.attribute as PolicyAttributeOperand['attribute'],
+    attribute: input.attribute,
   })
 }
 
@@ -108,30 +122,34 @@ function setOperand(value: unknown): PolicySetOperand {
   const input = record(value, ['kind', 'valueType', 'values'])
   if (input.kind !== 'set' || !Array.isArray(input.values)) invalid('policy')
   if (input.values.length < 1 || input.values.length > 32) invalid('policy')
-  let values: readonly (string | boolean | number)[]
   switch (input.valueType) {
-    case 'string':
-      values = input.values.map((item) => text(item, 256))
-      break
+    case 'string': {
+      const values = input.values.map((item) => text(item, 256))
+      if (new Set(values).size !== values.length) invalid('policy')
+      return Object.freeze({ kind: 'set', valueType: 'string', values: Object.freeze(values) })
+    }
     case 'boolean':
-      if (input.values.some((item) => typeof item !== 'boolean')) invalid('policy')
-      values = input.values as boolean[]
-      break
-    case 'integer':
-      values = input.values.map((item) => integer(item))
-      break
-    case 'decimal':
-      values = input.values.map(decimal)
-      break
+      if (!input.values.every((item): item is boolean => typeof item === 'boolean'))
+        invalid('policy')
+      if (new Set(input.values).size !== input.values.length) invalid('policy')
+      return Object.freeze({
+        kind: 'set',
+        valueType: 'boolean',
+        values: Object.freeze([...input.values]),
+      })
+    case 'integer': {
+      const values = input.values.map((item) => integer(item))
+      if (new Set(values).size !== values.length) invalid('policy')
+      return Object.freeze({ kind: 'set', valueType: 'integer', values: Object.freeze(values) })
+    }
+    case 'decimal': {
+      const values = input.values.map(decimal)
+      if (new Set(values).size !== values.length) invalid('policy')
+      return Object.freeze({ kind: 'set', valueType: 'decimal', values: Object.freeze(values) })
+    }
     default:
       return invalid('policy')
   }
-  if (new Set(values).size !== values.length) invalid('policy')
-  return Object.freeze({
-    kind: 'set',
-    valueType: input.valueType,
-    values: Object.freeze([...values]),
-  }) as PolicySetOperand
 }
 
 function pattern(value: unknown): PolicyPatternOperand {
@@ -144,33 +162,30 @@ function pattern(value: unknown): PolicyPatternOperand {
 
 function operator(value: unknown): PolicyOperator {
   const input = record(value, ['family', 'predicate', 'operand'])
-  if (input.family === 'equality' && (input.predicate === 'eq' || input.predicate === 'ne')) {
+  if (input.family === 'equality' && isOneOf(input.predicate, POLICY_EQUALITY_PREDICATES)) {
     const candidate = record(input.operand, ['kind'], ['valueType', 'value', 'attribute'])
     const operand =
       candidate.kind === 'attribute' ? attribute(input.operand) : literal(input.operand)
     return Object.freeze({ family: 'equality', predicate: input.predicate, operand })
   }
-  if (input.family === 'ordering' && ['gt', 'ge', 'lt', 'le'].includes(String(input.predicate))) {
+  if (input.family === 'ordering' && isOneOf(input.predicate, POLICY_ORDERING_PREDICATES)) {
     return Object.freeze({
       family: 'ordering',
-      predicate: input.predicate as 'gt' | 'ge' | 'lt' | 'le',
-      operand: literal(input.operand, true) as PolicyNumericOperand,
+      predicate: input.predicate,
+      operand: literal(input.operand, true),
     })
   }
-  if (input.family === 'membership' && (input.predicate === 'in' || input.predicate === 'notIn')) {
+  if (input.family === 'membership' && isOneOf(input.predicate, POLICY_MEMBERSHIP_PREDICATES)) {
     return Object.freeze({
       family: 'membership',
       predicate: input.predicate,
       operand: setOperand(input.operand),
     })
   }
-  if (
-    input.family === 'string' &&
-    ['startsWith', 'endsWith', 'contains', 'glob', 'regex'].includes(String(input.predicate))
-  ) {
+  if (input.family === 'string' && isOneOf(input.predicate, POLICY_STRING_PREDICATES)) {
     return Object.freeze({
       family: 'string',
-      predicate: input.predicate as 'startsWith' | 'endsWith' | 'contains' | 'glob' | 'regex',
+      predicate: input.predicate,
       operand: pattern(input.operand),
     })
   }
@@ -179,10 +194,7 @@ function operator(value: unknown): PolicyOperator {
 
 function obligations(value: unknown): PolicyObligations {
   const input = record(value, [], ['rowScope', 'fieldMask'])
-  if (
-    input.rowScope !== undefined &&
-    !['selfOnly', 'device', 'tenant'].includes(String(input.rowScope))
-  ) {
+  if (input.rowScope !== undefined && !isOneOf(input.rowScope, POLICY_ROW_SCOPES)) {
     invalid('policy')
   }
   const mask = input.fieldMask ?? []
@@ -190,7 +202,7 @@ function obligations(value: unknown): PolicyObligations {
   const fieldMask = Object.freeze(mask.map((item) => text(item)))
   if (input.rowScope === undefined) return Object.freeze({ fieldMask })
   return Object.freeze({
-    rowScope: input.rowScope as NonNullable<PolicyObligations['rowScope']>,
+    rowScope: input.rowScope,
     fieldMask,
   })
 }
@@ -219,7 +231,7 @@ function policy(value: unknown): PolicyView {
   if (policyId === undefined || !Array.isArray(input.rules)) invalid('policy')
   return Object.freeze({
     policyId,
-    version: integer(input.version, 1),
+    version: integer(input.version, 1, INT32_MAX),
     contractId: text(input.contractId),
     permission: text(input.permission),
     effectiveFrom: integer(input.effectiveFrom),

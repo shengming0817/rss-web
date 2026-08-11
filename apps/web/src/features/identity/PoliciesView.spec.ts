@@ -50,6 +50,8 @@ describe('PoliciesView', () => {
     await flushPromises()
     expect(get).toHaveBeenCalledOnce()
     expect(wrapper.text()).toContain('identity.policies-get')
+    const detailPanel = wrapper.get('[aria-labelledby="policy-detail-title"]')
+    expect(detailPanel.find('[data-source="rss"]').exists()).toBe(true)
     expect(document.activeElement).toBe(wrapper.get('#policy-detail-title').element)
     wrapper.unmount()
   })
@@ -84,5 +86,48 @@ describe('PoliciesView', () => {
     await flushPromises()
     expect(document.activeElement).toBe(wrapper.get('#policies-catalog-title').element)
     wrapper.unmount()
+  })
+
+  it('announces independent catalog and detail failures with unavailable provenance', async () => {
+    const listFailure = mount(PoliciesView, {
+      global: {
+        plugins: [
+          createWebI18n(),
+          policiesApiPlugin({
+            list: vi.fn().mockRejectedValue(new Error('offline')),
+            get: vi.fn(),
+          } as PoliciesApi),
+          authorizationExperiencePlugin(authorization),
+        ],
+      },
+    })
+    await flushPromises()
+    expect(listFailure.get('.error-page').attributes('role')).toBe('alert')
+    expect(
+      listFailure
+        .find('[aria-labelledby="policies-catalog-title"] [data-source="unavailable"]')
+        .exists(),
+    ).toBe(true)
+    listFailure.unmount()
+
+    const detailFailure = mount(PoliciesView, {
+      global: {
+        plugins: [
+          createWebI18n(),
+          policiesApiPlugin({
+            list: vi.fn().mockResolvedValue({ data: [policy], hasMore: false }),
+            get: vi.fn().mockRejectedValue(new Error('denied')),
+          } as PoliciesApi),
+          authorizationExperiencePlugin(authorization),
+        ],
+      },
+    })
+    await flushPromises()
+    await detailFailure.get('.policy-catalog__item').trigger('click')
+    await flushPromises()
+    const detailPanel = detailFailure.get('[aria-labelledby="policy-detail-title"]')
+    expect(detailPanel.get('.error-page').attributes('role')).toBe('alert')
+    expect(detailPanel.find('[data-source="unavailable"]').exists()).toBe(true)
+    detailFailure.unmount()
   })
 })

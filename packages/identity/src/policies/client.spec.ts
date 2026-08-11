@@ -42,4 +42,22 @@ describe('Policies API', () => {
     await expect(api.list({ limit: 501 })).rejects.toThrow('invalid policies list input')
     expect(request).not.toHaveBeenCalled()
   })
+
+  it('fails closed when detail response identity differs from the requested coordinate', async () => {
+    const request = vi.fn(async (options: { decode: (value: unknown) => unknown }) =>
+      options.decode({
+        data: {
+          policyId: 'policy-b',
+          version: 1,
+          contractId: 'identity.policies-get',
+          permission: 'identity:policy:read',
+          effectiveFrom: 1,
+          rules: [],
+        },
+      }),
+    )
+    const api = createPoliciesApi({ request } as unknown as HttpTransport)
+
+    await expect(api.get(parsePolicyId('policy-a')!)).rejects.toThrow('invalid policy response')
+  })
 })

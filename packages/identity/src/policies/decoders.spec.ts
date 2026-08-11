@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { decodePoliciesListResponse, decodePolicyGetResponse } from './decoders'
+import {
+  POLICY_ATTRIBUTES,
+  POLICY_EQUALITY_PREDICATES,
+  POLICY_MEMBERSHIP_PREDICATES,
+  POLICY_ORDERING_PREDICATES,
+  POLICY_ROW_SCOPES,
+  POLICY_STRING_PREDICATES,
+} from './types'
 
 const rules = [
   {
@@ -72,6 +80,148 @@ describe('Policies strict decoders', () => {
     })
     expect(detail.data.rules[2]?.obligations).toEqual({ fieldMask: [] })
     expect(detail.data.effectiveUntil).toBe(1_800_000_000)
+  })
+
+  const operatorCases: readonly (readonly [string, object])[] = [
+    ...POLICY_ATTRIBUTES.map(
+      (attribute) =>
+        [
+          `attribute ${attribute}`,
+          {
+            family: 'equality',
+            predicate: 'eq',
+            operand: { kind: 'attribute', valueType: 'string', attribute },
+          },
+        ] as const,
+    ),
+    ...POLICY_EQUALITY_PREDICATES.flatMap((predicate) => [
+      [
+        `equality ${predicate} string`,
+        {
+          family: 'equality',
+          predicate,
+          operand: { kind: 'literal', valueType: 'string', value: 'x' },
+        },
+      ] as const,
+      [
+        `equality ${predicate} boolean`,
+        {
+          family: 'equality',
+          predicate,
+          operand: { kind: 'literal', valueType: 'boolean', value: true },
+        },
+      ] as const,
+      [
+        `equality ${predicate} integer`,
+        {
+          family: 'equality',
+          predicate,
+          operand: { kind: 'literal', valueType: 'integer', value: 7 },
+        },
+      ] as const,
+      [
+        `equality ${predicate} decimal`,
+        {
+          family: 'equality',
+          predicate,
+          operand: { kind: 'literal', valueType: 'decimal', value: '7.5' },
+        },
+      ] as const,
+    ]),
+    ...POLICY_ORDERING_PREDICATES.map(
+      (predicate, index) =>
+        [
+          `ordering ${predicate}`,
+          {
+            family: 'ordering',
+            predicate,
+            operand:
+              index % 2 === 0
+                ? { kind: 'literal', valueType: 'integer', value: 7 }
+                : { kind: 'literal', valueType: 'decimal', value: '7.5' },
+          },
+        ] as const,
+    ),
+    ...POLICY_MEMBERSHIP_PREDICATES.flatMap((predicate) => [
+      [
+        `membership ${predicate} string`,
+        {
+          family: 'membership',
+          predicate,
+          operand: { kind: 'set', valueType: 'string', values: ['a', 'b'] },
+        },
+      ] as const,
+      [
+        `membership ${predicate} boolean`,
+        {
+          family: 'membership',
+          predicate,
+          operand: { kind: 'set', valueType: 'boolean', values: [true, false] },
+        },
+      ] as const,
+      [
+        `membership ${predicate} integer`,
+        {
+          family: 'membership',
+          predicate,
+          operand: { kind: 'set', valueType: 'integer', values: [1, 2] },
+        },
+      ] as const,
+      [
+        `membership ${predicate} decimal`,
+        {
+          family: 'membership',
+          predicate,
+          operand: { kind: 'set', valueType: 'decimal', values: ['1.5', '2.5'] },
+        },
+      ] as const,
+    ]),
+    ...POLICY_STRING_PREDICATES.map(
+      (predicate) =>
+        [
+          `string ${predicate}`,
+          {
+            family: 'string',
+            predicate,
+            operand: { kind: 'pattern', valueType: 'string', value: 'rss-*' },
+          },
+        ] as const,
+    ),
+  ]
+
+  it.each(operatorCases)('accepts active %s operator shape', (_name, operator) => {
+    const decoded = decodePolicyGetResponse({
+      data: {
+        ...policy,
+        rules: [{ condition: { attribute: 'resource.value', operator }, effect: 'allow' }],
+      },
+    })
+    expect(decoded.data.rules[0]?.condition.operator).toEqual(operator)
+  })
+
+  it.each(POLICY_ROW_SCOPES)('accepts active %s row scope', (rowScope) => {
+    const decoded = decodePolicyGetResponse({
+      data: {
+        ...policy,
+        rules: [
+          {
+            condition: { attribute: 'x', operator: rules[0]!.condition.operator },
+            effect: 'allow',
+            obligations: { rowScope, fieldMask: [] },
+          },
+        ],
+      },
+    })
+    expect(decoded.data.rules[0]?.obligations?.rowScope).toBe(rowScope)
+  })
+
+  it('enforces the positive int32 version boundary', () => {
+    expect(
+      decodePolicyGetResponse({ data: { ...policy, version: 2_147_483_647 } }).data.version,
+    ).toBe(2_147_483_647)
+    expect(() => decodePolicyGetResponse({ data: { ...policy, version: 2_147_483_648 } })).toThrow(
+      'invalid policy',
+    )
   })
 
   it.each([

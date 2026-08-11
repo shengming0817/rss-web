@@ -8,7 +8,7 @@ const { t } = useI18n()
 function operandValue(operator: PolicyOperator): string {
   const operand = operator.operand
   if (operand.kind === 'attribute') return operand.attribute
-  if (operand.kind === 'set') return operand.values.map(String).join(', ')
+  if (operand.kind === 'set') return ''
   return String(operand.value)
 }
 </script>
@@ -29,7 +29,17 @@ function operandValue(operator: PolicyOperator): string {
         <dt>{{ t('policies.detail.valueType') }}</dt>
         <dd>{{ rule.condition.operator.operand.valueType }}</dd>
         <dt>{{ t('policies.detail.operandValue') }}</dt>
-        <dd>{{ operandValue(rule.condition.operator) }}</dd>
+        <dd>
+          <ul v-if="rule.condition.operator.operand.kind === 'set'" class="policy-set">
+            <li
+              v-for="(value, valueIndex) in rule.condition.operator.operand.values"
+              :key="valueIndex"
+            >
+              <code>{{ String(value) }}</code>
+            </li>
+          </ul>
+          <template v-else>{{ operandValue(rule.condition.operator) }}</template>
+        </dd>
         <dt>{{ t('policies.detail.effect') }}</dt>
         <dd>{{ rule.effect }}</dd>
         <template v-if="rule.obligations">
@@ -76,5 +86,10 @@ dt {
 dd {
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+.policy-set {
+  margin: 0;
+  padding-inline-start: 20px;
 }
 </style>
