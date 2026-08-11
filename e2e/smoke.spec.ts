@@ -567,7 +567,7 @@ test.describe('RSS Web Identity UX', () => {
     await page.getByLabel('密码').fill('test-password')
     await page.getByRole('button', { name: '登录', exact: true }).click()
     const navigation = page.getByRole('navigation', { name: '主导航' })
-    await expect(navigation.getByRole('link')).toHaveCount(10)
+    await expect(navigation.getByRole('link')).toHaveCount(11)
     await expect(navigation.getByRole('link', { name: /Bindings Preview/ })).toHaveCount(0)
     await expect(navigation.locator('[data-source="mock"]')).toHaveCount(0)
     await expect(navigation.getByRole('link', { name: /首页/ })).toContainText('RSS')
@@ -578,6 +578,13 @@ test.describe('RSS Web Identity UX', () => {
     await expect(navigation.getByRole('link', { name: /Secret Material Reveal/ })).toContainText(
       'RSS',
     )
+    await expect(navigation.getByRole('link', { name: /关于/ })).toContainText('外部')
+    await navigation.getByRole('link', { name: /关于/ }).click()
+    await expect(page).toHaveURL(/\/about$/)
+    await expect(page.getByRole('heading', { name: '关于' })).toBeVisible()
+    await expect(page.locator('[data-release-web-revision]')).toHaveText(/^[0-9a-f]{40}$/)
+    await expect(page.locator('[data-release-preview-source]')).toHaveCount(0)
+
     await navigation.getByRole('link', { name: /运行时/ }).click()
     await expect(page).toHaveURL(/\/runtime$/)
     await expect(page.getByRole('heading', { name: '运行时详情' })).toBeVisible()
