@@ -4,7 +4,7 @@
 
 - Issue: #35
 - Implementation commit and archived Web revision:
-  `d7725743b4206f339d9bdaf4f2965fc9988b7fb5`
+  `3a180209f346c7311cc2d66b1e756f0947933b71`
 - Web contract baseline: `b513d3390d73d4f291bb31afc588ca1307ce19af`
 - Real journey RSS archive: `b7f3e1d0bcc5b2e59639a81b4f37937914b53f00`
 - Independently inspected RSS revision: `1f6c131f0759f921551a81e12e0adb0071346927`
@@ -36,13 +36,15 @@
   30-second lease. Manual hide, expiry, Escape, hidden/pagehide, route leave, session navigation, and
   unmount use the same abort/generation/clear funnel. This releases app-owned references; it does not
   claim physical JavaScript string erasure.
-- Clipboard copy is explicit and generation-fenced. The UI states that the operating-system
-  clipboard is outside the app's cleanup boundary; there is no automatic copy, download, export, or
-  clipboard overwrite.
+- Clipboard copy is explicit and generation-fenced. Its asynchronous continuation retains only the
+  numeric generation, not a second app-owned material reference. The UI states that the
+  operating-system clipboard is outside the app's cleanup boundary; there is no automatic copy,
+  download, export, or clipboard overwrite.
 - The exact Edge material location stays on Primary, disables proxy buffering, hides any upstream
   cache header, and emits one `Cache-Control: no-store` on success and failure. Neighbor Settings
-  routes retain their existing behavior. Safe access logs contain method/status/requestId only, not
-  URI, body size, key, or material.
+  routes retain their existing behavior. The route also covers opaque keys whose encoded path
+  segment contains a separator after Nginx normalization. Safe access logs contain
+  method/status/requestId only, not URI, body size, key, or material.
 - There is no publish-to-resolve handoff, secret/store discovery, Mock/Preview fallback, tenant input,
   material persistence, telemetry, runtime schema loading, RSS modification, or fabricated Admin
   authority.
@@ -70,24 +72,27 @@ Final implementation verification from the clean implementation commit:
 - production build with both Preview flags forced true, RSS identity scan, and Preview absence scan:
   passed
 - explicitly enabled demo Preview build: passed
-- Chromium smoke: 18 passed
+- Chromium smoke: 19 passed, including a protected 200 path that proves confirmation-before-fetch,
+  request no-store/no body/no tenant header, raw Base64 display, and hide/route cleanup
 - Docker/Nginx Edge routing, no-store, near-miss, log, and checked teardown smoke: passed
 - archived Web + pinned RSS real journey: all 10 phases and checked cleanup passed, including the
   isolated `settings-config` phase proving one Secret Resolve GET, exact real 403, request/response
   no-store, no tenant header, no replay, and no active material DOM
-  (`/tmp/rss-web-35-final-real-receipt-2.json`)
+  (`/tmp/rss-web-35-review-real-receipt.json`)
 - `git diff --check`: passed
 
-The first run on the identical archived Web/RSS revisions stopped in the pre-existing limited-account
-`main` journey and completed checked cleanup before the new Settings phase. The second run passed all
-phases and cleanup; the failed machine receipt remains at `/tmp/rss-web-35-final-real-receipt.json`.
+The first run on the earlier archived Web/RSS revisions stopped in the pre-existing limited-account
+`main` journey and completed checked cleanup before the new Settings phase. Its immediate rerun passed
+all phases and cleanup. After review fixes, the full journey was run again on the final implementation
+commit above and all 10 phases plus cleanup passed. The earlier receipts remain at
+`/tmp/rss-web-35-final-real-receipt.json` and `/tmp/rss-web-35-final-real-receipt-2.json`.
 
 ## Changed lines and rollback
 
 - semantic/config: +663 / -11
-- tests/type/Edge/real evidence: +725 / -15
+- tests/type/Edge/real evidence: +796 / -15
 - README/CLAUDE/baseline note: +38 / -4
-- implementation total: +1,426 / -30
+- implementation total: +1,497 / -30
 - generated/lockfile: 0
 
 Rollback is one revert of this PR. It removes the resolve endpoint/client method, Reveal route and
