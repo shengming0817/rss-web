@@ -31,6 +31,7 @@ describe('real RSS journey harness', () => {
         'account-status-self',
         'roles',
         'policies-write',
+        'settings-config',
         'rate-limited',
         'budget-exhausted',
         'admin-down',
