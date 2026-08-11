@@ -15,6 +15,7 @@ describe('Settings config decoder', () => {
 
   it.each([
     { data: { key: 'app.k', version: 0 } },
+    { data: { key: '', version: 1 } },
     { data: { key: 'app.k', version: Number.MAX_SAFE_INTEGER + 1 } },
     { data: { key: 'app.k', version: 1, extra: true } },
     { data: { key: 'app.k', value: 1, version: 1 } },
@@ -67,5 +68,6 @@ describe('Settings config client', () => {
     await expect(api.get('app.k')).rejects.toThrow()
     expect(() => api.publish({ key: '', value: 'v' })).toThrow()
     expect(() => api.delete('')).toThrow()
+    await expect(api.publish({ key: 'app.k', value: 'v', extra: true } as never)).rejects.toThrow()
   })
 })

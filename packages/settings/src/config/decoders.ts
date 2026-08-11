@@ -20,6 +20,12 @@ function text(value: unknown): string {
   return value
 }
 
+function key(value: unknown): string {
+  const result = text(value)
+  if (result.length === 0) invalid()
+  return result
+}
+
 function version(value: unknown): ConfigVersion {
   if (!Number.isSafeInteger(value) || (value as number) < 1) invalid()
   return value as ConfigVersion
@@ -27,7 +33,7 @@ function version(value: unknown): ConfigVersion {
 
 function coordinate(value: unknown) {
   const input = record(value, ['key', 'version'])
-  return Object.freeze({ key: text(input.key), version: version(input.version) })
+  return Object.freeze({ key: key(input.key), version: version(input.version) })
 }
 
 export function decodeConfigPublishResponse(value: unknown): ConfigPublishResponse {
@@ -39,7 +45,7 @@ export function decodeConfigGetResponse(value: unknown): ConfigGetResponse {
   const envelope = record(value, ['data'])
   const input = record(envelope.data, ['key', 'value', 'version'])
   const data: ConfigEntry = Object.freeze({
-    key: text(input.key),
+    key: key(input.key),
     value: text(input.value),
     version: version(input.version),
   })

@@ -165,6 +165,36 @@ try {
   assert.deepEqual(rolesList.json.tenantHeaders, [])
   assert.equal(rolesList.json.authorizationPresent, true)
 
+  const configBody = JSON.stringify({ key: 'app.k', value: 'edge-sensitive-fixture' })
+  for (const [method, path, body] of [
+    ['GET', '/api/v1/settings/configs/app.k', undefined],
+    ['POST', '/api/v1/settings/configs', configBody],
+    ['DELETE', '/api/v1/settings/configs/app.k', undefined],
+  ]) {
+    const response = await request(port, path, {
+      method,
+      headers: {
+        'X-Tenant-ID': 'attacker',
+        Authorization: 'Bearer fixture',
+        ...(body === undefined
+          ? {}
+          : {
+              'Content-Type': 'application/json',
+              'Content-Length': String(Buffer.byteLength(body)),
+            }),
+      },
+      ...(body === undefined ? {} : { body }),
+    })
+    assert.equal(response.status, 200)
+    assert.equal(response.json.listener, 'primary')
+    assert.equal(response.json.method, method)
+    assert.equal(response.json.url, path)
+    assert.deepEqual(response.json.tenantHeaders, [])
+    assert.equal(response.json.authorizationPresent, true)
+    if (body !== undefined)
+      assert.equal(response.json.bodySha256, createHash('sha256').update(body).digest('hex'))
+  }
+
   for (const path of [
     '/api/v1/identity/policies?limit=50',
     '/api/v1/identity/policies/rss-web-policy-read',

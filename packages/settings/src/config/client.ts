@@ -22,6 +22,18 @@ function key(value: string): string {
   return value
 }
 
+function exactPublishRequest(value: ConfigPublishRequest): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    Object.hasOwn(value, 'key') &&
+    Object.hasOwn(value, 'value') &&
+    Reflect.ownKeys(value).length === 2 &&
+    typeof value.key === 'string' &&
+    typeof value.value === 'string'
+  )
+}
+
 function signal(options?: SettingsCallOptions) {
   return options?.signal === undefined ? {} : { signal: options.signal }
 }
@@ -29,12 +41,9 @@ function signal(options?: SettingsCallOptions) {
 export function createSettingsApi(transport: HttpTransport): SettingsApi {
   return Object.freeze({
     publish(request: ConfigPublishRequest, options?: SettingsCallOptions) {
-      const requestKey = key(request.key)
-      if (
-        typeof request.value !== 'string' ||
-        Reflect.ownKeys(request).some((field) => field !== 'key' && field !== 'value')
-      )
+      if (!exactPublishRequest(request))
         return Promise.reject(new Error('invalid config publish input'))
+      const requestKey = key(request.key)
       return transport.request({
         ...settingsEndpoints.configPublish,
         body: Object.freeze({ key: requestKey, value: request.value }),

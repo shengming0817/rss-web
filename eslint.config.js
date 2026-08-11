@@ -280,6 +280,34 @@ export default tseslint.config(
       ),
     },
   },
+  {
+    files: ['packages/settings/**/*.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex: '^@rss/(?!api(?:$|/endpoints/settings$))',
+            message: '@rss/settings 只允许依赖 @rss/api 与 Settings endpoint。',
+          },
+        ],
+        [NO_AXIOS_PATH],
+      ),
+    },
+  },
+  {
+    files: ['packages/settings/**/*.spec.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex: '^@rss/(?!api(?:$|/endpoints/settings$|/session$|/testing$))',
+            message: '@rss/settings 测试只允许依赖 API seam、Settings endpoint 与测试 capability。',
+          },
+        ],
+        [NO_AXIOS_PATH],
+      ),
+    },
+  },
 
   // ── 边界锁: packages/authorization ───────────────────────────────────────
   // UX hint capability is framework-neutral and has zero runtime dependencies.

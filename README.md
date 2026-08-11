@@ -63,7 +63,7 @@ Web source. No browser ABAC evaluation, request authority, or legacy access endp
 
 The authenticated shell derives Sidebar and command-palette navigation from implemented route
 metadata; currently that closed production set contains Home, Identity self-service, Account Status,
-Roles, Policies, Runtime details, and Audit queries.
+Roles, Policies, key-driven Settings Config, Runtime details, and Audit queries.
 Removed and future capabilities
 do not receive placeholder routes or menu entries. `@rss/shared` owns a discriminated `SourceMeta`
 model with sealed, frozen display constants; direct object-literal construction is rejected. Reusable
@@ -71,6 +71,12 @@ badges make RSS, mock, manual, external, and unavailable sources visible without
 as request or permission authority. Generic content/error presentation accepts only reviewed status,
 code, retryability, and requestId coordinates—never backend messages or details. Unknown protected
 paths use the authenticated catch-all; anonymous requests still reach Login first.
+
+`@rss/settings` provides the strict framework-neutral client for explicit Config publish, get, and
+delete coordinates. Vue composition remains in `apps/web`. Publish is a one-shot non-idempotent
+operation; an uncertain result drops the value draft and requires an explicit server read. Config
+values are never placed in URLs, storage, logs, errors, receipts, or source metadata. There is no
+catalog, history, recent-key list, mock fallback, tenant selector, or direct Axios path.
 
 `@rss/runtime` and `@rss/audit` provide strict, framework-neutral clients for the selected Admin
 listener reads. The authenticated Home composes both over the single session transport and degrades

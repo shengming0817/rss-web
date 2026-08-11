@@ -169,22 +169,23 @@ describe('ESLint package boundaries', () => {
     }
   })
 
-  it('keeps Runtime and Audit behind their exact API endpoint owner', async () => {
-    for (const [domain, endpoint] of [
-      ['runtime', 'runtime'],
-      ['audit', 'audit'],
+  it('keeps domain adapters behind their exact API endpoint owner', async () => {
+    for (const [domain, endpoint, client] of [
+      ['runtime', 'runtime', 'api/client.ts'],
+      ['audit', 'audit', 'api/client.ts'],
+      ['settings', 'settings', 'config/client.ts'],
     ] as const) {
       expect(
         await ruleIds(
           `import { x } from '@rss/api/endpoints/${endpoint}'\nexport const y = x\n`,
-          `packages/${domain}/src/api/client.ts`,
+          `packages/${domain}/src/${client}`,
         ),
       ).not.toContain('no-restricted-imports')
       for (const dependency of ['axios', '@rss/core', '@rss/identity', '@rss/api/session']) {
         expect(
           await ruleIds(
             `import { x } from '${dependency}'\nexport const y = x\n`,
-            `packages/${domain}/src/api/client.ts`,
+            `packages/${domain}/src/${client}`,
           ),
         ).toContain('no-restricted-imports')
       }
