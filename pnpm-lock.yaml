@@ -347,6 +347,9 @@ importers:
       '@rss/api':
         specifier: workspace:*
         version: link:../api
+      '@rss/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       '@vitest/coverage-v8':
         specifier: 'catalog:'

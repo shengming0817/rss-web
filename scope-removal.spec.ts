@@ -107,7 +107,12 @@ describe('RSS-only foundation boundary', () => {
     expect(router).toContain("path: '/login'")
     expect(router).toContain("path: ':pathMatch(.*)*'")
     const labels = [...router.matchAll(/labelKey: '(navigation\.[^']+)'/g)].map((match) => match[1])
-    expect(labels.filter((label) => label !== 'navigation.roleBindingsPreview')).toEqual([
+    expect(
+      labels.filter(
+        (label) =>
+          label !== 'navigation.roleBindingsPreview' && label !== 'navigation.configCatalogPreview',
+      ),
+    ).toEqual([
       'navigation.home',
       'navigation.identity',
       'navigation.accountStatus',
@@ -118,7 +123,9 @@ describe('RSS-only foundation boundary', () => {
       'navigation.audit',
     ])
     expect(labels.filter((label) => label === 'navigation.roleBindingsPreview')).toHaveLength(1)
+    expect(labels.filter((label) => label === 'navigation.configCatalogPreview')).toHaveLength(1)
     expect(router).toContain('if (options.roleBindingsPreview)')
+    expect(router).toContain('if (options.configCatalogPreview)')
     expect(router).toContain('source: MOCK_SOURCE')
     expect(router).toContain('authorizationIntent: RUNTIME_INVENTORY_INTENT')
     expect(runtimeIntent).toContain("contractId: 'runtime.inventory'")

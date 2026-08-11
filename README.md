@@ -54,6 +54,12 @@ inspect its synthetic, permanently non-authoritative fixtures in development, ru
 closed `development`, `test`, or `demo` modes; production ignores the flag. Preview data never calls
 RSS and never derives state from Roles command receipts.
 
+Config Catalog Preview is also disabled by default. In development, test, or demo mode it can be
+enabled with `VITE_CONFIG_CATALOG_PREVIEW=true pnpm dev`. Its `preview.example.*` rows are local
+synthetic metadata marked Mock and non-authoritative. A row requires an explicit warning confirmation
+before its key is copied once into the existing Manual Config draft; no RSS request occurs until the
+user separately selects “Read current config”, and a real failure never falls back to Preview data.
+
 `@rss/authorization` provides closed, non-authoritative UX hints. The Web composition root installs
 only its server mode, which always defers to the real RSS request. A Web-owned context lets future
 routes and controls consume hints without treating them as security: operations still execute once,

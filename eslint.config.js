@@ -286,8 +286,9 @@ export default tseslint.config(
       'no-restricted-imports': boundaryRule(
         [
           {
-            regex: '^@rss/(?!api(?:$|/endpoints/settings$))',
-            message: '@rss/settings 只允许依赖 @rss/api 与 Settings endpoint。',
+            regex: '^@rss/(?!(?:api(?:$|/endpoints/settings$)|shared$))',
+            message:
+              '@rss/settings 只允许依赖 @rss/api、Settings endpoint 与 sealed source metadata。',
           },
         ],
         [NO_AXIOS_PATH],
@@ -300,8 +301,9 @@ export default tseslint.config(
       'no-restricted-imports': boundaryRule(
         [
           {
-            regex: '^@rss/(?!api(?:$|/endpoints/settings$|/session$|/testing$))',
-            message: '@rss/settings 测试只允许依赖 API seam、Settings endpoint 与测试 capability。',
+            regex: '^@rss/(?!(?:api(?:$|/endpoints/settings$|/session$|/testing$)|shared$))',
+            message:
+              '@rss/settings 测试只允许依赖 API seam、Settings endpoint、sealed source metadata 与测试 capability。',
           },
         ],
         [NO_AXIOS_PATH],

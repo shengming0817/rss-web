@@ -90,6 +90,11 @@ Config get/delete may use only the session owner's exact-401 recovery, and delet
 body. Config values must not enter URLs, storage, logs, telemetry, errors, receipts, or SourceMeta.
 Do not add catalog/history/recent-key providers, mock fallback, tenant inputs, schema loading, or a
 second HTTP/session seam.
+Issue #32 adds one concrete Config Catalog Preview under `@rss/settings/preview`. It is registered only
+for an exact development/test/demo build-time flag and production remains disabled. Fixtures are
+synthetic Mock metadata only; there is no provider SPI, remote adapter, catalog contract, value/version,
+authority inference, automatic request, persistence, URL handoff, or real-failure fallback. A reviewed
+key may cross once into the existing Manual draft only after explicit warning confirmation.
 
 The opt-in real RSS harness may read a user-supplied RSS checkout only through a pinned `git archive`
 and must build the Web Edge from an archived, clean Web HEAD rather than the live worktree. It may

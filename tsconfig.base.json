@@ -45,6 +45,7 @@
       "@rss/audit": ["packages/audit/src/index.ts"],
       "@rss/runtime": ["packages/runtime/src/index.ts"],
       "@rss/settings": ["packages/settings/src/index.ts"],
+      "@rss/settings/preview": ["packages/settings/src/preview.ts"],
       "@rss/api/endpoints/settings": ["packages/api/src/endpoints/settings.ts"]
     }
   }

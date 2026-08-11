@@ -15,10 +15,21 @@ import { policiesApiPlugin } from './features/identity/policies-context'
 import { auditApiPlugin } from './features/audit/audit-context'
 import { runtimeApiPlugin } from './features/runtime/runtime-context'
 import { settingsApiPlugin } from './features/settings/settings-context'
+import { configCatalogDraftPlugin } from './features/settings/config-catalog-draft-context'
 
 const app = createApp(App)
-const { accountStatus, audit, authorization, policies, roles, router, runtime, session, settings } =
-  createWebRuntime()
+const {
+  accountStatus,
+  audit,
+  authorization,
+  configCatalogDraft,
+  policies,
+  roles,
+  router,
+  runtime,
+  session,
+  settings,
+} = createWebRuntime()
 app.use(createPinia())
 app.use(createWebI18n())
 app.use(router)
@@ -30,4 +41,5 @@ app.use(authorizationExperiencePlugin(authorization))
 app.use(auditApiPlugin(audit))
 app.use(runtimeApiPlugin(runtime))
 app.use(settingsApiPlugin(settings))
+app.use(configCatalogDraftPlugin(configCatalogDraft))
 app.mount('#app')

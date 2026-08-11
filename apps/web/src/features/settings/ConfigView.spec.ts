@@ -1,11 +1,15 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import type { SettingsApi } from '@rss/settings'
 import { networkErrorForTest } from '@rss/api/testing'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createWebI18n } from '../../i18n'
 import { authorizationExperiencePlugin } from '../authorization/authorization-context'
 import ConfigView from './ConfigView.vue'
 import { settingsApiPlugin } from './settings-context'
+import {
+  configCatalogDraftPlugin,
+  createConfigCatalogDraftHandoff,
+} from './config-catalog-draft-context'
 
 const execute = vi.fn((_intent: unknown, operation: () => Promise<unknown>) => operation())
 const authorization = {
@@ -27,6 +31,37 @@ function api(overrides: Partial<SettingsApi> = {}): SettingsApi {
 }
 
 describe('ConfigView', () => {
+  beforeEach(() => vi.clearAllMocks())
+  it('consumes a staged Mock key as an unsubmitted Manual draft', async () => {
+    const settings = api()
+    const handoff = createConfigCatalogDraftHandoff()
+    handoff.stage('preview.example.appearance.theme')
+    const wrapper = mount(ConfigView, {
+      global: {
+        plugins: [
+          createWebI18n(),
+          settingsApiPlugin(settings),
+          authorizationExperiencePlugin(authorization),
+          configCatalogDraftPlugin(handoff),
+        ],
+      },
+    })
+    expect((wrapper.get('#config-key').element as HTMLInputElement).value).toBe(
+      'preview.example.appearance.theme',
+    )
+    expect(wrapper.text()).toContain('尚未向 RSS 发出请求')
+    expect(settings.get).not.toHaveBeenCalled()
+    expect(settings.publish).not.toHaveBeenCalled()
+    expect(settings.delete).not.toHaveBeenCalled()
+    expect(settings.rollback).not.toHaveBeenCalled()
+    expect((wrapper.get('#config-value').element as HTMLTextAreaElement).value).toBe('')
+    expect((wrapper.get('#config-rollback-version').element as HTMLInputElement).value).toBe('')
+
+    await wrapper.get('button').trigger('click')
+    await flushPromises()
+    expect(settings.get).toHaveBeenCalledOnce()
+  })
+
   it('marks manual/RSS sources and clears the publish value before awaiting the server', async () => {
     let resolve!: (value: { data: { key: string; version: number } }) => void
     const publish = vi.fn().mockReturnValue(

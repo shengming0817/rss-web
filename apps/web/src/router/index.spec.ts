@@ -36,7 +36,7 @@ function sessionFixture(initial: IdentitySessionState) {
 function appRouter(
   fixture: ReturnType<typeof sessionFixture>,
   port: AuthorizationPort = createServerAuthorizationPort(),
-  options?: { readonly roleBindingsPreview: boolean },
+  options?: { readonly configCatalogPreview: boolean; readonly roleBindingsPreview: boolean },
 ) {
   const authorization = createAuthorizationExperience({
     port,
@@ -248,11 +248,13 @@ describe('session-owned router', () => {
     const fixture = sessionFixture({ status: 'anonymous' })
     const production = appRouter(fixture)
     expect(production.resolve('/preview/role-bindings').name).toBe('not-found')
+    expect(production.resolve('/preview/config-catalog').name).toBe('not-found')
     expect(createShellNavigation(production, (key) => key)).not.toContainEqual(
       expect.objectContaining({ id: 'role-bindings-preview' }),
     )
 
     const preview = appRouter(fixture, createServerAuthorizationPort(), {
+      configCatalogPreview: false,
       roleBindingsPreview: true,
     })
     expect(preview.resolve('/preview/role-bindings')).toMatchObject({
@@ -277,6 +279,20 @@ describe('session-owned router', () => {
     await preview.push('/preview/role-bindings')
     await preview.isReady()
     expect(preview.currentRoute.value.name).toBe('login')
+
+    const catalog = appRouter(fixture, createServerAuthorizationPort(), {
+      configCatalogPreview: true,
+      roleBindingsPreview: false,
+    })
+    expect(catalog.resolve('/preview/config-catalog')).toMatchObject({
+      name: 'config-catalog-preview',
+      meta: {
+        navigation: { labelKey: 'navigation.configCatalogPreview', source: MOCK_SOURCE },
+      },
+    })
+    expect(catalog.resolve('/preview/config-catalog').meta).not.toHaveProperty(
+      'authorizationIntent',
+    )
   })
 
   it('owns the Audit page with ambient route intent and no client-side SuperAdmin gate', () => {

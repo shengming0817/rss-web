@@ -131,6 +131,7 @@ const baseRoutes: RouteRecordRaw[] = [
 ]
 
 export interface AppRouterOptions {
+  readonly configCatalogPreview: boolean
   readonly roleBindingsPreview: boolean
 }
 
@@ -155,6 +156,22 @@ function routes(options: AppRouterOptions): RouteRecordRaw[] {
         },
       })
     }
+    if (options.configCatalogPreview) {
+      children.push({
+        path: 'preview/config-catalog',
+        name: 'config-catalog-preview',
+        component: () => import('../features/settings/ConfigCatalogPreviewView.vue'),
+        meta: {
+          sessionAccess: 'authenticated',
+          focusTarget: 'shell-content',
+          navigation: {
+            labelKey: 'navigation.configCatalogPreview',
+            order: 39,
+            source: MOCK_SOURCE,
+          },
+        },
+      })
+    }
     children.push(catchAll)
     return { ...route, children }
   })
@@ -164,7 +181,7 @@ export function createAppRouter(
   session: IdentitySession,
   authorization: AuthorizationExperience,
   history: RouterHistory,
-  options: AppRouterOptions = { roleBindingsPreview: false },
+  options: AppRouterOptions = { configCatalogPreview: false, roleBindingsPreview: false },
 ) {
   const router = createRouter({
     history,

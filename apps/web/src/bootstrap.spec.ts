@@ -61,7 +61,7 @@ describe('web composition root', () => {
       createIdentitySession.mock.results[0]?.value,
       createAuthorizationExperience.mock.results[0]?.value,
       expect.anything(),
-      { roleBindingsPreview: false },
+      { configCatalogPreview: false, roleBindingsPreview: false },
     )
     expect(runtime.authorization).toBe(createAuthorizationExperience.mock.results[0]?.value)
     expect(runtime.accountStatus).toBe(createAccountStatusApi.mock.results[0]?.value)
@@ -76,12 +76,13 @@ describe('web composition root', () => {
     const { createWebRuntime } = await import('./bootstrap')
     vi.stubEnv('MODE', 'test')
     vi.stubEnv('VITE_ROLE_BINDINGS_PREVIEW', 'true')
+    vi.stubEnv('VITE_CONFIG_CATALOG_PREVIEW', 'true')
     createWebRuntime()
     expect(createAppRouter).toHaveBeenLastCalledWith(
       expect.anything(),
       expect.anything(),
       expect.anything(),
-      { roleBindingsPreview: true },
+      { configCatalogPreview: true, roleBindingsPreview: true },
     )
 
     vi.stubEnv('MODE', 'production')
@@ -90,7 +91,7 @@ describe('web composition root', () => {
       expect.anything(),
       expect.anything(),
       expect.anything(),
-      { roleBindingsPreview: false },
+      { configCatalogPreview: false, roleBindingsPreview: false },
     )
   })
 })

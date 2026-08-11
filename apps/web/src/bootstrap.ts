@@ -12,6 +12,8 @@ import { createSettingsApi } from '@rss/settings'
 import { createWebHistory, type RouterHistory } from 'vue-router'
 import { createAuthorizationExperience } from './features/authorization/authorization-context'
 import { isRoleBindingsPreviewEnabled } from './features/identity/role-bindings-preview'
+import { createConfigCatalogDraftHandoff } from './features/settings/config-catalog-draft-context'
+import { isConfigCatalogPreviewEnabled } from './features/settings/config-catalog-preview'
 import { createAppRouter } from './router'
 
 export const DEFAULT_HTTP_TIMEOUT_MS = 10_000
@@ -27,20 +29,26 @@ export function createWebRuntime(history?: RouterHistory) {
   const settings = createSettingsApi(session.transport)
   const port = createServerAuthorizationPort()
   const authorization = createAuthorizationExperience({ port, session })
+  const configCatalogDraft = createConfigCatalogDraftHandoff()
   const roleBindingsPreview = isRoleBindingsPreviewEnabled(
     import.meta.env.MODE,
     import.meta.env.VITE_ROLE_BINDINGS_PREVIEW,
+  )
+  const configCatalogPreview = isConfigCatalogPreviewEnabled(
+    import.meta.env.MODE,
+    import.meta.env.VITE_CONFIG_CATALOG_PREVIEW,
   )
   const router = createAppRouter(
     session,
     authorization,
     history ?? createWebHistory(import.meta.env.BASE_URL),
-    { roleBindingsPreview },
+    { configCatalogPreview, roleBindingsPreview },
   )
   return Object.freeze({
     accountStatus,
     audit,
     authorization,
+    configCatalogDraft,
     policies,
     roles,
     router,
