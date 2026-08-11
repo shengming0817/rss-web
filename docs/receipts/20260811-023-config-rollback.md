@@ -38,17 +38,20 @@
 
 ## Verification
 
-- Frozen install, workspace typecheck, lint, format check, 905 unit/root tests, 847 coverage tests,
+- Frozen install, workspace typecheck, lint, format check, 906 unit/root tests, 848 coverage tests,
   58 boundary tests, production build, built-identity scan, and diff check passed.
 - Eighteen Chromium journeys passed, including explicit rollback confirmation, exact request body,
   strict 201 receipt, and value absence from confirmation, URL, and storage.
 - Docker/Nginx Edge smoke passed exact rollback path/body, Primary routing, bearer pass-through,
   forged tenant removal, listener isolation, and checked teardown.
 - The real runner archived clean Web implementation
-  `3e81f78c4c86789312f189cbefd421d2160d767e`. Main, password-change, account-status-self, roles,
+  `1346273f60fbed8f997eb52622cf11a92f6370ab`. Main, password-change, account-status-self, roles,
   policies-write, settings-config, rate-limited, budget-exhausted, Admin-down, and Primary-down phases
   passed; cleanup passed. The settings-config phase records final RSS 403 for get, publish, rollback,
-  and delete under the real User authority. Machine receipt: `/tmp/rss-web-31-real-receipt.json`.
+  and delete under the real User authority. Machine receipt: `/tmp/rss-web-31-review-real-receipt.json`.
+- Review closure split key and sourceVersion drift into independent fail-closed tests and centralized
+  mutation outcome/write-lock predicates. Focused tests and the archived real journey were rerun after
+  the final implementation commit.
 
 ## Four-principle check
 
@@ -64,10 +67,10 @@
 
 ## Changed-line classification
 
-- Semantic handwritten code, locales, and docs: 364 additions / 69 deletions.
-- Unit/type/boundary/browser/Edge/real tests: 229 additions / 11 deletions.
+- Semantic handwritten code, locales, and docs: 357 additions / 73 deletions.
+- Unit/type/boundary/browser/Edge/real tests: 230 additions / 11 deletions.
 - Lockfile and generated code: 0 lines.
-- Implementation total excluding this receipt: 593 additions / 80 deletions.
+- Implementation total excluding this receipt: 587 additions / 84 deletions.
 
 ## Rollback
 
