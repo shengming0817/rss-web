@@ -4,7 +4,7 @@
 
 - Issue: #37. All declared blockers #22–#26, #28, and #30–#36 were closed before
   implementation.
-- Final implementation commit: `61593e2576cd2f7cf4ce1853b579f5652c0ad8c8`.
+- Final implementation commit: `d2f863c2042704e800dfd84173fee3e736e6aeee`.
 - Base Web revision: `167ddb5ed89a8965f1f42c9367d56f8f19dba8e4`.
 - Reviewed RSS contract baseline: `b513d3390d73d4f291bb31afc588ca1307ce19af`.
 - Optional real-harness RSS archive: `b7f3e1d0bcc5b2e59639a81b4f37937914b53f00`.
@@ -61,7 +61,7 @@ Final implementation verification:
 - Chromium smoke: 20 passed; the authenticated navigation includes About, production
   shows no Mock sources, and its Web revision is a full 40-character SHA
 - Docker/Nginx Edge smoke: passed; Chromium About revision, build argument, and OCI
-  image label all equal `61593e2576cd2f7cf4ce1853b579f5652c0ad8c8`, with checked
+  image label all equal `d2f863c2042704e800dfd84173fee3e736e6aeee`, with checked
   teardown
 - the Edge provenance runner rejects tracked or untracked dirty source before build;
   manual Compose deployment requires the same explicit clean Web revision
@@ -84,9 +84,9 @@ evidence and does not replace the required unit, Chromium, and real-Edge gates.
 ## Changed lines and rollback
 
 - semantic/application/build: +442 / -89
-- tests and executable evidence: +665 / -11
+- tests and executable evidence: +684 / -11
 - documentation and rules: +39 / -4
-- implementation total: +1,146 / -104
+- implementation total: +1,165 / -104
 - generated files and dependency lock changes: 0
 
 Rollback is one revert of this PR. It removes the About route, static release metadata,
