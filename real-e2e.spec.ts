@@ -10,6 +10,12 @@ import {
   isCleanWebStatus,
 } from './e2e/real/lifecycle.mjs'
 import { executeBounded } from './e2e/real/process.mjs'
+import {
+  failedPhaseEvidence,
+  passedPhaseEvidence,
+  REAL_PHASES,
+  realPhase,
+} from './e2e/real/phase-evidence.mjs'
 
 const root = resolve(import.meta.dirname)
 
@@ -91,6 +97,24 @@ describe('real RSS journey harness', () => {
         return /\bfunction\s+classifyPlaywrightReport\s*\(/.test(source)
       })
     expect(classifierOwners).toEqual(['lifecycle.mjs'])
+  })
+
+  it('derives successful and failed receipt facts from the closed phase descriptors', () => {
+    expect(REAL_PHASES).toHaveLength(11)
+    expect(passedPhaseEvidence('preview-isolation')).toEqual({
+      name: 'preview-isolation',
+      status: 'passed',
+      artifactMode: 'demo-preview',
+    })
+    expect(
+      failedPhaseEvidence('product:preview-isolation', 'product', 'preview-isolation'),
+    ).toEqual({
+      name: 'product:preview-isolation',
+      status: 'failed',
+      classification: 'product',
+      artifactMode: 'demo-preview',
+    })
+    expect(() => realPhase('unreviewed-phase')).toThrow('unknown real browser phase')
   })
 
   it('fails closed for cleanup, total deadlines, and non-assertion Playwright failures', () => {

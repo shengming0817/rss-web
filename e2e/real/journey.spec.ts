@@ -762,9 +762,27 @@ test('@admin-down keeps Primary login and shell available while Admin panels fai
   const retry = runtimePanel.getByRole('button', { name: '重试' })
   await retry.evaluate((button) => {
     const observations: Array<{ attribute: string; oldValue: string | null }> = []
+    const busySnapshots: Array<{ busy: string | null; disabled: boolean; focused: boolean }> = []
     ;(
-      window as typeof window & { __runtimeRetryObservations?: typeof observations }
+      window as typeof window & {
+        __runtimeRetryObservations?: typeof observations
+        __runtimeRetryBusySnapshots?: typeof busySnapshots
+      }
     ).__runtimeRetryObservations = observations
+    ;(
+      window as typeof window & { __runtimeRetryBusySnapshots?: typeof busySnapshots }
+    ).__runtimeRetryBusySnapshots = busySnapshots
+    const setAttribute = button.setAttribute.bind(button)
+    button.setAttribute = (name, value) => {
+      setAttribute(name, value)
+      if (name === 'aria-busy' && value === 'true') {
+        busySnapshots.push({
+          busy: button.getAttribute('aria-busy'),
+          disabled: (button as HTMLButtonElement).disabled,
+          focused: document.activeElement === button,
+        })
+      }
+    }
     new MutationObserver((records) => {
       observations.push(
         ...records.map((record) => ({
@@ -791,6 +809,20 @@ test('@admin-down keeps Primary login and shell available while Admin panels fai
   )
   expect(observations).toContainEqual({ attribute: 'aria-busy', oldValue: 'false' })
   expect(observations).toContainEqual({ attribute: 'disabled', oldValue: null })
+  expect(
+    await page.evaluate(
+      () =>
+        (
+          window as typeof window & {
+            __runtimeRetryBusySnapshots?: Array<{
+              busy: string | null
+              disabled: boolean
+              focused: boolean
+            }>
+          }
+        ).__runtimeRetryBusySnapshots ?? [],
+    ),
+  ).toContainEqual({ busy: 'true', disabled: true, focused: true })
   await expect(runtimePanel.locator('[data-source="unavailable"]')).toBeVisible()
   await expect(runtimePanel.getByRole('heading', { name: '运行时摘要' })).toBeFocused()
   expect(runtimeRequests).toBe(2)
