@@ -3,7 +3,7 @@
 ## Scope and provenance
 
 - Issue: #34
-- Implementation commit: `c97e27df94cbeff21deb0df88f57dafe0524d149`
+- Implementation commit: `f55041eccb9ec7faacab0214bcfd73ae3a306fda`
 - Web contract baseline: `b513d3390d73d4f291bb31afc588ca1307ce19af`
 - Real journey RSS archive: `b7f3e1d0bcc5b2e59639a81b4f37937914b53f00`
 - Independently inspected RSS object: `2fa78c4da110f60e1c0cc112b72f852c30f1dc9d`
@@ -30,6 +30,8 @@
 - Success shows only the strictly decoded server key/version. Reviewed 4xx responses are final.
   Network, timeout, abort, protocol, malformed-success, and internal outcomes enter a terminal
   coordinate-free unknown state with no retry, reset, replay, or invented reconciliation.
+- The endpoint error policy accepts only reviewed publish coordinates; an undeclared 404 is rejected
+  as protocol drift and therefore enters the same terminal unknown posture.
 - While a verified session owns a publishing or unknown operation, ordinary SPA navigation is
   blocked so the route cannot be remounted to bypass the terminal fence. Navigation to Login remains
   available for session expiry or sign-out, which establishes a new authority generation.
@@ -81,10 +83,10 @@ environment revision error and also cleaned up.
 
 ## Changed lines and rollback
 
-- semantic/config: +665 / -67
-- tests/type/Edge/real evidence: +728 / -34
+- semantic/config: +664 / -67
+- tests/type/Edge/real evidence: +727 / -34
 - README/CLAUDE: +20 / -9
-- implementation total: +1,413 / -110
+- implementation total: +1,411 / -110
 - generated/lockfile: 0
 
 Rollback is one revert of the PR. It removes the Secret endpoint owner, adapter, route, operation,
