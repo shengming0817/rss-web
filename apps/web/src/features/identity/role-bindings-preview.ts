@@ -1,11 +1,5 @@
 import { MOCK_SOURCE } from '@rss/shared'
 
-const MODES: ReadonlySet<string> = new Set(['development', 'test', 'demo'])
-
-export function isRoleBindingsPreviewEnabled(mode: string, value: unknown): boolean {
-  return MODES.has(mode) && value === 'true'
-}
-
 export interface RoleBindingPreviewRow {
   readonly previewId: string
   readonly subject: string

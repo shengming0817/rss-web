@@ -1,4 +1,3 @@
-import 'ant-design-vue/dist/reset.css'
 import '@rss/core/styles/tokens.css'
 import '@rss/core/styles/v1-linear.scss'
 

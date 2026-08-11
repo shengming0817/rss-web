@@ -192,7 +192,7 @@ function routes(options: AppRouterOptions): RouteRecordRaw[] {
         props: { configPreviewDraft: options.configPreviewDraft },
       }
     }
-    if (options.roleBindingsPreview) {
+    if (import.meta.env.MODE !== 'production' && options.roleBindingsPreview) {
       children.push({
         path: 'preview/role-bindings',
         name: 'role-bindings-preview',

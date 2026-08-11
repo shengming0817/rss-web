@@ -22,12 +22,19 @@ describe('Role Bindings Preview boundary', () => {
   it('has one reviewed environment composition owner and no package-level Preview model', () => {
     const bootstrap = read('apps/web/src/bootstrap.ts')
     const router = read('apps/web/src/router/index.ts')
+    const enablement = read('apps/web/src/features/identity/role-bindings-preview-enablement.ts')
     expect(bootstrap.match(/VITE_ROLE_BINDINGS_PREVIEW/g)).toHaveLength(1)
     expect(bootstrap).not.toMatch(/WebRuntimeOptions|options\?\.roleBindingsPreview/)
-    expect(bootstrap).toContain(
-      'isRoleBindingsPreviewEnabled(\n    import.meta.env.MODE,\n    import.meta.env.VITE_ROLE_BINDINGS_PREVIEW',
+    expect(bootstrap).toMatch(
+      /isRoleBindingsPreviewEnabled\(import\.meta\.env\.MODE, import\.meta\.env\.VITE_ROLE_BINDINGS_PREVIEW\)/,
     )
-    expect(router).toContain('if (options.roleBindingsPreview)')
+    expect(bootstrap).toMatch(
+      /import\.meta\.env\.MODE !== 'production'\s*&&\s*isRoleBindingsPreviewEnabled/,
+    )
+    expect(enablement).toContain("['development', 'test', 'demo']")
+    expect(router).toContain(
+      "if (import.meta.env.MODE !== 'production' && options.roleBindingsPreview)",
+    )
     expect(router).toContain('source: MOCK_SOURCE')
     expect(router).not.toContain('authorizationIntent: ROLE_BINDINGS')
     expect(read('packages/identity/src/index.ts')).not.toMatch(

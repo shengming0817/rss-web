@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { MOCK_SOURCE } from '@rss/shared'
-import {
-  groupRoleBindingsPreview,
-  isRoleBindingsPreviewEnabled,
-  ROLE_BINDINGS_PREVIEW_ROWS,
-} from './role-bindings-preview'
+import { groupRoleBindingsPreview, ROLE_BINDINGS_PREVIEW_ROWS } from './role-bindings-preview'
+import { isRoleBindingsPreviewEnabled } from './role-bindings-preview-enablement'
 
 describe('Role Bindings Preview source', () => {
   it.each(['development', 'test', 'demo'])('requires an exact true flag in %s mode', (mode) => {
