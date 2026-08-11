@@ -23,6 +23,7 @@
     "@rss/core": "workspace:*",
     "@rss/identity": "workspace:*",
     "@rss/runtime": "workspace:*",
+    "@rss/settings": "workspace:*",
     "@rss/shared": "workspace:*",
     "vue-i18n": "catalog:"
   },

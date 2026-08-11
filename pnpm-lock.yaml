@@ -188,6 +188,9 @@ importers:
       '@rss/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
+      '@rss/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
       '@rss/shared':
         specifier: workspace:*
         version: link:../../packages/shared

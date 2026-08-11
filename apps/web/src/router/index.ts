@@ -7,6 +7,7 @@ import type { AuthorizationExperience } from '../features/authorization/authoriz
 import { AUDIT_AMBIENT_INTENT } from '../features/audit/audit-intent'
 import { RUNTIME_INVENTORY_INTENT } from '../features/runtime/runtime-intent'
 import { POLICIES_LIST_INTENT } from '../features/identity/policies-intent'
+import { CONFIG_GET_INTENT } from '../features/settings/config-intent'
 import type { NavigationMessageKey } from './navigation'
 import { registerAuthorizationRouting, registerRouterA11y, registerSessionRouting } from './guards'
 
@@ -84,6 +85,17 @@ const baseRoutes: RouteRecordRaw[] = [
           focusTarget: 'shell-content',
           authorizationIntent: POLICIES_LIST_INTENT,
           navigation: { labelKey: 'navigation.policies', order: 35, source: RSS_SOURCE },
+        },
+      },
+      {
+        path: 'settings',
+        name: 'settings',
+        component: () => import('../features/settings/ConfigView.vue'),
+        meta: {
+          sessionAccess: 'authenticated',
+          focusTarget: 'shell-content',
+          authorizationIntent: CONFIG_GET_INTENT,
+          navigation: { labelKey: 'navigation.settings', order: 38, source: RSS_SOURCE },
         },
       },
       {

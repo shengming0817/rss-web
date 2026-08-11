@@ -14,6 +14,7 @@ const createAuthorizationExperience = vi.fn(() => ({ getHint: vi.fn() }))
 const createAppRouter = vi.fn(() => ({ install: vi.fn() }))
 const createAuditApi = vi.fn(() => ({ listEntries: vi.fn() }))
 const createRuntimeApi = vi.fn(() => ({ inventory: vi.fn() }))
+const createSettingsApi = vi.fn(() => ({ get: vi.fn(), publish: vi.fn(), delete: vi.fn() }))
 
 vi.mock('@rss/api', () => ({ createHttpTransport }))
 vi.mock('@rss/authorization', () => ({ createServerAuthorizationPort }))
@@ -25,6 +26,7 @@ vi.mock('@rss/identity', () => ({
 }))
 vi.mock('@rss/audit', () => ({ createAuditApi }))
 vi.mock('@rss/runtime', () => ({ createRuntimeApi }))
+vi.mock('@rss/settings', () => ({ createSettingsApi }))
 vi.mock('./features/authorization/authorization-context', () => ({
   createAuthorizationExperience,
 }))
@@ -50,6 +52,7 @@ describe('web composition root', () => {
     expect(createPoliciesApi).toHaveBeenCalledWith(session?.transport)
     expect(createAuditApi).toHaveBeenCalledWith(session?.transport)
     expect(createRuntimeApi).toHaveBeenCalledWith(session?.transport)
+    expect(createSettingsApi).toHaveBeenCalledWith(session?.transport)
     expect(createAuthorizationExperience).toHaveBeenCalledWith({
       port: createServerAuthorizationPort.mock.results[0]?.value,
       session: createIdentitySession.mock.results[0]?.value,
@@ -66,6 +69,7 @@ describe('web composition root', () => {
     expect(runtime.roles).toBe(createRolesApi.mock.results[0]?.value)
     expect(runtime.policies).toBe(createPoliciesApi.mock.results[0]?.value)
     expect(runtime.runtime).toBe(createRuntimeApi.mock.results[0]?.value)
+    expect(runtime.settings).toBe(createSettingsApi.mock.results[0]?.value)
   })
 
   it('passes only an explicitly enabled closed Preview composition to the router', async () => {
