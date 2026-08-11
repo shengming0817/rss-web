@@ -21,7 +21,7 @@ const enUS = {
   settingsConfig: {
     title: 'Configuration',
     subtitle:
-      'Read, publish, or delete RSS configuration by explicit key; no catalog or history is inferred.',
+      'Read, publish, delete, or roll back RSS configuration by explicit key; no catalog or history is inferred.',
     operationTitle: 'Config operation',
     manualDraft: 'Manual draft',
     key: 'Config key',
@@ -34,20 +34,31 @@ const enUS = {
     read: 'Read current config',
     preparePublish: 'Prepare publish',
     prepareDelete: 'Prepare delete',
+    rollbackVersion: 'Rollback source version',
+    rollbackVersionHint:
+      'Only an explicitly entered positive decimal safe integer is accepted; no history is queried or inferred.',
+    rollbackVersionRequired: 'Enter a valid positive decimal safe-integer version.',
+    prepareRollback: 'Prepare rollback',
     reading: 'Reading config…',
     publishing: 'Publishing config…',
     deleting: 'Deleting config…',
+    'rolling-back': 'Rolling back config…',
     revealValue: 'Reveal sensitive value',
     hideValue: 'Hide sensitive value',
     published: 'RSS confirmed publish for {key}, version {version}.',
     deleted: 'RSS confirmed deletion of {key}.',
-    unknown:
+    rolledBack:
+      'RSS confirmed rollback of {key} from source version {sourceVersion} as new version {version}.',
+    publishUnknown:
       'Publish outcome is unknown; the sensitive draft was cleared. Explicitly read server state before deciding.',
+    rollbackUnknown: 'Rollback outcome is unknown. Explicitly read server state before deciding.',
     reconcile: 'Reload server state',
     confirmTitle: 'Confirm Config operation',
     confirmPublish:
       'Publish the current sensitive value to {key}? The draft is cleared immediately after confirmation.',
     confirmDelete: 'Delete {key}? The response only confirms command completion.',
+    confirmRollback:
+      'Roll back {key} to the explicit source version {toVersion}? No historical value is previewed.',
     cancel: 'Cancel',
     confirm: 'Confirm',
   },

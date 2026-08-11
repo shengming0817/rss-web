@@ -168,3 +168,13 @@ an explicit GET. Get and delete are idempotent and may use only the session owne
 recovery; delete accepts exact 204 and never decodes a body. Config values never enter URLs, browser
 storage, logs, telemetry, errors, receipts, or source metadata. This slice does not add catalog,
 history, recent-key, mock/provider, tenant-selection, schema-copy, or runtime-discovery behavior.
+
+WEB-PR-023 additionally enables `settings.config-rollback` against the same pinned and reviewed
+current RSS revisions. The contract TOML SHA-256 is
+`eca423d9cac582b11933f297f1fb9f32dfb04515d1492850dd94474cf868a31e`; request and response hashes
+remain those recorded in the baseline table. Rollback is a non-idempotent OutboxFact write and uses
+the protected no-replay session policy. The request is an explicit positive safe-integer
+`toVersion`; the strict 201 receipt must correlate both key and sourceVersion. Network, timeout,
+abort, protocol, malformed success, internal failure, and budget-unavailable outcomes remain locked
+until an explicit same-key GET succeeds. No history read, candidate provider, value preview,
+automatic selection, retry, or fallback is introduced.

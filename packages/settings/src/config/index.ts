@@ -6,6 +6,9 @@ export type {
   ConfigGetResponse,
   ConfigPublishRequest,
   ConfigPublishResponse,
+  ConfigRollbackReceipt,
+  ConfigRollbackRequest,
+  ConfigRollbackResponse,
   ConfigVersion,
   SettingsCallOptions,
 } from './types'

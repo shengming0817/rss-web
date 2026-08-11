@@ -1,5 +1,20 @@
 import { isRssApiError } from '@rss/api'
-import type { ConfigCoordinate, ConfigEntry, SettingsApi } from '@rss/settings'
+import type {
+  ConfigCoordinate,
+  ConfigEntry,
+  ConfigRollbackReceipt,
+  SettingsApi,
+} from '@rss/settings'
+
+type ConfigUnknownState =
+  | Readonly<{ status: 'unknown'; action: 'publish'; key: string; error: unknown }>
+  | Readonly<{
+      status: 'unknown'
+      action: 'rollback'
+      key: string
+      toVersion: number
+      error: unknown
+    }>
 
 export type ConfigOperationState =
   | Readonly<{ status: 'idle' }>
@@ -11,10 +26,13 @@ export type ConfigOperationState =
   | Readonly<{ status: 'confirming-delete'; key: string }>
   | Readonly<{ status: 'deleting'; key: string }>
   | Readonly<{ status: 'deleted'; key: string }>
-  | Readonly<{ status: 'unknown'; key: string; error: unknown }>
+  | Readonly<{ status: 'confirming-rollback'; key: string; toVersion: number }>
+  | Readonly<{ status: 'rolling-back'; key: string; toVersion: number }>
+  | Readonly<{ status: 'rolled-back'; receipt: ConfigRollbackReceipt }>
+  | ConfigUnknownState
   | Readonly<{
       status: 'error'
-      action: 'read' | 'publish' | 'delete'
+      action: 'read' | 'publish' | 'delete' | 'rollback'
       key: string
       error: unknown
     }>
@@ -29,11 +47,14 @@ export interface ConfigOperation {
   beginDelete(key: string): boolean
   cancelDelete(): void
   confirmDelete(): Promise<void>
+  beginRollback(key: string, toVersion: number): boolean
+  cancelRollback(): void
+  confirmRollback(): Promise<void>
   reset(): boolean
   dispose(): void
 }
 
-function publishUnknown(error: unknown): boolean {
+function writeOutcomeUnknown(error: unknown): boolean {
   if (!isRssApiError(error)) return true
   if (
     error.cause === 'network' ||
@@ -53,7 +74,7 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
   let state: ConfigOperationState = Object.freeze({ status: 'idle' })
   let generation = 0
   let controller: AbortController | undefined
-  let unresolvedKey: string | undefined
+  let unresolved: ConfigUnknownState | undefined
 
   function publish(next: ConfigOperationState) {
     state = Object.freeze(next)
@@ -66,9 +87,19 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
     controller = undefined
   }
 
+  function writesLocked() {
+    return (
+      state.status === 'publishing' ||
+      state.status === 'deleting' ||
+      state.status === 'rolling-back' ||
+      unresolved !== undefined
+    )
+  }
+
   async function read(key: string) {
-    const reconciling = unresolvedKey !== undefined
-    if (reconciling && key !== unresolvedKey) return
+    const pendingUnresolved = unresolved
+    const reconciling = pendingUnresolved !== undefined
+    if (reconciling && key !== pendingUnresolved.key) return
     abort()
     const current = generation
     controller = new AbortController()
@@ -78,22 +109,21 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
       const response = await api.get(key, { signal })
       if (current !== generation || signal.aborted) return
       controller = undefined
-      if (reconciling) unresolvedKey = undefined
+      if (reconciling) unresolved = undefined
       publish({ status: 'ready', entry: response.data })
     } catch (error: unknown) {
       if (current !== generation || signal.aborted) return
       controller = undefined
       publish(
-        reconciling
-          ? { status: 'unknown', key, error }
+        pendingUnresolved
+          ? { ...pendingUnresolved, error }
           : { status: 'error', action: 'read', key, error },
       )
     }
   }
 
   function beginPublish(key: string) {
-    if (state.status === 'publishing' || state.status === 'deleting' || unresolvedKey !== undefined)
-      return false
+    if (writesLocked()) return false
     publish({ status: 'confirming-publish', key })
     return true
   }
@@ -118,19 +148,17 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
     } catch (error: unknown) {
       if (current !== generation) return
       controller = undefined
-      const unknown = publishUnknown(error)
-      if (unknown) unresolvedKey = key
-      publish(
-        unknown
-          ? { status: 'unknown', key, error }
-          : { status: 'error', action: 'publish', key, error },
-      )
+      const unknown = writeOutcomeUnknown(error)
+      const next: ConfigOperationState = unknown
+        ? { status: 'unknown', action: 'publish', key, error }
+        : { status: 'error', action: 'publish', key, error }
+      if (next.status === 'unknown') unresolved = next
+      publish(next)
     }
   }
 
   function beginDelete(key: string) {
-    if (state.status === 'publishing' || state.status === 'deleting' || unresolvedKey !== undefined)
-      return false
+    if (writesLocked()) return false
     publish({ status: 'confirming-delete', key })
     return true
   }
@@ -159,8 +187,43 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
     }
   }
 
+  function beginRollback(key: string, toVersion: number) {
+    if (!Number.isSafeInteger(toVersion) || toVersion < 1 || writesLocked()) return false
+    publish({ status: 'confirming-rollback', key, toVersion })
+    return true
+  }
+
+  function cancelRollback() {
+    if (state.status === 'confirming-rollback') publish({ status: 'idle' })
+  }
+
+  async function confirmRollback() {
+    if (state.status !== 'confirming-rollback') return
+    const { key, toVersion } = state
+    abort()
+    const current = generation
+    controller = new AbortController()
+    const signal = controller.signal
+    publish({ status: 'rolling-back', key, toVersion })
+    try {
+      const response = await api.rollback(key, { toVersion }, { signal })
+      if (current !== generation || signal.aborted) return
+      controller = undefined
+      publish({ status: 'rolled-back', receipt: response.data })
+    } catch (error: unknown) {
+      if (current !== generation) return
+      controller = undefined
+      const unknown = writeOutcomeUnknown(error)
+      const next: ConfigOperationState = unknown
+        ? { status: 'unknown', action: 'rollback', key, toVersion, error }
+        : { status: 'error', action: 'rollback', key, error }
+      if (next.status === 'unknown') unresolved = next
+      publish(next)
+    }
+  }
+
   function reset() {
-    if (unresolvedKey !== undefined) return false
+    if (unresolved !== undefined) return false
     abort()
     publish({ status: 'idle' })
     return true
@@ -179,11 +242,14 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
     beginDelete,
     cancelDelete,
     confirmDelete,
+    beginRollback,
+    cancelRollback,
+    confirmRollback,
     reset,
     dispose() {
       listeners.clear()
       abort()
-      unresolvedKey = undefined
+      unresolved = undefined
       state = Object.freeze({ status: 'idle' })
     },
   })

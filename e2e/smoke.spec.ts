@@ -310,6 +310,15 @@ async function installIdentityMocks(
       })
       await route.fulfill({ status: 201, json: { data: { key: 'app.browser', version: 3 } } })
     } else if (
+      route.request().method() === 'POST' &&
+      url.pathname === '/api/v1/settings/configs/app.browser/rollbacks'
+    ) {
+      expect(route.request().postDataJSON()).toEqual({ toVersion: 1 })
+      await route.fulfill({
+        status: 201,
+        json: { data: { key: 'app.browser', version: 4, sourceVersion: 1 } },
+      })
+    } else if (
       route.request().method() === 'GET' &&
       url.pathname === '/api/v1/settings/configs/app.browser'
     ) {
@@ -632,7 +641,7 @@ test.describe('RSS Web Identity UX', () => {
     await expect(page.getByText(/已由 RSS 确认成功/)).toBeVisible()
   })
 
-  test('publishes, explicitly reads, and deletes one Config key without retaining the value', async ({
+  test('publishes, reads, rolls back, and deletes one Config key without retaining values', async ({
     page,
   }) => {
     const requests: Array<{ method: string; path: string }> = []
@@ -679,12 +688,22 @@ test.describe('RSS Web Identity UX', () => {
     await page.getByRole('button', { name: '隐藏敏感 value' }).click()
     await expect(page.getByText('server-secret')).toHaveCount(0)
 
+    await page.getByLabel('回滚源版本').fill('1')
+    await page.getByRole('button', { name: '准备回滚' }).click()
+    const rollbackDialog = page.getByRole('alertdialog')
+    await expect(rollbackDialog).toContainText('app.browser')
+    await expect(rollbackDialog).toContainText('1')
+    await expect(rollbackDialog).not.toContainText('server-secret')
+    await rollbackDialog.getByRole('button', { name: '确认' }).click()
+    await expect(page.getByText(/源版本 1.*新版本 4/)).toBeVisible()
+
     await page.getByRole('button', { name: '准备删除' }).click()
     await page.getByRole('alertdialog').getByRole('button', { name: '确认' }).click()
     await expect(page.getByText(/RSS 已确认删除 app\.browser/)).toBeVisible()
     expect(requests).toEqual([
       { method: 'POST', path: '/api/v1/settings/configs' },
       { method: 'GET', path: '/api/v1/settings/configs/app.browser' },
+      { method: 'POST', path: '/api/v1/settings/configs/app.browser/rollbacks' },
       { method: 'DELETE', path: '/api/v1/settings/configs/app.browser' },
     ])
   })

@@ -1,4 +1,11 @@
-import type { ConfigEntry, ConfigGetResponse, ConfigPublishResponse, ConfigVersion } from './types'
+import type {
+  ConfigEntry,
+  ConfigGetResponse,
+  ConfigPublishResponse,
+  ConfigRollbackReceipt,
+  ConfigRollbackResponse,
+  ConfigVersion,
+} from './types'
 
 function invalid(): never {
   throw new Error('invalid settings config response')
@@ -48,6 +55,17 @@ export function decodeConfigGetResponse(value: unknown): ConfigGetResponse {
     key: key(input.key),
     value: text(input.value),
     version: version(input.version),
+  })
+  return Object.freeze({ data })
+}
+
+export function decodeConfigRollbackResponse(value: unknown): ConfigRollbackResponse {
+  const envelope = record(value, ['data'])
+  const input = record(envelope.data, ['key', 'version', 'sourceVersion'])
+  const data: ConfigRollbackReceipt = Object.freeze({
+    key: key(input.key),
+    version: version(input.version),
+    sourceVersion: version(input.sourceVersion),
   })
   return Object.freeze({ data })
 }

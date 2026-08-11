@@ -1,10 +1,16 @@
 import type { HttpTransport } from '@rss/api'
 import { settingsEndpoints } from '@rss/api/endpoints/settings'
-import { decodeConfigGetResponse, decodeConfigPublishResponse } from './decoders'
+import {
+  decodeConfigGetResponse,
+  decodeConfigPublishResponse,
+  decodeConfigRollbackResponse,
+} from './decoders'
 import type {
   ConfigGetResponse,
   ConfigPublishRequest,
   ConfigPublishResponse,
+  ConfigRollbackRequest,
+  ConfigRollbackResponse,
   SettingsCallOptions,
 } from './types'
 
@@ -15,6 +21,11 @@ export interface SettingsApi {
   ): Promise<ConfigPublishResponse>
   get(key: string, options?: SettingsCallOptions): Promise<ConfigGetResponse>
   delete(key: string, options?: SettingsCallOptions): Promise<void>
+  rollback(
+    key: string,
+    request: ConfigRollbackRequest,
+    options?: SettingsCallOptions,
+  ): Promise<ConfigRollbackResponse>
 }
 
 function key(value: string): string {
@@ -31,6 +42,17 @@ function exactPublishRequest(value: ConfigPublishRequest): boolean {
     Reflect.ownKeys(value).length === 2 &&
     typeof value.key === 'string' &&
     typeof value.value === 'string'
+  )
+}
+
+function exactRollbackRequest(value: ConfigRollbackRequest): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    Object.hasOwn(value, 'toVersion') &&
+    Reflect.ownKeys(value).length === 1 &&
+    Number.isSafeInteger(value.toVersion) &&
+    value.toVersion >= 1
   )
 }
 
@@ -76,6 +98,24 @@ export function createSettingsApi(transport: HttpTransport): SettingsApi {
         ...settingsEndpoints.configDelete,
         pathParams: { key: requestKey },
         session: 'required',
+        ...signal(options),
+      })
+    },
+    rollback(rawKey: string, request: ConfigRollbackRequest, options?: SettingsCallOptions) {
+      if (!exactRollbackRequest(request))
+        return Promise.reject(new Error('invalid config rollback input'))
+      const requestKey = key(rawKey)
+      return transport.request({
+        ...settingsEndpoints.configRollback,
+        pathParams: { key: requestKey },
+        body: Object.freeze({ toVersion: request.toVersion }),
+        decode(value) {
+          const response = decodeConfigRollbackResponse(value)
+          if (response.data.key !== requestKey || response.data.sourceVersion !== request.toVersion)
+            throw new Error('invalid settings config response')
+          return response
+        },
+        session: 'required-no-replay',
         ...signal(options),
       })
     },

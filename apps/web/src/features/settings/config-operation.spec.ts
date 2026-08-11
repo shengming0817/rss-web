@@ -22,6 +22,7 @@ function api(overrides: Partial<SettingsApi> = {}): SettingsApi {
     get: vi.fn().mockResolvedValue({ data: entry }),
     publish: vi.fn().mockResolvedValue({ data: { key: 'app.k', version: 3 } }),
     delete: vi.fn().mockResolvedValue(undefined),
+    rollback: vi.fn().mockResolvedValue({ data: { key: 'app.k', version: 4, sourceVersion: 1 } }),
     ...overrides,
   }
 }
@@ -54,10 +55,16 @@ describe('Config operation', () => {
     operation.beginPublish('app.k')
     await operation.confirmPublish('must-disappear')
     expect(publish).toHaveBeenCalledOnce()
-    expect(operation.getState()).toEqual({ status: 'unknown', key: 'app.k', error: failure })
+    expect(operation.getState()).toEqual({
+      status: 'unknown',
+      action: 'publish',
+      key: 'app.k',
+      error: failure,
+    })
     expect(JSON.stringify(operation.getState())).not.toContain('must-disappear')
     expect(operation.beginPublish('app.k')).toBe(false)
     expect(operation.beginDelete('app.k')).toBe(false)
+    expect(operation.beginRollback('app.k', 1)).toBe(false)
     expect(operation.reset()).toBe(false)
     await operation.read('app.k')
     expect(operation.getState()).toEqual({ status: 'ready', entry })
@@ -91,11 +98,13 @@ describe('Config operation', () => {
     await pendingReconciliation
     expect(operation.getState()).toEqual({
       status: 'unknown',
+      action: 'publish',
       key: 'app.k',
       error: reconciliationFailure,
     })
     expect(operation.beginPublish('app.k')).toBe(false)
     expect(operation.beginDelete('app.k')).toBe(false)
+    expect(operation.beginRollback('app.k', 1)).toBe(false)
     expect(operation.reset()).toBe(false)
 
     await operation.read('app.k')
@@ -131,7 +140,75 @@ describe('Config operation', () => {
     const operation = createConfigOperation(api({ publish: vi.fn().mockRejectedValue(failure) }))
     operation.beginPublish('app.k')
     await operation.confirmPublish('secret')
-    expect(operation.getState()).toEqual({ status: 'unknown', key: 'app.k', error: failure })
+    expect(operation.getState()).toEqual({
+      status: 'unknown',
+      action: 'publish',
+      key: 'app.k',
+      error: failure,
+    })
+  })
+
+  it('confirms an explicit rollback coordinate and publishes only the server receipt', async () => {
+    const settings = api()
+    const operation = createConfigOperation(settings)
+    expect(operation.beginRollback('app.k', 1)).toBe(true)
+    expect(operation.getState()).toEqual({
+      status: 'confirming-rollback',
+      key: 'app.k',
+      toVersion: 1,
+    })
+    await operation.confirmRollback()
+    expect(settings.rollback).toHaveBeenCalledWith(
+      'app.k',
+      { toVersion: 1 },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
+    expect(operation.getState()).toEqual({
+      status: 'rolled-back',
+      receipt: { key: 'app.k', version: 4, sourceVersion: 1 },
+    })
+  })
+
+  it.each([
+    [404, wire(404, 'ERR_CORE_NOT_FOUND', 'not found')],
+    [409, wire(409, 'ERR_CORE_VERSION_CONFLICT', 'version conflict', true)],
+  ])('keeps final rollback wire %s editable', async (_status, failure) => {
+    const operation = createConfigOperation(api({ rollback: vi.fn().mockRejectedValue(failure) }))
+    operation.beginRollback('app.k', 1)
+    await operation.confirmRollback()
+    expect(operation.getState()).toEqual({
+      status: 'error',
+      action: 'rollback',
+      key: 'app.k',
+      error: failure,
+    })
+    expect(operation.beginRollback('app.k', 1)).toBe(true)
+  })
+
+  it.each([
+    ['network', networkErrorForTest()],
+    ['timeout', timeoutErrorForTest()],
+    ['protocol', protocolErrorForTest(201)],
+    ['aborted', abortedErrorForTest()],
+    ['internal', wire(500, 'ERR_CORE_INTERNAL', 'internal error')],
+    ['budget', wire(503, 'ERR_CORE_UNAVAILABLE', 'service unavailable')],
+  ])('locks every write after a %s rollback outcome', async (_name, failure) => {
+    const rollback = vi.fn().mockRejectedValue(failure)
+    const operation = createConfigOperation(api({ rollback }))
+    operation.beginRollback('app.k', 1)
+    await operation.confirmRollback()
+    expect(rollback).toHaveBeenCalledOnce()
+    expect(operation.getState()).toEqual({
+      status: 'unknown',
+      action: 'rollback',
+      key: 'app.k',
+      toVersion: 1,
+      error: failure,
+    })
+    expect(operation.beginPublish('app.k')).toBe(false)
+    expect(operation.beginDelete('app.k')).toBe(false)
+    expect(operation.beginRollback('app.k', 2)).toBe(false)
+    expect(operation.reset()).toBe(false)
   })
 
   it('confirms delete and fences stale reads after reset', async () => {

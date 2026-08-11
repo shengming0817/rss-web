@@ -40,4 +40,16 @@ export const settingsEndpoints = Object.freeze({
       500: INTERNAL_EMPTY,
     }),
   }),
+  configRollback: defineEndpoint({
+    method: 'POST',
+    path: '/api/v1/settings/configs/{key}/rollbacks',
+    successStatus: 201,
+    errorPolicy: Object.freeze({
+      400: VALIDATION_PUBLIC,
+      404: NOT_FOUND_EMPTY,
+      409: Object.freeze([VERSION_CONFLICT_EMPTY, OUTBOX_FACT_CONFLICT_EMPTY]),
+      413: PAYLOAD_TOO_LARGE_EMPTY,
+      500: INTERNAL_EMPTY,
+    }),
+  }),
 })

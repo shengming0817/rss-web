@@ -141,6 +141,7 @@ describe('RSS-only foundation boundary', () => {
     expect(configIntent).toContain("contractId: 'settings.config-get'")
     expect(configIntent).toContain("contractId: 'settings.config-publish'")
     expect(configIntent).toContain("contractId: 'settings.config-delete'")
+    expect(configIntent).toContain("contractId: 'settings.config-rollback'")
     expect(router).not.toContain("path: 'config'")
     for (const path of ['/access', '/flags', '/admin', '/observability', '/observe']) {
       expect(router).not.toContain(path)
