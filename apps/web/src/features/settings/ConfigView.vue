@@ -13,7 +13,9 @@ import {
   CONFIG_ROLLBACK_INTENT,
 } from './config-intent'
 import { useSettingsApi } from './settings-context'
+import type { ConfigCatalogDraftHandoff } from './config-catalog-draft-context'
 
+const props = defineProps<{ readonly configCatalogDraft?: ConfigCatalogDraftHandoff }>()
 const { t } = useI18n()
 const api = useSettingsApi()
 const readAuthorization = useAuthorizationIntent(CONFIG_GET_INTENT)
@@ -21,6 +23,8 @@ const publishAuthorization = useAuthorizationIntent(CONFIG_PUBLISH_INTENT)
 const deleteAuthorization = useAuthorizationIntent(CONFIG_DELETE_INTENT)
 const rollbackAuthorization = useAuthorizationIntent(CONFIG_ROLLBACK_INTENT)
 const keyInput = ref('')
+const catalogDraft = props.configCatalogDraft?.consume()
+if (catalogDraft !== undefined) keyInput.value = catalogDraft.key
 const valueInput = ref('')
 const rollbackVersionInput = ref('')
 const revealValue = ref(false)
@@ -222,6 +226,9 @@ onBeforeUnmount(() => {
           <h3>{{ t('settingsConfig.manualDraft') }}</h3>
           <SourceBadge :source="MANUAL_SOURCE" />
         </div>
+        <p v-if="catalogDraft" role="status" class="config-catalog-draft-notice">
+          {{ t('settingsConfig.catalogDraftNotice') }}
+        </p>
         <label for="config-key">{{ t('settingsConfig.key') }}</label>
         <input
           id="config-key"

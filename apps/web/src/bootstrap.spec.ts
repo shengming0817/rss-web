@@ -61,7 +61,7 @@ describe('web composition root', () => {
       createIdentitySession.mock.results[0]?.value,
       createAuthorizationExperience.mock.results[0]?.value,
       expect.anything(),
-      { roleBindingsPreview: false },
+      { configCatalogPreview: false, roleBindingsPreview: false },
     )
     expect(runtime.authorization).toBe(createAuthorizationExperience.mock.results[0]?.value)
     expect(runtime.accountStatus).toBe(createAccountStatusApi.mock.results[0]?.value)
@@ -75,22 +75,37 @@ describe('web composition root', () => {
   it('passes only an explicitly enabled closed Preview composition to the router', async () => {
     const { createWebRuntime } = await import('./bootstrap')
     vi.stubEnv('MODE', 'test')
+    vi.stubEnv('VITE_CONFIG_CATALOG_PREVIEW', 'true')
+    createWebRuntime()
+    expect(createAppRouter).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      {
+        configCatalogDraft: expect.anything(),
+        configCatalogPreview: true,
+        roleBindingsPreview: false,
+      },
+    )
+
+    vi.stubEnv('VITE_CONFIG_CATALOG_PREVIEW', 'false')
     vi.stubEnv('VITE_ROLE_BINDINGS_PREVIEW', 'true')
     createWebRuntime()
     expect(createAppRouter).toHaveBeenLastCalledWith(
       expect.anything(),
       expect.anything(),
       expect.anything(),
-      { roleBindingsPreview: true },
+      { configCatalogPreview: false, roleBindingsPreview: true },
     )
 
     vi.stubEnv('MODE', 'production')
+    vi.stubEnv('VITE_CONFIG_CATALOG_PREVIEW', 'true')
     createWebRuntime()
     expect(createAppRouter).toHaveBeenLastCalledWith(
       expect.anything(),
       expect.anything(),
       expect.anything(),
-      { roleBindingsPreview: false },
+      { configCatalogPreview: false, roleBindingsPreview: false },
     )
   })
 })

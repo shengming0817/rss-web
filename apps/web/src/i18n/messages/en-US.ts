@@ -14,6 +14,7 @@ const enUS = {
     roleBindingsPreview: 'Bindings Preview',
     policies: 'Policies',
     settings: 'Settings',
+    configCatalogPreview: 'Config Catalog Preview',
     runtime: 'Runtime',
     audit: 'Audit',
   },
@@ -61,6 +62,26 @@ const enUS = {
       'Roll back {key} to the explicit source version {toVersion}? No historical value is previewed.',
     cancel: 'Cancel',
     confirm: 'Confirm',
+    catalogDraftNotice:
+      'A Mock suggestion was copied into a Manual draft. No RSS request was sent; explicitly select “Read current config”.',
+  },
+  configCatalogPreview: {
+    title: 'Config Catalog Preview',
+    subtitle: 'Local synthetic key metadata only; this is not an RSS catalog or existence fact.',
+    warning:
+      'Preview is permanently non-authoritative. Selecting a row does not read RSS or copy a value or version.',
+    search: 'Local search',
+    prefix: 'Local key prefix',
+    localResult: 'Local fixture page {page}, showing {count} rows.',
+    copy: 'Prepare Manual draft copy',
+    empty: 'No local fixture rows match.',
+    previous: 'Previous',
+    next: 'Next',
+    confirmTitle: 'Confirm synthetic key copy',
+    confirmDescription:
+      'Copy {key} into an unsubmitted Manual draft? This action does not request RSS.',
+    cancel: 'Cancel',
+    confirm: 'Copy and open Settings',
   },
   runtimeSummary: {
     title: 'Runtime summary',

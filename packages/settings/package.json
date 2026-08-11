@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./preview": "./src/preview.ts"
   },
   "files": [
     "src"
@@ -15,7 +16,8 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@rss/api": "workspace:*"
+    "@rss/api": "workspace:*",
+    "@rss/shared": "workspace:*"
   },
   "devDependencies": {
     "vitest": "catalog:",

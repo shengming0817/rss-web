@@ -7,6 +7,7 @@
     "eslint.config.js",
     "eslint.config.spec.ts",
     "edge-config.spec.ts",
+    "config-catalog-preview-boundary.spec.ts",
     "real-e2e.spec.ts",
     "role-bindings-preview-boundary.spec.ts",
     "identity-migration.spec.ts",
