@@ -3,7 +3,7 @@
 ## Scope and provenance
 
 - Issue: #33
-- Implementation commit: `e8bea18429c3e43bae64ff79ec735cf957502527`
+- Implementation commit: `12bceeb32e14dc762edadcecb02bfec84d6b35aa`
 - RSS contracts consumed: none. The current RSS baseline has no active Config History/List/Versions
   contract.
 - Source: frozen synthetic key/version rows in `@rss/settings/preview`, each sealed as `mock`,
@@ -28,6 +28,8 @@
   existing authoritative behavior and never fall back to Mock.
 - Catalog and History flags are independent; all four combinations are tested and any enabled Config
   Preview receives the same handoff instance as Settings.
+- If session routing redirects, aborts, or rejects before Settings mounts, the staged coordinate is
+  discarded and an accessible local error is shown; no draft can cross into a later session.
 
 ## Four-principle result
 
@@ -46,19 +48,21 @@
 Final implementation commit verification completed locally in a clean worktree:
 
 - frozen install, typecheck, lint, format check: passed
-- coverage: 94 files / 883 tests passed
+- coverage: 94 files / 888 tests passed
 - root boundary: 10 files / 60 tests passed
-- Web production build, RSS identity scan, and Config Preview artifact scan: passed
+- Web production build with both flags forced true, RSS identity scan, and Config Preview artifact
+  scan: passed
+- explicitly enabled `demo` Preview build: passed
 - Chromium smoke: 18 passed
 - Docker/Nginx Edge routing smoke and checked teardown: passed
 - `git diff --check`: passed
 
 ## Changed lines and rollback
 
-- semantic/config: +333 / -51
-- tests/type proofs: +364 / -75
+- semantic/config: +421 / -63
+- tests/type proofs: +503 / -94
 - README/CLAUDE: +20 / -5
-- implementation total: +717 / -131
+- implementation total: +944 / -162
 - generated/lockfile: 0
 
 Rollback is one revert of the PR. It removes the History fixture, flag, route, shared Preview draft
