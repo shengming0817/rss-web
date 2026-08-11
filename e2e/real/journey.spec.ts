@@ -405,9 +405,7 @@ test('@roles keeps the RSS user authority boundary for list, assign, and revoke'
   await expect(page.getByText(/已绑定|未绑定/)).toHaveCount(0)
 })
 
-test('@settings-config keeps Config get, publish, delete, and rollback server-authoritative', async ({
-  page,
-}) => {
+test('@settings-config keeps Settings writes server-authoritative', async ({ page }) => {
   await signInAndExpectShell(page, limitedUsername)
   await page
     .getByRole('navigation', { name: '主导航' })
@@ -456,6 +454,68 @@ test('@settings-config keeps Config get, publish, delete, and rollback server-au
   await page.getByRole('alertdialog').getByRole('button', { name: '确认' }).click()
   expect((await deleteDenied).status()).toBe(403)
   await expect(page.getByText('ERR_CORE_FORBIDDEN')).toBeVisible()
+
+  const secretCoordinates = [
+    'rss-web.real.secret-key',
+    'real-secret-store-marker',
+    'real/secret-ref-marker',
+    'real-secret-version-marker',
+  ] as const
+  const secretRequests: string[] = []
+  const materialRequests: string[] = []
+  page.on('request', (request) => {
+    const path = new URL(request.url()).pathname
+    if (path === '/api/v1/settings/secrets') {
+      secretRequests.push(request.method())
+      expect(request.headers()['x-tenant-id']).toBeUndefined()
+    }
+    if (path.startsWith('/api/v1/settings/secrets/') && path.endsWith('/material')) {
+      materialRequests.push(path)
+    }
+  })
+  await page.locator('a[href="/settings/secret-reference"]').click()
+  await page.locator('#secret-key').fill(secretCoordinates[0])
+  await page.locator('#secret-store-id').fill(secretCoordinates[1])
+  await page.locator('#secret-ref-key').fill(secretCoordinates[2])
+  await page.locator('#secret-ref-version').fill(secretCoordinates[3])
+  await page.locator('[data-action="prepare-secret-publish"]').click()
+  const secretDenied = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      new URL(response.url()).pathname === '/api/v1/settings/secrets',
+  )
+  await page.locator('[data-action="confirm-secret-publish"]').click()
+  const secretResponse = await secretDenied
+  expect(secretResponse.status()).toBe(403)
+  expect(secretResponse.request().postDataJSON()).toEqual({
+    key: secretCoordinates[0],
+    storeId: secretCoordinates[1],
+    refKey: secretCoordinates[2],
+    refVersion: secretCoordinates[3],
+  })
+  expect(await secretResponse.json()).toEqual({
+    error: {
+      code: 'ERR_CORE_FORBIDDEN',
+      message: 'forbidden',
+      retryable: false,
+      details: [],
+      requestId: expect.stringMatching(/^[!-~]{1,128}$/),
+    },
+  })
+  await expect(page.getByText('ERR_CORE_FORBIDDEN')).toBeVisible()
+  await page.waitForTimeout(250)
+  expect(secretRequests).toEqual(['POST'])
+  expect(materialRequests).toEqual([])
+  for (const selector of [
+    '#secret-key',
+    '#secret-store-id',
+    '#secret-ref-key',
+    '#secret-ref-version',
+  ]) {
+    await expect(page.locator(selector)).toHaveValue('')
+  }
+  for (const coordinate of secretCoordinates)
+    await expect(page.getByText(coordinate)).toHaveCount(0)
 })
 
 test('@rate-limited observes canonical 401 and 429 through the browser Edge and UI', async ({

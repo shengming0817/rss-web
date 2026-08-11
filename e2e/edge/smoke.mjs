@@ -167,11 +167,24 @@ try {
 
   const configBody = JSON.stringify({ key: 'app.k', value: 'edge-sensitive-fixture' })
   const rollbackBody = JSON.stringify({ toVersion: 1 })
+  const secretCoordinateMarkers = [
+    'edge-secret-key-marker',
+    'edge-secret-store-marker',
+    'edge-secret-ref-marker',
+    'edge-secret-version-marker',
+  ]
+  const secretPublishBody = JSON.stringify({
+    key: secretCoordinateMarkers[0],
+    storeId: secretCoordinateMarkers[1],
+    refKey: secretCoordinateMarkers[2],
+    refVersion: secretCoordinateMarkers[3],
+  })
   for (const [method, path, body] of [
     ['GET', '/api/v1/settings/configs/app.k', undefined],
     ['POST', '/api/v1/settings/configs', configBody],
     ['DELETE', '/api/v1/settings/configs/app.k', undefined],
     ['POST', '/api/v1/settings/configs/app.k/rollbacks', rollbackBody],
+    ['POST', '/api/v1/settings/secrets', secretPublishBody],
   ]) {
     const response = await request(port, path, {
       method,
@@ -317,6 +330,7 @@ try {
   const accessOutput = `${edgeLogs.stdout}${edgeLogs.stderr}`
   assert(!accessOutput.includes(opaqueSubject))
   assert(!accessOutput.includes(encodedSubject))
+  for (const marker of secretCoordinateMarkers) assert(!accessOutput.includes(marker))
 
   for (const path of ['/api/v1/audit/entries', '/api/v1/runtime/inventory']) {
     const response = await request(port, path, { headers: { 'X-Tenant-ID': 'attacker' } })
