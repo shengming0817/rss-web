@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ErrorPage, ModalShell, SourceBadge } from '@rss/core'
+import { DegradedState, ErrorPage, ModalShell, SourceBadge } from '@rss/core'
 import { isRoleId, type RoleView } from '@rss/identity'
-import { RSS_SOURCE, UNAVAILABLE_SOURCE } from '@rss/shared'
+import { RSS_SOURCE } from '@rss/shared'
 import { toSafeErrorPresentation, toSafeReadErrorPresentation } from '../../errors/rss-error'
 import { useAuthorizationIntent } from '../authorization/authorization-context'
 import {
@@ -133,7 +133,6 @@ onBeforeUnmount(() => {
           {{ t('roles.catalog.title') }}
         </h2>
         <SourceBadge v-if="catalog.status === 'ready'" :source="RSS_SOURCE" />
-        <SourceBadge v-else-if="catalog.status === 'error'" :source="UNAVAILABLE_SOURCE" />
       </header>
       <p>{{ t('roles.catalog.warning') }}</p>
       <p v-if="catalog.status === 'loading'" role="status" aria-live="polite">
@@ -168,11 +167,12 @@ onBeforeUnmount(() => {
       >
         {{ t('roles.catalog.next') }}
       </button>
-      <ErrorPage
+      <DegradedState
         v-if="catalogError"
         :error="catalogError"
+        :recovery="catalogError.recovery === 'retry' ? 'retryRead' : 'none'"
         :heading-level="3"
-        @recover="recoverCatalog"
+        @retry-read="recoverCatalog"
       />
     </section>
 

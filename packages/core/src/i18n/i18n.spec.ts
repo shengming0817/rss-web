@@ -39,6 +39,7 @@ describe('createRssI18n', () => {
     expect(Object.keys(zhCN).sort()).toEqual([
       'command',
       'contentState',
+      'degradedState',
       'errorPage',
       'errors',
       'home',

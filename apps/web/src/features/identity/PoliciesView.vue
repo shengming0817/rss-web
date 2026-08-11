@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ErrorPage, ModalShell, SourceBadge } from '@rss/core'
+import { DegradedState, ErrorPage, ModalShell, SourceBadge } from '@rss/core'
 import type { PolicyId, PolicyView } from '@rss/identity'
-import { RSS_SOURCE, UNAVAILABLE_SOURCE } from '@rss/shared'
+import { RSS_SOURCE } from '@rss/shared'
 import { toSafeErrorPresentation, toSafeReadErrorPresentation } from '../../errors/rss-error'
 import { useAuthorizationIntent } from '../authorization/authorization-context'
 import PolicyRuleList from './PolicyRuleList.vue'
@@ -256,7 +256,7 @@ onBeforeUnmount(() => {
         <h2 id="policies-catalog-title" ref="catalogHeading" tabindex="-1">
           {{ t('policies.catalog.title') }}
         </h2>
-        <SourceBadge :source="catalog.status === 'error' ? UNAVAILABLE_SOURCE : RSS_SOURCE" />
+        <SourceBadge v-if="catalog.status === 'ready' && !catalogRetrying" :source="RSS_SOURCE" />
       </div>
       <p
         v-if="
@@ -267,14 +267,14 @@ onBeforeUnmount(() => {
       >
         {{ t('policies.catalog.loading') }}
       </p>
-      <ErrorPage
+      <DegradedState
         v-else-if="displayedCatalogError && (catalog.status === 'error' || catalogRetrying)"
         role="alert"
         :error="displayedCatalogError"
         :heading-level="3"
-        :show-recovery="displayedCatalogError.recovery === 'retry'"
+        :recovery="displayedCatalogError.recovery === 'retry' ? 'retryRead' : 'none'"
         :recovery-busy="catalogRetrying"
-        @recover="recoverCatalog"
+        @retry-read="recoverCatalog"
       />
       <p v-else-if="catalog.status === 'ready' && catalog.rows.length === 0">
         {{ t('policies.catalog.empty') }}
@@ -323,22 +323,22 @@ onBeforeUnmount(() => {
           {{ t('policies.detail.title') }}
         </h2>
         <SourceBadge
-          v-if="detailState.status === 'ready' || detailState.status === 'error'"
-          :source="detailState.status === 'error' ? UNAVAILABLE_SOURCE : RSS_SOURCE"
+          v-if="detailState.status === 'ready' && !detailRetrying"
+          :source="RSS_SOURCE"
         />
       </div>
       <p v-if="detailState.status === 'idle'">{{ t('policies.detail.select') }}</p>
       <p v-else-if="detailState.status === 'loading'" role="status" aria-live="polite">
         {{ t('policies.detail.loading') }}
       </p>
-      <ErrorPage
+      <DegradedState
         v-else-if="displayedDetailError && (detailState.status === 'error' || detailRetrying)"
         role="alert"
         :error="displayedDetailError"
         :heading-level="3"
-        :show-recovery="displayedDetailError.recovery === 'retry'"
+        :recovery="displayedDetailError.recovery === 'retry' ? 'retryRead' : 'none'"
         :recovery-busy="detailRetrying"
-        @recover="recoverDetail"
+        @retry-read="recoverDetail"
       />
       <div v-else-if="detailState.status === 'ready'" class="policy-detail">
         <dl>

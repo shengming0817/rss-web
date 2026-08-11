@@ -79,6 +79,16 @@ describe('RolesView', () => {
     opener.remove()
   })
 
+  it('closes unavailable catalog recovery when the read projection does not permit retry', async () => {
+    list.mockRejectedValueOnce(new Error('offline'))
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('[data-source="unavailable"]').exists()).toBe(true)
+    expect(wrapper.find('[data-action="recover"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('requires explicit subject and confirmation, then drops subject from receipt DOM', async () => {
     const wrapper = mountView()
     await flushPromises()

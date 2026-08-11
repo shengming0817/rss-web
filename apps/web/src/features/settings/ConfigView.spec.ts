@@ -183,6 +183,8 @@ describe('ConfigView', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('发布结果未知')
+    expect(wrapper.find('[data-source="unavailable"]').exists()).toBe(true)
+    expect(wrapper.find('[data-action="recover"]').exists()).toBe(false)
     expect(wrapper.get('#config-key').attributes('disabled')).toBeDefined()
     expect(wrapper.get('#config-value').attributes('disabled')).toBeDefined()
     expect(wrapper.get('#config-rollback-version').attributes('disabled')).toBeDefined()

@@ -2,8 +2,8 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { RuntimeInventoryFacts } from '@rss/runtime'
-import { ErrorPage, SourceBadge } from '@rss/core'
-import { RSS_SOURCE, UNAVAILABLE_SOURCE } from '@rss/shared'
+import { DegradedState, SourceBadge } from '@rss/core'
+import { RSS_SOURCE } from '@rss/shared'
 import { toSafeReadErrorPresentation } from '../../errors/rss-error'
 import { useRuntimeApi } from './runtime-context'
 
@@ -44,7 +44,6 @@ onBeforeUnmount(() => {
     <header class="home-panel__header">
       <h2 id="runtime-summary-title">{{ t('runtimeSummary.title') }}</h2>
       <SourceBadge v-if="state.status === 'ready'" :source="RSS_SOURCE" />
-      <SourceBadge v-else-if="state.status === 'error'" :source="UNAVAILABLE_SOURCE" />
     </header>
     <p v-if="state.status === 'loading'" role="status" aria-busy="true">
       {{ t('runtimeSummary.loading') }}
@@ -76,12 +75,12 @@ onBeforeUnmount(() => {
         {{ t('runtimeSummary.details') }}
       </RouterLink>
     </template>
-    <ErrorPage
+    <DegradedState
       v-else
       :error="state.error"
       :heading-level="3"
-      :show-recovery="state.error.recovery === 'retry'"
-      @recover="load"
+      :recovery="state.error.recovery === 'retry' ? 'retryRead' : 'none'"
+      @retry-read="load"
     />
   </section>
 </template>

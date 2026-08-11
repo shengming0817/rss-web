@@ -2,8 +2,8 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AuditEntriesPage } from '@rss/audit'
-import { ContentState, ErrorPage, SourceBadge } from '@rss/core'
-import { RSS_SOURCE, UNAVAILABLE_SOURCE } from '@rss/shared'
+import { ContentState, DegradedState, SourceBadge } from '@rss/core'
+import { RSS_SOURCE } from '@rss/shared'
 import { toSafeReadErrorPresentation } from '../../errors/rss-error'
 import { useAuditApi } from './audit-context'
 
@@ -62,7 +62,6 @@ function recordedAt(seconds: number): { readonly datetime?: string; readonly tex
     <header class="home-panel__header">
       <h2 id="audit-entries-title">{{ t('auditEntries.title') }}</h2>
       <SourceBadge v-if="state.status === 'ready'" :source="RSS_SOURCE" />
-      <SourceBadge v-else-if="state.status === 'error'" :source="UNAVAILABLE_SOURCE" />
     </header>
     <p class="v1-sub">{{ t('auditEntries.firstPageNotice') }}</p>
     <button
@@ -112,12 +111,12 @@ function recordedAt(seconds: number): { readonly datetime?: string; readonly tex
       </ol>
       <p v-if="state.page.hasMore">{{ t('auditEntries.hasMore') }}</p>
     </template>
-    <ErrorPage
+    <DegradedState
       v-else
       :error="state.error"
       :heading-level="3"
-      :show-recovery="state.error.recovery === 'retry'"
-      @recover="load"
+      :recovery="state.error.recovery === 'retry' ? 'retryRead' : 'none'"
+      @retry-read="load"
     />
   </section>
 </template>

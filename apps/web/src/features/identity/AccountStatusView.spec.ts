@@ -142,6 +142,7 @@ describe('AccountStatusView', () => {
     await flushPromises()
 
     expect(wrapper.find('[data-source="unavailable"]').exists()).toBe(true)
+    expect(wrapper.find('[data-action="recover"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('must-not-render')
     expect(wrapper.text()).not.toContain('服务端状态')
     wrapper.unmount()
