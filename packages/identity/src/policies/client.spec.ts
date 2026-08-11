@@ -121,4 +121,23 @@ describe('Policies API', () => {
       }),
     )
   })
+
+  it('rejects malformed CAS bodies before transport without minting a version', async () => {
+    const request = vi.fn()
+    const api = createPoliciesApi({ request } as unknown as HttpTransport)
+    const policyId = parsePolicyId('policy-write')!
+    const fields = {
+      contractId: 'identity.policies-list',
+      permission: 'identity:policy:read',
+      effectiveFrom: 1,
+      rules: [],
+    }
+    expect(() => api.update(policyId, { expectedVersion: 0 as never, ...fields })).toThrow(
+      'invalid policy write input',
+    )
+    expect(() => api.deactivate(policyId, { expectedVersion: 0 as never })).toThrow(
+      'invalid policy write input',
+    )
+    expect(request).not.toHaveBeenCalled()
+  })
 })

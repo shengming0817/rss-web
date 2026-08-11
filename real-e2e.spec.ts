@@ -54,7 +54,7 @@ describe('real RSS journey harness', () => {
     expect(runner).toContain("['archive', '--output', webArchivePath, webRevision]")
     expect(runner).toContain("'down', '--volumes', '--remove-orphans'")
     expect(runner).not.toContain('spawnSync')
-    expect(runner).toContain("activeChild?.kill('SIGTERM')")
+    expect(runner).toContain('activeChild?.terminate()')
     expect(runner).toContain('await chromium.launch({ headless: true })')
     expect(runner).toContain('await waitServerListening(8080)')
     expect(runner).toContain('await boundedSleep(500)')
@@ -151,7 +151,7 @@ describe('real RSS journey harness', () => {
     ).toBe('environment')
   })
 
-  it('escalates a child that ignores SIGTERM and settles within the hard timeout', async () => {
+  it('escalates a process tree that ignores SIGTERM and settles within the hard timeout', async () => {
     const startedAt = Date.now()
     const result = await executeBounded(
       process.execPath,

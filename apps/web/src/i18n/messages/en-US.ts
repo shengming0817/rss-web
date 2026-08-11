@@ -314,6 +314,8 @@ const enUS = {
         'Server state changed. The draft is retained; reload and merge manually. It will not be resubmitted automatically.',
       unknown:
         'The request outcome is unknown. The draft is retained; explicitly reload to reconcile. It will not be replayed automatically.',
+      reconciled:
+        'Reloaded server version {version}. The draft is still retained for manual comparison before another submission.',
       reload: 'Reload server state',
     },
   },

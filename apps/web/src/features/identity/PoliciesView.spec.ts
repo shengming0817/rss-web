@@ -199,6 +199,7 @@ describe('PoliciesView', () => {
     })
     const get = vi.fn().mockResolvedValue({ data: policy })
     const wrapper = mount(PoliciesView, {
+      attachTo: document.body,
       global: {
         plugins: [
           createWebI18n(),
@@ -284,6 +285,7 @@ describe('PoliciesView', () => {
     const get = vi.fn().mockResolvedValueOnce({ data: policy }).mockReturnValueOnce(reconciliation)
     const update = vi.fn().mockRejectedValue(conflict)
     const wrapper = mount(PoliciesView, {
+      attachTo: document.body,
       global: {
         plugins: [
           createWebI18n(),
@@ -331,7 +333,73 @@ describe('PoliciesView', () => {
     ).toBe('identity:policy:draft-retained')
     expect(wrapper.text()).toContain('版本 3')
     expect(wrapper.text()).not.toContain('草稿已保留')
+    expect(wrapper.text()).toContain('草稿仍保留')
+    expect(document.activeElement).toBe(wrapper.get('#policy-write-title').element)
     expect(wrapper.get('.policy-catalog__item').attributes('disabled')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('retries a failed reconciliation without clearing or deadlocking the write state', async () => {
+    const conflict = decodeWireErrorForTest(409, {
+      error: {
+        code: 'ERR_CORE_VERSION_CONFLICT',
+        message: 'version conflict',
+        retryable: true,
+        details: [],
+        requestId: 'policy-conflict-retry-rid',
+      },
+    })
+    const unavailable = decodeWireErrorForTest(503, {
+      error: {
+        code: 'ERR_CORE_PROVIDER_UNAVAILABLE',
+        message: 'provider unavailable',
+        retryable: true,
+        details: [],
+        requestId: 'policy-reconcile-unavailable-rid',
+      },
+    })
+    const get = vi
+      .fn()
+      .mockResolvedValueOnce({ data: policy })
+      .mockRejectedValueOnce(unavailable)
+      .mockResolvedValueOnce({ data: { ...policy, version: 3 as never } })
+    const wrapper = mount(PoliciesView, {
+      global: {
+        plugins: [
+          createWebI18n(),
+          policiesApiPlugin(
+            policiesApi({
+              list: vi.fn().mockResolvedValue({ data: [policy], hasMore: false }),
+              get,
+              update: vi.fn().mockRejectedValue(conflict),
+            }),
+          ),
+          authorizationExperiencePlugin(authorization),
+        ],
+      },
+    })
+    await flushPromises()
+    await wrapper.get('.policy-catalog__item').trigger('click')
+    await flushPromises()
+    await wrapper.findAll('form')[1]!.trigger('submit')
+    await wrapper.get('[role="alertdialog"]').findAll('button').at(-1)!.trigger('click')
+    await flushPromises()
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '重新读取服务端状态')!
+      .trigger('click')
+    await flushPromises()
+    expect(get).toHaveBeenCalledTimes(2)
+    const detailPanel = wrapper.get('[aria-labelledby="policy-detail-title"]')
+    await detailPanel
+      .findAll('button')
+      .find((button) => button.text() === '重试')!
+      .trigger('click')
+    await flushPromises()
+    expect(get).toHaveBeenCalledTimes(3)
+    expect(wrapper.text()).not.toContain('草稿已保留')
+    expect(wrapper.text()).toContain('草稿仍保留')
+    expect(detailPanel.find('[aria-busy="true"]').exists()).toBe(false)
     wrapper.unmount()
   })
 })

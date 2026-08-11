@@ -57,9 +57,9 @@ async function execute(command, args, options = {}) {
       stdio: options.stdio ?? ['pipe', 'inherit', 'inherit'],
       input: options.input,
       timeoutMs: timeout,
-      onChild: (child) => (activeChild = child),
+      onChild: (child, terminate) => (activeChild = { child, terminate }),
       onRelease: (child) => {
-        if (activeChild === child) activeChild = undefined
+        if (activeChild?.child === child) activeChild = undefined
       },
     })
     if (receivedSignal && !options.ignoreInterrupt) throw interruptedError()
@@ -468,7 +468,7 @@ async function teardown() {
 function handleSignal(signal) {
   if (receivedSignal) return
   receivedSignal = signal
-  activeChild?.kill('SIGTERM')
+  activeChild?.terminate()
 }
 
 const signalHandlers = {

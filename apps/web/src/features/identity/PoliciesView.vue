@@ -63,6 +63,7 @@ const detail = createPolicyDetail((policyId, signal) =>
 )
 const detailState = shallowRef<PolicyDetailState>(detail.getState())
 const writeBasis = shallowRef<PolicyView>()
+const reconciledVersion = ref<number>()
 let reconciliation: PolicyWriteCommand | undefined
 const unsubscribeDetail = detail.subscribe((state) => {
   detailState.value = state
@@ -75,7 +76,9 @@ const unsubscribeDetail = detail.subscribe((state) => {
         : reconciliation.policyId === state.policy.policyId)
     ) {
       writeOperation.reconciled(reconciliation)
+      reconciledVersion.value = state.policy.version
       reconciliation = undefined
+      void nextTick(() => writeHeading.value?.focus())
     }
   } else if (state.status === 'error' && reconciliation !== undefined) {
     reconciliation = undefined
@@ -168,6 +171,7 @@ const writeEditorLocked = computed(
 
 async function selectPolicy(policyId: PolicyId) {
   if (writeNavigationLocked.value || !writeOperation.reset()) return
+  reconciledVersion.value = undefined
   writeBasis.value = undefined
   await detail.select(policyId)
   await nextTick()
@@ -175,6 +179,7 @@ async function selectPolicy(policyId: PolicyId) {
 }
 
 function prepareWrite(command: PolicyWriteCommand) {
+  reconciledVersion.value = undefined
   writeOperation.prepare(command)
 }
 
@@ -211,7 +216,11 @@ function recoverDetail() {
   if (detailState.value.status === 'error') {
     detailRecoveryError.value = detailError.value
     detailRetrying.value = true
-    void selectPolicy(detailState.value.policyId)
+    if (writeState.value.status === 'conflict' || writeState.value.status === 'unknown') {
+      void reconcileWrite()
+    } else {
+      void selectPolicy(detailState.value.policyId)
+    }
   }
 }
 
@@ -386,6 +395,9 @@ onBeforeUnmount(() => {
       </p>
       <p v-else-if="writeState.status === 'success'" role="status">
         {{ t('policies.write.success', { action: t(`policies.write.${writeState.action}`) }) }}
+      </p>
+      <p v-if="reconciledVersion !== undefined" role="status" aria-live="polite">
+        {{ t('policies.write.reconciled', { version: reconciledVersion }) }}
       </p>
       <div
         v-else-if="writeState.status === 'conflict' || writeState.status === 'unknown'"

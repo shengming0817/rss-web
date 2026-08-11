@@ -3,8 +3,6 @@ import {
   createPolicyDeactivateRequest,
   createPolicyUpdateRequest,
   parsePolicyCreateRequest,
-  parsePolicyDeactivateRequestInternal,
-  parsePolicyUpdateRequestInternal,
 } from './authoring'
 import { decodePolicyView } from './decoders'
 
@@ -96,13 +94,5 @@ describe('Policy authoring boundary', () => {
       expectedVersion: 2,
     })
     expect(createPolicyDeactivateRequest(snapshot)).toEqual({ expectedVersion: 2 })
-    for (const expectedVersion of [0, 2_147_483_648, 1.5]) {
-      expect(() => parsePolicyUpdateRequestInternal({ expectedVersion, ...writeFields })).toThrow(
-        'invalid policy write input',
-      )
-      expect(() => parsePolicyDeactivateRequestInternal({ expectedVersion })).toThrow(
-        'invalid policy write input',
-      )
-    }
   })
 })

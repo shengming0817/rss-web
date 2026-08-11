@@ -1,6 +1,5 @@
 import { decodePolicyWriteFields } from './decoders'
 import { parsePolicyId } from './policy-id'
-import { sealPolicyVersion } from './policy-version'
 import type {
   PolicyCreateRequest,
   PolicyDeactivateRequest,
@@ -37,7 +36,15 @@ function positiveInt32(value: unknown): number {
   return value as number
 }
 
-function writeFields(input: Record<string, unknown>): PolicyWriteFields {
+function writeFields(
+  input: Readonly<{
+    contractId?: unknown
+    permission?: unknown
+    effectiveFrom?: unknown
+    effectiveUntil?: unknown
+    rules?: unknown
+  }>,
+): PolicyWriteFields {
   return decodePolicyWriteFields(
     {
       contractId: input.contractId,
@@ -61,30 +68,15 @@ export function parsePolicyCreateRequest(value: unknown): PolicyCreateRequest {
   return Object.freeze({ policyId, ...writeFields(input) })
 }
 
-export function parsePolicyUpdateRequestInternal(value: unknown): PolicyUpdateRequest {
-  const input = exactRecord(
-    value,
-    ['expectedVersion', 'contractId', 'permission', 'effectiveFrom', 'rules'],
-    ['effectiveUntil'],
-  )
-  return Object.freeze({
-    expectedVersion: sealPolicyVersion(positiveInt32(input.expectedVersion)),
-    ...writeFields(input),
-  })
-}
-
-export function parsePolicyDeactivateRequestInternal(value: unknown): PolicyDeactivateRequest {
-  const input = exactRecord(value, ['expectedVersion'])
-  return Object.freeze({ expectedVersion: sealPolicyVersion(positiveInt32(input.expectedVersion)) })
-}
-
 export function createPolicyUpdateRequest(
   snapshot: PolicyView,
   fields: PolicyWriteFields,
 ): PolicyUpdateRequest {
-  return parsePolicyUpdateRequestInternal({ expectedVersion: snapshot.version, ...fields })
+  positiveInt32(snapshot.version)
+  return Object.freeze({ expectedVersion: snapshot.version, ...writeFields(fields) })
 }
 
 export function createPolicyDeactivateRequest(snapshot: PolicyView): PolicyDeactivateRequest {
+  positiveInt32(snapshot.version)
   return Object.freeze({ expectedVersion: snapshot.version })
 }

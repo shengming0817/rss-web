@@ -2,16 +2,13 @@ import type { HttpTransport } from '@rss/api'
 import { identityEndpoints } from '@rss/api/endpoints/identity'
 import {
   decodePoliciesListResponse,
+  decodePolicyWriteFields,
   decodePolicyCreateResponse,
   decodePolicyDeactivateResponse,
   decodePolicyGetResponse,
   decodePolicyUpdateResponse,
 } from './decoders'
-import {
-  parsePolicyCreateRequest,
-  parsePolicyDeactivateRequestInternal,
-  parsePolicyUpdateRequestInternal,
-} from './authoring'
+import { parsePolicyCreateRequest } from './authoring'
 import type { PolicyId } from './policy-id'
 import type {
   PoliciesCallOptions,
@@ -63,6 +60,49 @@ function signal(options?: PoliciesCallOptions) {
   return options?.signal === undefined ? {} : { signal: options.signal }
 }
 
+function updateBody(request: PolicyUpdateRequest): PolicyUpdateRequest {
+  const keys = Reflect.ownKeys(request)
+  const allowed = new Set([
+    'expectedVersion',
+    'contractId',
+    'permission',
+    'effectiveFrom',
+    'effectiveUntil',
+    'rules',
+  ])
+  if (
+    keys.some((key) => typeof key !== 'string' || !allowed.has(key)) ||
+    !Number.isInteger(request.expectedVersion) ||
+    request.expectedVersion < 1 ||
+    request.expectedVersion > 2_147_483_647
+  )
+    throw new Error('invalid policy write input')
+  return Object.freeze({
+    expectedVersion: request.expectedVersion,
+    ...decodePolicyWriteFields(
+      {
+        contractId: request.contractId,
+        permission: request.permission,
+        effectiveFrom: request.effectiveFrom,
+        ...(request.effectiveUntil === undefined ? {} : { effectiveUntil: request.effectiveUntil }),
+        rules: request.rules,
+      },
+      { requireRules: true },
+    ),
+  })
+}
+
+function deactivateBody(request: PolicyDeactivateRequest): PolicyDeactivateRequest {
+  if (
+    Reflect.ownKeys(request).some((key) => key !== 'expectedVersion') ||
+    !Number.isInteger(request.expectedVersion) ||
+    request.expectedVersion < 1 ||
+    request.expectedVersion > 2_147_483_647
+  )
+    throw new Error('invalid policy write input')
+  return Object.freeze({ expectedVersion: request.expectedVersion })
+}
+
 export function createPoliciesApi(transport: HttpTransport): PoliciesApi {
   return Object.freeze({
     list(request?: PoliciesListRequest, options?: PoliciesCallOptions) {
@@ -104,7 +144,7 @@ export function createPoliciesApi(transport: HttpTransport): PoliciesApi {
       })
     },
     update(policyId: PolicyId, request: PolicyUpdateRequest, options?: PoliciesCallOptions) {
-      const body = parsePolicyUpdateRequestInternal(request)
+      const body = updateBody(request)
       return transport.request({
         ...identityEndpoints.policiesUpdate,
         pathParams: { policyId },
@@ -123,7 +163,7 @@ export function createPoliciesApi(transport: HttpTransport): PoliciesApi {
       request: PolicyDeactivateRequest,
       options?: PoliciesCallOptions,
     ) {
-      const body = parsePolicyDeactivateRequestInternal(request)
+      const body = deactivateBody(request)
       return transport.request({
         ...identityEndpoints.policiesDeactivate,
         pathParams: { policyId },

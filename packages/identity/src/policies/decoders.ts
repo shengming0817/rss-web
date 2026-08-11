@@ -1,6 +1,6 @@
 import { decodeCursorPage } from '@rss/api'
 import { parsePolicyId } from './policy-id'
-import { sealPolicyVersion } from './policy-version'
+import type { PolicyVersion } from './policy-version'
 import type {
   PoliciesListResponse,
   PolicyAttributeOperand,
@@ -265,7 +265,7 @@ export function decodePolicyView(value: unknown): PolicyView {
   })
   return Object.freeze({
     policyId,
-    version: sealPolicyVersion(integer(input.version, 1, INT32_MAX)),
+    version: integer(input.version, 1, INT32_MAX) as PolicyVersion,
     ...fields,
   })
 }
@@ -305,7 +305,7 @@ export function decodePolicyDeactivateResponse(value: unknown): PolicyDeactivate
   return Object.freeze({
     data: Object.freeze({
       deactivated: data.deactivated,
-      version: sealPolicyVersion(integer(data.version, 1, INT32_MAX)),
+      version: integer(data.version, 1, INT32_MAX) as PolicyVersion,
     }),
   })
 }
