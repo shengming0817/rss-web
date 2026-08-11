@@ -52,3 +52,10 @@ export const INTERNAL_EMPTY = rule({
   retryable: false,
   details: 'empty',
 })
+
+export const PAYLOAD_TOO_LARGE_EMPTY = rule({
+  code: 'ERR_CORE_PAYLOAD_TOO_LARGE',
+  message: 'payload too large',
+  retryable: false,
+  details: 'empty',
+})
