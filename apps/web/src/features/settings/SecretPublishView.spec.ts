@@ -7,6 +7,20 @@ import { authorizationExperiencePlugin } from '../authorization/authorization-co
 import { settingsApiPlugin } from './settings-context'
 import SecretPublishView from './SecretPublishView.vue'
 
+const routeLeave = vi.hoisted(() => ({
+  guard: undefined as ((to: { name?: unknown }) => unknown) | undefined,
+}))
+
+vi.mock('vue-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('vue-router')>()
+  return {
+    ...actual,
+    onBeforeRouteLeave: (guard: (to: { name?: unknown }) => unknown) => {
+      routeLeave.guard = guard
+    },
+  }
+})
+
 type PublishSecret = SettingsApi['publishSecret']
 
 const execute = vi.fn((_intent: unknown, operation: () => Promise<unknown>) => operation())
@@ -59,7 +73,10 @@ async function fill(
 }
 
 describe('SecretPublishView', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    routeLeave.guard = undefined
+  })
 
   it('validates required raw fields in order and focuses the first invalid input', async () => {
     const publishSecret = vi.fn() as PublishSecret
@@ -145,6 +162,8 @@ describe('SecretPublishView', () => {
     )
     expect(wrapper.get('form').attributes('aria-busy')).toBe('true')
     expect(document.activeElement).toBe(wrapper.get('[role="status"][tabindex="-1"]').element)
+    expect(routeLeave.guard?.({ name: 'settings' })).toBe(false)
+    expect(routeLeave.guard?.({ name: 'login' })).toBeUndefined()
     expect(storage).not.toHaveBeenCalled()
     expect(pushState).not.toHaveBeenCalled()
     expect(replaceState).not.toHaveBeenCalled()
@@ -185,6 +204,7 @@ describe('SecretPublishView', () => {
     ).toBeDefined()
     expect(wrapper.find('[data-action="retry-secret-publish"]').exists()).toBe(false)
     expect(publishSecret).toHaveBeenCalledOnce()
+    expect(routeLeave.guard?.({ name: 'settings' })).toBe(false)
     wrapper.unmount()
   })
 

@@ -1,5 +1,5 @@
-import { isRssApiError } from '@rss/api'
 import type { SettingsApi } from '@rss/settings'
+import { isWriteOutcomeUnknown } from '../../errors/write-outcome'
 
 type PublishSecret = SettingsApi['publishSecret']
 type SecretPublishRequest = Parameters<PublishSecret>[0]
@@ -20,17 +20,6 @@ export interface SecretPublishOperation {
   cancel(): void
   confirm(request: SecretPublishRequest): Promise<void>
   dispose(): void
-}
-
-const DEFINITE_WIRE_STATUSES: ReadonlySet<number> = new Set([400, 401, 403, 404, 409, 413, 429])
-
-function outcomeUnknown(error: unknown): boolean {
-  return !(
-    isRssApiError(error) &&
-    error.cause === 'wire' &&
-    error.status !== undefined &&
-    DEFINITE_WIRE_STATUSES.has(error.status)
-  )
 }
 
 export function createSecretPublishOperation(
@@ -76,7 +65,9 @@ export function createSecretPublishOperation(
     } catch (error: unknown) {
       if (current !== generation || signal.aborted) return
       controller = undefined
-      publish(outcomeUnknown(error) ? { status: 'unknown', error } : { status: 'error', error })
+      publish(
+        isWriteOutcomeUnknown(error) ? { status: 'unknown', error } : { status: 'error', error },
+      )
     }
   }
 

@@ -1,5 +1,3 @@
-export { createSettingsApi } from './client'
-export type { SettingsApi } from './client'
 export type {
   ConfigCoordinate,
   ConfigEntry,
@@ -10,5 +8,4 @@ export type {
   ConfigRollbackRequest,
   ConfigRollbackResponse,
   ConfigVersion,
-  SettingsCallOptions,
 } from './types'

@@ -4,17 +4,17 @@ import {
   decodeConfigGetResponse,
   decodeConfigPublishResponse,
   decodeConfigRollbackResponse,
-} from './decoders'
+} from './config/decoders'
 import type {
   ConfigGetResponse,
   ConfigPublishRequest,
   ConfigPublishResponse,
   ConfigRollbackRequest,
   ConfigRollbackResponse,
-  SettingsCallOptions,
-} from './types'
-import { decodeSecretPublishResponse } from '../secret/decoders'
-import type { SecretPublishRequest, SecretPublishResponse } from '../secret/types'
+} from './config/types'
+import { decodeSecretPublishResponse } from './secret/decoders'
+import type { SecretPublishRequest, SecretPublishResponse } from './secret/types'
+import type { SettingsCallOptions } from './types'
 
 export interface SettingsApi {
   publishSecret(

@@ -1,6 +1,6 @@
 import type { HttpTransport, RequestOptions } from '@rss/api'
 import { describe, expect, it, vi } from 'vitest'
-import { createSettingsApi } from '../config/client'
+import { createSettingsApi } from '../client'
 import { decodeSecretPublishResponse } from './decoders'
 
 describe('Settings secret decoder', () => {

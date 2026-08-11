@@ -2,7 +2,7 @@ import type { HttpTransport } from '@rss/api'
 import { createSessionHttpTransport, type SessionTransportHooks } from '@rss/api/session'
 import { decodeWireErrorForTest } from '@rss/api/testing'
 import { describe, expect, it, vi } from 'vitest'
-import { createSettingsApi } from './client'
+import { createSettingsApi } from '../client'
 
 const unauthenticated = () =>
   decodeWireErrorForTest(401, {

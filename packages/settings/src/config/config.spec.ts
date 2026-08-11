@@ -1,6 +1,6 @@
 import type { HttpTransport, NoContentRequest, RequestOptions } from '@rss/api'
 import { describe, expect, it, vi } from 'vitest'
-import { createSettingsApi } from './client'
+import { createSettingsApi } from '../client'
 import {
   decodeConfigGetResponse,
   decodeConfigPublishResponse,

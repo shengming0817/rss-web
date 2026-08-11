@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { onBeforeRouteLeave } from 'vue-router'
 import type { SettingsApi } from '@rss/settings'
 import { ErrorPage, ModalShell, SourceBadge } from '@rss/core'
 import { MANUAL_SOURCE, RSS_SOURCE } from '@rss/shared'
@@ -100,6 +101,14 @@ function confirm() {
   clearFields()
   void operation.confirm(request)
 }
+
+onBeforeRouteLeave((to) => {
+  if (
+    (state.value.status === 'publishing' || state.value.status === 'unknown') &&
+    to.name !== 'login'
+  )
+    return false
+})
 
 onBeforeUnmount(() => {
   prepared = undefined

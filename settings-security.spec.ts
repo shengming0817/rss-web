@@ -22,7 +22,7 @@ const applicationProductionOwners = () =>
 
 describe('Settings config security boundary', () => {
   it('keeps publish and rollback non-replayable and 204 decoder-free', () => {
-    const client = read('packages/settings/src/config/client.ts')
+    const client = read('packages/settings/src/client.ts')
     expect(client).toContain("session: 'required-no-replay'")
     expect(client).toContain("session: 'required'")
     expect(client).not.toContain('headers:')
@@ -33,7 +33,7 @@ describe('Settings config security boundary', () => {
   it('keeps sensitive values out of persistence and diagnostics owners', () => {
     const owners = settingsProductionOwners()
     expect(owners).toContain('apps/web/src/features/settings/ConfigView.vue')
-    expect(owners).toContain('packages/settings/src/config/client.ts')
+    expect(owners).toContain('packages/settings/src/client.ts')
     const production = owners.map(read).join('\n')
     expect(production).not.toMatch(
       /localStorage|sessionStorage|indexedDB|console\.|logger\.|analytics/,
@@ -50,7 +50,7 @@ describe('Settings config security boundary', () => {
       'apps/web/src/features/settings/SecretPublishView.vue',
       'apps/web/src/i18n/messages/en-US.ts',
       'apps/web/src/i18n/messages/zh-CN.ts',
-      'packages/settings/src/config/client.ts',
+      'packages/settings/src/client.ts',
       'packages/settings/src/secret/types.ts',
     ])
   })

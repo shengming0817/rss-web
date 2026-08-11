@@ -34,6 +34,12 @@ describe('Settings endpoints', () => {
           retryable: false,
           details: 'empty',
         },
+        404: {
+          code: 'ERR_CORE_NOT_FOUND',
+          message: 'not found',
+          retryable: false,
+          details: 'empty',
+        },
         409: {
           code: 'ERR_CORE_VERSION_CONFLICT',
           message: 'version conflict',
