@@ -110,7 +110,9 @@ describe('RSS-only foundation boundary', () => {
     expect(
       labels.filter(
         (label) =>
-          label !== 'navigation.roleBindingsPreview' && label !== 'navigation.configCatalogPreview',
+          label !== 'navigation.roleBindingsPreview' &&
+          label !== 'navigation.configCatalogPreview' &&
+          label !== 'navigation.configHistoryPreview',
       ),
     ).toEqual([
       'navigation.home',
@@ -124,9 +126,13 @@ describe('RSS-only foundation boundary', () => {
     ])
     expect(labels.filter((label) => label === 'navigation.roleBindingsPreview')).toHaveLength(1)
     expect(labels.filter((label) => label === 'navigation.configCatalogPreview')).toHaveLength(1)
+    expect(labels.filter((label) => label === 'navigation.configHistoryPreview')).toHaveLength(1)
     expect(router).toContain('if (options.roleBindingsPreview)')
     expect(router).toContain(
       "import.meta.env.MODE !== 'production' && options.configCatalogPreview",
+    )
+    expect(router).toContain(
+      "import.meta.env.MODE !== 'production' && options.configHistoryPreview",
     )
     expect(router).toContain('source: MOCK_SOURCE')
     expect(router).toContain('authorizationIntent: RUNTIME_INVENTORY_INTENT')
@@ -244,6 +250,7 @@ describe('RSS-only foundation boundary', () => {
       .trim()
       .split('\n')
       .filter(Boolean)
+      .filter((path) => existsSync(resolve(root, path)))
     const productionOwners = candidates
       .filter((path) => read(path).includes('RSS_SOURCE'))
       .filter((path) => !path.endsWith('.spec.ts'))
