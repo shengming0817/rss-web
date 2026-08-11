@@ -8,7 +8,7 @@ import type { IdentitySession, IdentitySessionState } from '@rss/identity'
 import { createAuthorizationExperience } from '../features/authorization/authorization-context'
 import { createAppRouter, type AppRouterOptions } from './index'
 import { createShellNavigation } from './navigation'
-import { createConfigCatalogDraftHandoff } from '../features/settings/config-catalog-draft-context'
+import { createConfigPreviewDraftHandoff } from '../features/settings/config-preview-draft-context'
 
 window.scrollTo = vi.fn()
 
@@ -250,12 +250,14 @@ describe('session-owned router', () => {
     const production = appRouter(fixture)
     expect(production.resolve('/preview/role-bindings').name).toBe('not-found')
     expect(production.resolve('/preview/config-catalog').name).toBe('not-found')
+    expect(production.resolve('/preview/config-history').name).toBe('not-found')
     expect(createShellNavigation(production, (key) => key)).not.toContainEqual(
       expect.objectContaining({ id: 'role-bindings-preview' }),
     )
 
     const preview = appRouter(fixture, createServerAuthorizationPort(), {
       configCatalogPreview: false,
+      configHistoryPreview: false,
       roleBindingsPreview: true,
     })
     expect(preview.resolve('/preview/role-bindings')).toMatchObject({
@@ -281,9 +283,11 @@ describe('session-owned router', () => {
     await preview.isReady()
     expect(preview.currentRoute.value.name).toBe('login')
 
+    const catalogDraft = createConfigPreviewDraftHandoff()
     const catalog = appRouter(fixture, createServerAuthorizationPort(), {
-      configCatalogDraft: createConfigCatalogDraftHandoff(),
       configCatalogPreview: true,
+      configHistoryPreview: false,
+      configPreviewDraft: catalogDraft,
       roleBindingsPreview: false,
     })
     expect(catalog.resolve('/preview/config-catalog')).toMatchObject({
@@ -295,6 +299,46 @@ describe('session-owned router', () => {
     expect(catalog.resolve('/preview/config-catalog').meta).not.toHaveProperty(
       'authorizationIntent',
     )
+    for (const name of ['settings', 'config-catalog-preview']) {
+      expect(catalog.getRoutes().find((route) => route.name === name)?.props.default).toEqual({
+        configPreviewDraft: catalogDraft,
+      })
+    }
+
+    const historyDraft = createConfigPreviewDraftHandoff()
+    const history = appRouter(fixture, createServerAuthorizationPort(), {
+      configCatalogPreview: false,
+      configHistoryPreview: true,
+      configPreviewDraft: historyDraft,
+      roleBindingsPreview: false,
+    })
+    expect(history.resolve('/preview/config-catalog').name).toBe('not-found')
+    expect(history.resolve('/preview/config-history').name).toBe('config-history-preview')
+    for (const name of ['settings', 'config-history-preview']) {
+      expect(history.getRoutes().find((route) => route.name === name)?.props.default).toEqual({
+        configPreviewDraft: historyDraft,
+      })
+    }
+
+    const sharedDraft = createConfigPreviewDraftHandoff()
+    const both = appRouter(fixture, createServerAuthorizationPort(), {
+      configCatalogPreview: true,
+      configHistoryPreview: true,
+      configPreviewDraft: sharedDraft,
+      roleBindingsPreview: false,
+    })
+    expect(both.resolve('/preview/config-history')).toMatchObject({
+      name: 'config-history-preview',
+      meta: {
+        navigation: { labelKey: 'navigation.configHistoryPreview', source: MOCK_SOURCE },
+      },
+    })
+    expect(both.resolve('/preview/config-history').meta).not.toHaveProperty('authorizationIntent')
+    for (const name of ['settings', 'config-catalog-preview', 'config-history-preview']) {
+      expect(both.getRoutes().find((route) => route.name === name)?.props.default).toEqual({
+        configPreviewDraft: sharedDraft,
+      })
+    }
   })
 
   it('owns the Audit page with ambient route intent and no client-side SuperAdmin gate', () => {

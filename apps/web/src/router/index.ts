@@ -9,7 +9,7 @@ import { RUNTIME_INVENTORY_INTENT } from '../features/runtime/runtime-intent'
 import { POLICIES_LIST_INTENT } from '../features/identity/policies-intent'
 import { CONFIG_GET_INTENT } from '../features/settings/config-intent'
 import type { NavigationMessageKey } from './navigation'
-import type { ConfigCatalogDraftHandoff } from '../features/settings/config-catalog-draft-context'
+import type { ConfigPreviewDraftHandoff } from '../features/settings/config-preview-draft-context'
 import { registerAuthorizationRouting, registerRouterA11y, registerSessionRouting } from './guards'
 
 declare module 'vue-router' {
@@ -131,26 +131,33 @@ const baseRoutes: RouteRecordRaw[] = [
   },
 ]
 
+type ConfigPreviewRouterOptions =
+  | {
+      readonly configCatalogPreview: false
+      readonly configHistoryPreview: false
+    }
+  | ({
+      readonly configPreviewDraft: ConfigPreviewDraftHandoff
+    } & (
+      | { readonly configCatalogPreview: true; readonly configHistoryPreview: false }
+      | { readonly configCatalogPreview: false; readonly configHistoryPreview: true }
+      | { readonly configCatalogPreview: true; readonly configHistoryPreview: true }
+    ))
+
 export type AppRouterOptions = {
   readonly roleBindingsPreview: boolean
-} & (
-  | { readonly configCatalogPreview: false }
-  | {
-      readonly configCatalogPreview: true
-      readonly configCatalogDraft: ConfigCatalogDraftHandoff
-    }
-)
+} & ConfigPreviewRouterOptions
 
 function routes(options: AppRouterOptions): RouteRecordRaw[] {
   return baseRoutes.map((route) => {
     if (route.path !== '/' || route.children === undefined) return route
     const catchAll = route.children.at(-1)!
     const children = route.children.slice(0, -1)
-    if (options.configCatalogPreview) {
+    if (options.configCatalogPreview || options.configHistoryPreview) {
       const settings = children.findIndex((child) => child.name === 'settings')
       children[settings] = {
         ...children[settings]!,
-        props: { configCatalogDraft: options.configCatalogDraft },
+        props: { configPreviewDraft: options.configPreviewDraft },
       }
     }
     if (options.roleBindingsPreview) {
@@ -174,13 +181,30 @@ function routes(options: AppRouterOptions): RouteRecordRaw[] {
         path: 'preview/config-catalog',
         name: 'config-catalog-preview',
         component: () => import('../features/settings/ConfigCatalogPreviewView.vue'),
-        props: { configCatalogDraft: options.configCatalogDraft },
+        props: { configPreviewDraft: options.configPreviewDraft },
         meta: {
           sessionAccess: 'authenticated',
           focusTarget: 'shell-content',
           navigation: {
             labelKey: 'navigation.configCatalogPreview',
             order: 39,
+            source: MOCK_SOURCE,
+          },
+        },
+      })
+    }
+    if (import.meta.env.MODE !== 'production' && options.configHistoryPreview) {
+      children.push({
+        path: 'preview/config-history',
+        name: 'config-history-preview',
+        component: () => import('../features/settings/ConfigHistoryPreviewView.vue'),
+        props: { configPreviewDraft: options.configPreviewDraft },
+        meta: {
+          sessionAccess: 'authenticated',
+          focusTarget: 'shell-content',
+          navigation: {
+            labelKey: 'navigation.configHistoryPreview',
+            order: 39.5,
             source: MOCK_SOURCE,
           },
         },
@@ -195,7 +219,11 @@ export function createAppRouter(
   session: IdentitySession,
   authorization: AuthorizationExperience,
   history: RouterHistory,
-  options: AppRouterOptions = { configCatalogPreview: false, roleBindingsPreview: false },
+  options: AppRouterOptions = {
+    configCatalogPreview: false,
+    configHistoryPreview: false,
+    roleBindingsPreview: false,
+  },
 ) {
   const router = createRouter({
     history,

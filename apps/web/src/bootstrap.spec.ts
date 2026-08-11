@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { AppRouterOptions } from './router'
 
 const createHttpTransport = vi.fn(() => ({ request: vi.fn() }))
 const createServerAuthorizationPort = vi.fn(() => ({ preview: vi.fn() }))
@@ -11,7 +12,11 @@ const createAccountStatusApi = vi.fn(() => ({ get: vi.fn(), set: vi.fn() }))
 const createRolesApi = vi.fn(() => ({ list: vi.fn(), assign: vi.fn(), revoke: vi.fn() }))
 const createPoliciesApi = vi.fn(() => ({ list: vi.fn(), get: vi.fn() }))
 const createAuthorizationExperience = vi.fn(() => ({ getHint: vi.fn() }))
-const createAppRouter = vi.fn(() => ({ install: vi.fn() }))
+const createAppRouter = vi.fn(
+  (_session: unknown, _authorization: unknown, _history: unknown, _options?: AppRouterOptions) => ({
+    install: vi.fn(),
+  }),
+)
 const createAuditApi = vi.fn(() => ({ listEntries: vi.fn() }))
 const createRuntimeApi = vi.fn(() => ({ inventory: vi.fn() }))
 const createSettingsApi = vi.fn(() => ({ get: vi.fn(), publish: vi.fn(), delete: vi.fn() }))
@@ -61,7 +66,11 @@ describe('web composition root', () => {
       createIdentitySession.mock.results[0]?.value,
       createAuthorizationExperience.mock.results[0]?.value,
       expect.anything(),
-      { configCatalogPreview: false, roleBindingsPreview: false },
+      {
+        configCatalogPreview: false,
+        configHistoryPreview: false,
+        roleBindingsPreview: false,
+      },
     )
     expect(runtime.authorization).toBe(createAuthorizationExperience.mock.results[0]?.value)
     expect(runtime.accountStatus).toBe(createAccountStatusApi.mock.results[0]?.value)
@@ -72,40 +81,44 @@ describe('web composition root', () => {
     expect(runtime.settings).toBe(createSettingsApi.mock.results[0]?.value)
   })
 
-  it('passes only an explicitly enabled closed Preview composition to the router', async () => {
+  it('passes all four Config Preview flag combinations through one closed composition', async () => {
     const { createWebRuntime } = await import('./bootstrap')
     vi.stubEnv('MODE', 'test')
+    for (const [configCatalogPreview, configHistoryPreview] of [
+      [false, false],
+      [true, false],
+      [false, true],
+      [true, true],
+    ] as const) {
+      vi.stubEnv('VITE_CONFIG_CATALOG_PREVIEW', configCatalogPreview ? 'true' : 'false')
+      vi.stubEnv('VITE_CONFIG_HISTORY_PREVIEW', configHistoryPreview ? 'true' : 'false')
+      createWebRuntime()
+      const options = createAppRouter.mock.lastCall?.[3]
+      expect(options).toMatchObject({
+        configCatalogPreview,
+        configHistoryPreview,
+        roleBindingsPreview: false,
+      })
+      if (configCatalogPreview || configHistoryPreview) {
+        expect(options).toHaveProperty('configPreviewDraft', expect.anything())
+      } else {
+        expect(options).not.toHaveProperty('configPreviewDraft')
+      }
+    }
+
+    vi.stubEnv('MODE', 'production')
     vi.stubEnv('VITE_CONFIG_CATALOG_PREVIEW', 'true')
+    vi.stubEnv('VITE_CONFIG_HISTORY_PREVIEW', 'true')
     createWebRuntime()
     expect(createAppRouter).toHaveBeenLastCalledWith(
       expect.anything(),
       expect.anything(),
       expect.anything(),
       {
-        configCatalogDraft: expect.anything(),
-        configCatalogPreview: true,
+        configCatalogPreview: false,
+        configHistoryPreview: false,
         roleBindingsPreview: false,
       },
-    )
-
-    vi.stubEnv('VITE_CONFIG_CATALOG_PREVIEW', 'false')
-    vi.stubEnv('VITE_ROLE_BINDINGS_PREVIEW', 'true')
-    createWebRuntime()
-    expect(createAppRouter).toHaveBeenLastCalledWith(
-      expect.anything(),
-      expect.anything(),
-      expect.anything(),
-      { configCatalogPreview: false, roleBindingsPreview: true },
-    )
-
-    vi.stubEnv('MODE', 'production')
-    vi.stubEnv('VITE_CONFIG_CATALOG_PREVIEW', 'true')
-    createWebRuntime()
-    expect(createAppRouter).toHaveBeenLastCalledWith(
-      expect.anything(),
-      expect.anything(),
-      expect.anything(),
-      { configCatalogPreview: false, roleBindingsPreview: false },
     )
   })
 })

@@ -1,13 +1,13 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import type { SettingsApi } from '@rss/settings'
-import { CONFIG_CATALOG_PREVIEW_ROWS } from '@rss/settings/preview'
+import { CONFIG_CATALOG_PREVIEW_ROWS, CONFIG_HISTORY_PREVIEW_ROWS } from '@rss/settings/preview'
 import { networkErrorForTest } from '@rss/api/testing'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createWebI18n } from '../../i18n'
 import { authorizationExperiencePlugin } from '../authorization/authorization-context'
 import ConfigView from './ConfigView.vue'
 import { settingsApiPlugin } from './settings-context'
-import { createConfigCatalogDraftHandoff } from './config-catalog-draft-context'
+import { createConfigPreviewDraftHandoff } from './config-preview-draft-context'
 
 const execute = vi.fn((_intent: unknown, operation: () => Promise<unknown>) => operation())
 const authorization = {
@@ -32,10 +32,10 @@ describe('ConfigView', () => {
   beforeEach(() => vi.clearAllMocks())
   it('consumes a staged Mock key as an unsubmitted Manual draft', async () => {
     const settings = api()
-    const handoff = createConfigCatalogDraftHandoff()
-    handoff.stage(CONFIG_CATALOG_PREVIEW_ROWS[0]!)
+    const handoff = createConfigPreviewDraftHandoff()
+    handoff.stageCatalog(CONFIG_CATALOG_PREVIEW_ROWS[0]!)
     const wrapper = mount(ConfigView, {
-      props: { configCatalogDraft: handoff },
+      props: { configPreviewDraft: handoff },
       global: {
         plugins: [
           createWebI18n(),
@@ -58,6 +58,41 @@ describe('ConfigView', () => {
     await wrapper.get('button').trigger('click')
     await flushPromises()
     expect(settings.get).toHaveBeenCalledOnce()
+  })
+
+  it('consumes a Mock History candidate as an unsubmitted Manual rollback draft', async () => {
+    const settings = api()
+    const handoff = createConfigPreviewDraftHandoff()
+    const candidate = CONFIG_HISTORY_PREVIEW_ROWS[0]!
+    handoff.stageHistory(candidate)
+    const wrapper = mount(ConfigView, {
+      props: { configPreviewDraft: handoff },
+      global: {
+        plugins: [
+          createWebI18n(),
+          settingsApiPlugin(settings),
+          authorizationExperiencePlugin(authorization),
+        ],
+      },
+    })
+
+    expect((wrapper.get('#config-key').element as HTMLInputElement).value).toBe(candidate.key)
+    expect((wrapper.get('#config-rollback-version').element as HTMLInputElement).value).toBe(
+      String(candidate.version),
+    )
+    expect((wrapper.get('#config-value').element as HTMLTextAreaElement).value).toBe('')
+    expect(wrapper.text()).toContain('未提交')
+    expect(settings.get).not.toHaveBeenCalled()
+    expect(settings.publish).not.toHaveBeenCalled()
+    expect(settings.delete).not.toHaveBeenCalled()
+    expect(settings.rollback).not.toHaveBeenCalled()
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '准备回滚')!
+      .trigger('click')
+    expect(settings.rollback).not.toHaveBeenCalled()
+    expect(wrapper.find('[role="alertdialog"]').exists()).toBe(true)
   })
 
   it('marks manual/RSS sources and clears the publish value before awaiting the server', async () => {

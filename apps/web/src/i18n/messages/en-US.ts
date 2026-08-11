@@ -15,6 +15,7 @@ const enUS = {
     policies: 'Policies',
     settings: 'Settings',
     configCatalogPreview: 'Config Catalog Preview',
+    configHistoryPreview: 'Config History Preview',
     runtime: 'Runtime',
     audit: 'Audit',
   },
@@ -64,6 +65,8 @@ const enUS = {
     confirm: 'Confirm',
     catalogDraftNotice:
       'A Mock suggestion was copied into a Manual draft. No RSS request was sent; explicitly select “Read current config”.',
+    historyDraftNotice:
+      'A Mock candidate was copied into an unsubmitted Manual rollback draft. Version existence is unverified; you must still select “Prepare rollback” and confirm again.',
   },
   configCatalogPreview: {
     title: 'Config Catalog Preview',
@@ -80,6 +83,24 @@ const enUS = {
     confirmTitle: 'Confirm synthetic key copy',
     confirmDescription:
       'Copy {key} into an unsubmitted Manual draft? This action does not request RSS.',
+    handoffError:
+      'Navigation did not reach Settings. The candidate was discarded and the Manual draft was unchanged; cancel and try again.',
+    cancel: 'Cancel',
+    confirm: 'Copy and open Settings',
+  },
+  configHistoryPreview: {
+    title: 'Config History Preview',
+    subtitle: 'Local synthetic key and version metadata only; this is not RSS history.',
+    warning:
+      'Preview is permanently non-authoritative. A Mock version does not prove that RSS contains that version and includes no configuration material.',
+    localResult: 'The local fixture timeline shows {count} rows.',
+    version: 'Synthetic version {version}',
+    copy: 'Prepare Manual rollback draft copy',
+    confirmTitle: 'Confirm synthetic version copy',
+    confirmDescription:
+      'Copy synthetic version {version} for {key} into an unsubmitted Manual rollback draft? Version existence is unverified and this action does not request RSS.',
+    handoffError:
+      'This Mock candidate could not be copied. The Manual draft was not changed; cancel and select again.',
     cancel: 'Cancel',
     confirm: 'Copy and open Settings',
   },

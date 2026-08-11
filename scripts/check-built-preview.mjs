@@ -5,7 +5,13 @@ import process from 'node:process'
 const root = process.argv[2]
 if (!root) throw new Error('dist path is required')
 
-const forbidden = [/ConfigCatalogPreviewView/, /preview\.example\./, /preview\/config-catalog/]
+const forbidden = [
+  /ConfigCatalogPreviewView/,
+  /ConfigHistoryPreviewView/,
+  /preview\.example\./,
+  /preview\/config-catalog/,
+  /preview\/config-history/,
+]
 
 function files(path) {
   return readdirSync(path, { withFileTypes: true }).flatMap((entry) => {
@@ -16,11 +22,11 @@ function files(path) {
 
 for (const file of files(root)) {
   if (forbidden.some((pattern) => pattern.test(file))) {
-    throw new Error(`production artifact contains Config Catalog Preview file: ${file}`)
+    throw new Error(`production artifact contains Config Preview file: ${file}`)
   }
   if (!['.html', '.js', '.css'].includes(extname(file))) continue
   const content = readFileSync(file, 'utf8')
   if (forbidden.some((pattern) => pattern.test(content))) {
-    throw new Error(`production artifact contains Config Catalog Preview content: ${file}`)
+    throw new Error(`production artifact contains Config Preview content: ${file}`)
   }
 }

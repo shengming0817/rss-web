@@ -4,3 +4,5 @@ export type {
   ConfigCatalogPreviewQuery,
   ConfigCatalogPreviewRow,
 } from './catalog/preview'
+export { CONFIG_HISTORY_PREVIEW_ROWS } from './history/preview'
+export type { ConfigHistoryPreviewRow } from './history/preview'

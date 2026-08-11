@@ -4,15 +4,17 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { ModalShell, SourceBadge } from '@rss/core'
 import { queryConfigCatalogPreview, type ConfigCatalogPreviewRow } from '@rss/settings/preview'
-import type { ConfigCatalogDraftHandoff } from './config-catalog-draft-context'
+import type { ConfigPreviewDraftHandoff } from './config-preview-draft-context'
 
-const props = defineProps<{ readonly configCatalogDraft: ConfigCatalogDraftHandoff }>()
+const props = defineProps<{ readonly configPreviewDraft: ConfigPreviewDraftHandoff }>()
 const { t } = useI18n()
 const router = useRouter()
 const search = ref('')
 const prefix = ref('')
 const page = ref(1)
 const candidate = ref<ConfigCatalogPreviewRow>()
+const handoffError = ref(false)
+const handoffErrorAlert = ref<HTMLElement>()
 const resultStatus = ref<HTMLElement>()
 const result = computed(() =>
   queryConfigCatalogPreview({ search: search.value, prefix: prefix.value, page: page.value }),
@@ -30,19 +32,38 @@ async function changePage(next: number) {
 }
 
 function propose(row: ConfigCatalogPreviewRow) {
+  handoffError.value = false
   candidate.value = row
 }
 
 function close() {
+  props.configPreviewDraft.discard()
+  handoffError.value = false
   candidate.value = undefined
 }
 
 async function confirm() {
   const selected = candidate.value
   if (selected === undefined) return
-  if (!props.configCatalogDraft.stage(selected)) return
-  candidate.value = undefined
-  await router.push({ name: 'settings' })
+  if (!props.configPreviewDraft.stageCatalog(selected)) {
+    handoffError.value = true
+    await nextTick()
+    handoffErrorAlert.value?.focus()
+    return
+  }
+  try {
+    await router.push({ name: 'settings' })
+    if (router.currentRoute.value.name === 'settings') {
+      candidate.value = undefined
+      return
+    }
+  } catch {
+    // The reviewed coordinate is discarded below; raw navigation errors are not rendered.
+  }
+  props.configPreviewDraft.discard()
+  handoffError.value = true
+  await nextTick()
+  handoffErrorAlert.value?.focus()
 }
 </script>
 
@@ -97,6 +118,9 @@ async function confirm() {
       <h2 id="catalog-copy-title">{{ t('configCatalogPreview.confirmTitle') }}</h2>
       <p id="catalog-copy-description">
         {{ t('configCatalogPreview.confirmDescription', { key: candidate?.key }) }}
+      </p>
+      <p v-if="handoffError" ref="handoffErrorAlert" role="alert" tabindex="-1">
+        {{ t('configCatalogPreview.handoffError') }}
       </p>
       <div class="catalog-preview__actions">
         <button type="button" class="v1-ghost" @click="close">
