@@ -1,0 +1,7 @@
+services:
+  edge:
+    volumes:
+      - type: bind
+        source: ${RSS_WEB_REAL_PREVIEW_DIST:?Archived Preview artifact path is required}
+        target: /usr/share/nginx/html
+        read_only: true

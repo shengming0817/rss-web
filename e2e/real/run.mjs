@@ -23,6 +23,7 @@ const passwordHash =
 const temp = mkdtempSync(resolve(tmpdir(), 'rss-web-real-'))
 const snapshot = resolve(temp, 'rss')
 const webSnapshot = resolve(temp, 'web')
+const previewDist = resolve(webSnapshot, 'apps/web/dist-preview-demo')
 const deadlineMs = Date.now() + 30 * 60_000
 const receiptPath =
   process.env.RSS_WEB_REAL_RECEIPT ?? resolve(tmpdir(), `rss-web-real-receipt-${process.pid}.json`)
@@ -32,7 +33,21 @@ let webRevision = ''
 let cleanupAttempted = false
 let activeChild
 let receivedSignal
+let activeArtifactMode = 'production'
 const phases = []
+const productionPhases = Object.freeze([
+  'main',
+  'password-change',
+  'account-status-self',
+  'roles',
+  'policies-write',
+  'settings-config',
+  'rate-limited',
+  'budget-exhausted',
+  'admin-down',
+  'primary-down',
+])
+const previewPhase = 'preview-isolation'
 
 function interruptedError() {
   const error = new Error(`real journey interrupted by ${receivedSignal}`)
@@ -308,7 +323,7 @@ async function waitServerListening(port) {
   throw error
 }
 
-async function playwright(phase) {
+async function playwright(phase, artifactMode = 'production') {
   const timeout = boundedTimeout(deadlineMs, 3 * 60_000)
   if (timeout === 0) {
     const error = new Error('real journey total deadline exhausted')
@@ -372,7 +387,30 @@ async function playwright(phase) {
     error.stage = `${classification === 'product' ? 'product' : 'environment'}:${phase}`
     throw error
   }
-  phases.push({ name: phase, status: 'passed' })
+  phases.push({ name: phase, status: 'passed', artifactMode })
+}
+
+async function buildPreviewArtifact() {
+  const previewEnvironment = {
+    ...process.env,
+    CI: 'true',
+    HUSKY: '0',
+    RSS_WEB_REVISION: webRevision,
+  }
+  await run('pnpm', ['install', '--frozen-lockfile'], {
+    cwd: webSnapshot,
+    env: previewEnvironment,
+    stdio: 'inherit',
+    timeoutMs: 5 * 60_000,
+    stage: 'environment:preview-install',
+  })
+  await run('pnpm', ['build:preview:demo'], {
+    cwd: webSnapshot,
+    env: previewEnvironment,
+    stdio: 'inherit',
+    timeoutMs: 3 * 60_000,
+    stage: 'environment:preview-build',
+  })
 }
 
 async function preflightPlaywright() {
@@ -413,18 +451,14 @@ function printPlan() {
       pinnedRevision: revision,
       tenantBootstrap: 'edge-deployment-fixed',
       browserNetwork: 'edge-only',
-      phases: [
-        'main',
-        'password-change',
-        'account-status-self',
-        'roles',
-        'policies-write',
-        'settings-config',
-        'rate-limited',
-        'budget-exhausted',
-        'admin-down',
-        'primary-down',
-      ],
+      phases: [...productionPhases, previewPhase],
+      artifactModes: {
+        production: productionPhases,
+        'demo-preview': [previewPhase],
+      },
+      previewArtifactSource: 'archived-clean-web-head',
+      receiptPhaseEvidence: 'artifactMode',
+      faultTransport: 'none',
       malformedResponseEvidence: 'isolated-playwright-smoke',
       cleanup: 'compose-down-volumes-and-temporary-snapshot',
     })}\n`,
@@ -538,6 +572,7 @@ try {
     RSS_WEB_BUILD_REVISION: webRevision,
     RSS_WEB_REAL_TENANT_ID: tenant,
     RSS_WEB_REAL_EDGE_PORT: String(edgePort),
+    RSS_WEB_REAL_PREVIEW_DIST: previewDist,
     GIT_SHA: revision,
     BUILD_DATE: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
   }
@@ -617,10 +652,25 @@ try {
   })
   await waitPhaseReady({ requireServer: true })
   await playwright('primary-down')
+
+  activeArtifactMode = 'demo-preview'
+  await buildPreviewArtifact()
+  environment.RSS_WEB_REAL_ACCESS_TOKEN_TTL_SECS = '60'
+  environment.RSS_WEB_REAL_PRIMARY_PORT = '8080'
+  composeFiles.push('-f', resolve(webSnapshot, 'e2e/real/compose.preview.override.yml'))
+  await compose(['up', '-d', '--no-deps', '--force-recreate', 'server'], {
+    stage: 'environment:preview-server',
+  })
+  await compose(['up', '-d', '--no-deps', '--force-recreate', 'edge'], {
+    stage: 'environment:preview-edge',
+  })
+  await waitReady()
+  await waitPhaseReady({ requireServer: true })
+  await playwright(previewPhase, activeArtifactMode)
 } catch (error) {
   const stage = typeof error?.stage === 'string' ? error.stage : 'environment:unknown'
   const classification = stage.startsWith('product:') ? 'product' : 'environment'
-  phases.push({ name: stage, status: 'failed', classification })
+  phases.push({ name: stage, status: 'failed', classification, artifactMode: activeArtifactMode })
   outcome = { status: 'failed', failure: { stage, classification } }
   process.stderr.write(`[real-e2e] ${stage} (${classification})\n`)
 } finally {
