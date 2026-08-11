@@ -13,7 +13,7 @@ describe('Config Preview boundary', () => {
     expect(read('packages/settings/src/index.ts')).not.toContain('preview')
   })
 
-  it('uses one exact build-time gate and an in-memory key-only handoff', () => {
+  it('uses exact build-time gates and one in-memory coordinate-only handoff', () => {
     const bootstrap = read('apps/web/src/bootstrap.ts')
     const handoff = read('apps/web/src/features/settings/config-preview-draft-context.ts')
     expect(bootstrap.match(/VITE_CONFIG_CATALOG_PREVIEW/g)).toHaveLength(1)

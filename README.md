@@ -60,6 +60,13 @@ synthetic metadata marked Mock and non-authoritative. A row requires an explicit
 before its key is copied once into the existing Manual Config draft; no RSS request occurs until the
 user separately selects “Read current config”, and a real failure never falls back to Preview data.
 
+Config History Preview is independently disabled by default and uses
+`VITE_CONFIG_HISTORY_PREVIEW=true` in the same closed non-production modes. It shows only frozen,
+synthetic key/version metadata: no historical value, diff, material, time, actor, or “current/latest”
+claim exists. Explicitly confirming a candidate copies it once into the Manual rollback draft. The
+candidate is not proof that a real version exists; the user must still prepare and confirm the real
+rollback, and every real RSS result remains final without Mock fallback.
+
 `@rss/authorization` provides closed, non-authoritative UX hints. The Web composition root installs
 only its server mode, which always defers to the real RSS request. A Web-owned context lets future
 routes and controls consume hints without treating them as security: operations still execute once,
@@ -81,10 +88,12 @@ paths use the authenticated catch-all; anonymous requests still reach Login firs
 `@rss/settings` provides the strict framework-neutral client for explicit Config publish, get,
 delete, and rollback coordinates. Vue composition remains in `apps/web`. Publish and rollback are
 one-shot non-idempotent operations; an uncertain result requires an explicit server read, and publish
-also drops the value draft. Rollback accepts only a manually entered source version and never infers
-or previews history. Config
+also drops the value draft. Rollback accepts only an explicit Manual key/source-version coordinate,
+whether typed by the user or copied from the non-authoritative Preview, and never infers real history.
+Config
 values are never placed in URLs, storage, logs, errors, receipts, or source metadata. There is no
-catalog, history, recent-key list, mock fallback, tenant selector, or direct Axios path.
+active catalog/history contract, provider, recent-key list, mock fallback, tenant selector, or direct
+Axios path.
 
 `@rss/runtime` and `@rss/audit` provide strict, framework-neutral clients for the selected Admin
 listener reads. The authenticated Home composes both over the single session transport and degrades

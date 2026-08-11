@@ -4,9 +4,9 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { ModalShell, SourceBadge } from '@rss/core'
 import { queryConfigCatalogPreview, type ConfigCatalogPreviewRow } from '@rss/settings/preview'
-import type { ConfigCatalogDraftHandoff } from './config-catalog-draft-context'
+import type { ConfigPreviewDraftHandoff } from './config-preview-draft-context'
 
-const props = defineProps<{ readonly configCatalogDraft: ConfigCatalogDraftHandoff }>()
+const props = defineProps<{ readonly configPreviewDraft: ConfigPreviewDraftHandoff }>()
 const { t } = useI18n()
 const router = useRouter()
 const search = ref('')
@@ -40,7 +40,7 @@ function close() {
 async function confirm() {
   const selected = candidate.value
   if (selected === undefined) return
-  if (!props.configCatalogDraft.stage(selected)) return
+  if (!props.configPreviewDraft.stageCatalog(selected)) return
   candidate.value = undefined
   await router.push({ name: 'settings' })
 }

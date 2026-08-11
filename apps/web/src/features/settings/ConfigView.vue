@@ -13,9 +13,9 @@ import {
   CONFIG_ROLLBACK_INTENT,
 } from './config-intent'
 import { useSettingsApi } from './settings-context'
-import type { ConfigCatalogDraftHandoff } from './config-catalog-draft-context'
+import type { ConfigPreviewDraftHandoff } from './config-preview-draft-context'
 
-const props = defineProps<{ readonly configCatalogDraft?: ConfigCatalogDraftHandoff }>()
+const props = defineProps<{ readonly configPreviewDraft?: ConfigPreviewDraftHandoff }>()
 const { t } = useI18n()
 const api = useSettingsApi()
 const readAuthorization = useAuthorizationIntent(CONFIG_GET_INTENT)
@@ -23,10 +23,13 @@ const publishAuthorization = useAuthorizationIntent(CONFIG_PUBLISH_INTENT)
 const deleteAuthorization = useAuthorizationIntent(CONFIG_DELETE_INTENT)
 const rollbackAuthorization = useAuthorizationIntent(CONFIG_ROLLBACK_INTENT)
 const keyInput = ref('')
-const catalogDraft = props.configCatalogDraft?.consume()
-if (catalogDraft !== undefined) keyInput.value = catalogDraft.key
+const previewDraft = props.configPreviewDraft?.consume()
+if (previewDraft !== undefined) keyInput.value = previewDraft.key
 const valueInput = ref('')
 const rollbackVersionInput = ref('')
+if (previewDraft?.kind === 'history-rollback') {
+  rollbackVersionInput.value = String(previewDraft.toVersion)
+}
 const revealValue = ref(false)
 const attempted = ref(false)
 const rollbackAttempted = ref(false)
@@ -226,8 +229,14 @@ onBeforeUnmount(() => {
           <h3>{{ t('settingsConfig.manualDraft') }}</h3>
           <SourceBadge :source="MANUAL_SOURCE" />
         </div>
-        <p v-if="catalogDraft" role="status" class="config-catalog-draft-notice">
-          {{ t('settingsConfig.catalogDraftNotice') }}
+        <p v-if="previewDraft" role="status" class="config-preview-draft-notice">
+          {{
+            t(
+              previewDraft.kind === 'history-rollback'
+                ? 'settingsConfig.historyDraftNotice'
+                : 'settingsConfig.catalogDraftNotice',
+            )
+          }}
         </p>
         <label for="config-key">{{ t('settingsConfig.key') }}</label>
         <input

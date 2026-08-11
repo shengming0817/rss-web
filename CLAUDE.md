@@ -84,8 +84,8 @@ fail closed as protocol errors. Idempotent panel retry is user-triggered only.
 `@rss/settings` is the framework-neutral owner for the selected Config DTOs and adapter; all Vue
 composition stays in `apps/web`. Config publish and rollback are protected no-replay. Any uncertain
 result must require an explicit GET before the user decides what to do next; publish also releases the
-value draft. Rollback uses only a manually entered key/source-version coordinate and must not infer or
-preview history.
+value draft. Rollback uses only an explicit Manual key/source-version coordinate and must not infer
+real history.
 Config get/delete may use only the session owner's exact-401 recovery, and delete never parses a 204
 body. Config values must not enter URLs, storage, logs, telemetry, errors, receipts, or SourceMeta.
 Do not add catalog/history/recent-key providers, mock fallback, tenant inputs, schema loading, or a
@@ -95,6 +95,12 @@ for an exact development/test/demo build-time flag and production remains disabl
 synthetic Mock metadata only; there is no provider SPI, remote adapter, catalog contract, value/version,
 authority inference, automatic request, persistence, URL handoff, or real-failure fallback. A reviewed
 key may cross once into the existing Manual draft only after explicit warning confirmation.
+Issue #33 adds one independently gated Config History Preview to the same concrete Preview subpath.
+Its frozen rows contain synthetic key/version/source metadata only and never claim existence,
+currency, recency, or authority. Do not add value, diff, material, actor/time facts, provider/SPI,
+transport, contract discovery, or fallback. A fixture row may cross once into the Manual rollback
+draft only after explicit warning confirmation; it must not start a GET or rollback. The existing
+prepare-and-confirm flow remains the only owner of a real rollback request.
 
 The opt-in real RSS harness may read a user-supplied RSS checkout only through a pinned `git archive`
 and must build the Web Edge from an archived, clean Web HEAD rather than the live worktree. It may
