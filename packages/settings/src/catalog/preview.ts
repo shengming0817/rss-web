@@ -31,10 +31,6 @@ export const CONFIG_CATALOG_PREVIEW_ROWS: readonly ConfigCatalogPreviewRow[] = O
   row('preview.example.reader.density', 'Synthetic reader preference'),
 ])
 
-export function isConfigCatalogPreviewKey(key: string): boolean {
-  return CONFIG_CATALOG_PREVIEW_ROWS.some((candidate) => candidate.key === key)
-}
-
 export function queryConfigCatalogPreview(
   input: ConfigCatalogPreviewQuery = {},
 ): ConfigCatalogPreviewPage {

@@ -1,15 +1,13 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import type { SettingsApi } from '@rss/settings'
+import { CONFIG_CATALOG_PREVIEW_ROWS } from '@rss/settings/preview'
 import { networkErrorForTest } from '@rss/api/testing'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createWebI18n } from '../../i18n'
 import { authorizationExperiencePlugin } from '../authorization/authorization-context'
 import ConfigView from './ConfigView.vue'
 import { settingsApiPlugin } from './settings-context'
-import {
-  configCatalogDraftPlugin,
-  createConfigCatalogDraftHandoff,
-} from './config-catalog-draft-context'
+import { createConfigCatalogDraftHandoff } from './config-catalog-draft-context'
 
 const execute = vi.fn((_intent: unknown, operation: () => Promise<unknown>) => operation())
 const authorization = {
@@ -35,14 +33,14 @@ describe('ConfigView', () => {
   it('consumes a staged Mock key as an unsubmitted Manual draft', async () => {
     const settings = api()
     const handoff = createConfigCatalogDraftHandoff()
-    handoff.stage('preview.example.appearance.theme')
+    handoff.stage(CONFIG_CATALOG_PREVIEW_ROWS[0]!)
     const wrapper = mount(ConfigView, {
+      props: { configCatalogDraft: handoff },
       global: {
         plugins: [
           createWebI18n(),
           settingsApiPlugin(settings),
           authorizationExperiencePlugin(authorization),
-          configCatalogDraftPlugin(handoff),
         ],
       },
     })

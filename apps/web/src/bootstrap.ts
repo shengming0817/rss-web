@@ -29,26 +29,29 @@ export function createWebRuntime(history?: RouterHistory) {
   const settings = createSettingsApi(session.transport)
   const port = createServerAuthorizationPort()
   const authorization = createAuthorizationExperience({ port, session })
-  const configCatalogDraft = createConfigCatalogDraftHandoff()
   const roleBindingsPreview = isRoleBindingsPreviewEnabled(
     import.meta.env.MODE,
     import.meta.env.VITE_ROLE_BINDINGS_PREVIEW,
   )
-  const configCatalogPreview = isConfigCatalogPreviewEnabled(
-    import.meta.env.MODE,
-    import.meta.env.VITE_CONFIG_CATALOG_PREVIEW,
-  )
+  const configCatalogPreview =
+    import.meta.env.MODE !== 'production' &&
+    isConfigCatalogPreviewEnabled(import.meta.env.MODE, import.meta.env.VITE_CONFIG_CATALOG_PREVIEW)
   const router = createAppRouter(
     session,
     authorization,
     history ?? createWebHistory(import.meta.env.BASE_URL),
-    { configCatalogPreview, roleBindingsPreview },
+    configCatalogPreview
+      ? {
+          configCatalogDraft: createConfigCatalogDraftHandoff(),
+          configCatalogPreview: true,
+          roleBindingsPreview,
+        }
+      : { configCatalogPreview: false, roleBindingsPreview },
   )
   return Object.freeze({
     accountStatus,
     audit,
     authorization,
-    configCatalogDraft,
     policies,
     roles,
     router,

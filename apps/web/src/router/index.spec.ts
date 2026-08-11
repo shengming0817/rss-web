@@ -6,8 +6,9 @@ import { createPreviewAuthorizationPort } from '@rss/authorization/preview'
 import type { AuthorizationPort } from '@rss/authorization'
 import type { IdentitySession, IdentitySessionState } from '@rss/identity'
 import { createAuthorizationExperience } from '../features/authorization/authorization-context'
-import { createAppRouter } from './index'
+import { createAppRouter, type AppRouterOptions } from './index'
 import { createShellNavigation } from './navigation'
+import { createConfigCatalogDraftHandoff } from '../features/settings/config-catalog-draft-context'
 
 window.scrollTo = vi.fn()
 
@@ -36,7 +37,7 @@ function sessionFixture(initial: IdentitySessionState) {
 function appRouter(
   fixture: ReturnType<typeof sessionFixture>,
   port: AuthorizationPort = createServerAuthorizationPort(),
-  options?: { readonly configCatalogPreview: boolean; readonly roleBindingsPreview: boolean },
+  options?: AppRouterOptions,
 ) {
   const authorization = createAuthorizationExperience({
     port,
@@ -281,6 +282,7 @@ describe('session-owned router', () => {
     expect(preview.currentRoute.value.name).toBe('login')
 
     const catalog = appRouter(fixture, createServerAuthorizationPort(), {
+      configCatalogDraft: createConfigCatalogDraftHandoff(),
       configCatalogPreview: true,
       roleBindingsPreview: false,
     })

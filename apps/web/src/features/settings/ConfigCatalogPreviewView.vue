@@ -1,23 +1,33 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { ModalShell, SourceBadge } from '@rss/core'
 import { queryConfigCatalogPreview, type ConfigCatalogPreviewRow } from '@rss/settings/preview'
-import { useConfigCatalogDraftHandoff } from './config-catalog-draft-context'
+import type { ConfigCatalogDraftHandoff } from './config-catalog-draft-context'
 
+const props = defineProps<{ readonly configCatalogDraft: ConfigCatalogDraftHandoff }>()
 const { t } = useI18n()
 const router = useRouter()
-const handoff = useConfigCatalogDraftHandoff()
 const search = ref('')
 const prefix = ref('')
 const page = ref(1)
 const candidate = ref<ConfigCatalogPreviewRow>()
+const resultStatus = ref<HTMLElement>()
 const result = computed(() =>
   queryConfigCatalogPreview({ search: search.value, prefix: prefix.value, page: page.value }),
 )
 
-watch([search, prefix], () => (page.value = 1))
+watch([search, prefix], async () => {
+  page.value = 1
+  await nextTick()
+})
+
+async function changePage(next: number) {
+  page.value = next
+  await nextTick()
+  resultStatus.value?.focus()
+}
 
 function propose(row: ConfigCatalogPreviewRow) {
   candidate.value = row
@@ -29,7 +39,8 @@ function close() {
 
 async function confirm() {
   const selected = candidate.value
-  if (selected === undefined || !handoff.stage(selected.key)) return
+  if (selected === undefined) return
+  props.configCatalogDraft.stage(selected)
   candidate.value = undefined
   await router.push({ name: 'settings' })
 }
@@ -48,7 +59,9 @@ async function confirm() {
       <label for="catalog-prefix">{{ t('configCatalogPreview.prefix') }}</label>
       <input id="catalog-prefix" v-model="prefix" />
     </div>
-    <p>{{ t('configCatalogPreview.localPage', { page: result.page }) }}</p>
+    <p ref="resultStatus" tabindex="-1" role="status" aria-live="polite">
+      {{ t('configCatalogPreview.localResult', { page: result.page, count: result.rows.length }) }}
+    </p>
     <ul class="catalog-preview__rows">
       <li v-for="row in result.rows" :key="row.key">
         <div>
@@ -62,10 +75,15 @@ async function confirm() {
     </ul>
     <p v-if="result.rows.length === 0">{{ t('configCatalogPreview.empty') }}</p>
     <div class="catalog-preview__pagination">
-      <button type="button" class="v1-ghost" :disabled="page === 1" @click="page--">
+      <button type="button" class="v1-ghost" :disabled="page === 1" @click="changePage(page - 1)">
         {{ t('configCatalogPreview.previous') }}
       </button>
-      <button type="button" class="v1-ghost" :disabled="!result.hasMore" @click="page++">
+      <button
+        type="button"
+        class="v1-ghost"
+        :disabled="!result.hasMore"
+        @click="changePage(page + 1)"
+      >
         {{ t('configCatalogPreview.next') }}
       </button>
     </div>

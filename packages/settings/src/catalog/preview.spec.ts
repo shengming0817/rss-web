@@ -15,16 +15,27 @@ describe('Config Catalog Preview', () => {
     }
   })
 
-  it('filters and pages locally without cursor semantics', () => {
-    const result = queryConfigCatalogPreview({
-      search: 'THEME',
-      prefix: 'preview.example.',
-      page: 1,
-    })
-    expect(result.rows.map((row) => row.key)).toEqual(['preview.example.appearance.theme'])
-    expect(result).toMatchObject({ page: 1, hasMore: false })
-    expect(result).not.toHaveProperty('cursor')
-    expect(result).not.toHaveProperty('total')
+  it('searches labels case-insensitively', () => {
+    expect(
+      queryConfigCatalogPreview({ search: 'DIGEST PREFERENCE' }).rows.map((row) => row.key),
+    ).toEqual(['preview.example.notifications.digest'])
+  })
+
+  it('applies a selective key prefix', () => {
+    expect(
+      queryConfigCatalogPreview({ prefix: 'preview.example.reader.' }).rows.map((row) => row.key),
+    ).toEqual(['preview.example.reader.density'])
+  })
+
+  it('uses explicit local pages without cursor or remote-total semantics', () => {
+    const first = queryConfigCatalogPreview()
+    expect(first.rows).toHaveLength(2)
+    expect(first).toMatchObject({ page: 1, hasMore: true })
+    const second = queryConfigCatalogPreview({ page: 2 })
+    expect(second.rows).toHaveLength(2)
+    expect(second).toMatchObject({ page: 2, hasMore: false })
+    expect(first).not.toHaveProperty('cursor')
+    expect(first).not.toHaveProperty('total')
     expect(queryConfigCatalogPreview({ page: 99 }).rows).toEqual([])
   })
 })

@@ -9,6 +9,7 @@ import { RUNTIME_INVENTORY_INTENT } from '../features/runtime/runtime-intent'
 import { POLICIES_LIST_INTENT } from '../features/identity/policies-intent'
 import { CONFIG_GET_INTENT } from '../features/settings/config-intent'
 import type { NavigationMessageKey } from './navigation'
+import type { ConfigCatalogDraftHandoff } from '../features/settings/config-catalog-draft-context'
 import { registerAuthorizationRouting, registerRouterA11y, registerSessionRouting } from './guards'
 
 declare module 'vue-router' {
@@ -130,16 +131,28 @@ const baseRoutes: RouteRecordRaw[] = [
   },
 ]
 
-export interface AppRouterOptions {
-  readonly configCatalogPreview: boolean
+export type AppRouterOptions = {
   readonly roleBindingsPreview: boolean
-}
+} & (
+  | { readonly configCatalogPreview: false }
+  | {
+      readonly configCatalogPreview: true
+      readonly configCatalogDraft: ConfigCatalogDraftHandoff
+    }
+)
 
 function routes(options: AppRouterOptions): RouteRecordRaw[] {
   return baseRoutes.map((route) => {
     if (route.path !== '/' || route.children === undefined) return route
     const catchAll = route.children.at(-1)!
     const children = route.children.slice(0, -1)
+    if (options.configCatalogPreview) {
+      const settings = children.findIndex((child) => child.name === 'settings')
+      children[settings] = {
+        ...children[settings]!,
+        props: { configCatalogDraft: options.configCatalogDraft },
+      }
+    }
     if (options.roleBindingsPreview) {
       children.push({
         path: 'preview/role-bindings',
@@ -156,11 +169,12 @@ function routes(options: AppRouterOptions): RouteRecordRaw[] {
         },
       })
     }
-    if (options.configCatalogPreview) {
+    if (import.meta.env.MODE !== 'production' && options.configCatalogPreview) {
       children.push({
         path: 'preview/config-catalog',
         name: 'config-catalog-preview',
         component: () => import('../features/settings/ConfigCatalogPreviewView.vue'),
+        props: { configCatalogDraft: options.configCatalogDraft },
         meta: {
           sessionAccess: 'authenticated',
           focusTarget: 'shell-content',

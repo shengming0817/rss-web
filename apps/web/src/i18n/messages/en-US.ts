@@ -72,7 +72,7 @@ const enUS = {
       'Preview is permanently non-authoritative. Selecting a row does not read RSS or copy a value or version.',
     search: 'Local search',
     prefix: 'Local key prefix',
-    localPage: 'Local fixture page {page}',
+    localResult: 'Local fixture page {page}, showing {count} rows.',
     copy: 'Prepare Manual draft copy',
     empty: 'No local fixture rows match.',
     previous: 'Previous',

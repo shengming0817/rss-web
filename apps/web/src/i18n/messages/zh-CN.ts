@@ -57,7 +57,7 @@ const zhCN = {
     warning: 'Preview 永久非权威。选择条目不会读取 RSS，也不会复制 value 或版本。',
     search: '本地搜索',
     prefix: '本地 key 前缀',
-    localPage: '本地 fixture 第 {page} 页',
+    localResult: '本地 fixture 第 {page} 页，当前显示 {count} 项。',
     copy: '准备复制到 Manual 草稿',
     empty: '本地 fixture 没有匹配项。',
     previous: '上一页',
