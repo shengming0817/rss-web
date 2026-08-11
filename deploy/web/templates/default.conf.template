@@ -80,7 +80,7 @@ server {
   location ^~ /readyz/ { return 404; }
   location /api/ { return 404; }
 
-    location ~ "^/assets/.+-[A-Za-z0-9_-]{8}\.(?:css|js)$" {
+  location ~ "^/assets/.+-[A-Za-z0-9_-]{8}\.(?:css|js)$" {
     include /etc/nginx/snippets/rss-security-headers.conf;
     add_header Cache-Control "public, max-age=31536000, immutable";
     try_files $uri =404;

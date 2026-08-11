@@ -12,6 +12,15 @@ async function ruleIds(code: string, file: string): Promise<string[]> {
 }
 
 describe('ESLint package boundaries', () => {
+  it('ignores generated production and demo build artifacts', async () => {
+    await expect(eslint.isPathIgnored(path.resolve(root, 'apps/web/dist/app.js'))).resolves.toBe(
+      true,
+    )
+    await expect(
+      eslint.isPathIgnored(path.resolve(root, 'apps/web/dist-preview-demo/app.js')),
+    ).resolves.toBe(true)
+  })
+
   it('allows core to depend on shared', async () => {
     expect(
       await ruleIds(

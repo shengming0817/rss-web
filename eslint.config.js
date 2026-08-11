@@ -100,6 +100,7 @@ export default tseslint.config(
   {
     ignores: [
       '**/dist/**',
+      '**/dist-preview-demo/**',
       '**/coverage/**',
       'pnpm-lock.yaml',
       'worktrees/**',

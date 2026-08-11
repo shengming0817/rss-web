@@ -46,10 +46,7 @@ for (const file of files(root)) {
   if (extname(file) === '.html' && inlineScript.test(content)) {
     throw new Error(`${mode} artifact contains an inline script: ${file}`)
   }
-  if (
-    mode === 'production' &&
-    productionForbidden.some((pattern) => pattern.test(content))
-  ) {
+  if (mode === 'production' && productionForbidden.some((pattern) => pattern.test(content))) {
     throw new Error(`production artifact contains Preview content: ${file}`)
   }
 }
