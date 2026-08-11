@@ -90,6 +90,14 @@ Config get/delete may use only the session owner's exact-401 recovery, and delet
 body. Config values must not enter URLs, storage, logs, telemetry, errors, receipts, or SourceMeta.
 Do not add catalog/history/recent-key providers, mock fallback, tenant inputs, schema loading, or a
 second HTTP/session seam.
+Issue #34 adds reference-only Secret publish through the existing `@rss/settings` client and a
+separate Web route. It is non-idempotent and must use `required-no-replay`; key, storeId, refKey, and
+refVersion are internal coordinates that must be released before the request is awaited and must not
+enter URL/query/history, storage, logs, telemetry, errors, receipts, or public operation state. A
+network, timeout, abort, protocol, malformed-success, or internal outcome is terminal unknown: do not
+retry, reset, call secret-resolve, fetch material, or manufacture a reconciliation source. Success may
+show only the strictly decoded server key/version receipt. Do not add store/catalog discovery,
+material reveal, tenant inputs, or a second Settings client.
 Issue #32 adds one concrete Config Catalog Preview under `@rss/settings/preview`. It is registered only
 for an exact development/test/demo build-time flag and production remains disabled. Fixtures are
 synthetic Mock metadata only; there is no provider SPI, remote adapter, catalog contract, value/version,

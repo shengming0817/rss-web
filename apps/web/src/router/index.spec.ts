@@ -231,6 +231,12 @@ describe('session-owned router', () => {
         source: RSS_SOURCE,
       },
       {
+        id: 'secret-reference-publish',
+        label: 'navigation.secretReference',
+        to: { name: 'secret-reference-publish' },
+        source: RSS_SOURCE,
+      },
+      {
         id: 'runtime',
         label: 'navigation.runtime',
         to: { name: 'runtime' },
@@ -368,6 +374,25 @@ describe('session-owned router', () => {
         permission: 'runtime:inventory:read',
       },
       navigation: { labelKey: 'navigation.runtime', order: 40, source: RSS_SOURCE },
+    })
+  })
+
+  it('owns Secret Reference publish with one exact server-authoritative intent', () => {
+    const router = appRouter(sessionFixture({ status: 'anonymous' }))
+    const route = router.resolve('/settings/secret-reference')
+    expect(route.name).toBe('secret-reference-publish')
+    expect(route.meta).toMatchObject({
+      sessionAccess: 'authenticated',
+      focusTarget: 'shell-content',
+      authorizationIntent: {
+        contractId: 'settings.secret-publish',
+        permission: 'settings.secret-publish',
+      },
+      navigation: {
+        labelKey: 'navigation.secretReference',
+        order: 39,
+        source: RSS_SOURCE,
+      },
     })
   })
 

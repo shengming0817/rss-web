@@ -69,7 +69,9 @@ function writeOutcomeUnknown(error: unknown): boolean {
   )
 }
 
-export function createConfigOperation(api: SettingsApi): ConfigOperation {
+type ConfigOperationApi = Pick<SettingsApi, 'get' | 'publish' | 'delete' | 'rollback'>
+
+export function createConfigOperation(api: ConfigOperationApi): ConfigOperation {
   const listeners = new Set<(state: ConfigOperationState) => void>()
   let state: ConfigOperationState = Object.freeze({ status: 'idle' })
   let generation = 0

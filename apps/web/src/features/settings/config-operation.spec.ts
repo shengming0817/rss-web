@@ -17,7 +17,9 @@ function wire(status: number, code: string, message: string, retryable = false) 
   })
 }
 
-function api(overrides: Partial<SettingsApi> = {}): SettingsApi {
+type ConfigOperationApi = Pick<SettingsApi, 'get' | 'publish' | 'delete' | 'rollback'>
+
+function api(overrides: Partial<ConfigOperationApi> = {}): ConfigOperationApi {
   return {
     get: vi.fn().mockResolvedValue({ data: entry }),
     publish: vi.fn().mockResolvedValue({ data: { key: 'app.k', version: 3 } }),

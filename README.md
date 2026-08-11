@@ -76,7 +76,8 @@ Web source. No browser ABAC evaluation, request authority, or legacy access endp
 
 The authenticated shell derives Sidebar and command-palette navigation from implemented route
 metadata; currently that closed production set contains Home, Identity self-service, Account Status,
-Roles, Policies, key-driven Settings Config, Runtime details, and Audit queries.
+Roles, Policies, key-driven Settings Config, Secret Reference publish, Runtime details, and Audit
+queries.
 Removed and future capabilities
 do not receive placeholder routes or menu entries. `@rss/shared` owns a discriminated `SourceMeta`
 model with sealed, frozen display constants; direct object-literal construction is rejected. Reusable
@@ -86,14 +87,16 @@ code, retryability, and requestId coordinates—never backend messages or detail
 paths use the authenticated catch-all; anonymous requests still reach Login first.
 
 `@rss/settings` provides the strict framework-neutral client for explicit Config publish, get,
-delete, and rollback coordinates. Vue composition remains in `apps/web`. Publish and rollback are
-one-shot non-idempotent operations; an uncertain result requires an explicit server read, and publish
-also drops the value draft. Rollback accepts only an explicit Manual key/source-version coordinate,
-whether typed by the user or copied from the non-authoritative Preview, and never infers real history.
-Config
-values are never placed in URLs, storage, logs, errors, receipts, or source metadata. There is no
-active catalog/history contract, provider, recent-key list, mock fallback, tenant selector, or direct
-Axios path.
+delete, and rollback coordinates plus reference-only Secret publish. Vue composition remains in
+`apps/web`. Config publish and rollback are one-shot non-idempotent operations; an uncertain result
+requires an explicit server read, and publish also drops the value draft. Rollback accepts only an
+explicit Manual key/source-version coordinate, whether typed by the user or copied from the
+non-authoritative Preview, and never infers real history. Secret publish has its own route and
+terminal unknown-outcome state because no safe metadata read exists: it never resolves material,
+replays a request, or invents reconciliation. Submitted Config values and Secret reference
+coordinates are released and never placed in URLs, storage, logs, errors, receipts, or source
+metadata. There is no active catalog/history contract, provider, recent-key list, mock fallback,
+tenant selector, secret-store discovery, or direct Axios path.
 
 `@rss/runtime` and `@rss/audit` provide strict, framework-neutral clients for the selected Admin
 listener reads. The authenticated Home composes both over the single session transport and degrades

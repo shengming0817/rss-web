@@ -8,6 +8,7 @@ import { AUDIT_AMBIENT_INTENT } from '../features/audit/audit-intent'
 import { RUNTIME_INVENTORY_INTENT } from '../features/runtime/runtime-intent'
 import { POLICIES_LIST_INTENT } from '../features/identity/policies-intent'
 import { CONFIG_GET_INTENT } from '../features/settings/config-intent'
+import { SECRET_PUBLISH_INTENT } from '../features/settings/secret-publish-intent'
 import type { NavigationMessageKey } from './navigation'
 import type { ConfigPreviewDraftHandoff } from '../features/settings/config-preview-draft-context'
 import { registerAuthorizationRouting, registerRouterA11y, registerSessionRouting } from './guards'
@@ -97,6 +98,21 @@ const baseRoutes: RouteRecordRaw[] = [
           focusTarget: 'shell-content',
           authorizationIntent: CONFIG_GET_INTENT,
           navigation: { labelKey: 'navigation.settings', order: 38, source: RSS_SOURCE },
+        },
+      },
+      {
+        path: 'settings/secret-reference',
+        name: 'secret-reference-publish',
+        component: () => import('../features/settings/SecretPublishView.vue'),
+        meta: {
+          sessionAccess: 'authenticated',
+          focusTarget: 'shell-content',
+          authorizationIntent: SECRET_PUBLISH_INTENT,
+          navigation: {
+            labelKey: 'navigation.secretReference',
+            order: 39,
+            source: RSS_SOURCE,
+          },
         },
       },
       {
