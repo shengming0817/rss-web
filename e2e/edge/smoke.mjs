@@ -6,21 +6,105 @@ import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import assert from 'node:assert/strict'
 import process from 'node:process'
+import { chromium } from '@playwright/test'
+import { findInlineScriptTags } from '../../scripts/artifact-policy.mjs'
 
 const shellCache = 'no-store, max-age=0, must-revalidate'
 const assetCache = 'public, max-age=31536000, immutable'
+const contentSecurityPolicy =
+  "default-src 'none'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; script-src-attr 'none'; style-src 'self'; style-src-attr 'none'; font-src 'self'; img-src 'self'; connect-src 'self'; frame-src 'none'; worker-src 'none'; media-src 'none'; manifest-src 'self'"
 
 function assertSecurityHeaders(response) {
   const csp = response.headers['content-security-policy']
-  assert.equal(typeof csp, 'string')
-  assert(csp.includes("default-src 'none'"))
-  assert(csp.includes("frame-ancestors 'none'"))
+  assert.equal(csp, contentSecurityPolicy)
   assert(!csp.includes('unsafe-inline'))
   assert(!csp.includes('unsafe-eval'))
   assert.equal(response.headers['referrer-policy'], 'no-referrer')
   assert.equal(response.headers['x-content-type-options'], 'nosniff')
   assert.equal(response.headers['x-frame-options'], 'DENY')
   assert.equal(response.headers['strict-transport-security'], undefined)
+}
+
+async function browserSecuritySmoke(port) {
+  const browser = await chromium.launch({ headless: true })
+  try {
+    const context = await browser.newContext()
+    const page = await context.newPage()
+    const cspConsoleErrors = []
+    page.on('console', (message) => {
+      const text = message.text()
+      if (/content security policy|refused to (?:load|execute|apply|connect)/i.test(text)) {
+        cspConsoleErrors.push(text)
+      }
+    })
+    await page.addInitScript(() => {
+      localStorage.setItem('rss-theme', 'dark')
+      window.__rssCspViolations = []
+      document.addEventListener('securitypolicyviolation', (event) => {
+        window.__rssCspViolations.push({
+          blockedUri: event.blockedURI,
+          directive: event.effectiveDirective,
+        })
+      })
+      requestAnimationFrame(() => {
+        window.__rssThemeAtFirstFrame = document.documentElement.dataset.theme ?? ''
+      })
+    })
+    await page.route('**/api/v1/identity/login', (route) =>
+      route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            sessionId: 'edge-browser-session',
+            expiresAt: 2_000_003_600,
+            accessToken: 'edge-browser-access',
+            refreshToken: 'edge-browser-refresh',
+            accessExpiresAt: 2_000_000_600,
+          },
+        }),
+      }),
+    )
+    await page.route('**/api/v1/identity/profile', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            subject: 'edge-browser-subject',
+            tenantId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+            kind: 'user',
+          },
+        }),
+      }),
+    )
+
+    const documentResponse = await page.goto(`http://127.0.0.1:${port}/`)
+    assert(documentResponse)
+    assert.equal(documentResponse.headers()['content-security-policy'], contentSecurityPolicy)
+    await page.waitForURL(/\/login$/)
+    assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark')
+    await page.waitForFunction(() => window.__rssThemeAtFirstFrame === 'dark')
+    await page.getByLabel('用户名').fill('edge-browser')
+    await page.getByLabel('密码').fill('edge-password')
+    await page.getByRole('button', { name: '登录', exact: true }).click()
+    await page.getByRole('navigation', { name: '主导航' }).waitFor()
+    const paletteButton = page.getByRole('button', { name: '打开命令面板' })
+    await paletteButton.focus()
+    await page.keyboard.press('Enter')
+    const palette = page.getByRole('dialog', { name: '命令面板' })
+    await palette.waitFor()
+    await page.keyboard.press('Escape')
+    await palette.waitFor({ state: 'detached' })
+    assert.equal(
+      await paletteButton.evaluate((element) => element === document.activeElement),
+      true,
+    )
+    assert.deepEqual(await page.evaluate(() => window.__rssCspViolations), [])
+    assert.deepEqual(cspConsoleErrors, [])
+  } finally {
+    await browser.close()
+  }
 }
 
 const directory = dirname(fileURLToPath(import.meta.url))
@@ -110,9 +194,9 @@ try {
   assert.equal(rootResponse.status, 200)
   assert.equal(rootResponse.headers['cache-control'], shellCache)
   assertSecurityHeaders(rootResponse)
-  const inlineScripts = [...rootResponse.text.matchAll(/<script>([\s\S]*?)<\/script>/g)]
-  assert.equal(inlineScripts.length, 0)
+  assert.equal(findInlineScriptTags(rootResponse.text).length, 0)
   assert(!rootResponse.headers['content-security-policy'].match(/sha(?:256|384|512)-/))
+  await browserSecuritySmoke(port)
 
   for (const path of ['/index.html', '/theme-init.js', '/settings/secret-material']) {
     const shell = await request(port, path)
@@ -603,6 +687,10 @@ try {
   const adminUnavailable = await request(port, '/api/v1/runtime/inventory')
   assertGatewayUnavailable(adminUnavailable.status)
   assertSecurityHeaders(adminUnavailable)
+  const outageTenant = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  assertGatewayUnavailable(
+    (await request(port, `/api/v1/audit/tenants/${outageTenant}/entries`)).status,
+  )
   assert.equal((await request(port, '/api/v1/identity/profile')).status, 200)
   assert.equal((await request(port, '/')).status, 200)
 
@@ -611,7 +699,35 @@ try {
   result = docker(['stop', 'primary'], { env: environment })
   assert.equal(result.status, 0)
   assertGatewayUnavailable((await request(port, '/api/v1/identity/profile')).status)
+  const outageSecretKey = 'REVIEW59-SECRET/KEY'
+  const encodedOutageSecretKey = encodeURIComponent(outageSecretKey)
+  assertGatewayUnavailable(
+    (await request(port, `/api/v1/settings/secrets/${encodedOutageSecretKey}/material`)).status,
+  )
+  const outageSubject = 'REVIEW59-SUBJECT@example.test'
+  const encodedOutageSubject = encodeURIComponent(outageSubject)
+  assertGatewayUnavailable(
+    (
+      await request(port, `/api/v1/identity/roles/ops%3Aadmin/bindings/${encodedOutageSubject}`, {
+        method: 'DELETE',
+      })
+    ).status,
+  )
   assert.equal((await request(port, '/api/v1/audit/entries')).status, 200)
+
+  const outageLogs = docker(['logs', 'edge'], { env: environment })
+  assert.equal(outageLogs.status, 0)
+  const outageLogOutput = `${outageLogs.stdout}${outageLogs.stderr}`
+  for (const coordinate of [
+    outageTenant,
+    outageSecretKey,
+    encodedOutageSecretKey,
+    outageSubject,
+    encodedOutageSubject,
+  ]) {
+    assert(!outageLogOutput.includes(coordinate), `edge logs leaked ${coordinate}`)
+  }
+  assert.match(outageLogOutput, /(?:GET|DELETE) (?:502|504) request_id=/)
 } finally {
   const cleanup = docker(['down', '--volumes', '--remove-orphans'], {
     env: environment,

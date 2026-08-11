@@ -34,6 +34,9 @@ create duplicate or weaker browser policy. The SPA shell and its parser-blocking
 same-origin theme initializer are `no-store` and must-revalidate,
 build-generated hashed JavaScript/CSS is immutable for one year, and the Secret
 Material response remains `no-store` on every status.
+Request-level Nginx error logs are discarded because upstream errors include the
+raw URI; the safe access receipt retains method, status, and request ID without
+secret, subject, tenant-resource, query, or body coordinates.
 
 WEB-PR-015 adds only the canonical lowercase, non-nil UUID target-Audit route. Uppercase, nil,
 malformed, encoded-slash, trailing-segment, and trailing-slash variants remain 404. The target UUID

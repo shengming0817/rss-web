@@ -25,6 +25,7 @@ server {
   root /usr/share/nginx/html;
   index index.html;
   access_log /var/log/nginx/access.log rss_safe;
+  error_log /dev/null crit;
   include /etc/nginx/snippets/rss-security-headers.conf;
 
   gzip on;

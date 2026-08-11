@@ -62,6 +62,11 @@ describe('Config Preview boundary', () => {
     expect(artifactGate).toContain('preview\\/config-catalog')
     expect(artifactGate).toContain('preview\\/config-history')
     expect(read('.github/workflows/test.yml')).toContain('pnpm build:preview:demo')
+    const demoBuild = JSON.parse(read('package.json')).scripts['build:preview:demo'] as string
+    expect(demoBuild).toContain('VITE_ROLE_BINDINGS_PREVIEW=true')
+    expect(demoBuild).toContain('VITE_CONFIG_CATALOG_PREVIEW=true')
+    expect(demoBuild).toContain('VITE_CONFIG_HISTORY_PREVIEW=true')
+    expect(demoBuild).toContain('check-built-preview.mjs apps/web/dist-preview-demo demo')
   })
 })
 
@@ -94,7 +99,11 @@ describe('built Preview artifact gate', () => {
 
   it.each([
     ['an inline script', '<script>window.inline = true</script>'],
+    ['an inline script with data-src', '<script data-src="/ignored.js">inline()</script>'],
+    ['an inline script with x-src', '<script x-src="/ignored.js">inline()</script>'],
     ['an external font', '<link href="https://fonts.googleapis.com/css2?family=Geist">'],
+    ['a protocol-relative external font', 'url(//fonts.gstatic.com/font.woff2)'],
+    ['an HTTP external font', '@import "http://fonts.googleapis.com/css"'],
     ['the removed Ant runtime', 'ant-design-vue'],
   ])('rejects %s from both production and demo artifacts', (_label, marker) => {
     for (const mode of ['production', 'demo'] as const) {
@@ -111,15 +120,15 @@ describe('built Preview artifact gate', () => {
     const webManifest = read('apps/web/package.json')
     const coreManifest = read('packages/core/package.json')
 
-    expect(index).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>/i)
+    expect(scan(artifact({ 'index.html': index }), 'production').status).toBe(0)
     expect(index).not.toMatch(/fonts\.(?:googleapis|gstatic)\.com|https?:\/\//)
     expect(index).toContain('<script src="/theme-init.js"></script>')
     expect(index).not.toMatch(/theme-init\.js[^>]*(?:async|defer|type=)/)
     expect(themeInit).toContain("localStorage.getItem('rss-theme')")
     expect(themeInit).toContain("matchMedia('(prefers-color-scheme: dark)')")
     expect(themeInit).toContain('document.documentElement.dataset.theme = theme')
-    expect([app, main, webManifest, coreManifest].join('\n')).not.toMatch(
-      /ant-design-vue|@ant-design\/icons-vue|useThemeTokens|ConfigProvider/,
-    )
+    expect(
+      [app, main, webManifest, coreManifest, read('pnpm-workspace.yaml')].join('\n'),
+    ).not.toMatch(/ant-design-vue|@ant-design\/icons-vue|useThemeTokens|ConfigProvider/)
   })
 })

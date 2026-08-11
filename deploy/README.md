@@ -22,6 +22,12 @@ receive a one-year immutable cache policy. The runtime stage contains the built
 `index.html`, `theme-init.js`, and hashed assets rather than the stock Nginx
 error page or build toolchain.
 
+Request observability uses the safe access receipt (method, status, request ID)
+only. Request-level Nginx error logging is discarded because upstream failures
+embed the raw request URI and can expose secret, subject, or tenant resource
+coordinates. Startup and entrypoint failures remain visible outside the server
+request context.
+
 This container listens on plaintext port 80 and does not terminate TLS. A
 production ingress or load balancer that actually terminates HTTPS owns the
 HTTP-to-HTTPS redirect, certificate policy, and HSTS response. The HTTP Edge

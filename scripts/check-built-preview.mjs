@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { extname, join } from 'node:path'
 import process from 'node:process'
+import { containsExternalFontOrigin, findInlineScriptTags } from './artifact-policy.mjs'
 
 const root = process.argv[2]
 if (!root) throw new Error('dist path is required')
@@ -19,13 +20,7 @@ const productionForbidden = [
   /preview\/config-catalog/,
   /preview\/config-history/,
 ]
-const commonForbidden = [
-  /ant-design-vue/,
-  /@ant-design\/icons-vue/,
-  /\banticon\b/,
-  /https:\/\/fonts\.(?:googleapis|gstatic)\.com/,
-]
-const inlineScript = /<script(?![^>]*\bsrc=)[^>]*>/i
+const commonForbidden = [/ant-design-vue/, /@ant-design\/icons-vue/, /\banticon\b/]
 
 function files(path) {
   return readdirSync(path, { withFileTypes: true }).flatMap((entry) => {
@@ -43,7 +38,10 @@ for (const file of files(root)) {
   if (commonForbidden.some((pattern) => pattern.test(content))) {
     throw new Error(`${mode} artifact contains removed external UI content: ${file}`)
   }
-  if (extname(file) === '.html' && inlineScript.test(content)) {
+  if (containsExternalFontOrigin(content)) {
+    throw new Error(`${mode} artifact contains an external font origin: ${file}`)
+  }
+  if (extname(file) === '.html' && findInlineScriptTags(content).length > 0) {
     throw new Error(`${mode} artifact contains an inline script: ${file}`)
   }
   if (mode === 'production' && productionForbidden.some((pattern) => pattern.test(content))) {

@@ -164,6 +164,8 @@ describe('RSS Web edge configuration', () => {
       "log_format rss_safe '$request_method $status request_id=$request_id';",
     )
     expect(template).toContain('access_log /var/log/nginx/access.log rss_safe;')
+    expect(template).toContain('error_log /dev/null crit;')
+    expect(template.match(/\berror_log\b/g)).toHaveLength(1)
     expect(template).not.toMatch(
       /log_format rss_safe[^;]*\$(?:request_uri|uri|request)(?:\s|['"]|;)/,
     )

@@ -5,7 +5,7 @@ import { useUiStore } from '../stores/useUiStore'
 /**
  * ARIA interactive widget roles that accept text input — shortcuts must be
  * suppressed when any of these roles is focused to avoid mis-triggering while
- * the user types inside AntD Select / AutoComplete / InputNumber / Slider etc.
+ * the user types inside composite combobox, spinbutton, or slider widgets.
  */
 const ARIA_INPUT_ROLES = new Set(['textbox', 'searchbox', 'spinbutton', 'combobox', 'slider'])
 
@@ -14,8 +14,8 @@ const ARIA_INPUT_ROLES = new Set(['textbox', 'searchbox', 'spinbutton', 'combobo
  * accepts text input. Shortcuts (except Esc) must be ignored in this case.
  *
  * Covers: native input/textarea/select, contenteditable, and ARIA interactive
- * widget roles (textbox, searchbox, spinbutton, combobox, slider) to handle
- * AntD Select and similar composite components that set role on a wrapper div.
+ * widget roles (textbox, searchbox, spinbutton, combobox, slider), including
+ * composite components that set the role on a wrapper element.
  */
 function isInputFocused(): boolean {
   const el = document.activeElement
