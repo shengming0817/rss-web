@@ -198,9 +198,9 @@ describe('useGlobalShortcuts', () => {
     document.body.removeChild(select)
   })
 
-  // ─── ARIA role input guard (AntD Select / combobox) ───────────────────────
+  // ─── ARIA composite input guard ───────────────────────────────────────────
 
-  it('ignores shortcuts when role="combobox" element is focused (AntD Select)', () => {
+  it('ignores shortcuts when a role="combobox" element is focused', () => {
     setup()
     const spy = vi.spyOn(themeStore, 'toggleTheme')
 

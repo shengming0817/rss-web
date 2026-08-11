@@ -107,10 +107,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: pnpm
 
-      - name: Run Docker/Nginx edge smoke
-        run: node e2e/edge/smoke.mjs
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser (chromium only)
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run browser + Docker/Nginx Edge smoke
+        run: pnpm test:edge

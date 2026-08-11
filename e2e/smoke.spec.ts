@@ -366,6 +366,115 @@ test.describe('RSS Web Identity UX', () => {
     await expect.poll(() => page.locator('html').getAttribute('data-theme')).not.toBe(before)
   })
 
+  test('preserves first-paint theme and keyboard UX without browser security violations or third-party fonts', async ({
+    page,
+  }) => {
+    const cspConsoleErrors: string[] = []
+    const thirdPartyFontRequests: string[] = []
+    const themeInitRequests: string[] = []
+
+    page.on('console', (message) => {
+      const text = message.text()
+      if (
+        /refused to (?:load|execute|apply|connect|frame)|content security policy.*(?:violat|block)|csp violation/i.test(
+          text,
+        )
+      ) {
+        cspConsoleErrors.push(text)
+      }
+    })
+    page.on('request', (request) => {
+      const url = new URL(request.url())
+      if (url.pathname === '/theme-init.js') themeInitRequests.push(request.url())
+      if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
+        thirdPartyFontRequests.push(request.url())
+      }
+    })
+    await page.addInitScript(() => {
+      localStorage.setItem('rss-theme', 'dark')
+      const securityProbe = window as typeof window & {
+        __rssCspViolations?: Array<{
+          readonly blockedUri: string
+          readonly directive: string
+        }>
+        __rssThemeAtFirstFrame?: string
+      }
+      securityProbe.__rssCspViolations = []
+      document.addEventListener('securitypolicyviolation', (event) => {
+        securityProbe.__rssCspViolations?.push({
+          blockedUri: event.blockedURI,
+          directive: event.effectiveDirective,
+        })
+      })
+      requestAnimationFrame(() => {
+        securityProbe.__rssThemeAtFirstFrame = document.documentElement.dataset.theme ?? ''
+      })
+    })
+    await installIdentityMocks(page)
+
+    await page.goto('/')
+
+    await expect(page).toHaveURL(/\/login$/)
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    const themeInitScript = page.locator('head > script[src="/theme-init.js"]')
+    await expect(themeInitScript).toHaveCount(1)
+    expect(
+      await themeInitScript.evaluate((script) => ({
+        async: (script as HTMLScriptElement).async,
+        defer: (script as HTMLScriptElement).defer,
+        type: (script as HTMLScriptElement).type,
+      })),
+    ).toEqual({ async: false, defer: false, type: '' })
+    expect(themeInitRequests).toHaveLength(1)
+    expect(new URL(themeInitRequests[0] ?? '').origin).toBe(new URL(page.url()).origin)
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (
+              window as typeof window & {
+                __rssThemeAtFirstFrame?: string
+              }
+            ).__rssThemeAtFirstFrame,
+        ),
+      )
+      .toBe('dark')
+    await expect(page.getByLabel('用户名')).toBeFocused()
+
+    await page.getByLabel('用户名').fill('alice')
+    await page.getByLabel('密码').fill('test-password')
+    await page.getByRole('button', { name: '登录', exact: true }).click()
+    await expect(page.getByRole('navigation', { name: '主导航' })).toBeVisible()
+    await page
+      .getByRole('navigation', { name: '主导航' })
+      .getByRole('link', { name: /身份/ })
+      .click()
+    await expect(page).toHaveURL(/\/identity$/)
+    await expect(page.locator('#shell-content')).toBeFocused()
+
+    const paletteButton = page.getByRole('button', { name: '打开命令面板' })
+    await paletteButton.focus()
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('dialog', { name: '命令面板' })).toBeVisible()
+    await expect(page.getByRole('textbox', { name: '搜索命令' })).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog', { name: '命令面板' })).toHaveCount(0)
+    await expect(paletteButton).toBeFocused()
+
+    expect(thirdPartyFontRequests).toEqual([])
+    expect(cspConsoleErrors).toEqual([])
+    expect(
+      await page.evaluate(
+        () =>
+          (
+            window as typeof window & {
+              __rssCspViolations?: ReadonlyArray<unknown>
+            }
+          ).__rssCspViolations ?? [],
+      ),
+    ).toEqual([])
+  })
+
   test('enters the shell only after verified profile and reload returns to login', async ({
     page,
   }) => {

@@ -31,9 +31,10 @@ RUN pnpm -F @rss/web build
 # ── 运行阶段 ───────────────────────────────────────────────────────────────
 FROM nginx:1.27-alpine AS runtime
 ENV NGINX_ENVSUBST_FILTER=^RSS_WEB_
-RUN mkdir -p /etc/nginx/snippets
+RUN rm -rf /usr/share/nginx/html && mkdir -p /etc/nginx/snippets
 COPY deploy/web/templates/default.conf.template /etc/nginx/templates/default.conf.template
 COPY deploy/web/proxy-common.conf /etc/nginx/snippets/rss-proxy-common.conf
+COPY deploy/web/security-headers.conf /etc/nginx/snippets/rss-security-headers.conf
 COPY --chmod=755 deploy/web/docker-entrypoint.d/15-validate-edge-env.sh /docker-entrypoint.d/15-validate-edge-env.sh
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 EXPOSE 80

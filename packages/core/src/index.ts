@@ -1,5 +1,5 @@
 // Composables
-export { useTheme, useThemeTokens, useRovingTablist } from './composables/index'
+export { useTheme, useRovingTablist } from './composables/index'
 export type { RovingTablistOptions, RovingTablistReturn } from './composables/index'
 
 // Stores

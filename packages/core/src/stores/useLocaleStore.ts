@@ -19,8 +19,7 @@ function readInitialLocale(): AppLocale {
  * useLocaleStore — manages application locale state.
  *
  * Persists to localStorage under 'rss-locale'.
- * Drives vue-i18n locale + AntD ConfigProvider locale via watchers
- * registered by createRssI18n() / App.vue.
+ * Drives the vue-i18n locale through the watcher registered by App.vue.
  *
  * Store id: 'core.locale' (point-namespaced to avoid DevTools conflicts)
  */

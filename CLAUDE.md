@@ -50,6 +50,12 @@ mint, infer, or inject an Admin bearer in Web production or acceptance code to f
 The Nginx same-origin Edge is the sole listener-routing and pre-auth tenant
 bootstrap boundary. Do not add browser-selectable tenants, client runtime API
 origins, listener discovery, proxy fallbacks, or Internal/Health routes.
+It also owns the single browser security-header and static-cache policy: enforced
+self-only CSP, no framing, no third-party fonts or runtime inline styles, no-store
+SPA shell/theme initializer, and immutable build-hashed assets only. Production
+artifacts must not contain Preview fixtures, the Nginx stock error page, source
+maps, or build tooling. This HTTP-only image must not emit HSTS; the verified
+outer TLS terminator owns HTTPS redirect, certificates, and HSTS.
 
 `@rss/authorization` is a closed UX-hint capability, not a PDP. Production code uses its server
 mode, which always defers authority to the real request. Do not add policies, ABAC evaluation,

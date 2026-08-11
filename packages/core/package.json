@@ -27,7 +27,6 @@
     "vue": "catalog:",
     "vue-router": "catalog:",
     "pinia": "catalog:",
-    "ant-design-vue": "catalog:",
     "vue-i18n": "catalog:"
   },
   "devDependencies": {

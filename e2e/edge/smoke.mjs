@@ -6,6 +6,106 @@ import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import assert from 'node:assert/strict'
 import process from 'node:process'
+import { chromium } from '@playwright/test'
+import { findInlineScriptTags } from '../../scripts/artifact-policy.mjs'
+
+const shellCache = 'no-store, max-age=0, must-revalidate'
+const assetCache = 'public, max-age=31536000, immutable'
+const contentSecurityPolicy =
+  "default-src 'none'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; script-src-attr 'none'; style-src 'self'; style-src-attr 'none'; font-src 'self'; img-src 'self'; connect-src 'self'; frame-src 'none'; worker-src 'none'; media-src 'none'; manifest-src 'self'"
+
+function assertSecurityHeaders(response) {
+  const csp = response.headers['content-security-policy']
+  assert.equal(csp, contentSecurityPolicy)
+  assert(!csp.includes('unsafe-inline'))
+  assert(!csp.includes('unsafe-eval'))
+  assert.equal(response.headers['referrer-policy'], 'no-referrer')
+  assert.equal(response.headers['x-content-type-options'], 'nosniff')
+  assert.equal(response.headers['x-frame-options'], 'DENY')
+  assert.equal(response.headers['strict-transport-security'], undefined)
+}
+
+async function browserSecuritySmoke(port) {
+  const browser = await chromium.launch({ headless: true })
+  try {
+    const context = await browser.newContext()
+    const page = await context.newPage()
+    const cspConsoleErrors = []
+    page.on('console', (message) => {
+      const text = message.text()
+      if (/content security policy|refused to (?:load|execute|apply|connect)/i.test(text)) {
+        cspConsoleErrors.push(text)
+      }
+    })
+    await page.addInitScript(() => {
+      localStorage.setItem('rss-theme', 'dark')
+      window.__rssCspViolations = []
+      document.addEventListener('securitypolicyviolation', (event) => {
+        window.__rssCspViolations.push({
+          blockedUri: event.blockedURI,
+          directive: event.effectiveDirective,
+        })
+      })
+      requestAnimationFrame(() => {
+        window.__rssThemeAtFirstFrame = document.documentElement.dataset.theme ?? ''
+      })
+    })
+    await page.route('**/api/v1/identity/login', (route) =>
+      route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            sessionId: 'edge-browser-session',
+            expiresAt: 2_000_003_600,
+            accessToken: 'edge-browser-access',
+            refreshToken: 'edge-browser-refresh',
+            accessExpiresAt: 2_000_000_600,
+          },
+        }),
+      }),
+    )
+    await page.route('**/api/v1/identity/profile', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            subject: 'edge-browser-subject',
+            tenantId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+            kind: 'user',
+          },
+        }),
+      }),
+    )
+
+    const documentResponse = await page.goto(`http://127.0.0.1:${port}/`)
+    assert(documentResponse)
+    assert.equal(documentResponse.headers()['content-security-policy'], contentSecurityPolicy)
+    await page.waitForURL(/\/login$/)
+    assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark')
+    await page.waitForFunction(() => window.__rssThemeAtFirstFrame === 'dark')
+    await page.getByLabel('用户名').fill('edge-browser')
+    await page.getByLabel('密码').fill('edge-password')
+    await page.getByRole('button', { name: '登录', exact: true }).click()
+    await page.getByRole('navigation', { name: '主导航' }).waitFor()
+    const paletteButton = page.getByRole('button', { name: '打开命令面板' })
+    await paletteButton.focus()
+    await page.keyboard.press('Enter')
+    const palette = page.getByRole('dialog', { name: '命令面板' })
+    await palette.waitFor()
+    await page.keyboard.press('Escape')
+    await palette.waitFor({ state: 'detached' })
+    assert.equal(
+      await paletteButton.evaluate((element) => element === document.activeElement),
+      true,
+    )
+    assert.deepEqual(await page.evaluate(() => window.__rssCspViolations), [])
+    assert.deepEqual(cspConsoleErrors, [])
+  } finally {
+    await browser.close()
+  }
+}
 
 const directory = dirname(fileURLToPath(import.meta.url))
 const root = resolve(directory, '../..')
@@ -85,9 +185,85 @@ try {
     env: environment,
     stdio: 'inherit',
   })
+  if (result.status !== 0) {
+    docker(['logs', 'edge'], { env: environment, stdio: 'inherit' })
+  }
   assert.equal(result.status, 0, 'edge fixture startup failed')
 
-  assert.equal((await request(port, '/')).status, 200)
+  const rootResponse = await request(port, '/')
+  assert.equal(rootResponse.status, 200)
+  assert.equal(rootResponse.headers['cache-control'], shellCache)
+  assertSecurityHeaders(rootResponse)
+  assert.equal(findInlineScriptTags(rootResponse.text).length, 0)
+  assert(!rootResponse.headers['content-security-policy'].match(/sha(?:256|384|512)-/))
+  await browserSecuritySmoke(port)
+
+  for (const path of ['/index.html', '/theme-init.js', '/settings/secret-material']) {
+    const shell = await request(port, path)
+    assert.equal(shell.status, 200)
+    assert.equal(shell.headers['cache-control'], shellCache)
+    assertSecurityHeaders(shell)
+  }
+
+  const imageContents = docker(
+    [
+      'exec',
+      '-T',
+      'edge',
+      'sh',
+      '-c',
+      "find /usr/share/nginx/html -type f | sed 's#^/usr/share/nginx/html/##' | sort",
+    ],
+    { env: environment },
+  )
+  assert.equal(imageContents.status, 0)
+  const staticFiles = imageContents.stdout.trim().split('\n')
+  assert(staticFiles.includes('index.html'))
+  assert(!staticFiles.includes('50x.html'))
+  assert(!staticFiles.some((file) => file.endsWith('.map')))
+  const assets = staticFiles.filter((file) => file.startsWith('assets/'))
+  assert(assets.length > 0)
+  assert(
+    assets.every((file) => /^assets\/.+-[A-Za-z0-9_-]{8}\.(?:css|js)$/.test(file)),
+    `runtime contains an unhashed asset: ${assets.join(', ')}`,
+  )
+  assert.deepEqual(
+    staticFiles.filter((file) => !file.startsWith('assets/')),
+    ['index.html', 'theme-init.js'],
+  )
+
+  const runtimeClosure = docker(
+    [
+      'exec',
+      '-T',
+      'edge',
+      'sh',
+      '-c',
+      [
+        'test -f /etc/nginx/templates/default.conf.template',
+        'test -f /etc/nginx/snippets/rss-proxy-common.conf',
+        'test -f /etc/nginx/snippets/rss-security-headers.conf',
+        'test -x /docker-entrypoint.d/15-validate-edge-env.sh',
+        'test ! -e /app',
+        '! command -v node',
+        '! command -v pnpm',
+      ].join(' && '),
+    ],
+    { env: environment },
+  )
+  assert.equal(runtimeClosure.status, 0, `runtime closure check failed: ${runtimeClosure.stderr}`)
+
+  for (const asset of assets) {
+    const response = await request(port, `/${asset}`)
+    assert.equal(response.status, 200)
+    assert.equal(response.headers['cache-control'], assetCache)
+    assert.equal(response.headers.expires, undefined)
+    assertSecurityHeaders(response)
+  }
+  const missingAsset = await request(port, '/assets/not-hashed.js')
+  assert.equal(missingAsset.status, 404)
+  assert.equal(missingAsset.headers['cache-control'], undefined)
+  assertSecurityHeaders(missingAsset)
 
   for (const path of ['/api/v1/identity/profile', '/api/v1/settings/configs/key']) {
     const response = await request(port, path, {
@@ -217,6 +393,7 @@ try {
   })
   assert.equal(secretMaterial.status, 200)
   assert.equal(secretMaterial.headers['cache-control'], 'no-store')
+  assertSecurityHeaders(secretMaterial)
   assert.equal(secretMaterial.json.listener, 'primary')
   assert.equal(secretMaterial.json.method, 'GET')
   assert.equal(secretMaterial.json.url, `${secretMaterialPath}?fixture-cache=public`)
@@ -237,6 +414,16 @@ try {
   assert.deepEqual(encodedSeparator.json.tenantHeaders, [])
   assert.equal(encodedSeparator.json.authorizationPresent, true)
   assert.equal(encodedSeparator.json.bodyBytes, 0)
+
+  const materialFailure = await request(
+    port,
+    `${secretMaterialPath}?fixture-status=418&fixture-cache=public&fixture-security=hostile`,
+    { headers: { Authorization: 'Bearer fixture' } },
+  )
+  assert.equal(materialFailure.status, 418)
+  assert.equal(materialFailure.headers['cache-control'], 'no-store')
+  assertSecurityHeaders(materialFailure)
+  assert.equal(materialFailure.headers['content-security-policy-report-only'], undefined)
 
   for (const path of [
     `/api/v1/settings/secrets/${secretMaterialKeyMarker}/Material?fixture-cache=public`,
@@ -455,6 +642,7 @@ try {
   const errorResponse = await request(port, '/api/v1/audit/entries?fixture-status=418')
   assert.equal(errorResponse.status, 418)
   assert.equal(errorResponse.headers['x-fixture-listener'], 'admin')
+  assertSecurityHeaders(errorResponse)
 
   const primaryBefore = (await request(port, '/api/v1/identity/__fixture-count')).json.requestCount
   const adminBefore = (await request(port, '/api/v1/audit/entries?fixture-count=1')).json
@@ -481,7 +669,9 @@ try {
     '/api/v1/audit//tenants/f47ac10b-58cc-4372-a567-0e02b2c3d479/entries',
     '/api/v1/unknown',
   ]) {
-    assert.equal((await request(port, path)).status, 404, path)
+    const negative = await request(port, path)
+    assert.equal(negative.status, 404, path)
+    assertSecurityHeaders(negative)
   }
   assert.equal(
     (await request(port, '/api/v1/identity/__fixture-count')).json.requestCount,
@@ -494,7 +684,13 @@ try {
 
   result = docker(['stop', 'admin'], { env: environment })
   assert.equal(result.status, 0)
-  assertGatewayUnavailable((await request(port, '/api/v1/runtime/inventory')).status)
+  const adminUnavailable = await request(port, '/api/v1/runtime/inventory')
+  assertGatewayUnavailable(adminUnavailable.status)
+  assertSecurityHeaders(adminUnavailable)
+  const outageTenant = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  assertGatewayUnavailable(
+    (await request(port, `/api/v1/audit/tenants/${outageTenant}/entries`)).status,
+  )
   assert.equal((await request(port, '/api/v1/identity/profile')).status, 200)
   assert.equal((await request(port, '/')).status, 200)
 
@@ -503,7 +699,35 @@ try {
   result = docker(['stop', 'primary'], { env: environment })
   assert.equal(result.status, 0)
   assertGatewayUnavailable((await request(port, '/api/v1/identity/profile')).status)
+  const outageSecretKey = 'REVIEW59-SECRET/KEY'
+  const encodedOutageSecretKey = encodeURIComponent(outageSecretKey)
+  assertGatewayUnavailable(
+    (await request(port, `/api/v1/settings/secrets/${encodedOutageSecretKey}/material`)).status,
+  )
+  const outageSubject = 'REVIEW59-SUBJECT@example.test'
+  const encodedOutageSubject = encodeURIComponent(outageSubject)
+  assertGatewayUnavailable(
+    (
+      await request(port, `/api/v1/identity/roles/ops%3Aadmin/bindings/${encodedOutageSubject}`, {
+        method: 'DELETE',
+      })
+    ).status,
+  )
   assert.equal((await request(port, '/api/v1/audit/entries')).status, 200)
+
+  const outageLogs = docker(['logs', 'edge'], { env: environment })
+  assert.equal(outageLogs.status, 0)
+  const outageLogOutput = `${outageLogs.stdout}${outageLogs.stderr}`
+  for (const coordinate of [
+    outageTenant,
+    outageSecretKey,
+    encodedOutageSecretKey,
+    outageSubject,
+    encodedOutageSubject,
+  ]) {
+    assert(!outageLogOutput.includes(coordinate), `edge logs leaked ${coordinate}`)
+  }
+  assert.match(outageLogOutput, /(?:GET|DELETE) (?:502|504) request_id=/)
 } finally {
   const cleanup = docker(['down', '--volumes', '--remove-orphans'], {
     env: environment,

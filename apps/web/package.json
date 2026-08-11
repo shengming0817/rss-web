@@ -15,8 +15,6 @@
     "vue": "catalog:",
     "vue-router": "catalog:",
     "pinia": "catalog:",
-    "ant-design-vue": "catalog:",
-    "@ant-design/icons-vue": "catalog:",
     "@rss/api": "workspace:*",
     "@rss/audit": "workspace:*",
     "@rss/authorization": "workspace:*",

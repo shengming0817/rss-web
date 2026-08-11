@@ -11,7 +11,7 @@
   "scripts": {
     "dev": "pnpm -F @rss/web dev",
     "build": "pnpm -F @rss/web build && pnpm check:identity:build && pnpm check:preview:build",
-    "build:preview:demo": "VITE_CONFIG_CATALOG_PREVIEW=true VITE_CONFIG_HISTORY_PREVIEW=true pnpm -F @rss/web exec vite build --mode demo --outDir dist-preview-demo",
+    "build:preview:demo": "VITE_CONFIG_CATALOG_PREVIEW=true VITE_CONFIG_HISTORY_PREVIEW=true VITE_ROLE_BINDINGS_PREVIEW=true pnpm -F @rss/web exec vite build --mode demo --outDir dist-preview-demo && node scripts/check-built-preview.mjs apps/web/dist-preview-demo demo",
     "check:identity:build": "node scripts/check-built-identity.mjs apps/web/dist",
     "check:preview:build": "node scripts/check-built-preview.mjs apps/web/dist",
     "typecheck": "pnpm -r --if-present typecheck",

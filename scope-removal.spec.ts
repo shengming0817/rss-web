@@ -131,7 +131,7 @@ describe('RSS-only foundation boundary', () => {
     expect(labels.filter((label) => label === 'navigation.roleBindingsPreview')).toHaveLength(1)
     expect(labels.filter((label) => label === 'navigation.configCatalogPreview')).toHaveLength(1)
     expect(labels.filter((label) => label === 'navigation.configHistoryPreview')).toHaveLength(1)
-    expect(router).toContain('if (options.roleBindingsPreview)')
+    expect(router).toContain("import.meta.env.MODE !== 'production' && options.roleBindingsPreview")
     expect(router).toContain(
       "import.meta.env.MODE !== 'production' && options.configCatalogPreview",
     )

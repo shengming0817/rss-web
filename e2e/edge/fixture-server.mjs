@@ -55,6 +55,16 @@ const server = createServer((request, response) => {
     response.writeHead(status, {
       'Content-Type': 'application/json',
       'X-Fixture-Listener': listener,
+      ...(request.url?.includes('fixture-security=hostile')
+        ? {
+            'Content-Security-Policy': "default-src * 'unsafe-inline' 'unsafe-eval'",
+            'Content-Security-Policy-Report-Only': 'default-src *',
+            'Referrer-Policy': 'unsafe-url',
+            'X-Content-Type-Options': 'off',
+            'X-Frame-Options': 'ALLOWALL',
+            'Strict-Transport-Security': 'max-age=63072000; includeSubDomains',
+          }
+        : {}),
       ...(request.url?.includes('fixture-cache=public')
         ? { 'Cache-Control': 'public, max-age=3600' }
         : {}),

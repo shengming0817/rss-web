@@ -11,7 +11,7 @@ import { createRuntimeApi } from '@rss/runtime'
 import { createSettingsApi } from '@rss/settings'
 import { createWebHistory, type RouterHistory } from 'vue-router'
 import { createAuthorizationExperience } from './features/authorization/authorization-context'
-import { isRoleBindingsPreviewEnabled } from './features/identity/role-bindings-preview'
+import { isRoleBindingsPreviewEnabled } from './features/identity/role-bindings-preview-enablement'
 import { createConfigPreviewDraftHandoff } from './features/settings/config-preview-draft-context'
 import { isConfigCatalogPreviewEnabled } from './features/settings/config-catalog-preview'
 import { isConfigHistoryPreviewEnabled } from './features/settings/config-history-preview'
@@ -30,10 +30,9 @@ export function createWebRuntime(history?: RouterHistory) {
   const settings = createSettingsApi(session.transport)
   const port = createServerAuthorizationPort()
   const authorization = createAuthorizationExperience({ port, session })
-  const roleBindingsPreview = isRoleBindingsPreviewEnabled(
-    import.meta.env.MODE,
-    import.meta.env.VITE_ROLE_BINDINGS_PREVIEW,
-  )
+  const roleBindingsPreview =
+    import.meta.env.MODE !== 'production' &&
+    isRoleBindingsPreviewEnabled(import.meta.env.MODE, import.meta.env.VITE_ROLE_BINDINGS_PREVIEW)
   const configCatalogPreview =
     import.meta.env.MODE !== 'production' &&
     isConfigCatalogPreviewEnabled(import.meta.env.MODE, import.meta.env.VITE_CONFIG_CATALOG_PREVIEW)
