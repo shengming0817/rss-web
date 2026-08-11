@@ -207,6 +207,25 @@ describe('ESLint package boundaries', () => {
         'packages/core/src/components/DegradedState.vue',
       ),
     ).toContain('no-restricted-imports')
+    for (const bypass of [
+      './../../../../apps/web/src/bootstrap',
+      '.././../../../apps/web/src/bootstrap',
+    ]) {
+      expect(
+        await ruleIds(
+          `<script setup lang="ts">\nimport { createWebRuntime } from '${bypass}'\nvoid createWebRuntime\n</script>\n<template><p /></template>`,
+          'packages/core/src/components/DegradedState.vue',
+        ),
+      ).toContain('no-restricted-imports')
+    }
+    for (const localImport of ['./error-presentation', './ErrorPage.vue', './SourceBadge.vue']) {
+      expect(
+        await ruleIds(
+          `<script setup lang="ts">\nimport value from '${localImport}'\nvoid value\n</script>\n<template><p /></template>`,
+          'packages/core/src/components/DegradedState.vue',
+        ),
+      ).not.toContain('no-restricted-imports')
+    }
   })
 
   it('blocks Preview authorization imports in production app source', async () => {

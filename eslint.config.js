@@ -100,9 +100,9 @@ const ABOUT_RELEASE_META_ONLY_PATTERN = {
   message: 'About may consume only the injected release metadata module.',
 }
 
-const NO_CROSS_CORE_TRAVERSAL_PATTERN = {
-  regex: '^(?:\\.\\./){3}',
-  message: 'Core presentation cannot traverse into another workspace package or app.',
+const DEGRADED_LOCAL_IMPORTS_ONLY_PATTERN = {
+  regex: '^(?!\\./(?:error-presentation|ErrorPage\\.vue|SourceBadge\\.vue)$)\\.',
+  message: 'DegradedState may import only its three reviewed local presentation modules.',
 }
 
 const NO_STATIC_DIAGNOSTICS_NETWORK = [
@@ -475,7 +475,7 @@ export default tseslint.config(
           regex: '^@rss/(?!shared(?:/|$))',
           message: 'DegradedState can depend only on sealed source metadata.',
         },
-        NO_CROSS_CORE_TRAVERSAL_PATTERN,
+        DEGRADED_LOCAL_IMPORTS_ONLY_PATTERN,
       ]),
       'no-restricted-globals': ['error', ...NO_STATIC_DIAGNOSTICS_NETWORK],
       'no-restricted-properties': ['error', ...NO_STATIC_DIAGNOSTICS_NETWORK_PROPERTIES],
