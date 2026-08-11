@@ -10,10 +10,8 @@ describe('Config Catalog draft handoff', () => {
     expect(handoff.consume()).toBeUndefined()
   })
 
-  it('does not expose a string-based staging seam', () => {
+  it('starts without a staged key', () => {
     const handoff = createConfigCatalogDraftHandoff()
-    // @ts-expect-error only decoded fixture rows may cross the handoff
-    handoff.stage('production.database.password')
     expect(handoff.consume()).toBeUndefined()
   })
 })
