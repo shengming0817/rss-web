@@ -3,7 +3,7 @@
 ## Scope and provenance
 
 - Issue: #32
-- Implementation commit: `b1c3e240d92c1caaaf0c5cec66cab92a7e394daa`
+- Implementation commit: `c9a3cc8ce3baaa8d1f5d59d1927601f926fc8293`
 - RSS contracts consumed: none. The current RSS baseline has no active Config Catalog/List contract.
 - Source: fixed `preview.example.*` metadata in `@rss/settings/preview`, each row sealed as
   `mock`, `authoritative=false`, `preview=true`.
@@ -13,6 +13,8 @@
 - The route and navigation are absent by default and remain absent in production even if the flag is
   present. Only `development`, `test`, or `demo` plus exact
   `VITE_CONFIG_CATALOG_PREVIEW=true` enables them.
+- A production-artifact scan proves the Preview route chunk, fixture keys, and route coordinate are
+  physically absent from the built output.
 - Search, prefix filtering, and 1-based pages operate only on the local frozen fixture. There is no
   cursor, remote total, provider interface, transport, runtime registry, or fallback.
 - Selecting a row opens an explicit warning. Confirmation stages only the reviewed key in a one-shot
@@ -35,7 +37,7 @@
 Final implementation commit verification completed locally in a clean worktree:
 
 - frozen install, typecheck, lint, format check: passed
-- coverage: 91 files / 865 tests passed
+- coverage: 91 files / 867 tests passed
 - root boundary: 10 files / 60 tests passed
 - Web production build and RSS-only identity scan: passed
 - Chromium smoke: 18 passed
@@ -47,10 +49,10 @@ root TypeScript project. The include was added, then the full gate above was rer
 
 ## Changed lines and rollback
 
-- semantic/config: +344 / -10
-- tests: +191 / -6
+- semantic/config: +370 / -11
+- tests: +234 / -7
 - README/CLAUDE: +11 / -0
-- implementation total: +546 / -16
+- implementation total: +615 / -18
 - generated: 0
 
 Rollback is one revert of the PR. It removes the package Preview subpath, flag, conditional route,
