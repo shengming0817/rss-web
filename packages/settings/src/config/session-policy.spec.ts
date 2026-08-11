@@ -45,6 +45,11 @@ describe('Settings session policy', () => {
       'rollback',
       (api: ReturnType<typeof createSettingsApi>) => api.rollback('app.k', { toVersion: 1 }),
     ],
+    [
+      'secret publish',
+      (api: ReturnType<typeof createSettingsApi>) =>
+        api.publishSecret({ key: 'vault.db', storeId: 'vault', refKey: 'app/db' }),
+    ],
   ])('never recovers or replays a %s after an exact 401', async (_name, invoke) => {
     const delegate = {
       request: vi.fn(() => Promise.reject(unauthenticated())),

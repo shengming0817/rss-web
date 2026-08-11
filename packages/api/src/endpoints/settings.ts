@@ -4,11 +4,23 @@ import {
   NOT_FOUND_EMPTY,
   OUTBOX_FACT_CONFLICT_EMPTY,
   PAYLOAD_TOO_LARGE_EMPTY,
+  VALIDATION_EMPTY,
   VALIDATION_PUBLIC,
   VERSION_CONFLICT_EMPTY,
 } from './error-rules'
 
 export const settingsEndpoints = Object.freeze({
+  secretPublish: defineEndpoint({
+    method: 'POST',
+    path: '/api/v1/settings/secrets',
+    successStatus: 201,
+    errorPolicy: Object.freeze({
+      400: VALIDATION_EMPTY,
+      409: VERSION_CONFLICT_EMPTY,
+      413: PAYLOAD_TOO_LARGE_EMPTY,
+      500: INTERNAL_EMPTY,
+    }),
+  }),
   configPublish: defineEndpoint({
     method: 'POST',
     path: '/api/v1/settings/configs',

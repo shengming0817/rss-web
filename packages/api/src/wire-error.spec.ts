@@ -253,15 +253,21 @@ describe('decodeEndpointError', () => {
     ['get', 404, 'ERR_CORE_NOT_FOUND', 'not found', false, []],
     ['delete', 409, 'ERR_CORE_VERSION_CONFLICT', 'version conflict', true, []],
     ['delete', 500, 'ERR_CORE_INTERNAL', 'internal error', false, []],
+    ['secret', 400, 'ERR_CORE_VALIDATION', 'validation error', false, []],
+    ['secret', 409, 'ERR_CORE_VERSION_CONFLICT', 'version conflict', true, []],
+    ['secret', 413, 'ERR_CORE_PAYLOAD_TOO_LARGE', 'payload too large', false, []],
+    ['secret', 500, 'ERR_CORE_INTERNAL', 'internal error', false, []],
   ] as const)(
     'accepts reviewed Settings %s %s coordinate',
     (endpoint, status, code, message, retryable, details) => {
       const policy =
-        endpoint === 'publish'
-          ? settingsEndpoints.configPublish.errorPolicy
-          : endpoint === 'get'
-            ? settingsEndpoints.configGet.errorPolicy
-            : settingsEndpoints.configDelete.errorPolicy
+        endpoint === 'secret'
+          ? settingsEndpoints.secretPublish.errorPolicy
+          : endpoint === 'publish'
+            ? settingsEndpoints.configPublish.errorPolicy
+            : endpoint === 'get'
+              ? settingsEndpoints.configGet.errorPolicy
+              : settingsEndpoints.configDelete.errorPolicy
       expect(
         decodeEndpointError(status, envelope({ code, message, retryable, details }), policy),
       ).toMatchObject({ cause: 'wire', status, code, retryable })
@@ -292,6 +298,16 @@ describe('decodeEndpointError', () => {
         code: 'ERR_CORE_INTERNAL',
         message: 'internal error',
         details: [{ leaked: true }],
+      }),
+    ],
+    [
+      settingsEndpoints.secretPublish.errorPolicy,
+      400,
+      envelope({
+        code: 'ERR_CORE_VALIDATION',
+        message: 'validation error',
+        retryable: false,
+        details: [{ field: 'refKey' }],
       }),
     ],
   ] as const)('fails closed for drifting Settings coordinate %#', (policy, status, body) => {
