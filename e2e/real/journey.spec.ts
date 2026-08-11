@@ -21,7 +21,8 @@ async function signInAndExpectShell(page: Page, login = username, credential = p
     (response) => new URL(response.url()).pathname === '/api/v1/identity/login',
   )
   const profileResponse = page.waitForResponse(
-    (response) => new URL(response.url()).pathname === '/api/v1/identity/profile',
+    (response) =>
+      new URL(response.url()).pathname === '/api/v1/identity/profile' && response.status() === 200,
   )
   await signIn(page, login, credential)
   expect((await loginResponse).status()).toBe(201)
