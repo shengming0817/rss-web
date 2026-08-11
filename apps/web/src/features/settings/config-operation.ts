@@ -53,6 +53,7 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
   let state: ConfigOperationState = Object.freeze({ status: 'idle' })
   let generation = 0
   let controller: AbortController | undefined
+  let unresolvedKey: string | undefined
 
   function publish(next: ConfigOperationState) {
     state = Object.freeze(next)
@@ -66,7 +67,6 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
   }
 
   async function read(key: string) {
-    const unresolvedKey = state.status === 'unknown' ? state.key : undefined
     const reconciling = unresolvedKey !== undefined
     if (reconciling && key !== unresolvedKey) return
     abort()
@@ -78,6 +78,7 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
       const response = await api.get(key, { signal })
       if (current !== generation || signal.aborted) return
       controller = undefined
+      if (reconciling) unresolvedKey = undefined
       publish({ status: 'ready', entry: response.data })
     } catch (error: unknown) {
       if (current !== generation || signal.aborted) return
@@ -91,7 +92,7 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
   }
 
   function beginPublish(key: string) {
-    if (state.status === 'publishing' || state.status === 'deleting' || state.status === 'unknown')
+    if (state.status === 'publishing' || state.status === 'deleting' || unresolvedKey !== undefined)
       return false
     publish({ status: 'confirming-publish', key })
     return true
@@ -117,8 +118,10 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
     } catch (error: unknown) {
       if (current !== generation) return
       controller = undefined
+      const unknown = publishUnknown(error)
+      if (unknown) unresolvedKey = key
       publish(
-        publishUnknown(error)
+        unknown
           ? { status: 'unknown', key, error }
           : { status: 'error', action: 'publish', key, error },
       )
@@ -126,7 +129,7 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
   }
 
   function beginDelete(key: string) {
-    if (state.status === 'publishing' || state.status === 'deleting' || state.status === 'unknown')
+    if (state.status === 'publishing' || state.status === 'deleting' || unresolvedKey !== undefined)
       return false
     publish({ status: 'confirming-delete', key })
     return true
@@ -157,7 +160,7 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
   }
 
   function reset() {
-    if (state.status === 'unknown') return false
+    if (unresolvedKey !== undefined) return false
     abort()
     publish({ status: 'idle' })
     return true
@@ -180,6 +183,7 @@ export function createConfigOperation(api: SettingsApi): ConfigOperation {
     dispose() {
       listeners.clear()
       abort()
+      unresolvedKey = undefined
       state = Object.freeze({ status: 'idle' })
     },
   })

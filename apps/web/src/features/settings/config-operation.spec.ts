@@ -65,9 +65,14 @@ describe('Config operation', () => {
 
   it('keeps writes locked when reconciliation fails and only unlocks after an authoritative GET', async () => {
     const reconciliationFailure = networkErrorForTest()
+    let rejectReconciliation!: (error: unknown) => void
     const get = vi
       .fn()
-      .mockRejectedValueOnce(reconciliationFailure)
+      .mockReturnValueOnce(
+        new Promise((_resolve, reject) => {
+          rejectReconciliation = reject
+        }),
+      )
       .mockResolvedValueOnce({ data: entry })
     const operation = createConfigOperation(
       api({ get, publish: vi.fn().mockRejectedValue(networkErrorForTest()) }),
@@ -77,7 +82,13 @@ describe('Config operation', () => {
 
     await operation.read('different.k')
     expect(get).not.toHaveBeenCalled()
-    await operation.read('app.k')
+    const pendingReconciliation = operation.read('app.k')
+    expect(operation.getState()).toEqual({ status: 'reading', key: 'app.k' })
+    expect(operation.beginPublish('app.k')).toBe(false)
+    expect(operation.beginDelete('app.k')).toBe(false)
+    expect(operation.reset()).toBe(false)
+    rejectReconciliation(reconciliationFailure)
+    await pendingReconciliation
     expect(operation.getState()).toEqual({
       status: 'unknown',
       key: 'app.k',
