@@ -1,7 +1,7 @@
 import { createRouter, type RouteRecordRaw, type RouterHistory } from 'vue-router'
 import type { AuthorizationIntent } from '@rss/authorization'
 import type { IdentitySession } from '@rss/identity'
-import { RSS_SOURCE } from '@rss/shared'
+import { MOCK_SOURCE, RSS_SOURCE } from '@rss/shared'
 import type { SourceMeta } from '@rss/shared'
 import type { AuthorizationExperience } from '../features/authorization/authorization-context'
 import { AUDIT_AMBIENT_INTENT } from '../features/audit/audit-intent'
@@ -22,7 +22,7 @@ declare module 'vue-router' {
   }
 }
 
-const routes: RouteRecordRaw[] = [
+const baseRoutes: RouteRecordRaw[] = [
   {
     path: '/login',
     name: 'login',
@@ -106,14 +106,45 @@ const routes: RouteRecordRaw[] = [
   },
 ]
 
+export interface AppRouterOptions {
+  readonly roleBindingsPreview: boolean
+}
+
+function routes(options: AppRouterOptions): RouteRecordRaw[] {
+  return baseRoutes.map((route) => {
+    if (route.path !== '/' || route.children === undefined) return route
+    const catchAll = route.children.at(-1)!
+    const children = route.children.slice(0, -1)
+    if (options.roleBindingsPreview) {
+      children.push({
+        path: 'preview/role-bindings',
+        name: 'role-bindings-preview',
+        component: () => import('../features/identity/RoleBindingsPreviewView.vue'),
+        meta: {
+          sessionAccess: 'authenticated',
+          focusTarget: 'shell-content',
+          navigation: {
+            labelKey: 'navigation.roleBindingsPreview',
+            order: 35,
+            source: MOCK_SOURCE,
+          },
+        },
+      })
+    }
+    children.push(catchAll)
+    return { ...route, children }
+  })
+}
+
 export function createAppRouter(
   session: IdentitySession,
   authorization: AuthorizationExperience,
   history: RouterHistory,
+  options: AppRouterOptions = { roleBindingsPreview: false },
 ) {
   const router = createRouter({
     history,
-    routes,
+    routes: routes(options),
     scrollBehavior: () => ({ top: 0 }),
   })
   registerSessionRouting(router, session)

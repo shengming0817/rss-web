@@ -4,6 +4,7 @@ const zhCN = {
     identity: '身份',
     accountStatus: '账户状态',
     roles: '角色',
+    roleBindingsPreview: '绑定 Preview',
     runtime: '运行时',
     audit: '审计',
   },
@@ -215,6 +216,13 @@ const zhCN = {
       cancel: '取消',
       confirm: '提交命令',
     },
+  },
+  roleBindingsPreview: {
+    title: 'Role Bindings Preview',
+    subtitle: '仅用于显式启用的开发、测试或演示体验。',
+    warning: '这是静态合成的 Mock / 非权威 Preview，不代表当前 binding，也不会触发真实请求或命令。',
+    bySubject: '按 Subject 查看',
+    byRole: '按 Role 查看',
   },
 } as const
 
