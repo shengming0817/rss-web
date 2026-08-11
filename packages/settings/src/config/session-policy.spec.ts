@@ -36,14 +36,23 @@ function hooks(): SessionTransportHooks {
 }
 
 describe('Settings session policy', () => {
-  it('never recovers or replays a publish after an exact 401', async () => {
+  it.each([
+    [
+      'publish',
+      (api: ReturnType<typeof createSettingsApi>) => api.publish({ key: 'app.k', value: 'secret' }),
+    ],
+    [
+      'rollback',
+      (api: ReturnType<typeof createSettingsApi>) => api.rollback('app.k', { toVersion: 1 }),
+    ],
+  ])('never recovers or replays a %s after an exact 401', async (_name, invoke) => {
     const delegate = {
       request: vi.fn(() => Promise.reject(unauthenticated())),
     } as unknown as HttpTransport
     const sessionHooks = hooks()
     const api = createSettingsApi(createSessionHttpTransport(delegate, sessionHooks))
 
-    await expect(api.publish({ key: 'app.k', value: 'secret' })).rejects.toMatchObject({
+    await expect(invoke(api)).rejects.toMatchObject({
       status: 401,
     })
     expect(delegate.request).toHaveBeenCalledOnce()

@@ -24,6 +24,18 @@ export interface ConfigGetResponse {
   readonly data: ConfigEntry
 }
 
+export interface ConfigRollbackRequest {
+  readonly toVersion: number
+}
+
+export interface ConfigRollbackReceipt extends ConfigCoordinate {
+  readonly sourceVersion: ConfigVersion
+}
+
+export interface ConfigRollbackResponse {
+  readonly data: ConfigRollbackReceipt
+}
+
 export interface SettingsCallOptions {
   readonly signal?: AbortSignal
 }
