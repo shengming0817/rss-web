@@ -408,7 +408,7 @@ test('@roles keeps the RSS user authority boundary for list, assign, and revoke'
 test('@settings-config keeps Config get, publish, and delete server-authoritative', async ({
   page,
 }) => {
-  await signInAndExpectShell(page, primaryUsername)
+  await signInAndExpectShell(page, limitedUsername)
   await page
     .getByRole('navigation', { name: '主导航' })
     .getByRole('link', { name: /^配置/ })
