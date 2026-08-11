@@ -3,7 +3,7 @@
 ## Scope and provenance
 
 - Issue: #36; blocked-by #35 is closed.
-- Implementation commit: `2e5b2585195dcd685a2b26e449b150e6d05c584f`.
+- Final implementation commit: `bd4846849c777aef15ef46d980a6c783a3e109d7`.
 - Base Web revision: `f84bdb0aec9d325ba2c04ee5152f3dc145bcd54c`.
 - RSS was not modified. The optional archived journey retained the reviewed RSS pin
   `b7f3e1d0bcc5b2e59639a81b4f37937914b53f00`.
@@ -32,7 +32,16 @@
 - Role Bindings Preview enablement is physically separated from its fixture and is
   compile-time closed in production. Production artifact scanning now covers Role,
   Config Catalog, and Config History Preview; the explicit demo build retains all
-  three as non-authoritative experiences.
+  three as non-authoritative experiences. The canonical demo build enables all
+  three flags and runs the shared deterministic artifact scanner in CI.
+- The shared artifact scanner recognizes only an exact `src` attribute on script
+  tags and rejects HTTP, HTTPS, and protocol-relative external font origins. The
+  production Nginx smoke reuses the same parser instead of maintaining a second
+  HTML regex.
+- Request-level Nginx error logging is suppressed in the reviewed server because
+  default proxy diagnostics include raw request and upstream URIs. The safe access
+  receipt remains the observable status/request-id carrier; outage smoke proves
+  that Secret Material and opaque role coordinates do not enter container logs.
 - The image listens only on HTTP port 80. It does not emit HSTS or infer TLS from
   forwarded browser input; the verified outer TLS terminator owns certificates,
   redirects, and HSTS.
@@ -58,21 +67,24 @@ Final local implementation verification:
 - frozen install and workspace typecheck: passed
 - lint and format check: passed
 - coverage: 99 files / 978 tests passed
-- root boundary: 10 files / 72 tests passed
+- root boundary: 10 files / 76 tests passed
 - production build with all Preview flags forced true, identity scan, and Preview
   absence scan: passed
-- explicit demo build with all three Preview experiences and common security/artifact
-  scan: passed
+- canonical demo build with all three Preview flags and the shared
+  security/artifact scan: passed
 - Chromium smoke: 20 passed; stored dark theme is applied before app mount, no
   third-party font request or CSP violation occurs, and route/command focus remains
   intact
-- Docker/Nginx Edge smoke: passed, including HTML/deep-link/theme/asset/API/error
+- Docker/Nginx Edge smoke: passed, including a real Chromium session executing the
+  production bundle under the exact response CSP, HTML/deep-link/theme/asset/API/error
   headers, single cache values, hostile upstream stripping, Secret Material all-status
-  no-store, #6 negative routes, minimal runtime contents, and checked teardown
+  no-store, outage log redaction, #6 negative routes, minimal runtime contents, and
+  checked teardown
 - `git diff --check`: passed
 
-The opt-in archived real journey was attempted twice on the exact implementation
-commit above. Both attempts stopped in the pre-existing `@main` limited-account
+The opt-in archived real journey was attempted twice on the pre-review implementation
+commit `2e5b2585195dcd685a2b26e449b150e6d05c584f`. Both attempts stopped in the
+pre-existing `@main` limited-account
 scenario before any Issue #36-specific phase, at different assertions (the expected
 403 count, then login/profile setup); both performed checked cleanup. They are not
 reported as passing evidence and remain at
@@ -82,11 +94,11 @@ replace or weaken the required browser and real-Edge verification above.
 
 ## Changed lines and rollback
 
-- semantic/config: +66 / -143
-- tests and executable evidence: +415 / -291
-- documentation: +39 / -1
+- semantic/config: +72 / -151
+- tests and executable evidence: +568 / -294
+- documentation: +51 / -2
 - mechanical lockfile dependency removal: +0 / -210
-- implementation total: +520 / -645
+- implementation total: +691 / -657
 - generated files: 0
 
 Rollback is one revert of this PR. It removes the security-header/cache policy,
