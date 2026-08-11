@@ -8,6 +8,7 @@ const zhCN = {
     policies: '策略',
     settings: '配置',
     configCatalogPreview: 'Config Catalog Preview',
+    configHistoryPreview: 'Config History Preview',
     runtime: '运行时',
     audit: '审计',
   },
@@ -50,6 +51,8 @@ const zhCN = {
     confirm: '确认',
     catalogDraftNotice:
       'Mock 建议已复制为 Manual 草稿；尚未向 RSS 发出请求。请显式点击“读取当前配置”。',
+    historyDraftNotice:
+      'Mock 候选已复制为未提交的 Manual rollback 草稿；版本存在性未经验证。仍需显式选择“准备回滚”并再次确认。',
   },
   configCatalogPreview: {
     title: 'Config Catalog Preview',
@@ -64,6 +67,20 @@ const zhCN = {
     next: '下一页',
     confirmTitle: '确认复制合成 key',
     confirmDescription: '将 {key} 复制为尚未提交的 Manual 草稿？此操作不会请求 RSS。',
+    cancel: '取消',
+    confirm: '复制并前往配置页',
+  },
+  configHistoryPreview: {
+    title: 'Config History Preview',
+    subtitle: '仅展示本地合成 key 与版本元数据，不是 RSS 历史事实。',
+    warning: 'Preview 永久非权威。Mock 版本不证明 RSS 中存在对应版本，且不包含配置内容。',
+    localResult: '本地 fixture 时间线显示 {count} 项。',
+    version: '合成版本 {version}',
+    copy: '准备复制为 Manual rollback 草稿',
+    confirmTitle: '确认复制合成版本',
+    confirmDescription:
+      '将 {key} 的合成版本 {version} 复制为未提交的 Manual rollback 草稿？版本存在性未经验证，且此操作不会请求 RSS。',
+    handoffError: '无法复制此 Mock 候选；未修改 Manual 草稿。请取消并重新选择。',
     cancel: '取消',
     confirm: '复制并前往配置页',
   },
