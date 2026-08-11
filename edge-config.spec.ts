@@ -70,6 +70,43 @@ function validate(overrides: Record<string, string | undefined> = {}) {
 }
 
 describe('RSS Web edge configuration', () => {
+  it('owns one strict security-header policy without claiming HTTP transport security', () => {
+    const headers = read('deploy/web/security-headers.conf')
+    const index = read('apps/web/index.html')
+
+    expect(index).not.toMatch(/<script>([\s\S]*?)<\/script>/)
+    expect(headers).toContain("script-src 'self'")
+    expect(headers).toContain("default-src 'none'")
+    expect(headers).toContain("frame-ancestors 'none'")
+    expect(headers).toContain("base-uri 'none'")
+    expect(headers).toContain("object-src 'none'")
+    expect(headers).toContain("form-action 'self'")
+    expect(headers).toContain("style-src 'self'")
+    expect(headers).toContain("font-src 'self'")
+    expect(headers).toContain("connect-src 'self'")
+    expect(headers).toContain('add_header Referrer-Policy "no-referrer" always;')
+    expect(headers).toContain('add_header X-Content-Type-Options "nosniff" always;')
+    expect(headers).toContain('add_header X-Frame-Options "DENY" always;')
+    expect(headers).not.toMatch(
+      /unsafe-inline|unsafe-eval|sha(?:256|384|512)-|https?:|\*|Strict-Transport-Security/,
+    )
+
+    const template = read('deploy/web/templates/default.conf.template')
+    expect(template).toContain('include /etc/nginx/snippets/rss-security-headers.conf;')
+    expect(template).not.toMatch(/Strict-Transport-Security|upgrade-insecure-requests/)
+    const proxy = read('deploy/web/proxy-common.conf')
+    for (const header of [
+      'Content-Security-Policy',
+      'Content-Security-Policy-Report-Only',
+      'Referrer-Policy',
+      'X-Content-Type-Options',
+      'X-Frame-Options',
+      'Strict-Transport-Security',
+    ]) {
+      expect(proxy).toContain(`proxy_hide_header ${header};`)
+    }
+  })
+
   it('accepts only complete, typed deployment configuration', () => {
     expect(validate().status).toBe(0)
     for (const [key, value] of [
@@ -155,10 +192,26 @@ describe('RSS Web edge configuration', () => {
     expect(template.match(/add_header Cache-Control "no-store" always;/g)).toHaveLength(1)
   })
 
+  it('keeps the SPA shell uncacheable and only content-hashed assets immutable', () => {
+    const template = read('deploy/web/templates/default.conf.template')
+    expect(template).toContain('location = /index.html {')
+    expect(template).toContain(
+      'add_header Cache-Control "no-store, max-age=0, must-revalidate" always;',
+    )
+    expect(template).toContain('location = /theme-init.js {')
+    expect(template).toContain('location ~ "^/assets/.+-[A-Za-z0-9_-]{8}\\.(?:css|js)$" {')
+    expect(template).toContain('add_header Cache-Control "public, max-age=31536000, immutable";')
+    expect(template).toContain('location /assets/ {')
+    expect(template).not.toMatch(/\bexpires\s/)
+    expect(template.match(/add_header Cache-Control/g)).toHaveLength(4)
+  })
+
   it('uses server-side same-origin configuration only', () => {
     expect(read('apps/web/env.d.ts')).not.toContain('VITE_API_BASE')
     expect(read('deploy/web/Dockerfile')).toContain('/etc/nginx/templates/default.conf.template')
     expect(read('deploy/web/Dockerfile')).toContain('/docker-entrypoint.d/15-validate-edge-env.sh')
+    expect(read('deploy/web/Dockerfile')).toContain('/etc/nginx/snippets/rss-security-headers.conf')
+    expect(read('deploy/web/Dockerfile')).toMatch(/rm -rf \/usr\/share\/nginx\/html(?:\s|;|&)/)
   })
 
   it('installs every Web workspace dependency in the cached Docker dependency layer', () => {

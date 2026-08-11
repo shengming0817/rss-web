@@ -25,6 +25,7 @@ server {
   root /usr/share/nginx/html;
   index index.html;
   access_log /var/log/nginx/access.log rss_safe;
+  include /etc/nginx/snippets/rss-security-headers.conf;
 
   gzip on;
   gzip_types text/css application/javascript application/json image/svg+xml;
@@ -45,6 +46,7 @@ server {
     include /etc/nginx/snippets/rss-proxy-common.conf;
     proxy_buffering off;
     proxy_hide_header Cache-Control;
+    include /etc/nginx/snippets/rss-security-headers.conf;
     add_header Cache-Control "no-store" always;
     proxy_pass http://rss_primary;
   }
@@ -78,9 +80,25 @@ server {
   location ^~ /readyz/ { return 404; }
   location /api/ { return 404; }
 
+    location ~ "^/assets/.+-[A-Za-z0-9_-]{8}\.(?:css|js)$" {
+    include /etc/nginx/snippets/rss-security-headers.conf;
+    add_header Cache-Control "public, max-age=31536000, immutable";
+    try_files $uri =404;
+  }
+
   location /assets/ {
-    expires 1y;
-    add_header Cache-Control "public, immutable";
+    try_files $uri =404;
+  }
+
+  location = /index.html {
+    include /etc/nginx/snippets/rss-security-headers.conf;
+    add_header Cache-Control "no-store, max-age=0, must-revalidate" always;
+    try_files $uri =404;
+  }
+
+  location = /theme-init.js {
+    include /etc/nginx/snippets/rss-security-headers.conf;
+    add_header Cache-Control "no-store, max-age=0, must-revalidate" always;
     try_files $uri =404;
   }
 

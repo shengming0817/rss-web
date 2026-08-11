@@ -7,6 +7,22 @@ import { dirname, resolve } from 'node:path'
 import assert from 'node:assert/strict'
 import process from 'node:process'
 
+const shellCache = 'no-store, max-age=0, must-revalidate'
+const assetCache = 'public, max-age=31536000, immutable'
+
+function assertSecurityHeaders(response) {
+  const csp = response.headers['content-security-policy']
+  assert.equal(typeof csp, 'string')
+  assert(csp.includes("default-src 'none'"))
+  assert(csp.includes("frame-ancestors 'none'"))
+  assert(!csp.includes('unsafe-inline'))
+  assert(!csp.includes('unsafe-eval'))
+  assert.equal(response.headers['referrer-policy'], 'no-referrer')
+  assert.equal(response.headers['x-content-type-options'], 'nosniff')
+  assert.equal(response.headers['x-frame-options'], 'DENY')
+  assert.equal(response.headers['strict-transport-security'], undefined)
+}
+
 const directory = dirname(fileURLToPath(import.meta.url))
 const root = resolve(directory, '../..')
 const composeFile = resolve(directory, 'compose.yml')
@@ -85,9 +101,85 @@ try {
     env: environment,
     stdio: 'inherit',
   })
+  if (result.status !== 0) {
+    docker(['logs', 'edge'], { env: environment, stdio: 'inherit' })
+  }
   assert.equal(result.status, 0, 'edge fixture startup failed')
 
-  assert.equal((await request(port, '/')).status, 200)
+  const rootResponse = await request(port, '/')
+  assert.equal(rootResponse.status, 200)
+  assert.equal(rootResponse.headers['cache-control'], shellCache)
+  assertSecurityHeaders(rootResponse)
+  const inlineScripts = [...rootResponse.text.matchAll(/<script>([\s\S]*?)<\/script>/g)]
+  assert.equal(inlineScripts.length, 0)
+  assert(!rootResponse.headers['content-security-policy'].match(/sha(?:256|384|512)-/))
+
+  for (const path of ['/index.html', '/theme-init.js', '/settings/secret-material']) {
+    const shell = await request(port, path)
+    assert.equal(shell.status, 200)
+    assert.equal(shell.headers['cache-control'], shellCache)
+    assertSecurityHeaders(shell)
+  }
+
+  const imageContents = docker(
+    [
+      'exec',
+      '-T',
+      'edge',
+      'sh',
+      '-c',
+      "find /usr/share/nginx/html -type f | sed 's#^/usr/share/nginx/html/##' | sort",
+    ],
+    { env: environment },
+  )
+  assert.equal(imageContents.status, 0)
+  const staticFiles = imageContents.stdout.trim().split('\n')
+  assert(staticFiles.includes('index.html'))
+  assert(!staticFiles.includes('50x.html'))
+  assert(!staticFiles.some((file) => file.endsWith('.map')))
+  const assets = staticFiles.filter((file) => file.startsWith('assets/'))
+  assert(assets.length > 0)
+  assert(
+    assets.every((file) => /^assets\/.+-[A-Za-z0-9_-]{8}\.(?:css|js)$/.test(file)),
+    `runtime contains an unhashed asset: ${assets.join(', ')}`,
+  )
+  assert.deepEqual(
+    staticFiles.filter((file) => !file.startsWith('assets/')),
+    ['index.html', 'theme-init.js'],
+  )
+
+  const runtimeClosure = docker(
+    [
+      'exec',
+      '-T',
+      'edge',
+      'sh',
+      '-c',
+      [
+        'test -f /etc/nginx/templates/default.conf.template',
+        'test -f /etc/nginx/snippets/rss-proxy-common.conf',
+        'test -f /etc/nginx/snippets/rss-security-headers.conf',
+        'test -x /docker-entrypoint.d/15-validate-edge-env.sh',
+        'test ! -e /app',
+        '! command -v node',
+        '! command -v pnpm',
+      ].join(' && '),
+    ],
+    { env: environment },
+  )
+  assert.equal(runtimeClosure.status, 0, `runtime closure check failed: ${runtimeClosure.stderr}`)
+
+  for (const asset of assets) {
+    const response = await request(port, `/${asset}`)
+    assert.equal(response.status, 200)
+    assert.equal(response.headers['cache-control'], assetCache)
+    assert.equal(response.headers.expires, undefined)
+    assertSecurityHeaders(response)
+  }
+  const missingAsset = await request(port, '/assets/not-hashed.js')
+  assert.equal(missingAsset.status, 404)
+  assert.equal(missingAsset.headers['cache-control'], undefined)
+  assertSecurityHeaders(missingAsset)
 
   for (const path of ['/api/v1/identity/profile', '/api/v1/settings/configs/key']) {
     const response = await request(port, path, {
@@ -217,6 +309,7 @@ try {
   })
   assert.equal(secretMaterial.status, 200)
   assert.equal(secretMaterial.headers['cache-control'], 'no-store')
+  assertSecurityHeaders(secretMaterial)
   assert.equal(secretMaterial.json.listener, 'primary')
   assert.equal(secretMaterial.json.method, 'GET')
   assert.equal(secretMaterial.json.url, `${secretMaterialPath}?fixture-cache=public`)
@@ -237,6 +330,16 @@ try {
   assert.deepEqual(encodedSeparator.json.tenantHeaders, [])
   assert.equal(encodedSeparator.json.authorizationPresent, true)
   assert.equal(encodedSeparator.json.bodyBytes, 0)
+
+  const materialFailure = await request(
+    port,
+    `${secretMaterialPath}?fixture-status=418&fixture-cache=public&fixture-security=hostile`,
+    { headers: { Authorization: 'Bearer fixture' } },
+  )
+  assert.equal(materialFailure.status, 418)
+  assert.equal(materialFailure.headers['cache-control'], 'no-store')
+  assertSecurityHeaders(materialFailure)
+  assert.equal(materialFailure.headers['content-security-policy-report-only'], undefined)
 
   for (const path of [
     `/api/v1/settings/secrets/${secretMaterialKeyMarker}/Material?fixture-cache=public`,
@@ -455,6 +558,7 @@ try {
   const errorResponse = await request(port, '/api/v1/audit/entries?fixture-status=418')
   assert.equal(errorResponse.status, 418)
   assert.equal(errorResponse.headers['x-fixture-listener'], 'admin')
+  assertSecurityHeaders(errorResponse)
 
   const primaryBefore = (await request(port, '/api/v1/identity/__fixture-count')).json.requestCount
   const adminBefore = (await request(port, '/api/v1/audit/entries?fixture-count=1')).json
@@ -481,7 +585,9 @@ try {
     '/api/v1/audit//tenants/f47ac10b-58cc-4372-a567-0e02b2c3d479/entries',
     '/api/v1/unknown',
   ]) {
-    assert.equal((await request(port, path)).status, 404, path)
+    const negative = await request(port, path)
+    assert.equal(negative.status, 404, path)
+    assertSecurityHeaders(negative)
   }
   assert.equal(
     (await request(port, '/api/v1/identity/__fixture-count')).json.requestCount,
@@ -494,7 +600,9 @@ try {
 
   result = docker(['stop', 'admin'], { env: environment })
   assert.equal(result.status, 0)
-  assertGatewayUnavailable((await request(port, '/api/v1/runtime/inventory')).status)
+  const adminUnavailable = await request(port, '/api/v1/runtime/inventory')
+  assertGatewayUnavailable(adminUnavailable.status)
+  assertSecurityHeaders(adminUnavailable)
   assert.equal((await request(port, '/api/v1/identity/profile')).status, 200)
   assert.equal((await request(port, '/')).status, 200)
 

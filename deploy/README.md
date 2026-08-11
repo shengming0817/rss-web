@@ -15,5 +15,18 @@ Open `http://localhost:8088`. Local compose defaults point both listeners at
 private listener coordinates. The Nginx health check verifies the static root;
 Internal/Health listeners and raw metrics are never exposed.
 
+The image owns a strict CSP and the browser-facing referrer, content-type, and
+frame protections. The SPA shell and its parser-blocking theme initializer are
+never stored, while only build-generated content-hashed JavaScript and CSS
+receive a one-year immutable cache policy. The runtime stage contains the built
+`index.html`, `theme-init.js`, and hashed assets rather than the stock Nginx
+error page or build toolchain.
+
+This container listens on plaintext port 80 and does not terminate TLS. A
+production ingress or load balancer that actually terminates HTTPS owns the
+HTTP-to-HTTPS redirect, certificate policy, and HSTS response. The HTTP Edge
+does not emit `Strict-Transport-Security` or trust a browser-authored forwarded
+scheme.
+
 The exact decision, evidence, route table, and trust boundary are in
 [`docs/architecture/20260809-006-same-origin-edge-tenant-bootstrap.md`](../docs/architecture/20260809-006-same-origin-edge-tenant-bootstrap.md).

@@ -26,6 +26,15 @@ upstream traffic. Primary and Admin have no fallback to each other. The Edge
 does not implement authentication, session state, retries, DTO decoding, policy,
 or backend discovery.
 
+The listener also owns one browser security-header policy. Its CSP admits only
+the built same-origin application; framing, objects, workers, media, inline
+scripts and attributes, external origins, and unreviewed script execution
+remain closed. Upstream security headers are hidden so Primary and Admin cannot
+create duplicate or weaker browser policy. The SPA shell and its parser-blocking
+same-origin theme initializer are `no-store` and must-revalidate,
+build-generated hashed JavaScript/CSS is immutable for one year, and the Secret
+Material response remains `no-store` on every status.
+
 WEB-PR-015 adds only the canonical lowercase, non-nil UUID target-Audit route. Uppercase, nil,
 malformed, encoded-slash, trailing-segment, and trailing-slash variants remain 404. The target UUID
 is a resource coordinate, not tenant authority, and the browser header is still removed. Because the
@@ -59,6 +68,12 @@ The intended production topology places the Edge and the RSS runtime in the
 same pod or network namespace with loopback/private listener connectivity. RSS
 plaintext listener opt-in is for explicitly controlled development environments,
 not a public-network transport policy.
+
+The image listens on HTTP port 80 and does not own TLS termination. Therefore it
+does not emit HSTS or infer secure transport from forwarded browser headers.
+When production places an HTTPS ingress or load balancer in front of this Edge,
+that verified TLS terminator owns certificate policy, HTTP-to-HTTPS redirects,
+and `Strict-Transport-Security` on its HTTPS responses.
 
 Hostname-derived tenants, route-derived tenants, login-form tenant input, and a
 resolver SPI were rejected because they make browser-controlled data part of
