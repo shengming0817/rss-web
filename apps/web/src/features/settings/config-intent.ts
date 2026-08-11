@@ -12,3 +12,7 @@ export const CONFIG_DELETE_INTENT: AuthorizationIntent = Object.freeze({
   contractId: 'settings.config-delete',
   permission: 'settings.config-delete',
 })
+export const CONFIG_ROLLBACK_INTENT: AuthorizationIntent = Object.freeze({
+  contractId: 'settings.config-rollback',
+  permission: 'settings.config-rollback',
+})

@@ -6,7 +6,12 @@ import { MANUAL_SOURCE, RSS_SOURCE, UNAVAILABLE_SOURCE } from '@rss/shared'
 import { toSafeErrorPresentation, toSafeReadErrorPresentation } from '../../errors/rss-error'
 import { useAuthorizationIntent } from '../authorization/authorization-context'
 import { createConfigOperation, type ConfigOperationState } from './config-operation'
-import { CONFIG_DELETE_INTENT, CONFIG_GET_INTENT, CONFIG_PUBLISH_INTENT } from './config-intent'
+import {
+  CONFIG_DELETE_INTENT,
+  CONFIG_GET_INTENT,
+  CONFIG_PUBLISH_INTENT,
+  CONFIG_ROLLBACK_INTENT,
+} from './config-intent'
 import { useSettingsApi } from './settings-context'
 
 const { t } = useI18n()
@@ -14,6 +19,7 @@ const api = useSettingsApi()
 const readAuthorization = useAuthorizationIntent(CONFIG_GET_INTENT)
 const publishAuthorization = useAuthorizationIntent(CONFIG_PUBLISH_INTENT)
 const deleteAuthorization = useAuthorizationIntent(CONFIG_DELETE_INTENT)
+const rollbackAuthorization = useAuthorizationIntent(CONFIG_ROLLBACK_INTENT)
 const keyInput = ref('')
 const valueInput = ref('')
 const revealValue = ref(false)
@@ -26,6 +32,8 @@ const operation = createConfigOperation({
   get: (key, options) => readAuthorization.execute(() => api.get(key, options)),
   publish: (request, options) => publishAuthorization.execute(() => api.publish(request, options)),
   delete: (key, options) => deleteAuthorization.execute(() => api.delete(key, options)),
+  rollback: (key, request, options) =>
+    rollbackAuthorization.execute(() => api.rollback(key, request, options)),
 })
 const state = shallowRef<ConfigOperationState>(operation.getState())
 const unsubscribe = operation.subscribe((next) => {
