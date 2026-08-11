@@ -117,7 +117,11 @@ copy, bulk export, or fallback source exists.
 The production Nginx image is a minimal same-origin Edge with a closed
 Primary/Admin route table; Audit exposes the ambient entries path plus the exact canonical target-tenant
 path. It removes browser tenant headers and injects the
-deployment-fixed tenant only for login and refresh. See the
+deployment-fixed tenant only for login and refresh. The Edge enforces a self-only
+CSP and browser security headers, serves the SPA shell and theme initializer with
+no-store, and grants one-year immutable caching only to generated hashed assets.
+Preview fixtures and stock Nginx content are absent from the production image;
+HSTS remains owned by the actual outer TLS terminator. See the
 [`same-origin Edge ADR`](docs/architecture/20260809-006-same-origin-edge-tenant-bootstrap.md).
 
 The repository uses the single `@rss/*` workspace namespace and RSS Web product
