@@ -8,6 +8,7 @@ import assert from 'node:assert/strict'
 import process from 'node:process'
 import { chromium } from '@playwright/test'
 import { findInlineScriptTags } from '../../scripts/artifact-policy.mjs'
+import { isCleanWebStatus } from '../real/lifecycle.mjs'
 
 const shellCache = 'no-store, max-age=0, must-revalidate'
 const assetCache = 'public, max-age=31536000, immutable'
@@ -176,6 +177,15 @@ function assertGatewayUnavailable(status) {
 }
 
 const port = await freePort()
+const sourceStatus = spawnSync('/usr/bin/git', ['status', '--porcelain', '--untracked-files=all'], {
+  cwd: root,
+  encoding: 'utf8',
+})
+assert.equal(sourceStatus.status, 0, 'Web source status lookup failed')
+assert(
+  isCleanWebStatus(sourceStatus.stdout),
+  'Edge source must be clean before the provenance build',
+)
 const revisionResult = spawnSync('/usr/bin/git', ['rev-parse', 'HEAD'], {
   cwd: root,
   encoding: 'utf8',

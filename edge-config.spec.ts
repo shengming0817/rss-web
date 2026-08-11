@@ -238,6 +238,17 @@ describe('RSS Web edge configuration', () => {
     expect(workflow).toContain('RSS_WEB_REVISION: ${{ github.sha }}')
   })
 
+  it('rejects a dirty Edge build context before attesting the HEAD revision', () => {
+    const smoke = read('e2e/edge/smoke.mjs')
+
+    expect(smoke).toContain("['status', '--porcelain', '--untracked-files=all']")
+    expect(smoke).toContain('isCleanWebStatus(sourceStatus.stdout)')
+    expect(smoke).toContain('Edge source must be clean before the provenance build')
+    expect(smoke.indexOf("['status', '--porcelain', '--untracked-files=all']")).toBeLessThan(
+      smoke.indexOf("docker(['build', 'edge']"),
+    )
+  })
+
   it('installs every Web workspace dependency in the cached Docker dependency layer', () => {
     const dockerfile = read('deploy/web/Dockerfile')
     const manifests = repositoryWorkspaceManifests()
