@@ -1,4 +1,5 @@
 import { MOCK_SOURCE } from '@rss/shared'
+import { registerConfigCatalogPreviewRow } from '../preview-brand'
 
 const CONFIG_CATALOG_PREVIEW_ROW: unique symbol = Symbol('rss-config-catalog-preview-row')
 
@@ -24,12 +25,14 @@ export interface ConfigCatalogPreviewPage {
 const PAGE_SIZE = 2
 
 function row(key: string, label: string): ConfigCatalogPreviewRow {
-  return Object.freeze({
-    [CONFIG_CATALOG_PREVIEW_ROW]: true as const,
-    key,
-    label,
-    source: MOCK_SOURCE,
-  })
+  return registerConfigCatalogPreviewRow(
+    Object.freeze({
+      [CONFIG_CATALOG_PREVIEW_ROW]: true as const,
+      key,
+      label,
+      source: MOCK_SOURCE,
+    }),
+  )
 }
 
 export const CONFIG_CATALOG_PREVIEW_ROWS: readonly ConfigCatalogPreviewRow[] = Object.freeze([

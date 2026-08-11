@@ -3,6 +3,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
 import { createWebI18n } from '../../i18n'
 import ConfigHistoryPreviewView from './ConfigHistoryPreviewView.vue'
+import { createConfigPreviewDraftHandoff } from './config-preview-draft-context'
 
 function setup(stageHistory = vi.fn(() => true)) {
   const router = createRouter({
@@ -16,6 +17,7 @@ function setup(stageHistory = vi.fn(() => true)) {
     stageCatalog: vi.fn(() => true),
     stageHistory,
     consume: vi.fn(() => undefined),
+    discard: vi.fn(),
   }
   return { router, configPreviewDraft, stageHistory }
 }
@@ -73,5 +75,63 @@ describe('ConfigHistoryPreviewView', () => {
     await flushPromises()
     expect(router.currentRoute.value.name).toBe('settings')
     wrapper.unmount()
+  })
+
+  it('discards the candidate when navigation is redirected before Settings mounts', async () => {
+    const configPreviewDraft = createConfigPreviewDraftHandoff()
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/', name: 'preview', component: ConfigHistoryPreviewView },
+        { path: '/settings', name: 'settings', component: { template: '<p>settings</p>' } },
+        { path: '/login', name: 'login', component: { template: '<p>login</p>' } },
+      ],
+    })
+    router.beforeEach((to) => (to.name === 'settings' ? { name: 'login' } : true))
+    await router.push('/')
+    await router.isReady()
+    const wrapper = mount(ConfigHistoryPreviewView, {
+      attachTo: document.body,
+      props: { configPreviewDraft },
+      global: { plugins: [createWebI18n(), router] },
+    })
+
+    await wrapper.get('[data-action="prepare-history-copy"]').trigger('click')
+    await wrapper.get('[data-action="confirm-history-copy"]').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.name).toBe('login')
+    expect(configPreviewDraft.consume()).toBeUndefined()
+    expect(document.activeElement).toBe(wrapper.get('[role="alert"][tabindex="-1"]').element)
+    wrapper.unmount()
+  })
+
+  it('discards the candidate when navigation rejects', async () => {
+    const configPreviewDraft = createConfigPreviewDraftHandoff()
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/', name: 'preview', component: ConfigHistoryPreviewView },
+        { path: '/settings', name: 'settings', component: { template: '<p>settings</p>' } },
+      ],
+    })
+    router.beforeEach((to) => {
+      if (to.name === 'settings') throw new Error('closed navigation failure')
+      return true
+    })
+    await router.push('/')
+    await router.isReady()
+    const wrapper = mount(ConfigHistoryPreviewView, {
+      props: { configPreviewDraft },
+      global: { plugins: [createWebI18n(), router] },
+    })
+
+    await wrapper.get('[data-action="prepare-history-copy"]').trigger('click')
+    await wrapper.get('[data-action="confirm-history-copy"]').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.name).toBe('preview')
+    expect(configPreviewDraft.consume()).toBeUndefined()
+    expect(wrapper.get('[role="alert"][tabindex="-1"]').text()).toContain('未修改')
   })
 })

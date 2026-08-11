@@ -53,4 +53,33 @@ describe('ConfigCatalogPreviewView', () => {
     })
     wrapper.unmount()
   })
+
+  it('discards the candidate when session routing redirects away from Settings', async () => {
+    const handoff = createConfigPreviewDraftHandoff()
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/', name: 'preview', component: ConfigCatalogPreviewView },
+        { path: '/settings', name: 'settings', component: { template: '<p>settings</p>' } },
+        { path: '/login', name: 'login', component: { template: '<p>login</p>' } },
+      ],
+    })
+    router.beforeEach((to) => (to.name === 'settings' ? { name: 'login' } : true))
+    await router.push('/')
+    await router.isReady()
+    const wrapper = mount(ConfigCatalogPreviewView, {
+      attachTo: document.body,
+      props: { configPreviewDraft: handoff },
+      global: { plugins: [createWebI18n(), router] },
+    })
+
+    await wrapper.get('li button').trigger('click')
+    await wrapper.get('[data-action="confirm-catalog-copy"]').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.name).toBe('login')
+    expect(handoff.consume()).toBeUndefined()
+    expect(document.activeElement).toBe(wrapper.get('[role="alert"][tabindex="-1"]').element)
+    wrapper.unmount()
+  })
 })

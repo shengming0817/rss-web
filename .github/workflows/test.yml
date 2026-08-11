@@ -49,12 +49,18 @@ jobs:
 
       - name: Build web
         run: pnpm -F @rss/web build
+        env:
+          VITE_CONFIG_CATALOG_PREVIEW: 'true'
+          VITE_CONFIG_HISTORY_PREVIEW: 'true'
 
       - name: Verify RSS-only build identity
         run: pnpm check:identity:build
 
       - name: Verify production Preview absence
         run: pnpm check:preview:build
+
+      - name: Build explicitly enabled demo Preview
+        run: pnpm build:preview:demo
 
   # ── Playwright 冒烟（shell + 主题切换，无后端依赖） ─────────────────────────
   e2e:

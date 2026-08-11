@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { MOCK_SOURCE } from '@rss/shared'
 import { CONFIG_CATALOG_PREVIEW_ROWS, queryConfigCatalogPreview } from './preview'
+import { isConfigCatalogPreviewRow } from '../preview-guard'
 
 describe('Config Catalog Preview', () => {
   it('contains only frozen synthetic metadata with sealed Mock provenance', () => {
@@ -37,5 +38,11 @@ describe('Config Catalog Preview', () => {
     expect(first).not.toHaveProperty('cursor')
     expect(first).not.toHaveProperty('total')
     expect(queryConfigCatalogPreview({ page: 99 }).rows).toEqual([])
+  })
+
+  it('recognizes only registered fixture identities', () => {
+    expect(isConfigCatalogPreviewRow(CONFIG_CATALOG_PREVIEW_ROWS[0])).toBe(true)
+    expect(isConfigCatalogPreviewRow({ ...CONFIG_CATALOG_PREVIEW_ROWS[0]! })).toBe(false)
+    expect(isConfigCatalogPreviewRow(undefined)).toBe(false)
   })
 })

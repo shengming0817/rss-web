@@ -67,6 +67,7 @@ const zhCN = {
     next: '下一页',
     confirmTitle: '确认复制合成 key',
     confirmDescription: '将 {key} 复制为尚未提交的 Manual 草稿？此操作不会请求 RSS。',
+    handoffError: '导航未进入配置页；候选已丢弃，Manual 草稿未改变。请取消并重试。',
     cancel: '取消',
     confirm: '复制并前往配置页',
   },

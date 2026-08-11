@@ -46,6 +46,7 @@
       "@rss/runtime": ["packages/runtime/src/index.ts"],
       "@rss/settings": ["packages/settings/src/index.ts"],
       "@rss/settings/preview": ["packages/settings/src/preview.ts"],
+      "@rss/settings/preview-guard": ["packages/settings/src/preview-guard.ts"],
       "@rss/api/endpoints/settings": ["packages/api/src/endpoints/settings.ts"]
     }
   }

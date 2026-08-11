@@ -19,6 +19,7 @@ function propose(row: ConfigHistoryPreviewRow) {
 }
 
 function close() {
+  props.configPreviewDraft.discard()
   handoffError.value = false
   candidate.value = undefined
 }
@@ -32,8 +33,19 @@ async function confirm() {
     handoffErrorAlert.value?.focus()
     return
   }
-  candidate.value = undefined
-  await router.push({ name: 'settings' })
+  try {
+    await router.push({ name: 'settings' })
+    if (router.currentRoute.value.name === 'settings') {
+      candidate.value = undefined
+      return
+    }
+  } catch {
+    // The reviewed coordinate is discarded below; raw navigation errors are not rendered.
+  }
+  props.configPreviewDraft.discard()
+  handoffError.value = true
+  await nextTick()
+  handoffErrorAlert.value?.focus()
 }
 </script>
 

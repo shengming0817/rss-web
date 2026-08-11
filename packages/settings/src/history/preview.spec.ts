@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { MOCK_SOURCE } from '@rss/shared'
 import { CONFIG_CATALOG_PREVIEW_ROWS } from '../catalog/preview'
 import { CONFIG_HISTORY_PREVIEW_ROWS } from '../preview'
+import { isConfigHistoryPreviewRow } from '../preview-guard'
 
 const catalogKeys = new Set(CONFIG_CATALOG_PREVIEW_ROWS.map((row) => row.key))
 
@@ -42,5 +43,8 @@ describe('Config History Preview', () => {
     const reviewed = CONFIG_HISTORY_PREVIEW_ROWS[0]!
     const forged = { ...reviewed, version: reviewed.version + 1 }
     expect(CONFIG_HISTORY_PREVIEW_ROWS.includes(forged)).toBe(false)
+    expect(isConfigHistoryPreviewRow(reviewed)).toBe(true)
+    expect(isConfigHistoryPreviewRow(forged)).toBe(false)
+    expect(isConfigHistoryPreviewRow(null)).toBe(false)
   })
 })

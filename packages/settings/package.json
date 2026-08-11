@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./preview": "./src/preview.ts"
+    "./preview": "./src/preview.ts",
+    "./preview-guard": "./src/preview-guard.ts"
   },
   "files": [
     "src"

@@ -1,5 +1,5 @@
-const PREVIEW_MODES: ReadonlySet<string> = new Set(['development', 'test', 'demo'])
+import { isConfigPreviewEnabled } from './config-preview-enablement'
 
 export function isConfigHistoryPreviewEnabled(mode: string, value: unknown): boolean {
-  return PREVIEW_MODES.has(mode) && value === 'true'
+  return isConfigPreviewEnabled(mode, value)
 }

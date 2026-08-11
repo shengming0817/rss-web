@@ -1,5 +1,6 @@
 import { MOCK_SOURCE } from '@rss/shared'
 import { CONFIG_CATALOG_PREVIEW_ROWS, type ConfigCatalogPreviewRow } from '../catalog/preview'
+import { registerConfigHistoryPreviewRow } from '../preview-brand'
 
 const CONFIG_HISTORY_PREVIEW_ROW: unique symbol = Symbol('rss-config-history-preview-row')
 
@@ -11,12 +12,14 @@ export interface ConfigHistoryPreviewRow {
 }
 
 function row(catalogRow: ConfigCatalogPreviewRow, version: number): ConfigHistoryPreviewRow {
-  return Object.freeze({
-    [CONFIG_HISTORY_PREVIEW_ROW]: true as const,
-    key: catalogRow.key,
-    version,
-    source: MOCK_SOURCE,
-  })
+  return registerConfigHistoryPreviewRow(
+    Object.freeze({
+      [CONFIG_HISTORY_PREVIEW_ROW]: true as const,
+      key: catalogRow.key,
+      version,
+      source: MOCK_SOURCE,
+    }),
+  )
 }
 
 export const CONFIG_HISTORY_PREVIEW_ROWS: readonly ConfigHistoryPreviewRow[] = Object.freeze([

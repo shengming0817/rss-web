@@ -37,4 +37,11 @@ describe('Config Preview draft handoff', () => {
     ).toBe(false)
     expect(handoff.consume()).toBeUndefined()
   })
+
+  it('discards an unconsumed draft explicitly', () => {
+    const handoff = createConfigPreviewDraftHandoff()
+    expect(handoff.stageHistory(CONFIG_HISTORY_PREVIEW_ROWS[0]!)).toBe(true)
+    handoff.discard()
+    expect(handoff.consume()).toBeUndefined()
+  })
 })

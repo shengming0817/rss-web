@@ -83,6 +83,8 @@ const enUS = {
     confirmTitle: 'Confirm synthetic key copy',
     confirmDescription:
       'Copy {key} into an unsubmitted Manual draft? This action does not request RSS.',
+    handoffError:
+      'Navigation did not reach Settings. The candidate was discarded and the Manual draft was unchanged; cancel and try again.',
     cancel: 'Cancel',
     confirm: 'Copy and open Settings',
   },

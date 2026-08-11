@@ -12,16 +12,10 @@ import { createSettingsApi } from '@rss/settings'
 import { createWebHistory, type RouterHistory } from 'vue-router'
 import { createAuthorizationExperience } from './features/authorization/authorization-context'
 import { isRoleBindingsPreviewEnabled } from './features/identity/role-bindings-preview'
-import type { ConfigPreviewDraftHandoff } from './features/settings/config-preview-draft-context'
+import { createConfigPreviewDraftHandoff } from './features/settings/config-preview-draft-context'
 import { isConfigCatalogPreviewEnabled } from './features/settings/config-catalog-preview'
 import { isConfigHistoryPreviewEnabled } from './features/settings/config-history-preview'
 import { createAppRouter } from './router'
-
-const createConfigPreviewDraftHandoff: (() => ConfigPreviewDraftHandoff) | undefined =
-  import.meta.env.MODE !== 'production'
-    ? (await import('./features/settings/config-preview-draft-context'))
-        .createConfigPreviewDraftHandoff
-    : undefined
 
 export const DEFAULT_HTTP_TIMEOUT_MS = 10_000
 
@@ -47,9 +41,7 @@ export function createWebRuntime(history?: RouterHistory) {
     import.meta.env.MODE !== 'production' &&
     isConfigHistoryPreviewEnabled(import.meta.env.MODE, import.meta.env.VITE_CONFIG_HISTORY_PREVIEW)
   const configPreviewDraft =
-    (configCatalogPreview || configHistoryPreview) && createConfigPreviewDraftHandoff !== undefined
-      ? createConfigPreviewDraftHandoff()
-      : undefined
+    configCatalogPreview || configHistoryPreview ? createConfigPreviewDraftHandoff() : undefined
   const router = createAppRouter(
     session,
     authorization,
