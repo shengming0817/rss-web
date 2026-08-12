@@ -15,6 +15,14 @@ const CONTRACT_SOURCE_BY_ID = Object.freeze({
   'settings.secret-publish': 'contracts/http/settings/v2/contract.toml',
   'settings.secret-resolve': 'contracts/http/settings/v7/contract.toml',
 })
+const SHARED_SOURCE_OWNERS = Object.freeze({
+  'contracts/components/identity/v1/common-abac-operator.schema.json': Object.freeze([
+    'identity.policies-create',
+    'identity.policies-get',
+    'identity.policies-list',
+    'identity.policies-update',
+  ]),
+})
 
 function expectedContractSource(id) {
   return (
@@ -117,6 +125,7 @@ export function auditRssReleaseBaseline(input, selectedEndpoints) {
 
   const ids = []
   const referencedFiles = new Set()
+  const sharedSourceOwners = new Map(Object.keys(SHARED_SOURCE_OWNERS).map((path) => [path, []]))
   let compatibleExact = 0
   let compatibleAdopted = 0
   for (const [index, rawContract] of manifest.contracts.entries()) {
@@ -162,6 +171,11 @@ export function auditRssReleaseBaseline(input, selectedEndpoints) {
     for (const path of contract.sourceFiles) {
       if (typeof path !== 'string' || !files.has(path)) throw new Error(`unknown source for ${id}`)
       referencedFiles.add(path)
+      if (path.startsWith('contracts/components/')) {
+        const owners = sharedSourceOwners.get(path)
+        if (owners === undefined) throw new Error(`unreviewed shared source for ${id}`)
+        owners.push(id)
+      }
     }
     const sourceClosureSha256 = createHash('sha256')
       .update(contract.sourceFiles.map((path) => `${path}\0${files.get(path).sha256}\n`).join(''))
@@ -176,6 +190,14 @@ export function auditRssReleaseBaseline(input, selectedEndpoints) {
     }
   }
   unique(ids, 'contract ids')
+  for (const [path, owners] of sharedSourceOwners) {
+    const expected = SHARED_SOURCE_OWNERS[path]
+    if (
+      owners.length !== expected.length ||
+      owners.some((owner, index) => owner !== expected[index])
+    )
+      throw new Error(`shared source ownership drifted for ${path}`)
+  }
   if (ids.some((id) => !endpoints.has(id)) || endpoints.size !== ids.length) {
     throw new Error('selected endpoint set drifted')
   }

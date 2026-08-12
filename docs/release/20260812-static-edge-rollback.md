@@ -8,8 +8,10 @@ reuse a mutable tag as evidence, switch RSS revisions, or introduce a second rou
 - Select a previously attested image by immutable registry digest and record its lowercase 40-character
   Web source revision.
 - Keep the deployment-owned tenant and Primary/Admin listener coordinates unchanged.
-- Confirm that the selected release's consumed-contract ledger and real-journey support statement are
-  acceptable for the deployment. A reviewed RSS revision is not automatically a supported runtime.
+- Confirm that the selected release's declared contract evidence and real-journey support statement
+  are acceptable for the deployment. Ledger-aware releases declare a consumed-contract ledger;
+  legacy releases may declare only a historical baseline. Neither fact automatically makes a reviewed
+  RSS revision a supported runtime.
 - Preserve the current image digest so forward recovery is a single inverse deployment action.
 
 ## Atomic rollback

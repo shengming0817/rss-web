@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { createHash } from 'node:crypto'
 import { auditRssReleaseBaseline } from './scripts/check-rss-release-baseline.mjs'
 import baseline from './docs/contracts/20260812-rss-release-baseline.json'
 import { auditEndpoints } from './packages/api/src/endpoints/audit'
@@ -29,6 +30,19 @@ function changed(mutator: (copy: Record<string, unknown>) => void): unknown {
   const copy = structuredClone(baseline) as unknown as Record<string, unknown>
   mutator(copy)
   return copy
+}
+
+function resignContractClosures(copy: Record<string, unknown>): void {
+  const hashes = new Map(
+    (copy.files as { path: string; sha256: string }[]).map((file) => [file.path, file.sha256]),
+  )
+  for (const contract of copy.contracts as Record<string, unknown>[]) {
+    contract.sourceClosureSha256 = createHash('sha256')
+      .update(
+        (contract.sourceFiles as string[]).map((path) => `${path}\0${hashes.get(path)}\n`).join(''),
+      )
+      .digest('hex')
+  }
 }
 
 describe('RSS release baseline audit', () => {
@@ -120,6 +134,22 @@ describe('RSS release baseline audit', () => {
             second.sourceClosureSha256,
             first.sourceClosureSha256,
           ]
+        }),
+    ],
+    [
+      'shared transitive source ownership drift',
+      () =>
+        changed((copy) => {
+          const contracts = copy.contracts as Record<string, unknown>[]
+          const shared = 'contracts/components/identity/v1/common-abac-operator.schema.json'
+          for (const contract of contracts) {
+            const sources = contract.sourceFiles as string[]
+            if (sources.includes(shared))
+              contract.sourceFiles = sources.filter((path) => path !== shared)
+          }
+          const login = contracts.find((contract) => contract.id === 'identity.login')!
+          login.sourceFiles = [...(login.sourceFiles as string[]), shared].sort()
+          resignContractClosures(copy)
         }),
     ],
     [
