@@ -3,7 +3,7 @@
 ## Scope and provenance
 
 - Issue: #38. Its declared blockers #27, #29, and #37 were closed before implementation.
-- Final executable implementation commit: `73baa31f841d92c78a7f6a9c43613b88ce7c6696`.
+- Final executable implementation commit: `71af81442798b746420b1a90929e285a0edb1bdf`.
 - Base Web revision: `a772f31939b864018056d93db3ba908d2d6bd530`.
 - Real RSS archive: `b7f3e1d0bcc5b2e59639a81b4f37937914b53f00`.
 - Reviewed RSS contract baseline remains `b513d3390d73d4f291bb31afc588ca1307ce19af`.
@@ -26,8 +26,9 @@
   Mock rows.
 - Production evidence now asserts RSS source metadata for Runtime and Audit, no Preview navigation or
   About sources, and independent Admin outage. Runtime supplies one representative user-triggered
-  retry: one initial request, one manual retry, a busy/disabled transition, retained keyboard focus,
-  final heading focus, and no Audit retry or fallback.
+  retry: one initial request, one focused manual activation, a busy/disabled transition, final heading
+  focus, and no Audit retry or fallback. Native Chromium moves focus when a button becomes disabled;
+  this receipt does not claim otherwise.
 - Settings and Secret evidence scans submitted markers across the DOM, remaining field values, URL,
   history state, local/session storage, and console output after the existing real 403 flows.
 - One ordinary Chromium smoke journey uses a deliberately synthetic Secret publish failure to prove
@@ -59,17 +60,17 @@ Final executable verification:
 
 - workspace typecheck, lint, and format check: passed
 - coverage suites: 103 files / 995 tests passed
-- root boundary: 10 files / 79 tests passed
+- root boundary: 10 files / 81 tests passed
 - production build plus Identity and Preview artifact scans: passed
 - ordinary Chromium smoke: 21 passed, including the explicitly synthetic unknown-outcome journey
 - Docker/Nginx Edge smoke: passed with checked container/network teardown
 - `git diff --check`: passed
 
-The final archived run wrote `/tmp/rss-web-38-real-receipt-4.json`. It records Web
-`73baa31f841d92c78a7f6a9c43613b88ce7c6696`, RSS
+The final archived run wrote `/tmp/rss-web-38-final-real-receipt-3.json`. It records Web
+`71af81442798b746420b1a90929e285a0edb1bdf`, RSS
 `b7f3e1d0bcc5b2e59639a81b4f37937914b53f00`, all ten production phases passed,
 `preview-isolation` passed with `artifactMode: demo-preview`, and cleanup passed for Compose project
-`rss-web-real-14536`.
+`rss-web-real-23111`.
 
 Earlier attempts are retained honestly:
 
@@ -80,6 +81,9 @@ Earlier attempts are retained honestly:
 - `/tmp/rss-web-38-real-receipt-3.json` passed the first eight production phases and exposed a brittle
   combined MutationObserver/focus sample in the new Admin retry assertion; the final test separately
   observes lifecycle transitions and settled focus
+- review-follow-up runs against `6dff2ec` and `3aade0d` confirmed that a natively disabled Chromium
+  button does not retain focus; both stopped at the deliberately over-strong Admin assertion with
+  cleanup passed, and the final receipt now states the browser behavior precisely
 
 All failed product attempts report cleanup passed. None is presented as successful evidence.
 
@@ -90,10 +94,10 @@ closure.
 
 ## Changed lines and rollback
 
-- runner and test-only Compose semantics: +82 / -18
-- browser, harness, and executable evidence: +306 / -18
+- runner and test-only Compose semantics: +113 / -22
+- browser, harness, and executable evidence: +330 / -18
 - README and project rules: +17 / -0
-- implementation total excluding this receipt: +405 / -36
+- implementation total excluding this receipt: +460 / -40
 - production application/package code: 0
 - generated files and dependency lock changes: 0
 
