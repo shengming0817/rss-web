@@ -9,6 +9,7 @@
     "edge-config.spec.ts",
     "config-preview-boundary.spec.ts",
     "real-e2e.spec.ts",
+    "rss-release-baseline.spec.ts",
     "role-bindings-preview-boundary.spec.ts",
     "identity-migration.spec.ts",
     "scope-removal.spec.ts",
