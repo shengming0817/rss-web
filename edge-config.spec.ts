@@ -2,6 +2,11 @@ import { spawnSync } from 'node:child_process'
 import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import {
+  candidateOnlyHashedAssets,
+  createStaticRollbackPlan,
+  ROLLBACK_WEB_REVISION,
+} from './e2e/edge/release-rollback.mjs'
 
 const root = resolve(import.meta.dirname)
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8')
@@ -247,6 +252,37 @@ describe('RSS Web edge configuration', () => {
     expect(smoke.indexOf("['status', '--porcelain', '--untracked-files=all']")).toBeLessThan(
       smoke.indexOf("docker(['build', 'edge']"),
     )
+  })
+
+  it('uses archived candidate and previous release images in the existing Edge smoke', () => {
+    const smoke = read('e2e/edge/smoke.mjs')
+    const compose = read('e2e/edge/compose.yml')
+    const workflow = read('.github/workflows/test.yml')
+    const candidate = '1'.repeat(40)
+
+    expect(createStaticRollbackPlan(candidate)).toEqual({
+      candidateRevision: candidate,
+      rollbackRevision: ROLLBACK_WEB_REVISION,
+    })
+    expect(() => createStaticRollbackPlan(ROLLBACK_WEB_REVISION)).toThrow(
+      'candidate and rollback revisions must differ',
+    )
+    expect(
+      candidateOnlyHashedAssets(
+        ['assets/app-aaaaaaaa.js', 'assets/shared-cccccccc.css'],
+        ['assets/app-bbbbbbbb.js', 'assets/shared-cccccccc.css'],
+      ),
+    ).toEqual(['assets/app-aaaaaaaa.js'])
+
+    expect(compose).toContain('context: ${RSS_WEB_EDGE_CONTEXT:?archived Web context required}')
+    expect(smoke).toContain("['archive', '--output'")
+    expect(smoke).toContain('ROLLBACK_WEB_REVISION')
+    expect(smoke).toContain('candidateOnlyHashedAssets')
+    expect(smoke).toContain('rollbackDigest')
+    expect(smoke).toMatch(/'--force-recreate'[\s\S]{0,200}'edge'/)
+    expect(smoke).toContain("'[data-release-rss-ledger-id]'")
+    expect(smoke).toContain("'[data-release-rss-source-revision]'")
+    expect(workflow).toMatch(/edge:[\s\S]*uses: actions\/checkout@v4[\s\S]*fetch-depth: 0/)
   })
 
   it('installs every Web workspace dependency in the cached Docker dependency layer', () => {

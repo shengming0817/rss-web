@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto'
 import { Buffer } from 'node:buffer'
 import { createServer, request as httpRequest } from 'node:http'
 import { spawnSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import assert from 'node:assert/strict'
@@ -9,6 +11,11 @@ import process from 'node:process'
 import { chromium } from '@playwright/test'
 import { findInlineScriptTags } from '../../scripts/artifact-policy.mjs'
 import { isCleanWebStatus } from '../real/lifecycle.mjs'
+import {
+  candidateOnlyHashedAssets,
+  createStaticRollbackPlan,
+  ROLLBACK_WEB_REVISION,
+} from './release-rollback.mjs'
 
 const shellCache = 'no-store, max-age=0, must-revalidate'
 const assetCache = 'public, max-age=31536000, immutable'
@@ -26,7 +33,7 @@ function assertSecurityHeaders(response) {
   assert.equal(response.headers['strict-transport-security'], undefined)
 }
 
-async function browserSecuritySmoke(port, webRevision) {
+async function browserSecuritySmoke(port, release) {
   const browser = await chromium.launch({ headless: true })
   try {
     const context = await browser.newContext()
@@ -92,7 +99,24 @@ async function browserSecuritySmoke(port, webRevision) {
     await page.getByRole('navigation', { name: '主导航' }).waitFor()
     await page.locator('a[href="/about"]').click()
     await page.waitForURL(/\/about$/)
-    assert.equal(await page.locator('[data-release-web-revision]').textContent(), webRevision)
+    assert.equal(
+      await page.locator('[data-release-web-revision]').textContent(),
+      release.webRevision,
+    )
+    if (release.ledgerId !== undefined) {
+      assert.equal(
+        await page.locator('[data-release-rss-ledger-id]').textContent(),
+        release.ledgerId,
+      )
+      assert.equal(
+        await page.locator('[data-release-rss-source-revision]').textContent(),
+        release.rssSourceRevision,
+      )
+    } else {
+      const baseline = await page.locator('[data-release-rss-baseline]').textContent()
+      assert(baseline.includes(release.legacyBaselineId))
+      assert(baseline.includes(release.rssSourceRevision))
+    }
     const paletteButton = page.getByRole('button', { name: '打开命令面板' })
     await paletteButton.focus()
     await page.keyboard.press('Enter')
@@ -116,6 +140,8 @@ const root = resolve(directory, '../..')
 const composeFile = resolve(directory, 'compose.yml')
 const project = `rss-web-edge-${process.pid}`
 const edgeImage = `${project}-edge`
+const candidateImage = `${project}-candidate`
+const rollbackImage = `${project}-rollback`
 const tenant = 'f47ac10b-58cc-4372-a567-0e02b2c3d479'
 
 function docker(args, options = {}) {
@@ -128,6 +154,52 @@ function docker(args, options = {}) {
 
 function dockerEngine(args, options = {}) {
   return spawnSync('docker', args, { cwd: root, encoding: 'utf8', ...options })
+}
+
+function archiveRevision(revision, destination, archivePath) {
+  const resolvedRevision = spawnSync('/usr/bin/git', ['rev-parse', `${revision}^{commit}`], {
+    cwd: root,
+    encoding: 'utf8',
+  })
+  assert.equal(resolvedRevision.status, 0, `Web revision lookup failed: ${revision}`)
+  assert.equal(resolvedRevision.stdout.trim(), revision)
+  mkdirSync(destination)
+  const archive = spawnSync('/usr/bin/git', ['archive', '--output', archivePath, revision], {
+    cwd: root,
+    encoding: 'utf8',
+  })
+  assert.equal(archive.status, 0, `Web archive failed: ${archive.stderr}`)
+  const extract = spawnSync('tar', ['-x', '-f', archivePath, '-C', destination], {
+    cwd: root,
+    encoding: 'utf8',
+  })
+  assert.equal(extract.status, 0, `Web archive extraction failed: ${extract.stderr}`)
+}
+
+function imageInspect(image, format) {
+  const result = dockerEngine(['image', 'inspect', '--format', format, image])
+  assert.equal(result.status, 0, `image inspection failed for ${image}: ${result.stderr}`)
+  return result.stdout.trim()
+}
+
+function containerInspect(container, format) {
+  const result = dockerEngine(['inspect', '--format', format, container])
+  assert.equal(result.status, 0, `container inspection failed for ${container}: ${result.stderr}`)
+  return result.stdout.trim()
+}
+
+function imageStaticFiles(image) {
+  const result = dockerEngine([
+    'run',
+    '--rm',
+    '--entrypoint',
+    'sh',
+    image,
+    '-c',
+    "find /usr/share/nginx/html -type f | sed 's#^/usr/share/nginx/html/##' | sort",
+  ])
+  assert.equal(result.status, 0, `static file inspection failed for ${image}: ${result.stderr}`)
+  return result.stdout.trim().split('\n')
 }
 
 async function freePort() {
@@ -167,7 +239,7 @@ function request(port, path, { method = 'GET', headers, body } = {}) {
 
 function expectFailure(args, env) {
   const result = docker(['run', '--rm', '--no-deps', ...args, 'edge', 'nginx', '-t'], {
-    env: { ...process.env, RSS_EDGE_TEST_PORT: '1', ...env },
+    env: { ...environment, RSS_EDGE_TEST_PORT: '1', ...env },
   })
   assert.notEqual(result.status, 0, `expected edge startup rejection for ${JSON.stringify(env)}`)
 }
@@ -193,28 +265,59 @@ const revisionResult = spawnSync('/usr/bin/git', ['rev-parse', 'HEAD'], {
 assert.equal(revisionResult.status, 0, 'Web revision lookup failed')
 const webRevision = revisionResult.stdout.trim()
 assert.match(webRevision, /^[0-9a-f]{40}$/)
+const rollbackPlan = createStaticRollbackPlan(webRevision)
+const releaseTemp = mkdtempSync(resolve(tmpdir(), 'rss-web-edge-release-'))
+const candidateSnapshot = resolve(releaseTemp, 'candidate')
+const rollbackSnapshot = resolve(releaseTemp, 'rollback')
 const environment = {
   ...process.env,
   RSS_EDGE_TEST_PORT: String(port),
   RSS_WEB_BUILD_REVISION: webRevision,
+  RSS_WEB_EDGE_CONTEXT: candidateSnapshot,
 }
 
 try {
+  archiveRevision(
+    rollbackPlan.candidateRevision,
+    candidateSnapshot,
+    resolve(releaseTemp, 'candidate.tar'),
+  )
+  archiveRevision(
+    rollbackPlan.rollbackRevision,
+    rollbackSnapshot,
+    resolve(releaseTemp, 'rollback.tar'),
+  )
+
   let result = docker(['build', 'edge'], { env: environment, stdio: 'inherit' })
   assert.equal(result.status, 0, 'edge image build failed')
+  result = dockerEngine(['tag', edgeImage, candidateImage])
+  assert.equal(result.status, 0, `candidate image tagging failed: ${result.stderr}`)
 
-  const imageRevision = dockerEngine(
+  result = dockerEngine(
     [
-      'image',
-      'inspect',
-      '--format',
-      '{{ index .Config.Labels "org.opencontainers.image.revision" }}',
-      edgeImage,
+      'build',
+      '--build-arg',
+      `RSS_WEB_BUILD_REVISION=${ROLLBACK_WEB_REVISION}`,
+      '--file',
+      resolve(rollbackSnapshot, 'deploy/web/Dockerfile'),
+      '--tag',
+      rollbackImage,
+      rollbackSnapshot,
     ],
-    { env: environment },
+    { stdio: 'inherit' },
   )
-  assert.equal(imageRevision.status, 0, `edge image inspection failed: ${imageRevision.stderr}`)
-  assert.equal(imageRevision.stdout.trim(), webRevision)
+  assert.equal(result.status, 0, 'rollback edge image build failed')
+
+  const revisionLabel = '{{ index .Config.Labels "org.opencontainers.image.revision" }}'
+  assert.equal(imageInspect(candidateImage, revisionLabel), webRevision)
+  assert.equal(imageInspect(rollbackImage, revisionLabel), ROLLBACK_WEB_REVISION)
+  const candidateDigest = imageInspect(candidateImage, '{{.Id}}')
+  const rollbackDigest = imageInspect(rollbackImage, '{{.Id}}')
+  assert.notEqual(candidateDigest, rollbackDigest)
+  const candidateStaticFiles = imageStaticFiles(candidateImage)
+  const rollbackStaticFiles = imageStaticFiles(rollbackImage)
+  const candidateOnlyAssets = candidateOnlyHashedAssets(candidateStaticFiles, rollbackStaticFiles)
+  assert(candidateOnlyAssets.length > 0, 'candidate image must contain a release-specific asset')
 
   expectFailure(['-e', 'RSS_WEB_TENANT_ID='], {})
   expectFailure(['-e', 'RSS_WEB_TENANT_ID=F47AC10B-58CC-4372-A567-0E02B2C3D479'], {})
@@ -238,7 +341,11 @@ try {
   assertSecurityHeaders(rootResponse)
   assert.equal(findInlineScriptTags(rootResponse.text).length, 0)
   assert(!rootResponse.headers['content-security-policy'].match(/sha(?:256|384|512)-/))
-  await browserSecuritySmoke(port, webRevision)
+  await browserSecuritySmoke(port, {
+    webRevision,
+    ledgerId: '20260812-release-consumed-contracts',
+    rssSourceRevision: '1f6c131f0759f921551a81e12e0adb0071346927',
+  })
 
   for (const path of ['/index.html', '/theme-init.js', '/settings/secret-material']) {
     const shell = await request(port, path)
@@ -770,10 +877,83 @@ try {
     assert(!outageLogOutput.includes(coordinate), `edge logs leaked ${coordinate}`)
   }
   assert.match(outageLogOutput, /(?:GET|DELETE) (?:502|504) request_id=/)
+
+  result = docker(['up', '-d', '--wait', '--wait-timeout', '120', 'primary', 'admin'], {
+    env: environment,
+    stdio: 'inherit',
+  })
+  assert.equal(result.status, 0, 'fixture listeners did not recover before rollback')
+  result = dockerEngine(['tag', rollbackDigest, edgeImage])
+  assert.equal(result.status, 0, `rollback digest tagging failed: ${result.stderr}`)
+  result = docker(
+    [
+      'up',
+      '-d',
+      '--no-build',
+      '--no-deps',
+      '--force-recreate',
+      '--wait',
+      '--wait-timeout',
+      '120',
+      'edge',
+    ],
+    { env: environment, stdio: 'inherit' },
+  )
+  assert.equal(result.status, 0, 'rollback edge deployment failed')
+  const edgeContainer = docker(['ps', '-q', 'edge'], { env: environment })
+  assert.equal(edgeContainer.status, 0, `rollback container lookup failed: ${edgeContainer.stderr}`)
+  assert.equal(
+    containerInspect(edgeContainer.stdout.trim(), '{{.Image}}'),
+    rollbackDigest,
+    'running Edge must use the selected rollback digest',
+  )
+  assert.equal(containerInspect(edgeContainer.stdout.trim(), revisionLabel), ROLLBACK_WEB_REVISION)
+
+  await browserSecuritySmoke(port, {
+    webRevision: ROLLBACK_WEB_REVISION,
+    legacyBaselineId: '20260809-current-rss-baseline',
+    rssSourceRevision: 'b513d3390d73d4f291bb31afc588ca1307ce19af',
+  })
+  for (const path of ['/', '/index.html', '/theme-init.js']) {
+    const shell = await request(port, path)
+    assert.equal(shell.status, 200)
+    assert.equal(shell.headers['cache-control'], shellCache)
+    assertSecurityHeaders(shell)
+  }
+  const rollbackAssets = rollbackStaticFiles.filter((file) => file.startsWith('assets/'))
+  assert(rollbackAssets.length > 0)
+  for (const asset of rollbackAssets) {
+    const response = await request(port, `/${asset}`)
+    assert.equal(response.status, 200)
+    assert.equal(response.headers['cache-control'], assetCache)
+    assertSecurityHeaders(response)
+  }
+  for (const asset of candidateOnlyAssets) {
+    const response = await request(port, `/${asset}`)
+    assert.equal(response.status, 404)
+    assertSecurityHeaders(response)
+  }
+  const rollbackPrimary = await request(port, '/api/v1/identity/profile', {
+    headers: { Authorization: 'Bearer rollback-fixture' },
+  })
+  assert.equal(rollbackPrimary.status, 200)
+  assert.equal(rollbackPrimary.json.listener, 'primary')
+  const rollbackAdmin = await request(port, '/api/v1/runtime/inventory', {
+    headers: { Authorization: 'Bearer rollback-fixture' },
+  })
+  assert.equal(rollbackAdmin.status, 200)
+  assert.equal(rollbackAdmin.json.listener, 'admin')
 } finally {
   const cleanup = docker(['down', '--volumes', '--remove-orphans'], {
     env: environment,
     stdio: 'inherit',
   })
   assert.equal(cleanup.status, 0, `edge fixture cleanup failed for project ${project}`)
+  for (const image of [edgeImage, candidateImage, rollbackImage]) {
+    const present = dockerEngine(['image', 'inspect', image])
+    if (present.status !== 0) continue
+    const removed = dockerEngine(['image', 'rm', '--force', image])
+    assert.equal(removed.status, 0, `release image cleanup failed for ${image}: ${removed.stderr}`)
+  }
+  rmSync(releaseTemp, { recursive: true, force: true })
 }

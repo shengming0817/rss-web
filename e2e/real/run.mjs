@@ -18,10 +18,11 @@ import {
   realPhase,
 } from './phase-evidence.mjs'
 import { executeBounded } from './process.mjs'
+import { resolveSupportedRssRevision, SUPPORTED_RSS_REVISIONS } from './supported-revisions.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const source = resolve(process.env.RSS_SOURCE_DIR ?? resolve(root, '..'))
-const revision = process.env.RSS_SOURCE_REVISION ?? 'b7f3e1d0bcc5b2e59639a81b4f37937914b53f00'
+const revision = resolveSupportedRssRevision(process.env.RSS_SOURCE_REVISION)
 const tenant = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const project = `rss-web-real-${process.pid}`
 const passwordHash =
@@ -445,6 +446,7 @@ function printPlan() {
       sourceMode: 'git-archive',
       webSourceMode: 'git-archive-clean-head',
       pinnedRevision: revision,
+      supportedRevisions: SUPPORTED_RSS_REVISIONS,
       tenantBootstrap: 'edge-deployment-fixed',
       browserNetwork: 'edge-only',
       phases: REAL_PHASES.map((phase) => phase.name),
