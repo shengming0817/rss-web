@@ -3,11 +3,11 @@
 ## Scope and identities
 
 - Issue: #39; blocker #38 was closed before implementation.
-- Final executable implementation commit: `d9600435c13f5b153d4f5e64aaa56661dd10c189`.
+- Final executable implementation commit: `a5a696c4e7526f33eff47838e83020ac34969c46`.
 - Base Web revision and rollback image source: `a2b90c97d2da7079b0a593fd7b445fd595e6b897`.
 - Decision ledger: `20260812-release-consumed-contracts` at
   `docs/contracts/20260812-rss-release-baseline.json`.
-- Ledger file SHA-256: `a84b197807a94f47da273c70d4c151f5bb630c665d6b386f7aa880ba264802c2`.
+- Ledger file SHA-256: `b70d25d7e27ad856097adac00b86f6a52466d437e10223efcfef9595bdc7af17`.
 - Historical comparison RSS revision: `b513d3390d73d4f291bb31afc588ca1307ce19af`.
 - Reviewed selected-contract RSS revision: `1f6c131f0759f921551a81e12e0adb0071346927`.
 - Sole real-journey-supported RSS revision:
@@ -38,11 +38,11 @@ of a running RSS instance. Only the explicit supported revision may enter the ar
 
 ## Real journey decision
 
-The final machine receipt is `/tmp/rss-web-39-final-real-receipt.json`. It records Web
-`d9600435c13f5b153d4f5e64aaa56661dd10c189`, RSS
+The final review machine receipt is `/tmp/rss-web-39-review-final-real-receipt.json`. It records Web
+`a5a696c4e7526f33eff47838e83020ac34969c46`, RSS
 `b7f3e1d0bcc5b2e59639a81b4f37937914b53f00`, all ten production phases passed,
 `preview-isolation` passed as `demo-preview`, and checked cleanup passed for Compose project
-`rss-web-real-43098`.
+`rss-web-real-48378`.
 
 Evidence that narrowed the original plan is retained honestly:
 
@@ -95,7 +95,7 @@ The single final local acceptance run passed:
 
 - workspace typecheck, lint, and format check
 - coverage: 103 files / 995 tests
-- root boundary: 11 files / 97 tests
+- root boundary: 11 files / 100 tests
 - production build plus release-baseline, Identity, and Preview artifact gates
 - ordinary Chromium: 21 journeys
 - Docker/Nginx/Chromium Edge and static rollback smoke, including checked teardown
@@ -108,10 +108,10 @@ phases plus cleanup as recorded above.
 
 Implementation excluding this receipt:
 
-- release identity, ledger, audit, and operational guards: +876 / -20
-- executable tests, Chromium, Edge rollback, and CI evidence: +418 / -22
-- project rules and runbook: +74 / -4
-- total: +1368 / -46
+- release identity, ledger, audit, and operational guards: +980 / -21
+- executable tests, Chromium, Edge rollback, and CI evidence: +465 / -22
+- project rules and runbook: +77 / -4
+- total: +1522 / -47
 - generated files and dependency lock changes: 0
 
 Feature rollback is one revert of this PR. It restores the prior About baseline identity and real pin,
