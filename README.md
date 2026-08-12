@@ -67,6 +67,13 @@ claim exists. Explicitly confirming a candidate copies it once into the Manual r
 candidate is not proof that a real version exists; the user must still prepare and confirm the real
 rollback, and every real RSS result remains final without Mock fallback.
 
+The opt-in real browser journey separates artifact and backend facts. Ten production phases exercise
+the archived production Web build against the pinned real RSS archive. A final Preview-isolation phase
+builds the explicitly enabled demo artifact from the same clean Web revision, serves it through the
+same production Nginx Edge, and proves that Mock fixtures remain non-authoritative and request-free
+until an explicit Manual handoff. One ordinary Chromium smoke case supplies clearly synthetic
+unknown-outcome evidence; it is not counted as a real RSS response or compatibility claim.
+
 `@rss/authorization` provides closed, non-authoritative UX hints. The Web composition root installs
 only its server mode, which always defers to the real RSS request. A Web-owned context lets future
 routes and controls consume hints without treating them as security: operations still execute once,

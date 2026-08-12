@@ -11,6 +11,12 @@ import {
   finalizeOutcome,
   isCleanWebStatus,
 } from './lifecycle.mjs'
+import {
+  failedPhaseEvidence,
+  passedPhaseEvidence,
+  REAL_PHASES,
+  realPhase,
+} from './phase-evidence.mjs'
 import { executeBounded } from './process.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
@@ -23,6 +29,7 @@ const passwordHash =
 const temp = mkdtempSync(resolve(tmpdir(), 'rss-web-real-'))
 const snapshot = resolve(temp, 'rss')
 const webSnapshot = resolve(temp, 'web')
+const previewDist = resolve(webSnapshot, 'apps/web/dist-preview-demo')
 const deadlineMs = Date.now() + 30 * 60_000
 const receiptPath =
   process.env.RSS_WEB_REAL_RECEIPT ?? resolve(tmpdir(), `rss-web-real-receipt-${process.pid}.json`)
@@ -32,7 +39,10 @@ let webRevision = ''
 let cleanupAttempted = false
 let activeChild
 let receivedSignal
+let activePhase = realPhase('main')
 const phases = []
+const productionPhases = REAL_PHASES.filter((phase) => phase.artifactMode === 'production')
+const previewPhase = realPhase('preview-isolation')
 
 function interruptedError() {
   const error = new Error(`real journey interrupted by ${receivedSignal}`)
@@ -308,7 +318,8 @@ async function waitServerListening(port) {
   throw error
 }
 
-async function playwright(phase) {
+async function playwright(phaseName) {
+  activePhase = realPhase(phaseName)
   const timeout = boundedTimeout(deadlineMs, 3 * 60_000)
   if (timeout === 0) {
     const error = new Error('real journey total deadline exhausted')
@@ -325,12 +336,12 @@ async function playwright(phase) {
       env: {
         ...environment,
         RSS_WEB_REAL_BASE_URL: `http://127.0.0.1:${environment.RSS_WEB_REAL_EDGE_PORT}`,
-        RSS_WEB_REAL_PHASE: phase,
+        RSS_WEB_REAL_PHASE: activePhase.name,
       },
     },
   )
   if (result.timedOut) {
-    const error = new Error(`Playwright ${phase} timed out`)
+    const error = new Error(`Playwright ${activePhase.name} timed out`)
     error.stage = 'environment:playwright-timeout'
     throw error
   }
@@ -368,11 +379,34 @@ async function playwright(phase) {
         process.stderr.write(`[real-e2e] failed locations: ${failedLocations.join(' | ')}\n`)
       }
     }
-    const error = new Error(`Playwright ${phase} failed`)
-    error.stage = `${classification === 'product' ? 'product' : 'environment'}:${phase}`
+    const error = new Error(`Playwright ${activePhase.name} failed`)
+    error.stage = `${classification === 'product' ? 'product' : 'environment'}:${activePhase.name}`
     throw error
   }
-  phases.push({ name: phase, status: 'passed' })
+  phases.push(passedPhaseEvidence(activePhase.name))
+}
+
+async function buildPreviewArtifact() {
+  const previewEnvironment = {
+    ...process.env,
+    CI: 'true',
+    HUSKY: '0',
+    RSS_WEB_REVISION: webRevision,
+  }
+  await run('pnpm', ['install', '--frozen-lockfile'], {
+    cwd: webSnapshot,
+    env: previewEnvironment,
+    stdio: 'inherit',
+    timeoutMs: 5 * 60_000,
+    stage: 'environment:preview-install',
+  })
+  await run('pnpm', ['build:preview:demo'], {
+    cwd: webSnapshot,
+    env: previewEnvironment,
+    stdio: 'inherit',
+    timeoutMs: 3 * 60_000,
+    stage: 'environment:preview-build',
+  })
 }
 
 async function preflightPlaywright() {
@@ -413,18 +447,14 @@ function printPlan() {
       pinnedRevision: revision,
       tenantBootstrap: 'edge-deployment-fixed',
       browserNetwork: 'edge-only',
-      phases: [
-        'main',
-        'password-change',
-        'account-status-self',
-        'roles',
-        'policies-write',
-        'settings-config',
-        'rate-limited',
-        'budget-exhausted',
-        'admin-down',
-        'primary-down',
-      ],
+      phases: REAL_PHASES.map((phase) => phase.name),
+      artifactModes: {
+        production: productionPhases.map((phase) => phase.name),
+        'demo-preview': [previewPhase.name],
+      },
+      previewArtifactSource: 'archived-clean-web-head',
+      receiptPhaseEvidence: 'artifactMode',
+      faultTransport: 'none',
       malformedResponseEvidence: 'isolated-playwright-smoke',
       cleanup: 'compose-down-volumes-and-temporary-snapshot',
     })}\n`,
@@ -538,6 +568,9 @@ try {
     RSS_WEB_BUILD_REVISION: webRevision,
     RSS_WEB_REAL_TENANT_ID: tenant,
     RSS_WEB_REAL_EDGE_PORT: String(edgePort),
+    RSS_WEB_REAL_PREVIEW_DIST: previewDist,
+    RSS_WEB_REAL_RATE_LIMIT_PER_SECOND: '100',
+    RSS_WEB_REAL_RATE_LIMIT_BURST: '200',
     GIT_SHA: revision,
     BUILD_DATE: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
   }
@@ -571,6 +604,9 @@ try {
     'rate-limited',
   ]
   for (const phase of isolatedMainPhases) {
+    const rateLimited = phase === 'rate-limited'
+    environment.RSS_WEB_REAL_RATE_LIMIT_PER_SECOND = rateLimited ? '5' : '100'
+    environment.RSS_WEB_REAL_RATE_LIMIT_BURST = rateLimited ? '10' : '200'
     await compose(['up', '-d', '--no-deps', '--force-recreate', 'server'], {
       stage: `environment:${phase}-server`,
     })
@@ -582,6 +618,8 @@ try {
     await playwright(phase)
   }
 
+  environment.RSS_WEB_REAL_RATE_LIMIT_PER_SECOND = '100'
+  environment.RSS_WEB_REAL_RATE_LIMIT_BURST = '200'
   environment.RSS_WEB_REAL_REQUEST_BUDGET_MS = '1'
   await compose(['up', '-d', '--no-deps', '--force-recreate', 'server'], {
     stage: 'environment:budget-fault-server',
@@ -617,10 +655,25 @@ try {
   })
   await waitPhaseReady({ requireServer: true })
   await playwright('primary-down')
+
+  activePhase = previewPhase
+  await buildPreviewArtifact()
+  environment.RSS_WEB_REAL_ACCESS_TOKEN_TTL_SECS = '60'
+  environment.RSS_WEB_REAL_PRIMARY_PORT = '8080'
+  composeFiles.push('-f', resolve(webSnapshot, 'e2e/real/compose.preview.override.yml'))
+  await compose(['up', '-d', '--no-deps', '--force-recreate', 'server'], {
+    stage: 'environment:preview-server',
+  })
+  await compose(['up', '-d', '--no-deps', '--force-recreate', 'edge'], {
+    stage: 'environment:preview-edge',
+  })
+  await waitReady()
+  await waitPhaseReady({ requireServer: true })
+  await playwright(previewPhase.name)
 } catch (error) {
   const stage = typeof error?.stage === 'string' ? error.stage : 'environment:unknown'
   const classification = stage.startsWith('product:') ? 'product' : 'environment'
-  phases.push({ name: stage, status: 'failed', classification })
+  phases.push(failedPhaseEvidence(stage, classification, activePhase.name))
   outcome = { status: 'failed', failure: { stage, classification } }
   process.stderr.write(`[real-e2e] ${stage} (${classification})\n`)
 } finally {
