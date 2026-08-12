@@ -1,10 +1,9 @@
 import { createHash } from 'node:crypto'
 
 const EXPECTED_ID = '20260812-release-consumed-contracts'
-const SUPPORTED_RSS_REVISIONS = Object.freeze([
-  'b7f3e1d0bcc5b2e59639a81b4f37937914b53f00',
-  '1f6c131f0759f921551a81e12e0adb0071346927',
-])
+const SUPPORTED_RSS_REVISIONS = Object.freeze(['b7f3e1d0bcc5b2e59639a81b4f37937914b53f00'])
+const HISTORICAL_COMPARISON_REVISION = 'b513d3390d73d4f291bb31afc588ca1307ce19af'
+const REVIEWED_RSS_REVISION = '1f6c131f0759f921551a81e12e0adb0071346927'
 const SHA256 = /^[0-9a-f]{64}$/
 const SOURCE_PATH =
   /^contracts\/(?:http|components)\/[a-z0-9./-]+(?:\.schema\.json|contract\.toml)$/
@@ -33,11 +32,26 @@ function unique(values, label) {
 export function auditRssReleaseBaseline(input, selectedEndpoints) {
   const manifest = record(
     input,
-    ['schemaVersion', 'id', 'supportedRssRevisions', 'closureSha256', 'contracts', 'files'],
+    [
+      'schemaVersion',
+      'id',
+      'historicalComparisonRevision',
+      'reviewedRssRevision',
+      'supportedRssRevisions',
+      'closureSha256',
+      'contracts',
+      'files',
+    ],
     'release baseline',
   )
   if (manifest.schemaVersion !== 1 || manifest.id !== EXPECTED_ID) {
     throw new Error('release baseline identity drifted')
+  }
+  if (
+    manifest.historicalComparisonRevision !== HISTORICAL_COMPARISON_REVISION ||
+    manifest.reviewedRssRevision !== REVIEWED_RSS_REVISION
+  ) {
+    throw new Error('reviewed RSS identities drifted')
   }
   if (
     !Array.isArray(manifest.supportedRssRevisions) ||

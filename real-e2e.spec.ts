@@ -17,7 +17,6 @@ import {
   realPhase,
 } from './e2e/real/phase-evidence.mjs'
 import {
-  CURRENT_RSS_REVISION,
   DEFAULT_RSS_REVISION,
   resolveSupportedRssRevision,
   SUPPORTED_RSS_REVISIONS,
@@ -65,19 +64,14 @@ describe('real RSS journey harness', () => {
     })
   })
 
-  it('accepts only the two manifest-supported RSS revisions before archive or Docker work', () => {
+  it('accepts only the manifest-supported real RSS revision before archive or Docker work', () => {
     expect(resolveSupportedRssRevision(undefined)).toBe(DEFAULT_RSS_REVISION)
-    expect(resolveSupportedRssRevision(CURRENT_RSS_REVISION)).toBe(CURRENT_RSS_REVISION)
+    expect(() => resolveSupportedRssRevision('1f6c131f0759f921551a81e12e0adb0071346927')).toThrow(
+      'unsupported RSS source revision',
+    )
     expect(() => resolveSupportedRssRevision('0'.repeat(40))).toThrow(
       'unsupported RSS source revision',
     )
-
-    const current = execFileSync('node', ['e2e/real/run.mjs', '--print-plan'], {
-      cwd: root,
-      encoding: 'utf8',
-      env: { ...process.env, RSS_SOURCE_REVISION: CURRENT_RSS_REVISION },
-    })
-    expect(JSON.parse(current)).toMatchObject({ pinnedRevision: CURRENT_RSS_REVISION })
 
     const unsupported = spawnSync('node', ['e2e/real/run.mjs', '--print-plan'], {
       cwd: root,

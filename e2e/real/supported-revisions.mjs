@@ -10,7 +10,7 @@ const ledger = JSON.parse(
 if (
   ledger.id !== '20260812-release-consumed-contracts' ||
   !Array.isArray(ledger.supportedRssRevisions) ||
-  ledger.supportedRssRevisions.length !== 2 ||
+  ledger.supportedRssRevisions.length !== 1 ||
   !ledger.supportedRssRevisions.every((revision) => WEB_REVISION.test(revision)) ||
   new Set(ledger.supportedRssRevisions).size !== ledger.supportedRssRevisions.length
 ) {
@@ -19,7 +19,6 @@ if (
 
 export const SUPPORTED_RSS_REVISIONS = Object.freeze([...ledger.supportedRssRevisions])
 export const DEFAULT_RSS_REVISION = SUPPORTED_RSS_REVISIONS[0]
-export const CURRENT_RSS_REVISION = SUPPORTED_RSS_REVISIONS[1]
 
 export function resolveSupportedRssRevision(requestedRevision) {
   const revision = requestedRevision ?? DEFAULT_RSS_REVISION

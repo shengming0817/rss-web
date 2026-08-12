@@ -45,6 +45,14 @@ describe('RSS release baseline audit', () => {
     ['missing top-level field', () => changed((copy) => delete copy.files)],
     ['extra top-level field', () => changed((copy) => (copy.extra = true))],
     [
+      'reviewed revision drift',
+      () => changed((copy) => (copy.reviewedRssRevision = '0'.repeat(40))),
+    ],
+    [
+      'historical comparison drift',
+      () => changed((copy) => (copy.historicalComparisonRevision = '0'.repeat(40))),
+    ],
+    [
       'missing contract field',
       () =>
         changed((copy) => {
