@@ -9,9 +9,12 @@ business routes, generated contracts, administration and observability screens,
 Devboard, and old generation tools remain physically removed. RSS capabilities
 return only through reviewed issues backed by selected RSS contracts.
 
-The reviewed RSS contract selection is pinned in
-[`docs/contracts/20260809-current-rss-baseline.md`](docs/contracts/20260809-current-rss-baseline.md).
-It is audit evidence, not a runtime registry or a copy of backend contracts.
+The release-consumed RSS contract selection is sealed in
+[`docs/contracts/20260812-rss-release-baseline.json`](docs/contracts/20260812-rss-release-baseline.json).
+It is a production-excluded decision ledger for the exact 25 Web endpoint owners and their immutable
+source closure, not a runtime registry or a copy of backend schemas. The historical 20260809 capture
+remains provenance only. A reviewed selected-contract revision and a real-journey-supported RSS
+revision are deliberately separate facts.
 
 `@rss/identity` provides strict DTO decoding, an injected API adapter, and a
 framework-neutral memory-only session controller. Only a successful
@@ -94,13 +97,20 @@ code, retryability, and requestId coordinates—never backend messages or detail
 paths use the authenticated catch-all; anonymous requests still reach Login first.
 
 The authenticated About page is a zero-network view of frozen build evidence: the Web image revision,
-the reviewed RSS contract-baseline identity, and only the Preview experiences explicitly enabled by
+the reviewed release-consumed ledger identity, and only the Preview experiences explicitly enabled by
 the already production-gated composition flags. Build and baseline facts are External; Preview facts
 remain Mock and non-authoritative. It does not discover runtime contracts, providers, listeners,
 compatibility, or health. Degraded domain panels reuse one pure presentation component, while each
 domain keeps its own operation state and must explicitly choose whether a user-triggered idempotent
 read retry is allowed. Writes, audited target reads, unknown outcomes, and Secret Material never gain
 a generic retry path.
+
+Release compatibility is fail-closed and selected-contract scoped. `pnpm check:rss-release-baseline`
+joins the typed endpoint set to the committed ledger and rejects missing, extra, drifted, duplicate, or
+non-compatible entries. The ledger's reviewed RSS revision is not a whole-runtime compatibility claim;
+only revisions in its explicit `supportedRssRevisions` list may enter the archived real harness.
+Static rollback redeploys the previously attested immutable Web/Edge image by digest and verifies its
+About/OCI identity, cache and security headers, release-specific assets, and Primary/Admin proxy routes.
 
 `@rss/settings` provides the strict framework-neutral client for explicit Config publish, get,
 delete, and rollback coordinates plus reference-only Secret publish and one-time Secret Material

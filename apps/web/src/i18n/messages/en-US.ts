@@ -32,11 +32,11 @@ const enUS = {
       revision: 'Source revision',
     },
     rss: {
-      title: 'RSS contract baseline',
-      baseline: 'Baseline identifier',
+      title: 'RSS consumed-contract record',
+      baseline: 'Record identifier',
       sourceRevision: 'RSS source revision',
       notice:
-        'This is the contract evidence fixed at Web build time, not the runtime version of the current RSS instance.',
+        'This records only the selected RSS contracts reviewed for this Web build. It does not identify the current RSS runtime instance, version, health, or authority, and makes no whole-API or N/N-1 compatibility claim.',
     },
     preview: {
       title: 'Preview sources',

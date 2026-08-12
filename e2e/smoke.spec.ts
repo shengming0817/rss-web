@@ -594,11 +594,27 @@ test.describe('RSS Web Identity UX', () => {
       'RSS',
     )
     await expect(navigation.getByRole('link', { name: /关于/ })).toContainText('外部')
+    const aboutRequests: string[] = []
+    page.on('request', (request) => {
+      if (new URL(request.url()).pathname.startsWith('/api/')) aboutRequests.push(request.url())
+    })
     await navigation.getByRole('link', { name: /关于/ }).click()
     await expect(page).toHaveURL(/\/about$/)
     await expect(page.getByRole('heading', { name: '关于' })).toBeVisible()
     await expect(page.locator('[data-release-web-revision]')).toHaveText(/^[0-9a-f]{40}$/)
+    await expect(page.locator('[data-release-rss-ledger-id]')).toHaveText(
+      '20260812-release-consumed-contracts',
+    )
+    await expect(page.locator('[data-release-rss-source-revision]')).toHaveText(
+      '1f6c131f0759f921551a81e12e0adb0071346927',
+    )
+    await expect(page.locator('[data-release-rss-notice]')).toContainText(
+      '整个 RSS API 或任何 N/N-1 兼容承诺',
+    )
     await expect(page.locator('[data-release-preview-source]')).toHaveCount(0)
+    await expect(page.locator('[data-release-compatibility-status]')).toHaveCount(0)
+    await expect(page.locator('main table')).toHaveCount(0)
+    expect(aboutRequests).toEqual([])
 
     await navigation.getByRole('link', { name: /运行时/ }).click()
     await expect(page).toHaveURL(/\/runtime$/)

@@ -1,5 +1,9 @@
 # Current RSS HTTP contract baseline
 
+> Superseded for release decisions by
+> [`20260812-rss-release-baseline.json`](20260812-rss-release-baseline.json). This document remains
+> historical provenance for the original capture and incremental adapter reviews.
+
 Captured on 2026-08-09 UTC from the clean, read-only RSS checkout at commit
 `b513d3390d73d4f291bb31afc588ca1307ce19af`. Every SHA-256 below is over the
 raw schema file at that revision. Planning-pack hashes were not used.

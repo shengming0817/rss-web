@@ -30,19 +30,21 @@ const { t } = useI18n()
     <section class="about__panel" aria-labelledby="about-rss-title">
       <header class="about__panel-header">
         <h2 id="about-rss-title">{{ t('about.rss.title') }}</h2>
-        <SourceBadge :source="releaseMeta.rssContractBaseline.source" />
+        <SourceBadge :source="releaseMeta.rssContractLedger.source" />
       </header>
-      <dl data-release-rss-baseline>
+      <dl>
         <dt>{{ t('about.rss.baseline') }}</dt>
         <dd>
-          <code>{{ releaseMeta.rssContractBaseline.id }}</code>
+          <code data-release-rss-ledger-id>{{ releaseMeta.rssContractLedger.id }}</code>
         </dd>
         <dt>{{ t('about.rss.sourceRevision') }}</dt>
         <dd>
-          <code>{{ releaseMeta.rssContractBaseline.sourceRevision }}</code>
+          <code data-release-rss-source-revision>{{
+            releaseMeta.rssContractLedger.sourceRevision
+          }}</code>
         </dd>
       </dl>
-      <p>{{ t('about.rss.notice') }}</p>
+      <p data-release-rss-notice>{{ t('about.rss.notice') }}</p>
     </section>
 
     <section class="about__panel" aria-labelledby="about-preview-title">

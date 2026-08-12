@@ -35,7 +35,7 @@ services:
 
   edge:
     build:
-      context: ../..
+      context: ${RSS_WEB_EDGE_CONTEXT:?archived Web context required}
       dockerfile: deploy/web/Dockerfile
       args:
         RSS_WEB_BUILD_REVISION: ${RSS_WEB_BUILD_REVISION:?40-character Web revision required}

@@ -243,6 +243,21 @@ describe('ESLint package boundaries', () => {
     }
   })
 
+  it('blocks release ledger imports through package-like and relative app paths', async () => {
+    for (const dependency of [
+      'docs/contracts/20260812-rss-release-baseline.json',
+      '../../../../docs/contracts/20260812-rss-release-baseline.json',
+      './.././../../../docs/contracts/20260812-rss-release-baseline.json',
+    ]) {
+      expect(
+        await ruleIds(
+          `import ledger from '${dependency}'\nexport const x = ledger\n`,
+          'apps/web/src/bootstrap.ts',
+        ),
+      ).toContain('no-restricted-imports')
+    }
+  })
+
   it('keeps authorization independent from HTTP and other workspace packages', async () => {
     for (const dependency of ['@rss/api', '@rss/core', '@rss/identity', 'axios']) {
       expect(

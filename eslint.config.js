@@ -84,6 +84,11 @@ const PREVIEW_AUTHORIZATION_PATTERN = {
     '生产应用禁止导入 UX-only Preview authorization。Preview 只能由后续显式 dev/test/demo composition owner 启用。',
 }
 
+const RELEASE_LEDGER_IMPORT_PATTERN = {
+  regex: '(?:^|/)docs/contracts/20260812-rss-release-baseline(?:\\.json)?$',
+  message: 'The release ledger is production-excluded; app code may consume only sealed scalars.',
+}
+
 const STATIC_DIAGNOSTICS_DEPENDENCY_PATTERN = {
   regex: '^@rss/(?:api|audit|authorization|identity|runtime|settings)(?:/|$)',
   message:
@@ -424,7 +429,12 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
-          patterns: [DEEP_PATH_PATTERN, INTERNAL_ENDPOINT_PATTERN, PREVIEW_AUTHORIZATION_PATTERN],
+          patterns: [
+            DEEP_PATH_PATTERN,
+            INTERNAL_ENDPOINT_PATTERN,
+            PREVIEW_AUTHORIZATION_PATTERN,
+            RELEASE_LEDGER_IMPORT_PATTERN,
+          ],
           paths: [NO_AXIOS_PATH],
         },
       ],

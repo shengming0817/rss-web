@@ -43,3 +43,5 @@ scheme.
 
 The exact decision, evidence, route table, and trust boundary are in
 [`docs/architecture/20260809-006-same-origin-edge-tenant-bootstrap.md`](../docs/architecture/20260809-006-same-origin-edge-tenant-bootstrap.md).
+The immutable-image rollback procedure and its fail-closed verification are in
+[`docs/release/20260812-static-edge-rollback.md`](../docs/release/20260812-static-edge-rollback.md).

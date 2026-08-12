@@ -1,0 +1,692 @@
+{
+  "schemaVersion": 1,
+  "id": "20260812-release-consumed-contracts",
+  "historicalComparisonRevision": "b513d3390d73d4f291bb31afc588ca1307ce19af",
+  "reviewedRssRevision": "1f6c131f0759f921551a81e12e0adb0071346927",
+  "supportedRssRevisions": [
+    "b7f3e1d0bcc5b2e59639a81b4f37937914b53f00"
+  ],
+  "closureSha256": "9179ab7ea099032c3441226c818901eebae16a90563d2a665f58c5bfd30922a8",
+  "contracts": [
+    {
+      "id": "audit.list-entries",
+      "method": "GET",
+      "path": "/api/v1/audit/entries",
+      "successStatus": 200,
+      "decision": "compatible-exact",
+      "sourceFiles": [
+        "contracts/http/audit/v1/list-entries/bad-request.schema.json",
+        "contracts/http/audit/v1/list-entries/contract.toml",
+        "contracts/http/audit/v1/list-entries/internal-server-error.schema.json",
+        "contracts/http/audit/v1/list-entries/request.schema.json",
+        "contracts/http/audit/v1/list-entries/response.schema.json"
+      ],
+      "contractSource": "contracts/http/audit/v1/list-entries/contract.toml",
+      "sourceClosureSha256": "11382cdab96b1fe4d69302cefde1832c6bf3a8bb2b5cb6891e85e6abf048f565"
+    },
+    {
+      "id": "audit.list-tenant-entries",
+      "method": "GET",
+      "path": "/api/v1/audit/tenants/{tenantId}/entries",
+      "successStatus": 200,
+      "decision": "compatible-exact",
+      "sourceFiles": [
+        "contracts/http/audit/v1/list-tenant-entries/contract.toml",
+        "contracts/http/audit/v1/list-tenant-entries/request.schema.json",
+        "contracts/http/audit/v1/list-tenant-entries/response.schema.json"
+      ],
+      "contractSource": "contracts/http/audit/v1/list-tenant-entries/contract.toml",
+      "sourceClosureSha256": "3e29647f9efb0c633d95c13f6cd7cfd6e64d8bd1ed04c755adfe1807a6a02338"
+    },
+    {
+      "id": "identity.account-status-get",
+      "method": "GET",
+      "path": "/api/v1/identity/accounts/{userId}/status",
+      "successStatus": 200,
+      "decision": "compatible-exact",
+      "sourceFiles": [
+        "contracts/http/identity/v1/account-status-get/contract.toml",
+        "contracts/http/identity/v1/account-status-get/request.schema.json",
+        "contracts/http/identity/v1/account-status-get/response.schema.json"
+      ],
+      "contractSource": "contracts/http/identity/v1/account-status-get/contract.toml",
+      "sourceClosureSha256": "653f878af5bed79d94c6a7fc139de222096ca6403b7c344675abc92b80c16cbe"
+    },
+    {
+      "id": "identity.account-status-set",
+      "method": "PUT",
+      "path": "/api/v1/identity/accounts/{userId}/status",
+      "successStatus": 200,
+      "decision": "compatible-exact",
+      "sourceFiles": [
+        "contracts/http/identity/v1/account-status-set/contract.toml",
+        "contracts/http/identity/v1/account-status-set/request.schema.json",
+        "contracts/http/identity/v1/account-status-set/response.schema.json"
+      ],
+      "contractSource": "contracts/http/identity/v1/account-status-set/contract.toml",
+      "sourceClosureSha256": "03f42e5232805ee5374eef5dd31de4175748dd4ba9fd4e53f5811888b5399d9e"
+    },
+    {
+      "id": "identity.login",
+      "method": "POST",
+      "path": "/api/v1/identity/login",
+      "successStatus": 201,
+      "decision": "compatible-exact",
+      "sourceFiles": [
+        "contracts/http/identity/v1/login/contract.toml",
+        "contracts/http/identity/v1/login/request.schema.json",
+        "contracts/http/identity/v1/login/response.schema.json"
+      ],
+      "contractSource": "contracts/http/identity/v1/login/contract.toml",
+      "sourceClosureSha256": "164180d931d65d5a715b636d384a322bd398468928a8a285fde5f68519342f43"
+    },
+    {
+      "id": "identity.logout",
+      "method": "POST",
+      "path": "/api/v1/identity/logout",
+      "successStatus": 200,
+      "decision": "compatible-exact",
+      "sourceFiles": [
+        "contracts/http/identity/v1/logout/contract.toml",
+        "contracts/http/identity/v1/logout/request.schema.json",
+        "contracts/http/identity/v1/logout/response.schema.json"
+      ],
+      "contractSource": "contracts/http/identity/v1/logout/contract.toml",
+      "sourceClosureSha256": "fd9413a9e3b67c471d9b72140c0583fbc5eab2505ad7b130f3b42109dd61277f"
+    },
+    {
+      "id": "identity.logout-all",
+      "method": "POST",
+      "path": "/api/v1/identity/logout-all",
+      "successStatus": 200,
+      "decision": "compatible-exact",
+      "sourceFiles": [
+        "contracts/http/identity/v1/logout-all/contract.toml",
+        "contracts/http/identity/v1/logout-all/request.schema.json",
+        "contracts/http/identity/v1/logout-all/response.schema.json"
+      ],
+      "contractSource": "contracts/http/identity/v1/logout-all/contract.toml",
+      "sourceClosureSha256": "42a518de84281e00b780e5ed25dd78cef24df05e84a679a40365a8d456286e18"
+    },
+    {
+      "id": "identity.password-change",
+      "method": "POST",
+      "path": "/api/v1/identity/password/change",
+      "successStatus": 200,
+      "decision": "compatible-exact",
+      "sourceFiles": [
+        "contracts/http/identity/v1/password-change/contract.toml",
+        "contracts/http/identity/v1/password-change/request.schema.json",
+        "contracts/http/identity/v1/password-change/response.schema.json"
+      ],
+      "contractSource": "contracts/http/identity/v1/password-change/contract.toml",
+      "sourceClosureSha256": "8d93bd217b9a197741258afafdc219d91fa41cef585eb99455bf6d37c67c7c44"
+    },
+    {
+      "id": "identity.policies-create",
+      "method": "POST",
+      "path": "/api/v1/identity/policies",
+      "successStatus": 201,
+      "decision": "compatible-exact",
+      "sourceFiles": [
+        "contracts/components/identity/v1/common-abac-operator.schema.json",
+        "contracts/http/identity/v1/policies-create/contract.toml",
+        "contracts/http/identity/v1/policies-create/request.schema.json",
+        "contracts/http/identity/v1/policies-create/response.schema.json"
+      ],
+      "contractSource": "contracts/http/identity/v1/policies-create/contract.toml",
+      "sourceClosureSha256": "24d9118de732029c13b3ee7ea157d56dc29281a4dd9acbef185d4185eb57006c"
+    },
+    {
+      "id": "identity.policies-deactivate",
+      "method": "POST",
+      "path": "/api/v1/identity/policies/{policyId}/deactivate",
+      "successStatus": 200,
+      "decision": "compatible-exact",
+      "sourceFiles": [
+        "contracts/http/identity/v1/policies-deactivate/contract.toml",
+        "contracts/http/identity/v1/policies-deactivate/request.schema.json",
+        "contracts/http/identity/v1/policies-deactivate/response.schema.json"
+      ],
+      "contractSource": "contracts/http/identity/v1/policies-deactivate/contract.toml",
+      "sourceClosureSha256": "2a9492646326d48e6bf9fd1bf65215142635896d73a7f904d3491cf2fafee8d8"
+    },
+    {
+      "id": "identity.policies-get",
+      "method": "GET",
+      "path": "/api/v1/identity/policies/{policyId}",
+      "successStatus": 200,
+      "decision": "compatible-exact",
+      "sourceFiles": [
+        "contracts/components/identity/v1/common-abac-operator.schema.json",
+        "contracts/http/identity/v1/policies-get/contract.toml",
+        "contracts/http/identity/v1/policies-get/request.schema.json",
+        "contracts/http/identity/v1/policies-get/response.schema.json"
+      ],
+      "contractSource": "contracts/http/identity/v1/policies-get/contract.toml",
+      "sourceClosureSha256": "8b074794dae690537cc77b45d43bda858825193a16d110dc3f75d1caccf50b39"
+    },
+    {
+      "id": "identity.policies-list",
+      "method": "GET",
+      "path": "/api/v1/identity/policies",
+      "successStatus": 200,
+      "decision": "compatible-exact",
+      "sourceFiles": [
+        "contracts/components/identity/v1/common-abac-operator.schema.json",
+        "contracts/http/identity/v1/policies-list/contract.toml",
+        "contracts/http/identity/v1/policies-list/request.schema.json",
+        "contracts/http/identity/v1/policies-list/response.schema.json"
+      ],
+      "contractSource": "contracts/http/identity/v1/policies-list/contract.toml",
+      "sourceClosureSha256": "975b7ad9531041fbc476a75d20ac370815d0e52a8c55b06aaa5db18d24d347b1"
+    },
+    {
+      "id": "identity.policies-update",
+      "method": "PUT",
+      "path": "/api/v1/identity/policies/{policyId}",
+      "successStatus": 200,
+      "decision": "compatible-exact",
+      "sourceFiles": [
+        "contracts/components/identity/v1/common-abac-operator.schema.json",
+        "contracts/http/identity/v1/policies-update/contract.toml",
+        "contracts/http/identity/v1/policies-update/request.schema.json",
+        "contracts/http/identity/v1/policies-update/response.schema.json"
+      ],
+      "contractSource": "contracts/http/identity/v1/policies-update/contract.toml",
+      "sourceClosureSha256": "9d5dbcbe996b79f27b6d2a002bb28b76491775167b17f1e17ef60589db4fd966"
+    },
+    {
+      "id": "identity.profile",
+      "method": "GET",
+      "path": "/api/v1/identity/profile",
+      "successStatus": 200,
+      "decision": "compatible-exact",
+      "sourceFiles": [
+        "contracts/http/identity/v1/profile/contract.toml",
+        "contracts/http/identity/v1/profile/request.schema.json",
+        "contracts/http/identity/v1/profile/response.schema.json"
+      ],
+      "contractSource": "contracts/http/identity/v1/profile/contract.toml",
+      "sourceClosureSha256": "66d3010ae8957f5a01f061d151eccb99a4aaf11230d46ded09673fb68ae9aca5"
+    },
+    {
+      "id": "identity.refresh",
+      "method": "POST",
+      "path": "/api/v1/identity/refresh",
+      "successStatus": 201,
+      "decision": "compatible-exact",
+      "sourceFiles": [
+        "contracts/http/identity/v1/refresh/contract.toml",
+        "contracts/http/identity/v1/refresh/request.schema.json",
+        "contracts/http/identity/v1/refresh/response.schema.json"
+      ],
+      "contractSource": "contracts/http/identity/v1/refresh/contract.toml",
+      "sourceClosureSha256": "c73140659985581d7faeea8b179d59a05b6af813e19b41c565556b999f57f063"
+    },
+    {
+      "id": "identity.roles-assign",
+      "method": "POST",
+      "path": "/api/v1/identity/roles/{roleId}/bindings",
+      "successStatus": 201,
+      "decision": "compatible-exact",
+      "sourceFiles": [
+        "contracts/http/identity/v1/roles-assign/contract.toml",
+        "contracts/http/identity/v1/roles-assign/request.schema.json",
+        "contracts/http/identity/v1/roles-assign/response.schema.json"
+      ],
+      "contractSource": "contracts/http/identity/v1/roles-assign/contract.toml",
+      "sourceClosureSha256": "aee2bac95eab8d5e142a4710d808ff78d7f24d194517c01d1387098d84c29b2f"
+    },
+    {
+      "id": "identity.roles-list",
+      "method": "GET",
+      "path": "/api/v1/identity/roles",
+      "successStatus": 200,
+      "decision": "compatible-exact",
+      "sourceFiles": [
+        "contracts/http/identity/v1/roles-list/contract.toml",
+        "contracts/http/identity/v1/roles-list/request.schema.json",
+        "contracts/http/identity/v1/roles-list/response.schema.json"
+      ],
+      "contractSource": "contracts/http/identity/v1/roles-list/contract.toml",
+      "sourceClosureSha256": "d72dfdb436ad50fbf69f063c0bd5d117e2d3f80de0af81b8aabeff8eb41e93b9"
+    },
+    {
+      "id": "identity.roles-revoke",
+      "method": "DELETE",
+      "path": "/api/v1/identity/roles/{roleId}/bindings/{subject}",
+      "successStatus": 200,
+      "decision": "compatible-exact",
+      "sourceFiles": [
+        "contracts/http/identity/v1/roles-revoke/contract.toml",
+        "contracts/http/identity/v1/roles-revoke/request.schema.json",
+        "contracts/http/identity/v1/roles-revoke/response.schema.json"
+      ],
+      "contractSource": "contracts/http/identity/v1/roles-revoke/contract.toml",
+      "sourceClosureSha256": "f1b968dc5cee6a10e5eed8d4b43600313f4d76188edc8ec5c36b2d683d1a658d"
+    },
+    {
+      "id": "runtime.inventory",
+      "method": "GET",
+      "path": "/api/v1/runtime/inventory",
+      "successStatus": 200,
+      "decision": "compatible-adopted",
+      "sourceFiles": [
+        "contracts/http/runtime/v1/inventory/contract.toml",
+        "contracts/http/runtime/v1/inventory/internal-server-error.schema.json",
+        "contracts/http/runtime/v1/inventory/provider-unavailable.schema.json",
+        "contracts/http/runtime/v1/inventory/request.schema.json",
+        "contracts/http/runtime/v1/inventory/response.schema.json"
+      ],
+      "contractSource": "contracts/http/runtime/v1/inventory/contract.toml",
+      "sourceClosureSha256": "6f0694dd0554d332a668b908e66c1582de60eab033339dad035964e657817ec7"
+    },
+    {
+      "id": "settings.config-delete",
+      "method": "DELETE",
+      "path": "/api/v1/settings/configs/{key}",
+      "successStatus": 204,
+      "decision": "compatible-exact",
+      "sourceFiles": [
+        "contracts/http/settings/v5/contract.toml",
+        "contracts/http/settings/v5/request.schema.json",
+        "contracts/http/settings/v5/response.schema.json"
+      ],
+      "contractSource": "contracts/http/settings/v5/contract.toml",
+      "sourceClosureSha256": "896ff52b060712d566f8128d70c76472325c21b0cade7a38410d1e39c1329844"
+    },
+    {
+      "id": "settings.config-get",
+      "method": "GET",
+      "path": "/api/v1/settings/configs/{key}",
+      "successStatus": 200,
+      "decision": "compatible-exact",
+      "sourceFiles": [
+        "contracts/http/settings/v4/contract.toml",
+        "contracts/http/settings/v4/request.schema.json",
+        "contracts/http/settings/v4/response.schema.json"
+      ],
+      "contractSource": "contracts/http/settings/v4/contract.toml",
+      "sourceClosureSha256": "cdf66b421d33d68e9e18be4796c30889a3bbbcde43ee1d1c23f8fc9c644ea011"
+    },
+    {
+      "id": "settings.config-publish",
+      "method": "POST",
+      "path": "/api/v1/settings/configs",
+      "successStatus": 201,
+      "decision": "compatible-exact",
+      "sourceFiles": [
+        "contracts/http/settings/v1/contract.toml",
+        "contracts/http/settings/v1/request.schema.json",
+        "contracts/http/settings/v1/response.schema.json"
+      ],
+      "contractSource": "contracts/http/settings/v1/contract.toml",
+      "sourceClosureSha256": "ba4b5bfbbb113e0c264eab840f19816c200346aea6851e0a694140cfec12c000"
+    },
+    {
+      "id": "settings.config-rollback",
+      "method": "POST",
+      "path": "/api/v1/settings/configs/{key}/rollbacks",
+      "successStatus": 201,
+      "decision": "compatible-exact",
+      "sourceFiles": [
+        "contracts/http/settings/v6/contract.toml",
+        "contracts/http/settings/v6/request.schema.json",
+        "contracts/http/settings/v6/response.schema.json"
+      ],
+      "contractSource": "contracts/http/settings/v6/contract.toml",
+      "sourceClosureSha256": "318f3ea265492d91be4384e779c0aeed737d946f2605547f35da8c89bae9075f"
+    },
+    {
+      "id": "settings.secret-publish",
+      "method": "POST",
+      "path": "/api/v1/settings/secrets",
+      "successStatus": 201,
+      "decision": "compatible-exact",
+      "sourceFiles": [
+        "contracts/http/settings/v2/contract.toml",
+        "contracts/http/settings/v2/request.schema.json",
+        "contracts/http/settings/v2/response.schema.json"
+      ],
+      "contractSource": "contracts/http/settings/v2/contract.toml",
+      "sourceClosureSha256": "8639d6a91409df6a61b7a12d4ff2a938345707e0b742d1cbffc4f93cdfc72cc8"
+    },
+    {
+      "id": "settings.secret-resolve",
+      "method": "GET",
+      "path": "/api/v1/settings/secrets/{key}/material",
+      "successStatus": 200,
+      "decision": "compatible-exact",
+      "sourceFiles": [
+        "contracts/http/settings/v7/contract.toml",
+        "contracts/http/settings/v7/request.schema.json",
+        "contracts/http/settings/v7/response.schema.json"
+      ],
+      "contractSource": "contracts/http/settings/v7/contract.toml",
+      "sourceClosureSha256": "ad78e767c8e6f6d67b82371384d483047e429c6d613bbad3dd9baf4e829c38ec"
+    }
+  ],
+  "files": [
+    {
+      "path": "contracts/components/identity/v1/common-abac-operator.schema.json",
+      "sha256": "0a124adb46ca042dae2f3ebcc5baa44e3340da7d6999b6f3c4ee0e9f5405604b"
+    },
+    {
+      "path": "contracts/http/audit/v1/list-entries/bad-request.schema.json",
+      "sha256": "cbe15bf4d7a1685ece8b0ccfb3ca6ff515c77ee53554f628a683a248f18e87ed"
+    },
+    {
+      "path": "contracts/http/audit/v1/list-entries/contract.toml",
+      "sha256": "1f6d2fe1a2c2611db4792b2bfc7c364cfd9e9835956db92aec6af74b75918f95"
+    },
+    {
+      "path": "contracts/http/audit/v1/list-entries/internal-server-error.schema.json",
+      "sha256": "ee69bc2df46124db112fa8eb5767533ada4fa1601fedd2f96c9fb5d60b6d1dab"
+    },
+    {
+      "path": "contracts/http/audit/v1/list-entries/request.schema.json",
+      "sha256": "cec15c822a3b892419c2814c1542ab041abc9601ab7e39e6bb1d5bfb3c602ed0"
+    },
+    {
+      "path": "contracts/http/audit/v1/list-entries/response.schema.json",
+      "sha256": "0e24f408fedc33948ec62896fc3fe5e47681b7acdafcad7022ab01f7fc642d01"
+    },
+    {
+      "path": "contracts/http/audit/v1/list-tenant-entries/contract.toml",
+      "sha256": "c60d51a58ca33da3b3d74e4779ca53250239d93c0a921d0163c44fc0f9dc5b79"
+    },
+    {
+      "path": "contracts/http/audit/v1/list-tenant-entries/request.schema.json",
+      "sha256": "36c75a1ecba6ecd027be66f5819bb02785b18007bd20674435a1e4e2705e81c0"
+    },
+    {
+      "path": "contracts/http/audit/v1/list-tenant-entries/response.schema.json",
+      "sha256": "c3f0b3e61b9574fc822262d4b1052045cae714b4c15570e239537b48d6f358c7"
+    },
+    {
+      "path": "contracts/http/identity/v1/account-status-get/contract.toml",
+      "sha256": "f16b94f6991e9fa319d3f87d753bd85509258587144434d191a95c81ee2d942f"
+    },
+    {
+      "path": "contracts/http/identity/v1/account-status-get/request.schema.json",
+      "sha256": "ea1cad270e9cbacbab52d3a3f50532fe80f108005fdc1e2d8262ed1c780a6688"
+    },
+    {
+      "path": "contracts/http/identity/v1/account-status-get/response.schema.json",
+      "sha256": "6ca8313a01a539d1081ada55b1bd152632060a3490fa5d0d483726299d11ebf1"
+    },
+    {
+      "path": "contracts/http/identity/v1/account-status-set/contract.toml",
+      "sha256": "6b5c5996b1852b72d571adc766b1fdd0d108919f901ef55800b14feda35b7c70"
+    },
+    {
+      "path": "contracts/http/identity/v1/account-status-set/request.schema.json",
+      "sha256": "accda8ebb305f9669b3a92ad578675331e7af14f99088bb570b9d611d72f7147"
+    },
+    {
+      "path": "contracts/http/identity/v1/account-status-set/response.schema.json",
+      "sha256": "ddb3918bb8c739f61416d66fc8a712f42ef53e63672ab32a20e25d1a29ac3395"
+    },
+    {
+      "path": "contracts/http/identity/v1/login/contract.toml",
+      "sha256": "39b98f7e90b6d24ac988a716242d62ffaaebfe3f561f33c3ab3cc92a80d64aa5"
+    },
+    {
+      "path": "contracts/http/identity/v1/login/request.schema.json",
+      "sha256": "a31fb0f85ac64cdcb7ea710da564ee077dc83691c010767d59d72958c6bbf9a7"
+    },
+    {
+      "path": "contracts/http/identity/v1/login/response.schema.json",
+      "sha256": "27782157748c9357ed5a4832f053fc0caf32be115c65ff661ddeca71c9174e94"
+    },
+    {
+      "path": "contracts/http/identity/v1/logout-all/contract.toml",
+      "sha256": "594812c80e44a8712ddb83280b4b0348516c9d78fa64b1a2a05eaf89f99cf1d7"
+    },
+    {
+      "path": "contracts/http/identity/v1/logout-all/request.schema.json",
+      "sha256": "2b86ce16cfc3eb0d6870a47b728d52d1a1cd34885e4bea9ebfec6080853f0882"
+    },
+    {
+      "path": "contracts/http/identity/v1/logout-all/response.schema.json",
+      "sha256": "38ae5a875184bea024b1d73b9a7537d074ac1e29216e373af9e92931393964d8"
+    },
+    {
+      "path": "contracts/http/identity/v1/logout/contract.toml",
+      "sha256": "b6f7c7b093c64f4127b2c24e24083c441f8ee91d0fd735e07b6780087a8e8002"
+    },
+    {
+      "path": "contracts/http/identity/v1/logout/request.schema.json",
+      "sha256": "e426b10fa58de94999ff0ee43f88ea19ebef39f3ab871df7389f62f7f1948333"
+    },
+    {
+      "path": "contracts/http/identity/v1/logout/response.schema.json",
+      "sha256": "874408b4f6e516ced5f92f911a945aaa13a1f0de784770e3aafe384a56aadd01"
+    },
+    {
+      "path": "contracts/http/identity/v1/password-change/contract.toml",
+      "sha256": "6798727427fbdfffa1f226b2734cbe808341d772b4413465d5376c3e3fa7eeb1"
+    },
+    {
+      "path": "contracts/http/identity/v1/password-change/request.schema.json",
+      "sha256": "055b9ef6fb6eceed4b2770f42a23bf29d70d2271475c6418cc8337fddce49602"
+    },
+    {
+      "path": "contracts/http/identity/v1/password-change/response.schema.json",
+      "sha256": "6e518a5eb318c0979189babca8ed856c7b39cdf68d004cdbf724893cc8940fe9"
+    },
+    {
+      "path": "contracts/http/identity/v1/policies-create/contract.toml",
+      "sha256": "66d5105d3a846d525d1cbd742064b98eb6c5adaf078df95d3a855cde4e2c7dfe"
+    },
+    {
+      "path": "contracts/http/identity/v1/policies-create/request.schema.json",
+      "sha256": "b5a1dcf14b50dc0fb400e6cbcde9896da07a26977ce9bfad59e131a0dd721a29"
+    },
+    {
+      "path": "contracts/http/identity/v1/policies-create/response.schema.json",
+      "sha256": "f0486800c8a868755f2191132d89a60c94e50792da83f91a6c5b3677946d9abd"
+    },
+    {
+      "path": "contracts/http/identity/v1/policies-deactivate/contract.toml",
+      "sha256": "cde7f396da804bfa7fd151cfd43fe2ad7c3c2481de830a5ac3502b952ff16084"
+    },
+    {
+      "path": "contracts/http/identity/v1/policies-deactivate/request.schema.json",
+      "sha256": "eafc047bc38dcc84e5440bd246a2796bc98a7ab8dd88edd8f4adb986fc2ebc65"
+    },
+    {
+      "path": "contracts/http/identity/v1/policies-deactivate/response.schema.json",
+      "sha256": "07c6e96914664482fd982c44264e15955c0c066cc434e8bed24f39c34df9a0df"
+    },
+    {
+      "path": "contracts/http/identity/v1/policies-get/contract.toml",
+      "sha256": "57e225e48f71b344db1c0f08f647cb07948b6427d834ff1c51631b8110231898"
+    },
+    {
+      "path": "contracts/http/identity/v1/policies-get/request.schema.json",
+      "sha256": "389e06c4fca071d6b737d86cb6ccaa52966b1e9121c0652f89fa1327bb148277"
+    },
+    {
+      "path": "contracts/http/identity/v1/policies-get/response.schema.json",
+      "sha256": "cdc5db7e0e01959c37c0c224721e89a7b567f98aab4e090883582be91c6978e5"
+    },
+    {
+      "path": "contracts/http/identity/v1/policies-list/contract.toml",
+      "sha256": "29fef99b450243aeab0a51d1fbffdadcc1a1ac3b26c1af90d24766b4926d0f95"
+    },
+    {
+      "path": "contracts/http/identity/v1/policies-list/request.schema.json",
+      "sha256": "9cabc6ac741b77b4e341914a76b9bd4cc9a97744defff7c72967460b995f1e00"
+    },
+    {
+      "path": "contracts/http/identity/v1/policies-list/response.schema.json",
+      "sha256": "608b9af54d7b52b995ad50ab0fca4d57a3c5939bf2d01cac443ac1c5b08bf014"
+    },
+    {
+      "path": "contracts/http/identity/v1/policies-update/contract.toml",
+      "sha256": "4f1c18ae74a4e963c3d9ad83b47645618d93e22411ce347ad5a12b21b9c56e2e"
+    },
+    {
+      "path": "contracts/http/identity/v1/policies-update/request.schema.json",
+      "sha256": "96276930f07b030376ebf56a8be58fffaffdb2794178f6e8658a310d4ce05940"
+    },
+    {
+      "path": "contracts/http/identity/v1/policies-update/response.schema.json",
+      "sha256": "dc5c1734cdf1846a59644181153184e1f809daf555adbf457d0a9567e608a06d"
+    },
+    {
+      "path": "contracts/http/identity/v1/profile/contract.toml",
+      "sha256": "ce8af7ee9087abab41317e3a2ecba930ac936985012efee0715ae423690fe174"
+    },
+    {
+      "path": "contracts/http/identity/v1/profile/request.schema.json",
+      "sha256": "244bc4c19657d111bffa7f2f40373f87dcd78fd6c6acb762f4abbc08145e1c70"
+    },
+    {
+      "path": "contracts/http/identity/v1/profile/response.schema.json",
+      "sha256": "6963ea41f2c8f3d0ac0743f8eca51ec217a306c659b1fe1a02a6c6f3400b50b9"
+    },
+    {
+      "path": "contracts/http/identity/v1/refresh/contract.toml",
+      "sha256": "4d56babf528b09e3493f7127e12c10659753809f699828900a9eca549b460c00"
+    },
+    {
+      "path": "contracts/http/identity/v1/refresh/request.schema.json",
+      "sha256": "e8e053ae57791d81d8089c12289f81e8dfae7844c9338c41381b22130e8d7c9b"
+    },
+    {
+      "path": "contracts/http/identity/v1/refresh/response.schema.json",
+      "sha256": "f41bd9bfc8e745fb4a86c884d2531896852a8b953aafee87f5b0e2f565e562e6"
+    },
+    {
+      "path": "contracts/http/identity/v1/roles-assign/contract.toml",
+      "sha256": "7bff2f144aa5bd51ba67b7a04446c961f9791e28ac06e566cef48789f21fa79d"
+    },
+    {
+      "path": "contracts/http/identity/v1/roles-assign/request.schema.json",
+      "sha256": "c9414f14248c596ceb2d85cb262d34402c8702be487881aa2053ccddf1ff5b0f"
+    },
+    {
+      "path": "contracts/http/identity/v1/roles-assign/response.schema.json",
+      "sha256": "e883deeb83574fec973e3c25d839b5138a560cd79cd86fdf89be9fed0df82712"
+    },
+    {
+      "path": "contracts/http/identity/v1/roles-list/contract.toml",
+      "sha256": "4a4e0d7b4f246b4d90f61948afb6eee164beb11a8b60f09f735e5389936271a7"
+    },
+    {
+      "path": "contracts/http/identity/v1/roles-list/request.schema.json",
+      "sha256": "7b5f95484acaac845a49868eb53c0b22f97c8361c6f3eb6e1bd3f9d38c03a286"
+    },
+    {
+      "path": "contracts/http/identity/v1/roles-list/response.schema.json",
+      "sha256": "c88538246c6522d039744d63a0e72245758c2d2590c8681b2b59698ba254a13b"
+    },
+    {
+      "path": "contracts/http/identity/v1/roles-revoke/contract.toml",
+      "sha256": "f091730db197aa51b4672f37f119453577da4317d0fdfed7c6297cbf10db0da9"
+    },
+    {
+      "path": "contracts/http/identity/v1/roles-revoke/request.schema.json",
+      "sha256": "90caa4072598f5b8342582c2661a85164e31dce05a2de1b94173b96feb9765af"
+    },
+    {
+      "path": "contracts/http/identity/v1/roles-revoke/response.schema.json",
+      "sha256": "6516eb78cd75e2d3ccd0aa947c2c2e83aa9d72140525b69e767e77026ee84ce3"
+    },
+    {
+      "path": "contracts/http/runtime/v1/inventory/contract.toml",
+      "sha256": "5e9e8df12de3fa2962b08a13f64716209f303d12465f6a851bb112e8256ddce5"
+    },
+    {
+      "path": "contracts/http/runtime/v1/inventory/internal-server-error.schema.json",
+      "sha256": "086c3fb0936f05965729ef7b7ec331c5eae54318078092219c56a164d5ab4765"
+    },
+    {
+      "path": "contracts/http/runtime/v1/inventory/provider-unavailable.schema.json",
+      "sha256": "2f50c56345873186e668b4f0795203c92d259a4da864934999291cf63324c170"
+    },
+    {
+      "path": "contracts/http/runtime/v1/inventory/request.schema.json",
+      "sha256": "e7f8d09e8d049eef78bbcb5234808dcfba9a832ea57733c2960ad2305742a571"
+    },
+    {
+      "path": "contracts/http/runtime/v1/inventory/response.schema.json",
+      "sha256": "b6f6f369a34ec843124ec5b331d7a5126369a6990167b53bdacd9af318f6dbec"
+    },
+    {
+      "path": "contracts/http/settings/v1/contract.toml",
+      "sha256": "263986f861f65d2f0d51d37cad83d2829776b0d6991d23396b4666d631e4dab0"
+    },
+    {
+      "path": "contracts/http/settings/v1/request.schema.json",
+      "sha256": "b2e84b22ba317b6b97ff57c5d176313c7faecb7bef5609032110ba992f3c4590"
+    },
+    {
+      "path": "contracts/http/settings/v1/response.schema.json",
+      "sha256": "9368e70c18fecff35bdcc15a3a518eee53a3419d77cea6c72e563127af56651b"
+    },
+    {
+      "path": "contracts/http/settings/v2/contract.toml",
+      "sha256": "1bf3e4f3e3d1661f37d284e007c182f85109908b48233280b4155241ca08e8bd"
+    },
+    {
+      "path": "contracts/http/settings/v2/request.schema.json",
+      "sha256": "fe9adcdfa49c4ff53ad40d5747be81ef13179383f1e4b5a2233d6c251fde0e60"
+    },
+    {
+      "path": "contracts/http/settings/v2/response.schema.json",
+      "sha256": "14e986f2efd4a05d94423b425c61b8d71ec0eff1e08b75aefeb100f101c391a8"
+    },
+    {
+      "path": "contracts/http/settings/v4/contract.toml",
+      "sha256": "1c80e3394db279cc4bf1a5170030b978331721e81bd4108ab4ad9d4d09070fe4"
+    },
+    {
+      "path": "contracts/http/settings/v4/request.schema.json",
+      "sha256": "06664c97e453d441a332cb9aab08d9ba63a10783afba6c6791c1b53b2a3a2333"
+    },
+    {
+      "path": "contracts/http/settings/v4/response.schema.json",
+      "sha256": "e24e2efc0831f66d2c9e89c7d3f5d11760e0a7093efbbcb8a07614ddc1bd1d20"
+    },
+    {
+      "path": "contracts/http/settings/v5/contract.toml",
+      "sha256": "1793c84bcc12999c6d0cd92557d25d6fdd08e117e7b1a21fec1965b4b52abe64"
+    },
+    {
+      "path": "contracts/http/settings/v5/request.schema.json",
+      "sha256": "f452100480f9e5727d4073642eedc56ce1a93a60d6dd07e0a5e356f7e7f4fc48"
+    },
+    {
+      "path": "contracts/http/settings/v5/response.schema.json",
+      "sha256": "7431ab4858652efa49ed7ee6ceafe1570ddf1d4d9a7364df9c4e2b2d6b32316f"
+    },
+    {
+      "path": "contracts/http/settings/v6/contract.toml",
+      "sha256": "eca423d9cac582b11933f297f1fb9f32dfb04515d1492850dd94474cf868a31e"
+    },
+    {
+      "path": "contracts/http/settings/v6/request.schema.json",
+      "sha256": "b1b103d5b13511051dbe696dec31cf0c6f1c07ed1408a2a99e89a5afe4001396"
+    },
+    {
+      "path": "contracts/http/settings/v6/response.schema.json",
+      "sha256": "ea545bdbaa7995e0f366a0df1c99dad73b379563098aea2bfad98cf8b7874766"
+    },
+    {
+      "path": "contracts/http/settings/v7/contract.toml",
+      "sha256": "c2b2a2b80464a020c57e7901b73e200c6891486ba5dbd5c042ba73c438b4ffa1"
+    },
+    {
+      "path": "contracts/http/settings/v7/request.schema.json",
+      "sha256": "170da93c84b0b1d752d0066d14e907766e106531e6f14e260db6a86073e7eb09"
+    },
+    {
+      "path": "contracts/http/settings/v7/response.schema.json",
+      "sha256": "bd8d7f235164904c435bf3ada4c9b39be7d926dca2def300309c05399bde2833"
+    }
+  ]
+}

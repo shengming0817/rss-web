@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -16,6 +16,11 @@ import {
   REAL_PHASES,
   realPhase,
 } from './e2e/real/phase-evidence.mjs'
+import {
+  DEFAULT_RSS_REVISION,
+  resolveSupportedRssRevision,
+  SUPPORTED_RSS_REVISIONS,
+} from './e2e/real/supported-revisions.mjs'
 
 const root = resolve(import.meta.dirname)
 
@@ -42,7 +47,8 @@ describe('real RSS journey harness', () => {
     expect(JSON.parse(output)).toEqual({
       sourceMode: 'git-archive',
       webSourceMode: 'git-archive-clean-head',
-      pinnedRevision: 'b7f3e1d0bcc5b2e59639a81b4f37937914b53f00',
+      pinnedRevision: DEFAULT_RSS_REVISION,
+      supportedRevisions: SUPPORTED_RSS_REVISIONS,
       tenantBootstrap: 'edge-deployment-fixed',
       browserNetwork: 'edge-only',
       faultTransport: 'none',
@@ -56,6 +62,26 @@ describe('real RSS journey harness', () => {
       malformedResponseEvidence: 'isolated-playwright-smoke',
       cleanup: 'compose-down-volumes-and-temporary-snapshot',
     })
+  })
+
+  it('accepts only the manifest-supported real RSS revision before archive or Docker work', () => {
+    expect(resolveSupportedRssRevision(undefined)).toBe(DEFAULT_RSS_REVISION)
+    expect(() => resolveSupportedRssRevision('1f6c131f0759f921551a81e12e0adb0071346927')).toThrow(
+      'unsupported RSS source revision',
+    )
+    expect(() => resolveSupportedRssRevision('0'.repeat(40))).toThrow(
+      'unsupported RSS source revision',
+    )
+
+    const unsupported = spawnSync('node', ['e2e/real/run.mjs', '--print-plan'], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...process.env, RSS_SOURCE_REVISION: '0'.repeat(40) },
+    })
+    expect(unsupported.status).not.toBe(0)
+    expect(unsupported.stderr).toContain('unsupported RSS source revision')
+    expect(unsupported.stderr).not.toContain('docker')
+    expect(unsupported.stderr).not.toContain('archive')
   })
 
   it('does not use browser interception, direct tenant headers, or a sibling working tree', () => {

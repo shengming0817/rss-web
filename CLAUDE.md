@@ -90,6 +90,15 @@ Runtime Inventory, discover providers/listeners/contracts, read env flags again,
 as request, tenant, principal, compatibility, or health authority. The Web image revision, reviewed RSS
 contract baseline, and opt-in real-harness RSS archive revision remain separate identities.
 
+`docs/contracts/20260812-rss-release-baseline.json` is the sole release-consumed contract decision
+ledger. It is production-excluded and must exactly match the typed endpoint owner set plus the reviewed
+RSS source-file closure. Historical comparison, reviewed selected-contract, and real-journey-supported
+RSS revisions are distinct identities: hash equality never promotes a revision into the supported
+runtime set. Unknown, incompatible, or fail-closed decisions block the release audit. Do not import the
+ledger into application code, discover RSS contracts at runtime, create a compatibility fallback, or
+claim whole-revision/N-1 compatibility from the bounded journey. Rollback is an atomic immutable
+Web/Edge image redeploy by digest, never a partial static-file copy or dual route.
+
 `@rss/runtime` and `@rss/audit` are framework-neutral Admin-listener adapters over the one protected
 session transport. Vue composition belongs in `apps/web`. Runtime inventory is facts only; do not use
 it for listener discovery or deployment authority. Validate but discard listener/placement endpoints

@@ -24,10 +24,11 @@ const zhCN = {
       revision: '源码 revision',
     },
     rss: {
-      title: 'RSS Contract 基线',
-      baseline: '基线标识',
+      title: 'RSS 已消费 Contract 记录',
+      baseline: '记录标识',
       sourceRevision: 'RSS 源码 revision',
-      notice: '这是 Web 构建时固定的 contract 依据，不代表当前 RSS 实例的运行时版本。',
+      notice:
+        '仅记录此 Web 构建审查过的 RSS contracts。不表示当前 RSS 实例的版本、健康或 authority，也不表示整个 RSS API 或任何 N/N-1 兼容承诺。',
     },
     preview: {
       title: 'Preview 来源',
