@@ -3,7 +3,7 @@
 ## Scope and identities
 
 - Issue: #39; blocker #38 was closed before implementation.
-- Final executable implementation commit: `a5a696c4e7526f33eff47838e83020ac34969c46`.
+- Final executable implementation commit: `27b5e9bc80bccaefc05005caec02306aa9b233f7`.
 - Base Web revision and rollback image source: `a2b90c97d2da7079b0a593fd7b445fd595e6b897`.
 - Decision ledger: `20260812-release-consumed-contracts` at
   `docs/contracts/20260812-rss-release-baseline.json`.
@@ -38,8 +38,8 @@ of a running RSS instance. Only the explicit supported revision may enter the ar
 
 ## Real journey decision
 
-The final review machine receipt is `/tmp/rss-web-39-review-final-real-receipt.json`. It records Web
-`a5a696c4e7526f33eff47838e83020ac34969c46`, RSS
+The review machine receipt `/tmp/rss-web-39-review-final-real-receipt.json` binds the preceding
+executable audit/Edge implementation `a5a696c4e7526f33eff47838e83020ac34969c46` and records RSS
 `b7f3e1d0bcc5b2e59639a81b4f37937914b53f00`, all ten production phases passed,
 `preview-isolation` passed as `demo-preview`, and checked cleanup passed for Compose project
 `rss-web-real-48378`.
@@ -108,10 +108,10 @@ phases plus cleanup as recorded above.
 
 Implementation excluding this receipt:
 
-- release identity, ledger, audit, and operational guards: +980 / -21
-- executable tests, Chromium, Edge rollback, and CI evidence: +465 / -22
-- project rules and runbook: +77 / -4
-- total: +1522 / -47
+- release identity, ledger, audit, and operational guards: +1002 / -21
+- executable tests, Chromium, Edge rollback, and CI evidence: +495 / -22
+- project rules and runbook: +79 / -4
+- total: +1576 / -47
 - generated files and dependency lock changes: 0
 
 Feature rollback is one revert of this PR. It restores the prior About baseline identity and real pin,
