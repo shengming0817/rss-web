@@ -5,7 +5,7 @@ import { createWebReleaseMeta } from './release-meta'
 const revision = 'a'.repeat(40)
 
 describe('Web release metadata', () => {
-  it('freezes build and RSS baseline facts as external release evidence', () => {
+  it('freezes build and selected-contract ledger facts as external release evidence', () => {
     const meta = createWebReleaseMeta({
       webRevision: revision,
       roleBindingsPreview: false,
@@ -15,16 +15,16 @@ describe('Web release metadata', () => {
 
     expect(meta).toEqual({
       web: { revision, source: EXTERNAL_SOURCE },
-      rssContractBaseline: {
-        id: '20260809-current-rss-baseline',
-        sourceRevision: 'b513d3390d73d4f291bb31afc588ca1307ce19af',
+      rssContractLedger: {
+        id: '20260812-release-consumed-contracts',
+        sourceRevision: '1f6c131f0759f921551a81e12e0adb0071346927',
         source: EXTERNAL_SOURCE,
       },
       previewSources: [],
     })
     expect(Object.isFrozen(meta)).toBe(true)
     expect(Object.isFrozen(meta.web)).toBe(true)
-    expect(Object.isFrozen(meta.rssContractBaseline)).toBe(true)
+    expect(Object.isFrozen(meta.rssContractLedger)).toBe(true)
     expect(Object.isFrozen(meta.previewSources)).toBe(true)
   })
 

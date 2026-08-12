@@ -15,9 +15,9 @@ export interface WebReleaseMeta {
     readonly revision: string
     readonly source: typeof EXTERNAL_SOURCE
   }>
-  readonly rssContractBaseline: Readonly<{
-    readonly id: '20260809-current-rss-baseline'
-    readonly sourceRevision: 'b513d3390d73d4f291bb31afc588ca1307ce19af'
+  readonly rssContractLedger: Readonly<{
+    readonly id: '20260812-release-consumed-contracts'
+    readonly sourceRevision: '1f6c131f0759f921551a81e12e0adb0071346927'
     readonly source: typeof EXTERNAL_SOURCE
   }>
   readonly previewSources: readonly PreviewReleaseSource[]
@@ -48,9 +48,9 @@ export function createWebReleaseMeta(input: WebReleaseMetaInput): WebReleaseMeta
   ])
   return Object.freeze({
     web: Object.freeze({ revision: input.webRevision, source: EXTERNAL_SOURCE }),
-    rssContractBaseline: Object.freeze({
-      id: '20260809-current-rss-baseline',
-      sourceRevision: 'b513d3390d73d4f291bb31afc588ca1307ce19af',
+    rssContractLedger: Object.freeze({
+      id: '20260812-release-consumed-contracts',
+      sourceRevision: '1f6c131f0759f921551a81e12e0adb0071346927',
       source: EXTERNAL_SOURCE,
     }),
     previewSources,
