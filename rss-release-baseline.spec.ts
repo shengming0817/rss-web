@@ -5,6 +5,7 @@ import { auditEndpoints } from './packages/api/src/endpoints/audit'
 import { identityEndpoints } from './packages/api/src/endpoints/identity'
 import { runtimeEndpoints } from './packages/api/src/endpoints/runtime'
 import { settingsEndpoints } from './packages/api/src/endpoints/settings'
+import { createWebReleaseMeta } from './apps/web/src/release-meta'
 
 const kebab = (value: string) => value.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)
 
@@ -37,6 +38,19 @@ describe('RSS release baseline audit', () => {
       files: 80,
       compatibleAdopted: 1,
       compatibleExact: 24,
+    })
+  })
+
+  it('joins the About release scalars to the sole ledger identity', () => {
+    const release = createWebReleaseMeta({
+      webRevision: '0'.repeat(40),
+      roleBindingsPreview: false,
+      configCatalogPreview: false,
+      configHistoryPreview: false,
+    })
+    expect(release.rssContractLedger).toMatchObject({
+      id: baseline.id,
+      sourceRevision: baseline.reviewedRssRevision,
     })
   })
 
@@ -88,6 +102,24 @@ describe('RSS release baseline audit', () => {
         changed((copy) => {
           const contract = (copy.contracts as Record<string, unknown>[])[0]!
           contract.path = '/api/v1/drift'
+        }),
+    ],
+    [
+      'contract source association swap',
+      () =>
+        changed((copy) => {
+          const contracts = copy.contracts as Record<string, unknown>[]
+          const first = contracts[0]!
+          const second = contracts[1]!
+          ;[first.sourceFiles, second.sourceFiles] = [second.sourceFiles, first.sourceFiles]
+          ;[first.contractSource, second.contractSource] = [
+            second.contractSource,
+            first.contractSource,
+          ]
+          ;[first.sourceClosureSha256, second.sourceClosureSha256] = [
+            second.sourceClosureSha256,
+            first.sourceClosureSha256,
+          ]
         }),
     ],
     [

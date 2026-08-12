@@ -21,6 +21,11 @@ const productionForbidden = [
   /preview\/config-history/,
 ]
 const commonForbidden = [/ant-design-vue/, /@ant-design\/icons-vue/, /\banticon\b/]
+const productionReleaseForbidden = [
+  /20260812-rss-release-baseline/,
+  /9179ab7ea099032c3441226c818901eebae16a90563d2a665f58c5bfd30922a8/,
+  /contracts\/http\/runtime\/v1\/inventory\/contract\.toml/,
+]
 
 function files(path) {
   return readdirSync(path, { withFileTypes: true }).flatMap((entry) => {
@@ -46,5 +51,11 @@ for (const file of files(root)) {
   }
   if (mode === 'production' && productionForbidden.some((pattern) => pattern.test(content))) {
     throw new Error(`production artifact contains Preview content: ${file}`)
+  }
+  if (
+    mode === 'production' &&
+    productionReleaseForbidden.some((pattern) => pattern.test(content))
+  ) {
+    throw new Error(`production artifact contains release ledger content: ${file}`)
   }
 }

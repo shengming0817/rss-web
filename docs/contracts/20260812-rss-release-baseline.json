@@ -20,7 +20,9 @@
         "contracts/http/audit/v1/list-entries/internal-server-error.schema.json",
         "contracts/http/audit/v1/list-entries/request.schema.json",
         "contracts/http/audit/v1/list-entries/response.schema.json"
-      ]
+      ],
+      "contractSource": "contracts/http/audit/v1/list-entries/contract.toml",
+      "sourceClosureSha256": "11382cdab96b1fe4d69302cefde1832c6bf3a8bb2b5cb6891e85e6abf048f565"
     },
     {
       "id": "audit.list-tenant-entries",
@@ -32,7 +34,9 @@
         "contracts/http/audit/v1/list-tenant-entries/contract.toml",
         "contracts/http/audit/v1/list-tenant-entries/request.schema.json",
         "contracts/http/audit/v1/list-tenant-entries/response.schema.json"
-      ]
+      ],
+      "contractSource": "contracts/http/audit/v1/list-tenant-entries/contract.toml",
+      "sourceClosureSha256": "3e29647f9efb0c633d95c13f6cd7cfd6e64d8bd1ed04c755adfe1807a6a02338"
     },
     {
       "id": "identity.account-status-get",
@@ -44,7 +48,9 @@
         "contracts/http/identity/v1/account-status-get/contract.toml",
         "contracts/http/identity/v1/account-status-get/request.schema.json",
         "contracts/http/identity/v1/account-status-get/response.schema.json"
-      ]
+      ],
+      "contractSource": "contracts/http/identity/v1/account-status-get/contract.toml",
+      "sourceClosureSha256": "653f878af5bed79d94c6a7fc139de222096ca6403b7c344675abc92b80c16cbe"
     },
     {
       "id": "identity.account-status-set",
@@ -56,7 +62,9 @@
         "contracts/http/identity/v1/account-status-set/contract.toml",
         "contracts/http/identity/v1/account-status-set/request.schema.json",
         "contracts/http/identity/v1/account-status-set/response.schema.json"
-      ]
+      ],
+      "contractSource": "contracts/http/identity/v1/account-status-set/contract.toml",
+      "sourceClosureSha256": "03f42e5232805ee5374eef5dd31de4175748dd4ba9fd4e53f5811888b5399d9e"
     },
     {
       "id": "identity.login",
@@ -68,7 +76,9 @@
         "contracts/http/identity/v1/login/contract.toml",
         "contracts/http/identity/v1/login/request.schema.json",
         "contracts/http/identity/v1/login/response.schema.json"
-      ]
+      ],
+      "contractSource": "contracts/http/identity/v1/login/contract.toml",
+      "sourceClosureSha256": "164180d931d65d5a715b636d384a322bd398468928a8a285fde5f68519342f43"
     },
     {
       "id": "identity.logout",
@@ -80,7 +90,9 @@
         "contracts/http/identity/v1/logout/contract.toml",
         "contracts/http/identity/v1/logout/request.schema.json",
         "contracts/http/identity/v1/logout/response.schema.json"
-      ]
+      ],
+      "contractSource": "contracts/http/identity/v1/logout/contract.toml",
+      "sourceClosureSha256": "fd9413a9e3b67c471d9b72140c0583fbc5eab2505ad7b130f3b42109dd61277f"
     },
     {
       "id": "identity.logout-all",
@@ -92,7 +104,9 @@
         "contracts/http/identity/v1/logout-all/contract.toml",
         "contracts/http/identity/v1/logout-all/request.schema.json",
         "contracts/http/identity/v1/logout-all/response.schema.json"
-      ]
+      ],
+      "contractSource": "contracts/http/identity/v1/logout-all/contract.toml",
+      "sourceClosureSha256": "42a518de84281e00b780e5ed25dd78cef24df05e84a679a40365a8d456286e18"
     },
     {
       "id": "identity.password-change",
@@ -104,7 +118,9 @@
         "contracts/http/identity/v1/password-change/contract.toml",
         "contracts/http/identity/v1/password-change/request.schema.json",
         "contracts/http/identity/v1/password-change/response.schema.json"
-      ]
+      ],
+      "contractSource": "contracts/http/identity/v1/password-change/contract.toml",
+      "sourceClosureSha256": "8d93bd217b9a197741258afafdc219d91fa41cef585eb99455bf6d37c67c7c44"
     },
     {
       "id": "identity.policies-create",
@@ -117,7 +133,9 @@
         "contracts/http/identity/v1/policies-create/contract.toml",
         "contracts/http/identity/v1/policies-create/request.schema.json",
         "contracts/http/identity/v1/policies-create/response.schema.json"
-      ]
+      ],
+      "contractSource": "contracts/http/identity/v1/policies-create/contract.toml",
+      "sourceClosureSha256": "24d9118de732029c13b3ee7ea157d56dc29281a4dd9acbef185d4185eb57006c"
     },
     {
       "id": "identity.policies-deactivate",
@@ -129,7 +147,9 @@
         "contracts/http/identity/v1/policies-deactivate/contract.toml",
         "contracts/http/identity/v1/policies-deactivate/request.schema.json",
         "contracts/http/identity/v1/policies-deactivate/response.schema.json"
-      ]
+      ],
+      "contractSource": "contracts/http/identity/v1/policies-deactivate/contract.toml",
+      "sourceClosureSha256": "2a9492646326d48e6bf9fd1bf65215142635896d73a7f904d3491cf2fafee8d8"
     },
     {
       "id": "identity.policies-get",
@@ -142,7 +162,9 @@
         "contracts/http/identity/v1/policies-get/contract.toml",
         "contracts/http/identity/v1/policies-get/request.schema.json",
         "contracts/http/identity/v1/policies-get/response.schema.json"
-      ]
+      ],
+      "contractSource": "contracts/http/identity/v1/policies-get/contract.toml",
+      "sourceClosureSha256": "8b074794dae690537cc77b45d43bda858825193a16d110dc3f75d1caccf50b39"
     },
     {
       "id": "identity.policies-list",
@@ -155,7 +177,9 @@
         "contracts/http/identity/v1/policies-list/contract.toml",
         "contracts/http/identity/v1/policies-list/request.schema.json",
         "contracts/http/identity/v1/policies-list/response.schema.json"
-      ]
+      ],
+      "contractSource": "contracts/http/identity/v1/policies-list/contract.toml",
+      "sourceClosureSha256": "975b7ad9531041fbc476a75d20ac370815d0e52a8c55b06aaa5db18d24d347b1"
     },
     {
       "id": "identity.policies-update",
@@ -168,7 +192,9 @@
         "contracts/http/identity/v1/policies-update/contract.toml",
         "contracts/http/identity/v1/policies-update/request.schema.json",
         "contracts/http/identity/v1/policies-update/response.schema.json"
-      ]
+      ],
+      "contractSource": "contracts/http/identity/v1/policies-update/contract.toml",
+      "sourceClosureSha256": "9d5dbcbe996b79f27b6d2a002bb28b76491775167b17f1e17ef60589db4fd966"
     },
     {
       "id": "identity.profile",
@@ -180,7 +206,9 @@
         "contracts/http/identity/v1/profile/contract.toml",
         "contracts/http/identity/v1/profile/request.schema.json",
         "contracts/http/identity/v1/profile/response.schema.json"
-      ]
+      ],
+      "contractSource": "contracts/http/identity/v1/profile/contract.toml",
+      "sourceClosureSha256": "66d3010ae8957f5a01f061d151eccb99a4aaf11230d46ded09673fb68ae9aca5"
     },
     {
       "id": "identity.refresh",
@@ -192,7 +220,9 @@
         "contracts/http/identity/v1/refresh/contract.toml",
         "contracts/http/identity/v1/refresh/request.schema.json",
         "contracts/http/identity/v1/refresh/response.schema.json"
-      ]
+      ],
+      "contractSource": "contracts/http/identity/v1/refresh/contract.toml",
+      "sourceClosureSha256": "c73140659985581d7faeea8b179d59a05b6af813e19b41c565556b999f57f063"
     },
     {
       "id": "identity.roles-assign",
@@ -204,7 +234,9 @@
         "contracts/http/identity/v1/roles-assign/contract.toml",
         "contracts/http/identity/v1/roles-assign/request.schema.json",
         "contracts/http/identity/v1/roles-assign/response.schema.json"
-      ]
+      ],
+      "contractSource": "contracts/http/identity/v1/roles-assign/contract.toml",
+      "sourceClosureSha256": "aee2bac95eab8d5e142a4710d808ff78d7f24d194517c01d1387098d84c29b2f"
     },
     {
       "id": "identity.roles-list",
@@ -216,7 +248,9 @@
         "contracts/http/identity/v1/roles-list/contract.toml",
         "contracts/http/identity/v1/roles-list/request.schema.json",
         "contracts/http/identity/v1/roles-list/response.schema.json"
-      ]
+      ],
+      "contractSource": "contracts/http/identity/v1/roles-list/contract.toml",
+      "sourceClosureSha256": "d72dfdb436ad50fbf69f063c0bd5d117e2d3f80de0af81b8aabeff8eb41e93b9"
     },
     {
       "id": "identity.roles-revoke",
@@ -228,7 +262,9 @@
         "contracts/http/identity/v1/roles-revoke/contract.toml",
         "contracts/http/identity/v1/roles-revoke/request.schema.json",
         "contracts/http/identity/v1/roles-revoke/response.schema.json"
-      ]
+      ],
+      "contractSource": "contracts/http/identity/v1/roles-revoke/contract.toml",
+      "sourceClosureSha256": "f1b968dc5cee6a10e5eed8d4b43600313f4d76188edc8ec5c36b2d683d1a658d"
     },
     {
       "id": "runtime.inventory",
@@ -242,7 +278,9 @@
         "contracts/http/runtime/v1/inventory/provider-unavailable.schema.json",
         "contracts/http/runtime/v1/inventory/request.schema.json",
         "contracts/http/runtime/v1/inventory/response.schema.json"
-      ]
+      ],
+      "contractSource": "contracts/http/runtime/v1/inventory/contract.toml",
+      "sourceClosureSha256": "6f0694dd0554d332a668b908e66c1582de60eab033339dad035964e657817ec7"
     },
     {
       "id": "settings.config-delete",
@@ -254,7 +292,9 @@
         "contracts/http/settings/v5/contract.toml",
         "contracts/http/settings/v5/request.schema.json",
         "contracts/http/settings/v5/response.schema.json"
-      ]
+      ],
+      "contractSource": "contracts/http/settings/v5/contract.toml",
+      "sourceClosureSha256": "896ff52b060712d566f8128d70c76472325c21b0cade7a38410d1e39c1329844"
     },
     {
       "id": "settings.config-get",
@@ -266,7 +306,9 @@
         "contracts/http/settings/v4/contract.toml",
         "contracts/http/settings/v4/request.schema.json",
         "contracts/http/settings/v4/response.schema.json"
-      ]
+      ],
+      "contractSource": "contracts/http/settings/v4/contract.toml",
+      "sourceClosureSha256": "cdf66b421d33d68e9e18be4796c30889a3bbbcde43ee1d1c23f8fc9c644ea011"
     },
     {
       "id": "settings.config-publish",
@@ -278,7 +320,9 @@
         "contracts/http/settings/v1/contract.toml",
         "contracts/http/settings/v1/request.schema.json",
         "contracts/http/settings/v1/response.schema.json"
-      ]
+      ],
+      "contractSource": "contracts/http/settings/v1/contract.toml",
+      "sourceClosureSha256": "ba4b5bfbbb113e0c264eab840f19816c200346aea6851e0a694140cfec12c000"
     },
     {
       "id": "settings.config-rollback",
@@ -290,7 +334,9 @@
         "contracts/http/settings/v6/contract.toml",
         "contracts/http/settings/v6/request.schema.json",
         "contracts/http/settings/v6/response.schema.json"
-      ]
+      ],
+      "contractSource": "contracts/http/settings/v6/contract.toml",
+      "sourceClosureSha256": "318f3ea265492d91be4384e779c0aeed737d946f2605547f35da8c89bae9075f"
     },
     {
       "id": "settings.secret-publish",
@@ -302,7 +348,9 @@
         "contracts/http/settings/v2/contract.toml",
         "contracts/http/settings/v2/request.schema.json",
         "contracts/http/settings/v2/response.schema.json"
-      ]
+      ],
+      "contractSource": "contracts/http/settings/v2/contract.toml",
+      "sourceClosureSha256": "8639d6a91409df6a61b7a12d4ff2a938345707e0b742d1cbffc4f93cdfc72cc8"
     },
     {
       "id": "settings.secret-resolve",
@@ -314,7 +362,9 @@
         "contracts/http/settings/v7/contract.toml",
         "contracts/http/settings/v7/request.schema.json",
         "contracts/http/settings/v7/response.schema.json"
-      ]
+      ],
+      "contractSource": "contracts/http/settings/v7/contract.toml",
+      "sourceClosureSha256": "ad78e767c8e6f6d67b82371384d483047e429c6d613bbad3dd9baf4e829c38ec"
     }
   ],
   "files": [

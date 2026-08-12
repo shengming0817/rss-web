@@ -25,7 +25,10 @@ reuse a mutable tag as evidence, switch RSS revisions, or introduce a second rou
 
 - The running container image ID/digest and OCI `org.opencontainers.image.revision` label match the
   selected rollback image and Web revision.
-- Authenticated About displays that Web revision and the rollback release's own ledger identity.
+- Authenticated About displays that Web revision and the exact contract-evidence identity declared by
+  that release. A ledger-aware release shows its ledger ID/revision; the canonical legacy rollback
+  `a2b90c97…` shows historical baseline `20260809-current-rss-baseline` at
+  `b513d3390d73d4f291bb31afc588ca1307ce19af` and must not be relabelled as a compatibility ledger.
 - `/`, `/index.html`, and `/theme-init.js` have the reviewed no-store shell policy and security headers.
 - Every rollback hashed asset is available with the immutable cache policy; candidate-only assets are
   404, proving that releases were not mixed.

@@ -7,6 +7,21 @@ const REVIEWED_RSS_REVISION = '1f6c131f0759f921551a81e12e0adb0071346927'
 const SHA256 = /^[0-9a-f]{64}$/
 const SOURCE_PATH =
   /^contracts\/(?:http|components)\/[a-z0-9./-]+(?:\.schema\.json|contract\.toml)$/
+const CONTRACT_SOURCE_BY_ID = Object.freeze({
+  'settings.config-delete': 'contracts/http/settings/v5/contract.toml',
+  'settings.config-get': 'contracts/http/settings/v4/contract.toml',
+  'settings.config-publish': 'contracts/http/settings/v1/contract.toml',
+  'settings.config-rollback': 'contracts/http/settings/v6/contract.toml',
+  'settings.secret-publish': 'contracts/http/settings/v2/contract.toml',
+  'settings.secret-resolve': 'contracts/http/settings/v7/contract.toml',
+})
+
+function expectedContractSource(id) {
+  return (
+    CONTRACT_SOURCE_BY_ID[id] ??
+    `contracts/http/${id.replace('.', '/v1/').replaceAll('.', '-')}/contract.toml`
+  )
+}
 
 function record(value, keys, label) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
@@ -107,7 +122,16 @@ export function auditRssReleaseBaseline(input, selectedEndpoints) {
   for (const [index, rawContract] of manifest.contracts.entries()) {
     const contract = record(
       rawContract,
-      ['id', 'method', 'path', 'successStatus', 'decision', 'sourceFiles'],
+      [
+        'id',
+        'method',
+        'path',
+        'successStatus',
+        'decision',
+        'contractSource',
+        'sourceClosureSha256',
+        'sourceFiles',
+      ],
       `contracts[${index}]`,
     )
     const id = nonempty(contract.id, `contracts[${index}].id`)
@@ -125,17 +149,25 @@ export function auditRssReleaseBaseline(input, selectedEndpoints) {
       throw new Error(`source closure missing for ${id}`)
     }
     unique(contract.sourceFiles, `${id} source files`)
+    const expectedSource = expectedContractSource(id)
     if (
-      contract.sourceFiles.filter(
-        (path) => typeof path === 'string' && path.endsWith('/contract.toml'),
-      ).length !== 1
-    ) {
-      throw new Error(`contract source missing for ${id}`)
-    }
+      contract.contractSource !== expectedSource ||
+      !contract.sourceFiles.includes(expectedSource)
+    )
+      throw new Error(`contract source drifted for ${id}`)
+    const contractDirectory = expectedSource.slice(0, -'/contract.toml'.length)
+    const privateSources = contract.sourceFiles.filter((path) => path.startsWith('contracts/http/'))
+    if (privateSources.some((path) => !path.startsWith(`${contractDirectory}/`)))
+      throw new Error(`private source ownership drifted for ${id}`)
     for (const path of contract.sourceFiles) {
       if (typeof path !== 'string' || !files.has(path)) throw new Error(`unknown source for ${id}`)
       referencedFiles.add(path)
     }
+    const sourceClosureSha256 = createHash('sha256')
+      .update(contract.sourceFiles.map((path) => `${path}\0${files.get(path).sha256}\n`).join(''))
+      .digest('hex')
+    if (contract.sourceClosureSha256 !== sourceClosureSha256)
+      throw new Error(`contract source closure drifted for ${id}`)
     if (contract.decision === 'compatible-exact') compatibleExact += 1
     else if (contract.decision === 'compatible-adopted' && id === 'runtime.inventory') {
       compatibleAdopted += 1
