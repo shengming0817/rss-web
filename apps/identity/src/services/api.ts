@@ -60,7 +60,7 @@ export function createApi(owner: IdentitySession) {
         (v) =>
           list(object(v, ['providers'])['providers'], (p) => {
             const r = object(p, ['provider_id', 'label'])
-            return { id: uuid(r['provider_id']), label: text(r['label']) }
+            return { id: uuid(r['provider_id']), label: text(r['label'], 4096) }
           }),
         undefined,
         200,

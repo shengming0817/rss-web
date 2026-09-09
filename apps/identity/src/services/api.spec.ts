@@ -112,3 +112,10 @@ it('keeps the session after a duplicate login conflict without replaying creatio
   expect(f.session.state.value.status).toBe('authenticated')
   expect(f.request.mock.calls.filter(([o]) => o.path.endsWith('/accounts'))).toHaveLength(1)
 })
+
+it('decodes a bounded full issuer and client login label', async () => {
+  const f = fixture()
+  const label = `https://idp.example.test/${'a'.repeat(2000)} · client · ${OTHER}`
+  f.replies.push({ providers: [{ provider_id: OTHER, label }] })
+  expect(await f.api.loginOptions(TENANT)).toEqual([{ id: OTHER, label }])
+})
