@@ -18,6 +18,32 @@ export function createSession(transport: HttpTransport) {
   let generation = 0
   let rotation: Promise<void> | undefined
   let departure: Promise<void> | undefined
+  let pending: Promise<unknown> | undefined
+  function serial<T>(work: () => Promise<T>): Promise<T> {
+    const result = pending ? pending.then(work, work) : work()
+    const settled = result.then(
+      () => undefined,
+      () => undefined,
+    )
+    pending = settled
+    void settled.then(() => {
+      if (pending === settled) pending = undefined
+    })
+    return result
+  }
+  function perform<T>(work: () => Promise<T>): Promise<T> {
+    return serial(async () => {
+      const expected = generation
+      try {
+        const result = await work()
+        if (generation !== expected) throw new Error('Stale response')
+        return result
+      } catch (error) {
+        if (generation === expected) failure(error)
+        throw error
+      }
+    })
+  }
   function clear(status: 'anonymous' | 'unavailable' = 'anonymous') {
     generation++
     csrf = undefined
@@ -25,6 +51,7 @@ export function createSession(transport: HttpTransport) {
   }
   function accept(tenant: string, v: SessionResponse, expected: number) {
     if (generation !== expected) throw new Error('Stale session')
+    generation++
     csrf = v.csrf_token
     state.value = { status: 'authenticated', tenant, session: v.session, identity: v.identity }
   }
@@ -38,7 +65,6 @@ export function createSession(transport: HttpTransport) {
       clear('unavailable')
   }
   async function check(tenant: string) {
-    if (departure) await departure
     tenant = uuid(tenant)
     clear()
     const expected = generation
@@ -64,8 +90,6 @@ export function createSession(transport: HttpTransport) {
     }
   }
   async function login(tenant: string, login: string, password: string) {
-    await rotation
-    if (departure) await departure
     tenant = uuid(tenant)
     const expected = ++generation
     try {
@@ -93,11 +117,12 @@ export function createSession(transport: HttpTransport) {
     return { 'X-Identity-Request': '1', ...(csrf === undefined ? {} : { 'X-CSRF-Token': csrf }) }
   }
   function refresh(): Promise<void> {
+    if (departure) return departure
     if (rotation) return rotation
     const tenant = state.value.tenant
     if (tenant === null) return Promise.reject(new Error('Session required'))
-    const expected = generation
-    rotation = (async () => {
+    rotation = serial(async () => {
+      const expected = generation
       try {
         accept(
           tenant,
@@ -118,7 +143,7 @@ export function createSession(transport: HttpTransport) {
         }
         throw error
       }
-    })().finally(() => {
+    }).finally(() => {
       rotation = undefined
     })
     return rotation
@@ -134,8 +159,7 @@ export function createSession(transport: HttpTransport) {
   }
   function logout(all = false): Promise<void> {
     if (departure) return departure
-    departure = (async () => {
-      await rotation
+    departure = serial(async () => {
       const tenant = state.value.tenant
       if (tenant === null) return
       const saved = headers()
@@ -153,26 +177,23 @@ export function createSession(transport: HttpTransport) {
         failure(error)
         throw error
       }
-    })().finally(() => {
+    }).finally(() => {
       departure = undefined
     })
     return departure
   }
   return {
     state: readonly(state),
-    check,
-    login,
+    check: (tenant: string) => serial(() => check(tenant)),
+    login: (tenant: string, loginKey: string, password: string) =>
+      serial(() => login(tenant, loginKey, password)),
     clear,
     headers,
     refresh,
     activity,
     logout,
     failure,
-    generation: () => generation,
-    ready: async () => {
-      await rotation
-      await departure
-    },
+    perform,
     transport,
   }
 }

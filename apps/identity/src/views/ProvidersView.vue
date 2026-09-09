@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { ModalShell } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
 import { useIdentity } from '../context'
 import { useOperation } from '../services/operation'
@@ -13,6 +14,7 @@ const blocked = computed(() =>
 const rows = ref<Provider[]>([])
 const selected = ref<Provider | null>(null)
 const report = ref('')
+const pending = ref<Provider | null>(null)
 const issuer = ref('')
 const client = ref('')
 const secretRef = ref('')
@@ -67,7 +69,16 @@ async function save() {
     await load()
   })
 }
-async function toggle(p: Provider) {
+function toggle(p: Provider) {
+  if (p.enabled) pending.value = p
+  else void changeEnabled(p)
+}
+async function confirmDisable() {
+  const p = pending.value
+  pending.value = null
+  if (p) await changeEnabled(p)
+}
+async function changeEnabled(p: Provider) {
   await run(async () => {
     await api.enableProvider(p, !p.enabled)
     clear()
@@ -118,7 +129,9 @@ async function test(p: Provider) {
                 <button :disabled="busy || blocked" @click="edit(p)">
                   {{ t('identity.edit') }}</button
                 ><button :disabled="busy || blocked" @click="toggle(p)">
-                  {{ t(p.enabled ? 'identity.disable' : 'identity.enable') }}</button
+                  {{
+                    t(p.enabled ? 'identity.disableProvider' : 'identity.enableProvider')
+                  }}</button
                 ><button :disabled="busy || blocked" @click="test(p)">
                   {{ t('identity.test') }}
                 </button>
@@ -148,5 +161,19 @@ async function test(p: Provider) {
         <button type="submit" :disabled="busy || blocked">{{ t('identity.save') }}</button>
       </form></template
     >
+    <ModalShell
+      :open="pending !== null"
+      title-id="provider-disable-title"
+      description-id="provider-disable-detail"
+      role="alertdialog"
+      @close="pending = null"
+    >
+      <h2 id="provider-disable-title">{{ t('identity.disableProvider') }}</h2>
+      <p id="provider-disable-detail">
+        {{ pending?.settings.issuer }} · {{ t('identity.disableProviderHelp') }}
+      </p>
+      <button @click="pending = null">{{ t('identity.cancel') }}</button>
+      <button :disabled="busy" @click="confirmDisable">{{ t('identity.confirm') }}</button>
+    </ModalShell>
   </section>
 </template>

@@ -14,6 +14,6 @@
 
 `pnpm typecheck/lint/format:check/test:coverage/test:boundary/build` 包含独立应用；`pnpm test:e2e:identity` 为明确的模拟浏览器交互证明，不冒称真实后端。`scripts/check-identity-app-build.mjs` 验证产物无旧 bearer/业务入口和 mock/source map。
 
-实际 HTTP/UI T2 在后端 `make test-ui` 下运行 `e2e/identity/real.mjs`，使用固定前端构建、测试 HTTPS gateway、真实公开 Axum Router 与一次性 PostgreSQL；核对管理写入、退出后的401和普通成员403。前端源码应从固定 Git revision 归档、frozen lock安装，并用同一 `RSS_IDENTITY_WEB_REVISION` 构建。此证明不包含生产 binary/image/config、MDM 接入或生产恢复。
+实际 HTTP/UI T2 由消费者 rss-web 持有：先以 frozen lock 安装依赖，提交两仓源码，再运行 `IDENTITY_BACKEND_FIXTURE=/absolute/backend/worktree IDENTITY_JOINT_RECORD=/tmp/identity-joint.json pnpm test:identity:joint`。该入口构建当前已提交的 UI，选择同一源码内的浏览器 runner，并调用后端测试专用 `make test-ui` fixture。记录两仓完整 commit、lock 摘要、实际 UI 产物摘要和 runner 摘要；后端不获取或构建消费者源码，也不把消费者版本检查加入生产请求链。
 
-上游参考：Vue Router v4.5.0 `packages/router/src/navigationGuards.ts`；现有 @rss/core 主题与 ModalShell 公共接口。
+fixture 使用测试 HTTPS gateway、真实公开 Axum Router 与一次性 PostgreSQL，覆盖账户创建、停用、重置、恢复、IdP 创建/更新/测试/启停，以及退出后的 401 和普通成员 403。IdP 远程端口在该 UI 接缝中使用脚本实现；真实秘密和远程连接由后端 Keycloak 分组验证。此证明不包含生产 binary/image/config、MDM 接入或生产恢复。

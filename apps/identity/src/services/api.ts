@@ -25,14 +25,12 @@ export function createApi(owner: IdentitySession) {
     anonymousTenant?: string,
     query?: Record<string, string>,
   ): Promise<T> {
-    await owner.ready()
-    const tenant = anonymousTenant ?? owner.state.value.tenant
-    if (!tenant) throw new Error('Tenant required')
-    if (anonymousTenant === undefined && owner.state.value.status !== 'authenticated')
-      throw new Error('Session required')
-    const generation = owner.generation()
-    try {
-      const result = await owner.transport.request({
+    return owner.perform(async () => {
+      const tenant = anonymousTenant ?? owner.state.value.tenant
+      if (!tenant) throw new Error('Tenant required')
+      if (anonymousTenant === undefined && owner.state.value.status !== 'authenticated')
+        throw new Error('Session required')
+      return owner.transport.request({
         method,
         path: `/api/v1/tenants/{tenant}/${suffix}`,
         pathParams: { tenant: uuid(tenant) },
@@ -42,12 +40,7 @@ export function createApi(owner: IdentitySession) {
         decode,
         ...(query === undefined ? {} : { query }),
       })
-      if (generation !== owner.generation()) throw new Error('Stale response')
-      return result
-    } catch (error) {
-      if (generation === owner.generation()) owner.failure(error)
-      throw error
-    }
+    })
   }
   async function selfWrite(work: () => Promise<Account>) {
     try {
@@ -142,33 +135,32 @@ export function createApi(owner: IdentitySession) {
         tenant,
       ),
     async prepare(kind: 'login' | 'consent', challenge: string) {
-      return owner.transport.request({
-        method: 'POST',
-        path: `/api/v1/downstream/${kind}`,
-        headers: owner.headers(false),
-        body: { challenge },
-        successStatus: 200,
-        decode: flow,
-      })
+      return owner.perform(() =>
+        owner.transport.request({
+          method: 'POST',
+          path: `/api/v1/downstream/${kind}`,
+          headers: owner.headers(false),
+          body: { challenge },
+          successStatus: 200,
+          decode: flow,
+        }),
+      )
     },
     async accept(
       kind: 'login' | 'consent',
       challenge: string,
       value: { tenant_id: string; grant_id: string },
     ) {
-      try {
-        return await owner.transport.request({
+      return owner.perform(() =>
+        owner.transport.request({
           method: 'POST',
           path: `/api/v1/downstream/${kind}/accept`,
           headers: owner.headers(),
           body: { challenge, flow: value },
           successStatus: 200,
           decode: (v) => redirect(v, 'redirect_to'),
-        })
-      } catch (error) {
-        owner.failure(error)
-        throw error
-      }
+        }),
+      )
     },
   }
 }

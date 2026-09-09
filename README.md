@@ -1,6 +1,6 @@
 # RSS Web
 
-仓库包含既有 RSS 应用 `apps/web`，以及独立中央身份应用 `apps/identity`。后者消费 rss-identity 的 Cookie/CSRF API，详情见 [#2337 架构决定](docs/architecture/20260909-2337-central-identity.md)。开发使用 `pnpm -F @rss/identity-app dev`；生产构建须设置 `RSS_IDENTITY_WEB_REVISION`。
+仓库包含既有 RSS 应用 `apps/web`，以及独立中央身份应用 `apps/identity`。后者消费 rss-identity 的 Cookie/CSRF API，详情见 [#2337 架构决定](docs/architecture/20260909-2337-central-identity.md)。`pnpm -F @rss/identity-app dev` 只启动静态 UI 开发服务器，不提供 Identity API 或跨源代理。端到端开发需同源挂载真实后端；测试 fixture 与联合验收命令见上述架构决定。生产构建须设置 `RSS_IDENTITY_WEB_REVISION`。
 
 ## Existing RSS application
 

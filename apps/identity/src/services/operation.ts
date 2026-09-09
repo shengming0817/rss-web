@@ -23,5 +23,8 @@ export function useOperation() {
       if (active) busy.value = false
     }
   }
-  return { busy, error, run }
+  function checkpoint() {
+    if (!active) throw new Error('Operation abandoned')
+  }
+  return { busy, error, run, checkpoint }
 }

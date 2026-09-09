@@ -27,6 +27,7 @@
     "test:edge": "node e2e/edge/smoke.mjs",
     "test:e2e:real": "node e2e/real/run.mjs",
     "prepare": "husky",
+    "test:identity:joint": "node e2e/identity/run.mjs",
     "test:e2e:identity": "playwright test -c playwright.identity.config.ts",
     "check:identity-app:build": "node scripts/check-identity-app-build.mjs"
   },

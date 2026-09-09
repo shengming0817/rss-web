@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
@@ -34,11 +34,18 @@ async function view(
         name,
         component: { template: '<div/>' },
       })),
+      ...['resume', 'hydra-login', 'hydra-consent'].map((name) => ({
+        path: `/auth/${name}`,
+        name,
+        component: { template: '<div/>' },
+      })),
       { path: '/auth/error', name: 'error', component: { template: '<div/>' } },
     ],
   })
   await router.push(
-    name === 'error' ? { name, query } : { name, params: { tenant: TENANT }, query },
+    ['error', 'resume', 'hydra-login', 'hydra-consent'].includes(name)
+      ? { name, query }
+      : { name, params: { tenant: TENANT }, query },
   )
   await router.isReady()
   const wrapper = mount(component, {
@@ -218,7 +225,7 @@ describe('Identity views use actual app session and decoder modules', () => {
     )
     await wrapper
       .findAll('button')
-      .find((b) => b.text() === '启用账户')!
+      .find((b) => b.text() === '启用身份提供方')!
       .trigger('click')
     await flushPromises()
     await wrapper.get('#issuer').setValue('https://second.test')
@@ -246,4 +253,78 @@ describe('Identity views use actual app session and decoder modules', () => {
     expect(f.flows.read()).toBeNull()
     wrapper.unmount()
   })
+})
+
+it('discards late downstream preparation after the page leaves', async () => {
+  const f = fixture()
+  let finish!: (v: unknown) => void
+  f.replies.push(
+    () =>
+      new Promise((r) => {
+        finish = r
+      }),
+  )
+  const { wrapper, router } = await view(LoginView, f, 'hydra-login', {
+    login_challenge: 'secret challenge',
+  })
+  wrapper.unmount()
+  await router.replace({ name: 'error' })
+  finish({ tenant_id: TENANT, grant_id: ID })
+  await flushPromises()
+  expect(f.flows.read()).toBeNull()
+  expect(router.currentRoute.value.name).toBe('error')
+  expect(f.request).toHaveBeenCalledTimes(1)
+})
+
+it('routes expired resume and uncertain or rejected accept to a terminal error', async () => {
+  const expired = fixture()
+  expired.flows.save({ kind: 'sso', tenant: TENANT, challenge: '', flow: null })
+  const now = Date.now()
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 300001)
+  const first = await view(LoginView, expired, 'resume')
+  clock.mockRestore()
+  expect(first.router.currentRoute.value.name).toBe('error')
+  expect(expired.flows.read()).toBeNull()
+  first.wrapper.unmount()
+  for (const failure of [
+    decodeIdentityError(403, { code: 'insufficient_privilege' }, false),
+    decodeIdentityError(503, { code: 'identity_unavailable' }, false),
+  ]) {
+    const f = fixture()
+    f.flows.save({
+      kind: 'login',
+      tenant: TENANT,
+      challenge: 'secret',
+      flow: { tenant_id: TENANT, grant_id: ID },
+    })
+    f.replies.push(sessionValue(), failure)
+    const { wrapper, router } = await view(LoginView, f, 'resume')
+    expect(router.currentRoute.value.name).toBe('error')
+    expect(f.flows.read()).toBeNull()
+    expect(f.request.mock.calls.filter(([o]) => o.path.endsWith('/accept'))).toHaveLength(1)
+    wrapper.unmount()
+  }
+})
+
+it('requires confirmation before revoking a provider and its sessions', async () => {
+  const f = fixture()
+  await f.login()
+  f.replies.push({ providers: [{ ...providerValue, enabled: true }] })
+  const { wrapper } = await view(ProvidersView, f, 'providers')
+  const count = f.request.mock.calls.length
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text() === '停用身份提供方')!
+    .trigger('click')
+  expect(f.request).toHaveBeenCalledTimes(count)
+  expect(wrapper.get('[role=alertdialog]').text()).toContain('已有联合会话将失效')
+  f.replies.push(providerValue, { providers: [providerValue] })
+  await wrapper
+    .get('[role=alertdialog]')
+    .findAll('button')
+    .find((b) => b.text() === '确认')!
+    .trigger('click')
+  await flushPromises()
+  expect(f.request.mock.calls.at(-2)?.[0].body).toEqual({ expected_version: 1, enabled: false })
+  wrapper.unmount()
 })

@@ -18,6 +18,7 @@ describe('one central cookie session owner', () => {
     const first = f.session.refresh()
     const second = f.session.refresh()
     expect(first).toBe(second)
+    await Promise.resolve()
     resolve(sessionValue(true, 'b'.repeat(64)))
     await first
     expect(f.session.headers()['X-CSRF-Token']).toBe('b'.repeat(64))
@@ -120,4 +121,44 @@ it('waits for signout settlement before a login-page session check', async () =>
   await logout
   await check
   expect(f.session.state.value.status).toBe('anonymous')
+})
+
+it('does not start refresh during pending logout', async () => {
+  const f = fixture()
+  await f.login()
+  let finish!: (v: unknown) => void
+  f.replies.push(
+    () =>
+      new Promise((r) => {
+        finish = r
+      }),
+  )
+  const exit = f.session.logout()
+  await Promise.resolve()
+  const renewal = f.session.refresh().catch(() => undefined)
+  expect(f.request.mock.calls.some(([o]) => o.path.endsWith('/refresh'))).toBe(false)
+  finish(undefined)
+  await exit
+  await renewal
+  expect(f.session.state.value.status).toBe('anonymous')
+})
+
+it('serializes downstream accept behind rotation and uses the new CSRF', async () => {
+  const f = fixture()
+  await f.login()
+  let finish!: (v: unknown) => void
+  f.replies.push(
+    () =>
+      new Promise((r) => {
+        finish = r
+      }),
+    { redirect_to: 'https://consumer.example.test/done' },
+  )
+  const rotation = f.session.refresh()
+  const acceptance = f.api.accept('login', 'challenge', { tenant_id: TENANT, grant_id: TENANT })
+  expect(f.request).toHaveBeenCalledTimes(2)
+  finish(sessionValue(true, 'c'.repeat(64)))
+  await rotation
+  await acceptance
+  expect(f.request.mock.calls.at(-1)?.[0].headers?.['X-CSRF-Token']).toBe('c'.repeat(64))
 })

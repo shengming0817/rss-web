@@ -15,6 +15,7 @@ const statuses: Readonly<Record<string, number>> = {
   reauthentication_failed: 403,
   last_administrator: 409,
   configuration_changed: 409,
+  provider_limit_reached: 409,
   identity_link_conflict: 409,
   rate_limited: 429,
   identity_unavailable: 503,
