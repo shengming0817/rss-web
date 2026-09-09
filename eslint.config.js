@@ -56,7 +56,7 @@ const DEEP_PATH_PATTERN = {
 
 /** Reverse-dependency ban: no package/* or tools/* may import the app layer */
 const NO_WEB_PATTERN = {
-  regex: '^@rss/web(/|$)',
+  regex: '^@rss/(?:web|identity-app)(/|$)',
   message:
     'packages/* 和 tools/* 禁止反向 import @rss/web（应用层）。参见 AGENTS.md 和 CLAUDE.md。',
 }
@@ -519,6 +519,28 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/consistent-type-imports': 'off',
       '@typescript-eslint/no-explicit-any': 'warn',
+    },
+  },
+
+  // #2337: a separate central Identity app; no bearer/legacy business dependencies.
+  {
+    files: ['apps/identity/**/*.{js,ts,vue}'],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex: '^@rss/(?!core(?:/|$)|api/identity$)',
+            message: 'Identity app uses only core UI and its dedicated Identity transport.',
+          },
+          {
+            regex: '(?:^|/)apps/web(?:/|$)|(?:^|/)packages/identity(?:/|$)',
+            message: 'No cross-app or legacy Identity source imports.',
+          },
+        ],
+        [NO_AXIOS_PATH],
+      ),
+      'no-restricted-globals': ['error', ...NO_STATIC_DIAGNOSTICS_NETWORK],
+      'no-restricted-properties': ['error', ...NO_STATIC_DIAGNOSTICS_NETWORK_PROPERTIES],
     },
   },
 

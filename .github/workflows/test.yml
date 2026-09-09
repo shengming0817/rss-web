@@ -56,6 +56,11 @@ jobs:
           VITE_CONFIG_CATALOG_PREVIEW: 'true'
           VITE_CONFIG_HISTORY_PREVIEW: 'true'
 
+      - name: Build central Identity app
+        run: pnpm -F @rss/identity-app build && pnpm check:identity-app:build
+        env:
+          RSS_IDENTITY_WEB_REVISION: ${{ github.sha }}
+
       - name: Verify RSS-only build identity
         run: pnpm check:identity:build
 
@@ -91,6 +96,11 @@ jobs:
 
       - name: Run E2E smoke tests
         run: pnpm test:e2e
+        env:
+          CI: true
+
+      - name: Run Identity browser interaction tests
+        run: pnpm test:e2e:identity
         env:
           CI: true
 

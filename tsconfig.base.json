@@ -12,7 +12,6 @@
     "skipLibCheck": true,
     "noEmit": true,
     "jsx": "preserve",
-
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
@@ -21,7 +20,6 @@
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
     "forceConsistentCasingInFileNames": true,
-
     "types": [],
     "baseUrl": ".",
     "paths": {
@@ -47,7 +45,8 @@
       "@rss/settings": ["packages/settings/src/index.ts"],
       "@rss/settings/preview": ["packages/settings/src/preview.ts"],
       "@rss/settings/preview-guard": ["packages/settings/src/preview-guard.ts"],
-      "@rss/api/endpoints/settings": ["packages/api/src/endpoints/settings.ts"]
+      "@rss/api/endpoints/settings": ["packages/api/src/endpoints/settings.ts"],
+      "@rss/api/identity": ["packages/api/src/identity.ts"]
     }
   }
 }
