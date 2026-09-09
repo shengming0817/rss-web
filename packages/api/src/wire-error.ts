@@ -189,3 +189,15 @@ function decodeAgainstRule(status: number, value: unknown, rule: EndpointErrorRu
     return protocolError(status)
   return decoded
 }
+
+/** Private construction seam for the separate, closed Identity protocol adapter. */
+export function identityWireFailure(status: number, code: string, requestId?: string): RssApiError {
+  return new RssApiErrorImpl({
+    cause: 'wire',
+    code,
+    messageKey: 'errors.unknown',
+    retryable: false,
+    status,
+    ...(requestId === undefined ? {} : { requestId }),
+  })
+}

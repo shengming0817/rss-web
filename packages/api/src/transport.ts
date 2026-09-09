@@ -1,6 +1,12 @@
 import axios from 'axios'
 import type { AxiosInstance, AxiosRequestConfig } from 'axios'
-import type { HttpTransport, NoContentRequest, QueryValue, RequestOptions } from './types'
+import type {
+  HttpTransport,
+  NoContentRequest,
+  QueryValue,
+  RequestOptions,
+  RssApiError,
+} from './types'
 import { authorizationFrom } from './internal/authorization'
 import {
   abortedError,
@@ -94,13 +100,13 @@ function resolveQuery(
   return result
 }
 
-function requestConfig(
+export function requestConfig(
   options: NoContentRequest | RequestOptions<unknown>,
   defaultTimeoutMs: number,
+  protectedHeaders: Readonly<Record<string, string>>,
 ): AxiosRequestConfig {
   const timeout = options.timeoutMs ?? defaultTimeoutMs
   if (!positiveTimeout(timeout)) throw clientError()
-  const authorization = authorizationFrom(options)
   const reservedHeader = Object.keys(options.headers ?? {}).some((header) => {
     const normalized = header.toLowerCase()
     return (
@@ -110,19 +116,13 @@ function requestConfig(
       normalized === 'pragma'
     )
   })
-  if (
-    reservedHeader ||
-    (options.cache !== undefined && options.cache !== 'no-store') ||
-    (options.session !== undefined && authorization === undefined) ||
-    (authorization !== undefined &&
-      (options.session === undefined || authorization.trim().length === 0))
-  ) {
+  if (reservedHeader || (options.cache !== undefined && options.cache !== 'no-store')) {
     throw clientError()
   }
   const headers = {
     ...(options.headers ?? {}),
     ...(options.cache === 'no-store' ? { 'Cache-Control': 'no-store' } : {}),
-    ...(authorization === undefined ? {} : { Authorization: `Bearer ${authorization}` }),
+    ...protectedHeaders,
   }
   return {
     method: options.method,
@@ -136,16 +136,19 @@ function requestConfig(
   }
 }
 
-async function execute<T>(
+export async function execute<T>(
   instance: AxiosInstance,
   defaultTimeoutMs: number,
   options: NoContentRequest | RequestOptions<T>,
+  decodeError: (status: number, value: unknown) => RssApiError,
+  protectedHeaders: Readonly<Record<string, string>>,
 ): Promise<T | void> {
   if (options.signal?.aborted === true) throw abortedError()
   try {
-    const response = await instance.request(requestConfig(options, defaultTimeoutMs))
-    if (response.status >= 400)
-      throw decodeEndpointError(response.status, response.data, options.errorPolicy)
+    const response = await instance.request(
+      requestConfig(options, defaultTimeoutMs, protectedHeaders),
+    )
+    if (response.status >= 400) throw decodeError(response.status, response.data)
     if (response.status !== options.successStatus) throw protocolError(response.status)
     if (options.successStatus === 204) return undefined
     try {
@@ -174,8 +177,21 @@ export function createHttpTransport(config: HttpTransportConfig): HttpTransport 
   }
   const instance = axios.create({ baseURL: config.baseURL ?? '' })
   return {
-    request(options: NoContentRequest | RequestOptions<unknown>) {
-      return execute(instance, config.defaultTimeoutMs, options)
+    async request(options: NoContentRequest | RequestOptions<unknown>) {
+      const authorization = authorizationFrom(options)
+      if (
+        (options.session !== undefined && authorization === undefined) ||
+        (authorization !== undefined &&
+          (options.session === undefined || authorization.trim().length === 0))
+      )
+        throw clientError()
+      return execute(
+        instance,
+        config.defaultTimeoutMs,
+        options,
+        (status, value) => decodeEndpointError(status, value, options.errorPolicy),
+        authorization === undefined ? {} : { Authorization: `Bearer ${authorization}` },
+      )
     },
   } as HttpTransport
 }

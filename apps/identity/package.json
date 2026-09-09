@@ -1,0 +1,31 @@
+{
+  "name": "@rss/identity-app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "typecheck": "vue-tsc --noEmit && vue-tsc --noEmit -p tsconfig.node.json",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "vue": "catalog:",
+    "vue-router": "catalog:",
+    "vue-i18n": "catalog:",
+    "pinia": "catalog:",
+    "@rss/core": "workspace:*",
+    "@rss/api": "workspace:*"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "catalog:",
+    "@types/node": "catalog:",
+    "vite": "catalog:",
+    "sass": "catalog:",
+    "vitest": "catalog:",
+    "@vue/test-utils": "catalog:",
+    "jsdom": "catalog:",
+    "@vitest/coverage-v8": "catalog:"
+  }
+}

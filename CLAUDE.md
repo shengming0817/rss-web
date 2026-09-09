@@ -167,3 +167,7 @@ failure evidence is labelled synthetic and must not be reported as real-backend 
 a fault proxy, interception to the real journey, a second runner/classifier, or a domain-by-status
 matrix. Failure postures such as rate limiting must be isolated to their named phase so shared harness
 state cannot contaminate unrelated product evidence.
+
+## #2337 independent central Identity app
+
+The earlier bearer session, profile-verification, pre-auth tenant-header, and `apps/web` composition rules govern the existing RSS application. The separate `apps/identity` application follows the accepted boundary in AGENTS.md and `docs/architecture/20260909-2337-central-identity.md`: one cookie session controller, same-origin Identity APIs, strict closed response decoding and no replay. Its browser does not consume internal identity validation, exchange OIDC tokens or inherit old RSS business adapters. Shared API HTTP execution remains single-owned; no legacy wire fallback is permitted. Its static build and browser tests must be included in CI.

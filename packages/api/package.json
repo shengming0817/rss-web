@@ -10,7 +10,8 @@
     "./endpoints/runtime": "./src/endpoints/runtime.ts",
     "./endpoints/settings": "./src/endpoints/settings.ts",
     "./session": "./src/session.ts",
-    "./testing": "./src/testing.ts"
+    "./testing": "./src/testing.ts",
+    "./identity": "./src/identity.ts"
   },
   "files": [
     "src"

@@ -292,3 +292,18 @@ describe('ESLint package boundaries', () => {
     }
   })
 })
+
+it('contains Identity relative imports within the app', async () => {
+  for (const specifier of [
+    '../../../packages/api/src/transport',
+    '../../web/src/main',
+    '../../../packages/settings/src/index',
+  ]) {
+    expect(
+      await ruleIds(`export { x } from '${specifier}'`, 'apps/identity/src/main.ts'),
+    ).toContain('identity-boundary/contained')
+  }
+  expect(
+    await ruleIds("export { x } from './services/session'", 'apps/identity/src/main.ts'),
+  ).not.toContain('identity-boundary/contained')
+})

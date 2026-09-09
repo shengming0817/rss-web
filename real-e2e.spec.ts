@@ -107,7 +107,7 @@ describe('real RSS journey harness', () => {
     )
     expect(policyGrant).toContain('"effect":"allow"')
     expect(policyGrant).not.toContain('"obligations"')
-    expect(defaultPlaywright).toContain("testIgnore: 'real/**'")
+    expect(defaultPlaywright).toContain("testIgnore: ['real/**', 'identity/**']")
   })
 
   it('keeps one real runner and one Playwright failure classifier', () => {

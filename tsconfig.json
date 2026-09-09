@@ -20,6 +20,8 @@
     "vitest.workspace.ts",
     "playwright.config.ts",
     "playwright.real.config.ts",
-    "e2e/**/*.ts"
+    "e2e/**/*.ts",
+    "identity-app-security.spec.ts",
+    "playwright.identity.config.ts"
   ]
 }

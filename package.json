@@ -10,7 +10,7 @@
   },
   "scripts": {
     "dev": "pnpm -F @rss/web dev",
-    "build": "pnpm check:rss-release-baseline && RSS_WEB_REVISION=$(/usr/bin/git rev-parse HEAD) pnpm -F @rss/web build && pnpm check:identity:build && pnpm check:preview:build",
+    "build": "pnpm check:rss-release-baseline && RSS_WEB_REVISION=$(/usr/bin/git rev-parse HEAD) pnpm -F @rss/web build && pnpm check:identity:build && pnpm check:preview:build && RSS_IDENTITY_WEB_REVISION=$(/usr/bin/git rev-parse HEAD) pnpm -F @rss/identity-app build && pnpm check:identity-app:build",
     "build:preview:demo": "VITE_CONFIG_CATALOG_PREVIEW=true VITE_CONFIG_HISTORY_PREVIEW=true VITE_ROLE_BINDINGS_PREVIEW=true pnpm -F @rss/web exec vite build --mode demo --outDir dist-preview-demo && node scripts/check-built-preview.mjs apps/web/dist-preview-demo demo",
     "check:identity:build": "node scripts/check-built-identity.mjs apps/web/dist",
     "check:preview:build": "node scripts/check-built-preview.mjs apps/web/dist",
@@ -26,7 +26,10 @@
     "test:e2e": "playwright test",
     "test:edge": "node e2e/edge/smoke.mjs",
     "test:e2e:real": "node e2e/real/run.mjs",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:identity:joint": "node e2e/identity/run.mjs",
+    "test:e2e:identity": "playwright test -c playwright.identity.config.ts",
+    "check:identity-app:build": "node scripts/check-identity-app-build.mjs"
   },
   "lint-staged": {
     "*.{ts,vue}": [
