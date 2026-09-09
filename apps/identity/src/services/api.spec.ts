@@ -101,3 +101,14 @@ describe('Identity operations use one protected transport without replay', () =>
     await expect(result).rejects.toBeDefined()
   })
 })
+
+it('keeps the session after a duplicate login conflict without replaying creation', async () => {
+  const f = fixture()
+  await f.login()
+  f.replies.push(decodeIdentityError(409, { code: 'account_already_exists' }, false))
+  await expect(
+    f.api.createAccount('existing', 'strong private password', 'member'),
+  ).rejects.toMatchObject({ code: 'account_already_exists' })
+  expect(f.session.state.value.status).toBe('authenticated')
+  expect(f.request.mock.calls.filter(([o]) => o.path.endsWith('/accounts'))).toHaveLength(1)
+})
