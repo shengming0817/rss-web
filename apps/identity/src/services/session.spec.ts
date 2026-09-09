@@ -162,3 +162,22 @@ it('serializes downstream accept behind rotation and uses the new CSRF', async (
   await acceptance
   expect(f.request.mock.calls.at(-1)?.[0].headers?.['X-CSRF-Token']).toBe('c'.repeat(64))
 })
+
+it('resolves refresh tenant only after earlier session transitions settle', async () => {
+  const f = fixture()
+  await f.login()
+  let release!: () => void
+  const hold = f.session.perform(
+    () =>
+      new Promise<void>((resolve) => {
+        release = resolve
+      }),
+  )
+  const other = '44444444-4444-4444-8444-444444444444'
+  f.replies.push(sessionValue(), sessionValue())
+  const check = f.session.check(other)
+  const refresh = f.session.refresh()
+  release()
+  await Promise.all([hold, check, refresh])
+  expect(f.request.mock.calls.at(-1)?.[0].pathParams).toEqual({ tenant: other })
+})

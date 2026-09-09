@@ -119,9 +119,10 @@ export function createSession(transport: HttpTransport) {
   function refresh(): Promise<void> {
     if (departure) return departure
     if (rotation) return rotation
-    const tenant = state.value.tenant
-    if (tenant === null) return Promise.reject(new Error('Session required'))
+    if (state.value.tenant === null) return Promise.reject(new Error('Session required'))
     rotation = serial(async () => {
+      const tenant = state.value.tenant
+      if (tenant === null) throw new Error('Session required')
       const expected = generation
       try {
         accept(
