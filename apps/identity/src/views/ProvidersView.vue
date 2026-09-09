@@ -45,8 +45,8 @@ function edit(p: Provider) {
   report.value = ''
 }
 async function load() {
-  rows.value = await api.providers()
   clear()
+  rows.value = await api.providers()
 }
 onMounted(() => {
   if (session.state.value.identity?.administrator) void run(load)

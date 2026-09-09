@@ -328,3 +328,27 @@ it('requires confirmation before revoking a provider and its sessions', async ()
   expect(f.request.mock.calls.at(-2)?.[0].body).toEqual({ expected_version: 1, enabled: false })
   wrapper.unmount()
 })
+
+it('does not erase provider edits when the initial list finishes late', async () => {
+  const f = fixture()
+  await f.login()
+  let finish!: (v: unknown) => void
+  f.replies.push(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  const { wrapper } = await view(ProvidersView, f, 'providers')
+  await wrapper.get('#issuer').setValue('https://new.example.test')
+  await wrapper.get('#client-id').setValue('new-client')
+  await wrapper.get('#secret-ref').setValue('new-secret@1')
+  finish({ providers: [] })
+  await flushPromises()
+  expect((wrapper.get('#issuer').element as HTMLInputElement).value).toBe(
+    'https://new.example.test',
+  )
+  expect((wrapper.get('#client-id').element as HTMLInputElement).value).toBe('new-client')
+  expect((wrapper.get('#secret-ref').element as HTMLInputElement).value).toBe('new-secret@1')
+  wrapper.unmount()
+})
