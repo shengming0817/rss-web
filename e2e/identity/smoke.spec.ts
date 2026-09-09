@@ -66,3 +66,81 @@ test('callback error clears per-tab flow and never reflects provider text', asyn
   await expect(page.getByRole('heading', { name: '登录未完成' })).toBeVisible()
   await expect(page.locator('body')).not.toContainText('private-upstream-marker')
 })
+
+test('SSO resumes a prepared Hydra flow and consumes the locator before accept', async ({
+  page,
+}) => {
+  let active = false
+  let accepts = 0
+  let consumed = false
+  const flow = { tenant_id: tenant, grant_id: id }
+  await page.route('https://idp.example.test/authorize', (route) =>
+    route.fulfill({ status: 302, headers: { location: 'http://localhost:5175/auth/resume' } }),
+  )
+  await page.route('https://consumer.example.test/done', (route) =>
+    route.fulfill({ contentType: 'text/html', body: '<h1>Consumer continuation</h1>' }),
+  )
+  await page.route('**/api/v1/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    let body: unknown
+    let status = 200
+    if (path === '/api/v1/downstream/login') body = flow
+    else if (path.endsWith('/session')) {
+      body = active ? profile : { code: 'invalid_credential' }
+      status = active ? 200 : 401
+    } else if (path.endsWith('/login-options'))
+      body = { providers: [{ provider_id: id, label: 'Example SSO' }] }
+    else if (path.endsWith(`/oidc/${id}/login`)) {
+      active = true
+      body = { authorization_url: 'https://idp.example.test/authorize' }
+    } else if (path === '/api/v1/downstream/login/accept') {
+      accepts++
+      expect(route.request().postDataJSON()).toEqual({ flow, challenge: 'fixture-challenge' })
+      expect(route.request().headers()['x-csrf-token']).toBe(csrf)
+      consumed = await page.evaluate(
+        () => sessionStorage.getItem('rss.identity.pending-flow') === null,
+      )
+      body = { redirect_to: 'https://consumer.example.test/done' }
+    } else {
+      status = 400
+      body = { code: 'malformed_request' }
+    }
+    await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
+  })
+  await page.goto('/login?login_challenge=fixture-challenge')
+  await expect(page.getByRole('button', { name: '组织 SSO · Example SSO' })).toBeVisible()
+  expect(page.url()).not.toContain('fixture-challenge')
+  await page.getByRole('button', { name: '组织 SSO · Example SSO' }).click()
+  await expect(page.getByRole('heading', { name: 'Consumer continuation' })).toBeVisible()
+  expect(accepts).toBe(1)
+  expect(consumed).toBe(true)
+})
+
+test('an unknown consent result cannot replay after reload', async ({ page }) => {
+  let accepts = 0
+  const flow = { tenant_id: tenant, grant_id: id }
+  await page.route('**/api/v1/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    let body: unknown
+    let status = 200
+    if (path === '/api/v1/downstream/consent') body = flow
+    else if (path.endsWith('/session')) body = profile
+    else if (path.endsWith('/login-options')) body = { providers: [] }
+    else if (path === '/api/v1/downstream/consent/accept') {
+      accepts++
+      status = 503
+      body = { code: 'identity_unavailable', correlation_id: id }
+    } else {
+      status = 400
+      body = { code: 'malformed_request' }
+    }
+    await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
+  })
+  await page.goto('/consent?consent_challenge=fixture-consent')
+  await page.getByRole('button', { name: '继续', exact: true }).click()
+  await expect(page.getByRole('alert')).toBeVisible()
+  expect(await page.evaluate(() => sessionStorage.getItem('rss.identity.pending-flow'))).toBeNull()
+  await page.reload()
+  await expect(page.getByRole('alert')).toBeVisible()
+  expect(accepts).toBe(1)
+})
