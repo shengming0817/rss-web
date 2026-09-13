@@ -1,5 +1,5 @@
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE'
-export type SuccessStatus = 200 | 201 | 202 | 204
+export type SuccessStatus = 200 | 201 | 204
 export type QueryValue = string | number | boolean | undefined
 export type Decoder<T> = (value: unknown, status?: number) => T
 
