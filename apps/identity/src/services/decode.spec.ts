@@ -3,6 +3,21 @@ import * as d from './decode'
 import { accountValue, providerValue, sessionValue, ID } from '../../tests/support'
 import { testReport } from './api'
 describe('closed Identity wire projections', () => {
+  it('requires the current platform identity shape and rejects legacy session fields', () => {
+    const value = sessionValue()
+    expect(() =>
+      d.sessionResponse({
+        ...value,
+        identity: { principal_id: ID, administrator: true, has_local_password: true },
+      }),
+    ).toThrow()
+    expect(
+      d.sessionResponse({
+        ...value,
+        identity: { ...value.identity, platform_administrator: false },
+      }).identity.platform_administrator,
+    ).toBe(false)
+  })
   it('decodes accounts, sessions, provider config and bound flow', () => {
     expect(d.account(accountValue).login).toBe('member')
     expect(d.account({ ...accountValue, login: null }).login).toBeNull()

@@ -149,10 +149,14 @@ export async function execute<T>(
       requestConfig(options, defaultTimeoutMs, protectedHeaders),
     )
     if (response.status >= 400) throw decodeError(response.status, response.data)
-    if (response.status !== options.successStatus) throw protocolError(response.status)
+    const expected = options.successStatus
+    if (
+      Array.isArray(expected) ? !expected.includes(response.status) : response.status !== expected
+    )
+      throw protocolError(response.status)
     if (options.successStatus === 204) return undefined
     try {
-      return options.decode(response.data)
+      return options.decode(response.data, response.status)
     } catch {
       throw protocolError(response.status)
     }

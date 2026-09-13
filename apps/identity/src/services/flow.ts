@@ -2,10 +2,11 @@ import { flow, object, number, text, uuid, type Flow } from './decode'
 const KEY = 'rss.identity.pending-flow'
 const LIFETIME = 300_000
 export interface Pending {
-  kind: 'login' | 'consent' | 'sso'
+  kind: 'login' | 'consent' | 'sso' | 'step-up'
   tenant: string
   challenge: string
   flow: Flow | null
+  operation: string | null
   created: number
 }
 export function createFlows(
@@ -25,8 +26,10 @@ export function createFlows(
         'challenge',
         'flow',
         'created',
+        'operation',
       ])
-      if (!['login', 'consent', 'sso'].includes(text(v['kind']))) throw new Error('Invalid flow')
+      if (!['login', 'consent', 'sso', 'step-up'].includes(text(v['kind'])))
+        throw new Error('Invalid flow')
       const created = number(v['created'])
       if (now() < created || now() - created >= LIFETIME) throw new Error('Expired flow')
       return {
@@ -34,6 +37,7 @@ export function createFlows(
         tenant: uuid(v['tenant']),
         challenge: text(v['challenge'], 8192),
         flow: v['flow'] === null ? null : flow(v['flow']),
+        operation: v['operation'] === null ? null : uuid(v['operation']),
         created,
       }
     } catch {

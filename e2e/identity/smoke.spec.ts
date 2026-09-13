@@ -4,8 +4,18 @@ const id = '22222222-2222-4222-8222-222222222222'
 const csrf = 'a'.repeat(64)
 const profile = {
   session: { id, auth_time: 1, idle_expires_at: 4102444800, absolute_expires_at: 4102444900 },
-  identity: { principal_id: id, administrator: true, has_local_password: true },
+  identity: {
+    principal_id: id,
+    administrator: true,
+    platform_administrator: false,
+    has_local_password: true,
+  },
   csrf_token: csrf,
+}
+const security = {
+  session_id: id,
+  authentication: { auth_time: 1, acr: 'unspecified', amr: ['pwd'] },
+  eligible_step_up_providers: [],
 }
 async function fixture(page: Page) {
   let active = false
@@ -26,6 +36,7 @@ async function fixture(page: Page) {
       status = 401
       body = { code: 'invalid_credential' }
     } else if (path.endsWith('/session')) body = profile
+    else if (path.endsWith('/session/security')) body = security
     else if (path.endsWith('/sessions')) body = { sessions: [profile.session], next_cursor: null }
     else if (path.endsWith('/accounts')) body = { accounts: [], next_cursor: null }
     else if (path.endsWith('/providers')) body = { providers: [] }

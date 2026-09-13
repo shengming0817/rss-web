@@ -20,6 +20,14 @@ const statuses: Readonly<Record<string, number>> = {
   identity_link_conflict: 409,
   rate_limited: 429,
   identity_unavailable: 503,
+  platform_administrator_required: 403,
+  invalid_platform_request: 400,
+  platform_conflict: 409,
+  tenant_limit_reached: 409,
+  last_platform_administrator: 409,
+  operation_not_observed: 404,
+  operation_outcome_unknown: 503,
+  operation_not_completed: 503,
 }
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export function decodeIdentityError(
@@ -51,8 +59,16 @@ export function createIdentityTransport(): HttpTransport {
       const downstream = /^\/api\/v1\/downstream\/(?:login|consent)(?:\/accept)?$/.test(
         options.path,
       )
+      const platform =
+        (options.method === 'GET' &&
+          [
+            '/api/v1/platform',
+            '/api/v1/platform/tenants',
+            '/api/v1/platform/operations/{operation}',
+          ].includes(options.path)) ||
+        (options.method === 'POST' && options.path === '/api/v1/platform/tenants')
       if (
-        (!downstream && !options.path.startsWith('/api/v1/tenants/{tenant}/')) ||
+        (!downstream && !platform && !options.path.startsWith('/api/v1/tenants/{tenant}/')) ||
         options.session !== undefined ||
         options.errorPolicy !== undefined
       )

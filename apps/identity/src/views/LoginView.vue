@@ -6,6 +6,7 @@ import { useIdentity } from '../context'
 import { useOperation } from '../services/operation'
 import { isRssApiError } from '@rss/api/identity'
 import { uuid } from '../services/decode'
+import { operationQuery } from '../services/navigation'
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
@@ -17,16 +18,22 @@ const password = ref('')
 const providers = ref<{ id: string; label: string }[]>([])
 async function failFlow(failure: unknown) {
   checkpoint()
+  const pending = flows.read()
+  const operation = pending?.operation ?? operationQuery(route.query).operation
+  const originTenant = pending?.tenant ?? tenant.value
   flows.clear()
   await router.replace({
     name: 'error',
-    query: { reason: isRssApiError(failure) && failure.status === 503 ? 'unavailable' : 'failed' },
+    query: {
+      reason: isRssApiError(failure) && failure.status === 503 ? 'unavailable' : 'failed',
+      ...(operation ? { operation, tenant: originTenant } : {}),
+    },
   })
 }
 async function continueFlow() {
   checkpoint()
   const pending = flows.take()
-  if (pending && pending.kind !== 'sso' && pending.flow) {
+  if (pending && (pending.kind === 'login' || pending.kind === 'consent') && pending.flow) {
     try {
       const location = await api.accept(pending.kind, pending.challenge, pending.flow)
       checkpoint()
@@ -36,7 +43,14 @@ async function continueFlow() {
     }
   } else if (route.name === 'hydra-login' || route.name === 'hydra-consent') {
     await failFlow(new Error('Flow expired'))
-  } else await router.replace({ name: 'sessions', params: { tenant: tenant.value } })
+  } else {
+    const operation = pending?.operation ?? operationQuery(route.query).operation
+    await router.replace({
+      name: operation ? 'platform' : 'sessions',
+      params: { tenant: tenant.value },
+      query: operation ? { operation } : {},
+    })
+  }
 }
 async function submit() {
   const secret = password.value
@@ -48,7 +62,14 @@ async function submit() {
 }
 async function sso(id: string) {
   await run(async () => {
-    if (!flows.read()) flows.save({ kind: 'sso', tenant: tenant.value, challenge: '', flow: null })
+    if (!flows.read())
+      flows.save({
+        kind: 'sso',
+        tenant: tenant.value,
+        challenge: '',
+        flow: null,
+        operation: operationQuery(route.query).operation ?? null,
+      })
     try {
       const location = await api.beginSso(tenant.value, id)
       checkpoint()
@@ -86,7 +107,7 @@ onMounted(() => {
         const value = await api.prepare(kind, challenge)
         checkpoint()
         tenant.value = value.tenant_id
-        flows.save({ kind, tenant: value.tenant_id, challenge, flow: value })
+        flows.save({ kind, tenant: value.tenant_id, challenge, flow: value, operation: null })
       } else tenant.value = uuid(route.params['tenant'])
       await session.check(tenant.value)
       checkpoint()

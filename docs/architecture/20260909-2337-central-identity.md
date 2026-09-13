@@ -16,4 +16,28 @@
 
 实际 HTTP/UI T2 由消费者 rss-web 持有：先以 frozen lock 安装依赖，提交两仓源码，再运行 `IDENTITY_BACKEND_FIXTURE=/absolute/backend/worktree IDENTITY_JOINT_RECORD=/tmp/identity-joint.json pnpm test:identity:joint`。该入口构建当前已提交的 UI，选择同一源码内的浏览器 runner，并调用后端测试专用 `make test-ui` fixture。记录两仓完整 commit、lock 摘要、实际 UI 产物摘要和 runner 摘要；后端不获取或构建消费者源码，也不把消费者版本检查加入生产请求链。
 
-fixture 使用测试 HTTPS gateway、真实公开 Axum Router 与一次性 PostgreSQL，覆盖账户创建、停用、重置、恢复、IdP 创建/更新/测试/启停，以及退出后的 401 和普通成员 403。IdP 远程端口在该 UI 接缝中使用脚本实现；真实秘密和远程连接由后端 Keycloak 分组验证。此证明不包含生产 binary/image/config、MDM 接入或生产恢复。
+fixture 使用测试 HTTPS gateway、真实公开 Axum Router 与一次性 PostgreSQL，覆盖账户创建、停用、重置、恢复、IdP 创建/更新/测试/启停，以及退出后的 401 和普通成员 403。本接缝使用后端固定 Keycloak fixture 与生产 OIDC adapter；浏览器实际完成授权跳转、唯一 callback、resume 和 step-up。此证明不包含生产 binary/image/config、MDM 接入或生产恢复。
+
+## #2368 平台与当前认证事实
+
+平台管理员复用部署提供的系统域登录地址；入口 `/tenants/{tenant}/platform` 使用当前会话的
+`platform_administrator` 提示和后端平台上下文结果。列表与创建消费现有平台 API，网页自动生成
+租户、首个管理员与操作 UUID，口令只在组件和本次请求中存在。201/202 分别表示可登录/待激活，
+后续读取失败不改变已确认的提交事实。未知结果只查询原 operation；404 仍为未观察到，不能重放。
+校验后的 operation UUID 可随同域页面、登录、错误导航恢复查询；不保存命令、秘密或任意 return URL。
+
+`GET /api/v1/tenants/{tenant}/session/security` 是 Federation 的唯一浏览器安全投影，返回当前 session ID、
+规范认证事实和当前主体 eligible providers。会话控制器按消费者需要读取并合并并发调用，刷新、
+退出和上下文变化使旧快照失效。页面不根据 provider 管理列表、AMR 是否为空或 URL 判断 MFA/资格。
+step-up 使用现有 POST、唯一 callback 与 resume；五分钟 flow locator 增加 step-up 类型及可空的
+operation 查询定位。旧 locator 字段形状直接作废，没有兼容读取分支。
+
+所有排队操作绑定页面与会话上下文；跨租户路径重新挂载视图，已知会话到期统一清空身份。
+平台开通只给出目标租户登录地址，不授予目标租户内容访问或 MDM 权限。
+
+同步当前后端协议：session identity 必须含 platform_administrator；账户列表与账户写入回执分别
+严格解码；provider settings 移除 secret_ref，管理创建/更新显式提交 client_secret/ca_pem，响应
+包含 credential_version。秘密从不回填或持久化，旧字段集合与旧请求体不再接受。
+
+本项不增加身份关联、平台角色管理、已有租户管理员增补或通用 MFA 策略 UI。真实 T2 还覆盖
+平台网页开通、首个管理员登录和普通租户身份拒绝；MFA 产品 T3 仍由 #2366 持有。

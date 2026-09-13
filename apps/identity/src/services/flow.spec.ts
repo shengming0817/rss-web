@@ -21,6 +21,7 @@ describe('bounded per-tab continuation', () => {
       tenant: TENANT,
       challenge: 'one-use',
       flow: { tenant_id: TENANT, grant_id: ID },
+      operation: null,
     }
     f.save(value)
     expect(f.take()?.challenge).toBe('one-use')
@@ -31,7 +32,7 @@ describe('bounded per-tab continuation', () => {
     f.save(value)
     now--
     expect(f.read()).toBeNull()
-    f.save({ ...value, kind: 'sso', flow: null })
+    f.save({ ...value, kind: 'sso', flow: null, operation: null })
     expect(f.read()?.flow).toBeNull()
     const key = [...map.keys()][0]!
     map.set(key, 'private-invalid-json')

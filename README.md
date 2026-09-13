@@ -2,6 +2,8 @@
 
 仓库包含既有 RSS 应用 `apps/web`，以及独立中央身份应用 `apps/identity`。后者消费 rss-identity 的 Cookie/CSRF API，详情见 [#2337 架构决定](docs/architecture/20260909-2337-central-identity.md)。`pnpm -F @rss/identity-app dev` 只启动静态 UI 开发服务器，不提供 Identity API 或跨源代理。端到端开发需同源挂载真实后端；测试 fixture 与联合验收命令见上述架构决定。生产构建须设置 `RSS_IDENTITY_WEB_REVISION`。
 
+中央 Identity 的平台管理员使用部署提供的系统域登录地址；登录后可开通业务租户。我的会话页面展示服务端认证事实并提供当前主体可用的显式 step-up。两仓必须消费配套的当前协议，不回退旧字段；详细边界及联合验证见上述架构决定。
+
 ## Existing RSS application
 
 RSS Web is the browser client for RSS. It is being migrated through small,

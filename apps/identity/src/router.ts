@@ -1,10 +1,17 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { IdentitySession } from './services/session'
 import { uuid } from './services/decode'
+import { operationQuery } from './services/navigation'
 export function identityRouter(session: IdentitySession) {
   const router = createRouter({
     history: createWebHistory(),
     routes: [
+      {
+        path: '/tenants/:tenant/platform',
+        name: 'platform',
+        component: () => import('./views/PlatformView.vue'),
+        meta: { protected: true },
+      },
       { path: '/', name: 'entry', component: () => import('./views/ErrorView.vue') },
       { path: '/login', name: 'hydra-login', component: () => import('./views/LoginView.vue') },
       { path: '/consent', name: 'hydra-consent', component: () => import('./views/LoginView.vue') },
@@ -48,12 +55,22 @@ export function identityRouter(session: IdentitySession) {
       try {
         await session.check(tenant)
       } catch {
-        return { name: 'error', query: { reason: 'unavailable' } }
+        return {
+          name: 'error',
+          query: { reason: 'unavailable', tenant, ...operationQuery(to.query) },
+        }
       }
     }
     if (session.state.value.status !== 'authenticated')
-      return { name: 'login', params: { tenant }, query: { reason: 'expired' } }
+      return {
+        name: 'login',
+        params: { tenant },
+        query: { reason: 'expired', ...operationQuery(to.query) },
+      }
     return true
+  })
+  router.afterEach((to, from, failure) => {
+    if (!failure && to.path !== from.path) session.leavePage()
   })
   return router
 }

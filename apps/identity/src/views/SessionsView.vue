@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useIdentity } from '../context'
@@ -8,19 +8,58 @@ import type { Session } from '../services/decode'
 const { t } = useI18n()
 const router = useRouter()
 const { session, api, flows } = useIdentity()
-const { busy, error, run } = useOperation()
+const { busy, error, run, checkpoint } = useOperation()
 const rows = ref<Session[]>([])
 const next = ref<string | null>(null)
 const current = ref('')
 const password = ref('')
 async function load(cursor?: string) {
   const value = await api.sessions(cursor)
+  checkpoint()
   rows.value = cursor ? [...rows.value, ...value.sessions] : value.sessions
   next.value = value.next
 }
 onMounted(() => {
-  void run(() => load())
+  void run(async () => {
+    await load()
+    await session.loadSecurity()
+  })
+  document.addEventListener('visibilitychange', visible)
 })
+onBeforeUnmount(() => document.removeEventListener('visibilitychange', visible))
+function visible() {
+  if (document.visibilityState === 'visible' && !busy.value)
+    void run(async () => {
+      const tenant = session.state.value.tenant
+      if (tenant) {
+        await session.check(tenant)
+        checkpoint()
+        await session.loadSecurity()
+      }
+    })
+}
+watch(
+  () => session.state.value.session,
+  (value, previous) => {
+    if (value && previous && value !== previous && !busy.value)
+      void run(() => session.loadSecurity())
+  },
+)
+async function stepUp(id: string) {
+  await run(async () => {
+    const tenant = session.state.value.tenant
+    if (!tenant) return
+    flows.save({ kind: 'step-up', tenant, challenge: '', flow: null, operation: null })
+    try {
+      const location = await api.stepUp(id)
+      checkpoint()
+      window.location.assign(location)
+    } catch (failure) {
+      flows.clear()
+      throw failure
+    }
+  })
+}
 async function change() {
   const old = current.value
   const value = password.value
@@ -42,6 +81,43 @@ async function logout(all: boolean) {
 <template>
   <section class="identity-card">
     <h1>{{ t('identity.sessions') }}</h1>
+    <section aria-labelledby="security-title">
+      <h2 id="security-title">{{ t('identity.authentication') }}</h2>
+      <template v-if="session.state.value.security">
+        <p>
+          {{ t('identity.authTime') }}:
+          {{
+            new Date(session.state.value.security.authentication.auth_time * 1000).toLocaleString()
+          }}
+        </p>
+        <p>
+          {{ t('identity.strength') }}:
+          {{ t('identity.' + session.state.value.security.authentication.acr) }}
+        </p>
+        <p>
+          {{ t('identity.methods') }}:
+          {{
+            session.state.value.security.authentication.amr
+              .map((m) => t('identity.method_' + m))
+              .join(' · ') || t('identity.noMethods')
+          }}
+        </p>
+        <p v-if="!session.state.value.security.eligible_step_up_providers.length">
+          {{ t('identity.noStepUp') }}
+        </p>
+        <button
+          v-for="p in session.state.value.security.eligible_step_up_providers"
+          :key="p.provider_id"
+          :disabled="busy"
+          @click="stepUp(p.provider_id)"
+        >
+          {{ t('identity.stepUp') }} · {{ p.label }}
+        </button>
+      </template>
+      <button :disabled="busy" @click="run(() => session.loadSecurity())">
+        {{ t('identity.reloadSecurity') }}
+      </button>
+    </section>
     <p v-if="error" role="alert">{{ t(`identity.errors.${error}`) }}</p>
     <div class="identity-actions">
       <button :disabled="busy" @click="run(() => load())">{{ t('identity.reload') }}</button

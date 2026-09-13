@@ -1,7 +1,7 @@
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE'
-export type SuccessStatus = 200 | 201 | 204
+export type SuccessStatus = 200 | 201 | 202 | 204
 export type QueryValue = string | number | boolean | undefined
-export type Decoder<T> = (value: unknown) => T
+export type Decoder<T> = (value: unknown, status?: number) => T
 
 export interface EndpointErrorRule {
   readonly code: `ERR_${string}`
@@ -29,7 +29,7 @@ interface RequestBase {
 }
 
 export interface RequestOptions<T> extends RequestBase {
-  successStatus: 200 | 201
+  successStatus: 200 | 201 | readonly [201, 202]
   decode: Decoder<T>
 }
 
