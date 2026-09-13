@@ -60,7 +60,7 @@ function activity(event: Event) {
       <RouterLink :to="{ name: 'sessions', params: { tenant: session.state.value.tenant } }">{{
         t('identity.sessions')
       }}</RouterLink
-      ><template v-if="session.state.value.identity?.administrator"
+      ><template v-if="session.managementHint.value"
         ><RouterLink :to="{ name: 'accounts', params: { tenant: session.state.value.tenant } }">{{
           t('identity.accounts')
         }}</RouterLink

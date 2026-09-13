@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { HttpTransport, NoContentRequest, RequestOptions } from '@rss/api'
+import type {
+  HttpTransport,
+  NoContentRequest,
+  RequestOptions,
+  ResponseRequestOptions,
+} from '@rss/api'
 import { createIdentitySession } from './index'
 import {
   decodeWireErrorForTest,
@@ -8,7 +13,7 @@ import {
   timeoutErrorForTest,
 } from '@rss/api/testing'
 
-type RecordedRequest = NoContentRequest | RequestOptions<unknown>
+type RecordedRequest = NoContentRequest | RequestOptions<unknown> | ResponseRequestOptions<unknown>
 const now = 1_800_000_000
 
 function fixture(passwordResult: unknown = { data: { changed: true } }) {
@@ -38,7 +43,14 @@ function fixture(passwordResult: unknown = { data: { changed: true } }) {
               },
             }
           : passwordResult)
-      return request.successStatus === 204 ? undefined : request.decode(wire)
+      return request.successStatus === 204
+        ? undefined
+        : request.decode(
+            wire,
+            Array.isArray(request.successStatus)
+              ? request.successStatus[0]
+              : (request.successStatus as number),
+          )
     }),
   } as unknown as HttpTransport
   return { calls, transport }

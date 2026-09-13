@@ -1,5 +1,10 @@
 import { vi } from 'vitest'
-import type { HttpTransport, RequestOptions, NoContentRequest } from '@rss/api/identity'
+import type {
+  HttpTransport,
+  RequestOptions,
+  ResponseRequestOptions,
+  NoContentRequest,
+} from '@rss/api/identity'
 import { createSession } from '../src/services/session'
 import { createApi } from '../src/services/api'
 import { createFlows } from '../src/services/flow'
@@ -53,20 +58,24 @@ export const providerValue = {
 }
 export function fixture() {
   const replies: unknown[] = []
-  const request = vi.fn(async (options: RequestOptions<unknown> | NoContentRequest) => {
-    let result = replies.shift()
-    if (typeof result === 'function') result = await (result as () => Promise<unknown>)()
-    if (result instanceof Error) throw result
-    if (options.successStatus === 204) return undefined
-    return options.decode(
-      result,
-      Array.isArray(options.successStatus)
-        ? (result as { active: boolean }).active
-          ? 201
-          : 202
-        : (options.successStatus as number),
-    )
-  })
+  const request = vi.fn(
+    async (
+      options: RequestOptions<unknown> | ResponseRequestOptions<unknown> | NoContentRequest,
+    ) => {
+      let result = replies.shift()
+      if (typeof result === 'function') result = await (result as () => Promise<unknown>)()
+      if (result instanceof Error) throw result
+      if (options.successStatus === 204) return undefined
+      return options.decode(
+        result,
+        Array.isArray(options.successStatus)
+          ? (result as { active: boolean }).active
+            ? 201
+            : 202
+          : (options.successStatus as number),
+      )
+    },
+  )
   const transport = { request } as HttpTransport
   const session = createSession(transport)
   const api = createApi(session)

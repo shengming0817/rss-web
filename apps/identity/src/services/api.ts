@@ -1,4 +1,4 @@
-import { isRssApiError } from '@rss/api/identity'
+import { isRssApiError, type CreationSuccessStatuses } from '@rss/api/identity'
 import type { IdentitySession } from './session'
 import {
   object,
@@ -24,24 +24,29 @@ export function createApi(owner: IdentitySession) {
   async function platform<T>(
     method: 'GET' | 'POST',
     path: string,
-    decode: (v: unknown, status?: number) => T,
+    decode: (v: unknown, status: number) => T,
     body?: unknown,
-    status: 200 | readonly [201, 202] = 200,
+    status: 200 | CreationSuccessStatuses = 200,
     pathParams?: Record<string, string>,
     query?: Record<string, string>,
   ): Promise<T> {
     return owner.perform(() => {
       if (owner.state.value.status !== 'authenticated') throw new Error('Session required')
-      return owner.transport.request({
+      const options = {
         method,
         path,
-        decode,
-        successStatus: status,
         headers: method === 'GET' ? {} : owner.headers(),
         ...(body === undefined ? {} : { body }),
         ...(pathParams === undefined ? {} : { pathParams }),
         ...(query === undefined ? {} : { query }),
-      })
+      }
+      return status === 200
+        ? owner.transport.request({
+            ...options,
+            successStatus: 200,
+            decode: (value) => decode(value, 200),
+          })
+        : owner.transport.request({ ...options, successStatus: status, decode })
     })
   }
   async function call<T>(

@@ -54,7 +54,7 @@ async function load() {
   rows.value = value
 }
 onMounted(() => {
-  if (session.state.value.identity?.administrator) void run(load)
+  if (session.managementHint.value) void run(load)
 })
 onBeforeUnmount(() => {
   clientSecret.value = ''
@@ -113,7 +113,7 @@ async function test(p: Provider) {
     <h1>{{ t('identity.providers') }}</h1>
     <p v-if="error" role="alert">{{ t(`identity.errors.${error}`) }}</p>
     <p v-if="report" role="status">{{ report }}</p>
-    <p v-if="!session.state.value.identity?.administrator">
+    <p v-if="!session.managementHint.value">
       {{ t('identity.errors.insufficient_privilege') }}
     </p>
     <template v-else
@@ -176,7 +176,10 @@ async function test(p: Provider) {
         ><input id="email-claim" v-model="email" />
         <label for="groups-claim">{{ t('identity.groupsClaim') }}</label
         ><input id="groups-claim" v-model="groups" />
-        <label class="identity-checkbox" for="jit"
+        <label
+          v-if="session.state.value.identity?.administrator"
+          class="identity-checkbox"
+          for="jit"
           ><input id="jit" v-model="jit" type="checkbox" />{{ t('identity.jit') }}</label
         >
         <button type="submit" :disabled="busy || blocked">{{ t('identity.save') }}</button>

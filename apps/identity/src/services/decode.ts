@@ -154,7 +154,7 @@ export interface OperationReply {
   }
   active: boolean
 }
-export function operationReply(value: unknown, status?: number): OperationReply {
+export function operationReply(value: unknown, status: number): OperationReply {
   const v = object(value, ['operation', 'active'])
   const o = object(v['operation'], [
     'operation_id',

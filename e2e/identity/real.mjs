@@ -5,15 +5,35 @@ import process from 'node:process'
 // Real-browser T2 consumer of the built app and public Identity routers. Fixture credentials only.
 import { chromium, expect } from '@playwright/test'
 const origin = process.env.IDENTITY_TEST_UI_ORIGIN
-const issuer = process.env.IDENTITY_TEST_FEDERATED_ISSUER
-const ca = readFileSync(process.env.IDENTITY_TEST_FEDERATED_CA, 'utf8')
+let issuer
+let ca
 const tenant = '11111111-1111-4111-8111-111111111111'
 let browser
 let context
 let page
 let stage = 'environment'
 try {
-  if (!origin?.startsWith('https://localhost:')) throw new Error('Missing isolated Identity origin')
+  const parsedOrigin = new URL(origin)
+  issuer = process.env.IDENTITY_TEST_FEDERATED_ISSUER
+  const parsedIssuer = new URL(issuer)
+  if (
+    parsedOrigin.protocol !== 'https:' ||
+    parsedOrigin.hostname !== 'localhost' ||
+    parsedOrigin.username ||
+    parsedOrigin.password ||
+    parsedOrigin.search ||
+    parsedOrigin.hash ||
+    parsedOrigin.pathname !== '/' ||
+    parsedIssuer.protocol !== 'https:' ||
+    !['127.0.0.1', 'localhost'].includes(parsedIssuer.hostname) ||
+    parsedIssuer.username ||
+    parsedIssuer.password ||
+    parsedIssuer.search ||
+    parsedIssuer.hash ||
+    typeof process.env.IDENTITY_TEST_FEDERATED_CA !== 'string'
+  )
+    throw new Error('Invalid fixture input')
+  ca = readFileSync(process.env.IDENTITY_TEST_FEDERATED_CA, 'utf8')
   browser = await chromium.launch({ headless: true })
   context = await browser.newContext({ ignoreHTTPSErrors: true, locale: 'zh-CN' })
   context.setDefaultTimeout(10000)

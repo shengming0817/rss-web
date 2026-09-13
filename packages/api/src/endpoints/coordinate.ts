@@ -1,9 +1,9 @@
-import type { EndpointErrorPolicy, HttpMethod, SuccessStatus } from '../types'
+import type { EndpointErrorPolicy, HttpMethod, EndpointSuccessStatus } from '../types'
 
 export interface EndpointCoordinate {
   readonly method: HttpMethod
   readonly path: `/api/${string}`
-  readonly successStatus: SuccessStatus
+  readonly successStatus: EndpointSuccessStatus
   readonly errorPolicy?: EndpointErrorPolicy
 }
 

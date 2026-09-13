@@ -196,9 +196,15 @@ async function newOperation() {
       :to="{
         name: 'login',
         params: { tenant: route.params['tenant'] },
-        query: operationQuery(route.query),
+        query: ['rejected', 'not_completed'].includes(outcome) ? {} : operationQuery(route.query),
       }"
-      >{{ t('identity.login') }}</RouterLink
+      >{{
+        t(
+          ['rejected', 'not_completed'].includes(outcome)
+            ? 'identity.loginAndCreate'
+            : 'identity.login',
+        )
+      }}</RouterLink
     >
     <section v-if="operationId" aria-labelledby="operation-title">
       <h2 id="operation-title">{{ t('identity.provisioningResult') }}</h2>

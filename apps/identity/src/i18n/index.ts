@@ -35,6 +35,7 @@ const zh = {
   reloadSecurity: '重新读取认证事实',
 
   login: '登录',
+  loginAndCreate: '重新登录后创建新租户',
   loginDescription: '使用本地账户或组织身份提供方登录。',
   username: '账户名',
   password: '密码',
@@ -175,6 +176,7 @@ const en = {
   reloadSecurity: 'Reload authentication facts',
 
   login: 'Sign in',
+  loginAndCreate: 'Sign in to start a new tenant creation',
   loginDescription: 'Use your local account or your organization’s identity provider.',
   username: 'Account name',
   password: 'Password',

@@ -1,8 +1,11 @@
-import type { NoContentRequest, RequestOptions } from '../types'
+import type { NoContentRequest, RequestOptions, ResponseRequestOptions } from '../types'
 
 export const AUTHORIZATION = Symbol('rss.session.authorization')
 
-export type TransportRequest<T = unknown> = NoContentRequest | RequestOptions<T>
+export type TransportRequest<T = unknown> =
+  | NoContentRequest
+  | RequestOptions<T>
+  | ResponseRequestOptions<T>
 export type AuthorizedRequest<T = unknown> = TransportRequest<T> & {
   readonly [AUTHORIZATION]: string
 }

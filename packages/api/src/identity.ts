@@ -2,8 +2,21 @@
 import axios from 'axios'
 import { execute } from './transport'
 import { clientError, identityWireFailure, protocolError } from './wire-error'
-import type { HttpTransport, NoContentRequest, RequestOptions, RssApiError } from './types'
-export type { HttpTransport, RssApiError, RequestOptions, NoContentRequest } from './types'
+import type {
+  HttpTransport,
+  NoContentRequest,
+  RequestOptions,
+  ResponseRequestOptions,
+  RssApiError,
+} from './types'
+export type {
+  HttpTransport,
+  RssApiError,
+  RequestOptions,
+  ResponseRequestOptions,
+  CreationSuccessStatuses,
+  NoContentRequest,
+} from './types'
 export { isRssApiError } from './wire-error'
 const statuses: Readonly<Record<string, number>> = {
   malformed_request: 400,
@@ -55,7 +68,9 @@ export function decodeIdentityError(
 export function createIdentityTransport(): HttpTransport {
   const instance = axios.create({ baseURL: '' })
   return {
-    async request(options: NoContentRequest | RequestOptions<unknown>) {
+    async request(
+      options: NoContentRequest | RequestOptions<unknown> | ResponseRequestOptions<unknown>,
+    ) {
       const downstream = /^\/api\/v1\/downstream\/(?:login|consent)(?:\/accept)?$/.test(
         options.path,
       )

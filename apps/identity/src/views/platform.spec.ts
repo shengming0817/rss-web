@@ -150,6 +150,12 @@ describe('platform tenant provisioning', () => {
     expect(f.request.mock.calls.filter(([o]) => o.method === 'POST')).toHaveLength(1)
     expect(f.wrapper.find('form').exists()).toBe(false)
     expect(f.router.currentRoute.value.query['operation']).toBeDefined()
+    if (code === 'operation_not_completed') {
+      const restart = f.wrapper.findAll('a').find((v) => v.text() === '重新登录后创建新租户')!
+      expect(restart.attributes('href')).toBe('/tenants/' + TENANT + '/login')
+    }
+    if (code === 'operation_outcome_unknown')
+      expect(f.wrapper.find('a').attributes('href')).toContain('operation=')
     f.wrapper.unmount()
     f.session.clear()
   })

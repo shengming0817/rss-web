@@ -41,3 +41,18 @@ operation 查询定位。旧 locator 字段形状直接作废，没有兼容读�
 
 本项不增加身份关联、平台角色管理、已有租户管理员增补或通用 MFA 策略 UI。真实 T2 还覆盖
 平台网页开通、首个管理员登录和普通租户身份拒绝；MFA 产品 T3 仍由 #2366 持有。
+
+### 联合验证的退出与记录
+
+联合入口复用仓内受控子进程执行器；backend 阶段保留一小时上限以覆盖已有 provider/编译/测试预算，
+中断后给 Python fixture 两分钟清理宽限，不用旧六百秒外层预算截断合法内部步骤。SIGINT/SIGTERM
+传给受控进程组，fixture 屏蔽重复信号后进入 ExitStack，删除自身容器及匿名卷并核实消失。
+
+无论成功失败都原子写 IDENTITY_JOINT_RECORD；记录可取得的两仓 commit/lock 与 dirty 状态、
+UI/runner 摘要、失败阶段/分类及 cleanup。未确认 Docker create、清理失败或强杀导致 fixture
+终态缺失均不能报告 clean/pass，而是保留具名恢复目标和临时记录目录。不会自动操作其它运行的资源；
+SIGKILL 不能承诺执行 finally。UI runner 环境输入失败统一为 environment，不输出原始异常或路径。
+
+系统域已有账户/IdP 管理由后端平台角色结果提供显示提示；系统域只提供 member 账户形态，
+不提供租户 administrator/emergency 变更或 JIT。该提示不授权任何请求，平台角色授撤页面仍不在范围内。
+明确拒绝或未完成的开通结果提供重新登录后新建的入口，不携带旧 operation；真正 unknown 继续只恢复原查询。

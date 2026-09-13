@@ -1,4 +1,4 @@
-import { shallowRef, readonly } from 'vue'
+import { shallowRef, readonly, computed } from 'vue'
 import { isRssApiError, type HttpTransport } from '@rss/api/identity'
 import {
   sessionResponse,
@@ -26,8 +26,9 @@ export function createSession(transport: HttpTransport) {
   })
   let csrf: string | undefined
   let generation = 0
-  let rotation: Promise<void> | undefined
-  let departure: Promise<void> | undefined
+  type Control = { scope: string; page: number; promise: Promise<void> }
+  let rotation: Control | undefined
+  let departure: Control | undefined
   let pending: Promise<unknown> | undefined
   let securityRead: Promise<void> | undefined
   let expiry: ReturnType<typeof setTimeout> | undefined
@@ -205,14 +206,20 @@ export function createSession(transport: HttpTransport) {
     return { 'X-Identity-Request': '1', ...(csrf === undefined ? {} : { 'X-CSRF-Token': csrf }) }
   }
   function refresh(): Promise<void> {
-    if (departure) return departure
-    if (rotation) return rotation
-    if (state.value.tenant === null) return Promise.reject(new Error('Session required'))
-    rotation = serial(async () => {
-      const tenant = state.value.tenant
-      if (tenant === null) throw new Error('Session required')
+    const scope = context()
+    const page = pageGeneration
+    const tenant = state.value.tenant
+    if (!scope || !tenant) return Promise.reject(new Error('Session required'))
+    const running = departure ?? rotation
+    if (running)
+      return running.scope === scope && running.page === page
+        ? running.promise
+        : Promise.reject(new Error('Operation abandoned'))
+    const promise = serial(async () => {
+      if (context() !== scope || pageGeneration !== page) throw new Error('Operation abandoned')
       const expected = generation
       try {
+        // Once dispatched, a confirmed same-session rotation still owns its new CSRF across navigation.
         accept(
           tenant,
           await transport.request({
@@ -233,9 +240,10 @@ export function createSession(transport: HttpTransport) {
         throw error
       }
     }).finally(() => {
-      rotation = undefined
+      if (rotation?.promise === promise) rotation = undefined
     })
-    return rotation
+    rotation = { scope, page, promise }
+    return promise
   }
   async function activity() {
     const s = state.value.session
@@ -247,12 +255,20 @@ export function createSession(transport: HttpTransport) {
       await refresh()
   }
   function logout(all = false): Promise<void> {
-    if (departure) return departure
-    departure = serial(async () => {
-      const tenant = state.value.tenant
-      if (tenant === null) return
+    const scope = context()
+    const page = pageGeneration
+    const tenant = state.value.tenant
+    if (departure)
+      return departure.page === page && (scope === departure.scope || scope === null)
+        ? departure.promise
+        : Promise.reject(new Error('Operation abandoned'))
+    if (!scope || !tenant) return Promise.resolve()
+    const promise = serial(async () => {
+      if (context() !== scope || pageGeneration !== page) throw new Error('Operation abandoned')
+      // Read only the current CSRF of the bound session, after any preceding same-session rotation.
       const saved = headers()
       clear()
+      const expected = generation
       try {
         await transport.request({
           method: 'POST',
@@ -261,18 +277,26 @@ export function createSession(transport: HttpTransport) {
           headers: saved,
           successStatus: 204,
         })
-        clear()
+        if (generation === expected) clear()
       } catch (error) {
-        failure(error)
+        if (generation === expected) failure(error)
         throw error
       }
     }).finally(() => {
-      departure = undefined
+      if (departure?.promise === promise) departure = undefined
     })
-    return departure
+    departure = { scope, page, promise }
+    return promise
   }
+  // Presentation only: these flags already come from the server's scoped management authority.
+  const managementHint = computed(
+    () =>
+      state.value.status === 'authenticated' &&
+      !!(state.value.identity?.administrator || state.value.identity?.platform_administrator),
+  )
   return {
     state: readonly(state),
+    managementHint,
     check: (tenant: string) => serial(() => check(tenant)),
     login: (tenant: string, loginKey: string, password: string) =>
       serial(() => login(tenant, loginKey, password)),

@@ -61,6 +61,29 @@ async function view(
   return { wrapper, router }
 }
 describe('Identity views use actual app session and decoder modules', () => {
+  it('shows system-domain management with only the account and IdP actions the server accepts', async () => {
+    const f = fixture()
+    const value = sessionValue(false)
+    value.identity.platform_administrator = true
+    f.replies.push(value)
+    await f.session.check(TENANT)
+    f.replies.push({
+      accounts: [{ ...accountValue, platform_administrator: false }],
+      next_cursor: null,
+    })
+    const accounts = await view(AccountsView, f, 'accounts')
+    expect(
+      accounts.wrapper.findAll('#account-role option').map((v) => v.attributes('value')),
+    ).toEqual(['member'])
+    expect(accounts.wrapper.findAll('button').some((v) => v.text() === '授予管理员')).toBe(false)
+    accounts.wrapper.unmount()
+    f.replies.push({ providers: [providerValue] })
+    const providers = await view(ProvidersView, f, 'providers')
+    expect(providers.wrapper.find('form').exists()).toBe(true)
+    expect(providers.wrapper.find('#jit').exists()).toBe(false)
+    providers.wrapper.unmount()
+    f.session.clear()
+  })
   it('clears the login password immediately, reports a safe failure and completes sign-in', async () => {
     const f = fixture()
     f.replies.push(decodeIdentityError(401, { code: 'invalid_credential' }, false), {
