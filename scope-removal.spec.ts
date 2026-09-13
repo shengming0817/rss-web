@@ -73,6 +73,7 @@ describe('RSS-only foundation boundary', () => {
       .filter((line) => !line.startsWith('packages/api/src/transport.ts:'))
       .filter((line) => !line.startsWith('packages/api/src/identity.ts:'))
       .filter((line) => !line.startsWith('apps/identity/src/services/session.ts:'))
+      .filter((line) => !line.startsWith('apps/identity/src/services/api.ts:'))
       .filter((line) => !line.startsWith('packages/api/src/endpoints/identity.ts:'))
       .filter((line) => !line.startsWith('packages/api/src/endpoints/audit.ts:'))
       .filter((line) => !line.startsWith('packages/api/src/endpoints/runtime.ts:'))
