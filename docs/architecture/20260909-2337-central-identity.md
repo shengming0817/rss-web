@@ -65,6 +65,10 @@ SIGKILL 不能承诺执行 finally。UI runner 环境输入失败统一为 envir
 operation；明确终态的“创建新租户”动作才可清除。未决操作离开页面时携带原 UUID，平台导航保留
 这个恢复定位，返回只恢复查询，不保存或重放命令。
 
+从携带 operation 的会话页发生失效、不可用、主动退出或改密时，登录/错误导航继续传递经过
+校验的 UUID；错误页同时保留 tenant 定位以支持重载。step-up 使用现有五分钟 flow 携带该 UUID，
+resume 成功回平台查询，失败先提取恢复定位再清除 flow。恢复不保存或重新执行开通命令。
+
 联合记录保留闭集 execution 原因（spawn/exit/timeout/interrupted）。backend 未提供有效失败证据时
 归 environment；有效 fixture 的 phase/classification 保留，外层 timeout/interrupted 优先。
 缺失或无效 fixture 仍为 cleanup unknown，不反射原始进程异常。
