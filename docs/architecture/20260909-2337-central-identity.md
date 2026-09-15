@@ -16,4 +16,55 @@
 
 实际 HTTP/UI T2 由消费者 rss-web 持有：先以 frozen lock 安装依赖，提交两仓源码，再运行 `IDENTITY_BACKEND_FIXTURE=/absolute/backend/worktree IDENTITY_JOINT_RECORD=/tmp/identity-joint.json pnpm test:identity:joint`。该入口构建当前已提交的 UI，选择同一源码内的浏览器 runner，并调用后端测试专用 `make test-ui` fixture。记录两仓完整 commit、lock 摘要、实际 UI 产物摘要和 runner 摘要；后端不获取或构建消费者源码，也不把消费者版本检查加入生产请求链。
 
-fixture 使用测试 HTTPS gateway、真实公开 Axum Router 与一次性 PostgreSQL，覆盖账户创建、停用、重置、恢复、IdP 创建/更新/测试/启停，以及退出后的 401 和普通成员 403。IdP 远程端口在该 UI 接缝中使用脚本实现；真实秘密和远程连接由后端 Keycloak 分组验证。此证明不包含生产 binary/image/config、MDM 接入或生产恢复。
+fixture 使用测试 HTTPS gateway、真实公开 Axum Router 与一次性 PostgreSQL，覆盖账户创建、停用、重置、恢复、IdP 创建/更新/测试/启停，以及退出后的 401 和普通成员 403。本接缝使用后端固定 Keycloak fixture 与生产 OIDC adapter；浏览器实际完成授权跳转、唯一 callback、resume 和 step-up。此证明不包含生产 binary/image/config、MDM 接入或生产恢复。
+
+## #2368 平台与当前认证事实
+
+平台管理员复用部署提供的系统域登录地址；入口 `/tenants/{tenant}/platform` 使用当前会话的
+`platform_administrator` 提示和后端平台上下文结果。列表与创建消费现有平台 API，网页自动生成
+租户、首个管理员与操作 UUID，口令只在组件和本次请求中存在。201/202 分别表示可登录/待激活，
+后续读取失败不改变已确认的提交事实。未知结果只查询原 operation；404 仍为未观察到，不能重放。
+校验后的 operation UUID 可随同域页面、登录、错误导航恢复查询；不保存命令、秘密或任意 return URL。
+
+`GET /api/v1/tenants/{tenant}/session/security` 是 Federation 的唯一浏览器安全投影，返回当前 session ID、
+规范认证事实和当前主体 eligible providers。会话控制器按消费者需要读取并合并并发调用，刷新、
+退出和上下文变化使旧快照失效。页面不根据 provider 管理列表、AMR 是否为空或 URL 判断 MFA/资格。
+step-up 使用现有 POST、唯一 callback 与 resume；五分钟 flow locator 增加 step-up 类型及可空的
+operation 查询定位。旧 locator 字段形状直接作废，没有兼容读取分支。
+
+所有排队操作绑定页面与会话上下文；跨租户路径重新挂载视图，已知会话到期统一清空身份。
+平台开通只给出目标租户登录地址，不授予目标租户内容访问或 MDM 权限。
+
+同步当前后端协议：session identity 必须含 platform_administrator；账户列表与账户写入回执分别
+严格解码；provider settings 移除 secret_ref，管理创建/更新显式提交 client_secret/ca_pem，响应
+包含 credential_version。秘密从不回填或持久化，旧字段集合与旧请求体不再接受。
+
+本项不增加身份关联、平台角色管理、已有租户管理员增补或通用 MFA 策略 UI。真实 T2 还覆盖
+平台网页开通、首个管理员登录和普通租户身份拒绝；MFA 产品 T3 仍由 #2366 持有。
+
+### 联合验证的退出与记录
+
+联合入口复用仓内受控子进程执行器；backend 阶段保留一小时上限以覆盖已有 provider/编译/测试预算，
+中断后给 Python fixture 两分钟清理宽限，不用旧六百秒外层预算截断合法内部步骤。SIGINT/SIGTERM
+传给受控进程组，fixture 屏蔽重复信号后进入 ExitStack，删除自身容器及匿名卷并核实消失。
+
+无论成功失败都原子写 IDENTITY_JOINT_RECORD；记录可取得的两仓 commit/lock 与 dirty 状态、
+UI/runner 摘要、失败阶段/分类及 cleanup。未确认 Docker create、清理失败或强杀导致 fixture
+终态缺失均不能报告 clean/pass，而是保留具名恢复目标和临时记录目录。不会自动操作其它运行的资源；
+SIGKILL 不能承诺执行 finally。UI runner 环境输入失败统一为 environment，不输出原始异常或路径。
+
+系统域已有账户/IdP 管理由后端平台角色结果提供显示提示；系统域只提供 member 账户形态，
+不提供租户 administrator/emergency 变更或 JIT。该提示不授权任何请求，平台角色授撤页面仍不在范围内。
+明确拒绝或未完成的开通结果提供重新登录后新建的入口，不携带旧 operation；真正 unknown 继续只恢复原查询。
+
+
+### PR #1019 修复边界
+
+会话页按 tenant/principal/session owner 同步清空列表、分页及密码草稿；旧 owner 的在途读取不能回填。
+新 owner 就绪且当前操作结束后重新读取其列表和安全投影。平台页普通同页导航不能删除或替换已有
+operation；明确终态的“创建新租户”动作才可清除。未决操作离开页面时携带原 UUID，平台导航保留
+这个恢复定位，返回只恢复查询，不保存或重放命令。
+
+联合记录保留闭集 execution 原因（spawn/exit/timeout/interrupted）。backend 未提供有效失败证据时
+归 environment；有效 fixture 的 phase/classification 保留，外层 timeout/interrupted 优先。
+缺失或无效 fixture 仍为 cleanup unknown，不反射原始进程异常。

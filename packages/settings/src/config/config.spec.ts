@@ -1,4 +1,9 @@
-import type { HttpTransport, NoContentRequest, RequestOptions } from '@rss/api'
+import type {
+  HttpTransport,
+  NoContentRequest,
+  RequestOptions,
+  ResponseRequestOptions,
+} from '@rss/api'
 import { describe, expect, it, vi } from 'vitest'
 import { createSettingsApi } from '../client'
 import {
@@ -45,19 +50,34 @@ describe('Settings config decoder', () => {
 
 describe('Settings config client', () => {
   it('uses no-replay mutations, protected get, and decoder-free 204 delete', async () => {
-    const calls: Array<RequestOptions<unknown> | NoContentRequest> = []
+    const calls: Array<
+      RequestOptions<unknown> | ResponseRequestOptions<unknown> | NoContentRequest
+    > = []
     const transport: HttpTransport = {
-      request: vi.fn(async (request: RequestOptions<unknown> | NoContentRequest) => {
-        calls.push(request)
-        if (request.successStatus === 204) return undefined
-        if (request.path === '/api/v1/settings/configs/{key}/rollbacks')
-          return request.decode({
-            data: { key: request.pathParams?.key, version: 3, sourceVersion: 1 },
-          })
-        if (request.pathParams !== undefined)
-          return request.decode({ data: { key: request.pathParams.key, value: 'v', version: 2 } })
-        return request.decode({ data: { key: 'app.k', version: 1 } })
-      }),
+      request: vi.fn(
+        async (
+          request: RequestOptions<unknown> | ResponseRequestOptions<unknown> | NoContentRequest,
+        ) => {
+          calls.push(request)
+          if (request.successStatus === 204) return undefined
+          const status = Array.isArray(request.successStatus)
+            ? request.successStatus[0]
+            : (request.successStatus as number)
+          if (request.path === '/api/v1/settings/configs/{key}/rollbacks')
+            return request.decode(
+              {
+                data: { key: request.pathParams?.key, version: 3, sourceVersion: 1 },
+              },
+              status,
+            )
+          if (request.pathParams !== undefined)
+            return request.decode(
+              { data: { key: request.pathParams.key, value: 'v', version: 2 } },
+              status,
+            )
+          return request.decode({ data: { key: 'app.k', version: 1 } }, status)
+        },
+      ),
     } as HttpTransport
     const api = createSettingsApi(transport)
     await expect(api.publish({ key: 'app.k', value: 'v' })).resolves.toEqual({

@@ -25,6 +25,26 @@ function setup() {
 afterEach(() => vi.restoreAllMocks())
 
 describe('createHttpTransport', () => {
+  it('accepts only the declared creation statuses and passes the actual status without replay', async () => {
+    for (const status of [200, 201, 202, 203]) {
+      const { mock, transport } = setup()
+      mock.onPost('/api/v1/platform/tenants').reply(status, { active: status === 201 })
+      const decode = vi.fn((value: unknown, actual?: number) => ({ value, actual }))
+      const result = transport.request({
+        method: 'POST',
+        path: '/api/v1/platform/tenants',
+        successStatus: [201, 202],
+        decode,
+      })
+      if (status === 201 || status === 202) {
+        await expect(result).resolves.toEqual({ value: { active: status === 201 }, actual: status })
+      } else {
+        await expect(result).rejects.toMatchObject({ cause: 'protocol' })
+        expect(decode).not.toHaveBeenCalled()
+      }
+      expect(mock.history.post).toHaveLength(1)
+    }
+  })
   it('encodes path parameters and preserves meaningful query values', async () => {
     const { mock, transport } = setup()
     mock.onGet('/api/v1/settings/configs/a%2Fb').reply((config) => {

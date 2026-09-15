@@ -9,6 +9,7 @@ import { identityI18n } from '../i18n'
 import {
   fixture,
   sessionValue,
+  securityValue,
   accountValue,
   providerValue,
   TENANT,
@@ -48,6 +49,7 @@ async function view(
       : { name, params: { tenant: TENANT }, query },
   )
   await router.isReady()
+  if (component === SessionsView) f.replies.push(securityValue())
   const wrapper = mount(component, {
     attachTo: document.body,
     global: {
@@ -59,6 +61,29 @@ async function view(
   return { wrapper, router }
 }
 describe('Identity views use actual app session and decoder modules', () => {
+  it('shows system-domain management with only the account and IdP actions the server accepts', async () => {
+    const f = fixture()
+    const value = sessionValue(false)
+    value.identity.platform_administrator = true
+    f.replies.push(value)
+    await f.session.check(TENANT)
+    f.replies.push({
+      accounts: [{ ...accountValue, platform_administrator: false }],
+      next_cursor: null,
+    })
+    const accounts = await view(AccountsView, f, 'accounts')
+    expect(
+      accounts.wrapper.findAll('#account-role option').map((v) => v.attributes('value')),
+    ).toEqual(['member'])
+    expect(accounts.wrapper.findAll('button').some((v) => v.text() === '授予管理员')).toBe(false)
+    accounts.wrapper.unmount()
+    f.replies.push({ providers: [providerValue] })
+    const providers = await view(ProvidersView, f, 'providers')
+    expect(providers.wrapper.find('form').exists()).toBe(true)
+    expect(providers.wrapper.find('#jit').exists()).toBe(false)
+    providers.wrapper.unmount()
+    f.session.clear()
+  })
   it('clears the login password immediately, reports a safe failure and completes sign-in', async () => {
     const f = fixture()
     f.replies.push(decodeIdentityError(401, { code: 'invalid_credential' }, false), {
@@ -142,7 +167,10 @@ describe('Identity views use actual app session and decoder modules', () => {
   it('creates accounts, confirms status changes and resets other passwords', async () => {
     const f = fixture()
     await f.login()
-    f.replies.push({ accounts: [accountValue], next_cursor: OTHER })
+    f.replies.push({
+      accounts: [{ ...accountValue, platform_administrator: false }],
+      next_cursor: OTHER,
+    })
     const { wrapper } = await view(AccountsView, f, 'accounts')
     f.replies.push({ accounts: [], next_cursor: null })
     await wrapper
@@ -152,7 +180,10 @@ describe('Identity views use actual app session and decoder modules', () => {
     await flushPromises()
     await wrapper.get('#account-login').setValue('newmember')
     await wrapper.get('#account-password').setValue('private new password')
-    f.replies.push(accountValue, { accounts: [accountValue], next_cursor: null })
+    f.replies.push(accountValue, {
+      accounts: [{ ...accountValue, platform_administrator: false }],
+      next_cursor: null,
+    })
     await wrapper.findAll('form')[0]!.trigger('submit')
     await flushPromises()
     expect((wrapper.get('#account-password').element as HTMLInputElement).value).toBe('')
@@ -162,7 +193,10 @@ describe('Identity views use actual app session and decoder modules', () => {
         .find((b) => b.text() === label)!
         .trigger('click')
       await flushPromises()
-      f.replies.push(accountValue, { accounts: [accountValue], next_cursor: null })
+      f.replies.push(accountValue, {
+        accounts: [{ ...accountValue, platform_administrator: false }],
+        next_cursor: null,
+      })
       await wrapper
         .get('[role=alertdialog]')
         .findAll('button')
@@ -176,7 +210,10 @@ describe('Identity views use actual app session and decoder modules', () => {
       .trigger('click')
     await flushPromises()
     await wrapper.get('#reset-password').setValue('private reset password')
-    f.replies.push(accountValue, { accounts: [accountValue], next_cursor: null })
+    f.replies.push(accountValue, {
+      accounts: [{ ...accountValue, platform_administrator: false }],
+      next_cursor: null,
+    })
     await wrapper.get('[role=dialog] form').trigger('submit')
     await flushPromises()
     expect(wrapper.find('#reset-password').exists()).toBe(false)
@@ -230,7 +267,7 @@ describe('Identity views use actual app session and decoder modules', () => {
     await flushPromises()
     await wrapper.get('#issuer').setValue('https://second.test')
     await wrapper.get('#client-id').setValue('second')
-    await wrapper.get('#secret-ref').setValue('second@1')
+    await wrapper.get('#client-secret').setValue('second@1')
     f.replies.push(providerValue, { providers: [providerValue] })
     await wrapper.get('form').trigger('submit')
     await flushPromises()
@@ -243,6 +280,7 @@ describe('Identity views use actual app session and decoder modules', () => {
       tenant: TENANT,
       challenge: 'private challenge',
       flow: { tenant_id: TENANT, grant_id: ID },
+      operation: null,
     })
     const { wrapper } = await view(ErrorView, f, 'error', {
       reason: 'cancelled',
@@ -278,7 +316,7 @@ it('discards late downstream preparation after the page leaves', async () => {
 
 it('routes expired resume and uncertain or rejected accept to a terminal error', async () => {
   const expired = fixture()
-  expired.flows.save({ kind: 'sso', tenant: TENANT, challenge: '', flow: null })
+  expired.flows.save({ kind: 'sso', tenant: TENANT, challenge: '', flow: null, operation: null })
   const now = Date.now()
   const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 300001)
   const first = await view(LoginView, expired, 'resume')
@@ -296,6 +334,7 @@ it('routes expired resume and uncertain or rejected accept to a terminal error',
       tenant: TENANT,
       challenge: 'secret',
       flow: { tenant_id: TENANT, grant_id: ID },
+      operation: null,
     })
     f.replies.push(sessionValue(), failure)
     const { wrapper, router } = await view(LoginView, f, 'resume')
@@ -342,13 +381,82 @@ it('does not erase provider edits when the initial list finishes late', async ()
   const { wrapper } = await view(ProvidersView, f, 'providers')
   await wrapper.get('#issuer').setValue('https://new.example.test')
   await wrapper.get('#client-id').setValue('new-client')
-  await wrapper.get('#secret-ref').setValue('new-secret@1')
+  await wrapper.get('#client-secret').setValue('new-secret@1')
   finish({ providers: [] })
   await flushPromises()
   expect((wrapper.get('#issuer').element as HTMLInputElement).value).toBe(
     'https://new.example.test',
   )
   expect((wrapper.get('#client-id').element as HTMLInputElement).value).toBe('new-client')
-  expect((wrapper.get('#secret-ref').element as HTMLInputElement).value).toBe('new-secret@1')
+  expect((wrapper.get('#client-secret').element as HTMLInputElement).value).toBe('new-secret@1')
   wrapper.unmount()
+})
+
+it('clears prior-owner rows, pagination and password drafts when visibility rechecks another account', async () => {
+  const f = fixture()
+  await f.login()
+  f.replies.push({ sessions: [sessionValue().session], next_cursor: ID })
+  const { wrapper } = await view(SessionsView, f)
+  await wrapper.get('#current-password').setValue('old owner password')
+  await wrapper.get('#new-password').setValue('old owner new password')
+  const changed = sessionValue()
+  changed.identity.principal_id = OTHER
+  changed.session.id = OTHER
+  f.replies.push(
+    changed,
+    { sessions: [changed.session], next_cursor: null },
+    { ...securityValue(), session_id: OTHER },
+  )
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+  document.dispatchEvent(new Event('visibilitychange'))
+  await flushPromises()
+  expect(wrapper.get('tbody').text()).not.toContain(ID)
+  expect(wrapper.get('tbody').text()).toContain(OTHER)
+  expect(wrapper.findAll('button').some((b) => b.text() === '加载更多')).toBe(false)
+  expect((wrapper.get('#current-password').element as HTMLInputElement).value).toBe('')
+  expect((wrapper.get('#new-password').element as HTMLInputElement).value).toBe('')
+  wrapper.unmount()
+  f.session.clear()
+  vi.restoreAllMocks()
+})
+
+it('discards an old owner list completion and reloads after the pending read settles', async () => {
+  const f = fixture()
+  await f.login()
+  f.replies.push({ sessions: [sessionValue().session], next_cursor: ID })
+  const { wrapper } = await view(SessionsView, f)
+  let finish!: (page: {
+    sessions: ReturnType<typeof sessionValue>['session'][]
+    next: string | null
+  }) => void
+  vi.spyOn(f.api, 'sessions').mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text() === '加载更多')!
+    .trigger('click')
+  f.session.clear()
+  await flushPromises()
+  expect(wrapper.get('tbody').text()).toBe('')
+  const changed = sessionValue()
+  changed.identity.principal_id = OTHER
+  changed.session.id = OTHER
+  f.replies.push(
+    changed,
+    { sessions: [changed.session], next_cursor: null },
+    { ...securityValue(), session_id: OTHER },
+  )
+  await f.session.check(TENANT)
+  finish({ sessions: [sessionValue().session], next: ID })
+  await flushPromises()
+  expect(wrapper.get('tbody').text()).toContain(OTHER)
+  expect(wrapper.get('tbody').text()).not.toContain(ID)
+  expect(wrapper.findAll('button').some((b) => b.text() === '加载更多')).toBe(false)
+  wrapper.unmount()
+  f.session.clear()
+  vi.restoreAllMocks()
 })

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { ModalShell } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
 import { useIdentity } from '../context'
@@ -7,7 +7,7 @@ import { useOperation } from '../services/operation'
 import type { Provider, ProviderSettings } from '../services/decode'
 const { t } = useI18n()
 const { api, session } = useIdentity()
-const { busy, error, run } = useOperation()
+const { busy, error, run, checkpoint } = useOperation()
 const blocked = computed(() =>
   ['configuration_changed', 'unknown_result', 'identity_unavailable'].includes(error.value),
 )
@@ -17,7 +17,8 @@ const report = ref('')
 const pending = ref<Provider | null>(null)
 const issuer = ref('')
 const client = ref('')
-const secretRef = ref('')
+const clientSecret = ref('')
+const caPem = ref('')
 const scopes = ref('openid profile email')
 const email = ref('email')
 const groups = ref('groups')
@@ -26,7 +27,8 @@ function clear() {
   selected.value = null
   issuer.value = ''
   client.value = ''
-  secretRef.value = ''
+  clientSecret.value = ''
+  caPem.value = ''
   scopes.value = 'openid profile email'
   email.value = 'email'
   groups.value = 'groups'
@@ -37,7 +39,8 @@ function edit(p: Provider) {
   selected.value = p
   issuer.value = p.settings.issuer
   client.value = p.settings.client_id
-  secretRef.value = p.settings.secret_ref
+  clientSecret.value = ''
+  caPem.value = ''
   scopes.value = p.settings.scopes.join(' ')
   email.value = p.settings.claims.email ?? ''
   groups.value = p.settings.claims.groups ?? ''
@@ -46,25 +49,35 @@ function edit(p: Provider) {
 }
 async function load() {
   clear()
-  rows.value = await api.providers()
+  const value = await api.providers()
+  checkpoint()
+  rows.value = value
 }
 onMounted(() => {
-  if (session.state.value.identity?.administrator) void run(load)
+  if (session.managementHint.value) void run(load)
+})
+onBeforeUnmount(() => {
+  clientSecret.value = ''
+  caPem.value = ''
 })
 async function save() {
   const settings: ProviderSettings = {
     issuer: issuer.value,
     client_id: client.value,
-    secret_ref: secretRef.value,
     redirect_uri: `${window.location.origin}/api/v1/oidc/callback`,
     scopes: scopes.value.split(/\s+/).filter(Boolean),
     claims: { email: email.value || null, groups: groups.value || null },
     jit: jit.value,
   }
   const current = selected.value
+  const secret = clientSecret.value
+  const ca = caPem.value || null
+  clientSecret.value = ''
+  caPem.value = ''
   await run(async () => {
-    if (current) await api.updateProvider(current, settings)
-    else await api.createProvider(settings)
+    if (current) await api.updateProvider(current, settings, secret, ca)
+    else await api.createProvider(settings, secret, ca)
+    checkpoint()
     clear()
     await load()
   })
@@ -100,7 +113,7 @@ async function test(p: Provider) {
     <h1>{{ t('identity.providers') }}</h1>
     <p v-if="error" role="alert">{{ t(`identity.errors.${error}`) }}</p>
     <p v-if="report" role="status">{{ report }}</p>
-    <p v-if="!session.state.value.identity?.administrator">
+    <p v-if="!session.managementHint.value">
       {{ t('identity.errors.insufficient_privilege') }}
     </p>
     <template v-else
@@ -147,15 +160,26 @@ async function test(p: Provider) {
         ><input id="issuer" v-model="issuer" type="url" :readonly="selected !== null" required />
         <label for="client-id">{{ t('identity.client') }}</label
         ><input id="client-id" v-model="client" required />
-        <label for="secret-ref">{{ t('identity.secretRef') }}</label
-        ><input id="secret-ref" v-model="secretRef" autocomplete="off" required />
+        <label for="client-secret">{{ t('identity.clientSecret') }}</label
+        ><input
+          id="client-secret"
+          v-model="clientSecret"
+          type="password"
+          autocomplete="new-password"
+          required
+        />
+        <label for="ca-pem">{{ t('identity.caPem') }}</label>
+        <textarea id="ca-pem" v-model="caPem" autocomplete="off"></textarea>
         <label for="scopes">{{ t('identity.scopes') }}</label
         ><input id="scopes" v-model="scopes" required />
         <label for="email-claim">{{ t('identity.emailClaim') }}</label
         ><input id="email-claim" v-model="email" />
         <label for="groups-claim">{{ t('identity.groupsClaim') }}</label
         ><input id="groups-claim" v-model="groups" />
-        <label class="identity-checkbox" for="jit"
+        <label
+          v-if="session.state.value.identity?.administrator"
+          class="identity-checkbox"
+          for="jit"
           ><input id="jit" v-model="jit" type="checkbox" />{{ t('identity.jit') }}</label
         >
         <button type="submit" :disabled="busy || blocked">{{ t('identity.save') }}</button>

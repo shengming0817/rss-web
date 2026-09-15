@@ -4,8 +4,18 @@ const id = '22222222-2222-4222-8222-222222222222'
 const csrf = 'a'.repeat(64)
 const profile = {
   session: { id, auth_time: 1, idle_expires_at: 4102444800, absolute_expires_at: 4102444900 },
-  identity: { principal_id: id, administrator: true, has_local_password: true },
+  identity: {
+    principal_id: id,
+    administrator: true,
+    platform_administrator: false,
+    has_local_password: true,
+  },
   csrf_token: csrf,
+}
+const security = {
+  session_id: id,
+  authentication: { auth_time: 1, acr: 'unspecified', amr: ['pwd'] },
+  eligible_step_up_providers: [],
 }
 async function fixture(page: Page) {
   let active = false
@@ -26,6 +36,7 @@ async function fixture(page: Page) {
       status = 401
       body = { code: 'invalid_credential' }
     } else if (path.endsWith('/session')) body = profile
+    else if (path.endsWith('/session/security')) body = security
     else if (path.endsWith('/sessions')) body = { sessions: [profile.session], next_cursor: null }
     else if (path.endsWith('/accounts')) body = { accounts: [], next_cursor: null }
     else if (path.endsWith('/providers')) body = { providers: [] }
@@ -143,4 +154,96 @@ test('an unknown consent result cannot replay after reload', async ({ page }) =>
   await page.reload()
   await expect(page.getByRole('heading', { name: '身份服务暂时不可用', exact: true })).toBeVisible()
   expect(accepts).toBe(1)
+})
+
+test('rejected step-up clears its own locator without relying on an error page', async ({
+  page,
+}) => {
+  await fixture(page)
+  let attempts = 0
+  await page.route('**/session/security', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ...security,
+        eligible_step_up_providers: [{ provider_id: id, label: 'Eligible provider' }],
+      }),
+    }),
+  )
+  await page.route('**/step-up', (route) => {
+    attempts++
+    expect(route.request().postDataJSON()).toEqual({
+      client_id: 'identity-ui',
+      return_target: 'resume',
+    })
+    expect(route.request().headers()['x-csrf-token']).toBe(csrf)
+    return route.fulfill({
+      status: 403,
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 'insufficient_privilege' }),
+    })
+  })
+  await page.goto(`/tenants/${tenant}/login`)
+  await page.getByLabel('账户名', { exact: true }).fill('admin')
+  await page.getByLabel('密码', { exact: true }).fill('private fixture password')
+  await page.getByRole('button', { name: '登录', exact: true }).click()
+  await page.getByRole('button', { name: '增强认证 · Eligible provider', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('没有执行此操作的权限')
+  await expect(page.getByRole('heading', { name: '我的会话', exact: true })).toBeVisible()
+  expect(await page.evaluate(() => sessionStorage.getItem('rss.identity.pending-flow'))).toBeNull()
+  await page.reload()
+  expect(attempts).toBe(1)
+})
+
+test('unknown provisioning survives session clearing and reload as an original-operation query', async ({
+  page,
+}) => {
+  const platformProfile = {
+    ...profile,
+    identity: { ...profile.identity, administrator: false, platform_administrator: true },
+  }
+  let creates = 0
+  await page.route('**/api/v1/**', async (route) => {
+    const request = route.request()
+    const path = new URL(request.url()).pathname
+    let status = 200
+    let body: unknown
+    if (path.endsWith('/session')) body = platformProfile
+    else if (path === '/api/v1/platform')
+      body = { system_domain_id: tenant, identity: platformProfile.identity }
+    else if (path === '/api/v1/platform/tenants' && request.method() === 'GET')
+      body = { tenants: [], next_cursor: null }
+    else if (path === '/api/v1/platform/tenants') {
+      creates++
+      status = 503
+      expect(request.headers()['x-csrf-token']).toBe(csrf)
+      body = { code: 'operation_outcome_unknown' }
+    } else if (path.startsWith('/api/v1/platform/operations/')) {
+      expect(request.method()).toBe('GET')
+      status = 404
+      body = { code: 'operation_not_observed' }
+    } else {
+      status = 400
+      body = { code: 'malformed_request' }
+    }
+    await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
+  })
+  await page.goto(`/tenants/${tenant}/platform`)
+  await page.getByLabel('租户名称', { exact: true }).fill('Synthetic tenant')
+  await page.getByLabel('首个管理员账户名', { exact: true }).fill('first-admin')
+  await page
+    .getByLabel('新密码（至少 15 个字符）', { exact: true })
+    .fill('private fixture password')
+  await page.getByRole('button', { name: '创建', exact: true }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: '确认', exact: true }).click()
+  await expect(page.getByTestId('provisioning-outcome')).toContainText('结果尚未确认')
+  const operation = new URL(page.url()).searchParams.get('operation')
+  expect(operation).not.toBeNull()
+  await expect(page.getByRole('link', { name: '登录', exact: true })).toBeVisible()
+  await page.reload()
+  await page.getByRole('button', { name: '核实原操作', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('不代表未提交')
+  await expect(page.getByTestId('provisioning-outcome')).toContainText('结果尚未确认')
+  expect(new URL(page.url()).searchParams.get('operation')).toBe(operation)
+  expect(creates).toBe(1)
 })

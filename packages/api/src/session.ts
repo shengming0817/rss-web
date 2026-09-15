@@ -1,4 +1,11 @@
-import type { HttpTransport, NoContentRequest, RequestOptions, RssApiError } from './types'
+import type {
+  HttpTransport,
+  NoContentRequest,
+  RequestOptions,
+  ResponseRequestOptions,
+  RssApiError,
+} from './types'
+import type { TransportRequest } from './internal/authorization'
 import { authorizeRequest } from './internal/authorization'
 import { isRssApiError } from './wire-error'
 
@@ -27,10 +34,14 @@ function combinedSignal(caller: AbortSignal | undefined, lifecycle: AbortSignal)
   return caller === undefined ? lifecycle : AbortSignal.any([caller, lifecycle])
 }
 
-function authorized<T>(
-  request: NoContentRequest | RequestOptions<T>,
-  credential: SessionCredential,
-) {
+function dispatch<T>(delegate: HttpTransport, request: TransportRequest<T>): Promise<T | void> {
+  if (request.successStatus === 204) return delegate.request(request as NoContentRequest)
+  if (Array.isArray(request.successStatus))
+    return delegate.request(request as ResponseRequestOptions<T>)
+  return delegate.request(request as RequestOptions<T>)
+}
+
+function authorized<T>(request: TransportRequest<T>, credential: SessionCredential) {
   return authorizeRequest(
     request,
     credential.bearer,
@@ -41,18 +52,18 @@ function authorized<T>(
 async function protectedRequest<T>(
   delegate: HttpTransport,
   hooks: SessionTransportHooks,
-  request: NoContentRequest | RequestOptions<T>,
+  request: TransportRequest<T>,
 ): Promise<T | void> {
   const initial = await hooks.authorize(request.signal)
   try {
-    return await delegate.request(authorized(request, initial) as RequestOptions<T>)
+    return await dispatch(delegate, authorized(request, initial))
   } catch (error: unknown) {
     if (!exactUnauthenticated(error)) throw error
   }
 
   const recovered = await hooks.recover(initial.generation, request.signal)
   try {
-    return await delegate.request(authorized(request, recovered) as RequestOptions<T>)
+    return await dispatch(delegate, authorized(request, recovered))
   } catch (error: unknown) {
     if (exactUnauthenticated(error)) hooks.invalidate(recovered.generation)
     throw error
@@ -62,11 +73,11 @@ async function protectedRequest<T>(
 async function protectedNoReplayRequest<T>(
   delegate: HttpTransport,
   hooks: SessionTransportHooks,
-  request: NoContentRequest | RequestOptions<T>,
+  request: TransportRequest<T>,
 ): Promise<T | void> {
   const initial = await hooks.authorize(request.signal)
   try {
-    return await delegate.request(authorized(request, initial) as RequestOptions<T>)
+    return await dispatch(delegate, authorized(request, initial))
   } catch (error: unknown) {
     if (exactUnauthenticated(error)) hooks.invalidate(initial.generation)
     throw error
@@ -78,9 +89,9 @@ export function createCredentialHttpTransport(
   credential: SessionCredential,
 ): HttpTransport {
   return {
-    request<T>(request: NoContentRequest | RequestOptions<T>): Promise<T | void> {
-      if (request.session === undefined) return delegate.request(request as RequestOptions<T>)
-      return delegate.request(authorized(request, credential) as RequestOptions<T>)
+    request<T>(request: TransportRequest<T>): Promise<T | void> {
+      if (request.session === undefined) return dispatch(delegate, request)
+      return dispatch(delegate, authorized(request, credential))
     },
   } as HttpTransport
 }
@@ -90,8 +101,8 @@ export function createSessionHttpTransport(
   hooks: SessionTransportHooks,
 ): HttpTransport {
   return {
-    request<T>(request: NoContentRequest | RequestOptions<T>): Promise<T | void> {
-      if (request.session === undefined) return delegate.request(request as RequestOptions<T>)
+    request<T>(request: TransportRequest<T>): Promise<T | void> {
+      if (request.session === undefined) return dispatch(delegate, request)
       if (request.session === 'required-no-replay')
         return protectedNoReplayRequest(delegate, hooks, request)
       return protectedRequest(delegate, hooks, request)

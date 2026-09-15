@@ -14,7 +14,10 @@ describe('Identity operations use one protected transport without replay', () =>
   it('consumes every account/session operation with explicit pagination', async () => {
     const f = fixture()
     await f.login()
-    f.replies.push({ accounts: [accountValue], next_cursor: OTHER })
+    f.replies.push({
+      accounts: [{ ...accountValue, platform_administrator: false }],
+      next_cursor: OTHER,
+    })
     expect((await f.api.accounts()).next).toBe(OTHER)
     f.replies.push({ accounts: [], next_cursor: null })
     await f.api.accounts(OTHER)
@@ -44,9 +47,9 @@ describe('Identity operations use one protected transport without replay', () =>
     f.replies.push({ providers: [providerValue] })
     await f.api.providers()
     f.replies.push(providerValue)
-    await f.api.createProvider(settingsValue)
+    await f.api.createProvider(settingsValue, 'fixture-secret', null)
     f.replies.push({ ...providerValue, version: 2 })
-    await f.api.updateProvider(providerValue, settingsValue)
+    await f.api.updateProvider(providerValue, settingsValue, 'rotated-secret', null)
     f.replies.push({ ...providerValue, version: 2, enabled: true })
     await f.api.enableProvider(providerValue, true)
     f.replies.push({ passed: false, diagnostic: { stage: 'binding', reason: 'missing_secret' } })

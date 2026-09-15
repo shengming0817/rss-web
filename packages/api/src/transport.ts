@@ -3,6 +3,7 @@ import type { AxiosInstance, AxiosRequestConfig } from 'axios'
 import type {
   HttpTransport,
   NoContentRequest,
+  ResponseRequestOptions,
   QueryValue,
   RequestOptions,
   RssApiError,
@@ -101,7 +102,7 @@ function resolveQuery(
 }
 
 export function requestConfig(
-  options: NoContentRequest | RequestOptions<unknown>,
+  options: NoContentRequest | RequestOptions<unknown> | ResponseRequestOptions<unknown>,
   defaultTimeoutMs: number,
   protectedHeaders: Readonly<Record<string, string>>,
 ): AxiosRequestConfig {
@@ -139,7 +140,7 @@ export function requestConfig(
 export async function execute<T>(
   instance: AxiosInstance,
   defaultTimeoutMs: number,
-  options: NoContentRequest | RequestOptions<T>,
+  options: NoContentRequest | RequestOptions<T> | ResponseRequestOptions<T>,
   decodeError: (status: number, value: unknown) => RssApiError,
   protectedHeaders: Readonly<Record<string, string>>,
 ): Promise<T | void> {
@@ -149,10 +150,14 @@ export async function execute<T>(
       requestConfig(options, defaultTimeoutMs, protectedHeaders),
     )
     if (response.status >= 400) throw decodeError(response.status, response.data)
-    if (response.status !== options.successStatus) throw protocolError(response.status)
+    const expected = options.successStatus
+    if (
+      Array.isArray(expected) ? !expected.includes(response.status) : response.status !== expected
+    )
+      throw protocolError(response.status)
     if (options.successStatus === 204) return undefined
     try {
-      return options.decode(response.data)
+      return options.decode(response.data, response.status)
     } catch {
       throw protocolError(response.status)
     }
@@ -177,7 +182,9 @@ export function createHttpTransport(config: HttpTransportConfig): HttpTransport 
   }
   const instance = axios.create({ baseURL: config.baseURL ?? '' })
   return {
-    async request(options: NoContentRequest | RequestOptions<unknown>) {
+    async request(
+      options: NoContentRequest | RequestOptions<unknown> | ResponseRequestOptions<unknown>,
+    ) {
       const authorization = authorizationFrom(options)
       if (
         (options.session !== undefined && authorization === undefined) ||

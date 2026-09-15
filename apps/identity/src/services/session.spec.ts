@@ -163,7 +163,7 @@ it('serializes downstream accept behind rotation and uses the new CSRF', async (
   expect(f.request.mock.calls.at(-1)?.[0].headers?.['X-CSRF-Token']).toBe('c'.repeat(64))
 })
 
-it('resolves refresh tenant only after earlier session transitions settle', async () => {
+it('rejects queued refresh after a tenant transition', async () => {
   const f = fixture()
   await f.login()
   let release!: () => void
@@ -176,8 +176,98 @@ it('resolves refresh tenant only after earlier session transitions settle', asyn
   const other = '44444444-4444-4444-8444-444444444444'
   f.replies.push(sessionValue(), sessionValue())
   const check = f.session.check(other)
-  const refresh = f.session.refresh()
+  const refresh = expect(f.session.refresh()).rejects.toThrow('Operation abandoned')
   release()
   await Promise.all([hold, check, refresh])
-  expect(f.request.mock.calls.at(-1)?.[0].pathParams).toEqual({ tenant: other })
+  expect(f.request.mock.calls.some(([o]) => o.path.endsWith('/refresh'))).toBe(false)
+  expect(f.session.state.value.tenant).toBe(other)
+  expect(f.session.state.value.status).toBe('authenticated')
+})
+
+for (const control of ['refresh', 'logout'] as const) {
+  it(`never rebinds queued ${control} after page departure`, async () => {
+    const f = fixture()
+    await f.login()
+    let release!: () => void
+    const hold = f.session.perform(
+      () =>
+        new Promise<void>((r) => {
+          release = r
+        }),
+    )
+    const rejected = expect(f.session[control]()).rejects.toThrow('Operation abandoned')
+    f.session.leavePage()
+    release()
+    await expect(hold).rejects.toThrow('Stale response')
+    await rejected
+    expect(f.request).toHaveBeenCalledTimes(1)
+    expect(f.session.state.value.status).toBe('authenticated')
+    f.session.clear()
+  })
+}
+it('never applies queued logout to a newly selected tenant', async () => {
+  const f = fixture()
+  await f.login()
+  let release!: () => void
+  const hold = f.session.perform(
+    () =>
+      new Promise<void>((r) => {
+        release = r
+      }),
+  )
+  const other = '44444444-4444-4444-8444-444444444444'
+  f.replies.push(sessionValue())
+  const change = f.session.check(other)
+  const rejected = expect(f.session.logout()).rejects.toThrow('Operation abandoned')
+  release()
+  await Promise.all([hold, change, rejected])
+  expect(f.request.mock.calls.some(([o]) => o.path.endsWith('/logout'))).toBe(false)
+  expect(f.session.state.value.status).toBe('authenticated')
+  f.session.clear()
+})
+
+it('dispatches create and step-up after same-session rotation using the new CSRF', async () => {
+  for (const kind of ['create', 'step-up'] as const) {
+    const f = fixture()
+    await f.login()
+    let release!: (v: unknown) => void
+    f.replies.push(
+      () =>
+        new Promise((r) => {
+          release = r
+        }),
+    )
+    const rotation = f.session.refresh()
+    f.replies.push(
+      kind === 'step-up'
+        ? { authorization_url: 'https://idp.test/authorize' }
+        : {
+            active: true,
+            operation: {
+              operation_id: TENANT,
+              kind: 'tenant_created',
+              tenant_id: TENANT,
+              principal_id: TENANT,
+              created_at: 1,
+            },
+          },
+    )
+    const work =
+      kind === 'step-up'
+        ? f.api.stepUp(TENANT)
+        : f.api.createTenant({
+            tenant_id: TENANT,
+            name: 'Fixture tenant',
+            administrator: {
+              operation_id: TENANT,
+              principal_id: TENANT,
+              login: 'first',
+              password: 'private fixture password',
+            },
+          })
+    release(sessionValue(true, 'c'.repeat(64)))
+    await Promise.all([rotation, work])
+    expect(f.request.mock.calls.at(-1)?.[0].headers?.['X-CSRF-Token']).toBe('c'.repeat(64))
+    f.session.clear()
+  }
 })

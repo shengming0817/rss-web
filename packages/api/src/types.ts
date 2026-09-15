@@ -1,7 +1,11 @@
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE'
-export type SuccessStatus = 200 | 201 | 204
+export type SuccessStatus = 200 | 201 | 202 | 204
+/** The reviewed RSS endpoint coordinates use one terminal success status. */
+export type EndpointSuccessStatus = Exclude<SuccessStatus, 202>
+export type CreationSuccessStatuses = readonly [201, 202]
 export type QueryValue = string | number | boolean | undefined
 export type Decoder<T> = (value: unknown) => T
+export type ResponseDecoder<T> = (value: unknown, status: number) => T
 
 export interface EndpointErrorRule {
   readonly code: `ERR_${string}`
@@ -29,8 +33,14 @@ interface RequestBase {
 }
 
 export interface RequestOptions<T> extends RequestBase {
-  successStatus: 200 | 201
+  successStatus: Exclude<EndpointSuccessStatus, 204>
   decode: Decoder<T>
+}
+
+/** Creation can commit before activation. Its decoder must receive the actual HTTP status. */
+export interface ResponseRequestOptions<T> extends RequestBase {
+  successStatus: CreationSuccessStatuses
+  decode: ResponseDecoder<T>
 }
 
 export interface NoContentRequest extends RequestBase {
@@ -41,6 +51,7 @@ export interface NoContentRequest extends RequestBase {
 export interface HttpTransport {
   request(options: NoContentRequest): Promise<void>
   request<T>(options: RequestOptions<T>): Promise<T>
+  request<T>(options: ResponseRequestOptions<T>): Promise<T>
 }
 
 export interface CursorPage<T> {

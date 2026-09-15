@@ -25,7 +25,7 @@ async function load(cursor?: string) {
   next.value = value.next
 }
 onMounted(() => {
-  if (session.state.value.identity?.administrator) void run(() => load())
+  if (session.managementHint.value) void run(() => load())
 })
 async function create() {
   const secret = password.value
@@ -69,7 +69,7 @@ async function reset() {
   <section class="identity-card">
     <h1>{{ t('identity.accounts') }}</h1>
     <p v-if="error" role="alert">{{ t(`identity.errors.${error}`) }}</p>
-    <p v-if="!session.state.value.identity?.administrator">
+    <p v-if="!session.managementHint.value">
       {{ t('identity.errors.insufficient_privilege') }}
     </p>
     <template v-else>
@@ -108,6 +108,7 @@ async function reset() {
                   {{ t(a.member_active ? 'identity.disableMember' : 'identity.enableMember') }}
                 </button>
                 <button
+                  v-if="session.state.value.identity?.administrator"
                   :disabled="busy"
                   @click="
                     pending = { account: a, field: 'administrator', enabled: !a.administrator }
@@ -140,8 +141,12 @@ async function reset() {
         <label for="account-role">{{ t('identity.role') }}</label
         ><select id="account-role" v-model="role">
           <option value="member">{{ t('identity.member') }}</option>
-          <option value="administrator">{{ t('identity.administrator') }}</option>
-          <option value="emergency">{{ t('identity.emergency') }}</option>
+          <option v-if="session.state.value.identity?.administrator" value="administrator">
+            {{ t('identity.administrator') }}
+          </option>
+          <option v-if="session.state.value.identity?.administrator" value="emergency">
+            {{ t('identity.emergency') }}
+          </option>
         </select>
         <label for="account-password">{{ t('identity.password') }}</label
         ><input
