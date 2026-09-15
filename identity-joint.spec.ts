@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -57,3 +57,66 @@ it('classifies missing browser CA as an environment failure without emitting a r
   })
   expect(result.stderr).toBe('')
 })
+
+it.each(['spawn', 'exit', 'malformed', 'assertion', 'timeout'] as const)(
+  'classifies backend %s using execution facts and validated fixture evidence',
+  (mode) => {
+    const path = output()
+    const root = resolve(path, '..')
+    mkdirSync(resolve(root, 'e2e/identity'), { recursive: true })
+    mkdirSync(resolve(root, 'apps/identity/dist'), { recursive: true })
+    writeFileSync(resolve(root, 'pnpm-lock.yaml'), 'lock')
+    writeFileSync(resolve(root, 'Cargo.lock'), 'lock')
+    writeFileSync(resolve(root, 'e2e/identity/real.mjs'), '')
+    writeFileSync(resolve(root, '.gitignore'), 'record.json\n')
+    const stub = `import { writeFileSync } from 'node:fs';
+export async function executeBounded(command, args, options) {
+  if (command !== 'make') return { status: 0 };
+  const mode = ${JSON.stringify(mode)};
+  if (mode === 'spawn') throw new Error('private spawn failure');
+  if (mode === 'malformed') writeFileSync(options.env.IDENTITY_UI_FIXTURE_RECORD, '{');
+  if (mode === 'assertion' || mode === 'timeout') writeFileSync(options.env.IDENTITY_UI_FIXTURE_RECORD, JSON.stringify({
+    format_version: 1, result: 'failed', cleanup: { status: 'passed', recovery_targets: [] },
+    failure: { phase: 'browser', classification: 'assertion' }
+  }));
+  return { status: 2, timedOut: mode === 'timeout' };
+}`
+    writeFileSync(resolve(root, 'process.mjs'), stub)
+    writeFileSync(
+      resolve(root, 'e2e/identity/run.mjs'),
+      readFileSync(resolve(import.meta.dirname, 'e2e/identity/run.mjs'), 'utf8').replace(
+        "'../real/process.mjs'",
+        "'../../process.mjs'",
+      ),
+    )
+    for (const args of [
+      ['init', '-q'],
+      ['add', '.'],
+      ['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'fixture'],
+    ]) {
+      expect(spawnSync('/usr/bin/git', args, { cwd: root }).status).toBe(0)
+    }
+    const result = spawnSync(process.execPath, [resolve(root, 'e2e/identity/run.mjs')], {
+      cwd: root,
+      encoding: 'utf8',
+      timeout: 10000,
+      env: { ...process.env, IDENTITY_BACKEND_FIXTURE: root, IDENTITY_JOINT_RECORD: path },
+    })
+    expect(result.status).toBe(1)
+    const record = JSON.parse(readFileSync(path, 'utf8'))
+    if (record.cleanup.recovery_directory) directories.push(record.cleanup.recovery_directory)
+    expect(record.failure).toMatchObject({
+      phase: mode === 'assertion' ? 'browser' : 'backend',
+      classification:
+        mode === 'assertion' ? 'assertion' : mode === 'timeout' ? 'timeout' : 'environment',
+    })
+    if (mode !== 'malformed')
+      expect(record.failure.execution).toBe(
+        mode === 'spawn' ? 'spawn' : mode === 'timeout' ? 'timeout' : 'exit',
+      )
+    expect(record.cleanup.status).toBe(
+      ['assertion', 'timeout'].includes(mode) ? 'passed' : 'unknown',
+    )
+    expect(result.stdout + result.stderr).not.toContain('private spawn failure')
+  },
+)

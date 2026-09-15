@@ -8,7 +8,8 @@ import { runtimeKey } from '../context'
 import { identityI18n } from '../i18n'
 import type { CreateTenant } from '../services/api'
 import PlatformView from './PlatformView.vue'
-async function platform(admin = true, operation?: string) {
+import App from '../App.vue'
+async function platform(admin = true, operation?: string, shell = false) {
   const f = fixture()
   const value = sessionValue(false)
   value.identity.platform_administrator = admin
@@ -24,6 +25,12 @@ async function platform(admin = true, operation?: string) {
     routes: [
       { path: '/tenants/:tenant/platform', name: 'platform', component: PlatformView },
       { path: '/tenants/:tenant/login', name: 'login', component: { template: '<div/>' } },
+      ...['sessions', 'accounts', 'providers'].map((name) => ({
+        path: '/tenants/:tenant/' + name,
+        name,
+        component: { template: '<div/>' },
+      })),
+      { path: '/', component: { template: '<div/>' } },
     ],
   })
   await router.push({
@@ -31,7 +38,7 @@ async function platform(admin = true, operation?: string) {
     params: { tenant: TENANT },
     query: operation ? { operation } : {},
   })
-  const wrapper = mount(PlatformView, {
+  const wrapper = mount(shell ? App : { template: '<RouterView />' }, {
     attachTo: document.body,
     global: {
       plugins: [createPinia(), identityI18n(), router],
@@ -199,4 +206,88 @@ describe('platform tenant provisioning', () => {
     expect(f.wrapper.find('form').exists()).toBe(false)
     f.wrapper.unmount()
   })
+})
+
+it.each(['submitting', 'pending', 'unknown'] as const)(
+  'keeps the original %s operation through actual shell navigation and query removal',
+  async (state) => {
+    const f = await platform(true, state === 'unknown' ? OTHER : undefined, true)
+    let finish: (() => void) | undefined
+    if (state !== 'unknown') {
+      await prepare(f)
+      if (state === 'submitting') {
+        f.replies.push(() => {
+          const result = reply(f, false)()
+          return new Promise((resolve) => {
+            finish = () => resolve(result)
+          })
+        })
+      } else f.replies.push(reply(f, false))
+      await confirm(f)
+    }
+    const operation = f.router.currentRoute.value.query['operation']
+    await f.wrapper
+      .get('nav')
+      .findAll('a')
+      .find((a) => a.text() === '平台管理')!
+      .trigger('click')
+    await flushPromises()
+    expect(f.router.currentRoute.value.query['operation']).toBe(operation)
+    await f.router.push({ name: 'platform', params: { tenant: TENANT } })
+    await flushPromises()
+    expect(f.router.currentRoute.value.query['operation']).toBe(operation)
+    expect(f.wrapper.find('form').exists()).toBe(false)
+    finish?.()
+    await flushPromises()
+    expect(f.wrapper.get('[data-testid=provisioning-outcome]').text()).toContain(
+      state === 'unknown' ? '结果尚未确认' : '等待激活',
+    )
+    f.wrapper.unmount()
+    f.session.clear()
+  },
+)
+
+it('carries an unresolved locator across shell departure and return without resubmitting', async () => {
+  const f = await platform(true, OTHER, true)
+  await f.wrapper
+    .get('nav')
+    .findAll('a')
+    .find((a) => a.text() === '我的会话')!
+    .trigger('click')
+  await flushPromises()
+  expect(f.router.currentRoute.value.name).toBe('sessions')
+  expect(f.router.currentRoute.value.query['operation']).toBe(OTHER)
+  f.replies.push(
+    { system_domain_id: TENANT, identity: f.session.state.value.identity },
+    { tenants: [], next_cursor: null },
+  )
+  await f.wrapper
+    .get('nav')
+    .findAll('a')
+    .find((a) => a.text() === '平台管理')!
+    .trigger('click')
+  await flushPromises()
+  expect(f.router.currentRoute.value.query['operation']).toBe(OTHER)
+  expect(f.wrapper.find('form').exists()).toBe(false)
+  expect(f.request.mock.calls.some(([o]) => o.method === 'POST')).toBe(false)
+  f.wrapper.unmount()
+  f.session.clear()
+})
+
+it('clears a completed operation only with the explicit new operation action', async () => {
+  const f = await platform()
+  await prepare(f)
+  f.replies.push(reply(f))
+  await confirm(f)
+  await f.router.push({ name: 'platform', params: { tenant: TENANT }, query: { operation: OTHER } })
+  expect(f.router.currentRoute.value.query['operation']).not.toBe(OTHER)
+  await f.wrapper
+    .findAll('button')
+    .find((b) => b.text() === '创建新租户')!
+    .trigger('click')
+  await flushPromises()
+  expect(f.router.currentRoute.value.query['operation']).toBeUndefined()
+  expect(f.wrapper.find('form').exists()).toBe(true)
+  f.wrapper.unmount()
+  f.session.clear()
 })

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ModalShell } from '@rss/core/components'
 import { isRssApiError } from '@rss/api/identity'
@@ -38,6 +38,17 @@ type Outcome =
   | 'unknown'
 const outcome = ref<Outcome>(operationQuery(route.query).operation ? 'unknown' : 'idle')
 const operationId = computed(() => operationQuery(route.query).operation)
+let resetting = false
+onBeforeRouteUpdate(
+  (to) =>
+    !operationId.value || resetting || operationQuery(to.query).operation === operationId.value,
+)
+onBeforeRouteLeave((to) => {
+  if (!operationId.value || ['active', 'rejected', 'not_completed'].includes(outcome.value))
+    return true
+  if (operationQuery(to.query).operation === operationId.value) return true
+  return { ...to, query: { ...to.query, operation: operationId.value } }
+})
 const authenticated = computed(() => session.state.value.status === 'authenticated')
 const approved = computed(
   () =>
@@ -145,6 +156,7 @@ async function create() {
         },
       })
       checkpoint()
+      if (operationId.value !== value.operation_id) return
       receipt.value = result
       outcome.value = result.active ? 'active' : 'pending'
     } catch (failure) {
@@ -180,7 +192,12 @@ async function newOperation() {
     !['active', 'rejected', 'not_completed'].includes(outcome.value)
   )
     return
-  await router.replace({ name: 'platform', params: { tenant: session.state.value.tenant } })
+  resetting = true
+  try {
+    await router.replace({ name: 'platform', params: { tenant: session.state.value.tenant } })
+  } finally {
+    resetting = false
+  }
 }
 </script>
 <template>

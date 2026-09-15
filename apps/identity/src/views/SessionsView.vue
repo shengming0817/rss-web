@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useIdentity } from '../context'
@@ -13,17 +13,50 @@ const rows = ref<Session[]>([])
 const next = ref<string | null>(null)
 const current = ref('')
 const password = ref('')
+const owner = computed(() =>
+  session.state.value.status === 'authenticated'
+    ? [
+        session.state.value.tenant,
+        session.state.value.identity?.principal_id,
+        session.state.value.session?.id,
+      ].join('/')
+    : null,
+)
+let generation = 0
+let reload = true
+watch(
+  owner,
+  () => {
+    generation++
+    rows.value = []
+    next.value = null
+    current.value = ''
+    password.value = ''
+    reload = true
+  },
+  { flush: 'sync' },
+)
+watch(
+  [owner, busy],
+  () => {
+    if (!owner.value || busy.value || !reload) return
+    reload = false
+    void run(async () => {
+      await load()
+      await session.loadSecurity()
+    })
+  },
+  { immediate: true },
+)
 async function load(cursor?: string) {
+  const expected = generation
   const value = await api.sessions(cursor)
   checkpoint()
+  if (generation !== expected) throw new Error('Stale session page')
   rows.value = cursor ? [...rows.value, ...value.sessions] : value.sessions
   next.value = value.next
 }
 onMounted(() => {
-  void run(async () => {
-    await load()
-    await session.loadSecurity()
-  })
   document.addEventListener('visibilitychange', visible)
 })
 onBeforeUnmount(() => document.removeEventListener('visibilitychange', visible))
@@ -34,7 +67,6 @@ function visible() {
       if (tenant) {
         await session.check(tenant)
         checkpoint()
-        await session.loadSecurity()
       }
     })
 }

@@ -56,3 +56,15 @@ SIGKILL 不能承诺执行 finally。UI runner 环境输入失败统一为 envir
 系统域已有账户/IdP 管理由后端平台角色结果提供显示提示；系统域只提供 member 账户形态，
 不提供租户 administrator/emergency 变更或 JIT。该提示不授权任何请求，平台角色授撤页面仍不在范围内。
 明确拒绝或未完成的开通结果提供重新登录后新建的入口，不携带旧 operation；真正 unknown 继续只恢复原查询。
+
+
+### PR #1019 修复边界
+
+会话页按 tenant/principal/session owner 同步清空列表、分页及密码草稿；旧 owner 的在途读取不能回填。
+新 owner 就绪且当前操作结束后重新读取其列表和安全投影。平台页普通同页导航不能删除或替换已有
+operation；明确终态的“创建新租户”动作才可清除。未决操作离开页面时携带原 UUID，平台导航保留
+这个恢复定位，返回只恢复查询，不保存或重放命令。
+
+联合记录保留闭集 execution 原因（spawn/exit/timeout/interrupted）。backend 未提供有效失败证据时
+归 environment；有效 fixture 的 phase/classification 保留，外层 timeout/interrupted 优先。
+缺失或无效 fixture 仍为 cleanup unknown，不反射原始进程异常。

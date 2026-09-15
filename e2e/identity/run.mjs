@@ -42,8 +42,14 @@ const record = {
   failure: null,
   cleanup: { status: 'not_started', recovery_targets: [] },
 }
+class CommandFailure extends Error {
+  constructor(execution) {
+    super(execution)
+    this.execution = execution
+  }
+}
 async function run(command, args, cwd, env = process.env, fixture = false) {
-  if (interrupted) throw new Error('interrupted')
+  if (interrupted) throw new CommandFailure('interrupted')
   const result = await executeBounded(command, args, {
     cwd,
     env,
@@ -57,10 +63,12 @@ async function run(command, args, cwd, env = process.env, fixture = false) {
     onRelease: () => {
       active = undefined
     },
+  }).catch(() => {
+    throw new CommandFailure('spawn')
   })
-  if (interrupted) throw new Error('interrupted')
-  if (result.timedOut) throw new Error('timeout')
-  if (result.status !== 0) throw new Error('command')
+  if (interrupted) throw new CommandFailure('interrupted')
+  if (result.timedOut) throw new CommandFailure('timeout')
+  if (result.status !== 0) throw new CommandFailure('exit')
 }
 function fixtureState() {
   if (!fixtureRecord || !existsSync(fixtureRecord)) return null
@@ -163,11 +171,12 @@ try {
 } catch (error) {
   record.failure = {
     phase,
+    ...(error instanceof CommandFailure ? { execution: error.execution } : {}),
     classification: interrupted
       ? 'interrupted'
       : error?.message === 'timeout'
         ? 'timeout'
-        : ['preflight', 'build', 'artifact'].includes(phase)
+        : ['preflight', 'build', 'artifact', 'backend'].includes(phase)
           ? 'environment'
           : 'assertion',
   }
@@ -189,7 +198,10 @@ try {
           allowedPhases.includes(fixture.failure.phase) &&
           allowedClasses.includes(fixture.failure.classification)
         )
-          record.failure = fixture.failure
+          record.failure = {
+            ...fixture.failure,
+            ...(record.failure?.execution ? { execution: record.failure.execution } : {}),
+          }
       }
     } catch {
       record.cleanup = { status: 'unknown', recovery_targets: [] }

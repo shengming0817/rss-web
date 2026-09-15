@@ -391,3 +391,72 @@ it('does not erase provider edits when the initial list finishes late', async ()
   expect((wrapper.get('#client-secret').element as HTMLInputElement).value).toBe('new-secret@1')
   wrapper.unmount()
 })
+
+it('clears prior-owner rows, pagination and password drafts when visibility rechecks another account', async () => {
+  const f = fixture()
+  await f.login()
+  f.replies.push({ sessions: [sessionValue().session], next_cursor: ID })
+  const { wrapper } = await view(SessionsView, f)
+  await wrapper.get('#current-password').setValue('old owner password')
+  await wrapper.get('#new-password').setValue('old owner new password')
+  const changed = sessionValue()
+  changed.identity.principal_id = OTHER
+  changed.session.id = OTHER
+  f.replies.push(
+    changed,
+    { sessions: [changed.session], next_cursor: null },
+    { ...securityValue(), session_id: OTHER },
+  )
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+  document.dispatchEvent(new Event('visibilitychange'))
+  await flushPromises()
+  expect(wrapper.get('tbody').text()).not.toContain(ID)
+  expect(wrapper.get('tbody').text()).toContain(OTHER)
+  expect(wrapper.findAll('button').some((b) => b.text() === '加载更多')).toBe(false)
+  expect((wrapper.get('#current-password').element as HTMLInputElement).value).toBe('')
+  expect((wrapper.get('#new-password').element as HTMLInputElement).value).toBe('')
+  wrapper.unmount()
+  f.session.clear()
+  vi.restoreAllMocks()
+})
+
+it('discards an old owner list completion and reloads after the pending read settles', async () => {
+  const f = fixture()
+  await f.login()
+  f.replies.push({ sessions: [sessionValue().session], next_cursor: ID })
+  const { wrapper } = await view(SessionsView, f)
+  let finish!: (page: {
+    sessions: ReturnType<typeof sessionValue>['session'][]
+    next: string | null
+  }) => void
+  vi.spyOn(f.api, 'sessions').mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text() === '加载更多')!
+    .trigger('click')
+  f.session.clear()
+  await flushPromises()
+  expect(wrapper.get('tbody').text()).toBe('')
+  const changed = sessionValue()
+  changed.identity.principal_id = OTHER
+  changed.session.id = OTHER
+  f.replies.push(
+    changed,
+    { sessions: [changed.session], next_cursor: null },
+    { ...securityValue(), session_id: OTHER },
+  )
+  await f.session.check(TENANT)
+  finish({ sessions: [sessionValue().session], next: ID })
+  await flushPromises()
+  expect(wrapper.get('tbody').text()).toContain(OTHER)
+  expect(wrapper.get('tbody').text()).not.toContain(ID)
+  expect(wrapper.findAll('button').some((b) => b.text() === '加载更多')).toBe(false)
+  wrapper.unmount()
+  f.session.clear()
+  vi.restoreAllMocks()
+})
