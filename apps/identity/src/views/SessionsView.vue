@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useIdentity } from '../context'
 import { useOperation } from '../services/operation'
+import { operationQuery } from '../services/navigation'
 import type { Session } from '../services/decode'
 const { t } = useI18n()
 const router = useRouter()
+const route = useRoute()
 const { session, api, flows } = useIdentity()
 const { busy, error, run, checkpoint } = useOperation()
 const rows = ref<Session[]>([])
@@ -81,7 +83,13 @@ async function stepUp(id: string) {
   await run(async () => {
     const tenant = session.state.value.tenant
     if (!tenant) return
-    flows.save({ kind: 'step-up', tenant, challenge: '', flow: null, operation: null })
+    flows.save({
+      kind: 'step-up',
+      tenant,
+      challenge: '',
+      flow: null,
+      operation: operationQuery(route.query).operation ?? null,
+    })
     try {
       const location = await api.stepUp(id)
       checkpoint()
@@ -93,6 +101,7 @@ async function stepUp(id: string) {
   })
 }
 async function change() {
+  const query = operationQuery(route.query)
   const old = current.value
   const value = password.value
   current.value = ''
@@ -100,14 +109,15 @@ async function change() {
   await run(async () => {
     await api.ownPassword(old, value)
     flows.clear()
-    await router.replace({ name: 'login', params: { tenant: session.state.value.tenant } })
+    await router.replace({ name: 'login', params: { tenant: session.state.value.tenant }, query })
   })
 }
 async function logout(all: boolean) {
   const tenant = session.state.value.tenant
+  const query = operationQuery(route.query)
   flows.clear()
   await run(() => session.logout(all))
-  await router.replace({ name: 'login', params: { tenant } })
+  await router.replace({ name: 'login', params: { tenant }, query })
 }
 </script>
 <template>

@@ -28,8 +28,19 @@ watch(
     )
       void router.replace(
         status === 'unavailable'
-          ? { name: 'error', query: { reason: 'unavailable' } }
-          : { name: 'login', params: { tenant: session.state.value.tenant } },
+          ? {
+              name: 'error',
+              query: {
+                reason: 'unavailable',
+                tenant: session.state.value.tenant,
+                ...operationQuery(router.currentRoute.value.query),
+              },
+            }
+          : {
+              name: 'login',
+              params: { tenant: session.state.value.tenant },
+              query: operationQuery(router.currentRoute.value.query),
+            },
       )
   },
 )

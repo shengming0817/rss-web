@@ -91,7 +91,7 @@ onMounted(() => {
         await session.check(tenant.value)
         checkpoint()
         if (session.state.value.status !== 'authenticated') {
-          flows.clear()
+          // failFlow captures the recovery locator before clearing the one-shot flow.
           throw new Error('Session unavailable')
         }
         await continueFlow()
