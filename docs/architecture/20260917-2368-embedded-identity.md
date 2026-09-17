@@ -11,3 +11,5 @@ UI 挂载 `/`，租户登录入口 `/tenants/{tenant UUID}/login`。API 仅 `/ap
 构建：`pnpm install --frozen-lockfile`，`RSS_IDENTITY_WEB_REVISION=$(/usr/bin/git rev-parse HEAD) pnpm -F @rss/identity-app build`，`pnpm check:identity-app:build`。构建输出 apps/identity/dist 与 identity-build.json；#2436 将双方 SHA、locks、UI 摘要和镜像摘要绑定到 candidate.json。
 
 联合 HTTP T2：两仓先提交固定源码，运行 `IDENTITY_BACKEND_FIXTURE=/absolute/identity/worktree IDENTITY_JOINT_RECORD=/tmp/joint.json pnpm test:identity:joint`。复用编排与清理记录，在 Vitest/jsdom 中使用生产 Axios XMLHttpRequest transport，通过测试 TLS 网关访问真实公开组件与参考宿主策略；没有另写 cookie/CSRF 客户端。上游网络/TOTP 的完整验证仍由 Identity 的 Keycloak T2 持有。此证明不冒称 #2366 的真实浏览器、候选恢复或容量 T3。
+
+jsdom 25 的 XHR 只为 CORS 添加 Origin，T2 的 origin.mjs 补充 Fetch 规定的同源写请求 Origin 元数据；cookie jar、CSRF、body 和重定向仍由 jsdom 与生产 transport 处理。此窄补丁不替代真实浏览器证明。

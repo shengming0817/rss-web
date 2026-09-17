@@ -6,6 +6,14 @@ import process from 'node:process'
 import { executeBounded } from '../real/process.mjs'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 let failure = 'environment'
+let terminate
+let interrupted = false
+function interrupt() {
+  interrupted = true
+  terminate?.()
+}
+process.on('SIGINT', interrupt)
+process.on('SIGTERM', interrupt)
 try {
   const origin = new URL(process.env.IDENTITY_TEST_UI_ORIGIN)
   if (
@@ -17,16 +25,29 @@ try {
     throw new Error('fixture input')
   const result = await executeBounded(
     'pnpm',
-    ['exec', 'vitest', 'run', '--no-workspace', '--config', 'e2e/identity/vitest.config.mjs'],
+    ['exec', 'vitest', 'run', '--config', 'e2e/identity/vitest.config.mjs'],
     {
       cwd: root,
+      onChild: (_child, stop) => {
+        terminate = stop
+        if (interrupted) stop()
+      },
+      onRelease: () => {
+        terminate = undefined
+      },
       env: process.env,
       timeoutMs: 180000,
       graceMs: 5000,
       stdio: ['ignore', 'pipe', 'pipe'],
     },
   )
-  failure = result.timedOut ? 'timeout' : result.status === 0 ? null : 'assertion'
+  failure = interrupted
+    ? 'interrupted'
+    : result.timedOut
+      ? 'timeout'
+      : result.status === 0
+        ? null
+        : 'assertion'
 } catch {
   /* Only a closed failure category leaves the runner. */
 }

@@ -31,15 +31,14 @@ it('writes a failure receipt even when joint preflight cannot select a backend',
   expect(record['cleanup']).toEqual({ status: 'not_started', recovery_targets: [] })
   expect(result.stderr).not.toContain('Error:')
 })
-it('classifies missing browser CA as an environment failure without emitting a raw exception', () => {
+it('classifies missing transport CA as an environment failure without emitting a raw exception', () => {
   const path = output()
   const env = {
     ...process.env,
     IDENTITY_UI_DIAGNOSTIC: path,
     IDENTITY_TEST_UI_ORIGIN: 'https://localhost:1234',
-    IDENTITY_TEST_FEDERATED_ISSUER: 'https://127.0.0.1:2345/realms/fixture',
   }
-  delete env['IDENTITY_TEST_FEDERATED_CA']
+  delete env['NODE_EXTRA_CA_CERTS']
   const result = spawnSync(
     process.execPath,
     [resolve(import.meta.dirname, 'e2e/identity/real.mjs')],
@@ -120,3 +119,41 @@ export async function executeBounded(command, args, options) {
     expect(result.stdout + result.stderr).not.toContain('private spawn failure')
   },
 )
+
+it('forwards interruption to the owned transport child before publishing failure', () => {
+  const path = output()
+  const root = resolve(path, '..')
+  mkdirSync(resolve(root, 'e2e/identity'), { recursive: true })
+  const stub = `export async function executeBounded(command, args, options) {
+    let stopped = false;
+    options.onChild({}, () => { stopped = true });
+    process.emit('SIGTERM');
+    if (!stopped) throw new Error('child escaped');
+    options.onRelease();
+    return { status: 0 };
+  }`
+  writeFileSync(resolve(root, 'process.mjs'), stub)
+  writeFileSync(
+    resolve(root, 'e2e/identity/real.mjs'),
+    readFileSync(resolve(import.meta.dirname, 'e2e/identity/real.mjs'), 'utf8').replace(
+      "'../real/process.mjs'",
+      "'../../process.mjs'",
+    ),
+  )
+  // An existing public CA path satisfies the environment gate; the stub makes no network call.
+  const result = spawnSync(process.execPath, [resolve(root, 'e2e/identity/real.mjs')], {
+    encoding: 'utf8',
+    timeout: 10000,
+    env: {
+      ...process.env,
+      IDENTITY_UI_DIAGNOSTIC: path,
+      IDENTITY_TEST_UI_ORIGIN: 'https://localhost:1234',
+      NODE_EXTRA_CA_CERTS: resolve(root, 'process.mjs'),
+    },
+  })
+  expect(result.status).toBe(1)
+  expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({
+    stage: 'transport',
+    failure: 'interrupted',
+  })
+})

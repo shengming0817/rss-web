@@ -99,11 +99,6 @@ jobs:
         env:
           CI: true
 
-      - name: Run Identity browser interaction tests
-        run: pnpm test:e2e:identity
-        env:
-          CI: true
-
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@v4

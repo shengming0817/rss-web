@@ -22,7 +22,9 @@ describe('one instance cookie session owner', () => {
     resolve(sessionValue(true, 'b'.repeat(64)))
     await first
     expect(f.session.headers()['X-CSRF-Token']).toBe('b'.repeat(64))
-    expect(f.request.mock.calls.filter(([o]) => o.path.endsWith('/refresh'))).toHaveLength(1)
+    expect(
+      f.request.mock.calls.filter(([o]) => /\/(refresh|reauthenticate)$/.test(o.path)),
+    ).toHaveLength(1)
     await f.session.activity()
     expect(f.request).toHaveBeenCalledTimes(4)
   })
@@ -136,7 +138,7 @@ it('does not start refresh during pending logout', async () => {
   const exit = f.session.logout()
   await Promise.resolve()
   const renewal = f.session.refresh().catch(() => undefined)
-  expect(f.request.mock.calls.some(([o]) => o.path.endsWith('/refresh'))).toBe(false)
+  expect(f.request.mock.calls.some(([o]) => /\/(refresh|reauthenticate)$/.test(o.path))).toBe(false)
   finish(undefined)
   await exit
   await renewal
@@ -157,14 +159,17 @@ it('rejects queued refresh after a tenant transition', async () => {
   f.replies.push(sessionValue(), sessionValue())
   const check = f.session.check(other)
   const refresh = expect(f.session.refresh()).rejects.toThrow('Operation abandoned')
+  const reauth = expect(f.session.reauthenticate('private password')).rejects.toThrow(
+    'Operation abandoned',
+  )
   release()
-  await Promise.all([hold, check, refresh])
-  expect(f.request.mock.calls.some(([o]) => o.path.endsWith('/refresh'))).toBe(false)
+  await Promise.all([hold, check, refresh, reauth])
+  expect(f.request.mock.calls.some(([o]) => /\/(refresh|reauthenticate)$/.test(o.path))).toBe(false)
   expect(f.session.state.value.tenant).toBe(other)
   expect(f.session.state.value.status).toBe('authenticated')
 })
 
-for (const control of ['refresh', 'logout'] as const) {
+for (const control of ['refresh', 'logout', 'reauthenticate'] as const) {
   it(`never rebinds queued ${control} after page departure`, async () => {
     const f = fixture()
     await f.login()
@@ -175,7 +180,11 @@ for (const control of ['refresh', 'logout'] as const) {
           release = r
         }),
     )
-    const rejected = expect(f.session[control]()).rejects.toThrow('Operation abandoned')
+    const rejected = expect(
+      control === 'reauthenticate'
+        ? f.session.reauthenticate('private password')
+        : f.session[control](),
+    ).rejects.toThrow('Operation abandoned')
     f.session.leavePage()
     release()
     await expect(hold).rejects.toThrow('Stale response')

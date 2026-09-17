@@ -57,7 +57,7 @@ export function createApi(owner: IdentitySession) {
     }
   }
   return {
-    link: (id: string, password: string) =>
+    link: (id: string, password: string | null) =>
       call('POST', `oidc/${uuid(id)}/link`, (v) => redirect(v, 'authorizationUrl'), {
         returnTarget: 'resume',
         password,

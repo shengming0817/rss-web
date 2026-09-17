@@ -26,6 +26,7 @@ async function view(
   f: ReturnType<typeof fixture>,
   name = 'sessions',
   query: Record<string, string> = {},
+  sessionProviders: { providerId: string; label: string }[] = [],
 ) {
   const router = createRouter({
     history: createMemoryHistory(),
@@ -50,7 +51,7 @@ async function view(
   )
   await router.isReady()
   if (component === SessionsView && f.session.config.oidcEnabled)
-    f.replies.push(securityValue(), { providers: [] })
+    f.replies.push(securityValue(), { providers: sessionProviders })
   const wrapper = mount(component, {
     attachTo: document.body,
     global: {
@@ -406,4 +407,18 @@ it('discards an old owner list completion and reloads after the pending read set
   wrapper.unmount()
   f.session.clear()
   vi.restoreAllMocks()
+})
+
+it('offers provider linking without a local password for an SSO account', async () => {
+  const f = fixture()
+  f.replies.push({ ...sessionValue(), identity: { principalId: ID, hasLocalPassword: false } })
+  await f.session.check(TENANT)
+  f.replies.push({ sessions: [], nextCursor: null })
+  const { wrapper } = await view(SessionsView, f, 'sessions', {}, [
+    { providerId: OTHER, label: 'Second provider' },
+  ])
+  expect(wrapper.find('#link-provider').exists()).toBe(true)
+  expect(wrapper.find('#link-password').exists()).toBe(false)
+  wrapper.unmount()
+  f.session.clear()
 })

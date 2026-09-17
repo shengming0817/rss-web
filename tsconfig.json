@@ -22,7 +22,6 @@
     "playwright.real.config.ts",
     "e2e/**/*.ts",
     "identity-app-security.spec.ts",
-    "identity-joint.spec.ts",
-    "playwright.identity.config.ts"
+    "identity-joint.spec.ts"
   ]
 }

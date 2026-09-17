@@ -346,7 +346,11 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
       state.value.host?.navigation.manageProviders === true,
   )
   function reauthenticate(password: string): Promise<void> {
+    const scope = context()
+    const page = pageGeneration
     return serial(async () => {
+      if (!scope || context() !== scope || pageGeneration !== page)
+        throw new Error('Operation abandoned')
       const tenant = state.value.tenant
       if (!tenant || state.value.status !== 'authenticated') throw new Error('Session required')
       const expected = generation

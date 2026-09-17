@@ -61,6 +61,12 @@ describe('Identity operations use one protected transport without replay', () =>
     expect(await f.api.beginSso(TENANT, OTHER)).toContain('idp.test')
     f.replies.push({ authorizationUrl: 'https://idp.test/authorize' })
     await f.api.link(OTHER, 'private password')
+    f.replies.push({ authorizationUrl: 'https://idp.test/reauthenticate' })
+    await f.api.link(OTHER, null)
+    expect(f.request.mock.calls.at(-1)?.[0].body).toEqual({
+      returnTarget: 'resume',
+      password: null,
+    })
     f.replies.push(decodeIdentityError(503, { code: 'identity_unavailable' }))
     await expect(f.api.stepUp(OTHER)).rejects.toBeDefined()
     expect(f.session.state.value.status).toBe('unavailable')

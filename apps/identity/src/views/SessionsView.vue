@@ -129,7 +129,7 @@ async function reauthenticate() {
 }
 async function link() {
   const tenant = session.state.value.tenant
-  const value = linkPassword.value
+  const value = session.state.value.identity?.hasLocalPassword ? linkPassword.value : null
   linkPassword.value = ''
   if (!tenant) return
   await run(async () => {
@@ -254,27 +254,22 @@ onBeforeUnmount(() => {
       />
       <button :disabled="busy">{{ t('identity.reauthenticate') }}</button>
     </form>
-    <form
-      v-if="
-        session.config.oidcEnabled &&
-        providers.length &&
-        session.state.value.identity?.hasLocalPassword
-      "
-      @submit.prevent="link"
-    >
+    <form v-if="session.config.oidcEnabled && providers.length" @submit.prevent="link">
       <h2>{{ t('identity.linkProvider') }}</h2>
       <label for="link-provider">{{ t('identity.providers') }}</label>
       <select id="link-provider" v-model="selectedProvider" required>
         <option v-for="p in providers" :key="p.id" :value="p.id">{{ p.label }}</option>
       </select>
-      <label for="link-password">{{ t('identity.currentPassword') }}</label>
-      <input
-        id="link-password"
-        v-model="linkPassword"
-        type="password"
-        autocomplete="current-password"
-        required
-      />
+      <template v-if="session.state.value.identity?.hasLocalPassword">
+        <label for="link-password">{{ t('identity.currentPassword') }}</label>
+        <input
+          id="link-password"
+          v-model="linkPassword"
+          type="password"
+          autocomplete="current-password"
+          required
+        />
+      </template>
       <button :disabled="busy">{{ t('identity.linkProvider') }}</button>
     </form>
     <p class="identity-muted">{{ t('identity.logoutHelp') }}</p>
