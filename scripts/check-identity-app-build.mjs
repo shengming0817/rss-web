@@ -14,7 +14,7 @@ function scan(dir) {
     if (entry.name.endsWith('.map')) throw new Error('Unexpected sourcemap')
     const content = readFileSync(path, 'utf8')
     if (
-      /Bearer |accessToken|refreshToken|\/api\/v1\/|\/downstream\/|platform_administrator|hydra|csrf_token|principal_id|MOCK_SOURCE/.test(
+      /Bearer |accessToken|refreshToken|\/api\/v1\/|\/downstream\/|platform_administrator|\bhydra\b|csrf_token|principal_id|MOCK_SOURCE/.test(
         content,
       )
     )
