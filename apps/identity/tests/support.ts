@@ -14,36 +14,32 @@ export const OTHER = '33333333-3333-4333-8333-333333333333'
 export const TOKEN = 'a'.repeat(64)
 export function securityValue() {
   return {
-    session_id: ID,
-    authentication: { auth_time: 1, acr: 'unspecified', amr: ['pwd'] },
-    eligible_step_up_providers: [] as { provider_id: string; label: string }[],
+    sessionId: ID,
+    authentication: { authTime: 1, acr: 'unspecified', amr: ['pwd'] },
+    eligibleStepUpProviders: [] as { providerId: string; label: string }[],
   }
 }
-export function sessionValue(admin = true, token = TOKEN) {
+export function sessionValue(_admin = true, token = TOKEN) {
   return {
-    session: { id: ID, auth_time: 1, idle_expires_at: 4102444800, absolute_expires_at: 4102444900 },
+    session: { id: ID, authTime: 1, idleExpiresAt: 4102444800, absoluteExpiresAt: 4102444900 },
     identity: {
-      principal_id: ID,
-      administrator: admin,
-      platform_administrator: false,
-      has_local_password: true,
+      principalId: ID,
+      hasLocalPassword: true,
     },
-    csrf_token: token,
+    csrfToken: token,
   }
 }
 export const accountValue = {
-  principal_id: OTHER,
+  principalId: OTHER,
   login: 'member',
   enabled: true,
-  administrator: false,
-  emergency: false,
-  member_active: true,
-  has_local_password: true,
+  memberActive: true,
+  hasLocalPassword: true,
 }
 export const settingsValue = {
   issuer: 'https://idp.example.test',
-  client_id: 'identity',
-  redirect_uri: 'https://identity.example.test/api/v1/oidc/callback',
+  clientId: 'identity',
+  redirectUri: 'https://identity.example.test/api/v2/oidc/callback',
   scopes: ['openid'],
   claims: { email: 'email', groups: null },
   jit: false,
@@ -51,21 +47,39 @@ export const settingsValue = {
 export const providerValue = {
   id: OTHER,
   version: 1,
-  revocation_epoch: 1,
-  credential_version: 1,
+  revocationEpoch: 1,
+  credentialVersion: 1,
   enabled: false,
   settings: settingsValue,
 }
-export function fixture() {
+export function fixture(oidcEnabled = true) {
+  let manager = true
+  let current = sessionValue()
+  let currentTenant = TENANT
+  const contextReplies: unknown[] = []
   const replies: unknown[] = []
   const request = vi.fn(
     async (
       options: RequestOptions<unknown> | ResponseRequestOptions<unknown> | NoContentRequest,
     ) => {
-      let result = replies.shift()
+      const contextRead = options.path.endsWith('/context')
+      let result = contextRead
+        ? contextReplies.length
+          ? contextReplies.shift()
+          : {
+              tenantId: currentTenant,
+              principalId: current.identity.principalId,
+              sessionId: current.session.id,
+              navigation: { manageAccounts: manager, manageProviders: manager },
+            }
+        : replies.shift()
       if (typeof result === 'function') result = await (result as () => Promise<unknown>)()
       if (result instanceof Error) throw result
       if (options.successStatus === 204) return undefined
+      if (result && typeof result === 'object' && 'csrfToken' in result) {
+        current = result as ReturnType<typeof sessionValue>
+        currentTenant = String(options.pathParams?.['tenant'] ?? TENANT)
+      }
       return options.decode(
         result,
         Array.isArray(options.successStatus)
@@ -77,7 +91,10 @@ export function fixture() {
     },
   )
   const transport = { request } as HttpTransport
-  const session = createSession(transport)
+  const session = createSession(transport, {
+    canonicalOrigin: 'https://identity.example.test',
+    oidcEnabled,
+  })
   const api = createApi(session)
   const storage = new Map<string, string>()
   const flows = createFlows({
@@ -91,12 +108,14 @@ export function fixture() {
   })
   return {
     replies,
+    contextReplies,
     request,
     session,
     api,
     flows,
     storage,
     async login(admin = true) {
+      manager = admin
       replies.push(sessionValue(admin))
       await session.login(TENANT, 'admin', 'private fixture password')
     },

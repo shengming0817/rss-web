@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { createFlows } from './flow'
-import { TENANT, ID } from '../../tests/support'
+import { TENANT } from '../../tests/support'
 describe('bounded per-tab continuation', () => {
-  it('consumes before acceptance and rejects expiry, rollback and corruption', () => {
+  it('consumes before resumption and rejects expiry, rollback and corruption', () => {
     let now = 1000
     const map = new Map<string, string>()
     const store = {
@@ -16,15 +16,9 @@ describe('bounded per-tab continuation', () => {
     }
     const f = createFlows(store, () => now)
     expect(f.read()).toBeNull()
-    const value = {
-      kind: 'login' as const,
-      tenant: TENANT,
-      challenge: 'one-use',
-      flow: { tenant_id: TENANT, grant_id: ID },
-      operation: null,
-    }
+    const value = { kind: 'sso' as const, tenant: TENANT }
     f.save(value)
-    expect(f.take()?.challenge).toBe('one-use')
+    expect(f.take()?.tenant).toBe(TENANT)
     expect(f.take()).toBeNull()
     f.save(value)
     now += 300000
@@ -32,8 +26,8 @@ describe('bounded per-tab continuation', () => {
     f.save(value)
     now--
     expect(f.read()).toBeNull()
-    f.save({ ...value, kind: 'sso', flow: null, operation: null })
-    expect(f.read()?.flow).toBeNull()
+    f.save({ ...value, kind: 'link' })
+    expect(f.read()?.kind).toBe('link')
     const key = [...map.keys()][0]!
     map.set(key, 'private-invalid-json')
     expect(f.read()).toBeNull()

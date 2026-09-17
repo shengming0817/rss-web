@@ -1,4 +1,4 @@
-import { isRssApiError, type CreationSuccessStatuses } from '@rss/api/identity'
+import { isRssApiError } from '@rss/api/identity'
 import type { IdentitySession } from './session'
 import {
   object,
@@ -7,48 +7,14 @@ import {
   bool,
   uuid,
   account,
-  accountListEntry,
   provider,
-  flow,
   redirect,
   session,
   type ProviderSettings,
   type Provider,
   type Account,
-  identity,
-  tenant as decodeTenant,
-  operationReply,
-  type OperationReply,
 } from './decode'
 export function createApi(owner: IdentitySession) {
-  async function platform<T>(
-    method: 'GET' | 'POST',
-    path: string,
-    decode: (v: unknown, status: number) => T,
-    body?: unknown,
-    status: 200 | CreationSuccessStatuses = 200,
-    pathParams?: Record<string, string>,
-    query?: Record<string, string>,
-  ): Promise<T> {
-    return owner.perform(() => {
-      if (owner.state.value.status !== 'authenticated') throw new Error('Session required')
-      const options = {
-        method,
-        path,
-        headers: method === 'GET' ? {} : owner.headers(),
-        ...(body === undefined ? {} : { body }),
-        ...(pathParams === undefined ? {} : { pathParams }),
-        ...(query === undefined ? {} : { query }),
-      }
-      return status === 200
-        ? owner.transport.request({
-            ...options,
-            successStatus: 200,
-            decode: (value) => decode(value, 200),
-          })
-        : owner.transport.request({ ...options, successStatus: status, decode })
-    })
-  }
   async function call<T>(
     method: 'GET' | 'POST' | 'PUT',
     suffix: string,
@@ -58,6 +24,11 @@ export function createApi(owner: IdentitySession) {
     anonymousTenant?: string,
     query?: Record<string, string>,
   ): Promise<T> {
+    if (
+      !owner.config.oidcEnabled &&
+      (suffix.startsWith('oidc/') || suffix === 'login-options' || suffix.startsWith('providers'))
+    )
+      return Promise.reject(new Error('OIDC disabled'))
     return owner.perform(async () => {
       const tenant = anonymousTenant ?? owner.state.value.tenant
       if (!tenant) throw new Error('Tenant required')
@@ -65,7 +36,7 @@ export function createApi(owner: IdentitySession) {
         throw new Error('Session required')
       return owner.transport.request({
         method,
-        path: `/api/v1/tenants/{tenant}/${suffix}`,
+        path: `/api/v2/tenants/{tenant}/${suffix}`,
         pathParams: { tenant: uuid(tenant) },
         headers: method === 'GET' ? {} : owner.headers(anonymousTenant === undefined),
         ...(body === undefined ? {} : { body }),
@@ -86,80 +57,14 @@ export function createApi(owner: IdentitySession) {
     }
   }
   return {
-    platformContext: () =>
-      platform('GET', '/api/v1/platform', (value) => {
-        const v = object(value, ['system_domain_id', 'identity'])
-        const result = {
-          system_domain_id: uuid(v['system_domain_id']),
-          identity: identity(v['identity']),
-        }
-        if (
-          result.system_domain_id !== owner.state.value.tenant ||
-          result.identity.principal_id !== owner.state.value.identity?.principal_id ||
-          !result.identity.platform_administrator
-        )
-          throw new Error('Invalid platform context')
-        return result
+    link: (id: string, password: string) =>
+      call('POST', `oidc/${uuid(id)}/link`, (v) => redirect(v, 'authorizationUrl'), {
+        returnTarget: 'resume',
+        password,
       }),
-    tenants: (cursor?: string) =>
-      platform(
-        'GET',
-        '/api/v1/platform/tenants',
-        (value) => {
-          const v = object(value, ['tenants', 'next_cursor'])
-          return {
-            tenants: list(v['tenants'], decodeTenant),
-            next: v['next_cursor'] === null ? null : uuid(v['next_cursor']),
-          }
-        },
-        undefined,
-        200,
-        undefined,
-        cursor ? { cursor: uuid(cursor) } : undefined,
-      ),
-    createTenant: (input: CreateTenant) =>
-      platform(
-        'POST',
-        '/api/v1/platform/tenants',
-        (value, status) => {
-          const result = operationReply(value, status)
-          if (
-            result.operation.operation_id !== input.administrator.operation_id ||
-            result.operation.tenant_id !== input.tenant_id ||
-            result.operation.principal_id !== input.administrator.principal_id
-          )
-            throw new Error('Mismatched receipt')
-          return result
-        },
-        input,
-        [201, 202],
-      ),
-    tenantOperation: (
-      id: string,
-      expected?: { tenant_id: string; principal_id: string },
-    ): Promise<OperationReply> =>
-      platform(
-        'GET',
-        '/api/v1/platform/operations/{operation}',
-        (value, status) => {
-          const result = operationReply(value, status)
-          if (result.operation.operation_id !== id) throw new Error('Mismatched receipt')
-          if (
-            expected &&
-            (result.operation.tenant_id !== expected.tenant_id ||
-              result.operation.principal_id !== expected.principal_id)
-          )
-            throw new Error('Mismatched receipt')
-          return result
-        },
-        undefined,
-        200,
-        { operation: uuid(id) },
-      ),
     stepUp: (id: string) =>
-      call('POST', `oidc/${uuid(id)}/step-up`, (v) => redirect(v, 'authorization_url'), {
-        client_id: 'identity-ui',
-        return_target: 'resume',
+      call('POST', `oidc/${uuid(id)}/step-up`, (v) => redirect(v, 'authorizationUrl'), {
+        returnTarget: 'resume',
       }),
     loginOptions: (tenant: string) =>
       call(
@@ -167,8 +72,8 @@ export function createApi(owner: IdentitySession) {
         'login-options',
         (v) =>
           list(object(v, ['providers'])['providers'], (p) => {
-            const r = object(p, ['provider_id', 'label'])
-            return { id: uuid(r['provider_id']), label: text(r['label'], 4096) }
+            const r = object(p, ['providerId', 'label'])
+            return { id: uuid(r['providerId']), label: text(r['label'], 4096) }
           }),
         undefined,
         200,
@@ -179,10 +84,10 @@ export function createApi(owner: IdentitySession) {
         'GET',
         'sessions',
         (v) => {
-          const r = object(v, ['sessions', 'next_cursor'])
+          const r = object(v, ['sessions', 'nextCursor'])
           return {
             sessions: list(r['sessions'], session),
-            next: r['next_cursor'] === null ? null : uuid(r['next_cursor']),
+            next: r['nextCursor'] === null ? null : uuid(r['nextCursor']),
           }
         },
         undefined,
@@ -195,10 +100,10 @@ export function createApi(owner: IdentitySession) {
         'GET',
         'accounts',
         (v) => {
-          const r = object(v, ['accounts', 'next_cursor'])
+          const r = object(v, ['accounts', 'nextCursor'])
           return {
-            accounts: list(r['accounts'], accountListEntry),
-            next: r['next_cursor'] === null ? null : uuid(r['next_cursor']),
+            accounts: list(r['accounts'], account),
+            next: r['nextCursor'] === null ? null : uuid(r['nextCursor']),
           }
         },
         undefined,
@@ -206,40 +111,36 @@ export function createApi(owner: IdentitySession) {
         undefined,
         cursor === undefined ? undefined : { cursor: uuid(cursor) },
       ),
-    createAccount: (login: string, password: string, role: string) =>
-      call('POST', 'accounts', account, { login, password, role }, 201),
-    setAccount: (
-      a: Account,
-      field: 'enabled' | 'administrator' | 'membership',
-      enabled: boolean,
-    ) => {
+    createAccount: (login: string, password: string) =>
+      call('POST', 'accounts', account, { login, password }, 201),
+    setAccount: (a: Account, field: 'enabled' | 'membership', enabled: boolean) => {
       const work = () =>
-        call('POST', `accounts/${uuid(a.principal_id)}/${field}`, account, { enabled })
-      return a.principal_id === owner.state.value.identity?.principal_id ? selfWrite(work) : work()
+        call('POST', `accounts/${uuid(a.principalId)}/${field}`, account, { enabled })
+      return a.principalId === owner.state.value.identity?.principalId ? selfWrite(work) : work()
     },
     resetPassword: (id: string, password: string) =>
       call('POST', `accounts/${uuid(id)}/password`, account, { password }),
-    ownPassword: (current_password: string, password: string) =>
-      selfWrite(() => call('POST', 'account/password', account, { current_password, password })),
+    ownPassword: (currentPassword: string, password: string) =>
+      selfWrite(() => call('POST', 'account/password', account, { currentPassword, password })),
     providers: () =>
       call('GET', 'providers', (v) => list(object(v, ['providers'])['providers'], provider)),
-    createProvider: (settings: ProviderSettings, client_secret: string, ca_pem: string | null) =>
-      call('POST', 'providers', provider, { settings, client_secret, ca_pem }, 201),
+    createProvider: (settings: ProviderSettings, clientSecret: string, caPem: string | null) =>
+      call('POST', 'providers', provider, { settings, clientSecret, caPem }, 201),
     updateProvider: (
       p: Provider,
       settings: ProviderSettings,
-      client_secret: string,
-      ca_pem: string | null,
+      clientSecret: string,
+      caPem: string | null,
     ) =>
       call('PUT', `providers/${uuid(p.id)}`, provider, {
-        expected_version: p.version,
+        expectedVersion: p.version,
         settings,
-        client_secret,
-        ca_pem,
+        clientSecret,
+        caPem,
       }),
     enableProvider: (p: Provider, enabled: boolean) =>
       call('POST', `providers/${uuid(p.id)}/enabled`, provider, {
-        expected_version: p.version,
+        expectedVersion: p.version,
         enabled,
       }),
     testProvider: (p: Provider) => call('POST', `providers/${uuid(p.id)}/test`, testReport),
@@ -247,45 +148,15 @@ export function createApi(owner: IdentitySession) {
       call(
         'POST',
         `oidc/${uuid(id)}/login`,
-        (v) => redirect(v, 'authorization_url'),
-        { client_id: 'identity-ui', return_target: 'resume' },
+        (v) => redirect(v, 'authorizationUrl'),
+        { returnTarget: 'resume' },
         200,
         tenant,
       ),
-    async prepare(kind: 'login' | 'consent', challenge: string) {
-      return owner.perform(() =>
-        owner.transport.request({
-          method: 'POST',
-          path: `/api/v1/downstream/${kind}`,
-          headers: owner.headers(false),
-          body: { challenge },
-          successStatus: 200,
-          decode: flow,
-        }),
-      )
-    },
-    async accept(
-      kind: 'login' | 'consent',
-      challenge: string,
-      value: { tenant_id: string; grant_id: string },
-    ) {
-      return owner.perform(() =>
-        owner.transport.request({
-          method: 'POST',
-          path: `/api/v1/downstream/${kind}/accept`,
-          headers: owner.headers(),
-          body: { challenge, flow: value },
-          successStatus: 200,
-          decode: (v) => redirect(v, 'redirect_to'),
-        }),
-      )
-    },
   }
 }
 const stages = ['binding', 'discovery', 'jwks', 'exchange', 'claims']
 const reasons = [
-  'unapproved_binding',
-  'missing_secret',
   'invalid_trust_anchor',
   'egress_denied',
   'tls_rejected',
@@ -302,7 +173,7 @@ export function testReport(value: unknown): { passed: boolean; diagnostic: strin
     throw new Error('Invalid response')
   if (value.passed === true) {
     const v = object(value, ['passed', 'report'])
-    const r = object(v['report'], ['checks', 'tls_verified', 'authorization_response_issuer'])
+    const r = object(v['report'], ['checks', 'tlsVerified', 'authorizationResponseIssuer'])
     list(
       r['checks'],
       (v) => {
@@ -312,8 +183,8 @@ export function testReport(value: unknown): { passed: boolean; diagnostic: strin
       },
       5,
     )
-    bool(r['tls_verified'])
-    bool(r['authorization_response_issuer'])
+    bool(r['tlsVerified'])
+    bool(r['authorizationResponseIssuer'])
     return { passed: true, diagnostic: '' }
   }
   const v = object(value, ['passed', 'diagnostic'])
@@ -325,8 +196,3 @@ export function testReport(value: unknown): { passed: boolean; diagnostic: strin
   return { passed: false, diagnostic: `${stage}: ${reason}` }
 }
 export type IdentityApi = ReturnType<typeof createApi>
-export interface CreateTenant {
-  tenant_id: string
-  name: string
-  administrator: { operation_id: string; principal_id: string; login: string; password: string }
-}

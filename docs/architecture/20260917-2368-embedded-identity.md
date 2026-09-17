@@ -1,0 +1,13 @@
+# 产品宿主内认证 UI
+
+UI 挂载 `/`，租户登录入口 `/tenants/{tenant UUID}/login`。API 仅 `/api/v2`，唯一协议 callback `/api/v2/oidc/callback`；宿主 return target `resume` 必须指向同源 `/auth/resume`。API DTO 均为 camelCase。上游 issuer/clientId 是外部企业 IdP 配置，默认本地认证不需要 IdP。
+
+网关固定路径 `/api/identity-host/v1/config.json` 提供严格静态 JSON：`{"canonicalOrigin":"https://identity.example.test","oidcEnabled":false}`。origin 必须与浏览器完全匹配，缺失、额外字段或畸形值均拒绝启动。此文件由部署输入生成，不由身份服务动态发现。本地模式不加载 providers、login-options 或 session/security。
+
+唯一动态宿主接口为 `GET /api/identity-host/v1/tenants/{tenant}/context`，返回 `{tenantId,principalId,sessionId,navigation:{manageAccounts,manageProviders}}`。会话控制器对三个身份坐标严格匹配；登录、刷新、重认证、失效及主体变化清空旧提示。导航只控制展示，真实请求由组件事务内宿主策略授权。403 不靠隐藏按钮替代，也不重放写入。
+
+登录、刷新、重认证、退出、全部撤销、账户管理、IdP 配置/关联和 step-up 复用既有页面与唯一会话控制器。密码保持表单局部，CSRF 只在控制器闭包，HttpOnly cookie 不被应用读取。OIDC 资格仅显示服务端 eligibleStepUpProviders；缺失 authTime 显示未知，不从浏览器推断 MFA。resume 使用五分钟 tenant/kind locator 后重读会话，浏览器不交换 code。
+
+构建：`pnpm install --frozen-lockfile`，`RSS_IDENTITY_WEB_REVISION=$(/usr/bin/git rev-parse HEAD) pnpm -F @rss/identity-app build`，`pnpm check:identity-app:build`。构建输出 apps/identity/dist 与 identity-build.json；#2436 将双方 SHA、locks、UI 摘要和镜像摘要绑定到 candidate.json。
+
+联合 HTTP T2：两仓先提交固定源码，运行 `IDENTITY_BACKEND_FIXTURE=/absolute/identity/worktree IDENTITY_JOINT_RECORD=/tmp/joint.json pnpm test:identity:joint`。复用编排与清理记录，在 Vitest/jsdom 中使用生产 Axios XMLHttpRequest transport，通过测试 TLS 网关访问真实公开组件与参考宿主策略；没有另写 cookie/CSRF 客户端。上游网络/TOTP 的完整验证仍由 Identity 的 Keycloak T2 持有。此证明不冒称 #2366 的真实浏览器、候选恢复或容量 T3。

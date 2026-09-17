@@ -1,17 +1,14 @@
-import { flow, object, number, text, uuid, type Flow } from './decode'
+import { object, number, text, uuid } from './decode'
 const KEY = 'rss.identity.pending-flow'
 const LIFETIME = 300_000
 export interface Pending {
-  kind: 'login' | 'consent' | 'sso' | 'step-up'
+  kind: 'sso' | 'step-up' | 'link'
   tenant: string
-  challenge: string
-  flow: Flow | null
-  operation: string | null
   created: number
 }
 export function createFlows(
   storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>,
-  now = Date.now,
+  now = () => Date.now(),
 ) {
   function clear() {
     storage.removeItem(KEY)
@@ -20,24 +17,13 @@ export function createFlows(
     try {
       const raw = storage.getItem(KEY)
       if (raw === null) return null
-      const v = object(JSON.parse(raw) as unknown, [
-        'kind',
-        'tenant',
-        'challenge',
-        'flow',
-        'created',
-        'operation',
-      ])
-      if (!['login', 'consent', 'sso', 'step-up'].includes(text(v['kind'])))
-        throw new Error('Invalid flow')
+      const v = object(JSON.parse(raw) as unknown, ['kind', 'tenant', 'created'])
+      if (!['sso', 'step-up', 'link'].includes(text(v['kind']))) throw new Error('Invalid flow')
       const created = number(v['created'])
       if (now() < created || now() - created >= LIFETIME) throw new Error('Expired flow')
       return {
         kind: v['kind'] as Pending['kind'],
         tenant: uuid(v['tenant']),
-        challenge: text(v['challenge'], 8192),
-        flow: v['flow'] === null ? null : flow(v['flow']),
-        operation: v['operation'] === null ? null : uuid(v['operation']),
         created,
       }
     } catch {

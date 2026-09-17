@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { decodeIdentityError } from '@rss/api/identity'
 import { fixture, sessionValue, TENANT, TOKEN } from '../../tests/support'
-describe('one central cookie session owner', () => {
+describe('one instance cookie session owner', () => {
   it('checks state, keeps CSRF private and serializes refresh rotation', async () => {
     const f = fixture()
     f.replies.push(sessionValue())
@@ -24,24 +24,24 @@ describe('one central cookie session owner', () => {
     expect(f.session.headers()['X-CSRF-Token']).toBe('b'.repeat(64))
     expect(f.request.mock.calls.filter(([o]) => o.path.endsWith('/refresh'))).toHaveLength(1)
     await f.session.activity()
-    expect(f.request).toHaveBeenCalledTimes(2)
+    expect(f.request).toHaveBeenCalledTimes(4)
   })
   it('clears revoked sessions, blocks unavailable authority, and never replays writes', async () => {
     const f = fixture()
-    f.replies.push(decodeIdentityError(401, { code: 'invalid_credential' }, false))
+    f.replies.push(decodeIdentityError(401, { code: 'invalid_credential' }))
     await f.session.check(TENANT)
     expect(f.session.state.value.status).toBe('anonymous')
     expect(() => f.session.headers()).toThrow()
     await f.login()
-    f.replies.push(decodeIdentityError(503, { code: 'identity_unavailable' }, false))
+    f.replies.push(decodeIdentityError(503, { code: 'identity_unavailable' }))
     await expect(f.session.refresh()).rejects.toBeDefined()
     expect(f.session.state.value.status).toBe('unavailable')
     expect(() => f.session.headers()).toThrow()
     await f.login()
-    f.replies.push(decodeIdentityError(403, { code: 'insufficient_privilege' }, false))
+    f.replies.push(decodeIdentityError(403, { code: 'insufficient_privilege' }))
     await expect(f.api.accounts()).rejects.toBeDefined()
     expect(f.session.state.value.status).toBe('authenticated')
-    f.replies.push(decodeIdentityError(401, { code: 'invalid_credential' }, false))
+    f.replies.push(decodeIdentityError(401, { code: 'invalid_credential' }))
     await expect(f.api.accounts()).rejects.toBeDefined()
     expect(f.session.state.value.status).toBe('anonymous')
   })
@@ -77,7 +77,7 @@ describe('one central cookie session owner', () => {
     const f = fixture()
     await expect(f.session.refresh()).rejects.toBeDefined()
     await f.session.logout()
-    f.replies.push(decodeIdentityError(401, { code: 'invalid_credential' }, false))
+    f.replies.push(decodeIdentityError(401, { code: 'invalid_credential' }))
     await expect(f.session.login(TENANT, 'user', 'bad')).rejects.toBeDefined()
     f.replies.push(new Error('network'))
     await expect(f.session.check(TENANT)).rejects.toBeDefined()
@@ -90,12 +90,12 @@ describe('one central cookie session owner', () => {
   it('renews only near expiry when invoked by activity', async () => {
     const f = fixture()
     const value = sessionValue()
-    value.session.idle_expires_at = Math.floor(Date.now() / 1000) + 30
+    value.session.idleExpiresAt = Math.floor(Date.now() / 1000) + 30
     f.replies.push(value)
     await f.session.check(TENANT)
     f.replies.push(sessionValue())
     await f.session.activity()
-    expect(f.request.mock.calls.at(-1)?.[0].path).toContain('/refresh')
+    expect(f.request.mock.calls.filter(([r]) => r.path.endsWith('/refresh'))).toHaveLength(1)
   })
 })
 
@@ -108,13 +108,13 @@ it('waits for signout settlement before a login-page session check', async () =>
       new Promise((r) => {
         resolve = r
       }),
-    decodeIdentityError(401, { code: 'invalid_credential' }, false),
+    decodeIdentityError(401, { code: 'invalid_credential' }),
   )
   const logout = f.session.logout()
   await Promise.resolve()
   const check = f.session.check(TENANT)
   try {
-    expect(f.request).toHaveBeenCalledTimes(2)
+    expect(f.request).toHaveBeenCalledTimes(3)
   } finally {
     resolve(undefined)
   }
@@ -141,26 +141,6 @@ it('does not start refresh during pending logout', async () => {
   await exit
   await renewal
   expect(f.session.state.value.status).toBe('anonymous')
-})
-
-it('serializes downstream accept behind rotation and uses the new CSRF', async () => {
-  const f = fixture()
-  await f.login()
-  let finish!: (v: unknown) => void
-  f.replies.push(
-    () =>
-      new Promise((r) => {
-        finish = r
-      }),
-    { redirect_to: 'https://consumer.example.test/done' },
-  )
-  const rotation = f.session.refresh()
-  const acceptance = f.api.accept('login', 'challenge', { tenant_id: TENANT, grant_id: TENANT })
-  expect(f.request).toHaveBeenCalledTimes(2)
-  finish(sessionValue(true, 'c'.repeat(64)))
-  await rotation
-  await acceptance
-  expect(f.request.mock.calls.at(-1)?.[0].headers?.['X-CSRF-Token']).toBe('c'.repeat(64))
 })
 
 it('rejects queued refresh after a tenant transition', async () => {
@@ -200,7 +180,7 @@ for (const control of ['refresh', 'logout'] as const) {
     release()
     await expect(hold).rejects.toThrow('Stale response')
     await rejected
-    expect(f.request).toHaveBeenCalledTimes(1)
+    expect(f.request).toHaveBeenCalledTimes(2)
     expect(f.session.state.value.status).toBe('authenticated')
     f.session.clear()
   })
@@ -226,48 +206,21 @@ it('never applies queued logout to a newly selected tenant', async () => {
   f.session.clear()
 })
 
-it('dispatches create and step-up after same-session rotation using the new CSRF', async () => {
-  for (const kind of ['create', 'step-up'] as const) {
-    const f = fixture()
-    await f.login()
-    let release!: (v: unknown) => void
-    f.replies.push(
-      () =>
-        new Promise((r) => {
-          release = r
-        }),
-    )
-    const rotation = f.session.refresh()
-    f.replies.push(
-      kind === 'step-up'
-        ? { authorization_url: 'https://idp.test/authorize' }
-        : {
-            active: true,
-            operation: {
-              operation_id: TENANT,
-              kind: 'tenant_created',
-              tenant_id: TENANT,
-              principal_id: TENANT,
-              created_at: 1,
-            },
-          },
-    )
-    const work =
-      kind === 'step-up'
-        ? f.api.stepUp(TENANT)
-        : f.api.createTenant({
-            tenant_id: TENANT,
-            name: 'Fixture tenant',
-            administrator: {
-              operation_id: TENANT,
-              principal_id: TENANT,
-              login: 'first',
-              password: 'private fixture password',
-            },
-          })
-    release(sessionValue(true, 'c'.repeat(64)))
-    await Promise.all([rotation, work])
-    expect(f.request.mock.calls.at(-1)?.[0].headers?.['X-CSRF-Token']).toBe('c'.repeat(64))
-    f.session.clear()
-  }
+it('dispatches step-up after same-session rotation using the new CSRF', async () => {
+  const f = fixture()
+  await f.login()
+  let release!: (v: unknown) => void
+  f.replies.push(
+    () =>
+      new Promise((r) => {
+        release = r
+      }),
+    { authorizationUrl: 'https://idp.test/authorize' },
+  )
+  const rotation = f.session.refresh()
+  const work = f.api.stepUp(TENANT)
+  release(sessionValue(true, 'c'.repeat(64)))
+  await Promise.all([rotation, work])
+  expect(f.request.mock.calls.at(-1)?.[0].headers?.['X-CSRF-Token']).toBe('c'.repeat(64))
+  f.session.clear()
 })

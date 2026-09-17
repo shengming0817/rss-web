@@ -1,3 +1,5 @@
+> 历史中央模式的来源记录；当前实现和接入要求见 [#2368](20260917-2368-embedded-identity.md)，本文不再作为执行入口。
+
 # #2337：独立中央 Identity 应用
 
 维护者确认：中央 Identity UI 源码位于 rss-web 的 `apps/identity`，后端与唯一协议 callback 由 rss-identity 持有。基线为 rss-web `dc2863c5ceeedcd364ed6243e2342a63130ccea5` 和 rss-identity `9e7c645f53ac2171e88738656b85976c1126f873`；实际实现版本、构建与联合 T2 结果记录在双 PR。
