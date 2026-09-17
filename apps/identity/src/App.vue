@@ -59,21 +59,20 @@ function activity(event: Event) {
           params: { tenant: session.state.value.tenant },
         }"
         >{{ t('identity.sessions') }}</RouterLink
-      ><template v-if="session.managementHint.value"
-        ><RouterLink
-          :to="{
-            name: 'accounts',
-            params: { tenant: session.state.value.tenant },
-          }"
-          >{{ t('identity.accounts') }}</RouterLink
-        ><RouterLink
-          v-if="session.providerHint.value"
-          :to="{
-            name: 'providers',
-            params: { tenant: session.state.value.tenant },
-          }"
-          >{{ t('identity.providers') }}</RouterLink
-        ></template
+      ><RouterLink
+        v-if="session.managementHint.value"
+        :to="{
+          name: 'accounts',
+          params: { tenant: session.state.value.tenant },
+        }"
+        >{{ t('identity.accounts') }}</RouterLink
+      ><RouterLink
+        v-if="session.providerHint.value"
+        :to="{
+          name: 'providers',
+          params: { tenant: session.state.value.tenant },
+        }"
+        >{{ t('identity.providers') }}</RouterLink
       >
     </nav>
     <main id="identity-main" tabindex="-1">

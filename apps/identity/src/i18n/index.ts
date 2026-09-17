@@ -92,6 +92,7 @@ const zh = {
     malformed_request: '请求无效，请检查输入。',
     invalid_credential: '登录失败或会话已失效。',
     csrf_rejected: '请求校验失败，请重新登录。',
+    reauthentication_failed: '当前密码不正确，请检查后重新提交。',
     reauthentication_required: '请在会话页面重新认证，然后手动重试操作。',
     insufficient_privilege: '当前账户没有执行此操作的权限。',
     provider_limit_reached: '身份提供方已达上限（100 个）。',
@@ -202,6 +203,7 @@ const en = {
     malformed_request: 'Invalid request. Check the input.',
     invalid_credential: 'Sign-in failed or the session is no longer valid.',
     csrf_rejected: 'Request verification failed. Sign in again.',
+    reauthentication_failed: 'The current password is incorrect. Check it before submitting again.',
     reauthentication_required:
       'Reauthenticate on the sessions page, then submit the operation again.',
     insufficient_privilege: 'You do not have permission to perform this operation.',

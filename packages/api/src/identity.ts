@@ -24,6 +24,7 @@ const statuses: Readonly<Record<string, number>> = {
   csrf_rejected: 403,
   insufficient_privilege: 403,
   reauthentication_required: 403,
+  reauthentication_failed: 403,
   configuration_changed: 409,
   provider_limit_reached: 409,
   account_already_exists: 409,

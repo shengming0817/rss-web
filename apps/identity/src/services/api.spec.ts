@@ -78,8 +78,14 @@ describe('Identity operations use one protected transport without replay', () =>
     f.replies.push(decodeIdentityError(409, { code: 'configuration_changed' }))
     await expect(f.api.enableProvider(providerValue, true)).rejects.toBeDefined()
     expect(f.session.state.value.status).toBe('authenticated')
-    f.replies.push(decodeIdentityError(403, { code: 'reauthentication_required' }))
-    await expect(f.api.ownPassword('wrong', 'new password')).rejects.toBeDefined()
+    const beforeRejection = f.request.mock.calls.length
+    f.replies.push(decodeIdentityError(403, { code: 'reauthentication_failed' }))
+    await expect(f.api.ownPassword('wrong', 'new password')).rejects.toMatchObject({
+      status: 403,
+      code: 'reauthentication_failed',
+      cause: 'wire',
+    })
+    expect(f.request).toHaveBeenCalledTimes(beforeRejection + 1)
     expect(f.session.state.value.status).toBe('authenticated')
     const count = f.request.mock.calls.length
     f.replies.push(new Error('private server details'))

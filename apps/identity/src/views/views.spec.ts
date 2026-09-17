@@ -16,6 +16,7 @@ import {
   ID,
   OTHER,
 } from '../../tests/support'
+import App from '../App.vue'
 import LoginView from './LoginView.vue'
 import SessionsView from './SessionsView.vue'
 import AccountsView from './AccountsView.vue'
@@ -31,6 +32,7 @@ async function view(
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
+      { path: '/', component: { template: '<div/>' } },
       ...['login', 'sessions', 'accounts', 'providers'].map((name) => ({
         path: `/tenants/:tenant/${name}`,
         name,
@@ -421,4 +423,62 @@ it('offers provider linking without a local password for an SSO account', async 
   expect(wrapper.find('#link-password').exists()).toBe(false)
   wrapper.unmount()
   f.session.clear()
+})
+
+it.each([
+  [false, false, true],
+  [false, true, true],
+  [true, false, true],
+  [true, true, true],
+  [false, true, false],
+  [true, true, false],
+])(
+  'renders independent account=%s and provider=%s hints with OIDC=%s',
+  async (accounts, providers, oidc) => {
+    const f = fixture(oidc)
+    f.contextReplies.push({
+      tenantId: TENANT,
+      principalId: ID,
+      sessionId: ID,
+      navigation: { manageAccounts: accounts, manageProviders: providers },
+    })
+    await f.login()
+    const { wrapper } = await view(App, f)
+    try {
+      expect(wrapper.find(`nav a[href="/tenants/${TENANT}/accounts"]`).exists()).toBe(accounts)
+      expect(wrapper.find(`nav a[href="/tenants/${TENANT}/providers"]`).exists()).toBe(
+        providers && oidc,
+      )
+      f.session.clear()
+      await flushPromises()
+      expect(wrapper.find('nav').exists()).toBe(false)
+    } finally {
+      wrapper.unmount()
+      f.session.clear()
+    }
+  },
+)
+
+it('clears both password drafts but retains the session after an incorrect current password', async () => {
+  const f = fixture()
+  await f.login()
+  f.replies.push({ sessions: [], nextCursor: null })
+  const { wrapper, router } = await view(SessionsView, f)
+  try {
+    await wrapper.get('#current-password').setValue('wrong private password')
+    await wrapper.get('#new-password').setValue('new private password')
+    const count = f.request.mock.calls.length
+    f.replies.push(decodeIdentityError(403, { code: 'reauthentication_failed' }))
+    await wrapper.get('form').trigger('submit')
+    expect((wrapper.get('#current-password').element as HTMLInputElement).value).toBe('')
+    expect((wrapper.get('#new-password').element as HTMLInputElement).value).toBe('')
+    await flushPromises()
+    expect(f.request).toHaveBeenCalledTimes(count + 1)
+    expect(f.session.state.value.status).toBe('authenticated')
+    expect(router.currentRoute.value.name).toBe('sessions')
+    expect(wrapper.get('[role=alert]').text()).toContain('当前密码不正确')
+  } finally {
+    wrapper.unmount()
+    f.session.clear()
+  }
 })

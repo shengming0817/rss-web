@@ -11,6 +11,7 @@ import {
   existsSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { transportDiagnostic } from './diagnostic.mjs'
 import { executeBounded } from '../real/process.mjs'
 import { dirname, resolve, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -199,7 +200,11 @@ try {
           allowedClasses.includes(fixture.failure.classification)
         )
           record.failure = {
-            ...fixture.failure,
+            phase: fixture.failure.phase,
+            classification: fixture.failure.classification,
+            ...(transportDiagnostic(fixture.browser?.diagnostic)
+              ? { diagnostic: transportDiagnostic(fixture.browser.diagnostic) }
+              : {}),
             ...(record.failure?.execution ? { execution: record.failure.execution } : {}),
           }
       }
