@@ -32,10 +32,10 @@ try {
     certificates.reduce((rest, cert) => rest.replace(cert, ''), pem).trim()
   )
     throw new Error('fixture CA')
+  // NODE_EXTRA_CA_CERTS also accepts the fixture's explicitly trusted self-signed leaf.
   for (const pemCertificate of certificates) {
     const certificate = new X509Certificate(pemCertificate)
     if (
-      !certificate.ca ||
       Date.parse(certificate.validFrom) > Date.now() ||
       Date.parse(certificate.validTo) < Date.now()
     )

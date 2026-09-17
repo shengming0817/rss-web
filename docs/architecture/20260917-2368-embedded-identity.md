@@ -14,6 +14,6 @@ UI 挂载 `/`，租户登录入口 `/tenants/{tenant UUID}/login`。API 仅 `/ap
 
 jsdom 25 的 XHR 只为 CORS 添加 Origin，T2 的 origin.mjs 补充 Fetch 规定的同源写请求 Origin 元数据；cookie jar、CSRF、body 和重定向仍由 jsdom 与生产 transport 处理。此窄补丁不替代真实浏览器证明。
 
-联合 runner 先验证 CA 可读、PEM 可解析、具备 CA 属性且在有效期内，再启动有界 Vitest 子进程。
+联合 runner 先验证 CA 可读、PEM 可解析且在有效期内（允许 fixture 显式信任的自签名叶证书），再启动有界 Vitest 子进程。
 启动/配置/网络失败记为 environment，已执行的协议/产品断言记为 assertion，超时与中断分别记为 timeout/interrupted；空测试结果不得通过。
 Vitest JSON 只在内存消费，记录仅投影固定测试 ID、闭合步骤 ID、仓库相对文件和测试声明行号，并透传至联合 receipt；不保存或回显原始 stdout/stderr、错误消息、动态测试标题或请求凭据。180 秒外层进程预算拥有测试超时与终止清理。

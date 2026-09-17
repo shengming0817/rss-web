@@ -302,6 +302,31 @@ it('private title', ({ task }) => {
 })`,
     )
     writeFileSync(resolve(root, 'ca.pem'), rootCertificates[0]!)
+    if (mode === 'passed') {
+      expect(
+        spawnSync(
+          '/usr/bin/openssl',
+          [
+            'req',
+            '-x509',
+            '-newkey',
+            'rsa:2048',
+            '-nodes',
+            '-days',
+            '2',
+            '-subj',
+            '/CN=identity-ui-t2',
+            '-addext',
+            'basicConstraints=CA:FALSE',
+            '-keyout',
+            resolve(root, 'key.pem'),
+            '-out',
+            resolve(root, 'ca.pem'),
+          ],
+          { stdio: 'ignore', timeout: 10000 },
+        ).status,
+      ).toBe(0)
+    }
     const result = spawnSync(process.execPath, [resolve(root, 'e2e/identity/real.mjs')], {
       encoding: 'utf8',
       timeout: 15000,
