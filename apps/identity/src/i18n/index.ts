@@ -1,5 +1,7 @@
 import { createRssI18n } from '@rss/core'
 const zh = {
+  navigationUnavailable: '管理导航暂时不可用，你仍可使用当前会话。',
+  retryNavigation: '重试导航',
   reauthenticate: '重新认证',
   linkProvider: '关联组织身份',
   noAuthTime: '未提供认证时间',
@@ -104,6 +106,9 @@ const zh = {
   },
 }
 const en = {
+  navigationUnavailable:
+    'Management navigation is temporarily unavailable. Your session is still active.',
+  retryNavigation: 'Retry navigation',
   reauthenticate: 'Reauthenticate',
   linkProvider: 'Link organization identity',
   noAuthTime: 'Authentication time unavailable',

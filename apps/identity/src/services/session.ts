@@ -19,6 +19,7 @@ export interface SessionState {
   identity: Identity | null
   security: SessionSecurity | null
   host: HostContext | null
+  navigation: 'idle' | 'loading' | 'ready' | 'unavailable'
 }
 export function createSession(transport: HttpTransport, config: HostConfig) {
   const state = shallowRef<SessionState>({
@@ -28,6 +29,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
     identity: null,
     security: null,
     host: null,
+    navigation: 'idle',
   })
   let csrf: string | undefined
   let generation = 0
@@ -86,6 +88,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
       identity: null,
       security: null,
       host: null,
+      navigation: 'idle',
     }
   }
   function accept(tenant: string, v: SessionResponse, expected: number) {
@@ -99,6 +102,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
       identity: v.identity,
       security: null,
       host: null,
+      navigation: 'idle',
     }
     armExpiry()
   }
@@ -198,6 +202,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
       session: null,
       security: null,
       host: null,
+      navigation: 'idle',
     }
     try {
       accept(
@@ -309,10 +314,10 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
     return promise
   }
   async function loadContext(): Promise<void> {
-    state.value = { ...state.value, host: null }
     const expected = generation
     const tenant = state.value.tenant
     if (!tenant || state.value.status !== 'authenticated') throw new Error('Session required')
+    state.value = { ...state.value, host: null, navigation: 'loading' }
     try {
       const value = await transport.request({
         method: 'GET',
@@ -328,9 +333,21 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
         value.sessionId !== state.value.session?.id
       )
         throw new Error('Mismatched context')
-      state.value = { ...state.value, host: value }
+      state.value = { ...state.value, host: value, navigation: 'ready' }
     } catch (error) {
-      if (generation === expected) failure(error)
+      if (generation === expected) {
+        // Only transient navigation failures preserve the already accepted cookie/CSRF session.
+        if (
+          isRssApiError(error) &&
+          (error.cause === 'network' ||
+            error.cause === 'timeout' ||
+            (error.cause === 'wire' && error.status === 503))
+        ) {
+          state.value = { ...state.value, host: null, navigation: 'unavailable' }
+          return
+        }
+        failure(error)
+      }
       throw error
     }
   }

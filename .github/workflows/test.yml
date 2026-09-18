@@ -56,8 +56,8 @@ jobs:
           VITE_CONFIG_CATALOG_PREVIEW: 'true'
           VITE_CONFIG_HISTORY_PREVIEW: 'true'
 
-      - name: Build central Identity app
-        run: pnpm -F @rss/identity-app build && pnpm check:identity-app:build
+      - name: Build Identity app
+        run: pnpm build:identity
         env:
           RSS_IDENTITY_WEB_REVISION: ${{ github.sha }}
 

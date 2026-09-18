@@ -1,5 +1,7 @@
 # RSS Web
 
+Identity 提供独立 Node/Nginx 镜像：`pnpm image:identity --tag rss-identity-web:my-version`。部署挂载和导航暂不可用行为见[宿主认证 UI](docs/architecture/20260917-2368-embedded-identity.md)。
+
 仓库包含既有 RSS 应用 `apps/web` 与产品宿主内认证 UI `apps/identity`。后者只消费 HTTP v2；部署入口、严格静态配置、callback 与验证见 [宿主接入说明](docs/architecture/20260917-2368-embedded-identity.md)。生产构建设置 `RSS_IDENTITY_WEB_REVISION`，同源网关由 rss-identity #2436 持有。
 
 ## Existing RSS application

@@ -80,8 +80,10 @@ describe('real RSS journey harness', () => {
     })
     expect(unsupported.status).not.toBe(0)
     expect(unsupported.stderr).toContain('unsupported RSS source revision')
-    expect(unsupported.stderr).not.toContain('docker')
-    expect(unsupported.stderr).not.toContain('archive')
+    // Stack paths may themselves contain words such as docker or archive.
+    const diagnostic = unsupported.stderr.replaceAll(root, '<workspace>')
+    expect(diagnostic).not.toContain('docker')
+    expect(diagnostic).not.toContain('archive')
   })
 
   it('does not use browser interception, direct tenant headers, or a sibling working tree', () => {
