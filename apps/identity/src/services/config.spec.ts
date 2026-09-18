@@ -69,28 +69,35 @@ describe('deployment and authoritative host context', () => {
 })
 
 for (const operation of ['login', 'check', 'refresh', 'reauthenticate'] as const) {
-  it(`preserves accepted session and CSRF after ${operation} when navigation is unavailable`, async () => {
-    const f = fixture()
-    if (operation === 'refresh' || operation === 'reauthenticate') await f.login()
-    f.replies.push(sessionValue(true, 'b'.repeat(64)))
-    f.contextReplies.push(decodeIdentityError(503, { code: 'identity_unavailable' }))
-    await (operation === 'login'
-      ? f.session.login(TENANT, 'user', 'private password')
-      : operation === 'check'
-        ? f.session.check(TENANT)
-        : operation === 'refresh'
-          ? f.session.refresh()
-          : f.session.reauthenticate('private password'))
-    expect(f.session.state.value.status).toBe('authenticated')
-    expect(f.session.state.value.navigation).toBe('unavailable')
-    expect(f.session.headers()['X-CSRF-Token']).toBe('b'.repeat(64))
-    expect(f.session.managementHint.value).toBe(false)
-    expect(f.session.providerHint.value).toBe(false)
-    await f.session.loadContext()
-    expect(f.session.state.value.navigation).toBe('ready')
-    expect(f.session.managementHint.value).toBe(true)
-    f.session.clear()
-  })
+  it.each([
+    networkErrorForTest(),
+    timeoutErrorForTest(),
+    decodeIdentityError(503, { code: 'identity_unavailable' }),
+  ])(
+    `preserves accepted session and CSRF after ${operation} when navigation is unavailable: $cause`,
+    async (error) => {
+      const f = fixture()
+      if (operation === 'refresh' || operation === 'reauthenticate') await f.login()
+      f.replies.push(sessionValue(true, 'b'.repeat(64)))
+      f.contextReplies.push(error)
+      await (operation === 'login'
+        ? f.session.login(TENANT, 'user', 'private password')
+        : operation === 'check'
+          ? f.session.check(TENANT)
+          : operation === 'refresh'
+            ? f.session.refresh()
+            : f.session.reauthenticate('private password'))
+      expect(f.session.state.value.status).toBe('authenticated')
+      expect(f.session.state.value.navigation).toBe('unavailable')
+      expect(f.session.headers()['X-CSRF-Token']).toBe('b'.repeat(64))
+      expect(f.session.managementHint.value).toBe(false)
+      expect(f.session.providerHint.value).toBe(false)
+      await f.session.loadContext()
+      expect(f.session.state.value.navigation).toBe('ready')
+      expect(f.session.managementHint.value).toBe(true)
+      f.session.clear()
+    },
+  )
 }
 
 it('degrades only transient navigation errors and fences stale success and failure', async () => {
