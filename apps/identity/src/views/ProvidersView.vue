@@ -12,6 +12,7 @@ const blocked = computed(() =>
   ['configuration_changed', 'unknown_result', 'identity_unavailable'].includes(error.value),
 )
 const rows = ref<Provider[]>([])
+const loaded = ref(false)
 const selected = ref<Provider | null>(null)
 const report = ref('')
 const pending = ref<Provider | null>(null)
@@ -38,7 +39,7 @@ function clear() {
 function edit(p: Provider) {
   selected.value = p
   issuer.value = p.settings.issuer
-  client.value = p.settings.client_id
+  client.value = p.settings.clientId
   clientSecret.value = ''
   caPem.value = ''
   scopes.value = p.settings.scopes.join(' ')
@@ -52,9 +53,10 @@ async function load() {
   const value = await api.providers()
   checkpoint()
   rows.value = value
+  loaded.value = true
 }
 onMounted(() => {
-  if (session.managementHint.value) void run(load)
+  if (session.providerHint.value) void run(load)
 })
 onBeforeUnmount(() => {
   clientSecret.value = ''
@@ -63,8 +65,8 @@ onBeforeUnmount(() => {
 async function save() {
   const settings: ProviderSettings = {
     issuer: issuer.value,
-    client_id: client.value,
-    redirect_uri: `${window.location.origin}/api/v1/oidc/callback`,
+    clientId: client.value,
+    redirectUri: `${session.config.canonicalOrigin}/api/v2/oidc/callback`,
     scopes: scopes.value.split(/\s+/).filter(Boolean),
     claims: { email: email.value || null, groups: groups.value || null },
     jit: jit.value,
@@ -113,15 +115,22 @@ async function test(p: Provider) {
     <h1>{{ t('identity.providers') }}</h1>
     <p v-if="error" role="alert">{{ t(`identity.errors.${error}`) }}</p>
     <p v-if="report" role="status">{{ report }}</p>
-    <p v-if="!session.managementHint.value">
+    <p v-if="session.state.value.navigation !== 'ready'" role="status">
+      {{ t('identity.navigationUnavailable') }}
+    </p>
+    <p v-else-if="!session.providerHint.value">
       {{ t('identity.errors.insufficient_privilege') }}
     </p>
     <template v-else
       ><div class="identity-actions">
-        <button :disabled="busy" @click="run(load)">{{ t('identity.reload') }}</button
-        ><button :disabled="busy || blocked" @click="clear">{{ t('identity.newProvider') }}</button>
+        <button :disabled="busy" @click="run(load)">
+          {{ t(loaded ? 'identity.reload' : 'identity.loadList') }}</button
+        ><button :disabled="busy || blocked" @click="clear">
+          {{ t('identity.newProvider') }}
+        </button>
       </div>
-      <div class="identity-table">
+      <p v-if="!loaded" role="status">{{ t('identity.listNotLoaded') }}</p>
+      <div v-if="loaded" class="identity-table">
         <table>
           <thead>
             <tr>
@@ -176,15 +185,12 @@ async function test(p: Provider) {
         ><input id="email-claim" v-model="email" />
         <label for="groups-claim">{{ t('identity.groupsClaim') }}</label
         ><input id="groups-claim" v-model="groups" />
-        <label
-          v-if="session.state.value.identity?.administrator"
-          class="identity-checkbox"
-          for="jit"
+        <label v-if="session.providerHint.value" class="identity-checkbox" for="jit"
           ><input id="jit" v-model="jit" type="checkbox" />{{ t('identity.jit') }}</label
         >
         <button type="submit" :disabled="busy || blocked">{{ t('identity.save') }}</button>
-      </form></template
-    >
+      </form>
+    </template>
     <ModalShell
       :open="pending !== null"
       title-id="provider-disable-title"

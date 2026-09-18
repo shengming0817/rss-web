@@ -1,25 +1,27 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { useIdentity } from '../context'
 import { useOperation } from '../services/operation'
-import { operationQuery } from '../services/navigation'
 import type { Session } from '../services/decode'
 const { t } = useI18n()
 const router = useRouter()
-const route = useRoute()
 const { session, api, flows } = useIdentity()
 const { busy, error, run, checkpoint } = useOperation()
 const rows = ref<Session[]>([])
 const next = ref<string | null>(null)
 const current = ref('')
 const password = ref('')
+const reauthPassword = ref('')
+const linkPassword = ref('')
+const providers = ref<{ id: string; label: string }[]>([])
+const selectedProvider = ref('')
 const owner = computed(() =>
   session.state.value.status === 'authenticated'
     ? [
         session.state.value.tenant,
-        session.state.value.identity?.principal_id,
+        session.state.value.identity?.principalId,
         session.state.value.session?.id,
       ].join('/')
     : null,
@@ -34,6 +36,10 @@ watch(
     next.value = null
     current.value = ''
     password.value = ''
+    reauthPassword.value = ''
+    linkPassword.value = ''
+    providers.value = []
+    selectedProvider.value = ''
     reload = true
   },
   { flush: 'sync' },
@@ -46,6 +52,8 @@ watch(
     void run(async () => {
       await load()
       await session.loadSecurity()
+      if (session.config.oidcEnabled && session.state.value.tenant)
+        providers.value = await api.loginOptions(session.state.value.tenant)
     })
   },
   { immediate: true },
@@ -86,9 +94,6 @@ async function stepUp(id: string) {
     flows.save({
       kind: 'step-up',
       tenant,
-      challenge: '',
-      flow: null,
-      operation: operationQuery(route.query).operation ?? null,
     })
     try {
       const location = await api.stepUp(id)
@@ -101,7 +106,6 @@ async function stepUp(id: string) {
   })
 }
 async function change() {
-  const query = operationQuery(route.query)
   const old = current.value
   const value = password.value
   current.value = ''
@@ -109,27 +113,56 @@ async function change() {
   await run(async () => {
     await api.ownPassword(old, value)
     flows.clear()
-    await router.replace({ name: 'login', params: { tenant: session.state.value.tenant }, query })
+    await router.replace({ name: 'login', params: { tenant: session.state.value.tenant } })
   })
 }
 async function logout(all: boolean) {
   const tenant = session.state.value.tenant
-  const query = operationQuery(route.query)
   flows.clear()
   await run(() => session.logout(all))
-  await router.replace({ name: 'login', params: { tenant }, query })
+  await router.replace({ name: 'login', params: { tenant } })
 }
+async function reauthenticate() {
+  const value = reauthPassword.value
+  reauthPassword.value = ''
+  await run(() => session.reauthenticate(value))
+}
+async function link() {
+  const tenant = session.state.value.tenant
+  const value = session.state.value.identity?.hasLocalPassword ? linkPassword.value : null
+  linkPassword.value = ''
+  if (!tenant) return
+  await run(async () => {
+    flows.save({ kind: 'link', tenant })
+    try {
+      const location = await api.link(selectedProvider.value, value)
+      checkpoint()
+      window.location.assign(location)
+    } catch (failure) {
+      flows.clear()
+      throw failure
+    }
+  })
+}
+onBeforeUnmount(() => {
+  reauthPassword.value = ''
+  linkPassword.value = ''
+})
 </script>
 <template>
   <section class="identity-card">
     <h1>{{ t('identity.sessions') }}</h1>
-    <section aria-labelledby="security-title">
+    <section v-if="session.config.oidcEnabled" aria-labelledby="security-title">
       <h2 id="security-title">{{ t('identity.authentication') }}</h2>
       <template v-if="session.state.value.security">
         <p>
           {{ t('identity.authTime') }}:
           {{
-            new Date(session.state.value.security.authentication.auth_time * 1000).toLocaleString()
+            session.state.value.security.authentication.authTime === null
+              ? t('identity.noAuthTime')
+              : new Date(
+                  session.state.value.security.authentication.authTime * 1000,
+                ).toLocaleString()
           }}
         </p>
         <p>
@@ -144,14 +177,14 @@ async function logout(all: boolean) {
               .join(' · ') || t('identity.noMethods')
           }}
         </p>
-        <p v-if="!session.state.value.security.eligible_step_up_providers.length">
+        <p v-if="!session.state.value.security.eligibleStepUpProviders.length">
           {{ t('identity.noStepUp') }}
         </p>
         <button
-          v-for="p in session.state.value.security.eligible_step_up_providers"
-          :key="p.provider_id"
+          v-for="p in session.state.value.security.eligibleStepUpProviders"
+          :key="p.providerId"
           :disabled="busy"
-          @click="stepUp(p.provider_id)"
+          @click="stepUp(p.providerId)"
         >
           {{ t('identity.stepUp') }} · {{ p.label }}
         </button>
@@ -182,7 +215,7 @@ async function logout(all: boolean) {
                 >({{ t('identity.current') }})</span
               >
             </td>
-            <td>{{ new Date(row.idle_expires_at * 1000).toLocaleString() }}</td>
+            <td>{{ new Date(row.idleExpiresAt * 1000).toLocaleString() }}</td>
           </tr>
         </tbody>
       </table>
@@ -190,7 +223,7 @@ async function logout(all: boolean) {
     <button v-if="next" :disabled="busy" @click="run(() => load(next ?? undefined))">
       {{ t('identity.more') }}
     </button>
-    <form v-if="session.state.value.identity?.has_local_password" @submit.prevent="change">
+    <form v-if="session.state.value.identity?.hasLocalPassword" @submit.prevent="change">
       <h2>{{ t('identity.changePassword') }}</h2>
       <label for="current-password">{{ t('identity.currentPassword') }}</label
       ><input
@@ -208,6 +241,36 @@ async function logout(all: boolean) {
         minlength="15"
         required
       /><button type="submit" :disabled="busy">{{ t('identity.changePassword') }}</button>
+    </form>
+    <form v-if="session.state.value.identity?.hasLocalPassword" @submit.prevent="reauthenticate">
+      <h2>{{ t('identity.reauthenticate') }}</h2>
+      <label for="reauth-password">{{ t('identity.currentPassword') }}</label>
+      <input
+        id="reauth-password"
+        v-model="reauthPassword"
+        type="password"
+        autocomplete="current-password"
+        required
+      />
+      <button :disabled="busy">{{ t('identity.reauthenticate') }}</button>
+    </form>
+    <form v-if="session.config.oidcEnabled && providers.length" @submit.prevent="link">
+      <h2>{{ t('identity.linkProvider') }}</h2>
+      <label for="link-provider">{{ t('identity.providers') }}</label>
+      <select id="link-provider" v-model="selectedProvider" required>
+        <option v-for="p in providers" :key="p.id" :value="p.id">{{ p.label }}</option>
+      </select>
+      <template v-if="session.state.value.identity?.hasLocalPassword">
+        <label for="link-password">{{ t('identity.currentPassword') }}</label>
+        <input
+          id="link-password"
+          v-model="linkPassword"
+          type="password"
+          autocomplete="current-password"
+          required
+        />
+      </template>
+      <button :disabled="busy">{{ t('identity.linkProvider') }}</button>
     </form>
     <p class="identity-muted">{{ t('identity.logoutHelp') }}</p>
   </section>

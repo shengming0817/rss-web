@@ -12,12 +12,12 @@ function sources(dir = resolve(root, 'apps/identity/src')): string[] {
         : [],
   )
 }
-describe('separate central Identity application', () => {
+describe('embedded Identity application', () => {
   it('has no legacy authentication, persistence of credentials, or network bypass', () => {
     for (const path of sources()) {
       const s = readFileSync(path, 'utf8')
       expect(s, relative(root, path)).not.toMatch(
-        /@rss\/identity(?:['"/])|Authorization|X-Tenant-ID|accessToken|refreshToken|localStorage|indexedDB|console\.|\batob\(|jwt-decode/,
+        /\/api\/v1\/|downstream|platform_administrator|hydra|@rss\/identity(?:['"/])|Authorization|X-Tenant-ID|accessToken|refreshToken|localStorage|indexedDB|console\.|\batob\(|jwt-decode/,
       )
       if (!path.endsWith('/main.ts')) expect(s).not.toContain('sessionStorage')
       if (!path.endsWith('/services/flow.ts')) expect(s).not.toMatch(/\.setItem\(/)

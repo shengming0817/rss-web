@@ -1,20 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { IdentitySession } from './services/session'
 import { uuid } from './services/decode'
-import { operationQuery } from './services/navigation'
 export function identityRouter(session: IdentitySession) {
   const router = createRouter({
     history: createWebHistory(),
     routes: [
-      {
-        path: '/tenants/:tenant/platform',
-        name: 'platform',
-        component: () => import('./views/PlatformView.vue'),
-        meta: { protected: true },
-      },
       { path: '/', name: 'entry', component: () => import('./views/ErrorView.vue') },
-      { path: '/login', name: 'hydra-login', component: () => import('./views/LoginView.vue') },
-      { path: '/consent', name: 'hydra-consent', component: () => import('./views/LoginView.vue') },
       { path: '/auth/resume', name: 'resume', component: () => import('./views/LoginView.vue') },
       { path: '/auth/error', name: 'error', component: () => import('./views/ErrorView.vue') },
       {
@@ -38,12 +29,13 @@ export function identityRouter(session: IdentitySession) {
         path: '/tenants/:tenant/providers',
         name: 'providers',
         component: () => import('./views/ProvidersView.vue'),
-        meta: { protected: true },
+        meta: { protected: true, oidc: true },
       },
       { path: '/:pathMatch(.*)*', component: () => import('./views/ErrorView.vue') },
     ],
   })
   router.beforeEach(async (to) => {
+    if (to.meta['oidc'] && !session.config.oidcEnabled) return { name: 'error' }
     if (!to.meta['protected']) return true
     let tenant: string
     try {
@@ -57,7 +49,7 @@ export function identityRouter(session: IdentitySession) {
       } catch {
         return {
           name: 'error',
-          query: { reason: 'unavailable', tenant, ...operationQuery(to.query) },
+          query: { reason: 'unavailable', tenant },
         }
       }
     }
@@ -65,7 +57,7 @@ export function identityRouter(session: IdentitySession) {
       return {
         name: 'login',
         params: { tenant },
-        query: { reason: 'expired', ...operationQuery(to.query) },
+        query: { reason: 'expired' },
       }
     return true
   })

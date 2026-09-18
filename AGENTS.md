@@ -13,8 +13,10 @@ Read `README.md` and the current migration issue before changing this repository
 - Preserve provenance records under `docs/migration/`; later product changes must
   not rewrite the historical source identity.
 
-# #2337 central Identity application
+# #2368 embedded authentication UI
 
-`apps/identity` is the explicitly accepted central Identity UI, consumed through the rss-identity v1 cookie/CSRF protocol. It is separate from `apps/web`; the existing app's RSS bearer baseline is not a fallback or dependency. Reuse `@rss/core` public UI exports and `@rss/api/identity`. Keep Identity operations/session state app-local; do not add a domain package or mirror store. UI authority hints never replace server checks. Tenant coordinates are explicit route locators or returned by the validated downstream preparation, not authorization.
+`apps/identity` consumes only rss-identity HTTP v2 under its product host origin. Reuse `@rss/core` and `@rss/api/identity`; its single app-local session controller owns cookie/CSRF transitions and context hints. No platform, downstream, dual backend or bearer fallback. `apps/web` retains its independent contract.
 
-Only the flow module may persist a bounded, per-tab challenge/flow locator for five minutes; no password, CSRF, token, PKCE verifier or authenticated state is persisted. A flow is removed before accept and never replayed after an unknown result. The sole upstream protocol callback remains `/api/v1/oidc/callback`; UI resume/error routes do not exchange codes. Production hosting remains on the Identity origin and is handed to I08.
+The gateway serves strict static `/api/identity-host/v1/config.json` with canonicalOrigin and oidcEnabled. Missing or malformed input prevents UI startup. Only `/api/identity-host/v1/tenants/{tenant}/context` is a dynamic host endpoint; its hints are session-bound presentation facts. Component transactions enforce management policy. Tenant paths are resource locators.
+
+Only the flow owner may keep a per-tab tenant/kind locator for five minutes. No credentials, authenticated state, tokens or verifier persistence. The sole protocol callback is `/api/v2/oidc/callback`; `/auth/resume` reads the session and never exchanges codes. No write replay after conflict, reauthentication or unknown results. Deployment belongs to #2436; actual browser acceptance belongs to #2366.

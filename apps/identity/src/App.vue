@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useTheme } from '@rss/core/composables'
 import { useIdentity } from './context'
-import { operationQuery } from './services/navigation'
 const { session } = useIdentity()
 const router = useRouter()
 const { t, locale } = useI18n()
@@ -14,13 +13,6 @@ onBeforeUnmount(() => window.removeEventListener('pagehide', session.leavePage))
 watch(
   () => session.state.value.status,
   (status) => {
-    // Keep the single operation receipt visible while authority is cleared.
-    // PlatformView hides all protected content and offers reauthentication.
-    if (
-      router.currentRoute.value.name === 'platform' &&
-      operationQuery(router.currentRoute.value.query).operation
-    )
-      return
     if (
       router.currentRoute.value.meta['protected'] &&
       status !== 'authenticated' &&
@@ -33,13 +25,11 @@ watch(
               query: {
                 reason: 'unavailable',
                 tenant: session.state.value.tenant,
-                ...operationQuery(router.currentRoute.value.query),
               },
             }
           : {
               name: 'login',
               params: { tenant: session.state.value.tenant },
-              query: operationQuery(router.currentRoute.value.query),
             },
       )
   },
@@ -52,11 +42,7 @@ function activity(event: Event) {
   <div class="identity-app" @pointerdown="activity" @keydown="activity">
     <a class="identity-skip" href="#identity-main">{{ t('identity.skip') }}</a>
     <header>
-      <RouterLink
-        :to="{ path: '/', query: operationQuery(router.currentRoute.value.query) }"
-        class="identity-brand"
-        >RSS <strong>Identity</strong></RouterLink
-      >
+      <RouterLink to="/" class="identity-brand">RSS <strong>Identity</strong></RouterLink>
       <div class="identity-actions">
         <button @click="locale = locale === 'zh-CN' ? 'en-US' : 'zh-CN'">
           {{ locale === 'zh-CN' ? 'English' : '中文' }}</button
@@ -68,39 +54,39 @@ function activity(event: Event) {
       :aria-label="t('identity.navigation')"
     >
       <RouterLink
-        v-if="session.state.value.identity?.platform_administrator"
-        :to="{
-          name: 'platform',
-          params: { tenant: session.state.value.tenant },
-          query: operationQuery(router.currentRoute.value.query),
-        }"
-        >{{ t('identity.platform') }}</RouterLink
-      >
-      <RouterLink
         :to="{
           name: 'sessions',
           params: { tenant: session.state.value.tenant },
-          query: operationQuery(router.currentRoute.value.query),
         }"
         >{{ t('identity.sessions') }}</RouterLink
-      ><template v-if="session.managementHint.value"
-        ><RouterLink
-          :to="{
-            name: 'accounts',
-            params: { tenant: session.state.value.tenant },
-            query: operationQuery(router.currentRoute.value.query),
-          }"
-          >{{ t('identity.accounts') }}</RouterLink
-        ><RouterLink
-          :to="{
-            name: 'providers',
-            params: { tenant: session.state.value.tenant },
-            query: operationQuery(router.currentRoute.value.query),
-          }"
-          >{{ t('identity.providers') }}</RouterLink
-        ></template
+      ><RouterLink
+        v-if="session.managementHint.value"
+        :to="{
+          name: 'accounts',
+          params: { tenant: session.state.value.tenant },
+        }"
+        >{{ t('identity.accounts') }}</RouterLink
+      ><RouterLink
+        v-if="session.providerHint.value"
+        :to="{
+          name: 'providers',
+          params: { tenant: session.state.value.tenant },
+        }"
+        >{{ t('identity.providers') }}</RouterLink
       >
     </nav>
+    <p
+      v-if="
+        session.state.value.status === 'authenticated' &&
+        session.state.value.navigation === 'unavailable'
+      "
+      role="status"
+    >
+      {{ t('identity.navigationUnavailable') }}
+      <button @click="session.loadContext().catch(() => undefined)">
+        {{ t('identity.retryNavigation') }}
+      </button>
+    </p>
     <main id="identity-main" tabindex="-1">
       <RouterView :key="router.currentRoute.value.path" />
     </main>

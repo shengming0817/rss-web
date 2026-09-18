@@ -21,49 +21,28 @@ export { isRssApiError } from './wire-error'
 const statuses: Readonly<Record<string, number>> = {
   malformed_request: 400,
   invalid_credential: 401,
-  invalid_client: 401,
   csrf_rejected: 403,
-  identity_not_active: 403,
   insufficient_privilege: 403,
+  reauthentication_required: 403,
   reauthentication_failed: 403,
-  last_administrator: 409,
   configuration_changed: 409,
   provider_limit_reached: 409,
   account_already_exists: 409,
   identity_link_conflict: 409,
   rate_limited: 429,
   identity_unavailable: 503,
-  platform_administrator_required: 403,
-  invalid_platform_request: 400,
-  platform_conflict: 409,
-  tenant_limit_reached: 409,
-  last_platform_administrator: 409,
-  operation_not_observed: 404,
-  operation_outcome_unknown: 503,
-  operation_not_completed: 503,
 }
-const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
-export function decodeIdentityError(
-  status: number,
-  value: unknown,
-  downstream: boolean,
-): RssApiError {
+export function decodeIdentityError(status: number, value: unknown): RssApiError {
   if (typeof value !== 'object' || value === null || Array.isArray(value))
     return protocolError(status)
   const v = value as Record<string, unknown>
   if (
-    Object.keys(v).sort().join(',') !== (downstream ? 'code,correlation_id' : 'code') ||
+    Object.keys(v).join() !== 'code' ||
     typeof v['code'] !== 'string' ||
     statuses[v['code']] !== status
   )
     return protocolError(status)
-  if (downstream && (typeof v['correlation_id'] !== 'string' || !uuid.test(v['correlation_id'])))
-    return protocolError(status)
-  return identityWireFailure(
-    status,
-    v['code'],
-    downstream ? (v['correlation_id'] as string) : undefined,
-  )
+  return identityWireFailure(status, v['code'], undefined)
 }
 export function createIdentityTransport(): HttpTransport {
   const instance = axios.create({ baseURL: '' })
@@ -71,19 +50,12 @@ export function createIdentityTransport(): HttpTransport {
     async request(
       options: NoContentRequest | RequestOptions<unknown> | ResponseRequestOptions<unknown>,
     ) {
-      const downstream = /^\/api\/v1\/downstream\/(?:login|consent)(?:\/accept)?$/.test(
-        options.path,
-      )
-      const platform =
-        (options.method === 'GET' &&
-          [
-            '/api/v1/platform',
-            '/api/v1/platform/tenants',
-            '/api/v1/platform/operations/{operation}',
-          ].includes(options.path)) ||
-        (options.method === 'POST' && options.path === '/api/v1/platform/tenants')
+      const read =
+        options.method === 'GET' &&
+        (options.path === '/api/identity-host/v1/config.json' ||
+          options.path === '/api/identity-host/v1/tenants/{tenant}/context')
       if (
-        (!downstream && !platform && !options.path.startsWith('/api/v1/tenants/{tenant}/')) ||
+        (!read && !options.path.startsWith('/api/v2/tenants/{tenant}/')) ||
         options.session !== undefined ||
         options.errorPolicy !== undefined
       )
@@ -95,7 +67,7 @@ export function createIdentityTransport(): HttpTransport {
         instance,
         30_000,
         { ...options, cache: 'no-store' },
-        (status, value) => decodeIdentityError(status, value, downstream),
+        (status, value) => decodeIdentityError(status, value),
         {},
       )
     },

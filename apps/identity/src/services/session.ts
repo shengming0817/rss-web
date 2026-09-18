@@ -1,7 +1,10 @@
 import { shallowRef, readonly, computed } from 'vue'
+import type { HostConfig } from './config'
 import { isRssApiError, type HttpTransport } from '@rss/api/identity'
 import {
   sessionResponse,
+  hostContext,
+  type HostContext,
   sessionSecurity,
   type SessionSecurity,
   type SessionResponse,
@@ -15,14 +18,18 @@ export interface SessionState {
   session: Session | null
   identity: Identity | null
   security: SessionSecurity | null
+  host: HostContext | null
+  navigation: 'idle' | 'loading' | 'ready' | 'unavailable'
 }
-export function createSession(transport: HttpTransport) {
+export function createSession(transport: HttpTransport, config: HostConfig) {
   const state = shallowRef<SessionState>({
     status: 'anonymous',
     tenant: null,
     session: null,
     identity: null,
     security: null,
+    host: null,
+    navigation: 'idle',
   })
   let csrf: string | undefined
   let generation = 0
@@ -36,7 +43,7 @@ export function createSession(transport: HttpTransport) {
   function context() {
     const v = state.value
     return v.status === 'authenticated'
-      ? [v.tenant, v.identity?.principal_id, v.session?.id].join('/')
+      ? [v.tenant, v.identity?.principalId, v.session?.id].join('/')
       : null
   }
   function serial<T>(work: () => Promise<T>): Promise<T> {
@@ -80,18 +87,22 @@ export function createSession(transport: HttpTransport) {
       session: null,
       identity: null,
       security: null,
+      host: null,
+      navigation: 'idle',
     }
   }
   function accept(tenant: string, v: SessionResponse, expected: number) {
     if (generation !== expected) throw new Error('Stale session')
     generation++
-    csrf = v.csrf_token
+    csrf = v.csrfToken
     state.value = {
       status: 'authenticated',
       tenant,
       session: v.session,
       identity: v.identity,
       security: null,
+      host: null,
+      navigation: 'idle',
     }
     armExpiry()
   }
@@ -99,7 +110,7 @@ export function createSession(transport: HttpTransport) {
     clearTimeout(expiry)
     const view = state.value.session
     if (!view) return
-    const remaining = Math.min(view.idle_expires_at, view.absolute_expires_at) * 1000 - Date.now()
+    const remaining = Math.min(view.idleExpiresAt, view.absoluteExpiresAt) * 1000 - Date.now()
     if (remaining <= 0) {
       clear()
       return
@@ -112,6 +123,7 @@ export function createSession(transport: HttpTransport) {
     state.value = { ...state.value, security: null }
   }
   function loadSecurity(): Promise<void> {
+    if (!config.oidcEnabled) return Promise.resolve()
     if (securityRead) return securityRead
     state.value = { ...state.value, security: null }
     let inspectedGeneration = generation
@@ -122,7 +134,7 @@ export function createSession(transport: HttpTransport) {
       if (!tenant || !session || status !== 'authenticated') throw new Error('Session required')
       return transport.request({
         method: 'GET',
-        path: '/api/v1/tenants/{tenant}/session/security',
+        path: '/api/v2/tenants/{tenant}/session/security',
         pathParams: { tenant },
         successStatus: 200,
         decode: sessionSecurity,
@@ -133,7 +145,7 @@ export function createSession(transport: HttpTransport) {
           generation !== inspectedGeneration ||
           pageGeneration !== inspectedPage ||
           state.value.status !== 'authenticated' ||
-          value.session_id !== state.value.session?.id
+          value.sessionId !== state.value.session?.id
         )
           throw new Error('Stale security snapshot')
         state.value = { ...state.value, security: value }
@@ -163,13 +175,14 @@ export function createSession(transport: HttpTransport) {
         tenant,
         await transport.request({
           method: 'GET',
-          path: '/api/v1/tenants/{tenant}/session',
+          path: '/api/v2/tenants/{tenant}/session',
           pathParams: { tenant },
           successStatus: 200,
           decode: sessionResponse,
         }),
         expected,
       )
+      await loadContext()
     } catch (error) {
       if (generation === expected) {
         failure(error)
@@ -181,12 +194,22 @@ export function createSession(transport: HttpTransport) {
   async function login(tenant: string, login: string, password: string) {
     tenant = uuid(tenant)
     const expected = ++generation
+    state.value = {
+      ...state.value,
+      status: 'checking',
+      tenant,
+      identity: null,
+      session: null,
+      security: null,
+      host: null,
+      navigation: 'idle',
+    }
     try {
       accept(
         tenant,
         await transport.request({
           method: 'POST',
-          path: '/api/v1/tenants/{tenant}/login',
+          path: '/api/v2/tenants/{tenant}/login',
           pathParams: { tenant },
           headers: headers(false),
           body: { login, password },
@@ -195,6 +218,7 @@ export function createSession(transport: HttpTransport) {
         }),
         expected,
       )
+      await loadContext()
     } catch (error) {
       if (generation === expected) failure(error)
       throw error
@@ -224,7 +248,7 @@ export function createSession(transport: HttpTransport) {
           tenant,
           await transport.request({
             method: 'POST',
-            path: '/api/v1/tenants/{tenant}/session/refresh',
+            path: '/api/v2/tenants/{tenant}/session/refresh',
             pathParams: { tenant },
             headers: headers(),
             successStatus: 200,
@@ -232,6 +256,7 @@ export function createSession(transport: HttpTransport) {
           }),
           expected,
         )
+        await loadContext()
       } catch (error) {
         if (generation === expected) {
           clear()
@@ -250,7 +275,7 @@ export function createSession(transport: HttpTransport) {
     if (
       state.value.status === 'authenticated' &&
       s &&
-      s.idle_expires_at * 1000 - Date.now() < 120_000
+      s.idleExpiresAt * 1000 - Date.now() < 120_000
     )
       await refresh()
   }
@@ -272,7 +297,7 @@ export function createSession(transport: HttpTransport) {
       try {
         await transport.request({
           method: 'POST',
-          path: `/api/v1/tenants/{tenant}/${all ? 'sessions/logout-all' : 'session/logout'}`,
+          path: `/api/v2/tenants/{tenant}/${all ? 'sessions/logout-all' : 'session/logout'}`,
           pathParams: { tenant },
           headers: saved,
           successStatus: 204,
@@ -288,15 +313,89 @@ export function createSession(transport: HttpTransport) {
     departure = { scope, page, promise }
     return promise
   }
-  // Presentation only: these flags already come from the server's scoped management authority.
+  async function loadContext(): Promise<void> {
+    const expected = generation
+    const tenant = state.value.tenant
+    if (!tenant || state.value.status !== 'authenticated') throw new Error('Session required')
+    state.value = { ...state.value, host: null, navigation: 'loading' }
+    try {
+      const value = await transport.request({
+        method: 'GET',
+        path: '/api/identity-host/v1/tenants/{tenant}/context',
+        pathParams: { tenant },
+        successStatus: 200,
+        decode: hostContext,
+      })
+      if (generation !== expected) throw new Error('Stale context')
+      if (
+        value.tenantId !== tenant ||
+        value.principalId !== state.value.identity?.principalId ||
+        value.sessionId !== state.value.session?.id
+      )
+        throw new Error('Mismatched context')
+      state.value = { ...state.value, host: value, navigation: 'ready' }
+    } catch (error) {
+      if (generation === expected) {
+        // Only transient navigation failures preserve the already accepted cookie/CSRF session.
+        if (
+          isRssApiError(error) &&
+          (error.cause === 'network' ||
+            error.cause === 'timeout' ||
+            (error.cause === 'wire' && error.status === 503))
+        ) {
+          state.value = { ...state.value, host: null, navigation: 'unavailable' }
+          return
+        }
+        failure(error)
+      }
+      throw error
+    }
+  }
   const managementHint = computed(
     () =>
       state.value.status === 'authenticated' &&
-      !!(state.value.identity?.administrator || state.value.identity?.platform_administrator),
+      state.value.host?.navigation.manageAccounts === true,
   )
+  const providerHint = computed(
+    () =>
+      config.oidcEnabled &&
+      state.value.status === 'authenticated' &&
+      state.value.host?.navigation.manageProviders === true,
+  )
+  function reauthenticate(password: string): Promise<void> {
+    const scope = context()
+    const page = pageGeneration
+    return serial(async () => {
+      if (!scope || context() !== scope || pageGeneration !== page)
+        throw new Error('Operation abandoned')
+      const tenant = state.value.tenant
+      if (!tenant || state.value.status !== 'authenticated') throw new Error('Session required')
+      const expected = generation
+      try {
+        const value = await transport.request({
+          method: 'POST',
+          path: '/api/v2/tenants/{tenant}/session/reauthenticate',
+          pathParams: { tenant },
+          headers: headers(),
+          body: { password },
+          successStatus: 200,
+          decode: sessionResponse,
+        })
+        accept(tenant, value, expected)
+        await loadContext()
+      } catch (error) {
+        if (generation === expected) failure(error)
+        throw error
+      }
+    })
+  }
   return {
     state: readonly(state),
     managementHint,
+    providerHint,
+    config: Object.freeze({ ...config }),
+    loadContext: () => serial(loadContext),
+    reauthenticate,
     check: (tenant: string) => serial(() => check(tenant)),
     login: (tenant: string, loginKey: string, password: string) =>
       serial(() => login(tenant, loginKey, password)),

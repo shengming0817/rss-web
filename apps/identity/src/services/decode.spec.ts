@@ -3,31 +3,23 @@ import * as d from './decode'
 import { accountValue, providerValue, sessionValue, ID } from '../../tests/support'
 import { testReport } from './api'
 describe('closed Identity wire projections', () => {
-  it('requires the current platform identity shape and rejects legacy session fields', () => {
-    const value = sessionValue()
+  it('accepts only the embedded v2 identity without role fields', () => {
+    const value = {
+      session: { id: ID, authTime: 1, idleExpiresAt: 4102444800, absoluteExpiresAt: 4102444900 },
+      identity: { principalId: ID, hasLocalPassword: true },
+      csrfToken: 'a'.repeat(64),
+    }
+    expect(d.sessionResponse(value)).toEqual(value)
     expect(() =>
-      d.sessionResponse({
-        ...value,
-        identity: { principal_id: ID, administrator: true, has_local_password: true },
-      }),
+      d.sessionResponse({ ...value, identity: { ...value.identity, administrator: true } }),
     ).toThrow()
-    expect(
-      d.sessionResponse({
-        ...value,
-        identity: { ...value.identity, platform_administrator: false },
-      }).identity.platform_administrator,
-    ).toBe(false)
   })
-  it('decodes accounts, sessions, provider config and bound flow', () => {
+  it('decodes accounts, sessions, provider config', () => {
     expect(d.account(accountValue).login).toBe('member')
     expect(d.account({ ...accountValue, login: null }).login).toBeNull()
     expect(d.provider(providerValue).version).toBe(1)
-    expect(d.sessionResponse(sessionValue()).identity.administrator).toBe(true)
-    expect(d.flow({ tenant_id: ID, grant_id: ID }).grant_id).toBe(ID)
-    expect(d.redirect({ redirect_to: 'https://idp.test/path' }, 'redirect_to')).toBe(
-      'https://idp.test/path',
-    )
-    expect(d.redirect({ authorization_url: 'https://idp.test/path' }, 'authorization_url')).toBe(
+    expect(d.sessionResponse(sessionValue()).identity.hasLocalPassword).toBe(true)
+    expect(d.redirect({ authorizationUrl: 'https://idp.test/path' }, 'authorizationUrl')).toBe(
       'https://idp.test/path',
     )
   })
@@ -43,10 +35,10 @@ describe('closed Identity wire projections', () => {
     expect(() => d.list({}, d.text)).toThrow()
     expect(() => d.list([1, 2], d.number, 1)).toThrow()
     expect(() => d.provider({ ...providerValue, version: 0 })).toThrow()
-    expect(() => d.session({ ...sessionValue().session, idle_expires_at: 0 })).toThrow()
-    expect(() => d.sessionResponse({ ...sessionValue(), csrf_token: 'bad' })).toThrow()
+    expect(() => d.session({ ...sessionValue().session, idleExpiresAt: 0 })).toThrow()
+    expect(() => d.sessionResponse({ ...sessionValue(), csrfToken: 'bad' })).toThrow()
     for (const url of ['http://idp.test', 'https://user:password@idp.test'])
-      expect(() => d.redirect({ redirect_to: url }, 'redirect_to')).toThrow()
+      expect(() => d.redirect({ authorizationUrl: url }, 'authorizationUrl')).toThrow()
   })
   it('only exposes closed provider test diagnostics', () => {
     expect(
@@ -54,26 +46,28 @@ describe('closed Identity wire projections', () => {
         passed: true,
         report: {
           checks: ['binding', 'discovery', 'jwks'],
-          tls_verified: true,
-          authorization_response_issuer: true,
+          tlsVerified: true,
+          authorizationResponseIssuer: true,
         },
       }).passed,
     ).toBe(true)
     expect(
-      testReport({ passed: false, diagnostic: { stage: 'binding', reason: 'missing_secret' } })
-        .diagnostic,
-    ).toBe('binding: missing_secret')
+      testReport({
+        passed: false,
+        diagnostic: { stage: 'binding', reason: 'invalid_trust_anchor' },
+      }).diagnostic,
+    ).toBe('binding: invalid_trust_anchor')
     for (const value of [
       null,
       {},
       { passed: true, report: {} },
       {
         passed: true,
-        report: { checks: ['private'], tls_verified: true, authorization_response_issuer: true },
+        report: { checks: ['private'], tlsVerified: true, authorizationResponseIssuer: true },
       },
       {
         passed: true,
-        report: { checks: [], tls_verified: 'x', authorization_response_issuer: true },
+        report: { checks: [], tlsVerified: 'x', authorizationResponseIssuer: true },
       },
       { passed: false, diagnostic: { stage: 'secret', reason: 'raw' } },
       { passed: true, diagnostic: {} },

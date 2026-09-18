@@ -9,20 +9,21 @@ const { t } = useI18n()
 const { api, session } = useIdentity()
 const { busy, error, run } = useOperation()
 const rows = ref<Account[]>([])
+const loaded = ref(false)
 const next = ref<string | null>(null)
 const login = ref('')
 const password = ref('')
-const role = ref('member')
 const resetTarget = ref<Account | null>(null)
 const pending = ref<{
   account: Account
-  field: 'enabled' | 'administrator' | 'membership'
+  field: 'enabled' | 'membership'
   enabled: boolean
 } | null>(null)
 async function load(cursor?: string) {
   const value = await api.accounts(cursor)
   rows.value = cursor ? [...rows.value, ...value.accounts] : value.accounts
   next.value = value.next
+  loaded.value = true
 }
 onMounted(() => {
   if (session.managementHint.value) void run(() => load())
@@ -31,7 +32,7 @@ async function create() {
   const secret = password.value
   password.value = ''
   await run(async () => {
-    await api.createAccount(login.value, secret, role.value)
+    await api.createAccount(login.value, secret)
     login.value = ''
     await load()
   })
@@ -60,7 +61,7 @@ async function reset() {
   password.value = ''
   if (target)
     await run(async () => {
-      await api.resetPassword(target.principal_id, secret)
+      await api.resetPassword(target.principalId, secret)
       await load()
     })
 }
@@ -69,12 +70,18 @@ async function reset() {
   <section class="identity-card">
     <h1>{{ t('identity.accounts') }}</h1>
     <p v-if="error" role="alert">{{ t(`identity.errors.${error}`) }}</p>
-    <p v-if="!session.managementHint.value">
+    <p v-if="session.state.value.navigation !== 'ready'" role="status">
+      {{ t('identity.navigationUnavailable') }}
+    </p>
+    <p v-else-if="!session.managementHint.value">
       {{ t('identity.errors.insufficient_privilege') }}
     </p>
     <template v-else>
-      <button :disabled="busy" @click="run(() => load())">{{ t('identity.reload') }}</button>
-      <div class="identity-table">
+      <button :disabled="busy" @click="run(() => load())">
+        {{ t(loaded ? 'identity.reload' : 'identity.loadList') }}
+      </button>
+      <p v-if="!loaded" role="status">{{ t('identity.listNotLoaded') }}</p>
+      <div v-if="loaded" class="identity-table">
         <table>
           <thead>
             <tr>
@@ -84,15 +91,13 @@ async function reset() {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="a in rows" :key="a.principal_id">
+            <tr v-for="a in rows" :key="a.principalId">
               <td>
-                {{ a.login ?? a.principal_id }}<small>{{ a.principal_id }}</small
-                ><small v-if="a.emergency">{{ t('identity.emergency') }}</small>
+                {{ a.login ?? a.principalId }}<small>{{ a.principalId }}</small>
               </td>
               <td>
                 {{ t(a.enabled ? 'identity.enabled' : 'identity.disabled') }} ·
-                {{ t(a.member_active ? 'identity.memberActive' : 'identity.memberInactive')
-                }}<small v-if="a.administrator">{{ t('identity.administrator') }}</small>
+                {{ t(a.memberActive ? 'identity.memberActive' : 'identity.memberInactive') }}
               </td>
               <td class="identity-actions">
                 <button
@@ -103,23 +108,14 @@ async function reset() {
                 </button>
                 <button
                   :disabled="busy"
-                  @click="pending = { account: a, field: 'membership', enabled: !a.member_active }"
+                  @click="pending = { account: a, field: 'membership', enabled: !a.memberActive }"
                 >
-                  {{ t(a.member_active ? 'identity.disableMember' : 'identity.enableMember') }}
-                </button>
-                <button
-                  v-if="session.state.value.identity?.administrator"
-                  :disabled="busy"
-                  @click="
-                    pending = { account: a, field: 'administrator', enabled: !a.administrator }
-                  "
-                >
-                  {{ t(a.administrator ? 'identity.revokeAdmin' : 'identity.grantAdmin') }}
+                  {{ t(a.memberActive ? 'identity.disableMember' : 'identity.enableMember') }}
                 </button>
                 <button
                   v-if="
-                    a.has_local_password &&
-                    a.principal_id !== session.state.value.identity?.principal_id
+                    a.hasLocalPassword &&
+                    a.principalId !== session.state.value.identity?.principalId
                   "
                   :disabled="busy"
                   @click="openReset(a)"
@@ -138,16 +134,6 @@ async function reset() {
         <h2>{{ t('identity.createAccount') }}</h2>
         <label for="account-login">{{ t('identity.username') }}</label
         ><input id="account-login" v-model="login" autocomplete="off" required />
-        <label for="account-role">{{ t('identity.role') }}</label
-        ><select id="account-role" v-model="role">
-          <option value="member">{{ t('identity.member') }}</option>
-          <option v-if="session.state.value.identity?.administrator" value="administrator">
-            {{ t('identity.administrator') }}
-          </option>
-          <option v-if="session.state.value.identity?.administrator" value="emergency">
-            {{ t('identity.emergency') }}
-          </option>
-        </select>
         <label for="account-password">{{ t('identity.password') }}</label
         ><input
           id="account-password"
@@ -167,7 +153,7 @@ async function reset() {
       @close="pending = null"
       ><h2 id="change-title">{{ t('identity.confirmChange') }}</h2>
       <p id="change-detail">
-        {{ pending?.account.login ?? pending?.account.principal_id }} ·
+        {{ pending?.account.login ?? pending?.account.principalId }} ·
         {{ t('identity.changeHelp') }}
       </p>
       <button @click="pending = null">{{ t('identity.cancel') }}</button
