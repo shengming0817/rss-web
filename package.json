@@ -30,7 +30,7 @@
     "test:identity:joint": "node e2e/identity/run.mjs",
     "check:identity-app:build": "node scripts/check-identity-app-build.mjs",
     "build:identity": "pnpm -F @rss/identity-app build && pnpm check:identity-app:build",
-    "image:identity": "docker buildx build --platform linux/amd64 --load --provenance=false -f deploy/identity/Dockerfile"
+    "image:identity": "bash scripts/build-identity-image.sh"
   },
   "lint-staged": {
     "*.{ts,vue}": [
