@@ -9,6 +9,7 @@ const { t } = useI18n()
 const { api, session } = useIdentity()
 const { busy, error, run } = useOperation()
 const rows = ref<Account[]>([])
+const loaded = ref(false)
 const next = ref<string | null>(null)
 const login = ref('')
 const password = ref('')
@@ -22,6 +23,7 @@ async function load(cursor?: string) {
   const value = await api.accounts(cursor)
   rows.value = cursor ? [...rows.value, ...value.accounts] : value.accounts
   next.value = value.next
+  loaded.value = true
 }
 onMounted(() => {
   if (session.managementHint.value) void run(() => load())
@@ -68,12 +70,18 @@ async function reset() {
   <section class="identity-card">
     <h1>{{ t('identity.accounts') }}</h1>
     <p v-if="error" role="alert">{{ t(`identity.errors.${error}`) }}</p>
-    <p v-if="!session.managementHint.value">
+    <p v-if="session.state.value.navigation !== 'ready'" role="status">
+      {{ t('identity.navigationUnavailable') }}
+    </p>
+    <p v-else-if="!session.managementHint.value">
       {{ t('identity.errors.insufficient_privilege') }}
     </p>
     <template v-else>
-      <button :disabled="busy" @click="run(() => load())">{{ t('identity.reload') }}</button>
-      <div class="identity-table">
+      <button :disabled="busy" @click="run(() => load())">
+        {{ t(loaded ? 'identity.reload' : 'identity.loadList') }}
+      </button>
+      <p v-if="!loaded" role="status">{{ t('identity.listNotLoaded') }}</p>
+      <div v-if="loaded" class="identity-table">
         <table>
           <thead>
             <tr>

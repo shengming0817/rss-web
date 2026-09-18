@@ -12,6 +12,7 @@ const blocked = computed(() =>
   ['configuration_changed', 'unknown_result', 'identity_unavailable'].includes(error.value),
 )
 const rows = ref<Provider[]>([])
+const loaded = ref(false)
 const selected = ref<Provider | null>(null)
 const report = ref('')
 const pending = ref<Provider | null>(null)
@@ -52,6 +53,7 @@ async function load() {
   const value = await api.providers()
   checkpoint()
   rows.value = value
+  loaded.value = true
 }
 onMounted(() => {
   if (session.providerHint.value) void run(load)
@@ -113,15 +115,22 @@ async function test(p: Provider) {
     <h1>{{ t('identity.providers') }}</h1>
     <p v-if="error" role="alert">{{ t(`identity.errors.${error}`) }}</p>
     <p v-if="report" role="status">{{ report }}</p>
-    <p v-if="!session.providerHint.value">
+    <p v-if="session.state.value.navigation !== 'ready'" role="status">
+      {{ t('identity.navigationUnavailable') }}
+    </p>
+    <p v-else-if="!session.providerHint.value">
       {{ t('identity.errors.insufficient_privilege') }}
     </p>
     <template v-else
       ><div class="identity-actions">
-        <button :disabled="busy" @click="run(load)">{{ t('identity.reload') }}</button
-        ><button :disabled="busy || blocked" @click="clear">{{ t('identity.newProvider') }}</button>
+        <button :disabled="busy" @click="run(load)">
+          {{ t(loaded ? 'identity.reload' : 'identity.loadList') }}</button
+        ><button :disabled="busy || blocked" @click="clear">
+          {{ t('identity.newProvider') }}
+        </button>
       </div>
-      <div class="identity-table">
+      <p v-if="!loaded" role="status">{{ t('identity.listNotLoaded') }}</p>
+      <div v-if="loaded" class="identity-table">
         <table>
           <thead>
             <tr>
@@ -180,8 +189,8 @@ async function test(p: Provider) {
           ><input id="jit" v-model="jit" type="checkbox" />{{ t('identity.jit') }}</label
         >
         <button type="submit" :disabled="busy || blocked">{{ t('identity.save') }}</button>
-      </form></template
-    >
+      </form>
+    </template>
     <ModalShell
       :open="pending !== null"
       title-id="provider-disable-title"

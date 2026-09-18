@@ -499,3 +499,52 @@ it('shows a manual navigation retry without hiding the accepted session', async 
   wrapper.unmount()
   f.session.clear()
 })
+
+it.each([
+  {
+    component: AccountsView,
+    name: 'accounts',
+    response: { accounts: [accountValue], nextCursor: null },
+    text: 'member',
+  },
+  {
+    component: ProvidersView,
+    name: 'providers',
+    response: { providers: [providerValue] },
+    text: providerValue.settings.issuer,
+  },
+])(
+  'keeps $name unread until an explicit load after navigation recovery',
+  async ({ component, name, response, text }) => {
+    const f = fixture()
+    f.contextReplies.push(decodeIdentityError(503, { code: 'identity_unavailable' }))
+    await f.login()
+    const before = f.request.mock.calls.length
+    const { wrapper } = await view(component, f, name)
+    try {
+      expect(wrapper.text()).not.toContain('当前账户没有执行此操作的权限')
+      expect(wrapper.text()).toContain('管理导航暂时不可用')
+      expect(wrapper.find('table').exists()).toBe(false)
+      expect(f.request).toHaveBeenCalledTimes(before)
+      await f.session.loadContext()
+      await flushPromises()
+      expect(wrapper.text()).toContain('列表尚未加载')
+      expect(wrapper.find('table').exists()).toBe(false)
+      expect(f.request).toHaveBeenCalledTimes(before + 1)
+      f.replies.push(response)
+      await wrapper
+        .findAll('button')
+        .find((button) => button.text() === '加载列表')!
+        .trigger('click')
+      await flushPromises()
+      expect(wrapper.text()).not.toContain('列表尚未加载')
+      expect(wrapper.get('tbody').text()).toContain(text)
+      expect(wrapper.find('form').exists()).toBe(true)
+      expect(f.request).toHaveBeenCalledTimes(before + 2)
+      expect(f.session.state.value.status).toBe('authenticated')
+    } finally {
+      wrapper.unmount()
+      f.session.clear()
+    }
+  },
+)
