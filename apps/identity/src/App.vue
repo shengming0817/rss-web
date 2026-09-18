@@ -75,6 +75,18 @@ function activity(event: Event) {
         >{{ t('identity.providers') }}</RouterLink
       >
     </nav>
+    <p
+      v-if="
+        session.state.value.status === 'authenticated' &&
+        session.state.value.navigation === 'unavailable'
+      "
+      role="status"
+    >
+      {{ t('identity.navigationUnavailable') }}
+      <button @click="session.loadContext().catch(() => undefined)">
+        {{ t('identity.retryNavigation') }}
+      </button>
+    </p>
     <main id="identity-main" tabindex="-1">
       <RouterView :key="router.currentRoute.value.path" />
     </main>

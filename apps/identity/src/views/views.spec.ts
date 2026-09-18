@@ -482,3 +482,20 @@ it('clears both password drafts but retains the session after an incorrect curre
     f.session.clear()
   }
 })
+
+it('shows a manual navigation retry without hiding the accepted session', async () => {
+  const f = fixture()
+  f.contextReplies.push(decodeIdentityError(503, { code: 'identity_unavailable' }))
+  await f.login()
+  const { wrapper } = await view(App, f)
+  expect(wrapper.text()).toContain('管理导航暂时不可用')
+  expect(wrapper.findAll('nav a')).toHaveLength(1)
+  const retry = wrapper.findAll('button').find((button) => button.text() === '重试导航')
+  expect(retry).toBeDefined()
+  await retry!.trigger('click')
+  await flushPromises()
+  expect(wrapper.text()).not.toContain('管理导航暂时不可用')
+  expect(wrapper.findAll('nav a')).toHaveLength(3)
+  wrapper.unmount()
+  f.session.clear()
+})
