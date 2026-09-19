@@ -11,7 +11,7 @@ if [[ -n "$(/usr/bin/git -C "$root" status --porcelain)" ]]; then
   echo 'image requires clean HEAD' >&2
   exit 1
 fi
-/usr/bin/git -C "$root" archive "$revision" | docker buildx build --platform linux/amd64 --load --provenance=false \
+/usr/bin/git -C "$root" archive "$revision" | docker buildx build --load --provenance=false \
   -f deploy/identity/Dockerfile --tag "$2" --build-arg "RSS_IDENTITY_WEB_REVISION=$revision" -
 test "$(/usr/bin/git -C "$root" rev-parse HEAD)" = "$revision"
 test -z "$(/usr/bin/git -C "$root" status --porcelain)"
