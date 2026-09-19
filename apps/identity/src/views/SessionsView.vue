@@ -119,8 +119,11 @@ async function change() {
 async function logout(all: boolean) {
   const tenant = session.state.value.tenant
   flows.clear()
-  await run(() => session.logout(all))
-  await router.replace({ name: 'login', params: { tenant } })
+  await run(async () => {
+    await session.logout(all)
+    checkpoint()
+    await router.replace({ name: 'login', params: { tenant } })
+  })
 }
 async function reauthenticate() {
   const value = reauthPassword.value
@@ -196,8 +199,10 @@ onBeforeUnmount(() => {
     <p v-if="error" role="alert">{{ t(`identity.errors.${error}`) }}</p>
     <div class="identity-actions">
       <button :disabled="busy" @click="run(() => load())">{{ t('identity.reload') }}</button
-      ><button :disabled="busy" @click="logout(false)">{{ t('identity.logout') }}</button
-      ><button :disabled="busy" @click="logout(true)">{{ t('identity.logoutAll') }}</button>
+      ><button :disabled="busy || !owner" @click="logout(false)">{{ t('identity.logout') }}</button
+      ><button :disabled="busy || !owner" @click="logout(true)">
+        {{ t('identity.logoutAll') }}
+      </button>
     </div>
     <div class="identity-table">
       <table>
