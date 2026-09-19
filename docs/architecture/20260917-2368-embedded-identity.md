@@ -8,7 +8,7 @@ UI 挂载 `/`，租户登录入口 `/tenants/{tenant UUID}/login`。API 仅 `/ap
 
 登录、刷新、重认证、退出、全部撤销、账户管理、IdP 配置/关联和 step-up 复用既有页面与唯一会话控制器。本人改密的 `403 / reauthentication_failed` 表示当前密码错误：清除两份密码草稿、保留会话并等待显式重新提交；未知结果仍清除本地会话且不重放。密码保持表单局部，CSRF 只在控制器闭包，HttpOnly cookie 不被应用读取。OIDC 资格仅显示服务端 eligibleStepUpProviders；缺失 authTime 显示未知，不从浏览器推断 MFA。resume 使用五分钟 tenant/kind locator 后重读会话，浏览器不交换 code。
 
-构建：`pnpm install --frozen-lockfile`，`RSS_IDENTITY_WEB_REVISION=$(/usr/bin/git rev-parse HEAD) pnpm -F @rss/identity-app build`，`pnpm check:identity-app:build`。构建输出 apps/identity/dist 与 identity-build.json。前端拥有独立 Node/Nginx 多阶段镜像，执行 `pnpm image:identity --tag rss-identity-web:my-version`，默认 linux/amd64，镜像内以 UID/GID 10001:10001 运行。镜像构建调用同一 `pnpm build:identity` 入口进行类型、生产编译与静态边界检查，不需要后端 checkout。入口要求干净 HEAD，通过 git archive 固定源码，revision 从该提交派生，拒绝额外 revision 参数。
+构建：`pnpm install --frozen-lockfile`，`RSS_IDENTITY_WEB_REVISION=$(/usr/bin/git rev-parse HEAD) pnpm -F @rss/identity-app build`，`pnpm check:identity-app:build`。构建输出 apps/identity/dist 与 identity-build.json。前端拥有独立 Node/Nginx 多阶段镜像，执行 `pnpm image:identity --tag rss-identity-web:my-version`，使用当前 Docker/BuildKit 默认平台，基础镜像从固定的多架构索引摘要选择对应变体，镜像内以 UID/GID 10001:10001 运行。镜像构建调用同一 `pnpm build:identity` 入口进行类型、生产编译与静态边界检查，不需要后端 checkout。入口要求干净 HEAD，通过 git archive 固定源码，revision 从该提交派生，拒绝额外 revision 参数。
 
 部署时挂载 `/run/config/gateway.conf`、`/run/config/ui.json`、TLS 证书及私钥；配置与域名不进入静态镜像。#2436 的 renderer 用 `--identity-image` 和 `--web-image` 在目标 daemon 解析 immutable image ID 并写入 Compose，禁止隐式拉取。前后端 revision 独立，前端升级不要求重建后端或替换备份；不再生产或消费 candidate.json、OCI tar 或裸二进制候选包。
 
