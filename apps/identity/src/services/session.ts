@@ -31,6 +31,8 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
     host: null,
     navigation: 'idle',
   })
+  // Presentation only: never retains identity, credentials or permission.
+  const logoutOutcome = shallowRef<'idle' | 'pending' | 'unconfirmed'>('idle')
   let csrf: string | undefined
   let generation = 0
   type Control = { scope: string; page: number; promise: Promise<void> }
@@ -93,6 +95,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
   }
   function accept(tenant: string, v: SessionResponse, expected: number) {
     if (generation !== expected) throw new Error('Stale session')
+    logoutOutcome.value = 'idle'
     generation++
     csrf = v.csrfToken
     state.value = {
@@ -118,6 +121,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
     expiry = setTimeout(armExpiry, Math.min(remaining, 2_147_483_647))
   }
   function leavePage() {
+    logoutOutcome.value = 'idle'
     pageGeneration++
     securityRead = undefined
     state.value = { ...state.value, security: null }
@@ -292,6 +296,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
       if (context() !== scope || pageGeneration !== page) throw new Error('Operation abandoned')
       // Read only the current CSRF of the bound session, after any preceding same-session rotation.
       const saved = headers()
+      logoutOutcome.value = 'pending'
       clear()
       const expected = generation
       try {
@@ -302,9 +307,15 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
           headers: saved,
           successStatus: 204,
         })
-        if (generation === expected) clear()
+        if (generation === expected) {
+          clear()
+          logoutOutcome.value = 'idle'
+        }
       } catch (error) {
-        if (generation === expected) failure(error)
+        if (generation === expected) {
+          failure(error)
+          logoutOutcome.value = 'unconfirmed'
+        }
         throw error
       }
     }).finally(() => {
@@ -391,6 +402,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
   }
   return {
     state: readonly(state),
+    logoutOutcome: readonly(logoutOutcome),
     managementHint,
     providerHint,
     config: Object.freeze({ ...config }),

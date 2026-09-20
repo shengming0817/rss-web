@@ -66,19 +66,23 @@ async function load(cursor?: string) {
   rows.value = cursor ? [...rows.value, ...value.sessions] : value.sessions
   next.value = value.next
 }
+async function checkSession() {
+  const tenant = session.state.value.tenant
+  if (tenant) {
+    await session.check(tenant)
+    checkpoint()
+  }
+}
+async function reloadSessions() {
+  if (owner.value) await load()
+  else await checkSession()
+}
 onMounted(() => {
   document.addEventListener('visibilitychange', visible)
 })
 onBeforeUnmount(() => document.removeEventListener('visibilitychange', visible))
 function visible() {
-  if (document.visibilityState === 'visible' && !busy.value)
-    void run(async () => {
-      const tenant = session.state.value.tenant
-      if (tenant) {
-        await session.check(tenant)
-        checkpoint()
-      }
-    })
+  if (document.visibilityState === 'visible' && !busy.value) void run(checkSession)
 }
 watch(
   () => session.state.value.session,
@@ -119,8 +123,11 @@ async function change() {
 async function logout(all: boolean) {
   const tenant = session.state.value.tenant
   flows.clear()
-  await run(() => session.logout(all))
-  await router.replace({ name: 'login', params: { tenant } })
+  await run(async () => {
+    await session.logout(all)
+    checkpoint()
+    await router.replace({ name: 'login', params: { tenant } })
+  })
 }
 async function reauthenticate() {
   const value = reauthPassword.value
@@ -189,15 +196,26 @@ onBeforeUnmount(() => {
           {{ t('identity.stepUp') }} · {{ p.label }}
         </button>
       </template>
-      <button :disabled="busy" @click="run(() => session.loadSecurity())">
+      <button :disabled="busy || !owner" @click="run(() => session.loadSecurity())">
         {{ t('identity.reloadSecurity') }}
       </button>
     </section>
-    <p v-if="error" role="alert">{{ t(`identity.errors.${error}`) }}</p>
+    <p v-if="session.logoutOutcome.value === 'unconfirmed'" role="alert">
+      {{ t('identity.logoutUnconfirmed') }}
+    </p>
+    <p v-else-if="error" role="alert">{{ t(`identity.errors.${error}`) }}</p>
     <div class="identity-actions">
-      <button :disabled="busy" @click="run(() => load())">{{ t('identity.reload') }}</button
-      ><button :disabled="busy" @click="logout(false)">{{ t('identity.logout') }}</button
-      ><button :disabled="busy" @click="logout(true)">{{ t('identity.logoutAll') }}</button>
+      <button :disabled="busy" @click="run(reloadSessions)">{{ t('identity.reload') }}</button
+      ><button :disabled="busy || !owner" @click="logout(false)">{{ t('identity.logout') }}</button
+      ><button :disabled="busy || !owner" @click="logout(true)">
+        {{ t('identity.logoutAll') }}
+      </button>
+      <RouterLink
+        v-if="session.logoutOutcome.value === 'unconfirmed' && !owner"
+        :to="{ name: 'login', params: { tenant: session.state.value.tenant } }"
+      >
+        {{ t('identity.login') }}
+      </RouterLink>
     </div>
     <div class="identity-table">
       <table>

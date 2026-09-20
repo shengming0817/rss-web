@@ -11,8 +11,10 @@ const theme = useTheme()
 onMounted(() => window.addEventListener('pagehide', session.leavePage))
 onBeforeUnmount(() => window.removeEventListener('pagehide', session.leavePage))
 watch(
-  () => session.state.value.status,
-  (status) => {
+  () => [session.state.value.status, session.logoutOutcome.value] as const,
+  ([status, logoutOutcome]) => {
+    // The session page owns the pending/unknown departure message, not authority.
+    if (router.currentRoute.value.name === 'sessions' && logoutOutcome !== 'idle') return
     if (
       router.currentRoute.value.meta['protected'] &&
       status !== 'authenticated' &&

@@ -145,6 +145,99 @@ describe('Identity views use actual app session and decoder modules', () => {
       wrapper.unmount()
     }
   })
+  it('keeps failed logout visible without navigating or replaying the write', async () => {
+    for (const all of [false, true]) {
+      for (const failure of [
+        decodeIdentityError(503, { code: 'identity_unavailable' }),
+        new Error('gateway response unavailable'),
+      ]) {
+        const f = fixture()
+        await f.login()
+        f.replies.push({ sessions: [], nextCursor: null })
+        const { wrapper, router } = await view(SessionsView, f)
+        f.replies.push(failure)
+        const label = all ? '退出全部会话' : '退出当前会话'
+        await wrapper
+          .findAll('button')
+          .find((b) => b.text() === label)!
+          .trigger('click')
+        await flushPromises()
+        expect(router.currentRoute.value.name).toBe('sessions')
+        expect(wrapper.get('[role=alert]').text()).toMatch(/不能作为成功|尚未确认/)
+        expect(f.session.state.value.status).not.toBe('authenticated')
+        expect(
+          wrapper
+            .findAll('button')
+            .find((b) => b.text() === label)!
+            .attributes('disabled'),
+        ).toBeDefined()
+        const path = all ? '/sessions/logout-all' : '/session/logout'
+        expect(f.request.mock.calls.filter(([r]) => r.path.endsWith(path))).toHaveLength(1)
+        wrapper.unmount()
+      }
+    }
+  })
+  it('keeps the protected App route until logout is confirmed', async () => {
+    for (const all of [false, true]) {
+      for (const failure of [
+        undefined,
+        decodeIdentityError(503, { code: 'identity_unavailable' }),
+        new Error('gateway unavailable'),
+      ]) {
+        const f = fixture(false)
+        await f.login()
+        f.replies.push({ sessions: [], nextCursor: null })
+        const router = createRouter({
+          history: createMemoryHistory(),
+          routes: [
+            {
+              path: '/tenants/:tenant/sessions',
+              name: 'sessions',
+              component: SessionsView,
+              meta: { protected: true },
+            },
+            ...['login', 'accounts', 'providers'].map((name) => ({
+              path: `/tenants/:tenant/${name}`,
+              name,
+              component: { template: '<div />' },
+            })),
+            { path: '/auth/error', name: 'error', component: { template: '<div />' } },
+          ],
+        })
+        await router.push({ name: 'sessions', params: { tenant: TENANT } })
+        await router.isReady()
+        const wrapper = mount(App, {
+          global: {
+            plugins: [createPinia(), identityI18n(), router],
+            provide: { [runtimeKey as symbol]: f },
+          },
+        })
+        await flushPromises()
+        let settle!: () => void
+        f.replies.push(
+          () =>
+            new Promise((resolve, reject) => {
+              settle = () => (failure ? reject(failure) : resolve(undefined))
+            }),
+        )
+        const label = all ? '退出全部会话' : '退出当前会话'
+        await wrapper
+          .findAll('button')
+          .find((b) => b.text() === label)!
+          .trigger('click')
+        await flushPromises()
+        expect(router.currentRoute.value.name).toBe('sessions')
+        expect(f.session.state.value.status).not.toBe('authenticated')
+        settle()
+        await flushPromises()
+        expect(router.currentRoute.value.name).toBe(failure ? 'sessions' : 'login')
+        if (failure) expect(wrapper.get('[role=alert]').text()).toMatch(/不能作为成功|尚未确认/)
+        const path = all ? '/sessions/logout-all' : '/session/logout'
+        expect(f.request.mock.calls.filter(([r]) => r.path.endsWith(path))).toHaveLength(1)
+        wrapper.unmount()
+      }
+    }
+  })
   it('keeps ordinary members outside management UI', async () => {
     const f = fixture()
     await f.login(false)
