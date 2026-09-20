@@ -141,12 +141,71 @@ export function account(value: unknown): Account {
   }
 }
 
+export interface DepartmentSnapshotClaim {
+  claim: string
+  maxAgeSeconds: number
+}
+const reservedDepartmentClaims = new Set([
+  'iss',
+  'sub',
+  'sid',
+  'aud',
+  'exp',
+  'nbf',
+  'iat',
+  'jti',
+  'auth_time',
+  'nonce',
+  'acr',
+  'amr',
+  'azp',
+  'at_hash',
+  'c_hash',
+  's_hash',
+  'name',
+  'given_name',
+  'family_name',
+  'middle_name',
+  'nickname',
+  'preferred_username',
+  'profile',
+  'picture',
+  'website',
+  'email',
+  'email_verified',
+  'gender',
+  'birthdate',
+  'zoneinfo',
+  'locale',
+  'phone_number',
+  'phone_number_verified',
+  'address',
+  'updated_at',
+])
+function departmentSnapshotClaim(value: unknown): DepartmentSnapshotClaim | null {
+  if (value === null) return null
+  const v = object(value, ['claim', 'maxAgeSeconds'])
+  const claim = text(v['claim'], 64)
+  const maxAgeSeconds = number(v['maxAgeSeconds'])
+  if (
+    !/^[A-Za-z0-9_]+$/.test(claim) ||
+    reservedDepartmentClaims.has(claim) ||
+    maxAgeSeconds < 1 ||
+    maxAgeSeconds > 300
+  )
+    throw new Error('Invalid department snapshot configuration')
+  return { claim, maxAgeSeconds }
+}
 export interface ProviderSettings {
   issuer: string
   clientId: string
   redirectUri: string
   scopes: string[]
-  claims: { email: string | null; groups: string | null }
+  claims: {
+    email: string | null
+    groups: string | null
+    departmentSnapshot: DepartmentSnapshotClaim | null
+  }
   jit: boolean
 }
 export interface Provider {
@@ -159,16 +218,23 @@ export interface Provider {
 }
 export function settings(value: unknown): ProviderSettings {
   const v = object(value, ['issuer', 'clientId', 'redirectUri', 'scopes', 'claims', 'jit'])
-  const c = object(v['claims'], ['email', 'groups'])
+  const c = object(v['claims'], ['email', 'groups', 'departmentSnapshot'])
+  const claims = {
+    email: c['email'] === null ? null : text(c['email'], 128),
+    groups: c['groups'] === null ? null : text(c['groups'], 128),
+    departmentSnapshot: departmentSnapshotClaim(c['departmentSnapshot']),
+  }
+  if (
+    claims.departmentSnapshot &&
+    [claims.email, claims.groups].includes(claims.departmentSnapshot.claim)
+  )
+    throw new Error('Conflicting department snapshot claim')
   return {
     issuer: text(v['issuer']),
     clientId: text(v['clientId'], 256),
     redirectUri: text(v['redirectUri']),
     scopes: list(v['scopes'], (v) => text(v, 128), 16),
-    claims: {
-      email: c['email'] === null ? null : text(c['email'], 128),
-      groups: c['groups'] === null ? null : text(c['groups'], 128),
-    },
+    claims,
     jit: bool(v['jit']),
   }
 }

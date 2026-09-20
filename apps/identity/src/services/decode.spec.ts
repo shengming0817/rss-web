@@ -3,6 +3,58 @@ import * as d from './decode'
 import { accountValue, providerValue, sessionValue, ID } from '../../tests/support'
 import { testReport } from './api'
 describe('closed Identity wire projections', () => {
+  it('requires the complete new department snapshot configuration without legacy aliases', () => {
+    for (const departmentSnapshot of [
+      null,
+      { claim: 'organization_snapshot', maxAgeSeconds: 60 },
+    ]) {
+      const value = {
+        ...providerValue.settings,
+        claims: { email: 'email', groups: null, departmentSnapshot },
+      }
+      expect(d.settings(value)).toEqual(value)
+    }
+    for (const departmentSnapshot of [
+      undefined,
+      'organization_snapshot',
+      {},
+      { claim: 'organization_snapshot' },
+      { claim: 'organization_snapshot', maxAgeSeconds: 0 },
+      { claim: 'organization_snapshot', maxAgeSeconds: 301 },
+      { claim: 'organization_snapshot', maxAgeSeconds: 1.5 },
+      { claim: '', maxAgeSeconds: 60 },
+      { claim: 'email', maxAgeSeconds: 60 },
+      { claim: 'sid', maxAgeSeconds: 60 },
+      { claim: 'organization.snapshot', maxAgeSeconds: 60 },
+      { claim: 'organization_snapshot', max_age_seconds: 60 },
+      { claim: 'organization_snapshot', maxAgeSeconds: 60, extra: true },
+    ]) {
+      expect(() =>
+        d.settings({
+          ...providerValue.settings,
+          claims: { email: 'email', groups: null, departmentSnapshot },
+        }),
+      ).toThrow()
+    }
+    for (const claims of [
+      { email: 'email', groups: null },
+      { email: 'email', groups: null, department: null },
+      { email: 'email', groups: null, departmentSnapshot: null, department: null },
+    ]) {
+      expect(() => d.settings({ ...providerValue.settings, claims })).toThrow()
+    }
+  })
+  it('rejects department mappings that collide with other claims', () => {
+    for (const key of ['email', 'groups']) {
+      const claims = {
+        email: null,
+        groups: null,
+        departmentSnapshot: { claim: 'organization', maxAgeSeconds: 60 },
+        [key]: 'organization',
+      }
+      expect(() => d.settings({ ...providerValue.settings, claims })).toThrow()
+    }
+  })
   it('accepts only the embedded v2 identity without role fields', () => {
     const value = {
       session: { id: ID, authTime: 1, idleExpiresAt: 4102444800, absoluteExpiresAt: 4102444900 },
