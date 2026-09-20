@@ -36,6 +36,8 @@ const zh = {
   reload: '重新读取',
   logout: '退出当前会话',
   logoutAll: '退出全部会话',
+  logoutUnconfirmed:
+    '退出结果尚未确认。重新读取只检查当前会话，不证明全部会话已撤销。你也可以前往登录页。',
   more: '加载更多',
   changePassword: '修改密码',
   currentPassword: '当前密码',
@@ -146,6 +148,8 @@ const en = {
   reload: 'Reload',
   logout: 'Sign out',
   logoutAll: 'Sign out all sessions',
+  logoutUnconfirmed:
+    'The sign-out outcome is unconfirmed. Reload checks only the current session and does not confirm that all sessions were revoked. You can also go to sign in.',
   more: 'Load more',
   changePassword: 'Change password',
   currentPassword: 'Current password',
