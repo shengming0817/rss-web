@@ -23,6 +23,8 @@ describe('closed Identity wire projections', () => {
       { claim: 'organization_snapshot', maxAgeSeconds: 301 },
       { claim: 'organization_snapshot', maxAgeSeconds: 1.5 },
       { claim: '', maxAgeSeconds: 60 },
+      { claim: 'email', maxAgeSeconds: 60 },
+      { claim: 'sid', maxAgeSeconds: 60 },
       { claim: 'organization.snapshot', maxAgeSeconds: 60 },
       { claim: 'organization_snapshot', max_age_seconds: 60 },
       { claim: 'organization_snapshot', maxAgeSeconds: 60, extra: true },
@@ -39,6 +41,17 @@ describe('closed Identity wire projections', () => {
       { email: 'email', groups: null, department: null },
       { email: 'email', groups: null, departmentSnapshot: null, department: null },
     ]) {
+      expect(() => d.settings({ ...providerValue.settings, claims })).toThrow()
+    }
+  })
+  it('rejects department mappings that collide with other claims', () => {
+    for (const key of ['email', 'groups']) {
+      const claims = {
+        email: null,
+        groups: null,
+        departmentSnapshot: { claim: 'organization', maxAgeSeconds: 60 },
+        [key]: 'organization',
+      }
       expect(() => d.settings({ ...providerValue.settings, claims })).toThrow()
     }
   })
