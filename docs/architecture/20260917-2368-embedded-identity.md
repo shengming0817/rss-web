@@ -1,6 +1,8 @@
 # 产品宿主内认证 UI
 
-UI 挂载 `/`，租户登录入口 `/tenants/{tenant UUID}/login`。API 仅 `/api/v2`，唯一协议 callback `/api/v2/oidc/callback`；宿主 return target `resume` 必须指向同源 `/auth/resume`。API DTO 均为 camelCase。上游 issuer/clientId 是外部企业 IdP 配置，默认本地认证不需要 IdP。
+UI 挂载 `/`，租户登录入口 `/tenants/{tenant UUID}/login`。API 仅 `/api/v2`，唯一协议 callback `/api/v2/oidc/callback`；宿主 return target `resume` 必须指向同源 `/auth/resume`。API DTO 均为 camelCase。Provider claims 只接受 email/groups/departmentSnapshot；departmentSnapshot 为 null 或完整 claim/maxAgeSeconds（1–300 秒），拒绝旧 department 字段。编辑其它设置保留后端配置的部门快照映射，新 provider 明确提交 null；部门配置通过后端管理 API 维护，本 UI 不新增部门目录或授权页面。此契约对应 Identity #2451。
+
+上游 issuer/clientId 是外部企业 IdP 配置，默认本地认证不需要 IdP。
 
 网关固定路径 `/api/identity-host/v1/config.json` 提供严格静态 JSON：`{"canonicalOrigin":"https://identity.example.test","oidcEnabled":false}`。origin 必须与浏览器完全匹配，缺失、额外字段或畸形值均拒绝启动。此文件由部署输入生成，不由身份服务动态发现。本地模式不加载 providers、login-options 或 session/security。
 

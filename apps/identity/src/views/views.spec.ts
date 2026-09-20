@@ -304,9 +304,17 @@ describe('Identity views use actual app session and decoder modules', () => {
     wrapper.unmount()
   })
   it('edits, tests and enables IdPs through versioned writes', async () => {
+    const departmentSnapshot = { claim: 'organization_snapshot', maxAgeSeconds: 120 }
+    const configuredProvider = {
+      ...providerValue,
+      settings: {
+        ...providerValue.settings,
+        claims: { ...providerValue.settings.claims, departmentSnapshot },
+      },
+    }
     const f = fixture()
     await f.login()
-    f.replies.push({ providers: [providerValue] })
+    f.replies.push({ providers: [configuredProvider] })
     const { wrapper } = await view(ProvidersView, f, 'providers')
     await wrapper
       .findAll('button')
@@ -314,11 +322,14 @@ describe('Identity views use actual app session and decoder modules', () => {
       .trigger('click')
     await wrapper.get('#client-id').setValue('updated')
     f.replies.push(
-      { ...providerValue, version: 2 },
-      { providers: [{ ...providerValue, version: 2 }] },
+      { ...configuredProvider, version: 2 },
+      { providers: [{ ...configuredProvider, version: 2 }] },
     )
     await wrapper.get('form').trigger('submit')
     await flushPromises()
+    expect(f.request.mock.calls.findLast(([r]) => r.method === 'PUT')?.[0].body).toMatchObject({
+      settings: { clientId: 'updated', claims: { departmentSnapshot } },
+    })
     f.replies.push({
       passed: true,
       report: {
@@ -344,8 +355,8 @@ describe('Identity views use actual app session and decoder modules', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('invalid_trust_anchor')
     f.replies.push(
-      { ...providerValue, enabled: true, version: 3 },
-      { providers: [{ ...providerValue, enabled: true, version: 3 }] },
+      { ...configuredProvider, enabled: true, version: 3 },
+      { providers: [{ ...configuredProvider, enabled: true, version: 3 }] },
     )
     await wrapper
       .findAll('button')
@@ -355,9 +366,16 @@ describe('Identity views use actual app session and decoder modules', () => {
     await wrapper.get('#issuer').setValue('https://second.test')
     await wrapper.get('#client-id').setValue('second')
     await wrapper.get('#client-secret').setValue('second@1')
-    f.replies.push(providerValue, { providers: [providerValue] })
+    f.replies.push(configuredProvider, { providers: [configuredProvider] })
     await wrapper.get('form').trigger('submit')
     await flushPromises()
+    expect(
+      f.request.mock.calls.findLast(
+        ([r]) => r.method === 'POST' && r.path.endsWith('/providers'),
+      )?.[0].body,
+    ).toMatchObject({
+      settings: { clientId: 'second', claims: { departmentSnapshot: null } },
+    })
     wrapper.unmount()
   })
   it('clears pending continuation on safe error pages', async () => {

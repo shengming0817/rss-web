@@ -42,11 +42,17 @@ it('consumes v2 cookie/CSRF, host policy, account and provider operations throug
       clientId: 'reference',
       redirectUri: `${config.canonicalOrigin}/api/v2/oidc/callback`,
       scopes: ['openid'],
-      claims: { email: null, groups: null },
+      claims: {
+        email: null,
+        groups: null,
+        departmentSnapshot: { claim: 'organization_snapshot', maxAgeSeconds: 120 },
+      },
       jit: false,
     }
     let provider = await api.createProvider(settings, 'private provider secret', null)
+    expect(provider.settings.claims.departmentSnapshot).toEqual(settings.claims.departmentSnapshot)
     provider = await api.updateProvider(provider, settings, 'private rotated secret', null)
+    expect(provider.settings.claims.departmentSnapshot).toEqual(settings.claims.departmentSnapshot)
     expect((await api.testProvider(provider)).passed).toBe(true)
     provider = await api.enableProvider(provider, true)
     task.meta['step'] = 'step-up'

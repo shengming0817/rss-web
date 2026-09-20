@@ -63,15 +63,19 @@ onBeforeUnmount(() => {
   caPem.value = ''
 })
 async function save() {
+  const current = selected.value
   const settings: ProviderSettings = {
     issuer: issuer.value,
     clientId: client.value,
     redirectUri: `${session.config.canonicalOrigin}/api/v2/oidc/callback`,
     scopes: scopes.value.split(/\s+/).filter(Boolean),
-    claims: { email: email.value || null, groups: groups.value || null },
+    claims: {
+      email: email.value || null,
+      groups: groups.value || null,
+      departmentSnapshot: current ? current.settings.claims.departmentSnapshot : null,
+    },
     jit: jit.value,
   }
-  const current = selected.value
   const secret = clientSecret.value
   const ca = caPem.value || null
   clientSecret.value = ''

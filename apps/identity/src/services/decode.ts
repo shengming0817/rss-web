@@ -141,12 +141,29 @@ export function account(value: unknown): Account {
   }
 }
 
+export interface DepartmentSnapshotClaim {
+  claim: string
+  maxAgeSeconds: number
+}
+function departmentSnapshotClaim(value: unknown): DepartmentSnapshotClaim | null {
+  if (value === null) return null
+  const v = object(value, ['claim', 'maxAgeSeconds'])
+  const claim = text(v['claim'], 64)
+  const maxAgeSeconds = number(v['maxAgeSeconds'])
+  if (!/^[A-Za-z0-9_]+$/.test(claim) || maxAgeSeconds < 1 || maxAgeSeconds > 300)
+    throw new Error('Invalid department snapshot configuration')
+  return { claim, maxAgeSeconds }
+}
 export interface ProviderSettings {
   issuer: string
   clientId: string
   redirectUri: string
   scopes: string[]
-  claims: { email: string | null; groups: string | null }
+  claims: {
+    email: string | null
+    groups: string | null
+    departmentSnapshot: DepartmentSnapshotClaim | null
+  }
   jit: boolean
 }
 export interface Provider {
@@ -159,7 +176,7 @@ export interface Provider {
 }
 export function settings(value: unknown): ProviderSettings {
   const v = object(value, ['issuer', 'clientId', 'redirectUri', 'scopes', 'claims', 'jit'])
-  const c = object(v['claims'], ['email', 'groups'])
+  const c = object(v['claims'], ['email', 'groups', 'departmentSnapshot'])
   return {
     issuer: text(v['issuer']),
     clientId: text(v['clientId'], 256),
@@ -168,6 +185,7 @@ export function settings(value: unknown): ProviderSettings {
     claims: {
       email: c['email'] === null ? null : text(c['email'], 128),
       groups: c['groups'] === null ? null : text(c['groups'], 128),
+      departmentSnapshot: departmentSnapshotClaim(c['departmentSnapshot']),
     },
     jit: bool(v['jit']),
   }
