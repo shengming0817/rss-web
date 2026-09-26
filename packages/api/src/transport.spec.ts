@@ -1,10 +1,8 @@
 import axios from 'axios'
 import AxiosMockAdapter from 'axios-mock-adapter'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createHttpTransport } from './transport'
+import { createIdentityTransport } from './identity'
 import { isRssApiError } from './wire-error'
-import { auditEndpoints } from './endpoints/audit'
-import { runtimeEndpoints } from './endpoints/runtime'
 
 const decodeObject = (value: unknown): { ok: boolean } => {
   if (typeof value !== 'object' || value === null || (value as { ok?: unknown }).ok !== true) {
@@ -14,53 +12,42 @@ const decodeObject = (value: unknown): { ok: boolean } => {
 }
 
 function setup() {
-  const instance = axios.create({ baseURL: '/edge' })
+  const instance = axios.create({ baseURL: '' })
   const mock = new AxiosMockAdapter(instance)
   const create = vi.spyOn(axios, 'create').mockReturnValueOnce(instance)
-  const transport = createHttpTransport({ baseURL: '/edge', defaultTimeoutMs: 5_000 })
+  const transport = createIdentityTransport()
   create.mockRestore()
-  return { mock, transport }
+  return {
+    mock,
+    transport: {
+      request: ((options: Parameters<typeof transport.request>[0]) =>
+        transport.request({
+          ...options,
+          pathParams: { tenant: 'test', ...options.pathParams },
+        } as never)) as typeof transport.request,
+    },
+  }
 }
 
 afterEach(() => vi.restoreAllMocks())
 
-describe('createHttpTransport', () => {
-  it('accepts only the declared creation statuses and passes the actual status without replay', async () => {
-    for (const status of [200, 201, 202, 203]) {
-      const { mock, transport } = setup()
-      mock.onPost('/api/v1/platform/tenants').reply(status, { active: status === 201 })
-      const decode = vi.fn((value: unknown, actual?: number) => ({ value, actual }))
-      const result = transport.request({
-        method: 'POST',
-        path: '/api/v1/platform/tenants',
-        successStatus: [201, 202],
-        decode,
-      })
-      if (status === 201 || status === 202) {
-        await expect(result).resolves.toEqual({ value: { active: status === 201 }, actual: status })
-      } else {
-        await expect(result).rejects.toMatchObject({ cause: 'protocol' })
-        expect(decode).not.toHaveBeenCalled()
-      }
-      expect(mock.history.post).toHaveLength(1)
-    }
-  })
+describe('Identity HTTP execution', () => {
   it('encodes path parameters and preserves meaningful query values', async () => {
     const { mock, transport } = setup()
-    mock.onGet('/api/v1/settings/configs/a%2Fb').reply((config) => {
-      expect(config.baseURL).toBe('/edge')
+    mock.onGet('/api/v2/tenants/test/accounts/a%2Fb').reply((config) => {
+      expect(config.baseURL).toBe('')
       expect(config.params).toEqual({ cursor: '', limit: 0, enabled: false })
-      expect(config.headers?.['X-Request']).toBe('fixture')
+      expect(config.headers?.['X-Identity-Request']).toBe('fixture')
       return [200, { ok: true }]
     })
 
     await expect(
       transport.request({
         method: 'GET',
-        path: '/api/v1/settings/configs/{key}',
+        path: '/api/v2/tenants/{tenant}/accounts/{key}',
         pathParams: { key: 'a/b' },
         query: { cursor: '', limit: 0, enabled: false, omitted: undefined },
-        headers: { 'X-Request': 'fixture' },
+        headers: { 'X-Identity-Request': 'fixture' },
         successStatus: 200,
         decode: decodeObject,
       }),
@@ -69,7 +56,7 @@ describe('createHttpTransport', () => {
 
   it('passes a JSON body and accepts an exact 201', async () => {
     const { mock, transport } = setup()
-    mock.onPost('/api/v1/identity/login').reply((config) => {
+    mock.onPost('/api/v2/tenants/test/login').reply((config) => {
       expect(config.data).toBe(JSON.stringify({ username: 'alice', password: 'secret' }))
       expect(config.timeout).toBe(250)
       return [201, { ok: true }]
@@ -78,7 +65,7 @@ describe('createHttpTransport', () => {
     await expect(
       transport.request({
         method: 'POST',
-        path: '/api/v1/identity/login',
+        path: '/api/v2/tenants/{tenant}/login',
         body: { username: 'alice', password: 'secret' },
         timeoutMs: 250,
         successStatus: 201,
@@ -89,7 +76,7 @@ describe('createHttpTransport', () => {
 
   it('owns the closed no-store request cache directive', async () => {
     const { mock, transport } = setup()
-    mock.onGet('/api/v1/settings/secrets/vault.db/material').reply((config) => {
+    mock.onGet('/api/v2/tenants/test/sessions/vault.db').reply((config) => {
       expect(config.headers?.['Cache-Control']).toBe('no-store')
       expect(config.headers?.Pragma).toBeUndefined()
       return [200, { ok: true }]
@@ -98,27 +85,12 @@ describe('createHttpTransport', () => {
     await expect(
       transport.request({
         method: 'GET',
-        path: '/api/v1/settings/secrets/{key}/material',
+        path: '/api/v2/tenants/{tenant}/sessions/{key}',
         pathParams: { key: 'vault.db' },
-        cache: 'no-store',
         successStatus: 200,
         decode: decodeObject,
       }),
     ).resolves.toEqual({ ok: true })
-  })
-
-  it('rejects a forged cache directive before sending', async () => {
-    const { mock, transport } = setup()
-    await expect(
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/settings/secrets/key/material',
-        cache: 'reload',
-        successStatus: 200,
-        decode: decodeObject,
-      } as never),
-    ).rejects.toMatchObject({ cause: 'client', code: 'INVALID_REQUEST' })
-    expect(mock.history.get).toHaveLength(0)
   })
 
   it.each(['Authorization', 'authorization', 'X-Tenant-ID', 'x-tenant-id'])(
@@ -128,7 +100,7 @@ describe('createHttpTransport', () => {
       await expect(
         transport.request({
           method: 'GET',
-          path: '/api/v1/identity/profile',
+          path: '/api/v2/tenants/{tenant}/session',
           headers: { [header]: 'forged' },
           successStatus: 200,
           decode: decodeObject,
@@ -145,7 +117,7 @@ describe('createHttpTransport', () => {
       await expect(
         transport.request({
           method: 'GET',
-          path: '/api/v1/settings/secrets/key/material',
+          path: '/api/v2/tenants/{tenant}/sessions/key',
           headers: { [header]: 'no-store' },
           successStatus: 200,
           decode: decodeObject,
@@ -155,42 +127,13 @@ describe('createHttpTransport', () => {
     },
   )
 
-  it('rejects a protected request that bypasses the session transport', async () => {
-    const { mock, transport } = setup()
-    await expect(
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/identity/profile',
-        session: 'required',
-        successStatus: 200,
-        decode: decodeObject,
-      }),
-    ).rejects.toMatchObject({ cause: 'client' })
-    expect(mock.history.get).toHaveLength(0)
-  })
-
-  it('rejects a protected no-replay request that bypasses the session transport', async () => {
-    const { mock, transport } = setup()
-    await expect(
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/audit/tenants/{tenantId}/entries',
-        pathParams: { tenantId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479' },
-        session: 'required-no-replay',
-        successStatus: 200,
-        decode: decodeObject,
-      }),
-    ).rejects.toMatchObject({ cause: 'client' })
-    expect(mock.history.get).toHaveLength(0)
-  })
-
   it('returns void for 204 without touching an unexpected body', async () => {
     const { mock, transport } = setup()
-    mock.onDelete('/api/v1/settings/configs/key').reply(204, '<not-json>')
+    mock.onDelete('/api/v2/tenants/test/accounts/key').reply(204, '<not-json>')
     await expect(
       transport.request({
         method: 'DELETE',
-        path: '/api/v1/settings/configs/{key}',
+        path: '/api/v2/tenants/{tenant}/accounts/{key}',
         pathParams: { key: 'key' },
         successStatus: 204,
       }),
@@ -198,11 +141,11 @@ describe('createHttpTransport', () => {
   })
 
   it.each([
-    'https://evil.example/api/v1/x',
-    '//evil.example/api/v1/x',
+    'https://evil.example/api/v2/tenants/{tenant}/x',
+    '//evil.example/api/v2/tenants/{tenant}/x',
     '/healthz',
-    '/api/v1/x?raw=true',
-    '/api/v1/x#fragment',
+    '/api/v2/tenants/{tenant}/x?raw=true',
+    '/api/v2/tenants/{tenant}/x#fragment',
     '/api/../internal/x',
     '/api/%2e%2e/internal/x',
     '/api/%2Finternal/x',
@@ -214,26 +157,12 @@ describe('createHttpTransport', () => {
     expect(mock.history.get).toHaveLength(0)
   })
 
-  it.each([
-    'https://evil.example',
-    '//evil.example',
-    'edge',
-    '/edge?raw=true',
-    '/edge#fragment',
-    '/edge/../internal',
-    '/edge/%2e%2e/internal',
-  ])('rejects unsafe base URL %s', (baseURL) => {
-    expect(() => createHttpTransport({ baseURL, defaultTimeoutMs: 5_000 })).toThrowError(
-      expect.objectContaining({ cause: 'client' }),
-    )
-  })
-
   it('rejects unresolved or extra path parameters', async () => {
     const { transport } = setup()
     await expect(
       transport.request({
         method: 'GET',
-        path: '/api/v1/items/{id}',
+        path: '/api/v2/tenants/{tenant}/items/{id}',
         successStatus: 200,
         decode: decodeObject,
       }),
@@ -242,7 +171,7 @@ describe('createHttpTransport', () => {
       await expect(
         transport.request({
           method: 'GET',
-          path: '/api/v1/items/{id}',
+          path: '/api/v2/tenants/{tenant}/items/{id}',
           pathParams: { id },
           successStatus: 200,
           decode: decodeObject,
@@ -252,7 +181,7 @@ describe('createHttpTransport', () => {
     await expect(
       transport.request({
         method: 'GET',
-        path: '/api/v1/items',
+        path: '/api/v2/tenants/{tenant}/items',
         pathParams: { id: 'unused' },
         successStatus: 200,
         decode: decodeObject,
@@ -262,21 +191,21 @@ describe('createHttpTransport', () => {
 
   it('treats an unexpected success status and malformed success body as protocol errors', async () => {
     const { mock, transport } = setup()
-    mock.onGet('/api/v1/queued').reply(202, { ok: true })
+    mock.onGet('/api/v2/tenants/test/queued').reply(202, { ok: true })
     await expect(
       transport.request({
         method: 'GET',
-        path: '/api/v1/queued',
+        path: '/api/v2/tenants/{tenant}/queued',
         successStatus: 200,
         decode: decodeObject,
       }),
     ).rejects.toMatchObject({ cause: 'protocol', status: 202 })
 
-    mock.onGet('/api/v1/malformed').reply(200, { ok: false, secret: 'must-not-leak' })
+    mock.onGet('/api/v2/tenants/test/malformed').reply(200, { ok: false, secret: 'must-not-leak' })
     await expect(
       transport.request({
         method: 'GET',
-        path: '/api/v1/malformed',
+        path: '/api/v2/tenants/{tenant}/malformed',
         successStatus: 200,
         decode: decodeObject,
       }),
@@ -290,34 +219,34 @@ describe('createHttpTransport', () => {
     await expect(
       transport.request({
         method: 'GET',
-        path: '/api/v1/abort',
+        path: '/api/v2/tenants/{tenant}/abort',
         signal: controller.signal,
         successStatus: 200,
         decode: decodeObject,
       }),
-    ).rejects.toMatchObject({ cause: 'aborted', retryable: false })
+    ).rejects.toMatchObject({ cause: 'aborted' })
 
-    mock.onGet('/api/v1/timeout').timeout()
+    mock.onGet('/api/v2/tenants/test/timeout').timeout()
     await expect(
       transport.request({
         method: 'GET',
-        path: '/api/v1/timeout',
+        path: '/api/v2/tenants/{tenant}/timeout',
         successStatus: 200,
         decode: decodeObject,
       }),
-    ).rejects.toMatchObject({ cause: 'timeout', retryable: false })
+    ).rejects.toMatchObject({ cause: 'timeout' })
 
-    mock.onGet('/api/v1/network').networkError()
+    mock.onGet('/api/v2/tenants/test/network').networkError()
     const caught = await transport
       .request({
         method: 'GET',
-        path: '/api/v1/network',
+        path: '/api/v2/tenants/{tenant}/network',
         successStatus: 200,
         decode: decodeObject,
       })
       .catch((error: unknown) => error)
     expect(isRssApiError(caught)).toBe(true)
-    expect(caught).toMatchObject({ cause: 'network', retryable: false })
+    expect(caught).toMatchObject({ cause: 'network' })
     expect(caught).not.toHaveProperty('response')
     expect(caught).not.toHaveProperty('config')
     expect(caught).not.toHaveProperty('request')
@@ -326,50 +255,17 @@ describe('createHttpTransport', () => {
   it('maps an in-flight cancellation to aborted', async () => {
     const { mock, transport } = setup()
     mock
-      .onGet('/api/v1/slow')
+      .onGet('/api/v2/tenants/test/slow')
       .reply(() => new Promise((resolve) => setTimeout(() => resolve([200, { ok: true }]), 25)))
     const controller = new AbortController()
     const pending = transport.request({
       method: 'GET',
-      path: '/api/v1/slow',
+      path: '/api/v2/tenants/{tenant}/slow',
       signal: controller.signal,
       successStatus: 200,
       decode: decodeObject,
     })
     controller.abort()
-    await expect(pending).rejects.toMatchObject({ cause: 'aborted', retryable: false })
-  })
-
-  it('enforces endpoint-declared error status, code, retryability and detail posture', async () => {
-    const envelope = (
-      code: string,
-      message: string,
-      retryable: boolean,
-      details: unknown[] = [],
-    ) => ({
-      error: { code, message, retryable, details, requestId: 'policy-fixture' },
-    })
-    const { mock, transport } = setup()
-    mock
-      .onGet('/api/v1/runtime/inventory')
-      .replyOnce(503, envelope('ERR_CORE_PROVIDER_UNAVAILABLE', 'provider unavailable', true))
-      .onGet('/api/v1/runtime/inventory')
-      .replyOnce(
-        503,
-        envelope('ERR_CORE_PROVIDER_UNAVAILABLE', 'provider unavailable', true, [{ leaked: true }]),
-      )
-    mock
-      .onGet('/api/v1/audit/entries')
-      .replyOnce(503, envelope('ERR_CORE_PROVIDER_UNAVAILABLE', 'provider unavailable', true))
-
-    await expect(
-      transport.request({ ...runtimeEndpoints.inventory, decode: decodeObject }),
-    ).rejects.toMatchObject({ cause: 'wire', code: 'ERR_CORE_PROVIDER_UNAVAILABLE' })
-    await expect(
-      transport.request({ ...runtimeEndpoints.inventory, decode: decodeObject }),
-    ).rejects.toMatchObject({ cause: 'protocol', status: 503 })
-    await expect(
-      transport.request({ ...auditEndpoints.listEntries, decode: decodeObject }),
-    ).rejects.toMatchObject({ cause: 'protocol', status: 503 })
+    await expect(pending).rejects.toMatchObject({ cause: 'aborted' })
   })
 })

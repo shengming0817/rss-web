@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os'
 import { rootCertificates } from 'node:tls'
 import { resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { executeBounded } from './e2e/identity/process.mjs'
 const directories: string[] = []
 afterEach(() => {
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
@@ -21,8 +22,7 @@ function output() {
   directories.push(directory)
   return resolve(realpathSync(directory), 'record.json')
 }
-it('writes a failure receipt even when joint preflight cannot select a backend', () => {
-  const path = output()
+it('fails preflight when no backend is selected without leaking raw exceptions', () => {
   const result = spawnSync(
     process.execPath,
     [resolve(import.meta.dirname, 'e2e/identity/run.mjs')],
@@ -30,21 +30,18 @@ it('writes a failure receipt even when joint preflight cannot select a backend',
       cwd: import.meta.dirname,
       encoding: 'utf8',
       timeout: 10000,
-      env: { ...process.env, IDENTITY_BACKEND_FIXTURE: '', IDENTITY_JOINT_RECORD: path },
+      env: { ...process.env, IDENTITY_BACKEND_FIXTURE: '' },
     },
   )
   expect(result.status).toBe(1)
-  const record = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>
-  expect(record['result']).toBe('failed')
-  expect(record['failure']).toEqual({ phase: 'preflight', classification: 'environment' })
-  expect(record['cleanup']).toEqual({ status: 'not_started', recovery_targets: [] })
+  expect(result.stderr).toContain('preflight/environment')
   expect(result.stderr).not.toContain('Error:')
 })
 it('classifies missing transport CA as an environment failure without emitting a raw exception', () => {
   const path = output()
   const env = {
     ...process.env,
-    IDENTITY_UI_DIAGNOSTIC: path,
+    IDENTITY_UI_BROWSER_RECORD: path,
     IDENTITY_TEST_UI_ORIGIN: 'https://localhost:1234',
   }
   delete env['NODE_EXTRA_CA_CERTS']
@@ -66,7 +63,7 @@ it('classifies missing transport CA as an environment failure without emitting a
   expect(result.stderr).toBe('')
 })
 
-it.each(['spawn', 'exit', 'malformed', 'assertion', 'timeout'] as const)(
+it.each(['spawn', 'exit', 'malformed', 'assertion', 'timeout', 'passed'] as const)(
   'classifies backend %s using execution facts and validated fixture evidence',
   (mode) => {
     const path = output()
@@ -77,14 +74,14 @@ it.each(['spawn', 'exit', 'malformed', 'assertion', 'timeout'] as const)(
       readFileSync(resolve(import.meta.dirname, 'e2e/identity/diagnostic.mjs')),
     )
     mkdirSync(resolve(root, 'apps/identity/dist'), { recursive: true })
-    writeFileSync(resolve(root, 'pnpm-lock.yaml'), 'lock')
-    writeFileSync(resolve(root, 'Cargo.lock'), 'lock')
-    writeFileSync(resolve(root, 'e2e/identity/real.mjs'), '')
-    writeFileSync(resolve(root, '.gitignore'), 'record.json\n')
     const stub = `import { writeFileSync } from 'node:fs';
 export async function executeBounded(command, args, options) {
   if (command !== 'make') return { status: 0 };
   const mode = ${JSON.stringify(mode)};
+  if (mode === 'passed') {
+    writeFileSync(options.env.IDENTITY_UI_FIXTURE_RECORD, JSON.stringify({format_version: 1, result: 'passed', cleanup: { status: 'passed', recovery_targets: [] }}));
+    return {status: 0};
+  }
   if (mode === 'spawn') throw new Error('private spawn failure');
   if (mode === 'malformed') writeFileSync(options.env.IDENTITY_UI_FIXTURE_RECORD, '{');
   if (mode === 'assertion' || mode === 'timeout') writeFileSync(options.env.IDENTITY_UI_FIXTURE_RECORD, JSON.stringify({
@@ -98,46 +95,35 @@ export async function executeBounded(command, args, options) {
     writeFileSync(
       resolve(root, 'e2e/identity/run.mjs'),
       readFileSync(resolve(import.meta.dirname, 'e2e/identity/run.mjs'), 'utf8').replace(
-        "'../real/process.mjs'",
+        "'./process.mjs'",
         "'../../process.mjs'",
       ),
     )
-    for (const args of [
-      ['init', '-q'],
-      ['add', '.'],
-      ['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'fixture'],
-    ]) {
-      expect(spawnSync('/usr/bin/git', args, { cwd: root }).status).toBe(0)
-    }
     const result = spawnSync(process.execPath, [resolve(root, 'e2e/identity/run.mjs')], {
       cwd: root,
       encoding: 'utf8',
       timeout: 10000,
-      env: { ...process.env, IDENTITY_BACKEND_FIXTURE: root, IDENTITY_JOINT_RECORD: path },
+      env: { ...process.env, IDENTITY_BACKEND_FIXTURE: root },
     })
+    if (mode === 'passed') {
+      expect(result.status).toBe(0)
+      expect(result.stdout).toContain('Identity integration passed')
+      return
+    }
     expect(result.status).toBe(1)
-    const record = JSON.parse(readFileSync(path, 'utf8'))
-    if (record.cleanup.recovery_directory) directories.push(record.cleanup.recovery_directory)
-    expect(record.failure).toMatchObject({
-      phase: mode === 'assertion' ? 'browser' : 'backend',
-      classification:
-        mode === 'assertion' ? 'assertion' : mode === 'timeout' ? 'timeout' : 'environment',
-    })
-    if (mode === 'assertion')
-      expect(record.failure.diagnostic).toEqual({
-        test: 'identity-transport',
-        step: 'step-up',
-        file: 'e2e/identity/transport.spec.ts',
-        line: 6,
-      })
-    expect(JSON.stringify(record)).not.toContain('private')
-    if (mode !== 'malformed')
-      expect(record.failure.execution).toBe(
-        mode === 'spawn' ? 'spawn' : mode === 'timeout' ? 'timeout' : 'exit',
-      )
-    expect(record.cleanup.status).toBe(
-      ['assertion', 'timeout'].includes(mode) ? 'passed' : 'unknown',
+    const recovery = result.stderr.match(/Recovery directory: (.+)/)?.[1]
+    if (recovery) directories.push(recovery)
+    expect(result.stderr).toContain(
+      mode === 'assertion'
+        ? 'browser/assertion'
+        : mode === 'timeout'
+          ? 'backend/timeout'
+          : 'backend/environment',
     )
+    expect(result.stderr).toContain(
+      'Cleanup: ' + (['assertion', 'timeout'].includes(mode) ? 'passed' : 'unknown'),
+    )
+    expect(result.stdout + result.stderr).not.toContain('private')
     expect(result.stdout + result.stderr).not.toContain('private spawn failure')
   },
 )
@@ -162,7 +148,7 @@ it('forwards interruption to the owned transport child before publishing failure
   writeFileSync(
     resolve(root, 'e2e/identity/real.mjs'),
     readFileSync(resolve(import.meta.dirname, 'e2e/identity/real.mjs'), 'utf8').replace(
-      "'../real/process.mjs'",
+      "'./process.mjs'",
       "'../../process.mjs'",
     ),
   )
@@ -172,7 +158,7 @@ it('forwards interruption to the owned transport child before publishing failure
     timeout: 10000,
     env: {
       ...process.env,
-      IDENTITY_UI_DIAGNOSTIC: path,
+      IDENTITY_UI_BROWSER_RECORD: path,
       IDENTITY_TEST_UI_ORIGIN: 'https://localhost:1234',
       NODE_EXTRA_CA_CERTS: resolve(root, 'ca.pem'),
     },
@@ -230,7 +216,7 @@ export async function executeBounded() {
     writeFileSync(
       resolve(root, 'e2e/identity/real.mjs'),
       readFileSync(resolve(import.meta.dirname, 'e2e/identity/real.mjs'), 'utf8').replace(
-        "'../real/process.mjs'",
+        "'./process.mjs'",
         "'../../process.mjs'",
       ),
     )
@@ -243,7 +229,7 @@ export async function executeBounded() {
       timeout: 10000,
       env: {
         ...process.env,
-        IDENTITY_UI_DIAGNOSTIC: path,
+        IDENTITY_UI_BROWSER_RECORD: path,
         IDENTITY_TEST_UI_ORIGIN: 'https://localhost:1234',
         NODE_EXTRA_CA_CERTS: resolve(root, 'ca.pem'),
       },
@@ -276,8 +262,7 @@ it.each(['startup', 'assertion', 'passed'] as const)(
     const path = output()
     const root = resolve(path, '..')
     mkdirSync(resolve(root, 'e2e/identity'), { recursive: true })
-    mkdirSync(resolve(root, 'e2e/real'), { recursive: true })
-    for (const file of ['identity/real.mjs', 'identity/diagnostic.mjs', 'real/process.mjs']) {
+    for (const file of ['identity/real.mjs', 'identity/diagnostic.mjs', 'identity/process.mjs']) {
       writeFileSync(
         resolve(root, 'e2e', file),
         readFileSync(resolve(import.meta.dirname, 'e2e', file)),
@@ -332,7 +317,7 @@ it('private title', ({ task }) => {
       timeout: 15000,
       env: {
         ...process.env,
-        IDENTITY_UI_DIAGNOSTIC: path,
+        IDENTITY_UI_BROWSER_RECORD: path,
         IDENTITY_TEST_UI_ORIGIN: 'https://localhost:1234',
         NODE_EXTRA_CA_CERTS: resolve(root, 'ca.pem'),
       },
@@ -352,3 +337,12 @@ it('private title', ({ task }) => {
     expect(JSON.stringify(record) + result.stdout + result.stderr).not.toContain('private')
   },
 )
+
+it('terminates a process tree that ignores SIGTERM within its timeout budget', async () => {
+  const result = await executeBounded(
+    process.execPath,
+    [resolve(import.meta.dirname, 'e2e/identity/ignore-term.mjs')],
+    { timeoutMs: 100, graceMs: 100, stdio: ['ignore', 'pipe', 'pipe'] },
+  )
+  expect(result).toMatchObject({ signal: 'SIGKILL', timedOut: true })
+})

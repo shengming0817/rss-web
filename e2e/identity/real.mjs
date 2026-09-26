@@ -5,7 +5,7 @@ import { transportDiagnostic } from './diagnostic.mjs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import process from 'node:process'
-import { executeBounded } from '../real/process.mjs'
+import { executeBounded } from './process.mjs'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 let failure = 'environment'
 let diagnostic
@@ -103,7 +103,6 @@ const record = {
   failure,
   ...(diagnostic ? { diagnostic } : {}),
 }
-for (const path of [process.env.IDENTITY_UI_DIAGNOSTIC, process.env.IDENTITY_UI_BROWSER_RECORD]) {
-  if (path) writeFileSync(path, JSON.stringify(record), { mode: 0o600 })
-}
+if (process.env.IDENTITY_UI_BROWSER_RECORD)
+  writeFileSync(process.env.IDENTITY_UI_BROWSER_RECORD, JSON.stringify(record), { mode: 0o600 })
 if (failure) process.exitCode = 1

@@ -1,22 +1,9 @@
-/** Identity browser transport. A separate endpoint set over the single network executor. */
+/** Identity browser transport. The only endpoint set over the network executor. */
 import axios from 'axios'
 import { execute } from './transport'
 import { clientError, identityWireFailure, protocolError } from './wire-error'
-import type {
-  HttpTransport,
-  NoContentRequest,
-  RequestOptions,
-  ResponseRequestOptions,
-  RssApiError,
-} from './types'
-export type {
-  HttpTransport,
-  RssApiError,
-  RequestOptions,
-  ResponseRequestOptions,
-  CreationSuccessStatuses,
-  NoContentRequest,
-} from './types'
+import type { HttpTransport, NoContentRequest, RequestOptions, RssApiError } from './types'
+export type { HttpTransport, RssApiError, RequestOptions, NoContentRequest } from './types'
 export { isRssApiError } from './wire-error'
 const statuses: Readonly<Record<string, number>> = {
   malformed_request: 400,
@@ -42,33 +29,22 @@ export function decodeIdentityError(status: number, value: unknown): RssApiError
     statuses[v['code']] !== status
   )
     return protocolError(status)
-  return identityWireFailure(status, v['code'], undefined)
+  return identityWireFailure(status, v['code'])
 }
 export function createIdentityTransport(): HttpTransport {
   const instance = axios.create({ baseURL: '' })
   return {
-    async request(
-      options: NoContentRequest | RequestOptions<unknown> | ResponseRequestOptions<unknown>,
-    ) {
+    async request(options: NoContentRequest | RequestOptions<unknown>) {
       const read =
         options.method === 'GET' &&
         (options.path === '/api/identity-host/v1/config.json' ||
           options.path === '/api/identity-host/v1/tenants/{tenant}/context')
-      if (
-        (!read && !options.path.startsWith('/api/v2/tenants/{tenant}/')) ||
-        options.session !== undefined ||
-        options.errorPolicy !== undefined
-      )
-        throw clientError()
+      if (!read && !options.path.startsWith('/api/v2/tenants/{tenant}/')) throw clientError()
       const headers = Object.keys(options.headers ?? {}).map((v) => v.toLowerCase())
       if (headers.some((v) => !['x-identity-request', 'x-csrf-token'].includes(v)))
         throw clientError()
-      return execute(
-        instance,
-        30_000,
-        { ...options, cache: 'no-store' },
-        (status, value) => decodeIdentityError(status, value),
-        {},
+      return execute(instance, 30_000, options, (status, value) =>
+        decodeIdentityError(status, value),
       )
     },
   } as HttpTransport

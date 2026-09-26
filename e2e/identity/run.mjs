@@ -1,21 +1,10 @@
-// Consumer-owned adapter acceptance. The backend supplies only a disposable test fixture.
-import { createHash } from 'node:crypto'
-import {
-  readFileSync,
-  readdirSync,
-  lstatSync,
-  writeFileSync,
-  renameSync,
-  mkdtempSync,
-  rmSync,
-  existsSync,
-} from 'node:fs'
+// Current-worktree HTTP integration with a disposable backend fixture.
+import { readFileSync, mkdtempSync, rmSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { transportDiagnostic } from './diagnostic.mjs'
-import { executeBounded } from '../real/process.mjs'
-import { dirname, resolve, relative } from 'node:path'
+import { executeBounded } from './process.mjs'
+import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { spawnSync } from 'node:child_process'
 import process from 'node:process'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const backend = process.env.IDENTITY_BACKEND_FIXTURE
@@ -32,13 +21,6 @@ const interrupt = () => {
 process.on('SIGINT', interrupt)
 process.on('SIGTERM', interrupt)
 const record = {
-  format_version: 1,
-  frontend: null,
-  backend: null,
-  artifact_sha256: null,
-  runner_sha256: null,
-  scope: 'Identity HTTP/UI adapter T2',
-  node: process.version,
   result: 'failed',
   failure: null,
   cleanup: { status: 'not_started', recovery_targets: [] },
@@ -60,6 +42,7 @@ async function run(command, args, cwd, env = process.env, fixture = false) {
     stdio: fixture ? ['ignore', 'pipe', 'pipe'] : ['ignore', 'inherit', 'inherit'],
     onChild: (_child, terminate) => {
       active = terminate
+      if (interrupted) terminate()
     },
     onRelease: () => {
       active = undefined
@@ -87,61 +70,12 @@ function fixtureState() {
     throw new Error('fixture record')
   return value
 }
-function publish() {
-  const evidence = JSON.stringify(record, null, 2)
-  if (process.env.IDENTITY_JOINT_RECORD) {
-    const path = resolve(process.env.IDENTITY_JOINT_RECORD)
-    const temporary = path + '.' + process.pid + '.tmp'
-    writeFileSync(temporary, evidence, { mode: 0o600 })
-    renameSync(temporary, path)
-  }
-  console.log(evidence)
-}
-function git(cwd, args) {
-  const result = spawnSync('/usr/bin/git', args, { cwd, encoding: 'utf8', timeout: 10_000 })
-  if (result.status !== 0) throw new Error('Source identity unavailable')
-  return result.stdout.trim()
-}
-function source(cwd, lock) {
-  return {
-    revision: git(cwd, ['rev-parse', 'HEAD']),
-    lock_sha256: digest(readFileSync(resolve(cwd, lock))),
-    dirty: git(cwd, ['status', '--porcelain', '--untracked-files=normal']) !== '',
-  }
-}
-function digest(value) {
-  return createHash('sha256').update(value).digest('hex')
-}
-function artifact(directory) {
-  const entries = []
-  function visit(path) {
-    for (const entry of readdirSync(path).sort()) {
-      const file = resolve(path, entry)
-      const stat = lstatSync(file)
-      if (stat.isSymbolicLink()) throw new Error('Artifact symlinks are not supported')
-      if (stat.isDirectory()) visit(file)
-      else entries.push([relative(directory, file), digest(readFileSync(file))])
-    }
-  }
-  visit(directory)
-  return digest(JSON.stringify(entries))
-}
 const dist = resolve(root, 'apps/identity/dist')
 const runner = resolve(root, 'e2e/identity/real.mjs')
 try {
   if (!backend || process.platform === 'win32') throw new Error('environment')
-  record.frontend = source(root, 'pnpm-lock.yaml')
-  record.backend = source(backend, 'Cargo.lock')
-  if (record.frontend.dirty || record.backend.dirty) throw new Error('uncommitted source')
-  record.runner_sha256 = digest(readFileSync(runner))
   phase = 'build'
-  await run('pnpm', ['-F', '@rss/identity-app', 'build'], root, {
-    ...process.env,
-    RSS_IDENTITY_WEB_REVISION: record.frontend.revision,
-  })
-  phase = 'artifact'
-  await run('pnpm', ['check:identity-app:build'], root)
-  record.artifact_sha256 = artifact(dist)
+  await run('pnpm', ['build:identity'], root)
   scratch = mkdtempSync(resolve(tmpdir(), 'identity-joint-' + process.pid + '-'))
   fixtureRecord = resolve(scratch, 'fixture.json')
   phase = 'backend'
@@ -161,13 +95,6 @@ try {
   const fixture = fixtureState()
   if (!fixture || fixture.result !== 'passed' || fixture.cleanup.status !== 'passed')
     throw new Error('fixture record')
-  phase = 'verification'
-  if (
-    artifact(dist) !== record.artifact_sha256 ||
-    JSON.stringify(source(root, 'pnpm-lock.yaml')) !== JSON.stringify(record.frontend) ||
-    JSON.stringify(source(backend, 'Cargo.lock')) !== JSON.stringify(record.backend)
-  )
-    throw new Error('inputs changed')
   record.result = 'passed'
 } catch (error) {
   record.failure = {
@@ -177,7 +104,7 @@ try {
       ? 'interrupted'
       : error?.message === 'timeout'
         ? 'timeout'
-        : ['preflight', 'build', 'artifact', 'backend'].includes(phase)
+        : ['preflight', 'build', 'backend'].includes(phase)
           ? 'environment'
           : 'assertion',
   }
@@ -232,11 +159,17 @@ try {
   }
   process.removeListener('SIGINT', interrupt)
   process.removeListener('SIGTERM', interrupt)
-  try {
-    publish()
-  } catch {
-    console.error('Identity joint receipt could not be written')
-    record.result = 'failed'
+  if (record.result !== 'passed') {
+    const failure = record.failure
+    console.error(
+      `Identity integration failed: ${failure?.phase}/${failure?.classification}${failure?.execution ? '/' + failure.execution : ''}`,
+    )
+    if (failure?.diagnostic) console.error(JSON.stringify(failure.diagnostic))
+    console.error(`Cleanup: ${record.cleanup.status}`)
+    if (record.cleanup.recovery_directory)
+      console.error(`Recovery directory: ${record.cleanup.recovery_directory}`)
+    process.exitCode = 1
+  } else {
+    console.log('Identity integration passed; fixture cleanup passed')
   }
-  if (record.result !== 'passed') process.exitCode = 1
 }

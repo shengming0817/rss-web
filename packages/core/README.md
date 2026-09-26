@@ -1,7 +1,3 @@
 # @rss/core
 
-Shared application shell and design foundation: tokens, theme, i18n,
-accessibility primitives, empty navigation, and command palette.
-
-Core does not import business packages. Navigation contains only implemented
-routes; future products must add a real route and tests instead of placeholders.
+Identity presentation primitives: theme selection, locale initialization, accessible modal and shared styles. The application owns translated messages and business interactions; Core has no HTTP or business dependencies.

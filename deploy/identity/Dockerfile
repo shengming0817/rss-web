@@ -6,12 +6,9 @@ RUN corepack enable
 WORKDIR /app
 COPY . .
 RUN pnpm install --frozen-lockfile
-ARG RSS_IDENTITY_WEB_REVISION
-RUN RSS_IDENTITY_WEB_REVISION="$RSS_IDENTITY_WEB_REVISION" pnpm build:identity
+RUN pnpm build:identity
 
 FROM nginx:1.30.4@sha256:d5792f71a9496b833bc08ea834a758c46e2b6a6306c10f4be926f38a656cdc1c AS runtime
-ARG RSS_IDENTITY_WEB_REVISION
-LABEL org.opencontainers.image.revision=$RSS_IDENTITY_WEB_REVISION
 RUN rm -rf /usr/share/nginx/html/* /etc/nginx/conf.d/*
 COPY --from=build /app/apps/identity/dist /usr/share/nginx/html/
 USER 10001:10001

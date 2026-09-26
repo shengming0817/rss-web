@@ -1,4 +1,4 @@
-// Closed projection shared by the transport runner and its outer receipt owner.
+// Closed projection shared by the transport runner and integration failure reporting.
 export function transportDiagnostic(value) {
   const steps = [
     'config',

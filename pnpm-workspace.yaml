@@ -3,12 +3,9 @@
 packages:
   - apps/*
   - packages/*
-  - tools/*
 
-# 仅放行 esbuild 平台二进制安装脚本（Vite 依赖）和 core-js 构建脚本；其余包默认禁止 postinstall。
+# 仅放行现有构建与 ESLint resolver 所需的安装脚本。
 allowBuilds:
-  '@parcel/watcher': true
-  core-js: true
   esbuild: true
   unrs-resolver: true
 
@@ -26,15 +23,12 @@ catalog:
   vue-tsc: ^2.2.0
   '@types/node': ^22.10.5
   # —— 样式 ——
-  sass: ^1.83.0
   # —— 测试 ——
   vitest: ^3.0.4
   '@vue/test-utils': ^2.4.6
-  '@pinia/testing': ^1.0.0
   jsdom: ^25.0.1
   '@vitest/coverage-v8': ^3.0.4
   axios-mock-adapter: ^2.1.0
-  '@playwright/test': ^1.49.1
   # —— Lint / format / git hooks ——
   eslint: ^9.18.0
   '@eslint/js': ^9.18.0

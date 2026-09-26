@@ -1,5 +1,4 @@
 import '@rss/core/styles/tokens.css'
-import '@rss/core/styles/v1-linear.scss'
 import './style.css'
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
