@@ -64,8 +64,8 @@ async function apply(reset: boolean) {
       >Mock ·
       {{
         locale === 'zh-CN'
-          ? '纯合成数据；登录 demo / demo；不执行真实设备操作'
-          : 'Synthetic data; login demo / demo; no real device actions'
+          ? '纯合成数据；账户 demo 或 reviewer，密码 demo；不执行真实设备操作'
+          : 'Synthetic data; accounts demo or reviewer, password demo; no real device actions'
       }}</strong
     >
     <label for="demo-scenario">{{ locale === 'zh-CN' ? '场景' : 'Scenario' }}</label>

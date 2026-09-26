@@ -47,7 +47,12 @@ it('verifies raw upload length and digest, permits exact bytes replay, and refus
               profile: 'posix_sh',
               runAs: 'system',
               encoding: 'utf8',
-              parameters: { type: 'object' },
+              parameters: {
+                type: 'object',
+                properties: {},
+                required: [],
+                additionalProperties: false,
+              },
               bindings: {},
               output: { type: 'object' },
               purpose: { kind: 'action' },

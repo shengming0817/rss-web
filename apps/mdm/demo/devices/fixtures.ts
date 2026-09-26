@@ -12,6 +12,7 @@ export interface DemoDevice {
   inventory: Inventory
   registrations: ReturnType<typeof registration>[]
   enrollments: string[]
+  nativeWindows?: { osVersion: string; edition: number }
   history: { id: string; at: number; event: string; operation: string | null }[]
 }
 const definitions: [string, Scalar['kind'], boolean][] = [
@@ -153,6 +154,9 @@ export function makeDevices(): Map<string, DemoDevice> {
           summary,
           inventory: { device: id, channels, fields, quality: [], revisions },
           registrations,
+          ...(platform === 'windows' && channels.includes('mdm')
+            ? { nativeWindows: { osVersion: '10.0.26100', edition: 48 } }
+            : {}),
           enrollments: registrations.map((r) => r.enrollmentId),
           history: [
             {

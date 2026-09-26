@@ -4,6 +4,7 @@ import type { createDeviceDemo } from '../devices/state'
 import type { createScopeDemo } from './scopes'
 import type { createResourceDemo } from './resources'
 import type { createNativeDemo } from './native'
+import type { FrozenNativeTask } from '../../src/features/policies/clients/native'
 import type { PolicyRead } from '../../src/features/policies/clients/policies'
 import { closed, count, enumeration, identifier, record, uuid } from '../../src/services/decode'
 import { createPages, createReceipts, error, ok, operation } from '../http'
@@ -15,7 +16,14 @@ interface Policy {
   version: number
   saved: string | null
 }
+type History = ReturnType<ReturnType<typeof createNativeDemo>['policyRecords']>
+type Intent =
+  | { kind: 'add' | 'supersede'; device: string; version: number }
+  | { kind: 'retain' | 'cancel'; execution: History[number]['execution']; reason: string }
+  | { kind: 'predecessor'; execution: History[number]['execution']; successor_version: number }
 interface Preview {
+  history: History
+  intents: Intent[]
   policy: string
   revision: number
   scope: Scope
@@ -35,7 +43,10 @@ export function createPolicyDemo(
   devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts'>,
   scopes: Pick<ReturnType<typeof createScopeDemo>, 'freeze'>,
   resources: Pick<ReturnType<typeof createResourceDemo>, 'read'>,
-  native: Pick<ReturnType<typeof createNativeDemo>, 'admit'>,
+  native: Pick<
+    ReturnType<typeof createNativeDemo>,
+    'admit' | 'validateAdmission' | 'policyRecords' | 'cancelPolicy'
+  >,
 ) {
   const policies = new Map<string, Policy>(),
     previews = new Map<string, Preview>(),
@@ -52,6 +63,7 @@ export function createPolicyDemo(
           platform: d?.summary.platform,
           channels: d?.summary.channels,
           registrations: d?.registrations,
+          nativeWindows: d?.nativeWindows,
         }
       }),
     )
@@ -65,7 +77,9 @@ export function createPolicyDemo(
     const scope = scopes.freeze(preview.scope.id),
       version = resource(policy)
     return (
+      !preview.executed &&
       policy.read.revision === preview.revision &&
+      JSON.stringify(native.policyRecords(policy.read.id)) === JSON.stringify(preview.history) &&
       scope !== null &&
       JSON.stringify(scope) === JSON.stringify(preview.scope) &&
       version?.state === 'active' &&
@@ -141,20 +155,16 @@ export function createPolicyDemo(
           const items =
             projection === 'targets'
               ? preview.scope.members
-              : projection === 'add'
-                ? preview.scope.members.map((device) => ({
-                    kind: 'add',
-                    device,
-                    version: preview.version,
-                  }))
-                : []
+              : preview.intents.filter(
+                  (i) => i.kind === (projection === 'predecessors' ? 'predecessor' : projection),
+                )
           const page = pages.page<unknown>(request.path, items, request.query, task)
           return ok({
             result: task,
             policy: id,
             plan: preview.plan,
             totalTargets: preview.scope.members.length,
-            totalExecutions: preview.scope.members.length,
+            totalExecutions: preview.history.length,
             page: { kind: projection === 'targets' ? 'targets' : 'intents', items: page.items },
             nextCursor: page.nextCursor,
           })
@@ -172,34 +182,50 @@ export function createPolicyDemo(
             !preview ||
             preview.plan !== match[3] ||
             count(body['expectedRevision']) !== policy.read.storageRevision ||
-            policy.read.status !== 'active' ||
             !fresh(policy, preview) ||
             preview.executed
           )
             return error('operation_conflict')
           const deadline = count(body['deadline'])
           if (deadline <= Math.floor(Date.now() / 1000)) return error('malformed_request', 400)
-          const operations: unknown[] = []
-          for (const device of preview.scope.members) {
-            const operationId = randomUUID()
-            const reply = native.admit(
-              device,
-              operationId,
-              {
+          const desired = preview.intents.filter((i) => i.kind === 'add' || i.kind === 'supersede')
+          const admissions = desired.map((intent) => {
+            if (!('device' in intent)) throw new Error('Invalid desired intent')
+            const capability = devices
+              .facts()
+              .find((d) => d.summary.id === intent.device)?.nativeWindows
+            if (!capability) throw new Error('Missing frozen capability')
+            return {
+              device: intent.device,
+              operation: randomUUID(),
+              task: {
                 kind: 'firewall',
                 enabled: preview.enabled,
                 plan: preview.admission,
                 policy: id,
                 version: preview.version,
-                osVersion: '10.0.22631',
-                edition: 48,
-              },
-              deadline,
-              scenario,
-            )
-            if (reply.status !== 202) throw new Error('Admission changed after frozen validation')
-            operations.push(reply.body)
+                ...capability,
+              } satisfies FrozenNativeTask,
+            }
+          })
+          // Validate the whole batch before any mutation. This synchronous server turn
+          // cannot interleave a device/history change between validation and admission.
+          for (const a of admissions) {
+            const rejected = native.validateAdmission(a.device, a.operation, a.task, deadline)
+            if (rejected) return rejected
           }
+          const operations: unknown[] = []
+          for (const intent of preview.intents) {
+            if (intent.kind !== 'cancel' || !('execution' in intent)) continue
+            const original = preview.history.find(
+              (r) =>
+                r.execution.device === intent.execution.device &&
+                r.execution.version === intent.execution.version,
+            )!
+            operations.push(native.cancelPolicy(original.operation))
+          }
+          for (const a of admissions)
+            operations.push(native.admit(a.device, a.operation, a.task, deadline, scenario).body)
           preview.executed = true
           return ok({ plan: preview.admission, operations }, 202)
         })
@@ -212,7 +238,7 @@ export function createPolicyDemo(
           const input = closed(op.input, ['scope', 'expectedRevision'])
           if (
             !policy ||
-            policy.read.status !== 'active' ||
+            policy.read.status === 'draft' ||
             count(input['expectedRevision']) !== op.expectedRevision
           )
             return error('operation_conflict')
@@ -220,23 +246,83 @@ export function createPolicyDemo(
             version = resource(policy)
           if (!scope || !version?.configuration || version.state !== 'active')
             return error('operation_conflict')
+          const history = native.policyRecords(id)
+          const intents: Intent[] = []
+          for (const device of scope.members) {
+            const previous = history.filter((r) => r.execution.device === device)
+            if (
+              policy.read.status !== 'active' ||
+              previous.some((r) => r.execution.version === policy.version)
+            )
+              continue
+            intents.push({
+              kind: previous.length ? 'supersede' : 'add',
+              device,
+              version: policy.version,
+            })
+            for (const prior of previous)
+              intents.push({
+                kind: 'predecessor',
+                execution: structuredClone(prior.execution),
+                successor_version: policy.version,
+              })
+          }
+          for (const record of history) {
+            const execution = structuredClone(record.execution)
+            const reason =
+              policy.read.status === 'archived'
+                ? 'archived'
+                : !scope.members.includes(execution.device)
+                  ? 'scope_exit'
+                  : execution.version !== policy.version
+                    ? 'superseded'
+                    : null
+            const terminal = ['succeeded', 'failed', 'cancelled'].includes(execution.progress)
+            intents.push(
+              reason
+                ? {
+                    kind: terminal ? 'retain' : 'cancel',
+                    execution,
+                    reason: terminal ? 'historical' : reason,
+                  }
+                : {
+                    kind: 'retain',
+                    execution,
+                    reason: policy.read.status === 'paused' ? 'paused' : 'current',
+                  },
+            )
+          }
+          const desired = intents.flatMap((i) => ('device' in i ? [i.device] : []))
           const facts = devices.facts(),
-            failed = scope.members.find((id) => {
+            failed = desired.find((id) => {
               const d = facts.find((d) => d.summary.id === id)
               return (
                 !d ||
                 d.summary.platform !== 'windows' ||
                 !d.summary.channels.includes('mdm') ||
-                !d.registrations.some((r) => r.status === 'active')
+                !d.registrations.some((r) => r.status === 'active' && r.source === 'mdm.windows') ||
+                !d.nativeWindows
               )
             })
           const failedDevice = failed ? facts.find((d) => d.summary.id === failed) : null
           const capabilities = capability(scope.members)
           const plan = createHash('sha256')
-            .update(JSON.stringify([id, policy.read.revision, scope, version.digest, capabilities]))
+            .update(
+              JSON.stringify([
+                id,
+                policy.read.revision,
+                scope,
+                version.digest,
+                capabilities,
+                history,
+                intents,
+              ]),
+            )
             .digest('hex')
           previews.set(op.operationId, {
             policy: id,
+            history,
+            intents,
             revision: policy.read.revision,
             scope,
             resourceDigest: [...version.digest],

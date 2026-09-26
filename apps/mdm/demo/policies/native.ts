@@ -12,6 +12,31 @@ import { createReceipts, error, ok } from '../http'
 export function createNativeDemo(devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts'>) {
   const operations = new Map<string, { device: string; read: NativeOperation; reads: number }>(),
     receipts = createReceipts()
+  function validateAdmission(device: string, id: string, task: FrozenNativeTask, deadline: number) {
+    if (deadline <= Math.floor(Date.now() / 1000)) return error('malformed_request', 400)
+    const d = devices.facts().find((d) => d.summary.id === device)
+    if (!d) return error('management_device_not_found', 404)
+    if (
+      !d.summary.channels.includes('mdm') ||
+      !d.registrations.some(
+        (r) =>
+          r.status === 'active' &&
+          r.source === (d.summary.platform === 'windows' ? 'mdm.windows' : 'mdm.apple'),
+      ) ||
+      (d.summary.platform === 'windows' && task.kind.startsWith('profile_')) ||
+      (d.summary.platform === 'macos' && !task.kind.startsWith('profile_'))
+    )
+      return error('action_not_supported', 501)
+    if (operations.has(id)) return error('operation_conflict')
+    if (
+      task.kind === 'firewall' &&
+      (!d.nativeWindows ||
+        task.osVersion !== d.nativeWindows.osVersion ||
+        task.edition !== d.nativeWindows.edition)
+    )
+      return error('operation_conflict')
+    return null
+  }
   function admit(
     device: string,
     id: string,
@@ -19,16 +44,9 @@ export function createNativeDemo(devices: Pick<ReturnType<typeof createDeviceDem
     deadline: number,
     scenario: Scenario,
   ) {
-    if (deadline <= Math.floor(Date.now() / 1000)) return error('malformed_request', 400)
-    const d = devices.facts().find((d) => d.summary.id === device)
-    if (!d) return error('management_device_not_found', 404)
-    if (
-      !d.summary.channels.includes('mdm') ||
-      (d.summary.platform === 'windows' && task.kind.startsWith('profile_')) ||
-      (d.summary.platform === 'macos' && !task.kind.startsWith('profile_'))
-    )
-      return error('action_not_supported', 501)
-    if (operations.has(id)) return error('operation_conflict')
+    const rejected = validateAdmission(device, id, task, deadline)
+    if (rejected) return rejected
+    const d = devices.facts().find((d) => d.summary.id === device)!
     const read = decodeNativeOperation(
       {
         operationId: id,
@@ -131,6 +149,45 @@ export function createNativeDemo(devices: Pick<ReturnType<typeof createDeviceDem
   return {
     handle,
     admit,
+    validateAdmission,
+    policyRecords(policy: string) {
+      return [...operations.values()].flatMap(({ device, read: r }) =>
+        r.task.kind === 'firewall' && r.task.policy === policy
+          ? [
+              {
+                operation: r.operationId,
+                revision: r.revision,
+                execution: {
+                  device,
+                  version: r.task.version,
+                  progress:
+                    r.commandStatus === 'cancelled'
+                      ? ('cancelled' as const)
+                      : r.observation.progress !== 'unknown'
+                        ? r.observation.progress
+                        : r.commandStatus === 'queued'
+                          ? ('planned' as const)
+                          : ('running' as const),
+                  effect: r.observation.effect,
+                },
+              },
+            ]
+          : [],
+      )
+    },
+    cancelPolicy(operation: string) {
+      const state = operations.get(operation)
+      if (!state || state.read.task.kind !== 'firewall') throw new Error('Missing policy operation')
+      state.read.commandStatus = 'cancelled'
+      state.read.revision++
+      return {
+        operationId: operation,
+        commandId: state.read.commandId,
+        action: 'cancel' as const,
+        commandStatus: 'cancelled' as const,
+        revision: state.read.revision,
+      }
+    },
     executions(): ExecutionSummary[] {
       return [...operations.values()].map(({ device, read: r, reads }) => ({
         id: r.operationId,

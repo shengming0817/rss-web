@@ -95,8 +95,9 @@ onMounted(() => load())
     <section v-if="native">
       <h2>{{ native.observation.protocol }}</h2>
       <p>
-        {{ t('policies.revision') }} {{ native.revision }} · {{ native.task.kind }} ·
-        {{ native.commandStatus }}
+        {{ t('policies.revision') }} {{ native.revision }} ·
+        {{ t(`policies.state.${native.task.kind}`) }} ·
+        {{ t(`policies.state.${native.commandStatus}`) }}
       </p>
       <button :disabled="busy || uncertain" @click="change('approve')">
         {{ t('policies.reapprove') }}</button

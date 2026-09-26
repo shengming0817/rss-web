@@ -7,6 +7,7 @@ import {
   type ResourceRead,
   type Variant,
 } from '../../src/features/policies/clients/resources'
+import { validateScriptVariant } from './script-validation'
 import { createReceipts, error, ok, operation } from '../http'
 const hash = (value: string | Uint8Array) => [...createHash('sha256').update(value).digest()]
 const contentKey = (
@@ -117,26 +118,12 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
             ).versions[0]!
             if (!firewall && !decoded.variants.length) return error('malformed_request', 400)
             for (const v of decoded.variants) {
+              validateScriptVariant(v)
               if (
                 !v.declaration.artifact.length ||
                 v.declaration.artifact.length > MDM_CONTENT_BODY_LIMIT
               )
                 return error('malformed_request', 400)
-              if (
-                v.declaration.kind === 'script' &&
-                v.declaration.definition.profile === 'osquery_info_v1'
-              ) {
-                const d = v.declaration.definition
-                if (
-                  d.runAs !== 'system' ||
-                  Object.keys(d.bindings).length ||
-                  d.maxRows !== 1 ||
-                  d.purpose.kind !== 'collection' ||
-                  JSON.stringify(d.purpose.mappings) !==
-                    JSON.stringify({ 'custom.osquery.version': '/0/version' })
-                )
-                  return error('malformed_request', 400)
-              }
             }
             next.versions.push(decoded)
           } else {

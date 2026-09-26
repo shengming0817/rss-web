@@ -27,8 +27,8 @@ it('freezes workflow targets, enforces independent approval, and retains unknown
     schedule: {
       trigger: { kind: 'manual' },
       misfire: 'skip',
-      notBefore: 0,
-      until: 4102444800,
+      notBefore: Math.floor(Date.now() / 1000) - 60,
+      until: Math.floor(Date.now() / 1000) + 86400,
       jitterSeconds: 0,
       window: null,
     },
@@ -60,6 +60,11 @@ it('freezes workflow targets, enforces independent approval, and retains unknown
       query: new URLSearchParams(),
     }
   }
+  definition.steps.push({
+    ...structuredClone(definition.steps[0]!),
+    id: randomUUID(),
+    name: 'Second step',
+  })
   expect(workflows.handle(request(path, { action: 'put', definition }), 'normal')?.status).toBe(200)
   const started = workflows.handle(request(`${path}/runs`, {}, 1), 'normal')!
   expect(started.status).toBe(202)

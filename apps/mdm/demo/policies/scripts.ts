@@ -9,6 +9,8 @@ import {
   type ScriptRun,
 } from '../../src/features/policies/clients/scripts'
 import type { ExecutionSummary } from '../../src/features/policies/clients/executions'
+import { validateSchedule, manualReady } from './schedule'
+import { validateScriptParameters } from './script-validation'
 import { createReceipts, error, ok } from '../http'
 export function createScriptDemo(
   devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts'>,
@@ -61,31 +63,14 @@ export function createScriptDemo(
             },
             id,
           )
+          validateScriptParameters(read.definition.definition, read.definition.input.parameters)
           const input = read.definition.input,
-            facts = devices.facts(),
-            schedule = input.schedule
+            facts = devices.facts()
+          validateSchedule(input.schedule)
           if (
             !input.devices.length ||
             input.runLifetimeSeconds < 1 ||
-            input.runLifetimeSeconds > 86400 ||
-            schedule.until <= schedule.notBefore ||
-            schedule.jitterSeconds > 3600
-          )
-            return error('malformed_request', 400)
-          const trigger = schedule.trigger
-          if (
-            (trigger.kind === 'interval' && trigger.seconds < 1) ||
-            (trigger.kind === 'weekly' && (trigger.weekday > 6 || trigger.minute > 1439)) ||
-            (trigger.kind === 'check_in' && trigger.minimumSeconds < 1)
-          )
-            return error('malformed_request', 400)
-          if (
-            schedule.window &&
-            (!schedule.window.weekdays.length ||
-              schedule.window.weekdays.some((d) => d > 6) ||
-              schedule.window.startMinute > 1439 ||
-              schedule.window.endMinute > 1440 ||
-              schedule.window.startMinute === schedule.window.endMinute)
+            input.runLifetimeSeconds > 86400
           )
             return error('malformed_request', 400)
           for (const device of input.devices) {
@@ -203,7 +188,7 @@ export function createScriptDemo(
           state.read.approved = true
           // Synthetic server admits manual occurrences. Calendar/device triggers remain waiting;
           // the browser never runs a scheduler or manufactures device receipts.
-          if (input.schedule.trigger.kind === 'manual' && !input.schedule.window) {
+          if (manualReady(input.schedule, Math.floor(Date.now() / 1000))) {
             const now = Math.floor(Date.now() / 1000)
             state.runs = targets.map((d) => {
               const registration = d!.registrations.find((r) => r.status === 'active')!

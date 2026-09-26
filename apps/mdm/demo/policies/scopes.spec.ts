@@ -91,4 +91,21 @@ it('uses published group membership, never a running or preview membership set',
     members: [device],
     sources: [{ memberSet: task, memberVersion: 1 }],
   })
+  const changed = randomUUID()
+  expect(
+    devices.handle(
+      request(`/api/v2/groups/${group}`, {
+        operationId: changed,
+        expectedRevision: 2,
+        input: { action: 'members', add: ['device-02'], remove: [] },
+      }),
+      'normal',
+    )?.status,
+  ).toBe(202)
+  devices.handle(request(`/api/v2/groups/${group}/tasks/${changed}`), 'normal')
+  devices.handle(request(`/api/v2/groups/${group}/tasks/${changed}`), 'normal')
+  expect(scopes.freeze(id)).toBeNull()
+  expect(
+    scopes.handle(request(`/api/v2/scopes/${id}/results/${op}/members`), 'normal')?.body,
+  ).toMatchObject({ current: true, page: { items: [device] } })
 })

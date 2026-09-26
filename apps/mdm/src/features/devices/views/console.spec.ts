@@ -8,6 +8,7 @@ import { createScenario, TENANT } from '../../../../demo/scenario'
 import { createDeviceDemo } from '../../../../demo/devices/state'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
+import { policyFeature } from '../../policies/routes'
 import { deviceFeature } from '../routes'
 import { createDeviceClients } from '../client'
 const wrappers: VueWrapper[] = []
@@ -59,7 +60,12 @@ async function setup(
   const devices = createDeviceClients(transport, TENANT, true)
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [deviceFeature.entry, ...(deviceFeature.routes ?? [])],
+    routes: [
+      deviceFeature.entry,
+      ...(deviceFeature.routes ?? []),
+      policyFeature.entry,
+      ...(policyFeature.routes ?? []),
+    ],
   })
   await router.push({ name, params: { tenant: TENANT, ...params }, query })
   await router.isReady()

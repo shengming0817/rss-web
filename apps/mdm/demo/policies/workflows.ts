@@ -13,6 +13,7 @@ import type { ExecutionSummary } from '../../src/features/policies/clients/execu
 import { closed, enumeration, record, uuid } from '../../src/services/decode'
 import { evaluate } from '../devices/criteria'
 import { createPages, createReceipts, error, operation } from '../http'
+import { validateSchedule, manualReady } from './schedule'
 import { candidate } from './http'
 interface RunState {
   read: WorkflowRun
@@ -53,12 +54,14 @@ export function createWorkflowDemo(
       return
     }
     let failure = false
+    let uncertain = false
     for (const device of run.targets) {
       const condition = state.conditions[step.id]![device]
       if (condition === 'no_match') continue
       const failed = scenario === 'partial' && device === run.targets[0]
       const unknown = condition === 'unknown' || scenario === 'unknown'
       failure ||= failed || unknown
+      uncertain ||= unknown
       const id = randomUUID()
       state.executions.push({
         id,
@@ -79,7 +82,8 @@ export function createWorkflowDemo(
     }
     state.step++
     run.revision++
-    if (failure && step.onFailure === 'stop') run.state = 'partial'
+    if (uncertain) run.state = 'unknown'
+    else if (failure && step.onFailure === 'stop') run.state = 'partial'
     else if (failure && step.onFailure === 'approval') {
       run.state = 'waiting'
       run.approval = 'pending'
@@ -123,7 +127,10 @@ export function createWorkflowDemo(
           closed(op.input, [])
           if (op.expectedRevision !== state.read.revision) return error('operation_conflict')
           if (match[3] === 'cancel') {
-            if (state.read.state === 'cancelled') return error('operation_conflict')
+            if (
+              ['cancel_requested', 'cancelled', 'completed', 'partial'].includes(state.read.state)
+            )
+              return error('operation_conflict')
             state.read.state = 'cancel_requested'
             state.read.revision++
             for (const execution of state.executions)
@@ -153,11 +160,12 @@ export function createWorkflowDemo(
               return error('operation_conflict')
             state.read.approval = 'approved'
             state.read.revision++
-            state.read.state =
-              state.read.definition.schedule.trigger.kind === 'manual' &&
-              !state.read.definition.schedule.window
-                ? 'running'
-                : 'waiting'
+            state.read.state = manualReady(
+              state.read.definition.schedule,
+              Math.floor(Date.now() / 1000),
+            )
+              ? 'running'
+              : 'waiting'
           } else return error('malformed_request', 400)
           return candidate({ run: structuredClone(state.read) })
         }
@@ -243,6 +251,7 @@ export function createWorkflowDemo(
         }
         closed(input, ['action', 'definition'])
         const definition = workflowDefinition(input['definition'])
+        validateSchedule(definition.schedule)
         if (!scopes.freeze(definition.scope)) return error('operation_conflict')
         const next: Workflow = {
           id,

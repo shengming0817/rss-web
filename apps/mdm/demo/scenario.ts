@@ -1,5 +1,4 @@
 /** MOCK_SOURCE: synthetic HTTP server, never part of a production entry. */
-import { randomUUID } from 'node:crypto'
 import { MDM_JSON_BODY_LIMIT, MDM_CONTENT_BODY_LIMIT, isMdmContentPath } from '@rss/api/mdm-limits'
 export const TENANT = '11111111-1111-4111-8111-111111111111'
 const PRINCIPAL = '22222222-2222-4222-8222-222222222222'
@@ -37,7 +36,7 @@ export function createScenario(
   let active: Scenario = 'normal'
   let signedIn = false
   let principalId = PRINCIPAL
-  let sessionId = randomUUID()
+  let sessionId = crypto.randomUUID()
   let epoch = 0
   let token = '0'.repeat(64)
   const sources: Record<string, 'real' | 'mock'> = {
@@ -113,7 +112,7 @@ export function createScenario(
         return { status: 401, body: { code: 'invalid_credential' } }
       signedIn = true
       principalId = data['login'] === 'reviewer' ? REVIEWER : PRINCIPAL
-      sessionId = randomUUID()
+      sessionId = crypto.randomUUID()
       epoch++
       return { status: 200, body: session() }
     }

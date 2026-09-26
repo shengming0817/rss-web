@@ -185,7 +185,7 @@ onMounted(async () => {
       {{ t('policies.replay') }}
     </button>
     <section v-if="task">
-      <p>{{ task }} · {{ status?.status ?? '—' }}</p>
+      <p>{{ task }} · {{ status ? t(`policies.state.${status.status}`) : '—' }}</p>
       <button :disabled="busy" @click="refresh">{{ t('policies.refresh') }}</button
       ><template v-if="status?.status === 'completed'"
         ><p>{{ t('policies.frozen') }}</p>
@@ -194,7 +194,56 @@ onMounted(async () => {
           <option value="members">{{ t('policies.members') }}</option>
           <option value="decisions">{{ t('policies.decisions') }}</option></select
         ><button :disabled="busy" @click="page()">{{ t('policies.open') }}</button>
-        <pre v-if="result">{{ JSON.stringify(result, null, 2) }}</pre>
+        <template v-if="result"
+          ><p>
+            {{ t('policies.targets') }} {{ result.totalObjects }} · {{ t('policies.members') }}
+            {{ result.totalMembers }}
+          </p>
+          <ul v-if="result.page.kind === 'members'">
+            <li v-for="device in result.page.items" :key="device">{{ device }}</li>
+          </ul>
+          <table v-else>
+            <thead>
+              <tr>
+                <th>{{ t('policies.device') }}</th>
+                <th>{{ t('policies.identity') }}</th>
+                <th>{{ t('policies.reason') }}</th>
+                <th>{{ t('policies.source') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in result.page.items" :key="item.device">
+                <td>{{ item.device }}</td>
+                <td>{{ t(`policies.state.${item.identity}`) }}</td>
+                <td>
+                  {{ item.reasons.map((reason) => t(`policies.state.${reason}`)).join(', ') }}
+                </td>
+                <td>
+                  {{ item.sources.map((index) => result!.sources[index]!.reference.id).join(', ') }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <table>
+            <thead>
+              <tr>
+                <th>{{ t('policies.source') }}</th>
+                <th>{{ t('policies.sourceVersion') }}</th>
+                <th>{{ t('policies.revision') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="source in result.sources"
+                :key="`${source.reference.kind}:${source.reference.id}`"
+              >
+                <td>{{ t(`policies.${source.reference.kind}`) }} {{ source.reference.id }}</td>
+                <td>{{ source.memberVersion }} · {{ source.memberSet ?? '—' }}</td>
+                <td>{{ source.definitionVersion }}</td>
+              </tr>
+            </tbody>
+          </table></template
+        >
         <button v-if="result?.nextCursor" :disabled="busy" @click="page(result.nextCursor)">
           {{ t('policies.next') }}
         </button></template

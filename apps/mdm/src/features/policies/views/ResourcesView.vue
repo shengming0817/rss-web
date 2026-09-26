@@ -43,7 +43,7 @@ const spec = ref<ScriptSpec>({
   profile: 'power_shell7',
   runAs: 'system',
   encoding: 'utf8',
-  parameters: { type: 'object', properties: {}, additionalProperties: false },
+  parameters: { type: 'object', properties: {}, required: [], additionalProperties: false },
   bindings: {},
   output: { type: 'object', properties: {}, additionalProperties: false },
   purpose: { kind: 'action' },
@@ -222,7 +222,7 @@ onMounted(() => load())
       ><label for="resource-kind">{{ t('policies.kind') }}</label
       ><select id="resource-kind" v-model="kind" :disabled="!!current">
         <option value="script">{{ t('policies.scripts') }}</option>
-        <option value="software">Software</option>
+        <option value="software">{{ t('policies.software') }}</option>
         <option value="configuration">{{ t('policies.configurations') }}</option></select
       ><button v-if="!current" :disabled="!id" @click="change({ action: 'create', kind })">
         {{ t('policies.save') }}
@@ -241,7 +241,7 @@ onMounted(() => load())
         <tbody>
           <tr v-for="item in current.versions" :key="item.id">
             <td>{{ item.id }}</td>
-            <td>{{ item.state }}</td>
+            <td>{{ t(`policies.state.${item.state}`) }}</td>
             <td>
               <button
                 v-for="action in ['activate', 'deprecate', 'archive'] as const"

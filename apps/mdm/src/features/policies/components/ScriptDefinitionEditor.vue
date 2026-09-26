@@ -37,6 +37,29 @@ function json(event: Event, key: 'parameters' | 'output' | 'bindings' | 'mapping
     input.setCustomValidity(t('policies.invalidJson'))
   }
 }
+function osqueryTemplate() {
+  model.value = {
+    profile: 'osquery_info_v1',
+    runAs: 'system',
+    encoding: 'utf8',
+    parameters: { type: 'object', properties: {}, required: [], additionalProperties: false },
+    bindings: {},
+    output: {
+      type: 'array',
+      maxItems: 1,
+      items: {
+        type: 'object',
+        properties: { version: { type: 'string' } },
+        required: ['version'],
+        additionalProperties: false,
+      },
+    },
+    purpose: { kind: 'collection', mappings: { 'custom.osquery.version': '/0/version' } },
+    timeoutSeconds: 60,
+    outputBytes: 16384,
+    maxRows: 1,
+  }
+}
 function collection(event: Event) {
   model.value = {
     ...model.value,
@@ -49,6 +72,8 @@ function collection(event: Event) {
 <template>
   <fieldset>
     <legend>{{ t('policies.scriptDefinition') }}</legend>
+    <button type="button" @click="osqueryTemplate">{{ t('policies.osqueryTemplate') }}</button>
+    <p v-if="model.profile === 'osquery_info_v1'">{{ t('policies.osqueryHint') }}</p>
     <label :for="`${id}-profile`">{{ t('policies.profile') }}</label
     ><select :id="`${id}-profile`" v-model="model.profile">
       <option

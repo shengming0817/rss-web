@@ -93,6 +93,29 @@ function save() {
 function copySettings(value: Setting[]) {
   settings.value = structuredClone(toRaw(value))
 }
+function template() {
+  if (busy.value || uncertain.value || !current.value) return
+  const presets: Record<ConfigurationFormat, Setting[]> = {
+    windows_csp: [
+      { key: './Vendor/MSFT/Firewall/MdmStore/DomainProfile/EnableFirewall', value: true },
+    ],
+    windows_admx: [
+      {
+        key: './Device/Vendor/MSFT/Policy/Config/ADMX_ControlPanelDisplay/CPL_Personalization_NoChangingLockScreen',
+        value: '<enabled/>',
+      },
+    ],
+    apple_profile: [
+      { key: 'PayloadType', value: 'com.apple.security.firewall' },
+      { key: 'EnableFirewall', value: true },
+    ],
+    apple_ddm: [
+      { key: 'Type', value: 'com.apple.configuration.passcode.settings' },
+      { key: 'Payload.MinimumLength', value: 8 },
+    ],
+  }
+  settings.value = presets[current.value.format]
+}
 function diff() {
   if (current.value)
     void run(
@@ -162,7 +185,9 @@ onMounted(() => load())
             {{ item }}
           </option></select
         ><template v-if="current"
-          ><div v-for="(setting, index) in settings" :key="index">
+          ><button type="button" @click="template">{{ t('policies.loadTemplate') }}</button>
+          <p>{{ t('policies.templateHint') }}</p>
+          <div v-for="(setting, index) in settings" :key="index">
             <label :for="`setting-${index}`">{{ t('policies.setting') }}</label
             ><input :id="`setting-${index}`" v-model="setting.key" required /><label
               :for="`setting-type-${index}`"
@@ -213,7 +238,7 @@ onMounted(() => load())
         <tbody>
           <tr v-for="item in current.versions" :key="item.version">
             <td>{{ item.version }}</td>
-            <td>{{ item.status }}</td>
+            <td>{{ t(`policies.state.${item.status}`) }}</td>
             <td>
               <button :disabled="busy || uncertain" @click="copySettings(item.settings)">
                 {{ t('policies.copySettings') }}</button
@@ -274,7 +299,10 @@ onMounted(() => load())
       </fieldset>
       <button v-if="task" :disabled="busy" @click="refresh">{{ t('policies.refresh') }}</button
       ><template v-if="preview"
-        ><p>{{ preview.status }} · {{ t('policies.revision') }} {{ preview.scopeRevision }}</p>
+        ><p>
+          {{ t(`policies.state.${preview.status}`) }} · {{ t('policies.revision') }}
+          {{ preview.scopeRevision }}
+        </p>
         <table>
           <thead>
             <tr>
@@ -288,9 +316,9 @@ onMounted(() => load())
           <tbody>
             <tr v-for="row in preview.rows" :key="row.device">
               <td>{{ row.device }}</td>
-              <td>{{ row.support }}</td>
-              <td>{{ row.reason }}</td>
-              <td>{{ row.drift }}</td>
+              <td>{{ t(`policies.state.${row.support}`) }}</td>
+              <td>{{ row.reason ? t(`policies.state.${row.reason}`) : '—' }}</td>
+              <td>{{ t(`policies.state.${row.drift}`) }}</td>
               <td>{{ row.conflicts.join(', ') }}</td>
             </tr>
           </tbody>

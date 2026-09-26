@@ -192,10 +192,17 @@ export function createScopeDemo(devices: Devices) {
         .map((s) => ({ id: s.id, label: s.id, revision: s.revision, status: 'ready' as const })),
     freeze(id: string) {
       const task = current.get(id),
-        job = task ? jobs.get(task) : null
-      return job && !deleted.has(id) && scopes.get(id)?.revision === job.frozen.revision
-        ? structuredClone(job.frozen)
-        : null
+        job = task ? jobs.get(task) : null,
+        read = scopes.get(id)
+      if (!job || !read || deleted.has(id) || read.revision !== job.frozen.revision) return null
+      // Published pages remain immutable. Consumers must revalidate source versions
+      // before using that publication to authorize a new plan or workflow.
+      try {
+        if (JSON.stringify(resolve(read).frozen) !== JSON.stringify(job.frozen)) return null
+        return structuredClone(job.frozen)
+      } catch {
+        return null
+      }
     },
     reset() {
       scopes.clear()

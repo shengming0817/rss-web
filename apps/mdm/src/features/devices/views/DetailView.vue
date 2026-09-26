@@ -152,7 +152,15 @@ function selectTab(key: (typeof tabs)[number]) {
   >
     <button :disabled="busy" @click="load">{{ t('devices.reload') }}</button>
     <template v-if="detail"
-      ><p v-if="detailStale" role="status">{{ t('devices.refreshDetail') }}</p>
+      ><RouterLink
+        :to="{
+          name: 'policy-scopes',
+          params: { tenant: runtime.tenant },
+          query: { device: detail.device.id },
+        }"
+        >{{ t('policies.scopes') }}</RouterLink
+      >
+      <p v-if="detailStale" role="status">{{ t('devices.refreshDetail') }}</p>
       <p v-else>
         {{ t(`devices.${detail.device.status}`) }} · {{ t(`devices.${detail.device.platform}`) }} ·
         {{ detail.device.channels.join(' + ') || '—' }}
