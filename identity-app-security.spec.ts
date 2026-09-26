@@ -34,7 +34,12 @@ describe('embedded Identity application', () => {
       const result = await lint.lintText(text, {
         filePath: resolve(root, 'apps/identity/src/services/session.ts'),
       })
-      expect(result[0]?.messages.some((m) => m.ruleId?.startsWith('no-restricted'))).toBe(true)
+      expect(
+        result[0]?.messages.some(
+          (m) =>
+            m.ruleId?.startsWith('no-restricted') || m.ruleId === 'identity-boundary/contained',
+        ),
+      ).toBe(true)
     }
   })
 })

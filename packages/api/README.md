@@ -1,26 +1,5 @@
 # @rss/api
 
-Narrow same-origin HTTP mechanics for RSS Web. The public surface exposes one
-transport factory, typed success decoders, cursor decoding, and sanitized
-`RssApiError` values recognized through `isRssApiError`. Error construction is
-internal so consumers cannot bypass WireError sanitization. It never exports
-Axios instances or responses.
-Copyable WireError request IDs are restricted to 1–128 printable ASCII characters; malformed
-diagnostic coordinates fail closed as protocol errors rather than entering UI or clipboard output.
+`@rss/api/identity` provides the same-origin Identity HTTP v2 transport, strict success/error decoding and sanitized errors. The application owns endpoint DTOs and its cookie/CSRF session controller. Requests never replay automatically or accept caller-authored Authorization or tenant headers. Transport errors contain only cause, code and optional status; Axios request/response data never leaves the boundary.
 
-Domain adapters own endpoint methods, paths, success statuses, and DTO decoders.
-The restricted `@rss/api/session` subpath provides the one reviewed transport
-decorator used by `@rss/identity`: it injects a capability-owned bearer only on
-adapter-marked protected requests, recognizes only a sanitized RSS
-`ERR_CORE_UNAUTHENTICATED` 401, and delegates one retry after recovery. The main
-API surface does not expose this capability. Browser-authored `Authorization`
-and `X-Tenant-ID` headers are rejected before network I/O.
-
-The package does not store credentials, choose tenant authority, load contracts
-at runtime, log request/response bodies, or provide general retry middleware.
-
-Selected endpoint coordinates may be exposed through reviewed `./endpoints/*`
-subpaths for their owning domain adapter. They are static coordinates, not a
-runtime contract registry, and applications must consume the domain adapter. A
-coordinate can carry its closed RSS error policy; undeclared statuses or drifted
-code, message, retryability, and detail posture become protocol errors.
+`@rss/api/testing` supplies network and timeout failures for application tests. Production code consumes only the Identity export.

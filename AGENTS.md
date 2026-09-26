@@ -1,22 +1,13 @@
-# RSS Web agent boundary
+# RSS Web collaboration
 
-Read `README.md` and the current migration issue before changing this repository.
+Read README.md and the current issue before changing this repository. Use /usr/bin/git.
 
-- Treat the imported source tree as a historical baseline, not as the RSS
-  product or contract truth.
-- Do not add backward-compatibility aliases, a dual-backend mode, or silent
-  fallback between old and new behavior.
-- Delete out-of-scope behavior instead of hiding it behind flags.
-- Consume RSS only through explicitly selected active contracts; do not create a
-  contract bundle, generic SDK/codegen platform, API gateway, IAM/user-directory,
-  MDM/fleet, or hosted-observability product.
-- Preserve provenance records under `docs/migration/`; later product changes must
-  not rewrite the historical source identity.
-
-# #2368 embedded authentication UI
-
-`apps/identity` consumes only rss-identity HTTP v2 under its product host origin. Reuse `@rss/core` and `@rss/api/identity`; its single app-local session controller owns cookie/CSRF transitions and context hints. No platform, downstream, dual backend or bearer fallback. `apps/web` retains its independent contract.
-
-The gateway serves strict static `/api/identity-host/v1/config.json` with canonicalOrigin and oidcEnabled. Missing or malformed input prevents UI startup. Only `/api/identity-host/v1/tenants/{tenant}/context` is a dynamic host endpoint; its hints are session-bound presentation facts. Component transactions enforce management policy. Tenant paths are resource locators.
-
-Only the flow owner may keep a per-tab tenant/kind locator for five minutes. No credentials, authenticated state, tokens or verifier persistence. The sole protocol callback is `/api/v2/oidc/callback`; `/auth/resume` reads the session and never exchanges codes. No write replay after conflict, reauthentication or unknown results. Deployment belongs to #2436; actual browser acceptance belongs to #2366.
+- apps/identity owns the host-embedded authentication UI; consume only same-origin HTTP v2 and the explicit identity-host config/context endpoints.
+- @rss/api/identity owns HTTP execution and strict decoding. The app-local session controller alone owns cookie/CSRF transitions. Never add bearer fallback, old wire decoding, a second session/retry controller, or credential persistence.
+- @rss/core owns reusable presentation used by Identity: theme, locale, modal and styles. Keep package imports on declared exports, strict TypeScript, accessible UI and i18n.
+- Host config is strict and static; missing or malformed input prevents startup. Context hints are bound to tenant/principal/session and grant no authority. Backend transactions enforce management policy.
+- Tenant paths are resource locators. Only the flow owner may store a per-tab tenant/kind locator for five minutes. Never persist secrets, authenticated state or verifier data. /api/v2/oidc/callback is the sole protocol callback; /auth/resume reads the session and never exchanges codes.
+- No automatic write replay after conflict, reauthentication or unknown results. Clear component-local secrets on submission.
+- Delete retired implementation and its dedicated exports/tests/scripts; no aliases, dual backend, placeholder files or silent fallback. Preserve docs/migration source provenance without rewriting it.
+- Validate affected behavior and necessary integration. Retain production bundle checks for legacy authentication, mock code and source maps. Do not add commit/clean-HEAD/archive/digest proof, simulated consumers, receipt frameworks or ordinary capacity tests. Reuse caches.
+- Integration must redact secrets, bound child processes, handle interruption and fail when cleanup is unconfirmed. Actual browser/product acceptance remains separately owned.

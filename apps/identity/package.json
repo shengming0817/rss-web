@@ -22,7 +22,6 @@
     "@vitejs/plugin-vue": "catalog:",
     "@types/node": "catalog:",
     "vite": "catalog:",
-    "sass": "catalog:",
     "vitest": "catalog:",
     "@vue/test-utils": "catalog:",
     "jsdom": "catalog:",

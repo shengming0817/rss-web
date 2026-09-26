@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { decodeIdentityError } from '@rss/api/identity'
 // Test-only sanitized errors; application code still uses only the Identity transport.
-// eslint-disable-next-line no-restricted-imports
 import { networkErrorForTest, timeoutErrorForTest } from '@rss/api/testing'
 import { loadConfig } from './config'
 import { fixture, ID, OTHER, TENANT, sessionValue } from '../../tests/support'

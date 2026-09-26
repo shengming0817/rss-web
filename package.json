@@ -9,12 +9,6 @@
     "pnpm": ">=11.4.0"
   },
   "scripts": {
-    "dev": "pnpm -F @rss/web dev",
-    "build": "pnpm check:rss-release-baseline && RSS_WEB_REVISION=$(/usr/bin/git rev-parse HEAD) pnpm -F @rss/web build && pnpm check:identity:build && pnpm check:preview:build && RSS_IDENTITY_WEB_REVISION=$(/usr/bin/git rev-parse HEAD) pnpm -F @rss/identity-app build && pnpm check:identity-app:build",
-    "build:preview:demo": "VITE_CONFIG_CATALOG_PREVIEW=true VITE_CONFIG_HISTORY_PREVIEW=true VITE_ROLE_BINDINGS_PREVIEW=true pnpm -F @rss/web exec vite build --mode demo --outDir dist-preview-demo && node scripts/check-built-preview.mjs apps/web/dist-preview-demo demo",
-    "check:identity:build": "node scripts/check-built-identity.mjs apps/web/dist",
-    "check:preview:build": "node scripts/check-built-preview.mjs apps/web/dist",
-    "check:rss-release-baseline": "vitest run rss-release-baseline.spec.ts",
     "typecheck": "pnpm -r --if-present typecheck",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -23,14 +17,13 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage --project '!root'",
     "test:boundary": "vitest run --project root",
-    "test:e2e": "playwright test",
-    "test:edge": "node e2e/edge/smoke.mjs",
-    "test:e2e:real": "node e2e/real/run.mjs",
     "prepare": "husky",
     "test:identity:joint": "node e2e/identity/run.mjs",
     "check:identity-app:build": "node scripts/check-identity-app-build.mjs",
     "build:identity": "pnpm -F @rss/identity-app build && pnpm check:identity-app:build",
-    "image:identity": "bash scripts/build-identity-image.sh"
+    "image:identity": "bash scripts/build-identity-image.sh",
+    "dev": "pnpm -F @rss/identity-app dev",
+    "build": "pnpm build:identity"
   },
   "lint-staged": {
     "*.{ts,vue}": [
@@ -48,7 +41,6 @@
     "@vitest/coverage-v8": "catalog:",
     "@vue/test-utils": "catalog:",
     "jsdom": "catalog:",
-    "@playwright/test": "catalog:",
     "eslint": "catalog:",
     "@eslint/js": "catalog:",
     "typescript-eslint": "catalog:",

@@ -10,13 +10,9 @@ worktrees/
 # 依赖与构建产物
 node_modules/
 dist/
-dist-preview-demo/
 *.log
 .DS_Store
 
 # 测试 / 覆盖率 / E2E 产物
 coverage/
 .vitest/
-playwright-report/
-test-results/
-.playwright/

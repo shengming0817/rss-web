@@ -1,10 +1,5 @@
 import { vi } from 'vitest'
-import type {
-  HttpTransport,
-  RequestOptions,
-  ResponseRequestOptions,
-  NoContentRequest,
-} from '@rss/api/identity'
+import type { HttpTransport, RequestOptions, NoContentRequest } from '@rss/api/identity'
 import { createSession } from '../src/services/session'
 import { createApi } from '../src/services/api'
 import { createFlows } from '../src/services/flow'
@@ -58,38 +53,27 @@ export function fixture(oidcEnabled = true) {
   let currentTenant = TENANT
   const contextReplies: unknown[] = []
   const replies: unknown[] = []
-  const request = vi.fn(
-    async (
-      options: RequestOptions<unknown> | ResponseRequestOptions<unknown> | NoContentRequest,
-    ) => {
-      const contextRead = options.path.endsWith('/context')
-      let result = contextRead
-        ? contextReplies.length
-          ? contextReplies.shift()
-          : {
-              tenantId: currentTenant,
-              principalId: current.identity.principalId,
-              sessionId: current.session.id,
-              navigation: { manageAccounts: manager, manageProviders: manager },
-            }
-        : replies.shift()
-      if (typeof result === 'function') result = await (result as () => Promise<unknown>)()
-      if (result instanceof Error) throw result
-      if (options.successStatus === 204) return undefined
-      if (result && typeof result === 'object' && 'csrfToken' in result) {
-        current = result as ReturnType<typeof sessionValue>
-        currentTenant = String(options.pathParams?.['tenant'] ?? TENANT)
-      }
-      return options.decode(
-        result,
-        Array.isArray(options.successStatus)
-          ? (result as { active: boolean }).active
-            ? 201
-            : 202
-          : (options.successStatus as number),
-      )
-    },
-  )
+  const request = vi.fn(async (options: RequestOptions<unknown> | NoContentRequest) => {
+    const contextRead = options.path.endsWith('/context')
+    let result = contextRead
+      ? contextReplies.length
+        ? contextReplies.shift()
+        : {
+            tenantId: currentTenant,
+            principalId: current.identity.principalId,
+            sessionId: current.session.id,
+            navigation: { manageAccounts: manager, manageProviders: manager },
+          }
+      : replies.shift()
+    if (typeof result === 'function') result = await (result as () => Promise<unknown>)()
+    if (result instanceof Error) throw result
+    if (options.successStatus === 204) return undefined
+    if (result && typeof result === 'object' && 'csrfToken' in result) {
+      current = result as ReturnType<typeof sessionValue>
+      currentTenant = String(options.pathParams?.['tenant'] ?? TENANT)
+    }
+    return options.decode(result)
+  })
   const transport = { request } as HttpTransport
   const session = createSession(transport, {
     canonicalOrigin: 'https://identity.example.test',

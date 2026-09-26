@@ -2,9 +2,6 @@
 # on PR + push develop
 name: test
 
-env:
-  RSS_WEB_REVISION: ${{ github.sha }}
-
 on:
   pull_request:
   push:
@@ -50,87 +47,5 @@ jobs:
       - name: Boundary self-check (no coverage)
         run: pnpm test:boundary
 
-      - name: Build web
-        run: pnpm -F @rss/web build
-        env:
-          VITE_CONFIG_CATALOG_PREVIEW: 'true'
-          VITE_CONFIG_HISTORY_PREVIEW: 'true'
-
-      - name: Build Identity app
-        run: pnpm build:identity
-        env:
-          RSS_IDENTITY_WEB_REVISION: ${{ github.sha }}
-
-      - name: Verify RSS-only build identity
-        run: pnpm check:identity:build
-
-      - name: Verify production Preview absence
-        run: pnpm check:preview:build
-
-      - name: Build explicitly enabled demo Preview
-        run: pnpm build:preview:demo
-
-  # ── Playwright 冒烟（shell + 主题切换，无后端依赖） ─────────────────────────
-  e2e:
-    name: Playwright smoke
-    runs-on: ubuntu-latest
-    needs: unit
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install (frozen lockfile)
-        run: pnpm install --frozen-lockfile
-
-      - name: Install Playwright browsers (chromium only)
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Run E2E smoke tests
-        run: pnpm test:e2e
-        env:
-          CI: true
-
-      - name: Upload Playwright report on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 7
-
-  edge:
-    name: Edge routing smoke
-    runs-on: ubuntu-latest
-    needs: unit
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install (frozen lockfile)
-        run: pnpm install --frozen-lockfile
-
-      - name: Install Playwright browser (chromium only)
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Run browser + Docker/Nginx Edge smoke
-        run: pnpm test:edge
+      - name: Build Identity app and scan production assets
+        run: pnpm build
