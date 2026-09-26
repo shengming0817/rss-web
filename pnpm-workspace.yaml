@@ -4,10 +4,8 @@ packages:
   - apps/*
   - packages/*
 
-# 仅放行 esbuild 平台二进制安装脚本（Vite 依赖）和 core-js 构建脚本；其余包默认禁止 postinstall。
+# 仅放行现有构建与 ESLint resolver 所需的安装脚本。
 allowBuilds:
-  '@parcel/watcher': true
-  core-js: true
   esbuild: true
   unrs-resolver: true
 

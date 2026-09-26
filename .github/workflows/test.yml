@@ -1,4 +1,4 @@
-# T023/T028: 单测 + lint + 构建 + Playwright 冒烟 CI
+# Identity: 类型、静态检查、业务测试和生产构建
 # on PR + push develop
 name: test
 

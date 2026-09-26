@@ -19,7 +19,6 @@ export default defineConfig({
         'src/index.ts',
         'src/components/index.ts',
         'src/composables/index.ts',
-        // Pure data / type files — v8 over-counts branches on `as const` expressions
       ],
       thresholds: {
         lines: 90,
