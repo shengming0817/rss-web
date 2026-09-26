@@ -103,15 +103,24 @@ function change(input: ResourceChange) {
   }
   void pending()
 }
+function validFile(file: File) {
+  if (!file.size) {
+    failure.value = 'emptyContent'
+    return false
+  }
+  if (file.size > MDM_CONTENT_BODY_LIMIT) {
+    failure.value = 'contentTooLarge'
+    return false
+  }
+  return true
+}
 async function metadata(event: Event) {
   const input = event.target as HTMLInputElement,
     selected = input.files?.[0]
   input.value = ''
-  if (!selected) return
+  if (!selected || !validFile(selected)) return
   await run(
     async () => {
-      if (!selected.size || selected.size > MDM_CONTENT_BODY_LIMIT)
-        throw new Error('Invalid content size')
       const bytes = await selected.arrayBuffer()
       return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
     },
@@ -174,25 +183,29 @@ async function upload() {
   const selected = file.value
   file.value = undefined
   if (uploadInput.value) uploadInput.value.value = ''
+  if (!validFile(selected)) return
   const original = uploadPending.value
   const resource = original?.id ?? current.value.id,
     destination = original?.target ?? { ...toRaw(target.value), version: version.value }
   let bytes: ArrayBuffer | undefined
+  let mismatch = false
   const prepared = await run(
     async () => {
-      if (!selected.size || selected.size > MDM_CONTENT_BODY_LIMIT)
-        throw new Error('Invalid content size')
       bytes = await selected.arrayBuffer()
       const hash = hashText([...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))])
-      if (original && (hash !== original.hash || bytes.byteLength !== original.length))
+      if (original && (hash !== original.hash || bytes.byteLength !== original.length)) {
+        mismatch = true
         throw new Error('Different content')
+      }
       return { id: resource, target: destination, hash, length: bytes.byteLength }
     },
     (value) => (uploadPending.value = value),
   )
+  if (mismatch) failure.value = 'differentContent'
   if (!prepared || !bytes) return
   const content = bytes
   const acknowledged = await runWrite(() => client.upload(resource, destination, content))
+  if (failure.value === 'requestTooLarge') failure.value = 'contentTooLarge'
   if (acknowledged || !uncertain.value) uploadPending.value = undefined
 }
 onBeforeUnmount(() => {

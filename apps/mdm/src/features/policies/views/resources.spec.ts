@@ -1,3 +1,4 @@
+import { decodeMdmError } from '@rss/api/mdm'
 import { webcrypto } from 'node:crypto'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -42,8 +43,9 @@ it('requires reselection of identical bytes after unknown upload and never retai
   await flushPromises()
   await wrapper.get('#resource-version').setValue('1')
   const input = wrapper.get<HTMLInputElement>('#resource-upload')
-  async function select(text: string) {
+  async function select(text: string, size = text.length) {
     const file = new File([text], 'script.ps1')
+    Object.defineProperty(file, 'size', { value: size })
     Object.defineProperty(file, 'arrayBuffer', {
       value: async () => {
         const result = new ArrayBuffer(text.length)
@@ -74,5 +76,26 @@ it('requires reselection of identical bytes after unknown upload and never retai
   await vi.waitFor(() => expect(upload).toHaveBeenCalledTimes(2))
   expect(upload.mock.calls[1]![0]).toBe('script')
   expect(upload.mock.calls[1]![1]).toEqual(upload.mock.calls[0]![1])
+  await select('x', 16_777_217)
+  await button().trigger('click')
+  await vi.waitFor(() =>
+    expect(wrapper.get('section.device-console').attributes('aria-busy')).toBe('false'),
+  )
+  expect(wrapper.text()).toContain('16 MiB')
+  expect(upload).toHaveBeenCalledTimes(2)
+  const metadata = wrapper.get<HTMLInputElement>('#resource-metadata')
+  const huge = new File(['x'], 'huge.ps1')
+  Object.defineProperty(huge, 'size', { value: 16_777_217 })
+  Object.defineProperty(metadata.element, 'files', { configurable: true, value: [huge] })
+  await metadata.trigger('change')
+  await flushPromises()
+  expect(wrapper.text()).toContain('16 MiB')
+  upload.mockRejectedValueOnce(decodeMdmError(413, {}))
+  await select('server-sized')
+  await button().trigger('click')
+  await vi.waitFor(() => expect(upload).toHaveBeenCalledTimes(3))
+  await flushPromises()
+  expect(wrapper.text()).toContain('16 MiB')
+  expect(wrapper.text()).not.toContain('16 KiB')
   wrapper.unmount()
 })

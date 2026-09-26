@@ -353,6 +353,18 @@ export function createPolicyDemo(
   }
   return {
     handle,
+    assignedConfigurations(device: string) {
+      return [...policies.values()].flatMap(({ read }) => {
+        const d = read.definition
+        return !read.archived &&
+          d.enabled &&
+          d.source === 'configuration' &&
+          (!d.validity || (clock >= d.validity.start && clock < d.validity.end)) &&
+          scopes.resolve(d.scope)?.members.includes(device)
+          ? [{ id: d.resource, version: Number(d.resourceVersion) }]
+          : []
+      })
+    },
     reconcile,
     executions: () => structuredClone([...runs.values()]),
     references: (

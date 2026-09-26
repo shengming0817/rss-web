@@ -1,4 +1,7 @@
 export const devicesZh = {
+  emptyContent: '内容文件为空，请选择非空文件。',
+  contentTooLarge: '内容上传上限为 16 MiB，请选择不超过该上限的文件。',
+  differentContent: '所选文件与原上传内容不一致，请重新选择原文件以核实未知提交。',
   navigation: '设备导航',
   directory: '设备目录',
   search: '资产搜索',
@@ -217,6 +220,10 @@ export const devicesZh = {
   },
 }
 export const devicesEn: typeof devicesZh = {
+  emptyContent: 'The content file is empty. Select a nonempty file.',
+  contentTooLarge: 'Content uploads are limited to 16 MiB. Select a file within this limit.',
+  differentContent:
+    'The selected bytes differ from the original upload. Reselect the original file to resolve the unknown submission.',
   navigation: 'Device navigation',
   directory: 'Device directory',
   search: 'Asset search',

@@ -7,11 +7,38 @@ export type Applicability =
   | 'unsupported'
   | 'conflict'
   | 'resource_unavailable'
+export function configurationConflicts(
+  configuration: Configuration,
+  version: number,
+  assigned: Configuration[],
+): string[] {
+  const selected = configuration.versions.find(
+    (v) => v.version === version && v.status === 'published',
+  )
+  if (!selected) return []
+  return [
+    ...new Set(
+      assigned
+        .filter(
+          (c) =>
+            c.platform === configuration.platform &&
+            c.versions.some(
+              (other) =>
+                other.status === 'published' &&
+                other.settings.some((s) =>
+                  selected.settings.some((next) => next.key === s.key && next.value !== s.value),
+                ),
+            ),
+        )
+        .map((c) => c.id),
+    ),
+  ]
+}
 export function configurationApplicability(
   configuration: Configuration,
   version: number,
   device: DemoDevice | undefined,
-  catalog: Configuration[],
+  assigned: Configuration[],
 ): Applicability {
   const v = configuration.versions.find((v) => v.version === version && v.status === 'published')
   if (!v) return 'resource_unavailable'
@@ -25,21 +52,7 @@ export function configurationApplicability(
     !device.summary.channels.includes('mdm')
   )
     return 'unsupported'
-  if (
-    catalog.some(
-      (c) =>
-        c.id !== configuration.id &&
-        c.platform === configuration.platform &&
-        c.versions.some(
-          (other) =>
-            other.status === 'published' &&
-            other.settings.some((s) =>
-              v.settings.some((next) => next.key === s.key && next.value !== s.value),
-            ),
-        ),
-    )
-  )
-    return 'conflict'
+  if (configurationConflicts(configuration, version, assigned).length) return 'conflict'
   return 'applicable'
 }
 export function resourceApplicability(

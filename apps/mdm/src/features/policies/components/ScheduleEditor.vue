@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { useId, computed, ref, watchEffect } from 'vue'
+import { useId, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import UtcTimeInput from './UtcTimeInput.vue'
 import { decodeSchedule, type Schedule, type Trigger } from '../clients/schedule'
 const model = defineModel<Schedule>({ required: true })
 const { t } = useI18n(),
   id = useId()
-const untilInput = ref<HTMLInputElement>()
 const invalid = computed(() => {
   try {
     decodeSchedule(model.value)
@@ -14,7 +14,6 @@ const invalid = computed(() => {
     return t('policies.invalidSchedule')
   }
 })
-watchEffect(() => untilInput.value?.setCustomValidity(invalid.value))
 const triggers = ['manual', 'once', 'interval', 'weekly', 'registration', 'check_in'] as const
 function trigger(event: Event) {
   const kind = (event.target as HTMLSelectElement).value as Trigger['kind']
@@ -47,20 +46,12 @@ function window(event: Event) {
       </option></select
     ><template v-if="model.trigger.kind === 'once'"
       ><label :for="`${id}-at`">{{ t('policies.at') }}</label
-      ><input
-        :id="`${id}-at`"
-        v-model.number="model.trigger.at"
-        type="number"
-        min="0"
-        required /></template
+      ><UtcTimeInput :id="`${id}-at`" v-model="model.trigger.at" /></template
     ><template v-if="model.trigger.kind === 'interval'"
       ><label :for="`${id}-anchor`">{{ t('policies.anchor') }}</label
-      ><input
-        :id="`${id}-anchor`"
-        v-model.number="model.trigger.anchor"
-        type="number"
-        min="0"
-        required /><label :for="`${id}-seconds`">{{ t('policies.seconds') }}</label
+      ><UtcTimeInput :id="`${id}-anchor`" v-model="model.trigger.anchor" /><label
+        :for="`${id}-seconds`"
+        >{{ t('policies.seconds') }}</label
       ><input
         :id="`${id}-seconds`"
         v-model.number="model.trigger.seconds"
@@ -97,22 +88,16 @@ function window(event: Event) {
         max="1439"
         required /></template
     ><label :for="`${id}-not-before`">{{ t('policies.notBefore') }}</label
-    ><input
-      :id="`${id}-not-before`"
-      v-model.number="model.notBefore"
-      type="number"
-      min="0"
-      required
-    /><label :for="`${id}-until`">{{ t('policies.until') }}</label
-    ><input
+    ><UtcTimeInput :id="`${id}-not-before`" v-model="model.notBefore" /><label
+      :for="`${id}-until`"
+      >{{ t('policies.until') }}</label
+    ><UtcTimeInput
       :id="`${id}-until`"
-      ref="untilInput"
-      v-model.number="model.until"
-      :aria-describedby="invalid ? `${id}-validation` : undefined"
-      type="number"
+      v-model="model.until"
+      :error="invalid"
+      :description="invalid ? `${id}-validation` : ''"
       :min="model.notBefore + 1"
       :max="model.notBefore + 366 * 86400"
-      required
     /><label :for="`${id}-jitter`">{{ t('policies.jitter') }}</label
     ><input
       :id="`${id}-jitter`"

@@ -32,9 +32,10 @@ it('saves an empty assignment directly, preserves draft during progress reads an
     routes: [{ path: '/', component: PoliciesView }],
   })
   await router.push('/?id=policy')
+  const i18n = mdmI18n()
   const wrapper = mount(PoliciesView, {
     global: {
-      plugins: [router, mdmI18n()],
+      plugins: [router, i18n],
       stubs: { RouterLink: true },
       provide: {
         [mdmKey as symbol]: {
@@ -48,6 +49,12 @@ it('saves an empty assignment directly, preserves draft during progress reads an
       },
     },
   })
+  await flushPromises()
+  i18n.global.locale.value = 'en-US'
+  await flushPromises()
+  expect(wrapper.text()).toContain('Candidate continuous assignments')
+  expect(wrapper.text()).not.toContain('live policy execution')
+  i18n.global.locale.value = 'zh-CN'
   await flushPromises()
   const button = (text: string) => wrapper.findAll('button').find((b) => b.text() === text)!
   expect(wrapper.text()).toContain('等待 Scope 成员')

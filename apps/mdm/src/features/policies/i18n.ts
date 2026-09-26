@@ -1,4 +1,8 @@
 export const policiesZh = {
+  invalidDate: '请填写有效的 UTC 日期和时间。',
+  workflowApprovalHint: '仅显式人工审批步骤或失败审批分支需要其他账户批准。普通步骤按调度继续。',
+  pendingApprovalHint: '当前步骤等待其他账户批准。',
+  demoReviewerHint: '演示可使用 reviewer 账户批准。',
   executionBasis: '本次执行的冻结依据（资源/参数摘要、Scope 与设备世代）',
   invalidSchedule: '调度组合无效：请检查触发时间、IANA 时区、星期及起止窗口。',
   observation: {
@@ -27,7 +31,7 @@ export const policiesZh = {
   onChange: '成员或资源变化',
   interval: '固定间隔',
   checkIn: '设备签到',
-  optionalWindow: '限制有效时间窗口（UTC 秒）',
+  optionalWindow: '限制有效时间窗口（UTC）',
   computation: '成员计算序号',
   refreshProgress: '刷新进度（保留编辑）',
   reloadDefinition: '重新载入配置（替换编辑）',
@@ -317,9 +321,14 @@ export const policiesZh = {
   approve: '批准',
   reapprove: '重新批准',
   author: '提交人',
-  independent: '必须由其他账户批准。演示账户 demo / reviewer，密码均为 demo。',
+  independent: '当前人工审批必须由其他账户批准。',
 }
 export const policiesEn: typeof policiesZh = {
+  invalidDate: 'Enter a valid UTC date and time.',
+  workflowApprovalHint:
+    'Only explicit human approval steps or approval-on-failure branches require another account. Ordinary steps follow the schedule.',
+  pendingApprovalHint: 'This step is waiting for approval by another account.',
+  demoReviewerHint: 'In the demo, use the reviewer account to approve.',
   executionBasis:
     'Frozen execution basis (resource/parameter digests, Scope and device generation)',
   invalidSchedule:
@@ -350,7 +359,7 @@ export const policiesEn: typeof policiesZh = {
   onChange: 'Membership or resource change',
   interval: 'Interval',
   checkIn: 'Device check-in',
-  optionalWindow: 'Limit validity window (UTC seconds)',
+  optionalWindow: 'Limit validity window (UTC)',
   computation: 'Membership computation',
   refreshProgress: 'Refresh progress (keep edits)',
   reloadDefinition: 'Reload definition (replace edits)',
@@ -460,7 +469,7 @@ export const policiesEn: typeof policiesZh = {
     repair: 'Controlled repair',
   },
   policyHint:
-    'The current live policy execution supports Windows domain firewall only. Preview freezes targets and versions; saving uses CAS; execution revalidates authorization and capabilities.',
+    'Candidate continuous assignments take effect after saving the resource version, dynamic Scope and trigger. Preview has no execution effects; mock does not prove real device effects.',
   storageRevision: 'Storage revision',
   pause: 'Pause',
   resume: 'Resume',
@@ -643,6 +652,5 @@ export const policiesEn: typeof policiesZh = {
   approve: 'Approve',
   reapprove: 'Reapprove',
   author: 'Author',
-  independent:
-    'A different account must approve. Demo accounts: demo / reviewer; both use password demo.',
+  independent: 'A different account must approve the pending human approval.',
 }

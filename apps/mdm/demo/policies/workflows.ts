@@ -76,6 +76,11 @@ export function createWorkflowDemo(
       }
     }
   }
+  function completedState(state: RunState) {
+    return state.executions.some((e) => e.execution === 'failed' || e.execution === 'unknown')
+      ? ('partial' as const)
+      : ('completed' as const)
+  }
   function advance(state: RunState, scenario: Scenario) {
     const run = state.read
     if (run.state !== 'running' || run.approval === 'pending') return
@@ -92,11 +97,7 @@ export function createWorkflowDemo(
     }
     const step = run.definition.steps[state.step]
     if (!step) {
-      run.state = state.executions.some(
-        (e) => e.execution === 'failed' || e.execution === 'unknown',
-      )
-        ? 'partial'
-        : 'completed'
+      run.state = completedState(state)
       run.revision++
       return
     }
@@ -141,8 +142,7 @@ export function createWorkflowDemo(
     else if (failure && step.onFailure === 'approval') {
       run.state = 'waiting'
       run.approval = 'pending'
-    } else if (state.step === run.definition.steps.length)
-      run.state = failure ? 'partial' : 'completed'
+    } else if (state.step === run.definition.steps.length) run.state = completedState(state)
   }
   const handle: DomainHandler = (request, scenario) => {
     const match =

@@ -1,4 +1,4 @@
-import { configurationApplicability } from './applicability'
+import { configurationApplicability, configurationConflicts } from './applicability'
 import type { DomainHandler } from '../scenario'
 import type { createDeviceDemo } from '../devices/state'
 import type { createScopeDemo } from './scopes'
@@ -18,11 +18,19 @@ export function createConfigurationDemo(
   devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts'>,
   scopes: Pick<ReturnType<typeof createScopeDemo>, 'freeze'>,
   referenced: (id: string, version: number) => boolean,
+  assigned: (device: string) => { id: string; version: number }[] = () => [],
 ) {
   const configurations = new Map<string, Configuration>(),
     previews = new Map<string, { value: Preview; revision: number; reads: number }>(),
     receipts = createReceipts(),
     pages = createPages()
+  function assignedVersions(device: string) {
+    return assigned(device).flatMap((ref) => {
+      const c = configurations.get(ref.id),
+        v = c?.versions.find((v) => v.version === ref.version && v.status === 'published')
+      return c && v ? [{ ...c, versions: [v] }] : []
+    })
+  }
   const handle: DomainHandler = (request, scenario) => {
     const match =
       /^\/api\/mdm-candidate\/v1\/policies\/configurations(?:\/([^/]+)(?:\/(diff|previews)(?:\/([^/]+))?)?)?$/.exec(
@@ -87,9 +95,12 @@ export function createConfigurationDemo(
           const facts = devices.facts()
           const rows: Preview['rows'] = scope.members.map((device) => {
             const d = facts.find((d) => d.summary.id === device)
-            const reason = configurationApplicability(state, version.version, d, [
-              ...configurations.values(),
-            ])
+            const reason = configurationApplicability(
+              state,
+              version.version,
+              d,
+              assignedVersions(device),
+            )
             return {
               device,
               support:
@@ -107,8 +118,7 @@ export function createConfigurationDemo(
                       ? 'conflict'
                       : 'authorization',
               drift: 'unknown',
-              conflicts:
-                reason === 'conflict' ? [...configurations.keys()].filter((key) => key !== id) : [],
+              conflicts: configurationConflicts(state, version.version, assignedVersions(device)),
             }
           })
           previews.set(op.operationId, {
@@ -190,7 +200,7 @@ export function createConfigurationDemo(
             c,
             version,
             devices.facts().find((d) => d.summary.id === device),
-            [...configurations.values()],
+            assignedVersions(device),
           )
         : ('resource_unavailable' as const)
     },

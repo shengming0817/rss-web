@@ -23,6 +23,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
     (id, version): boolean =>
       policies.references(id, String(version), 'configuration') ||
       workflows.referencesConfiguration(id, version),
+    (device) => policies.assignedConfigurations(device),
   )
   const policies = createPolicyDemo(devices, scopes, resources, configurations)
   const workflows = createWorkflowDemo(devices, scopes, resources, configurations),

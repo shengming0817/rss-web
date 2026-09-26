@@ -29,3 +29,18 @@ it('rejects impossible combinations in DTO decoding and blocks the corresponding
   expect(wrapper.find('[role="alert"]').exists()).toBe(false)
   wrapper.unmount()
 })
+
+it('offers readable UTC absolute date fields while retaining numeric durations', () => {
+  const modelValue: Schedule = {
+    trigger: { kind: 'once', at: 1790000100 },
+    misfire: 'skip',
+    notBefore: 1790000000,
+    until: 1790000200,
+    jitterSeconds: 0,
+    window: null,
+  }
+  const wrapper = mount(ScheduleEditor, { props: { modelValue }, global: { plugins: [mdmI18n()] } })
+  expect(wrapper.findAll('input[type="datetime-local"]')).toHaveLength(3)
+  expect(wrapper.text()).toContain('UTC')
+  wrapper.unmount()
+})

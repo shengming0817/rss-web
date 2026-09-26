@@ -6,6 +6,7 @@ import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
 import { jsonValue } from '../clients/resources'
 import type { PolicyRead, PolicyDefinition, PolicyChange } from '../clients/policies'
+import UtcTimeInput from '../components/UtcTimeInput.vue'
 import PolicyFrame from '../components/PolicyFrame.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
@@ -212,18 +213,13 @@ onMounted(async () => {
         >
         <template v-if="definition.validity"
           ><label for="policy-start">{{ t('policies.notBefore') }}</label
-          ><input
-            id="policy-start"
-            v-model.number="definition.validity.start"
-            type="number"
-            min="0"
-            required /><label for="policy-end">{{ t('policies.until') }}</label
-          ><input
+          ><UtcTimeInput id="policy-start" v-model="definition.validity.start" /><label
+            for="policy-end"
+            >{{ t('policies.until') }}</label
+          ><UtcTimeInput
             id="policy-end"
-            v-model.number="definition.validity.end"
-            type="number"
+            v-model="definition.validity.end"
             :min="definition.validity.start + 1"
-            required
         /></template>
         <button type="submit" :disabled="!id">{{ t('policies.save') }}</button
         ><button type="button" :disabled="!id" @click="preview">{{ t('policies.preview') }}</button>

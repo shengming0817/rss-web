@@ -161,7 +161,11 @@ onMounted(async () => {
 <template>
   <PolicyFrame :title="t('policies.workflows')" :busy="busy" :failure="failure"
     ><p>{{ t('policies.candidate') }}</p>
-    <p>{{ t('policies.independent') }}</p>
+    <p>{{ t('policies.workflowApprovalHint') }}</p>
+    <p v-if="activeRun?.approval === 'pending'">
+      {{ t('policies.pendingApprovalHint')
+      }}<span v-if="runtime.demo"> {{ t('policies.demoReviewerHint') }}</span>
+    </p>
     <button :disabled="busy || uncertain" @click="create">{{ t('policies.create') }}</button
     ><button :disabled="busy" @click="load()">{{ t('policies.reload') }}</button>
     <p v-if="list && !list.items.length">{{ t('policies.empty') }}</p>

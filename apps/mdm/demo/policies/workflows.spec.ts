@@ -4,7 +4,7 @@ import { createWorkflowDemo } from './workflows'
 import { createDeviceDemo } from '../devices/state'
 import type { WorkflowDefinition, WorkflowRun } from '../../src/features/policies/clients/workflows'
 import type { DemoRequest } from '../scenario'
-function fixture(approval: boolean) {
+function fixture(approval: boolean, onFailure?: 'continue' | 'approval') {
   const author = randomUUID(),
     reviewer = randomUUID(),
     id = randomUUID(),
@@ -50,6 +50,14 @@ function fixture(approval: boolean) {
         },
       },
     ],
+  }
+  if (onFailure) {
+    definition.steps[0]!.onFailure = onFailure
+    definition.steps.push({
+      ...structuredClone(definition.steps[0]!),
+      id: randomUUID(),
+      onFailure: 'stop',
+    })
   }
   const path = `/api/mdm-candidate/v1/policies/workflows/${id}`
   function request(url: string, input?: unknown, revision = 0, principalId = author): DemoRequest {
@@ -107,4 +115,36 @@ it('requires a second subject only at an explicit approval step and confirms can
     (f.workflows.handle(f.request(path), 'normal')!.body as { run: WorkflowRun }).run.state,
   ).toBe('cancelled')
   expect(f.workflows.approvals()).toEqual([])
+})
+
+it('retains earlier failures after continuing to a successful final step', () => {
+  const f = fixture(false, 'continue'),
+    path = `${f.path}/runs/${f.run.id}`
+  expect(
+    (f.workflows.handle(f.request(path), 'partial')!.body as { run: WorkflowRun }).run.state,
+  ).toBe('running')
+  expect(
+    (f.workflows.handle(f.request(path), 'normal')!.body as { run: WorkflowRun }).run.state,
+  ).toBe('partial')
+})
+
+it('retains failed facts after an explicit approval permits continuation', () => {
+  const f = fixture(false, 'approval'),
+    path = `${f.path}/runs/${f.run.id}`
+  const waiting = (f.workflows.handle(f.request(path), 'partial')!.body as { run: WorkflowRun }).run
+  expect(waiting.approval).toBe('pending')
+  expect(
+    f.workflows.handle(f.request(`${path}/approve`, {}, waiting.revision, f.reviewer), 'normal')
+      ?.status,
+  ).toBe(200)
+  expect(
+    (f.workflows.handle(f.request(path), 'normal')!.body as { run: WorkflowRun }).run.state,
+  ).toBe('partial')
+  const success = fixture(false, 'continue'),
+    successPath = `${success.path}/runs/${success.run.id}`
+  success.workflows.handle(success.request(successPath), 'normal')
+  expect(
+    (success.workflows.handle(success.request(successPath), 'normal')!.body as { run: WorkflowRun })
+      .run.state,
+  ).toBe('completed')
 })
