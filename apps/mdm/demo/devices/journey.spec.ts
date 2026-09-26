@@ -123,9 +123,7 @@ it('freezes searches while manual changes preserve CAS, deleted history and exac
   expect(first.items[0]?.fields['custom.is_loaner']?.state.kind).toBe('known')
   const second = await assets.items(accepted.task, first.nextCursor!)
   expect(second.items).toHaveLength(3)
-  const tail = await assets.items(accepted.task, second.nextCursor!)
-  expect(tail.items).toEqual([])
-  expect(tail.nextCursor).toBeNull()
+  expect(second.nextCursor).toBeNull()
 })
 it('keeps pending enrollment discoverable, cancellation readable, and reset removes changes', async () => {
   const { enrollment, directory, scenario } = await setup()

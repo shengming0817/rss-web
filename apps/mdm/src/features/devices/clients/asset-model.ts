@@ -50,11 +50,6 @@ export interface Query {
   select: string[]
   sort: { field: string; descending: boolean } | null
 }
-export interface Operation<T> {
-  operationId: string
-  expectedRevision: number
-  input: T
-}
 export type ManualChange = { action: 'set'; value: Scalar } | { action: 'null' | 'delete' }
 export function fieldKey(value: unknown) {
   const v = identifier(value)

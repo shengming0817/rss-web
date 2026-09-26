@@ -3,10 +3,10 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { lifecycleActions, type Batch, type LifecycleAction } from '../clients/directory'
-import { operation, useOperation } from '../useOperation'
+import { operation, useOperation } from '../../../services/useOperation'
 const props = defineProps<{ devices: string[] }>()
 const { t } = useI18n(),
-  { devices: clients } = useMdm(),
+  { devices: clients, tenant } = useMdm(),
   { run, runWrite, busy, failure, uncertain } = useOperation()
 const action = ref<LifecycleAction>('onboard'),
   batch = ref<Batch>(),
@@ -113,7 +113,10 @@ function cancel() {
         {{ t('devices.reload') }}
       </button>
       <p v-for="target in batch.targets.filter((v) => v.execution)" :key="target.device">
-        {{ t('devices.execution') }}: {{ target.execution }} · {{ t('devices.futureExecution') }}
+        <RouterLink
+          :to="{ name: 'policy-execution', params: { tenant, execution: target.execution } }"
+          >{{ t('devices.execution') }}: {{ target.execution }}</RouterLink
+        >
       </p>
     </template>
     <button

@@ -1,3 +1,4 @@
+import type { Operation } from '../../../services/useOperation'
 /** Published rss-mdm v2 asset contract; candidate directory is a separate projection. */
 import type { HttpTransport } from '@rss/api/mdm'
 import {
@@ -20,7 +21,6 @@ import {
   savedQuery,
   summary,
   type ManualChange,
-  type Operation,
   type Query,
 } from './asset-model'
 export * from './asset-model'

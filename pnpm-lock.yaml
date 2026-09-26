@@ -21,6 +21,9 @@ catalogs:
     '@vue/test-utils':
       specifier: ^2.4.6
       version: 2.4.10
+    ajv:
+      specifier: 6.15.0
+      version: 6.15.0
     axios:
       specifier: ^1.7.9
       version: 1.16.1
@@ -232,6 +235,9 @@ importers:
       '@vue/test-utils':
         specifier: 'catalog:'
         version: 2.4.10(@vue/compiler-dom@3.5.35)(@vue/server-renderer@3.5.35(vue@3.5.35(typescript@5.7.3)))(vue@3.5.35(typescript@5.7.3))
+      ajv:
+        specifier: 'catalog:'
+        version: 6.15.0
       jsdom:
         specifier: 'catalog:'
         version: 25.0.1

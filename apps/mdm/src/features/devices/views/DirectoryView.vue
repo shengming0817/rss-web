@@ -2,7 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
-import { useOperation } from '../useOperation'
+import { useOperation } from '../../../services/useOperation'
 import DeviceFrame from '../components/DeviceFrame.vue'
 import BatchPanel from '../components/BatchPanel.vue'
 const { t } = useI18n(),

@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import type { FieldDefinition, Inventory, ManualChange, Scalar } from '../clients/assets'
-import { operation, useOperation } from '../useOperation'
+import { operation, useOperation } from '../../../services/useOperation'
 import ScalarEditor from './ScalarEditor.vue'
 import AssetValue from './AssetValue.vue'
 const props = defineProps<{ device: string; inventory: Inventory; fields: FieldDefinition[] }>()

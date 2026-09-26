@@ -1,6 +1,6 @@
 /** MDM browser protocol policy over the shared HTTP executor. No retries. */
 import axios from 'axios'
-import { MDM_JSON_BODY_LIMIT } from './mdm-limits'
+import { isMdmContentPath, MDM_CONTENT_BODY_LIMIT, MDM_JSON_BODY_LIMIT } from './mdm-limits'
 import { decodeIdentityError } from './identity'
 import { execute } from './transport'
 import { clientError, identityWireFailure, protocolError } from './wire-error'
@@ -65,17 +65,44 @@ export function decodeMdmError(status: number, value: unknown): RssApiError {
   return identityWireFailure(status, v['code'])
 }
 const paths =
-  /^\/api\/(?:v1\/(?:authorization|devices|software-sources)(?:\/|$)|v2\/(?:asset-fields|device-queries|devices|saved-queries|groups|scopes|policies|tasks)(?:\/|$)|v3\/(?:resources|script-plans|enrollments|devices)(?:\/|$)|mdm-host\/v1\/config\.json$|mdm-candidate\/v1\/(?:workspace|devices|groups|policies|executions|security|support|authorization|audit|operations|integrations)(?:\/|$))/
+  /^\/api\/(?:v1\/(?:authorization|devices|software-sources)(?:\/|$)|v2\/(?:asset-fields|device-queries|devices|saved-queries|groups|scopes|policies)(?:\/|$)|v3\/(?:resources|enrollments|devices)(?:\/|$)|mdm-host\/v1\/config\.json$|mdm-candidate\/v1\/(?:workspace|devices|groups|policies|executions|security|support|authorization|audit|operations|integrations)(?:\/|$))/
 export function createMdmTransport(): HttpTransport {
   const instance = axios.create({ baseURL: '' })
   return {
     async request(options: NoContentRequest | RequestOptions<unknown>) {
       if (!paths.test(options.path)) throw clientError()
+      const content = options.method === 'POST' && isMdmContentPath(options.path)
       if (
-        Object.keys(options.headers ?? {}).some(
-          (key) =>
-            !['x-identity-request', 'x-csrf-token', 'idempotency-key'].includes(key.toLowerCase()),
+        Object.entries(options.headers ?? {}).some(
+          ([key, value]) =>
+            !['x-identity-request', 'x-csrf-token', 'idempotency-key'].includes(
+              key.toLowerCase(),
+            ) &&
+            !(
+              content &&
+              key.toLowerCase() === 'content-type' &&
+              value === 'application/octet-stream'
+            ),
         )
+      )
+        throw clientError()
+      if (content) {
+        if (!(options.body instanceof ArrayBuffer) || !options.body.byteLength) throw clientError()
+        if (options.body.byteLength > MDM_CONTENT_BODY_LIMIT) throw decodeMdmError(413, undefined)
+        return execute(
+          instance,
+          30_000,
+          {
+            ...options,
+            headers: { ...options.headers, 'Content-Type': 'application/octet-stream' },
+          },
+          decodeMdmError,
+        )
+      }
+      if (
+        options.body instanceof ArrayBuffer ||
+        ArrayBuffer.isView(options.body) ||
+        (typeof Blob !== 'undefined' && options.body instanceof Blob)
       )
         throw clientError()
       if (

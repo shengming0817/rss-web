@@ -8,7 +8,7 @@ import {
   generateEnrollmentPassword,
   type EnrollmentSource,
 } from '../clients/enrollment'
-import { useOperation } from '../useOperation'
+import { useOperation } from '../../../services/useOperation'
 import DeviceFrame from '../components/DeviceFrame.vue'
 const { t } = useI18n(),
   route = useRoute(),

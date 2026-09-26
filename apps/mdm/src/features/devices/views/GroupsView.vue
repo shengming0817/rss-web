@@ -2,7 +2,7 @@
 import { onMounted, ref, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
-import { operation, useOperation } from '../useOperation'
+import { operation, useOperation } from '../../../services/useOperation'
 import type { Criteria, FieldDefinition } from '../clients/assets'
 import type { GroupChange, GroupProjection, GroupRead } from '../clients/groups'
 import DeviceFrame from '../components/DeviceFrame.vue'
@@ -204,6 +204,14 @@ function openGroup(group: string) {
     </p>
     <section v-if="current" class="identity-card" data-testid="server-definition">
       <h2>{{ t('devices.current') }}</h2>
+      <RouterLink
+        :to="{
+          name: 'policy-scopes',
+          params: { tenant: runtime.tenant },
+          query: { group: current.group.id },
+        }"
+        >{{ t('policies.scopes') }}</RouterLink
+      >
       <p>{{ current.group.name }} · {{ current.group.description }}</p>
       <fieldset disabled>
         <CriteriaEditor :model-value="current.criteria" :fields="fields" />

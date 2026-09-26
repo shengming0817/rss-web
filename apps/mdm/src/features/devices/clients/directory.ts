@@ -1,3 +1,4 @@
+import type { Operation } from '../../../services/useOperation'
 /** Candidate devices-v1 projection, owned by rss-mdm; not a published backend contract. */
 import type { HttpTransport } from '@rss/api/mdm'
 import {
@@ -12,7 +13,7 @@ import {
   unique,
   uuid,
 } from '../../../services/decode'
-import { cursor, resolvedField, type Operation } from './asset-model'
+import { cursor, resolvedField } from './asset-model'
 import { groupSummary } from './groups'
 export const lifecycleActions = [
   'ade',

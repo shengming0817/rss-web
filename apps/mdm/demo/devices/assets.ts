@@ -8,7 +8,8 @@ import {
   type SavedQuery,
 } from '../../src/features/devices/clients/asset-model'
 import { catalog, fact, type DemoDevice } from './fixtures'
-import { asset, createPages, createReceipts, error, operation } from './http'
+import { asset } from './http'
+import { createPages, createReceipts, error, operation } from '../http'
 import { evaluate } from './criteria'
 interface Search {
   reads: number

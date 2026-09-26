@@ -1,4 +1,4 @@
-import { createApp } from 'vue'
+import { createApp, computed } from 'vue'
 import { createIdentityTransport } from '@rss/api/identity'
 import { startMdm } from '../src/bootstrap'
 import { TENANT } from './scenario'
@@ -12,4 +12,9 @@ const runtime = startMdm(
   true,
 )
 
-createApp(DemoControls).use(runtime.i18n).mount(controls)
+createApp(DemoControls, {
+  transport: runtime.transport,
+  authenticated: computed(() => runtime.session.state.value.status === 'authenticated'),
+})
+  .use(runtime.i18n)
+  .mount(controls)

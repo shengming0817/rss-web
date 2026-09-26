@@ -1,7 +1,9 @@
 /** MOCK_SOURCE: synthetic HTTP server, never part of a production entry. */
-import { MDM_JSON_BODY_LIMIT } from '@rss/api/mdm-limits'
+import type { DemoEvent } from './policies/schedule'
+import { MDM_JSON_BODY_LIMIT, MDM_CONTENT_BODY_LIMIT, isMdmContentPath } from '@rss/api/mdm-limits'
 export const TENANT = '11111111-1111-4111-8111-111111111111'
 const PRINCIPAL = '22222222-2222-4222-8222-222222222222'
+const REVIEWER = '33333333-3333-4333-8333-333333333333'
 export const scenarios = [
   'normal',
   'empty',
@@ -20,6 +22,7 @@ export interface Reply {
   body?: unknown
 }
 export interface DemoRequest {
+  actor: { principalId: string; sessionId: string }
   method: string
   path: string
   body: unknown
@@ -30,9 +33,13 @@ export type DomainHandler = (request: DemoRequest, scenario: Scenario) => Reply 
 export function createScenario(
   handlers: DomainHandler[] = [],
   resetDomains: () => void = () => {},
+  advance: (event: DemoEvent, scenario: Scenario) => void = () => {},
+  observed: (method: string, path: string, scenario: Scenario) => void = () => {},
 ) {
   let active: Scenario = 'normal'
   let signedIn = false
+  let principalId = PRINCIPAL
+  let sessionId = crypto.randomUUID()
   let epoch = 0
   let token = '0'.repeat(64)
   const sources: Record<string, 'real' | 'mock'> = {
@@ -55,12 +62,12 @@ export function createScenario(
     token = (epoch + 1).toString(16).padStart(64, '0')
     return {
       session: {
-        id: PRINCIPAL,
+        id: sessionId,
         authTime: 1,
         idleExpiresAt: 4102444800,
         absoluteExpiresAt: 4102444900,
       },
-      identity: { principalId: PRINCIPAL, hasLocalPassword: true },
+      identity: { principalId, hasLocalPassword: true },
       csrfToken: token,
     }
   }
@@ -70,17 +77,45 @@ export function createScenario(
     body?: unknown,
     headers: Record<string, string | string[] | undefined> = {},
   ): Promise<Reply> {
-    if (
+    const parsed = new URL(url, 'http://demo.invalid')
+    const path = parsed.pathname
+    const content = method === 'POST' && isMdmContentPath(path)
+    if (content) {
+      if (!(body instanceof ArrayBuffer) || body.byteLength === 0)
+        return { status: 400, body: { code: 'malformed_request' } }
+      if (body.byteLength > MDM_CONTENT_BODY_LIMIT) return { status: 413 }
+    } else if (body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
+      return { status: 400, body: { code: 'malformed_request' } }
+    } else if (
       body !== undefined &&
       new TextEncoder().encode(JSON.stringify(body)).byteLength > MDM_JSON_BODY_LIMIT
     )
       return { status: 413 }
-    const parsed = new URL(url, 'http://demo.invalid')
-    const path = parsed.pathname
     const data = body && typeof body === 'object' ? (body as Record<string, unknown>) : {}
     if (path === '/api/mdm-candidate/v1/workspace/scenario' && method === 'GET')
       return { status: 200, body: { scenario: active, sources: { ...sources } } }
     if (path === '/api/mdm-candidate/v1/workspace/scenario' && method === 'POST') {
+      if (!signedIn) return { status: 401, body: { code: 'invalid_identity' } }
+      if (headers['x-csrf-token'] !== token || headers['x-identity-request'] !== '1')
+        return { status: 403, body: { code: 'csrf_rejected' } }
+      if (data['event'] !== undefined) {
+        if (!signedIn) return { status: 401, body: { code: 'invalid_identity' } }
+        if (sources['policies'] !== 'mock')
+          return { status: 409, body: { code: 'operation_conflict' } }
+        const event = data['event'] as Partial<DemoEvent> | null
+        if (
+          !event ||
+          !['clock', 'registration', 'check_in'].includes(event.kind ?? '') ||
+          typeof event.at !== 'number' ||
+          !Number.isSafeInteger(event.at) ||
+          event.at < 0 ||
+          event.at > 8640000000000 ||
+          (event.kind !== 'clock' && (typeof event.device !== 'string' || !event.device))
+        )
+          return { status: 400, body: { code: 'malformed_request' } }
+        advance(event as DemoEvent, active)
+        return { status: 204 }
+      }
       if (data['reset'] === true) reset()
       else {
         if (!scenarios.includes(data['scenario'] as Scenario))
@@ -97,9 +132,11 @@ export function createScenario(
     }
     const loginPath = `/api/v2/tenants/${TENANT}/login`
     if (path === loginPath && method === 'POST') {
-      if (data['login'] !== 'demo' || data['password'] !== 'demo')
+      if (!['demo', 'reviewer'].includes(String(data['login'])) || data['password'] !== 'demo')
         return { status: 401, body: { code: 'invalid_credential' } }
       signedIn = true
+      principalId = data['login'] === 'reviewer' ? REVIEWER : PRINCIPAL
+      sessionId = crypto.randomUUID()
       epoch++
       return { status: 200, body: session() }
     }
@@ -115,8 +152,8 @@ export function createScenario(
         status: 200,
         body: {
           tenantId: TENANT,
-          principalId: PRINCIPAL,
-          sessionId: PRINCIPAL,
+          principalId,
+          sessionId,
           navigation: { manageAccounts: false, manageProviders: false },
         },
       }
@@ -163,10 +200,15 @@ export function createScenario(
           })),
         },
       }
-    const module =
-      /^\/api\/(?:v2\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v3\/(?:enrollments|devices))(?:\/|$)/.test(
+    const policyPath =
+      /^\/api\/(?:v2\/(?:scopes|policies)(?:\/|$)|v3\/(?:resources)(?:\/|$)|v2\/devices\/[^/]+\/operations(?:\/|$)|mdm-candidate\/v1\/(?:policies|executions)(?:\/|$))/.test(
         path,
       )
+    const module = policyPath
+      ? 'policies'
+      : /^\/api\/(?:v2\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v3\/(?:enrollments|devices))(?:\/|$)/.test(
+            path,
+          )
         ? 'devices'
         : path.startsWith('/api/mdm-candidate/v1/groups')
           ? 'devices'
@@ -174,11 +216,23 @@ export function createScenario(
     if (module && sources[module] === 'real')
       return { status: 503, body: { code: 'service_unavailable' } }
     for (const handler of handlers) {
-      const reply = handler({ method, path, body, query: parsed.searchParams, headers }, active)
-      if (reply)
+      const reply = handler(
+        {
+          method,
+          path,
+          body,
+          query: parsed.searchParams,
+          headers,
+          actor: { principalId, sessionId },
+        },
+        active,
+      )
+      if (reply) {
+        if (reply.status >= 200 && reply.status < 300) observed(method, path, active)
         return unknownReply && reply.status >= 200 && reply.status < 300
           ? { status: 503, body: { code: 'operation_unknown' } }
           : reply
+      }
     }
     if (unknownReply) return { status: 503, body: { code: 'operation_unknown' } }
     return { status: 501, body: { code: 'action_not_supported' } }

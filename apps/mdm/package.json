@@ -27,6 +27,7 @@
     "vitest": "catalog:",
     "@vue/test-utils": "catalog:",
     "jsdom": "catalog:",
-    "@vitest/coverage-v8": "catalog:"
+    "@vitest/coverage-v8": "catalog:",
+    "ajv": "catalog:"
   }
 }

@@ -6,7 +6,7 @@ import {
   type EnrollmentSource,
 } from '../../src/features/devices/clients/enrollment'
 import type { DemoDevice } from './fixtures'
-import { createReceipts, error, ok } from './http'
+import { createReceipts, error, ok } from '../http'
 interface Enrollment {
   enrollmentId: string
   device: string

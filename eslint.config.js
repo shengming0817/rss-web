@@ -271,7 +271,7 @@ export default tseslint.config(
       'no-restricted-imports': boundaryRule(
         [
           {
-            regex: '^@rss/(?!core(?:/|$)|auth$|api/mdm$)',
+            regex: '^@rss/(?!core(?:/|$)|auth$|api/(?:mdm|mdm-limits)$)',
             message: 'Features consume injected clients and public UI.',
           },
         ],

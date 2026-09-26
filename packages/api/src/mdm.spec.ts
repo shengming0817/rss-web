@@ -99,3 +99,79 @@ it('counts the complete encoded JSON body at the inclusive 16 KiB boundary', asy
   expect(mock.history.put).toHaveLength(1)
   expect(new TextEncoder().encode(mock.history.put[0]!.data).byteLength).toBe(16_384)
 })
+
+it('sends raw resource content unchanged only through the explicit content route', async () => {
+  const instance = axios.create()
+  const mock = new AxiosMockAdapter(instance)
+  const spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance)
+  const transport = createMdmTransport()
+  spy.mockRestore()
+  const bytes = new Uint8Array([0, 255, 128, 10]).buffer
+  mock.onPost('/api/v3/resources/script/content').reply((config) => {
+    expect(config.data).toBe(bytes)
+    expect(config.headers?.['Content-Type']).toBe('application/octet-stream')
+    return [201, '']
+  })
+  await expect(
+    transport.request({
+      method: 'POST',
+      path: '/api/v3/resources/{id}/content',
+      pathParams: { id: 'script' },
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: bytes,
+      successStatus: 201,
+      decode: (v) => {
+        if (v !== '') throw new Error('Unexpected body')
+      },
+    }),
+  ).resolves.toBeUndefined()
+  await expect(
+    transport.request({
+      method: 'POST',
+      path: '/api/v2/groups/group',
+      body: bytes,
+      successStatus: 200,
+      decode: (v) => v,
+    }),
+  ).rejects.toMatchObject({ cause: 'client' })
+  await expect(
+    transport.request({
+      method: 'GET',
+      path: '/api/v3/resources/{id}/content',
+      pathParams: { id: 'script' },
+      body: bytes,
+      successStatus: 200,
+      decode: (v) => v,
+    }),
+  ).rejects.toMatchObject({ cause: 'client' })
+  expect(mock.history.post).toHaveLength(1)
+})
+
+it('enforces the exact resource content byte budget without widening JSON routes', async () => {
+  const instance = axios.create()
+  const mock = new AxiosMockAdapter(instance)
+  mock.onPost().reply(201, '')
+  const spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance)
+  const transport = createMdmTransport()
+  spy.mockRestore()
+  const upload = (body: unknown) =>
+    transport.request({
+      method: 'POST',
+      path: '/api/v3/resources/{id}/content',
+      pathParams: { id: 'script' },
+      body,
+      successStatus: 201,
+      decode: (v) => v,
+    })
+  await expect(upload(new ArrayBuffer(16_777_216))).resolves.toBe('')
+  await expect(upload(new ArrayBuffer(16_777_217))).rejects.toMatchObject({
+    status: 413,
+    cause: 'wire',
+  })
+  await expect(upload(new Uint8Array([1]).subarray(0, 1))).rejects.toMatchObject({
+    cause: 'client',
+  })
+  await expect(upload({ text: 'wrong format' })).rejects.toMatchObject({ cause: 'client' })
+  await expect(upload(new ArrayBuffer(0))).rejects.toMatchObject({ cause: 'client' })
+  expect(mock.history.post).toHaveLength(1)
+})

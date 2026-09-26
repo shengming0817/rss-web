@@ -41,6 +41,9 @@ it('ignores responses after route changes/unmount and keeps business error meani
   await pending
   expect(apply).not.toHaveBeenCalled()
   for (const [status, code, key] of [
+    [400, 'malformed_request', 'invalidRequest'],
+    [404, 'operation_not_found', 'notFound'],
+    [429, 'request_limited', 'limited'],
     [403, 'permission_denied', 'denied'],
     [409, 'operation_conflict', 'conflict'],
     [501, 'action_not_supported', 'unsupported'],

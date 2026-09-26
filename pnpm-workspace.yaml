@@ -23,6 +23,8 @@ catalog:
   vue-tsc: ^2.2.0
   '@types/node': ^22.10.5
   # —— 样式 ——
+  # Synthetic HTTP demo validates the backend's finite JSON Schema subset.
+  ajv: 6.15.0
   # —— 测试 ——
   vitest: ^3.0.4
   '@vue/test-utils': ^2.4.6
