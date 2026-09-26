@@ -141,7 +141,12 @@ export function workflowRun(value: unknown, workflow: string, id?: string) {
     revision: count(v['revision']),
     version: count(v['version']),
     author: uuid(v['author']),
-    approval: enumeration(v['approval'], ['pending', 'approved', 'blocked'] as const),
+    approval: enumeration(v['approval'], [
+      'not_required',
+      'pending',
+      'approved',
+      'blocked',
+    ] as const),
     state: enumeration(v['state'], [
       'waiting',
       'running',

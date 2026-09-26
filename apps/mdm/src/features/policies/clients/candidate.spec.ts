@@ -120,7 +120,7 @@ it('submits workflow CAS without accepting an approver supplied by a browser', a
       trigger: { kind: 'manual' },
       misfire: 'skip',
       notBefore: 0,
-      until: 4102444800,
+      until: 86400,
       jitterSeconds: 0,
       window: null,
     },
@@ -150,4 +150,23 @@ it('submits workflow CAS without accepting an approver supplied by a browser', a
   })
   t.reply(envelope({ workflow: { ...workflow, approver: 'browser-selected' } }))
   await expect(client.read(id)).rejects.toThrow()
+})
+it('rejects retired catalog statuses and workflow approvals without a concrete run', async () => {
+  const t = transport(
+      envelope({
+        snapshot,
+        items: [{ id, label: 'Bad', revision: 1, status: 'pending_review' }],
+        nextCursor: null,
+      }),
+    ),
+    client = createCatalogClient(t.http, tenant, true)
+  await expect(client.list('policies')).rejects.toThrow()
+  t.reply(
+    envelope({
+      snapshot,
+      items: [{ kind: 'workflow', id, run: null, revision: 1, author: tenant, label: 'Review' }],
+      nextCursor: null,
+    }),
+  )
+  await expect(client.approvals()).rejects.toThrow()
 })

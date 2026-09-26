@@ -31,18 +31,14 @@ export function createCatalogClient(transport: HttpTransport, tenant: string, de
                   id: identifier(i['id']),
                   label: identifier(i['label']),
                   revision: count(i['revision']),
-                  status: enumeration(i['status'], [
-                    'ready',
-                    'draft',
-                    'frozen',
-                    'active',
-                    'paused',
-                    'archived',
-                    'pending_review',
-                    'approved',
-                    'cancelled',
-                    'deleted',
-                  ] as const),
+                  status: enumeration(
+                    i['status'],
+                    collection === 'policies'
+                      ? (['active', 'paused', 'archived'] as const)
+                      : collection === 'workflows'
+                        ? (['active', 'archived'] as const)
+                        : (['ready'] as const),
+                  ),
                 }
               }),
               (i) => i.id,
@@ -66,7 +62,7 @@ export function createCatalogClient(transport: HttpTransport, tenant: string, de
               return {
                 kind: enumeration(a['kind'], ['workflow'] as const),
                 id: uuid(a['id']),
-                run: nullable(a['run'], uuid),
+                run: uuid(a['run']),
                 revision: count(a['revision']),
                 author: uuid(a['author']),
                 label: identifier(a['label']),

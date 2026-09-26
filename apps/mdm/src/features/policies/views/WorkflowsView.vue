@@ -164,6 +164,7 @@ onMounted(async () => {
     <p>{{ t('policies.independent') }}</p>
     <button :disabled="busy || uncertain" @click="create">{{ t('policies.create') }}</button
     ><button :disabled="busy" @click="load()">{{ t('policies.reload') }}</button>
+    <p v-if="list && !list.items.length">{{ t('policies.empty') }}</p>
     <ul>
       <li v-for="item in list?.items" :key="item.id">
         <button :disabled="busy || uncertain" @click="open(item.id)">{{ item.label }}</button>
@@ -219,7 +220,7 @@ onMounted(async () => {
       <button :disabled="busy || uncertain || current.status === 'archived'" @click="archive">
         {{ t('policies.archive') }}</button
       ><button :disabled="busy || uncertain || current.status === 'archived'" @click="start">
-        {{ t('policies.submitReview') }}</button
+        {{ t('policies.startWorkflow') }}</button
       ><button :disabled="busy" @click="page()">{{ t('policies.executions') }}</button>
       <ul>
         <li v-for="item in runs?.items" :key="item.id">
@@ -245,7 +246,13 @@ onMounted(async () => {
       </p>
       <button :disabled="busy" @click="readRun()">{{ t('policies.verify') }}</button
       ><button
-        v-for="action in ['approve', 'reapprove', 'cancel'] as const"
+        v-for="action in (['completed', 'partial', 'cancelled', 'cancel_requested'].includes(
+          activeRun.state,
+        )
+          ? []
+          : activeRun.approval === 'pending'
+            ? ['approve', 'cancel']
+            : ['cancel']) as ('approve' | 'cancel')[]"
         :key="action"
         :disabled="busy || uncertain"
         @click="changeRun(action)"

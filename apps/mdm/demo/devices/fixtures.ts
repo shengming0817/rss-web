@@ -8,6 +8,7 @@ import type {
 } from '../../src/features/devices/clients/asset-model'
 import type { registration } from '../../src/features/devices/clients/enrollment'
 export interface DemoDevice {
+  architecture?: 'x86_64' | 'aarch64'
   summary: DeviceSummary
   inventory: Inventory
   registrations: ReturnType<typeof registration>[]
@@ -152,6 +153,7 @@ export function makeDevices(): Map<string, DemoDevice> {
         id,
         {
           summary,
+          architecture: platform === 'windows' ? 'x86_64' : 'aarch64',
           inventory: { device: id, channels, fields, quality: [], revisions },
           registrations,
           ...(platform === 'windows' && channels.includes('mdm')

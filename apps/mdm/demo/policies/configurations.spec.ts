@@ -3,7 +3,7 @@ import { expect, it } from 'vitest'
 import { createConfigurationDemo } from './configurations'
 import { createDeviceDemo } from '../devices/state'
 import type { DemoRequest } from '../scenario'
-it('freezes configuration versions, computes differences, and labels broad settings as candidate-only', () => {
+it('freezes configuration versions, computes differences, and previews candidate execution without claiming real effects', () => {
   const devices = createDeviceDemo(),
     actor = { principalId: randomUUID(), sessionId: randomUUID() },
     id = randomUUID(),
@@ -67,7 +67,7 @@ it('freezes configuration versions, computes differences, and labels broad setti
     preview: {
       status: 'completed',
       rows: expect.arrayContaining([
-        expect.objectContaining({ support: 'blocked', reason: 'candidate_only', drift: 'unknown' }),
+        expect.objectContaining({ support: 'executable', reason: null, drift: 'unknown' }),
       ]),
     },
   })

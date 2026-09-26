@@ -3,6 +3,8 @@ import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { createScenario, TENANT } from '../scenario'
 import { createDeviceDemo } from '../devices/state'
 import { createAutomationDemo } from './state'
+import { createGroupsClient } from '../../src/features/devices/clients/groups'
+import { createEnrollmentClient } from '../../src/features/devices/clients/enrollment'
 import { createPolicyClients } from '../../src/features/policies/client'
 const operation = <T>(input: T, expectedRevision = 0) => ({
   operationId: crypto.randomUUID(),
@@ -19,6 +21,7 @@ it('carries Scope and resource edits through HTTP clients into continuous assign
         automation.reset()
       },
       automation.tick,
+      automation.observe,
     )
   const login = await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
     login: 'demo',
@@ -38,7 +41,12 @@ it('carries Scope and resource edits through HTTP clients into continuous assign
           .filter(([, v]) => v !== undefined)
           .map(([k, v]) => [k, String(v)]),
       )
-      const r = await scenario.handle(o.method, `${path}?${query}`, o.body, headers)
+      const r = await scenario.handle(o.method, `${path}?${query}`, o.body, {
+        ...headers,
+        ...Object.fromEntries(
+          Object.entries(o.headers ?? {}).map(([key, value]) => [key.toLowerCase(), value]),
+        ),
+      })
       if (r.status !== o.successStatus)
         throw Object.assign(new Error('Rejected'), { status: r.status })
       return o.decode(r.body)
@@ -72,20 +80,29 @@ it('carries Scope and resource edits through HTTP clients into continuous assign
   const before = (await client.executions.list()).items
   await client.policies.preview('policy', definition)
   expect((await client.executions.list()).items).toEqual(before)
+  const groups = createGroupsClient(transport),
+    group = crypto.randomUUID()
+  await groups.change(
+    group,
+    operation({ action: 'create', name: 'Pilot', description: '', criteria: null }),
+  )
   await client.scopes.change(
     scope,
     operation(
       {
         action: 'put',
-        definition: {
-          targets: [{ kind: 'device', id: 'device-01' }],
-          limitations: null,
-          exclusions: [],
-        },
+        definition: { targets: [{ kind: 'group', id: group }], limitations: null, exclusions: [] },
       },
       1,
     ),
   )
+  const membership = await groups.change(
+    group,
+    operation({ action: 'members', add: ['device-01'], remove: [] }, 1),
+  )
+  expect((await client.policies.read('policy')).members).toEqual([])
+  await groups.status(group, membership.task!)
+  await groups.status(group, membership.task!)
   const current = await client.policies.read('policy')
   expect(current.revision).toBe(1)
   expect(current.members[0]).toMatchObject({
@@ -100,6 +117,13 @@ it('carries Scope and resource edits through HTTP clients into continuous assign
     effect: 'unverified',
     compliance: 'unknown',
   })
+  const enrollment = createEnrollmentClient(transport)
+  const registration = (await enrollment.registrations('device-01')).items.find(
+    (r) => r.source === 'mdm.windows',
+  )!
+  await enrollment.revoke('device-01', registration.registrationId, crypto.randomUUID())
+  expect((await client.policies.read('policy')).members[0]?.reason).toBe('authorization')
+  expect((await client.executions.read(execution.id)).execution).toBe('cancelled')
   const pause = operation(
     { action: 'put' as const, definition: { ...definition, enabled: false } },
     1,

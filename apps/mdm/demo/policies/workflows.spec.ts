@@ -2,27 +2,21 @@ import { randomUUID } from 'node:crypto'
 import { expect, it } from 'vitest'
 import { createWorkflowDemo } from './workflows'
 import { createDeviceDemo } from '../devices/state'
-import type { WorkflowDefinition } from '../../src/features/policies/clients/workflows'
+import type { WorkflowDefinition, WorkflowRun } from '../../src/features/policies/clients/workflows'
 import type { DemoRequest } from '../scenario'
-it('freezes workflow targets, enforces independent approval, and retains unknown effects after cancellation', () => {
-  const devices = createDeviceDemo(),
-    author = randomUUID(),
+function fixture(approval: boolean) {
+  const author = randomUUID(),
     reviewer = randomUUID(),
-    id = randomUUID()
-  const scope = {
-    id: randomUUID(),
-    revision: 1,
-    members: [devices.facts()[0]!.summary.id],
-    sources: [],
-  }
+    id = randomUUID(),
+    scope = { id: randomUUID(), revision: 1, members: ['device-01'], sources: [] }
   const workflows = createWorkflowDemo(
-    devices,
+    createDeviceDemo(),
     { freeze: () => structuredClone(scope) },
     { read: () => null },
     { read: () => null },
   )
   const definition: WorkflowDefinition = {
-    name: 'Inventory review',
+    name: 'Query',
     scope: scope.id,
     schedule: {
       trigger: { kind: 'manual' },
@@ -33,6 +27,17 @@ it('freezes workflow targets, enforces independent approval, and retains unknown
       window: null,
     },
     steps: [
+      ...(approval
+        ? [
+            {
+              id: randomUUID(),
+              name: 'Review',
+              condition: null,
+              onFailure: 'stop' as const,
+              action: { kind: 'approval' as const },
+            },
+          ]
+        : []),
       {
         id: randomUUID(),
         name: 'Collect',
@@ -47,9 +52,9 @@ it('freezes workflow targets, enforces independent approval, and retains unknown
     ],
   }
   const path = `/api/mdm-candidate/v1/policies/workflows/${id}`
-  function request(path: string, input?: unknown, revision = 0, principalId = author): DemoRequest {
+  function request(url: string, input?: unknown, revision = 0, principalId = author): DemoRequest {
     return {
-      path,
+      path: url,
       method: input === undefined ? 'GET' : 'POST',
       body:
         input === undefined
@@ -60,58 +65,46 @@ it('freezes workflow targets, enforces independent approval, and retains unknown
       query: new URLSearchParams(),
     }
   }
-  definition.steps.push({
-    ...structuredClone(definition.steps[0]!),
-    id: randomUUID(),
-    name: 'Second step',
-  })
   expect(workflows.handle(request(path, { action: 'put', definition }), 'normal')?.status).toBe(200)
-  const started = workflows.handle(request(`${path}/runs`, {}, 1), 'normal')!
-  expect(started.status).toBe(202)
-  const run = (started.body as { run: { id: string } }).run.id
-  scope.members.push('device-02')
-  expect(workflows.handle(request(`${path}/runs/${run}/approve`, {}, 1), 'normal')?.status).toBe(
-    403,
-  )
-  expect(
-    workflows.handle(request(`${path}/runs/${run}/approve`, {}, 1, reviewer), 'normal')?.status,
-  ).toBe(200)
-  const read = workflows.handle(request(`${path}/runs/${run}`), 'normal')!
-  expect(read.body).toMatchObject({
-    run: { targets: [scope.members[0]], executions: [expect.any(String)] },
+  const start = workflows.handle(request(`${path}/runs`, {}, 1), 'normal')!
+  expect(start.status).toBe(202)
+  const run = (start.body as { run: WorkflowRun }).run
+  return { workflows, scope, path, run, request, reviewer }
+}
+it('starts ordinary workflows without approval and preserves frozen targets and unknown results', () => {
+  const f = fixture(false)
+  expect(f.workflows.approvals()).toEqual([])
+  f.scope.members.push('device-02')
+  const path = `${f.path}/runs/${f.run.id}`
+  const unknown = f.workflows.handle(f.request(path), 'unknown')!.body as { run: WorkflowRun }
+  expect(unknown.run).toMatchObject({
+    state: 'unknown',
+    targets: ['device-01'],
+    executions: [expect.any(String)],
   })
-  expect(workflows.executions()[0]).toMatchObject({ effect: 'unverified', compliance: 'unknown' })
-  const revision = (read.body as { run: { revision: number } }).run.revision
   expect(
-    workflows.handle(request(`${path}/runs/${run}/cancel`, {}, revision), 'normal')?.status,
-  ).toBe(200)
-  expect(workflows.executions()[0]?.effect).toBe('unverified')
+    (f.workflows.handle(f.request(path), 'normal')!.body as { run: WorkflowRun }).run.executions,
+  ).toEqual(unknown.run.executions)
+})
+it('requires a second subject only at an explicit approval step and confirms cancellation on a demo event', () => {
+  const f = fixture(true),
+    path = `${f.path}/runs/${f.run.id}`
+  const waiting = (f.workflows.handle(f.request(path), 'normal')!.body as { run: WorkflowRun }).run
+  expect(waiting.approval).toBe('pending')
+  expect(f.workflows.approvals()).toHaveLength(1)
   expect(
-    workflows.handle(request(`${path}/runs/${run}/cancel`, {}, revision + 1), 'normal')?.status,
-  ).toBe(409)
-  const uncertain = workflows.handle(request(`${path}/runs`, {}, 1), 'normal')!
-  const uncertainId = (uncertain.body as { run: { id: string } }).run.id
-  workflows.handle(request(`${path}/runs/${uncertainId}/approve`, {}, 1, reviewer), 'normal')
-  expect(workflows.handle(request(`${path}/runs/${uncertainId}`), 'unknown')?.body).toMatchObject({
-    run: { state: 'unknown', executions: scope.members.map(() => expect.any(String)) },
-  })
-  expect(workflows.handle(request(`${path}/runs/${uncertainId}`), 'normal')?.body).toMatchObject({
-    run: { state: 'unknown', executions: scope.members.map(() => expect.any(String)) },
-  })
-  const terminal = workflows.handle(request(`${path}/runs`, {}, 1), 'normal')!
-  const terminalId = (terminal.body as { run: { id: string } }).run.id
-  workflows.handle(request(`${path}/runs/${terminalId}/approve`, {}, 1, reviewer), 'normal')
-  workflows.handle(request(`${path}/runs/${terminalId}`), 'normal')
-  const completed = workflows.handle(request(`${path}/runs/${terminalId}`), 'normal')!
-  expect(completed.body).toMatchObject({ run: { state: 'completed' } })
+    f.workflows.handle(f.request(`${path}/approve`, {}, waiting.revision), 'normal')?.status,
+  ).toBe(403)
+  const approved = f.workflows.handle(
+    f.request(`${path}/approve`, {}, waiting.revision, f.reviewer),
+    'normal',
+  )!
+  expect(approved.status).toBe(200)
+  const revision = (approved.body as { run: WorkflowRun }).run.revision
+  expect(f.workflows.handle(f.request(`${path}/cancel`, {}, revision), 'normal')?.status).toBe(200)
+  f.workflows.tick({ kind: 'clock', at: Math.floor(Date.now() / 1000) + 1 })
   expect(
-    workflows.handle(
-      request(
-        `${path}/runs/${terminalId}/cancel`,
-        {},
-        (completed.body as { run: { revision: number } }).run.revision,
-      ),
-      'normal',
-    )?.status,
-  ).toBe(409)
+    (f.workflows.handle(f.request(path), 'normal')!.body as { run: WorkflowRun }).run.state,
+  ).toBe('cancelled')
+  expect(f.workflows.approvals()).toEqual([])
 })

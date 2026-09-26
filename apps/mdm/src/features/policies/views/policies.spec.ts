@@ -69,5 +69,8 @@ it('saves an empty assignment directly, preserves draft during progress reads an
   await button('重放同一操作').trigger('click')
   await flushPromises()
   expect(change.mock.calls[1]).toEqual(change.mock.calls[0])
+  await button('新建').trigger('click')
+  expect((wrapper.get('#policy-resource').element as HTMLInputElement).value).toBe('')
+  expect((wrapper.get('#policy-scope').element as HTMLInputElement).value).toBe('')
   wrapper.unmount()
 })

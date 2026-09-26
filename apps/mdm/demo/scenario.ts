@@ -34,6 +34,7 @@ export function createScenario(
   handlers: DomainHandler[] = [],
   resetDomains: () => void = () => {},
   advance: (event: DemoEvent, scenario: Scenario) => void = () => {},
+  observed: (method: string, path: string, scenario: Scenario) => void = () => {},
 ) {
   let active: Scenario = 'normal'
   let signedIn = false
@@ -94,6 +95,9 @@ export function createScenario(
     if (path === '/api/mdm-candidate/v1/workspace/scenario' && method === 'GET')
       return { status: 200, body: { scenario: active, sources: { ...sources } } }
     if (path === '/api/mdm-candidate/v1/workspace/scenario' && method === 'POST') {
+      if (!signedIn) return { status: 401, body: { code: 'invalid_identity' } }
+      if (headers['x-csrf-token'] !== token || headers['x-identity-request'] !== '1')
+        return { status: 403, body: { code: 'csrf_rejected' } }
       if (data['event'] !== undefined) {
         if (!signedIn) return { status: 401, body: { code: 'invalid_identity' } }
         if (sources['policies'] !== 'mock')
@@ -223,10 +227,12 @@ export function createScenario(
         },
         active,
       )
-      if (reply)
+      if (reply) {
+        if (reply.status >= 200 && reply.status < 300) observed(method, path, active)
         return unknownReply && reply.status >= 200 && reply.status < 300
           ? { status: 503, body: { code: 'operation_unknown' } }
           : reply
+      }
     }
     if (unknownReply) return { status: 503, body: { code: 'operation_unknown' } }
     return { status: 501, body: { code: 'action_not_supported' } }

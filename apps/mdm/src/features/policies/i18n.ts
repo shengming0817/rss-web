@@ -1,4 +1,24 @@
 export const policiesZh = {
+  executionBasis: '本次执行的冻结依据（资源/参数摘要、Scope 与设备世代）',
+  invalidSchedule: '调度组合无效：请检查触发时间、IANA 时区、星期及起止窗口。',
+  observation: {
+    protocol: '协议',
+    result: '核对结果',
+    effect: '实际效果',
+    progress: '执行进度',
+    observationScope: '观察范围',
+    nativeStatus: '原生状态码',
+    receivedAt: '回执 UTC 时间',
+    receiptAccepted: '回执已受理',
+    writeStatus: '写入状态码',
+    attemptId: '尝试 ID',
+    attempt: '尝试次数',
+    quality: '数据质量',
+    cleanup: '清理状态',
+    value: '观察值',
+  },
+
+  startWorkflow: '启动工作流',
   scriptAssignment:
     '在资源库编辑脚本、参数与输出约束，再通过持续分配策略启用；普通脚本无需额外人工审批。',
   exitBehavior: '退出范围时',
@@ -14,6 +34,8 @@ export const policiesZh = {
   waitingMembers: '等待 Scope 成员；策略配置已保存。',
   assignment: {
     applicable: '适用',
+    conflict: '配置冲突',
+    cancelling: '等待旧执行取消确认',
     disabled: '未启用',
     offline: '设备离线',
     unsupported: '平台或能力不支持',
@@ -35,6 +57,7 @@ export const policiesZh = {
   identity: '设备身份',
   sourceVersion: '成员版本',
   state: {
+    not_required: '无需人工审批',
     draft: '草稿',
     frozen: '已冻结',
     active: '有效',
@@ -297,6 +320,28 @@ export const policiesZh = {
   independent: '必须由其他账户批准。演示账户 demo / reviewer，密码均为 demo。',
 }
 export const policiesEn: typeof policiesZh = {
+  executionBasis:
+    'Frozen execution basis (resource/parameter digests, Scope and device generation)',
+  invalidSchedule:
+    'Invalid schedule combination: check trigger time, IANA zone, weekdays and window bounds.',
+  observation: {
+    protocol: 'Protocol',
+    result: 'Comparison result',
+    effect: 'Effect',
+    progress: 'Execution progress',
+    observationScope: 'Observation scope',
+    nativeStatus: 'Native status',
+    receivedAt: 'Received at (UTC)',
+    receiptAccepted: 'Receipt accepted',
+    writeStatus: 'Write status',
+    attemptId: 'Attempt ID',
+    attempt: 'Attempt number',
+    quality: 'Quality',
+    cleanup: 'Cleanup status',
+    value: 'Observed value',
+  },
+
+  startWorkflow: 'Start workflow',
   scriptAssignment:
     'Author scripts, parameter and output constraints in Resources, then enable a continuous assignment. Ordinary scripts do not require an additional human approval.',
   exitBehavior: 'On scope exit',
@@ -312,6 +357,8 @@ export const policiesEn: typeof policiesZh = {
   waitingMembers: 'Waiting for Scope members; policy configuration is saved.',
   assignment: {
     applicable: 'Applicable',
+    conflict: 'Configuration conflict',
+    cancelling: 'Waiting for predecessor cancellation',
     disabled: 'Disabled',
     offline: 'Device offline',
     unsupported: 'Platform or capability unsupported',
@@ -333,6 +380,7 @@ export const policiesEn: typeof policiesZh = {
   identity: 'Device identity',
   sourceVersion: 'Member version',
   state: {
+    not_required: 'Human approval not required',
     draft: 'Draft',
     frozen: 'Frozen',
     active: 'Active',

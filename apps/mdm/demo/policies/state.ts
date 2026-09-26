@@ -111,6 +111,16 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
   }
   return {
     handle,
+    observe(method: string, path: string, scenario: Scenario) {
+      const deviceWrite =
+        method !== 'GET' &&
+        /^\/api\/(?:v[23]\/(?:devices|enrollments|groups)|mdm-candidate\/v1\/devices)(?:\/|$)/.test(
+          path,
+        ) &&
+        !path.includes('preview')
+      const groupPublished = method === 'GET' && /^\/api\/v2\/groups\/[^/]+\/tasks\//.test(path)
+      if (deviceWrite || groupPublished) policies.reconcile(scenario)
+    },
     tick(event: DemoEvent, scenario: Scenario = 'normal') {
       policies.reconcile(scenario, event)
       workflows.tick(event)

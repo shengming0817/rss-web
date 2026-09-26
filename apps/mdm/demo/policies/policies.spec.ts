@@ -106,7 +106,7 @@ it('blocks individual unsupported members and keeps unknown attempts without bli
   expect(f.policies.handle(f.request(path), 'normal')?.body).toMatchObject({
     policy: {
       members: expect.arrayContaining([
-        { device: 'device-02', reason: 'unsupported', execution: null },
+        { device: 'device-02', reason: 'unsupported', execution: null, cancellable: false },
       ]),
     },
   })
@@ -165,4 +165,40 @@ it('blocks offline and withdrawn identities per member and preserves confirmed r
   other.facts.find((d) => d.summary.id === 'device-01')!.registrations = []
   other.policies.reconcile('normal', { kind: 'clock', at: 2000000001 })
   expect(other.policies.executions()[0]?.execution).toBe('cancelled')
+})
+it('freezes execution basis and refuses terminal cancel while fencing deprecated resources', () => {
+  const f = fixture()
+  f.scope.members = ['device-01']
+  f.write(0)
+  const original = f.policies.executions()[0]!
+  expect(original.origin).toMatchObject({
+    kind: 'policy',
+    basis: {
+      resource: 'firewall',
+      version: '1',
+      scopeRevision: 1,
+      registrations: expect.any(Array),
+    },
+  })
+  f.resource.versions[0]!.state = 'deprecated'
+  f.policies.reconcile('normal', { kind: 'clock', at: 2000000000 })
+  expect(f.policies.executions()[0]?.execution).toBe('cancelled')
+  expect(f.write(1, { action: 'cancel_run', execution: original.id }).status).toBe(409)
+  expect(f.policies.executions()[0]?.origin).toEqual({
+    ...original.origin,
+    cancellation: 'confirmed',
+  })
+})
+it('waits for predecessor cancellation before dispatching a replacement', () => {
+  const f = fixture()
+  f.scope.members = ['device-01']
+  f.write(0)
+  f.policies.reconcile('normal', { kind: 'clock', at: 2000000000 })
+  f.resource.versions.push({ ...f.resource.versions[0]!, id: '2' })
+  f.write(1, { action: 'put', definition: { ...f.definition, resourceVersion: '2' } })
+  expect(f.policies.executions()).toHaveLength(1)
+  expect(f.policies.executions()[0]?.origin).toMatchObject({ cancellation: 'requested' })
+  f.policies.reconcile('normal', { kind: 'clock', at: 2000000001 })
+  expect(f.policies.executions()).toHaveLength(2)
+  expect(f.policies.executions()[0]?.execution).toBe('cancelled')
 })

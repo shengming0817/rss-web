@@ -71,6 +71,18 @@ function create() {
   if (busy.value || uncertain.value) return
   id.value = `policy-${crypto.randomUUID()}`
   current.value = undefined
+  Object.assign(definition.value, {
+    source: 'resource',
+    parameters: {},
+    resource: '',
+    resourceVersion: '1',
+    scope: '',
+    enabled: false,
+    exitBehavior: 'cancel',
+    trigger: { kind: 'on_change' },
+    validity: null,
+  })
+  parameters.value = '{}'
   previewRows.value = undefined
 }
 function change(input: PolicyChange) {
@@ -118,6 +130,7 @@ onMounted(async () => {
     <p>{{ t('policies.policyHint') }}</p>
     <button :disabled="busy || uncertain" @click="create">{{ t('policies.create') }}</button>
     <button :disabled="busy" @click="load()">{{ t('policies.reload') }}</button>
+    <p v-if="list && !list.items.length">{{ t('policies.empty') }}</p>
     <ul>
       <li v-for="item in list?.items" :key="item.id">
         <button :disabled="busy || uncertain" @click="open(item.id)">
@@ -261,7 +274,7 @@ onMounted(async () => {
               }"
               >{{ row.execution }}</RouterLink
             ><button
-              v-if="row.execution"
+              v-if="row.execution && row.cancellable"
               :disabled="busy || uncertain"
               @click="change({ action: 'cancel_run', execution: row.execution })"
             >

@@ -1,10 +1,20 @@
 <script setup lang="ts">
-import { useId } from 'vue'
+import { useId, computed, ref, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { Schedule, Trigger } from '../clients/schedule'
+import { decodeSchedule, type Schedule, type Trigger } from '../clients/schedule'
 const model = defineModel<Schedule>({ required: true })
 const { t } = useI18n(),
   id = useId()
+const untilInput = ref<HTMLInputElement>()
+const invalid = computed(() => {
+  try {
+    decodeSchedule(model.value)
+    return ''
+  } catch {
+    return t('policies.invalidSchedule')
+  }
+})
+watchEffect(() => untilInput.value?.setCustomValidity(invalid.value))
 const triggers = ['manual', 'once', 'interval', 'weekly', 'registration', 'check_in'] as const
 function trigger(event: Event) {
   const kind = (event.target as HTMLSelectElement).value as Trigger['kind']
@@ -29,6 +39,7 @@ function window(event: Event) {
   <fieldset>
     <legend>{{ t('policies.schedule') }}</legend>
     <p>{{ t('policies.scheduleHint') }}</p>
+    <p v-if="invalid" :id="`${id}-validation`" role="alert">{{ invalid }}</p>
     <label :for="`${id}-trigger`">{{ t('policies.trigger') }}</label
     ><select :id="`${id}-trigger`" :value="model.trigger.kind" @change="trigger">
       <option v-for="kind in triggers" :key="kind" :value="kind">
@@ -95,7 +106,9 @@ function window(event: Event) {
     /><label :for="`${id}-until`">{{ t('policies.until') }}</label
     ><input
       :id="`${id}-until`"
+      ref="untilInput"
       v-model.number="model.until"
+      :aria-describedby="invalid ? `${id}-validation` : undefined"
       type="number"
       :min="model.notBefore + 1"
       :max="model.notBefore + 366 * 86400"

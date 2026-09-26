@@ -28,8 +28,10 @@ export function createPages() {
         snapshot = old.snapshot
       }
       const page = remaining.slice(0, limit)
-      const nextCursor = page.length ? randomUUID() : null
+      const nextCursor = remaining.length > limit ? randomUUID() : null
       if (nextCursor) cursors.set(nextCursor, { key, snapshot, remaining: remaining.slice(limit) })
+      // Demo cursors permit exact GET retries within a bounded recent-page cache.
+      while (cursors.size > 256) cursors.delete(cursors.keys().next().value!)
       return { items: page, nextCursor, snapshot }
     },
   }

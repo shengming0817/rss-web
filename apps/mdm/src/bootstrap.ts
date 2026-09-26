@@ -61,5 +61,5 @@ export function startMdm(
   })
   const i18n = mdmI18n()
   app.use(createPinia()).use(i18n).use(router).mount('#app')
-  return { app, session, router, i18n }
+  return { app, session, router, i18n, transport: business }
 }

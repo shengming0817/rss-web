@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { createScenario, TENANT } from './scenario'
+async function control(scenario: ReturnType<typeof createScenario>, body: unknown) {
+  const session = await scenario.handle('GET', `/api/v2/tenants/${TENANT}/session`)
+  return scenario.handle('POST', '/api/mdm-candidate/v1/workspace/scenario', body, {
+    'x-csrf-token': (session.body as { csrfToken: string }).csrfToken,
+    'x-identity-request': '1',
+  })
+}
 describe('HTTP demo state', () => {
   it('requires login, rotates CSRF and resets deterministically', async () => {
     const scenario = createScenario()
@@ -121,7 +128,7 @@ it('never falls back to mock for published policy or native-operation paths', as
     login: 'demo',
     password: 'demo',
   })
-  await scenario.handle('POST', '/api/mdm-candidate/v1/workspace/scenario', {
+  await control(scenario, {
     scenario: 'normal',
     module: 'policies',
     source: 'real',
@@ -189,12 +196,11 @@ it('injects automation events only into the explicit mock source after login', a
     login: 'demo',
     password: 'demo',
   })
-  expect((await scenario.handle('POST', path, { event })).status).toBe(204)
+  expect((await scenario.handle('POST', path, { event })).status).toBe(403)
+  expect((await control(scenario, { event })).status).toBe(204)
   expect(events).toEqual([event])
-  expect(
-    (await scenario.handle('POST', path, { event: { kind: 'check_in', at: event.at } })).status,
-  ).toBe(400)
-  await scenario.handle('POST', path, { scenario: 'normal', module: 'policies', source: 'real' })
-  expect((await scenario.handle('POST', path, { event })).status).toBe(409)
+  expect((await control(scenario, { event: { kind: 'check_in', at: event.at } })).status).toBe(400)
+  await control(scenario, { scenario: 'normal', module: 'policies', source: 'real' })
+  expect((await control(scenario, { event })).status).toBe(409)
   expect(events).toHaveLength(1)
 })

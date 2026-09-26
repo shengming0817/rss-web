@@ -22,9 +22,9 @@ function approve(item: Item) {
     task = item.run,
     body = operation({}, item.revision)
   pending = async () => {
-    const acknowledged =
-      task !== null &&
-      (await runWrite(() => runtime.policies.workflows.changeRun(id, task, 'approve', body)))
+    const acknowledged = await runWrite(() =>
+      runtime.policies.workflows.changeRun(id, task, 'approve', body),
+    )
     if (acknowledged) await load()
   }
   void pending()

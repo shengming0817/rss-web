@@ -12,4 +12,4 @@ const runtime = startMdm(
   true,
 )
 
-createApp(DemoControls).use(runtime.i18n).mount(controls)
+createApp(DemoControls, { transport: runtime.transport }).use(runtime.i18n).mount(controls)

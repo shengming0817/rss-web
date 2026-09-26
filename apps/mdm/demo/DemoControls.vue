@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
-import { createMdmTransport } from '@rss/api/mdm'
+import type { HttpTransport } from '@rss/api/mdm'
 import { useI18n } from 'vue-i18n'
 import { scenarios, TENANT } from './scenario'
 import { record, enumeration } from '../src/services/decode'
 import { moduleIds } from '../src/services/workspace'
+const props = defineProps<{ transport: HttpTransport }>()
 const { locale, t } = useI18n()
 const active = ref('normal')
 const module = ref('devices')
@@ -15,7 +16,7 @@ watch(module, (value) => {
 })
 onMounted(async () => {
   try {
-    const value = await createMdmTransport().request({
+    const value = await props.transport.request({
       method: 'GET',
       path: '/api/mdm-candidate/v1/workspace/scenario',
       successStatus: 200,
@@ -47,7 +48,7 @@ async function simulate() {
   busy.value = true
   failed.value = false
   try {
-    await createMdmTransport().request({
+    await props.transport.request({
       method: 'POST',
       path: '/api/mdm-candidate/v1/workspace/scenario',
       body: {
@@ -71,7 +72,7 @@ async function apply(reset: boolean) {
   busy.value = true
   failed.value = false
   try {
-    await createMdmTransport().request({
+    await props.transport.request({
       method: 'POST',
       path: '/api/mdm-candidate/v1/workspace/scenario',
       body: { reset, scenario: active.value, module: module.value, source: source.value },

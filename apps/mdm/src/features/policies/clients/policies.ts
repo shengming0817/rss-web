@@ -54,11 +54,13 @@ export type PolicyChange =
   | { action: 'archive' }
   | { action: 'cancel_run'; execution: string }
 export function policyMember(value: unknown) {
-  const v = closed(value, ['device', 'reason', 'execution'])
+  const v = closed(value, ['device', 'reason', 'execution', 'cancellable'])
   return {
     device: identifier(v['device']),
     reason: enumeration(v['reason'], [
       'applicable',
+      'conflict',
+      'cancelling',
       'disabled',
       'offline',
       'unsupported',
@@ -70,6 +72,7 @@ export function policyMember(value: unknown) {
       'unknown',
     ] as const),
     execution: nullable(v['execution'], uuid),
+    cancellable: boolean(v['cancellable']),
   }
 }
 export function decodePolicy(value: unknown, id: string) {

@@ -1,4 +1,5 @@
-import { randomUUID } from 'node:crypto'
+import { resourceApplicability } from './applicability'
+import { createHash, randomUUID } from 'node:crypto'
 import type { DomainHandler, Scenario } from '../scenario'
 import type { createDeviceDemo } from '../devices/state'
 import type { createScopeDemo } from './scopes'
@@ -23,7 +24,10 @@ export function createPolicyDemo(
   devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts'>,
   scopes: Pick<ReturnType<typeof createScopeDemo>, 'resolve'>,
   resources: Pick<ReturnType<typeof createResourceDemo>, 'read'>,
-  configurations: Pick<ReturnType<typeof createConfigurationDemo>, 'read'> = { read: () => null },
+  configurations: Pick<ReturnType<typeof createConfigurationDemo>, 'read' | 'assess'> = {
+    read: () => null,
+    assess: () => 'resource_unavailable',
+  },
 ) {
   const policies = new Map<string, State>(),
     runs = new Map<string, ExecutionSummary>(),
@@ -36,8 +40,10 @@ export function createPolicyDemo(
       return c && v?.status === 'published'
         ? {
             fingerprint: JSON.stringify(v.settings),
+            digest: createHash('sha256').update(JSON.stringify(v.settings)).digest('hex'),
             platform: c.platform,
             script: false,
+            native: true,
             version: null,
           }
         : null
@@ -47,8 +53,10 @@ export function createPolicyDemo(
     if (!r || !v || v.state !== 'active') return null
     return {
       fingerprint: JSON.stringify(v.digest),
+      digest: Buffer.from(v.digest).toString('hex'),
       platform: v.configuration ? ('windows' as const) : null,
       script: r.kind === 'script',
+      native: v.configuration !== null,
       version: v,
     }
   }
@@ -58,7 +66,15 @@ export function createPolicyDemo(
     const selection = selected(definition)
     return scope.members.map((device) => {
       const d = devices.facts().find((d) => d.summary.id === device)
-      const channel = selection?.script ? 'agent' : 'mdm'
+      const applicability =
+        definition.source === 'configuration'
+          ? configurations.assess(definition.resource, Number(definition.resourceVersion), device)
+          : (() => {
+              const r = resources.read(definition.resource)
+              return r
+                ? resourceApplicability(r, definition.resourceVersion, d)
+                : ('resource_unavailable' as const)
+            })()
       const reason =
         scenario === 'denied'
           ? 'authorization'
@@ -69,27 +85,12 @@ export function createPolicyDemo(
               : definition.validity &&
                   (clock < definition.validity.start || clock >= definition.validity.end)
                 ? 'window'
-                : !d ||
-                    !d.registrations.some(
-                      (r) =>
-                        r.status === 'active' &&
-                        (channel === 'agent'
-                          ? r.source === 'agent.builtin'
-                          : r.source.startsWith('mdm.')),
-                    )
-                  ? 'authorization'
-                  : !d.summary.channels.includes(channel) ||
-                      (selection.platform !== null && d.summary.platform !== selection.platform) ||
-                      (selection.script &&
-                        !selection.version?.variants.some(
-                          (v) =>
-                            v.platform === d.summary.platform && v.declaration.kind === 'script',
-                        ))
-                    ? 'unsupported'
-                    : scenario === 'partial' && device.endsWith('01')
-                      ? 'offline'
-                      : 'applicable'
-      return { device, reason, execution: null }
+                : applicability !== 'applicable'
+                  ? applicability
+                  : scenario === 'partial' && device.endsWith('01')
+                    ? 'offline'
+                    : 'applicable'
+      return { device, reason, execution: null, cancellable: false }
     })
   }
   function cancel(id: string) {
@@ -136,7 +137,9 @@ export function createPolicyDemo(
           run = old ? runs.get(old.execution) : null
         if (row.reason !== 'applicable') {
           if (
-            row.reason === 'authorization' ||
+            ['authorization', 'resource_unavailable', 'window', 'unsupported', 'conflict'].includes(
+              row.reason,
+            ) ||
             (row.reason === 'disabled' && def.exitBehavior === 'cancel')
           ) {
             if (old) cancel(old.execution)
@@ -153,9 +156,13 @@ export function createPolicyDemo(
           def.resourceVersion,
           selection?.fingerprint,
           def.parameters,
+          d.architecture,
+          d.nativeWindows,
+          d.summary.platform,
+          d.summary.channels,
           d.registrations
             .filter((r) =>
-              selected(def)?.script ? r.source === 'agent.builtin' : r.source.startsWith('mdm.'),
+              selection?.native ? r.source.startsWith('mdm.') : r.source === 'agent.builtin',
             )
             .map((r) => [r.registrationId, r.generation, r.status]),
         ])
@@ -178,6 +185,18 @@ export function createPolicyDemo(
             : event?.kind === 'clock' && (!old || clock - old.at >= def.trigger.seconds!))
         const changed = old?.fingerprint !== fingerprint
         if (changed && old) cancel(old.execution)
+        const cancelling = [...runs.values()].find(
+          (r) =>
+            r.device === row.device &&
+            r.origin.kind === 'policy' &&
+            r.origin.policy === id &&
+            r.origin.cancellation === 'requested',
+        )
+        if (cancelling) {
+          row.reason = 'cancelling'
+          row.execution = cancelling.id
+          continue
+        }
         if (
           (!old || changed || (def.trigger.kind !== 'on_change' && due && old.at !== clock)) &&
           due
@@ -191,6 +210,21 @@ export function createPolicyDemo(
               kind: 'policy',
               policy: id,
               revision: read.revision,
+              basis: {
+                source: def.source,
+                resource: def.resource,
+                version: def.resourceVersion,
+                resourceDigest: selection!.digest,
+                parameterDigest: createHash('sha256')
+                  .update(JSON.stringify(def.parameters))
+                  .digest('hex'),
+                scope: def.scope,
+                scopeRevision: scopes.resolve(def.scope)!.revision,
+                registrations: d.registrations
+                  .filter((r) => r.status === 'active')
+                  .map((r) => ({ id: r.registrationId, generation: r.generation })),
+                architecture: d.architecture ?? null,
+              },
               cancellation: 'none',
               output: null,
             },
@@ -223,6 +257,14 @@ export function createPolicyDemo(
               message: 'Synthetic result; no device executed this assignment.',
             }
         }
+      }
+      for (const row of rows) {
+        const r = row.execution ? runs.get(row.execution) : undefined
+        row.cancellable =
+          !!r &&
+          r.origin.kind === 'policy' &&
+          r.origin.cancellation === 'none' &&
+          ['not_started', 'running', 'unknown'].includes(r.execution)
       }
       read.members = rows
       read.computation = {
@@ -290,9 +332,15 @@ export function createPolicyDemo(
             if (
               !runs.has(execution) ||
               runs.get(execution)?.origin.kind !== 'policy' ||
-              ![...state.current.values()].some((v) => v.execution === execution)
+              (runs.get(execution)!.origin as { policy?: string }).policy !== id
             )
               return error('operation_not_found', 404)
+            const run = runs.get(execution)!
+            if (
+              !['not_started', 'running', 'unknown'].includes(run.execution) ||
+              (run.origin.kind === 'policy' && run.origin.cancellation !== 'none')
+            )
+              return error('operation_conflict')
             cancel(execution)
           }
         }

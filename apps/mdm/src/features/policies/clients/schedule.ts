@@ -57,7 +57,7 @@ function trigger(value: unknown): Trigger {
 }
 export function decodeSchedule(value: unknown): Schedule {
   const v = closed(value, ['trigger', 'misfire', 'notBefore', 'until', 'jitterSeconds', 'window'])
-  return {
+  const result: Schedule = {
     trigger: trigger(v['trigger']),
     misfire: enumeration(v['misfire'], ['skip', 'coalesce_one'] as const),
     notBefore: count(v['notBefore']),
@@ -72,5 +72,48 @@ export function decodeSchedule(value: unknown): Schedule {
         endMinute: count(w['endMinute']),
       }
     }),
+  }
+  validateSchedule(result)
+  return result
+}
+
+function invalid(): never {
+  throw new Error('Invalid schedule')
+}
+function zone(name: string) {
+  if (name !== 'UTC' && (!name.includes('/') || name.length > 128)) invalid()
+  return new Intl.DateTimeFormat('en-GB', { timeZone: name })
+}
+export function validateSchedule(s: Schedule) {
+  if (
+    s.notBefore < 0 ||
+    s.until <= s.notBefore ||
+    s.until - s.notBefore > 366 * 86400 ||
+    s.jitterSeconds > 3600
+  )
+    invalid()
+  const t = s.trigger
+  if (t.kind === 'once' && (t.at < s.notBefore || t.at >= s.until)) invalid()
+  if (t.kind === 'interval') {
+    if (t.anchor < 0 || t.seconds < 60 || t.seconds > 31536000) invalid()
+    const first =
+      t.anchor + Math.max(0, Math.ceil((s.notBefore - t.anchor) / t.seconds)) * t.seconds
+    if (first >= s.until) invalid()
+  }
+  if (t.kind === 'check_in' && (t.minimumSeconds < 60 || t.minimumSeconds > 31536000)) invalid()
+  if (t.kind === 'weekly') {
+    zone(t.zone)
+    if (t.weekday < 1 || t.weekday > 7 || t.minute > 1439) invalid()
+  }
+  const w = s.window
+  if (w) {
+    zone(w.zone)
+    if (
+      !w.weekdays.length ||
+      w.weekdays.some((d) => d < 1 || d > 7) ||
+      w.startMinute >= w.endMinute ||
+      w.endMinute > 1440
+    )
+      invalid()
   }
 }

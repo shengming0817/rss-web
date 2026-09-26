@@ -1,3 +1,4 @@
+import { configurationApplicability } from './applicability'
 import type { DomainHandler } from '../scenario'
 import type { createDeviceDemo } from '../devices/state'
 import type { createScopeDemo } from './scopes'
@@ -85,30 +86,29 @@ export function createConfigurationDemo(
             return error('operation_conflict')
           const facts = devices.facts()
           const rows: Preview['rows'] = scope.members.map((device) => {
-            const d = facts.find((d) => d.summary.id === device),
-              wrong = d?.summary.platform !== state.platform
-            const conflicts = [...configurations.values()]
-              .filter(
-                (c) =>
-                  c.id !== id &&
-                  c.platform === state.platform &&
-                  c.versions.some(
-                    (v) =>
-                      v.status === 'published' &&
-                      v.settings.some((s) =>
-                        version.settings.some(
-                          (next) => next.key === s.key && next.value !== s.value,
-                        ),
-                      ),
-                  ),
-              )
-              .map((c) => c.id)
+            const d = facts.find((d) => d.summary.id === device)
+            const reason = configurationApplicability(state, version.version, d, [
+              ...configurations.values(),
+            ])
             return {
               device,
-              support: wrong ? 'unsupported' : 'blocked',
-              reason: wrong ? 'platform' : conflicts.length ? 'conflict' : 'candidate_only',
+              support:
+                reason === 'applicable'
+                  ? 'executable'
+                  : reason === 'unsupported'
+                    ? 'unsupported'
+                    : 'blocked',
+              reason:
+                reason === 'applicable'
+                  ? null
+                  : reason === 'unsupported'
+                    ? 'platform'
+                    : reason === 'conflict'
+                      ? 'conflict'
+                      : 'authorization',
               drift: 'unknown',
-              conflicts,
+              conflicts:
+                reason === 'conflict' ? [...configurations.keys()].filter((key) => key !== id) : [],
             }
           })
           previews.set(op.operationId, {
@@ -183,6 +183,17 @@ export function createConfigurationDemo(
   }
   return {
     handle,
+    assess(id: string, version: number, device: string) {
+      const c = configurations.get(id)
+      return c
+        ? configurationApplicability(
+            c,
+            version,
+            devices.facts().find((d) => d.summary.id === device),
+            [...configurations.values()],
+          )
+        : ('resource_unavailable' as const)
+    },
     read: (id: string) => {
       const value = configurations.get(id)
       return value ? structuredClone(value) : null

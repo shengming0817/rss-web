@@ -19,12 +19,50 @@ export type ExecutionOrigin =
       kind: 'policy'
       policy: string
       revision: number
+      basis: {
+        source: 'resource' | 'configuration'
+        resource: string
+        version: string
+        resourceDigest: string
+        parameterDigest: string
+        scope: string
+        scopeRevision: number
+        registrations: { id: string; generation: number }[]
+        architecture: string | null
+      }
       cancellation: 'none' | 'requested' | 'confirmed'
       output: Json
     }
   | { kind: 'native'; operation: string }
   | { kind: 'workflow'; workflow: string; run: string; step: string }
   | { kind: 'device_batch'; batch: string }
+function basis(value: unknown) {
+  const b = closed(value, [
+    'source',
+    'resource',
+    'version',
+    'resourceDigest',
+    'parameterDigest',
+    'scope',
+    'scopeRevision',
+    'registrations',
+    'architecture',
+  ])
+  return {
+    source: enumeration(b['source'], ['resource', 'configuration'] as const),
+    resource: identifier(b['resource']),
+    version: identifier(b['version']),
+    resourceDigest: identifier(b['resourceDigest']),
+    parameterDigest: identifier(b['parameterDigest']),
+    scope: uuid(b['scope']),
+    scopeRevision: count(b['scopeRevision']),
+    registrations: array(b['registrations'], (value) => {
+      const r = closed(value, ['id', 'generation'])
+      return { id: uuid(r['id']), generation: count(r['generation']) }
+    }),
+    architecture: nullable(b['architecture'], identifier),
+  }
+}
 function origin(value: unknown): ExecutionOrigin {
   const kind = enumeration(record(value)['kind'], [
     'policy',
@@ -33,11 +71,12 @@ function origin(value: unknown): ExecutionOrigin {
     'device_batch',
   ] as const)
   if (kind === 'policy') {
-    const v = closed(value, ['kind', 'policy', 'revision', 'cancellation', 'output'])
+    const v = closed(value, ['kind', 'policy', 'revision', 'basis', 'cancellation', 'output'])
     return {
       kind,
       policy: identifier(v['policy']),
       revision: count(v['revision']),
+      basis: basis(v['basis']),
       cancellation: enumeration(v['cancellation'], ['none', 'requested', 'confirmed'] as const),
       output: jsonValue(v['output'], 65536),
     }

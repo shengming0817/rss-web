@@ -1,5 +1,6 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
+import { createMdmTransport } from '@rss/api/mdm'
 import { mdmI18n } from '../src/i18n'
 import DemoControls from './DemoControls.vue'
 vi.mock('@rss/api/mdm', () => ({
@@ -13,7 +14,10 @@ vi.mock('@rss/api/mdm', () => ({
 it('translates all option labels while retaining their protocol values', async () => {
   const i18n = mdmI18n()
   i18n.global.locale.value = 'zh-CN'
-  const wrapper = mount(DemoControls, { global: { plugins: [i18n] } })
+  const wrapper = mount(DemoControls, {
+    props: { transport: createMdmTransport() },
+    global: { plugins: [i18n] },
+  })
   await flushPromises()
   expect(wrapper.get('#demo-scenario option[value="normal"]').text()).toBe('正常')
   expect(wrapper.get('#demo-module option[value="devices"]').text()).toBe('设备与资产')

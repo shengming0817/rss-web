@@ -13,7 +13,8 @@ import type { ExecutionSummary } from '../../src/features/policies/clients/execu
 import { closed, enumeration, record, uuid } from '../../src/services/decode'
 import { evaluate } from '../devices/criteria'
 import { createPages, createReceipts, error, operation } from '../http'
-import { validateSchedule, due, type DemoEvent, type Occurrence } from './schedule'
+import { validateSchedule } from '../../src/features/policies/clients/schedule'
+import { due, type DemoEvent, type Occurrence } from './schedule'
 import { candidate } from './http'
 interface RunState {
   approvedAt: number
@@ -41,7 +42,17 @@ export function createWorkflowDemo(
     clock = event.at
     for (const state of runs.values()) {
       const run = state.read
-      if (run.state !== 'waiting' || run.approval !== 'approved') continue
+      if (run.state === 'cancel_requested') {
+        run.state = 'cancelled'
+        run.revision++
+        for (const execution of state.executions) {
+          if (execution.execution === 'not_started' || execution.execution === 'running')
+            execution.execution = 'cancelled'
+          execution.waitingReason = null
+        }
+        continue
+      }
+      if (run.state !== 'waiting' || run.approval === 'pending') continue
       if (event.kind !== 'clock' && !run.targets.includes(event.device ?? '')) continue
       state.occurrence ??= due(
         run.definition.schedule,
@@ -67,7 +78,7 @@ export function createWorkflowDemo(
   }
   function advance(state: RunState, scenario: Scenario) {
     const run = state.read
-    if (run.state !== 'running' || run.approval !== 'approved') return
+    if (run.state !== 'running' || run.approval === 'pending') return
     if (
       Math.max(clock, Math.floor(Date.now() / 1000)) >=
       Math.min(
@@ -182,7 +193,7 @@ export function createWorkflowDemo(
             if (state.read.author === request.actor.principalId)
               return error('permission_denied', 403)
             if (
-              state.read.approval === 'approved' ||
+              state.read.approval !== 'pending' ||
               ['cancel_requested', 'cancelled', 'completed', 'partial', 'unknown'].includes(
                 state.read.state,
               )
@@ -262,7 +273,7 @@ export function createWorkflowDemo(
             revision: 1,
             version: workflow.version,
             author: request.actor.principalId,
-            approval: 'pending',
+            approval: 'not_required',
             state: 'waiting',
             definition: structuredClone(workflow.definition),
             scopeRevision: scope.revision,
@@ -271,7 +282,7 @@ export function createWorkflowDemo(
           }
           runs.set(read.id, {
             read,
-            approvedAt: 0,
+            approvedAt: Math.max(clock, Math.floor(Date.now() / 1000)),
             occurrence: null,
             step: 0,
             executions: [],
@@ -279,6 +290,7 @@ export function createWorkflowDemo(
             references: refs,
             configurations: configs,
           })
+          tick({ kind: 'clock', at: Math.max(clock, Math.floor(Date.now() / 1000)) })
           return candidate({ run: structuredClone(read) }, 202)
         }
         const input = record(op.input),
@@ -333,7 +345,7 @@ export function createWorkflowDemo(
       })),
     approvals: () =>
       [...runs.values()]
-        .filter((r) => r.read.approval !== 'approved' && r.read.state === 'waiting')
+        .filter((r) => r.read.approval === 'pending' && r.read.state === 'waiting')
         .map((r) => ({
           kind: 'workflow' as const,
           id: r.read.workflow,

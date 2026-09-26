@@ -137,6 +137,7 @@ onMounted(async () => {
     <p>{{ t('policies.scopeHint') }}</p>
     <button :disabled="busy || uncertain" @click="create">{{ t('policies.create') }}</button
     ><button :disabled="busy" @click="load()">{{ t('policies.reload') }}</button>
+    <p v-if="list && !list.items.length">{{ t('policies.empty') }}</p>
     <ul>
       <li v-for="item in list?.items" :key="item.id">
         <button :disabled="busy || uncertain" @click="open(item.id)">{{ item.label }}</button> ·

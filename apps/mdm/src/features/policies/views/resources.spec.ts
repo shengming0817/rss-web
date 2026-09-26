@@ -64,7 +64,10 @@ it('requires reselection of identical bytes after unknown upload and never retai
   await select('wrong')
   await button().trigger('click')
   await flushPromises()
-  await vi.waitFor(() => expect(button().attributes('disabled')).toBeDefined())
+  await vi.waitFor(() =>
+    expect(wrapper.get('section.device-console').attributes('aria-busy')).toBe('false'),
+  )
+  expect(button().attributes('disabled')).toBeDefined()
   expect(upload).toHaveBeenCalledTimes(1)
   await select('first')
   await button().trigger('click')

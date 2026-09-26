@@ -88,16 +88,54 @@ onMounted(() => load())
       <h2>{{ t('policies.output') }}</h2>
       <pre>{{ JSON.stringify(execution.origin.output, null, 2) }}</pre>
     </section>
+    <section v-if="execution?.origin.kind === 'policy'">
+      <h2>{{ t('policies.executionBasis') }}</h2>
+      <p>
+        {{ execution.origin.basis.source }} · {{ execution.origin.basis.resource }} /
+        {{ execution.origin.basis.version }} · Scope {{ execution.origin.basis.scope }} /
+        {{ execution.origin.basis.scopeRevision }}
+      </p>
+      <p>
+        {{ execution.origin.basis.resourceDigest }} · {{ execution.origin.basis.parameterDigest }}
+      </p>
+      <ul>
+        <li v-for="identity in execution.origin.basis.registrations" :key="identity.id">
+          {{ identity.id }} / {{ identity.generation }}
+        </li>
+      </ul>
+    </section>
     <section v-if="native">
       <h2>{{ native.observation.protocol }}</h2>
+      <dl>
+        <template v-for="(value, key) in native.observation" :key="key"
+          ><dt>{{ t(`policies.observation.${key}`) }}</dt>
+          <dd>{{ value === null ? '—' : value }}</dd></template
+        >
+      </dl>
       <p>
         {{ t('policies.revision') }} {{ native.revision }} ·
         {{ t(`policies.state.${native.task.kind}`) }} ·
         {{ t(`policies.state.${native.commandStatus}`) }}
       </p>
-      <button :disabled="busy || uncertain" @click="change('approve')">
+      <button
+        v-if="
+          native.authorization === 'blocked' &&
+          !['cancelled', 'applied', 'rejected', 'timed_out', 'superseded'].includes(
+            native.commandStatus,
+          )
+        "
+        :disabled="busy || uncertain"
+        @click="change('approve')"
+      >
         {{ t('policies.reapprove') }}</button
-      ><button :disabled="busy || uncertain" @click="change('cancel')">
+      ><button
+        v-if="
+          ['queued', 'published', 'received'].includes(native.commandStatus) &&
+          !['succeeded', 'failed'].includes(native.observation.progress)
+        "
+        :disabled="busy || uncertain"
+        @click="change('cancel')"
+      >
         {{ t('policies.cancel') }}
       </button>
     </section>

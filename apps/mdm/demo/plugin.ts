@@ -19,6 +19,7 @@ export function demoPlugin(): Plugin {
           automation.reset()
         },
         automation.tick,
+        automation.observe,
       )
       server.middlewares.use(async (req, res, next) => {
         if (!req.url?.startsWith('/api/')) {

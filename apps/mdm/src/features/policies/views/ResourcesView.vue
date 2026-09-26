@@ -205,6 +205,7 @@ onMounted(() => load())
   <PolicyFrame :title="t('policies.resources')" :busy="busy" :failure="failure">
     <button :disabled="busy || uncertain" @click="create">{{ t('policies.create') }}</button
     ><button :disabled="busy" @click="load()">{{ t('policies.reload') }}</button>
+    <p v-if="list && !list.items.length">{{ t('policies.empty') }}</p>
     <ul>
       <li v-for="item in list?.items" :key="item.id">
         <button :disabled="busy || uncertain" @click="open(item.id)">{{ item.label }}</button>
@@ -244,7 +245,13 @@ onMounted(() => load())
             <td>{{ t(`policies.state.${item.state}`) }}</td>
             <td>
               <button
-                v-for="action in ['activate', 'deprecate', 'archive'] as const"
+                v-for="action in (item.state === 'frozen'
+                  ? ['activate', 'archive']
+                  : item.state === 'active'
+                    ? ['deprecate', 'archive']
+                    : item.state === 'deprecated'
+                      ? ['activate', 'archive']
+                      : []) as ('activate' | 'deprecate' | 'archive')[]"
                 :key="action"
                 :disabled="busy || uncertain"
                 @click="change({ action, version: item.id })"

@@ -1,5 +1,6 @@
+import { validateSchedule } from '../../src/features/policies/clients/schedule'
 import { expect, it } from 'vitest'
-import { validateSchedule, due } from './schedule'
+import { due } from './schedule'
 import type { Schedule } from '../../src/features/policies/clients/schedule'
 const schedule: Schedule = {
   trigger: { kind: 'manual' },

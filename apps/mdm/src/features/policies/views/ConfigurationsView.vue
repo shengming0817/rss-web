@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, toRaw } from 'vue'
+import { onMounted, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
@@ -31,6 +31,9 @@ const from = ref(1),
   task = ref<string>(),
   preview = ref<Awaited<ReturnType<typeof client.previewStatus>>>()
 let pending: (() => Promise<boolean>) | undefined
+watch(platform, (value) => {
+  if (!current.value) format.value = value === 'windows' ? 'windows_csp' : 'apple_profile'
+})
 function load(cursor?: string) {
   void run(
     () => client.list(cursor),
@@ -155,6 +158,7 @@ onMounted(() => load())
     ><p>{{ t('policies.candidate') }}</p>
     <button :disabled="busy || uncertain" @click="create">{{ t('policies.create') }}</button
     ><button :disabled="busy" @click="load()">{{ t('policies.reload') }}</button>
+    <p v-if="list && !list.items.length">{{ t('policies.empty') }}</p>
     <ul>
       <li v-for="item in list?.items" :key="item.id">
         <button :disabled="busy || uncertain" @click="open(item.id)">{{ item.name }}</button> ·
@@ -181,7 +185,13 @@ onMounted(() => load())
           <option value="macos">macOS</option></select
         ><label for="configuration-format">{{ t('policies.format') }}</label
         ><select id="configuration-format" v-model="format" :disabled="!!current">
-          <option v-for="item in configurationFormats" :key="item" :value="item">
+          <option
+            v-for="item in configurationFormats.filter((item) =>
+              platform === 'windows' ? item.startsWith('windows_') : item.startsWith('apple_'),
+            )"
+            :key="item"
+            :value="item"
+          >
             {{ item }}
           </option></select
         ><template v-if="current"
@@ -248,7 +258,7 @@ onMounted(() => load())
               >
                 {{ t('policies.publish') }}</button
               ><button
-                :disabled="busy || uncertain"
+                :disabled="busy || uncertain || item.status === 'archived'"
                 @click="change({ action: 'archive', version: item.version })"
               >
                 {{ t('policies.archive') }}
