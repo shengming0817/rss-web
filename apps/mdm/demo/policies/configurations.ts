@@ -18,14 +18,17 @@ export function createConfigurationDemo(
   devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts'>,
   scopes: Pick<ReturnType<typeof createScopeDemo>, 'freeze'>,
   referenced: (id: string, version: number) => boolean,
-  assigned: (device: string) => { id: string; version: number }[] = () => [],
+  assigned: (
+    device: string,
+    replacedPolicy?: string,
+  ) => { id: string; version: number }[] = () => [],
 ) {
   const configurations = new Map<string, Configuration>(),
     previews = new Map<string, { value: Preview; revision: number; reads: number }>(),
     receipts = createReceipts(),
     pages = createPages()
-  function assignedVersions(device: string) {
-    return assigned(device).flatMap((ref) => {
+  function assignedVersions(device: string, replacedPolicy?: string) {
+    return assigned(device, replacedPolicy).flatMap((ref) => {
       const c = configurations.get(ref.id),
         v = c?.versions.find((v) => v.version === ref.version && v.status === 'published')
       return c && v ? [{ ...c, versions: [v] }] : []
@@ -193,14 +196,14 @@ export function createConfigurationDemo(
   }
   return {
     handle,
-    assess(id: string, version: number, device: string) {
+    assess(id: string, version: number, device: string, replacedPolicy?: string) {
       const c = configurations.get(id)
       return c
         ? configurationApplicability(
             c,
             version,
             devices.facts().find((d) => d.summary.id === device),
-            assignedVersions(device),
+            assignedVersions(device, replacedPolicy),
           )
         : ('resource_unavailable' as const)
     },

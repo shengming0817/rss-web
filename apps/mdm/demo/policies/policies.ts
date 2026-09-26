@@ -60,7 +60,11 @@ export function createPolicyDemo(
       version: v,
     }
   }
-  function members(definition: PolicyDefinition, scenario: Scenario): PolicyRead['members'] {
+  function members(
+    definition: PolicyDefinition,
+    scenario: Scenario,
+    replacedPolicy?: string,
+  ): PolicyRead['members'] {
     const scope = scopes.resolve(definition.scope)
     if (!scope) return []
     const selection = selected(definition)
@@ -68,7 +72,12 @@ export function createPolicyDemo(
       const d = devices.facts().find((d) => d.summary.id === device)
       const applicability =
         definition.source === 'configuration'
-          ? configurations.assess(definition.resource, Number(definition.resourceVersion), device)
+          ? configurations.assess(
+              definition.resource,
+              Number(definition.resourceVersion),
+              device,
+              replacedPolicy,
+            )
           : (() => {
               const r = resources.read(definition.resource)
               return r
@@ -290,7 +299,7 @@ export function createPolicyDemo(
       if (request.method !== 'POST') return
       if (match[2] === 'preview') {
         const v = closed(request.body, ['definition'])
-        return candidate({ members: members(policyDefinition(v['definition']), scenario) })
+        return candidate({ members: members(policyDefinition(v['definition']), scenario, id) })
       }
       const op = operation(request.body)
       return receipts.write(request, op.operationId, () => {
@@ -353,17 +362,19 @@ export function createPolicyDemo(
   }
   return {
     handle,
-    assignedConfigurations(device: string) {
-      return [...policies.values()].flatMap(({ read }) => {
-        const d = read.definition
-        return !read.archived &&
-          d.enabled &&
-          d.source === 'configuration' &&
-          (!d.validity || (clock >= d.validity.start && clock < d.validity.end)) &&
-          scopes.resolve(d.scope)?.members.includes(device)
-          ? [{ id: d.resource, version: Number(d.resourceVersion) }]
-          : []
-      })
+    assignedConfigurations(device: string, replacedPolicy?: string) {
+      return [...policies.values()]
+        .filter(({ read }) => read.id !== replacedPolicy)
+        .flatMap(({ read }) => {
+          const d = read.definition
+          return !read.archived &&
+            d.enabled &&
+            d.source === 'configuration' &&
+            (!d.validity || (clock >= d.validity.start && clock < d.validity.end)) &&
+            scopes.resolve(d.scope)?.members.includes(device)
+            ? [{ id: d.resource, version: Number(d.resourceVersion) }]
+            : []
+        })
     },
     reconcile,
     executions: () => structuredClone([...runs.values()]),

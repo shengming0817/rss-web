@@ -123,3 +123,97 @@ it('uses only overlapping enabled assignments when reporting configuration confl
   write(pathB, { action: 'put', definition: definition(b, scopeA) }, 2)
   expect(reason()).toBe('conflict')
 })
+it('previews policy replacements without self-conflict while retaining competing policy conflicts and leaving state untouched', () => {
+  const automation = createAutomationDemo(createDeviceDemo()),
+    actor = { principalId: randomUUID(), sessionId: randomUUID() },
+    scope = randomUUID(),
+    config = randomUUID(),
+    other = randomUUID()
+  function request(path: string, body?: unknown): DemoRequest {
+    return {
+      path,
+      body,
+      method: body === undefined ? 'GET' : 'POST',
+      actor,
+      headers: {},
+      query: new URLSearchParams(),
+    }
+  }
+  function write(path: string, input: unknown, expectedRevision = 0) {
+    const r = automation.handle(
+      request(path, { operationId: randomUUID(), expectedRevision, input }),
+      'normal',
+    )!
+    expect(r.status).toBe(200)
+    return r.body
+  }
+  const read = (id: string) =>
+    automation.handle(request(`/api/mdm-candidate/v1/policies/assignments/${id}`), 'normal')!.body
+  write(`/api/v2/scopes/${scope}`, {
+    action: 'put',
+    definition: {
+      targets: [{ kind: 'device', id: 'device-01' }],
+      limitations: null,
+      exclusions: [],
+    },
+  })
+  for (const id of [config, other]) {
+    const path = `/api/mdm-candidate/v1/policies/configurations/${id}`
+    write(path, { action: 'create', name: id, platform: 'windows', format: 'windows_csp' })
+    write(path, { action: 'version', settings: [{ key: 'Camera', value: false }] }, 1)
+    write(path, { action: 'publish', version: 1 }, 2)
+    write(path, { action: 'version', settings: [{ key: 'Camera', value: true }] }, 3)
+    write(path, { action: 'publish', version: 2 }, 4)
+  }
+  const definition = (resource: string, resourceVersion: string) => ({
+    source: 'configuration',
+    resource,
+    resourceVersion,
+    parameters: {},
+    scope,
+    enabled: true,
+    exitBehavior: 'cancel',
+    trigger: { kind: 'on_change' },
+    validity: null,
+  })
+  const pathA = '/api/mdm-candidate/v1/policies/assignments/a',
+    pathB = '/api/mdm-candidate/v1/policies/assignments/b'
+  write(pathA, { action: 'put', definition: definition(config, '1') })
+  const before = structuredClone(read('a')),
+    executions = structuredClone(
+      automation.handle(request('/api/mdm-candidate/v1/executions'), 'normal')!.body,
+    )
+  for (const resource of [config, other]) {
+    const result = automation.handle(
+      request(`${pathA}/preview`, { definition: definition(resource, '2') }),
+      'normal',
+    )!
+    expect(result.body).toMatchObject({
+      members: [{ device: 'device-01', reason: 'applicable', execution: null, cancellable: false }],
+    })
+  }
+  expect(read('a')).toEqual(before)
+  expect(
+    (
+      automation.handle(request('/api/mdm-candidate/v1/executions'), 'normal')!.body as {
+        items: unknown[]
+      }
+    ).items,
+  ).toEqual((executions as { items: unknown[] }).items)
+  write(pathA, { action: 'put', definition: definition(config, '2') }, 1)
+  expect(read('a')).toMatchObject({ policy: { members: [{ reason: 'applicable' }] } })
+  write(pathA, { action: 'put', definition: definition(other, '2') }, 2)
+  expect(read('a')).toMatchObject({
+    policy: {
+      definition: { resource: other, resourceVersion: '2' },
+      members: [{ reason: 'applicable' }],
+    },
+  })
+  write(pathB, { action: 'put', definition: definition(config, '1') })
+  expect(
+    automation.handle(
+      request(`${pathA}/preview`, { definition: definition(config, '2') }),
+      'normal',
+    )!.body,
+  ).toMatchObject({ members: [{ reason: 'conflict' }] })
+})
