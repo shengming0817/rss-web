@@ -1,4 +1,5 @@
 import { identityI18n } from '@rss/auth'
+import { policiesZh, policiesEn } from './features/policies/i18n'
 import { devicesZh, devicesEn } from './features/devices/i18n'
 const zh = {
   scenarios: {
@@ -74,5 +75,7 @@ export function mdmI18n() {
   i18n.global.mergeLocaleMessage('en-US', { mdm: en })
   i18n.global.mergeLocaleMessage('zh-CN', { devices: devicesZh })
   i18n.global.mergeLocaleMessage('en-US', { devices: devicesEn })
+  i18n.global.mergeLocaleMessage('zh-CN', { policies: policiesZh })
+  i18n.global.mergeLocaleMessage('en-US', { policies: policiesEn })
   return i18n
 }

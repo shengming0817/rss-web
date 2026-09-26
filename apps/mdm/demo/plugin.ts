@@ -2,6 +2,7 @@ import type { Plugin } from 'vite'
 import { MDM_JSON_BODY_LIMIT, MDM_CONTENT_BODY_LIMIT, isMdmContentPath } from '@rss/api/mdm-limits'
 import { createScenario } from './scenario'
 import { createDeviceDemo } from './devices/state'
+import { createAutomationDemo } from './policies/state'
 export function demoPlugin(): Plugin {
   return {
     name: 'mdm-http-demo',
@@ -10,7 +11,11 @@ export function demoPlugin(): Plugin {
     },
     configureServer(server) {
       const devices = createDeviceDemo()
-      const scenario = createScenario([devices.handle], devices.reset)
+      const automation = createAutomationDemo(devices)
+      const scenario = createScenario([automation.handle, devices.handle], () => {
+        devices.reset()
+        automation.reset()
+      })
       server.middlewares.use(async (req, res, next) => {
         if (!req.url?.startsWith('/api/')) {
           next()
