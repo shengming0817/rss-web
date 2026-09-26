@@ -3,7 +3,8 @@ import type { DomainHandler } from '../scenario'
 import { array, closed, enumeration, identifier, nullable } from '../../src/services/decode'
 import { lifecycleActions, type Batch } from '../../src/features/devices/clients/directory'
 import { makeDevices, fact } from './fixtures'
-import { candidate, createPages, createReceipts, error, operation } from './http'
+import { candidate } from './http'
+import { createPages, createReceipts, error, operation } from '../http'
 import { createAssetDemo } from './assets'
 import { createGroupDemo } from './groups'
 import { createEnrollmentDemo } from './enrollment'
@@ -251,6 +252,9 @@ export function createDeviceDemo() {
   }
   return {
     handle,
+    facts: () => structuredClone([...devices.values()]),
+    publishedGroup: groups.published,
+    batches: () => structuredClone([...batches.values()]),
     reset() {
       devices = makeDevices()
       assets.reset()

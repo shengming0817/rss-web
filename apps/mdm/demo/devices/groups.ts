@@ -12,7 +12,8 @@ import {
 import { criteria } from '../../src/features/devices/clients/asset-model'
 import type { GroupRead } from '../../src/features/devices/clients/groups'
 import type { DemoDevice } from './fixtures'
-import { candidate, createPages, createReceipts, error, ok, operation } from './http'
+import { candidate } from './http'
+import { createPages, createReceipts, error, ok, operation } from '../http'
 import { evaluate } from './criteria'
 type Decision = ReturnType<typeof evaluate> & {
   device: string
@@ -284,5 +285,19 @@ export function createGroupDemo(devices: () => Map<string, DemoDevice>) {
       })
     })
   }
-  return { handle, reset }
+  return {
+    handle,
+    reset,
+    published(id: string) {
+      const state = groups.get(id)
+      if (!state || state.read.group.deleted) return null
+      return structuredClone({
+        members: state.members,
+        memberSet: state.read.memberSet,
+        memberVersion: state.read.group.memberVersion,
+        definitionVersion: state.read.group.revision,
+        authorityVersion: 1,
+      })
+    },
+  }
 }

@@ -82,3 +82,96 @@ it('enforces CSRF, rotates it on refresh, and clears authenticated state after l
   ).toBe(204)
   expect((await scenario.handle('GET', `/api/v2/tenants/${TENANT}/session`)).status).toBe(401)
 })
+
+it('derives distinct actors and session IDs from authenticated accounts, never request data', async () => {
+  const seen: unknown[] = []
+  const scenario = createScenario([
+    (request) => {
+      seen.push(request.actor)
+      return { status: 200 }
+    },
+  ])
+  async function login(login: string) {
+    const reply = await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+      login,
+      password: 'demo',
+    })
+    expect(reply.status).toBe(200)
+    return reply.body as {
+      session: { id: string }
+      identity: { principalId: string }
+      csrfToken: string
+    }
+  }
+  const author = await login('demo')
+  await scenario.handle('GET', '/api/v2/scopes/example', { principalId: 'forged' })
+  const reviewer = await login('reviewer')
+  await scenario.handle('GET', '/api/v2/scopes/example')
+  const renewed = await login('demo')
+  expect(author.identity.principalId).not.toBe(reviewer.identity.principalId)
+  expect(author.session.id).not.toBe(renewed.session.id)
+  expect(seen).toEqual([
+    { principalId: author.identity.principalId, sessionId: author.session.id },
+    { principalId: reviewer.identity.principalId, sessionId: reviewer.session.id },
+  ])
+})
+it('never falls back to mock for published policy or native-operation paths', async () => {
+  const scenario = createScenario([() => ({ status: 200 })])
+  await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+    login: 'demo',
+    password: 'demo',
+  })
+  await scenario.handle('POST', '/api/mdm-candidate/v1/workspace/scenario', {
+    scenario: 'normal',
+    module: 'policies',
+    source: 'real',
+  })
+  for (const path of [
+    '/api/v2/scopes/id',
+    '/api/v3/resources/id',
+    '/api/v2/policies/id',
+    '/api/v2/plan-previews/id',
+    '/api/v3/script-plans/id',
+    '/api/v2/devices/device/operations/id',
+    '/api/mdm-candidate/v1/executions/id',
+  ]) {
+    expect((await scenario.handle('GET', path)).status, path).toBe(503)
+  }
+})
+
+it('accepts bounded raw resource bytes while retaining the JSON request budget elsewhere', async () => {
+  const scenario = createScenario([
+    (request) => ({
+      status: 201,
+      body: request.body instanceof ArrayBuffer ? request.body.byteLength : -1,
+    }),
+  ])
+  const login = await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+    login: 'demo',
+    password: 'demo',
+  })
+  const headers = {
+    'x-csrf-token': (login.body as { csrfToken: string }).csrfToken,
+    'x-identity-request': '1',
+  }
+  const content = new Uint8Array(20_000).buffer
+  expect(await scenario.handle('POST', '/api/v3/resources/id/content', content, headers)).toEqual({
+    status: 201,
+    body: 20_000,
+  })
+  expect((await scenario.handle('POST', '/api/v3/resources/id', content, headers)).status).toBe(400)
+  expect(
+    (await scenario.handle('POST', '/api/v3/resources/id', { data: 'a'.repeat(20_000) }, headers))
+      .status,
+  ).toBe(413)
+  expect(
+    (
+      await scenario.handle(
+        'POST',
+        '/api/v3/resources/id/content',
+        new ArrayBuffer(16_777_217),
+        headers,
+      )
+    ).status,
+  ).toBe(413)
+})

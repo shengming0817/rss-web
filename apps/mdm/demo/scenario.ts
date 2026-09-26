@@ -1,7 +1,9 @@
 /** MOCK_SOURCE: synthetic HTTP server, never part of a production entry. */
-import { MDM_JSON_BODY_LIMIT } from '@rss/api/mdm-limits'
+import { randomUUID } from 'node:crypto'
+import { MDM_JSON_BODY_LIMIT, MDM_CONTENT_BODY_LIMIT, isMdmContentPath } from '@rss/api/mdm-limits'
 export const TENANT = '11111111-1111-4111-8111-111111111111'
 const PRINCIPAL = '22222222-2222-4222-8222-222222222222'
+const REVIEWER = '33333333-3333-4333-8333-333333333333'
 export const scenarios = [
   'normal',
   'empty',
@@ -20,6 +22,7 @@ export interface Reply {
   body?: unknown
 }
 export interface DemoRequest {
+  actor: { principalId: string; sessionId: string }
   method: string
   path: string
   body: unknown
@@ -33,6 +36,8 @@ export function createScenario(
 ) {
   let active: Scenario = 'normal'
   let signedIn = false
+  let principalId = PRINCIPAL
+  let sessionId = randomUUID()
   let epoch = 0
   let token = '0'.repeat(64)
   const sources: Record<string, 'real' | 'mock'> = {
@@ -55,12 +60,12 @@ export function createScenario(
     token = (epoch + 1).toString(16).padStart(64, '0')
     return {
       session: {
-        id: PRINCIPAL,
+        id: sessionId,
         authTime: 1,
         idleExpiresAt: 4102444800,
         absoluteExpiresAt: 4102444900,
       },
-      identity: { principalId: PRINCIPAL, hasLocalPassword: true },
+      identity: { principalId, hasLocalPassword: true },
       csrfToken: token,
     }
   }
@@ -70,13 +75,20 @@ export function createScenario(
     body?: unknown,
     headers: Record<string, string | string[] | undefined> = {},
   ): Promise<Reply> {
-    if (
+    const parsed = new URL(url, 'http://demo.invalid')
+    const path = parsed.pathname
+    const content = method === 'POST' && isMdmContentPath(path)
+    if (content) {
+      if (!(body instanceof ArrayBuffer) || body.byteLength === 0)
+        return { status: 400, body: { code: 'malformed_request' } }
+      if (body.byteLength > MDM_CONTENT_BODY_LIMIT) return { status: 413 }
+    } else if (body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
+      return { status: 400, body: { code: 'malformed_request' } }
+    } else if (
       body !== undefined &&
       new TextEncoder().encode(JSON.stringify(body)).byteLength > MDM_JSON_BODY_LIMIT
     )
       return { status: 413 }
-    const parsed = new URL(url, 'http://demo.invalid')
-    const path = parsed.pathname
     const data = body && typeof body === 'object' ? (body as Record<string, unknown>) : {}
     if (path === '/api/mdm-candidate/v1/workspace/scenario' && method === 'GET')
       return { status: 200, body: { scenario: active, sources: { ...sources } } }
@@ -97,9 +109,11 @@ export function createScenario(
     }
     const loginPath = `/api/v2/tenants/${TENANT}/login`
     if (path === loginPath && method === 'POST') {
-      if (data['login'] !== 'demo' || data['password'] !== 'demo')
+      if (!['demo', 'reviewer'].includes(String(data['login'])) || data['password'] !== 'demo')
         return { status: 401, body: { code: 'invalid_credential' } }
       signedIn = true
+      principalId = data['login'] === 'reviewer' ? REVIEWER : PRINCIPAL
+      sessionId = randomUUID()
       epoch++
       return { status: 200, body: session() }
     }
@@ -115,8 +129,8 @@ export function createScenario(
         status: 200,
         body: {
           tenantId: TENANT,
-          principalId: PRINCIPAL,
-          sessionId: PRINCIPAL,
+          principalId,
+          sessionId,
           navigation: { manageAccounts: false, manageProviders: false },
         },
       }
@@ -163,10 +177,15 @@ export function createScenario(
           })),
         },
       }
-    const module =
-      /^\/api\/(?:v2\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v3\/(?:enrollments|devices))(?:\/|$)/.test(
+    const policyPath =
+      /^\/api\/(?:v2\/(?:scopes|policies|plan-previews)(?:\/|$)|v3\/(?:resources|script-plans)(?:\/|$)|v2\/devices\/[^/]+\/operations(?:\/|$)|mdm-candidate\/v1\/(?:policies|executions)(?:\/|$))/.test(
         path,
       )
+    const module = policyPath
+      ? 'policies'
+      : /^\/api\/(?:v2\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v3\/(?:enrollments|devices))(?:\/|$)/.test(
+            path,
+          )
         ? 'devices'
         : path.startsWith('/api/mdm-candidate/v1/groups')
           ? 'devices'
@@ -174,7 +193,17 @@ export function createScenario(
     if (module && sources[module] === 'real')
       return { status: 503, body: { code: 'service_unavailable' } }
     for (const handler of handlers) {
-      const reply = handler({ method, path, body, query: parsed.searchParams, headers }, active)
+      const reply = handler(
+        {
+          method,
+          path,
+          body,
+          query: parsed.searchParams,
+          headers,
+          actor: { principalId, sessionId },
+        },
+        active,
+      )
       if (reply)
         return unknownReply && reply.status >= 200 && reply.status < 300
           ? { status: 503, body: { code: 'operation_unknown' } }
