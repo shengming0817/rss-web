@@ -1,11 +1,17 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import type { IdentitySession } from './services/session'
 import { uuid } from './services/decode'
-export function identityRouter(session: IdentitySession) {
+export function identityRouter(
+  session: IdentitySession,
+  features: RouteRecordRaw[] = [],
+  hostTenant?: string,
+) {
   const router = createRouter({
     history: createWebHistory(),
     routes: [
-      { path: '/', name: 'entry', component: () => import('./views/ErrorView.vue') },
+      ...(features.some((route) => route.path === '/')
+        ? []
+        : [{ path: '/', name: 'entry', component: () => import('./views/ErrorView.vue') }]),
       { path: '/auth/resume', name: 'resume', component: () => import('./views/LoginView.vue') },
       { path: '/auth/error', name: 'error', component: () => import('./views/ErrorView.vue') },
       {
@@ -31,10 +37,13 @@ export function identityRouter(session: IdentitySession) {
         component: () => import('./views/ProvidersView.vue'),
         meta: { protected: true, oidc: true },
       },
+      ...features,
       { path: '/:pathMatch(.*)*', component: () => import('./views/ErrorView.vue') },
     ],
   })
   router.beforeEach(async (to) => {
+    if (hostTenant && to.params['tenant'] !== undefined && to.params['tenant'] !== hostTenant)
+      return { name: 'error' }
     if (to.meta['oidc'] && !session.config.oidcEnabled) return { name: 'error' }
     if (!to.meta['protected']) return true
     let tenant: string

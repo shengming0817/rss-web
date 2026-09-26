@@ -1,5 +1,5 @@
 # @rss/api
 
-`@rss/api/identity` provides the same-origin Identity HTTP v2 transport, strict success/error decoding and sanitized errors. The application owns endpoint DTOs and its cookie/CSRF session controller. Requests never replay automatically or accept caller-authored Authorization or tenant headers. Transport errors contain only cause, code and optional status; Axios request/response data never leaves the boundary.
+`@rss/api/identity` provides the same-origin Identity HTTP v2 transport and strict authentication errors. `@rss/api/mdm` provides explicit MDM v1/v2/v3 and documented candidate endpoint boundaries with product error decoding. Both reuse one private HTTP executor; neither retries automatically nor accepts caller-authored Authorization or tenant headers. MDM allows operation-specific Idempotency-Key without generating or replaying it.
 
-`@rss/api/testing` supplies network and timeout failures for application tests. Production code consumes only the Identity export.
+Domain clients own DTO decoders. Each application assembles one `@rss/auth` cookie/CSRF controller. Transport errors expose only cause, code and optional status; Axios request/response data never leaves the boundary. Success status is exact, including MDM asynchronous 202. `@rss/api/testing` supplies sanitized failures only to tests.

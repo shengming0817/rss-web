@@ -233,3 +233,80 @@ it('dispatches step-up after same-session rotation using the new CSRF', async ()
   expect(f.request.mock.calls.at(-1)?.[0].headers?.['X-CSRF-Token']).toBe('c'.repeat(64))
   f.session.clear()
 })
+
+it('abandons queued business dispatch after rotation failure without replay', async () => {
+  const f = fixture()
+  await f.login()
+  let reject!: (error: Error) => void
+  f.replies.push(
+    () =>
+      new Promise((_resolve, fail) => {
+        reject = fail
+      }),
+  )
+  const refresh = f.session.refresh().catch((error: unknown) => error)
+  let calls = 0
+  const business = f.session
+    .business(async () => {
+      calls++
+    })
+    .catch((error: unknown) => error)
+  await Promise.resolve()
+  reject(decodeIdentityError(503, { code: 'identity_unavailable' }))
+  expect(await refresh).toBeInstanceOf(Error)
+  expect(await business).toBeInstanceOf(Error)
+  expect(calls).toBe(0)
+  expect(f.session.state.value.status).toBe('unavailable')
+})
+
+it('fences business responses on page departure and releases waiting controls', async () => {
+  const f = fixture()
+  await f.login()
+  let finish!: () => void
+  let started!: () => void
+  const dispatched = new Promise<void>((resolve) => {
+    started = resolve
+  })
+  const response = f.session
+    .business(async (headers) => {
+      expect(headers['X-CSRF-Token']).toBe(TOKEN)
+      started()
+      await new Promise<void>((resolve) => {
+        finish = resolve
+      })
+    })
+    .catch((error: unknown) => error)
+  await dispatched
+  f.session.leavePage()
+  f.replies.push(sessionValue(true, 'b'.repeat(64)))
+  const refresh = f.session.refresh()
+  finish()
+  expect(await response).toBeInstanceOf(Error)
+  await refresh
+  expect(f.session.state.value.status).toBe('authenticated')
+})
+
+it('does not rotate after an in-flight business 401 invalidates its session', async () => {
+  const f = fixture()
+  await f.login()
+  let reject!: (error: Error) => void
+  let started!: () => void
+  const dispatched = new Promise<void>((resolve) => {
+    started = resolve
+  })
+  const response = f.session
+    .business(async () => {
+      started()
+      await new Promise((_resolve, fail) => {
+        reject = fail
+      })
+    })
+    .catch((error: unknown) => error)
+  await dispatched
+  const refresh = f.session.refresh().catch((error: unknown) => error)
+  reject(decodeIdentityError(401, { code: 'invalid_credential' }))
+  expect(await response).toBeInstanceOf(Error)
+  expect(await refresh).toBeInstanceOf(Error)
+  expect(f.session.state.value.status).toBe('anonymous')
+  expect(f.request.mock.calls.filter(([o]) => o.path.endsWith('/refresh'))).toHaveLength(0)
+})

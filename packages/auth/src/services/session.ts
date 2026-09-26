@@ -35,9 +35,11 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
   const logoutOutcome = shallowRef<'idle' | 'pending' | 'unconfirmed'>('idle')
   let csrf: string | undefined
   let generation = 0
+  let lifetime = 0
   type Control = { scope: string; page: number; promise: Promise<void> }
   let rotation: Control | undefined
   let departure: Control | undefined
+  const businessRequests = new Set<Promise<void>>()
   let pending: Promise<unknown> | undefined
   let securityRead: Promise<void> | undefined
   let expiry: ReturnType<typeof setTimeout> | undefined
@@ -49,7 +51,9 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
       : null
   }
   function serial<T>(work: () => Promise<T>): Promise<T> {
-    const result = pending ? pending.then(work, work) : work()
+    const drained = () =>
+      businessRequests.size ? Promise.all([...businessRequests]).then(work) : work()
+    const result = pending ? pending.then(drained, drained) : drained()
     const settled = result.then(
       () => undefined,
       () => undefined,
@@ -59,6 +63,33 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
       if (pending === settled) pending = undefined
     })
     return result
+  }
+  /** Concurrent business requests share credentials; session controls exclude them in both directions. */
+  async function business<T>(work: (headers: Record<string, string>) => Promise<T>): Promise<T> {
+    const scope = context()
+    const page = pageGeneration
+    const owner = lifetime
+    if (!scope) throw new Error('Session required')
+    while (pending) await pending
+    if (context() !== scope || pageGeneration !== page || lifetime !== owner)
+      throw new Error('Operation abandoned')
+    const expected = generation
+    let release!: () => void
+    const lease = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    businessRequests.add(lease)
+    try {
+      const result = await work(headers())
+      if (generation !== expected || pageGeneration !== page) throw new Error('Stale response')
+      return result
+    } catch (error) {
+      if (generation === expected && isRssApiError(error) && error.status === 401) clear()
+      throw error
+    } finally {
+      businessRequests.delete(lease)
+      release()
+    }
   }
   function perform<T>(work: () => Promise<T>): Promise<T> {
     const boundContext = context()
@@ -79,6 +110,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
     })
   }
   function clear(status: 'anonymous' | 'unavailable' = 'anonymous') {
+    lifetime++
     generation++
     csrf = undefined
     clearTimeout(expiry)
@@ -197,6 +229,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
   }
   async function login(tenant: string, login: string, password: string) {
     tenant = uuid(tenant)
+    lifetime++
     const expected = ++generation
     state.value = {
       ...state.value,
@@ -418,6 +451,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
     logout,
     failure,
     perform,
+    business,
     loadSecurity,
     leavePage,
     transport,

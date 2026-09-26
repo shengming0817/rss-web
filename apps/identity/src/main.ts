@@ -1,21 +1,23 @@
 import '@rss/core/styles/tokens.css'
-import './style.css'
+import '@rss/auth/styles.css'
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import { createIdentityTransport } from '@rss/api/identity'
-import { loadConfig } from './services/config'
-import { createSession } from './services/session'
-import { createApi } from './services/api'
-import { createFlows } from './services/flow'
-import { identityRouter } from './router'
-import { runtimeKey } from './context'
-import { identityI18n } from './i18n'
-import App from './App.vue'
+import {
+  loadConfig,
+  createSession,
+  createApi,
+  createFlows,
+  identityRouter,
+  runtimeKey,
+  identityI18n,
+  AuthShell,
+} from '@rss/auth'
 async function start() {
   const transport = createIdentityTransport()
   const config = await loadConfig(transport, window.location.origin)
   const session = createSession(transport, config)
-  const app = createApp(App)
+  const app = createApp(AuthShell)
   app.provide(runtimeKey, {
     session,
     api: createApi(session),

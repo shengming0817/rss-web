@@ -1,4 +1,4 @@
-export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE'
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 export type QueryValue = string | number | boolean | undefined
 export type Decoder<T> = (value: unknown) => T
 
@@ -14,7 +14,7 @@ interface RequestBase {
 }
 
 export interface RequestOptions<T> extends RequestBase {
-  successStatus: 200 | 201
+  successStatus: 200 | 201 | 202
   decode: Decoder<T>
 }
 

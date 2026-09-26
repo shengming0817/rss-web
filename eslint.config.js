@@ -18,13 +18,13 @@ const DEEP_PATH_PATTERN = {
 const NO_AXIOS_PATH = { name: 'axios', message: 'HTTP belongs to @rss/api.' }
 const NO_NETWORK = ['fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource'].map((name) => ({
   name,
-  message: 'Use the Identity transport.',
+  message: 'Use the product transport in @rss/api.',
 }))
 const NO_NETWORK_PROPERTIES = ['window', 'globalThis'].flatMap((object) =>
   ['fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource'].map((property) => ({
     object,
     property,
-    message: 'Use the Identity transport.',
+    message: 'Use the product transport in @rss/api.',
   })),
 )
 function boundaryRule(extraPatterns = [], extraPaths = []) {
@@ -175,7 +175,11 @@ export default tseslint.config(
 
   // The application owns one same-origin Identity session.
   {
-    files: ['apps/identity/**/*.{js,ts,vue}'],
+    files: [
+      'apps/identity/**/*.{js,ts,vue}',
+      'packages/auth/**/*.{js,ts,vue}',
+      'apps/mdm/**/*.{js,ts,vue}',
+    ],
     plugins: {
       'identity-boundary': {
         rules: {
@@ -193,7 +197,11 @@ export default tseslint.config(
                 const value = node.value
                 if (typeof value !== 'string' || !value.startsWith('.')) return
                 const filename = context.filename
-                const marker = `${sep}apps${sep}identity${sep}`
+                const marker = filename.includes(`${sep}packages${sep}auth${sep}`)
+                  ? `${sep}packages${sep}auth${sep}`
+                  : filename.includes(`${sep}apps${sep}mdm${sep}`)
+                    ? `${sep}apps${sep}mdm${sep}`
+                    : `${sep}apps${sep}identity${sep}`
                 const index = filename.lastIndexOf(marker)
                 const root = filename.slice(0, index) + marker
                 if (!resolve(dirname(filename), value).startsWith(root))
@@ -217,7 +225,7 @@ export default tseslint.config(
       'no-restricted-imports': boundaryRule(
         [
           {
-            regex: '^@rss/(?!core(?:/|$)|api/identity$)',
+            regex: '^@rss/(?!core(?:/|$)|auth(?:/|$)|api/identity$)',
             message: 'Identity app uses only core UI and its dedicated Identity transport.',
           },
         ],
@@ -229,16 +237,57 @@ export default tseslint.config(
   },
 
   {
-    files: ['apps/identity/**/*.spec.ts'],
+    files: ['apps/identity/**/*.spec.ts', 'packages/auth/**/*.spec.ts'],
     rules: {
       'no-restricted-imports': boundaryRule(
         [
           {
-            regex: '^@rss/(?!core(?:/|$)|api/(?:identity|testing)$)',
+            regex: '^@rss/(?!core(?:/|$)|auth(?:/|$)|api/(?:identity|testing)$)',
             message: 'Tests use public UI/Identity exports and sanitized failures only.',
           },
         ],
         [NO_AXIOS_PATH],
+      ),
+    },
+  },
+  {
+    files: ['apps/mdm/**/*.{ts,vue}'],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex: '^@rss/(?!core(?:/|$)|auth(?:/|$)|api/(?:identity|mdm)$)',
+            message: 'Use public product boundaries.',
+          },
+        ],
+        [NO_AXIOS_PATH],
+      ),
+    },
+  },
+  {
+    files: ['apps/mdm/src/**/*.{ts,vue}'],
+    ignores: ['apps/mdm/src/main.ts', 'apps/mdm/src/bootstrap.ts', '**/*.spec.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex: '^@rss/(?!core(?:/|$)|auth$|api/mdm$)',
+            message: 'Features consume injected clients and public UI.',
+          },
+        ],
+        [
+          NO_AXIOS_PATH,
+          {
+            name: '@rss/auth',
+            importNames: ['createSession', 'createApi', 'createFlows', 'identityRouter'],
+            message: 'Only bootstrap assembles authentication.',
+          },
+          {
+            name: '@rss/api/mdm',
+            importNames: ['createMdmTransport'],
+            message: 'Only bootstrap assembles the business transport.',
+          },
+        ],
       ),
     },
   },

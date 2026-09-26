@@ -3,6 +3,7 @@ import type { IdentitySession } from './services/session'
 import type { IdentityApi } from './services/api'
 import type { createFlows } from './services/flow'
 export interface Runtime {
+  landingRoute?: string
   session: IdentitySession
   api: IdentityApi
   flows: ReturnType<typeof createFlows>

@@ -8,7 +8,7 @@ import { uuid } from '../services/decode'
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const { session, api, flows } = useIdentity()
+const { session, api, flows, landingRoute = 'sessions' } = useIdentity()
 const { busy, error, run, checkpoint } = useOperation()
 const tenant = ref('')
 const login = ref('')
@@ -17,7 +17,7 @@ const providers = ref<{ id: string; label: string }[]>([])
 async function continueFlow() {
   checkpoint()
   flows.clear()
-  await router.replace({ name: 'sessions', params: { tenant: tenant.value } })
+  await router.replace({ name: landingRoute, params: { tenant: tenant.value } })
 }
 async function submit() {
   const secret = password.value

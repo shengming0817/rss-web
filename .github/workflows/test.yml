@@ -1,4 +1,4 @@
-# Identity: 类型、静态检查、业务测试和生产构建
+# Product apps: 类型、静态检查、业务测试和生产构建
 # on PR + push develop
 name: test
 
@@ -47,5 +47,5 @@ jobs:
       - name: Boundary self-check (no coverage)
         run: pnpm test:boundary
 
-      - name: Build Identity app and scan production assets
+      - name: Build Identity and MDM and scan production assets
         run: pnpm build

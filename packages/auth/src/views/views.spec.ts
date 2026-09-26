@@ -33,7 +33,7 @@ async function view(
     history: createMemoryHistory(),
     routes: [
       { path: '/', component: { template: '<div/>' } },
-      ...['login', 'sessions', 'accounts', 'providers'].map((name) => ({
+      ...['login', 'sessions', 'accounts', 'providers', 'workspace'].map((name) => ({
         path: `/tenants/:tenant/${name}`,
         name,
         component: { template: '<div/>' },
@@ -659,3 +659,23 @@ it.each([
     }
   },
 )
+
+it.each(['login', 'continue', 'resume'])('uses the app landing route after %s', async (mode) => {
+  const f = Object.assign(fixture(), { landingRoute: 'workspace' })
+  if (mode === 'resume') f.flows.save({ kind: 'sso', tenant: TENANT })
+  f.replies.push(
+    mode === 'login' ? decodeIdentityError(401, { code: 'invalid_credential' }) : sessionValue(),
+  )
+  if (mode !== 'resume') f.replies.push({ providers: [] })
+  const { wrapper, router } = await view(LoginView, f, mode === 'resume' ? 'resume' : 'login')
+  if (mode === 'login') {
+    await wrapper.get('#login-name').setValue('user')
+    await wrapper.get('#login-password').setValue('secret')
+    f.replies.push(sessionValue())
+    await wrapper.get('form').trigger('submit')
+  } else if (mode === 'continue') await wrapper.get('button').trigger('click')
+  await flushPromises()
+  expect(router.currentRoute.value.name).toBe('workspace')
+  wrapper.unmount()
+  f.session.clear()
+})

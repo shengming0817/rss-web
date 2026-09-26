@@ -14,7 +14,7 @@ function sources(dir = resolve(root, 'apps/identity/src')): string[] {
 }
 describe('embedded Identity application', () => {
   it('has no legacy authentication, persistence of credentials, or network bypass', () => {
-    for (const path of sources()) {
+    for (const path of [...sources(), ...sources(resolve(root, 'packages/auth/src'))]) {
       const s = readFileSync(path, 'utf8')
       expect(s, relative(root, path)).not.toMatch(
         /\/api\/v1\/|downstream|platform_administrator|hydra|@rss\/identity(?:['"/])|Authorization|X-Tenant-ID|accessToken|refreshToken|localStorage|indexedDB|console\.|\batob\(|jwt-decode/,
@@ -32,7 +32,7 @@ describe('embedded Identity application', () => {
       "import { createIdentityApi } from '../../../../../packages/identity/src/api'",
     ]) {
       const result = await lint.lintText(text, {
-        filePath: resolve(root, 'apps/identity/src/services/session.ts'),
+        filePath: resolve(root, 'apps/identity/src/main.ts'),
       })
       expect(
         result[0]?.messages.some(

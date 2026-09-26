@@ -1,4 +1,4 @@
-# Send only source and manifests required by the Identity build.
+# Send only production source and manifests required by the product builds.
 **
 !package.json
 !pnpm-lock.yaml
@@ -23,6 +23,10 @@
 !packages/
 !packages/api/
 !packages/core/
+!packages/auth/
+!packages/auth/env.d.ts
+!packages/auth/tests/
+!packages/auth/tests/**/*.ts
 !packages/*/package.json
 !packages/*/tsconfig.json
 !packages/*/vitest.config.ts
@@ -33,3 +37,21 @@
 !packages/*/src/**/*.css
 !scripts/
 !scripts/check-identity-app-build.mjs
+
+!apps/mdm/
+!apps/mdm/package.json
+!apps/mdm/tsconfig*.json
+!apps/mdm/vite.config.ts
+!apps/mdm/env.d.ts
+!apps/mdm/index.html
+!apps/mdm/public/
+!apps/mdm/public/theme-init.js
+!apps/mdm/src/
+!apps/mdm/src/**/
+!apps/mdm/src/**/*.ts
+!apps/mdm/src/**/*.vue
+!apps/mdm/src/**/*.css
+!apps/mdm/demo/
+!apps/mdm/demo/*.ts
+!apps/mdm/demo/*.vue
+!scripts/check-mdm-app-build.mjs

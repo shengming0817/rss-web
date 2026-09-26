@@ -23,7 +23,12 @@
     "build:identity": "pnpm -F @rss/identity-app build && pnpm check:identity-app:build",
     "image:identity": "bash scripts/build-identity-image.sh",
     "dev": "pnpm -F @rss/identity-app dev",
-    "build": "pnpm build:identity"
+    "build": "pnpm build:identity && pnpm build:mdm",
+    "dev:identity": "pnpm -F @rss/identity-app dev",
+    "dev:mdm": "pnpm -F @rss/mdm-app dev",
+    "dev:mdm:demo": "pnpm -F @rss/mdm-app demo",
+    "build:mdm": "pnpm -F @rss/mdm-app build && node scripts/check-mdm-app-build.mjs",
+    "image:mdm": "bash scripts/build-mdm-image.sh"
   },
   "lint-staged": {
     "*.{ts,vue}": [
@@ -52,6 +57,7 @@
     "eslint-config-prettier": "catalog:",
     "prettier": "catalog:",
     "husky": "catalog:",
-    "lint-staged": "catalog:"
+    "lint-staged": "catalog:",
+    "@rss/auth": "workspace:*"
   }
 }

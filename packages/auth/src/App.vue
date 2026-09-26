@@ -4,10 +4,18 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useTheme } from '@rss/core/composables'
 import { useIdentity } from './context'
+defineProps<{ product?: string }>()
 const { session } = useIdentity()
 const router = useRouter()
 const { t, locale } = useI18n()
 const theme = useTheme()
+watch(
+  locale,
+  (value) => {
+    document.documentElement.lang = value
+  },
+  { immediate: true },
+)
 onMounted(() => window.addEventListener('pagehide', session.leavePage))
 onBeforeUnmount(() => window.removeEventListener('pagehide', session.leavePage))
 watch(
@@ -44,7 +52,9 @@ function activity(event: Event) {
   <div class="identity-app" @pointerdown="activity" @keydown="activity">
     <a class="identity-skip" href="#identity-main">{{ t('identity.skip') }}</a>
     <header>
-      <RouterLink to="/" class="identity-brand">RSS <strong>Identity</strong></RouterLink>
+      <RouterLink to="/" class="identity-brand"
+        >RSS <strong>{{ product ?? 'Identity' }}</strong></RouterLink
+      >
       <div class="identity-actions">
         <button @click="locale = locale === 'zh-CN' ? 'en-US' : 'zh-CN'">
           {{ locale === 'zh-CN' ? 'English' : '中文' }}</button
@@ -76,6 +86,7 @@ function activity(event: Event) {
         }"
         >{{ t('identity.providers') }}</RouterLink
       >
+      <slot name="navigation" />
     </nav>
     <p
       v-if="

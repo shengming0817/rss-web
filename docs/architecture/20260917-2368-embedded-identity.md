@@ -1,6 +1,6 @@
 # 产品宿主内认证 UI
 
-UI 挂载 `/`，租户登录入口 `/tenants/{tenant UUID}/login`。API 仅 `/api/v2`，唯一协议 callback `/api/v2/oidc/callback`；宿主 return target `resume` 必须指向同源 `/auth/resume`。API DTO 均为 camelCase。Provider claims 只接受 email/groups/departmentSnapshot；departmentSnapshot 为 null 或完整 claim/maxAgeSeconds（1–300 秒），拒绝旧 department 字段。编辑其它设置保留后端配置的部门快照映射，新 provider 明确提交 null；部门配置通过后端管理 API 维护，本 UI 不新增部门目录或授权页面。此契约对应 Identity #2451。
+Identity 应用独立装配 `@rss/auth` 的唯一会话实例；MDM 复用该共享包但独立部署，见 [MDM 前端](20260926-2544-mdm-web.md)。UI 挂载 `/`，租户登录入口 `/tenants/{tenant UUID}/login`。API 仅 `/api/v2`，唯一协议 callback `/api/v2/oidc/callback`；宿主 return target `resume` 必须指向同源 `/auth/resume`。API DTO 均为 camelCase。Provider claims 只接受 email/groups/departmentSnapshot；departmentSnapshot 为 null 或完整 claim/maxAgeSeconds（1–300 秒），拒绝旧 department 字段。编辑其它设置保留后端配置的部门快照映射，新 provider 明确提交 null；部门配置通过后端管理 API 维护，本 UI 不新增部门目录或授权页面。此契约对应 Identity #2451。
 
 上游 issuer/clientId 是外部企业 IdP 配置，默认本地认证不需要 IdP。
 

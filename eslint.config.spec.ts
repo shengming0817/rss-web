@@ -37,7 +37,7 @@ describe('ESLint package boundaries', () => {
     }
   })
   it('uses public Identity and UI exports, with test factories only in tests', async () => {
-    const source = 'apps/identity/src/services/config.ts'
+    const source = 'apps/identity/src/main.ts'
     for (const dependency of ['@rss/api/identity', '@rss/core']) {
       expect(
         await ruleIds(`import { x } from '${dependency}'\nexport const y = x`, source),
@@ -51,8 +51,41 @@ describe('ESLint package boundaries', () => {
     expect(
       await ruleIds(
         "import { networkErrorForTest } from '@rss/api/testing'\nexport const x = networkErrorForTest",
-        'apps/identity/src/services/config.spec.ts',
+        'packages/auth/src/services/config.spec.ts',
       ),
     ).not.toContain('no-restricted-imports')
   })
+})
+
+it('keeps both app compositions and shared auth behind declared public exports', async () => {
+  for (const file of ['apps/identity/src/main.ts', 'packages/auth/src/index.ts']) {
+    expect(await ruleIds("import { x } from '@rss/api/mdm'\nexport const y = x", file)).toContain(
+      'no-restricted-imports',
+    )
+  }
+  for (const file of ['apps/mdm/src/main.ts', 'packages/auth/src/index.ts']) {
+    expect(await ruleIds("import axios from 'axios'\nexport const y = axios", file)).toContain(
+      'no-restricted-imports',
+    )
+  }
+  expect(
+    await ruleIds("import { x } from '@rss/auth'\nexport const y = x", 'apps/mdm/src/main.ts'),
+  ).not.toContain('no-restricted-imports')
+  expect(
+    await ruleIds(
+      "import { x } from '@rss/mdm-app'\nexport const y = x",
+      'apps/identity/src/main.ts',
+    ),
+  ).toContain('no-restricted-imports')
+})
+
+it('permits owner factories only in the MDM composition roots', async () => {
+  for (const [name, dependency] of [
+    ['createSession', '@rss/auth'],
+    ['createMdmTransport', '@rss/api/mdm'],
+  ]) {
+    const code = `import { ${name} } from '${dependency}'\nexport const factory = ${name}`
+    expect(await ruleIds(code, 'apps/mdm/src/features.ts')).toContain('no-restricted-imports')
+    expect(await ruleIds(code, 'apps/mdm/src/bootstrap.ts')).not.toContain('no-restricted-imports')
+  }
 })

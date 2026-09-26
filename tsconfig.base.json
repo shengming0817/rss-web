@@ -27,7 +27,10 @@
       "@rss/core/composables": ["packages/core/src/composables/index.ts"],
       "@rss/core/components": ["packages/core/src/components/index.ts"],
       "@rss/api/testing": ["packages/api/src/testing.ts"],
-      "@rss/api/identity": ["packages/api/src/identity.ts"]
+      "@rss/api/identity": ["packages/api/src/identity.ts"],
+      "@rss/auth": ["packages/auth/src/index.ts"],
+      "@rss/api/mdm": ["packages/api/src/mdm.ts"],
+      "@rss/auth/session": ["packages/auth/src/session.ts"]
     }
   }
 }
