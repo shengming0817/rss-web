@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, watch, type Ref } from 'vue'
 import type { HttpTransport } from '@rss/api/mdm'
 import { useI18n } from 'vue-i18n'
 import { scenarios, TENANT } from './scenario'
 import { record, enumeration } from '../src/services/decode'
 import { moduleIds } from '../src/services/workspace'
-const props = defineProps<{ transport: HttpTransport }>()
+const props = defineProps<{ transport: HttpTransport; authenticated: Readonly<Ref<boolean>> }>()
 const { locale, t } = useI18n()
 const active = ref('normal')
 const module = ref('devices')
@@ -14,7 +14,7 @@ const selectedSources = ref<Record<string, string>>({})
 watch(module, (value) => {
   source.value = selectedSources.value[value] ?? 'mock'
 })
-onMounted(async () => {
+async function load() {
   try {
     const value = await props.transport.request({
       method: 'GET',
@@ -37,7 +37,14 @@ onMounted(async () => {
   } catch {
     failed.value = true
   }
-})
+}
+watch(
+  () => props.authenticated.value,
+  (value) => {
+    if (value) void load()
+  },
+  { immediate: true },
+)
 const failed = ref(false)
 const busy = ref(false)
 const eventKind = ref('clock'),
@@ -115,10 +122,10 @@ async function apply(reset: boolean) {
       <option value="mock">{{ t('mdm.mock') }}</option>
       <option value="real">{{ t('mdm.real') }}</option>
     </select>
-    <button :disabled="busy" @click="apply(false)">
+    <button :disabled="busy || !authenticated.value" @click="apply(false)">
       {{ locale === 'zh-CN' ? '应用' : 'Apply' }}
     </button>
-    <button :disabled="busy" @click="apply(true)">
+    <button :disabled="busy || !authenticated.value" @click="apply(true)">
       {{ locale === 'zh-CN' ? '重置演示' : 'Reset demo' }}
     </button>
     <p v-if="failed" role="alert">
@@ -152,7 +159,7 @@ async function apply(reset: boolean) {
         locale === 'zh-CN' ? '设备 ID' : 'Device ID'
       }}</label>
       <input v-if="eventKind !== 'clock'" id="demo-event-device" v-model="eventDevice" />
-      <button :disabled="busy" @click="simulate">
+      <button :disabled="busy || !authenticated.value" @click="simulate">
         {{ locale === 'zh-CN' ? '注入模拟事件' : 'Inject synthetic event' }}
       </button>
     </details>

@@ -1,3 +1,4 @@
+import { ref } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import { createMdmTransport } from '@rss/api/mdm'
@@ -15,7 +16,7 @@ it('translates all option labels while retaining their protocol values', async (
   const i18n = mdmI18n()
   i18n.global.locale.value = 'zh-CN'
   const wrapper = mount(DemoControls, {
-    props: { transport: createMdmTransport() },
+    props: { transport: createMdmTransport(), authenticated: ref(true) },
     global: { plugins: [i18n] },
   })
   await flushPromises()

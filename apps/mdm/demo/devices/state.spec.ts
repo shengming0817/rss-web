@@ -10,11 +10,16 @@ it('resets domain changes and blocks published device endpoints when real is sel
   })
   expect(login.status).toBe(200)
   expect((await scenario.handle('GET', '/api/v2/asset-fields')).status).toBe(200)
-  await scenario.handle('POST', '/api/mdm-candidate/v1/workspace/scenario', {
-    scenario: 'normal',
-    module: 'devices',
-    source: 'real',
-  })
+  await scenario.handle(
+    'POST',
+    '/api/mdm-candidate/v1/workspace/scenario',
+    {
+      scenario: 'normal',
+      module: 'devices',
+      source: 'real',
+    },
+    { 'x-csrf-token': (login.body as { csrfToken: string }).csrfToken, 'x-identity-request': '1' },
+  )
   for (const path of [
     '/api/v2/asset-fields',
     '/api/v2/device-queries',
