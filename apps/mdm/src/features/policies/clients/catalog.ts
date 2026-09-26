@@ -11,7 +11,7 @@ import {
   uuid,
 } from '../../../services/decode'
 import { candidate } from './candidate'
-export type Collection = 'scopes' | 'resources' | 'policies' | 'script-plans' | 'workflows'
+export type Collection = 'scopes' | 'resources' | 'policies' | 'workflows'
 export function createCatalogClient(transport: HttpTransport, tenant: string, demo: boolean) {
   return {
     list: (collection: Collection, cursor?: string) =>
@@ -64,7 +64,7 @@ export function createCatalogClient(transport: HttpTransport, tenant: string, de
             items: array(v['items'], (value) => {
               const a = closed(value, ['kind', 'id', 'run', 'revision', 'author', 'label'])
               return {
-                kind: enumeration(a['kind'], ['script', 'workflow'] as const),
+                kind: enumeration(a['kind'], ['workflow'] as const),
                 id: uuid(a['id']),
                 run: nullable(a['run'], uuid),
                 revision: count(a['revision']),

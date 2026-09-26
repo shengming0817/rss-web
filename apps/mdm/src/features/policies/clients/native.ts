@@ -4,7 +4,6 @@ import {
   closed,
   count,
   enumeration,
-  identifier,
   integer,
   nullable,
   record,
@@ -15,23 +14,11 @@ export type NativeTask =
   | { kind: 'profile_install'; enabled: boolean }
   | { kind: 'profile_remove'; profile: string }
   | { kind: 'state_verify'; field: 'model' | 'os_version'; expectedValue: string }
-export type FrozenNativeTask =
-  | NativeTask
-  | {
-      kind: 'firewall'
-      enabled: boolean
-      plan: string
-      policy: string
-      version: number
-      osVersion: string
-      edition: number
-    }
-function task(value: unknown): FrozenNativeTask {
+export function decodeNativeTask(value: unknown): NativeTask {
   const kind = enumeration(record(value)['kind'], [
     'profile_install',
     'profile_remove',
     'state_verify',
-    'firewall',
   ] as const)
   if (kind === 'profile_install') {
     const v = closed(value, ['kind', 'enabled'])
@@ -49,17 +36,9 @@ function task(value: unknown): FrozenNativeTask {
       expectedValue: string(v['expectedValue']),
     }
   }
-  const v = closed(value, ['kind', 'enabled', 'plan', 'policy', 'version', 'osVersion', 'edition'])
-  return {
-    kind,
-    enabled: boolean(v['enabled']),
-    plan: uuid(v['plan']),
-    policy: identifier(v['policy']),
-    version: count(v['version']),
-    osVersion: string(v['osVersion']),
-    edition: count(v['edition']),
-  }
+  throw new Error('Unsupported native task')
 }
+
 function observation(value: unknown) {
   const protocol = enumeration(record(value)['protocol'], ['mdm.apple', 'mdm.windows'] as const)
   const base = ['protocol', 'result', 'effect', 'progress']
@@ -138,7 +117,7 @@ export function decodeNativeOperation(value: unknown, id: string) {
     operationId: id,
     commandId: id,
     revision: count(v['revision']),
-    task: task(v['task']),
+    task: decodeNativeTask(v['task']),
     deadline: count(v['deadline']),
     authorization: enumeration(v['authorization'], ['approved', 'blocked'] as const),
     commandStatus: enumeration(v['commandStatus'], [

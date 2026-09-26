@@ -6,7 +6,6 @@ import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import type { ExecutionSummary } from '../clients/executions'
 import type { NativeOperation } from '../clients/native'
-import type { ScriptRun } from '../clients/scripts'
 import PolicyFrame from '../components/PolicyFrame.vue'
 import ExecutionFacts from '../components/ExecutionFacts.vue'
 const { t } = useI18n(),
@@ -14,8 +13,7 @@ const { t } = useI18n(),
   route = useRoute(),
   { run, runWrite, busy, failure, uncertain } = useOperation()
 const execution = ref<ExecutionSummary>(),
-  native = ref<NativeOperation>(),
-  script = ref<ScriptRun>()
+  native = ref<NativeOperation>()
 let pending: (() => Promise<void>) | undefined
 async function load() {
   const id = String(route.params['execution'])
@@ -26,17 +24,12 @@ async function load() {
         summary.origin.kind === 'native'
           ? await runtime.policies.native.read(summary.device, summary.origin.operation)
           : undefined
-      const s =
-        summary.origin.kind === 'script'
-          ? await runtime.policies.scripts.run(summary.origin.plan, summary.origin.task)
-          : undefined
-      const updated = n || s ? await runtime.policies.executions.read(id) : summary
-      return { summary: updated, n, s }
+      const updated = n ? await runtime.policies.executions.read(id) : summary
+      return { summary: updated, n }
     },
     (v) => {
       execution.value = v.summary
       native.value = v.n
-      script.value = v.s
     },
   )
 }
@@ -55,7 +48,6 @@ watch(
   () => {
     execution.value = undefined
     native.value = undefined
-    script.value = undefined
     pending = undefined
     void load()
   },
@@ -75,13 +67,13 @@ onMounted(() => load())
         }"
         >{{ t('policies.batch') }}</RouterLink
       ><RouterLink
-        v-if="execution.origin.kind === 'script'"
+        v-if="execution.origin.kind === 'policy'"
         :to="{
-          name: 'policy-scripts',
+          name: 'policy-policies',
           params: { tenant: runtime.tenant },
-          query: { id: execution.origin.plan },
+          query: { id: execution.origin.policy },
         }"
-        >{{ t('policies.scripts') }}</RouterLink
+        >{{ t('policies.policies') }}</RouterLink
       ><RouterLink
         v-if="execution.origin.kind === 'workflow'"
         :to="{
@@ -92,6 +84,10 @@ onMounted(() => load())
         >{{ t('policies.workflows') }}</RouterLink
       ></template
     >
+    <section v-if="execution?.origin.kind === 'policy' && execution.origin.output !== null">
+      <h2>{{ t('policies.output') }}</h2>
+      <pre>{{ JSON.stringify(execution.origin.output, null, 2) }}</pre>
+    </section>
     <section v-if="native">
       <h2>{{ native.observation.protocol }}</h2>
       <p>
@@ -104,16 +100,6 @@ onMounted(() => load())
       ><button :disabled="busy || uncertain" @click="change('cancel')">
         {{ t('policies.cancel') }}
       </button>
-    </section>
-    <section v-if="script">
-      <h2>{{ t('policies.scripts') }}</h2>
-      <p>{{ script.registrationId }} / {{ script.generation }}</p>
-      <p>{{ t('policies.fact.unverified') }}</p>
-      <template v-if="script.result">
-        <pre>{{ JSON.stringify(script.result.output, null, 2) }}</pre>
-        <pre>{{ script.result.diagnostics.stdout }}</pre>
-        <pre>{{ script.result.diagnostics.stderr }}</pre>
-      </template>
     </section>
     <button v-if="uncertain && pending" :disabled="busy" @click="pending()">
       {{ t('policies.replay') }}

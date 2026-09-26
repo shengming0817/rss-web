@@ -1,4 +1,5 @@
 /** MOCK_SOURCE: synthetic HTTP server, never part of a production entry. */
+import type { DemoEvent } from './policies/schedule'
 import { MDM_JSON_BODY_LIMIT, MDM_CONTENT_BODY_LIMIT, isMdmContentPath } from '@rss/api/mdm-limits'
 export const TENANT = '11111111-1111-4111-8111-111111111111'
 const PRINCIPAL = '22222222-2222-4222-8222-222222222222'
@@ -32,6 +33,7 @@ export type DomainHandler = (request: DemoRequest, scenario: Scenario) => Reply 
 export function createScenario(
   handlers: DomainHandler[] = [],
   resetDomains: () => void = () => {},
+  advance: (event: DemoEvent, scenario: Scenario) => void = () => {},
 ) {
   let active: Scenario = 'normal'
   let signedIn = false
@@ -92,6 +94,24 @@ export function createScenario(
     if (path === '/api/mdm-candidate/v1/workspace/scenario' && method === 'GET')
       return { status: 200, body: { scenario: active, sources: { ...sources } } }
     if (path === '/api/mdm-candidate/v1/workspace/scenario' && method === 'POST') {
+      if (data['event'] !== undefined) {
+        if (!signedIn) return { status: 401, body: { code: 'invalid_identity' } }
+        if (sources['policies'] !== 'mock')
+          return { status: 409, body: { code: 'operation_conflict' } }
+        const event = data['event'] as Partial<DemoEvent> | null
+        if (
+          !event ||
+          !['clock', 'registration', 'check_in'].includes(event.kind ?? '') ||
+          typeof event.at !== 'number' ||
+          !Number.isSafeInteger(event.at) ||
+          event.at < 0 ||
+          event.at > 8640000000000 ||
+          (event.kind !== 'clock' && (typeof event.device !== 'string' || !event.device))
+        )
+          return { status: 400, body: { code: 'malformed_request' } }
+        advance(event as DemoEvent, active)
+        return { status: 204 }
+      }
       if (data['reset'] === true) reset()
       else {
         if (!scenarios.includes(data['scenario'] as Scenario))
@@ -177,7 +197,7 @@ export function createScenario(
         },
       }
     const policyPath =
-      /^\/api\/(?:v2\/(?:scopes|policies|plan-previews)(?:\/|$)|v3\/(?:resources|script-plans)(?:\/|$)|v2\/devices\/[^/]+\/operations(?:\/|$)|mdm-candidate\/v1\/(?:policies|executions)(?:\/|$))/.test(
+      /^\/api\/(?:v2\/(?:scopes|policies)(?:\/|$)|v3\/(?:resources)(?:\/|$)|v2\/devices\/[^/]+\/operations(?:\/|$)|mdm-candidate\/v1\/(?:policies|executions)(?:\/|$))/.test(
         path,
       )
     const module = policyPath

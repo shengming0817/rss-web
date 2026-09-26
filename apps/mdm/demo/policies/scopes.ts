@@ -190,6 +190,15 @@ export function createScopeDemo(devices: Devices) {
       [...scopes.values()]
         .filter((s) => !deleted.has(s.id))
         .map((s) => ({ id: s.id, label: s.id, revision: s.revision, status: 'ready' as const })),
+    resolve(id: string) {
+      const read = scopes.get(id)
+      if (!read || deleted.has(id)) return null
+      try {
+        return structuredClone(resolve(read).frozen)
+      } catch {
+        return null
+      }
+    },
     freeze(id: string) {
       const task = current.get(id),
         job = task ? jobs.get(task) : null,

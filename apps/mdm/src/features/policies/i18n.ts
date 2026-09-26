@@ -1,4 +1,30 @@
 export const policiesZh = {
+  scriptAssignment:
+    '在资源库编辑脚本、参数与输出约束，再通过持续分配策略启用；普通脚本无需额外人工审批。',
+  exitBehavior: '退出范围时',
+  cancelOutstanding: '取消尚未完成的运行（不撤销已生效配置）',
+  retainEffects: '保留既有运行与效果',
+  onChange: '成员或资源变化',
+  interval: '固定间隔',
+  checkIn: '设备签到',
+  optionalWindow: '限制有效时间窗口（UTC 秒）',
+  computation: '成员计算序号',
+  refreshProgress: '刷新进度（保留编辑）',
+  reloadDefinition: '重新载入配置（替换编辑）',
+  waitingMembers: '等待 Scope 成员；策略配置已保存。',
+  assignment: {
+    applicable: '适用',
+    disabled: '未启用',
+    offline: '设备离线',
+    unsupported: '平台或能力不支持',
+    authorization: '授权或身份不可用',
+    scope_unavailable: 'Scope 不可用',
+    resource_unavailable: '资源版本不可用',
+    window: '有效窗口之外',
+    trigger: '等待触发',
+    unknown: '结果未知，需核实',
+  },
+
   loadTemplate: '载入平台示例（替换草稿）',
   templateHint:
     '示例仅填写候选设置草稿，不生成设备载荷或授予执行权限。保存版本后由服务端预检实际支持。',
@@ -88,15 +114,10 @@ export const policiesZh = {
     repair: '受控修复',
   },
   policyHint:
-    '现有真实策略执行仅支持 Windows 域防火墙。预览冻结目标与版本，保存采用 CAS；执行前再次核实授权和能力。',
+    '候选持续分配：保存资源版本、动态 Scope 和触发配置后生效。预览无执行副作用；Mock 不代表真实设备效果。',
   storageRevision: '存储版本',
-  policyVersion: '策略版本',
-  fresh: '计划有效',
   pause: '暂停',
   resume: '恢复',
-  savePlan: '保存冻结计划',
-  confirmExecute: '确认执行已保存的冻结计划',
-  execute: '执行计划',
   projection: {
     targets: '目标',
     add: '新增',
@@ -114,7 +135,6 @@ export const policiesZh = {
   submitReview: '提交审批',
   active: '调度有效',
   approved: '已批准',
-  cancelPlan: '请求取消整个脚本计划',
   schedule: '调度定义',
   scheduleHint: '由服务端处理触发与维护窗口；浏览器不调度任务。时间使用 Unix 秒。',
   trigger: '触发方式',
@@ -277,6 +297,32 @@ export const policiesZh = {
   independent: '必须由其他账户批准。演示账户 demo / reviewer，密码均为 demo。',
 }
 export const policiesEn: typeof policiesZh = {
+  scriptAssignment:
+    'Author scripts, parameter and output constraints in Resources, then enable a continuous assignment. Ordinary scripts do not require an additional human approval.',
+  exitBehavior: 'On scope exit',
+  cancelOutstanding: 'Cancel outstanding runs (does not undo applied configuration)',
+  retainEffects: 'Retain existing runs and effects',
+  onChange: 'Membership or resource change',
+  interval: 'Interval',
+  checkIn: 'Device check-in',
+  optionalWindow: 'Limit validity window (UTC seconds)',
+  computation: 'Membership computation',
+  refreshProgress: 'Refresh progress (keep edits)',
+  reloadDefinition: 'Reload definition (replace edits)',
+  waitingMembers: 'Waiting for Scope members; policy configuration is saved.',
+  assignment: {
+    applicable: 'Applicable',
+    disabled: 'Disabled',
+    offline: 'Device offline',
+    unsupported: 'Platform or capability unsupported',
+    authorization: 'Authorization or identity unavailable',
+    scope_unavailable: 'Scope unavailable',
+    resource_unavailable: 'Resource version unavailable',
+    window: 'Outside validity window',
+    trigger: 'Waiting for trigger',
+    unknown: 'Unknown result; verify first',
+  },
+
   loadTemplate: 'Load platform example (replace draft)',
   templateHint:
     'Examples fill candidate setting drafts only. They do not generate device payloads or grant execution authority. Save a version and use server preflight to check support.',
@@ -368,13 +414,8 @@ export const policiesEn: typeof policiesZh = {
   policyHint:
     'The current live policy execution supports Windows domain firewall only. Preview freezes targets and versions; saving uses CAS; execution revalidates authorization and capabilities.',
   storageRevision: 'Storage revision',
-  policyVersion: 'Policy version',
-  fresh: 'Plan fresh',
   pause: 'Pause',
   resume: 'Resume',
-  savePlan: 'Save frozen plan',
-  confirmExecute: 'Confirm execution of the saved frozen plan',
-  execute: 'Execute plan',
   projection: {
     targets: 'Targets',
     add: 'Add',
@@ -392,7 +433,6 @@ export const policiesEn: typeof policiesZh = {
   submitReview: 'Submit for review',
   active: 'Schedule active',
   approved: 'Approved',
-  cancelPlan: 'Request cancellation of the entire script plan',
   schedule: 'Schedule definition',
   scheduleHint:
     'The server handles triggers and maintenance windows; the browser does not schedule tasks. Times are Unix seconds.',

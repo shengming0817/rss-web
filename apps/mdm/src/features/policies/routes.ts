@@ -21,7 +21,7 @@ export const policyFeature: MdmFeature = {
       meta: { protected: true },
     },
     {
-      path: `${base}/plans`,
+      path: `${base}/assignments`,
       name: 'policy-policies',
       component: () => import('./views/PoliciesView.vue'),
       meta: { protected: true },

@@ -39,6 +39,33 @@ onMounted(async () => {
 })
 const failed = ref(false)
 const busy = ref(false)
+const eventKind = ref('clock'),
+  eventAt = ref(Math.floor(Date.now() / 1000)),
+  eventDevice = ref('device-01')
+async function simulate() {
+  if (busy.value) return
+  busy.value = true
+  failed.value = false
+  try {
+    await createMdmTransport().request({
+      method: 'POST',
+      path: '/api/mdm-candidate/v1/workspace/scenario',
+      body: {
+        event: {
+          kind: eventKind.value,
+          at: eventAt.value,
+          ...(eventKind.value !== 'clock' ? { device: eventDevice.value } : {}),
+        },
+      },
+      successStatus: 204,
+    })
+    window.location.reload()
+  } catch {
+    failed.value = true
+  } finally {
+    busy.value = false
+  }
+}
 async function apply(reset: boolean) {
   if (busy.value) return
   busy.value = true
@@ -96,5 +123,37 @@ async function apply(reset: boolean) {
     <p v-if="failed" role="alert">
       {{ locale === 'zh-CN' ? '模拟服务不可用' : 'Demo server unavailable' }}
     </p>
+    <details>
+      <summary>
+        {{
+          locale === 'zh-CN'
+            ? '模拟自动化触发事件（先登录并启用策略或工作流）'
+            : 'Simulate automation events (sign in and enable a policy or workflow first)'
+        }}
+      </summary>
+      <label for="demo-event-kind">{{ locale === 'zh-CN' ? '事件' : 'Event' }}</label>
+      <select id="demo-event-kind" v-model="eventKind">
+        <option value="clock">
+          {{ locale === 'zh-CN' ? '服务端时钟推进' : 'Server clock tick' }}
+        </option>
+        <option value="registration">
+          {{ locale === 'zh-CN' ? '模拟设备注册事件' : 'Synthetic registration event' }}
+        </option>
+        <option value="check_in">
+          {{ locale === 'zh-CN' ? '模拟设备签入事件' : 'Synthetic check-in event' }}
+        </option>
+      </select>
+      <label for="demo-event-at">{{
+        locale === 'zh-CN' ? '时间（Unix 秒，单向推进）' : 'Time (Unix seconds, advances only)'
+      }}</label>
+      <input id="demo-event-at" v-model.number="eventAt" type="number" min="0" />
+      <label v-if="eventKind !== 'clock'" for="demo-event-device">{{
+        locale === 'zh-CN' ? '设备 ID' : 'Device ID'
+      }}</label>
+      <input v-if="eventKind !== 'clock'" id="demo-event-device" v-model="eventDevice" />
+      <button :disabled="busy" @click="simulate">
+        {{ locale === 'zh-CN' ? '注入模拟事件' : 'Inject synthetic event' }}
+      </button>
+    </details>
   </aside>
 </template>

@@ -2,6 +2,7 @@ import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
   closed,
+  count,
   enumeration,
   identifier,
   integer,
@@ -11,26 +12,39 @@ import {
   unique,
   uuid,
 } from '../../../services/decode'
+import { jsonValue, type Json } from './resources'
 import { candidate } from './candidate'
 export type ExecutionOrigin =
+  | {
+      kind: 'policy'
+      policy: string
+      revision: number
+      cancellation: 'none' | 'requested' | 'confirmed'
+      output: Json
+    }
   | { kind: 'native'; operation: string }
-  | { kind: 'script'; plan: string; task: string }
   | { kind: 'workflow'; workflow: string; run: string; step: string }
   | { kind: 'device_batch'; batch: string }
 function origin(value: unknown): ExecutionOrigin {
   const kind = enumeration(record(value)['kind'], [
+    'policy',
     'native',
-    'script',
     'workflow',
     'device_batch',
   ] as const)
+  if (kind === 'policy') {
+    const v = closed(value, ['kind', 'policy', 'revision', 'cancellation', 'output'])
+    return {
+      kind,
+      policy: identifier(v['policy']),
+      revision: count(v['revision']),
+      cancellation: enumeration(v['cancellation'], ['none', 'requested', 'confirmed'] as const),
+      output: jsonValue(v['output'], 65536),
+    }
+  }
   if (kind === 'native') {
     const v = closed(value, ['kind', 'operation'])
     return { kind, operation: uuid(v['operation']) }
-  }
-  if (kind === 'script') {
-    const v = closed(value, ['kind', 'plan', 'task'])
-    return { kind, plan: uuid(v['plan']), task: uuid(v['task']) }
   }
   if (kind === 'device_batch') {
     const v = closed(value, ['kind', 'batch'])

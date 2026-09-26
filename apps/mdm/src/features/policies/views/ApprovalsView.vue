@@ -23,10 +23,8 @@ function approve(item: Item) {
     body = operation({}, item.revision)
   pending = async () => {
     const acknowledged =
-      item.kind === 'script'
-        ? await runWrite(() => runtime.policies.scripts.approve(id, body.operationId))
-        : task !== null &&
-          (await runWrite(() => runtime.policies.workflows.changeRun(id, task, 'approve', body)))
+      task !== null &&
+      (await runWrite(() => runtime.policies.workflows.changeRun(id, task, 'approve', body)))
     if (acknowledged) await load()
   }
   void pending()
@@ -55,7 +53,7 @@ onMounted(() => load())
           <td>
             <RouterLink
               :to="{
-                name: item.kind === 'script' ? 'policy-scripts' : 'policy-workflows',
+                name: 'policy-workflows',
                 params: { tenant: runtime.tenant },
                 query: { id: item.id, run: item.run ?? undefined },
               }"

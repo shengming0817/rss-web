@@ -17,5 +17,11 @@ const facts = ['admission', 'dispatch', 'receipt', 'execution', 'effect', 'compl
     <dd>{{ execution.attempt ?? '—' }}</dd>
     <dt>{{ t('policies.nativeCode') }}</dt>
     <dd>{{ execution.nativeCode ?? '—' }}</dd>
+    <template v-if="execution.origin.kind === 'policy'"
+      ><dt>{{ t('policies.revision') }}</dt>
+      <dd>{{ execution.origin.revision }}</dd>
+      <dt>{{ t('policies.cancel') }}</dt>
+      <dd>{{ t(`policies.state.${execution.origin.cancellation}`) }}</dd></template
+    >
   </dl>
 </template>

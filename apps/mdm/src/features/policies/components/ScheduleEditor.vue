@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useId } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { Schedule, Trigger } from '../clients/scripts'
+import type { Schedule, Trigger } from '../clients/schedule'
 const model = defineModel<Schedule>({ required: true })
 const { t } = useI18n(),
   id = useId()

@@ -12,10 +12,14 @@ export function demoPlugin(): Plugin {
     configureServer(server) {
       const devices = createDeviceDemo()
       const automation = createAutomationDemo(devices)
-      const scenario = createScenario([automation.handle, devices.handle], () => {
-        devices.reset()
-        automation.reset()
-      })
+      const scenario = createScenario(
+        [automation.handle, devices.handle],
+        () => {
+          devices.reset()
+          automation.reset()
+        },
+        automation.tick,
+      )
       server.middlewares.use(async (req, res, next) => {
         if (!req.url?.startsWith('/api/')) {
           next()

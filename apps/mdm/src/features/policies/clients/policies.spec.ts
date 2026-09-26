@@ -1,150 +1,55 @@
 import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
-import { createPoliciesClient, decodePolicy, decodePolicyPage } from './policies'
-const task = '11111111-1111-4111-8111-111111111111'
-const scope = '22222222-2222-4222-8222-222222222222'
-const id = 'firewall-policy'
-const policy = {
-  id,
-  storageRevision: 8,
-  revision: 3,
-  status: 'active',
-  plan: 'digest',
-  fresh: true,
+import { createPoliciesClient, decodePolicy, policyDefinition } from './policies'
+const tenant = '11111111-1111-4111-8111-111111111111'
+const definition = {
+  source: 'resource' as const,
+  parameters: {},
+  resource: 'fw',
+  resourceVersion: '1',
+  scope: tenant,
+  enabled: true,
+  exitBehavior: 'cancel' as const,
+  trigger: { kind: 'on_change' as const },
+  validity: null,
 }
-it('keeps storage CAS, policy version and saved-plan freshness distinct', () => {
-  expect(decodePolicy(policy, id)).toEqual(policy)
-  expect(decodePolicy({ ...policy, fresh: false }, id).fresh).toBe(false)
-  for (const bad of [
-    { ...policy, id: 'other' },
-    { ...policy, storageRevision: -1 },
-    { ...policy, status: 'published' },
-    { ...policy, unexpected: true },
-  ])
-    expect(() => decodePolicy(bad, id)).toThrow()
-})
-it('preserves snake-case predecessor version and binds immutable policy pages', () => {
-  const execution = { device: 'device-01', version: 2, progress: 'unknown', effect: 'unverified' }
-  const page = {
-    result: task,
-    policy: id,
-    plan: 'digest',
-    totalTargets: 1,
-    totalExecutions: 1,
-    page: { kind: 'intents', items: [{ kind: 'predecessor', execution, successor_version: 3 }] },
-    nextCursor: 'tail',
-  }
-  expect(decodePolicyPage(page, id, task, 'predecessors')).toEqual(page)
-  expect(() => decodePolicyPage(page, id, task, 'add')).toThrow()
-  expect(() => decodePolicyPage({ ...page, policy: 'other' }, id, task, 'predecessors')).toThrow()
+const policy = {
+  id: 'fw',
+  revision: 1,
+  archived: false,
+  definition,
+  computation: { sequence: 4, status: 'waiting', at: 1 },
+  members: [],
+}
+it('separates editing revision from computation and rejects retired Plan wire', () => {
+  expect(decodePolicy(policy, 'fw')).toEqual(policy)
+  expect(() => decodePolicy({ ...policy, plan: 'old' }, 'fw')).toThrow()
+  expect(() => decodePolicy(policy, 'other')).toThrow()
   expect(() =>
-    decodePolicyPage(
-      {
-        ...page,
-        page: { kind: 'intents', items: [{ kind: 'predecessor', execution, successorVersion: 3 }] },
-      },
-      id,
-      task,
-      'predecessors',
-    ),
+    policyDefinition({ ...definition, trigger: { kind: 'interval', seconds: 0 } }),
   ).toThrow()
-  expect(
-    decodePolicyPage(
-      { ...page, page: { kind: 'targets', items: [] }, nextCursor: null },
-      id,
-      task,
-      'targets',
-    ).nextCursor,
-  ).toBeNull()
+  expect(() => policyDefinition({ ...definition, validity: { start: 10, end: 1 } })).toThrow()
 })
-it('follows preview, fixed result, save and execute contracts without a fabricated approve request', async () => {
-  let reply: unknown = {
-    task,
-    kind: 'policy',
-    target: id,
-    statusUrl: `/api/v2/plan-previews/${task}`,
+it('binds candidate responses to tenant/source and never requests save or execute', async () => {
+  let response: unknown = { contract: 'policies-v1', tenantId: tenant, source: 'mock', policy }
+  const request = vi.fn(async (o: RequestOptions<unknown>) => o.decode(response)),
+    transport = { request } as unknown as HttpTransport
+  const client = createPoliciesClient(transport, tenant, true)
+  const body = {
+    operationId: tenant,
+    expectedRevision: 0,
+    input: { action: 'put' as const, definition },
   }
-  const request = vi.fn(async (o: RequestOptions<unknown>) => o.decode(reply))
-  const client = createPoliciesClient({ request } as unknown as HttpTransport)
-  const preview = { operationId: task, expectedRevision: 8, input: { scope, expectedRevision: 8 } }
-  await client.preview(id, preview)
-  expect(request.mock.calls[0]![0]).toMatchObject({
-    method: 'POST',
-    path: '/api/v2/policies/{id}/previews',
-    pathParams: { id },
-    body: preview,
-    successStatus: 202,
+  expect(await client.change('fw', body)).toEqual(policy)
+  expect(request.mock.calls[0]?.[0]).toMatchObject({
+    path: '/api/mdm-candidate/v1/policies/assignments/{id}',
+    body,
   })
-  reply = {
-    task,
-    kind: 'policy',
-    target: id,
-    status: 'completed',
-    processed: 1,
-    members: 1,
-    plan: 'digest',
-    failure: null,
-    failureDetail: null,
-    execution: null,
-    policyRevision: 3,
-  }
-  await client.status(id, task)
-  expect(request.mock.calls[1]![0]).toMatchObject({
-    method: 'GET',
-    path: '/api/v2/plan-previews/{task}',
-    pathParams: { task },
-    successStatus: 200,
+  await expect(createPoliciesClient(transport, tenant, false).read('fw')).rejects.toThrow()
+  response = { contract: 'policies-v1', tenantId: tenant, source: 'mock', members: [] }
+  expect(await client.preview('fw', definition)).toEqual([])
+  expect(request.mock.calls.at(-1)?.[0]).toMatchObject({
+    path: '/api/mdm-candidate/v1/policies/assignments/{id}/preview',
+    body: { definition },
   })
-  reply = {
-    receipt: {
-      policy: id,
-      request: scope,
-      storageRevision: 9,
-      planId: 'digest',
-      planIsFresh: true,
-      task: null,
-    },
-    preview: task,
-    plan: 'digest',
-    dispatch: 'not_requested',
-  }
-  const saved = await client.save(id, {
-    operationId: scope,
-    expectedRevision: 8,
-    input: { preview: task },
-  })
-  expect(saved.dispatch).toBe('not_requested')
-  expect(request.mock.calls[2]![0]).toMatchObject({
-    method: 'POST',
-    path: '/api/v2/policies/{id}/plans',
-    successStatus: 200,
-    body: { expectedRevision: 8, input: { preview: task } },
-  })
-  reply = { plan: task, operations: [{ operationId: task, commandId: scope, accepted: true }] }
-  await client.execute(id, 'digest', {
-    operationId: task,
-    expectedRevision: 9,
-    deadline: 4102444800,
-  })
-  expect(request.mock.calls[3]![0]).toMatchObject({
-    method: 'POST',
-    path: '/api/v2/policies/{id}/plans/{plan}/execute',
-    pathParams: { id, plan: 'digest' },
-    successStatus: 202,
-    body: { expectedRevision: 9, deadline: 4102444800 },
-  })
-  expect(request).toHaveBeenCalledTimes(4)
-})
-it('rejects a mismatched accepted task URL instead of following a server-provided location', async () => {
-  const request = vi.fn(async (o: RequestOptions<unknown>) =>
-    o.decode({ task, kind: 'policy', target: id, statusUrl: 'https://other.invalid/private' }),
-  )
-  await expect(
-    createPoliciesClient({ request } as unknown as HttpTransport).preview(id, {
-      operationId: task,
-      expectedRevision: 8,
-      input: { scope, expectedRevision: 8 },
-    }),
-  ).rejects.toThrow()
-  expect(request).toHaveBeenCalledTimes(1)
 })

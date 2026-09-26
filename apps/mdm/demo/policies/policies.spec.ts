@@ -1,111 +1,15 @@
 import { randomUUID } from 'node:crypto'
 import { expect, it } from 'vitest'
 import { createPolicyDemo } from './policies'
-import { createNativeDemo } from './native'
 import { createDeviceDemo } from '../devices/state'
 import type { DemoRequest } from '../scenario'
 import type { ResourceRead } from '../../src/features/policies/clients/resources'
-it('rejects stale saved plans and executes only frozen server-selected Windows targets', () => {
-  const devices = createDeviceDemo(),
-    native = createNativeDemo(devices),
-    actor = { principalId: randomUUID(), sessionId: randomUUID() }
-  const device = devices
-    .facts()
-    .find(
-      (d) =>
-        d.summary.platform === 'windows' &&
-        d.summary.channels.includes('mdm') &&
-        d.registrations.some((r) => r.status === 'active'),
-    )!
-  const scope = { id: randomUUID(), revision: 1, members: [device.summary.id], sources: [] }
+const path = '/api/mdm-candidate/v1/policies/assignments/firewall'
+function fixture() {
+  const facts = createDeviceDemo().facts()
+  const scope = { id: randomUUID(), revision: 1, members: [] as string[], sources: [] }
   const resource: ResourceRead = {
     id: 'firewall',
-    revision: 2,
-    kind: 'configuration',
-    versions: [
-      {
-        id: '1',
-        state: 'active',
-        configuration: { enabled: true },
-        digest: Array(32).fill(1),
-        variants: [],
-      },
-    ],
-  }
-  const policies = createPolicyDemo(
-    devices,
-    { freeze: () => structuredClone(scope) },
-    { read: () => structuredClone(resource) },
-    native,
-  )
-  function request(path: string, body?: unknown): DemoRequest {
-    return {
-      path,
-      body,
-      method: body === undefined ? 'GET' : 'POST',
-      actor,
-      headers: {},
-      query: new URLSearchParams(),
-    }
-  }
-  const path = '/api/v2/policies/firewall'
-  const change = (expectedRevision: number, input: unknown) =>
-    policies.handle(
-      request(path, { operationId: randomUUID(), expectedRevision, input }),
-      'normal',
-    )!
-  expect(change(0, { action: 'create' }).status).toBe(200)
-  expect(
-    change(1, { action: 'activate', version: 1, resource: 'firewall', resourceVersion: '1' })
-      .status,
-  ).toBe(200)
-  const task = randomUUID()
-  expect(
-    policies.handle(
-      request(`${path}/previews`, {
-        operationId: task,
-        expectedRevision: 2,
-        input: { scope: scope.id, expectedRevision: 2 },
-      }),
-      'normal',
-    )?.status,
-  ).toBe(202)
-  policies.handle(request(`/api/v2/plan-previews/${task}`), 'normal')
-  policies.handle(request(`/api/v2/plan-previews/${task}`), 'normal')
-  const saved = policies.handle(
-    request(`${path}/plans`, {
-      operationId: randomUUID(),
-      expectedRevision: 2,
-      input: { preview: task },
-    }),
-    'normal',
-  )!
-  expect(saved.status).toBe(200)
-  const plan = (saved.body as { plan: string }).plan
-  scope.revision++
-  const body = { operationId: randomUUID(), expectedRevision: 3, deadline: 4102444800 }
-  expect(policies.handle(request(`${path}/plans/${plan}/execute`, body), 'normal')?.status).toBe(
-    409,
-  )
-  expect(native.executions()).toEqual([])
-  scope.revision--
-  expect(policies.handle(request(`${path}/plans/${plan}/execute`, body), 'normal')?.status).toBe(
-    202,
-  )
-  expect(native.executions()).toHaveLength(1)
-  expect(native.executions()[0]).toMatchObject({
-    device: device.summary.id,
-    receipt: 'not_received',
-    effect: 'unverified',
-    compliance: 'unknown',
-  })
-})
-it('reconciles frozen history without re-adding current work and preserves terminal effects', () => {
-  const devices = createDeviceDemo(),
-    native = createNativeDemo(devices)
-  const scope = { id: randomUUID(), revision: 1, members: ['device-01'], sources: [] }
-  const resource: ResourceRead = {
-    id: 'fw',
     revision: 1,
     kind: 'configuration',
     versions: [
@@ -119,121 +23,146 @@ it('reconciles frozen history without re-adding current work and preserves termi
     ],
   }
   const policies = createPolicyDemo(
-    devices,
-    { freeze: () => structuredClone(scope) },
+    { facts: () => structuredClone(facts) },
+    { resolve: () => structuredClone(scope) },
     { read: () => structuredClone(resource) },
-    native,
   )
   const actor = { principalId: randomUUID(), sessionId: randomUUID() }
-  const path = '/api/v2/policies/fw'
-  function req(path: string, body?: unknown): DemoRequest {
-    return {
-      path,
-      body,
-      method: body === undefined ? 'GET' : 'POST',
-      actor,
-      headers: {},
-      query: new URLSearchParams(),
-    }
+  const definition = {
+    source: 'resource' as const,
+    parameters: {},
+    resource: 'firewall',
+    resourceVersion: '1',
+    scope: scope.id,
+    enabled: true,
+    exitBehavior: 'cancel',
+    trigger: { kind: 'on_change' },
+    validity: null,
   }
-  let revision = 0
-  function change(input: unknown) {
-    const reply = policies.handle(
-      req(path, { operationId: randomUUID(), expectedRevision: revision, input }),
-      'normal',
-    )!
-    expect(reply.status).toBe(200)
-    revision++
-  }
-  function preview() {
-    const task = randomUUID()
-    expect(
-      policies.handle(
-        req(`${path}/previews`, {
-          operationId: task,
-          expectedRevision: revision,
-          input: { scope: scope.id, expectedRevision: revision },
-        }),
-        'normal',
-      )?.status,
-    ).toBe(202)
-    policies.handle(req(`/api/v2/plan-previews/${task}`), 'normal')
-    expect(policies.handle(req(`/api/v2/plan-previews/${task}`), 'normal')?.body).toMatchObject({
-      status: 'completed',
-    })
-    return task
-  }
-  function items(task: string, projection: string) {
-    return (
-      policies.handle(req(`${path}/results/${task}/${projection}`), 'normal')!.body as {
-        page: { items: unknown[] }
-      }
-    ).page.items
-  }
-  function execute(task: string) {
-    const saved = policies.handle(
-      req(`${path}/plans`, {
-        operationId: randomUUID(),
-        expectedRevision: revision,
-        input: { preview: task },
-      }),
-      'normal',
-    )!
-    expect(saved.status).toBe(200)
-    revision++
-    const plan = (saved.body as { plan: string }).plan
-    const reply = policies.handle(
-      req(`${path}/plans/${plan}/execute`, {
-        operationId: randomUUID(),
-        expectedRevision: revision,
-        deadline: 4102444800,
-      }),
-      'normal',
-    )!
-    expect(reply.status).toBe(202)
-    return reply
-  }
-  change({ action: 'create' })
-  change({ action: 'activate', version: 1, resource: 'fw', resourceVersion: '1' })
-  execute(preview())
-  const original = native.executions()[0]!
-  const repeated = preview()
-  expect(items(repeated, 'add')).toEqual([])
-  expect(items(repeated, 'retain')).toMatchObject([{ kind: 'retain', reason: 'current' }])
-  execute(repeated)
-  expect(native.executions()).toHaveLength(1)
-  change({ action: 'pause' })
-  const paused = preview()
-  expect(items(paused, 'add')).toEqual([])
-  expect(items(paused, 'retain')).toMatchObject([{ reason: 'paused' }])
-  change({ action: 'activate', version: 2, resource: 'fw', resourceVersion: '1' })
-  const replacement = preview()
-  expect(items(replacement, 'supersede')).toEqual([
-    { kind: 'supersede', device: 'device-01', version: 2 },
-  ])
-  expect(items(replacement, 'cancel')).toMatchObject([
-    { reason: 'superseded', execution: { version: 1 } },
-  ])
-  expect(items(replacement, 'predecessors')).toMatchObject([
-    { successor_version: 2, execution: { version: 1 } },
-  ])
-  execute(replacement)
-  expect(native.executions().find((e) => e.id === original.id)?.execution).toBe('cancelled')
-  const next = native.executions().find((e) => e.id !== original.id)!
-  native.handle(req(`/api/v2/devices/device-01/operations/${next.id}`), 'normal')
-  native.handle(req(`/api/v2/devices/device-01/operations/${next.id}`), 'normal')
-  change({ action: 'archive' })
-  const archived = preview()
-  expect(items(archived, 'cancel')).toEqual([])
-  expect(items(archived, 'retain')).toHaveLength(2)
-  expect(items(archived, 'retain')).toMatchObject([
-    { reason: 'historical' },
-    { reason: 'historical' },
-  ])
-  execute(archived)
-  expect(native.executions().find((e) => e.id === next.id)).toMatchObject({
-    execution: 'succeeded',
-    effect: 'unverified',
-    receipt: 'received',
+  const request = (url: string, body?: unknown): DemoRequest => ({
+    path: url,
+    body,
+    method: body === undefined ? 'GET' : 'POST',
+    actor,
+    headers: {},
+    query: new URLSearchParams(),
   })
+  const write = (
+    revision: number,
+    input: unknown = { action: 'put', definition },
+    operationId = randomUUID(),
+  ) => policies.handle(request(path, { operationId, expectedRevision: revision, input }), 'normal')!
+  return { policies, scope, resource, facts, definition, request, write }
+}
+it('enables empty scopes, reconciles membership without changing editing revision and never duplicates unchanged work', () => {
+  const f = fixture()
+  expect(f.write(0).status).toBe(200)
+  expect(f.policies.executions()).toEqual([])
+  f.scope.members = ['device-01']
+  f.policies.reconcile('normal', { kind: 'clock', at: 2000000000 })
+  expect(f.policies.executions()).toHaveLength(1)
+  f.policies.reconcile('normal', { kind: 'clock', at: 2000000001 })
+  expect(f.policies.executions()).toHaveLength(1)
+  expect(f.policies.handle(f.request(path), 'normal')?.body).toMatchObject({
+    policy: { revision: 1, computation: { status: 'ready' } },
+  })
+  f.scope.members = []
+  f.policies.reconcile('normal', { kind: 'clock', at: 2000000002 })
+  expect(f.policies.executions()[0]?.origin).toMatchObject({ cancellation: 'requested' })
+  f.scope.members = ['device-01']
+  f.policies.reconcile('normal', { kind: 'clock', at: 2000000003 })
+  expect(f.policies.executions()).toHaveLength(2)
+})
+it('keeps preview side effect free and fences CAS and exact replay', () => {
+  const f = fixture(),
+    operationId = randomUUID()
+  f.scope.members = ['device-01']
+  const preview = f.policies.handle(
+    f.request(`${path}/preview`, { definition: f.definition }),
+    'normal',
+  )!
+  expect(preview.status).toBe(200)
+  expect(f.policies.executions()).toEqual([])
+  expect(f.write(0, undefined, operationId).status).toBe(200)
+  expect(f.write(0, undefined, operationId).status).toBe(200)
+  expect(f.write(0).status).toBe(409)
+  expect(
+    f.write(1, { action: 'put', definition: { ...f.definition, enabled: false } }, operationId)
+      .status,
+  ).toBe(409)
+  expect(f.policies.executions()).toHaveLength(1)
+})
+it('blocks individual unsupported members and keeps unknown attempts without blind reruns', () => {
+  const f = fixture()
+  f.scope.members = ['device-01', 'device-02']
+  f.write(0)
+  expect(f.policies.executions()).toHaveLength(1)
+  f.policies.reconcile('unknown', { kind: 'clock', at: 2000000000 })
+  const first = f.policies.executions()[0]!
+  expect(first.execution).toBe('unknown')
+  f.policies.reconcile('normal', { kind: 'clock', at: 2000000001 })
+  expect(f.policies.executions()).toHaveLength(1)
+  expect(f.policies.executions()[0]?.execution).toBe('unknown')
+  expect(f.policies.handle(f.request(path), 'normal')?.body).toMatchObject({
+    policy: {
+      members: expect.arrayContaining([
+        { device: 'device-02', reason: 'unsupported', execution: null },
+      ]),
+    },
+  })
+})
+it('changes resource revisions once and fences obsolete device identities', () => {
+  const f = fixture()
+  f.scope.members = ['device-01']
+  f.write(0)
+  f.resource.versions.push({ ...f.resource.versions[0]!, id: '2', digest: Array(32).fill(2) })
+  expect(
+    f.write(1, { action: 'put', definition: { ...f.definition, resourceVersion: '2' } }).status,
+  ).toBe(200)
+  expect(f.policies.executions()).toHaveLength(2)
+  const d = f.facts.find((d) => d.summary.id === 'device-01')!
+  d.registrations.forEach((r) => r.generation++)
+  f.policies.reconcile('normal', { kind: 'clock', at: 2000000000 })
+  expect(f.policies.executions()).toHaveLength(3)
+  expect(f.policies.executions().filter((r) => r.execution === 'cancelled')).toHaveLength(2)
+})
+it('honors interval events, disabled policies and scope re-entry without retrying unknown effects', () => {
+  const f = fixture()
+  f.scope.members = ['device-01']
+  expect(
+    f.write(0, {
+      action: 'put',
+      definition: { ...f.definition, trigger: { kind: 'interval', seconds: 60 } },
+    }).status,
+  ).toBe(200)
+  expect(f.policies.executions()).toHaveLength(0)
+  f.policies.reconcile('normal', { kind: 'clock', at: 2000000000 })
+  f.policies.reconcile('normal', { kind: 'clock', at: 2000000000 })
+  expect(f.policies.executions()).toHaveLength(1)
+  f.policies.reconcile('unknown', { kind: 'clock', at: 2000000001 })
+  f.policies.reconcile('unknown', { kind: 'clock', at: 2000000002 })
+  f.scope.members = []
+  f.policies.reconcile('normal', { kind: 'clock', at: 2000000003 })
+  f.scope.members = ['device-01']
+  f.policies.reconcile('normal', { kind: 'clock', at: 2000000100 })
+  expect(f.policies.executions()).toHaveLength(1)
+  expect(f.policies.executions()[0]?.execution).toBe('unknown')
+})
+it('blocks offline and withdrawn identities per member and preserves confirmed results on archive', () => {
+  const f = fixture()
+  f.scope.members = ['device-01']
+  f.write(0)
+  f.policies.reconcile('partial', { kind: 'clock', at: 2000000000 })
+  expect(f.policies.executions()[0]?.execution).toBe('not_started')
+  f.policies.reconcile('normal', { kind: 'clock', at: 2000000001 })
+  f.policies.reconcile('normal', { kind: 'clock', at: 2000000002 })
+  expect(f.policies.executions()[0]?.execution).toBe('succeeded')
+  f.write(1, { action: 'archive' })
+  expect(f.policies.executions()[0]).toMatchObject({ execution: 'succeeded', effect: 'unverified' })
+  const other = fixture()
+  other.scope.members = ['device-01']
+  other.write(0)
+  other.facts.find((d) => d.summary.id === 'device-01')!.registrations = []
+  other.policies.reconcile('normal', { kind: 'clock', at: 2000000001 })
+  expect(other.policies.executions()[0]?.execution).toBe('cancelled')
 })

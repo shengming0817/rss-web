@@ -1,4 +1,4 @@
-import type { DomainHandler } from '../scenario'
+import type { DomainHandler, Scenario } from '../scenario'
 import type { createDeviceDemo } from '../devices/state'
 import { uuid } from '../../src/services/decode'
 import type { ExecutionSummary } from '../../src/features/policies/clients/executions'
@@ -7,24 +7,24 @@ import { candidate } from './http'
 import { createScopeDemo } from './scopes'
 import { createResourceDemo } from './resources'
 import { createNativeDemo } from './native'
-import { createScriptDemo } from './scripts'
 import { createPolicyDemo } from './policies'
 import { createConfigurationDemo } from './configurations'
 import { createWorkflowDemo } from './workflows'
+import type { DemoEvent } from './schedule'
 export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo>) {
   const scopes = createScopeDemo(devices),
     native = createNativeDemo(devices)
   const resources = createResourceDemo(
+    (id, version): boolean => policies.references(id, version) || workflows.references(id, version),
+  )
+  const configurations = createConfigurationDemo(
+    devices,
+    scopes,
     (id, version): boolean =>
-      scripts.references(id, version) ||
-      policies.references(id, version) ||
-      workflows.references(id, version),
+      policies.references(id, String(version), 'configuration') ||
+      workflows.referencesConfiguration(id, version),
   )
-  const scripts = createScriptDemo(devices, resources),
-    policies = createPolicyDemo(devices, scopes, resources, native)
-  const configurations = createConfigurationDemo(devices, scopes, (id, version): boolean =>
-    workflows.referencesConfiguration(id, version),
-  )
+  const policies = createPolicyDemo(devices, scopes, resources, configurations)
   const workflows = createWorkflowDemo(devices, scopes, resources, configurations),
     pages = createPages()
   function executions(): ExecutionSummary[] {
@@ -51,24 +51,24 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
           : [],
       ),
     )
-    return [...native.executions(), ...scripts.executions(), ...workflows.executions(), ...batches]
+    return [...policies.executions(), ...native.executions(), ...workflows.executions(), ...batches]
   }
   const handle: DomainHandler = (request, scenario) => {
     try {
-      for (const owner of [
-        scopes,
-        resources,
-        native,
-        scripts,
-        policies,
-        configurations,
-        workflows,
-      ]) {
+      for (const owner of [scopes, resources, native, policies, configurations, workflows]) {
         const reply = owner.handle(request, scenario)
-        if (reply) return reply
+        if (reply) {
+          if (
+            (owner === scopes || owner === resources) &&
+            request.method === 'POST' &&
+            reply.status < 300
+          )
+            policies.reconcile(scenario)
+          return reply
+        }
       }
       const collection =
-        /^\/api\/mdm-candidate\/v1\/policies\/(scopes|resources|policies|script-plans|workflows|approvals)$/.exec(
+        /^\/api\/mdm-candidate\/v1\/policies\/(scopes|resources|policies|workflows|approvals)$/.exec(
           request.path,
         )
       const execution = /^\/api\/mdm-candidate\/v1\/executions(?:\/([^/]+))?$/.exec(request.path)
@@ -83,11 +83,9 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
               ? resources.list()
               : name === 'policies'
                 ? policies.list()
-                : name === 'script-plans'
-                  ? scripts.list()
-                  : name === 'workflows'
-                    ? workflows.list()
-                    : [...scripts.approvals(), ...workflows.approvals()]
+                : name === 'workflows'
+                  ? workflows.list()
+                  : workflows.approvals()
         return candidate(
           pages.page<unknown>(request.path, scenario === 'empty' ? [] : items, request.query),
         )
@@ -113,17 +111,12 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
   }
   return {
     handle,
+    tick(event: DemoEvent, scenario: Scenario = 'normal') {
+      policies.reconcile(scenario, event)
+      workflows.tick(event)
+    },
     reset() {
-      for (const owner of [
-        scopes,
-        resources,
-        native,
-        scripts,
-        policies,
-        configurations,
-        workflows,
-        pages,
-      ])
+      for (const owner of [scopes, resources, native, policies, configurations, workflows, pages])
         owner.reset()
     },
   }

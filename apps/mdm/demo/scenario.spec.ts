@@ -130,8 +130,7 @@ it('never falls back to mock for published policy or native-operation paths', as
     '/api/v2/scopes/id',
     '/api/v3/resources/id',
     '/api/v2/policies/id',
-    '/api/v2/plan-previews/id',
-    '/api/v3/script-plans/id',
+    '/api/mdm-candidate/v1/policies/assignments/id',
     '/api/v2/devices/device/operations/id',
     '/api/mdm-candidate/v1/executions/id',
   ]) {
@@ -174,4 +173,28 @@ it('accepts bounded raw resource bytes while retaining the JSON request budget e
       )
     ).status,
   ).toBe(413)
+})
+
+it('injects automation events only into the explicit mock source after login', async () => {
+  const events: unknown[] = []
+  const scenario = createScenario(
+    [],
+    () => {},
+    (event) => events.push(event),
+  )
+  const path = '/api/mdm-candidate/v1/workspace/scenario'
+  const event = { kind: 'clock', at: Math.floor(Date.now() / 1000) + 60 }
+  expect((await scenario.handle('POST', path, { event })).status).toBe(401)
+  await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+    login: 'demo',
+    password: 'demo',
+  })
+  expect((await scenario.handle('POST', path, { event })).status).toBe(204)
+  expect(events).toEqual([event])
+  expect(
+    (await scenario.handle('POST', path, { event: { kind: 'check_in', at: event.at } })).status,
+  ).toBe(400)
+  await scenario.handle('POST', path, { scenario: 'normal', module: 'policies', source: 'real' })
+  expect((await scenario.handle('POST', path, { event })).status).toBe(409)
+  expect(events).toHaveLength(1)
 })

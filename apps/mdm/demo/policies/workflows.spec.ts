@@ -86,4 +86,32 @@ it('freezes workflow targets, enforces independent approval, and retains unknown
     workflows.handle(request(`${path}/runs/${run}/cancel`, {}, revision), 'normal')?.status,
   ).toBe(200)
   expect(workflows.executions()[0]?.effect).toBe('unverified')
+  expect(
+    workflows.handle(request(`${path}/runs/${run}/cancel`, {}, revision + 1), 'normal')?.status,
+  ).toBe(409)
+  const uncertain = workflows.handle(request(`${path}/runs`, {}, 1), 'normal')!
+  const uncertainId = (uncertain.body as { run: { id: string } }).run.id
+  workflows.handle(request(`${path}/runs/${uncertainId}/approve`, {}, 1, reviewer), 'normal')
+  expect(workflows.handle(request(`${path}/runs/${uncertainId}`), 'unknown')?.body).toMatchObject({
+    run: { state: 'unknown', executions: scope.members.map(() => expect.any(String)) },
+  })
+  expect(workflows.handle(request(`${path}/runs/${uncertainId}`), 'normal')?.body).toMatchObject({
+    run: { state: 'unknown', executions: scope.members.map(() => expect.any(String)) },
+  })
+  const terminal = workflows.handle(request(`${path}/runs`, {}, 1), 'normal')!
+  const terminalId = (terminal.body as { run: { id: string } }).run.id
+  workflows.handle(request(`${path}/runs/${terminalId}/approve`, {}, 1, reviewer), 'normal')
+  workflows.handle(request(`${path}/runs/${terminalId}`), 'normal')
+  const completed = workflows.handle(request(`${path}/runs/${terminalId}`), 'normal')!
+  expect(completed.body).toMatchObject({ run: { state: 'completed' } })
+  expect(
+    workflows.handle(
+      request(
+        `${path}/runs/${terminalId}/cancel`,
+        {},
+        (completed.body as { run: { revision: number } }).run.revision,
+      ),
+      'normal',
+    )?.status,
+  ).toBe(409)
 })

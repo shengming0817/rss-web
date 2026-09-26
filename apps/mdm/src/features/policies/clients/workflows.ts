@@ -13,7 +13,7 @@ import {
   uuid,
 } from '../../../services/decode'
 import { criteria, fieldKey, type Criteria } from '../../devices/clients/asset-model'
-import { decodeSchedule, type Schedule } from './scripts'
+import { decodeSchedule, type Schedule } from './schedule'
 import { jsonValue, type Json } from './resources'
 import { candidate } from './candidate'
 export type WorkflowAction =

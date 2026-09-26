@@ -4,11 +4,9 @@ import { createRouter, createMemoryHistory } from 'vue-router'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
 import ApprovalsView from './ApprovalsView.vue'
-it('dispatches script and workflow approvals to their own contracts with the listed revision', async () => {
-  const script = vi.fn().mockResolvedValue({}),
-    workflow = vi.fn().mockResolvedValue({})
+it('keeps explicit workflow approvals without ordinary script approval', async () => {
+  const workflow = vi.fn().mockResolvedValue({})
   const items = [
-    { kind: 'script', id: 'script', run: null, revision: 1, author: 'author', label: 'Script' },
     {
       kind: 'workflow',
       id: 'workflow',
@@ -33,7 +31,6 @@ it('dispatches script and workflow approvals to their own contracts with the lis
           demo: true,
           policies: {
             catalog: { approvals: async () => ({ items, nextCursor: null }) },
-            scripts: { approve: script },
             workflows: { changeRun: workflow },
           },
         },
@@ -44,12 +41,6 @@ it('dispatches script and workflow approvals to their own contracts with the lis
   await wrapper
     .findAll('button')
     .find((b) => b.text() === '批准')!
-    .trigger('click')
-  await flushPromises()
-  expect(script.mock.calls[0]?.[0]).toBe('script')
-  await wrapper
-    .findAll('button')
-    .filter((b) => b.text() === '批准')[1]!
     .trigger('click')
   await flushPromises()
   expect(workflow.mock.calls[0]).toMatchObject([

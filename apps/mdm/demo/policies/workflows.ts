@@ -13,9 +13,11 @@ import type { ExecutionSummary } from '../../src/features/policies/clients/execu
 import { closed, enumeration, record, uuid } from '../../src/services/decode'
 import { evaluate } from '../devices/criteria'
 import { createPages, createReceipts, error, operation } from '../http'
-import { validateSchedule, manualReady } from './schedule'
+import { validateSchedule, due, type DemoEvent, type Occurrence } from './schedule'
 import { candidate } from './http'
 interface RunState {
+  approvedAt: number
+  occurrence: Occurrence | null
   read: WorkflowRun
   step: number
   executions: ExecutionSummary[]
@@ -33,9 +35,50 @@ export function createWorkflowDemo(
     runs = new Map<string, RunState>(),
     receipts = createReceipts(),
     pages = createPages()
+  let clock = Math.floor(Date.now() / 1000)
+  function tick(event: DemoEvent) {
+    if (event.at < clock) return
+    clock = event.at
+    for (const state of runs.values()) {
+      const run = state.read
+      if (run.state !== 'waiting' || run.approval !== 'approved') continue
+      if (event.kind !== 'clock' && !run.targets.includes(event.device ?? '')) continue
+      state.occurrence ??= due(
+        run.definition.schedule,
+        state.approvedAt,
+        state.approvedAt - 1,
+        event,
+        run.id,
+      )
+      const occurrence = state.occurrence
+      if (
+        occurrence &&
+        clock >= occurrence.availableAt &&
+        clock <
+          Math.min(
+            occurrence.windowEnd ?? run.definition.schedule.until,
+            run.definition.schedule.until,
+          )
+      ) {
+        run.state = 'running'
+        run.revision++
+      }
+    }
+  }
   function advance(state: RunState, scenario: Scenario) {
     const run = state.read
     if (run.state !== 'running' || run.approval !== 'approved') return
+    if (
+      Math.max(clock, Math.floor(Date.now() / 1000)) >=
+      Math.min(
+        state.occurrence?.windowEnd ?? run.definition.schedule.until,
+        run.definition.schedule.until,
+      )
+    ) {
+      run.state = 'unknown'
+      run.revision++
+      return
+    }
     const step = run.definition.steps[state.step]
     if (!step) {
       run.state = state.executions.some(
@@ -160,12 +203,9 @@ export function createWorkflowDemo(
               return error('operation_conflict')
             state.read.approval = 'approved'
             state.read.revision++
-            state.read.state = manualReady(
-              state.read.definition.schedule,
-              Math.floor(Date.now() / 1000),
-            )
-              ? 'running'
-              : 'waiting'
+            state.approvedAt ||= Math.max(clock, Math.floor(Date.now() / 1000))
+            state.read.state = 'waiting'
+            tick({ kind: 'clock', at: Math.max(clock, Math.floor(Date.now() / 1000)) })
           } else return error('malformed_request', 400)
           return candidate({ run: structuredClone(state.read) })
         }
@@ -231,6 +271,8 @@ export function createWorkflowDemo(
           }
           runs.set(read.id, {
             read,
+            approvedAt: 0,
+            occurrence: null,
             step: 0,
             executions: [],
             conditions,
@@ -269,6 +311,7 @@ export function createWorkflowDemo(
   }
   return {
     handle,
+    tick,
     references: (resource: string, version: string) =>
       [...runs.values()].some(
         (r) =>
@@ -301,6 +344,7 @@ export function createWorkflowDemo(
         })),
     executions: () => structuredClone([...runs.values()].flatMap((r) => r.executions)),
     reset() {
+      clock = Math.floor(Date.now() / 1000)
       workflows.clear()
       runs.clear()
       receipts.reset()
