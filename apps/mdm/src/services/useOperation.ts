@@ -74,6 +74,11 @@ export function useOperation() {
   }
   return { busy, failure, uncertain, run, runWrite }
 }
-export function operation<T>(input: T, expectedRevision = 0) {
+export interface Operation<T> {
+  operationId: string
+  expectedRevision: number
+  input: T
+}
+export function operation<T>(input: T, expectedRevision = 0): Operation<T> {
   return { operationId: crypto.randomUUID(), expectedRevision, input }
 }

@@ -93,10 +93,10 @@ it('permits owner factories only in the MDM composition roots', async () => {
 it('allows sanitized transport failure factories only in MDM tests', async () => {
   const code =
     "import { networkErrorForTest } from '@rss/api/testing'\nexport const x = networkErrorForTest"
-  expect(await ruleIds(code, 'apps/mdm/src/features/devices/useOperation.spec.ts')).not.toContain(
+  expect(await ruleIds(code, 'apps/mdm/src/services/useOperation.spec.ts')).not.toContain(
     'no-restricted-imports',
   )
-  expect(await ruleIds(code, 'apps/mdm/src/features/devices/useOperation.ts')).toContain(
+  expect(await ruleIds(code, 'apps/mdm/src/services/useOperation.ts')).toContain(
     'no-restricted-imports',
   )
 })

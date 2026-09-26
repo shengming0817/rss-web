@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { lifecycleActions, type Batch, type LifecycleAction } from '../clients/directory'
-import { operation, useOperation } from '../useOperation'
+import { operation, useOperation } from '../../../services/useOperation'
 const props = defineProps<{ devices: string[] }>()
 const { t } = useI18n(),
   { devices: clients } = useMdm(),

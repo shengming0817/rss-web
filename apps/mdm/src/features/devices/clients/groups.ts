@@ -1,3 +1,4 @@
+import type { Operation } from '../../../services/useOperation'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -13,7 +14,7 @@ import {
   unique,
   uuid,
 } from '../../../services/decode'
-import { criteria, cursor, fieldKey, sourceIds, type Criteria, type Operation } from './asset-model'
+import { criteria, cursor, fieldKey, sourceIds, type Criteria } from './asset-model'
 
 export type GroupChange =
   | { action: 'create'; name: string; description: string; criteria: Criteria | null }

@@ -2,7 +2,7 @@
 import { onMounted, ref, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
-import { operation, useOperation } from '../useOperation'
+import { operation, useOperation } from '../../../services/useOperation'
 import type { Criteria, FieldDefinition } from '../clients/assets'
 import type { GroupChange, GroupProjection, GroupRead } from '../clients/groups'
 import DeviceFrame from '../components/DeviceFrame.vue'
