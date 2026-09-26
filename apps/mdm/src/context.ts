@@ -2,10 +2,12 @@ import { inject, type InjectionKey } from 'vue'
 import type { IdentitySession } from '@rss/auth'
 import type { HttpTransport } from '@rss/api/mdm'
 import type { createWorkspaceClient } from './services/workspace'
+import type { createDeviceClients } from './features/devices/client'
 export interface MdmRuntime {
   session: IdentitySession
   transport: HttpTransport
   workspace: ReturnType<typeof createWorkspaceClient>
+  devices: ReturnType<typeof createDeviceClients>
   tenant: string
   demo: boolean
 }

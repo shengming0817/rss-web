@@ -89,3 +89,27 @@ it('permits owner factories only in the MDM composition roots', async () => {
     expect(await ruleIds(code, 'apps/mdm/src/bootstrap.ts')).not.toContain('no-restricted-imports')
   }
 })
+
+it('allows sanitized transport failure factories only in MDM tests', async () => {
+  const code =
+    "import { networkErrorForTest } from '@rss/api/testing'\nexport const x = networkErrorForTest"
+  expect(await ruleIds(code, 'apps/mdm/src/features/devices/useOperation.spec.ts')).not.toContain(
+    'no-restricted-imports',
+  )
+  expect(await ruleIds(code, 'apps/mdm/src/features/devices/useOperation.ts')).toContain(
+    'no-restricted-imports',
+  )
+})
+
+it('allows the pure MDM budget export in the demo without opening private API modules', async () => {
+  const file = 'apps/mdm/demo/plugin.ts'
+  expect(
+    await ruleIds(
+      "import { MDM_JSON_BODY_LIMIT } from '@rss/api/mdm-limits'\nexport const x = MDM_JSON_BODY_LIMIT",
+      file,
+    ),
+  ).not.toContain('no-restricted-imports')
+  expect(
+    await ruleIds("import { execute } from '@rss/api/transport'\nexport const x = execute", file),
+  ).toContain('no-restricted-imports')
+})

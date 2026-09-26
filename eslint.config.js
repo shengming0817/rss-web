@@ -256,7 +256,7 @@ export default tseslint.config(
       'no-restricted-imports': boundaryRule(
         [
           {
-            regex: '^@rss/(?!core(?:/|$)|auth(?:/|$)|api/(?:identity|mdm)$)',
+            regex: '^@rss/(?!core(?:/|$)|auth(?:/|$)|api/(?:identity|mdm|mdm-limits)$)',
             message: 'Use public product boundaries.',
           },
         ],
@@ -288,6 +288,20 @@ export default tseslint.config(
             message: 'Only bootstrap assembles the business transport.',
           },
         ],
+      ),
+    },
+  },
+  {
+    files: ['apps/mdm/**/*.spec.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex: '^@rss/(?!core(?:/|$)|auth(?:/|$)|api/(?:identity|mdm|testing)$)',
+            message: 'Tests use public product exports and sanitized failures only.',
+          },
+        ],
+        [NO_AXIOS_PATH],
       ),
     },
   },

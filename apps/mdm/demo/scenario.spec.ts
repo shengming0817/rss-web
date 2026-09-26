@@ -15,7 +15,7 @@ describe('HTTP demo state', () => {
   })
   it('keeps explicit denied, unavailable and unknown scenarios distinct', async () => {
     const scenario = createScenario()
-    await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+    const login = await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
       login: 'demo',
       password: 'demo',
     })
@@ -24,7 +24,19 @@ describe('HTTP demo state', () => {
     scenario.set('offline')
     expect((await scenario.handle('GET', '/api/mdm-candidate/v1/workspace')).status).toBe(503)
     scenario.set('unknown')
-    expect((await scenario.handle('POST', '/api/mdm-candidate/v1/workspace/change')).body).toEqual({
+    expect(
+      (
+        await scenario.handle(
+          'POST',
+          '/api/mdm-candidate/v1/workspace/change',
+          {},
+          {
+            'x-csrf-token': (login.body as { csrfToken: string }).csrfToken,
+            'x-identity-request': '1',
+          },
+        )
+      ).body,
+    ).toEqual({
       code: 'operation_unknown',
     })
   })

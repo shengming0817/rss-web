@@ -18,6 +18,7 @@ import { createWorkspaceClient } from './services/workspace'
 import { mdmKey } from './context'
 import { mdmI18n } from './i18n'
 import { features } from './features'
+import { createDeviceClients } from './features/devices/client'
 import App from './App.vue'
 export function startMdm(
   transport: HttpTransport,
@@ -52,6 +53,7 @@ export function startMdm(
     session,
     transport: business,
     workspace: createWorkspaceClient(business, demo),
+    devices: createDeviceClients(business, tenant, demo),
     tenant,
     demo,
   })

@@ -1,5 +1,6 @@
 /** MDM browser protocol policy over the shared HTTP executor. No retries. */
 import axios from 'axios'
+import { MDM_JSON_BODY_LIMIT } from './mdm-limits'
 import { decodeIdentityError } from './identity'
 import { execute } from './transport'
 import { clientError, identityWireFailure, protocolError } from './wire-error'
@@ -37,6 +38,8 @@ const statuses: Readonly<Record<string, number>> = {
   service_unavailable: 503,
 }
 export function decodeMdmError(status: number, value: unknown): RssApiError {
+  // Ingress may reject before the JSON handler and return an HTML body.
+  if (status === 413) return identityWireFailure(413, 'request_too_large')
   const identity = decodeIdentityError(status, value)
   if (identity.cause === 'wire') return identity
   if (!value || typeof value !== 'object' || Array.isArray(value)) return protocolError(status)
@@ -75,6 +78,11 @@ export function createMdmTransport(): HttpTransport {
         )
       )
         throw clientError()
+      if (
+        options.body !== undefined &&
+        new TextEncoder().encode(JSON.stringify(options.body)).byteLength > MDM_JSON_BODY_LIMIT
+      )
+        throw decodeMdmError(413, undefined)
       return execute(instance, 30_000, options, decodeMdmError)
     },
   } as HttpTransport

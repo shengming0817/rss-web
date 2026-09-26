@@ -1,5 +1,7 @@
 import type { Plugin } from 'vite'
+import { MDM_JSON_BODY_LIMIT } from '@rss/api/mdm-limits'
 import { createScenario } from './scenario'
+import { createDeviceDemo } from './devices/state'
 export function demoPlugin(): Plugin {
   return {
     name: 'mdm-http-demo',
@@ -7,7 +9,8 @@ export function demoPlugin(): Plugin {
       return html.replace('/src/main.ts', '/demo/main.ts')
     },
     configureServer(server) {
-      const scenario = createScenario()
+      const devices = createDeviceDemo()
+      const scenario = createScenario([devices.handle], devices.reset)
       server.middlewares.use(async (req, res, next) => {
         if (!req.url?.startsWith('/api/')) {
           next()
@@ -19,7 +22,7 @@ export function demoPlugin(): Plugin {
           for await (const chunk of req) {
             const bytes = Buffer.from(chunk as Uint8Array)
             size += bytes.length
-            if (size > 1024 * 1024) {
+            if (size > MDM_JSON_BODY_LIMIT) {
               res.writeHead(413).end()
               return
             }

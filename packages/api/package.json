@@ -6,7 +6,8 @@
   "exports": {
     "./testing": "./src/testing.ts",
     "./identity": "./src/identity.ts",
-    "./mdm": "./src/mdm.ts"
+    "./mdm": "./src/mdm.ts",
+    "./mdm-limits": "./src/mdm-limits.ts"
   },
   "files": [
     "src"

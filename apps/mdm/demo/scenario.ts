@@ -1,4 +1,5 @@
 /** MOCK_SOURCE: synthetic HTTP server, never part of a production entry. */
+import { MDM_JSON_BODY_LIMIT } from '@rss/api/mdm-limits'
 export const TENANT = '11111111-1111-4111-8111-111111111111'
 const PRINCIPAL = '22222222-2222-4222-8222-222222222222'
 export const scenarios = [
@@ -23,9 +24,13 @@ export interface DemoRequest {
   path: string
   body: unknown
   query: URLSearchParams
+  headers: Record<string, string | string[] | undefined>
 }
 export type DomainHandler = (request: DemoRequest, scenario: Scenario) => Reply | undefined
-export function createScenario(handlers: DomainHandler[] = []) {
+export function createScenario(
+  handlers: DomainHandler[] = [],
+  resetDomains: () => void = () => {},
+) {
   let active: Scenario = 'normal'
   let signedIn = false
   let epoch = 0
@@ -37,6 +42,7 @@ export function createScenario(handlers: DomainHandler[] = []) {
     operations: 'mock',
   }
   function reset() {
+    resetDomains()
     signedIn = false
     active = 'normal'
     epoch++
@@ -64,6 +70,11 @@ export function createScenario(handlers: DomainHandler[] = []) {
     body?: unknown,
     headers: Record<string, string | string[] | undefined> = {},
   ): Promise<Reply> {
+    if (
+      body !== undefined &&
+      new TextEncoder().encode(JSON.stringify(body)).byteLength > MDM_JSON_BODY_LIMIT
+    )
+      return { status: 413 }
     const parsed = new URL(url, 'http://demo.invalid')
     const path = parsed.pathname
     const data = body && typeof body === 'object' ? (body as Record<string, unknown>) : {}
@@ -111,15 +122,21 @@ export function createScenario(handlers: DomainHandler[] = []) {
       }
     if (path === `/api/v2/tenants/${TENANT}/session` && method === 'GET')
       return { status: 200, body: session() }
-    if (method !== 'GET' && path.startsWith('/api/v2/tenants/')) {
+    if (method !== 'GET') {
       if (headers['x-csrf-token'] !== token || headers['x-identity-request'] !== '1')
         return { status: 403, body: { code: 'csrf_rejected' } }
-      if (path.endsWith('/logout') || path.endsWith('/logout-all')) {
+      if (
+        path.startsWith(`/api/v2/tenants/${TENANT}/session/`) &&
+        (path.endsWith('/logout') || path.endsWith('/logout-all'))
+      ) {
         signedIn = false
         epoch++
         return { status: 204 }
       }
-      if (path.endsWith('/refresh') || path.endsWith('/reauthenticate')) {
+      if (
+        path.startsWith(`/api/v2/tenants/${TENANT}/session/`) &&
+        (path.endsWith('/refresh') || path.endsWith('/reauthenticate'))
+      ) {
         epoch++
         return { status: 200, body: session() }
       }
@@ -134,8 +151,7 @@ export function createScenario(handlers: DomainHandler[] = []) {
     if (active === 'unsupported') return { status: 501, body: { code: 'action_not_supported' } }
     if (method !== 'GET' && active === 'conflict')
       return { status: 409, body: { code: 'operation_conflict' } }
-    if (method !== 'GET' && active === 'unknown')
-      return { status: 503, body: { code: 'operation_unknown' } }
+    const unknownReply = method !== 'GET' && active === 'unknown'
     if (path === '/api/mdm-candidate/v1/workspace' && method === 'GET')
       return {
         status: 200,
@@ -147,13 +163,24 @@ export function createScenario(handlers: DomainHandler[] = []) {
           })),
         },
       }
-    const module = path.split('/')[4]
+    const module =
+      /^\/api\/(?:v2\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v3\/(?:enrollments|devices))(?:\/|$)/.test(
+        path,
+      )
+        ? 'devices'
+        : path.startsWith('/api/mdm-candidate/v1/groups')
+          ? 'devices'
+          : path.split('/')[4]
     if (module && sources[module] === 'real')
       return { status: 503, body: { code: 'service_unavailable' } }
     for (const handler of handlers) {
-      const reply = handler({ method, path, body, query: parsed.searchParams }, active)
-      if (reply) return reply
+      const reply = handler({ method, path, body, query: parsed.searchParams, headers }, active)
+      if (reply)
+        return unknownReply && reply.status >= 200 && reply.status < 300
+          ? { status: 503, body: { code: 'operation_unknown' } }
+          : reply
     }
+    if (unknownReply) return { status: 503, body: { code: 'operation_unknown' } }
     return { status: 501, body: { code: 'action_not_supported' } }
   }
   return {
