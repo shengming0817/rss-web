@@ -25,3 +25,54 @@ Vitest JSON 只在内存消费，记录仅投影固定测试 ID、闭合步骤 I
 #2364 产品浏览器验收补充：退出仅在服务器确认成功后自动导航登录页。503、网关故障或未知结果保留会话页的专用退出提示；本地权威仍立即清除，退出按钮在无当前主体时禁用，不将重复点击视为撤销成功。无本地会话时，“重新读取”通过同一控制器查询当前会话，恢复认证后再加载列表；401 或 503 保留退出未知提示及显式登录入口。切回标签页的会话重读同样不会清掉未知提示。当前会话无效不证明全部会话撤销成功，不自动重放退出写入；用户可选择进入登录页，或重读取得有效会话后再明确退出。
 
 联调不生成跨仓证明回执，不比较 commit、lock、runner 或静态文件摘要。成功清理临时目录；清理失败或状态未知时返回非零并保留恢复目录。
+
+## 交互开发
+
+`pnpm dev` 使用 Vite 的 build watch，持续输出与生产配置一致的静态文件；它不提供独立的 localhost 页面，不启用 HMR，也不提供模拟认证/API。首次输出与后续重建完成后手动刷新页面。类型检查另运行 `pnpm typecheck`。
+
+前置条件：按 rss-identity 的 `docs/deployment/operations.md` 准备并启动一个**专用于开发**的参考宿主，完成安装、初始化和 open。浏览器须信任其 TLS 证书，DNS/hosts 指向该宿主，部署配置的 canonicalOrigin 与实际访问的 HTTPS origin 完全一致。已知租户 UUID 来自该实例配置。API、静态 config.json、会话 cookie 与 CSRF 均由这个真实宿主持有。
+
+在与开发宿主 Docker daemon 相同的机器上，进入 rss-web 根目录。终端一运行：
+
+```sh
+pnpm install --frozen-lockfile
+pnpm dev
+```
+
+等待首次 `built` 输出，再在终端二将当前输出挂载到既有网关。下面两个值必须对应上一步已经运行的开发部署目录和 Compose project；不要指向生产实例：
+
+```sh
+export RSS_WEB_DIST="$(pwd)/apps/identity/dist"
+export RSS_IDENTITY_DEV_DIR=/absolute/path/to/development/rendered
+export RSS_IDENTITY_DEV_PROJECT=identity-dev
+cat > /tmp/rss-identity-web-dev.yaml <<'YAML'
+services:
+  gateway:
+    volumes:
+      - type: bind
+        source: ${RSS_WEB_DIST:?run from rss-web root after the first build}
+        target: /usr/share/nginx/html
+        read_only: true
+        bind:
+          create_host_path: false
+YAML
+docker compose --project-name "$RSS_IDENTITY_DEV_PROJECT" \
+  --project-directory "$RSS_IDENTITY_DEV_DIR" \
+  -f "$RSS_IDENTITY_DEV_DIR/compose.json" -f /tmp/rss-identity-web-dev.yaml \
+  up -d --no-deps gateway
+```
+
+此覆盖只替换静态文件目录；保留原网关 TLS、CSP、严格 config.json、API 路由和后端宿主策略。开发实例由当前开发者独占，使用此覆盖期间不要并行执行 operate.py 或其它部署维护。
+
+先访问 `https://你的开发域名/api/identity-host/v1/config.json`，应返回 JSON，且 canonicalOrigin 等于当前 HTTPS origin；再访问同一域名的 `/tenants/已配置租户UUID/login`，应显示登录表单。登录、退出等请求继续走该域名的 `/api/v2`。配置不可用时修正宿主/TLS/挂载，不放宽前端校验。不要打开单独 Vite HTTP 地址。
+
+退出开发时停止终端一的 watch，再移除静态覆盖、恢复镜像自带文件：
+
+```sh
+docker compose --project-name "$RSS_IDENTITY_DEV_PROJECT" \
+  --project-directory "$RSS_IDENTITY_DEV_DIR" \
+  -f "$RSS_IDENTITY_DEV_DIR/compose.json" up -d --no-deps --force-recreate gateway
+rm /tmp/rss-identity-web-dev.yaml
+```
+
+用于启动开发宿主的部署目录、证书与配置留在仓外；本仓不保存秘密或另建开发宿主实现。
