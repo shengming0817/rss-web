@@ -3,7 +3,7 @@
 Read README.md and the current issue before changing this repository. Use /usr/bin/git.
 
 - apps/identity owns the host-embedded authentication UI; consume only same-origin HTTP v2 and the explicit identity-host config/context endpoints.
-- @rss/api/identity owns HTTP execution and strict decoding. The app-local session controller alone owns cookie/CSRF transitions. Never add bearer fallback, old wire decoding, a second session/retry controller, or credential persistence.
+- @rss/api/identity owns HTTP execution and strict error decoding. The application owns endpoint DTO decoders. The app-local session controller alone owns cookie/CSRF transitions. Never add bearer fallback, old wire decoding, a second session/retry controller, or credential persistence.
 - @rss/core owns reusable presentation used by Identity: theme, locale, modal and styles. Keep package imports on declared exports, strict TypeScript, accessible UI and i18n.
 - Host config is strict and static; missing or malformed input prevents startup. Context hints are bound to tenant/principal/session and grant no authority. Backend transactions enforce management policy.
 - Tenant paths are resource locators. Only the flow owner may store a per-tab tenant/kind locator for five minutes. Never persist secrets, authenticated state or verifier data. /api/v2/oidc/callback is the sole protocol callback; /auth/resume reads the session and never exchanges codes.
