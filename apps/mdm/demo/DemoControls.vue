@@ -49,7 +49,12 @@ const failed = ref(false)
 const busy = ref(false)
 const eventKind = ref('clock'),
   eventAt = ref(Math.floor(Date.now() / 1000)),
-  eventDevice = ref('device-01')
+  eventDevice = ref('device-01'),
+  eventResource = ref(''),
+  eventItem = ref(''),
+  eventTask = ref(''),
+  eventEnrollment = ref(''),
+  eventActive = ref(true)
 async function simulate() {
   if (busy.value) return
   busy.value = true
@@ -63,6 +68,13 @@ async function simulate() {
           kind: eventKind.value,
           at: eventAt.value,
           ...(eventKind.value !== 'clock' ? { device: eventDevice.value } : {}),
+          ...(eventKind.value === 'software_usage'
+            ? { resource: eventResource.value, active: eventActive.value }
+            : {}),
+          ...(eventKind.value === 'software_detect' ? { task: eventTask.value } : {}),
+          ...(eventKind.value === 'software_request' ? { item: eventItem.value } : {}),
+          ...(eventKind.value === 'enrollment_bind' ? { enrollment: eventEnrollment.value } : {}),
+          ...(eventKind.value === 'agent_binding' ? { active: eventActive.value } : {}),
         },
       },
       successStatus: 204,
@@ -150,6 +162,61 @@ async function apply(reset: boolean) {
         <option value="check_in">
           {{ locale === 'zh-CN' ? '模拟设备签入事件' : 'Synthetic check-in event' }}
         </option>
+        <option value="software_start">
+          {{
+            locale === 'zh-CN'
+              ? '模拟本地用户继续安装'
+              : 'Synthetic local user continues installation'
+          }}
+        </option>
+        <option value="software_usage">
+          {{ locale === 'zh-CN' ? '模拟独立软件使用采样' : 'Synthetic software usage observation' }}
+        </option>
+        <option value="software_request">
+          {{
+            locale === 'zh-CN'
+              ? '模拟本地用户提交安装申请'
+              : 'Synthetic local user installation request'
+          }}
+        </option>
+        <option value="enrollment_bind">
+          {{
+            locale === 'zh-CN'
+              ? '模拟设备完成已授权注册（使用设备页 Enrollment ID）'
+              : 'Synthetic completion of an authorized enrollment'
+          }}
+        </option>
+        <option value="agent_binding">
+          {{
+            locale === 'zh-CN'
+              ? '模拟已注册 Agent 的独立能力回报'
+              : 'Synthetic independent Agent binding report'
+          }}
+        </option>
+        <option value="bootstrap_continue">
+          {{
+            locale === 'zh-CN'
+              ? '模拟本地用户继续来源策略动作'
+              : 'Synthetic local consent for source policy action'
+          }}
+        </option>
+        <option value="bootstrap_detect">
+          {{
+            locale === 'zh-CN'
+              ? '模拟 Agent 安装检测 / 来源任务对账回报'
+              : 'Synthetic Agent detection / source attempt reconciliation'
+          }}
+        </option>
+        <option value="software_detect">
+          {{
+            locale === 'zh-CN'
+              ? '模拟原任务的迟到检测证据'
+              : 'Synthetic late detection for the original task'
+          }}
+        </option>
+        <option value="software_reboot">
+          {{ locale === 'zh-CN' ? '模拟重启后检测回报' : 'Synthetic detection after reboot' }}
+        </option>
       </select>
       <label for="demo-event-at">{{
         locale === 'zh-CN' ? '时间（Unix 秒，单向推进）' : 'Time (Unix seconds, advances only)'
@@ -159,6 +226,40 @@ async function apply(reset: boolean) {
         locale === 'zh-CN' ? '设备 ID' : 'Device ID'
       }}</label>
       <input v-if="eventKind !== 'clock'" id="demo-event-device" v-model="eventDevice" />
+      <template v-if="eventKind === 'software_detect'">
+        <label for="demo-event-task">{{
+          locale === 'zh-CN' ? '原任务 ID（运行详情）' : 'Original task ID (run detail)'
+        }}</label>
+        <input id="demo-event-task" v-model="eventTask" />
+      </template>
+      <template v-if="eventKind === 'software_usage'">
+        <label for="demo-event-resource">{{
+          locale === 'zh-CN' ? '软件 Resource ID' : 'Software Resource ID'
+        }}</label
+        ><input id="demo-event-resource" v-model="eventResource" />
+        <label
+          ><input v-model="eventActive" type="checkbox" />{{
+            locale === 'zh-CN' ? '该次采样观察到活跃使用' : 'Active use observed in this sample'
+          }}</label
+        >
+      </template>
+      <template v-if="eventKind === 'enrollment_bind'"
+        ><label for="demo-enrollment">Enrollment ID</label
+        ><input id="demo-enrollment" v-model="eventEnrollment"
+      /></template>
+      <label v-if="eventKind === 'agent_binding'"
+        ><input v-model="eventActive" type="checkbox" />{{
+          locale === 'zh-CN'
+            ? '明确报告软件执行和注册指引能力'
+            : 'Explicit software execution and enrollment guidance capabilities'
+        }}</label
+      >
+      <template v-if="eventKind === 'software_request'"
+        ><label for="demo-event-item">{{
+          locale === 'zh-CN' ? '自助目录条目 ID' : 'Self-service item ID'
+        }}</label
+        ><input id="demo-event-item" v-model="eventItem"
+      /></template>
       <button :disabled="busy || !authenticated.value" @click="simulate">
         {{ locale === 'zh-CN' ? '注入模拟事件' : 'Inject synthetic event' }}
       </button>

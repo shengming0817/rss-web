@@ -1,8 +1,15 @@
 import type { Plugin } from 'vite'
-import { MDM_JSON_BODY_LIMIT, MDM_CONTENT_BODY_LIMIT, isMdmContentPath } from '@rss/api/mdm-limits'
+import {
+  MDM_JSON_BODY_LIMIT,
+  MDM_CONTENT_BODY_LIMIT,
+  isMdmContentRequest,
+} from '@rss/api/mdm-limits'
 import { createScenario } from './scenario'
 import { createDeviceDemo } from './devices/state'
 import { createAutomationDemo } from './policies/state'
+import { createPublicationDemo } from './software/publication'
+import { createCatalogDemo } from './software/catalog'
+import { createImportsDemo } from './software/imports'
 export function demoPlugin(): Plugin {
   return {
     name: 'mdm-http-demo',
@@ -12,13 +19,26 @@ export function demoPlugin(): Plugin {
     configureServer(server) {
       const devices = createDeviceDemo()
       const automation = createAutomationDemo(devices)
+      const software = automation.admission
+      const publication = createPublicationDemo(automation.resources)
+      const imports = createImportsDemo(automation.resources, software)
+      const catalog = createCatalogDemo(automation.resources, software, publication, () =>
+        devices.facts().map((d) => d.summary.id),
+      )
       const scenario = createScenario(
-        [automation.handle, devices.handle],
+        [publication.handle, catalog.handle, imports.handle, automation.handle, devices.handle],
         () => {
           devices.reset()
           automation.reset()
+          publication.reset()
+          catalog.reset()
+          imports.reset()
         },
-        automation.tick,
+        (event, scenario) => {
+          devices.tick(event)
+          automation.tick(event, scenario)
+          catalog.tick(event)
+        },
         automation.observe,
       )
       server.middlewares.use(async (req, res, next) => {
@@ -27,9 +47,10 @@ export function demoPlugin(): Plugin {
           return
         }
         try {
-          const content =
-            req.method === 'POST' &&
-            isMdmContentPath(new URL(req.url, 'http://demo.invalid').pathname)
+          const content = isMdmContentRequest(
+            req.method ?? 'GET',
+            new URL(req.url, 'http://demo.invalid').pathname,
+          )
           const chunks: Buffer[] = []
           let size = 0
           for await (const chunk of req) {

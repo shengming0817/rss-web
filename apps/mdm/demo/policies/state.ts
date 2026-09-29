@@ -11,12 +11,34 @@ import { createPolicyDemo } from './policies'
 import { createConfigurationDemo } from './configurations'
 import { createWorkflowDemo } from './workflows'
 import type { DemoEvent } from './schedule'
+import { createAdmissionDemo } from '../software/admission'
+import { createSoftwarePolicyDemo } from '../software/assignments'
+import { softwareExecution } from '../../src/features/software/clients/execution'
+import { createBootstrapDemo } from '../software/bootstrap'
+import { createUpdatesDemo } from '../software/updates'
+import { createSelfServiceDemo } from '../software/self-service'
 export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo>) {
   const scopes = createScopeDemo(devices),
     native = createNativeDemo(devices)
   const resources = createResourceDemo(
-    (id, version): boolean => policies.references(id, version) || workflows.references(id, version),
+    (id, version): boolean =>
+      policies.references(id, version) ||
+      workflows.references(id, version) ||
+      software.references(id, version) ||
+      selfService.references(id, version) ||
+      updates.references(id, version) ||
+      bootstrap.references(id, version),
   )
+  const admission = createAdmissionDemo(resources),
+    software = createSoftwarePolicyDemo(
+      devices,
+      { resolve: scopes.freeze, snapshot: scopes.snapshot },
+      resources,
+      admission,
+    )
+  const selfService = createSelfServiceDemo(devices, scopes, resources, admission, software)
+  const bootstrap = createBootstrapDemo(devices, scopes, resources, admission)
+  const updates = createUpdatesDemo(devices, scopes, { resources, admission, software })
   const configurations = createConfigurationDemo(
     devices,
     scopes,
@@ -52,11 +74,36 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
           : [],
       ),
     )
-    return [...policies.executions(), ...native.executions(), ...workflows.executions(), ...batches]
+    return [
+      ...bootstrap.executions(),
+      ...updates.executions(),
+      ...policies.executions(),
+      ...native.executions(),
+      ...workflows.executions(),
+      ...batches,
+      ...software.runs.rows().map((r) =>
+        softwareExecution(r.policy.id, r.policy.versionId, {
+          ...r.value,
+          userAction: software.runs.userAction(r, software.now()),
+        }),
+      ),
+    ]
   }
   const handle: DomainHandler = (request, scenario) => {
     try {
-      for (const owner of [scopes, resources, native, policies, configurations, workflows]) {
+      for (const owner of [
+        scopes,
+        resources,
+        native,
+        policies,
+        configurations,
+        workflows,
+        admission,
+        software,
+        selfService,
+        updates,
+        bootstrap,
+      ]) {
         const reply = owner.handle(request, scenario)
         if (reply) {
           if (
@@ -111,6 +158,13 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
     }
   }
   return {
+    resources,
+    scopes,
+    admission,
+    software,
+    selfService,
+    updates,
+    bootstrap,
     handle,
     observe(method: string, path: string, scenario: Scenario) {
       const deviceWrite =
@@ -123,11 +177,30 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       if (deviceWrite || groupPublished) policies.reconcile(scenario)
     },
     tick(event: DemoEvent, scenario: Scenario = 'normal') {
-      policies.reconcile(scenario, event)
-      workflows.tick(event)
+      if (!event.kind.startsWith('software_') && !event.kind.startsWith('bootstrap_')) {
+        policies.reconcile(scenario, event)
+        workflows.tick(event)
+      }
+      bootstrap.tick(event, scenario)
+      updates.tick(event, scenario)
+      software.tick(event, scenario)
+      selfService.tick(event)
     },
     reset() {
-      for (const owner of [scopes, resources, native, policies, configurations, workflows, pages])
+      for (const owner of [
+        scopes,
+        resources,
+        native,
+        policies,
+        configurations,
+        workflows,
+        pages,
+        admission,
+        software,
+        selfService,
+        updates,
+        bootstrap,
+      ])
         owner.reset()
     },
   }

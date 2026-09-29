@@ -59,7 +59,7 @@ http {
       limit_req zone=mdm_login burst=10 nodelay;
       proxy_pass http://mdm:8080;
     }
-    location ~ ^/api/v3/resources/[^/]+/content$ {
+    location ~ ^/api/v3/resources/[^/]+/(content|uploads/[^/]+)$ {
       client_max_body_size 16m;
       limit_req zone=mdm_api burst=20 nodelay;
       proxy_pass http://mdm:8080;

@@ -66,3 +66,13 @@ export function unique<T>(items: T[], key: (item: T) => unknown): T[] {
   if (new Set(items.map(key)).size !== items.length) throw new Error('Duplicate item')
   return items
 }
+
+export function digest(value: unknown) {
+  const result = array(value, (v) => {
+    const n = count(v)
+    if (n > 255) throw new Error('Invalid digest')
+    return n
+  })
+  if (result.length !== 32) throw new Error('Invalid digest')
+  return result
+}

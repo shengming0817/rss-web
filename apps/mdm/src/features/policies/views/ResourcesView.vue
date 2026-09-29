@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, shallowRef, toRaw } from 'vue'
+import { onBeforeUnmount, ref, shallowRef, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
+import { fileHash, FILE_CHUNK_BYTES } from '../services/file-hash'
+import type { UploadSession } from '../clients/uploads'
+import { uuid } from '../../../services/decode'
 import { MDM_CONTENT_BODY_LIMIT } from '@rss/api/mdm-limits'
 import type {
   Artifact,
@@ -12,11 +16,15 @@ import type {
   ResourceRead,
   ScriptSpec,
   UploadTarget,
+  Variant,
 } from '../clients/resources'
+import { validateSoftwareTarget } from '../clients/software-definition'
+import SoftwareDefinitionEditor from '../../software/components/SoftwareDefinitionEditor.vue'
 import PolicyFrame from '../components/PolicyFrame.vue'
 import ScriptDefinitionEditor from '../components/ScriptDefinitionEditor.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
+  route = useRoute(),
   client = runtime.policies.resources,
   { run, runWrite, busy, failure, uncertain } = useOperation()
 const id = ref(''),
@@ -33,8 +41,6 @@ const list = ref<Awaited<ReturnType<typeof runtime.policies.catalog.list>>>(),
   artifact = ref<Artifact>({ reference: 'content', length: 0, sha256: Array(32).fill(0) })
 const firewall = ref(false),
   enabled = ref(true),
-  source = ref(''),
-  packageId = ref(''),
   schema = ref(''),
   apply = ref(''),
   detect = ref(''),
@@ -51,9 +57,39 @@ const spec = ref<ScriptSpec>({
   outputBytes: 16384,
   maxRows: 1,
 })
+const softwareEditor = ref<InstanceType<typeof SoftwareDefinitionEditor>>(),
+  contentArtifact = ref('')
+const draftVariants = ref<Variant[]>([]),
+  editorEpoch = ref(0)
+function resetDraft() {
+  draftVariants.value = []
+  editorEpoch.value++
+  artifact.value = { reference: 'content', length: 0, sha256: Array(32).fill(0) }
+  version.value = '1'
+  target.value = { version: '1', variant: 'main', platform: 'windows', architecture: 'x86_64' }
+  contentArtifact.value = ''
+  uploadPending.value = undefined
+  uploadSession.value = undefined
+  uploadId.value = ''
+  uploadCommitted.value = false
+  transfer?.abort()
+  file.value = undefined
+  if (uploadInput.value) uploadInput.value.value = ''
+  pending = undefined
+}
 const file = shallowRef<File>(),
   uploadInput = ref<HTMLInputElement>(),
-  uploadPending = ref<{ id: string; target: UploadTarget; hash: string; length: number }>()
+  uploadPending = ref<{
+    id: string
+    upload: string
+    target: UploadTarget
+    hash: string
+    length: number
+  }>(),
+  uploadId = ref(''),
+  uploadSession = ref<UploadSession>(),
+  uploadCommitted = ref(false)
+let transfer: AbortController | undefined
 let pending: (() => Promise<void>) | undefined
 const hashText = (bytes: number[]) => bytes.map((n) => n.toString(16).padStart(2, '0')).join('')
 function load(cursor?: string) {
@@ -70,8 +106,7 @@ function open(value = id.value) {
         current.value = v
         id.value = v.id
         kind.value = v.kind
-        uploadPending.value = undefined
-        file.value = undefined
+        resetDraft()
       },
     )
 }
@@ -79,8 +114,7 @@ function create() {
   if (busy.value || uncertain.value) return
   id.value = `resource-${crypto.randomUUID()}`
   current.value = undefined
-  uploadPending.value = undefined
-  file.value = undefined
+  resetDraft()
 }
 function change(input: ResourceChange) {
   if (busy.value || uncertain.value) return
@@ -98,6 +132,7 @@ function change(input: ResourceChange) {
           id.value = v.id
           kind.value = v.kind
           list.value = undefined
+          if (input.action === 'version') draftVariants.value = []
         },
       )
   }
@@ -108,7 +143,7 @@ function validFile(file: File) {
     failure.value = 'emptyContent'
     return false
   }
-  if (file.size > MDM_CONTENT_BODY_LIMIT) {
+  if (kind.value !== 'software' && file.size > MDM_CONTENT_BODY_LIMIT) {
     failure.value = 'contentTooLarge'
     return false
   }
@@ -120,15 +155,25 @@ async function metadata(event: Event) {
   input.value = ''
   if (!selected || !validFile(selected)) return
   await run(
-    async () => {
-      const bytes = await selected.arrayBuffer()
-      return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
-    },
+    () => fileHash(selected),
     (sha256) => (artifact.value = { ...artifact.value, length: selected.size, sha256 }),
   )
 }
 function addVersion() {
   const resourceKind = current.value?.kind ?? kind.value
+  if (resourceKind === 'software') {
+    if (!draftVariants.value.length) {
+      failure.value = 'invalidRequest'
+      return
+    }
+    change({
+      action: 'version',
+      version: version.value,
+      kind: resourceKind,
+      variants: structuredClone(toRaw(draftVariants.value)),
+    })
+    return
+  }
   if (firewall.value && resourceKind === 'configuration') {
     change({ action: 'firewall_version', version: version.value, enabled: enabled.value })
     return
@@ -140,17 +185,6 @@ function addVersion() {
       kind: resourceKind,
       artifact: a,
       definition: structuredClone(toRaw(spec.value)),
-    }
-  else if (resourceKind === 'software')
-    declaration = {
-      kind: resourceKind,
-      artifact: a,
-      source: source.value,
-      package: packageId.value,
-      version: version.value,
-      install: apply.value,
-      detect: detect.value,
-      uninstall: remove.value || null,
     }
   else
     declaration = {
@@ -175,44 +209,192 @@ function addVersion() {
     ],
   })
 }
+function stageVariant() {
+  if (busy.value || uncertain.value || !softwareEditor.value) return
+  try {
+    const definition = softwareEditor.value.read(structuredClone(toRaw(artifact.value)))
+    validateSoftwareTarget(definition, target.value.platform, target.value.architecture)
+    const variant: Variant = {
+      platform: target.value.platform,
+      architecture: target.value.architecture,
+      key: target.value.variant,
+      declaration: { kind: 'software', definition },
+    }
+    const index = draftVariants.value.findIndex(
+      (v) =>
+        v.platform === variant.platform &&
+        v.architecture === variant.architecture &&
+        v.key === variant.key,
+    )
+    if (index >= 0) draftVariants.value[index] = variant
+    else draftVariants.value.push(variant)
+    failure.value = null
+  } catch {
+    failure.value = 'invalidRequest'
+  }
+}
 function select(event: Event) {
   file.value = (event.target as HTMLInputElement).files?.[0]
 }
+function rememberUpload(value: UploadSession) {
+  uploadSession.value = value
+  uploadId.value = value.id
+  const b = value.binding
+  uploadPending.value = {
+    id: b.resource,
+    upload: value.id,
+    target: {
+      version: b.version,
+      variant: b.variant,
+      platform: b.platform,
+      architecture: b.architecture,
+      artifact: b.reference,
+    },
+    hash: hashText(b.sha256),
+    length: b.length,
+  }
+}
+function readUpload() {
+  if (!current.value || (uncertain.value && !uploadPending.value)) return
+  const resource = uploadPending.value?.id ?? current.value.id,
+    upload = uploadPending.value?.upload ?? uploadId.value
+  try {
+    uuid(upload)
+  } catch {
+    failure.value = 'invalidRequest'
+    return
+  }
+  void run(() => client.uploads.read(resource, upload), rememberUpload)
+}
 async function upload() {
-  if (busy.value || !file.value || !current.value) return
+  if (busy.value || !file.value || !current.value || (uncertain.value && !uploadPending.value))
+    return
   const selected = file.value
   file.value = undefined
   if (uploadInput.value) uploadInput.value.value = ''
   if (!validFile(selected)) return
-  const original = uploadPending.value
-  const resource = original?.id ?? current.value.id,
-    destination = original?.target ?? { ...toRaw(target.value), version: version.value }
-  let bytes: ArrayBuffer | undefined
+  const original = uploadPending.value,
+    resource = original?.id ?? current.value.id,
+    destination = original?.target ?? {
+      ...toRaw(target.value),
+      version: version.value,
+      ...(contentArtifact.value ? { artifact: contentArtifact.value } : {}),
+    },
+    upload = original?.upload ?? (uploadId.value || crypto.randomUUID())
+  try {
+    uuid(upload)
+  } catch {
+    failure.value = 'invalidRequest'
+    return
+  }
+  transfer?.abort()
+  const controller = new AbortController()
+  transfer = controller
   let mismatch = false
   const prepared = await run(
     async () => {
-      bytes = await selected.arrayBuffer()
-      const hash = hashText([...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))])
-      if (original && (hash !== original.hash || bytes.byteLength !== original.length)) {
+      const hash = hashText(await fileHash(selected, controller.signal))
+      if (original && (hash !== original.hash || selected.size !== original.length)) {
         mismatch = true
         throw new Error('Different content')
       }
-      return { id: resource, target: destination, hash, length: bytes.byteLength }
+      return { id: resource, upload, target: destination, hash, length: selected.size }
     },
-    (value) => (uploadPending.value = value),
+    (value) => {
+      uploadPending.value = value
+      uploadId.value = upload
+      uploadCommitted.value = false
+      if (uploadSession.value?.id !== upload) uploadSession.value = undefined
+    },
   )
   if (mismatch) failure.value = 'differentContent'
-  if (!prepared || !bytes) return
-  const content = bytes
-  const acknowledged = await runWrite(() => client.upload(resource, destination, content))
+  if (!prepared) return
+  const expected = uploadPending.value!
+  await runWrite(async () => {
+    let value = await client.uploads.begin(resource, upload, destination, controller.signal)
+    controller.signal.throwIfAborted()
+    if (
+      hashText(value.binding.sha256) !== expected.hash ||
+      value.binding.length !== expected.length
+    )
+      throw new Error('Different content binding')
+    rememberUpload(value)
+    while (!value.complete && value.offset < selected.size) {
+      const offset = value.offset,
+        bytes = await selected.slice(offset, offset + FILE_CHUNK_BYTES).arrayBuffer()
+      controller.signal.throwIfAborted()
+      const next = await client.uploads.append(resource, upload, offset, bytes, controller.signal)
+      controller.signal.throwIfAborted()
+      if (
+        JSON.stringify(next.binding) !== JSON.stringify(value.binding) ||
+        next.offset !== offset + bytes.byteLength
+      )
+        throw new Error('Invalid upload frontier')
+      value = next
+      rememberUpload(value)
+    }
+    return value
+  }, rememberUpload)
   if (failure.value === 'requestTooLarge') failure.value = 'contentTooLarge'
-  if (acknowledged || !uncertain.value) uploadPending.value = undefined
+}
+function completeUpload() {
+  const p = uploadPending.value,
+    session = uploadSession.value
+  if (!p || !session || session.id !== p.upload || session.offset !== p.length) return
+  transfer?.abort()
+  transfer = new AbortController()
+  void runWrite(
+    () => client.uploads.complete(p.id, p.upload, transfer!.signal),
+    () => {
+      uploadCommitted.value = true
+      uploadPending.value = undefined
+      uploadId.value = ''
+    },
+  )
+}
+function verifyUpload() {
+  const p = uploadPending.value
+  if (!p) return
+  void run(
+    async () => {
+      const receipt = await client.uploads.receipt(p.id, p.upload)
+      if (
+        receipt.version !== p.target.version ||
+        (p.target.artifact !== undefined && receipt.reference !== p.target.artifact) ||
+        receipt.length !== p.length ||
+        hashText(receipt.sha256) !== p.hash
+      )
+        throw new Error('Wrong upload receipt')
+    },
+    () => {
+      uploadCommitted.value = true
+      uploadPending.value = undefined
+      uploadId.value = ''
+      uncertain.value = false
+    },
+  )
 }
 onBeforeUnmount(() => {
+  transfer?.abort()
   file.value = undefined
   uploadPending.value = undefined
 })
-onMounted(() => load())
+watch(
+  () => route.fullPath,
+  () => {
+    resetDraft()
+    current.value = undefined
+    list.value = undefined
+    id.value = ''
+    kind.value = route.query['kind'] === 'software' ? 'software' : 'script'
+    if (typeof route.query['resource'] === 'string') open(route.query['resource'])
+    else {
+      if (route.query['kind'] === 'software') kind.value = 'software'
+      load()
+    }
+  },
+  { immediate: true },
+)
 </script>
 <template>
   <PolicyFrame :title="t('policies.resources')" :busy="busy" :failure="failure">
@@ -305,17 +487,16 @@ onMounted(() => load())
               {{ t('policies.length') }} {{ artifact.length }} · {{ t('policies.hash') }}
               {{ hashText(artifact.sha256) }}
             </p>
-            <ScriptDefinitionEditor v-if="kind === 'script'" v-model="spec" /><template v-else
-              ><template v-if="kind === 'software'"
-                ><label for="resource-source">{{ t('policies.sourceId') }}</label
-                ><input id="resource-source" v-model="source" required /><label
-                  for="resource-package"
-                  >{{ t('policies.packageId') }}</label
-                ><input id="resource-package" v-model="packageId" required /></template
-              ><template v-else
-                ><label for="resource-schema">{{ t('policies.schema') }}</label
-                ><input id="resource-schema" v-model="schema" required /></template
-              ><label for="resource-apply">{{ t('policies.apply') }}</label
+            <ScriptDefinitionEditor
+              v-if="kind === 'script'"
+              v-model="spec" /><SoftwareDefinitionEditor
+              v-else-if="kind === 'software'"
+              :key="editorEpoch"
+              ref="softwareEditor" /><template v-else
+              ><label for="resource-schema">{{ t('policies.schema') }}</label
+              ><input id="resource-schema" v-model="schema" required /><label
+                for="resource-apply"
+                >{{ t('policies.apply') }}</label
               ><input id="resource-apply" v-model="apply" required /><label for="resource-detect">{{
                 t('policies.detect')
               }}</label
@@ -323,13 +504,46 @@ onMounted(() => load())
                 for="resource-remove"
                 >{{ t('policies.uninstall') }}</label
               ><input id="resource-remove" v-model="remove" /></template></template
-          ><button type="submit" :disabled="!firewall && !artifact.length">
+          ><template v-if="kind === 'software'">
+            <button type="button" data-action="stage-variant" @click="stageVariant">
+              {{ t('software.stageVariant') }}
+            </button>
+            <p>{{ t('software.variantDraftHint') }}</p>
+            <ul>
+              <li
+                v-for="(v, index) in draftVariants"
+                :key="`${v.platform}/${v.architecture}/${v.key}`"
+              >
+                {{ v.platform }} / {{ v.architecture }} / {{ v.key }}
+                <button type="button" @click="draftVariants.splice(index, 1)">
+                  {{ t('software.removeVariant') }}
+                </button>
+              </li>
+            </ul> </template
+          ><button
+            type="submit"
+            :disabled="kind === 'software' ? !draftVariants.length : !firewall && !artifact.length"
+          >
             {{ t('policies.save') }}
           </button>
         </fieldset>
       </form>
       <section>
+        <p>{{ t('software.uploadSessionHint') }}</p>
+        <label for="resource-upload-id">{{ t('software.uploadSessionId') }}</label>
+        <input id="resource-upload-id" v-model="uploadId" :disabled="busy || !!uploadPending" />
+        <button
+          data-action="read-upload"
+          :disabled="busy || !uploadId || (uncertain && !uploadPending)"
+          @click="readUpload"
+        >
+          {{ t('software.readUpload') }}
+        </button>
         <p>{{ t('policies.fileCleared') }}</p>
+        <template v-if="kind === 'software'"
+          ><label for="resource-artifact">{{ t('software.contentArtifact') }}</label
+          ><input id="resource-artifact" v-model="contentArtifact" :disabled="busy || uncertain"
+        /></template>
         <label for="resource-upload">{{ t('policies.content') }}</label
         ><input
           id="resource-upload"
@@ -341,9 +555,34 @@ onMounted(() => load())
           {{ t('policies.upload') }}
         </button>
         <p v-if="uploadPending">
-          {{ uploadPending.id }} / {{ uploadPending.target.version }} /
+          {{ uploadPending.upload }} · {{ uploadPending.id }} / {{ uploadPending.target.version }} /
           {{ uploadPending.target.variant }} · {{ uploadPending.length }} · {{ uploadPending.hash }}
         </p>
+        <p v-if="uploadSession">
+          {{ t('software.uploadProgress') }} {{ uploadSession.offset }} /
+          {{ uploadSession.binding.length }}
+        </p>
+        <button
+          v-if="
+            uploadPending &&
+            uploadSession?.id === uploadPending.upload &&
+            uploadSession.offset === uploadPending.length
+          "
+          data-action="complete-upload"
+          :disabled="busy"
+          @click="completeUpload"
+        >
+          {{ t('software.completeUpload') }}
+        </button>
+        <button
+          v-if="uploadPending"
+          data-action="verify-upload"
+          :disabled="busy"
+          @click="verifyUpload"
+        >
+          {{ t('software.verifyUpload') }}
+        </button>
+        <p v-if="uploadCommitted" role="status">{{ t('software.uploadCommitted') }}</p>
       </section></template
     >
     <button v-if="uncertain && pending && !uploadPending" :disabled="busy" @click="pending()">

@@ -1,4 +1,5 @@
 import type { DomainHandler } from '../scenario'
+import { randomUUID } from 'node:crypto'
 import type { createDeviceDemo } from '../devices/state'
 import { closed, enumeration, record, uuid } from '../../src/services/decode'
 import {
@@ -33,6 +34,7 @@ interface Job {
   }[]
 }
 export function createScopeDemo(devices: Devices) {
+  const managedScopes = new Set<string>()
   const scopes = new Map<string, ScopeRead>(),
     deleted = new Set<string>(),
     jobs = new Map<string, Job>(),
@@ -155,6 +157,7 @@ export function createScopeDemo(devices: Devices) {
       if (request.method === 'GET')
         return read && !deleted.has(id) ? ok(structuredClone(read)) : error('scope_not_found', 404)
       if (request.method !== 'POST' || match[2]) return
+      if (managedScopes.has(id)) return error('permission_denied', 403)
       const op = operation(request.body)
       return receipts.write(request, op.operationId, () => {
         if (op.expectedRevision !== (read?.revision ?? 0) || deleted.has(id))
@@ -186,6 +189,41 @@ export function createScopeDemo(devices: Devices) {
   }
   return {
     handle,
+    forManagedDevices<T>(devices: string[], bind: (scope: string) => T): T {
+      const id = randomUUID(),
+        task = randomUUID()
+      const read: ScopeRead = {
+        id,
+        revision: 1,
+        definition: {
+          targets: devices.map((id) => ({ kind: 'device', id })),
+          limitations: null,
+          exclusions: [],
+        },
+      }
+      const job = resolve(read)
+      job.status = 'completed'
+      scopes.set(id, read)
+      jobs.set(task, job)
+      current.set(id, task)
+      managedScopes.add(id)
+      try {
+        return bind(id)
+      } catch (error) {
+        scopes.delete(id)
+        jobs.delete(task)
+        current.delete(id)
+        managedScopes.delete(id)
+        throw error
+      }
+    },
+    snapshot(id: string) {
+      const result = current.get(id),
+        job = result ? jobs.get(result) : undefined
+      if (!result || !job || deleted.has(id) || scopes.get(id)?.revision !== job.frozen.revision)
+        return null
+      return { result, devices: job.decisions.map((d) => d.device) }
+    },
     list: () =>
       [...scopes.values()]
         .filter((s) => !deleted.has(s.id))
@@ -207,6 +245,7 @@ export function createScopeDemo(devices: Devices) {
       // Published pages remain immutable. Consumers must revalidate source versions
       // before using that publication to authorize a new plan or workflow.
       try {
+        if (managedScopes.has(id)) return structuredClone(resolve(read).frozen)
         if (JSON.stringify(resolve(read).frozen) !== JSON.stringify(job.frozen)) return null
         return structuredClone(job.frozen)
       } catch {
@@ -220,6 +259,7 @@ export function createScopeDemo(devices: Devices) {
       current.clear()
       receipts.reset()
       pages.reset()
+      managedScopes.clear()
     },
   }
 }

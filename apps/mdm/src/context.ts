@@ -4,12 +4,14 @@ import type { HttpTransport } from '@rss/api/mdm'
 import type { createWorkspaceClient } from './services/workspace'
 import type { createPolicyClients } from './features/policies/client'
 import type { createDeviceClients } from './features/devices/client'
+import type { createSoftwareClients } from './features/software/client'
 export interface MdmRuntime {
   session: IdentitySession
   transport: HttpTransport
   workspace: ReturnType<typeof createWorkspaceClient>
   devices: ReturnType<typeof createDeviceClients>
   policies: ReturnType<typeof createPolicyClients>
+  software: ReturnType<typeof createSoftwareClients>
   tenant: string
   demo: boolean
 }

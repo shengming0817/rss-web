@@ -1,3 +1,4 @@
+import { softwareZh, softwareEn } from './features/software/i18n'
 import { identityI18n } from '@rss/auth'
 import { policiesZh, policiesEn } from './features/policies/i18n'
 import { devicesZh, devicesEn } from './features/devices/i18n'
@@ -30,6 +31,7 @@ const zh = {
   reload: '重新读取',
   devices: '设备与资产',
   policies: '配置与执行',
+  software: '应用、软件与更新',
   security: '安全与支持',
   operations: '权限与运营',
   boundary: '导航仅为展示提示，真实权限由后端判定。Mock 不证明设备效果或生产能力。',
@@ -64,6 +66,7 @@ const en: typeof zh = {
   reload: 'Reload',
   devices: 'Devices & assets',
   policies: 'Configuration & execution',
+  software: 'Applications, software & updates',
   security: 'Security & support',
   operations: 'Authorization & operations',
   boundary:
@@ -77,5 +80,7 @@ export function mdmI18n() {
   i18n.global.mergeLocaleMessage('en-US', { devices: devicesEn })
   i18n.global.mergeLocaleMessage('zh-CN', { policies: policiesZh })
   i18n.global.mergeLocaleMessage('en-US', { policies: policiesEn })
+  i18n.global.mergeLocaleMessage('zh-CN', { software: softwareZh })
+  i18n.global.mergeLocaleMessage('en-US', { software: softwareEn })
   return i18n
 }

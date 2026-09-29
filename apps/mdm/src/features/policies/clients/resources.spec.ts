@@ -91,27 +91,51 @@ it('keeps version creation and activation as separate CAS writes', async () => {
   expect(request).toHaveBeenCalledTimes(1)
 })
 
-it('accepts only the empty 201 upload acknowledgement and does not retain file names', async () => {
-  let reply: unknown = ''
-  const request = vi.fn(async (o: RequestOptions<unknown>) => o.decode(reply))
-  const client = createResourcesClient({ request } as unknown as HttpTransport)
-  const bytes = new Uint8Array([0, 10, 255]).buffer
-  const target = {
-    version: 'v1',
-    variant: 'default',
-    platform: 'windows' as const,
-    architecture: 'x86_64' as const,
+it('decodes complete SoftwareSpec and refuses the retired flat software contract', () => {
+  const definition = {
+    source: { id: 'private', revision: '1', sha256: digest },
+    package: 'app',
+    version: '1',
+    format: 'msi',
+    primary: 'installer',
+    artifacts: { installer: { ...artifact, origin: null } },
+    install: {
+      executor: 'msi',
+      entry: null,
+      runAs: 'system',
+      arguments: [],
+      environment: {},
+      timeoutSeconds: 60,
+      outputBytes: 1024,
+    },
+    uninstall: null,
+    detect: {
+      kind: 'msi_product',
+      productCode: '{11111111-1111-4111-8111-111111111111}',
+      version: '1',
+    },
+    reboot: 'report',
+    downgrade: 'deny',
+    ownership: 'managed_only',
+    dependencies: [],
+    bundle: null,
   }
-  await expect(client.upload('script-library', target, bytes)).resolves.toBeUndefined()
-  expect(request.mock.calls[0]![0]).toMatchObject({
-    method: 'POST',
-    path: '/api/v3/resources/{id}/content',
-    pathParams: { id: 'script-library' },
-    query: target,
-    headers: { 'Content-Type': 'application/octet-stream' },
-    successStatus: 201,
-  })
-  expect(request.mock.calls[0]![0].body).toBe(bytes)
-  reply = { accepted: true }
-  await expect(client.upload('script-library', target, bytes)).rejects.toThrow()
+  const value = {
+    ...resource,
+    kind: 'software',
+    versions: [
+      {
+        ...resource.versions[0],
+        variants: [
+          {
+            platform: 'windows',
+            architecture: 'x86_64',
+            key: 'main',
+            declaration: { kind: 'software', definition },
+          },
+        ],
+      },
+    ],
+  }
+  expect(decodeResource(value, resource.id)).toEqual(value)
 })

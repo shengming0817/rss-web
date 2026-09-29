@@ -19,7 +19,7 @@ it('validates the published finite schema/binding contract with a standard schem
     outputBytes: 1024,
     maxRows: 1,
   }
-  const variant: Variant = {
+  const variant: Variant & { declaration: Extract<Variant['declaration'], { kind: 'script' }> } = {
     platform: 'windows',
     architecture: 'x86_64',
     key: 'main',

@@ -6,6 +6,7 @@ import {
   type EnrollmentSource,
 } from '../../src/features/devices/clients/enrollment'
 import type { DemoDevice } from './fixtures'
+import type { DemoEvent } from '../policies/schedule'
 import { createReceipts, error, ok } from '../http'
 interface Enrollment {
   enrollmentId: string
@@ -158,5 +159,56 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
       return ok({ operationId, ...view(enrollment) })
     })
   }
-  return { handle, reset }
+  return {
+    handle,
+    reset,
+    tick(event: DemoEvent) {
+      if (event.kind !== 'enrollment_bind' || !event.enrollment) return
+      const e = enrollments.get(event.enrollment),
+        d = e ? devices().get(e.device) : undefined
+      if (
+        !e ||
+        !d ||
+        e.device !== event.device ||
+        e.status !== 'pending' ||
+        event.at >= e.expiresAt ||
+        event.at < e.expiresAt - 300
+      )
+        return
+      const generation =
+        Math.max(
+          0,
+          ...d.registrations.filter((r) => r.source === e.source).map((r) => r.generation),
+        ) + 1
+      for (const r of d.registrations)
+        if (r.source === e.source && r.status === 'active') r.status = 'superseded'
+      const registrationId = randomUUID()
+      d.registrations.push({
+        registrationId,
+        enrollmentId: e.enrollmentId,
+        source: e.source,
+        generation,
+        status: 'active',
+      })
+      e.status = 'bound'
+      e.registrationId = registrationId
+      d.summary.channels = [
+        ...new Set(
+          d.registrations
+            .filter((r) => r.status === 'active')
+            .map((r) => (r.source === 'agent.builtin' ? ('agent' as const) : ('mdm' as const))),
+        ),
+      ]
+      d.inventory.channels = [...d.summary.channels]
+      d.summary.status = 'registered'
+      d.summary.revision++
+      d.history.push({
+        id: randomUUID(),
+        at: event.at,
+        event: 'registration_bound',
+        operation: null,
+      })
+      // Registration does not invent an Agent wire binding or executable capability.
+    },
+  }
 }

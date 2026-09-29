@@ -20,6 +20,7 @@ import { mdmI18n } from './i18n'
 import { features } from './features'
 import { createDeviceClients } from './features/devices/client'
 import { createPolicyClients } from './features/policies/client'
+import { createSoftwareClients } from './features/software/client'
 import App from './App.vue'
 export function startMdm(
   transport: HttpTransport,
@@ -56,6 +57,7 @@ export function startMdm(
     workspace: createWorkspaceClient(business, demo),
     devices: createDeviceClients(business, tenant, demo),
     policies: createPolicyClients(business, tenant, demo),
+    software: createSoftwareClients(business, tenant, demo),
     tenant,
     demo,
   })

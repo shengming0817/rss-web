@@ -40,7 +40,7 @@ let pending: (() => Promise<void>) | undefined
 let pendingAssignment: (() => ReturnType<typeof clients.directory.assign>) | undefined
 function load() {
   const device = id.value
-  void run(
+  return run(
     async () => {
       const value = await clients.directory.detail(device)
       const catalog = await clients.assets.catalog()
@@ -123,8 +123,8 @@ function revoke(registration: string) {
   void pending()
 }
 watch(
-  id,
-  () => {
+  [id, () => route.query['tab']],
+  async () => {
     detail.value = undefined
     detailStale.value = false
     inventory.value = undefined
@@ -134,8 +134,8 @@ watch(
     registrations.value = undefined
     pending = undefined
     pendingAssignment = undefined
-    tab.value = 'inventory'
-    load()
+    tab.value = route.query['tab'] === 'credentials' ? 'credentials' : 'inventory'
+    if (await load()) loadTab()
   },
   { immediate: true },
 )

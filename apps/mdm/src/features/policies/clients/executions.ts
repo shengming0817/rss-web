@@ -33,7 +33,10 @@ export type ExecutionOrigin =
       cancellation: 'none' | 'requested' | 'confirmed'
       output: Json
     }
+  | { kind: 'update'; ring: string }
+  | { kind: 'bootstrap'; policy: string }
   | { kind: 'native'; operation: string }
+  | { kind: 'software'; policy: string; versionId: string; task: string }
   | { kind: 'workflow'; workflow: string; run: string; step: string }
   | { kind: 'device_batch'; batch: string }
 function basis(value: unknown) {
@@ -67,6 +70,9 @@ function origin(value: unknown): ExecutionOrigin {
   const kind = enumeration(record(value)['kind'], [
     'policy',
     'native',
+    'update',
+    'bootstrap',
+    'software',
     'workflow',
     'device_batch',
   ] as const)
@@ -81,9 +87,26 @@ function origin(value: unknown): ExecutionOrigin {
       output: jsonValue(v['output'], 65536),
     }
   }
+  if (kind === 'bootstrap') {
+    const v = closed(value, ['kind', 'policy'])
+    return { kind, policy: uuid(v['policy']) }
+  }
+  if (kind === 'update') {
+    const v = closed(value, ['kind', 'ring'])
+    return { kind, ring: uuid(v['ring']) }
+  }
   if (kind === 'native') {
     const v = closed(value, ['kind', 'operation'])
     return { kind, operation: uuid(v['operation']) }
+  }
+  if (kind === 'software') {
+    const v = closed(value, ['kind', 'policy', 'versionId', 'task'])
+    return {
+      kind,
+      policy: uuid(v['policy']),
+      versionId: uuid(v['versionId']),
+      task: uuid(v['task']),
+    }
   }
   if (kind === 'device_batch') {
     const v = closed(value, ['kind', 'batch'])
@@ -127,12 +150,15 @@ export function executionSummary(value: unknown) {
       'succeeded',
       'failed',
       'cancelled',
+      'waiting_reboot',
       'unknown',
     ] as const),
     effect: enumeration(v['effect'], [
       'unverified',
       'verified_present',
       'verified_absent',
+      'waiting_reboot',
+      'failed',
       'unknown',
     ] as const),
     compliance: enumeration(v['compliance'], ['unknown'] as const),
@@ -154,6 +180,8 @@ export function executionSummary(value: unknown) {
         'device_receipt',
         'effect_verification',
         'cancel_confirmation',
+        'user_action',
+        'reboot',
       ] as const),
     ),
   }

@@ -1,6 +1,6 @@
 /** MDM browser protocol policy over the shared HTTP executor. No retries. */
 import axios from 'axios'
-import { isMdmContentPath, MDM_CONTENT_BODY_LIMIT, MDM_JSON_BODY_LIMIT } from './mdm-limits'
+import { isMdmContentRequest, MDM_CONTENT_BODY_LIMIT, MDM_JSON_BODY_LIMIT } from './mdm-limits'
 import { decodeIdentityError } from './identity'
 import { execute } from './transport'
 import { clientError, identityWireFailure, protocolError } from './wire-error'
@@ -15,6 +15,7 @@ const statuses: Readonly<Record<string, number>> = {
   permission_denied: 403,
   inventory_not_found: 404,
   operation_not_found: 404,
+  task_not_found: 404,
   management_device_not_found: 404,
   group_not_found: 404,
   scope_not_found: 404,
@@ -25,6 +26,7 @@ const statuses: Readonly<Record<string, number>> = {
   software_candidate_not_found: 404,
   group_rule_not_found: 404,
   operation_conflict: 409,
+  upload_offset_conflict: 409,
   capability_unknown: 409,
   platform_unsupported: 409,
   stale_plan: 409,
@@ -46,6 +48,13 @@ export function decodeMdmError(status: number, value: unknown): RssApiError {
   const v = value as Record<string, unknown>
   if (typeof v['code'] !== 'string' || statuses[v['code']] !== status) return protocolError(status)
   const keys = Object.keys(v).sort().join()
+  if (v['code'] === 'upload_offset_conflict')
+    return keys === 'code,offset' &&
+      typeof v['offset'] === 'number' &&
+      Number.isSafeInteger(v['offset']) &&
+      v['offset'] >= 0
+      ? identityWireFailure(status, v['code'])
+      : protocolError(status)
   const plan = [
     'capability_unknown',
     'platform_unsupported',
@@ -65,13 +74,13 @@ export function decodeMdmError(status: number, value: unknown): RssApiError {
   return identityWireFailure(status, v['code'])
 }
 const paths =
-  /^\/api\/(?:v1\/(?:authorization|devices|software-sources)(?:\/|$)|v2\/(?:asset-fields|device-queries|devices|saved-queries|groups|scopes|policies)(?:\/|$)|v3\/(?:resources|enrollments|devices)(?:\/|$)|mdm-host\/v1\/config\.json$|mdm-candidate\/v1\/(?:workspace|devices|groups|policies|executions|security|support|authorization|audit|operations|integrations)(?:\/|$))/
+  /^\/api\/(?:v1\/(?:authorization|devices|software-sources)(?:\/|$)|v2\/(?:asset-fields|device-queries|devices|saved-queries|groups|scopes|policies)(?:\/|$)|v3\/(?:resources|software|enrollments|devices)(?:\/|$)|mdm-host\/v1\/config\.json$|mdm-candidate\/v1\/(?:workspace|devices|groups|policies|executions|software|security|support|authorization|audit|operations|integrations)(?:\/|$))/
 export function createMdmTransport(): HttpTransport {
   const instance = axios.create({ baseURL: '' })
   return {
     async request(options: NoContentRequest | RequestOptions<unknown>) {
       if (!paths.test(options.path)) throw clientError()
-      const content = options.method === 'POST' && isMdmContentPath(options.path)
+      const content = isMdmContentRequest(options.method, options.path)
       if (
         Object.entries(options.headers ?? {}).some(
           ([key, value]) =>

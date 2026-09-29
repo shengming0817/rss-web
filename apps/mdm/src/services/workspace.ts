@@ -1,6 +1,6 @@
 import type { HttpTransport } from '@rss/api/mdm'
 import { array, enumeration, record, string, uuid } from './decode'
-export const moduleIds = ['devices', 'policies', 'security', 'operations'] as const
+export const moduleIds = ['devices', 'policies', 'software', 'security', 'operations'] as const
 export type ModuleId = (typeof moduleIds)[number]
 export type Source = 'real' | 'mock'
 export interface ModuleState {

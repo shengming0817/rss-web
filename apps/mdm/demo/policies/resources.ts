@@ -1,9 +1,11 @@
+import { createResourceUploads } from './uploads'
 import { createHash } from 'node:crypto'
 import type { DomainHandler } from '../scenario'
 import { MDM_CONTENT_BODY_LIMIT } from '@rss/api/mdm-limits'
-import { boolean, closed, enumeration, identifier, record } from '../../src/services/decode'
+import { boolean, closed, enumeration, identifier, record, uuid } from '../../src/services/decode'
 import {
   decodeResource,
+  declarationArtifacts,
   type ResourceRead,
   type Variant,
 } from '../../src/features/policies/clients/resources'
@@ -14,12 +16,113 @@ const contentKey = (
   resource: string,
   version: string,
   v: Pick<Variant, 'platform' | 'architecture' | 'key'>,
-) => JSON.stringify([resource, version, v.platform, v.architecture, v.key])
+  reference: string,
+) => JSON.stringify([resource, version, v.platform, v.architecture, v.key, reference])
+export interface ImportedFile {
+  platform: Variant['platform']
+  architecture: Variant['architecture']
+  variant: string
+  reference: string
+  bytes: Uint8Array
+}
+export interface ResourceImport {
+  operation: string
+  actor: string
+  resource: string
+  version: string
+  expectedRevision: number
+  variants: Variant[]
+  files: ImportedFile[]
+}
 export function createResourceDemo(referenced: (id: string, version: string) => boolean) {
   const resources = new Map<string, ResourceRead>(),
     contents = new Map<string, Uint8Array>(),
     receipts = createReceipts()
+  const uploads = createResourceUploads(
+    (id) => resources.get(id),
+    (binding, bytes) => {
+      contents.set(
+        contentKey(
+          binding.resource,
+          binding.version,
+          { platform: binding.platform, architecture: binding.architecture, key: binding.variant },
+          binding.reference,
+        ),
+        bytes,
+      )
+    },
+  )
+  const imported = new Map<string, { fingerprint: string; revision: number }>()
+  /** Atomic synthetic Resource ingress; software import jobs never own a second package copy. */
+  function importVersion(input: ResourceImport) {
+    uuid(input.operation)
+    const id = identifier(input.resource),
+      version = identifier(input.version)
+    const fingerprint = JSON.stringify({
+      ...input,
+      files: input.files.map((f) => ({ ...f, bytes: hash(f.bytes) })),
+    })
+    const previous = imported.get(input.operation)
+    if (previous) {
+      if (previous.fingerprint !== fingerprint) return { failure: 'resource_conflict' as const }
+      return { revision: previous.revision }
+    }
+    const resource = resources.get(id)
+    if (
+      (resource?.revision ?? 0) !== input.expectedRevision ||
+      (resource &&
+        (resource.kind !== 'software' || resource.versions.some((v) => v.id === version)))
+    )
+      return { failure: 'resource_conflict' as const }
+    const declaration = { action: 'version', kind: 'software', version, variants: input.variants }
+    const next = decodeResource(
+      {
+        id,
+        kind: 'software',
+        revision: input.expectedRevision + 1,
+        versions: [
+          ...(resource?.versions ?? []),
+          {
+            id: version,
+            configuration: null,
+            digest: hash(JSON.stringify(declaration)),
+            state: 'frozen',
+            variants: input.variants,
+          },
+        ],
+      },
+      id,
+    )
+    const staged = new Map<string, Uint8Array>()
+    if (!input.variants.length) return { failure: 'content_invalid' as const }
+    for (const v of next.versions.at(-1)!.variants) {
+      for (const a of declarationArtifacts(v.declaration)) {
+        const files = input.files.filter(
+          (f) =>
+            f.platform === v.platform &&
+            f.architecture === v.architecture &&
+            f.variant === v.key &&
+            f.reference === a.reference,
+        )
+        if (
+          files.length !== 1 ||
+          files[0]!.bytes.length !== a.length ||
+          a.length > MDM_CONTENT_BODY_LIMIT ||
+          JSON.stringify(hash(files[0]!.bytes)) !== JSON.stringify(a.sha256)
+        )
+          return { failure: 'content_invalid' as const }
+        staged.set(contentKey(id, version, v, a.reference), files[0]!.bytes.slice())
+      }
+    }
+    if (staged.size !== input.files.length) return { failure: 'content_invalid' as const }
+    resources.set(id, next)
+    for (const [key, value] of staged) contents.set(key, value)
+    imported.set(input.operation, { fingerprint, revision: next.revision })
+    return { revision: next.revision }
+  }
   const handle: DomainHandler = (request, scenario) => {
+    const uploaded = uploads.handle(request, scenario)
+    if (uploaded) return uploaded
     const match = /^\/api\/v3\/resources\/([^/]+)(\/content)?$/.exec(request.path)
     if (!match) return
     try {
@@ -44,7 +147,14 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
           return error('malformed_request', 400)
         if (version.state === 'archived') return error('operation_conflict')
         const bytes = new Uint8Array(request.body),
-          artifact = variant.declaration.artifact
+          artifact = request.query.has('artifact')
+            ? declarationArtifacts(variant.declaration).find(
+                (a) => a.reference === request.query.get('artifact'),
+              )
+            : variant.declaration.kind === 'software'
+              ? variant.declaration.definition.artifacts[variant.declaration.definition.primary]
+              : variant.declaration.artifact
+        if (!artifact) return error('malformed_request', 400)
         if (
           bytes.byteLength !== artifact.length ||
           JSON.stringify(hash(bytes)) !== JSON.stringify(artifact.sha256)
@@ -56,7 +166,7 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
           new TextDecoder().decode(bytes) !== 'SELECT version FROM osquery_info;\n'
         )
           return error('malformed_request', 400)
-        contents.set(contentKey(id, version.id, variant), bytes.slice())
+        contents.set(contentKey(id, version.id, variant, artifact.reference), bytes.slice())
         return ok(undefined, 201)
       }
       if (request.method === 'GET')
@@ -120,8 +230,9 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
             for (const v of decoded.variants) {
               validateScriptVariant(v)
               if (
-                !v.declaration.artifact.length ||
-                v.declaration.artifact.length > MDM_CONTENT_BODY_LIMIT
+                declarationArtifacts(v.declaration).some(
+                  (a) => !a.length || a.length > MDM_CONTENT_BODY_LIMIT,
+                )
               )
                 return error('malformed_request', 400)
             }
@@ -134,7 +245,11 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
               return error('operation_conflict')
             if (
               action === 'activate' &&
-              existing.variants.some((v) => !contents.has(contentKey(id, versionId, v)))
+              existing.variants.some((v) =>
+                declarationArtifacts(v.declaration).some(
+                  (a) => !contents.has(contentKey(id, versionId, v, a.reference)),
+                ),
+              )
             )
               return error('operation_conflict')
             existing.state =
@@ -151,6 +266,19 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
   }
   return {
     handle,
+    importVersion,
+    importReceipt: (operation: string) => imported.get(operation)?.revision ?? null,
+    contentReady: (id: string, version: string) => {
+      const v = resources.get(id)?.versions.find((v) => v.id === version)
+      return (
+        !!v &&
+        v.variants.every((variant) =>
+          declarationArtifacts(variant.declaration).every((a) =>
+            contents.has(contentKey(id, version, variant, a.reference)),
+          ),
+        )
+      )
+    },
     read: (id: string) => {
       const value = resources.get(id)
       return value ? structuredClone(value) : null
@@ -166,6 +294,8 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
       resources.clear()
       contents.clear()
       receipts.reset()
+      imported.clear()
+      uploads.reset()
     },
   }
 }

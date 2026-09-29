@@ -1,3 +1,9 @@
+import { createUploadsClient } from './uploads'
+import {
+  decodeSoftwareDefinition,
+  validateSoftwareTarget,
+  type SoftwareDefinition,
+} from './software-definition'
 import type { HttpTransport } from '@rss/api/mdm'
 import type { Operation } from '../../../services/useOperation'
 import {
@@ -5,6 +11,7 @@ import {
   boolean,
   closed,
   count,
+  digest,
   enumeration,
   identifier,
   nullable,
@@ -29,15 +36,6 @@ export function jsonValue(value: unknown, budget: number, depth = 0): Json {
     )
   if (depth === 0 && new TextEncoder().encode(JSON.stringify(result)).byteLength > budget)
     throw new Error('JSON too large')
-  return result
-}
-export function digest(value: unknown) {
-  const result = array(value, (v) => {
-    const n = count(v)
-    if (n > 255) throw new Error('Invalid digest')
-    return n
-  })
-  if (result.length !== 32) throw new Error('Invalid digest')
   return result
 }
 function bounded(value: unknown, min: number, max: number) {
@@ -173,16 +171,7 @@ export interface Artifact {
 }
 export type Declaration =
   | { kind: 'script'; artifact: Artifact; definition: ScriptSpec }
-  | {
-      kind: 'software'
-      artifact: Artifact
-      source: string
-      package: string
-      version: string
-      install: string
-      detect: string
-      uninstall: string | null
-    }
+  | { kind: 'software'; definition: SoftwareDefinition }
   | {
       kind: 'configuration'
       artifact: Artifact
@@ -218,22 +207,12 @@ function declaration(value: unknown): Declaration {
     kind === 'script'
       ? ['kind', 'artifact', 'definition']
       : kind === 'software'
-        ? ['kind', 'artifact', 'source', 'package', 'version', 'install', 'detect', 'uninstall']
+        ? ['kind', 'definition']
         : ['kind', 'artifact', 'schema', 'apply', 'detect', 'remove'],
   )
+  if (kind === 'software') return { kind, definition: decodeSoftwareDefinition(v['definition']) }
   const a = artifact(v['artifact'])
   if (kind === 'script') return { kind, artifact: a, definition: decodeScriptSpec(v['definition']) }
-  if (kind === 'software')
-    return {
-      kind,
-      artifact: a,
-      source: identifier(v['source']),
-      package: identifier(v['package']),
-      version: identifier(v['version']),
-      install: identifier(v['install']),
-      detect: identifier(v['detect']),
-      uninstall: nullable(v['uninstall'], identifier),
-    }
   return {
     kind,
     artifact: a,
@@ -245,12 +224,15 @@ function declaration(value: unknown): Declaration {
 }
 function variant(value: unknown): Variant {
   const v = closed(value, ['platform', 'architecture', 'key', 'declaration'])
-  return {
+  const result = {
     platform: enumeration(v['platform'], platforms),
     architecture: enumeration(v['architecture'], architectures),
     key: identifier(v['key']),
     declaration: declaration(v['declaration']),
   }
+  if (result.declaration.kind === 'software')
+    validateSoftwareTarget(result.declaration.definition, result.platform, result.architecture)
+  return result
 }
 export function decodeResource(value: unknown, id: string) {
   const v = closed(value, ['id', 'revision', 'kind', 'versions'])
@@ -294,6 +276,7 @@ export interface UploadTarget {
   variant: string
   platform: Platform
   architecture: Architecture
+  artifact?: string
 }
 export function createResourcesClient(transport: HttpTransport) {
   return {
@@ -323,19 +306,13 @@ export function createResourcesClient(transport: HttpTransport) {
           }
         },
       }),
-    upload: (id: string, target: UploadTarget, bytes: ArrayBuffer) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v3/resources/{id}/content',
-        pathParams: { id },
-        query: { ...target },
-        headers: { 'Content-Type': 'application/octet-stream' },
-        body: bytes,
-        successStatus: 201,
-        decode(value): void {
-          if (value !== '' && value !== undefined)
-            throw new Error('Expected empty upload acknowledgement')
-        },
-      }),
+    uploads: createUploadsClient(transport),
   }
+}
+
+/** Every artifact is Resource-owned; software may carry auxiliary scripts as well as its installer. */
+export function declarationArtifacts(declaration: Declaration): Artifact[] {
+  return declaration.kind === 'software'
+    ? Object.values(declaration.definition.artifacts)
+    : [declaration.artifact]
 }

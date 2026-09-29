@@ -113,6 +113,28 @@ it('renders pending directory, pages, previews partial actions, cancels and subm
   expect(wrapper.text()).toContain('已受理')
   expect(wrapper.text()).not.toContain('擦除成功')
 })
+it('opens the existing registration owner from a software source-policy deep link', async () => {
+  const { wrapper, requests, router } = await setup(
+    'device-detail',
+    { device: 'device-01' },
+    { tab: 'credentials' },
+  )
+  expect(requests.some((r) => r.path === '/api/v3/devices/{device}/registrations')).toBe(true)
+  expect(wrapper.text()).toContain('agent.builtin')
+  await router.push({
+    name: 'device-detail',
+    params: { tenant: TENANT, device: 'device-02' },
+    query: { tab: 'credentials' },
+  })
+  await flushPromises()
+  expect(wrapper.text()).toContain('mdm.apple')
+  const registrations = wrapper
+    .findAll('li')
+    .filter((row) => row.findAll('button').some((button) => button.text() === '撤销凭据'))
+  expect(registrations).toHaveLength(1)
+  expect(registrations[0]!.text()).toContain('mdm.apple')
+  expect(registrations[0]!.text()).not.toContain('agent.builtin')
+})
 it('renders detail tabs, edits manual null/delete with conflict drafts, and edits ownership', async () => {
   const { wrapper, click, scenario } = await setup('device-detail', { device: 'device-01' })
   expect(wrapper.text()).toContain('ThinkPad T14')

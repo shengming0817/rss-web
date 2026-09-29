@@ -8,12 +8,18 @@ import type { ExecutionSummary } from '../clients/executions'
 import type { NativeOperation } from '../clients/native'
 import PolicyFrame from '../components/PolicyFrame.vue'
 import ExecutionFacts from '../components/ExecutionFacts.vue'
+import SoftwareRunFacts from '../../software/components/SoftwareRunFacts.vue'
+import BootstrapAttemptFacts from '../../software/components/BootstrapAttemptFacts.vue'
+import type { BootstrapAttempt } from '../../software/clients/bootstrap'
+import type { SoftwareRun } from '../../software/clients/runs'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
   { run, runWrite, busy, failure, uncertain } = useOperation()
 const execution = ref<ExecutionSummary>(),
-  native = ref<NativeOperation>()
+  native = ref<NativeOperation>(),
+  software = ref<SoftwareRun>(),
+  bootstrap = ref<BootstrapAttempt>()
 let pending: (() => Promise<void>) | undefined
 async function load() {
   const id = String(route.params['execution'])
@@ -25,11 +31,21 @@ async function load() {
           ? await runtime.policies.native.read(summary.device, summary.origin.operation)
           : undefined
       const updated = n ? await runtime.policies.executions.read(id) : summary
-      return { summary: updated, n }
+      const s =
+        summary.origin.kind === 'software'
+          ? await runtime.software.runs.read(summary.origin.policy, summary.origin.task)
+          : undefined
+      const b =
+        summary.origin.kind === 'bootstrap'
+          ? await runtime.software.bootstrap.attempt(summary.origin.policy, summary.id)
+          : undefined
+      return { b, summary: s ? await runtime.policies.executions.read(id) : updated, n, s }
     },
     (v) => {
       execution.value = v.summary
       native.value = v.n
+      software.value = v.s
+      bootstrap.value = v.b
     },
   )
 }
@@ -48,6 +64,8 @@ watch(
   () => {
     execution.value = undefined
     native.value = undefined
+    software.value = undefined
+    bootstrap.value = undefined
     pending = undefined
     void load()
   },
@@ -84,6 +102,25 @@ onMounted(() => load())
         >{{ t('policies.workflows') }}</RouterLink
       ></template
     >
+    <RouterLink
+      v-if="execution?.origin.kind === 'update'"
+      :to="{
+        name: 'software-updates',
+        params: { tenant: runtime.tenant },
+        query: { id: execution.origin.ring },
+      }"
+      >{{ t('software.updates') }}</RouterLink
+    >
+    <template v-if="bootstrap && execution?.origin.kind === 'bootstrap'"
+      ><RouterLink
+        :to="{
+          name: 'software-bootstrap',
+          params: { tenant: runtime.tenant },
+          query: { id: execution.origin.policy },
+        }"
+        >{{ t('software.bootstrap') }}</RouterLink
+      ><BootstrapAttemptFacts :attempt="bootstrap"
+    /></template>
     <section v-if="execution?.origin.kind === 'policy' && execution.origin.output !== null">
       <h2>{{ t('policies.output') }}</h2>
       <pre>{{ JSON.stringify(execution.origin.output, null, 2) }}</pre>
@@ -139,6 +176,17 @@ onMounted(() => load())
         {{ t('policies.cancel') }}
       </button>
     </section>
+    <template v-if="software && execution?.origin.kind === 'software'">
+      <RouterLink
+        :to="{
+          name: 'software-deployments',
+          params: { tenant: runtime.tenant },
+          query: { id: execution.origin.policy },
+        }"
+        >{{ t('software.deployments') }}</RouterLink
+      >
+      <SoftwareRunFacts :run="software" />
+    </template>
     <button v-if="uncertain && pending" :disabled="busy" @click="pending()">
       {{ t('policies.replay') }}
     </button></PolicyFrame

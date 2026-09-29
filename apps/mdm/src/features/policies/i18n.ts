@@ -242,6 +242,9 @@ export const policiesZh = {
   sourceId: '来源标识',
   packageId: '软件包标识',
   fact: {
+    waiting_reboot: '等待重启',
+    user_action: '等待本地用户',
+    reboot: '等待重启',
     accepted: '已受理',
     blocked: '已阻塞',
     unknown: '未知',
@@ -572,6 +575,9 @@ export const policiesEn: typeof policiesZh = {
   sourceId: 'Source ID',
   packageId: 'Package ID',
   fact: {
+    waiting_reboot: 'Waiting for reboot',
+    user_action: 'Waiting for local user',
+    reboot: 'Waiting for reboot',
     accepted: 'Accepted',
     blocked: 'Blocked',
     unknown: 'Unknown',

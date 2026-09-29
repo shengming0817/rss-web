@@ -8,8 +8,10 @@ import { createPages, createReceipts, error, operation } from '../http'
 import { createAssetDemo } from './assets'
 import { createGroupDemo } from './groups'
 import { createEnrollmentDemo } from './enrollment'
+import type { DemoEvent } from '../policies/schedule'
 export function createDeviceDemo() {
   let devices = makeDevices()
+  let observedAt = Math.floor(Date.now() / 1000)
   const assets = createAssetDemo(() => devices),
     groups = createGroupDemo(() => devices),
     enrollments = createEnrollmentDemo(() => devices)
@@ -255,8 +257,59 @@ export function createDeviceDemo() {
     facts: () => structuredClone([...devices.values()]),
     publishedGroup: groups.published,
     batches: () => structuredClone([...batches.values()]),
+    tick(event: DemoEvent) {
+      if (!['enrollment_bind', 'agent_binding'].includes(event.kind) || event.at < observedAt)
+        return
+      observedAt = event.at
+      enrollments.tick(event)
+      if (event.kind !== 'agent_binding' || typeof event.active !== 'boolean' || !event.device)
+        return
+      const d = devices.get(event.device),
+        registrations =
+          d?.registrations.filter((r) => r.source === 'agent.builtin' && r.status === 'active') ??
+          []
+      if (
+        !d ||
+        registrations.length !== 1 ||
+        !d.architecture ||
+        !['windows', 'macos'].includes(d.summary.platform)
+      )
+        return
+      const r = registrations[0]!
+      d.agentBindings = [
+        ...(d.agentBindings ?? []).filter((b) => b.registration !== r.registrationId),
+        {
+          registration: r.registrationId,
+          generation: r.generation,
+          wireVersion: 3,
+          platform: d.summary.platform as 'windows' | 'macos',
+          architecture: d.architecture,
+          capabilities: event.active ? ['software.execute.v3'] : [],
+        },
+      ]
+      d.bootstrapBindings = [
+        ...(d.bootstrapBindings ?? []).filter((b) => b.registration !== r.registrationId),
+        ...(event.active
+          ? [
+              {
+                registration: r.registrationId,
+                generation: r.generation,
+                capability: 'mdm.enroll.v1' as const,
+              },
+            ]
+          : []),
+      ]
+      d.summary.revision++
+      d.history.push({
+        id: randomUUID(),
+        at: event.at,
+        event: 'agent_binding_observed',
+        operation: null,
+      })
+    },
     reset() {
       devices = makeDevices()
+      observedAt = Math.floor(Date.now() / 1000)
       assets.reset()
       groups.reset()
       enrollments.reset()

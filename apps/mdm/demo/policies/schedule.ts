@@ -1,50 +1,34 @@
+import { calendar, civil, local } from './calendar'
 import { validateSchedule } from '../../src/features/policies/clients/schedule'
 import { createHash } from 'node:crypto'
 import type { Schedule } from '../../src/features/policies/clients/schedule'
 // Demo-only injected events. No timers or browser-owned scheduling authority.
 export interface DemoEvent {
-  kind: 'clock' | 'registration' | 'check_in'
+  kind:
+    | 'clock'
+    | 'registration'
+    | 'check_in'
+    | 'software_start'
+    | 'software_detect'
+    | 'software_reboot'
+    | 'software_usage'
+    | 'software_request'
+    | 'bootstrap_continue'
+    | 'bootstrap_detect'
+    | 'enrollment_bind'
+    | 'agent_binding'
   at: number
   device?: string
+  resource?: string
+  active?: boolean
+  task?: string
+  item?: string
+  enrollment?: string
 }
 export interface Occurrence {
   coordinate: number
   availableAt: number
   windowEnd: number | null
-}
-function calendar(name: string) {
-  return new Intl.DateTimeFormat('en-GB', {
-    timeZone: name,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  })
-}
-function civil(at: number, formatter: Intl.DateTimeFormat) {
-  const p = Object.fromEntries(
-    formatter.formatToParts(new Date(at * 1000)).map((p) => [p.type, p.value]),
-  )
-  return {
-    date: Date.UTC(Number(p['year']), Number(p['month']) - 1, Number(p['day'])) / 1000,
-    minute: Number(p['hour']) * 60 + Number(p['minute']),
-  }
-}
-function local(date: number, minute: number, formatter: Intl.DateTimeFormat): number | null {
-  if (minute === 1440) {
-    date += 86400
-    minute = 0
-  }
-  const nominal = date + minute * 60
-  // Bounded demo conversion using the host IANA database. Search in UTC order:
-  // a gap has no match, and a fold chooses its earlier instant, as the backend does.
-  for (let at = nominal - 14 * 3600; at <= nominal + 14 * 3600; at += 60) {
-    const c = civil(at, formatter)
-    if (c.date === date && c.minute === minute) return at
-  }
-  return null
 }
 export function due(
   s: Schedule,

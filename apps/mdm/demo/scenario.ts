@@ -1,6 +1,10 @@
 /** MOCK_SOURCE: synthetic HTTP server, never part of a production entry. */
 import type { DemoEvent } from './policies/schedule'
-import { MDM_JSON_BODY_LIMIT, MDM_CONTENT_BODY_LIMIT, isMdmContentPath } from '@rss/api/mdm-limits'
+import {
+  MDM_JSON_BODY_LIMIT,
+  MDM_CONTENT_BODY_LIMIT,
+  isMdmContentRequest,
+} from '@rss/api/mdm-limits'
 export const TENANT = '11111111-1111-4111-8111-111111111111'
 const PRINCIPAL = '22222222-2222-4222-8222-222222222222'
 const REVIEWER = '33333333-3333-4333-8333-333333333333'
@@ -45,6 +49,7 @@ export function createScenario(
   const sources: Record<string, 'real' | 'mock'> = {
     devices: 'mock',
     policies: 'mock',
+    software: 'mock',
     security: 'mock',
     operations: 'mock',
   }
@@ -79,7 +84,7 @@ export function createScenario(
   ): Promise<Reply> {
     const parsed = new URL(url, 'http://demo.invalid')
     const path = parsed.pathname
-    const content = method === 'POST' && isMdmContentPath(path)
+    const content = isMdmContentRequest(method, path)
     if (content) {
       if (!(body instanceof ArrayBuffer) || body.byteLength === 0)
         return { status: 400, body: { code: 'malformed_request' } }
@@ -105,14 +110,51 @@ export function createScenario(
         const event = data['event'] as Partial<DemoEvent> | null
         if (
           !event ||
-          !['clock', 'registration', 'check_in'].includes(event.kind ?? '') ||
+          ![
+            'clock',
+            'registration',
+            'check_in',
+            'software_start',
+            'software_detect',
+            'software_reboot',
+            'software_usage',
+            'software_request',
+            'bootstrap_continue',
+            'bootstrap_detect',
+            'enrollment_bind',
+            'agent_binding',
+          ].includes(event.kind ?? '') ||
           typeof event.at !== 'number' ||
           !Number.isSafeInteger(event.at) ||
           event.at < 0 ||
           event.at > 8640000000000 ||
-          (event.kind !== 'clock' && (typeof event.device !== 'string' || !event.device))
+          (event.kind !== 'clock' && (typeof event.device !== 'string' || !event.device)) ||
+          (event.kind === 'software_detect' &&
+            (typeof event.task !== 'string' ||
+              !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+                event.task,
+              ))) ||
+          (event.kind === 'agent_binding' && typeof event.active !== 'boolean') ||
+          (event.kind === 'enrollment_bind' &&
+            (typeof event.enrollment !== 'string' ||
+              !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+                event.enrollment,
+              ))) ||
+          (event.kind === 'software_usage' &&
+            (typeof event.resource !== 'string' ||
+              !event.resource ||
+              event.resource.length > 256 ||
+              typeof event.active !== 'boolean')) ||
+          (event.kind === 'software_request' &&
+            (typeof event.item !== 'string' ||
+              !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(event.item)))
         )
           return { status: 400, body: { code: 'malformed_request' } }
+        if (
+          ['enrollment_bind', 'agent_binding'].includes(event.kind!) &&
+          sources['devices'] !== 'mock'
+        )
+          return { status: 409, body: { code: 'operation_conflict' } }
         advance(event as DemoEvent, active)
         return { status: 204 }
       }
@@ -125,8 +167,14 @@ export function createScenario(
           typeof data['module'] === 'string' &&
           data['module'] in sources &&
           (data['source'] === 'real' || data['source'] === 'mock')
-        )
+        ) {
           sources[data['module']] = data['source']
+          // Resource, Scope and execution endpoints are shared; source choices move together.
+          if (['policies', 'software'].includes(data['module'])) {
+            sources['policies'] = data['source']
+            sources['software'] = data['source']
+          }
+        }
       }
       return { status: 204 }
     }
@@ -204,15 +252,21 @@ export function createScenario(
       /^\/api\/(?:v2\/(?:scopes|policies)(?:\/|$)|v3\/(?:resources)(?:\/|$)|v2\/devices\/[^/]+\/operations(?:\/|$)|mdm-candidate\/v1\/(?:policies|executions)(?:\/|$))/.test(
         path,
       )
-    const module = policyPath
-      ? 'policies'
-      : /^\/api\/(?:v2\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v3\/(?:enrollments|devices))(?:\/|$)/.test(
-            path,
-          )
-        ? 'devices'
-        : path.startsWith('/api/mdm-candidate/v1/groups')
+    const softwarePath =
+      /^\/api\/(?:v3\/software(?:\/|$)|v1\/software-sources(?:\/|$)|v2\/policies(?:\/|$)|mdm-candidate\/v1\/software(?:\/|$))/.test(
+        path,
+      )
+    const module = softwarePath
+      ? 'software'
+      : policyPath
+        ? 'policies'
+        : /^\/api\/(?:v2\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v3\/(?:enrollments|devices))(?:\/|$)/.test(
+              path,
+            )
           ? 'devices'
-          : path.split('/')[4]
+          : path.startsWith('/api/mdm-candidate/v1/groups')
+            ? 'devices'
+            : path.split('/')[4]
     if (module && sources[module] === 'real')
       return { status: 503, body: { code: 'service_unavailable' } }
     for (const handler of handlers) {

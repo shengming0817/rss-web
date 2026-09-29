@@ -175,3 +175,77 @@ it('enforces the exact resource content byte budget without widening JSON routes
   await expect(upload(new ArrayBuffer(0))).rejects.toMatchObject({ cause: 'client' })
   expect(mock.history.post).toHaveLength(1)
 })
+
+it('allows the published software catalog and candidate console without widening Identity or admitting arbitrary APIs', async () => {
+  const instance = axios.create(),
+    mock = new AxiosMockAdapter(instance)
+  mock.onGet().reply(200, {})
+  const spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance)
+  const transport = createMdmTransport()
+  spy.mockRestore()
+  for (const path of [
+    '/api/v3/software/sources/private/revisions/1',
+    '/api/v3/software/resources/app/versions/1',
+    '/api/mdm-candidate/v1/software/catalog',
+  ])
+    await expect(
+      transport.request({ method: 'GET', path, successStatus: 200, decode: (v) => v }),
+    ).resolves.toEqual({})
+  await expect(
+    transport.request({
+      method: 'GET',
+      path: '/api/v3/software-admin/secrets',
+      successStatus: 200,
+      decode: (v) => v,
+    }),
+  ).rejects.toMatchObject({ cause: 'client' })
+  expect(mock.history.get).toHaveLength(3)
+})
+
+it('decodes a missing native software task through the transport as a definite not-found', async () => {
+  const instance = axios.create()
+  const mock = new AxiosMockAdapter(instance)
+  const spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance)
+  const transport = createMdmTransport()
+  spy.mockRestore()
+  mock.onGet('/api/v2/policies/policy/runs/missing').reply(404, { code: 'task_not_found' })
+  await expect(
+    transport.request({
+      method: 'GET',
+      path: '/api/v2/policies/policy/runs/missing',
+      successStatus: 200,
+      decode: (v) => v,
+    }),
+  ).rejects.toMatchObject({ cause: 'wire', status: 404, code: 'task_not_found' })
+  expect(decodeMdmError(409, { code: 'task_not_found' }).cause).toBe('protocol')
+})
+
+it('bounds raw upload chunks to PATCH sessions and decodes offset conflict without exposing raw fields', async () => {
+  const instance = axios.create(),
+    mock = new AxiosMockAdapter(instance)
+  const spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance)
+  const transport = createMdmTransport()
+  spy.mockRestore()
+  const path = '/api/v3/resources/app/uploads/session',
+    bytes = new Uint8Array([1, 2]).buffer
+  mock.onPatch(path).reply(409, { code: 'upload_offset_conflict', offset: 2 })
+  await expect(
+    transport.request({
+      method: 'PATCH',
+      path,
+      query: { offset: 0 },
+      body: bytes,
+      headers: { 'Content-Type': 'application/octet-stream' },
+      successStatus: 200,
+      decode: (v) => v,
+    }),
+  ).rejects.toMatchObject({ cause: 'wire', code: 'upload_offset_conflict', status: 409 })
+  expect(mock.history.patch[0]?.data).toBe(bytes)
+  expect(decodeMdmError(409, { code: 'upload_offset_conflict', offset: -1 }).cause).toBe('protocol')
+  expect(
+    decodeMdmError(409, { code: 'upload_offset_conflict', offset: 0, secret: 'hidden' }).cause,
+  ).toBe('protocol')
+  await expect(
+    transport.request({ method: 'POST', path, body: bytes, successStatus: 200, decode: (v) => v }),
+  ).rejects.toMatchObject({ cause: 'client' })
+})

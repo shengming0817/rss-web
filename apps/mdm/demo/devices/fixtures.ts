@@ -8,6 +8,20 @@ import type {
 } from '../../src/features/devices/clients/asset-model'
 import type { registration } from '../../src/features/devices/clients/enrollment'
 export interface DemoDevice {
+  bootstrapBindings?: {
+    registration: string
+    generation: number
+    capability: 'agent.bootstrap.v1' | 'mdm.enroll.v1'
+  }[]
+  updateBindings?: { registration: string; generation: number; capabilities: string[] }[]
+  agentBindings?: {
+    registration: string
+    generation: number
+    wireVersion: number
+    platform: 'windows' | 'macos'
+    architecture: 'x86_64' | 'aarch64'
+    capabilities: string[]
+  }[]
   architecture?: 'x86_64' | 'aarch64'
   summary: DeviceSummary
   inventory: Inventory
@@ -156,6 +170,28 @@ export function makeDevices(): Map<string, DemoDevice> {
           architecture: platform === 'windows' ? 'x86_64' : 'aarch64',
           inventory: { device: id, channels, fields, quality: [], revisions },
           registrations,
+          bootstrapBindings: registrations.map((r) => ({
+            registration: r.registrationId,
+            generation: r.generation,
+            capability: r.source === 'agent.builtin' ? 'mdm.enroll.v1' : 'agent.bootstrap.v1',
+          })),
+          updateBindings: registrations
+            .filter((r) => r.source !== 'agent.builtin')
+            .map((r) => ({
+              registration: r.registrationId,
+              generation: r.generation,
+              capabilities: index === 4 ? [] : ['os.update.v1'],
+            })),
+          agentBindings: registrations
+            .filter((r) => r.source === 'agent.builtin')
+            .map((r) => ({
+              registration: r.registrationId,
+              generation: r.generation,
+              wireVersion: 3,
+              platform,
+              architecture: platform === 'windows' ? 'x86_64' : 'aarch64',
+              capabilities: index === 5 ? [] : ['software.execute.v3'],
+            })),
           ...(platform === 'windows' && channels.includes('mdm')
             ? { nativeWindows: { osVersion: '10.0.26100', edition: 48 } }
             : {}),
