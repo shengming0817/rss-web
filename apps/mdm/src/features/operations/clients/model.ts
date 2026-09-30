@@ -13,6 +13,7 @@ export const auditActions = [
   'request_revoked',
   'request_expired',
   'request_decision_denied',
+  'request_consumed',
   'risk_assessed',
   'security_dispatched',
   'security_result',

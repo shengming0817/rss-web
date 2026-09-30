@@ -95,6 +95,7 @@ it('rejects mismatched approval targets, self decisions and receipts from a diff
       state: 'pending',
       decision: null,
       revocation: null,
+      consumption: null,
     },
     envelope = { contract: 'security-v1', tenantId: id, source: 'mock', asOf: 100 }
   let reply: unknown = { ...envelope, request: value }

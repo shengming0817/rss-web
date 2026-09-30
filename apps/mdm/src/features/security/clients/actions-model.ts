@@ -2,7 +2,7 @@ import { closed, count, nullable, uuid } from '../../../services/decode'
 import { executionSummary } from '../../policies/clients/executions'
 import { positive } from './compliance-model'
 import { requestTarget } from './requests-model'
-import { securitySource } from './risks-model'
+import { securitySource } from './source'
 export function securityAction(value: unknown) {
   const v = closed(value, [
       'id',
@@ -18,7 +18,8 @@ export function securityAction(value: unknown) {
       'summary',
     ]),
     target = requestTarget(v['target'])
-  if (target.kind !== 'risk_remediation') throw new Error('Not a device action')
+  if (target.kind !== 'risk_remediation' && target.kind !== 'material_operation')
+    throw new Error('Not a device action')
   const result = {
     id: uuid(v['id']),
     revision: positive(v['revision']),
@@ -43,7 +44,12 @@ export function securityAction(value: unknown) {
     result.summary.origin.kind !== 'security' ||
     result.summary.origin.request !== result.request ||
     result.summary.attempt !== result.id ||
-    result.source.source !== 'agent.builtin'
+    result.source.source !==
+      (target.kind === 'risk_remediation' || target.material === 'laps'
+        ? 'agent.builtin'
+        : target.material === 'bitlocker'
+          ? 'mdm.windows'
+          : 'mdm.apple')
   )
     throw new Error('Wrong security execution')
   return result

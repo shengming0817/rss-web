@@ -1,5 +1,5 @@
 import type { DemoDevice } from '../devices/fixtures'
-import type { SecuritySource } from '../../src/features/security/clients/risks-model'
+import type { SecuritySource } from '../../src/features/security/clients/source'
 export function hasSecuritySource(device: DemoDevice | undefined, source: SecuritySource) {
   return !!device?.registrations.some(
     (r) =>

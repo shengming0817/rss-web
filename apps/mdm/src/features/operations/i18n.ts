@@ -43,6 +43,7 @@ export const operationsZh = {
     observed: '已记录证据',
   },
   actionName: {
+    request_consumed: '一次性查阅授权已消费',
     risk_assessed: '风险评估',
     security_dispatched: '派发安全操作',
     security_result: '安全操作结果',
@@ -115,6 +116,7 @@ export const operationsEn: typeof operationsZh = {
     observed: 'Evidence recorded',
   },
   actionName: {
+    request_consumed: 'Consume one-time disclosure authorization',
     risk_assessed: 'Assess risk',
     security_dispatched: 'Dispatch security action',
     security_result: 'Security action result',

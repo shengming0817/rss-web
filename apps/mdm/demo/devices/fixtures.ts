@@ -171,13 +171,22 @@ export function makeDevices(): Map<string, DemoDevice> {
           architecture: platform === 'windows' ? 'x86_64' : 'aarch64',
           inventory: { device: id, channels, fields, quality: [], revisions },
           registrations,
-          securityBindings: registrations
-            .filter((r) => r.source === 'agent.builtin')
-            .map((r) => ({
-              registration: r.registrationId,
-              generation: r.generation,
-              capabilities: index === 5 ? [] : ['security.remediate.v1'],
-            })),
+          securityBindings: registrations.map((r) => ({
+            registration: r.registrationId,
+            generation: r.generation,
+            capabilities:
+              index === 5
+                ? []
+                : r.source === 'agent.builtin'
+                  ? ['security.remediate.v1', 'material.laps.rotate.v1']
+                  : r.source === 'mdm.windows'
+                    ? ['material.bitlocker.rotate.v1']
+                    : [
+                        'material.filevault.rotate.v1',
+                        'material.bootstrap_token.reescrow.v1',
+                        'material.recovery_lock.rotate.v1',
+                      ],
+          })),
           bootstrapBindings: registrations.map((r) => ({
             registration: r.registrationId,
             generation: r.generation,

@@ -8,6 +8,12 @@ export const securityFeature: MdmFeature = {
   },
   routes: [
     {
+      path: '/tenants/:tenant/security/materials',
+      name: 'security-materials',
+      component: () => import('./views/MaterialsView.vue'),
+      meta: { protected: true },
+    },
+    {
       path: '/tenants/:tenant/security/risks',
       name: 'security-risks',
       component: () => import('./views/RisksView.vue'),

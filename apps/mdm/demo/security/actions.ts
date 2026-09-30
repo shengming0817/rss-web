@@ -4,6 +4,8 @@ import type { createDeviceDemo } from '../devices/state'
 import type { createOperationsDemo } from '../operations/state'
 import type { createSecurityRequests } from './requests'
 import type { createRisksDemo } from './risks'
+import type { createMaterialsDemo } from './materials'
+import type { MaterialKind } from '../../src/features/security/clients/materials-model'
 import { closed, identifier, uuid } from '../../src/services/decode'
 import {
   securityAction,
@@ -17,14 +19,25 @@ export function createSecurityActions(
   devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts'>,
   requests: Pick<ReturnType<typeof createSecurityRequests>, 'rows'>,
   risks: ReturnType<typeof createRisksDemo>,
+  materials: ReturnType<typeof createMaterialsDemo>,
   operations: ReturnType<typeof createOperationsDemo>,
 ) {
   const actions = new Map<string, SecurityAction>(),
     receipts = createReceipts(),
     pages = createSecurityPages(now)
   const currentRequest = (id: string) => requests.rows().find((r) => r.id === id)
-  const source = (device: string) =>
-    remediationSource(devices.facts().find((d) => d.summary.id === device))
+  const source = (target: SecurityAction['target']) =>
+    target.kind === 'risk_remediation'
+      ? remediationSource(devices.facts().find((d) => d.summary.id === target.device))
+      : materials.source(target.device, target.material)
+  const valid = (target: SecurityAction['target']) =>
+    target.kind === 'risk_remediation' ? risks.valid(target) : materials.valid(target)
+  const targetKey = (target: SecurityAction['target']) =>
+    JSON.stringify(
+      target.kind === 'risk_remediation'
+        ? [target.kind, target.device, target.risk]
+        : [target.kind, target.device, target.material, target.volume],
+    )
   function audit(
     value: SecurityAction,
     action: 'security_dispatched' | 'security_result' | 'security_detected',
@@ -51,7 +64,7 @@ export function createSecurityActions(
       if (['failed', 'cancelled'].includes(s.execution) || s.effect === 'verified_present') continue
       const r = currentRequest(a.request),
         queued = s.execution === 'not_started',
-        changed = JSON.stringify(source(a.target.device)) !== JSON.stringify(a.source),
+        changed = JSON.stringify(source(a.target)) !== JSON.stringify(a.source),
         reason = changed
           ? 'source_registration_changed'
           : queued &&
@@ -59,7 +72,7 @@ export function createSecurityActions(
                 r.state !== 'approved' ||
                 now() < r.validFrom ||
                 now() >= a.deadline ||
-                !risks.valid(a.target))
+                !valid(a.target))
             ? 'authorization_changed'
             : null
       if (!reason || s.nativeCode === reason) continue
@@ -119,19 +132,19 @@ export function createSecurityActions(
           r.state !== 'approved' ||
           r.validFrom > now() ||
           r.validUntil <= now() ||
-          r.target.kind !== 'risk_remediation' ||
-          !risks.valid(r.target)
+          (r.target.kind !== 'risk_remediation' && r.target.kind !== 'material_operation') ||
+          !valid(r.target)
         )
           return error('operation_conflict')
-        const identity = source(r.target.device)
+        const target = r.target,
+          identity = source(target)
         if (!identity || scenario === 'unsupported') return error('action_not_supported', 501)
         if (scenario === 'offline') return error('service_unavailable', 503)
         if (
           [...actions.values()].some(
             (a) =>
               a.request === id ||
-              (a.target.device === r.target.device &&
-                a.target.risk === r.target.risk &&
+              (targetKey(a.target) === targetKey(target) &&
                 !['failed', 'cancelled'].includes(a.summary.execution) &&
                 a.summary.effect !== 'verified_present'),
           )
@@ -176,14 +189,18 @@ export function createSecurityActions(
     handle,
     tick(event: DemoEvent, scenario: Scenario) {
       settle()
-      if (!['security_result', 'security_detect'].includes(event.kind) || !event.task) return
+      if (
+        !['security_result', 'security_detect', 'material_detect'].includes(event.kind) ||
+        !event.task
+      )
+        return
       const a = actions.get(event.task)
       if (
         !a ||
         a.target.device !== event.device ||
         event.at <= a.createdAt ||
         event.at > now() ||
-        JSON.stringify(source(a.target.device)) !== JSON.stringify(a.source) ||
+        JSON.stringify(source(a.target)) !== JSON.stringify(a.source) ||
         scenario === 'offline'
       )
         return
@@ -206,13 +223,17 @@ export function createSecurityActions(
           s.execution === 'unknown' ? 'unknown' : s.execution === 'failed' ? 'failed' : 'observed',
         )
       } else if (
-        event.kind === 'security_detect' &&
+        (a.target.kind === 'risk_remediation'
+          ? event.kind === 'security_detect'
+          : event.kind === 'material_detect') &&
         a.resultAt !== null &&
         event.at > a.resultAt &&
         a.detectedAt === null &&
         ['succeeded', 'unknown'].includes(s.execution) &&
         !['partial', 'unknown', 'unsupported'].includes(scenario) &&
-        risks.observe(a.target, a.source, event.at)
+        (a.target.kind === 'risk_remediation'
+          ? risks.observe(a.target, a.source, event.at)
+          : materials.observe(a.target, a.source, event.at))
       ) {
         s.effect = 'verified_present'
         a.detectedAt = event.at
@@ -224,6 +245,16 @@ export function createSecurityActions(
     executions() {
       settle()
       return structuredClone([...actions.values()].map((a) => a.summary))
+    },
+    blocksDisclosure(device: string, kind: MaterialKind) {
+      return [...actions.values()].some(
+        (a) =>
+          a.target.kind === 'material_operation' &&
+          a.target.device === device &&
+          a.target.material === kind &&
+          !['failed', 'cancelled'].includes(a.summary.execution) &&
+          a.summary.effect !== 'verified_present',
+      )
     },
     reset() {
       actions.clear()

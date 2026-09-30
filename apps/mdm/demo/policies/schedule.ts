@@ -19,6 +19,7 @@ export interface DemoEvent {
     | 'agent_binding'
     | 'security_result'
     | 'security_detect'
+    | 'material_detect'
   at: number
   device?: string
   resource?: string

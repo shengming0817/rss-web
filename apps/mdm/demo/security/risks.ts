@@ -7,8 +7,8 @@ import {
   risk,
   riskAssessment,
   type RiskAssessment,
-  type SecuritySource,
 } from '../../src/features/security/clients/risks-model'
+import type { SecuritySource } from '../../src/features/security/clients/source'
 import type { SecurityRequestTarget } from '../../src/features/security/clients/requests-model'
 import { createReceipts, error, operation } from '../http'
 import { candidate, createSecurityPages, queryKeys } from './http'

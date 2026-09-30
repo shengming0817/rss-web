@@ -71,7 +71,9 @@ async function simulate() {
           ...(eventKind.value === 'software_usage'
             ? { resource: eventResource.value, active: eventActive.value }
             : {}),
-          ...(['software_detect', 'security_result', 'security_detect'].includes(eventKind.value)
+          ...(['software_detect', 'security_result', 'security_detect', 'material_detect'].includes(
+            eventKind.value,
+          )
             ? { task: eventTask.value }
             : {}),
           ...(eventKind.value === 'software_request' ? { item: eventItem.value } : {}),
@@ -233,6 +235,13 @@ async function apply(reset: boolean) {
               : 'Synthetic security command result (effect unverified)'
           }}
         </option>
+        <option value="material_detect">
+          {{
+            locale === 'zh-CN'
+              ? '模拟新材料独立托管观测'
+              : 'Independent synthetic material escrow observation'
+          }}
+        </option>
         <option value="security_detect">
           {{
             locale === 'zh-CN'
@@ -250,7 +259,11 @@ async function apply(reset: boolean) {
       }}</label>
       <input v-if="eventKind !== 'clock'" id="demo-event-device" v-model="eventDevice" />
       <template
-        v-if="['software_detect', 'security_result', 'security_detect'].includes(eventKind)"
+        v-if="
+          ['software_detect', 'security_result', 'security_detect', 'material_detect'].includes(
+            eventKind,
+          )
+        "
       >
         <label for="demo-event-task">{{
           locale === 'zh-CN' ? '原任务 ID（运行详情）' : 'Original task ID (run detail)'
