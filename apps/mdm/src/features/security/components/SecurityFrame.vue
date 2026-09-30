@@ -4,7 +4,7 @@ import { useMdm } from '../../../context'
 defineProps<{ title: string; busy?: boolean; failure?: string | null }>()
 const { t } = useI18n(),
   runtime = useMdm()
-const links = ['rules', 'compliance']
+const links = ['rules', 'compliance', 'baselines', 'requests']
 </script>
 <template>
   <section class="device-console" :aria-busy="busy">

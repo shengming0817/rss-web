@@ -6,6 +6,13 @@ export const auditActions = [
   'alert_opened',
   'alert_resolved',
   'alert_acknowledged',
+  'baseline_saved',
+  'request_created',
+  'request_approved',
+  'request_denied',
+  'request_revoked',
+  'request_expired',
+  'request_decision_denied',
 ] as const
 export const alertStates = ['open', 'resolved'] as const
 export function candidate(value: unknown, tenant: string, demo: boolean, keys: string[]) {
@@ -19,7 +26,7 @@ export function candidate(value: unknown, tenant: string, demo: boolean, keys: s
 export function reference(value: unknown) {
   const v = closed(value, ['kind', 'id', 'device', 'revision'])
   return {
-    kind: enumeration(v['kind'], ['compliance_rule'] as const),
+    kind: enumeration(v['kind'], ['compliance_rule', 'baseline', 'security_request'] as const),
     id: uuid(v['id']),
     device: nullable(v['device'], identifier),
     revision: nullable(v['revision'], count),
@@ -84,6 +91,8 @@ export function alert(value: unknown) {
     operation: nullable(v['operation'], uuid),
   }
   if (
+    result.target.kind !== 'compliance_rule' ||
+    result.target.device === null ||
     !result.revision ||
     !result.evidence.version ||
     (result.state === 'resolved') !== (result.resolvedAt !== null) ||

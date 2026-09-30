@@ -20,10 +20,10 @@ import { createSelfServiceDemo } from '../software/self-service'
 import { createSecurityDemo } from '../security/state'
 import { createOperationsDemo } from '../operations/state'
 export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo>) {
-  const operations = createOperationsDemo(),
-    security = createSecurityDemo(devices, operations)
+  const operations = createOperationsDemo()
   const scopes = createScopeDemo(devices),
     native = createNativeDemo(devices)
+  const security = createSecurityDemo(devices, operations, scopes)
   const resources = createResourceDemo(
     (id, version): boolean =>
       policies.references(id, version) ||
@@ -185,6 +185,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       if (deviceWrite || groupPublished) policies.reconcile(scenario)
     },
     tick(event: DemoEvent, scenario: Scenario = 'normal') {
+      security.tick(event)
       if (!event.kind.startsWith('software_') && !event.kind.startsWith('bootstrap_')) {
         policies.reconcile(scenario, event)
         workflows.tick(event)

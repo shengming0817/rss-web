@@ -22,6 +22,8 @@ const value = {
 }
 it('rejects contradictory resolution and raw sensitive audit metadata', () => {
   expect(alert(value).state).toBe('open')
+  expect(() => alert({ ...value, target: { ...target, kind: 'security_request' } })).toThrow()
+  expect(() => alert({ ...value, target: { ...target, device: null } })).toThrow()
   expect(() => alert({ ...value, state: 'resolved' })).toThrow()
   expect(() => alert({ ...value, state: 'resolved', resolvedAt: 101 })).toThrow()
   expect(() => alert({ ...value, acknowledgment: { actor: other, at: 100 } })).toThrow()

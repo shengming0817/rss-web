@@ -8,6 +8,18 @@ export const securityFeature: MdmFeature = {
   },
   routes: [
     {
+      path: '/tenants/:tenant/security/baselines',
+      name: 'security-baselines',
+      component: () => import('./views/BaselinesView.vue'),
+      meta: { protected: true },
+    },
+    {
+      path: '/tenants/:tenant/security/requests',
+      name: 'security-requests',
+      component: () => import('./views/RequestsView.vue'),
+      meta: { protected: true },
+    },
+    {
       path: '/tenants/:tenant/security/compliance',
       name: 'security-compliance',
       component: () => import('./views/ComplianceView.vue'),
