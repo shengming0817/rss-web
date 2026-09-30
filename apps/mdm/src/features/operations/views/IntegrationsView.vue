@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { utc } from '../presentation'
-import { onMounted, ref, toRaw } from 'vue'
+import { onMounted, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { useMdm } from '../../../context'
@@ -30,7 +30,8 @@ const page = ref<Awaited<ReturnType<typeof client.list>>>(),
   revision = ref(0),
   attempts = ref<Awaited<ReturnType<typeof client.deliveries>>>(),
   test = ref<Delivery>(),
-  conflict = ref(false)
+  conflict = ref(false),
+  missing = ref(false)
 let pending: (() => Promise<boolean>) | undefined
 async function load(cursor?: string) {
   await run(
@@ -40,9 +41,21 @@ async function load(cursor?: string) {
 }
 async function open(target: string, replace = true) {
   if (uncertain.value && target !== id.value) return
+  if (replace && !uncertain.value) {
+    selected.value = undefined
+    draft.value = fresh()
+    id.value = target
+    revision.value = 0
+    attempts.value = undefined
+    test.value = undefined
+    pending = undefined
+    missing.value = true
+    conflict.value = false
+  }
   await run(
     () => client.read(target),
     (v) => {
+      missing.value = false
       selected.value = v
       if (replace && !uncertain.value) {
         draft.value = structuredClone(v.definition)
@@ -57,6 +70,7 @@ async function open(target: string, replace = true) {
 }
 function create() {
   if (busy.value || uncertain.value) return
+  missing.value = false
   selected.value = undefined
   draft.value = fresh()
   id.value = crypto.randomUUID()
@@ -67,10 +81,16 @@ function create() {
   pending = undefined
 }
 function save() {
-  if (busy.value || uncertain.value || conflict.value) return
+  if (busy.value || uncertain.value || conflict.value || missing.value) return
   try {
     const target = id.value,
-      body = operation(connectorDefinition(structuredClone(toRaw(draft.value))), revision.value)
+      body = operation(
+        connectorDefinition({
+          ...structuredClone(toRaw(draft.value)),
+          credentialRef: draft.value.credentialRef === '' ? null : draft.value.credentialRef,
+        }),
+        revision.value,
+      )
     pending = async () => {
       const saved = await runWrite(
         () => client.save(target, body),
@@ -127,9 +147,14 @@ function adopt() {
   revision.value = selected.value.revision
   conflict.value = false
 }
+function routeTarget() {
+  create()
+  if (typeof route.query['id'] === 'string') void open(route.query['id'])
+}
+watch(() => route.fullPath, routeTarget, { flush: 'post' })
 onMounted(async () => {
   await load()
-  if (typeof route.query['id'] === 'string') await open(route.query['id'])
+  routeTarget()
 })
 </script>
 <template>
@@ -150,7 +175,7 @@ onMounted(async () => {
       {{ t('devices.next') }}
     </button>
     <form @submit.prevent="save()">
-      <fieldset :disabled="busy || uncertain">
+      <fieldset :disabled="busy || uncertain || missing">
         <legend>{{ id }} / {{ revision }}</legend>
         <label
           >{{ t('operations.name')

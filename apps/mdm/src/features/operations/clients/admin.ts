@@ -59,11 +59,14 @@ export function createAdminClients(transport: HttpTransport, tenant: string, dem
       },
     })
   }
-  function write<T extends { operation: string | null }>(
+  function write<
+    T extends { operation: string | null; revision: number; id?: string; connector?: string },
+  >(
     path: string,
     key: string,
     body: Operation<unknown>,
     decode: (v: unknown) => T,
+    binding: { id?: string; connector?: string },
     status: 200 | 202 = 200,
   ) {
     return transport.request({
@@ -73,7 +76,13 @@ export function createAdminClients(transport: HttpTransport, tenant: string, dem
       successStatus: status,
       decode: (v) => {
         const value = decode(candidate(v, tenant, demo, [key])[key])
-        if (value.operation !== body.operationId) throw new Error('Wrong management receipt')
+        if (
+          value.operation !== body.operationId ||
+          value.revision !== (status === 202 ? 1 : body.expectedRevision + 1) ||
+          (binding.id !== undefined && value.id !== binding.id) ||
+          (binding.connector !== undefined && value.connector !== binding.connector)
+        )
+          throw new Error('Wrong management receipt')
         return value
       },
     })
@@ -89,13 +98,22 @@ export function createAdminClients(transport: HttpTransport, tenant: string, dem
       read: (id: string) =>
         read(`/api/mdm-candidate/v1/operations/reports/${uuid(id)}`, 'job', report),
       run: (body: Operation<{ from: number; until: number }>) =>
-        write('/api/mdm-candidate/v1/operations/reports', 'job', body, report, 202),
+        write(
+          '/api/mdm-candidate/v1/operations/reports',
+          'job',
+          body,
+          report,
+          { id: body.operationId },
+          202,
+        ),
     },
     alertRules: {
       list: (cursor?: string) =>
         page('/api/mdm-candidate/v1/operations/alert-rules', alertRule, { cursor }),
       save: (id: string, body: Operation<AlertRule['definition']>) =>
-        write(`/api/mdm-candidate/v1/operations/alert-rules/${uuid(id)}`, 'rule', body, alertRule),
+        write(`/api/mdm-candidate/v1/operations/alert-rules/${uuid(id)}`, 'rule', body, alertRule, {
+          id,
+        }),
     },
     connectors: {
       attempt: (id: string, attempt: string) =>
@@ -118,6 +136,7 @@ export function createAdminClients(transport: HttpTransport, tenant: string, dem
           'connector',
           body,
           connector,
+          { id },
         ),
       test: (id: string, body: Operation<Record<string, never>>) =>
         write(
@@ -125,6 +144,7 @@ export function createAdminClients(transport: HttpTransport, tenant: string, dem
           'delivery',
           body,
           delivery,
+          { id: body.operationId, connector: id },
           202,
         ),
       deliver: (id: string, body: Operation<Record<string, never>>) =>
@@ -133,6 +153,7 @@ export function createAdminClients(transport: HttpTransport, tenant: string, dem
           'delivery',
           body,
           delivery,
+          { id: body.operationId, connector: id },
           202,
         ),
       deliveries: (id: string, cursor?: string) =>
@@ -145,19 +166,27 @@ export function createAdminClients(transport: HttpTransport, tenant: string, dem
           'delivery',
           body,
           delivery,
+          { id: body.operationId, connector: id },
           202,
         ),
     },
     settings: {
       read: () => read('/api/mdm-candidate/v1/operations/settings', 'configuration', configuration),
       save: (body: Operation<ReturnType<typeof configuration>['values']>) =>
-        write('/api/mdm-candidate/v1/operations/settings', 'configuration', body, configuration),
+        write(
+          '/api/mdm-candidate/v1/operations/settings',
+          'configuration',
+          body,
+          configuration,
+          {},
+        ),
       activate: (body: Operation<Record<string, never>>) =>
         write(
           '/api/mdm-candidate/v1/operations/settings/activate',
           'configuration',
           body,
           configuration,
+          {},
         ),
       diagnostics: () =>
         read('/api/mdm-candidate/v1/operations/diagnostics', 'diagnostics', diagnostics),
@@ -168,7 +197,14 @@ export function createAdminClients(transport: HttpTransport, tenant: string, dem
       read: (id: string) =>
         read(`/api/mdm-candidate/v1/operations/maintenance/${uuid(id)}`, 'job', maintenance),
       start: (body: Operation<Maintenance['input']>) =>
-        write('/api/mdm-candidate/v1/operations/maintenance', 'job', body, maintenance, 202),
+        write(
+          '/api/mdm-candidate/v1/operations/maintenance',
+          'job',
+          body,
+          maintenance,
+          { id: body.operationId },
+          202,
+        ),
       change: (
         id: string,
         action: 'pause' | 'resume' | 'cancel',
@@ -179,6 +215,7 @@ export function createAdminClients(transport: HttpTransport, tenant: string, dem
           'job',
           body,
           maintenance,
+          { id },
         ),
     },
   }

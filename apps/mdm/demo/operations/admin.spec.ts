@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import { createAdminDemo } from './admin'
 import { createOperationsDemo } from './state'
 import { createAuthorizationDemo } from './authorization'
-import { createScenario, TENANT } from '../scenario'
+import { createScenario, TENANT, type Scenario } from '../scenario'
 import { operation } from '../../src/services/useOperation'
 async function fixture() {
   let time = 100
@@ -25,7 +25,7 @@ async function fixture() {
     },
     (e) => {
       time = e.at
-      admin.tick()
+      admin.tick('normal')
       return true
     },
   )
@@ -43,9 +43,9 @@ async function fixture() {
     post,
     admin,
     operations,
-    advance: () => {
+    advance: (scenario: Scenario = 'normal') => {
       time += 100
-      admin.tick()
+      admin.tick(scenario)
     },
   }
 }
@@ -171,9 +171,14 @@ it('closes the administrative ticket without resolving source evidence and reope
     rule = crypto.randomUUID()
   await f.post(
     `/api/mdm-candidate/v1/operations/alert-rules/${rule}`,
-    operation({ name: 'Pending agents', signal: 'agent_health', threshold: 0, enabled: true }),
+    operation({
+      name: 'Projection backlog',
+      signal: 'projection_backlog',
+      threshold: 0,
+      enabled: true,
+    }),
   )
-  f.advance()
+  f.advance('partial')
   const alertPage = (await f.server.handle('GET', '/api/mdm-candidate/v1/operations/alerts'))
     .body as { items: { id: string; revision: number }[] }
   const alert = alertPage.items[0]!
@@ -193,7 +198,7 @@ it('closes the administrative ticket without resolving source evidence and reope
     (await f.server.handle('GET', `/api/mdm-candidate/v1/operations/alerts/${alert.id}/closure`))
       .body,
   ).toMatchObject({ closure: { note: 'Tracked by support' } })
-  f.advance()
+  f.advance('partial')
   expect(
     (await f.server.handle('GET', `/api/mdm-candidate/v1/operations/alerts/${alert.id}/closure`))
       .body,
@@ -224,6 +229,79 @@ it('reads terminal connection tests without treating a passed test as business d
   expect((await f.server.handle('GET', `${root}/attempts/${test.delivery.id}`)).body).toMatchObject(
     { delivery: { kind: 'test', state: 'passed' } },
   )
+  expect((await f.server.handle('GET', root)).body).toMatchObject({
+    connector: { health: 'disconnected' },
+  })
+})
+
+it('uses report references for completed report audit events', async () => {
+  const f = await fixture(),
+    body = operation({ from: 0, until: 100 })
+  await f.post('/api/mdm-candidate/v1/operations/reports', body)
+  f.advance()
+  const page = (await f.server.handle('GET', '/api/mdm-candidate/v1/operations/audit')).body as {
+    items: { action: string; target: { kind: string; id: string } }[]
+  }
+  expect(page.items.find((v) => v.action === 'job_observed')?.target).toMatchObject({
+    kind: 'report',
+    id: body.operationId,
+  })
+})
+it('derives alerts from the same diagnostics and retains unknown agent evidence', async () => {
+  const f = await fixture()
+  const projection = crypto.randomUUID(),
+    agent = crypto.randomUUID()
+  for (const [id, signal] of [
+    [projection, 'projection_backlog'],
+    [agent, 'agent_health'],
+  ])
+    await f.post(
+      `/api/mdm-candidate/v1/operations/alert-rules/${id}`,
+      operation({ name: signal, signal, threshold: 0, enabled: true }),
+    )
+  f.advance('normal')
+  f.server.set('partial')
+  expect(
+    (await f.server.handle('GET', '/api/mdm-candidate/v1/operations/diagnostics')).body,
+  ).toMatchObject({
+    diagnostics: { projectionBacklog: 12, agents: [{ health: 'offline' }, { health: 'offline' }] },
+  })
+  f.advance('partial')
+  const page = async () =>
+    (await f.server.handle('GET', '/api/mdm-candidate/v1/operations/alerts')).body as {
+      items: { state: string; target: { id: string }; evidence: { state: string } }[]
+    }
+  expect((await page()).items.find((v) => v.target.id === projection)?.state).toBe('open')
+  f.server.set('normal')
+  f.advance('normal')
+  expect((await page()).items.find((v) => v.target.id === projection)?.state).toBe('resolved')
+  expect((await page()).items.find((v) => v.target.id === agent)).toMatchObject({
+    state: 'open',
+    evidence: { state: 'unknown' },
+  })
+})
+it('keeps disabled health while queued deliveries finish and restores known delivery facts on enable', async () => {
+  const f = await fixture(),
+    id = crypto.randomUUID(),
+    root = `/api/mdm-candidate/v1/integrations/connectors/${id}`
+  const definition = {
+    name: 'Desk',
+    kind: 'itsm',
+    endpoint: 'https://desk.example.test',
+    credentialRef: null,
+    enabled: true,
+  }
+  await f.post(root, operation(definition))
+  await f.post(`${root}/deliver`, operation({}, 1))
+  await f.post(root, operation({ ...definition, enabled: false }, 1))
+  f.advance()
+  expect((await f.server.handle('GET', root)).body).toMatchObject({
+    connector: { health: 'disabled', definition: { enabled: false } },
+  })
+  expect((await f.server.handle('GET', `${root}/deliveries`)).body).toMatchObject({
+    items: [{ state: 'failed' }],
+  })
+  await f.post(root, operation(definition, 2))
   expect((await f.server.handle('GET', root)).body).toMatchObject({
     connector: { health: 'disconnected' },
   })

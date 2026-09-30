@@ -65,7 +65,11 @@ function save(activate = false) {
         })()
       : (() => {
           const body = operation(
-            configurationValues(structuredClone(toRaw(draft.value))),
+            configurationValues({
+              ...structuredClone(toRaw(draft.value)),
+              certificateRef: draft.value.certificateRef === '' ? null : draft.value.certificateRef,
+              apnsRef: draft.value.apnsRef === '' ? null : draft.value.apnsRef,
+            }),
             revision.value,
           )
           return () => client.settings.save(body)

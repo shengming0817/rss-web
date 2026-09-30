@@ -310,8 +310,16 @@ onMounted(async () => {
         <button type="button" @click="addGrant()">{{ t('operations.addGrant') }}</button>
         <ul>
           <li v-for="(g, index) in grants" :key="index">
-            {{ g.operation }} / {{ g.scope.kind
-            }}<button type="button" @click="grants.splice(index, 1)">
+            {{ g.operation }} / {{ g.scope.kind }}
+            <RouterLink
+              v-if="g.scope.kind === 'device'"
+              :to="{
+                name: 'device-detail',
+                params: { tenant: runtime.tenant, device: g.scope.id },
+              }"
+              >{{ g.scope.id }}</RouterLink
+            >
+            <button type="button" @click="grants.splice(index, 1)">
               {{ t('operations.removeMember') }}
             </button>
           </li>
@@ -364,7 +372,14 @@ onMounted(async () => {
     </button>
     <ul>
       <li v-for="(g, index) in effective?.grants" :key="index">
-        {{ g.operation }} / {{ g.scope.kind }} · {{ g.ruleId }} / {{ g.ruleRevision }} ·
+        {{ g.operation }} / {{ g.scope.kind }}
+        <RouterLink
+          v-if="g.scope.kind === 'device'"
+          :to="{ name: 'device-detail', params: { tenant: runtime.tenant, device: g.scope.id } }"
+          >{{ g.scope.id }}</RouterLink
+        >
+        · {{ g.ruleId }} / {{ g.ruleRevision }} · {{ g.subject.kind }} /
+        {{ g.subject.kind === 'user' ? g.subject.user.principalId : g.subject.id }} ·
         {{ g.observation?.snapshotId ?? '—' }} · {{ g.observation?.expiresAt ?? '—' }}
       </li>
     </ul>

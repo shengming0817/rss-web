@@ -86,17 +86,41 @@ export function createAdminDemo(
       outcome: 'accepted',
     })
   }
-  function recordJob(job: Report | Maintenance) {
+  function recordJob(job: Report | Maintenance, kind: 'report' | 'job') {
     operations.record({
       at: now(),
       actor: null,
       action: 'job_observed',
-      target: { kind: 'job', id: job.id, device: null, revision: job.revision },
+      target: { kind, id: job.id, device: null, revision: job.revision },
       operation: job.operation,
       outcome: job.phase === 'failed' ? 'failed' : 'observed',
     })
   }
-  function tick() {
+  function diagnosticFacts(actor: string, scenario: Scenario) {
+    return {
+      projectionBacklog: scenario === 'partial' ? 12 : 0,
+      agents: devices(actor).map((v) => ({
+        device: v.id,
+        platform: v.platform === 'macos' ? ('macos' as const) : ('windows' as const),
+        version: v.status === 'pending' ? null : '1.0.0',
+        health: scenario === 'partial' ? ('offline' as const) : ('unknown' as const),
+      })),
+    }
+  }
+  function connectorHealth(id: string): Connector['health'] {
+    const completed = [...deliveries.values()]
+      .reverse()
+      .filter((v) => v.connector === id && v.kind === 'event' && v.state !== 'queued')
+      .sort((a, b) => b.at - a.at || b.attempt - a.attempt)[0]
+    return !completed
+      ? 'unknown'
+      : completed.state === 'failed'
+        ? 'disconnected'
+        : completed.state === 'unknown'
+          ? 'backlog'
+          : 'healthy'
+  }
+  function tick(scenario: Scenario) {
     if (configuration.state === 'restart_required') {
       configuration.activeVersion = configuration.savedVersion
       configuration.state = 'active'
@@ -129,7 +153,7 @@ export function createAdminDemo(
           report.phase === 'completed'
             ? stats(report.range.from, report.range.until, p.scenario, reportOwners.get(id)!)
             : null
-        recordJob(report)
+        recordJob(report, 'report')
       }
       if (delivery) {
         delivery.revision++
@@ -145,12 +169,9 @@ export function createAdminDemo(
               : null
         const connector = connectors.get(delivery.connector)
         if (connector && delivery.kind === 'event')
-          connector.health =
-            delivery.state === 'failed'
-              ? 'disconnected'
-              : delivery.state === 'unknown'
-                ? 'backlog'
-                : 'healthy'
+          connector.health = connector.definition.enabled
+            ? connectorHealth(connector.id)
+            : 'disabled'
         operations.record({
           at: now(),
           actor: null,
@@ -186,17 +207,21 @@ export function createAdminDemo(
             job.input.method === 'delta' && job.phase === 'failed' ? 'rebuild_failed' : null
         }
         if (job.input.kind === 'backup' && job.phase === 'completed') backups.add(job.input.target)
-        recordJob(job)
+        recordJob(job, 'job')
       }
     }
+    const facts = diagnosticFacts('22222222-2222-4222-8222-222222222222', scenario)
     for (const rule of rules.values()) {
       const value =
         rule.definition.signal === 'connector_failure'
-          ? [...connectors.values()].filter((c) => c.health === 'disconnected').length
+          ? [...connectors.values()].some((c) => c.health === 'backlog')
+            ? null
+            : [...connectors.values()].filter((c) => c.health === 'disconnected').length
           : rule.definition.signal === 'projection_backlog'
-            ? pending.size
-            : devices('22222222-2222-4222-8222-222222222222').filter((d) => d.status === 'pending')
-                .length
+            ? facts.projectionBacklog
+            : facts.agents.some((d) => d.health === 'unknown')
+              ? null
+              : facts.agents.filter((d) => d.health === 'offline').length
       operations.observeAlert({
         code: rule.definition.signal,
         severity: 'medium',
@@ -207,8 +232,7 @@ export function createAdminDemo(
           at: now(),
           state: !rule.definition.enabled
             ? 'cleared'
-            : rule.definition.signal === 'connector_failure' &&
-                [...connectors.values()].some((c) => c.health === 'backlog')
+            : value === null
               ? 'unknown'
               : value > rule.definition.threshold
                 ? 'active'
@@ -278,13 +302,7 @@ export function createAdminDemo(
                 }),
               ),
               taskBacklog: scenario === 'partial' ? null : pending.size,
-              projectionBacklog: scenario === 'partial' ? 12 : 0,
-              agents: devices(request.actor.principalId).map((v) => ({
-                device: v.id,
-                platform: v.platform === 'macos' ? 'macos' : 'windows',
-                version: v.status === 'pending' ? null : '1.0.0',
-                health: scenario === 'partial' ? 'offline' : 'unknown',
-              })),
+              ...diagnosticFacts(request.actor.principalId, scenario),
               content: scenario === 'partial' ? 'backlog' : 'unknown',
               deployment: 'demo-deployment-1',
               backups: [...backups],
@@ -486,11 +504,7 @@ export function createAdminDemo(
             revision: op.expectedRevision + 1,
             operation: op.operationId,
             definition,
-            health: definition.enabled
-              ? connectors.get(id)?.definition.enabled
-                ? connectors.get(id)!.health
-                : 'unknown'
-              : 'disabled',
+            health: definition.enabled ? connectorHealth(id) : 'disabled',
           }
           connectors.set(id, connector)
           record(request, id, 'connector', op.operationId, connector.revision)

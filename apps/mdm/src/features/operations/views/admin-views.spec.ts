@@ -64,7 +64,7 @@ async function fixture(component: Component) {
     attachTo: document.body,
     global: {
       plugins: [router, mdmI18n()],
-      stubs: { RouterLink: true },
+      stubs: { RouterLink: { template: '<a><slot /></a>' } },
       provide: {
         [mdmKey as symbol]: {
           tenant: TENANT,
@@ -464,5 +464,159 @@ it('refreshes a connection test to its explicit terminal fact', async () => {
   await f.wrapper.get('[data-testid="refresh-attempt"]').trigger('click')
   await flushPromises()
   expect(f.wrapper.text()).toContain('passed')
+  f.wrapper.unmount()
+})
+
+it('clears optional public references to null through the forms', async () => {
+  const f = await fixture(IntegrationsView)
+  await f.wrapper.get('[data-testid="connector-name"]').setValue('Desk')
+  await f.wrapper.get('[data-testid="connector-endpoint"]').setValue('https://desk.example.test')
+  const credential = f.wrapper
+    .findAll('label')
+    .find((v) => v.text() === '凭据引用')!
+    .get('input')
+  await credential.setValue('binding-1')
+  await f.wrapper.get('[data-testid="save-connector"]').trigger('click')
+  await flushPromises()
+  await credential.setValue('')
+  await f.wrapper.get('[data-testid="save-connector"]').trigger('click')
+  await flushPromises()
+  expect((await f.clients.admin.connectors.list()).items[0]!.definition.credentialRef).toBeNull()
+  f.wrapper.unmount()
+  const settings = await fixture(SettingsView)
+  await settings.wrapper
+    .findAll('label')
+    .find((v) => v.text() === '证书引用')!
+    .get('input')
+    .setValue('')
+  await settings.wrapper
+    .findAll('label')
+    .find((v) => v.text() === 'APNs 凭据引用')!
+    .get('input')
+    .setValue('')
+  await settings.wrapper.get('[data-testid="save-configuration"]').trigger('click')
+  await flushPromises()
+  expect((await settings.clients.admin.settings.read()).values).toMatchObject({
+    certificateRef: null,
+    apnsRef: null,
+  })
+  settings.wrapper.unmount()
+})
+it('shows the exact device scope in both draft grants and effective authority', async () => {
+  const f = await fixture(AuthorizationView),
+    effective = await f.clients.authorization.effective(),
+    id = crypto.randomUUID()
+  await f.clients.authorization.changeRule(id, {
+    operationId: crypto.randomUUID(),
+    expectedRevision: 0,
+    value: {
+      subject: {
+        kind: 'user',
+        user: {
+          instanceId: effective.instanceId,
+          tenantId: TENANT,
+          principalId: effective.principalId,
+        },
+      },
+      grants: [{ operation: 'inventory_read', scope: { kind: 'device', id: 'device-exact-99' } }],
+    },
+  })
+  await f.router.push({ path: '/', query: { id } })
+  await flushPromises()
+  await f.wrapper
+    .findAll('button')
+    .filter((v) => v.text() === '重新读取')
+    .at(-1)!
+    .trigger('click')
+  await flushPromises()
+  expect(
+    f.wrapper
+      .findAll('li')
+      .filter(
+        (v) => v.text().includes('inventory_read / device') && v.text().includes('device-exact-99'),
+      ),
+  ).toHaveLength(2)
+  f.wrapper.unmount()
+})
+it('switches connector targets and clears unknown receipts, drafts and failed targets', async () => {
+  const f = await fixture(IntegrationsView),
+    a = crypto.randomUUID(),
+    b = crypto.randomUUID()
+  for (const [id, name] of [
+    [a, 'Connector A'],
+    [b, 'Connector B'],
+  ])
+    await f.clients.admin.connectors.save(id!, {
+      operationId: crypto.randomUUID(),
+      expectedRevision: 0,
+      input: {
+        name: name!,
+        kind: 'itsm',
+        endpoint: 'https://desk.example.test',
+        credentialRef: null,
+        enabled: true,
+      },
+    })
+  await f.router.push({ path: '/', query: { id: a } })
+  await flushPromises()
+  expect((f.wrapper.get('[data-testid="connector-name"]').element as HTMLInputElement).value).toBe(
+    'Connector A',
+  )
+  f.server.set('unknown')
+  await f.wrapper.get('[data-testid="save-connector"]').trigger('click')
+  await flushPromises()
+  expect(f.wrapper.find('[data-testid="replay-write"]').exists()).toBe(true)
+  f.server.set('normal')
+  await f.router.push({ path: '/', query: { id: b } })
+  await flushPromises()
+  expect((f.wrapper.get('[data-testid="connector-name"]').element as HTMLInputElement).value).toBe(
+    'Connector B',
+  )
+  expect(f.wrapper.find('[data-testid="replay-write"]').exists()).toBe(false)
+  await f.router.push({ path: '/', query: { id: crypto.randomUUID() } })
+  await flushPromises()
+  expect((f.wrapper.get('[data-testid="connector-name"]').element as HTMLInputElement).value).toBe(
+    '',
+  )
+  expect(f.wrapper.get('[data-testid="save-connector"]').element.matches(':disabled')).toBe(true)
+  f.wrapper.unmount()
+})
+
+it('does not apply a connector read after its route target has changed', async () => {
+  const f = await fixture(IntegrationsView),
+    a = crypto.randomUUID(),
+    b = crypto.randomUUID()
+  for (const [id, name] of [
+    [a, 'Slow A'],
+    [b, 'Current B'],
+  ])
+    await f.clients.admin.connectors.save(id!, {
+      operationId: crypto.randomUUID(),
+      expectedRevision: 0,
+      input: {
+        name: name!,
+        kind: 'itsm',
+        endpoint: 'https://desk.example.test',
+        credentialRef: null,
+        enabled: true,
+      },
+    })
+  let release!: () => void
+  const delayed = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  f.inspect((o) => (o.method === 'GET' && o.path.endsWith(a) ? delayed : undefined))
+  await f.router.push({ path: '/', query: { id: a } })
+  await flushPromises()
+  await f.router.push({ path: '/', query: { id: b } })
+  await flushPromises()
+  expect((f.wrapper.get('[data-testid="connector-name"]').element as HTMLInputElement).value).toBe(
+    'Current B',
+  )
+  release()
+  await flushPromises()
+  expect((f.wrapper.get('[data-testid="connector-name"]').element as HTMLInputElement).value).toBe(
+    'Current B',
+  )
   f.wrapper.unmount()
 })

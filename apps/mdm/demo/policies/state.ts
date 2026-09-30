@@ -108,7 +108,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
   }
   const handle: DomainHandler = (request, scenario) => {
     try {
-      const denied = authorization.guard(request)
+      const denied = authorization.guard(request, devices.batches())
       if (denied) return denied
       security.settle()
       for (const owner of [
@@ -216,7 +216,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       updates.tick(event, scenario)
       software.tick(event, scenario)
       selfService.tick(event)
-      admin.tick()
+      admin.tick(scenario)
       return true
     },
     reset() {
