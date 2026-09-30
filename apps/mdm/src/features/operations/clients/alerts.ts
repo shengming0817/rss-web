@@ -1,7 +1,27 @@
 import type { HttpTransport } from '@rss/api/mdm'
 import type { Operation } from '../../../services/useOperation'
-import { array, nullable, string, unique, uuid } from '../../../services/decode'
+import {
+  array,
+  closed,
+  count,
+  identifier,
+  nullable,
+  string,
+  unique,
+  uuid,
+} from '../../../services/decode'
 import { alert, candidate, type Alert } from './model'
+export function closure(value: unknown) {
+  const v = closed(value, ['alert', 'revision', 'operation', 'actor', 'at', 'note'])
+  return {
+    alert: uuid(v['alert']),
+    revision: count(v['revision']),
+    operation: uuid(v['operation']),
+    actor: uuid(v['actor']),
+    at: count(v['at']),
+    note: identifier(v['note']),
+  }
+}
 export interface AlertFilter {
   cursor?: string
   device?: string
@@ -14,6 +34,36 @@ export function createAlertsClient(transport: HttpTransport, tenant: string, dem
     return result
   }
   return {
+    closure: (id: string) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/mdm-candidate/v1/operations/alerts/{id}/closure',
+        pathParams: { id },
+        successStatus: 200,
+        decode: (value) => {
+          const c = nullable(candidate(value, tenant, demo, ['closure'])['closure'], closure)
+          if (c && c.alert !== id) throw new Error('Wrong closure')
+          return c
+        },
+      }),
+    close: (id: string, body: Operation<{ note: string }>) =>
+      transport.request({
+        method: 'POST',
+        path: '/api/mdm-candidate/v1/operations/alerts/{id}/close',
+        pathParams: { id },
+        body,
+        successStatus: 200,
+        decode: (value) => {
+          const c = closure(candidate(value, tenant, demo, ['closure'])['closure'])
+          if (
+            c.alert !== id ||
+            c.operation !== body.operationId ||
+            c.revision !== body.expectedRevision + 1
+          )
+            throw new Error('Wrong close receipt')
+          return c
+        },
+      }),
     list: (filter: AlertFilter = {}) =>
       transport.request({
         method: 'GET',

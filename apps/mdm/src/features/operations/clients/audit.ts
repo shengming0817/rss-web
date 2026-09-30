@@ -2,6 +2,11 @@ import type { HttpTransport } from '@rss/api/mdm'
 import { array, nullable, string, unique, uuid } from '../../../services/decode'
 import { auditEntry, candidate, type AuditEntry } from './model'
 export interface AuditFilter {
+  actor?: string
+  object?: string
+  operation?: string
+  outcome?: AuditEntry['outcome']
+  stream?: AuditEntry['stream']
   cursor?: string
   device?: string
   action?: AuditEntry['action']

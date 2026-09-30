@@ -16,6 +16,11 @@ const { t } = useI18n(),
   { run, busy, failure } = useOperation()
 const page = ref<Awaited<ReturnType<typeof client.list>>>(),
   selected = ref<AuditEntry>(),
+  actor = ref(''),
+  object = ref(''),
+  operationId = ref(''),
+  outcome = ref<AuditEntry['outcome'] | ''>(''),
+  stream = ref<AuditEntry['stream'] | ''>(''),
   device = ref(''),
   action = ref<AuditEntry['action'] | ''>(''),
   bounded = ref(false),
@@ -30,6 +35,11 @@ function load(cursor?: string) {
     cursor && applied.value
       ? { ...applied.value }
       : {
+          ...(actor.value ? { actor: actor.value } : {}),
+          ...(object.value ? { object: object.value } : {}),
+          ...(operationId.value ? { operation: operationId.value } : {}),
+          ...(outcome.value ? { outcome: outcome.value } : {}),
+          ...(stream.value ? { stream: stream.value } : {}),
           ...(device.value ? { device: device.value } : {}),
           ...(action.value ? { action: action.value } : {}),
           ...(bounded.value ? { from: from.value, until: until.value } : {}),
@@ -60,6 +70,11 @@ function routeChanged() {
   selected.value = undefined
   applied.value = undefined
   device.value = typeof route.query['device'] === 'string' ? route.query['device'] : ''
+  actor.value = ''
+  object.value = ''
+  operationId.value = ''
+  outcome.value = ''
+  stream.value = ''
   action.value = ''
   bounded.value = false
   if (typeof route.query['id'] === 'string') open(route.query['id'])
@@ -70,9 +85,31 @@ onMounted(routeChanged)
 </script>
 <template>
   <OperationsFrame :title="t('operations.audit')" :busy="busy" :failure="failure">
-    <p>{{ t('operations.auditHint') }}</p>
+    <p>{{ t('operations.auditHint') }} · {{ t('operations.auditScope') }}</p>
     <form data-testid="audit-filter" @submit.prevent="load()">
       <fieldset :disabled="busy">
+        <label>{{ t('operations.actor') }}<input v-model="actor" /></label
+        ><label>{{ t('operations.object') }}<input v-model="object" /></label
+        ><label>{{ t('operations.operation') }}<input v-model="operationId" /></label
+        ><label
+          >{{ t('operations.outcome')
+          }}<select v-model="outcome">
+            <option value="">{{ t('devices.all') }}</option>
+            <option
+              v-for="value in ['accepted', 'denied', 'failed', 'unknown', 'observed']"
+              :key="value"
+            >
+              {{ value }}
+            </option>
+          </select></label
+        ><label
+          >{{ t('operations.stream')
+          }}<select v-model="stream">
+            <option value="">{{ t('devices.all') }}</option>
+            <option>mdm_business</option>
+            <option>identity_security</option>
+          </select></label
+        >
         <label>{{ t('policies.device') }}<input v-model="device" /></label>
         <label
           >{{ t('operations.action')
@@ -131,6 +168,10 @@ onMounted(routeChanged)
     </button>
     <section v-if="selected" data-testid="audit-detail">
       <h2>{{ t('operations.auditDetail') }} · {{ selected.id }}</h2>
+      <p>
+        {{ selected.stream }} / {{ selected.stage }} / HTTP {{ selected.status ?? '—' }} ·
+        {{ t('operations.auditScope') }}
+      </p>
       <dl>
         <dt>{{ t('operations.at') }}</dt>
         <dd>{{ at(selected.at) }}</dd>

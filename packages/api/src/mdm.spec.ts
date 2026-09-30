@@ -281,3 +281,26 @@ it('bounds raw upload chunks to PATCH sessions and decodes offset conflict witho
     transport.request({ method: 'POST', path, body: bytes, successStatus: 200, decode: (v) => v }),
   ).rejects.toMatchObject({ cause: 'client' })
 })
+
+it('dispatches exact authorization JSON at 2 MiB while rejecting overflow and other methods', async () => {
+  const instance = axios.create(),
+    mock = new AxiosMockAdapter(instance)
+  mock.onAny().reply(200, {})
+  vi.spyOn(axios, 'create').mockReturnValueOnce(instance)
+  const transport = createMdmTransport()
+  vi.restoreAllMocks()
+  const request = (method: 'PUT' | 'POST', length: number) =>
+    transport.request({
+      method,
+      path: '/api/v1/authorization/user-groups/{id}',
+      pathParams: { id: '11111111-1111-4111-8111-111111111111' },
+      body: { value: 'a'.repeat(length) },
+      successStatus: 200,
+      decode: (v) => v,
+    })
+  await expect(request('PUT', 2 * 1024 * 1024 - 12)).resolves.toEqual({})
+  await expect(request('PUT', 2 * 1024 * 1024 - 11)).rejects.toMatchObject({ status: 413 })
+  await expect(request('POST', 20000)).rejects.toMatchObject({ status: 413 })
+  expect(mock.history.put).toHaveLength(1)
+  expect(mock.history.post).toHaveLength(0)
+})

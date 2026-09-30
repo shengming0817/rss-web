@@ -1,9 +1,5 @@
 import type { Plugin } from 'vite'
-import {
-  MDM_JSON_BODY_LIMIT,
-  MDM_CONTENT_BODY_LIMIT,
-  isMdmContentRequest,
-} from '@rss/api/mdm-limits'
+import { mdmJsonBodyLimit, MDM_CONTENT_BODY_LIMIT, isMdmContentRequest } from '@rss/api/mdm-limits'
 import { createScenario } from './scenario'
 import { createDeviceDemo } from './devices/state'
 import { createAutomationDemo } from './policies/state'
@@ -49,16 +45,17 @@ export function demoPlugin(): Plugin {
           return
         }
         try {
-          const content = isMdmContentRequest(
-            req.method ?? 'GET',
-            new URL(req.url, 'http://demo.invalid').pathname,
-          )
+          const path = new URL(req.url, 'http://demo.invalid').pathname
+          const content = isMdmContentRequest(req.method ?? 'GET', path)
           const chunks: Buffer[] = []
           let size = 0
           for await (const chunk of req) {
             const bytes = Buffer.from(chunk as Uint8Array)
             size += bytes.length
-            if (size > (content ? MDM_CONTENT_BODY_LIMIT : MDM_JSON_BODY_LIMIT)) {
+            if (
+              size >
+              (content ? MDM_CONTENT_BODY_LIMIT : mdmJsonBodyLimit(req.method ?? 'GET', path))
+            ) {
               res.writeHead(413).end()
               return
             }

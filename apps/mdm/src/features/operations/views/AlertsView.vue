@@ -14,6 +14,8 @@ const { t } = useI18n(),
   client = runtime.operations.alerts,
   { run, runWrite, busy, failure, uncertain } = useOperation()
 const page = ref<Awaited<ReturnType<typeof client.list>>>(),
+  closure = ref<Awaited<ReturnType<typeof client.closure>>>(),
+  note = ref(''),
   selected = ref<Alert>(),
   device = ref(''),
   state = ref<Alert['state'] | ''>(''),
@@ -42,12 +44,16 @@ function load(cursor?: string) {
     },
   )
 }
-function open(id: string) {
+async function open(id: string) {
   if (busy.value || (uncertain.value && selected.value?.id !== id)) return
   if (!uncertain.value) selected.value = undefined
-  void run(
+  await run(
     () => client.read(id),
     (v) => (selected.value = v),
+  )
+  await run(
+    () => client.closure(id),
+    (v) => (closure.value = v),
   )
 }
 function acknowledge() {
@@ -71,9 +77,25 @@ function acknowledge() {
   }
   void pending()
 }
+function close() {
+  if (!selected.value || busy.value || uncertain.value || !note.value) return
+  const id = selected.value.id,
+    body = operation({ note: note.value }, selected.value.revision)
+  pending = async () => {
+    const closed = await runWrite(
+      () => client.close(id, body),
+      (v) => (closure.value = v),
+    )
+    if (closed) await open(id)
+    return closed
+  }
+  void pending()
+}
 function routeChanged() {
   page.value = undefined
   selected.value = undefined
+  closure.value = undefined
+  note.value = ''
   pending = undefined
   applied.value = undefined
   device.value = typeof route.query['device'] === 'string' ? route.query['device'] : ''
@@ -162,6 +184,17 @@ onMounted(routeChanged)
       >
         {{ t('operations.acknowledge') }}
       </button>
+      <p>{{ t('operations.closeHint') }}</p>
+      <p v-if="closure">
+        {{ t('operations.ticketClosed') }} · {{ closure.actor }} · {{ at(closure.at) }} ·
+        {{ closure.note }}
+      </p>
+      <form v-if="selected.state === 'open' && !closure" @submit.prevent="close()">
+        <fieldset :disabled="busy || uncertain">
+          <label>{{ t('operations.closeReason') }}<input v-model="note" required /></label
+          ><button data-testid="close-alert">{{ t('operations.closeTicket') }}</button>
+        </fieldset>
+      </form>
       <button v-if="uncertain && pending" :disabled="busy" @click="pending()">
         {{ t('policies.replay') }}
       </button>
