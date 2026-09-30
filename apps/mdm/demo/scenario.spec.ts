@@ -145,6 +145,26 @@ it('never falls back to mock for published policy or native-operation paths', as
   }
 })
 
+it('classifies native compliance under security before the generic device path', async () => {
+  const scenario = createScenario([() => ({ status: 200 })])
+  await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+    login: 'demo',
+    password: 'demo',
+  })
+  await control(scenario, { scenario: 'normal', module: 'security', source: 'real' })
+  for (const path of [
+    '/api/v2/compliance-rules',
+    '/api/v2/compliance-rules/id/tasks/task',
+    '/api/v2/devices/device-01/compliance',
+    '/api/v2/devices/device-01/compliance/history',
+  ])
+    expect((await scenario.handle('GET', path)).status, path).toBe(503)
+  expect((await scenario.handle('GET', '/api/v2/devices/device-01/inventory')).status).toBe(200)
+  await control(scenario, { scenario: 'normal', module: 'security', source: 'mock' })
+  await control(scenario, { scenario: 'normal', module: 'devices', source: 'real' })
+  expect((await scenario.handle('GET', '/api/v2/devices/device-01/compliance')).status).toBe(200)
+})
+
 it('accepts bounded raw resource bytes while retaining the JSON request budget elsewhere', async () => {
   const scenario = createScenario([
     (request) => ({

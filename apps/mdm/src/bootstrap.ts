@@ -21,6 +21,7 @@ import { features } from './features'
 import { createDeviceClients } from './features/devices/client'
 import { createPolicyClients } from './features/policies/client'
 import { createSoftwareClients } from './features/software/client'
+import { createSecurityClients } from './features/security/client'
 import App from './App.vue'
 export function startMdm(
   transport: HttpTransport,
@@ -58,6 +59,7 @@ export function startMdm(
     devices: createDeviceClients(business, tenant, demo),
     policies: createPolicyClients(business, tenant, demo),
     software: createSoftwareClients(business, tenant, demo),
+    security: createSecurityClients(business),
     tenant,
     demo,
   })

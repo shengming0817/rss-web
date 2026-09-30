@@ -17,7 +17,9 @@ import { softwareExecution } from '../../src/features/software/clients/execution
 import { createBootstrapDemo } from '../software/bootstrap'
 import { createUpdatesDemo } from '../software/updates'
 import { createSelfServiceDemo } from '../software/self-service'
+import { createSecurityDemo } from '../security/state'
 export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo>) {
+  const security = createSecurityDemo(devices)
   const scopes = createScopeDemo(devices),
     native = createNativeDemo(devices)
   const resources = createResourceDemo(
@@ -92,6 +94,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
   const handle: DomainHandler = (request, scenario) => {
     try {
       for (const owner of [
+        security,
         scopes,
         resources,
         native,
@@ -158,6 +161,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
     }
   }
   return {
+    security,
     resources,
     scopes,
     admission,
@@ -188,6 +192,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
     },
     reset() {
       for (const owner of [
+        security,
         scopes,
         resources,
         native,

@@ -256,17 +256,21 @@ export function createScenario(
       /^\/api\/(?:v3\/software(?:\/|$)|v1\/software-sources(?:\/|$)|v2\/policies(?:\/|$)|mdm-candidate\/v1\/software(?:\/|$))/.test(
         path,
       )
-    const module = softwarePath
-      ? 'software'
-      : policyPath
-        ? 'policies'
-        : /^\/api\/(?:v2\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v3\/(?:enrollments|devices))(?:\/|$)/.test(
-              path,
-            )
-          ? 'devices'
-          : path.startsWith('/api/mdm-candidate/v1/groups')
+    const securityPath =
+      /^\/api\/v2\/(?:compliance-rules(?:\/|$)|devices\/[^/]+\/compliance(?:\/|$))/.test(path)
+    const module = securityPath
+      ? 'security'
+      : softwarePath
+        ? 'software'
+        : policyPath
+          ? 'policies'
+          : /^\/api\/(?:v2\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v3\/(?:enrollments|devices))(?:\/|$)/.test(
+                path,
+              )
             ? 'devices'
-            : path.split('/')[4]
+            : path.startsWith('/api/mdm-candidate/v1/groups')
+              ? 'devices'
+              : path.split('/')[4]
     if (module && sources[module] === 'real')
       return { status: 503, body: { code: 'service_unavailable' } }
     for (const handler of handlers) {
