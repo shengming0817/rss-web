@@ -139,7 +139,8 @@ onMounted(routeChanged)
       <template
         v-if="
           selected.request.target.kind === 'risk_remediation' ||
-          selected.request.target.kind === 'material_operation'
+          selected.request.target.kind === 'material_operation' ||
+          selected.request.target.kind === 'certificate_deploy'
         "
       >
         <p>{{ t('security.dispatchHint') }}</p>

@@ -5,6 +5,7 @@ import type { createOperationsDemo } from '../operations/state'
 import type { createSecurityRequests } from './requests'
 import type { createRisksDemo } from './risks'
 import type { createMaterialsDemo } from './materials'
+import type { createCertificatesDemo } from './certificates'
 import type { MaterialKind } from '../../src/features/security/clients/materials-model'
 import { closed, identifier, uuid } from '../../src/services/decode'
 import {
@@ -20,6 +21,7 @@ export function createSecurityActions(
   requests: Pick<ReturnType<typeof createSecurityRequests>, 'rows'>,
   risks: ReturnType<typeof createRisksDemo>,
   materials: ReturnType<typeof createMaterialsDemo>,
+  certificates: ReturnType<typeof createCertificatesDemo>,
   operations: ReturnType<typeof createOperationsDemo>,
 ) {
   const actions = new Map<string, SecurityAction>(),
@@ -29,15 +31,25 @@ export function createSecurityActions(
   const source = (target: SecurityAction['target']) =>
     target.kind === 'risk_remediation'
       ? remediationSource(devices.facts().find((d) => d.summary.id === target.device))
-      : materials.source(target.device, target.material)
+      : target.kind === 'certificate_deploy'
+        ? certificates.source(target.device)
+        : materials.source(target.device, target.material)
   const valid = (target: SecurityAction['target']) =>
-    target.kind === 'risk_remediation' ? risks.valid(target) : materials.valid(target)
+    target.kind === 'risk_remediation'
+      ? risks.valid(target)
+      : target.kind === 'certificate_deploy'
+        ? certificates.valid(target)
+        : materials.valid(target)
   const targetKey = (target: SecurityAction['target']) =>
     JSON.stringify(
       target.kind === 'risk_remediation'
         ? [target.kind, target.device, target.risk]
-        : [target.kind, target.device, target.material, target.volume],
+        : target.kind === 'certificate_deploy'
+          ? [target.kind, target.device, target.certificate]
+          : [target.kind, target.device, target.material, target.volume],
     )
+  const targetDetection = (kind: 'material_operation' | 'certificate_deploy') =>
+    kind === 'certificate_deploy' ? 'certificate_detect' : 'material_detect'
   function audit(
     value: SecurityAction,
     action: 'security_dispatched' | 'security_result' | 'security_detected',
@@ -132,7 +144,9 @@ export function createSecurityActions(
           r.state !== 'approved' ||
           r.validFrom > now() ||
           r.validUntil <= now() ||
-          (r.target.kind !== 'risk_remediation' && r.target.kind !== 'material_operation') ||
+          (r.target.kind !== 'risk_remediation' &&
+            r.target.kind !== 'material_operation' &&
+            r.target.kind !== 'certificate_deploy') ||
           !valid(r.target)
         )
           return error('operation_conflict')
@@ -190,7 +204,9 @@ export function createSecurityActions(
     tick(event: DemoEvent, scenario: Scenario) {
       settle()
       if (
-        !['security_result', 'security_detect', 'material_detect'].includes(event.kind) ||
+        !['security_result', 'security_detect', 'material_detect', 'certificate_detect'].includes(
+          event.kind,
+        ) ||
         !event.task
       )
         return
@@ -225,7 +241,7 @@ export function createSecurityActions(
       } else if (
         (a.target.kind === 'risk_remediation'
           ? event.kind === 'security_detect'
-          : event.kind === 'material_detect') &&
+          : targetDetection(a.target.kind) === event.kind) &&
         a.resultAt !== null &&
         event.at > a.resultAt &&
         a.detectedAt === null &&
@@ -233,7 +249,9 @@ export function createSecurityActions(
         !['partial', 'unknown', 'unsupported'].includes(scenario) &&
         (a.target.kind === 'risk_remediation'
           ? risks.observe(a.target, a.source, event.at)
-          : materials.observe(a.target, a.source, event.at))
+          : a.target.kind === 'certificate_deploy'
+            ? certificates.observe(a.target, a.source, event.at)
+            : materials.observe(a.target, a.source, event.at))
       ) {
         s.effect = 'verified_present'
         a.detectedAt = event.at

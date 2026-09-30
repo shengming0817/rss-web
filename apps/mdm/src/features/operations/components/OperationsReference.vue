@@ -12,11 +12,13 @@ const link = computed(() => ({
       ? 'security-rules'
       : props.target.kind === 'baseline'
         ? 'security-baselines'
-        : props.target.kind === 'risk'
-          ? 'security-risks'
-          : props.target.kind === 'security_action'
-            ? 'security-actions'
-            : 'security-requests',
+        : props.target.kind === 'certificate'
+          ? 'security-certificates'
+          : props.target.kind === 'risk'
+            ? 'security-risks'
+            : props.target.kind === 'security_action'
+              ? 'security-actions'
+              : 'security-requests',
   params: { tenant: runtime.tenant },
   query:
     props.target.kind === 'compliance_rule'

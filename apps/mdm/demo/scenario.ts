@@ -126,15 +126,22 @@ export function createScenario(
             'security_result',
             'security_detect',
             'material_detect',
+            'certificate_issued',
+            'certificate_detect',
           ].includes(event.kind ?? '') ||
           typeof event.at !== 'number' ||
           !Number.isSafeInteger(event.at) ||
           event.at < 0 ||
           event.at > 8640000000000 ||
           (event.kind !== 'clock' && (typeof event.device !== 'string' || !event.device)) ||
-          (['software_detect', 'security_result', 'security_detect', 'material_detect'].includes(
-            event.kind ?? '',
-          ) &&
+          ([
+            'software_detect',
+            'security_result',
+            'security_detect',
+            'material_detect',
+            'certificate_issued',
+            'certificate_detect',
+          ].includes(event.kind ?? '') &&
             (typeof event.task !== 'string' ||
               !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
                 event.task,

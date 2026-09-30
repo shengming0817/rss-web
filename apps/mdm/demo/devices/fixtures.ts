@@ -180,8 +180,9 @@ export function makeDevices(): Map<string, DemoDevice> {
                 : r.source === 'agent.builtin'
                   ? ['security.remediate.v1', 'material.laps.rotate.v1']
                   : r.source === 'mdm.windows'
-                    ? ['material.bitlocker.rotate.v1']
+                    ? ['material.bitlocker.rotate.v1', 'certificate.deploy.v1']
                     : [
+                        'certificate.deploy.v1',
                         'material.filevault.rotate.v1',
                         'material.bootstrap_token.reescrow.v1',
                         'material.recovery_lock.rotate.v1',

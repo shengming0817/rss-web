@@ -20,6 +20,8 @@ export interface DemoEvent {
     | 'security_result'
     | 'security_detect'
     | 'material_detect'
+    | 'certificate_issued'
+    | 'certificate_detect'
   at: number
   device?: string
   resource?: string

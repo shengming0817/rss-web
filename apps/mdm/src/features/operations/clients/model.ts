@@ -18,6 +18,9 @@ export const auditActions = [
   'security_dispatched',
   'security_result',
   'security_detected',
+  'certificate_requested',
+  'certificate_issued',
+  'certificate_observed',
 ] as const
 export const alertStates = ['open', 'resolved'] as const
 export function candidate(value: unknown, tenant: string, demo: boolean, keys: string[]) {
@@ -37,6 +40,7 @@ export function reference(value: unknown) {
       'security_request',
       'risk',
       'security_action',
+      'certificate',
     ] as const),
     id: uuid(v['id']),
     device: nullable(v['device'], identifier),
@@ -82,7 +86,11 @@ export function alert(value: unknown) {
   const result = {
     id: uuid(v['id']),
     revision: count(v['revision']),
-    code: enumeration(v['code'], ['compliance_noncompliant', 'risk_affected'] as const),
+    code: enumeration(v['code'], [
+      'compliance_noncompliant',
+      'risk_affected',
+      'certificate_expiry',
+    ] as const),
     severity: enumeration(v['severity'], ['low', 'medium', 'high', 'critical'] as const),
     target: reference(v['target']),
     state: enumeration(v['state'], alertStates),
@@ -102,7 +110,12 @@ export function alert(value: unknown) {
     operation: nullable(v['operation'], uuid),
   }
   if (
-    result.target.kind !== (result.code === 'risk_affected' ? 'risk' : 'compliance_rule') ||
+    result.target.kind !==
+      (result.code === 'risk_affected'
+        ? 'risk'
+        : result.code === 'certificate_expiry'
+          ? 'certificate'
+          : 'compliance_rule') ||
     result.target.device === null ||
     !result.revision ||
     !result.evidence.version ||

@@ -54,6 +54,16 @@ const at = (value: number | null) =>
       >{{ t('security.risks') }}</RouterLink
     >
     <RouterLink
+      v-else-if="action.target.kind === 'certificate_deploy'"
+      :to="{
+        name: 'security-certificates',
+        params: { tenant: runtime.tenant },
+        query: { id: action.target.certificate, device: action.target.device },
+      }"
+      >{{ t('security.certificates') }} / {{ action.target.certificateRevision }} ·
+      {{ action.target.fingerprint }}</RouterLink
+    >
+    <RouterLink
       v-else
       :to="{
         name: 'security-materials',

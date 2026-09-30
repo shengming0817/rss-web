@@ -71,9 +71,14 @@ async function simulate() {
           ...(eventKind.value === 'software_usage'
             ? { resource: eventResource.value, active: eventActive.value }
             : {}),
-          ...(['software_detect', 'security_result', 'security_detect', 'material_detect'].includes(
-            eventKind.value,
-          )
+          ...([
+            'software_detect',
+            'security_result',
+            'security_detect',
+            'material_detect',
+            'certificate_issued',
+            'certificate_detect',
+          ].includes(eventKind.value)
             ? { task: eventTask.value }
             : {}),
           ...(eventKind.value === 'software_request' ? { item: eventItem.value } : {}),
@@ -235,6 +240,8 @@ async function apply(reset: boolean) {
               : 'Synthetic security command result (effect unverified)'
           }}
         </option>
+        <option value="certificate_issued">{{ t('security.demoCertificateIssued') }}</option>
+        <option value="certificate_detect">{{ t('security.demoCertificateDetected') }}</option>
         <option value="material_detect">
           {{
             locale === 'zh-CN'
@@ -260,9 +267,14 @@ async function apply(reset: boolean) {
       <input v-if="eventKind !== 'clock'" id="demo-event-device" v-model="eventDevice" />
       <template
         v-if="
-          ['software_detect', 'security_result', 'security_detect', 'material_detect'].includes(
-            eventKind,
-          )
+          [
+            'software_detect',
+            'security_result',
+            'security_detect',
+            'material_detect',
+            'certificate_issued',
+            'certificate_detect',
+          ].includes(eventKind)
         "
       >
         <label for="demo-event-task">{{
