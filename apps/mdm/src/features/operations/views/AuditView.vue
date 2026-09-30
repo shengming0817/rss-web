@@ -158,7 +158,11 @@ onMounted(routeChanged)
           </td>
           <td>{{ entry.actor ?? t('operations.system') }}</td>
           <td>{{ t(`operations.actionName.${entry.action}`) }}</td>
-          <td><OperationsReference :target="entry.target" /></td>
+          <td>
+            <OperationsReference v-if="entry.target" :target="entry.target" /><span v-else>{{
+              t('operations.unknownObject')
+            }}</span>
+          </td>
           <td>{{ t(`operations.outcomes.${entry.outcome}`) }}</td>
         </tr>
       </tbody>
@@ -180,7 +184,11 @@ onMounted(routeChanged)
         <dt>{{ t('operations.action') }}</dt>
         <dd>{{ t(`operations.actionName.${selected.action}`) }}</dd>
         <dt>{{ t('operations.object') }}</dt>
-        <dd><OperationsReference :target="selected.target" /></dd>
+        <dd>
+          <OperationsReference v-if="selected.target" :target="selected.target" /><span v-else>{{
+            t('operations.unknownObject')
+          }}</span>
+        </dd>
         <dt>{{ t('operations.operation') }}</dt>
         <dd>{{ selected.operation ?? '—' }}</dd>
         <dt>{{ t('operations.outcome') }}</dt>

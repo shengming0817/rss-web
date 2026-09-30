@@ -290,6 +290,21 @@ export function createAuthorizationClient(transport: HttpTransport, tenant: stri
       },
     })
   }
+  async function find<T>(path: string, decode: (value: unknown) => T, id: string) {
+    uuid(id)
+    let after: string | undefined
+    const seen = new Set<string>()
+    for (let pages = 0; pages < 100; pages++) {
+      const page = await list(path, decode, after),
+        value = page.items.find((v) => v.id === id)
+      if (value) return value
+      if (!page.nextCursor) break
+      if (seen.has(page.nextCursor)) throw new Error('Repeated authorization cursor')
+      seen.add(page.nextCursor)
+      after = page.nextCursor
+    }
+    return null
+  }
   return {
     effective: () =>
       transport.request({
@@ -336,6 +351,8 @@ export function createAuthorizationClient(transport: HttpTransport, tenant: stri
           }
         },
       }),
+    findRule: (id: string) => find('/api/v1/authorization/rules', (v) => rule(v, tenant), id),
+    findGroup: (id: string) => find('/api/v1/authorization/user-groups', summary, id),
     rules: (after?: string) => list('/api/v1/authorization/rules', (v) => rule(v, tenant), after),
     groups: (after?: string) => list('/api/v1/authorization/user-groups', summary, after),
     departments: () =>

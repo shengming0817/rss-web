@@ -10,6 +10,7 @@ const link = computed(() => {
   const target = props.target,
     params: { tenant: string; device?: string; execution?: string } = { tenant: runtime.tenant }
   const names = {
+    alert_rule: 'operations-alertRules',
     identity_principal: 'accounts',
     authorization_rule: 'operations-authorization',
     user_group: 'operations-organization',
@@ -34,11 +35,15 @@ const link = computed(() => {
     name: names[target.kind],
     params,
     query:
-      target.kind === 'compliance_rule'
-        ? { rule: target.id }
-        : target.kind === 'software_request'
-          ? { request: target.id }
-          : { id: target.id, ...(target.device ? { device: target.device } : {}) },
+      target.kind === 'settings'
+        ? { section: 'configuration' }
+        : target.kind === 'compliance_rule'
+          ? { rule: target.id }
+          : target.kind === 'delegation'
+            ? { id: target.id, kind: 'delegation' }
+            : target.kind === 'software_request'
+              ? { request: target.id }
+              : { id: target.id, ...(target.device ? { device: target.device } : {}) },
   }
 })
 </script>

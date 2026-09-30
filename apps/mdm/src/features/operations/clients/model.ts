@@ -47,6 +47,7 @@ export function reference(value: unknown) {
   return {
     kind: enumeration(v['kind'], [
       'identity_principal',
+      'alert_rule',
       'authorization_rule',
       'user_group',
       'delegation',
@@ -92,7 +93,7 @@ export function auditEntry(value: unknown) {
     status: nullable(v['status'], count),
     actor: nullable(v['actor'], uuid),
     action: enumeration(v['action'], auditActions),
-    target: reference(v['target']),
+    target: nullable(v['target'], reference),
     operation: nullable(v['operation'], uuid),
     outcome: enumeration(v['outcome'], [
       'accepted',
@@ -159,7 +160,7 @@ export function alert(value: unknown) {
             : 'compliance_rule') ||
         result.target.device === null)) ||
     (['projection_backlog', 'connector_failure', 'agent_health'].includes(result.code) &&
-      result.target.kind !== 'settings') ||
+      !['settings', 'alert_rule'].includes(result.target.kind)) ||
     !result.revision ||
     !result.evidence.version ||
     (result.state === 'resolved') !== (result.resolvedAt !== null) ||

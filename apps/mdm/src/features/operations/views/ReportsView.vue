@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { utc } from '../presentation'
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
 import type { Metrics, Report } from '../clients/admin-model'
 import OperationsFrame from '../components/OperationsFrame.vue'
 import UtcTimeInput from '../../policies/components/UtcTimeInput.vue'
 const { t } = useI18n(),
+  route = useRoute(),
   client = useMdm().operations.admin,
   { run, runWrite, busy, failure, uncertain } = useOperation()
 const from = ref(Math.floor(Date.now() / 1000) - 86400),
@@ -36,21 +38,29 @@ function create() {
       () => client.reports.run(body),
       (v) => (selected.value = v),
     )
-    if (accepted) await load()
+    if (accepted && (await open(body.operationId))) await load()
     return accepted
   }
   void pending()
 }
-function open(id: string) {
-  if (uncertain.value && id !== selected.value?.id) return
-  void run(
+async function open(id: string) {
+  if (uncertain.value && id !== selected.value?.id) return false
+  if (!uncertain.value) selected.value = undefined
+  return run(
     () => client.reports.read(id),
     (v) => (selected.value = v),
   )
 }
+function routeTarget() {
+  selected.value = undefined
+  pending = undefined
+  if (typeof route.query['id'] === 'string') void open(route.query['id'])
+}
+watch(() => route.fullPath, routeTarget, { flush: 'post' })
 onMounted(async () => {
   await refresh()
   await load()
+  routeTarget()
 })
 </script>
 <template>

@@ -2,12 +2,14 @@
 import { utc } from '../presentation'
 import { onMounted, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
 import { configurationValues, maintenanceKinds, type Maintenance } from '../clients/admin-model'
 import OperationsFrame from '../components/OperationsFrame.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
+  route = useRoute(),
   client = runtime.operations.admin,
   { run, runWrite, busy, failure, uncertain } = useOperation()
 const configuration = ref<Awaited<ReturnType<typeof client.settings.read>>>(),
@@ -73,7 +75,15 @@ function save(activate = false) {
         configuration.value = v
         revision.value = v.revision
       })
-      if (!saved && failure.value === 'conflict') conflict.value = true
+      if (saved)
+        await run(
+          () => client.settings.read(),
+          (v) => {
+            configuration.value = v
+            revision.value = v.revision
+          },
+        )
+      else if (failure.value === 'conflict') conflict.value = true
       return saved
     }
     void pending()
@@ -89,7 +99,7 @@ function start() {
       () => client.maintenance.start(body),
       (v) => (selected.value = v),
     )
-    if (accepted) await load()
+    if (accepted && (await open(body.operationId))) await load()
     return accepted
   }
   void pending()
@@ -98,20 +108,30 @@ function change(action: 'pause' | 'resume' | 'cancel') {
   if (!selected.value || busy.value || uncertain.value) return
   const id = selected.value.id,
     body = operation({}, selected.value.revision)
-  pending = () =>
-    runWrite(
+  pending = async () => {
+    const changed = await runWrite(
       () => client.maintenance.change(id, action, body),
       (v) => (selected.value = v),
     )
+    if (changed) await open(id)
+    return changed
+  }
   void pending()
 }
-function open(id: string) {
-  if (uncertain.value && id !== selected.value?.id) return
-  void run(
+async function open(id: string) {
+  if (uncertain.value && id !== selected.value?.id) return false
+  if (!uncertain.value) selected.value = undefined
+  return run(
     () => client.maintenance.read(id),
     (v) => (selected.value = v),
   )
 }
+function routeTarget() {
+  selected.value = undefined
+  pending = undefined
+  if (typeof route.query['id'] === 'string') void open(route.query['id'])
+}
+watch(() => route.fullPath, routeTarget, { flush: 'post' })
 function adopt() {
   if (!configuration.value) return
   revision.value = configuration.value.revision
@@ -121,6 +141,7 @@ onMounted(async () => {
   await read(true)
   await health()
   await load()
+  routeTarget()
 })
 </script>
 <template>

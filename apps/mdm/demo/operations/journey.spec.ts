@@ -111,3 +111,100 @@ it('binds frozen audit pages to exact filters and actor and clears them on reset
   f.automation.reset()
   expect((await f.server.handle('GET', `${root}?cursor=${first.nextCursor}`)).status).toBe(400)
 })
+
+it('rechecks native inventory/assignment permissions and preserves single-device reads', async () => {
+  const f = await fixture()
+  const original = (await f.server.handle('GET', '/api/v1/authorization/rules')).body as {
+    items: {
+      id: string
+      revision: number
+      value: { subject: unknown; grants: { operation: string; scope: unknown }[] }
+    }[]
+  }
+  const admin = original.items.find((r) => r.id === ADMIN_RULE)!
+  await f.write('PUT', `/api/v1/authorization/rules/${ADMIN_RULE}`, {
+    operationId: id(),
+    expectedRevision: admin.revision,
+    value: {
+      ...admin.value,
+      grants: admin.value.grants.filter((g) => g.operation !== 'inventory_read'),
+    },
+  })
+  expect((await f.server.handle('GET', '/api/v2/devices/device-01/inventory')).status).toBe(403)
+  await f.write('PUT', `/api/v1/authorization/rules/${ADMIN_RULE}`, {
+    operationId: id(),
+    expectedRevision: 2,
+    value: {
+      ...admin.value,
+      grants: admin.value.grants.map((g) =>
+        g.operation === 'inventory_read' ? { ...g, scope: { kind: 'device', id: 'device-01' } } : g,
+      ),
+    },
+  })
+  for (const suffix of ['', '/hardware', '/software', '/history'])
+    expect(
+      (await f.server.handle('GET', `/api/mdm-candidate/v1/devices/device-01${suffix}`)).status,
+    ).toBe(200)
+  expect(
+    (await f.server.handle('GET', '/api/mdm-candidate/v1/devices/device-02/hardware')).status,
+  ).toBe(403)
+  const login = await f.server.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+    login: 'reviewer',
+    password: 'demo',
+  })
+  expect(
+    (
+      await f.server.handle(
+        'PUT',
+        '/api/mdm-candidate/v1/devices/device-01/assignment',
+        { operationId: id(), expectedRevision: 1, input: { owner: 'changed', department: null } },
+        {
+          'x-csrf-token': (login.body as { csrfToken: string }).csrfToken,
+          'x-identity-request': '1',
+        },
+      )
+    ).status,
+  ).toBe(403)
+})
+it('records the exact business target and offline/unsupported failures without inventing an object', async () => {
+  const observed: import('../scenario').DemoObservation[] = []
+  const server = createScenario(
+    [() => ({ status: 200, body: {} })],
+    () => {},
+    () => true,
+    (e) => observed.push(e),
+  )
+  const login = await server.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+    login: 'demo',
+    password: 'demo',
+  })
+  const headers = {
+    'x-csrf-token': (login.body as { csrfToken: string }).csrfToken,
+    'x-identity-request': '1',
+  }
+  const target = id()
+  const cases: [string, string | null][] = [
+    ['/api/v2/devices/device-01/operations', 'device-01'],
+    [`/api/mdm-candidate/v1/software/self-service/requests/${target}`, target],
+    [`/api/mdm-candidate/v1/policies/assignments/${target}`, target],
+    ['/api/mdm-candidate/v1/unrecognized', null],
+  ]
+  for (const [path, expected] of cases) {
+    await server.handle('POST', path, { operationId: id() }, headers)
+    expect(observed.at(-1)?.target?.id ?? null).toBe(expected)
+  }
+  for (const scenario of ['offline', 'unsupported'] as const) {
+    server.set(scenario)
+    await server.handle(
+      'POST',
+      `/api/v2/devices/device-01/operations`,
+      { operationId: id() },
+      headers,
+    )
+    expect(observed.at(-1)).toMatchObject({
+      target: { device: 'device-01' },
+      outcome: 'failed',
+      status: scenario === 'offline' ? 503 : 501,
+    })
+  }
+})

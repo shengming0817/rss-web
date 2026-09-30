@@ -72,7 +72,7 @@ export function createAdminDemo(
   function record(
     request: DemoRequest,
     id: string,
-    kind: 'connector' | 'report' | 'settings' | 'job',
+    kind: 'connector' | 'report' | 'settings' | 'job' | 'alert_rule',
     op: string,
     revision: number,
     action: 'management_changed' | 'job_accepted' = 'management_changed',
@@ -144,7 +144,7 @@ export function createAdminDemo(
               ? 'delivery_timeout'
               : null
         const connector = connectors.get(delivery.connector)
-        if (connector)
+        if (connector && delivery.kind === 'event')
           connector.health =
             delivery.state === 'failed'
               ? 'disconnected'
@@ -200,13 +200,19 @@ export function createAdminDemo(
       operations.observeAlert({
         code: rule.definition.signal,
         severity: 'medium',
-        target: { kind: 'settings', id: rule.id, device: null, revision: rule.revision },
+        target: { kind: 'alert_rule', id: rule.id, device: null, revision: rule.revision },
         evidence: {
           id: rule.id,
           version: ++alertVersion,
           at: now(),
-          state:
-            rule.definition.enabled && value > rule.definition.threshold ? 'active' : 'cleared',
+          state: !rule.definition.enabled
+            ? 'cleared'
+            : rule.definition.signal === 'connector_failure' &&
+                [...connectors.values()].some((c) => c.health === 'backlog')
+              ? 'unknown'
+              : value > rule.definition.threshold
+                ? 'active'
+                : 'cleared',
         },
       })
     }
@@ -309,6 +315,17 @@ export function createAdminDemo(
         }
         if (path === '/api/mdm-candidate/v1/integrations/connectors')
           return list(request, scenario, [...connectors.values()])
+        const attempt =
+          /^\/api\/mdm-candidate\/v1\/integrations\/connectors\/([^/]+)\/attempts\/([^/]+)$/.exec(
+            path,
+          )
+        if (attempt) {
+          const id = uuid(attempt[2]),
+            value = deliveries.get(id)
+          return value && value.connector === uuid(attempt[1])
+            ? reply({ delivery: value })
+            : error('operation_not_found', 404)
+        }
         const c =
           /^\/api\/mdm-candidate\/v1\/integrations\/connectors\/([^/]+)(?:\/(deliveries))?$/.exec(
             path,
@@ -448,7 +465,7 @@ export function createAdminDemo(
             definition,
           }
           rules.set(id, rule)
-          record(request, id, 'settings', op.operationId, rule.revision)
+          record(request, id, 'alert_rule', op.operationId, rule.revision)
           return reply({ rule })
         })
       }
@@ -469,7 +486,11 @@ export function createAdminDemo(
             revision: op.expectedRevision + 1,
             operation: op.operationId,
             definition,
-            health: definition.enabled ? 'unknown' : 'disabled',
+            health: definition.enabled
+              ? connectors.get(id)?.definition.enabled
+                ? connectors.get(id)!.health
+                : 'unknown'
+              : 'disabled',
           }
           connectors.set(id, connector)
           record(request, id, 'connector', op.operationId, connector.revision)

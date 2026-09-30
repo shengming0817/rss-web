@@ -123,18 +123,34 @@ export function createAuthorizationDemo(
   function guard(request: DemoRequest) {
     const path = request.path
     if (path.startsWith('/api/v1/authorization')) return
-    if (path.startsWith('/api/mdm-candidate/v1/devices')) {
-      const device = /^\/api\/mdm-candidate\/v1\/devices\/([^/]+)$/.exec(path)?.[1]
+    const deviceMatch =
+      /^\/api\/(?:v2\/devices|mdm-candidate\/v1\/devices)\/([^/]+)(?:\/(.*))?$/.exec(path)
+    const actor = request.actor.principalId
+    const all = () =>
+      effective(actor).some(
+        (g) => g.operation === 'inventory_read' && g.scope.kind === 'all_devices',
+      )
+    if (deviceMatch) {
+      const device = decodeURIComponent(deviceMatch[1]!),
+        suffix = deviceMatch[2] ?? ''
       if (
         request.method === 'GET' &&
-        (device
-          ? !can(request.actor.principalId, 'inventory_read', device)
-          : !effective(request.actor.principalId).some(
-              (g) => g.operation === 'inventory_read' && g.scope.kind === 'all_devices',
-            ))
+        (!suffix || ['hardware', 'software', 'history', 'inventory'].includes(suffix)) &&
+        !can(actor, 'inventory_read', device)
       )
         return error('permission_denied', 403)
-    }
+      if (
+        request.method === 'PUT' &&
+        (suffix === 'assignment' || suffix.startsWith('manual-fields/')) &&
+        !can(actor, 'inventory_assign', device)
+      )
+        return error('permission_denied', 403)
+    } else if (
+      (path === '/api/mdm-candidate/v1/devices' ||
+        /^\/api\/v2\/(device-queries|saved-queries)(?:\/|$)/.test(path)) &&
+      !all()
+    )
+      return error('permission_denied', 403)
     if (/^\/api\/mdm-candidate\/v1\/(?:authorization|integrations|operations)(?:\/|$)/.test(path)) {
       // Candidate management grants are demo decisions, never added to the real Permission enum.
       const permission = request.method === 'GET' ? 'authorization_read' : 'authorization_write'

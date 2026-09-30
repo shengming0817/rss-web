@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { onMounted, ref, toRaw } from 'vue'
+import { onMounted, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
 import { signals, alertRuleDefinition, type AlertRule } from '../clients/admin-model'
 import OperationsFrame from '../components/OperationsFrame.vue'
 const { t } = useI18n(),
+  route = useRoute(),
   client = useMdm().operations.admin.alertRules,
   { run, runWrite, busy, failure, uncertain } = useOperation()
 const fresh = (): AlertRule['definition'] => ({
@@ -63,19 +65,22 @@ function save() {
     failure.value = 'invalidRequest'
   }
 }
-async function compare() {
+async function compare(target = id.value, replace = false) {
   await run(
     async () => {
       let cursor: string | undefined
       do {
         const p = await client.list(cursor),
-          item = p.items.find((v) => v.id === id.value)
+          item = p.items.find((v) => v.id === target)
         if (item) return item
         cursor = p.nextCursor ?? undefined
       } while (cursor)
       throw new Error('Rule absent')
     },
-    (v) => (remote.value = v),
+    (v) => {
+      if (replace) open(v)
+      else remote.value = v
+    },
   )
 }
 function adopt() {
@@ -83,7 +88,16 @@ function adopt() {
   revision.value = remote.value.revision
   conflict.value = false
 }
-onMounted(() => load())
+function routeTarget() {
+  pending = undefined
+  create()
+  if (typeof route.query['id'] === 'string') void compare(route.query['id'], true)
+}
+watch(() => route.fullPath, routeTarget, { flush: 'post' })
+onMounted(async () => {
+  await load()
+  routeTarget()
+})
 </script>
 <template>
   <OperationsFrame :title="t('operations.alertRules')" :busy="busy" :failure="failure"

@@ -39,7 +39,7 @@ export function createAdminClients(transport: HttpTransport, tenant: string, dem
       },
     })
   }
-  function page<T>(
+  function page<T extends { id: string }>(
     path: string,
     decode: (v: unknown) => T,
     query: Record<string, string | number | undefined> = {},
@@ -52,7 +52,7 @@ export function createAdminClients(transport: HttpTransport, tenant: string, dem
       decode(value) {
         const v = candidate(value, tenant, demo, ['items', 'snapshot', 'nextCursor'])
         return {
-          items: unique(array(v['items'], decode), (x) => JSON.stringify(x)),
+          items: unique(array(v['items'], decode), (x) => x.id),
           snapshot: uuid(v['snapshot']),
           nextCursor: nullable(v['nextCursor'], string),
         }
@@ -98,6 +98,16 @@ export function createAdminClients(transport: HttpTransport, tenant: string, dem
         write(`/api/mdm-candidate/v1/operations/alert-rules/${uuid(id)}`, 'rule', body, alertRule),
     },
     connectors: {
+      attempt: (id: string, attempt: string) =>
+        read(
+          `/api/mdm-candidate/v1/integrations/connectors/${uuid(id)}/attempts/${uuid(attempt)}`,
+          'delivery',
+          (value) => {
+            const v = delivery(value)
+            if (v.connector !== id) throw new Error('Wrong connector attempt')
+            return v
+          },
+        ),
       list: (cursor?: string) =>
         page('/api/mdm-candidate/v1/integrations/connectors', connector, { cursor }),
       read: (id: string) =>

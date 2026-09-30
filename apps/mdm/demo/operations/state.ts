@@ -164,11 +164,11 @@ export function createOperationsDemo(now: () => number) {
                 .filter(
                   (v) =>
                     (!actor || v.actor === actor) &&
-                    (!object || v.target.id === object) &&
+                    (!object || v.target?.id === object) &&
                     (!operationId || v.operation === operationId) &&
                     (!outcome || v.outcome === outcome) &&
                     (!stream || v.stream === stream) &&
-                    (!device || v.target.device === device) &&
+                    (!device || v.target?.device === device) &&
                     (!selectedAction || v.action === selectedAction) &&
                     (from === null || v.at >= from) &&
                     (until === null || v.at <= until),
@@ -176,7 +176,7 @@ export function createOperationsDemo(now: () => number) {
             : [...alerts.values()]
                 .reverse()
                 .filter(
-                  (v) => (!device || v.target.device === device) && (!state || v.state === state),
+                  (v) => (!device || v.target?.device === device) && (!state || v.state === state),
                 )
         const key = JSON.stringify([
           request.actor.principalId,

@@ -177,7 +177,7 @@ it('closes the administrative ticket without resolving source evidence and reope
   const alertPage = (await f.server.handle('GET', '/api/mdm-candidate/v1/operations/alerts'))
     .body as { items: { id: string; revision: number }[] }
   const alert = alertPage.items[0]!
-  expect(alert).toMatchObject({ state: 'open', target: { kind: 'settings', id: rule } })
+  expect(alert).toMatchObject({ state: 'open', target: { kind: 'alert_rule', id: rule } })
   expect(
     (
       await f.post(
@@ -198,4 +198,33 @@ it('closes the administrative ticket without resolving source evidence and reope
     (await f.server.handle('GET', `/api/mdm-candidate/v1/operations/alerts/${alert.id}/closure`))
       .body,
   ).toMatchObject({ closure: null })
+})
+
+it('reads terminal connection tests without treating a passed test as business delivery recovery', async () => {
+  const f = await fixture(),
+    id = crypto.randomUUID(),
+    root = `/api/mdm-candidate/v1/integrations/connectors/${id}`
+  await f.post(
+    root,
+    operation({
+      name: 'Desk',
+      kind: 'itsm',
+      endpoint: 'https://desk.example.test/events',
+      credentialRef: null,
+      enabled: true,
+    }),
+  )
+  await f.post(`${root}/deliver`, operation({}, 1))
+  f.advance()
+  expect((await f.server.handle('GET', root)).body).toMatchObject({
+    connector: { health: 'disconnected' },
+  })
+  const test = (await f.post(`${root}/test`, operation({}, 1))).body as { delivery: { id: string } }
+  f.advance()
+  expect((await f.server.handle('GET', `${root}/attempts/${test.delivery.id}`)).body).toMatchObject(
+    { delivery: { kind: 'test', state: 'passed' } },
+  )
+  expect((await f.server.handle('GET', root)).body).toMatchObject({
+    connector: { health: 'disconnected' },
+  })
 })

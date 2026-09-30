@@ -5,6 +5,7 @@ import { createPolicyClients } from '../../policies/client'
 import AlertRulesView from './AlertRulesView.vue'
 import ApprovalsView from './ApprovalsView.vue'
 import AuditView from './AuditView.vue'
+import AlertsView from './AlertsView.vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
@@ -38,8 +39,10 @@ async function fixture(component: Component) {
     'x-csrf-token': (login.body as { csrfToken: string }).csrfToken,
     'x-identity-request': '1',
   }
+  let inspect: ((o: RequestOptions<unknown>) => void | Promise<void>) | undefined
   const transport = {
     request: async (o: RequestOptions<unknown>) => {
+      await inspect?.(o)
       const path = o.path.replace(/\{([^}]+)\}/g, (_, key: string) => String(o.pathParams![key]))
       const q = new URLSearchParams()
       for (const [k, v] of Object.entries(o.query ?? {})) if (v !== undefined) q.set(k, String(v))
@@ -74,7 +77,16 @@ async function fixture(component: Component) {
     },
   })
   await flushPromises()
-  return { wrapper, server, clients, automation, router }
+  return {
+    wrapper,
+    server,
+    clients,
+    automation,
+    router,
+    inspect: (f: (o: RequestOptions<unknown>) => void | Promise<void>) => {
+      inspect = f
+    },
+  }
 }
 it('manages all group members and preserves a draft on conflict', async () => {
   const f = await fixture(OrganizationView)
@@ -220,5 +232,237 @@ it('compares native membership without replacing drafts and only adopts revision
   await f.wrapper.get('[data-testid="save-group"]').trigger('click')
   await flushPromises()
   expect((await f.clients.authorization.groups()).items[0]!.value!.name).toBe('My draft')
+  f.wrapper.unmount()
+})
+
+it('discards incomplete membership after a second-page conflict and edits the fully reloaded revision', async () => {
+  const f = await fixture(OrganizationView),
+    id = crypto.randomUUID(),
+    effective = await f.clients.authorization.effective()
+  const members = Array.from({ length: 201 }, (_, i) => ({
+    instanceId: effective.instanceId,
+    tenantId: TENANT,
+    principalId: `99999999-9999-4999-8999-${String(i + 1).padStart(12, '0')}`,
+  }))
+  await f.clients.authorization.changeGroup(id, {
+    operationId: crypto.randomUUID(),
+    expectedRevision: 0,
+    value: { name: 'Large group', enabled: true, members },
+  })
+  await f.wrapper
+    .findAll('button')
+    .find((b) => b.text() === '重新读取')!
+    .trigger('click')
+  await flushPromises()
+  let changed = false
+  const added = { ...members[0]!, principalId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }
+  f.inspect(async (o) => {
+    if (!changed && o.path.endsWith('/members') && o.query?.['offset'] === 100) {
+      changed = true
+      await f.clients.authorization.changeGroup(id, {
+        operationId: crypto.randomUUID(),
+        expectedRevision: 1,
+        value: { name: 'Concurrent group', enabled: true, members: [...members, added] },
+      })
+    }
+  })
+  await f.wrapper
+    .findAll('button')
+    .find((b) => b.text().includes('Large group'))!
+    .trigger('click')
+  await flushPromises()
+  expect(f.wrapper.text()).toContain(added.principalId)
+  expect(f.wrapper.find('[role="alert"]').exists()).toBe(false)
+  await f.wrapper.get('[data-testid="group-name"]').setValue('Safely edited')
+  await f.wrapper.get('[data-testid="save-group"]').trigger('click')
+  await flushPromises()
+  expect(await f.clients.authorization.allMembers(id, 3)).toEqual([...members, added])
+  f.wrapper.unmount()
+})
+it('reconciles completed reports after unknown accepted receipts are replayed', async () => {
+  const f = await fixture(ReportsView)
+  f.server.set('unknown')
+  await f.wrapper.get('[data-testid="run-report"]').trigger('click')
+  await flushPromises()
+  f.automation.tick({ kind: 'clock', at: f.automation.now() + 100 }, 'normal')
+  f.server.set('normal')
+  await f.wrapper.get('[data-testid="replay-write"]').trigger('click')
+  await flushPromises()
+  expect(f.wrapper.text()).toContain('completed')
+  f.wrapper.unmount()
+})
+it('reconciles active configuration and completed maintenance after unknown replay', async () => {
+  const f = await fixture(SettingsView)
+  await f.wrapper.get('[data-testid="save-configuration"]').trigger('click')
+  await flushPromises()
+  f.server.set('unknown')
+  await f.wrapper.get('[data-testid="activate-configuration"]').trigger('click')
+  await flushPromises()
+  f.automation.tick({ kind: 'clock', at: f.automation.now() + 100 }, 'normal')
+  f.server.set('normal')
+  await f.wrapper.get('[data-testid="replay-write"]').trigger('click')
+  await flushPromises()
+  expect(f.wrapper.text()).not.toContain('restart_required')
+  expect(f.wrapper.text()).toContain('active')
+  f.server.set('unknown')
+  await f.wrapper.get('[data-testid="start-maintenance"]').trigger('click')
+  await flushPromises()
+  f.automation.tick({ kind: 'clock', at: f.automation.now() + 100 }, 'normal')
+  f.server.set('normal')
+  await f.wrapper.get('[data-testid="replay-write"]').trigger('click')
+  await flushPromises()
+  expect(f.wrapper.text()).toContain('completed')
+  expect(f.wrapper.text()).toContain('unverified')
+  expect(f.wrapper.findAll('button').some((b) => b.text() === '暂停')).toBe(false)
+  f.wrapper.unmount()
+})
+it('opens group/report/job links and follows target query changes', async () => {
+  const group = await fixture(OrganizationView),
+    id = crypto.randomUUID(),
+    other = crypto.randomUUID()
+  for (const [target, name] of [
+    [id, 'Linked group'],
+    [other, 'Second linked group'],
+  ])
+    await group.clients.authorization.changeGroup(target!, {
+      operationId: crypto.randomUUID(),
+      expectedRevision: 0,
+      value: { name: name!, enabled: true, members: [] },
+    })
+  await group.router.push({ path: '/', query: { id } })
+  await flushPromises()
+  expect((group.wrapper.get('[data-testid="group-name"]').element as HTMLInputElement).value).toBe(
+    'Linked group',
+  )
+  await group.router.push({ path: '/', query: { id: other } })
+  await flushPromises()
+  expect((group.wrapper.get('[data-testid="group-name"]').element as HTMLInputElement).value).toBe(
+    'Second linked group',
+  )
+  group.wrapper.unmount()
+  const report = await fixture(ReportsView),
+    r = await report.clients.admin.reports.run({
+      operationId: crypto.randomUUID(),
+      expectedRevision: 0,
+      input: { from: 0, until: report.automation.now() },
+    })
+  await report.router.push({ path: '/', query: { id: r.id } })
+  await flushPromises()
+  expect(report.wrapper.text()).toContain(r.id)
+  report.wrapper.unmount()
+  const settings = await fixture(SettingsView),
+    job = await settings.clients.admin.maintenance.start({
+      operationId: crypto.randomUUID(),
+      expectedRevision: 0,
+      input: { kind: 'backup', target: 'linked-backup', method: 'full' },
+    })
+  await settings.router.push({ path: '/', query: { id: job.id } })
+  await flushPromises()
+  expect(settings.wrapper.text()).toContain('linked-backup')
+  settings.wrapper.unmount()
+})
+it('locates a native rule beyond page one and reports missing/tombstone targets', async () => {
+  const f = await fixture(AuthorizationView),
+    e = await f.clients.authorization.effective()
+  let last = ''
+  for (let i = 1; i <= 101; i++) {
+    last = `99999999-9999-4999-8999-${String(i).padStart(12, '0')}`
+    await f.clients.authorization.changeRule(last, {
+      operationId: crypto.randomUUID(),
+      expectedRevision: 0,
+      value: {
+        subject: {
+          kind: 'user',
+          user: { instanceId: e.instanceId, tenantId: TENANT, principalId: e.principalId },
+        },
+        grants: [{ operation: 'inventory_read', scope: { kind: 'device', id: 'device-01' } }],
+      },
+    })
+  }
+  await f.router.push({ path: '/', query: { id: last } })
+  await flushPromises()
+  expect(f.wrapper.text()).toContain(last)
+  expect((f.wrapper.get('[data-testid="subject-id"]').element as HTMLInputElement).value).toBe(
+    e.principalId,
+  )
+  await f.clients.authorization.changeRule(last, {
+    operationId: crypto.randomUUID(),
+    expectedRevision: 1,
+    value: null,
+  })
+  await f.router.push({ path: '/', query: { id: last, refresh: '1' } })
+  await flushPromises()
+  expect(f.wrapper.text()).toContain('已删除')
+  await f.router.push({ path: '/', query: { id: crypto.randomUUID() } })
+  await flushPromises()
+  expect(f.wrapper.find('[role="alert"]').exists()).toBe(true)
+  f.wrapper.unmount()
+})
+it('does not transfer a closed ticket to another alert when its closure read fails', async () => {
+  const f = await fixture(AlertsView)
+  for (let i = 1; i <= 2; i++)
+    f.automation.operations.observeAlert({
+      code: 'compliance_noncompliant',
+      severity: 'high',
+      target: {
+        kind: 'compliance_rule',
+        id: crypto.randomUUID(),
+        device: `device-0${i}`,
+        revision: 1,
+      },
+      evidence: { id: crypto.randomUUID(), version: 1, at: f.automation.now(), state: 'active' },
+    })
+  const alerts = (await f.clients.alerts.list()).items,
+    a = alerts.find((v) => v.target.device === 'device-01')!,
+    b = alerts.find((v) => v.target.device === 'device-02')!
+  await f.clients.alerts.close(a.id, {
+    operationId: crypto.randomUUID(),
+    expectedRevision: a.revision,
+    input: { note: 'A closure reason' },
+  })
+  await f.wrapper
+    .findAll('button')
+    .find((x) => x.text() === '重新读取')!
+    .trigger('click')
+  await flushPromises()
+  await f.wrapper
+    .findAll('li button')
+    .find((x) => x.text().includes('device-01'))!
+    .trigger('click')
+  await flushPromises()
+  expect(f.wrapper.text()).toContain('A closure reason')
+  f.inspect((o) => {
+    if (o.pathParams?.['id'] === b.id && o.path.endsWith('/closure'))
+      throw decodeMdmError(503, { code: 'service_unavailable' })
+  })
+  await f.wrapper
+    .findAll('li button')
+    .find((x) => x.text().includes('device-02'))!
+    .trigger('click')
+  await flushPromises()
+  expect(f.wrapper.text()).not.toContain('A closure reason')
+  expect(f.wrapper.text()).toContain('关闭状态未知')
+  expect(f.wrapper.find('[data-testid="close-alert"]').exists()).toBe(false)
+  f.wrapper.unmount()
+})
+
+it('refreshes a connection test to its explicit terminal fact', async () => {
+  const f = await fixture(IntegrationsView)
+  await f.wrapper.get('[data-testid="connector-name"]').setValue('Probe')
+  await f.wrapper
+    .get('[data-testid="connector-endpoint"]')
+    .setValue('https://probe.example.test/events')
+  await f.wrapper.get('[data-testid="save-connector"]').trigger('click')
+  await flushPromises()
+  await f.wrapper
+    .findAll('button')
+    .find((b) => b.text() === '受理连接测试')!
+    .trigger('click')
+  await flushPromises()
+  expect(f.wrapper.text()).toContain('queued')
+  f.automation.tick({ kind: 'clock', at: f.automation.now() + 100 }, 'normal')
+  await f.wrapper.get('[data-testid="refresh-attempt"]').trigger('click')
+  await flushPromises()
+  expect(f.wrapper.text()).toContain('passed')
   f.wrapper.unmount()
 })

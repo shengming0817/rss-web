@@ -101,7 +101,8 @@ function action(kind: 'test' | 'deliver', previous?: Delivery) {
         attempts.value = undefined
       },
     )
-    if (!accepted && failure.value === 'conflict') conflict.value = true
+    if (accepted) await refreshAttempt()
+    else if (failure.value === 'conflict') conflict.value = true
     return accepted
   }
   void pending()
@@ -110,6 +111,15 @@ async function deliveries(cursor?: string) {
   await run(
     () => client.deliveries(id.value, cursor),
     (v) => (attempts.value = v),
+  )
+}
+async function refreshAttempt() {
+  if (!test.value) return
+  const target = id.value,
+    attempt = test.value.id
+  await run(
+    () => client.attempt(target, attempt),
+    (v) => (test.value = v),
   )
 }
 function adopt() {
@@ -186,6 +196,9 @@ onMounted(async () => {
         {{ t('operations.deliver') }}</button
       ><button :disabled="busy" @click="deliveries()">{{ t('operations.deliveries') }}</button>
     </section>
+    <button v-if="test" data-testid="refresh-attempt" :disabled="busy" @click="refreshAttempt()">
+      {{ t('policies.refresh') }}
+    </button>
     <p v-if="test">
       {{ t('operations.attempt') }} {{ test.id }} · {{ test.kind }} / {{ test.state }} ·
       {{ test.reason ?? '—' }}

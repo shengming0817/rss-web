@@ -1,4 +1,5 @@
 /** MOCK_SOURCE: synthetic HTTP server, never part of a production entry. */
+import { observationTarget } from './operations/observation'
 import type { OperationsReference } from '../src/features/operations/clients/model'
 import type { DemoEvent } from './policies/schedule'
 import { mdmJsonBodyLimit, MDM_CONTENT_BODY_LIMIT, isMdmContentRequest } from '@rss/api/mdm-limits'
@@ -35,7 +36,7 @@ export interface DemoObservation {
   method: string
   path: string
   operation: string | null
-  target: OperationsReference
+  target: OperationsReference | null
   at: number
   status: number
   outcome: 'accepted' | 'denied' | 'failed' | 'unknown'
@@ -111,33 +112,20 @@ export function createScenario(
       const valid = (v: unknown): v is string =>
         typeof v === 'string' &&
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(v)
-      const segments = path.split('/')
-      let target: OperationsReference = {
-        kind: 'settings',
-        id: 'configuration',
-        device: null,
-        revision: null,
-      }
-      if (stream === 'identity_security')
-        target = { kind: 'identity_principal', id: principalId, device: null, revision: null }
-      else if (path.includes('/authorization/rules/') && valid(segments[5]))
-        target = { kind: 'authorization_rule', id: segments[5], device: null, revision: null }
-      else if (path.includes('/authorization/user-groups/') && valid(segments[5]))
-        target = { kind: 'user_group', id: segments[5], device: null, revision: null }
-      else if (path.includes('/integrations/connectors/') && valid(segments[6]))
-        target = { kind: 'connector', id: segments[6], device: null, revision: null }
-      else if (
-        path.includes('/devices/') &&
-        segments[5] &&
-        /^[a-zA-Z0-9_-]{1,256}$/.test(segments[5])
-      )
-        target = { kind: 'device', id: segments[5], device: segments[5], revision: null }
+      const operation =
+        valid(data['operationId']) && !/^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(data['operationId'])
+          ? data['operationId']
+          : null
+      const target =
+        stream === 'identity_security'
+          ? { kind: 'identity_principal' as const, id: principalId, device: null, revision: null }
+          : observationTarget(path, operation)
       observed(
         {
           actor: { principalId, sessionId },
           method,
           path,
-          operation: valid(data['operationId']) ? data['operationId'] : null,
+          operation,
           target,
           at: now(),
           status: reply.status,
@@ -320,14 +308,17 @@ export function createScenario(
     const expected = epoch
     if (active === 'late') await new Promise((resolve) => setTimeout(resolve, 1500))
     if (epoch !== expected) return { status: 409, body: { code: 'operation_conflict' } }
-    if (active === 'forbidden')
-      return observedReply({ status: 403, body: { code: 'permission_denied' } })
-    if (active === 'offline') return { status: 503, body: { code: 'service_unavailable' } }
-    if (active === 'unsupported') return { status: 501, body: { code: 'action_not_supported' } }
-    if (method !== 'GET' && active === 'conflict')
-      return observedReply({ status: 409, body: { code: 'operation_conflict' } })
+    function fault(): Reply | undefined {
+      if (active === 'forbidden') return { status: 403, body: { code: 'permission_denied' } }
+      if (active === 'offline') return { status: 503, body: { code: 'service_unavailable' } }
+      if (active === 'unsupported') return { status: 501, body: { code: 'action_not_supported' } }
+      if (method !== 'GET' && active === 'conflict')
+        return { status: 409, body: { code: 'operation_conflict' } }
+    }
     const unknownReply = method !== 'GET' && active === 'unknown'
-    if (path === '/api/mdm-candidate/v1/workspace' && method === 'GET')
+    if (path === '/api/mdm-candidate/v1/workspace' && method === 'GET') {
+      const failure = fault()
+      if (failure) return failure
       return {
         status: 200,
         body: {
@@ -338,6 +329,7 @@ export function createScenario(
           })),
         },
       }
+    }
     const policyPath =
       /^\/api\/(?:v2\/(?:scopes|policies)(?:\/|$)|v3\/(?:resources)(?:\/|$)|v2\/devices\/[^/]+\/operations(?:\/|$)|mdm-candidate\/v1\/(?:policies|executions)(?:\/|$))/.test(
         path,
@@ -369,6 +361,8 @@ export function createScenario(
                 : path.split('/')[4]
     if (module && sources[module] === 'real')
       return { status: 503, body: { code: 'service_unavailable' } }
+    const failure = fault()
+    if (failure) return observedReply(failure)
     for (const handler of handlers) {
       const reply = handler(
         {
@@ -389,8 +383,8 @@ export function createScenario(
         )
       }
     }
-    if (unknownReply) return { status: 503, body: { code: 'operation_unknown' } }
-    return { status: 501, body: { code: 'action_not_supported' } }
+    if (unknownReply) return observedReply({ status: 503, body: { code: 'operation_unknown' } })
+    return observedReply({ status: 501, body: { code: 'action_not_supported' } })
   }
   return {
     handle,

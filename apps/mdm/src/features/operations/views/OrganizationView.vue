@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { utc } from '../presentation'
-import { onMounted, ref, toRaw } from 'vue'
+import { onMounted, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
+import { isRssApiError } from '@rss/api/mdm'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { user, type UserGroup } from '../clients/authorization'
 import OperationsFrame from '../components/OperationsFrame.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
+  route = useRoute(),
   client = runtime.operations.authorization,
   { run, runWrite, busy, failure, uncertain } = useOperation()
 const page = ref<Awaited<ReturnType<typeof client.groups>>>(),
@@ -19,9 +22,11 @@ const draft = ref(fresh()),
   id = ref<string>(crypto.randomUUID()),
   revision = ref(0),
   member = ref(''),
-  remote = ref<UserGroup>(),
+  remote = ref<UserGroup | null>(),
   remoteRevision = ref<number>(),
   editing = ref(false),
+  deleted = ref(false),
+  missing = ref(false),
   conflict = ref(false)
 let pending: (() => Promise<boolean>) | undefined
 async function load(after?: string) {
@@ -30,33 +35,46 @@ async function load(after?: string) {
     (v) => (page.value = v),
   )
 }
-async function open(group: string, expected: number, replace = true) {
+async function open(group: string, replace = true) {
   await run(
     async () => {
-      let next: string | undefined,
-        summary: NonNullable<typeof page.value>['items'][number] | undefined
-      do {
-        const p = await client.groups(next)
-        summary = p.items.find((v) => v.id === group)
-        next = p.nextCursor ?? undefined
-      } while (!summary && next)
-      if (!summary?.value) throw new Error('Group not found')
-      if (replace && summary.revision !== expected) throw new Error('Group changed')
-      const members = await client.allMembers(group, summary.revision)
-      if (members.length !== summary.value.memberCount) throw new Error('Incomplete membership')
-      return {
-        definition: { name: summary.value.name, enabled: summary.value.enabled, members },
-        revision: summary.revision,
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const summary = await client.findGroup(group)
+        if (!summary) return null
+        if (!summary.value) return { definition: null, revision: summary.revision }
+        try {
+          const members = await client.allMembers(group, summary.revision)
+          if (members.length !== summary.value.memberCount) throw new Error('Incomplete membership')
+          return {
+            definition: { name: summary.value.name, enabled: summary.value.enabled, members },
+            revision: summary.revision,
+          }
+        } catch (error) {
+          if (attempt === 0 && isRssApiError(error) && error.status === 409) continue
+          throw error
+        }
       }
+      throw new Error('Membership changed again')
     },
     (v) => {
+      if (!v) {
+        id.value = group
+        revision.value = 0
+        draft.value = fresh()
+        missing.value = true
+        failure.value = 'notFound'
+        return
+      }
+      missing.value = false
       if (replace) {
         id.value = group
         revision.value = v.revision
-        draft.value = v.definition
+        draft.value = v.definition ?? fresh()
+        deleted.value = v.definition === null
         editing.value = true
         remote.value = undefined
         remoteRevision.value = undefined
+        conflict.value = false
       } else {
         remote.value = v.definition
         remoteRevision.value = v.revision
@@ -71,6 +89,8 @@ function create() {
   draft.value = fresh()
   editing.value = false
   conflict.value = false
+  deleted.value = false
+  missing.value = false
   remote.value = undefined
   remoteRevision.value = undefined
   pending = undefined
@@ -95,7 +115,7 @@ function add() {
   }
 }
 function save(remove = false) {
-  if (busy.value || uncertain.value || conflict.value) return
+  if (busy.value || uncertain.value || conflict.value || deleted.value || missing.value) return
   const target = id.value,
     body = {
       operationId: crypto.randomUUID(),
@@ -131,12 +151,45 @@ function adopt() {
   conflict.value = false
   failure.value = null
 }
+async function routeTarget() {
+  if (typeof route.query['id'] === 'string') {
+    if (route.query['kind'] === 'delegation') {
+      await run(
+        async () => {
+          let cursor: string | undefined
+          const seen = new Set<string>()
+          do {
+            const p = await runtime.operations.admin.delegations(cursor)
+            if (p.items.some((v) => v.id === route.query['id'])) return p
+            cursor = p.nextCursor ?? undefined
+            if (cursor) {
+              if (seen.has(cursor)) throw new Error('Repeated cursor')
+              seen.add(cursor)
+            }
+          } while (cursor)
+          throw new Error('Delegation absent')
+        },
+        (v) => (delegations.value = v),
+      )
+    } else await open(route.query['id'])
+  }
+}
+watch(
+  () => route.fullPath,
+  () => {
+    pending = undefined
+    create()
+    void routeTarget()
+  },
+  { flush: 'post' },
+)
 onMounted(async () => {
   await run(
     () => client.effective(),
     (v) => (effective.value = v),
   )
   await load()
+  await routeTarget()
 })
 </script>
 <template>
@@ -162,11 +215,7 @@ onMounted(async () => {
     <p v-if="page && !page.items.length">{{ t('operations.empty') }}</p>
     <ul>
       <li v-for="item in page?.items" :key="item.id">
-        <button
-          v-if="item.value"
-          :disabled="busy || uncertain"
-          @click="open(item.id, item.revision)"
-        >
+        <button v-if="item.value" :disabled="busy || uncertain" @click="open(item.id)">
           {{ item.value.name }} · {{ item.value.memberCount }}</button
         ><span v-else>{{ item.id }} · {{ t('operations.deleted') }}</span> · {{ item.revision }}
       </li>
@@ -174,8 +223,9 @@ onMounted(async () => {
     <button v-if="page?.nextCursor" :disabled="busy" @click="load(page.nextCursor)">
       {{ t('devices.next') }}
     </button>
+    <p v-if="deleted">{{ t('operations.deleted') }} · {{ id }} / {{ revision }}</p>
     <form @submit.prevent="save()">
-      <fieldset :disabled="busy || uncertain">
+      <fieldset :disabled="busy || uncertain || deleted || missing">
         <legend>{{ t('operations.groupEditor') }} · {{ id }} / {{ revision }}</legend>
         <label
           >{{ t('operations.name') }}<input v-model="draft.name" data-testid="group-name" required
@@ -206,13 +256,16 @@ onMounted(async () => {
         </button>
       </fieldset>
     </form>
-    <button v-if="editing" :disabled="busy" @click="open(id, revision, false)">
+    <button v-if="editing" :disabled="busy" @click="open(id, false)">
       {{ t('operations.compare') }}
     </button>
-    <section v-if="remote">
+    <section v-if="remoteRevision !== undefined">
       <h2>{{ t('operations.remote') }}</h2>
-      <p>{{ remote.name }} / {{ remoteRevision }} · {{ remote.members.length }}</p>
-      <button :disabled="busy || uncertain" @click="adopt()">
+      <p>
+        {{ remote?.name ?? t('operations.deleted') }} / {{ remoteRevision }} ·
+        {{ remote?.members.length ?? 0 }}
+      </p>
+      <button v-if="remote" :disabled="busy || uncertain" @click="adopt()">
         {{ t('operations.adoptRevision') }}
       </button>
     </section>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, toRaw } from 'vue'
+import { onMounted, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { useMdm } from '../../../context'
@@ -36,6 +36,8 @@ const page = ref<Awaited<ReturnType<typeof client.rules>>>(),
   remote = ref<Rule | null>(),
   remoteRevision = ref<number>(),
   confirm = ref(false),
+  deleted = ref(false),
+  missing = ref(false),
   conflict = ref(false)
 let pending: (() => Promise<boolean>) | undefined
 async function load(after?: string) {
@@ -59,6 +61,8 @@ function fill(value: Rule, target: string, rev: number) {
     if (value.subject.kind === 'department') matching.value = value.subject.matching
   }
   confirm.value = false
+  deleted.value = false
+  missing.value = false
   conflict.value = false
   remote.value = undefined
   remoteRevision.value = undefined
@@ -70,6 +74,8 @@ function create() {
   grants.value = []
   subjectId.value = ''
   confirm.value = false
+  deleted.value = false
+  missing.value = false
   conflict.value = false
   remote.value = undefined
   remoteRevision.value = undefined
@@ -163,19 +169,38 @@ function save(remove = false) {
 }
 async function compare() {
   await run(
-    async () => {
-      let after: string | undefined
-      do {
-        const p = await client.rules(after),
-          item = p.items.find((v) => v.id === id.value)
-        if (item) return item
-        after = p.nextCursor ?? undefined
-      } while (after)
-      throw new Error('Rule absent')
-    },
+    () => client.findRule(id.value),
     (v) => {
+      if (!v) {
+        failure.value = 'notFound'
+        return
+      }
       remote.value = v.value
       remoteRevision.value = v.revision
+    },
+  )
+}
+async function routeTarget() {
+  if (typeof route.query['id'] !== 'string') return
+  const target = route.query['id']
+  await run(
+    () => client.findRule(target),
+    (v) => {
+      if (!v) {
+        id.value = target
+        missing.value = true
+        failure.value = 'notFound'
+        return
+      }
+      missing.value = false
+      if (v.value) fill(v.value, v.id, v.revision)
+      else {
+        id.value = v.id
+        revision.value = v.revision
+        deleted.value = true
+        grants.value = []
+        subjectId.value = ''
+      }
     },
   )
 }
@@ -186,16 +211,22 @@ function adopt() {
   conflict.value = false
   failure.value = null
 }
+watch(
+  () => route.fullPath,
+  () => {
+    pending = undefined
+    create()
+    void routeTarget()
+  },
+  { flush: 'post' },
+)
 onMounted(async () => {
   await run(
     () => client.effective(),
     (v) => (effective.value = v),
   )
   await load()
-  if (typeof route.query['id'] === 'string') {
-    const item = page.value?.items.find((v) => v.id === route.query['id'])
-    if (item?.value) fill(item.value, item.id, item.revision)
-  }
+  await routeTarget()
 })
 </script>
 <template>
@@ -217,8 +248,9 @@ onMounted(async () => {
     <button v-if="page?.nextCursor" :disabled="busy" @click="load(page.nextCursor)">
       {{ t('devices.next') }}
     </button>
+    <p v-if="deleted">{{ t('operations.deleted') }} · {{ id }} / {{ revision }}</p>
     <form @submit.prevent="save()">
-      <fieldset :disabled="busy || uncertain || !effective">
+      <fieldset :disabled="busy || uncertain || !effective || deleted || missing">
         <legend>{{ t('operations.ruleEditor') }} · {{ id }} / {{ revision }}</legend>
         <label
           >{{ t('operations.subject')
@@ -306,7 +338,7 @@ onMounted(async () => {
     <p v-if="remoteRevision !== undefined">
       {{ t('operations.remote') }} · {{ remoteRevision }} ·
       {{ remote?.subject.kind ?? t('operations.deleted')
-      }}<button :disabled="busy || uncertain" @click="adopt()">
+      }}<button v-if="remote" :disabled="busy || uncertain" @click="adopt()">
         {{ t('operations.adoptRevision') }}
       </button>
     </p>

@@ -1,4 +1,6 @@
 export const operationsZh = {
+  closureUnknown: '关闭状态未知，无法确认当前工单是否关闭。',
+  unknownObject: '对象未提供，不补造业务链接',
   closeHint: '关闭管理工单不等于来源问题已解除；新问题证据会重新打开管理流程。',
   ticketClosed: '管理工单已关闭',
   closeReason: '关闭原因',
@@ -147,6 +149,7 @@ export const operationsZh = {
     risk_affected: '设备受风险影响',
   },
   target: {
+    alert_rule: '告警规则',
     identity_principal: 'Identity 主体',
     authorization_rule: '授权规则',
     user_group: '用户组',
@@ -211,6 +214,8 @@ export const operationsZh = {
   },
 }
 export const operationsEn: typeof operationsZh = {
+  closureUnknown: 'Closure state unknown; current ticket status cannot be confirmed.',
+  unknownObject: 'Target unavailable; no business link is invented',
   closeHint:
     'Closing an administrative ticket does not resolve source evidence. New active evidence reopens the workflow.',
   ticketClosed: 'Administrative ticket closed',
@@ -371,6 +376,7 @@ export const operationsEn: typeof operationsZh = {
     risk_affected: 'Device affected by risk',
   },
   target: {
+    alert_rule: 'Alert rule',
     identity_principal: 'Identity principal',
     authorization_rule: 'Authorization rule',
     user_group: 'User group',
