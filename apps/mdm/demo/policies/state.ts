@@ -20,7 +20,7 @@ import { createSelfServiceDemo } from '../software/self-service'
 import { createSecurityDemo } from '../security/state'
 import { createOperationsDemo } from '../operations/state'
 export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo>) {
-  const operations = createOperationsDemo()
+  const operations = createOperationsDemo(() => security.now())
   const scopes = createScopeDemo(devices),
     native = createNativeDemo(devices)
   const security = createSecurityDemo(devices, operations, scopes)

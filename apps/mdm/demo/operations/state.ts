@@ -13,7 +13,7 @@ import { createPages, createReceipts, error, ok, operation } from '../http'
 const candidate = (body: object) =>
   ok({ contract: 'operations-v1', tenantId: TENANT, source: 'mock', ...body })
 /** One metadata-only operations owner. Domain owners alone publish evidence and resolve alerts. */
-export function createOperationsDemo() {
+export function createOperationsDemo(now: () => number) {
   const audit = new Map<string, AuditEntry>(),
     alerts = new Map<string, Alert>(),
     pages = createPages(),
@@ -33,7 +33,7 @@ export function createOperationsDemo() {
       previous = alerts.get(key)
     if (previous && input.evidence.version <= previous.evidence.version) return
     if (!previous && input.evidence.state !== 'active') return
-    const at = Math.max(Math.floor(Date.now() / 1000), input.evidence.at, previous?.updatedAt ?? 0),
+    const at = Math.max(now(), input.evidence.at, previous?.updatedAt ?? 0),
       state =
         input.evidence.state === 'unknown'
           ? (previous?.state ?? 'open')
@@ -145,7 +145,7 @@ export function createOperationsDemo() {
           value.acknowledgment
         )
           return error('operation_conflict')
-        const at = Math.max(Math.floor(Date.now() / 1000), value.updatedAt)
+        const at = Math.max(now(), value.updatedAt)
         value.revision++
         value.updatedAt = at
         value.operation = op.operationId

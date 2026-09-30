@@ -101,6 +101,28 @@ it('retains installed expiry through issuance and command success until independ
   expect(
     (await f.server.handle('GET', `/api/mdm-candidate/v1/executions/${dispatch.operationId}`)).body,
   ).toMatchObject({ execution: { effect: 'verified_present', compliance: 'unknown' } })
+  // Advance the wall clock without reading certificates or injecting a certificate event.
+  const expiringAt = f.now + 1 + 84 * 86400
+  vi.setSystemTime(expiringAt * 1000)
+  expect((await f.server.handle('GET', alerts)).body).toMatchObject({
+    items: [
+      expect.objectContaining({
+        state: 'open',
+        acknowledgment: null,
+        evidence: expect.objectContaining({ at: expiringAt, state: 'active' }),
+      }),
+    ],
+  })
+  const audit = '/api/mdm-candidate/v1/operations/audit?action=alert_opened&from=' + expiringAt
+  expect((await f.server.handle('GET', audit)).body).toMatchObject({
+    items: [expect.objectContaining({ at: expiringAt })],
+  })
+  // Unchanged evidence must not publish another transition on a repeated projection read.
+  await f.server.handle('GET', alerts)
+  expect((await f.server.handle('GET', audit)).body).toMatchObject({
+    items: [expect.objectContaining({ at: expiringAt })],
+  })
+  expect(((await f.server.handle('GET', audit)).body as { items: unknown[] }).items).toHaveLength(1)
 })
 it('replays the original issuance receipt without a second attempt and preserves unknown until that issuer result resolves', async () => {
   const f = await setup(),

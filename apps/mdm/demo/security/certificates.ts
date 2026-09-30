@@ -219,6 +219,7 @@ export function createCertificatesDemo(
     }
   }
   return {
+    settle,
     handle,
     source,
     valid,

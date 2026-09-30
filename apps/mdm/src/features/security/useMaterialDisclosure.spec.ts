@@ -16,7 +16,10 @@ const tenant = '11111111-1111-4111-8111-111111111111',
     action: 'reveal' as const,
   },
   grant = { id: tenant, revision: 2 }
-afterEach(() => vi.useRealTimers())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
 async function setup() {
   const now = Date.now(),
     session = shallowRef({
@@ -141,4 +144,55 @@ it('does not extend the local display lifetime if the wall clock moves backwards
   await vi.advanceTimersByTimeAsync(30_000)
   expect(f.state.secret.value).toBeNull()
   f.wrapper.unmount()
+})
+
+it('clears hidden disclosure from state and DOM, rejects hidden starts and fences responses after visibility returns', async () => {
+  const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible'),
+    f = await setup()
+  try {
+    await f.state.reveal(target, grant)
+    expect(f.wrapper.text()).toContain('SYNTHETIC')
+    visibility.mockReturnValue('hidden')
+    document.dispatchEvent(new Event('visibilitychange'))
+    expect(f.state.secret.value).toBeNull()
+    expect(f.state.expiresAt.value).toBeNull()
+    await flushPromises()
+    expect(f.wrapper.text()).toBe('')
+    expect(await f.state.reveal(target, grant)).toBe(false)
+    expect(f.reveal).toHaveBeenCalledTimes(1)
+    visibility.mockReturnValue('visible')
+    document.dispatchEvent(new Event('visibilitychange'))
+    let finish!: (value: Awaited<ReturnType<typeof f.reveal>>) => void
+    f.reveal.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)))
+    const pending = f.state.reveal(target, grant)
+    visibility.mockReturnValue('hidden')
+    document.dispatchEvent(new Event('visibilitychange'))
+    expect(f.state.busy.value).toBe(false)
+    visibility.mockReturnValue('visible')
+    document.dispatchEvent(new Event('visibilitychange'))
+    finish({
+      disclosureId: tenant,
+      issuedAt: Math.floor(Date.now() / 1000),
+      expiresAt: Math.floor(Date.now() / 1000) + 30,
+      secret: 'SYNTHETIC late',
+    })
+    expect(await pending).toBe(false)
+    expect(f.state.secret.value).toBeNull()
+    await flushPromises()
+    expect(f.wrapper.text()).toBe('')
+    // A completion must check visibility even if its event has not yet been delivered.
+    f.reveal.mockImplementationOnce(async () => {
+      visibility.mockReturnValue('hidden')
+      return {
+        disclosureId: tenant,
+        issuedAt: Math.floor(Date.now() / 1000),
+        expiresAt: Math.floor(Date.now() / 1000) + 30,
+        secret: 'SYNTHETIC hidden completion',
+      }
+    })
+    expect(await f.state.reveal(target, grant)).toBe(false)
+    expect(f.state.secret.value).toBeNull()
+  } finally {
+    f.wrapper.unmount()
+  }
 })

@@ -131,3 +131,40 @@ it('pins deployment to the issued fingerprint and fences certificate responses a
   expect(wrapper.get('[data-testid="certificate-detail"] h2').text()).toBe('device-02')
   wrapper.unmount()
 })
+
+it('keeps the applied device with its cursor and removes stale pagination when a new query fails', async () => {
+  const read = vi.fn().mockResolvedValue({ certificate, asOf: 100 }),
+    list = vi
+      .fn()
+      .mockResolvedValue({ items: [certificate], nextCursor: 'original-cursor', asOf: 100 }),
+    { wrapper, router } = await setup({ read, list })
+  try {
+    await router.push({ path: '/', query: { device: 'device-01' } })
+    await flushPromises()
+    expect(list).toHaveBeenLastCalledWith('device-01', undefined)
+    await wrapper.get('input').setValue('device-02')
+    const next = () => wrapper.findAll('button').find((b) => b.text() === '下一页')
+    await next()!.trigger('click')
+    await flushPromises()
+    expect(list).toHaveBeenLastCalledWith('device-01', 'original-cursor')
+    list.mockRejectedValueOnce(new Error('unavailable'))
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(list).toHaveBeenLastCalledWith('device-02', undefined)
+    expect(next()).toBeUndefined()
+    expect(wrapper.findAll('li')).toHaveLength(0)
+    list.mockResolvedValue({
+      items: [{ ...certificate, device: 'device-02' }],
+      nextCursor: 'new-cursor',
+      asOf: 101,
+    })
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    await wrapper.get('input').setValue('')
+    await next()!.trigger('click')
+    await flushPromises()
+    expect(list).toHaveBeenLastCalledWith('device-02', 'new-cursor')
+  } finally {
+    wrapper.unmount()
+  }
+})

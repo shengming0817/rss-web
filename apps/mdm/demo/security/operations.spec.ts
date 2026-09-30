@@ -1,4 +1,5 @@
-import { expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
+afterEach(() => vi.useRealTimers())
 import { createDeviceDemo } from '../devices/state'
 import { createAutomationDemo } from '../policies/state'
 import { createScenario, TENANT } from '../scenario'
@@ -131,4 +132,79 @@ it('records native security changes once and keeps alert acknowledgement indepen
   expect(
     (await server.handle('GET', `${root}/audit?device=device-01&cursor=${rows.nextCursor}`)).status,
   ).toBe(400)
+})
+
+it('uses the advanced scenario clock for alert transitions, acknowledgement and time-filtered audit', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-09-30T00:00:00Z'))
+  const devices = createDeviceDemo(),
+    automation = createAutomationDemo(devices),
+    server = createScenario(
+      [automation.handle, devices.handle],
+      () => {},
+      (event, scenario) => automation.tick(event, scenario),
+    ),
+    root = '/api/mdm-candidate/v1/operations',
+    login = await server.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+      login: 'demo',
+      password: 'demo',
+    }),
+    headers = {
+      'x-csrf-token': (login.body as { csrfToken: string }).csrfToken,
+      'x-identity-request': '1',
+    },
+    advance = async (at: number) => {
+      expect(
+        (
+          await server.handle(
+            'POST',
+            '/api/mdm-candidate/v1/workspace/scenario',
+            { event: { kind: 'clock', at } },
+            headers,
+          )
+        ).status,
+      ).toBe(204)
+    },
+    start = Math.floor(Date.now() / 1000) + 3600,
+    id = crypto.randomUUID(),
+    target = { kind: 'certificate' as const, id, device: 'device-01', revision: 1 },
+    observe = (version: number, state: 'active' | 'cleared') =>
+      automation.operations.observeAlert({
+        code: 'certificate_expiry',
+        severity: 'high',
+        target,
+        evidence: { id, version, at: start - 1, state },
+      })
+  await advance(start)
+  observe(1, 'active')
+  const page = (await server.handle('GET', `${root}/alerts`)).body as {
+      items: { id: string; revision: number }[]
+    },
+    alert = page.items[0]!
+  expect(alert).toMatchObject({ openedAt: start, updatedAt: start })
+  await advance(start + 60)
+  expect(
+    (
+      await server.handle(
+        'POST',
+        `${root}/alerts/${alert.id}/acknowledge`,
+        operation({}, alert.revision),
+        headers,
+      )
+    ).body,
+  ).toMatchObject({ alert: { acknowledgment: { at: start + 60 } } })
+  await advance(start + 120)
+  observe(2, 'cleared')
+  expect((await server.handle('GET', `${root}/alerts/${alert.id}`)).body).toMatchObject({
+    alert: { resolvedAt: start + 120 },
+  })
+  for (const [action, at] of [
+    ['alert_opened', start],
+    ['alert_acknowledged', start + 60],
+    ['alert_resolved', start + 120],
+  ] as const) {
+    expect(
+      (await server.handle('GET', `${root}/audit?action=${action}&from=${at}&until=${at}`)).body,
+    ).toMatchObject({ items: [expect.objectContaining({ at })] })
+  }
 })

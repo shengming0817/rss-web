@@ -80,6 +80,7 @@ export function createSecurityDemo(
     settle() {
       requests.settle()
       actions.settle()
+      certificates.settle()
     },
     executions: actions.executions,
     handle,

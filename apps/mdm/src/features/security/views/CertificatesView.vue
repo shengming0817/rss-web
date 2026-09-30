@@ -15,6 +15,7 @@ const { t } = useI18n(),
   list = ref<Awaited<ReturnType<typeof client.list>>>(),
   current = ref<Awaited<ReturnType<typeof client.read>>>(),
   device = ref(''),
+  appliedDevice = ref<string>(),
   requesting = ref(false),
   reason = ref(''),
   from = ref(0),
@@ -27,11 +28,16 @@ function load(cursor?: string) {
   requesting.value = false
   reason.value = ''
   accepted.value = undefined
-  const filter = device.value || undefined
+  const filter = cursor ? appliedDevice.value : device.value || undefined
+  if (!cursor) {
+    list.value = undefined
+    appliedDevice.value = undefined
+  }
   void run(
     () => client.list(filter, cursor),
     (v) => {
       list.value = v
+      appliedDevice.value = filter
     },
   )
 }
@@ -112,6 +118,7 @@ function request() {
   void pending()
 }
 function changed() {
+  appliedDevice.value = undefined
   list.value = undefined
   current.value = undefined
   requesting.value = false

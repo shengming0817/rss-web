@@ -34,7 +34,7 @@ export function useMaterialDisclosure() {
     const bound = binding(),
       own = generation,
       startedAt = performance.now()
-    if (disposed || !bound) {
+    if (disposed || document.visibilityState !== 'visible' || !bound) {
       failure.value = 'disclosureUnavailable'
       return false
     }
@@ -49,7 +49,12 @@ export function useMaterialDisclosure() {
         },
         bound,
       )
-      if (disposed || own !== generation || JSON.stringify(binding()) !== JSON.stringify(bound))
+      if (
+        disposed ||
+        document.visibilityState !== 'visible' ||
+        own !== generation ||
+        JSON.stringify(binding()) !== JSON.stringify(bound)
+      )
         return false
       const remaining = Math.min(
         result.expiresAt * 1000 - Date.now(),
@@ -87,11 +92,16 @@ export function useMaterialDisclosure() {
     clear,
     { flush: 'sync' },
   )
+  function visibilityChanged() {
+    if (document.visibilityState !== 'visible') clear()
+  }
+  document.addEventListener('visibilitychange', visibilityChanged)
   window.addEventListener('pagehide', clear)
   onBeforeUnmount(() => {
     disposed = true
     clear()
     window.removeEventListener('pagehide', clear)
+    document.removeEventListener('visibilitychange', visibilityChanged)
   })
   return { secret, expiresAt, busy, failure, reveal, clear }
 }
