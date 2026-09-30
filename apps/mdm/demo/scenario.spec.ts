@@ -152,11 +152,24 @@ it('classifies native compliance under security before the generic device path',
     password: 'demo',
   })
   await control(scenario, { scenario: 'normal', module: 'security', source: 'real' })
+  expect(
+    (await scenario.handle('GET', '/api/mdm-candidate/v1/workspace/scenario')).body,
+  ).toMatchObject({
+    sources: {
+      policies: 'real',
+      software: 'real',
+      security: 'real',
+      operations: 'real',
+      devices: 'mock',
+    },
+  })
   for (const path of [
     '/api/v2/compliance-rules',
     '/api/v2/compliance-rules/id/tasks/task',
     '/api/v2/devices/device-01/compliance',
     '/api/v2/devices/device-01/compliance/history',
+    '/api/mdm-candidate/v1/operations/audit',
+    '/api/mdm-candidate/v1/operations/alerts',
   ])
     expect((await scenario.handle('GET', path)).status, path).toBe(503)
   expect((await scenario.handle('GET', '/api/v2/devices/device-01/inventory')).status).toBe(200)

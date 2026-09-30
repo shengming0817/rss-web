@@ -134,6 +134,13 @@ async function apply(reset: boolean) {
       <option value="mock">{{ t('mdm.mock') }}</option>
       <option value="real">{{ t('mdm.real') }}</option>
     </select>
+    <p>
+      {{
+        locale === 'zh-CN'
+          ? '配置、软件、安全与运营共用执行、审批和审计，来源会一起切换。'
+          : 'Configuration, software, security and operations share execution, approval and audit records; their sources switch together.'
+      }}
+    </p>
     <button :disabled="busy || !authenticated.value" @click="apply(false)">
       {{ locale === 'zh-CN' ? '应用' : 'Apply' }}
     </button>

@@ -18,8 +18,10 @@ import { createBootstrapDemo } from '../software/bootstrap'
 import { createUpdatesDemo } from '../software/updates'
 import { createSelfServiceDemo } from '../software/self-service'
 import { createSecurityDemo } from '../security/state'
+import { createOperationsDemo } from '../operations/state'
 export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo>) {
-  const security = createSecurityDemo(devices)
+  const operations = createOperationsDemo(),
+    security = createSecurityDemo(devices, operations)
   const scopes = createScopeDemo(devices),
     native = createNativeDemo(devices)
   const resources = createResourceDemo(
@@ -94,6 +96,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
   const handle: DomainHandler = (request, scenario) => {
     try {
       for (const owner of [
+        operations,
         security,
         scopes,
         resources,
@@ -161,6 +164,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
     }
   }
   return {
+    operations,
     security,
     resources,
     scopes,
@@ -192,6 +196,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
     },
     reset() {
       for (const owner of [
+        operations,
         security,
         scopes,
         resources,

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { DomainHandler, Scenario } from '../scenario'
 import type { createDeviceDemo } from '../devices/state'
+import type { createOperationsDemo } from '../operations/state'
 import { evaluate, referencedFields } from '../devices/criteria'
 import { createPages, createReceipts, error, ok, operation } from '../http'
 import { closed, count, identifier, uuid } from '../../src/services/decode'
@@ -22,7 +23,10 @@ interface RuleState {
   currentRun: string | null
 }
 /** Native-shape synthetic service. Evaluation only runs here, never in the browser. */
-export function createComplianceDemo(devices: DeviceOwner) {
+export function createComplianceDemo(
+  devices: DeviceOwner,
+  operations: Pick<ReturnType<typeof createOperationsDemo>, 'record' | 'observeAlert'>,
+) {
   const rules = new Map<string, RuleState>(),
     receipts = createReceipts(),
     pages = createPages()
@@ -190,7 +194,41 @@ export function createComplianceDemo(devices: DeviceOwner) {
         : null
     job.view.processed = job.results.size
     job.view.diagnostic = null
-    if (job.view.phase === 'published') r.currentRun = job.view.task
+    if (job.view.phase === 'published') {
+      r.currentRun = job.view.task
+      for (const [device, assessment] of job.results) {
+        const target = {
+          kind: 'compliance_rule' as const,
+          id: job.rule.id,
+          device,
+          revision: job.rule.revision,
+        }
+        operations.record({
+          at: Math.floor(Date.now() / 1000),
+          actor: null,
+          action: 'compliance_evaluated',
+          target,
+          operation: null,
+          outcome: 'observed',
+        })
+        operations.observeAlert({
+          code: 'compliance_noncompliant',
+          severity: d.severity,
+          target,
+          evidence: {
+            id: job.view.task,
+            version: job.view.factWatermark,
+            at: job.evaluatedAt,
+            state:
+              assessment.status === 'non_compliant'
+                ? 'active'
+                : assessment.status === 'compliant'
+                  ? 'cleared'
+                  : 'unknown',
+          },
+        })
+      }
+    }
   }
   function current(device: string) {
     if (!devices.facts().some((d) => d.summary.id === device)) return
@@ -322,7 +360,17 @@ export function createComplianceDemo(devices: DeviceOwner) {
         if (op.expectedRevision !== (r?.rule.revision ?? 0)) return error('operation_conflict')
         if (request.method === 'POST' && suffix === 'recompute' && !tail) {
           closed(op.input, [])
-          return r?.rule.definition.enabled ? ok({ task: enqueue(r) }) : error('operation_conflict')
+          if (!r?.rule.definition.enabled) return error('operation_conflict')
+          const task = enqueue(r)
+          operations.record({
+            at: Math.floor(Date.now() / 1000),
+            actor: request.actor.principalId,
+            action: 'compliance_recomputed',
+            target: { kind: 'compliance_rule', id, revision: r.rule.revision, device: null },
+            operation: op.operationId,
+            outcome: 'accepted',
+          })
+          return ok({ task })
         }
         if (request.method !== 'PUT' || suffix) return error('malformed_request', 400)
         const definition = complianceDefinition(op.input)
@@ -339,6 +387,14 @@ export function createComplianceDemo(devices: DeviceOwner) {
         }
         next.versions.set(rule.revision, structuredClone(rule))
         rules.set(id, next)
+        operations.record({
+          at: Math.floor(Date.now() / 1000),
+          actor: request.actor.principalId,
+          action: 'compliance_saved',
+          target: { kind: 'compliance_rule', id, revision: rule.revision, device: null },
+          operation: op.operationId,
+          outcome: 'accepted',
+        })
         return ok({ id, revision: rule.revision, task: definition.enabled ? enqueue(next) : null })
       })
     } catch {

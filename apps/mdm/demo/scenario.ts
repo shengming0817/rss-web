@@ -169,11 +169,10 @@ export function createScenario(
           (data['source'] === 'real' || data['source'] === 'mock')
         ) {
           sources[data['module']] = data['source']
-          // Resource, Scope and execution endpoints are shared; source choices move together.
-          if (['policies', 'software'].includes(data['module'])) {
-            sources['policies'] = data['source']
-            sources['software'] = data['source']
-          }
+          // Executions, approvals, audit and alerts have one owner across these domains.
+          if (['policies', 'software', 'security', 'operations'].includes(data['module']))
+            for (const module of ['policies', 'software', 'security', 'operations'])
+              sources[module] = data['source']
         }
       }
       return { status: 204 }
