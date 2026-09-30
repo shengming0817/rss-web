@@ -53,7 +53,7 @@ it('keeps unknown acknowledgment locked across GET and reads current state after
         [mdmKey as symbol]: {
           tenant: id,
           demo: true,
-          operations: { alerts: { read, acknowledge } },
+          operations: { alerts: { read, acknowledge, closure: async () => null } },
         },
       },
     },

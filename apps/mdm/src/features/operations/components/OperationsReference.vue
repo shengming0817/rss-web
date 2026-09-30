@@ -6,25 +6,46 @@ import type { OperationsReference } from '../clients/model'
 const props = defineProps<{ target: OperationsReference }>()
 const { t } = useI18n(),
   runtime = useMdm()
-const link = computed(() => ({
-  name:
-    props.target.kind === 'compliance_rule'
-      ? 'security-rules'
-      : props.target.kind === 'baseline'
-        ? 'security-baselines'
-        : props.target.kind === 'certificate'
-          ? 'security-certificates'
-          : props.target.kind === 'risk'
-            ? 'security-risks'
-            : props.target.kind === 'security_action'
-              ? 'security-actions'
-              : 'security-requests',
-  params: { tenant: runtime.tenant },
-  query:
-    props.target.kind === 'compliance_rule'
-      ? { rule: props.target.id }
-      : { id: props.target.id, ...(props.target.device ? { device: props.target.device } : {}) },
-}))
+const link = computed(() => {
+  const target = props.target,
+    params: { tenant: string; device?: string; execution?: string } = { tenant: runtime.tenant }
+  const names = {
+    alert_rule: 'operations-alertRules',
+    identity_principal: 'accounts',
+    authorization_rule: 'operations-authorization',
+    user_group: 'operations-organization',
+    delegation: 'operations-organization',
+    report: 'operations-reports',
+    connector: 'operations-integrations',
+    settings: 'operations-settings',
+    job: 'operations-settings',
+    device: 'device-detail',
+    policy: 'policy-policies',
+    software_request: 'software-self-service',
+    workflow: 'policy-workflows',
+    compliance_rule: 'security-rules',
+    baseline: 'security-baselines',
+    certificate: 'security-certificates',
+    risk: 'security-risks',
+    security_action: 'security-actions',
+    security_request: 'security-requests',
+  } as const
+  if (target.kind === 'device') params.device = target.id
+  return {
+    name: names[target.kind],
+    params,
+    query:
+      target.kind === 'settings'
+        ? { section: 'configuration' }
+        : target.kind === 'compliance_rule'
+          ? { rule: target.id }
+          : target.kind === 'delegation'
+            ? { id: target.id, kind: 'delegation' }
+            : target.kind === 'software_request'
+              ? { request: target.id }
+              : { id: target.id, ...(target.device ? { device: target.device } : {}) },
+  }
+})
 </script>
 <template>
   <span>

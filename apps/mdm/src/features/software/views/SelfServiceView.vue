@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { onMounted, ref, toRaw } from 'vue'
+import { onMounted, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import { useMdm } from '../../../context'
 import { operation, useOperation, type Operation } from '../../../services/useOperation'
 import {
@@ -21,6 +22,7 @@ import NativeScheduleEditor from '../components/NativeScheduleEditor.vue'
 import SoftwareRunFacts from '../components/SoftwareRunFacts.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
+  route = useRoute(),
   client = runtime.software.selfService
 const { run, runWrite, busy, uncertain, failure } = useOperation()
 const items = ref<Awaited<ReturnType<typeof client.items>>>(),
@@ -205,18 +207,29 @@ function loadEvidence() {
     )
   }
 }
-onMounted(() =>
-  run(
-    async () => {
-      const [catalog, requests] = await Promise.all([client.items(), client.requests(phase.value)])
-      return { catalog, requests }
-    },
-    (v) => {
-      items.value = v.catalog
-      queue.value = v.requests
-    },
-  ),
+function routeRequest() {
+  if (typeof route.query['request'] === 'string') readRequest(route.query['request'])
+}
+watch(
+  () => route.fullPath,
+  () => {
+    selected.value = undefined
+    pending = undefined
+    routeRequest()
+  },
+  { flush: 'sync' },
 )
+onMounted(async () => {
+  await run(
+    () => client.items(),
+    (v) => (items.value = v),
+  )
+  await run(
+    () => client.requests(phase.value),
+    (v) => (queue.value = v),
+  )
+  routeRequest()
+})
 </script>
 <template>
   <SoftwareFrame :title="t('software.selfService')" :busy="busy" :failure="failure">

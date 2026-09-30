@@ -1,4 +1,4 @@
-import type { DomainHandler, Scenario } from '../scenario'
+import type { DomainHandler, Scenario, DemoObservation } from '../scenario'
 import type { createDeviceDemo } from '../devices/state'
 import { uuid } from '../../src/services/decode'
 import type { ExecutionSummary } from '../../src/features/policies/clients/executions'
@@ -19,11 +19,23 @@ import { createUpdatesDemo } from '../software/updates'
 import { createSelfServiceDemo } from '../software/self-service'
 import { createSecurityDemo } from '../security/state'
 import { createOperationsDemo } from '../operations/state'
+import { createAuthorizationDemo } from '../operations/authorization'
+import { createAdminDemo } from '../operations/admin'
 export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo>) {
   const operations = createOperationsDemo(() => security.now())
   const scopes = createScopeDemo(devices),
     native = createNativeDemo(devices)
   const security = createSecurityDemo(devices, operations, scopes)
+  const authorization = createAuthorizationDemo(() => security.now(), operations.record)
+  const admin = createAdminDemo(
+    () => security.now(),
+    operations,
+    (actor) =>
+      devices
+        .facts()
+        .filter((d) => authorization.can(actor, 'inventory_read', d.summary.id))
+        .map((d) => ({ id: d.summary.id, platform: d.summary.platform, status: d.summary.status })),
+  )
   const resources = createResourceDemo(
     (id, version): boolean =>
       policies.references(id, version) ||
@@ -96,8 +108,12 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
   }
   const handle: DomainHandler = (request, scenario) => {
     try {
+      const denied = authorization.guard(request, devices.batches())
+      if (denied) return denied
       security.settle()
       for (const owner of [
+        authorization,
+        admin,
         operations,
         security,
         scopes,
@@ -177,7 +193,10 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
     updates,
     bootstrap,
     handle,
-    observe(method: string, path: string, scenario: Scenario) {
+    observe(event: DemoObservation, scenario: Scenario) {
+      operations.observe(event)
+      const { method, path } = event
+      if (event.status >= 300) return
       const deviceWrite =
         method !== 'GET' &&
         /^\/api\/(?:v[23]\/(?:devices|enrollments|groups)|mdm-candidate\/v1\/devices)(?:\/|$)/.test(
@@ -197,10 +216,13 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       updates.tick(event, scenario)
       software.tick(event, scenario)
       selfService.tick(event)
+      admin.tick(scenario)
       return true
     },
     reset() {
       for (const owner of [
+        authorization,
+        admin,
         operations,
         security,
         scopes,

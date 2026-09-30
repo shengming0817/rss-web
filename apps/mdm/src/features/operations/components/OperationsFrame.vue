@@ -9,7 +9,17 @@ const { t } = useI18n(),
   <section class="device-console" :aria-busy="busy">
     <nav class="device-actions" :aria-label="t('operations.navigation')">
       <RouterLink
-        v-for="name in ['audit', 'alerts']"
+        v-for="name in [
+          'organization',
+          'authorization',
+          'audit',
+          'reports',
+          'alerts',
+          'alertRules',
+          'integrations',
+          'settings',
+          'approvals',
+        ]"
         :key="name"
         :to="{ name: `operations-${name}`, params: { tenant: runtime.tenant } }"
         >{{ t(`operations.${name}`) }}</RouterLink

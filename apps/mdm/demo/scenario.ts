@@ -1,10 +1,8 @@
 /** MOCK_SOURCE: synthetic HTTP server, never part of a production entry. */
+import { observationTarget } from './operations/observation'
+import type { OperationsReference } from '../src/features/operations/clients/model'
 import type { DemoEvent } from './policies/schedule'
-import {
-  MDM_JSON_BODY_LIMIT,
-  MDM_CONTENT_BODY_LIMIT,
-  isMdmContentRequest,
-} from '@rss/api/mdm-limits'
+import { mdmJsonBodyLimit, MDM_CONTENT_BODY_LIMIT, isMdmContentRequest } from '@rss/api/mdm-limits'
 export const TENANT = '11111111-1111-4111-8111-111111111111'
 const PRINCIPAL = '22222222-2222-4222-8222-222222222222'
 const REVIEWER = '33333333-3333-4333-8333-333333333333'
@@ -33,12 +31,23 @@ export interface DemoRequest {
   query: URLSearchParams
   headers: Record<string, string | string[] | undefined>
 }
+export interface DemoObservation {
+  actor: { principalId: string; sessionId: string }
+  method: string
+  path: string
+  operation: string | null
+  target: OperationsReference | null
+  at: number
+  status: number
+  outcome: 'accepted' | 'denied' | 'failed' | 'unknown'
+  stream: 'identity_security' | 'mdm_business'
+}
 export type DomainHandler = (request: DemoRequest, scenario: Scenario) => Reply | undefined
 export function createScenario(
   handlers: DomainHandler[] = [],
   resetDomains: () => void = () => {},
   advance: (event: DemoEvent, scenario: Scenario) => boolean = () => true,
-  observed: (method: string, path: string, scenario: Scenario) => void = () => {},
+  observed: (event: DemoObservation, scenario: Scenario) => void = () => {},
   now: () => number = () => Math.floor(Date.now() / 1000),
 ) {
   let active: Scenario = 'normal'
@@ -94,10 +103,46 @@ export function createScenario(
       return { status: 400, body: { code: 'malformed_request' } }
     } else if (
       body !== undefined &&
-      new TextEncoder().encode(JSON.stringify(body)).byteLength > MDM_JSON_BODY_LIMIT
+      new TextEncoder().encode(JSON.stringify(body)).byteLength > mdmJsonBodyLimit(method, path)
     )
       return { status: 413 }
     const data = body && typeof body === 'object' ? (body as Record<string, unknown>) : {}
+
+    function observedReply(reply: Reply, stream: DemoObservation['stream'] = 'mdm_business') {
+      const valid = (v: unknown): v is string =>
+        typeof v === 'string' &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(v)
+      const operation =
+        valid(data['operationId']) && !/^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(data['operationId'])
+          ? data['operationId']
+          : null
+      const target =
+        stream === 'identity_security'
+          ? { kind: 'identity_principal' as const, id: principalId, device: null, revision: null }
+          : observationTarget(path, operation)
+      observed(
+        {
+          actor: { principalId, sessionId },
+          method,
+          path,
+          operation,
+          target,
+          at: now(),
+          status: reply.status,
+          outcome:
+            reply.status < 300
+              ? 'accepted'
+              : reply.status === 403
+                ? 'denied'
+                : (reply.body as { code?: string } | undefined)?.code === 'operation_unknown'
+                  ? 'unknown'
+                  : 'failed',
+          stream,
+        },
+        active,
+      )
+      return reply
+    }
     if (path === '/api/mdm-candidate/v1/workspace/scenario' && method === 'GET')
       return { status: 200, body: { scenario: active, sources: { ...sources }, asOf: now() } }
     if (path === '/api/mdm-candidate/v1/workspace/scenario' && method === 'POST') {
@@ -218,7 +263,7 @@ export function createScenario(
       principalId = data['login'] === 'reviewer' ? REVIEWER : PRINCIPAL
       sessionId = crypto.randomUUID()
       epoch++
-      return { status: 200, body: session() }
+      return observedReply({ status: 200, body: session() }, 'identity_security')
     }
     if (!signedIn)
       return {
@@ -263,13 +308,17 @@ export function createScenario(
     const expected = epoch
     if (active === 'late') await new Promise((resolve) => setTimeout(resolve, 1500))
     if (epoch !== expected) return { status: 409, body: { code: 'operation_conflict' } }
-    if (active === 'forbidden') return { status: 403, body: { code: 'permission_denied' } }
-    if (active === 'offline') return { status: 503, body: { code: 'service_unavailable' } }
-    if (active === 'unsupported') return { status: 501, body: { code: 'action_not_supported' } }
-    if (method !== 'GET' && active === 'conflict')
-      return { status: 409, body: { code: 'operation_conflict' } }
+    function fault(): Reply | undefined {
+      if (active === 'forbidden') return { status: 403, body: { code: 'permission_denied' } }
+      if (active === 'offline') return { status: 503, body: { code: 'service_unavailable' } }
+      if (active === 'unsupported') return { status: 501, body: { code: 'action_not_supported' } }
+      if (method !== 'GET' && active === 'conflict')
+        return { status: 409, body: { code: 'operation_conflict' } }
+    }
     const unknownReply = method !== 'GET' && active === 'unknown'
-    if (path === '/api/mdm-candidate/v1/workspace' && method === 'GET')
+    if (path === '/api/mdm-candidate/v1/workspace' && method === 'GET') {
+      const failure = fault()
+      if (failure) return failure
       return {
         status: 200,
         body: {
@@ -280,6 +329,7 @@ export function createScenario(
           })),
         },
       }
+    }
     const policyPath =
       /^\/api\/(?:v2\/(?:scopes|policies)(?:\/|$)|v3\/(?:resources)(?:\/|$)|v2\/devices\/[^/]+\/operations(?:\/|$)|mdm-candidate\/v1\/(?:policies|executions)(?:\/|$))/.test(
         path,
@@ -290,21 +340,29 @@ export function createScenario(
       )
     const securityPath =
       /^\/api\/v2\/(?:compliance-rules(?:\/|$)|devices\/[^/]+\/compliance(?:\/|$))/.test(path)
-    const module = securityPath
-      ? 'security'
-      : softwarePath
-        ? 'software'
-        : policyPath
-          ? 'policies'
-          : /^\/api\/(?:v2\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v3\/(?:enrollments|devices))(?:\/|$)/.test(
-                path,
-              )
-            ? 'devices'
-            : path.startsWith('/api/mdm-candidate/v1/groups')
+    const operationsPath =
+      /^\/api\/(?:v1\/authorization(?:\/|$)|mdm-candidate\/v1\/(?:authorization|audit|operations|integrations)(?:\/|$))/.test(
+        path,
+      )
+    const module = operationsPath
+      ? 'operations'
+      : securityPath
+        ? 'security'
+        : softwarePath
+          ? 'software'
+          : policyPath
+            ? 'policies'
+            : /^\/api\/(?:v2\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v3\/(?:enrollments|devices))(?:\/|$)/.test(
+                  path,
+                )
               ? 'devices'
-              : path.split('/')[4]
+              : path.startsWith('/api/mdm-candidate/v1/groups')
+                ? 'devices'
+                : path.split('/')[4]
     if (module && sources[module] === 'real')
       return { status: 503, body: { code: 'service_unavailable' } }
+    const failure = fault()
+    if (failure) return observedReply(failure)
     for (const handler of handlers) {
       const reply = handler(
         {
@@ -318,14 +376,15 @@ export function createScenario(
         active,
       )
       if (reply) {
-        if (reply.status >= 200 && reply.status < 300) observed(method, path, active)
-        return unknownReply && reply.status >= 200 && reply.status < 300
-          ? { status: 503, body: { code: 'operation_unknown' } }
-          : reply
+        return observedReply(
+          unknownReply && reply.status >= 200 && reply.status < 300
+            ? { status: 503, body: { code: 'operation_unknown' } }
+            : reply,
+        )
       }
     }
-    if (unknownReply) return { status: 503, body: { code: 'operation_unknown' } }
-    return { status: 501, body: { code: 'action_not_supported' } }
+    if (unknownReply) return observedReply({ status: 503, body: { code: 'operation_unknown' } })
+    return observedReply({ status: 501, body: { code: 'action_not_supported' } })
   }
   return {
     handle,

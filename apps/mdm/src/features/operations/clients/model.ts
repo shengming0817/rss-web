@@ -1,8 +1,17 @@
 import { closed, count, enumeration, identifier, nullable, uuid } from '../../../services/decode'
 export const auditActions = [
+  'authorization_changed',
+  'user_group_changed',
+  'management_changed',
+  'job_accepted',
+  'job_observed',
+  'request_succeeded',
+  'request_failed',
+  'identity_session_created',
   'compliance_saved',
   'compliance_recomputed',
   'compliance_evaluated',
+  'alert_closed',
   'alert_opened',
   'alert_resolved',
   'alert_acknowledged',
@@ -37,6 +46,19 @@ export function reference(value: unknown) {
   const v = closed(value, ['kind', 'id', 'device', 'revision'])
   return {
     kind: enumeration(v['kind'], [
+      'identity_principal',
+      'alert_rule',
+      'authorization_rule',
+      'user_group',
+      'delegation',
+      'report',
+      'connector',
+      'settings',
+      'job',
+      'device',
+      'policy',
+      'software_request',
+      'workflow',
       'compliance_rule',
       'baseline',
       'security_request',
@@ -44,20 +66,34 @@ export function reference(value: unknown) {
       'security_action',
       'certificate',
     ] as const),
-    id: uuid(v['id']),
+    id: identifier(v['id']),
     device: nullable(v['device'], identifier),
     revision: nullable(v['revision'], count),
   }
 }
 export type OperationsReference = ReturnType<typeof reference>
 export function auditEntry(value: unknown) {
-  const v = closed(value, ['id', 'at', 'actor', 'action', 'target', 'operation', 'outcome'])
+  const v = closed(value, [
+    'id',
+    'at',
+    'actor',
+    'action',
+    'target',
+    'operation',
+    'outcome',
+    'stream',
+    'stage',
+    'status',
+  ])
   return {
     id: uuid(v['id']),
     at: count(v['at']),
+    stream: enumeration(v['stream'], ['mdm_business', 'identity_security'] as const),
+    stage: enumeration(v['stage'], ['request', 'business', 'delivery'] as const),
+    status: nullable(v['status'], count),
     actor: nullable(v['actor'], uuid),
     action: enumeration(v['action'], auditActions),
-    target: reference(v['target']),
+    target: nullable(v['target'], reference),
     operation: nullable(v['operation'], uuid),
     outcome: enumeration(v['outcome'], [
       'accepted',
@@ -89,6 +125,9 @@ export function alert(value: unknown) {
     id: uuid(v['id']),
     revision: count(v['revision']),
     code: enumeration(v['code'], [
+      'projection_backlog',
+      'connector_failure',
+      'agent_health',
       'compliance_noncompliant',
       'risk_affected',
       'certificate_expiry',
@@ -112,13 +151,16 @@ export function alert(value: unknown) {
     operation: nullable(v['operation'], uuid),
   }
   if (
-    result.target.kind !==
-      (result.code === 'risk_affected'
-        ? 'risk'
-        : result.code === 'certificate_expiry'
-          ? 'certificate'
-          : 'compliance_rule') ||
-    result.target.device === null ||
+    (['compliance_noncompliant', 'risk_affected', 'certificate_expiry'].includes(result.code) &&
+      (result.target.kind !==
+        (result.code === 'risk_affected'
+          ? 'risk'
+          : result.code === 'certificate_expiry'
+            ? 'certificate'
+            : 'compliance_rule') ||
+        result.target.device === null)) ||
+    (['projection_backlog', 'connector_failure', 'agent_health'].includes(result.code) &&
+      !['settings', 'alert_rule'].includes(result.target.kind)) ||
     !result.revision ||
     !result.evidence.version ||
     (result.state === 'resolved') !== (result.resolvedAt !== null) ||

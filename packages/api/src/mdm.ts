@@ -1,6 +1,6 @@
 /** MDM browser protocol policy over the shared HTTP executor. No retries. */
 import axios from 'axios'
-import { isMdmContentRequest, MDM_CONTENT_BODY_LIMIT, MDM_JSON_BODY_LIMIT } from './mdm-limits'
+import { isMdmContentRequest, MDM_CONTENT_BODY_LIMIT, mdmJsonBodyLimit } from './mdm-limits'
 import { decodeIdentityError } from './identity'
 import { execute } from './transport'
 import { clientError, identityWireFailure, protocolError } from './wire-error'
@@ -116,7 +116,8 @@ export function createMdmTransport(): HttpTransport {
         throw clientError()
       if (
         options.body !== undefined &&
-        new TextEncoder().encode(JSON.stringify(options.body)).byteLength > MDM_JSON_BODY_LIMIT
+        new TextEncoder().encode(JSON.stringify(options.body)).byteLength >
+          mdmJsonBodyLimit(options.method, options.path)
       )
         throw decodeMdmError(413, undefined)
       return execute(instance, 30_000, options, decodeMdmError)
