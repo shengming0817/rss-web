@@ -160,6 +160,36 @@ function selectTab(key: (typeof tabs)[number]) {
         }"
         >{{ t('policies.scopes') }}</RouterLink
       >
+      <nav class="device-actions" :aria-label="t('security.relatedRecords')">
+        <RouterLink
+          v-for="name in [
+            'compliance',
+            'materials',
+            'certificates',
+            'support',
+            'experience',
+            'actions',
+            'requests',
+          ]"
+          :key="name"
+          :to="{
+            name: `security-${name}`,
+            params: { tenant: runtime.tenant },
+            query: { device: detail.device.id },
+          }"
+          >{{ t(`security.${name}`) }}</RouterLink
+        >
+        <RouterLink
+          v-for="name in ['audit', 'alerts']"
+          :key="name"
+          :to="{
+            name: `operations-${name}`,
+            params: { tenant: runtime.tenant },
+            query: { device: detail.device.id },
+          }"
+          >{{ t(`operations.${name}`) }}</RouterLink
+        >
+      </nav>
       <p v-if="detailStale" role="status">{{ t('devices.refreshDetail') }}</p>
       <p v-else>
         {{ t(`devices.${detail.device.status}`) }} · {{ t(`devices.${detail.device.platform}`) }} ·

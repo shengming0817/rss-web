@@ -1,4 +1,7 @@
 export const securityZh = {
+  configureRemediation: '配置修复策略',
+  remediationVerification:
+    '修复配置沿用策略与执行记录；下发或执行成功不改变当前合规结论。确认新设备证据后，在规则页显式重新评估。',
   experience: '终端体验',
   experienceHint:
     '指标由合成遥测源提供，按观测窗口列出有效样本、预期分母与缺失数。缺样本显示未知或不完整；不从当前设备清单推算趋势，也不补零。',
@@ -433,6 +436,9 @@ export const securityZh = {
   },
 }
 export const securityEn: typeof securityZh = {
+  configureRemediation: 'Configure remediation policy',
+  remediationVerification:
+    'Remediation uses existing policies and executions. Dispatch or command success does not change compliance. After confirming fresh device evidence, explicitly reassess from the rule page.',
   experience: 'Endpoint experience',
   experienceHint:
     'The synthetic telemetry source reports each observation window, valid samples, expected denominator and missing samples. Missing data stays unknown or incomplete; no inventory-derived trends or zero filling.',

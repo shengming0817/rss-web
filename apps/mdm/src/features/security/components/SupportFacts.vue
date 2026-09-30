@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import type { SupportRecord } from '../clients/support-model'
-defineProps<{ support: SupportRecord }>()
+defineProps<{ support: SupportRecord; asOf: number }>()
 const { t } = useI18n(),
   at = (v: number | null) =>
     v === null ? '—' : v <= 253402300799 ? new Date(v * 1000).toISOString() : String(v)
 </script>
 <template>
   <dl>
+    <dt>{{ t('security.asOf') }}</dt>
+    <dd>{{ at(asOf) }}</dd>
     <dt>{{ t('security.frozenSource') }}</dt>
     <dd>
       {{

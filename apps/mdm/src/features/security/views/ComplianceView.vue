@@ -113,6 +113,31 @@ onMounted(() => {
             <summary>{{ t('security.previous') }}</summary>
             <AssessmentFacts :assessment="rule.previous" /></details
         ></template>
+        <nav class="device-actions" :aria-label="t('security.relatedRecords')">
+          <RouterLink :to="{ name: 'policy-configurations', params: { tenant: runtime.tenant } }">{{
+            t('security.configureRemediation')
+          }}</RouterLink>
+          <RouterLink
+            :to="{
+              name: 'policy-scopes',
+              params: { tenant: runtime.tenant },
+              query: { device: current.device },
+            }"
+            >{{ t('policies.scopes') }}</RouterLink
+          >
+          <RouterLink :to="{ name: 'policy-executions', params: { tenant: runtime.tenant } }">{{
+            t('policies.executions')
+          }}</RouterLink>
+          <RouterLink
+            :to="{
+              name: 'operations-alerts',
+              params: { tenant: runtime.tenant },
+              query: { device: current.device },
+            }"
+            >{{ t('operations.alerts') }}</RouterLink
+          >
+        </nav>
+        <p>{{ t('security.remediationVerification') }}</p>
       </article>
       <h2>{{ t('security.history') }}</h2>
       <form data-testid="history-filter" @submit.prevent="loadHistory()">

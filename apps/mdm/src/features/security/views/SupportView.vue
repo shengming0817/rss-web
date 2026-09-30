@@ -266,6 +266,7 @@ onMounted(changed)
       <h2>{{ current.request.request.target.device }} · {{ current.request.request.id }}</h2>
       <RequestFacts :request="current.request.request" :as-of="current.request.asOf" /><SupportFacts
         :support="current.support.support"
+        :as-of="current.support.asOf"
       />
       <button
         :disabled="busy"
