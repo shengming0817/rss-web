@@ -1,8 +1,13 @@
-import { expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createScenario, TENANT } from '../scenario'
 import { createDeviceDemo } from '../devices/state'
 import { createAutomationDemo } from '../policies/state'
 import { operation } from '../../src/services/useOperation'
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-09-30T00:00:00Z'))
+})
+afterEach(() => vi.useRealTimers())
 const root = '/api/mdm-candidate/v1/security'
 async function setup() {
   const devices = createDeviceDemo(),
@@ -295,3 +300,44 @@ it.each(['filevault', 'laps', 'bootstrap_token', 'recovery_lock'] as const)(
     })
   },
 )
+
+it('settles an expired queued rotation before a material-only read and publishes its failure audit once', async () => {
+  const f = await setup(),
+    path = `${root}/materials/device-01/bitlocker`,
+    request = operation({
+      ...f.request().input,
+      target: {
+        kind: 'material_operation',
+        device: 'device-01',
+        material: 'bitlocker',
+        materialRevision: 1,
+        volume: 'os',
+        action: 'rotate',
+      },
+    })
+  expect((await f.write(`${root}/requests`, request)).status).toBe(200)
+  await f.login('reviewer')
+  await f.write(`${root}/requests/${request.operationId}/approve`, operation({}, 1))
+  await f.login('demo')
+  const dispatch = operation({}, 2)
+  expect((await f.write(`${root}/requests/${request.operationId}/dispatch`, dispatch)).status).toBe(
+    200,
+  )
+  expect((await f.server.handle('GET', path)).body).toMatchObject({
+    material: { actions: ['rotate'] },
+  })
+  // Natural server time advances without a demo event or execution-page read.
+  vi.setSystemTime((f.now + 121) * 1000)
+  expect((await f.server.handle('GET', path)).body).toMatchObject({
+    material: { actions: ['reveal', 'rotate'] },
+  })
+  const audit = '/api/mdm-candidate/v1/operations/audit?device=device-01&action=security_result'
+  const entries = (await f.server.handle('GET', audit)).body
+  expect(entries).toMatchObject({
+    items: [{ target: { id: dispatch.operationId }, outcome: 'failed' }],
+  })
+  await f.server.handle('GET', path)
+  expect((await f.server.handle('GET', audit)).body).toMatchObject({
+    items: [expect.objectContaining({ outcome: 'failed' })],
+  })
+})

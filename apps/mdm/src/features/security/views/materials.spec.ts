@@ -7,7 +7,7 @@ import { mdmI18n } from '../../../i18n'
 import MaterialsView from './MaterialsView.vue'
 const id = '11111111-1111-4111-8111-111111111111',
   other = '22222222-2222-4222-8222-222222222222'
-async function setup(lost: boolean) {
+async function setup(lost: boolean, multipleVolumes = false) {
   const now = Math.floor(Date.now() / 1000),
     target = {
       kind: 'material_access',
@@ -29,7 +29,12 @@ async function setup(lost: boolean) {
       actions: ['reveal', 'rotate'],
       details: {
         tpm: 'ready',
-        volumes: [{ id: 'os', role: 'os', encryption: 'on', escrow: 'available', keyId: id }],
+        volumes: [
+          ...(multipleVolumes
+            ? [{ id: 'missing', role: 'data', encryption: 'on', escrow: 'missing', keyId: null }]
+            : []),
+          { id: 'os', role: 'os', encryption: 'on', escrow: 'available', keyId: id },
+        ],
       },
     },
     request = {
@@ -125,5 +130,40 @@ it('keeps a lost disclosure disabled even if the nonsecret status read also fail
   expect(wrapper.get('[data-testid="reveal-material"]').attributes('disabled')).toBeDefined()
   expect(wrapper.text()).toContain('查阅结果未知，不可重放')
   expect(wrapper.findAll('button').some((b) => b.text() === '重放同一操作')).toBe(false)
+  wrapper.unmount()
+})
+
+it("disables another principal's approved disclosure before sending a request", async () => {
+  const { wrapper, reveal, session } = await setup(false)
+  session.value = { ...session.value, identity: { principalId: other } }
+  await flushPromises()
+  expect(wrapper.get('[data-testid="reveal-material"]').attributes('disabled')).toBeDefined()
+  await wrapper.get('[data-testid="reveal-material"]').trigger('click')
+  expect(reveal).not.toHaveBeenCalled()
+  session.value = { ...session.value, identity: { principalId: id } }
+  await flushPromises()
+  expect(wrapper.get('[data-testid="reveal-material"]').attributes('disabled')).toBeUndefined()
+  session.value = { ...session.value, status: 'anonymous' }
+  await flushPromises()
+  expect(wrapper.get('[data-testid="reveal-material"]').attributes('disabled')).toBeDefined()
+  wrapper.unmount()
+})
+it('selects only escrowed BitLocker volumes for disclosure while retaining rotation choices', async () => {
+  const { wrapper } = await setup(false, true)
+  const button = (label: string) => wrapper.findAll('button').find((b) => b.text() === label)!
+  await button('申请一次性查阅').trigger('click')
+  const volumes = () => wrapper.get('[data-testid="material-request"] select')
+  expect(
+    volumes()
+      .findAll('option')
+      .map((v) => v.attributes('value')),
+  ).toEqual(['os'])
+  expect(volumes().element).toHaveProperty('value', 'os')
+  await button('申请轮换').trigger('click')
+  expect(
+    volumes()
+      .findAll('option')
+      .map((v) => v.attributes('value')),
+  ).toEqual(['missing', 'os'])
   wrapper.unmount()
 })

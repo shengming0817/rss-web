@@ -241,6 +241,9 @@ export function supportRecord(value: unknown) {
       availableUntil: nullable(d['availableUntil'], count),
     }
   if (
+    (details.collection
+      ? details.availableUntil !== count(details.collection.at + target.retentionSeconds)
+      : details.availableUntil !== null) ||
     (details.collection !== null && (!base.action || !base.source)) ||
     (details.state === 'ready' &&
       (!details.collection ||

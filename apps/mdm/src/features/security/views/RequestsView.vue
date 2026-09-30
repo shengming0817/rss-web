@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -19,6 +19,21 @@ const page = ref<Awaited<ReturnType<typeof client.list>>>(),
   state = ref<SecurityRequest['state'] | ''>(''),
   applied = ref<RequestFilter>(),
   actionId = ref<string>()
+const principal = computed(() => {
+  const session = runtime.session.state.value
+  return session.status === 'authenticated' && session.tenant === runtime.tenant
+    ? session.identity?.principalId
+    : undefined
+})
+const isRequester = computed(
+  () => !!principal.value && selected.value?.request.requester === principal.value,
+)
+const canDecide = computed(() => !!principal.value && !!selected.value && !isRequester.value)
+const canRevoke = computed(
+  () =>
+    isRequester.value ||
+    (!!principal.value && selected.value?.request.decision?.by === principal.value),
+)
 let pending: (() => Promise<void>) | undefined
 const at = (seconds: number) =>
   seconds <= 253402300799 ? new Date(seconds * 1000).toISOString() : String(seconds)
@@ -52,7 +67,13 @@ function open(id: string) {
   )
 }
 function decide(action: 'approve' | 'deny' | 'revoke') {
-  if (busy.value || uncertain.value || !selected.value) return
+  if (
+    busy.value ||
+    uncertain.value ||
+    !selected.value ||
+    !(action === 'revoke' ? canRevoke.value : canDecide.value)
+  )
+    return
   const id = selected.value.request.id,
     body = operation({}, selected.value.request.revision)
   pending = async () => {
@@ -84,7 +105,7 @@ function routeChanged() {
   else load()
 }
 function dispatch() {
-  if (!selected.value || busy.value || uncertain.value) return
+  if (!selected.value || busy.value || uncertain.value || !isRequester.value) return
   const id = selected.value.request.id,
     body = operation({}, selected.value.request.revision)
   actionId.value = body.operationId
@@ -146,7 +167,7 @@ onMounted(routeChanged)
         <p>{{ t('security.dispatchHint') }}</p>
         <button
           v-if="selected.request.state === 'approved' && !actionId"
-          :disabled="busy || uncertain"
+          :disabled="busy || uncertain || !isRequester"
           data-testid="dispatch-security"
           @click="dispatch"
         >
@@ -177,18 +198,18 @@ onMounted(routeChanged)
       </button>
       <template v-if="selected.request.state === 'pending'"
         ><button
-          :disabled="busy || uncertain"
+          :disabled="busy || uncertain || !canDecide"
           data-testid="approve-request"
           @click="decide('approve')"
         >
           {{ t('security.approve') }}</button
-        ><button :disabled="busy || uncertain" @click="decide('deny')">
+        ><button :disabled="busy || uncertain || !canDecide" @click="decide('deny')">
           {{ t('security.deny') }}
         </button></template
       >
       <button
         v-if="['pending', 'approved'].includes(selected.request.state)"
-        :disabled="busy || uncertain"
+        :disabled="busy || uncertain || !canRevoke"
         @click="decide('revoke')"
       >
         {{ t('security.revoke') }}

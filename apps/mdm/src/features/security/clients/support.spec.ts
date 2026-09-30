@@ -83,3 +83,53 @@ it('checks support device/request identity, source and observation time before d
   await expect(client.context('device-02')).rejects.toThrow()
   await expect(createSupportClient(transport, id, false).context('device-01')).rejects.toThrow()
 })
+
+it('binds diagnostic availability to the approved retention from collection time', () => {
+  const diagnostics = {
+    ...support,
+    target: {
+      kind: 'diagnostics',
+      device: 'device-01',
+      contextRevision: 1,
+      artifacts: ['system_events'],
+      retentionSeconds: 86400,
+    },
+    details: {
+      kind: 'diagnostics',
+      state: 'ready',
+      collection: { at: 100, artifacts: [{ kind: 'system_events', records: 5, bytes: 1024 }] },
+      uploadedAt: 101,
+      scan: { state: 'clean', at: 102 },
+      availableUntil: 86500,
+    },
+  }
+  expect(supportRecord(diagnostics).details.kind).toBe('diagnostics')
+  for (const availableUntil of [null, 86499, 86501, 864100])
+    expect(() =>
+      supportRecord({ ...diagnostics, details: { ...diagnostics.details, availableUntil } }),
+    ).toThrow()
+  expect(() =>
+    supportRecord({
+      ...diagnostics,
+      action: null,
+      details: {
+        kind: 'diagnostics',
+        state: 'not_collected',
+        collection: null,
+        uploadedAt: null,
+        scan: { state: 'not_scanned', at: null },
+        availableUntil: 86500,
+      },
+    }),
+  ).toThrow()
+  expect(() =>
+    supportRecord({
+      ...diagnostics,
+      details: {
+        ...diagnostics.details,
+        collection: { ...diagnostics.details.collection, at: Number.MAX_SAFE_INTEGER },
+        availableUntil: Number.MAX_SAFE_INTEGER,
+      },
+    }),
+  ).toThrow()
+})

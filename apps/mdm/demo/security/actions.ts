@@ -239,6 +239,7 @@ export function createSecurityActions(
     }
   }
   return {
+    settle,
     handle,
     tick(event: DemoEvent, scenario: Scenario) {
       settle()

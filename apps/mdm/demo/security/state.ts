@@ -75,6 +75,11 @@ export function createSecurityDemo(
     materials,
     certificates,
     support,
+    // Settle once before public projections; blocksDisclosure stays a non-recursive predicate.
+    settle() {
+      requests.settle()
+      actions.settle()
+    },
     executions: actions.executions,
     handle,
     tick(event: DemoEvent, scenario: Scenario) {

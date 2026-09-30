@@ -45,9 +45,17 @@ const allowed = computed(() => {
         : c.remoteModes.includes(mode.value))
   )
 })
+const principal = computed(() => {
+  const session = runtime.session.state.value
+  return session.status === 'authenticated' && session.tenant === runtime.tenant
+    ? session.identity?.principalId
+    : undefined
+})
 const canDispatch = computed(
   () =>
-    current.value?.request.request.state === 'approved' &&
+    !!principal.value &&
+    current.value?.request.request.requester === principal.value &&
+    current.value.request.request.state === 'approved' &&
     !current.value.support.support.action &&
     (current.value.support.support.details.kind !== 'remote_support' ||
       current.value.support.support.details.consent.state === 'granted'),

@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
-import { materialKinds, type MaterialKind } from '../clients/materials-model'
+import { hasEscrow, materialKinds, type MaterialKind } from '../clients/materials-model'
 import { requestTarget } from '../clients/requests-model'
 import { useMaterialDisclosure } from '../useMaterialDisclosure'
 import SecurityFrame from '../components/SecurityFrame.vue'
@@ -34,9 +34,23 @@ const device = ref(''),
   accepted = ref<string>()
 const attempted = reactive(new Set<string>())
 let pending: (() => Promise<void>) | undefined
+const principal = computed(() => {
+  const session = runtime.session.state.value
+  return session.status === 'authenticated' && session.tenant === runtime.tenant
+    ? session.identity?.principalId
+    : undefined
+})
+const selectableVolumes = computed(() => {
+  const m = current.value?.material
+  return m?.kind === 'bitlocker'
+    ? (m.details?.volumes ?? []).filter((v) => action.value !== 'reveal' || hasEscrow(m, v.id))
+    : []
+})
 const canReveal = computed(
   () =>
-    grant.value?.request.state === 'approved' &&
+    !!principal.value &&
+    grant.value?.request.requester === principal.value &&
+    grant.value.request.state === 'approved' &&
     grant.value.request.target.kind === 'material_access' &&
     !attempted.has(grant.value.request.id) &&
     current.value?.material.actions.includes('reveal'),
@@ -75,6 +89,7 @@ function begin(selected: 'reveal' | 'rotate' | 'reescrow') {
   if (!current.value || busy.value || uncertain.value) return
   disclosure.clear()
   action.value = selected
+  volume.value = selectableVolumes.value[0]?.id ?? ''
   from.value = current.value.asOf
   until.value = from.value + (selected === 'reveal' ? 300 : 3600)
   reason.value = ''
@@ -82,6 +97,11 @@ function begin(selected: 'reveal' | 'rotate' | 'reescrow') {
 }
 function submit() {
   if (!current.value || busy.value || uncertain.value) return
+  if (
+    current.value.material.kind === 'bitlocker' &&
+    !selectableVolumes.value.some((v) => v.id === volume.value)
+  )
+    return
   disclosure.clear()
   const m = current.value.material,
     target = requestTarget({
@@ -240,7 +260,7 @@ onMounted(() => void changed())
         <label v-if="current.material.kind === 'bitlocker'"
           >{{ t('security.volume')
           }}<select v-model="volume" required>
-            <option v-for="v in current.material.details?.volumes" :key="v.id" :value="v.id">
+            <option v-for="v in selectableVolumes" :key="v.id" :value="v.id">
               {{ v.id }}
             </option>
           </select></label

@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
+import { shallowRef } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
@@ -44,6 +45,11 @@ async function setup(
   actions: object = {},
   query: Record<string, string> = { id },
 ) {
+  const session = shallowRef({
+    status: 'authenticated',
+    tenant: id,
+    identity: { principalId: other },
+  })
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [{ path: '/', component: SupportView }],
@@ -57,13 +63,14 @@ async function setup(
         [mdmKey as symbol]: {
           tenant: id,
           demo: true,
+          session: { state: session },
           security: { support: supportClient, requests, actions },
         },
       },
     },
   })
   await flushPromises()
-  return { wrapper, router }
+  return { wrapper, router, session }
 }
 it('requires separate user consent and preserves an unknown dispatch across metadata refreshes', async () => {
   const read = vi.fn().mockResolvedValue({ support, asOf: 100 }),
@@ -127,5 +134,28 @@ it('fences late support evidence after navigating to a different request', async
   finish({ support, asOf: 100 })
   await flushPromises()
   expect(wrapper.get('[data-testid="support-detail"] h2').text()).toContain('device-02')
+  wrapper.unmount()
+})
+
+it('only offers a consented dispatch to its authenticated requester', async () => {
+  const granted = {
+    ...support,
+    details: { ...support.details, consent: { state: 'granted', at: 99, validUntil: 200 } },
+  }
+  const dispatch = vi.fn(),
+    { wrapper, session } = await setup(
+      { read: async () => ({ support: granted, asOf: 100 }) },
+      { read: async () => ({ request, asOf: 100 }) },
+      { dispatch },
+    )
+  expect(wrapper.get('[data-testid="dispatch-support"]').attributes('disabled')).toBeUndefined()
+  session.value = { ...session.value, identity: { principalId: id } }
+  await flushPromises()
+  expect(wrapper.get('[data-testid="dispatch-support"]').attributes('disabled')).toBeDefined()
+  await wrapper.get('[data-testid="dispatch-support"]').trigger('click')
+  expect(dispatch).not.toHaveBeenCalled()
+  session.value = { ...session.value, status: 'anonymous', identity: { principalId: other } }
+  await flushPromises()
+  expect(wrapper.get('[data-testid="dispatch-support"]').attributes('disabled')).toBeDefined()
   wrapper.unmount()
 })

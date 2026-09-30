@@ -96,6 +96,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
   }
   const handle: DomainHandler = (request, scenario) => {
     try {
+      security.settle()
       for (const owner of [
         operations,
         security,

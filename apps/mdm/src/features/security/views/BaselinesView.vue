@@ -197,7 +197,7 @@ function submitRequest() {
   })
   requested.value = body.operationId
   pending = async () => {
-    await runWrite(
+    const done = await runWrite(
       () => runtime.security.requests.create(body),
       (v) => {
         requested.value = v.request.id
@@ -205,6 +205,7 @@ function submitRequest() {
         target.value = undefined
       },
     )
+    if (!done && !uncertain.value) requested.value = undefined
   }
   void pending()
 }
