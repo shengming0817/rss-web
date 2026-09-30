@@ -17,6 +17,8 @@ export interface DemoEvent {
     | 'bootstrap_detect'
     | 'enrollment_bind'
     | 'agent_binding'
+    | 'security_result'
+    | 'security_detect'
   at: number
   device?: string
   resource?: string

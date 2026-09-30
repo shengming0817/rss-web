@@ -12,10 +12,16 @@ const link = computed(() => ({
       ? 'security-rules'
       : props.target.kind === 'baseline'
         ? 'security-baselines'
-        : 'security-requests',
+        : props.target.kind === 'risk'
+          ? 'security-risks'
+          : props.target.kind === 'security_action'
+            ? 'security-actions'
+            : 'security-requests',
   params: { tenant: runtime.tenant },
   query:
-    props.target.kind === 'compliance_rule' ? { rule: props.target.id } : { id: props.target.id },
+    props.target.kind === 'compliance_rule'
+      ? { rule: props.target.id }
+      : { id: props.target.id, ...(props.target.device ? { device: props.target.device } : {}) },
 }))
 </script>
 <template>
@@ -26,9 +32,8 @@ const link = computed(() => ({
       ·
       <RouterLink
         :to="{
-          name: 'security-compliance',
-          params: { tenant: runtime.tenant },
-          query: { device: target.device },
+          name: 'device-detail',
+          params: { tenant: runtime.tenant, device: target.device },
         }"
         >{{ target.device }}</RouterLink
       ></template

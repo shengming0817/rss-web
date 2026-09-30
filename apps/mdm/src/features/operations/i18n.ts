@@ -27,8 +27,14 @@ export const operationsZh = {
   evidence: '来源证据、版本与评估时间',
   state: { open: '打开', resolved: '已解除' },
   evidenceState: { active: '问题仍存在', cleared: '已核实解除', unknown: '未知，不能推断解除' },
-  code: { compliance_noncompliant: '合规规则未满足' },
-  target: { compliance_rule: '合规规则', baseline: '合规基线', security_request: '安全申请' },
+  code: { compliance_noncompliant: '合规规则未满足', risk_affected: '设备受风险影响' },
+  target: {
+    compliance_rule: '合规规则',
+    baseline: '合规基线',
+    security_request: '安全申请',
+    risk: '风险',
+    security_action: '安全执行',
+  },
   outcomes: {
     accepted: '已受理',
     denied: '已拒绝',
@@ -37,6 +43,10 @@ export const operationsZh = {
     observed: '已记录证据',
   },
   actionName: {
+    risk_assessed: '风险评估',
+    security_dispatched: '派发安全操作',
+    security_result: '安全操作结果',
+    security_detected: '安全操作独立检测',
     baseline_saved: '保存合规基线',
     request_created: '创建安全申请',
     request_approved: '批准安全申请',
@@ -86,11 +96,16 @@ export const operationsEn: typeof operationsZh = {
     cleared: 'Verified clear',
     unknown: 'Unknown; resolution cannot be inferred',
   },
-  code: { compliance_noncompliant: 'Compliance rule not satisfied' },
+  code: {
+    compliance_noncompliant: 'Compliance rule not satisfied',
+    risk_affected: 'Device affected by risk',
+  },
   target: {
     compliance_rule: 'Compliance rule',
     baseline: 'Compliance baseline',
     security_request: 'Security request',
+    risk: 'Risk',
+    security_action: 'Security execution',
   },
   outcomes: {
     accepted: 'Accepted',
@@ -100,6 +115,10 @@ export const operationsEn: typeof operationsZh = {
     observed: 'Evidence recorded',
   },
   actionName: {
+    risk_assessed: 'Assess risk',
+    security_dispatched: 'Dispatch security action',
+    security_result: 'Security action result',
+    security_detected: 'Independent security action detection',
     baseline_saved: 'Save compliance baseline',
     request_created: 'Create security request',
     request_approved: 'Approve security request',

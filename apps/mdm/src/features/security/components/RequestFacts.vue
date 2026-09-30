@@ -21,7 +21,7 @@ const at = (seconds: number) =>
     <dt>{{ t('security.createdAt') }}</dt>
     <dd>{{ at(request.createdAt) }}</dd>
     <dt>{{ t('security.requestTarget') }}</dt>
-    <dd>
+    <dd v-if="request.target.kind === 'compliance_exception'">
       <RouterLink
         :to="{
           name: 'security-baselines',
@@ -50,6 +50,18 @@ const at = (seconds: number) =>
         }"
         >{{ request.target.device }}</RouterLink
       >
+    </dd>
+    <dd v-else>
+      <RouterLink
+        :to="{
+          name: 'security-risks',
+          params: { tenant: runtime.tenant },
+          query: { id: request.target.risk, device: request.target.device },
+        }"
+        >{{ request.target.risk }} · {{ request.target.device }}</RouterLink
+      >
+      · {{ t('security.assessment') }} {{ request.target.assessment }} /
+      {{ request.target.assessmentVersion }}
     </dd>
     <dt>{{ t('security.justification') }}</dt>
     <dd>{{ request.reason }}</dd>

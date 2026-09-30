@@ -33,6 +33,7 @@ export function createGovernanceDemo(
         : ('none' as const)
   }
   function valid(target: SecurityRequestTarget) {
+    if (target.kind !== 'compliance_exception') return false
     const record = records.get(target.baseline),
       rule = compliance.rule(target.rule)
     return (
@@ -82,6 +83,7 @@ export function createGovernanceDemo(
                 drift === 'none' && nativeStatus === 'non_compliant'
                   ? approved.find(
                       (v) =>
+                        v.target.kind === 'compliance_exception' &&
                         v.target.baseline === record.value.id &&
                         v.target.baselineRevision === record.value.revision &&
                         v.target.rule === pin.id &&

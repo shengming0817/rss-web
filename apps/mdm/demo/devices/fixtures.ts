@@ -8,6 +8,7 @@ import type {
 } from '../../src/features/devices/clients/asset-model'
 import type { registration } from '../../src/features/devices/clients/enrollment'
 export interface DemoDevice {
+  securityBindings?: { registration: string; generation: number; capabilities: string[] }[]
   bootstrapBindings?: {
     registration: string
     generation: number
@@ -170,6 +171,13 @@ export function makeDevices(): Map<string, DemoDevice> {
           architecture: platform === 'windows' ? 'x86_64' : 'aarch64',
           inventory: { device: id, channels, fields, quality: [], revisions },
           registrations,
+          securityBindings: registrations
+            .filter((r) => r.source === 'agent.builtin')
+            .map((r) => ({
+              registration: r.registrationId,
+              generation: r.generation,
+              capabilities: index === 5 ? [] : ['security.remediate.v1'],
+            })),
           bootstrapBindings: registrations.map((r) => ({
             registration: r.registrationId,
             generation: r.generation,

@@ -118,3 +118,46 @@ it('keeps an unknown decision locked across reads and loads expiry after replayi
   expect(wrapper.find('[data-testid="approve-request"]').exists()).toBe(false)
   wrapper.unmount()
 })
+it('replays the original dispatch after the displayed approval has expired', async () => {
+  const request = {
+      id,
+      revision: 2,
+      operation: other,
+      requester: other,
+      createdAt: 100,
+      state: 'approved',
+      target: {
+        kind: 'risk_remediation',
+        risk: id,
+        assessment: other,
+        assessmentVersion: 1,
+        device: 'device-01',
+      },
+      reason: 'Patch',
+      validFrom: 100,
+      validUntil: 200,
+      decision: { by: id, at: 101, value: 'approved' },
+      revocation: null,
+    },
+    read = vi.fn().mockResolvedValue({ request, asOf: 102 }),
+    dispatch = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('lost'))
+      .mockResolvedValue({ action: { id: other } })
+  const { wrapper, button } = await setup(RequestsView, {
+    requests: { read },
+    actions: { dispatch },
+  })
+  await wrapper.get('[data-testid="dispatch-security"]').trigger('click')
+  await flushPromises()
+  const frozen = structuredClone(dispatch.mock.calls[0])
+  read.mockResolvedValue({ request: { ...request, state: 'expired', revision: 3 }, asOf: 201 })
+  await wrapper.get('[data-testid="refresh-request"]').trigger('click')
+  await flushPromises()
+  expect(wrapper.get('[data-testid="request-state"]').text()).toBe('已过期')
+  await button('重放同一操作').trigger('click')
+  await flushPromises()
+  expect(dispatch.mock.calls[1]).toEqual(frozen)
+  expect(wrapper.find('[data-testid="dispatch-security"]').exists()).toBe(false)
+  wrapper.unmount()
+})

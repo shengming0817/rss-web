@@ -71,7 +71,9 @@ async function simulate() {
           ...(eventKind.value === 'software_usage'
             ? { resource: eventResource.value, active: eventActive.value }
             : {}),
-          ...(eventKind.value === 'software_detect' ? { task: eventTask.value } : {}),
+          ...(['software_detect', 'security_result', 'security_detect'].includes(eventKind.value)
+            ? { task: eventTask.value }
+            : {}),
           ...(eventKind.value === 'software_request' ? { item: eventItem.value } : {}),
           ...(eventKind.value === 'enrollment_bind' ? { enrollment: eventEnrollment.value } : {}),
           ...(eventKind.value === 'agent_binding' ? { active: eventActive.value } : {}),
@@ -224,6 +226,20 @@ async function apply(reset: boolean) {
         <option value="software_reboot">
           {{ locale === 'zh-CN' ? '模拟重启后检测回报' : 'Synthetic detection after reboot' }}
         </option>
+        <option value="security_result">
+          {{
+            locale === 'zh-CN'
+              ? '模拟安全任务设备回执（不确认效果）'
+              : 'Synthetic security command result (effect unverified)'
+          }}
+        </option>
+        <option value="security_detect">
+          {{
+            locale === 'zh-CN'
+              ? '模拟安全任务的独立补丁检测'
+              : 'Independent synthetic security patch detection'
+          }}
+        </option>
       </select>
       <label for="demo-event-at">{{
         locale === 'zh-CN' ? '时间（Unix 秒，单向推进）' : 'Time (Unix seconds, advances only)'
@@ -233,7 +249,9 @@ async function apply(reset: boolean) {
         locale === 'zh-CN' ? '设备 ID' : 'Device ID'
       }}</label>
       <input v-if="eventKind !== 'clock'" id="demo-event-device" v-model="eventDevice" />
-      <template v-if="eventKind === 'software_detect'">
+      <template
+        v-if="['software_detect', 'security_result', 'security_detect'].includes(eventKind)"
+      >
         <label for="demo-event-task">{{
           locale === 'zh-CN' ? '原任务 ID（运行详情）' : 'Original task ID (run detail)'
         }}</label>

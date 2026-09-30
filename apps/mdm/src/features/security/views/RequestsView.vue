@@ -17,7 +17,8 @@ const page = ref<Awaited<ReturnType<typeof client.list>>>(),
   selected = ref<Awaited<ReturnType<typeof client.read>>>(),
   device = ref(''),
   state = ref<SecurityRequest['state'] | ''>(''),
-  applied = ref<RequestFilter>()
+  applied = ref<RequestFilter>(),
+  actionId = ref<string>()
 let pending: (() => Promise<void>) | undefined
 const at = (seconds: number) =>
   seconds <= 253402300799 ? new Date(seconds * 1000).toISOString() : String(seconds)
@@ -41,7 +42,10 @@ function load(cursor?: string) {
 }
 function open(id: string) {
   if (busy.value || (uncertain.value && selected.value?.request.id !== id)) return
-  if (!uncertain.value) selected.value = undefined
+  if (!uncertain.value) {
+    selected.value = undefined
+    actionId.value = undefined
+  }
   void run(
     () => client.read(id),
     (v) => (selected.value = v),
@@ -69,6 +73,7 @@ function decide(action: 'approve' | 'deny' | 'revoke') {
   void pending()
 }
 function routeChanged() {
+  actionId.value = undefined
   page.value = undefined
   selected.value = undefined
   pending = undefined
@@ -77,6 +82,20 @@ function routeChanged() {
   device.value = typeof route.query['device'] === 'string' ? route.query['device'] : ''
   if (typeof route.query['id'] === 'string') open(route.query['id'])
   else load()
+}
+function dispatch() {
+  if (!selected.value || busy.value || uncertain.value) return
+  const id = selected.value.request.id,
+    body = operation({}, selected.value.request.revision)
+  actionId.value = body.operationId
+  pending = async () => {
+    const done = await runWrite(
+      () => runtime.security.actions.dispatch(id, body),
+      (v) => (actionId.value = v.action.id),
+    )
+    if (!done && !uncertain.value) actionId.value = undefined
+  }
+  void pending()
 }
 watch(() => route.fullPath, routeChanged, { flush: 'sync' })
 onMounted(routeChanged)
@@ -117,6 +136,36 @@ onMounted(routeChanged)
     <section v-if="selected" data-testid="security-request">
       <h2>{{ selected.request.id }}</h2>
       <RequestFacts :request="selected.request" :as-of="selected.asOf" />
+      <template v-if="selected.request.target.kind === 'risk_remediation'">
+        <p>{{ t('security.dispatchHint') }}</p>
+        <button
+          v-if="selected.request.state === 'approved' && !actionId"
+          :disabled="busy || uncertain"
+          data-testid="dispatch-security"
+          @click="dispatch"
+        >
+          {{ t('security.dispatch') }}
+        </button>
+        <RouterLink
+          :to="{
+            name: 'security-actions',
+            params: { tenant: runtime.tenant },
+            query: { request: selected.request.id },
+          }"
+          >{{ t('security.actions') }}</RouterLink
+        >
+        <p v-if="actionId">
+          {{ t('security.actionId') }}
+          <RouterLink
+            :to="{
+              name: 'security-actions',
+              params: { tenant: runtime.tenant },
+              query: { id: actionId },
+            }"
+            >{{ actionId }}</RouterLink
+          >
+        </p>
+      </template>
       <button :disabled="busy" data-testid="refresh-request" @click="open(selected.request.id)">
         {{ t('policies.refresh') }}
       </button>

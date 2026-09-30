@@ -13,6 +13,10 @@ export const auditActions = [
   'request_revoked',
   'request_expired',
   'request_decision_denied',
+  'risk_assessed',
+  'security_dispatched',
+  'security_result',
+  'security_detected',
 ] as const
 export const alertStates = ['open', 'resolved'] as const
 export function candidate(value: unknown, tenant: string, demo: boolean, keys: string[]) {
@@ -26,7 +30,13 @@ export function candidate(value: unknown, tenant: string, demo: boolean, keys: s
 export function reference(value: unknown) {
   const v = closed(value, ['kind', 'id', 'device', 'revision'])
   return {
-    kind: enumeration(v['kind'], ['compliance_rule', 'baseline', 'security_request'] as const),
+    kind: enumeration(v['kind'], [
+      'compliance_rule',
+      'baseline',
+      'security_request',
+      'risk',
+      'security_action',
+    ] as const),
     id: uuid(v['id']),
     device: nullable(v['device'], identifier),
     revision: nullable(v['revision'], count),
@@ -71,7 +81,7 @@ export function alert(value: unknown) {
   const result = {
     id: uuid(v['id']),
     revision: count(v['revision']),
-    code: enumeration(v['code'], ['compliance_noncompliant'] as const),
+    code: enumeration(v['code'], ['compliance_noncompliant', 'risk_affected'] as const),
     severity: enumeration(v['severity'], ['low', 'medium', 'high', 'critical'] as const),
     target: reference(v['target']),
     state: enumeration(v['state'], alertStates),
@@ -91,7 +101,7 @@ export function alert(value: unknown) {
     operation: nullable(v['operation'], uuid),
   }
   if (
-    result.target.kind !== 'compliance_rule' ||
+    result.target.kind !== (result.code === 'risk_affected' ? 'risk' : 'compliance_rule') ||
     result.target.device === null ||
     !result.revision ||
     !result.evidence.version ||

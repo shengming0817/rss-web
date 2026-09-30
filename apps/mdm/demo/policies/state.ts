@@ -79,6 +79,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       ),
     )
     return [
+      ...security.executions(),
       ...bootstrap.executions(),
       ...updates.executions(),
       ...policies.executions(),
@@ -185,7 +186,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       if (deviceWrite || groupPublished) policies.reconcile(scenario)
     },
     tick(event: DemoEvent, scenario: Scenario = 'normal') {
-      security.tick(event)
+      security.tick(event, scenario)
       if (!event.kind.startsWith('software_') && !event.kind.startsWith('bootstrap_')) {
         policies.reconcile(scenario, event)
         workflows.tick(event)

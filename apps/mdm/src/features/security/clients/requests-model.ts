@@ -1,11 +1,33 @@
-import { closed, count, enumeration, identifier, nullable, uuid } from '../../../services/decode'
+import {
+  closed,
+  count,
+  enumeration,
+  identifier,
+  nullable,
+  record,
+  uuid,
+} from '../../../services/decode'
 import { boundedText, positive } from './compliance-model'
 export const requestStates = ['pending', 'approved', 'denied', 'revoked', 'expired'] as const
 export const requestDecisions = ['approve', 'deny', 'revoke'] as const
 export function requestTarget(value: unknown) {
+  const kind = enumeration(record(value)['kind'], [
+    'compliance_exception',
+    'risk_remediation',
+  ] as const)
+  if (kind === 'risk_remediation') {
+    const v = closed(value, ['kind', 'risk', 'assessment', 'assessmentVersion', 'device'])
+    return {
+      kind,
+      risk: uuid(v['risk']),
+      assessment: uuid(v['assessment']),
+      assessmentVersion: positive(v['assessmentVersion']),
+      device: identifier(v['device']),
+    }
+  }
   const v = closed(value, ['kind', 'baseline', 'baselineRevision', 'rule', 'ruleVersion', 'device'])
   return {
-    kind: enumeration(v['kind'], ['compliance_exception'] as const),
+    kind,
     baseline: uuid(v['baseline']),
     baselineRevision: positive(v['baselineRevision']),
     rule: uuid(v['rule']),
