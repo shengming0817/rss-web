@@ -306,3 +306,134 @@ it('keeps disabled health while queued deliveries finish and restores known deli
     connector: { health: 'disconnected' },
   })
 })
+
+it.each(['retry_then_failure', 'failure_then_retry'] as const)(
+  'uses explicit business completion order for same-tick deliveries: %s',
+  async (order) => {
+    const f = await fixture(),
+      id = crypto.randomUUID(),
+      ruleId = crypto.randomUUID(),
+      root = `/api/mdm-candidate/v1/integrations/connectors/${id}`
+    const definition = {
+      name: 'Desk',
+      kind: 'itsm',
+      endpoint: 'https://desk.example.test',
+      credentialRef: null,
+      enabled: true,
+    }
+    await f.post(root, operation(definition))
+    await f.post(
+      `/api/mdm-candidate/v1/operations/alert-rules/${ruleId}`,
+      operation({
+        name: 'Delivery failures',
+        signal: 'connector_failure',
+        threshold: 0,
+        enabled: true,
+      }),
+    )
+    const first = operation({}, 1)
+    await f.post(`${root}/deliver`, first)
+    f.advance()
+    const alert = async () => {
+      const page = (await f.server.handle('GET', '/api/mdm-candidate/v1/operations/alerts'))
+        .body as {
+        items: { state: string; target: { id: string }; evidence: { state: string } }[]
+      }
+      return page.items.find((v) => v.target.id === ruleId)
+    }
+    expect(await alert()).toMatchObject({ state: 'open', evidence: { state: 'active' } })
+    const retry = operation({}, 2),
+      fresh = operation({}, 1)
+    const submitRetry = () => f.post(`${root}/deliveries/${first.operationId}/retry`, retry)
+    const submitFresh = () => f.post(`${root}/deliver`, fresh)
+    for (const submit of order === 'retry_then_failure'
+      ? [submitRetry, submitFresh]
+      : [submitFresh, submitRetry])
+      expect((await submit()).status).toBe(202)
+    f.advance()
+    expect(
+      (await f.server.handle('GET', `${root}/attempts/${retry.operationId}`)).body,
+    ).toMatchObject({ delivery: { state: 'delivered', at: 300, attempt: 2 } })
+    expect(
+      (await f.server.handle('GET', `${root}/attempts/${fresh.operationId}`)).body,
+    ).toMatchObject({ delivery: { state: 'failed', at: 300, attempt: 1 } })
+    const health = order === 'retry_then_failure' ? 'disconnected' : 'healthy'
+    expect((await f.server.handle('GET', root)).body).toMatchObject({ connector: { health } })
+    expect(await alert()).toMatchObject({
+      state: health === 'disconnected' ? 'open' : 'resolved',
+      evidence: { state: health === 'disconnected' ? 'active' : 'cleared' },
+    })
+    // Saving or re-enabling projects the same owner-observed fact.
+    await f.post(root, operation({ ...definition, enabled: false }, 1))
+    expect((await f.server.handle('GET', root)).body).toMatchObject({
+      connector: { health: 'disabled' },
+    })
+    await f.post(root, operation(definition, 2))
+    expect((await f.server.handle('GET', root)).body).toMatchObject({ connector: { health } })
+  },
+)
+
+it('keeps unknown delivery evidence after a passed connection test', async () => {
+  const f = await fixture(),
+    id = crypto.randomUUID(),
+    ruleId = crypto.randomUUID(),
+    root = `/api/mdm-candidate/v1/integrations/connectors/${id}`
+  await f.post(
+    root,
+    operation({
+      name: 'Desk',
+      kind: 'itsm',
+      endpoint: 'https://desk.example.test',
+      credentialRef: null,
+      enabled: true,
+    }),
+  )
+  await f.post(
+    `/api/mdm-candidate/v1/operations/alert-rules/${ruleId}`,
+    operation({ name: 'Failures', signal: 'connector_failure', threshold: 0, enabled: true }),
+  )
+  await f.post(`${root}/deliver`, operation({}, 1))
+  f.advance()
+  f.server.set('partial')
+  await f.post(`${root}/deliver`, operation({}, 1))
+  f.advance('partial')
+  f.server.set('normal')
+  await f.post(`${root}/test`, operation({}, 1))
+  f.advance()
+  expect((await f.server.handle('GET', root)).body).toMatchObject({
+    connector: { health: 'backlog' },
+  })
+  const page = (await f.server.handle('GET', '/api/mdm-candidate/v1/operations/alerts')).body as {
+    items: { state: string; target: { id: string }; evidence: { state: string } }[]
+  }
+  expect(page.items.find((v) => v.target.id === ruleId)).toMatchObject({
+    state: 'open',
+    evidence: { state: 'unknown' },
+  })
+})
+it('resets the latest business observation with the domain state and receipts', async () => {
+  const f = await fixture(),
+    a = crypto.randomUUID(),
+    b = crypto.randomUUID(),
+    root = '/api/mdm-candidate/v1/integrations/connectors',
+    body = operation({}, 1)
+  const definition = {
+    name: 'Desk',
+    kind: 'itsm',
+    endpoint: 'https://desk.example.test',
+    credentialRef: null,
+    enabled: true,
+  }
+  await f.post(`${root}/${a}`, operation(definition))
+  await f.post(`${root}/${a}/deliver`, body)
+  f.advance()
+  f.admin.reset()
+  f.operations.reset()
+  await f.post(`${root}/${b}`, operation(definition))
+  await f.post(`${root}/${b}/deliver`, body)
+  f.advance()
+  await f.post(`${root}/${a}`, operation(definition))
+  expect((await f.server.handle('GET', `${root}/${a}`)).body).toMatchObject({
+    connector: { health: 'unknown' },
+  })
+})

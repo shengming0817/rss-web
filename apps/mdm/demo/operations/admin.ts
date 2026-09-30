@@ -26,6 +26,7 @@ export function createAdminDemo(
     rules = new Map<string, AlertRule>(),
     reports = new Map<string, Report>(),
     deliveries = new Map<string, Delivery>(),
+    lastBusinessDelivery = new Map<string, string>(),
     jobs = new Map<string, Maintenance>(),
     pages = createPages(),
     receipts = createReceipts()
@@ -108,10 +109,8 @@ export function createAdminDemo(
     }
   }
   function connectorHealth(id: string): Connector['health'] {
-    const completed = [...deliveries.values()]
-      .reverse()
-      .filter((v) => v.connector === id && v.kind === 'event' && v.state !== 'queued')
-      .sort((a, b) => b.at - a.at || b.attempt - a.attempt)[0]
+    const observed = lastBusinessDelivery.get(id),
+      completed = observed === undefined ? undefined : deliveries.get(observed)
     return !completed
       ? 'unknown'
       : completed.state === 'failed'
@@ -168,10 +167,15 @@ export function createAdminDemo(
               ? 'delivery_timeout'
               : null
         const connector = connectors.get(delivery.connector)
-        if (connector && delivery.kind === 'event')
-          connector.health = connector.definition.enabled
-            ? connectorHealth(connector.id)
-            : 'disabled'
+        if (delivery.kind === 'event') {
+          // This owner observes terminal facts in tick order, including equal timestamps.
+          // Attempt numbers order one retry chain, never independent deliveries.
+          lastBusinessDelivery.set(delivery.connector, delivery.id)
+          if (connector)
+            connector.health = connector.definition.enabled
+              ? connectorHealth(connector.id)
+              : 'disabled'
+        }
         operations.record({
           at: now(),
           actor: null,
@@ -553,6 +557,7 @@ export function createAdminDemo(
       reportOwners.clear()
       alertVersion = 0
       deliveries.clear()
+      lastBusinessDelivery.clear()
       jobs.clear()
       pending.clear()
       pages.reset()
