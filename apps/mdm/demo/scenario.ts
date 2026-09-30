@@ -128,6 +128,15 @@ export function createScenario(
             'material_detect',
             'certificate_issued',
             'certificate_detect',
+            'remote_consent',
+            'remote_revoke',
+            'remote_ended',
+            'support_detect',
+            'elevation_used',
+            'elevation_ended',
+            'elevation_revoked',
+            'diagnostic_uploaded',
+            'diagnostic_scanned',
           ].includes(event.kind ?? '') ||
           typeof event.at !== 'number' ||
           !Number.isSafeInteger(event.at) ||
@@ -141,11 +150,21 @@ export function createScenario(
             'material_detect',
             'certificate_issued',
             'certificate_detect',
+            'remote_consent',
+            'remote_revoke',
+            'remote_ended',
+            'support_detect',
+            'elevation_used',
+            'elevation_ended',
+            'elevation_revoked',
+            'diagnostic_uploaded',
+            'diagnostic_scanned',
           ].includes(event.kind ?? '') &&
             (typeof event.task !== 'string' ||
               !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
                 event.task,
               ))) ||
+          (event.kind === 'remote_consent' && typeof event.active !== 'boolean') ||
           (event.kind === 'agent_binding' && typeof event.active !== 'boolean') ||
           (event.kind === 'enrollment_bind' &&
             (typeof event.enrollment !== 'string' ||

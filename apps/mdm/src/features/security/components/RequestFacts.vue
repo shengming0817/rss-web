@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { isSupportTarget } from '../clients/support-model'
+import SupportTargetFacts from './SupportTargetFacts.vue'
 import { useMdm } from '../../../context'
 import type { SecurityRequest } from '../clients/requests-model'
 defineProps<{ request: SecurityRequest; asOf: number }>()
@@ -74,6 +76,16 @@ const at = (seconds: number) =>
         {{ request.target.certificateRevision }} · {{ request.target.device }}</RouterLink
       >
       · {{ request.target.fingerprint }}
+    </dd>
+    <dd v-else-if="isSupportTarget(request.target)">
+      <SupportTargetFacts :target="request.target" /><RouterLink
+        :to="{
+          name: 'security-support',
+          params: { tenant: runtime.tenant },
+          query: { id: request.id, device: request.target.device },
+        }"
+        >{{ t('security.support') }}</RouterLink
+      >
     </dd>
     <dd v-else>
       <RouterLink

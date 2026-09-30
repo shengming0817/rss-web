@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { isSupportTarget } from '../clients/support-model'
 import { useMdm } from '../../../context'
 import type { SecurityAction } from '../clients/actions-model'
 import ExecutionFacts from '../../policies/components/ExecutionFacts.vue'
@@ -62,6 +63,15 @@ const at = (value: number | null) =>
       }"
       >{{ t('security.certificates') }} / {{ action.target.certificateRevision }} ·
       {{ action.target.fingerprint }}</RouterLink
+    >
+    <RouterLink
+      v-else-if="isSupportTarget(action.target)"
+      :to="{
+        name: 'security-support',
+        params: { tenant: runtime.tenant },
+        query: { id: action.request, device: action.target.device },
+      }"
+      >{{ t(`security.supportKinds.${action.target.kind}`) }}</RouterLink
     >
     <RouterLink
       v-else

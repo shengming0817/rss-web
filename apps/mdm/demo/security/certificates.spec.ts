@@ -1,8 +1,13 @@
-import { expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createScenario, TENANT } from '../scenario'
 import { createDeviceDemo } from '../devices/state'
 import { createAutomationDemo } from '../policies/state'
 import { operation } from '../../src/services/useOperation'
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-09-30T00:00:00Z'))
+})
+afterEach(() => vi.useRealTimers())
 const root = '/api/mdm-candidate/v1/security'
 async function setup() {
   const devices = createDeviceDemo(),

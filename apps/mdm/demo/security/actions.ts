@@ -6,6 +6,8 @@ import type { createSecurityRequests } from './requests'
 import type { createRisksDemo } from './risks'
 import type { createMaterialsDemo } from './materials'
 import type { createCertificatesDemo } from './certificates'
+import type { createSupportDemo } from './support'
+import { isSupportTarget } from '../../src/features/security/clients/support-model'
 import type { MaterialKind } from '../../src/features/security/clients/materials-model'
 import { closed, identifier, uuid } from '../../src/services/decode'
 import {
@@ -22,6 +24,7 @@ export function createSecurityActions(
   risks: ReturnType<typeof createRisksDemo>,
   materials: ReturnType<typeof createMaterialsDemo>,
   certificates: ReturnType<typeof createCertificatesDemo>,
+  support: ReturnType<typeof createSupportDemo>,
   operations: ReturnType<typeof createOperationsDemo>,
 ) {
   const actions = new Map<string, SecurityAction>(),
@@ -33,23 +36,33 @@ export function createSecurityActions(
       ? remediationSource(devices.facts().find((d) => d.summary.id === target.device))
       : target.kind === 'certificate_deploy'
         ? certificates.source(target.device)
-        : materials.source(target.device, target.material)
+        : isSupportTarget(target)
+          ? support.source(target)
+          : materials.source(target.device, target.material)
   const valid = (target: SecurityAction['target']) =>
     target.kind === 'risk_remediation'
       ? risks.valid(target)
       : target.kind === 'certificate_deploy'
         ? certificates.valid(target)
-        : materials.valid(target)
+        : isSupportTarget(target)
+          ? support.valid(target)
+          : materials.valid(target)
   const targetKey = (target: SecurityAction['target']) =>
     JSON.stringify(
       target.kind === 'risk_remediation'
         ? [target.kind, target.device, target.risk]
         : target.kind === 'certificate_deploy'
           ? [target.kind, target.device, target.certificate]
-          : [target.kind, target.device, target.material, target.volume],
+          : isSupportTarget(target)
+            ? [target.kind, target.device, target.kind === 'elevation' ? target.account : null]
+            : [target.kind, target.device, target.material, target.volume],
     )
-  const targetDetection = (kind: 'material_operation' | 'certificate_deploy') =>
-    kind === 'certificate_deploy' ? 'certificate_detect' : 'material_detect'
+  const targetDetection = (kind: SecurityAction['target']['kind']) =>
+    kind === 'certificate_deploy'
+      ? 'certificate_detect'
+      : kind === 'material_operation'
+        ? 'material_detect'
+        : 'support_detect'
   function audit(
     value: SecurityAction,
     action: 'security_dispatched' | 'security_result' | 'security_detected',
@@ -73,7 +86,26 @@ export function createSecurityActions(
   function settle() {
     for (const a of actions.values()) {
       const s = a.summary
-      if (['failed', 'cancelled'].includes(s.execution) || s.effect === 'verified_present') continue
+      const supportTarget = isSupportTarget(a.target),
+        observedEffect = supportTarget && a.detectedAt !== null ? support.effect(a.request) : null
+      if (observedEffect && observedEffect.state !== s.effect) {
+        s.effect = observedEffect.state
+        if (observedEffect.at !== null) a.detectedAt = observedEffect.at
+        s.waitingReason = observedEffect.state === 'unknown' ? 'effect_verification' : null
+        a.revision++
+        audit(
+          a,
+          'security_detected',
+          null,
+          observedEffect.state === 'unknown' ? 'unknown' : 'observed',
+        )
+      }
+      if (
+        ['failed', 'cancelled'].includes(s.execution) ||
+        s.effect === 'verified_absent' ||
+        (!supportTarget && s.effect === 'verified_present')
+      )
+        continue
       const r = currentRequest(a.request),
         queued = s.execution === 'not_started',
         changed = JSON.stringify(source(a.target)) !== JSON.stringify(a.source),
@@ -84,7 +116,8 @@ export function createSecurityActions(
                 r.state !== 'approved' ||
                 now() < r.validFrom ||
                 now() >= a.deadline ||
-                !valid(a.target))
+                !valid(a.target) ||
+                (supportTarget && !support.executionAllowed(a.request)))
             ? 'authorization_changed'
             : null
       if (!reason || s.nativeCode === reason) continue
@@ -146,8 +179,10 @@ export function createSecurityActions(
           r.validUntil <= now() ||
           (r.target.kind !== 'risk_remediation' &&
             r.target.kind !== 'material_operation' &&
-            r.target.kind !== 'certificate_deploy') ||
-          !valid(r.target)
+            r.target.kind !== 'certificate_deploy' &&
+            !isSupportTarget(r.target)) ||
+          !valid(r.target) ||
+          (isSupportTarget(r.target) && !support.executionAllowed(r.id))
         )
           return error('operation_conflict')
         const target = r.target,
@@ -160,7 +195,10 @@ export function createSecurityActions(
               a.request === id ||
               (targetKey(a.target) === targetKey(target) &&
                 !['failed', 'cancelled'].includes(a.summary.execution) &&
-                a.summary.effect !== 'verified_present'),
+                (isSupportTarget(a.target)
+                  ? support.occupied(a.request) ||
+                    !['verified_present', 'verified_absent'].includes(a.summary.effect)
+                  : a.summary.effect !== 'verified_present')),
           )
         )
           return error('operation_conflict')
@@ -192,6 +230,7 @@ export function createSecurityActions(
           },
         })
         actions.set(a.id, a)
+        if (isSupportTarget(a.target)) support.attach(r, a.id, a.source)
         audit(a, 'security_dispatched', request.actor.principalId, 'accepted')
         return candidate({ action: structuredClone(a), asOf: now() })
       })
@@ -204,9 +243,13 @@ export function createSecurityActions(
     tick(event: DemoEvent, scenario: Scenario) {
       settle()
       if (
-        !['security_result', 'security_detect', 'material_detect', 'certificate_detect'].includes(
-          event.kind,
-        ) ||
+        ![
+          'security_result',
+          'security_detect',
+          'material_detect',
+          'certificate_detect',
+          'support_detect',
+        ].includes(event.kind) ||
         !event.task
       )
         return
@@ -251,7 +294,9 @@ export function createSecurityActions(
           ? risks.observe(a.target, a.source, event.at)
           : a.target.kind === 'certificate_deploy'
             ? certificates.observe(a.target, a.source, event.at)
-            : materials.observe(a.target, a.source, event.at))
+            : isSupportTarget(a.target)
+              ? support.observe(a.request, a.source, event.at)
+              : materials.observe(a.target, a.source, event.at))
       ) {
         s.effect = 'verified_present'
         a.detectedAt = event.at

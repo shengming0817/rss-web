@@ -78,12 +78,23 @@ async function simulate() {
             'material_detect',
             'certificate_issued',
             'certificate_detect',
+            'remote_consent',
+            'remote_revoke',
+            'remote_ended',
+            'support_detect',
+            'elevation_used',
+            'elevation_ended',
+            'elevation_revoked',
+            'diagnostic_uploaded',
+            'diagnostic_scanned',
           ].includes(eventKind.value)
             ? { task: eventTask.value }
             : {}),
           ...(eventKind.value === 'software_request' ? { item: eventItem.value } : {}),
           ...(eventKind.value === 'enrollment_bind' ? { enrollment: eventEnrollment.value } : {}),
-          ...(eventKind.value === 'agent_binding' ? { active: eventActive.value } : {}),
+          ...(['agent_binding', 'remote_consent'].includes(eventKind.value)
+            ? { active: eventActive.value }
+            : {}),
         },
       },
       successStatus: 204,
@@ -241,6 +252,21 @@ async function apply(reset: boolean) {
           }}
         </option>
         <option value="certificate_issued">{{ t('security.demoCertificateIssued') }}</option>
+        <option value="remote_consent">{{ t('security.supportEvents.remote_consent') }}</option>
+        <option value="remote_revoke">{{ t('security.supportEvents.remote_revoke') }}</option>
+        <option value="remote_ended">{{ t('security.supportEvents.remote_ended') }}</option>
+        <option value="support_detect">{{ t('security.supportEvents.support_detect') }}</option>
+        <option value="elevation_used">{{ t('security.supportEvents.elevation_used') }}</option>
+        <option value="elevation_ended">{{ t('security.supportEvents.elevation_ended') }}</option>
+        <option value="elevation_revoked">
+          {{ t('security.supportEvents.elevation_revoked') }}
+        </option>
+        <option value="diagnostic_uploaded">
+          {{ t('security.supportEvents.diagnostic_uploaded') }}
+        </option>
+        <option value="diagnostic_scanned">
+          {{ t('security.supportEvents.diagnostic_scanned') }}
+        </option>
         <option value="certificate_detect">{{ t('security.demoCertificateDetected') }}</option>
         <option value="material_detect">
           {{
@@ -274,6 +300,15 @@ async function apply(reset: boolean) {
             'material_detect',
             'certificate_issued',
             'certificate_detect',
+            'remote_consent',
+            'remote_revoke',
+            'remote_ended',
+            'support_detect',
+            'elevation_used',
+            'elevation_ended',
+            'elevation_revoked',
+            'diagnostic_uploaded',
+            'diagnostic_scanned',
           ].includes(eventKind)
         "
       >
@@ -297,6 +332,9 @@ async function apply(reset: boolean) {
         ><label for="demo-enrollment">Enrollment ID</label
         ><input id="demo-enrollment" v-model="eventEnrollment"
       /></template>
+      <label v-if="eventKind === 'remote_consent'"
+        ><input v-model="eventActive" type="checkbox" />{{ t('security.consentChoice') }}</label
+      >
       <label v-if="eventKind === 'agent_binding'"
         ><input v-model="eventActive" type="checkbox" />{{
           locale === 'zh-CN'

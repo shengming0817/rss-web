@@ -48,6 +48,8 @@ export const operationsZh = {
     observed: '已记录证据',
   },
   actionName: {
+    support_consent: '设备用户同意变更',
+    support_observed: '终端支持观测',
     request_consumed: '一次性查阅授权已消费',
     risk_assessed: '风险评估',
     security_dispatched: '派发安全操作',
@@ -126,6 +128,8 @@ export const operationsEn: typeof operationsZh = {
     observed: 'Evidence recorded',
   },
   actionName: {
+    support_consent: 'Device user consent changed',
+    support_observed: 'Endpoint support observation',
     request_consumed: 'Consume one-time disclosure authorization',
     risk_assessed: 'Assess risk',
     security_dispatched: 'Dispatch security action',

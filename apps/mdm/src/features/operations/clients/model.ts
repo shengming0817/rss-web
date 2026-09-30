@@ -21,6 +21,8 @@ export const auditActions = [
   'certificate_requested',
   'certificate_issued',
   'certificate_observed',
+  'support_consent',
+  'support_observed',
 ] as const
 export const alertStates = ['open', 'resolved'] as const
 export function candidate(value: unknown, tenant: string, demo: boolean, keys: string[]) {

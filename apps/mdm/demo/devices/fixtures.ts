@@ -178,7 +178,15 @@ export function makeDevices(): Map<string, DemoDevice> {
               index === 5
                 ? []
                 : r.source === 'agent.builtin'
-                  ? ['security.remediate.v1', 'material.laps.rotate.v1']
+                  ? [
+                      'security.remediate.v1',
+                      'material.laps.rotate.v1',
+                      'support.experience.v1',
+                      'support.elevation.v1',
+                      'support.diagnostics.v1',
+                      'support.remote.view.v1',
+                      'support.remote.control.v1',
+                    ]
                   : r.source === 'mdm.windows'
                     ? ['material.bitlocker.rotate.v1', 'certificate.deploy.v1']
                     : [

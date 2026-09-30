@@ -9,6 +9,7 @@ import {
 } from '../../../services/decode'
 import { boundedText, positive } from './compliance-model'
 import { materialKinds, secretMaterialKinds } from './materials-model'
+import { isSupportTarget, supportKinds, supportTarget } from './support-model'
 export const requestStates = [
   'pending',
   'approved',
@@ -25,7 +26,10 @@ export function requestTarget(value: unknown) {
     'material_access',
     'material_operation',
     'certificate_deploy',
+    ...supportKinds,
   ] as const)
+  if (kind === 'elevation' || kind === 'diagnostics' || kind === 'remote_support')
+    return supportTarget(value)
   if (kind === 'certificate_deploy') {
     const v = closed(value, ['kind', 'device', 'certificate', 'certificateRevision', 'fingerprint'])
     return {
@@ -95,6 +99,8 @@ export function requestDefinition(value: unknown) {
     throw new Error('Invalid request window')
   if (result.target.kind === 'material_access' && result.validUntil - result.validFrom > 900)
     throw new Error('Material access window too long')
+  if (isSupportTarget(result.target) && result.validUntil - result.validFrom > 3600)
+    throw new Error('Support authorization window too long')
   return result
 }
 export type SecurityRequestDefinition = ReturnType<typeof requestDefinition>

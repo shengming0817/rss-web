@@ -2,6 +2,7 @@ import { closed, count, nullable, uuid } from '../../../services/decode'
 import { executionSummary } from '../../policies/clients/executions'
 import { positive } from './compliance-model'
 import { requestTarget } from './requests-model'
+import { isSupportTarget } from './support-model'
 import { securitySource } from './source'
 export function securityAction(value: unknown) {
   const v = closed(value, [
@@ -21,7 +22,8 @@ export function securityAction(value: unknown) {
   if (
     target.kind !== 'risk_remediation' &&
     target.kind !== 'material_operation' &&
-    target.kind !== 'certificate_deploy'
+    target.kind !== 'certificate_deploy' &&
+    !isSupportTarget(target)
   )
     throw new Error('Not a device action')
   const result = {
@@ -42,7 +44,10 @@ export function securityAction(value: unknown) {
     (result.resultAt !== null && result.resultAt <= result.createdAt) ||
     (result.detectedAt !== null &&
       (result.resultAt === null || result.detectedAt <= result.resultAt)) ||
-    (result.summary.effect === 'verified_present') !== (result.detectedAt !== null) ||
+    (isSupportTarget(target)
+      ? ['verified_present', 'verified_absent'].includes(result.summary.effect) &&
+        result.detectedAt === null
+      : (result.summary.effect === 'verified_present') !== (result.detectedAt !== null)) ||
     result.summary.id !== result.id ||
     result.summary.device !== target.device ||
     result.summary.origin.kind !== 'security' ||
@@ -51,7 +56,7 @@ export function securityAction(value: unknown) {
     (target.kind === 'certificate_deploy'
       ? result.source.source === 'agent.builtin'
       : result.source.source !==
-        (target.kind === 'risk_remediation' || target.material === 'laps'
+        (target.kind === 'risk_remediation' || isSupportTarget(target) || target.material === 'laps'
           ? 'agent.builtin'
           : target.material === 'bitlocker'
             ? 'mdm.windows'
