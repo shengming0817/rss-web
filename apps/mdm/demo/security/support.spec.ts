@@ -17,6 +17,7 @@ async function setup() {
       () => {},
       (e, s) => automation.tick(e, s),
       automation.observe,
+      automation.now,
     )
   let headers: Record<string, string> = {}
   async function login(login: 'demo' | 'reviewer') {
@@ -60,6 +61,26 @@ async function setup() {
     (await server.handle('GET', `${root}/support/requests/${id}`)).body
   return { server, write, login, principal, context: context.context, now, event, request, read }
 }
+it('rejects consent events for missing targets, stale timestamps and repeated transitions', async () => {
+  const f = await setup(),
+    id = await f.request({ kind: 'remote_support', mode: 'view' })
+  expect((await f.event('remote_consent', crypto.randomUUID(), f.now + 1, true)).status).toBe(409)
+  expect((await f.event('remote_consent', id, f.now, true)).status).toBe(409)
+  expect((await f.event('remote_revoke', id, f.now + 1)).status).toBe(409)
+  expect(await f.read(id)).toMatchObject({
+    support: { details: { consent: { state: 'pending' } } },
+  })
+  expect((await f.event('remote_consent', id, f.now + 2, true)).status).toBe(204)
+  expect(
+    (await f.server.handle('GET', '/api/mdm-candidate/v1/workspace/scenario')).body,
+  ).toMatchObject({ asOf: f.now + 2 })
+  expect((await f.event('remote_consent', id, f.now + 3, true)).status).toBe(409)
+  expect((await f.event('remote_revoke', id, f.now + 4)).status).toBe(204)
+  expect((await f.event('remote_revoke', id, f.now + 5)).status).toBe(409)
+  expect(await f.read(id)).toMatchObject({
+    support: { details: { consent: { state: 'revoked', at: f.now + 4 } } },
+  })
+})
 it('requires device consent for the exact approved remote attempt and keeps revocation separate from session end', async () => {
   const f = await setup(),
     id = await f.request({ kind: 'remote_support', mode: 'view' }),

@@ -3,7 +3,7 @@ import { ref, watch, type Ref } from 'vue'
 import type { HttpTransport } from '@rss/api/mdm'
 import { useI18n } from 'vue-i18n'
 import { scenarios, TENANT } from './scenario'
-import { record, enumeration } from '../src/services/decode'
+import { record, enumeration, count } from '../src/services/decode'
 import { moduleIds } from '../src/services/workspace'
 const props = defineProps<{ transport: HttpTransport; authenticated: Readonly<Ref<boolean>> }>()
 const { locale, t } = useI18n()
@@ -48,7 +48,7 @@ watch(
 const failed = ref(false)
 const busy = ref(false)
 const eventKind = ref('clock'),
-  eventAt = ref(Math.floor(Date.now() / 1000)),
+  eventAt = ref<number | ''>(''),
   eventDevice = ref('device-01'),
   eventResource = ref(''),
   eventItem = ref(''),
@@ -60,13 +60,24 @@ async function simulate() {
   busy.value = true
   failed.value = false
   try {
+    const at =
+      eventAt.value === ''
+        ? (
+            await props.transport.request({
+              method: 'GET',
+              path: '/api/mdm-candidate/v1/workspace/scenario',
+              successStatus: 200,
+              decode: (value) => ({ asOf: count(record(value)['asOf']) }),
+            })
+          ).asOf + 1
+        : eventAt.value
     await props.transport.request({
       method: 'POST',
       path: '/api/mdm-candidate/v1/workspace/scenario',
       body: {
         event: {
           kind: eventKind.value,
-          at: eventAt.value,
+          at,
           ...(eventKind.value !== 'clock' ? { device: eventDevice.value } : {}),
           ...(eventKind.value === 'software_usage'
             ? { resource: eventResource.value, active: eventActive.value }
@@ -168,7 +179,11 @@ async function apply(reset: boolean) {
       {{ locale === 'zh-CN' ? '重置演示' : 'Reset demo' }}
     </button>
     <p v-if="failed" role="alert">
-      {{ locale === 'zh-CN' ? '模拟服务不可用' : 'Demo server unavailable' }}
+      {{
+        locale === 'zh-CN'
+          ? '未确认模拟操作生效，请检查目标、状态和时间，或服务是否可用。'
+          : 'Demo operation is unconfirmed. Check the target, state, time and service availability.'
+      }}
     </p>
     <details>
       <summary>
@@ -284,7 +299,9 @@ async function apply(reset: boolean) {
         </option>
       </select>
       <label for="demo-event-at">{{
-        locale === 'zh-CN' ? '时间（Unix 秒，单向推进）' : 'Time (Unix seconds, advances only)'
+        locale === 'zh-CN'
+          ? '时间（Unix 秒；留空使用提交时的模拟时间 + 1 秒）'
+          : 'Time (Unix seconds; blank uses current demo time + 1 second)'
       }}</label>
       <input id="demo-event-at" v-model.number="eventAt" type="number" min="0" />
       <label v-if="eventKind !== 'clock'" for="demo-event-device">{{
@@ -313,7 +330,13 @@ async function apply(reset: boolean) {
         "
       >
         <label for="demo-event-task">{{
-          locale === 'zh-CN' ? '原任务 ID（运行详情）' : 'Original task ID (run detail)'
+          ['remote_consent', 'remote_revoke'].includes(eventKind)
+            ? locale === 'zh-CN'
+              ? '申请 ID（远程支持申请）'
+              : 'Request ID (remote support request)'
+            : locale === 'zh-CN'
+              ? '原任务 ID（运行详情）'
+              : 'Original task ID (run detail)'
         }}</label>
         <input id="demo-event-task" v-model="eventTask" />
       </template>

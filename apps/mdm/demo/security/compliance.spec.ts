@@ -44,6 +44,39 @@ const definition = {
   },
 }
 
+it('timestamps saved rules, recomputation and published evidence using the advanced scenario clock', async () => {
+  vi.spyOn(Date, 'now').mockReturnValue(1780000000000)
+  const f = await fixture(),
+    at = 1780003600,
+    path = `/api/v2/compliance-rules/${crypto.randomUUID()}`
+  await f.write('POST', '/api/mdm-candidate/v1/workspace/scenario', {
+    event: { kind: 'clock', at },
+  })
+  const created = await f.write('PUT', path, operation(definition))
+  const first = (created.body as { task: string }).task
+  await f.server.handle('GET', `${path}/tasks/${first}`)
+  await f.server.handle('GET', `${path}/tasks/${first}`)
+  const recomputed = await f.write('POST', `${path}/recompute`, operation({}, 1))
+  const second = (recomputed.body as { task: string }).task
+  await f.server.handle('GET', `${path}/tasks/${second}`)
+  await f.server.handle('GET', `${path}/tasks/${second}`)
+  const history = (
+    await f.server.handle('GET', `/api/v2/devices/device-01/compliance/history?from=${at}`)
+  ).body as { items: { evaluatedAt: number }[] }
+  expect(history.items).toHaveLength(2)
+  expect(history.items.every((item) => item.evaluatedAt === at)).toBe(true)
+  for (const action of ['compliance_saved', 'compliance_recomputed', 'compliance_evaluated']) {
+    const audit = (
+      await f.server.handle(
+        'GET',
+        `/api/mdm-candidate/v1/operations/audit?action=${action}&from=${at}`,
+      )
+    ).body as { items: { at: number }[] }
+    expect(audit.items.length).toBeGreaterThan(0)
+    expect(audit.items.every((item) => item.at === at)).toBe(true)
+  }
+})
+
 it('keeps native rule versions, pending previous evidence and immutable history distinct across recomputation', async () => {
   const clock = vi.spyOn(Date, 'now').mockReturnValue(1780000000000)
   const f = await fixture(),

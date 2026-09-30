@@ -37,8 +37,9 @@ export type DomainHandler = (request: DemoRequest, scenario: Scenario) => Reply 
 export function createScenario(
   handlers: DomainHandler[] = [],
   resetDomains: () => void = () => {},
-  advance: (event: DemoEvent, scenario: Scenario) => void = () => {},
+  advance: (event: DemoEvent, scenario: Scenario) => boolean = () => true,
   observed: (method: string, path: string, scenario: Scenario) => void = () => {},
+  now: () => number = () => Math.floor(Date.now() / 1000),
 ) {
   let active: Scenario = 'normal'
   let signedIn = false
@@ -98,7 +99,7 @@ export function createScenario(
       return { status: 413 }
     const data = body && typeof body === 'object' ? (body as Record<string, unknown>) : {}
     if (path === '/api/mdm-candidate/v1/workspace/scenario' && method === 'GET')
-      return { status: 200, body: { scenario: active, sources: { ...sources } } }
+      return { status: 200, body: { scenario: active, sources: { ...sources }, asOf: now() } }
     if (path === '/api/mdm-candidate/v1/workspace/scenario' && method === 'POST') {
       if (!signedIn) return { status: 401, body: { code: 'invalid_identity' } }
       if (headers['x-csrf-token'] !== token || headers['x-identity-request'] !== '1')
@@ -186,7 +187,8 @@ export function createScenario(
           sources['devices'] !== 'mock'
         )
           return { status: 409, body: { code: 'operation_conflict' } }
-        advance(event as DemoEvent, active)
+        if (!advance(event as DemoEvent, active))
+          return { status: 409, body: { code: 'operation_conflict' } }
         return { status: 204 }
       }
       if (data['reset'] === true) reset()

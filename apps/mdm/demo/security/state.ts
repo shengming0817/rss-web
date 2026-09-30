@@ -19,7 +19,7 @@ export function createSecurityDemo(
 ) {
   let time = Math.floor(Date.now() / 1000)
   const now = () => (time = Math.max(time, Math.floor(Date.now() / 1000)))
-  const compliance = createComplianceDemo(devices, operations)
+  const compliance = createComplianceDemo(devices, operations, now)
   const requests = createSecurityRequests(
     now,
     (target): boolean =>
@@ -67,6 +67,7 @@ export function createSecurityDemo(
     }
   }
   return {
+    now,
     compliance,
     governance,
     requests,
@@ -86,8 +87,9 @@ export function createSecurityDemo(
       time = Math.max(now(), event.at)
       requests.settle()
       certificates.tick(event, scenario)
-      support.tick(event, scenario)
+      const accepted = support.tick(event, scenario)
       actions.tick(event, scenario)
+      return !['remote_consent', 'remote_revoke'].includes(event.kind) || accepted
     },
     reset() {
       for (const owner of [

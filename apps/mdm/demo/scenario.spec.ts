@@ -220,7 +220,10 @@ it('injects automation events only into the explicit mock source after login', a
   const scenario = createScenario(
     [],
     () => {},
-    (event) => events.push(event),
+    (event) => {
+      events.push(event)
+      return true
+    },
   )
   const path = '/api/mdm-candidate/v1/workspace/scenario'
   const event = { kind: 'clock', at: Math.floor(Date.now() / 1000) + 60 }

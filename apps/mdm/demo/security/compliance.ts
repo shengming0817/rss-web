@@ -26,6 +26,7 @@ interface RuleState {
 export function createComplianceDemo(
   devices: DeviceOwner,
   operations: Pick<ReturnType<typeof createOperationsDemo>, 'record' | 'observeAlert'>,
+  now: () => number,
 ) {
   const rules = new Map<string, RuleState>(),
     receipts = createReceipts(),
@@ -92,7 +93,7 @@ export function createComplianceDemo(
       input: capture(r.rule.definition),
       results: new Map(),
       reads: 0,
-      evaluatedAt: Math.floor(Date.now() / 1000),
+      evaluatedAt: now(),
     })
     r.desired = task
     return task
@@ -204,7 +205,7 @@ export function createComplianceDemo(
           revision: job.rule.revision,
         }
         operations.record({
-          at: Math.floor(Date.now() / 1000),
+          at: now(),
           actor: null,
           action: 'compliance_evaluated',
           target,
@@ -363,7 +364,7 @@ export function createComplianceDemo(
           if (!r?.rule.definition.enabled) return error('operation_conflict')
           const task = enqueue(r)
           operations.record({
-            at: Math.floor(Date.now() / 1000),
+            at: now(),
             actor: request.actor.principalId,
             action: 'compliance_recomputed',
             target: { kind: 'compliance_rule', id, revision: r.rule.revision, device: null },
@@ -388,7 +389,7 @@ export function createComplianceDemo(
         next.versions.set(rule.revision, structuredClone(rule))
         rules.set(id, next)
         operations.record({
-          at: Math.floor(Date.now() / 1000),
+          at: now(),
           actor: request.actor.principalId,
           action: 'compliance_saved',
           target: { kind: 'compliance_rule', id, revision: rule.revision, device: null },

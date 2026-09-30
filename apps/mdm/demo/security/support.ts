@@ -307,7 +307,7 @@ export function createSupportDemo(
       return true
     },
     tick(event: DemoEvent, scenario: Scenario) {
-      if (!event.task || scenario === 'offline') return
+      if (!event.task || scenario === 'offline') return false
       const consentEvent = ['remote_consent', 'remote_revoke'].includes(event.kind),
         r = consentEvent
           ? request(event.task)
@@ -322,7 +322,7 @@ export function createSupportDemo(
         JSON.stringify(context(value.target.device)?.source) !== JSON.stringify(value.source) ||
         !value.source
       )
-        return
+        return false
       const d = value.details
       if (d.kind === 'remote_support') {
         if (
@@ -338,6 +338,7 @@ export function createSupportDemo(
             validUntil: event.active ? Math.min(r.validUntil, event.at + 300) : null,
           }
           audit(value, 'support_consent', event.active ? 'observed' : 'denied')
+          return true
         } else if (
           event.kind === 'remote_revoke' &&
           d.consent.state === 'granted' &&
@@ -345,6 +346,7 @@ export function createSupportDemo(
         ) {
           d.consent = { ...d.consent, state: 'revoked', at: event.at }
           audit(value, 'support_consent', 'observed')
+          return true
         } else if (
           event.kind === 'remote_ended' &&
           d.session.startedAt !== null &&
@@ -412,6 +414,7 @@ export function createSupportDemo(
           audit(value, 'support_observed', state === 'unknown' ? 'unknown' : 'observed')
         }
       }
+      return false
     },
     reset() {
       experiences.reset()

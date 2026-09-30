@@ -166,6 +166,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
     }
   }
   return {
+    now: security.now,
     operations,
     security,
     resources,
@@ -187,7 +188,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       if (deviceWrite || groupPublished) policies.reconcile(scenario)
     },
     tick(event: DemoEvent, scenario: Scenario = 'normal') {
-      security.tick(event, scenario)
+      if (!security.tick(event, scenario)) return false
       if (!event.kind.startsWith('software_') && !event.kind.startsWith('bootstrap_')) {
         policies.reconcile(scenario, event)
         workflows.tick(event)
@@ -196,6 +197,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       updates.tick(event, scenario)
       software.tick(event, scenario)
       selfService.tick(event)
+      return true
     },
     reset() {
       for (const owner of [
