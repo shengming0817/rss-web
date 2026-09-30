@@ -5,6 +5,11 @@ export type Evaluation = {
   outcome: 'match' | 'no_match' | 'null' | 'missing' | 'unsupported' | 'deleted' | 'conflict'
   path: number[]
 }
+export function referencedFields(criteria: Criteria): string[] {
+  return criteria.kind === 'predicate'
+    ? [criteria.field]
+    : [...new Set(criteria.children.flatMap(referencedFields))]
+}
 export function evaluate(
   node: Criteria | null,
   device: Inventory,

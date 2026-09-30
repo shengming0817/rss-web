@@ -8,6 +8,7 @@ import type {
 } from '../../src/features/devices/clients/asset-model'
 import type { registration } from '../../src/features/devices/clients/enrollment'
 export interface DemoDevice {
+  securityBindings?: { registration: string; generation: number; capabilities: string[] }[]
   bootstrapBindings?: {
     registration: string
     generation: number
@@ -170,6 +171,31 @@ export function makeDevices(): Map<string, DemoDevice> {
           architecture: platform === 'windows' ? 'x86_64' : 'aarch64',
           inventory: { device: id, channels, fields, quality: [], revisions },
           registrations,
+          securityBindings: registrations.map((r) => ({
+            registration: r.registrationId,
+            generation: r.generation,
+            capabilities:
+              index === 5
+                ? []
+                : r.source === 'agent.builtin'
+                  ? [
+                      'security.remediate.v1',
+                      'material.laps.rotate.v1',
+                      'support.experience.v1',
+                      'support.elevation.v1',
+                      'support.diagnostics.v1',
+                      'support.remote.view.v1',
+                      'support.remote.control.v1',
+                    ]
+                  : r.source === 'mdm.windows'
+                    ? ['material.bitlocker.rotate.v1', 'certificate.deploy.v1']
+                    : [
+                        'certificate.deploy.v1',
+                        'material.filevault.rotate.v1',
+                        'material.bootstrap_token.reescrow.v1',
+                        'material.recovery_lock.rotate.v1',
+                      ],
+          })),
           bootstrapBindings: registrations.map((r) => ({
             registration: r.registrationId,
             generation: r.generation,

@@ -2,6 +2,8 @@ import { softwareZh, softwareEn } from './features/software/i18n'
 import { identityI18n } from '@rss/auth'
 import { policiesZh, policiesEn } from './features/policies/i18n'
 import { devicesZh, devicesEn } from './features/devices/i18n'
+import { securityZh, securityEn } from './features/security/i18n'
+import { operationsZh, operationsEn } from './features/operations/i18n'
 const zh = {
   scenarios: {
     normal: '正常',
@@ -82,5 +84,9 @@ export function mdmI18n() {
   i18n.global.mergeLocaleMessage('en-US', { policies: policiesEn })
   i18n.global.mergeLocaleMessage('zh-CN', { software: softwareZh })
   i18n.global.mergeLocaleMessage('en-US', { software: softwareEn })
+  i18n.global.mergeLocaleMessage('zh-CN', { security: securityZh })
+  i18n.global.mergeLocaleMessage('en-US', { security: securityEn })
+  i18n.global.mergeLocaleMessage('zh-CN', { operations: operationsZh })
+  i18n.global.mergeLocaleMessage('en-US', { operations: operationsEn })
   return i18n
 }

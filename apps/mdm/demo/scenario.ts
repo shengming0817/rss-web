@@ -37,8 +37,9 @@ export type DomainHandler = (request: DemoRequest, scenario: Scenario) => Reply 
 export function createScenario(
   handlers: DomainHandler[] = [],
   resetDomains: () => void = () => {},
-  advance: (event: DemoEvent, scenario: Scenario) => void = () => {},
+  advance: (event: DemoEvent, scenario: Scenario) => boolean = () => true,
   observed: (method: string, path: string, scenario: Scenario) => void = () => {},
+  now: () => number = () => Math.floor(Date.now() / 1000),
 ) {
   let active: Scenario = 'normal'
   let signedIn = false
@@ -98,7 +99,7 @@ export function createScenario(
       return { status: 413 }
     const data = body && typeof body === 'object' ? (body as Record<string, unknown>) : {}
     if (path === '/api/mdm-candidate/v1/workspace/scenario' && method === 'GET')
-      return { status: 200, body: { scenario: active, sources: { ...sources } } }
+      return { status: 200, body: { scenario: active, sources: { ...sources }, asOf: now() } }
     if (path === '/api/mdm-candidate/v1/workspace/scenario' && method === 'POST') {
       if (!signedIn) return { status: 401, body: { code: 'invalid_identity' } }
       if (headers['x-csrf-token'] !== token || headers['x-identity-request'] !== '1')
@@ -123,17 +124,48 @@ export function createScenario(
             'bootstrap_detect',
             'enrollment_bind',
             'agent_binding',
+            'security_result',
+            'security_detect',
+            'material_detect',
+            'certificate_issued',
+            'certificate_detect',
+            'remote_consent',
+            'remote_revoke',
+            'remote_ended',
+            'support_detect',
+            'elevation_used',
+            'elevation_ended',
+            'elevation_revoked',
+            'diagnostic_uploaded',
+            'diagnostic_scanned',
           ].includes(event.kind ?? '') ||
           typeof event.at !== 'number' ||
           !Number.isSafeInteger(event.at) ||
           event.at < 0 ||
           event.at > 8640000000000 ||
           (event.kind !== 'clock' && (typeof event.device !== 'string' || !event.device)) ||
-          (event.kind === 'software_detect' &&
+          ([
+            'software_detect',
+            'security_result',
+            'security_detect',
+            'material_detect',
+            'certificate_issued',
+            'certificate_detect',
+            'remote_consent',
+            'remote_revoke',
+            'remote_ended',
+            'support_detect',
+            'elevation_used',
+            'elevation_ended',
+            'elevation_revoked',
+            'diagnostic_uploaded',
+            'diagnostic_scanned',
+          ].includes(event.kind ?? '') &&
             (typeof event.task !== 'string' ||
               !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
                 event.task,
               ))) ||
+          (event.kind === 'remote_consent' && typeof event.active !== 'boolean') ||
           (event.kind === 'agent_binding' && typeof event.active !== 'boolean') ||
           (event.kind === 'enrollment_bind' &&
             (typeof event.enrollment !== 'string' ||
@@ -155,7 +187,8 @@ export function createScenario(
           sources['devices'] !== 'mock'
         )
           return { status: 409, body: { code: 'operation_conflict' } }
-        advance(event as DemoEvent, active)
+        if (!advance(event as DemoEvent, active))
+          return { status: 409, body: { code: 'operation_conflict' } }
         return { status: 204 }
       }
       if (data['reset'] === true) reset()
@@ -169,11 +202,10 @@ export function createScenario(
           (data['source'] === 'real' || data['source'] === 'mock')
         ) {
           sources[data['module']] = data['source']
-          // Resource, Scope and execution endpoints are shared; source choices move together.
-          if (['policies', 'software'].includes(data['module'])) {
-            sources['policies'] = data['source']
-            sources['software'] = data['source']
-          }
+          // Executions, approvals, audit and alerts have one owner across these domains.
+          if (['policies', 'software', 'security', 'operations'].includes(data['module']))
+            for (const module of ['policies', 'software', 'security', 'operations'])
+              sources[module] = data['source']
         }
       }
       return { status: 204 }
@@ -256,17 +288,21 @@ export function createScenario(
       /^\/api\/(?:v3\/software(?:\/|$)|v1\/software-sources(?:\/|$)|v2\/policies(?:\/|$)|mdm-candidate\/v1\/software(?:\/|$))/.test(
         path,
       )
-    const module = softwarePath
-      ? 'software'
-      : policyPath
-        ? 'policies'
-        : /^\/api\/(?:v2\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v3\/(?:enrollments|devices))(?:\/|$)/.test(
-              path,
-            )
-          ? 'devices'
-          : path.startsWith('/api/mdm-candidate/v1/groups')
+    const securityPath =
+      /^\/api\/v2\/(?:compliance-rules(?:\/|$)|devices\/[^/]+\/compliance(?:\/|$))/.test(path)
+    const module = securityPath
+      ? 'security'
+      : softwarePath
+        ? 'software'
+        : policyPath
+          ? 'policies'
+          : /^\/api\/(?:v2\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v3\/(?:enrollments|devices))(?:\/|$)/.test(
+                path,
+              )
             ? 'devices'
-            : path.split('/')[4]
+            : path.startsWith('/api/mdm-candidate/v1/groups')
+              ? 'devices'
+              : path.split('/')[4]
     if (module && sources[module] === 'real')
       return { status: 503, body: { code: 'service_unavailable' } }
     for (const handler of handlers) {

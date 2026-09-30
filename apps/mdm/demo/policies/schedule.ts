@@ -17,6 +17,20 @@ export interface DemoEvent {
     | 'bootstrap_detect'
     | 'enrollment_bind'
     | 'agent_binding'
+    | 'security_result'
+    | 'security_detect'
+    | 'material_detect'
+    | 'certificate_issued'
+    | 'certificate_detect'
+    | 'remote_consent'
+    | 'remote_revoke'
+    | 'remote_ended'
+    | 'support_detect'
+    | 'elevation_used'
+    | 'elevation_ended'
+    | 'elevation_revoked'
+    | 'diagnostic_uploaded'
+    | 'diagnostic_scanned'
   at: number
   device?: string
   resource?: string

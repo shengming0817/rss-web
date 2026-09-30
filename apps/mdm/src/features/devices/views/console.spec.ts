@@ -9,6 +9,8 @@ import { createDeviceDemo } from '../../../../demo/devices/state'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
 import { policyFeature } from '../../policies/routes'
+import { securityFeature } from '../../security/routes'
+import { operationsFeature } from '../../operations/routes'
 import { deviceFeature } from '../routes'
 import { createDeviceClients } from '../client'
 const wrappers: VueWrapper[] = []
@@ -65,6 +67,10 @@ async function setup(
       ...(deviceFeature.routes ?? []),
       policyFeature.entry,
       ...(policyFeature.routes ?? []),
+      securityFeature.entry,
+      ...(securityFeature.routes ?? []),
+      operationsFeature.entry,
+      ...(operationsFeature.routes ?? []),
     ],
   })
   await router.push({ name, params: { tenant: TENANT, ...params }, query })

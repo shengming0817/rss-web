@@ -39,6 +39,7 @@ export type ExecutionOrigin =
   | { kind: 'software'; policy: string; versionId: string; task: string }
   | { kind: 'workflow'; workflow: string; run: string; step: string }
   | { kind: 'device_batch'; batch: string }
+  | { kind: 'security'; request: string }
 function basis(value: unknown) {
   const b = closed(value, [
     'source',
@@ -75,7 +76,12 @@ function origin(value: unknown): ExecutionOrigin {
     'software',
     'workflow',
     'device_batch',
+    'security',
   ] as const)
+  if (kind === 'security') {
+    const v = closed(value, ['kind', 'request'])
+    return { kind, request: uuid(v['request']) }
+  }
   if (kind === 'policy') {
     const v = closed(value, ['kind', 'policy', 'revision', 'basis', 'cancellation', 'output'])
     return {

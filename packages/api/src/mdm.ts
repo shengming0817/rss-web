@@ -74,7 +74,7 @@ export function decodeMdmError(status: number, value: unknown): RssApiError {
   return identityWireFailure(status, v['code'])
 }
 const paths =
-  /^\/api\/(?:v1\/(?:authorization|devices|software-sources)(?:\/|$)|v2\/(?:asset-fields|device-queries|devices|saved-queries|groups|scopes|policies)(?:\/|$)|v3\/(?:resources|software|enrollments|devices)(?:\/|$)|mdm-host\/v1\/config\.json$|mdm-candidate\/v1\/(?:workspace|devices|groups|policies|executions|software|security|support|authorization|audit|operations|integrations)(?:\/|$))/
+  /^\/api\/(?:v1\/(?:authorization|devices|software-sources)(?:\/|$)|v2\/(?:asset-fields|device-queries|devices|saved-queries|groups|scopes|policies|compliance-rules)(?:\/|$)|v3\/(?:resources|software|enrollments|devices)(?:\/|$)|mdm-host\/v1\/config\.json$|mdm-candidate\/v1\/(?:workspace|devices|groups|policies|executions|software|security|support|authorization|audit|operations|integrations)(?:\/|$))/
 export function createMdmTransport(): HttpTransport {
   const instance = axios.create({ baseURL: '' })
   return {

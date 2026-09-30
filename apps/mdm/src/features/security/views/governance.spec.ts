@@ -1,0 +1,298 @@
+import { flushPromises, mount } from '@vue/test-utils'
+import { expect, it, vi } from 'vitest'
+import { shallowRef } from 'vue'
+import { createMemoryHistory, createRouter } from 'vue-router'
+import { decodeMdmError } from '@rss/api/mdm'
+import { mdmKey } from '../../../context'
+import { mdmI18n } from '../../../i18n'
+import BaselinesView from './BaselinesView.vue'
+import RequestsView from './RequestsView.vue'
+const id = '11111111-1111-4111-8111-111111111111',
+  other = '22222222-2222-4222-8222-222222222222'
+async function setup(
+  component: typeof BaselinesView | typeof RequestsView,
+  security: object,
+  principal = id,
+) {
+  const session = shallowRef({
+    status: 'authenticated',
+    tenant: id,
+    identity: { principalId: principal },
+  })
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/', component }],
+  })
+  await router.push({ path: '/', query: { id } })
+  const wrapper = mount(component, {
+    global: {
+      plugins: [router, mdmI18n()],
+      stubs: { RouterLink: true },
+      provide: {
+        [mdmKey as symbol]: { tenant: id, demo: true, security, session: { state: session } },
+      },
+    },
+  })
+  await flushPromises()
+  const button = (label: string) => wrapper.findAll('button').find((b) => b.text() === label)!
+  return { wrapper, router, button, session }
+}
+it('preserves the baseline draft on conflict and only replaces it after explicit adoption', async () => {
+  const initial = {
+      asOf: 100,
+      baseline: {
+        id,
+        revision: 1,
+        scopeRevision: 1,
+        definition: {
+          name: 'Original',
+          enabled: true,
+          scope: other,
+          rules: [{ id: other, revision: 1 }],
+          graceUntil: null,
+        },
+      },
+    },
+    latest = {
+      ...initial,
+      baseline: {
+        ...initial.baseline,
+        revision: 2,
+        definition: { ...initial.baseline.definition, name: 'Server edit' },
+      },
+    },
+    read = vi.fn().mockResolvedValueOnce(initial).mockResolvedValue(latest),
+    put = vi.fn().mockRejectedValue(decodeMdmError(409, { code: 'operation_conflict' }))
+  const { wrapper, button } = await setup(BaselinesView, { governance: { read, put } })
+  await wrapper.get('[data-testid="baseline-name"]').setValue('My draft')
+  await wrapper.get('[data-testid="baseline-form"]').trigger('submit')
+  await flushPromises()
+  expect(put.mock.calls[0]![1]).toMatchObject({ expectedRevision: 1, input: { name: 'My draft' } })
+  expect(wrapper.get('[data-testid="baseline-name"]').element).toHaveProperty('value', 'My draft')
+  await button('读取服务器版本供比较').trigger('click')
+  await flushPromises()
+  expect(wrapper.get('[data-testid="baseline-comparison"]').text()).toContain('Server edit')
+  expect(wrapper.get('[data-testid="baseline-name"]').element).toHaveProperty('value', 'My draft')
+  await button('采用服务器版本并替换草稿').trigger('click')
+  expect(wrapper.get('[data-testid="baseline-name"]').element).toHaveProperty(
+    'value',
+    'Server edit',
+  )
+  wrapper.unmount()
+})
+it('keeps an unknown decision locked across reads and loads expiry after replaying the original approval', async () => {
+  const request = {
+      id,
+      revision: 1,
+      operation: id,
+      requester: other,
+      createdAt: 100,
+      state: 'pending',
+      target: {
+        kind: 'compliance_exception',
+        baseline: id,
+        baselineRevision: 1,
+        rule: other,
+        ruleVersion: 1,
+        device: 'device-01',
+      },
+      reason: 'Temporary',
+      validFrom: 100,
+      validUntil: 200,
+      decision: null,
+      revocation: null,
+    },
+    initial = { request, asOf: 101 },
+    approved = {
+      request: {
+        ...request,
+        revision: 2,
+        state: 'approved',
+        decision: { by: id, at: 102, value: 'approved' },
+      },
+      asOf: 102,
+    },
+    expired = { request: { ...approved.request, revision: 3, state: 'expired' }, asOf: 201 },
+    read = vi.fn().mockResolvedValue(initial),
+    decide = vi.fn().mockRejectedValueOnce(new Error('lost')).mockResolvedValue(approved)
+  const { wrapper, button } = await setup(RequestsView, { requests: { read, decide } })
+  await wrapper.get('[data-testid="approve-request"]').trigger('click')
+  await flushPromises()
+  const frozen = structuredClone(decide.mock.calls[0])
+  await wrapper.get('[data-testid="refresh-request"]').trigger('click')
+  await flushPromises()
+  expect(wrapper.get('[data-testid="approve-request"]').attributes('disabled')).toBeDefined()
+  read.mockResolvedValue(expired)
+  await button('重放同一操作').trigger('click')
+  await flushPromises()
+  expect(decide.mock.calls[1]).toEqual(frozen)
+  expect(wrapper.get('[data-testid="request-state"]').text()).toBe('已过期')
+  expect(wrapper.find('[data-testid="approve-request"]').exists()).toBe(false)
+  wrapper.unmount()
+})
+it('replays the original dispatch after the displayed approval has expired', async () => {
+  const request = {
+      id,
+      revision: 2,
+      operation: other,
+      requester: other,
+      createdAt: 100,
+      state: 'approved',
+      target: {
+        kind: 'risk_remediation',
+        risk: id,
+        assessment: other,
+        assessmentVersion: 1,
+        device: 'device-01',
+      },
+      reason: 'Patch',
+      validFrom: 100,
+      validUntil: 200,
+      decision: { by: id, at: 101, value: 'approved' },
+      revocation: null,
+    },
+    read = vi.fn().mockResolvedValue({ request, asOf: 102 }),
+    dispatch = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('lost'))
+      .mockResolvedValue({ action: { id: other } })
+  const { wrapper, button } = await setup(
+    RequestsView,
+    {
+      requests: { read },
+      actions: { dispatch },
+    },
+    other,
+  )
+  await wrapper.get('[data-testid="dispatch-security"]').trigger('click')
+  await flushPromises()
+  const frozen = structuredClone(dispatch.mock.calls[0])
+  read.mockResolvedValue({ request: { ...request, state: 'expired', revision: 3 }, asOf: 201 })
+  await wrapper.get('[data-testid="refresh-request"]').trigger('click')
+  await flushPromises()
+  expect(wrapper.get('[data-testid="request-state"]').text()).toBe('已过期')
+  await button('重放同一操作').trigger('click')
+  await flushPromises()
+  expect(dispatch.mock.calls[1]).toEqual(frozen)
+  expect(wrapper.find('[data-testid="dispatch-security"]').exists()).toBe(false)
+  wrapper.unmount()
+})
+
+it('limits decisions, revocation and dispatch to their displayed actor relationships', async () => {
+  const request = {
+    id,
+    revision: 1,
+    operation: id,
+    requester: other,
+    createdAt: 100,
+    state: 'pending',
+    target: {
+      kind: 'risk_remediation',
+      risk: id,
+      assessment: other,
+      assessmentVersion: 1,
+      device: 'device-01',
+    },
+    reason: 'Patch',
+    validFrom: 100,
+    validUntil: 200,
+    decision: null,
+    revocation: null,
+    consumption: null,
+  }
+  const read = vi.fn().mockResolvedValue({ request, asOf: 101 }),
+    decide = vi.fn(),
+    dispatch = vi.fn()
+  const { wrapper, button, session } = await setup(
+    RequestsView,
+    { requests: { read, decide }, actions: { dispatch } },
+    other,
+  )
+  expect(wrapper.get('[data-testid="approve-request"]').attributes('disabled')).toBeDefined()
+  expect(button('撤销').attributes('disabled')).toBeUndefined()
+  session.value = { ...session.value, identity: { principalId: id } }
+  await flushPromises()
+  expect(wrapper.get('[data-testid="approve-request"]').attributes('disabled')).toBeUndefined()
+  expect(button('撤销').attributes('disabled')).toBeDefined()
+  read.mockResolvedValue({
+    request: {
+      ...request,
+      state: 'approved',
+      revision: 2,
+      decision: { by: id, at: 101, value: 'approved' },
+    },
+    asOf: 102,
+  })
+  await wrapper.get('[data-testid="refresh-request"]').trigger('click')
+  await flushPromises()
+  expect(wrapper.get('[data-testid="dispatch-security"]').attributes('disabled')).toBeDefined()
+  expect(button('撤销').attributes('disabled')).toBeUndefined()
+  session.value = { ...session.value, identity: { principalId: other } }
+  await flushPromises()
+  expect(wrapper.get('[data-testid="dispatch-security"]').attributes('disabled')).toBeUndefined()
+  session.value = { ...session.value, status: 'anonymous' }
+  await flushPromises()
+  expect(wrapper.get('[data-testid="dispatch-security"]').attributes('disabled')).toBeDefined()
+  expect(button('撤销').attributes('disabled')).toBeDefined()
+  expect(decide).not.toHaveBeenCalled()
+  expect(dispatch).not.toHaveBeenCalled()
+  wrapper.unmount()
+})
+it.each([false, true])(
+  'clears a rejected exception link but retains unknown operation identity: unknown=%s',
+  async (unknown) => {
+    const baseline = {
+      id,
+      revision: 1,
+      scopeRevision: 1,
+      definition: {
+        name: 'Baseline',
+        enabled: true,
+        scope: other,
+        rules: [{ id: other, revision: 1 }],
+        graceUntil: null,
+      },
+    }
+    const create = vi
+      .fn()
+      .mockRejectedValue(
+        unknown ? new Error('lost') : decodeMdmError(409, { code: 'operation_conflict' }),
+      )
+    const { wrapper, button } = await setup(BaselinesView, {
+      governance: {
+        read: async () => ({ baseline, asOf: 100 }),
+        devices: async () => ({
+          items: [
+            {
+              device: 'device-01',
+              native: { status: 'non_compliant' },
+              rules: [
+                {
+                  ruleId: other,
+                  ruleVersion: 1,
+                  nativeStatus: 'non_compliant',
+                  drift: 'none',
+                  governance: 'action_required',
+                  request: null,
+                },
+              ],
+            },
+          ],
+          asOf: 100,
+          nextCursor: null,
+        }),
+      },
+      requests: { create },
+    })
+    await button('读取目标与漂移').trigger('click')
+    await flushPromises()
+    await button('申请例外豁免').trigger('click')
+    await wrapper.get('[data-testid="exception-form"] textarea').setValue('Temporary exception')
+    await wrapper.get('[data-testid="exception-form"]').trigger('submit')
+    await flushPromises()
+    expect(create).toHaveBeenCalledTimes(1)
+    expect(wrapper.text().includes('申请 ID')).toBe(unknown)
+    expect(wrapper.find('[data-testid="exception-form"]').exists()).toBe(true)
+    wrapper.unmount()
+  },
+)

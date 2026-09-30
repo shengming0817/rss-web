@@ -145,6 +145,39 @@ it('never falls back to mock for published policy or native-operation paths', as
   }
 })
 
+it('classifies native compliance under security before the generic device path', async () => {
+  const scenario = createScenario([() => ({ status: 200 })])
+  await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+    login: 'demo',
+    password: 'demo',
+  })
+  await control(scenario, { scenario: 'normal', module: 'security', source: 'real' })
+  expect(
+    (await scenario.handle('GET', '/api/mdm-candidate/v1/workspace/scenario')).body,
+  ).toMatchObject({
+    sources: {
+      policies: 'real',
+      software: 'real',
+      security: 'real',
+      operations: 'real',
+      devices: 'mock',
+    },
+  })
+  for (const path of [
+    '/api/v2/compliance-rules',
+    '/api/v2/compliance-rules/id/tasks/task',
+    '/api/v2/devices/device-01/compliance',
+    '/api/v2/devices/device-01/compliance/history',
+    '/api/mdm-candidate/v1/operations/audit',
+    '/api/mdm-candidate/v1/operations/alerts',
+  ])
+    expect((await scenario.handle('GET', path)).status, path).toBe(503)
+  expect((await scenario.handle('GET', '/api/v2/devices/device-01/inventory')).status).toBe(200)
+  await control(scenario, { scenario: 'normal', module: 'security', source: 'mock' })
+  await control(scenario, { scenario: 'normal', module: 'devices', source: 'real' })
+  expect((await scenario.handle('GET', '/api/v2/devices/device-01/compliance')).status).toBe(200)
+})
+
 it('accepts bounded raw resource bytes while retaining the JSON request budget elsewhere', async () => {
   const scenario = createScenario([
     (request) => ({
@@ -187,7 +220,10 @@ it('injects automation events only into the explicit mock source after login', a
   const scenario = createScenario(
     [],
     () => {},
-    (event) => events.push(event),
+    (event) => {
+      events.push(event)
+      return true
+    },
   )
   const path = '/api/mdm-candidate/v1/workspace/scenario'
   const event = { kind: 'clock', at: Math.floor(Date.now() / 1000) + 60 }

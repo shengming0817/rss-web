@@ -5,6 +5,8 @@ import type { createWorkspaceClient } from './services/workspace'
 import type { createPolicyClients } from './features/policies/client'
 import type { createDeviceClients } from './features/devices/client'
 import type { createSoftwareClients } from './features/software/client'
+import type { createSecurityClients } from './features/security/client'
+import type { createOperationsClients } from './features/operations/client'
 export interface MdmRuntime {
   session: IdentitySession
   transport: HttpTransport
@@ -12,6 +14,8 @@ export interface MdmRuntime {
   devices: ReturnType<typeof createDeviceClients>
   policies: ReturnType<typeof createPolicyClients>
   software: ReturnType<typeof createSoftwareClients>
+  security: ReturnType<typeof createSecurityClients>
+  operations: ReturnType<typeof createOperationsClients>
   tenant: string
   demo: boolean
 }

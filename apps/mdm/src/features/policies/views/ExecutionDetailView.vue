@@ -103,6 +103,15 @@ onMounted(() => load())
       ></template
     >
     <RouterLink
+      v-if="execution?.origin.kind === 'security'"
+      :to="{
+        name: 'security-actions',
+        params: { tenant: runtime.tenant },
+        query: { id: execution.id },
+      }"
+      >{{ t('security.actions') }}</RouterLink
+    >
+    <RouterLink
       v-if="execution?.origin.kind === 'update'"
       :to="{
         name: 'software-updates',

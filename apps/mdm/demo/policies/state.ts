@@ -17,9 +17,13 @@ import { softwareExecution } from '../../src/features/software/clients/execution
 import { createBootstrapDemo } from '../software/bootstrap'
 import { createUpdatesDemo } from '../software/updates'
 import { createSelfServiceDemo } from '../software/self-service'
+import { createSecurityDemo } from '../security/state'
+import { createOperationsDemo } from '../operations/state'
 export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo>) {
+  const operations = createOperationsDemo(() => security.now())
   const scopes = createScopeDemo(devices),
     native = createNativeDemo(devices)
+  const security = createSecurityDemo(devices, operations, scopes)
   const resources = createResourceDemo(
     (id, version): boolean =>
       policies.references(id, version) ||
@@ -75,6 +79,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       ),
     )
     return [
+      ...security.executions(),
       ...bootstrap.executions(),
       ...updates.executions(),
       ...policies.executions(),
@@ -91,7 +96,10 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
   }
   const handle: DomainHandler = (request, scenario) => {
     try {
+      security.settle()
       for (const owner of [
+        operations,
+        security,
         scopes,
         resources,
         native,
@@ -158,6 +166,9 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
     }
   }
   return {
+    now: security.now,
+    operations,
+    security,
     resources,
     scopes,
     admission,
@@ -177,6 +188,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       if (deviceWrite || groupPublished) policies.reconcile(scenario)
     },
     tick(event: DemoEvent, scenario: Scenario = 'normal') {
+      if (!security.tick(event, scenario)) return false
       if (!event.kind.startsWith('software_') && !event.kind.startsWith('bootstrap_')) {
         policies.reconcile(scenario, event)
         workflows.tick(event)
@@ -185,9 +197,12 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       updates.tick(event, scenario)
       software.tick(event, scenario)
       selfService.tick(event)
+      return true
     },
     reset() {
       for (const owner of [
+        operations,
+        security,
         scopes,
         resources,
         native,

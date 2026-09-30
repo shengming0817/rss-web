@@ -36,10 +36,12 @@ export function demoPlugin(): Plugin {
         },
         (event, scenario) => {
           devices.tick(event)
-          automation.tick(event, scenario)
+          const accepted = automation.tick(event, scenario)
           catalog.tick(event)
+          return accepted
         },
         automation.observe,
+        automation.now,
       )
       server.middlewares.use(async (req, res, next) => {
         if (!req.url?.startsWith('/api/')) {

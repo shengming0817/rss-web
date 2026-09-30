@@ -14,7 +14,7 @@ import type { GroupRead } from '../../src/features/devices/clients/groups'
 import type { DemoDevice } from './fixtures'
 import { candidate } from './http'
 import { createPages, createReceipts, error, ok, operation } from '../http'
-import { evaluate } from './criteria'
+import { evaluate, referencedFields } from './criteria'
 type Decision = ReturnType<typeof evaluate> & {
   device: string
   origin: 'rule' | 'manual'
@@ -34,12 +34,24 @@ interface Job {
   added: string[]
   removed: string[]
   decisions: Decision[]
+  ruleVersion: string | null
+  inputs: string
 }
 export function createGroupDemo(devices: () => Map<string, DemoDevice>) {
   const groups = new Map<string, GroupState>(),
     jobs = new Map<string, Job>()
   const pages = createPages(),
     receipts = createReceipts()
+  function inputs(read: GroupRead) {
+    const selected = read.criteria ? referencedFields(read.criteria) : []
+    return JSON.stringify(
+      [...devices().values()].map((d) => [
+        d.summary.id,
+        d.registrations,
+        selected.map((f) => d.inventory.fields[f] ?? null),
+      ]),
+    )
+  }
   function reset() {
     groups.clear()
     jobs.clear()
@@ -105,6 +117,8 @@ export function createGroupDemo(devices: () => Map<string, DemoDevice>) {
       added: members.filter((d) => !state.members.includes(d)),
       removed: state.members.filter((d) => !members.includes(d)),
       decisions,
+      ruleVersion: state.read.group.ruleVersion,
+      inputs: inputs(state.read),
     })
     return ok(
       { task, kind: 'group', target: id, statusUrl: `/api/v2/groups/${id}/tasks/${task}` },
@@ -291,12 +305,18 @@ export function createGroupDemo(devices: () => Map<string, DemoDevice>) {
     published(id: string) {
       const state = groups.get(id)
       if (!state || state.read.group.deleted) return null
+      const job = state.read.memberSet ? jobs.get(state.read.memberSet) : undefined
       return structuredClone({
         members: state.members,
         memberSet: state.read.memberSet,
         memberVersion: state.read.group.memberVersion,
         definitionVersion: state.read.group.revision,
         authorityVersion: 1,
+        ready:
+          state.read.group.kind === 'static' ||
+          (!!job &&
+            job.ruleVersion === state.read.group.ruleVersion &&
+            job.inputs === inputs(state.read)),
       })
     },
   }

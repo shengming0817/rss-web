@@ -3,7 +3,7 @@ import { ref, watch, type Ref } from 'vue'
 import type { HttpTransport } from '@rss/api/mdm'
 import { useI18n } from 'vue-i18n'
 import { scenarios, TENANT } from './scenario'
-import { record, enumeration } from '../src/services/decode'
+import { record, enumeration, count } from '../src/services/decode'
 import { moduleIds } from '../src/services/workspace'
 const props = defineProps<{ transport: HttpTransport; authenticated: Readonly<Ref<boolean>> }>()
 const { locale, t } = useI18n()
@@ -48,7 +48,7 @@ watch(
 const failed = ref(false)
 const busy = ref(false)
 const eventKind = ref('clock'),
-  eventAt = ref(Math.floor(Date.now() / 1000)),
+  eventAt = ref<number | ''>(''),
   eventDevice = ref('device-01'),
   eventResource = ref(''),
   eventItem = ref(''),
@@ -60,21 +60,52 @@ async function simulate() {
   busy.value = true
   failed.value = false
   try {
+    const at =
+      eventAt.value === ''
+        ? (
+            await props.transport.request({
+              method: 'GET',
+              path: '/api/mdm-candidate/v1/workspace/scenario',
+              successStatus: 200,
+              decode: (value) => ({ asOf: count(record(value)['asOf']) }),
+            })
+          ).asOf + 1
+        : eventAt.value
     await props.transport.request({
       method: 'POST',
       path: '/api/mdm-candidate/v1/workspace/scenario',
       body: {
         event: {
           kind: eventKind.value,
-          at: eventAt.value,
+          at,
           ...(eventKind.value !== 'clock' ? { device: eventDevice.value } : {}),
           ...(eventKind.value === 'software_usage'
             ? { resource: eventResource.value, active: eventActive.value }
             : {}),
-          ...(eventKind.value === 'software_detect' ? { task: eventTask.value } : {}),
+          ...([
+            'software_detect',
+            'security_result',
+            'security_detect',
+            'material_detect',
+            'certificate_issued',
+            'certificate_detect',
+            'remote_consent',
+            'remote_revoke',
+            'remote_ended',
+            'support_detect',
+            'elevation_used',
+            'elevation_ended',
+            'elevation_revoked',
+            'diagnostic_uploaded',
+            'diagnostic_scanned',
+          ].includes(eventKind.value)
+            ? { task: eventTask.value }
+            : {}),
           ...(eventKind.value === 'software_request' ? { item: eventItem.value } : {}),
           ...(eventKind.value === 'enrollment_bind' ? { enrollment: eventEnrollment.value } : {}),
-          ...(eventKind.value === 'agent_binding' ? { active: eventActive.value } : {}),
+          ...(['agent_binding', 'remote_consent'].includes(eventKind.value)
+            ? { active: eventActive.value }
+            : {}),
         },
       },
       successStatus: 204,
@@ -134,6 +165,13 @@ async function apply(reset: boolean) {
       <option value="mock">{{ t('mdm.mock') }}</option>
       <option value="real">{{ t('mdm.real') }}</option>
     </select>
+    <p>
+      {{
+        locale === 'zh-CN'
+          ? '配置、软件、安全与运营共用执行、审批和审计，来源会一起切换。'
+          : 'Configuration, software, security and operations share execution, approval and audit records; their sources switch together.'
+      }}
+    </p>
     <button :disabled="busy || !authenticated.value" @click="apply(false)">
       {{ locale === 'zh-CN' ? '应用' : 'Apply' }}
     </button>
@@ -141,7 +179,11 @@ async function apply(reset: boolean) {
       {{ locale === 'zh-CN' ? '重置演示' : 'Reset demo' }}
     </button>
     <p v-if="failed" role="alert">
-      {{ locale === 'zh-CN' ? '模拟服务不可用' : 'Demo server unavailable' }}
+      {{
+        locale === 'zh-CN'
+          ? '未确认模拟操作生效，请检查目标、状态和时间，或服务是否可用。'
+          : 'Demo operation is unconfirmed. Check the target, state, time and service availability.'
+      }}
     </p>
     <details>
       <summary>
@@ -217,18 +259,84 @@ async function apply(reset: boolean) {
         <option value="software_reboot">
           {{ locale === 'zh-CN' ? '模拟重启后检测回报' : 'Synthetic detection after reboot' }}
         </option>
+        <option value="security_result">
+          {{
+            locale === 'zh-CN'
+              ? '模拟安全任务设备回执（不确认效果）'
+              : 'Synthetic security command result (effect unverified)'
+          }}
+        </option>
+        <option value="certificate_issued">{{ t('security.demoCertificateIssued') }}</option>
+        <option value="remote_consent">{{ t('security.supportEvents.remote_consent') }}</option>
+        <option value="remote_revoke">{{ t('security.supportEvents.remote_revoke') }}</option>
+        <option value="remote_ended">{{ t('security.supportEvents.remote_ended') }}</option>
+        <option value="support_detect">{{ t('security.supportEvents.support_detect') }}</option>
+        <option value="elevation_used">{{ t('security.supportEvents.elevation_used') }}</option>
+        <option value="elevation_ended">{{ t('security.supportEvents.elevation_ended') }}</option>
+        <option value="elevation_revoked">
+          {{ t('security.supportEvents.elevation_revoked') }}
+        </option>
+        <option value="diagnostic_uploaded">
+          {{ t('security.supportEvents.diagnostic_uploaded') }}
+        </option>
+        <option value="diagnostic_scanned">
+          {{ t('security.supportEvents.diagnostic_scanned') }}
+        </option>
+        <option value="certificate_detect">{{ t('security.demoCertificateDetected') }}</option>
+        <option value="material_detect">
+          {{
+            locale === 'zh-CN'
+              ? '模拟新材料独立托管观测'
+              : 'Independent synthetic material escrow observation'
+          }}
+        </option>
+        <option value="security_detect">
+          {{
+            locale === 'zh-CN'
+              ? '模拟安全任务的独立补丁检测'
+              : 'Independent synthetic security patch detection'
+          }}
+        </option>
       </select>
       <label for="demo-event-at">{{
-        locale === 'zh-CN' ? '时间（Unix 秒，单向推进）' : 'Time (Unix seconds, advances only)'
+        locale === 'zh-CN'
+          ? '时间（Unix 秒；留空使用提交时的模拟时间 + 1 秒）'
+          : 'Time (Unix seconds; blank uses current demo time + 1 second)'
       }}</label>
       <input id="demo-event-at" v-model.number="eventAt" type="number" min="0" />
       <label v-if="eventKind !== 'clock'" for="demo-event-device">{{
         locale === 'zh-CN' ? '设备 ID' : 'Device ID'
       }}</label>
       <input v-if="eventKind !== 'clock'" id="demo-event-device" v-model="eventDevice" />
-      <template v-if="eventKind === 'software_detect'">
+      <template
+        v-if="
+          [
+            'software_detect',
+            'security_result',
+            'security_detect',
+            'material_detect',
+            'certificate_issued',
+            'certificate_detect',
+            'remote_consent',
+            'remote_revoke',
+            'remote_ended',
+            'support_detect',
+            'elevation_used',
+            'elevation_ended',
+            'elevation_revoked',
+            'diagnostic_uploaded',
+            'diagnostic_scanned',
+          ].includes(eventKind)
+        "
+      >
         <label for="demo-event-task">{{
-          locale === 'zh-CN' ? '原任务 ID（运行详情）' : 'Original task ID (run detail)'
+          ['remote_consent', 'remote_revoke'].includes(eventKind)
+            ? locale === 'zh-CN'
+              ? '申请 ID（远程支持申请）'
+              : 'Request ID (remote support request)'
+            : locale === 'zh-CN'
+              ? '原任务 ID（运行详情）'
+              : 'Original task ID (run detail)'
         }}</label>
         <input id="demo-event-task" v-model="eventTask" />
       </template>
@@ -247,6 +355,9 @@ async function apply(reset: boolean) {
         ><label for="demo-enrollment">Enrollment ID</label
         ><input id="demo-enrollment" v-model="eventEnrollment"
       /></template>
+      <label v-if="eventKind === 'remote_consent'"
+        ><input v-model="eventActive" type="checkbox" />{{ t('security.consentChoice') }}</label
+      >
       <label v-if="eventKind === 'agent_binding'"
         ><input v-model="eventActive" type="checkbox" />{{
           locale === 'zh-CN'

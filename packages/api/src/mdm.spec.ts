@@ -220,6 +220,38 @@ it('decodes a missing native software task through the transport as a definite n
   expect(decodeMdmError(409, { code: 'task_not_found' }).cause).toBe('protocol')
 })
 
+it('dispatches native compliance routes through the product boundary with no path rewriting', async () => {
+  const instance = axios.create(),
+    mock = new AxiosMockAdapter(instance)
+  mock.onAny().reply(200, {})
+  const spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance),
+    transport = createMdmTransport()
+  spy.mockRestore()
+  for (const path of [
+    '/api/v2/compliance-rules',
+    '/api/v2/compliance-rules/rule/versions/1',
+    '/api/v2/compliance-rules/rule/tasks/task',
+    '/api/v2/devices/device-01/compliance/history',
+  ])
+    await expect(
+      transport.request({ method: 'GET', path, successStatus: 200, decode: (v) => v }),
+    ).resolves.toEqual({})
+  expect(mock.history.get.map((v) => v.url)).toEqual([
+    '/api/v2/compliance-rules',
+    '/api/v2/compliance-rules/rule/versions/1',
+    '/api/v2/compliance-rules/rule/tasks/task',
+    '/api/v2/devices/device-01/compliance/history',
+  ])
+  await expect(
+    transport.request({
+      method: 'GET',
+      path: '/api/v2/compliance-rules-admin',
+      successStatus: 200,
+      decode: (v) => v,
+    }),
+  ).rejects.toMatchObject({ cause: 'client' })
+})
+
 it('bounds raw upload chunks to PATCH sessions and decodes offset conflict without exposing raw fields', async () => {
   const instance = axios.create(),
     mock = new AxiosMockAdapter(instance)
