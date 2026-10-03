@@ -107,3 +107,64 @@ it('clears unlock and password state on session change and fences pending respon
   expect(wrapper.text()).not.toContain('当前会话已解锁')
   wrapper.unmount()
 })
+it('keeps local file errors recoverable and sends each file format and password', async () => {
+  const imported: unknown[] = []
+  const importFile = vi.fn(async (_id, input) => {
+    imported.push(JSON.parse(JSON.stringify(input)))
+    return {}
+  })
+  const { wrapper } = await setup({
+    state: vi.fn().mockResolvedValue({
+      initialized: true,
+      generation: 1,
+      unlockedUntil: Math.floor(Date.now() / 1000) + 900,
+    }),
+    import: importFile,
+  })
+  await wrapper.get('#archive-name').setValue('CA with key')
+  const select = async (files: File[]) => {
+    Object.defineProperty(wrapper.get('#archive-file').element, 'files', {
+      configurable: true,
+      value: files,
+    })
+    await wrapper.get('#archive-file').trigger('change')
+  }
+  const submit = async () => {
+    wrapper
+      .get('#archive-name')
+      .element.closest('form')!
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    await flushPromises()
+  }
+  const large = new File([], 'large.pem')
+  Object.defineProperty(large, 'size', { value: 2 * 1024 * 1024 })
+  await select([large])
+  await submit()
+  expect(importFile).not.toHaveBeenCalled()
+  expect(wrapper.text()).not.toContain('查询操作结果')
+  const cert = new File([], 'ca.pem'),
+    key = new File([], 'key.pem')
+  for (const file of [cert, key])
+    Object.defineProperty(file, 'arrayBuffer', {
+      value: async () => new TextEncoder().encode(file.name).buffer,
+    })
+  await select([cert, key])
+  await wrapper.get('#archive-file-format-1').setValue('private_key')
+  await wrapper.get('#archive-file-password-1').setValue('file password')
+  await submit()
+  expect(importFile).toHaveBeenCalledTimes(1)
+  expect(imported).toEqual([
+    expect.objectContaining({
+      files: [
+        expect.objectContaining({ name: 'ca.pem', format: 'certificate', password: null }),
+        expect.objectContaining({
+          name: 'key.pem',
+          format: 'private_key',
+          password: 'file password',
+        }),
+      ],
+    }),
+  ])
+  expect(wrapper.find('#archive-file-password-1').exists()).toBe(false)
+  wrapper.unmount()
+})

@@ -14,6 +14,7 @@ import {
   type Entry,
   type Format,
   type Metadata,
+  type ImportInput,
   type Profile,
   type Reference,
   type Vault,
@@ -40,9 +41,8 @@ const vault = ref<Vault>(),
   diagnosis = ref(''),
   filter = ref('all'),
   fileInput = ref<HTMLInputElement>(),
-  files = ref<File[]>([]),
+  files = ref<{ file: File; format: Format; password: string }[]>([]),
   format = ref<Format>('certificate'),
-  filePassword = ref(''),
   password = ref(''),
   oldPassword = ref(''),
   newPassword = ref(''),
@@ -100,7 +100,6 @@ function clearSecrets() {
   password.value = ''
   oldPassword.value = ''
   newPassword.value = ''
-  filePassword.value = ''
   files.value = []
   if (fileInput.value) fileInput.value.value = ''
   clearDownloads()
@@ -258,7 +257,11 @@ function chosen() {
   return { entryId: entry?.id ?? crypto.randomUUID(), expectedRevision: entry?.revision ?? 0 }
 }
 function selectFiles(event: Event) {
-  files.value = Array.from((event.target as HTMLInputElement).files ?? [])
+  files.value = Array.from((event.target as HTMLInputElement).files ?? []).map((file) => ({
+    file,
+    format: format.value,
+    password: '',
+  }))
 }
 function encoded(bytes: ArrayBuffer) {
   let binary = ''
@@ -291,41 +294,46 @@ async function submit() {
     return
   }
   const selectedFiles = files.value,
-    secret = filePassword.value,
-    selectedFormat = format.value,
     requestVersion = reference(requestReference.value)
   files.value = []
-  filePassword.value = ''
   if (fileInput.value) fileInput.value.value = ''
-  await write(async (id) => {
+  let payload: ImportInput['files'] = []
+  try {
     if (
       !selectedFiles.length ||
       selectedFiles.length > 16 ||
-      selectedFiles.reduce((n, f) => n + f.size, 0) > 1024 * 1024
-    )
-      throw new Error('Invalid file size')
-    const payload = await Promise.all(
-      selectedFiles.map(async (f) => ({
-        name: f.name,
-        format: selectedFormat,
-        data: encoded(await f.arrayBuffer()),
-        password: secret || null,
-      })),
-    )
-    try {
-      return await client.import(id, {
-        ...entry,
-        metadata: details,
-        files: payload,
-        requestVersion,
-      })
-    } finally {
-      for (const file of payload) {
-        file.data = ''
-        file.password = null
-      }
+      selectedFiles.reduce((n, f) => n + f.file.size, 0) > 1024 * 1024
+    ) {
+      failure.value = 'invalidRequest'
+      return
     }
-  })
+    const prepared = await op.run(
+      () =>
+        invoke(async () =>
+          Promise.all(
+            selectedFiles.map(async (row) => ({
+              name: row.file.name,
+              format: row.format,
+              data: encoded(await row.file.arrayBuffer()),
+              password: row.password || null,
+            })),
+          ),
+        ),
+      (value) => {
+        payload = value
+      },
+    )
+    if (!prepared) return
+    await write((id) =>
+      client.import(id, { ...entry, metadata: details, files: payload, requestVersion }),
+    )
+  } finally {
+    for (const row of selectedFiles) row.password = ''
+    for (const file of payload) {
+      file.data = ''
+      file.password = null
+    }
+  }
 }
 async function open(entry: Entry) {
   if (busy.value) return
@@ -659,16 +667,27 @@ onMounted(() => load())
           ><select id="archive-format" v-model="format">
             <option v-for="value in formats" :key="value" :value="value">
               {{ t(`security.archive.formats.${value}`) }}
-            </option></select
-          ><label for="archive-file-password">{{ t('security.archive.filePassword') }}</label
-          ><input
-            id="archive-file-password"
-            v-model="filePassword"
-            type="password"
-            autocomplete="off"
-          /><label for="archive-request-reference">{{
-            t('security.archive.requestReference')
-          }}</label
+            </option>
+          </select>
+          <section v-for="(row, index) in files" :key="index">
+            <h3>{{ row.file.name }}</h3>
+            <label :for="`archive-file-format-${index}`">{{ t('security.archive.format') }}</label>
+            <select :id="`archive-file-format-${index}`" v-model="row.format">
+              <option v-for="value in formats" :key="value" :value="value">
+                {{ t(`security.archive.formats.${value}`) }}
+              </option>
+            </select>
+            <label :for="`archive-file-password-${index}`">{{
+              t('security.archive.filePassword')
+            }}</label>
+            <input
+              :id="`archive-file-password-${index}`"
+              v-model="row.password"
+              type="password"
+              autocomplete="off"
+            />
+          </section>
+          <label for="archive-request-reference">{{ t('security.archive.requestReference') }}</label
           ><select id="archive-request-reference" v-model="requestReference">
             <option value="">{{ t('security.archive.none') }}</option>
             <option
