@@ -168,3 +168,151 @@ it('keeps local file errors recoverable and sends each file format and password'
   expect(wrapper.find('#archive-file-password-1').exists()).toBe(false)
   wrapper.unmount()
 })
+const secondId = '22222222-2222-4222-8222-222222222222'
+function archiveEntry(id: string, revision = 1) {
+  return {
+    id,
+    revision,
+    retired: false,
+    recommendedVersion: null,
+    latest: {
+      entryId: id,
+      version: revision,
+      actor: tenant,
+      instance: tenant,
+      operationId: tenant,
+      createdAt: 100,
+      metadata: { name: id, category: 'custom', labels: [], usages: [], owner: '', notes: '' },
+      facts: [],
+      requestVersion: null,
+      source: 'import',
+    },
+  }
+}
+it.each(['import', 'generate'] as const)(
+  'blocks a lost second-page %s target after refresh and a successful append',
+  async (mode) => {
+    let revision = 1
+    const list = vi.fn(async (after?: string) => ({
+      tenantId: tenant,
+      items: [archiveEntry(after ? secondId : tenant, after ? revision : 1)],
+      nextAfter: after ? null : tenant,
+      asOf: 100,
+      reminderDays: 30,
+      alerts: { expired: 0, expiring: 0, notYetValid: 0 },
+    }))
+    const history = vi.fn(async (id: string) => [archiveEntry(id).latest])
+    const write = vi.fn(async () => {
+      revision++
+      return {}
+    })
+    const { wrapper } = await setup({
+      state: vi.fn().mockResolvedValue({
+        initialized: true,
+        generation: 1,
+        unlockedUntil: Math.floor(Date.now() / 1000) + 900,
+      }),
+      list,
+      history,
+      [mode]: write,
+    })
+    const click = async (text: string) => {
+      await wrapper
+        .findAll('button')
+        .find((b) => b.text() === text)!
+        .trigger('click')
+      await flushPromises()
+    }
+    await click('加载更多')
+    await click(secondId)
+    await wrapper.get('#archive-mode').setValue(mode)
+    await click('刷新')
+    expect((wrapper.get('#archive-target').element as HTMLSelectElement).value).toBe(secondId)
+    const submit = async () => {
+      if (mode === 'import') {
+        const file = new File([], 'certificate.pem')
+        Object.defineProperty(file, 'arrayBuffer', {
+          value: async () => new TextEncoder().encode('fixture').buffer,
+        })
+        Object.defineProperty(wrapper.get('#archive-file').element, 'files', {
+          configurable: true,
+          value: [file],
+        })
+        await wrapper.get('#archive-file').trigger('change')
+      }
+      await wrapper
+        .get('#archive-name')
+        .element.closest('form')!
+        .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+      await flushPromises()
+    }
+    await submit()
+    expect(write).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('对象或操作不存在')
+    await click('加载更多')
+    await submit()
+    expect(write).toHaveBeenCalledTimes(1)
+    expect(write.mock.calls[0]).toEqual([
+      expect.any(String),
+      expect.objectContaining({ entryId: secondId, expectedRevision: 1 }),
+    ])
+    await submit()
+    expect(write).toHaveBeenCalledTimes(1)
+    await click('加载更多')
+    await submit()
+    expect(write).toHaveBeenCalledTimes(2)
+    expect(write.mock.calls[1]).toEqual([
+      expect.any(String),
+      expect.objectContaining({ entryId: secondId, expectedRevision: 2 }),
+    ])
+    wrapper.unmount()
+  },
+)
+it.each(['success', 'unknown'] as const)(
+  'clears staged secrets before password rotation (%s)',
+  async (result) => {
+    let complete: () => void = () => {}
+    const password = vi.fn(
+      () =>
+        new Promise((resolve, reject) => {
+          complete = () => (result === 'success' ? resolve({}) : reject(new Error('lost response')))
+        }),
+    )
+    const state = vi
+      .fn()
+      .mockResolvedValueOnce({
+        initialized: true,
+        generation: 1,
+        unlockedUntil: Math.floor(Date.now() / 1000) + 900,
+      })
+      .mockResolvedValue({ initialized: true, generation: 2, unlockedUntil: null })
+    const { wrapper } = await setup({ state, password })
+    Object.defineProperty(wrapper.get('#archive-file').element, 'files', {
+      configurable: true,
+      value: [new File(['secret'], 'private.pfx')],
+    })
+    await wrapper.get('#archive-file').trigger('change')
+    await wrapper.get('#archive-file-password-0').setValue('file password')
+    await wrapper.get('#archive-old').setValue('old master password')
+    await wrapper.get('#archive-new').setValue('new master password')
+    await wrapper
+      .get('#archive-old')
+      .element.closest('form')!
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    await flushPromises()
+    expect(password).toHaveBeenCalledWith(
+      expect.any(String),
+      'old master password',
+      'new master password',
+    )
+    expect(wrapper.find('#archive-file-password-0').exists()).toBe(false)
+    expect((wrapper.get('#archive-file').element as HTMLInputElement).value).toBe('')
+    expect((wrapper.get('#archive-old').element as HTMLInputElement).value).toBe('')
+    expect((wrapper.get('#archive-new').element as HTMLInputElement).value).toBe('')
+    expect(wrapper.text()).not.toContain('当前会话已解锁')
+    complete()
+    await flushPromises()
+    expect(wrapper.find('#archive-file-password-0').exists()).toBe(false)
+    wrapper.unmount()
+  },
+)

@@ -23,3 +23,53 @@ it('uses the shared executor and explicit operation header; rejects the wrong re
   ).rejects.toThrow()
   expect(request).toHaveBeenCalledTimes(2)
 })
+it.each([null, { entryId: id, version: 1 }])(
+  'decodes list and history with the backend nullable requestVersion: %j',
+  async (requestVersion) => {
+    // rss-mdm certificate-archive-service/model.rs: Version and VersionRef serialize camelCase.
+    const wire = {
+      entryId: id,
+      version: 2,
+      actor: id,
+      instance: id,
+      operationId: id,
+      createdAt: 100,
+      metadata: {
+        name: 'Issued certificate',
+        category: 'custom',
+        labels: [],
+        usages: [],
+        owner: '',
+        notes: '',
+      },
+      facts: [],
+      requestVersion,
+      source: 'import',
+    }
+    let sample: unknown
+    const request = vi.fn(async (options: RequestOptions<unknown>) => options.decode(sample))
+    const client = createCertificateArchiveClient({ request } as unknown as HttpTransport, id)
+    sample = {
+      tenantId: id,
+      items: [{ id, revision: 2, retired: false, recommendedVersion: null, latest: wire }],
+      nextAfter: null,
+      asOf: 100,
+      reminderDays: 30,
+      alerts: { expired: 0, expiring: 0, notYetValid: 0 },
+    }
+    expect((await client.list()).items[0]!.latest.requestVersion).toEqual(requestVersion)
+    sample = [wire]
+    expect((await client.history(id))[0]!.requestVersion).toEqual(requestVersion)
+    for (const invalid of [
+      { entryId: 'invalid', version: 1 },
+      { entryId: id, version: 0 },
+      { entryId: id, version: 1, extra: true },
+      undefined,
+    ]) {
+      sample = [{ ...wire, requestVersion: invalid }]
+      await expect(client.history(id)).rejects.toThrow()
+    }
+    sample = [{ ...wire, extra: true }]
+    await expect(client.history(id)).rejects.toThrow()
+  },
+)

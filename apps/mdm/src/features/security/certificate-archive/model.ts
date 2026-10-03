@@ -119,6 +119,7 @@ export function version(value: unknown) {
     'createdAt',
     'metadata',
     'facts',
+    'requestVersion',
     'source',
   ])
   return {
@@ -130,6 +131,10 @@ export function version(value: unknown) {
     createdAt: count(v['createdAt']),
     metadata: metadata(v['metadata']),
     facts: array(v['facts'], material),
+    requestVersion: nullable(v['requestVersion'], (value): Reference => {
+      const r = closed(value, ['entryId', 'version'])
+      return { entryId: uuid(r['entryId']), version: positive(r['version']) }
+    }),
     source: enumeration(v['source'], ['import', 'generate', 'metadata'] as const),
   }
 }

@@ -100,6 +100,7 @@ function clearSecrets() {
   password.value = ''
   oldPassword.value = ''
   newPassword.value = ''
+  for (const row of files.value) row.password = ''
   files.value = []
   if (fileInput.value) fileInput.value.value = ''
   clearDownloads()
@@ -107,6 +108,7 @@ function clearSecrets() {
   expiry = undefined
 }
 function setVault(value: Vault) {
+  if (value.unlockedUntil === null) clearSecrets()
   clearDownloads()
   if (expiry) clearTimeout(expiry)
   vault.value = value
@@ -224,9 +226,7 @@ async function lock() {
 async function changePassword() {
   const old = oldPassword.value,
     newValue = newPassword.value
-  oldPassword.value = ''
-  newPassword.value = ''
-  clearDownloads()
+  clearSecrets()
   if (vault.value) vault.value.unlockedUntil = null
   await write((id) => client.password(id, old, newValue))
 }
@@ -253,8 +253,13 @@ function reference(value: string): Reference | null {
   return { entryId, version: Number(revision) }
 }
 function chosen() {
+  if (!target.value) return { entryId: crypto.randomUUID(), expectedRevision: 0 }
   const entry = items.value.find((e) => e.id === target.value)
-  return { entryId: entry?.id ?? crypto.randomUUID(), expectedRevision: entry?.revision ?? 0 }
+  if (!entry) {
+    failure.value = 'notFound'
+    return
+  }
+  return { entryId: entry.id, expectedRevision: entry.revision }
 }
 function selectFiles(event: Event) {
   files.value = Array.from((event.target as HTMLInputElement).files ?? []).map((file) => ({
@@ -270,8 +275,9 @@ function encoded(bytes: ArrayBuffer) {
 }
 async function submit() {
   if (!unlocked.value || busy.value || uncertain.value) return
-  const entry = chosen(),
-    details = metadata()
+  const entry = chosen()
+  if (!entry) return
+  const details = metadata()
   if (mode.value === 'metadata') {
     if (!target.value) return
     await write((id) => client.saveMetadata(id, entry.entryId, entry.expectedRevision, details))
@@ -629,6 +635,9 @@ onMounted(() => load())
         <label for="archive-target">{{ t('security.archive.target') }}</label
         ><select id="archive-target" v-model="target">
           <option value="">{{ t('security.archive.newEntry') }}</option>
+          <option v-if="target && !items.some((e) => e.id === target)" :value="target" disabled>
+            {{ target }} · {{ t('devices.notFound') }}
+          </option>
           <option v-for="entry in items" :key="entry.id" :value="entry.id">
             {{ entry.latest.metadata.name }}
           </option>
