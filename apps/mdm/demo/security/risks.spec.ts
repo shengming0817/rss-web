@@ -1,8 +1,13 @@
-import { expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createScenario, TENANT } from '../scenario'
 import { createDeviceDemo } from '../devices/state'
 import { createAutomationDemo } from '../policies/state'
 import { operation } from '../../src/services/useOperation'
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-09-30T00:00:00Z'))
+})
+afterEach(() => vi.useRealTimers())
 const root = '/api/mdm-candidate/v1/security'
 async function setup() {
   const devices = createDeviceDemo(),
@@ -12,6 +17,7 @@ async function setup() {
       () => {},
       (e, s) => automation.tick(e, s),
       automation.observe,
+      automation.now,
     )
   let headers: Record<string, string> = {}
   async function login(login: 'demo' | 'reviewer') {
@@ -266,24 +272,35 @@ it('keeps unknown device execution occupied until independent evidence and requi
   await g.write(`${root}/requests/${g.request.operationId}/approve`, operation({}, 1))
   await g.login('demo')
   const failed = operation({}, 2)
-  await g.write(`${root}/requests/${g.request.operationId}/dispatch`, failed)
+  expect((await g.write(`${root}/requests/${g.request.operationId}/dispatch`, failed)).status).toBe(
+    200,
+  )
   g.server.set('partial')
-  await g.write('/api/mdm-candidate/v1/workspace/scenario', {
-    event: {
-      kind: 'security_result',
-      at: g.initial.asOf + 1,
-      task: failed.operationId,
-      device: 'device-01',
-    },
-  })
+  expect(
+    (
+      await g.write('/api/mdm-candidate/v1/workspace/scenario', {
+        event: {
+          kind: 'security_result',
+          at: g.initial.asOf + 1,
+          task: failed.operationId,
+          device: 'device-01',
+        },
+      })
+    ).status,
+  ).toBe(204)
+  expect(
+    (await g.server.handle('GET', `/api/mdm-candidate/v1/executions/${failed.operationId}`)).body,
+  ).toMatchObject({ execution: { execution: 'failed', effect: 'failed' } })
   g.server.set('normal')
   expect(
     (await g.write(`${root}/requests/${g.request.operationId}/dispatch`, operation({}, 2))).status,
   ).toBe(409)
   const retry = operation(g.request.input)
-  await g.write(`${root}/requests`, retry)
+  expect((await g.write(`${root}/requests`, retry)).status).toBe(200)
   await g.login('reviewer')
-  await g.write(`${root}/requests/${retry.operationId}/approve`, operation({}, 1))
+  expect(
+    (await g.write(`${root}/requests/${retry.operationId}/approve`, operation({}, 1))).status,
+  ).toBe(200)
   await g.login('demo')
   expect(
     (await g.write(`${root}/requests/${retry.operationId}/dispatch`, operation({}, 2))).status,
