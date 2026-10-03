@@ -27,6 +27,10 @@ export const devicePermissions = [
   'operation_cancel',
 ] as const
 export const tenantPermissions = [
+  'certificate_archive_read',
+  'certificate_archive_write',
+  'certificate_archive_unlock',
+  'certificate_archive_export',
   'compliance_rule_read',
   'compliance_write',
   'compliance_recompute',

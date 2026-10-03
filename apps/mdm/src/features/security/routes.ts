@@ -8,6 +8,12 @@ export const securityFeature: MdmFeature = {
   },
   routes: [
     {
+      path: '/tenants/:tenant/security/certificate-archive',
+      name: 'security-certificate-archive',
+      component: () => import('./certificate-archive/ArchiveView.vue'),
+      meta: { protected: true },
+    },
+    {
       path: '/tenants/:tenant/security/experience',
       name: 'security-experience',
       component: () => import('./views/ExperienceView.vue'),
