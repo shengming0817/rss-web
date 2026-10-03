@@ -11,6 +11,7 @@ const links = [
   'risks',
   'materials',
   'certificates',
+  'certificate-archive',
   'support',
   'experience',
   'requests',

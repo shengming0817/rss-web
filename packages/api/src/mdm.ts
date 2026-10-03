@@ -11,6 +11,12 @@ const statuses: Readonly<Record<string, number>> = {
   malformed_request: 400,
   configuration_target_limit: 400,
   invalid_certificate_request: 400,
+  archive_material_invalid: 400,
+  archive_key_mismatch: 400,
+  archive_password_rejected: 403,
+  archive_locked: 423,
+  archive_not_found: 404,
+  archive_integrity_error: 500,
   invalid_identity: 401,
   permission_denied: 403,
   inventory_not_found: 404,
@@ -74,7 +80,7 @@ export function decodeMdmError(status: number, value: unknown): RssApiError {
   return identityWireFailure(status, v['code'])
 }
 const paths =
-  /^\/api\/(?:v1\/(?:authorization|devices|software-sources)(?:\/|$)|v2\/(?:asset-fields|device-queries|devices|saved-queries|groups|scopes|policies|compliance-rules)(?:\/|$)|v3\/(?:resources|software|enrollments|devices)(?:\/|$)|mdm-host\/v1\/config\.json$|mdm-candidate\/v1\/(?:workspace|devices|groups|policies|executions|software|security|support|authorization|audit|operations|integrations)(?:\/|$))/
+  /^\/api\/(?:v1\/(?:authorization|devices|software-sources|certificate-archive)(?:\/|$)|v2\/(?:asset-fields|device-queries|devices|saved-queries|groups|scopes|policies|compliance-rules)(?:\/|$)|v3\/(?:resources|software|enrollments|devices)(?:\/|$)|mdm-host\/v1\/config\.json$|mdm-candidate\/v1\/(?:workspace|devices|groups|policies|executions|software|security|support|authorization|audit|operations|integrations)(?:\/|$))/
 export function createMdmTransport(): HttpTransport {
   const instance = axios.create({ baseURL: '' })
   return {
