@@ -59,6 +59,7 @@
     "prettier": "catalog:",
     "husky": "catalog:",
     "lint-staged": "catalog:",
-    "@rss/auth": "workspace:*"
+    "@rss/auth": "workspace:*",
+    "@rss/api": "workspace:*"
   }
 }
