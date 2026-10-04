@@ -1,3 +1,4 @@
+import { createRegistrationDemo } from './registration'
 import { randomUUID } from 'node:crypto'
 import type { DomainHandler } from '../scenario'
 import { closed, enumeration, identifier, string, uuid } from '../../src/services/decode'
@@ -8,7 +9,9 @@ import {
 import type { DemoDevice } from './fixtures'
 import type { DemoEvent } from '../policies/schedule'
 import { createReceipts, error, ok } from '../http'
-interface Enrollment {
+export interface Enrollment {
+  actor?: string
+  selfService?: boolean
   enrollmentId: string
   device: string
   status: 'pending' | 'bound' | 'cancelled'
@@ -23,7 +26,8 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
     enrollments.clear()
     receipts.reset()
     for (const d of devices().values())
-      for (const r of d.registrations)
+      for (const r of d.registrations) {
+        if (r.enrollmentId === null) continue
         enrollments.set(r.enrollmentId, {
           device: d.summary.id,
           enrollmentId: r.enrollmentId,
@@ -32,9 +36,15 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
           registrationId: r.registrationId,
           source: r.source,
         })
+      }
   }
   reset()
-  const view = ({ device: _device, ...value }: Enrollment) => value
+  const view = ({
+    device: _device,
+    actor: _actor,
+    selfService: _selfService,
+    ...value
+  }: Enrollment) => value
   function password(value: unknown) {
     const result = string(value)
     if (
@@ -49,11 +59,13 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
     const registrations = /^\/api\/v1\/devices\/([^/]+)\/registrations(?:\/([^/]+)\/revoke)?$/.exec(
       path,
     )
-    if (!enrollmentPath && !registrations) return
+    if (!enrollmentPath && !registrations) return registration.handle(request, 'normal')
     if (method === 'GET') {
       if (enrollmentPath?.[1]) {
         const e = enrollments.get(enrollmentPath[1])
-        return e ? ok(view(e)) : error('permission_denied', 403)
+        return e && (!e.selfService || e.actor === request.actor.principalId)
+          ? ok(view(e))
+          : error('permission_denied', 403)
       }
       if (registrations) {
         const device = devices().get(decodeURIComponent(registrations[1]!))
@@ -63,7 +75,9 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
           .filter((r) => !after || r.registrationId > after)
           .sort((a, b) => a.registrationId.localeCompare(b.registrationId))
         return ok({
-          items: items.slice(0, 100),
+          items: items
+            .slice(0, 100)
+            .map(({ userContextId, ...r }) => (userContextId ? { ...r, userContextId } : r)),
           nextCursor: items.length > 100 ? items[99]!.registrationId : null,
         })
       }
@@ -100,7 +114,7 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
       const id = enrollmentPath?.[1],
         action = enrollmentPath?.[2]
       if (!id) {
-        const body = closed(request.body, ['deviceId', 'password', 'source'])
+        const body = closed(request.body, ['deviceId', 'password', 'source'], ['windowsProfile'])
         const deviceId = identifier(body['deviceId']),
           source = enumeration(body['source'], enrollmentSources)
         password(body['password'])
@@ -146,11 +160,21 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
         return ok({ operationId, ...view(enrollment) })
       }
       const enrollment = enrollments.get(id)
-      if (!enrollment) return error('permission_denied', 403)
+      if (!enrollment || (enrollment.selfService && enrollment.actor !== request.actor.principalId))
+        return error('permission_denied', 403)
       if (enrollment.status !== 'pending') return error('operation_conflict')
       if (action === 'resume') {
         const body = closed(request.body, ['password'])
         password(body['password'])
+        if (
+          enrollment.selfService &&
+          enrollment.expiresAt <= Math.floor(Date.now() / 1000) &&
+          !registration.admit(
+            request.actor.principalId,
+            enrollment.source === 'mdm.windows' ? 'windows_mdm' : 'macos_mdm',
+          )
+        )
+          return error('registration_limit', 429)
         enrollment.expiresAt = Math.floor(Date.now() / 1000) + 300
       } else if (action === 'cancel') {
         closed(request.body, [])
@@ -159,9 +183,13 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
       return ok({ operationId, ...view(enrollment) })
     })
   }
+  const registration = createRegistrationDemo(enrollments, devices, handle)
   return {
     handle,
-    reset,
+    reset() {
+      reset()
+      registration.reset()
+    },
     tick(event: DemoEvent) {
       if (event.kind !== 'enrollment_bind' || !event.enrollment) return
       const e = enrollments.get(event.enrollment),
@@ -186,6 +214,8 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
       d.registrations.push({
         registrationId,
         enrollmentId: e.enrollmentId,
+        agentGrantId: null,
+        userContextId: null,
         source: e.source,
         generation,
         status: 'active',

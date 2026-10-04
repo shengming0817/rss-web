@@ -115,6 +115,8 @@ it('keeps native installation receipt, detection and Agent registration as indep
   device.registrations.push({
     registrationId: randomUUID(),
     enrollmentId: randomUUID(),
+    agentGrantId: null,
+    userContextId: null,
     source: 'agent.builtin',
     status: 'active',
     generation: 1,

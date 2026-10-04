@@ -15,6 +15,7 @@ export interface EnrollmentInput {
   deviceId: string
   password: string
   source: EnrollmentSource
+  windowsProfile?: 'Full' | 'Device'
 }
 const statusKeys = ['enrollmentId', 'status', 'expiresAt', 'registrationId', 'source']
 function status(value: Record<string, unknown>) {
@@ -39,10 +40,16 @@ function receipt(value: unknown, operationId: string, id?: string) {
   return { operationId, ...result }
 }
 export function registration(value: unknown) {
-  const v = closed(value, ['registrationId', 'enrollmentId', 'source', 'generation', 'status'])
+  const v = closed(
+    value,
+    ['registrationId', 'enrollmentId', 'agentGrantId', 'source', 'generation', 'status'],
+    ['userContextId'],
+  )
   return {
     registrationId: uuid(v['registrationId']),
-    enrollmentId: uuid(v['enrollmentId']),
+    enrollmentId: nullable(v['enrollmentId'], uuid),
+    agentGrantId: nullable(v['agentGrantId'], uuid),
+    userContextId: v['userContextId'] === undefined ? null : nullable(v['userContextId'], uuid),
     source: enumeration(v['source'], enrollmentSources),
     generation: count(v['generation']),
     status: enumeration(v['status'], ['active', 'superseded', 'revoked'] as const),
