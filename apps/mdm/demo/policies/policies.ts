@@ -20,6 +20,7 @@ export function createPolicyDemo(
 ) {
   const runs = new Map<string, ExecutionSummary>(),
     admissions = new Map<string, string>(),
+    lastAdmissions = new Map<string, number>(),
     versions = new Map<string, string>(),
     entries = new Map<string, number>()
   let members = new Set<string>()
@@ -137,6 +138,14 @@ export function createPolicyDemo(
       const registrations = device.registrations
         .filter((r) => r.status === 'active')
         .map((r) => ({ id: r.registrationId, generation: r.generation }))
+      const admissionBasis = JSON.stringify([p.id, p.versionId, event.device, registrations]),
+        previous = lastAdmissions.get(admissionBasis)
+      if (
+        a.schedule.trigger.kind === 'check_in' &&
+        previous !== undefined &&
+        event.at - previous < a.schedule.trigger.minimumSeconds
+      )
+        continue
       const key = JSON.stringify([
         p.id,
         p.versionId,
@@ -185,6 +194,7 @@ export function createPolicyDemo(
       })
       versions.set(id, p.versionId)
       admissions.set(key, id)
+      lastAdmissions.set(admissionBasis, event.at)
     }
   }
   const handle: DomainHandler = (request, scenario) => store.handle(request, scenario)
@@ -204,6 +214,7 @@ export function createPolicyDemo(
     reset() {
       runs.clear()
       admissions.clear()
+      lastAdmissions.clear()
       versions.clear()
       entries.clear()
       members.clear()

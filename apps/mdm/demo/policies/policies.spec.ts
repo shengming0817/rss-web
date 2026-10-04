@@ -282,3 +282,77 @@ it('counts actual scope entries rather than Scope configuration revisions and st
   expect(policies.executions()).toHaveLength(2)
   expect(policies.executions()[1]?.execution).toBe('unknown')
 })
+
+it('gates every-trigger check-ins at 59/60 seconds and fences older events by version and registration', () => {
+  const source = createDeviceDemo(),
+    automation = createAutomationDemo(source),
+    seed = seedScriptPolicies(automation)
+  const facts = source.facts(),
+    scope = automation.scopes.resolve(seed.scope)!,
+    id = crypto.randomUUID()
+  scope.members = ['device-01']
+  const policies = createPolicyDemo(
+    { facts: () => structuredClone(facts) },
+    { resolve: () => structuredClone(scope) },
+    automation.resources,
+  )
+  const definition = {
+    ...seed.definition,
+    action: {
+      ...seed.definition.action,
+      frequency: 'every_trigger',
+      parameters: {
+        label: { kind: 'fixed', value: 'support' },
+        detail: { kind: 'fixed', value: 1 },
+      },
+      schedule: {
+        ...seed.definition.action.schedule,
+        trigger: { kind: 'check_in', minimumSeconds: 60 },
+      },
+    },
+  }
+  const write = (definition: unknown, revision = 0) =>
+    policies.handle(
+      {
+        path: `/api/v1/policies/${id}`,
+        method: 'POST',
+        body: {
+          operationId: crypto.randomUUID(),
+          expectedRevision: revision,
+          input: { action: 'put', enabled: true, definition },
+        },
+        actor: { principalId: crypto.randomUUID(), sessionId: crypto.randomUUID() },
+        headers: {},
+        query: new URLSearchParams(),
+      },
+      'normal',
+    )!
+  expect(write(definition).status).toBe(200)
+  const at = automation.now(),
+    check = (offset: number) =>
+      policies.reconcile('normal', { kind: 'check_in', device: 'device-01', at: at + offset })
+  check(0)
+  check(1)
+  check(2)
+  expect(policies.executions()).toHaveLength(1)
+  expect(policies.executions()[0]!.execution).toBe('succeeded')
+  check(59)
+  expect(policies.executions()).toHaveLength(1)
+  check(60)
+  expect(policies.executions()).toHaveLength(2)
+  check(61)
+  check(62)
+  check(50)
+  expect(policies.executions()).toHaveLength(2)
+  expect(
+    write({ ...definition, action: { ...definition.action, runLifetimeSeconds: 120 } }, 1).status,
+  ).toBe(200)
+  check(63)
+  expect(policies.executions()).toHaveLength(3)
+  check(64)
+  check(65)
+  const device = facts.find((d) => d.summary.id === 'device-01')!
+  device.registrations.filter((r) => r.status === 'active').forEach((r) => r.generation++)
+  check(66)
+  expect(policies.executions()).toHaveLength(4)
+})
