@@ -393,3 +393,41 @@ export type PolicyRead = ReturnType<typeof decodePolicy>
 export type PolicyChange =
   | { action: 'put'; definition: PolicyDefinition; enabled: boolean }
   | { action: 'enable' | 'disable' }
+
+export const taskStates = [
+  'paused',
+  'outside_window',
+  'outside_scope',
+  'scope_pending',
+  'outside_stage',
+  'scheduled',
+  'success_gate',
+  'missing_registration',
+  'ambiguous_registration',
+  'unsupported_capability',
+  'missing_variant',
+  'approval_withdrawn',
+  'permission_withdrawn',
+  'channel_unknown',
+  'already_satisfied',
+  'organization_conflict',
+  'missing_native_rights',
+  'missing_architecture',
+  'eligible',
+] as const
+export function taskAdmission(value: unknown) {
+  const v = closed(value, ['state'], ['stage'])
+  return {
+    state: enumeration(v['state'], taskStates),
+    ...('stage' in v ? { stage: count(v['stage']) } : {}),
+  }
+}
+export function eligibility(value: unknown) {
+  const state = enumeration(record(value)['state'], ['eligible', 'pending', 'excluded'] as const)
+  const v = closed(value, state === 'eligible' ? ['state', 'entry'] : ['state'])
+  return state === 'eligible' ? { state, entry: count(v['entry']) } : { state }
+}
+
+export type ConfigurationDefinition = PolicyDefinition & {
+  action: Extract<PolicyDefinition['action'], { kind: 'configuration' }>
+}

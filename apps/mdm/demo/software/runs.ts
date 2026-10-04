@@ -56,6 +56,10 @@ export function createSoftwareRuns(allowed: (run: RunRecord) => boolean) {
         failure: value.result.diagnostics.failure,
       }
     return {
+      ...(value.state.delivery.kind !== 'queued'
+        ? { attemptId: value.state.delivery.attempt }
+        : {}),
+      ...(value.authorization ? { authorization: value.authorization } : {}),
       taskId: value.taskId,
       device: value.device,
       registrationId: value.registrationId,

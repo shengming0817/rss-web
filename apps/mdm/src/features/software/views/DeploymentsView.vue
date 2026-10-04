@@ -382,6 +382,12 @@ watch(
         <li v-for="d in preview.items" :key="d.device">
           {{ d.device }} · {{ t(`software.eligibility_${d.eligibility.state}`) }} ·
           {{ d.taskAdmission ? t(`software.admission_${d.taskAdmission.state}`) : '—' }}
+          <ul v-if="d.operationIds.length">
+            <li v-for="op in d.operationIds" :key="op">{{ t('policies.operation') }} · {{ op }}</li>
+          </ul>
+          <ul v-if="d.diagnoses.length">
+            <li v-for="diagnosis in d.diagnoses" :key="diagnosis">{{ diagnosis }}</li>
+          </ul>
         </li>
       </ul>
       <button
@@ -421,6 +427,14 @@ watch(
           <li v-for="d in devices.items" :key="d.device">
             {{ d.device }} · {{ t(`software.eligibility_${d.assignment}`) }} ·
             {{ d.taskAdmission ? t(`software.admission_${d.taskAdmission.state}`) : '—' }}
+            <ul v-if="d.operationIds.length">
+              <li v-for="op in d.operationIds" :key="op">
+                {{ t('policies.operation') }} · {{ op }}
+              </li>
+            </ul>
+            <ul v-if="d.diagnoses.length">
+              <li v-for="diagnosis in d.diagnoses" :key="diagnosis">{{ diagnosis }}</li>
+            </ul>
           </li>
         </ul>
         <button v-if="devices.nextCursor" :disabled="busy" @click="loadDevices(devices.nextCursor)">

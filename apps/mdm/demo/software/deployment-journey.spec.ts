@@ -176,6 +176,7 @@ it('carries source admission, import, native software Policy and Agent evidence 
     ).toBe(204)
   const runs = await software.runs.list(id)
   expect(runs.items).toHaveLength(1)
+  expect(runs.items[0]!.attemptId).toBe(runs.items[0]!.state.delivery.attempt)
   expect(runs.items[0]!.result).toMatchObject({
     kind: 'software',
     observedVersion: '128.0',

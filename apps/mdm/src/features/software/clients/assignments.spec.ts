@@ -79,7 +79,7 @@ it('consumes the native Policy contract, including optional end and staged softw
 it('retains native cursor and scope-result fencing across previews', async () => {
   const request = vi.fn(async (o: RequestOptions<unknown>) =>
     o.decode({
-      resource: definition.action.resource,
+      action: definition.action,
       scopeResult: versionId,
       items: [],
       nextCursor: 'device-20',
@@ -113,4 +113,74 @@ it('does not infer full rollout success from reported or waiting-reboot counts',
   )
   const result = await createAssignmentsClient({ request } as unknown as HttpTransport).rollout(id)
   expect(result.stages[0]).toEqual(stage)
+})
+
+it('rejects changed full preview actions, scope results and retired projection fields', async () => {
+  let reply: unknown
+  const client = createAssignmentsClient({
+    request: async (o: RequestOptions<unknown>) => o.decode(reply),
+  } as HttpTransport)
+  for (const action of [
+    { ...definition.action, intent: 'explicit_uninstall' },
+    { ...definition.action, runLifetimeSeconds: 60 },
+    { ...definition.action, admissionOperation: id },
+    {
+      ...definition.action,
+      rollout: { stages: [{ scope: versionId, opensAt: 0, minimumVerifiedPercent: null }] },
+    },
+  ]) {
+    reply = { action, scopeResult: versionId, items: [], nextCursor: null }
+    await expect(client.preview(definition)).rejects.toThrow('Wrong preview basis')
+  }
+  reply = { action: definition.action, scopeResult: id, items: [], nextCursor: null }
+  await expect(client.preview(definition, 'device-01', versionId)).rejects.toThrow(
+    'Wrong preview basis',
+  )
+  reply = {
+    resource: definition.action.resource,
+    scopeResult: versionId,
+    items: [],
+    nextCursor: null,
+  }
+  await expect(client.preview(definition)).rejects.toThrow()
+})
+it('retains every operation and diagnosis, including empty arrays, and rejects old device shapes', async () => {
+  const row = {
+    device: 'device-01',
+    assignment: 'eligible',
+    taskAdmission: null,
+    operationIds: [id, versionId],
+    diagnoses: ['conflict', 'remove_pending'],
+  }
+  let reply: unknown = {
+    items: [row, { ...row, device: 'device-02', operationIds: [], diagnoses: [] }],
+    nextCursor: null,
+  }
+  const client = createAssignmentsClient({
+    request: async (o: RequestOptions<unknown>) => o.decode(reply),
+  } as HttpTransport)
+  expect((await client.devices(id)).items).toEqual([
+    row,
+    { ...row, device: 'device-02', operationIds: [], diagnoses: [] },
+  ])
+  for (const fields of [
+    { operationIds: ['bad'], diagnoses: [] },
+    { operationIds: [], diagnoses: [7] },
+  ]) {
+    reply = { items: [{ ...row, ...fields }], nextCursor: null }
+    await expect(client.devices(id)).rejects.toThrow()
+  }
+  reply = {
+    items: [
+      {
+        device: row.device,
+        assignment: row.assignment,
+        taskAdmission: null,
+        operationId: null,
+        diagnosis: null,
+      },
+    ],
+    nextCursor: null,
+  }
+  await expect(client.devices(id)).rejects.toThrow()
 })

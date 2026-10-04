@@ -116,3 +116,43 @@ it('keeps summary diagnostics redacted and uses both fields of the native run cu
   expect(request.mock.calls[0]![0].query).toEqual({ afterAt: 20, afterId: task })
   expect(result.items[0]!.result!.diagnostics).not.toHaveProperty('stdout')
 })
+
+it('decodes the current attempt and all authorization branches and rejects malformed facts', () => {
+  const policy = { kind: 'policy', policyId: id, policyVersion: task }
+  const self = {
+    kind: 'self_service',
+    requestId: task,
+    actor: { tenantId: id, instanceId: task, principalId: id },
+    source: 'ai',
+    policyId: id,
+    policyRevision: 1,
+    policyVersion: task,
+    allowAi: true,
+    riskLevel: 2,
+    confirmed: true,
+  }
+  for (const authorization of [policy, { kind: 'remote_operation', operationId: task }, self])
+    expect(softwareRun({ ...run, attemptId: task, authorization }, true)).toMatchObject({
+      attemptId: task,
+      authorization,
+    })
+  for (const authorization of [
+    { ...policy, policyVersion: 'bad' },
+    { ...self, confirmed: false },
+    { ...self, allowAi: false },
+    { ...self, riskLevel: 3 },
+    { ...self, actor: { ...self.actor, token: 'secret' } },
+  ])
+    expect(() => softwareRun({ ...run, authorization }, true)).toThrow()
+  expect(() => softwareRun({ ...run, attemptId: id }, true)).toThrow('Inconsistent run attempt')
+  expect(() =>
+    softwareRun(
+      { ...run, attemptId: task, state: { ...run.state, delivery: { kind: 'queued' } } },
+      true,
+    ),
+  ).toThrow()
+  const remote: Record<string, unknown> = { ...run }
+  delete remote['policyId']
+  expect(softwareRun({ ...remote, operationId: id }, true)).toMatchObject({ operationId: id })
+  expect(() => softwareRun({ ...run, attemptId: null }, true)).toThrow()
+})

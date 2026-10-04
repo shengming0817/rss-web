@@ -199,7 +199,7 @@ export function createSoftwarePolicyDemo(
           (d) => d,
         )
         return ok({
-          resource: d.action.resource,
+          action: d.action,
           scopeResult: snapshot.result,
           nextCursor: result.nextCursor,
           items: result.items.map((device) => ({
@@ -292,8 +292,8 @@ export function createSoftwarePolicyDemo(
                       ? 'excluded'
                       : 'pending',
                 taskAdmission: state,
-                operationId: null,
-                diagnosis: null,
+                operationIds: [],
+                diagnoses: [],
               }
             }),
           })
