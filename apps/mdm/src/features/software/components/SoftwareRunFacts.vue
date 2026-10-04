@@ -47,9 +47,19 @@ const utc = (at: number) =>
       <dl>
         <dt>{{ t('software.installerExit') }}</dt>
         <dd>{{ run.result.exitCode ?? '—' }}</dd>
+        <dt>{{ t('software.collectedAt') }}</dt>
+        <dd>{{ utc(run.result.collectedAt) }}</dd>
+        <dt>{{ t('policies.observation.receivedAt') }}</dt>
+        <dd>{{ utc(run.result.receivedAt) }}</dd>
+        <dt>{{ t('software.budgetValid') }}</dt>
+        <dd>{{ run.result.budgetValid ? t('software.yes') : t('software.no') }}</dd>
         <dt>{{ t('software.outputQuality') }}</dt>
         <dd>{{ run.result.quality }}</dd>
       </dl>
+      <p v-if="run.result.outputReference">
+        {{ t('software.outputReference') }} · {{ run.result.outputReference.bytes }} bytes ·
+        {{ run.result.outputReference.sha256 }}
+      </p>
       <pre v-if="'output' in run.result">{{ JSON.stringify(run.result.output, null, 2) }}</pre>
     </template>
     <details v-if="run.result && 'stdout' in run.result.diagnostics">

@@ -41,6 +41,10 @@ const run = {
 }
 it('preserves script history without pretending a pending result has a software kind', () => {
   const result = {
+    collectedAt: 12,
+    receivedAt: 15,
+    budgetValid: true,
+    outputReference: null,
     exitCode: 0,
     quality: 'complete',
     schemaValid: true,
@@ -155,4 +159,71 @@ it('decodes the current attempt and all authorization branches and rejects malfo
   delete remote['policyId']
   expect(softwareRun({ ...remote, operationId: id }, true)).toMatchObject({ operationId: id })
   expect(() => softwareRun({ ...run, attemptId: null }, true)).toThrow()
+})
+
+it('consumes current script evidence, redacts summaries and rejects obsolete or malformed envelopes', async () => {
+  const result = {
+    collectedAt: 12,
+    receivedAt: 15,
+    exitCode: 0,
+    quality: 'complete',
+    schemaValid: true,
+    budgetValid: true,
+    output: { large: 'a'.repeat(70_000) },
+    outputReference: null,
+    diagnostics: run.result.diagnostics,
+    trusted: true,
+  }
+  expect(softwareRun({ ...run, result }, true).result).toMatchObject({
+    collectedAt: 12,
+    receivedAt: 15,
+    budgetValid: true,
+    output: result.output,
+  })
+  const summaryResult: Record<string, unknown> = { ...result }
+  delete summaryResult['output']
+  const diagnostics: Record<string, unknown> = { ...result.diagnostics }
+  delete diagnostics['stdout']
+  delete diagnostics['stderr']
+  const summaryRun: Record<string, unknown> = { ...run }
+  delete summaryRun['policyId']
+  const request = vi.fn(async (o: RequestOptions<unknown>) =>
+    o.decode({
+      items: [{ ...summaryRun, occurrence: 'script:1', result: { ...summaryResult, diagnostics } }],
+      nextCursor: null,
+    }),
+  )
+  const summary = (await createRunsClient({ request } as HttpTransport).list(id)).items[0]!.result!
+  expect(summary).toMatchObject({
+    kind: 'script',
+    collectedAt: 12,
+    receivedAt: 15,
+    outputReference: null,
+  })
+  expect(summary).not.toHaveProperty('output')
+  expect(summary.diagnostics).not.toHaveProperty('stdout')
+  const reference = { bytes: 1_048_577, sha256: 'a'.repeat(64) }
+  expect(
+    softwareRun(
+      {
+        ...run,
+        result: { ...result, budgetValid: false, output: null, outputReference: reference },
+      },
+      true,
+    ).result,
+  ).toMatchObject({ output: null, outputReference: reference })
+  for (const invalid of [
+    { ...result, outputReference: { bytes: 1, sha256: 'bad' } },
+    { ...result, outputReference: reference },
+    { ...result, receivedAt: 'now' },
+    { ...result, budgetValid: 'true' },
+    { ...result, extra: true },
+    { ...result, output: 'a'.repeat(1_048_577) },
+  ])
+    expect(() => softwareRun({ ...run, result: invalid }, true)).toThrow()
+  for (const key of ['collectedAt', 'receivedAt', 'budgetValid', 'outputReference']) {
+    const invalid: Record<string, unknown> = { ...result }
+    delete invalid[key]
+    expect(() => softwareRun({ ...run, result: invalid }, true)).toThrow()
+  }
 })

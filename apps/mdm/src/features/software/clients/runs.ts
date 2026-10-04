@@ -46,21 +46,37 @@ function result(value: unknown, detail: boolean) {
   // Native history spans immutable Policy versions, including prior script versions.
   if ('exitCode' in record(value)) {
     const v = closed(value, [
+      'collectedAt',
+      'receivedAt',
       'exitCode',
       'quality',
+      'budgetValid',
+      'outputReference',
       'schemaValid',
       'diagnostics',
       'trusted',
       ...(detail ? ['output'] : []),
     ])
+    const outputReference = nullable(v['outputReference'], (value) => {
+      const r = closed(value, ['bytes', 'sha256']),
+        hash = string(r['sha256'])
+      if (!/^[0-9a-f]{64}$/.test(hash)) throw new Error('Invalid output reference')
+      return { bytes: count(r['bytes']), sha256: hash }
+    })
+    if (detail && outputReference !== null && v['output'] !== null)
+      throw new Error('Inconsistent output reference')
     return {
       kind: 'script' as const,
+      collectedAt: integer(v['collectedAt']),
+      receivedAt: integer(v['receivedAt']),
+      budgetValid: boolean(v['budgetValid']),
+      outputReference,
       exitCode: nullable(v['exitCode'], integer),
       quality: enumeration(v['quality'], ['complete', 'partial', 'truncated', 'failed'] as const),
       schemaValid: boolean(v['schemaValid']),
       diagnostics: diagnostics(v['diagnostics'], detail),
       trusted: boolean(v['trusted']),
-      ...(detail ? { output: jsonValue(v['output'], 65536) } : {}),
+      ...(detail ? { output: jsonValue(v['output'], 1024 * 1024) } : {}),
     }
   }
   const v = closed(value, [

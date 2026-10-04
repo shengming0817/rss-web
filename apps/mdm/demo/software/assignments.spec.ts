@@ -323,3 +323,45 @@ it('rejects late detection after registration generation changes or cancellation
     expect(f.runs()[0]?.effect).toBe('unknown')
   }
 })
+
+it('preserves current script history evidence through mock list/detail while redacting summary output', () => {
+  const f = setup(),
+    at = 2_000_000_000
+  f.put()
+  f.owner.tick({ kind: 'check_in', device: 'device-01', at }, 'normal')
+  const row = f.owner.runs.rows()[0]!
+  row.value.result = {
+    kind: 'script',
+    collectedAt: at,
+    receivedAt: at + 2,
+    exitCode: 0,
+    quality: 'complete',
+    schemaValid: true,
+    budgetValid: true,
+    outputReference: null,
+    output: { simulation: true },
+    trusted: false,
+    diagnostics: {
+      stdout: 'Synthetic historical script evidence',
+      stderr: '',
+      durationMs: 1,
+      executedAt: at,
+      failure: null,
+    },
+  }
+  expect(f.runs()[0]!.result).toMatchObject({
+    kind: 'script',
+    collectedAt: at,
+    receivedAt: at + 2,
+    trusted: false,
+  })
+  expect(f.runs()[0]!.result).not.toHaveProperty('output')
+  const detail = softwareRun(
+    f.owner.handle(request(`${f.path}/runs/${row.value.taskId}`), 'normal')!.body,
+    true,
+  )
+  expect(detail.result).toMatchObject({
+    output: { simulation: true },
+    diagnostics: { stdout: 'Synthetic historical script evidence' },
+  })
+})
