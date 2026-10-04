@@ -1,5 +1,6 @@
 /** Real registration HTTP consumer; the MDM T2 owner supplies isolated authority and PostgreSQL. */
 import { readFileSync } from 'node:fs'
+import { request } from 'node:http'
 import { expect, it } from 'vitest'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { decodeMdmError } from '@rss/api/mdm'
@@ -22,23 +23,43 @@ function transport(actor: typeof fixture.admin): HttpTransport {
       const path = o.path.replace(/\{([^}]+)\}/g, (_, key: string) =>
         encodeURIComponent(o.pathParams?.[key] ?? ''),
       )
-      const response = await fetch(fixture.origin + path, {
-        method: o.method,
-        headers: {
-          host: 'mdm.example.test',
-          cookie: actor.cookie,
-          origin: 'https://mdm.example.test',
-          'x-identity-request': '1',
-          'x-csrf-token': actor.csrf,
-          'content-type': 'application/json',
-          ...o.headers,
-        },
-        ...(o.body === undefined ? {} : { body: JSON.stringify(o.body) }),
-        signal: AbortSignal.timeout(12000),
+      // Node fetch removes Host overrides. The isolated listener still enforces
+      // the configured tenant host, so use an explicit Node HTTP request.
+      const response = await new Promise<{ status: number; body: unknown }>((resolve, reject) => {
+        const outgoing = request(
+          fixture.origin + path,
+          {
+            method: o.method,
+            headers: {
+              host: 'mdm.example.test',
+              cookie: actor.cookie,
+              origin: 'https://mdm.example.test',
+              'x-identity-request': '1',
+              'x-csrf-token': actor.csrf,
+              'content-type': 'application/json',
+              ...o.headers,
+            },
+            signal: AbortSignal.timeout(12000),
+          },
+          (incoming) => {
+            let body = ''
+            incoming.setEncoding('utf8')
+            incoming.on('data', (chunk: string) => (body += chunk))
+            incoming.on('error', reject)
+            incoming.on('end', () => {
+              try {
+                resolve({ status: incoming.statusCode ?? 0, body: JSON.parse(body) as unknown })
+              } catch (error) {
+                reject(error)
+              }
+            })
+          },
+        )
+        outgoing.on('error', reject)
+        outgoing.end(o.body === undefined ? undefined : JSON.stringify(o.body))
       })
-      const body: unknown = await response.json()
-      if (response.status !== o.successStatus) throw decodeMdmError(response.status, body)
-      return o.decode(body)
+      if (response.status !== o.successStatus) throw decodeMdmError(response.status, response.body)
+      return o.decode(response.body)
     },
   } as HttpTransport
 }
