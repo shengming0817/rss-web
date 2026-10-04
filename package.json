@@ -18,6 +18,7 @@
     "test:coverage": "vitest run --coverage --project '!root'",
     "test:boundary": "vitest run --project root",
     "prepare": "husky",
+    "test:mdm:joint": "vitest run --config e2e/mdm/vitest.config.ts",
     "test:identity:joint": "node e2e/identity/run.mjs",
     "check:identity-app:build": "node scripts/check-identity-app-build.mjs",
     "build:identity": "pnpm -F @rss/identity-app build && pnpm check:identity-app:build",
