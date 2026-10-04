@@ -191,7 +191,7 @@ export function createMaterialsDemo(
   }
   const handle: DomainHandler = (request, scenario) => {
     const match =
-      /^\/api\/mdm-candidate\/v1\/security\/materials\/([^/]+)(?:\/([^/]+)(\/reveal)?)?$/.exec(
+      /^\/api\/v1\/mdm-candidate\/security\/materials\/([^/]+)(?:\/([^/]+)(\/reveal)?)?$/.exec(
         request.path,
       )
     if (!match) return

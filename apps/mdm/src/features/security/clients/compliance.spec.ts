@@ -38,7 +38,7 @@ it('keeps native pagination, versions, CAS receipts and explicit history filters
   const client = createComplianceClient({ request } as unknown as HttpTransport)
   await client.list(id)
   expect(request.mock.lastCall![0]).toMatchObject({
-    path: '/api/v2/compliance-rules',
+    path: '/api/v1/compliance-rules',
     query: { after: id },
   })
   reply = { id, revision: 2, definition }
@@ -56,7 +56,7 @@ it('keeps native pagination, versions, CAS receipts and explicit history filters
   reply = { items: [{ ...assessment, task, disposition: 'published' }], nextCursor: 'opaque-token' }
   await client.history('device-01', { cursor: 'previous-token', from: 100, until: 200, limit: 10 })
   expect(request.mock.lastCall![0]).toMatchObject({
-    path: '/api/v2/devices/{device}/compliance/history',
+    path: '/api/v1/devices/{device}/compliance/history',
     pathParams: { device: 'device-01' },
     query: { cursor: 'previous-token', from: 100, until: 200, limit: 10 },
   })

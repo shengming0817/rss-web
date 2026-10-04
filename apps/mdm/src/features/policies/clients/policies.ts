@@ -100,7 +100,7 @@ export function createPoliciesClient(transport: HttpTransport, tenant: string, d
     read: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/policies/assignments/{id}',
+        path: '/api/v1/mdm-candidate/policies/assignments/{id}',
         pathParams: { id },
         successStatus: 200,
         decode: (v) => decode(v, id),
@@ -108,7 +108,7 @@ export function createPoliciesClient(transport: HttpTransport, tenant: string, d
     change: (id: string, body: Operation<PolicyChange>) =>
       transport.request({
         method: 'POST',
-        path: '/api/mdm-candidate/v1/policies/assignments/{id}',
+        path: '/api/v1/mdm-candidate/policies/assignments/{id}',
         pathParams: { id },
         body,
         successStatus: 200,
@@ -117,7 +117,7 @@ export function createPoliciesClient(transport: HttpTransport, tenant: string, d
     preview: (id: string, definition: PolicyDefinition) =>
       transport.request({
         method: 'POST',
-        path: '/api/mdm-candidate/v1/policies/assignments/{id}/preview',
+        path: '/api/v1/mdm-candidate/policies/assignments/{id}/preview',
         pathParams: { id },
         body: { definition },
         successStatus: 200,

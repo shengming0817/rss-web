@@ -14,7 +14,7 @@ function fixture() {
     scopes = createScopeDemo(devices),
     { resources } = softwareResource()
   resources.handle(
-    request('/api/v3/resources/app', operation({ action: 'activate', version: '1' }, 2)),
+    request('/api/v1/resources/app', operation({ action: 'activate', version: '1' }, 2)),
     'normal',
   )
   let admitted = true
@@ -38,11 +38,11 @@ function fixture() {
       },
       0,
     )
-  scopes.handle(request(`/api/v2/scopes/${scope}`, write), 'normal')
+  scopes.handle(request(`/api/v1/scopes/${scope}`, write), 'normal')
   for (let i = 0; i < 2; i++)
-    scopes.handle(request(`/api/v2/scopes/${scope}/tasks/${write.operationId}`), 'normal')
+    scopes.handle(request(`/api/v1/scopes/${scope}/tasks/${write.operationId}`), 'normal')
   const id = randomUUID(),
-    path = `/api/mdm-candidate/v1/software/self-service/items/${id}`
+    path = `/api/v1/mdm-candidate/software/self-service/items/${id}`
   const definition: SelfServiceDefinition = {
     title: 'Example',
     description: '',
@@ -65,7 +65,7 @@ function fixture() {
   ).toBe(200)
   const queue = () =>
     (
-      demo.handle(request('/api/mdm-candidate/v1/software/self-service/requests'), 'normal')!
+      demo.handle(request('/api/v1/mdm-candidate/software/self-service/requests'), 'normal')!
         .body as { items: unknown[] }
     ).items.map((v) => installationRequest(v))
   return {
@@ -90,7 +90,7 @@ it('keeps catalog publication, human approval and local start separate while reu
   f.demo.tick({ kind: 'software_request', item: f.id, device: 'device-01', at })
   expect(f.queue()).toHaveLength(1)
   const r = f.queue()[0]!,
-    path = `/api/mdm-candidate/v1/software/self-service/requests/${r.id}`
+    path = `/api/v1/mdm-candidate/software/self-service/requests/${r.id}`
   f.software.tick({ kind: 'check_in', device: r.device, at }, 'normal')
   expect(f.software.runs.rows()).toHaveLength(0)
   const approval = operation({ action: 'approve', note: 'Business need reviewed' }, r.revision)
@@ -121,7 +121,7 @@ it('rechecks catalog revision and enterprise admission at approval, and retains 
     at = 2000000000
   f.demo.tick({ kind: 'software_request', item: f.id, device: 'device-01', at })
   const r = f.queue()[0]!,
-    path = `/api/mdm-candidate/v1/software/self-service/requests/${r.id}`
+    path = `/api/v1/mdm-candidate/software/self-service/requests/${r.id}`
   f.demo.handle(
     request(
       f.path,
@@ -151,7 +151,7 @@ it('rechecks catalog revision and enterprise admission at approval, and retains 
   expect(
     other.demo.handle(
       request(
-        `/api/mdm-candidate/v1/software/self-service/requests/${other.queue()[0]!.id}`,
+        `/api/v1/mdm-candidate/software/self-service/requests/${other.queue()[0]!.id}`,
         operation({ action: 'approve', note: 'Review' }, 1),
       ),
       'normal',

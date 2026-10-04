@@ -198,7 +198,7 @@ export function createExecutionsClient(transport: HttpTransport, tenant: string,
     list: (cursor?: string, batch?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/executions',
+        path: '/api/v1/mdm-candidate/executions',
         query: { limit: 20, cursor, batch },
         successStatus: 200,
         decode(value) {
@@ -213,7 +213,7 @@ export function createExecutionsClient(transport: HttpTransport, tenant: string,
     read: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/executions/{id}',
+        path: '/api/v1/mdm-candidate/executions/{id}',
         pathParams: { id },
         successStatus: 200,
         decode(value) {

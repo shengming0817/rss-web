@@ -62,7 +62,7 @@ export function createSecurityRequests(
   }
   const handle: DomainHandler = (request, scenario) => {
     const match =
-      /^\/api\/mdm-candidate\/v1\/security\/requests(?:\/([^/]+)(?:\/(approve|deny|revoke))?)?$/.exec(
+      /^\/api\/v1\/mdm-candidate\/security\/requests(?:\/([^/]+)(?:\/(approve|deny|revoke))?)?$/.exec(
         request.path,
       )
     if (!match) return

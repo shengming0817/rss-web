@@ -21,7 +21,7 @@ it('carries source admission, import, native software Policy and Agent evidence 
     automation.tick,
     automation.observe,
   )
-  const login = await server.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  const login = await server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
   })
@@ -159,7 +159,7 @@ it('carries source admission, import, native software Policy and Agent evidence 
   const stored = await software.assignments.read(id)
   expect(stored.revision).toBe(1)
   expect((await software.assignments.change(id, body)).versionId).toBe(stored.versionId)
-  const control = '/api/mdm-candidate/v1/workspace/scenario',
+  const control = '/api/v1/mdm-candidate/workspace/scenario',
     at = 2000000000
   for (let step = 0; step < 3; step++)
     expect(

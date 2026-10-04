@@ -196,14 +196,14 @@ export function createUpdatesClient(transport: HttpTransport, tenant: string, de
     releases: () =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/software/updates/releases',
+        path: '/api/v1/mdm-candidate/software/updates/releases',
         successStatus: 200,
         decode: (v) => unique(array(envelope(v, ['items'])['items'], updateRelease), (r) => r.id),
       }),
     list: (cursor?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/software/updates',
+        path: '/api/v1/mdm-candidate/software/updates',
         query: { cursor, limit: 20 },
         successStatus: 200,
         decode: (v) => {
@@ -218,7 +218,7 @@ export function createUpdatesClient(transport: HttpTransport, tenant: string, de
     read: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/software/updates/{id}',
+        path: '/api/v1/mdm-candidate/software/updates/{id}',
         pathParams: { id },
         successStatus: 200,
         decode: (v) => updateRing(envelope(v, ['ring'])['ring'], id),
@@ -226,7 +226,7 @@ export function createUpdatesClient(transport: HttpTransport, tenant: string, de
     change: (id: string, body: Operation<UpdateChange>) =>
       transport.request({
         method: 'POST',
-        path: '/api/mdm-candidate/v1/software/updates/{id}',
+        path: '/api/v1/mdm-candidate/software/updates/{id}',
         pathParams: { id },
         body,
         successStatus: 200,

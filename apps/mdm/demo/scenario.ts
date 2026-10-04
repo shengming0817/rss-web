@@ -143,9 +143,9 @@ export function createScenario(
       )
       return reply
     }
-    if (path === '/api/mdm-candidate/v1/workspace/scenario' && method === 'GET')
+    if (path === '/api/v1/mdm-candidate/workspace/scenario' && method === 'GET')
       return { status: 200, body: { scenario: active, sources: { ...sources }, asOf: now() } }
-    if (path === '/api/mdm-candidate/v1/workspace/scenario' && method === 'POST') {
+    if (path === '/api/v1/mdm-candidate/workspace/scenario' && method === 'POST') {
       if (!signedIn) return { status: 401, body: { code: 'invalid_identity' } }
       if (headers['x-csrf-token'] !== token || headers['x-identity-request'] !== '1')
         return { status: 403, body: { code: 'csrf_rejected' } }
@@ -255,7 +255,7 @@ export function createScenario(
       }
       return { status: 204 }
     }
-    const loginPath = `/api/v2/tenants/${TENANT}/login`
+    const loginPath = `/api/v1/identity/tenants/${TENANT}/login`
     if (path === loginPath && method === 'POST') {
       if (!['demo', 'reviewer'].includes(String(data['login'])) || data['password'] !== 'demo')
         return { status: 401, body: { code: 'invalid_credential' } }
@@ -269,10 +269,12 @@ export function createScenario(
       return {
         status: 401,
         body: {
-          code: path.startsWith('/api/v2/tenants/') ? 'invalid_credential' : 'invalid_identity',
+          code: path.startsWith('/api/v1/identity/tenants/')
+            ? 'invalid_credential'
+            : 'invalid_identity',
         },
       }
-    if (path.startsWith('/api/identity-host/v1/tenants/'))
+    if (path.startsWith('/api/v1/identity-host/tenants/'))
       return {
         status: 200,
         body: {
@@ -282,13 +284,13 @@ export function createScenario(
           navigation: { manageAccounts: false, manageProviders: false },
         },
       }
-    if (path === `/api/v2/tenants/${TENANT}/session` && method === 'GET')
+    if (path === `/api/v1/identity/tenants/${TENANT}/session` && method === 'GET')
       return { status: 200, body: session() }
     if (method !== 'GET') {
       if (headers['x-csrf-token'] !== token || headers['x-identity-request'] !== '1')
         return { status: 403, body: { code: 'csrf_rejected' } }
       if (
-        path.startsWith(`/api/v2/tenants/${TENANT}/session/`) &&
+        path.startsWith(`/api/v1/identity/tenants/${TENANT}/session/`) &&
         (path.endsWith('/logout') || path.endsWith('/logout-all'))
       ) {
         signedIn = false
@@ -296,14 +298,14 @@ export function createScenario(
         return { status: 204 }
       }
       if (
-        path.startsWith(`/api/v2/tenants/${TENANT}/session/`) &&
+        path.startsWith(`/api/v1/identity/tenants/${TENANT}/session/`) &&
         (path.endsWith('/refresh') || path.endsWith('/reauthenticate'))
       ) {
         epoch++
         return { status: 200, body: session() }
       }
     }
-    if (path === `/api/v2/tenants/${TENANT}/sessions`)
+    if (path === `/api/v1/identity/tenants/${TENANT}/sessions`)
       return { status: 200, body: { sessions: [session().session], nextCursor: null } }
     const expected = epoch
     if (active === 'late') await new Promise((resolve) => setTimeout(resolve, 1500))
@@ -316,7 +318,7 @@ export function createScenario(
         return { status: 409, body: { code: 'operation_conflict' } }
     }
     const unknownReply = method !== 'GET' && active === 'unknown'
-    if (path === '/api/mdm-candidate/v1/workspace' && method === 'GET') {
+    if (path === '/api/v1/mdm-candidate/workspace' && method === 'GET') {
       const failure = fault()
       if (failure) return failure
       return {
@@ -331,17 +333,17 @@ export function createScenario(
       }
     }
     const policyPath =
-      /^\/api\/(?:v2\/(?:scopes|policies)(?:\/|$)|v3\/(?:resources)(?:\/|$)|v2\/devices\/[^/]+\/operations(?:\/|$)|mdm-candidate\/v1\/(?:policies|executions)(?:\/|$))/.test(
+      /^\/api\/(?:v1\/(?:scopes|policies)(?:\/|$)|v1\/(?:resources)(?:\/|$)|v1\/devices\/[^/]+\/operations(?:\/|$)|v1\/mdm-candidate\/(?:policies|executions)(?:\/|$))/.test(
         path,
       )
     const softwarePath =
-      /^\/api\/(?:v3\/software(?:\/|$)|v1\/software-sources(?:\/|$)|v2\/policies(?:\/|$)|mdm-candidate\/v1\/software(?:\/|$))/.test(
+      /^\/api\/(?:v1\/software(?:\/|$)|v1\/software-sources(?:\/|$)|v1\/policies(?:\/|$)|v1\/mdm-candidate\/software(?:\/|$))/.test(
         path,
       )
     const securityPath =
-      /^\/api\/v2\/(?:compliance-rules(?:\/|$)|devices\/[^/]+\/compliance(?:\/|$))/.test(path)
+      /^\/api\/v1\/(?:compliance-rules(?:\/|$)|devices\/[^/]+\/compliance(?:\/|$))/.test(path)
     const operationsPath =
-      /^\/api\/(?:v1\/authorization(?:\/|$)|mdm-candidate\/v1\/(?:authorization|audit|operations|integrations)(?:\/|$))/.test(
+      /^\/api\/(?:v1\/authorization(?:\/|$)|v1\/mdm-candidate\/(?:authorization|audit|operations|integrations)(?:\/|$))/.test(
         path,
       )
     const module = operationsPath
@@ -352,11 +354,11 @@ export function createScenario(
           ? 'software'
           : policyPath
             ? 'policies'
-            : /^\/api\/(?:v2\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v3\/(?:enrollments|devices))(?:\/|$)/.test(
+            : /^\/api\/(?:v1\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v1\/(?:enrollments|devices))(?:\/|$)/.test(
                   path,
                 )
               ? 'devices'
-              : path.startsWith('/api/mdm-candidate/v1/groups')
+              : path.startsWith('/api/v1/mdm-candidate/groups')
                 ? 'devices'
                 : path.split('/')[4]
     if (module && sources[module] === 'real')

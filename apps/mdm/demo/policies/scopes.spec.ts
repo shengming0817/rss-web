@@ -27,7 +27,7 @@ it('distinguishes unlimited from empty limitations and keeps old Scope results f
   }
   expect(
     scopes.handle(
-      request(`/api/v2/scopes/${id}`, {
+      request(`/api/v1/scopes/${id}`, {
         operationId: task,
         expectedRevision: 0,
         input: { action: 'put', definition },
@@ -35,23 +35,23 @@ it('distinguishes unlimited from empty limitations and keeps old Scope results f
       'normal',
     )?.status,
   ).toBe(200)
-  scopes.handle(request(`/api/v2/scopes/${id}/tasks/${task}`), 'normal')
-  scopes.handle(request(`/api/v2/scopes/${id}/tasks/${task}`), 'normal')
+  scopes.handle(request(`/api/v1/scopes/${id}/tasks/${task}`), 'normal')
+  scopes.handle(request(`/api/v1/scopes/${id}/tasks/${task}`), 'normal')
   expect(scopes.freeze(id)?.members).toEqual([device])
   const next = randomUUID()
   scopes.handle(
-    request(`/api/v2/scopes/${id}`, {
+    request(`/api/v1/scopes/${id}`, {
       operationId: next,
       expectedRevision: 1,
       input: { action: 'put', definition: { ...definition, limitations: [] } },
     }),
     'normal',
   )
-  scopes.handle(request(`/api/v2/scopes/${id}/tasks/${next}`), 'normal')
-  scopes.handle(request(`/api/v2/scopes/${id}/tasks/${next}`), 'normal')
+  scopes.handle(request(`/api/v1/scopes/${id}/tasks/${next}`), 'normal')
+  scopes.handle(request(`/api/v1/scopes/${id}/tasks/${next}`), 'normal')
   expect(scopes.freeze(id)?.members).toEqual([])
   expect(
-    scopes.handle(request(`/api/v2/scopes/${id}/results/${task}/members`), 'normal')?.body,
+    scopes.handle(request(`/api/v1/scopes/${id}/results/${task}/members`), 'normal')?.body,
   ).toMatchObject({ current: false, page: { items: [device] } })
 })
 it('uses published group membership, never a running or preview membership set', () => {
@@ -61,7 +61,7 @@ it('uses published group membership, never a running or preview membership set',
     task = randomUUID(),
     device = devices.facts()[0]!.summary.id
   devices.handle(
-    request(`/api/v2/groups/${group}`, {
+    request(`/api/v1/groups/${group}`, {
       operationId: task,
       expectedRevision: 1,
       input: { action: 'members', add: [device], remove: [] },
@@ -69,13 +69,13 @@ it('uses published group membership, never a running or preview membership set',
     'normal',
   )
   expect(devices.publishedGroup(group)?.members).toEqual([])
-  devices.handle(request(`/api/v2/groups/${group}/tasks/${task}`), 'normal')
-  devices.handle(request(`/api/v2/groups/${group}/tasks/${task}`), 'normal')
+  devices.handle(request(`/api/v1/groups/${group}/tasks/${task}`), 'normal')
+  devices.handle(request(`/api/v1/groups/${group}/tasks/${task}`), 'normal')
   expect(devices.publishedGroup(group)?.members).toEqual([device])
   const id = randomUUID(),
     op = randomUUID()
   scopes.handle(
-    request(`/api/v2/scopes/${id}`, {
+    request(`/api/v1/scopes/${id}`, {
       operationId: op,
       expectedRevision: 0,
       input: {
@@ -85,8 +85,8 @@ it('uses published group membership, never a running or preview membership set',
     }),
     'normal',
   )
-  scopes.handle(request(`/api/v2/scopes/${id}/tasks/${op}`), 'normal')
-  scopes.handle(request(`/api/v2/scopes/${id}/tasks/${op}`), 'normal')
+  scopes.handle(request(`/api/v1/scopes/${id}/tasks/${op}`), 'normal')
+  scopes.handle(request(`/api/v1/scopes/${id}/tasks/${op}`), 'normal')
   expect(scopes.freeze(id)).toMatchObject({
     members: [device],
     sources: [{ memberSet: task, memberVersion: 1 }],
@@ -94,7 +94,7 @@ it('uses published group membership, never a running or preview membership set',
   const changed = randomUUID()
   expect(
     devices.handle(
-      request(`/api/v2/groups/${group}`, {
+      request(`/api/v1/groups/${group}`, {
         operationId: changed,
         expectedRevision: 2,
         input: { action: 'members', add: ['device-02'], remove: [] },
@@ -102,10 +102,10 @@ it('uses published group membership, never a running or preview membership set',
       'normal',
     )?.status,
   ).toBe(202)
-  devices.handle(request(`/api/v2/groups/${group}/tasks/${changed}`), 'normal')
-  devices.handle(request(`/api/v2/groups/${group}/tasks/${changed}`), 'normal')
+  devices.handle(request(`/api/v1/groups/${group}/tasks/${changed}`), 'normal')
+  devices.handle(request(`/api/v1/groups/${group}/tasks/${changed}`), 'normal')
   expect(scopes.freeze(id)).toBeNull()
   expect(
-    scopes.handle(request(`/api/v2/scopes/${id}/results/${op}/members`), 'normal')?.body,
+    scopes.handle(request(`/api/v1/scopes/${id}/results/${op}/members`), 'normal')?.body,
   ).toMatchObject({ current: true, page: { items: [device] } })
 })

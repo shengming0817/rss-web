@@ -140,10 +140,10 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         }
       }
       const collection =
-        /^\/api\/mdm-candidate\/v1\/policies\/(scopes|resources|policies|workflows|approvals)$/.exec(
+        /^\/api\/v1\/mdm-candidate\/policies\/(scopes|resources|policies|workflows|approvals)$/.exec(
           request.path,
         )
-      const execution = /^\/api\/mdm-candidate\/v1\/executions(?:\/([^/]+))?$/.exec(request.path)
+      const execution = /^\/api\/v1\/mdm-candidate\/executions(?:\/([^/]+))?$/.exec(request.path)
       if ((!collection && !execution) || request.method !== 'GET') return
       if (scenario === 'denied') return error('permission_denied', 403)
       if (collection) {
@@ -199,11 +199,11 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       if (event.status >= 300) return
       const deviceWrite =
         method !== 'GET' &&
-        /^\/api\/(?:v[23]\/(?:devices|enrollments|groups)|mdm-candidate\/v1\/devices)(?:\/|$)/.test(
+        /^\/api\/(?:v1\/(?:devices|enrollments|groups)|v1\/mdm-candidate\/devices)(?:\/|$)/.test(
           path,
         ) &&
         !path.includes('preview')
-      const groupPublished = method === 'GET' && /^\/api\/v2\/groups\/[^/]+\/tasks\//.test(path)
+      const groupPublished = method === 'GET' && /^\/api\/v1\/groups\/[^/]+\/tasks\//.test(path)
       if (deviceWrite || groupPublished) policies.reconcile(scenario)
     },
     tick(event: DemoEvent, scenario: Scenario = 'normal') {

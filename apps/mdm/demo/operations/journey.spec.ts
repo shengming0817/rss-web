@@ -14,7 +14,7 @@ async function fixture() {
       automation.observe,
       automation.now,
     )
-  const login = await server.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  const login = await server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
   })
@@ -31,8 +31,8 @@ async function fixture() {
 }
 it('connects native permission changes, denied device access and sanitized audit without replay duplication', async () => {
   const f = await fixture(),
-    root = '/api/mdm-candidate/v1/operations/audit'
-  expect((await f.server.handle('GET', '/api/mdm-candidate/v1/devices/device-01')).status).toBe(200)
+    root = '/api/v1/mdm-candidate/operations/audit'
+  expect((await f.server.handle('GET', '/api/v1/mdm-candidate/devices/device-01')).status).toBe(200)
   const original = (await f.server.handle('GET', '/api/v1/authorization/rules')).body as {
     items: {
       id: string
@@ -54,7 +54,7 @@ it('connects native permission changes, denied device access and sanitized audit
   expect((await f.write('PUT', `/api/v1/authorization/rules/${ADMIN_RULE}`, body)).status).toBe(503)
   f.server.set('normal')
   expect((await f.write('PUT', `/api/v1/authorization/rules/${ADMIN_RULE}`, body)).status).toBe(200)
-  expect((await f.server.handle('GET', '/api/mdm-candidate/v1/devices/device-01')).status).toBe(403)
+  expect((await f.server.handle('GET', '/api/v1/mdm-candidate/devices/device-01')).status).toBe(403)
   const audit = (await f.server.handle('GET', `${root}?operation=${operationId}`)).body as {
     items: { stage: string; outcome: string }[]
   }
@@ -67,11 +67,11 @@ it('connects native permission changes, denied device access and sanitized audit
   })
   for (const path of [
     '/api/v1/authorization',
-    '/api/mdm-candidate/v1/authorization/delegations',
-    '/api/mdm-candidate/v1/operations/settings',
-    '/api/mdm-candidate/v1/integrations/connectors',
+    '/api/v1/mdm-candidate/authorization/delegations',
+    '/api/v1/mdm-candidate/operations/settings',
+    '/api/v1/mdm-candidate/integrations/connectors',
   ]) {
-    await f.write('POST', '/api/mdm-candidate/v1/workspace/scenario', {
+    await f.write('POST', '/api/v1/mdm-candidate/workspace/scenario', {
       scenario: 'normal',
       module: 'operations',
       source: 'real',
@@ -81,8 +81,8 @@ it('connects native permission changes, denied device access and sanitized audit
 })
 it('binds frozen audit pages to exact filters and actor and clears them on reset', async () => {
   const f = await fixture(),
-    root = '/api/mdm-candidate/v1/operations/audit',
-    path = '/api/mdm-candidate/v1/operations/alert-rules'
+    root = '/api/v1/mdm-candidate/operations/audit',
+    path = '/api/v1/mdm-candidate/operations/alert-rules'
   for (let i = 0; i < 3; i++)
     await f.write('POST', `${path}/${id()}`, {
       operationId: id(),
@@ -101,7 +101,7 @@ it('binds frozen audit pages to exact filters and actor and clears them on reset
     (await f.server.handle('GET', `${root}?limit=1&stream=mdm_business&cursor=${first.nextCursor}`))
       .status,
   ).toBe(400)
-  await f.server.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  await f.server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'reviewer',
     password: 'demo',
   })
@@ -130,7 +130,7 @@ it('rechecks native inventory/assignment permissions and preserves single-device
       grants: admin.value.grants.filter((g) => g.operation !== 'inventory_read'),
     },
   })
-  expect((await f.server.handle('GET', '/api/v2/devices/device-01/inventory')).status).toBe(403)
+  expect((await f.server.handle('GET', '/api/v1/devices/device-01/inventory')).status).toBe(403)
   await f.write('PUT', `/api/v1/authorization/rules/${ADMIN_RULE}`, {
     operationId: id(),
     expectedRevision: 2,
@@ -143,12 +143,12 @@ it('rechecks native inventory/assignment permissions and preserves single-device
   })
   for (const suffix of ['', '/hardware', '/software', '/history'])
     expect(
-      (await f.server.handle('GET', `/api/mdm-candidate/v1/devices/device-01${suffix}`)).status,
+      (await f.server.handle('GET', `/api/v1/mdm-candidate/devices/device-01${suffix}`)).status,
     ).toBe(200)
   expect(
-    (await f.server.handle('GET', '/api/mdm-candidate/v1/devices/device-02/hardware')).status,
+    (await f.server.handle('GET', '/api/v1/mdm-candidate/devices/device-02/hardware')).status,
   ).toBe(403)
-  const login = await f.server.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  const login = await f.server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'reviewer',
     password: 'demo',
   })
@@ -156,7 +156,7 @@ it('rechecks native inventory/assignment permissions and preserves single-device
     (
       await f.server.handle(
         'PUT',
-        '/api/mdm-candidate/v1/devices/device-01/assignment',
+        '/api/v1/mdm-candidate/devices/device-01/assignment',
         { operationId: id(), expectedRevision: 1, input: { owner: 'changed', department: null } },
         {
           'x-csrf-token': (login.body as { csrfToken: string }).csrfToken,
@@ -174,7 +174,7 @@ it('records the exact business target and offline/unsupported failures without i
     () => true,
     (e) => observed.push(e),
   )
-  const login = await server.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  const login = await server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
   })
@@ -184,10 +184,10 @@ it('records the exact business target and offline/unsupported failures without i
   }
   const target = id()
   const cases: [string, string | null][] = [
-    ['/api/v2/devices/device-01/operations', 'device-01'],
-    [`/api/mdm-candidate/v1/software/self-service/requests/${target}`, target],
-    [`/api/mdm-candidate/v1/policies/assignments/${target}`, target],
-    ['/api/mdm-candidate/v1/unrecognized', null],
+    ['/api/v1/devices/device-01/operations', 'device-01'],
+    [`/api/v1/mdm-candidate/software/self-service/requests/${target}`, target],
+    [`/api/v1/mdm-candidate/policies/assignments/${target}`, target],
+    ['/api/v1/mdm-candidate/unrecognized', null],
   ]
   for (const [path, expected] of cases) {
     await server.handle('POST', path, { operationId: id() }, headers)
@@ -197,7 +197,7 @@ it('records the exact business target and offline/unsupported failures without i
     server.set(scenario)
     await server.handle(
       'POST',
-      `/api/v2/devices/device-01/operations`,
+      `/api/v1/devices/device-01/operations`,
       { operationId: id() },
       headers,
     )

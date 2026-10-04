@@ -13,7 +13,7 @@ it('checks action and every device before preview, execution and exact replay af
     automation.tick,
   )
   async function login(role: 'admin' | 'reviewer') {
-    const reply = await server.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+    const reply = await server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
       login: role === 'admin' ? 'demo' : 'reviewer',
       password: 'demo',
     })
@@ -22,7 +22,7 @@ it('checks action and every device before preview, execution and exact replay af
       'x-identity-request': '1',
     }
   }
-  const root = '/api/mdm-candidate/v1/devices/batch-previews',
+  const root = '/api/v1/mdm-candidate/devices/batch-previews',
     preview = operation({ action: 'wipe', devices: ['device-01'] })
   const reviewer = await login('reviewer')
   expect((await server.handle('POST', root, preview, reviewer)).status).toBe(403)

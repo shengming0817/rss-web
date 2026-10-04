@@ -35,7 +35,7 @@ it('binds candidate list envelopes to tenant and source and carries snapshot cur
   expect((await client.list('scopes')).nextCursor).toBe('opaque')
   await client.list('scopes', 'opaque')
   expect(t.request.mock.calls[1]![0]).toMatchObject({
-    path: '/api/mdm-candidate/v1/policies/scopes',
+    path: '/api/v1/mdm-candidate/policies/scopes',
     query: { cursor: 'opaque' },
   })
   await expect(createCatalogClient(t.http, tenant, false).list('scopes')).rejects.toThrow()
@@ -145,7 +145,7 @@ it('submits workflow CAS without accepting an approver supplied by a browser', a
   expect(await client.change(id, body)).toEqual(workflow)
   expect(t.request.mock.calls[0]![0]).toMatchObject({
     method: 'POST',
-    path: '/api/mdm-candidate/v1/policies/workflows/{id}',
+    path: '/api/v1/mdm-candidate/policies/workflows/{id}',
     body,
   })
   t.reply(envelope({ workflow: { ...workflow, approver: 'browser-selected' } }))

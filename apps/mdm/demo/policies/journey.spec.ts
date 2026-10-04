@@ -23,7 +23,7 @@ it('carries Scope and resource edits through HTTP clients into continuous assign
       automation.tick,
       automation.observe,
     )
-  const login = await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  const login = await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
   })

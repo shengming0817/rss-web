@@ -8,7 +8,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date('2026-09-30T00:00:00Z'))
 })
 afterEach(() => vi.useRealTimers())
-const root = '/api/mdm-candidate/v1/security'
+const root = '/api/v1/mdm-candidate/security'
 async function setup() {
   const devices = createDeviceDemo(),
     automation = createAutomationDemo(devices),
@@ -21,7 +21,7 @@ async function setup() {
     )
   let headers: Record<string, string> = {}
   async function login(login: 'demo' | 'reviewer') {
-    const reply = await server.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+    const reply = await server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
       login,
       password: 'demo',
     })
@@ -39,7 +39,7 @@ async function setup() {
     },
     now = context.asOf
   const event = (kind: string, task: string, at: number, active?: boolean) =>
-    write('/api/mdm-candidate/v1/workspace/scenario', {
+    write('/api/v1/mdm-candidate/workspace/scenario', {
       event: { kind, task, at, device: 'device-01', ...(active === undefined ? {} : { active }) },
     })
   async function request(target: object, until = now + 300) {
@@ -72,7 +72,7 @@ it('rejects consent events for missing targets, stale timestamps and repeated tr
   })
   expect((await f.event('remote_consent', id, f.now + 2, true)).status).toBe(204)
   expect(
-    (await f.server.handle('GET', '/api/mdm-candidate/v1/workspace/scenario')).body,
+    (await f.server.handle('GET', '/api/v1/mdm-candidate/workspace/scenario')).body,
   ).toMatchObject({ asOf: f.now + 2 })
   expect((await f.event('remote_consent', id, f.now + 3, true)).status).toBe(409)
   expect((await f.event('remote_revoke', id, f.now + 4)).status).toBe(204)
@@ -112,7 +112,7 @@ it('requires device consent for the exact approved remote attempt and keeps revo
     },
   })
   expect(
-    (await f.server.handle('GET', `/api/mdm-candidate/v1/executions/${dispatch.operationId}`)).body,
+    (await f.server.handle('GET', `/api/v1/mdm-candidate/executions/${dispatch.operationId}`)).body,
   ).toMatchObject({ execution: { effect: 'unknown' } })
   await f.event('remote_ended', dispatch.operationId, f.now + 5)
   expect(await f.read(id)).toMatchObject({
@@ -140,7 +140,7 @@ it('expires elevation authorization without claiming the device grant or process
     support: { details: { grant: { state: 'available' }, usage: { state: 'not_observed' } } },
   })
   await f.event('elevation_used', dispatch.operationId, f.now + 3)
-  await f.write('/api/mdm-candidate/v1/workspace/scenario', {
+  await f.write('/api/v1/mdm-candidate/workspace/scenario', {
     event: { kind: 'clock', at: f.now + 31 },
   })
   expect(await f.read(id)).toMatchObject({
@@ -181,7 +181,7 @@ it('separates diagnostic collection, upload, scan and retention without raw outp
   expect(await f.read(id)).toMatchObject({
     support: { details: { state: 'ready', scan: { state: 'clean' }, availableUntil: f.now + 62 } },
   })
-  await f.write('/api/mdm-candidate/v1/workspace/scenario', {
+  await f.write('/api/v1/mdm-candidate/workspace/scenario', {
     event: { kind: 'clock', at: f.now + 63 },
   })
   expect(await f.read(id)).toMatchObject({ support: { details: { state: 'expired' } } })
@@ -207,7 +207,7 @@ it('ignores late consent after authorization expiry and refuses arbitrary elevat
     validUntil: f.now + 100,
   })
   expect((await f.write(`${root}/requests`, wrong)).status).toBe(409)
-  expect((await f.server.handle('GET', '/api/mdm-candidate/v1/executions')).body).toMatchObject({
+  expect((await f.server.handle('GET', '/api/v1/mdm-candidate/executions')).body).toMatchObject({
     items: [],
   })
 })
@@ -287,7 +287,7 @@ it('does not reuse a consent observation predating the administrator decision', 
       validUntil: f.now + 100,
     })
   await f.write(`${root}/requests`, r)
-  await f.write('/api/mdm-candidate/v1/workspace/scenario', {
+  await f.write('/api/v1/mdm-candidate/workspace/scenario', {
     event: { kind: 'clock', at: f.now + 5 },
   })
   await f.login('reviewer')

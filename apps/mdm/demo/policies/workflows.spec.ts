@@ -59,7 +59,7 @@ function fixture(approval: boolean, onFailure?: 'continue' | 'approval') {
       onFailure: 'stop',
     })
   }
-  const path = `/api/mdm-candidate/v1/policies/workflows/${id}`
+  const path = `/api/v1/mdm-candidate/policies/workflows/${id}`
   function request(url: string, input?: unknown, revision = 0, principalId = author): DemoRequest {
     return {
       path: url,

@@ -15,7 +15,7 @@ export function createCertificatesClient(transport: HttpTransport, tenant: strin
     list: (device?: string, cursor?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/security/certificates',
+        path: '/api/v1/mdm-candidate/security/certificates',
         query: { device, limit: 20, cursor },
         successStatus: 200,
         decode(value) {
@@ -35,7 +35,7 @@ export function createCertificatesClient(transport: HttpTransport, tenant: strin
     read: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/security/certificates/{id}',
+        path: '/api/v1/mdm-candidate/security/certificates/{id}',
         pathParams: { id },
         successStatus: 200,
         decode: (v) => detail(v, id),
@@ -43,7 +43,7 @@ export function createCertificatesClient(transport: HttpTransport, tenant: strin
     issue: (id: string, body: Operation<Record<string, never>>) =>
       transport.request({
         method: 'POST',
-        path: '/api/mdm-candidate/v1/security/certificates/{id}/issue',
+        path: '/api/v1/mdm-candidate/security/certificates/{id}/issue',
         pathParams: { id },
         body,
         successStatus: 200,

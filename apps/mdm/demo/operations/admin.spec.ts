@@ -29,7 +29,7 @@ async function fixture() {
       return true
     },
   )
-  const login = await server.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  const login = await server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
   })
@@ -51,7 +51,7 @@ async function fixture() {
 }
 it('keeps connector configuration, test and deliveries separate; CAS and retries retain failed history', async () => {
   const f = await fixture(),
-    root = '/api/mdm-candidate/v1/integrations/connectors',
+    root = '/api/v1/mdm-candidate/integrations/connectors',
     id = crypto.randomUUID()
   const definition = {
     name: 'Service desk',
@@ -91,47 +91,47 @@ it('keeps connector configuration, test and deliveries separate; CAS and retries
 it('runs bounded reports and configuration/maintenance stages only on explicit events', async () => {
   const f = await fixture()
   const report = await f.post(
-    '/api/mdm-candidate/v1/operations/reports',
+    '/api/v1/mdm-candidate/operations/reports',
     operation({ from: 0, until: 100 }),
   )
   expect(report.status).toBe(202)
   const job = (report.body as { job: { id: string } }).job
   expect(
-    (await f.server.handle('GET', `/api/mdm-candidate/v1/operations/reports/${job.id}`)).body,
+    (await f.server.handle('GET', `/api/v1/mdm-candidate/operations/reports/${job.id}`)).body,
   ).toMatchObject({ job: { phase: 'accepted', result: null } })
   f.advance()
   expect(
-    (await f.server.handle('GET', `/api/mdm-candidate/v1/operations/reports/${job.id}`)).body,
+    (await f.server.handle('GET', `/api/v1/mdm-candidate/operations/reports/${job.id}`)).body,
   ).toMatchObject({
     job: { phase: 'completed', result: { known: 2, unknown: 0, scope: 'authorized' } },
   })
-  const settings = (await f.server.handle('GET', '/api/mdm-candidate/v1/operations/settings'))
+  const settings = (await f.server.handle('GET', '/api/v1/mdm-candidate/operations/settings'))
     .body as { configuration: { revision: number; values: unknown } }
   await f.post(
-    '/api/mdm-candidate/v1/operations/settings',
+    '/api/v1/mdm-candidate/operations/settings',
     operation(settings.configuration.values, settings.configuration.revision),
   )
   expect(
-    (await f.server.handle('GET', '/api/mdm-candidate/v1/operations/settings')).body,
+    (await f.server.handle('GET', '/api/v1/mdm-candidate/operations/settings')).body,
   ).toMatchObject({ configuration: { state: 'saved', savedVersion: 2, activeVersion: 1 } })
   expect(
-    (await f.post('/api/mdm-candidate/v1/operations/settings/activate', operation({}, 2))).body,
+    (await f.post('/api/v1/mdm-candidate/operations/settings/activate', operation({}, 2))).body,
   ).toMatchObject({ configuration: { state: 'restart_required' } })
   expect(
     (
       await f.post(
-        '/api/mdm-candidate/v1/operations/maintenance',
+        '/api/v1/mdm-candidate/operations/maintenance',
         operation({ kind: 'restore', target: 'demo-backup-1', method: 'full' }),
       )
     ).status,
   ).toBe(202)
   f.advance()
-  const jobs = (await f.server.handle('GET', '/api/mdm-candidate/v1/operations/maintenance')).body
+  const jobs = (await f.server.handle('GET', '/api/v1/mdm-candidate/operations/maintenance')).body
   expect(jobs).toMatchObject({ items: [{ phase: 'completed', effect: 'unverified' }] })
 })
 it('supports alert rules, authorized partial metrics, frozen pages and unknown writes', async () => {
   const f = await fixture(),
-    root = '/api/mdm-candidate/v1/operations/alert-rules'
+    root = '/api/v1/mdm-candidate/operations/alert-rules'
   for (let i = 0; i < 3; i++)
     await f.post(
       `${root}/${crypto.randomUUID()}`,
@@ -155,13 +155,13 @@ it('supports alert rules, authorized partial metrics, frozen pages and unknown w
     (
       await f.server.handle(
         'GET',
-        `/api/mdm-candidate/v1/operations/maintenance?cursor=${first.nextCursor}`,
+        `/api/v1/mdm-candidate/operations/maintenance?cursor=${first.nextCursor}`,
       )
     ).status,
   ).toBe(400)
   f.server.set('partial')
   expect(
-    (await f.server.handle('GET', '/api/mdm-candidate/v1/operations/metrics?from=0&until=100'))
+    (await f.server.handle('GET', '/api/v1/mdm-candidate/operations/metrics?from=0&until=100'))
       .body,
   ).toMatchObject({ metrics: { complete: false, unknown: null, scope: 'authorized' } })
 })
@@ -170,7 +170,7 @@ it('closes the administrative ticket without resolving source evidence and reope
   const f = await fixture(),
     rule = crypto.randomUUID()
   await f.post(
-    `/api/mdm-candidate/v1/operations/alert-rules/${rule}`,
+    `/api/v1/mdm-candidate/operations/alert-rules/${rule}`,
     operation({
       name: 'Projection backlog',
       signal: 'projection_backlog',
@@ -179,28 +179,28 @@ it('closes the administrative ticket without resolving source evidence and reope
     }),
   )
   f.advance('partial')
-  const alertPage = (await f.server.handle('GET', '/api/mdm-candidate/v1/operations/alerts'))
+  const alertPage = (await f.server.handle('GET', '/api/v1/mdm-candidate/operations/alerts'))
     .body as { items: { id: string; revision: number }[] }
   const alert = alertPage.items[0]!
   expect(alert).toMatchObject({ state: 'open', target: { kind: 'alert_rule', id: rule } })
   expect(
     (
       await f.post(
-        `/api/mdm-candidate/v1/operations/alerts/${alert.id}/close`,
+        `/api/v1/mdm-candidate/operations/alerts/${alert.id}/close`,
         operation({ note: 'Tracked by support' }, alert.revision),
       )
     ).status,
   ).toBe(200)
   expect(
-    (await f.server.handle('GET', `/api/mdm-candidate/v1/operations/alerts/${alert.id}`)).body,
+    (await f.server.handle('GET', `/api/v1/mdm-candidate/operations/alerts/${alert.id}`)).body,
   ).toMatchObject({ alert: { state: 'open' } })
   expect(
-    (await f.server.handle('GET', `/api/mdm-candidate/v1/operations/alerts/${alert.id}/closure`))
+    (await f.server.handle('GET', `/api/v1/mdm-candidate/operations/alerts/${alert.id}/closure`))
       .body,
   ).toMatchObject({ closure: { note: 'Tracked by support' } })
   f.advance('partial')
   expect(
-    (await f.server.handle('GET', `/api/mdm-candidate/v1/operations/alerts/${alert.id}/closure`))
+    (await f.server.handle('GET', `/api/v1/mdm-candidate/operations/alerts/${alert.id}/closure`))
       .body,
   ).toMatchObject({ closure: null })
 })
@@ -208,7 +208,7 @@ it('closes the administrative ticket without resolving source evidence and reope
 it('reads terminal connection tests without treating a passed test as business delivery recovery', async () => {
   const f = await fixture(),
     id = crypto.randomUUID(),
-    root = `/api/mdm-candidate/v1/integrations/connectors/${id}`
+    root = `/api/v1/mdm-candidate/integrations/connectors/${id}`
   await f.post(
     root,
     operation({
@@ -237,9 +237,9 @@ it('reads terminal connection tests without treating a passed test as business d
 it('uses report references for completed report audit events', async () => {
   const f = await fixture(),
     body = operation({ from: 0, until: 100 })
-  await f.post('/api/mdm-candidate/v1/operations/reports', body)
+  await f.post('/api/v1/mdm-candidate/operations/reports', body)
   f.advance()
-  const page = (await f.server.handle('GET', '/api/mdm-candidate/v1/operations/audit')).body as {
+  const page = (await f.server.handle('GET', '/api/v1/mdm-candidate/operations/audit')).body as {
     items: { action: string; target: { kind: string; id: string } }[]
   }
   expect(page.items.find((v) => v.action === 'job_observed')?.target).toMatchObject({
@@ -256,19 +256,19 @@ it('derives alerts from the same diagnostics and retains unknown agent evidence'
     [agent, 'agent_health'],
   ])
     await f.post(
-      `/api/mdm-candidate/v1/operations/alert-rules/${id}`,
+      `/api/v1/mdm-candidate/operations/alert-rules/${id}`,
       operation({ name: signal, signal, threshold: 0, enabled: true }),
     )
   f.advance('normal')
   f.server.set('partial')
   expect(
-    (await f.server.handle('GET', '/api/mdm-candidate/v1/operations/diagnostics')).body,
+    (await f.server.handle('GET', '/api/v1/mdm-candidate/operations/diagnostics')).body,
   ).toMatchObject({
     diagnostics: { projectionBacklog: 12, agents: [{ health: 'offline' }, { health: 'offline' }] },
   })
   f.advance('partial')
   const page = async () =>
-    (await f.server.handle('GET', '/api/mdm-candidate/v1/operations/alerts')).body as {
+    (await f.server.handle('GET', '/api/v1/mdm-candidate/operations/alerts')).body as {
       items: { state: string; target: { id: string }; evidence: { state: string } }[]
     }
   expect((await page()).items.find((v) => v.target.id === projection)?.state).toBe('open')
@@ -283,7 +283,7 @@ it('derives alerts from the same diagnostics and retains unknown agent evidence'
 it('keeps disabled health while queued deliveries finish and restores known delivery facts on enable', async () => {
   const f = await fixture(),
     id = crypto.randomUUID(),
-    root = `/api/mdm-candidate/v1/integrations/connectors/${id}`
+    root = `/api/v1/mdm-candidate/integrations/connectors/${id}`
   const definition = {
     name: 'Desk',
     kind: 'itsm',
@@ -313,7 +313,7 @@ it.each(['retry_then_failure', 'failure_then_retry'] as const)(
     const f = await fixture(),
       id = crypto.randomUUID(),
       ruleId = crypto.randomUUID(),
-      root = `/api/mdm-candidate/v1/integrations/connectors/${id}`
+      root = `/api/v1/mdm-candidate/integrations/connectors/${id}`
     const definition = {
       name: 'Desk',
       kind: 'itsm',
@@ -323,7 +323,7 @@ it.each(['retry_then_failure', 'failure_then_retry'] as const)(
     }
     await f.post(root, operation(definition))
     await f.post(
-      `/api/mdm-candidate/v1/operations/alert-rules/${ruleId}`,
+      `/api/v1/mdm-candidate/operations/alert-rules/${ruleId}`,
       operation({
         name: 'Delivery failures',
         signal: 'connector_failure',
@@ -335,7 +335,7 @@ it.each(['retry_then_failure', 'failure_then_retry'] as const)(
     await f.post(`${root}/deliver`, first)
     f.advance()
     const alert = async () => {
-      const page = (await f.server.handle('GET', '/api/mdm-candidate/v1/operations/alerts'))
+      const page = (await f.server.handle('GET', '/api/v1/mdm-candidate/operations/alerts'))
         .body as {
         items: { state: string; target: { id: string }; evidence: { state: string } }[]
       }
@@ -377,7 +377,7 @@ it('keeps unknown delivery evidence after a passed connection test', async () =>
   const f = await fixture(),
     id = crypto.randomUUID(),
     ruleId = crypto.randomUUID(),
-    root = `/api/mdm-candidate/v1/integrations/connectors/${id}`
+    root = `/api/v1/mdm-candidate/integrations/connectors/${id}`
   await f.post(
     root,
     operation({
@@ -389,7 +389,7 @@ it('keeps unknown delivery evidence after a passed connection test', async () =>
     }),
   )
   await f.post(
-    `/api/mdm-candidate/v1/operations/alert-rules/${ruleId}`,
+    `/api/v1/mdm-candidate/operations/alert-rules/${ruleId}`,
     operation({ name: 'Failures', signal: 'connector_failure', threshold: 0, enabled: true }),
   )
   await f.post(`${root}/deliver`, operation({}, 1))
@@ -403,7 +403,7 @@ it('keeps unknown delivery evidence after a passed connection test', async () =>
   expect((await f.server.handle('GET', root)).body).toMatchObject({
     connector: { health: 'backlog' },
   })
-  const page = (await f.server.handle('GET', '/api/mdm-candidate/v1/operations/alerts')).body as {
+  const page = (await f.server.handle('GET', '/api/v1/mdm-candidate/operations/alerts')).body as {
     items: { state: string; target: { id: string }; evidence: { state: string } }[]
   }
   expect(page.items.find((v) => v.target.id === ruleId)).toMatchObject({
@@ -415,7 +415,7 @@ it('resets the latest business observation with the domain state and receipts', 
   const f = await fixture(),
     a = crypto.randomUUID(),
     b = crypto.randomUUID(),
-    root = '/api/mdm-candidate/v1/integrations/connectors',
+    root = '/api/v1/mdm-candidate/integrations/connectors',
     body = operation({}, 1)
   const definition = {
     name: 'Desk',

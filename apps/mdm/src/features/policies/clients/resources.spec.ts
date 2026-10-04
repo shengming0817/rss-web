@@ -79,7 +79,7 @@ it('keeps version creation and activation as separate CAS writes', async () => {
   })
   expect(request.mock.calls[0]![0]).toMatchObject({
     method: 'POST',
-    path: '/api/v3/resources/{id}',
+    path: '/api/v1/resources/{id}',
     pathParams: { id: resource.id },
     successStatus: 200,
     body: {

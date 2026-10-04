@@ -163,7 +163,7 @@ export function createDirectoryClient(transport: HttpTransport, tenant: string, 
     list: (next?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/devices',
+        path: '/api/v1/mdm-candidate/devices',
         query: { limit: 20, cursor: next },
         successStatus: 200,
         decode: (v) => decodeDirectory(v, tenant, demo),
@@ -171,7 +171,7 @@ export function createDirectoryClient(transport: HttpTransport, tenant: string, 
     detail: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/devices/{id}',
+        path: '/api/v1/mdm-candidate/devices/{id}',
         pathParams: { id },
         successStatus: 200,
         decode: (v) => decodeDeviceDetail(v, tenant, demo, id),
@@ -179,7 +179,7 @@ export function createDirectoryClient(transport: HttpTransport, tenant: string, 
     hardware: (id: string, next?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/devices/{id}/hardware',
+        path: '/api/v1/mdm-candidate/devices/{id}/hardware',
         pathParams: { id },
         query: { limit: 20, cursor: next },
         successStatus: 200,
@@ -196,7 +196,7 @@ export function createDirectoryClient(transport: HttpTransport, tenant: string, 
     software: (id: string, next?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/devices/{id}/software',
+        path: '/api/v1/mdm-candidate/devices/{id}/software',
         pathParams: { id },
         query: { limit: 20, cursor: next },
         successStatus: 200,
@@ -227,7 +227,7 @@ export function createDirectoryClient(transport: HttpTransport, tenant: string, 
     history: (id: string, next?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/devices/{id}/history',
+        path: '/api/v1/mdm-candidate/devices/{id}/history',
         pathParams: { id },
         query: { limit: 20, cursor: next },
         successStatus: 200,
@@ -259,7 +259,7 @@ export function createDirectoryClient(transport: HttpTransport, tenant: string, 
     assign: (id: string, body: Operation<{ owner: string | null; department: string | null }>) =>
       transport.request({
         method: 'PUT',
-        path: '/api/mdm-candidate/v1/devices/{id}/assignment',
+        path: '/api/v1/mdm-candidate/devices/{id}/assignment',
         pathParams: { id },
         body,
         successStatus: 200,
@@ -268,7 +268,7 @@ export function createDirectoryClient(transport: HttpTransport, tenant: string, 
     groups: (next?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/groups',
+        path: '/api/v1/mdm-candidate/groups',
         query: { limit: 20, cursor: next },
         successStatus: 200,
         decode: (value) => {
@@ -283,7 +283,7 @@ export function createDirectoryClient(transport: HttpTransport, tenant: string, 
     preview: (body: Operation<{ action: LifecycleAction; devices: string[] }>) =>
       transport.request({
         method: 'POST',
-        path: '/api/mdm-candidate/v1/devices/batch-previews',
+        path: '/api/v1/mdm-candidate/devices/batch-previews',
         body,
         successStatus: 200,
         decode: (v) => batch(v, body.operationId),
@@ -291,7 +291,7 @@ export function createDirectoryClient(transport: HttpTransport, tenant: string, 
     execute: (id: string, body: Operation<{ confirmed: true }>) =>
       transport.request({
         method: 'POST',
-        path: '/api/mdm-candidate/v1/devices/batch-previews/{id}/execute',
+        path: '/api/v1/mdm-candidate/devices/batch-previews/{id}/execute',
         pathParams: { id },
         body,
         successStatus: 202,
@@ -300,7 +300,7 @@ export function createDirectoryClient(transport: HttpTransport, tenant: string, 
     cancel: (id: string, body: Operation<Record<string, never>>) =>
       transport.request({
         method: 'POST',
-        path: '/api/mdm-candidate/v1/devices/batch-previews/{id}/cancel',
+        path: '/api/v1/mdm-candidate/devices/batch-previews/{id}/cancel',
         pathParams: { id },
         body,
         successStatus: 200,
@@ -309,7 +309,7 @@ export function createDirectoryClient(transport: HttpTransport, tenant: string, 
     batch: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/devices/batch-previews/{id}',
+        path: '/api/v1/mdm-candidate/devices/batch-previews/{id}',
         pathParams: { id },
         successStatus: 200,
         decode: (v) => {

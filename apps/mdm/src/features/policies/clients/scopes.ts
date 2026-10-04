@@ -117,7 +117,7 @@ export function createScopesClient(transport: HttpTransport) {
     read: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/scopes/{id}',
+        path: '/api/v1/scopes/{id}',
         pathParams: { id },
         successStatus: 200,
         decode: (v) => decodeScope(v, id),
@@ -125,7 +125,7 @@ export function createScopesClient(transport: HttpTransport) {
     change: (id: string, body: Operation<ScopeChange>) =>
       transport.request({
         method: 'POST',
-        path: '/api/v2/scopes/{id}',
+        path: '/api/v1/scopes/{id}',
         pathParams: { id },
         body,
         successStatus: 200,
@@ -138,7 +138,7 @@ export function createScopesClient(transport: HttpTransport) {
     status: (id: string, task: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/scopes/{id}/tasks/{task}',
+        path: '/api/v1/scopes/{id}/tasks/{task}',
         pathParams: { id, task },
         successStatus: 200,
         decode(value) {
@@ -195,7 +195,7 @@ export function createScopesClient(transport: HttpTransport) {
     page: (id: string, result: string, projection: ScopeProjection, cursor?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/scopes/{id}/results/{result}/{projection}',
+        path: '/api/v1/scopes/{id}/results/{result}/{projection}',
         pathParams: { id, result, projection },
         query: { limit: 20, cursor },
         successStatus: 200,

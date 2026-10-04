@@ -15,7 +15,7 @@ function fixture(direction: 'mdm_to_agent' | 'agent_to_mdm' = 'mdm_to_agent') {
     scopes = createScopeDemo(devices)
   const { resources } = softwareResource('RSS.DemoAgent')
   resources.handle(
-    request('/api/v3/resources/app', operation({ action: 'activate', version: '1' }, 2)),
+    request('/api/v1/resources/app', operation({ action: 'activate', version: '1' }, 2)),
     'normal',
   )
   const scope = randomUUID(),
@@ -27,16 +27,16 @@ function fixture(direction: 'mdm_to_agent' | 'agent_to_mdm' = 'mdm_to_agent') {
     },
     0,
   )
-  scopes.handle(request(`/api/v2/scopes/${scope}`, write), 'normal')
+  scopes.handle(request(`/api/v1/scopes/${scope}`, write), 'normal')
   for (let i = 0; i < 2; i++)
-    scopes.handle(request(`/api/v2/scopes/${scope}/tasks/${write.operationId}`), 'normal')
+    scopes.handle(request(`/api/v1/scopes/${scope}/tasks/${write.operationId}`), 'normal')
   let approved = true
   const demo = createBootstrapDemo({ facts: () => structuredClone(facts) }, scopes, resources, {
     isAdmitted: () => approved,
   })
   demo.tick({ kind: 'clock', at: 2000000000 }, 'normal')
   const id = randomUUID(),
-    path = `/api/mdm-candidate/v1/software/bootstrap/${id}`
+    path = `/api/v1/mdm-candidate/software/bootstrap/${id}`
   const definition: BootstrapDefinition = {
     title: 'Independent source policy',
     scope,
@@ -186,14 +186,14 @@ it('rejects general software and rechecks enterprise admission without creating 
   const f = fixture(),
     { resources } = softwareResource()
   resources.handle(
-    request('/api/v3/resources/app', operation({ action: 'activate', version: '1' }, 2)),
+    request('/api/v1/resources/app', operation({ action: 'activate', version: '1' }, 2)),
     'normal',
   )
   const generic = createBootstrapDemo(f.devices, f.scopes, resources, { isAdmitted: () => true })
   expect(
     generic.handle(
       request(
-        `/api/mdm-candidate/v1/software/bootstrap/${randomUUID()}`,
+        `/api/v1/mdm-candidate/software/bootstrap/${randomUUID()}`,
         operation({ action: 'put', definition: f.definition }, 0),
       ),
       'normal',
@@ -210,7 +210,7 @@ it('uses exact HTTP receipts for an unknown dispatch and never falls back from t
     scenario = createScenario([f.demo.handle], f.demo.reset)
   f.change({ action: 'evaluate' }, 1)
   const write = operation({ action: 'dispatch' }, 2)
-  const login = await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  const login = await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
   })
@@ -228,7 +228,7 @@ it('uses exact HTTP receipts for an unknown dispatch and never falls back from t
   expect(f.demo.executions()).toHaveLength(1)
   await scenario.handle(
     'POST',
-    '/api/mdm-candidate/v1/workspace/scenario',
+    '/api/v1/mdm-candidate/workspace/scenario',
     { scenario: 'normal', module: 'software', source: 'real' },
     headers,
   )

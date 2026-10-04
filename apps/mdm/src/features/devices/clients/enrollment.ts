@@ -64,7 +64,7 @@ export function createEnrollmentClient(transport: HttpTransport) {
     create: (operation: string, body: EnrollmentInput) =>
       transport.request({
         method: 'POST',
-        path: '/api/v3/enrollments',
+        path: '/api/v1/enrollments',
         headers: { 'Idempotency-Key': operation },
         body,
         successStatus: 200,
@@ -77,7 +77,7 @@ export function createEnrollmentClient(transport: HttpTransport) {
     status: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v3/enrollments/{id}',
+        path: '/api/v1/enrollments/{id}',
         pathParams: { id },
         successStatus: 200,
         decode: (v) => decodeEnrollment(v, id),
@@ -85,7 +85,7 @@ export function createEnrollmentClient(transport: HttpTransport) {
     resume: (id: string, operation: string, password: string) =>
       transport.request({
         method: 'POST',
-        path: '/api/v3/enrollments/{id}/resume',
+        path: '/api/v1/enrollments/{id}/resume',
         pathParams: { id },
         headers: { 'Idempotency-Key': operation },
         body: { password },
@@ -95,7 +95,7 @@ export function createEnrollmentClient(transport: HttpTransport) {
     cancel: (id: string, operation: string) =>
       transport.request({
         method: 'POST',
-        path: '/api/v3/enrollments/{id}/cancel',
+        path: '/api/v1/enrollments/{id}/cancel',
         pathParams: { id },
         headers: { 'Idempotency-Key': operation },
         body: {},
@@ -105,7 +105,7 @@ export function createEnrollmentClient(transport: HttpTransport) {
     registrations: (device: string, after?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v3/devices/{device}/registrations',
+        path: '/api/v1/devices/{device}/registrations',
         pathParams: { device },
         query: { after },
         successStatus: 200,
@@ -120,7 +120,7 @@ export function createEnrollmentClient(transport: HttpTransport) {
     revoke: (device: string, registration: string, operation: string) =>
       transport.request({
         method: 'POST',
-        path: '/api/v3/devices/{device}/registrations/{registration}/revoke',
+        path: '/api/v1/devices/{device}/registrations/{registration}/revoke',
         pathParams: { device, registration },
         headers: { 'Idempotency-Key': operation },
         body: {},

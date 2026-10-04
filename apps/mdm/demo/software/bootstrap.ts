@@ -187,7 +187,7 @@ export function createBootstrapDemo(
   }
   const handle: DomainHandler = (request, scenario) => {
     const route =
-      /^\/api\/mdm-candidate\/v1\/software\/bootstrap(?:\/([^/]+)(?:\/attempts\/([^/]+))?)?$/.exec(
+      /^\/api\/v1\/mdm-candidate\/software\/bootstrap(?:\/([^/]+)(?:\/attempts\/([^/]+))?)?$/.exec(
         request.path,
       )
     if (!route) return

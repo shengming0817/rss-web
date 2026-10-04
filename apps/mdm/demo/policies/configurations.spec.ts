@@ -24,7 +24,7 @@ it('freezes configuration versions, computes differences, and previews candidate
   function request(path: string, body?: unknown, query = new URLSearchParams()): DemoRequest {
     return { path, body, method: body === undefined ? 'GET' : 'POST', actor, headers: {}, query }
   }
-  const path = `/api/mdm-candidate/v1/policies/configurations/${id}`
+  const path = `/api/v1/mdm-candidate/policies/configurations/${id}`
   let revision = 0
   function change(input: unknown) {
     const reply = configs.handle(

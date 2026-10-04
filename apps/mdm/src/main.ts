@@ -8,7 +8,7 @@ async function start() {
   const config = await loadConfig(transport, window.location.origin)
   const mdm = await createMdmTransport().request({
     method: 'GET',
-    path: '/api/mdm-host/v1/config.json',
+    path: '/api/v1/mdm-host/config.json',
     successStatus: 200,
     decode: (value) => decodeMdmConfig(value, window.location.origin),
   })

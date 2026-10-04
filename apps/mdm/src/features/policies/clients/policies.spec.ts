@@ -42,14 +42,14 @@ it('binds candidate responses to tenant/source and never requests save or execut
   }
   expect(await client.change('fw', body)).toEqual(policy)
   expect(request.mock.calls[0]?.[0]).toMatchObject({
-    path: '/api/mdm-candidate/v1/policies/assignments/{id}',
+    path: '/api/v1/mdm-candidate/policies/assignments/{id}',
     body,
   })
   await expect(createPoliciesClient(transport, tenant, false).read('fw')).rejects.toThrow()
   response = { contract: 'policies-v1', tenantId: tenant, source: 'mock', members: [] }
   expect(await client.preview('fw', definition)).toEqual([])
   expect(request.mock.calls.at(-1)?.[0]).toMatchObject({
-    path: '/api/mdm-candidate/v1/policies/assignments/{id}/preview',
+    path: '/api/v1/mdm-candidate/policies/assignments/{id}/preview',
     body: { definition },
   })
 })

@@ -15,7 +15,7 @@ const operation = (input: unknown, expectedRevision: number) => ({
 it('approves enterprise software without publication, verifies all content, fences CAS and withdraws without changing resources', () => {
   const resources = createResourceDemo(() => false),
     catalog = createAdmissionDemo(resources)
-  const sourcePath = '/api/v3/software/sources/private/revisions/1'
+  const sourcePath = '/api/v1/software/sources/private/revisions/1'
   const writeSource = (input: unknown, revision: number) =>
     catalog.handle(request(sourcePath, operation(input, revision)), 'normal')!
   expect(
@@ -71,14 +71,14 @@ it('approves enterprise software without publication, verifies all content, fenc
   }
   expect(
     resources.handle(
-      request('/api/v3/resources/app', operation({ action: 'create', kind: 'software' }, 0)),
+      request('/api/v1/resources/app', operation({ action: 'create', kind: 'software' }, 0)),
       'normal',
     )?.status,
   ).toBe(200)
   expect(
     resources.handle(
       request(
-        '/api/v3/resources/app',
+        '/api/v1/resources/app',
         operation(
           {
             action: 'version',
@@ -99,7 +99,7 @@ it('approves enterprise software without publication, verifies all content, fenc
       'normal',
     )?.status,
   ).toBe(200)
-  const versionPath = '/api/v3/software/resources/app/versions/1',
+  const versionPath = '/api/v1/software/resources/app/versions/1',
     approve = operation({ action: 'approve', evidence: ['tested'] }, 0)
   expect(catalog.handle(request(versionPath, approve), 'normal')?.status).toBe(409)
   const query = new URLSearchParams({
@@ -109,12 +109,12 @@ it('approves enterprise software without publication, verifies all content, fenc
     variant: 'main',
   })
   expect(
-    resources.handle(request('/api/v3/resources/app/content', bytes, query), 'normal')?.status,
+    resources.handle(request('/api/v1/resources/app/content', bytes, query), 'normal')?.status,
   ).toBe(201)
   expect(catalog.handle(request(versionPath, approve), 'normal')?.status).toBe(409)
   query.set('artifact', 'detector')
   expect(
-    resources.handle(request('/api/v3/resources/app/content', bytes, query), 'normal')?.status,
+    resources.handle(request('/api/v1/resources/app/content', bytes, query), 'normal')?.status,
   ).toBe(201)
   const admitted = catalog.handle(request(versionPath, approve), 'normal')!
   expect(admitted.status).toBe(200)

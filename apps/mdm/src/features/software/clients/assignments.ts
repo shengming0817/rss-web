@@ -27,7 +27,7 @@ export function createAssignmentsClient(transport: HttpTransport) {
     list: (after?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/policies',
+        path: '/api/v1/policies',
         query: { after },
         successStatus: 200,
         decode(value) {
@@ -47,7 +47,7 @@ export function createAssignmentsClient(transport: HttpTransport) {
     read: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/policies/{id}',
+        path: '/api/v1/policies/{id}',
         pathParams: { id },
         successStatus: 200,
         decode: (v) => softwarePolicy(v, id),
@@ -55,7 +55,7 @@ export function createAssignmentsClient(transport: HttpTransport) {
     change: (id: string, body: Operation<AssignmentChange>) =>
       transport.request({
         method: 'POST',
-        path: '/api/v2/policies/{id}',
+        path: '/api/v1/policies/{id}',
         pathParams: { id },
         body,
         successStatus: 200,
@@ -64,7 +64,7 @@ export function createAssignmentsClient(transport: HttpTransport) {
     preview: (definition: SoftwarePolicyDefinition, after?: string, scopeResult?: string) =>
       transport.request({
         method: 'POST',
-        path: '/api/v2/policies/previews',
+        path: '/api/v1/policies/previews',
         body: { definition, ...(after ? { after } : {}), ...(scopeResult ? { scopeResult } : {}) },
         successStatus: 200,
         decode(value) {
@@ -97,7 +97,7 @@ export function createAssignmentsClient(transport: HttpTransport) {
     devices: (id: string, after?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/policies/{id}/devices',
+        path: '/api/v1/policies/{id}/devices',
         pathParams: { id },
         query: { after },
         successStatus: 200,
@@ -131,7 +131,7 @@ export function createAssignmentsClient(transport: HttpTransport) {
     rollout: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/policies/{id}/software/rollout',
+        path: '/api/v1/policies/{id}/software/rollout',
         pathParams: { id },
         successStatus: 200,
         decode(value) {

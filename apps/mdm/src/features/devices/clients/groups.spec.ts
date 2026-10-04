@@ -50,7 +50,7 @@ it('uses 200 for definition changes and 202 for recompute and preview, preservin
   const request = vi.fn(async (o: RequestOptions<unknown>) =>
     o.decode(
       o.successStatus === 202
-        ? { task, kind: 'group', target: id, statusUrl: `/api/v2/groups/${id}/tasks/${task}` }
+        ? { task, kind: 'group', target: id, statusUrl: `/api/v1/groups/${id}/tasks/${task}` }
         : { operation: task, group, added: 0, removed: 0, task: null },
     ),
   )
@@ -68,7 +68,7 @@ it('uses 200 for definition changes and 202 for recompute and preview, preservin
   await client.preview(id, { operationId: task, expectedRevision: 2, input: {} })
   expect(request.mock.calls.map(([o]) => o.successStatus)).toEqual([200, 202, 202])
   expect(request.mock.calls[2]?.[0]).toMatchObject({
-    path: '/api/v2/groups/{id}/previews',
+    path: '/api/v1/groups/{id}/previews',
     body: { expectedRevision: 2, input: {} },
   })
 })

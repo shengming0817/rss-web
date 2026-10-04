@@ -18,7 +18,7 @@ export function createSecurityActionsClient(
     list: (filter: { device?: string; request?: string; cursor?: string } = {}) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/security/actions',
+        path: '/api/v1/mdm-candidate/security/actions',
         query: { limit: 20, ...filter },
         successStatus: 200,
         decode(value) {
@@ -43,7 +43,7 @@ export function createSecurityActionsClient(
     read: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/security/actions/{id}',
+        path: '/api/v1/mdm-candidate/security/actions/{id}',
         pathParams: { id },
         successStatus: 200,
         decode: (v) => read(v, id),
@@ -51,7 +51,7 @@ export function createSecurityActionsClient(
     dispatch: (id: string, body: Operation<Record<string, never>>) =>
       transport.request({
         method: 'POST',
-        path: '/api/mdm-candidate/v1/security/requests/{id}/dispatch',
+        path: '/api/v1/mdm-candidate/security/requests/{id}/dispatch',
         pathParams: { id },
         body,
         successStatus: 200,

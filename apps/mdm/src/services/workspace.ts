@@ -39,7 +39,7 @@ export function createWorkspaceClient(transport: HttpTransport, demo: boolean) {
     async read() {
       return transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/workspace',
+        path: '/api/v1/mdm-candidate/workspace',
         successStatus: 200,
         decode(value) {
           const workspace = decodeWorkspace(value)

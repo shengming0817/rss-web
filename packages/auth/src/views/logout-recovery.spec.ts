@@ -84,7 +84,9 @@ it.each([200, 401, 503])(
         .find((button) => button.text() === '重新读取')!
         .trigger('click')
       await flushPromises()
-      expect(f.request.mock.calls[before]?.[0].path).toBe('/api/v2/tenants/{tenant}/session')
+      expect(f.request.mock.calls[before]?.[0].path).toBe(
+        '/api/v1/identity/tenants/{tenant}/session',
+      )
       expect(
         f.request.mock.calls.slice(before).every(([request]) => request.method === 'GET'),
       ).toBe(true)

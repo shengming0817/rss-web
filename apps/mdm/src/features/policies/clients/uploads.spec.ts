@@ -41,7 +41,7 @@ it('uses native begin/status/append/complete/receipt routes and rejects wrong co
   await client.begin('app', id, target)
   expect(request.mock.calls[0]![0]).toMatchObject({
     method: 'POST',
-    path: '/api/v3/resources/{id}/uploads/{upload}',
+    path: '/api/v1/resources/{id}/uploads/{upload}',
     query: target,
   })
   reply = { ...value, binding: { ...binding, version: '2' } }
@@ -61,7 +61,7 @@ it('uses native begin/status/append/complete/receipt routes and rejects wrong co
   await client.complete('app', id)
   expect(request.mock.lastCall![0]).toMatchObject({
     method: 'POST',
-    path: '/api/v3/resources/{id}/uploads/{upload}/complete',
+    path: '/api/v1/resources/{id}/uploads/{upload}/complete',
     successStatus: 201,
   })
   reply = {

@@ -106,8 +106,8 @@ it('keeps enterprise version admission on the v3 contract with distinct read and
     input: { action: 'approve', evidence: ['verified'] },
   })
   expect(request.mock.calls.map(([o]) => o.path)).toEqual([
-    '/api/v3/software/resources/{id}/versions/{version}',
-    '/api/v3/software/resources/{id}/versions/{version}',
+    '/api/v1/software/resources/{id}/versions/{version}',
+    '/api/v1/software/resources/{id}/versions/{version}',
   ])
   expect(request.mock.calls[1]![0]).toMatchObject({
     successStatus: 200,

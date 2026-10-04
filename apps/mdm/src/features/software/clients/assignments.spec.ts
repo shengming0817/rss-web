@@ -69,7 +69,7 @@ it('consumes the native Policy contract, including optional end and staged softw
     input: { action: 'disable' },
   })
   expect(request.mock.calls[1]![0]).toMatchObject({
-    path: '/api/v2/policies/{id}',
+    path: '/api/v1/policies/{id}',
     successStatus: 200,
     body: { input: { action: 'disable' } },
   })
@@ -87,7 +87,7 @@ it('retains native cursor and scope-result fencing across previews', async () =>
   const page = await client.preview(definition, 'device-01', versionId)
   expect(page.nextCursor).toBe('device-20')
   expect(request.mock.calls[0]![0]).toMatchObject({
-    path: '/api/v2/policies/previews',
+    path: '/api/v1/policies/previews',
     body: { definition, after: 'device-01', scopeResult: versionId },
   })
 })

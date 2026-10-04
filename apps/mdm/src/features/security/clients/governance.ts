@@ -14,7 +14,7 @@ export function createGovernanceClient(transport: HttpTransport, tenant: string,
     list: (cursor?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/security/baselines',
+        path: '/api/v1/mdm-candidate/security/baselines',
         query: { limit: 20, cursor },
         successStatus: 200,
         decode(value) {
@@ -30,7 +30,7 @@ export function createGovernanceClient(transport: HttpTransport, tenant: string,
     read: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/security/baselines/{id}',
+        path: '/api/v1/mdm-candidate/security/baselines/{id}',
         pathParams: { id },
         successStatus: 200,
         decode: (v) => read(v, id),
@@ -38,7 +38,7 @@ export function createGovernanceClient(transport: HttpTransport, tenant: string,
     put: (id: string, body: Operation<BaselineDefinition>) =>
       transport.request({
         method: 'PUT',
-        path: '/api/mdm-candidate/v1/security/baselines/{id}',
+        path: '/api/v1/mdm-candidate/security/baselines/{id}',
         pathParams: { id },
         body,
         successStatus: 200,
@@ -55,7 +55,7 @@ export function createGovernanceClient(transport: HttpTransport, tenant: string,
     devices: (id: string, revision: number, cursor?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/security/baselines/{id}/devices',
+        path: '/api/v1/mdm-candidate/security/baselines/{id}/devices',
         pathParams: { id },
         query: { revision, limit: 20, cursor },
         successStatus: 200,

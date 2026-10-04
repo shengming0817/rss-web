@@ -63,7 +63,7 @@ export function decodeUpload(value: unknown, resource: string, upload: string) {
 }
 export type UploadSession = ReturnType<typeof decodeUpload>
 export function createUploadsClient(transport: HttpTransport) {
-  const path = '/api/v3/resources/{id}/uploads/{upload}'
+  const path = '/api/v1/resources/{id}/uploads/{upload}'
   return {
     begin: (id: string, upload: string, target: UploadTarget, signal?: AbortSignal) =>
       transport.request({
@@ -122,7 +122,7 @@ export function createUploadsClient(transport: HttpTransport) {
     receipt: (id: string, upload: string, signal?: AbortSignal) =>
       transport.request({
         method: 'GET',
-        path: '/api/v3/resources/{id}/content/operations/{upload}',
+        path: '/api/v1/resources/{id}/content/operations/{upload}',
         pathParams: { id, upload },
         ...(signal ? { signal } : {}),
         successStatus: 200,

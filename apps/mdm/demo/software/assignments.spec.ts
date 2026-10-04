@@ -43,7 +43,7 @@ function setup() {
     },
   }
   const id = randomUUID(),
-    path = `/api/v2/policies/${id}`
+    path = `/api/v1/policies/${id}`
   const put = () =>
     owner.handle(
       request(path, operation({ action: 'put', enabled: true, definition }, 0)),
@@ -74,7 +74,7 @@ it('previews without creating work, fences scope results and requires explicit s
   const f = setup()
   const preview = () =>
     f.owner.handle(
-      request('/api/v2/policies/previews', {
+      request('/api/v1/policies/previews', {
         definition: f.definition,
         scopeResult: f.snapshot.result,
       }),
@@ -93,7 +93,7 @@ it('previews without creating work, fences scope results and requires explicit s
   })
   expect(
     f.owner.handle(
-      request('/api/v2/policies/previews', { definition: f.definition, scopeResult: randomUUID() }),
+      request('/api/v1/policies/previews', { definition: f.definition, scopeResult: randomUUID() }),
       'normal',
     )?.status,
   ).toBe(409)
@@ -245,7 +245,7 @@ it('rejects uninstall without a declared command before preview or publication, 
     at = 2000000000
   f.definition.behavior.intent = 'explicit_uninstall'
   const preview = () =>
-    f.owner.handle(request('/api/v2/policies/previews', { definition: f.definition }), 'normal')!
+    f.owner.handle(request('/api/v1/policies/previews', { definition: f.definition }), 'normal')!
   expect(preview()).toMatchObject({ status: 501, body: { code: 'action_not_supported' } })
   expect(f.put()).toMatchObject({ status: 501, body: { code: 'action_not_supported' } })
   f.owner.tick({ kind: 'check_in', device: 'device-01', at }, 'normal')

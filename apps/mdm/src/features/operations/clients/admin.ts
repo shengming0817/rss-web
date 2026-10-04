@@ -89,17 +89,17 @@ export function createAdminClients(transport: HttpTransport, tenant: string, dem
   }
   return {
     delegations: (cursor?: string) =>
-      page('/api/mdm-candidate/v1/authorization/delegations', delegation, { cursor }),
+      page('/api/v1/mdm-candidate/authorization/delegations', delegation, { cursor }),
     metrics: (from: number, until: number) =>
-      read('/api/mdm-candidate/v1/operations/metrics', 'metrics', metrics, { from, until }),
+      read('/api/v1/mdm-candidate/operations/metrics', 'metrics', metrics, { from, until }),
     reports: {
       list: (cursor?: string) =>
-        page('/api/mdm-candidate/v1/operations/reports', report, { cursor }),
+        page('/api/v1/mdm-candidate/operations/reports', report, { cursor }),
       read: (id: string) =>
-        read(`/api/mdm-candidate/v1/operations/reports/${uuid(id)}`, 'job', report),
+        read(`/api/v1/mdm-candidate/operations/reports/${uuid(id)}`, 'job', report),
       run: (body: Operation<{ from: number; until: number }>) =>
         write(
-          '/api/mdm-candidate/v1/operations/reports',
+          '/api/v1/mdm-candidate/operations/reports',
           'job',
           body,
           report,
@@ -109,16 +109,16 @@ export function createAdminClients(transport: HttpTransport, tenant: string, dem
     },
     alertRules: {
       list: (cursor?: string) =>
-        page('/api/mdm-candidate/v1/operations/alert-rules', alertRule, { cursor }),
+        page('/api/v1/mdm-candidate/operations/alert-rules', alertRule, { cursor }),
       save: (id: string, body: Operation<AlertRule['definition']>) =>
-        write(`/api/mdm-candidate/v1/operations/alert-rules/${uuid(id)}`, 'rule', body, alertRule, {
+        write(`/api/v1/mdm-candidate/operations/alert-rules/${uuid(id)}`, 'rule', body, alertRule, {
           id,
         }),
     },
     connectors: {
       attempt: (id: string, attempt: string) =>
         read(
-          `/api/mdm-candidate/v1/integrations/connectors/${uuid(id)}/attempts/${uuid(attempt)}`,
+          `/api/v1/mdm-candidate/integrations/connectors/${uuid(id)}/attempts/${uuid(attempt)}`,
           'delivery',
           (value) => {
             const v = delivery(value)
@@ -127,12 +127,12 @@ export function createAdminClients(transport: HttpTransport, tenant: string, dem
           },
         ),
       list: (cursor?: string) =>
-        page('/api/mdm-candidate/v1/integrations/connectors', connector, { cursor }),
+        page('/api/v1/mdm-candidate/integrations/connectors', connector, { cursor }),
       read: (id: string) =>
-        read(`/api/mdm-candidate/v1/integrations/connectors/${uuid(id)}`, 'connector', connector),
+        read(`/api/v1/mdm-candidate/integrations/connectors/${uuid(id)}`, 'connector', connector),
       save: (id: string, body: Operation<Connector['definition']>) =>
         write(
-          `/api/mdm-candidate/v1/integrations/connectors/${uuid(id)}`,
+          `/api/v1/mdm-candidate/integrations/connectors/${uuid(id)}`,
           'connector',
           body,
           connector,
@@ -140,7 +140,7 @@ export function createAdminClients(transport: HttpTransport, tenant: string, dem
         ),
       test: (id: string, body: Operation<Record<string, never>>) =>
         write(
-          `/api/mdm-candidate/v1/integrations/connectors/${uuid(id)}/test`,
+          `/api/v1/mdm-candidate/integrations/connectors/${uuid(id)}/test`,
           'delivery',
           body,
           delivery,
@@ -149,7 +149,7 @@ export function createAdminClients(transport: HttpTransport, tenant: string, dem
         ),
       deliver: (id: string, body: Operation<Record<string, never>>) =>
         write(
-          `/api/mdm-candidate/v1/integrations/connectors/${uuid(id)}/deliver`,
+          `/api/v1/mdm-candidate/integrations/connectors/${uuid(id)}/deliver`,
           'delivery',
           body,
           delivery,
@@ -157,12 +157,12 @@ export function createAdminClients(transport: HttpTransport, tenant: string, dem
           202,
         ),
       deliveries: (id: string, cursor?: string) =>
-        page(`/api/mdm-candidate/v1/integrations/connectors/${uuid(id)}/deliveries`, delivery, {
+        page(`/api/v1/mdm-candidate/integrations/connectors/${uuid(id)}/deliveries`, delivery, {
           cursor,
         }),
       retry: (id: string, attempt: string, body: Operation<Record<string, never>>) =>
         write(
-          `/api/mdm-candidate/v1/integrations/connectors/${uuid(id)}/deliveries/${uuid(attempt)}/retry`,
+          `/api/v1/mdm-candidate/integrations/connectors/${uuid(id)}/deliveries/${uuid(attempt)}/retry`,
           'delivery',
           body,
           delivery,
@@ -171,10 +171,10 @@ export function createAdminClients(transport: HttpTransport, tenant: string, dem
         ),
     },
     settings: {
-      read: () => read('/api/mdm-candidate/v1/operations/settings', 'configuration', configuration),
+      read: () => read('/api/v1/mdm-candidate/operations/settings', 'configuration', configuration),
       save: (body: Operation<ReturnType<typeof configuration>['values']>) =>
         write(
-          '/api/mdm-candidate/v1/operations/settings',
+          '/api/v1/mdm-candidate/operations/settings',
           'configuration',
           body,
           configuration,
@@ -182,23 +182,23 @@ export function createAdminClients(transport: HttpTransport, tenant: string, dem
         ),
       activate: (body: Operation<Record<string, never>>) =>
         write(
-          '/api/mdm-candidate/v1/operations/settings/activate',
+          '/api/v1/mdm-candidate/operations/settings/activate',
           'configuration',
           body,
           configuration,
           {},
         ),
       diagnostics: () =>
-        read('/api/mdm-candidate/v1/operations/diagnostics', 'diagnostics', diagnostics),
+        read('/api/v1/mdm-candidate/operations/diagnostics', 'diagnostics', diagnostics),
     },
     maintenance: {
       list: (cursor?: string) =>
-        page('/api/mdm-candidate/v1/operations/maintenance', maintenance, { cursor }),
+        page('/api/v1/mdm-candidate/operations/maintenance', maintenance, { cursor }),
       read: (id: string) =>
-        read(`/api/mdm-candidate/v1/operations/maintenance/${uuid(id)}`, 'job', maintenance),
+        read(`/api/v1/mdm-candidate/operations/maintenance/${uuid(id)}`, 'job', maintenance),
       start: (body: Operation<Maintenance['input']>) =>
         write(
-          '/api/mdm-candidate/v1/operations/maintenance',
+          '/api/v1/mdm-candidate/operations/maintenance',
           'job',
           body,
           maintenance,
@@ -211,7 +211,7 @@ export function createAdminClients(transport: HttpTransport, tenant: string, dem
         body: Operation<Record<string, never>>,
       ) =>
         write(
-          `/api/mdm-candidate/v1/operations/maintenance/${uuid(id)}/${action}`,
+          `/api/v1/mdm-candidate/operations/maintenance/${uuid(id)}/${action}`,
           'job',
           body,
           maintenance,

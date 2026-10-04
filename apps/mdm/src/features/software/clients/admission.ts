@@ -68,7 +68,7 @@ export function createAdmissionClient(transport: HttpTransport) {
     source: (id: string, revision: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v3/software/sources/{id}/revisions/{revision}',
+        path: '/api/v1/software/sources/{id}/revisions/{revision}',
         pathParams: { id, revision },
         successStatus: 200,
         decode: (v) => sourceRead(v, id, revision),
@@ -76,7 +76,7 @@ export function createAdmissionClient(transport: HttpTransport) {
     changeSource: (id: string, revision: string, body: Operation<SourceChange>) =>
       transport.request({
         method: 'POST',
-        path: '/api/v3/software/sources/{id}/revisions/{revision}',
+        path: '/api/v1/software/sources/{id}/revisions/{revision}',
         pathParams: { id, revision },
         body,
         successStatus: 200,
@@ -85,7 +85,7 @@ export function createAdmissionClient(transport: HttpTransport) {
     version: (id: string, version: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v3/software/resources/{id}/versions/{version}',
+        path: '/api/v1/software/resources/{id}/versions/{version}',
         pathParams: { id, version },
         successStatus: 200,
         decode(value) {
@@ -103,7 +103,7 @@ export function createAdmissionClient(transport: HttpTransport) {
     changeVersion: (id: string, version: string, body: Operation<AdmissionChange>) =>
       transport.request({
         method: 'POST',
-        path: '/api/v3/software/resources/{id}/versions/{version}',
+        path: '/api/v1/software/resources/{id}/versions/{version}',
         pathParams: { id, version },
         body,
         successStatus: 200,

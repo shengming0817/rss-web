@@ -79,7 +79,7 @@ export function createConfigurationsClient(
     list: (cursor?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/policies/configurations',
+        path: '/api/v1/mdm-candidate/policies/configurations',
         query: { cursor, limit: 20 },
         successStatus: 200,
         decode(value) {
@@ -94,7 +94,7 @@ export function createConfigurationsClient(
     read: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/policies/configurations/{id}',
+        path: '/api/v1/mdm-candidate/policies/configurations/{id}',
         pathParams: { id },
         successStatus: 200,
         decode: (v) => read(v, id),
@@ -102,7 +102,7 @@ export function createConfigurationsClient(
     change: (id: string, body: Operation<ConfigurationChange>) =>
       transport.request({
         method: 'POST',
-        path: '/api/mdm-candidate/v1/policies/configurations/{id}',
+        path: '/api/v1/mdm-candidate/policies/configurations/{id}',
         pathParams: { id },
         body,
         successStatus: 200,
@@ -111,7 +111,7 @@ export function createConfigurationsClient(
     diff: (id: string, from: number, to: number) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/policies/configurations/{id}/diff',
+        path: '/api/v1/mdm-candidate/policies/configurations/{id}/diff',
         pathParams: { id },
         query: { from, to },
         successStatus: 200,
@@ -132,7 +132,7 @@ export function createConfigurationsClient(
     preview: (id: string, body: Operation<{ scope: string; version: number }>) =>
       transport.request({
         method: 'POST',
-        path: '/api/mdm-candidate/v1/policies/configurations/{id}/previews',
+        path: '/api/v1/mdm-candidate/policies/configurations/{id}/previews',
         pathParams: { id },
         body,
         successStatus: 202,
@@ -145,7 +145,7 @@ export function createConfigurationsClient(
     previewStatus: (id: string, task: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/policies/configurations/{id}/previews/{task}',
+        path: '/api/v1/mdm-candidate/policies/configurations/{id}/previews/{task}',
         pathParams: { id, task },
         successStatus: 200,
         decode(value) {

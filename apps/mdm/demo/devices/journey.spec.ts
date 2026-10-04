@@ -12,7 +12,7 @@ import {
 async function setup() {
   const domain = createDeviceDemo(),
     scenario = createScenario([domain.handle], domain.reset)
-  const login = await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  const login = await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
   })
@@ -141,7 +141,7 @@ it('keeps pending enrollment discoverable, cancellation readable, and reset remo
   await enrollment.cancel(created.enrollmentId, crypto.randomUUID())
   expect((await enrollment.status(created.enrollmentId)).status).toBe('cancelled')
   scenario.reset()
-  expect((await scenario.handle('GET', '/api/mdm-candidate/v1/devices/new-mac')).status).toBe(401)
+  expect((await scenario.handle('GET', '/api/v1/mdm-candidate/devices/new-mac')).status).toBe(401)
 })
 it('previews do not publish membership and stale tasks do not overwrite a newer definition', async () => {
   const { groups } = await setup()

@@ -4,7 +4,7 @@ import { createPolicyDemo } from './policies'
 import { createDeviceDemo } from '../devices/state'
 import type { DemoRequest } from '../scenario'
 import type { ResourceRead } from '../../src/features/policies/clients/resources'
-const path = '/api/mdm-candidate/v1/policies/assignments/firewall'
+const path = '/api/v1/mdm-candidate/policies/assignments/firewall'
 function fixture() {
   const facts = createDeviceDemo().facts()
   const scope = { id: randomUUID(), revision: 1, members: [] as string[], sources: [] }

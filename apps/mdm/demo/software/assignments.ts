@@ -167,10 +167,10 @@ export function createSoftwarePolicyDemo(
     }
   }
   const handle: DomainHandler = (request, scenario) => {
-    if (!/^\/api\/v2\/policies(?:\/|$)/.test(request.path)) return
+    if (!/^\/api\/v1\/policies(?:\/|$)/.test(request.path)) return
     if (scenario === 'denied') return error('permission_denied', 403)
     try {
-      if (request.path === '/api/v2/policies/previews' && request.method === 'POST') {
+      if (request.path === '/api/v1/policies/previews' && request.method === 'POST') {
         const input = closed(request.body, ['definition'], ['after', 'scopeResult']),
           d = softwarePolicyDefinition(input['definition'])
         const failure = admissionFailure(d)
@@ -199,13 +199,13 @@ export function createSoftwarePolicyDemo(
           })),
         })
       }
-      if (request.path === '/api/v2/policies' && request.method === 'GET') {
+      if (request.path === '/api/v1/policies' && request.method === 'GET') {
         const after = request.query.get('after')
         if (after) uuid(after)
         return ok(page(scenario === 'empty' ? [] : [...policies.values()], after, (p) => p.id))
       }
       const match =
-        /^\/api\/v2\/policies\/([^/]+)(?:\/(devices|software\/rollout|runs|reruns)(?:\/([^/]+))?)?$/.exec(
+        /^\/api\/v1\/policies\/([^/]+)(?:\/(devices|software\/rollout|runs|reruns)(?:\/([^/]+))?)?$/.exec(
           request.path,
         )
       if (!match) return

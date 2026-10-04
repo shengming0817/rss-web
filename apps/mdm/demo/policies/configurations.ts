@@ -36,7 +36,7 @@ export function createConfigurationDemo(
   }
   const handle: DomainHandler = (request, scenario) => {
     const match =
-      /^\/api\/mdm-candidate\/v1\/policies\/configurations(?:\/([^/]+)(?:\/(diff|previews)(?:\/([^/]+))?)?)?$/.exec(
+      /^\/api\/v1\/mdm-candidate\/policies\/configurations(?:\/([^/]+)(?:\/(diff|previews)(?:\/([^/]+))?)?)?$/.exec(
         request.path,
       )
     if (!match) return

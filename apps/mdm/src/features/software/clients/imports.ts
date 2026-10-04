@@ -114,7 +114,7 @@ export function createImportsClient(transport: HttpTransport, tenant: string, de
     resolve: (query: ImportQuery) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/software/import-resolutions',
+        path: '/api/v1/mdm-candidate/software/import-resolutions',
         query: { ...query },
         successStatus: 200,
         decode(value) {
@@ -134,7 +134,7 @@ export function createImportsClient(transport: HttpTransport, tenant: string, de
     list: (cursor?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/software/imports',
+        path: '/api/v1/mdm-candidate/software/imports',
         query: { cursor, limit: 20 },
         successStatus: 200,
         decode(value) {
@@ -149,7 +149,7 @@ export function createImportsClient(transport: HttpTransport, tenant: string, de
     read: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/software/imports/{id}',
+        path: '/api/v1/mdm-candidate/software/imports/{id}',
         pathParams: { id },
         successStatus: 200,
         decode: (v) => read(v, id),
@@ -157,7 +157,7 @@ export function createImportsClient(transport: HttpTransport, tenant: string, de
     change: (id: string, body: Operation<ImportChange>) =>
       transport.request({
         method: 'POST',
-        path: '/api/mdm-candidate/v1/software/imports/{id}',
+        path: '/api/v1/mdm-candidate/software/imports/{id}',
         pathParams: { id },
         body,
         successStatus: body.input.action === 'start' ? 202 : 200,

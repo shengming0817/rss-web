@@ -284,7 +284,7 @@ export function createPolicyDemo(
     }
   }
   const handle: DomainHandler = (request, scenario) => {
-    const match = /^\/api\/mdm-candidate\/v1\/policies\/assignments\/([^/]+)(?:\/(preview))?$/.exec(
+    const match = /^\/api\/v1\/mdm-candidate\/policies\/assignments\/([^/]+)(?:\/(preview))?$/.exec(
       request.path,
     )
     if (!match) return

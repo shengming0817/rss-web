@@ -8,7 +8,7 @@ export function createSupportClient(transport: HttpTransport, tenant: string, de
     experience: (device: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/security/support/devices/{device}/experience',
+        path: '/api/v1/mdm-candidate/security/support/devices/{device}/experience',
         pathParams: { device },
         successStatus: 200,
         decode(value) {
@@ -23,7 +23,7 @@ export function createSupportClient(transport: HttpTransport, tenant: string, de
     context: (device: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/security/support/devices/{device}',
+        path: '/api/v1/mdm-candidate/security/support/devices/{device}',
         pathParams: { device },
         successStatus: 200,
         decode(value) {
@@ -38,7 +38,7 @@ export function createSupportClient(transport: HttpTransport, tenant: string, de
     read: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/security/support/requests/{id}',
+        path: '/api/v1/mdm-candidate/security/support/requests/{id}',
         pathParams: { id },
         successStatus: 200,
         decode(value) {

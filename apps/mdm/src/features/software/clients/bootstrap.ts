@@ -169,7 +169,7 @@ export function createBootstrapClient(transport: HttpTransport, tenant: string, 
     attempt: (id: string, attempt: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/software/bootstrap/{id}/attempts/{attempt}',
+        path: '/api/v1/mdm-candidate/software/bootstrap/{id}/attempts/{attempt}',
         pathParams: { id, attempt },
         successStatus: 200,
         decode: (v) => {
@@ -181,7 +181,7 @@ export function createBootstrapClient(transport: HttpTransport, tenant: string, 
     list: (cursor?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/software/bootstrap',
+        path: '/api/v1/mdm-candidate/software/bootstrap',
         query: { cursor, limit: 20 },
         successStatus: 200,
         decode: (v) => {
@@ -196,7 +196,7 @@ export function createBootstrapClient(transport: HttpTransport, tenant: string, 
     read: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/software/bootstrap/{id}',
+        path: '/api/v1/mdm-candidate/software/bootstrap/{id}',
         pathParams: { id },
         successStatus: 200,
         decode: (v) => bootstrapPolicy(envelope(v, ['policy'])['policy'], id),
@@ -204,7 +204,7 @@ export function createBootstrapClient(transport: HttpTransport, tenant: string, 
     change: (id: string, body: Operation<BootstrapChange>) =>
       transport.request({
         method: 'POST',
-        path: '/api/mdm-candidate/v1/software/bootstrap/{id}',
+        path: '/api/v1/mdm-candidate/software/bootstrap/{id}',
         pathParams: { id },
         body,
         successStatus: 200,

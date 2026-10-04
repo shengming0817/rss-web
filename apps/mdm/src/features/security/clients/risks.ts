@@ -22,7 +22,7 @@ export function createRisksClient(transport: HttpTransport, tenant: string, demo
     list: (cursor?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/security/risks',
+        path: '/api/v1/mdm-candidate/security/risks',
         query: { limit: 20, cursor },
         successStatus: 200,
         decode: (v) => page(v, risk, (r) => r.id),
@@ -30,7 +30,7 @@ export function createRisksClient(transport: HttpTransport, tenant: string, demo
     read: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/security/risks/{id}',
+        path: '/api/v1/mdm-candidate/security/risks/{id}',
         pathParams: { id },
         successStatus: 200,
         decode(value) {
@@ -43,7 +43,7 @@ export function createRisksClient(transport: HttpTransport, tenant: string, demo
     devices: (id: string, cursor?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/security/risks/{id}/devices',
+        path: '/api/v1/mdm-candidate/security/risks/{id}/devices',
         pathParams: { id },
         query: { limit: 20, cursor },
         successStatus: 200,
@@ -61,7 +61,7 @@ export function createRisksClient(transport: HttpTransport, tenant: string, demo
     current: (id: string, device: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/security/risks/{id}/devices/{device}',
+        path: '/api/v1/mdm-candidate/security/risks/{id}/devices/{device}',
         pathParams: { id, device },
         successStatus: 200,
         decode(value) {
@@ -72,7 +72,7 @@ export function createRisksClient(transport: HttpTransport, tenant: string, demo
     history: (id: string, device: string, cursor?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/security/risks/{id}/devices/{device}/history',
+        path: '/api/v1/mdm-candidate/security/risks/{id}/devices/{device}/history',
         pathParams: { id, device },
         query: { limit: 20, cursor },
         successStatus: 200,
@@ -86,7 +86,7 @@ export function createRisksClient(transport: HttpTransport, tenant: string, demo
     reassess: (id: string, device: string, body: Operation<Record<string, never>>) =>
       transport.request({
         method: 'POST',
-        path: '/api/mdm-candidate/v1/security/risks/{id}/devices/{device}/reassess',
+        path: '/api/v1/mdm-candidate/security/risks/{id}/devices/{device}/reassess',
         pathParams: { id, device },
         body,
         successStatus: 200,

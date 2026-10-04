@@ -34,8 +34,8 @@ describe('deployment and authoritative host context', () => {
     await expect(f.api.stepUp(OTHER)).rejects.toThrow()
     await expect(f.api.providers()).rejects.toThrow()
     expect(f.request.mock.calls.map(([r]) => r.path)).toEqual([
-      '/api/v2/tenants/{tenant}/login',
-      '/api/identity-host/v1/tenants/{tenant}/context',
+      '/api/v1/identity/tenants/{tenant}/login',
+      '/api/v1/identity-host/tenants/{tenant}/context',
     ])
     expect(f.session.providerHint.value).toBe(false)
     f.session.clear()

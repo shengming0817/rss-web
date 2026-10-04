@@ -12,7 +12,7 @@ function scan(dir) {
     if (entry.name.endsWith('.map')) throw new Error('Unexpected sourcemap')
     const content = readFileSync(path, 'utf8')
     if (
-      /Bearer |accessToken|refreshToken|\/api\/v1\/|\/downstream\/|platform_administrator|\bhydra\b|csrf_token|principal_id|MOCK_SOURCE|mdm-candidate|mdm-host|Enterprise device management/.test(
+      /Bearer |accessToken|refreshToken|\/api\/(?:v[234]\/|v1\/(?:tenants|oidc)\/|identity-host\/v1\/)|\/downstream\/|platform_administrator|\bhydra\b|csrf_token|principal_id|MOCK_SOURCE|mdm-candidate|mdm-host|Enterprise device management/.test(
         content,
       )
     )

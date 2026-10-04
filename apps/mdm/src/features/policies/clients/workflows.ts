@@ -172,7 +172,7 @@ export function createWorkflowsClient(transport: HttpTransport, tenant: string, 
     read: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/policies/workflows/{id}',
+        path: '/api/v1/mdm-candidate/policies/workflows/{id}',
         pathParams: { id },
         successStatus: 200,
         decode: (v) => read(v, id),
@@ -180,7 +180,7 @@ export function createWorkflowsClient(transport: HttpTransport, tenant: string, 
     change: (id: string, body: Operation<WorkflowChange>) =>
       transport.request({
         method: 'POST',
-        path: '/api/mdm-candidate/v1/policies/workflows/{id}',
+        path: '/api/v1/mdm-candidate/policies/workflows/{id}',
         pathParams: { id },
         body,
         successStatus: 200,
@@ -189,7 +189,7 @@ export function createWorkflowsClient(transport: HttpTransport, tenant: string, 
     start: (id: string, body: Operation<Record<string, never>>) =>
       transport.request({
         method: 'POST',
-        path: '/api/mdm-candidate/v1/policies/workflows/{id}/runs',
+        path: '/api/v1/mdm-candidate/policies/workflows/{id}/runs',
         pathParams: { id },
         body,
         successStatus: 202,
@@ -198,7 +198,7 @@ export function createWorkflowsClient(transport: HttpTransport, tenant: string, 
     run: (id: string, task: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/policies/workflows/{id}/runs/{task}',
+        path: '/api/v1/mdm-candidate/policies/workflows/{id}/runs/{task}',
         pathParams: { id, task },
         successStatus: 200,
         decode: (v) => run(v, id, task),
@@ -206,7 +206,7 @@ export function createWorkflowsClient(transport: HttpTransport, tenant: string, 
     runs: (id: string, cursor?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/policies/workflows/{id}/runs',
+        path: '/api/v1/mdm-candidate/policies/workflows/{id}/runs',
         pathParams: { id },
         query: { limit: 20, cursor },
         successStatus: 200,
@@ -227,7 +227,7 @@ export function createWorkflowsClient(transport: HttpTransport, tenant: string, 
     ) =>
       transport.request({
         method: 'POST',
-        path: `/api/mdm-candidate/v1/policies/workflows/{id}/runs/{task}/${action}`,
+        path: `/api/v1/mdm-candidate/policies/workflows/{id}/runs/{task}/${action}`,
         pathParams: { id, task },
         body,
         successStatus: 200,

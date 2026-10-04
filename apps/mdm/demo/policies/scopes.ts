@@ -98,7 +98,7 @@ export function createScopeDemo(devices: Devices) {
   }
   const handle: DomainHandler = (request, scenario) => {
     const match =
-      /^\/api\/v2\/scopes\/([^/]+)(?:\/(tasks|results)\/([^/]+)(?:\/(members|decisions))?)?$/.exec(
+      /^\/api\/v1\/scopes\/([^/]+)(?:\/(tasks|results)\/([^/]+)(?:\/(members|decisions))?)?$/.exec(
         request.path,
       )
     if (!match) return

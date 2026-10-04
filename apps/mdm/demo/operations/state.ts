@@ -103,7 +103,7 @@ export function createOperationsDemo(now: () => number) {
   }
   const handle: DomainHandler = (request, scenario) => {
     const match =
-      /^\/api\/mdm-candidate\/v1\/operations\/(audit|alerts)(?:\/([^/]+)(?:\/([^/]+))?)?$/.exec(
+      /^\/api\/v1\/mdm-candidate\/operations\/(audit|alerts)(?:\/([^/]+)(?:\/([^/]+))?)?$/.exec(
         request.path,
       )
     if (!match) return

@@ -17,7 +17,7 @@ export function createCatalogClient(transport: HttpTransport, tenant: string, de
     list: (collection: Collection, cursor?: string) =>
       transport.request({
         method: 'GET',
-        path: `/api/mdm-candidate/v1/policies/${collection}`,
+        path: `/api/v1/mdm-candidate/policies/${collection}`,
         query: { limit: 20, cursor },
         successStatus: 200,
         decode(value) {
@@ -50,7 +50,7 @@ export function createCatalogClient(transport: HttpTransport, tenant: string, de
     approvals: (cursor?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/policies/approvals',
+        path: '/api/v1/mdm-candidate/policies/approvals',
         query: { limit: 20, cursor },
         successStatus: 200,
         decode(value) {

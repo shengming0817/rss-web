@@ -38,7 +38,7 @@ it('consumes v2 cookie/CSRF, host policy, account and provider operations throug
     const settings = {
       issuer: 'https://idp.example.test',
       clientId: 'reference',
-      redirectUri: `${config.canonicalOrigin}/api/v2/oidc/callback`,
+      redirectUri: `${config.canonicalOrigin}/api/v1/identity/oidc/callback`,
       scopes: ['openid'],
       claims: {
         email: null,
@@ -70,7 +70,7 @@ it('consumes v2 cookie/CSRF, host policy, account and provider operations throug
     await expect(
       transport.request({
         method: 'GET',
-        path: '/api/identity-host/v1/tenants/{tenant}/context',
+        path: '/api/v1/identity-host/tenants/{tenant}/context',
         pathParams: { tenant },
         successStatus: 200,
         decode: (v) => v,

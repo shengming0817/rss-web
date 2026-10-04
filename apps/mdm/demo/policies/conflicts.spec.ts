@@ -32,12 +32,12 @@ it('uses only overlapping enabled assignments when reporting configuration confl
     [scopeA, 'device-01'],
     [scopeB, 'device-07'],
   ])
-    write(`/api/v2/scopes/${scope}`, {
+    write(`/api/v1/scopes/${scope}`, {
       action: 'put',
       definition: { targets: [{ kind: 'device', id: device }], limitations: null, exclusions: [] },
     })
   function configuration(id: string, value: boolean) {
-    const path = `/api/mdm-candidate/v1/policies/configurations/${id}`
+    const path = `/api/v1/mdm-candidate/policies/configurations/${id}`
     write(path, { action: 'create', name: id, platform: 'windows', format: 'windows_csp' })
     write(path, { action: 'version', settings: [{ key: 'Camera', value }] }, 1)
     write(path, { action: 'publish', version: 1 }, 2)
@@ -54,8 +54,8 @@ it('uses only overlapping enabled assignments when reporting configuration confl
     trigger: { kind: 'on_change' },
     validity: null,
   })
-  const pathA = '/api/mdm-candidate/v1/policies/assignments/a',
-    pathB = '/api/mdm-candidate/v1/policies/assignments/b'
+  const pathA = '/api/v1/mdm-candidate/policies/assignments/a',
+    pathB = '/api/v1/mdm-candidate/policies/assignments/b'
   write(pathA, { action: 'put', definition: definition(a, scopeA) })
   const reason = () =>
     (
@@ -67,12 +67,12 @@ it('uses only overlapping enabled assignments when reporting configuration confl
   automation.tick({ kind: 'clock', at: Math.floor(Date.now() / 1000) + 1 })
   expect(reason()).toBe('applicable')
   // Preflight consumes the same effective-assignment set, not the full catalog.
-  const scopeRead = automation.handle(request(`/api/v2/scopes/${scopeA}`), 'normal')!.body as {
+  const scopeRead = automation.handle(request(`/api/v1/scopes/${scopeA}`), 'normal')!.body as {
     revision: number
   }
   const scopeTask = randomUUID()
   const changed = automation.handle(
-    request(`/api/v2/scopes/${scopeA}`, {
+    request(`/api/v1/scopes/${scopeA}`, {
       operationId: scopeTask,
       expectedRevision: scopeRead.revision,
       input: {
@@ -87,10 +87,10 @@ it('uses only overlapping enabled assignments when reporting configuration confl
     'normal',
   )!
   expect(changed.status).toBe(200)
-  automation.handle(request(`/api/v2/scopes/${scopeA}/tasks/${scopeTask}`), 'normal')
-  automation.handle(request(`/api/v2/scopes/${scopeA}/tasks/${scopeTask}`), 'normal')
+  automation.handle(request(`/api/v1/scopes/${scopeA}/tasks/${scopeTask}`), 'normal')
+  automation.handle(request(`/api/v1/scopes/${scopeA}/tasks/${scopeTask}`), 'normal')
   const preview = randomUUID(),
-    previewPath = `/api/mdm-candidate/v1/policies/configurations/${a}/previews`
+    previewPath = `/api/v1/mdm-candidate/policies/configurations/${a}/previews`
   expect(
     automation.handle(
       request(previewPath, {
@@ -148,8 +148,8 @@ it('previews policy replacements without self-conflict while retaining competing
     return r.body
   }
   const read = (id: string) =>
-    automation.handle(request(`/api/mdm-candidate/v1/policies/assignments/${id}`), 'normal')!.body
-  write(`/api/v2/scopes/${scope}`, {
+    automation.handle(request(`/api/v1/mdm-candidate/policies/assignments/${id}`), 'normal')!.body
+  write(`/api/v1/scopes/${scope}`, {
     action: 'put',
     definition: {
       targets: [{ kind: 'device', id: 'device-01' }],
@@ -158,7 +158,7 @@ it('previews policy replacements without self-conflict while retaining competing
     },
   })
   for (const id of [config, other]) {
-    const path = `/api/mdm-candidate/v1/policies/configurations/${id}`
+    const path = `/api/v1/mdm-candidate/policies/configurations/${id}`
     write(path, { action: 'create', name: id, platform: 'windows', format: 'windows_csp' })
     write(path, { action: 'version', settings: [{ key: 'Camera', value: false }] }, 1)
     write(path, { action: 'publish', version: 1 }, 2)
@@ -176,12 +176,12 @@ it('previews policy replacements without self-conflict while retaining competing
     trigger: { kind: 'on_change' },
     validity: null,
   })
-  const pathA = '/api/mdm-candidate/v1/policies/assignments/a',
-    pathB = '/api/mdm-candidate/v1/policies/assignments/b'
+  const pathA = '/api/v1/mdm-candidate/policies/assignments/a',
+    pathB = '/api/v1/mdm-candidate/policies/assignments/b'
   write(pathA, { action: 'put', definition: definition(config, '1') })
   const before = structuredClone(read('a')),
     executions = structuredClone(
-      automation.handle(request('/api/mdm-candidate/v1/executions'), 'normal')!.body,
+      automation.handle(request('/api/v1/mdm-candidate/executions'), 'normal')!.body,
     )
   for (const resource of [config, other]) {
     const result = automation.handle(
@@ -195,7 +195,7 @@ it('previews policy replacements without self-conflict while retaining competing
   expect(read('a')).toEqual(before)
   expect(
     (
-      automation.handle(request('/api/mdm-candidate/v1/executions'), 'normal')!.body as {
+      automation.handle(request('/api/v1/mdm-candidate/executions'), 'normal')!.body as {
         items: unknown[]
       }
     ).items,

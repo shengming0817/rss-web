@@ -161,7 +161,7 @@ export function createRunsClient(transport: HttpTransport) {
     list: (id: string, cursor?: RunCursor) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/policies/{id}/runs',
+        path: '/api/v1/policies/{id}/runs',
         pathParams: { id },
         query: { afterAt: cursor?.availableAt, afterId: cursor?.taskId },
         successStatus: 200,
@@ -179,7 +179,7 @@ export function createRunsClient(transport: HttpTransport) {
     read: (id: string, task: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/policies/{id}/runs/{task}',
+        path: '/api/v1/policies/{id}/runs/{task}',
         pathParams: { id, task },
         successStatus: 200,
         decode(value) {

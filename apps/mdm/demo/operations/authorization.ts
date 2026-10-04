@@ -125,10 +125,10 @@ export function createAuthorizationDemo(
     const path = request.path
     if (path.startsWith('/api/v1/authorization')) return
     const deviceMatch =
-      /^\/api\/(?:v2\/devices|mdm-candidate\/v1\/devices)\/([^/]+)(?:\/(.*))?$/.exec(path)
+      /^\/api\/(?:v1\/devices|v1\/mdm-candidate\/devices)\/([^/]+)(?:\/(.*))?$/.exec(path)
     const actor = request.actor.principalId
     const batch =
-      /^\/api\/mdm-candidate\/v1\/devices\/batch-previews(?:\/([^/]+)(?:\/(execute|cancel))?)?$/.exec(
+      /^\/api\/v1\/mdm-candidate\/devices\/batch-previews(?:\/([^/]+)(?:\/(execute|cancel))?)?$/.exec(
         path,
       )
     if (batch) {
@@ -183,12 +183,12 @@ export function createAuthorizationDemo(
       )
         return error('permission_denied', 403)
     } else if (
-      (path === '/api/mdm-candidate/v1/devices' ||
-        /^\/api\/v2\/(device-queries|saved-queries)(?:\/|$)/.test(path)) &&
+      (path === '/api/v1/mdm-candidate/devices' ||
+        /^\/api\/v1\/(device-queries|saved-queries)(?:\/|$)/.test(path)) &&
       !all()
     )
       return error('permission_denied', 403)
-    if (/^\/api\/mdm-candidate\/v1\/(?:authorization|integrations|operations)(?:\/|$)/.test(path)) {
+    if (/^\/api\/v1\/mdm-candidate\/(?:authorization|integrations|operations)(?:\/|$)/.test(path)) {
       // Candidate management grants are demo decisions, never added to the real Permission enum.
       const permission = request.method === 'GET' ? 'authorization_read' : 'authorization_write'
       if (!can(request.actor.principalId, permission)) return error('permission_denied', 403)

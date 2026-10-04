@@ -68,7 +68,7 @@ export function createResourceUploads(
   }
   const handle: DomainHandler = (request, scenario) => {
     const match =
-      /^\/api\/v3\/resources\/([^/]+)\/(uploads|content\/operations)\/([^/]+)(\/complete)?$/.exec(
+      /^\/api\/v1\/resources\/([^/]+)\/(uploads|content\/operations)\/([^/]+)(\/complete)?$/.exec(
         request.path,
       )
     if (!match) return

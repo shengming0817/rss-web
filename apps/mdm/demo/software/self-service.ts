@@ -75,7 +75,7 @@ export function createSelfServiceDemo(
   }
   const handle: DomainHandler = (request, scenario) => {
     const route =
-      /^\/api\/mdm-candidate\/v1\/software\/self-service\/(items|requests)(?:\/([^/]+))?$/.exec(
+      /^\/api\/v1\/mdm-candidate\/software\/self-service\/(items|requests)(?:\/([^/]+))?$/.exec(
         request.path,
       )
     if (!route) return

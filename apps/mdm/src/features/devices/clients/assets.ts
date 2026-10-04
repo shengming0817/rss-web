@@ -49,7 +49,7 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
   const accepted = (value: unknown, operation: string) => {
     const v = assetEnvelope(value, tenant, 'accepted', ['task', 'statusUrl'])
     const task = uuid(v['task'])
-    if (task !== operation || v['statusUrl'] !== `/api/v2/device-queries/${task}`)
+    if (task !== operation || v['statusUrl'] !== `/api/v1/device-queries/${task}`)
       throw new Error('Wrong status URL')
     return { task, statusUrl: string(v['statusUrl']) }
   }
@@ -62,14 +62,14 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
     catalog: () =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/asset-fields',
+        path: '/api/v1/asset-fields',
         successStatus: 200,
         decode: (v) => decodeCatalog(v, tenant),
       }),
     inventory: (device: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/devices/{device}/inventory',
+        path: '/api/v1/devices/{device}/inventory',
         pathParams: { device },
         successStatus: 200,
         decode: (v) => {
@@ -81,7 +81,7 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
     search: (body: Operation<Query>) =>
       transport.request({
         method: 'POST',
-        path: '/api/v2/device-queries',
+        path: '/api/v1/device-queries',
         body,
         successStatus: 202,
         decode: (v) => accepted(v, body.operationId),
@@ -89,7 +89,7 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
     status: (task: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/device-queries/{task}',
+        path: '/api/v1/device-queries/{task}',
         pathParams: { task },
         successStatus: 200,
         decode: (value) => {
@@ -102,7 +102,7 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
           ])
           if (uuid(v['task']) !== task) throw new Error('Wrong task')
           const resultUrl = cursor(v['resultUrl'])
-          if (resultUrl !== null && resultUrl !== `/api/v2/device-queries/${task}/items`)
+          if (resultUrl !== null && resultUrl !== `/api/v1/device-queries/${task}/items`)
             throw new Error('Wrong result URL')
           return {
             task,
@@ -121,7 +121,7 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
     items: (task: string, next?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/device-queries/{task}/items',
+        path: '/api/v1/device-queries/{task}/items',
         pathParams: { task },
         query: { limit: 20, cursor: next },
         successStatus: 200,
@@ -134,7 +134,7 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
     facets: (task: string, facet: 'os_versions' | 'channels' | 'asset_states', next?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/device-queries/{task}/facets/{facet}',
+        path: '/api/v1/device-queries/{task}/facets/{facet}',
         pathParams: { task, facet },
         query: { limit: 20, cursor: next },
         successStatus: 200,
@@ -155,7 +155,7 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
     assign: (device: string, field: string, body: Operation<ManualChange>) =>
       transport.request({
         method: 'PUT',
-        path: '/api/v2/devices/{device}/manual-fields/{field}',
+        path: '/api/v1/devices/{device}/manual-fields/{field}',
         pathParams: { device, field },
         body,
         successStatus: 200,
@@ -169,7 +169,7 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
     saved: (after?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/saved-queries',
+        path: '/api/v1/saved-queries',
         query: { after },
         successStatus: 200,
         decode: (value) => {
@@ -180,7 +180,7 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
     readSaved: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/saved-queries/{id}',
+        path: '/api/v1/saved-queries/{id}',
         pathParams: { id },
         successStatus: 200,
         decode: (v) => saved(v, id),
@@ -193,7 +193,7 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
     ) =>
       transport.request({
         method: 'PUT',
-        path: '/api/v2/saved-queries/{id}',
+        path: '/api/v1/saved-queries/{id}',
         pathParams: { id },
         body,
         successStatus: 200,
@@ -202,7 +202,7 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
     executeSaved: (id: string, body: Operation<Record<string, never>>) =>
       transport.request({
         method: 'POST',
-        path: '/api/v2/saved-queries/{id}/execute',
+        path: '/api/v1/saved-queries/{id}/execute',
         pathParams: { id },
         body,
         successStatus: 202,

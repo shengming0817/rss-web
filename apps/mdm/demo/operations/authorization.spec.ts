@@ -9,7 +9,7 @@ async function fixture() {
     (e) => events.push(e),
   )
   const server = createScenario([auth.handle], auth.reset, () => true)
-  const session = await server.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  const session = await server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
   })

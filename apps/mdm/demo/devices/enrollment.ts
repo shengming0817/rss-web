@@ -45,8 +45,8 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
   }
   const handle: DomainHandler = (request) => {
     const { path, method, query } = request
-    const enrollmentPath = /^\/api\/v3\/enrollments(?:\/([^/]+)(?:\/(resume|cancel))?)?$/.exec(path)
-    const registrations = /^\/api\/v3\/devices\/([^/]+)\/registrations(?:\/([^/]+)\/revoke)?$/.exec(
+    const enrollmentPath = /^\/api\/v1\/enrollments(?:\/([^/]+)(?:\/(resume|cancel))?)?$/.exec(path)
+    const registrations = /^\/api\/v1\/devices\/([^/]+)\/registrations(?:\/([^/]+)\/revoke)?$/.exec(
       path,
     )
     if (!enrollmentPath && !registrations) return

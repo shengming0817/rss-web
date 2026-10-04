@@ -283,7 +283,7 @@ export function createResourcesClient(transport: HttpTransport) {
     read: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v3/resources/{id}',
+        path: '/api/v1/resources/{id}',
         pathParams: { id },
         successStatus: 200,
         decode: (v) => decodeResource(v, id),
@@ -291,7 +291,7 @@ export function createResourcesClient(transport: HttpTransport) {
     change: (id: string, body: Operation<ResourceChange>) =>
       transport.request({
         method: 'POST',
-        path: '/api/v3/resources/{id}',
+        path: '/api/v1/resources/{id}',
         pathParams: { id },
         body,
         successStatus: 200,

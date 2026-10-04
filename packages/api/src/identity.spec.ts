@@ -37,13 +37,13 @@ it('preserves the own-password wire rejection through the production executor wi
   create.mockRestore()
   const tenant = '11111111-1111-4111-8111-111111111111'
   mock
-    .onPost(`/api/v2/tenants/${tenant}/me/password`)
+    .onPost(`/api/v1/identity/tenants/${tenant}/me/password`)
     .reply(403, { code: 'reauthentication_failed' })
   try {
     await expect(
       transport.request({
         method: 'POST',
-        path: '/api/v2/tenants/{tenant}/me/password',
+        path: '/api/v1/identity/tenants/{tenant}/me/password',
         pathParams: { tenant },
         headers: { 'X-Identity-Request': '1', 'X-CSRF-Token': 'a'.repeat(64) },
         body: { currentPassword: 'incorrect', password: 'new private password' },
@@ -54,5 +54,20 @@ it('preserves the own-password wire rejection through the production executor wi
     expect(mock.history.post).toHaveLength(1)
   } finally {
     mock.restore()
+  }
+})
+
+it('rejects retired authentication routes and other API owners before dispatch', async () => {
+  const transport = createIdentityTransport()
+  for (const path of [
+    '/api/v2/tenants/{tenant}/login',
+    '/api/v1/tenants/{tenant}/login',
+    '/api/identity-host/v1/config.json',
+    '/api/v1/devices',
+    '/api/v1/agent/runtime/tasks',
+  ]) {
+    await expect(
+      transport.request({ method: 'GET', path, successStatus: 200, decode: (v) => v }),
+    ).rejects.toMatchObject({ cause: 'client' })
   }
 })

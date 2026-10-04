@@ -123,7 +123,7 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
   const handle: DomainHandler = (request, scenario) => {
     const uploaded = uploads.handle(request, scenario)
     if (uploaded) return uploaded
-    const match = /^\/api\/v3\/resources\/([^/]+)(\/content)?$/.exec(request.path)
+    const match = /^\/api\/v1\/resources\/([^/]+)(\/content)?$/.exec(request.path)
     if (!match) return
     try {
       if (scenario === 'denied') return error('permission_denied', 403)
