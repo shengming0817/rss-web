@@ -70,3 +70,37 @@ it('decodes current closed rules without legacy permissions or invented departme
   ).toThrow()
   expect(() => rule({ ...value, legacyRole: 'administrator' }, tenant)).toThrow()
 })
+
+it('uses current native configuration permissions and service-owned device versus tenant scopes', () => {
+  const subject = { kind: 'user_group', id: group }
+  for (const operation of [
+    'configuration_write',
+    'windows_mi_execute',
+    'device_control',
+    'device_update',
+    'account_write',
+    'security_operate',
+    'device_diagnostics',
+  ])
+    expect(
+      rule({ subject, grants: [{ operation, scope: { kind: 'all_devices' } }] }, tenant).grants[0]!
+        .operation,
+    ).toBe(operation)
+  for (const operation of [
+    'runtime_diagnostics_read',
+    'inventory_sensitive_read',
+    'inventory_fields_write',
+  ]) {
+    expect(
+      rule({ subject, grants: [{ operation, scope: { kind: 'tenant' } }] }, tenant).grants[0]!
+        .operation,
+    ).toBe(operation)
+    expect(() =>
+      rule({ subject, grants: [{ operation, scope: { kind: 'all_devices' } }] }, tenant),
+    ).toThrow()
+  }
+  for (const operation of ['firewall_write', 'state_verify'])
+    expect(() =>
+      rule({ subject, grants: [{ operation, scope: { kind: 'all_devices' } }] }, tenant),
+    ).toThrow()
+})

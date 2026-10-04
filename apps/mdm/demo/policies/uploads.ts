@@ -24,8 +24,7 @@ export function createResourceUploads(
           v.platform === query.get('platform') &&
           v.architecture === query.get('architecture'),
       )
-    if (!version || !v || version.state === 'archived' || v.declaration.kind === 'configuration')
-      return
+    if (!version || !v || version.state === 'archived') return
     const d = v.declaration,
       artifact = query.has('artifact')
         ? declarationArtifacts(d).find((a) => a.reference === query.get('artifact'))
@@ -38,8 +37,8 @@ export function createResourceUploads(
       (d.kind === 'script' && artifact.length > MDM_CONTENT_BODY_LIMIT)
     )
       return
-    if (d.kind === 'script' && d.definition.profile === 'osquery_info_v1') {
-      const expected = new TextEncoder().encode('SELECT version FROM osquery_info;\n')
+    if (d.kind === 'script' && d.definition.profile === 'osquery') {
+      const expected = new TextEncoder().encode(d.definition.sql!)
       if (
         artifact.length !== expected.length ||
         JSON.stringify(artifact.sha256) !==

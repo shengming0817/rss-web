@@ -163,8 +163,8 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
           return error('operation_conflict')
         if (
           variant.declaration.kind === 'script' &&
-          variant.declaration.definition.profile === 'osquery_info_v1' &&
-          new TextDecoder().decode(bytes) !== 'SELECT version FROM osquery_info;\n'
+          variant.declaration.definition.profile === 'osquery' &&
+          new TextDecoder().decode(bytes) !== variant.declaration.definition.sql
         )
           return error('malformed_request', 400)
         contents.set(contentKey(id, version.id, variant, artifact.reference), bytes.slice())

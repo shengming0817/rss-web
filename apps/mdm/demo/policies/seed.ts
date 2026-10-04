@@ -47,6 +47,7 @@ export function seedScriptPolicies(automation: ReturnType<typeof createAutomatio
             },
             definition: {
               profile: 'power_shell7',
+              sql: null,
               runAs: 'system',
               encoding: 'utf8',
               parameters: {

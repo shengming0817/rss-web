@@ -161,7 +161,9 @@ function apply(p: PolicyRead) {
   current.value = p
   id.value = p.id
   enabled.value = p.enabled
-  definition.value = structuredClone({ ...p.definition, action: p.definition.action })
+  if (p.definition.action.kind === 'execution')
+    definition.value = structuredClone({ ...p.definition, action: p.definition.action })
+  else definition.value = structuredClone({ ...p.definition, action: p.definition.action })
   resource.value = undefined
   preview.value = undefined
   progress.value = undefined
@@ -313,13 +315,14 @@ function change(input: PolicyChange) {
 function save(event: Event) {
   if (!(event.target as HTMLFormElement).reportValidity()) return
   try {
-    const d = policyDefinition(structuredClone(toRaw(definition.value)))
+    const d = policyDefinition(structuredClone(toRaw(definition.value))),
+      action = d.action
     if (
       !selectedVariant.value ||
-      (d.action.kind === 'execution' &&
+      (action.kind === 'execution' &&
         (!spec.value ||
-          fields.value.some((f) => !(f.name in d.action.parameters)) ||
-          Object.keys(d.action.parameters).length !== fields.value.length))
+          fields.value.some((f) => !(f.name in action.parameters)) ||
+          Object.keys(action.parameters).length !== fields.value.length))
     )
       throw new Error('Load exact resource first')
     change({ action: 'put', enabled: enabled.value, definition: d })

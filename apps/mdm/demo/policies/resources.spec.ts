@@ -45,6 +45,7 @@ it('verifies raw upload length and digest, permits exact bytes replay, and refus
             },
             definition: {
               profile: 'posix_sh',
+              sql: null,
               runAs: 'system',
               encoding: 'utf8',
               parameters: {

@@ -39,7 +39,8 @@ function json(event: Event, key: 'parameters' | 'output' | 'bindings' | 'mapping
 }
 function osqueryTemplate() {
   model.value = {
-    profile: 'osquery_info_v1',
+    profile: 'osquery',
+    sql: 'SELECT version FROM osquery_info',
     runAs: 'system',
     encoding: 'utf8',
     parameters: { type: 'object', properties: {}, required: [], additionalProperties: false },
@@ -60,6 +61,15 @@ function osqueryTemplate() {
     maxRows: 1,
   }
 }
+function changeProfile(event: Event) {
+  const value = (event.target as HTMLSelectElement).value
+  if (value === 'osquery') {
+    osqueryTemplate()
+    return
+  }
+  if (value === 'power_shell7' || value === 'posix_sh' || value === 'bash')
+    model.value = { ...model.value, profile: value, sql: null }
+}
 function collection(event: Event) {
   model.value = {
     ...model.value,
@@ -73,11 +83,11 @@ function collection(event: Event) {
   <fieldset>
     <legend>{{ t('policies.scriptDefinition') }}</legend>
     <button type="button" @click="osqueryTemplate">{{ t('policies.osqueryTemplate') }}</button>
-    <p v-if="model.profile === 'osquery_info_v1'">{{ t('policies.osqueryHint') }}</p>
+    <p v-if="model.profile === 'osquery'">{{ t('policies.osqueryHint') }}</p>
     <label :for="`${id}-profile`">{{ t('policies.profile') }}</label
-    ><select :id="`${id}-profile`" v-model="model.profile">
+    ><select :id="`${id}-profile`" :value="model.profile" @change="changeProfile">
       <option
-        v-for="profile in ['power_shell7', 'posix_sh', 'bash', 'osquery_info_v1']"
+        v-for="profile in ['power_shell7', 'posix_sh', 'bash', 'osquery']"
         :key="profile"
         :value="profile"
       >

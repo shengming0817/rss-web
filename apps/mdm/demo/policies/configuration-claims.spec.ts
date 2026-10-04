@@ -3,6 +3,7 @@ import { expect, it } from 'vitest'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { createAutomationDemo } from './state'
 import { createDeviceDemo } from '../devices/state'
+import { createUploadsClient } from '../../src/features/policies/clients/uploads'
 import { createPoliciesClient } from '../../src/features/policies/clients/policies'
 import { createConfigurationsClient } from '../../src/features/policies/clients/configurations'
 import type { ConfigurationDefinition, PolicyRead } from '../../src/features/policies/clients/model'
@@ -50,7 +51,7 @@ function fixture() {
       node: node + suffix,
       instance: [],
       operation: 'replace',
-      value: { type: 'boolean', value },
+      value: { type: 'integer', value: value ? '1' : '0' },
     }
     const native = {
       target: { kind: 'device' },
@@ -117,13 +118,16 @@ function fixture() {
   }
   const transport = {
     async request<T>(o: RequestOptions<T>) {
-      const path = o.path.replace(/\{([^}]+)\}/g, (_, k: string) => o.pathParams![k]!),
+      const path = o.path.replace(/\{([^}]+)\}/g, (_, k: string) => String(o.pathParams![k]!)),
         query = new URLSearchParams(
           Object.entries(o.query ?? {})
             .filter(([, v]) => v !== undefined)
             .map(([k, v]) => [k, String(v)]),
         )
-      const reply = send(path, o.body, query)
+      const reply = automation.handle(
+        { path, body: o.body, query, actor, headers: o.headers ?? {}, method: o.method },
+        'normal',
+      )!
       if (reply.status !== o.successStatus)
         throw Object.assign(new Error('Rejected'), { status: reply.status })
       return o.decode(reply.body)
@@ -134,7 +138,7 @@ function fixture() {
     scope: string,
     resource: ConfigurationDefinition['action']['resource'],
     exit: 'retain' | 'remove' = 'retain',
-    id = randomUUID(),
+    id: string = randomUUID(),
     revision = 0,
   ) {
     const definition: ConfigurationDefinition = {
@@ -201,7 +205,7 @@ it('feeds effective native claims into the existing configuration catalog previe
   const f = fixture(),
     scope = f.scope(),
     a = await f.put(scope, f.resource(false)),
-    id = randomUUID(),
+    id: string = randomUUID(),
     path = `/api/v1/mdm-candidate/policies/configurations/${id}`
   expect(
     f.send(
@@ -210,7 +214,7 @@ it('feeds effective native claims into the existing configuration catalog previe
     ).status,
   ).toBe(200)
   expect(
-    f.send(path, f.op({ action: 'version', settings: [{ key: f.node, value: true }] }, 1)).status,
+    f.send(path, f.op({ action: 'version', settings: [{ key: f.node, value: 1 }] }, 1)).status,
   ).toBe(200)
   expect(f.send(path, f.op({ action: 'publish', version: 1 }, 2)).status).toBe(200)
   const client = createConfigurationsClient(
@@ -287,5 +291,25 @@ it('retires claims on actual scope exit and rejects missing variants or remove c
   })
   await expect(f.put(scope, f.resource(false, false), 'remove')).rejects.toMatchObject({
     status: 404,
+  })
+})
+
+it('uploads immutable native content through current chunk and receipt clients', async () => {
+  const f = fixture(),
+    binding = f.resource(),
+    upload = randomUUID(),
+    client = createUploadsClient(f.transport)
+  const content = f.automation.resources.content(binding)!
+  const session = await client.begin(binding.id, upload, binding)
+  expect(session.binding.purpose.binding.storage_class).toBe('native_configuration')
+  expect((await client.append(binding.id, upload, 0, Uint8Array.from(content).buffer)).offset).toBe(
+    content.length,
+  )
+  await client.complete(binding.id, upload)
+  expect((await client.receipt(binding.id, upload)).length).toBe(content.length)
+  expect((await f.put(f.scope(), binding)).definition.action).toEqual({
+    kind: 'configuration',
+    resource: binding,
+    exit: 'retain',
   })
 })

@@ -200,7 +200,7 @@ export const policiesZh = {
     predecessors: '前序执行',
   },
   osqueryHint:
-    '已发布接口仅支持固定 osquery_info_v1 查询：SELECT version FROM osquery_info;（末尾换行）。通用查询属于候选工作流。',
+    '预设使用只读 SQL 模板 SELECT version FROM osquery_info；上传内容必须与资源 SQL 模板的规范文本完全一致（无分号或末尾换行）。',
   generalQuery: '通用查询工作流',
   parameters: '参数（JSON）',
   deviceIds: '设备标识（逗号或空白分隔）',
@@ -582,7 +582,7 @@ export const policiesEn: typeof policiesZh = {
     predecessors: 'Predecessors',
   },
   osqueryHint:
-    'The published API supports only the fixed osquery_info_v1 query: SELECT version FROM osquery_info; followed by a newline. General queries belong to candidate workflows.',
+    'The preset uses the read-only SQL template SELECT version FROM osquery_info. Upload the exact canonical Resource SQL text without a semicolon or trailing newline.',
   generalQuery: 'General query workflow',
   parameters: 'Parameters (JSON)',
   deviceIds: 'Device IDs (comma or whitespace separated)',

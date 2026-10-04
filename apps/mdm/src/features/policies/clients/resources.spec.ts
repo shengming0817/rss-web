@@ -5,6 +5,7 @@ const operationId = '11111111-1111-4111-8111-111111111111'
 const digest = Array.from({ length: 32 }, () => 0)
 const spec = {
   profile: 'power_shell7',
+  sql: null,
   runAs: 'system',
   encoding: 'utf8',
   parameters: { type: 'object', properties: {}, additionalProperties: false },
@@ -56,7 +57,8 @@ it('decodes current resource and ScriptSpec wire without private wrapper shapes'
 it('preserves finite collection bindings and rejects invented collection field identities', () => {
   const value = {
     ...spec,
-    profile: 'osquery_info_v1',
+    profile: 'osquery',
+    sql: 'SELECT version FROM osquery_info',
     purpose: { kind: 'collection', mappings: { 'custom.osquery.version': '/0/version' } },
   }
   expect(decodeScriptSpec(value).purpose).toEqual(value.purpose)

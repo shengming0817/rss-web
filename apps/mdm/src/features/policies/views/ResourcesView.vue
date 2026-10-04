@@ -42,6 +42,7 @@ const list = ref<Awaited<ReturnType<typeof runtime.policies.catalog.list>>>(),
 
 const spec = ref<ScriptSpec>({
   profile: 'power_shell7',
+  sql: null,
   runAs: 'system',
   encoding: 'utf8',
   parameters: { type: 'object', properties: {}, required: [], additionalProperties: false },

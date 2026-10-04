@@ -88,7 +88,8 @@ export const collectionFields = [
   'custom.osquery.version',
 ] as const
 export interface ScriptSpec {
-  profile: 'power_shell7' | 'posix_sh' | 'bash' | 'osquery_info_v1'
+  profile: 'power_shell7' | 'posix_sh' | 'bash' | 'osquery'
+  sql: string | null
   runAs: 'system' | 'logged_in_user'
   encoding: 'utf8'
   parameters: Record<string, Json>
@@ -104,6 +105,7 @@ export interface ScriptSpec {
 export function decodeScriptSpec(value: unknown): ScriptSpec {
   const v = closed(value, [
     'profile',
+    'sql',
     'runAs',
     'encoding',
     'parameters',
@@ -144,13 +146,27 @@ export function decodeScriptSpec(value: unknown): ScriptSpec {
             ]),
           ),
         }
-  return {
-    profile: enumeration(v['profile'], [
+  const profile = enumeration(v['profile'], [
       'power_shell7',
       'posix_sh',
       'bash',
-      'osquery_info_v1',
+      'osquery',
     ] as const),
+    sql = v['sql']
+  if (
+    !(
+      sql === null ||
+      (typeof sql === 'string' &&
+        sql.trim() &&
+        !sql.includes('\0') &&
+        new TextEncoder().encode(sql).byteLength <= 65536)
+    ) ||
+    (profile === 'osquery' ? sql === null : sql !== null)
+  )
+    throw new Error('Invalid script SQL template')
+  return {
+    profile,
+    sql: sql as string | null,
     runAs: enumeration(v['runAs'], ['system', 'logged_in_user'] as const),
     encoding: enumeration(v['encoding'], ['utf8'] as const),
     parameters: schema(v['parameters']),

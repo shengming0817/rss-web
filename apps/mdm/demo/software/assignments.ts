@@ -11,8 +11,8 @@ import { closed, identifier, uuid } from '../../src/services/decode'
 import {
   softwarePolicyDefinition,
   type SoftwarePolicyDefinition,
-  type taskAdmission,
 } from '../../src/features/software/clients/assignment-model'
+import type { taskAdmission } from '../../src/features/policies/clients/model'
 import { createSoftwareRuns, softwareProfiles } from './runs'
 type Definition = SoftwarePolicyDefinition
 export function createSoftwarePolicyDemo(
