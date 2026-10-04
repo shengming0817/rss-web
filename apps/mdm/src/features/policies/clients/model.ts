@@ -9,7 +9,6 @@ import {
   record,
   unique,
   uuid,
-  string,
 } from '../../../services/decode'
 export const targets = [
   'windows_x86_64',
@@ -188,7 +187,8 @@ export function parameterSources(value: unknown) {
   ) as Record<string, { kind: 'fixed'; value: string | boolean | number } | { kind: 'input' }>
 }
 function text(value: unknown, limit: number, required = false) {
-  const s = string(value)
+  if (typeof value !== 'string') throw new Error('Invalid metadata')
+  const s = value
   if (new TextEncoder().encode(s).byteLength > limit || s.includes('\0') || (required && !s.trim()))
     throw new Error('Invalid metadata')
   return s

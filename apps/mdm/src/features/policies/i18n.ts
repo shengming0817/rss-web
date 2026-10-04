@@ -1,5 +1,10 @@
 export const policiesZh = {
   selfService: {
+    minimum: '最小值：{value}',
+    maximum: '最大值：{value}',
+    minLength: '最短长度：{value}',
+    maxLength: '最长长度：{value}',
+    requiredValue: '请按资源约束填写',
     title: '脚本自助设置',
     publish: '发布脚本到自助服务',
     publishHint: '保存发布配置不运行脚本。撤回只阻止新的自助调用，既有任务和效果保留。',
@@ -360,6 +365,11 @@ export const policiesZh = {
 }
 export const policiesEn: typeof policiesZh = {
   selfService: {
+    minimum: 'Minimum: {value}',
+    maximum: 'Maximum: {value}',
+    minLength: 'Minimum length: {value}',
+    maxLength: 'Maximum length: {value}',
+    requiredValue: 'Enter a value within resource constraints',
     title: 'Script self-service',
     publish: 'Publish script to Self Service',
     publishHint:

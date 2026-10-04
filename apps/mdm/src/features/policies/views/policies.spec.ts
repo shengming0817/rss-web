@@ -61,7 +61,7 @@ async function fixture(unknown = false) {
   const button = (text: string) => wrapper.findAll('button').find((b) => b.text() === text)!
   await button('加载资源版本').trigger('click')
   await flushPromises()
-  return { wrapper, change, read, button }
+  return { wrapper, change, read, button, router }
 }
 it('reads a deep-linked formal Policy, retains false/1 and saves Resource parameter sources without schema copies', async () => {
   const f = await fixture()
@@ -98,5 +98,35 @@ it('keeps an Unknown operation fenced after a configuration read and never repla
   await f.wrapper.get('form').trigger('submit')
   await flushPromises()
   expect(f.change).toHaveBeenCalledTimes(1)
+  f.wrapper.unmount()
+})
+
+it('shows Resource bounds, starts numeric fixed values within bounds, and follows query locators', async () => {
+  const f = await fixture()
+  expect(f.wrapper.get('#value-detail').attributes()).toMatchObject({ min: '1', max: '3' })
+  await f.wrapper.get('#policy-variant').setValue('0')
+  expect((f.wrapper.get('#value-detail').element as HTMLInputElement).value).toBe('1')
+  expect(f.wrapper.get('#value-label').attributes()).toMatchObject({
+    minlength: '1',
+    maxlength: '80',
+  })
+  await f.wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(f.change).not.toHaveBeenCalled()
+  const next = crypto.randomUUID()
+  f.read.mockImplementation(async (id: string) => ({
+    ...(await f.read.mock.results[0]!.value),
+    id,
+  }))
+  await f.router.push({ query: { id: next } })
+  await flushPromises()
+  expect(f.read).toHaveBeenLastCalledWith(next)
+  expect((f.wrapper.get('#policy-id').element as HTMLInputElement).value).toBe(next)
+  const first = f.wrapper.findAll('li button')[0]!
+  await first.trigger('click')
+  await flushPromises()
+  expect(f.router.currentRoute.value.query['id']).toBe(
+    (f.wrapper.get('#policy-id').element as HTMLInputElement).value,
+  )
   f.wrapper.unmount()
 })

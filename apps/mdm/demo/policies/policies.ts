@@ -20,7 +20,9 @@ export function createPolicyDemo(
 ) {
   const runs = new Map<string, ExecutionSummary>(),
     admissions = new Map<string, string>(),
-    versions = new Map<string, string>()
+    versions = new Map<string, string>(),
+    entries = new Map<string, number>()
+  let members = new Set<string>()
   function selected(d: ExecutionDefinition) {
     const b = d.action.resource,
       r = resources.read(b.id),
@@ -46,7 +48,16 @@ export function createPolicyDemo(
     return undefined
   })
   function reconcile(scenario: Scenario, event?: DemoEvent) {
-    if (!event) return
+    const next = new Set<string>()
+    for (const p of store.values()) {
+      if (p.definition.action.kind !== 'execution') continue
+      for (const device of scopes.resolve(p.definition.scope)?.members ?? []) {
+        const key = JSON.stringify([p.id, device])
+        next.add(key)
+        if (!members.has(key)) entries.set(key, (entries.get(key) ?? 0) + 1)
+      }
+    }
+    members = next
     for (const run of runs.values()) {
       if (run.origin.kind !== 'policy') continue
       const p = store.get(run.origin.policy),
@@ -76,7 +87,7 @@ export function createPolicyDemo(
       }
       if (!valid && run.execution === 'running') run.origin.cancellation = 'requested'
       if (!valid || run.execution === 'unknown') continue
-      if (event.kind !== 'check_in' || event.device !== run.device) continue
+      if (event?.kind !== 'check_in' || event.device !== run.device) continue
       if (run.execution === 'not_started') {
         run.dispatch = 'published'
         run.attempt = randomUUID()
@@ -92,7 +103,7 @@ export function createPolicyDemo(
         }
       }
     }
-    if (event.kind !== 'check_in' || !event.device) return
+    if (event?.kind !== 'check_in' || !event.device) return
     const device = devices.facts().find((v) => v.summary.id === event.device)
     if (!device || scenario === 'denied' || scenario === 'unsupported') return
     for (const p of store.values()) {
@@ -131,7 +142,7 @@ export function createPolicyDemo(
         p.versionId,
         registrations,
         a.frequency === 'once_per_entry'
-          ? scopes.resolve(d.scope)!.revision
+          ? entries.get(JSON.stringify([p.id, event.device]))
           : a.frequency === 'every_trigger'
             ? due.coordinate
             : null,
@@ -194,6 +205,8 @@ export function createPolicyDemo(
       runs.clear()
       admissions.clear()
       versions.clear()
+      entries.clear()
+      members.clear()
       store.reset()
     },
   }

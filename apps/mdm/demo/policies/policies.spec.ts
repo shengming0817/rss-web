@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import { createAutomationDemo } from './state'
+import { createPolicyDemo } from './policies'
 import { createDeviceDemo } from '../devices/state'
 import { seedScriptPolicies } from './seed'
 import type { DemoRequest } from '../scenario'
@@ -210,4 +211,74 @@ it('admits only fixed-input Agent check-ins and preserves Unknown runs through l
   f.automation.tick({ kind: 'check_in', device: 'device-01', at: at + 100 })
   expect(executions()).toHaveLength(1)
   expect(executions()[0]?.execution).toBe('unknown')
+})
+
+it('counts actual scope entries rather than Scope configuration revisions and still fences Unknown', () => {
+  const devices = createDeviceDemo(),
+    automation = createAutomationDemo(devices),
+    seed = seedScriptPolicies(automation)
+  const scope = automation.scopes.resolve(seed.scope)!,
+    id = crypto.randomUUID()
+  scope.members = ['device-01']
+  const policies = createPolicyDemo(
+    devices,
+    { resolve: () => structuredClone(scope) },
+    automation.resources,
+  )
+  const definition = {
+    ...seed.definition,
+    action: {
+      ...seed.definition.action,
+      frequency: 'once_per_entry',
+      parameters: {
+        label: { kind: 'fixed', value: 'support' },
+        detail: { kind: 'fixed', value: 1 },
+      },
+      schedule: {
+        ...seed.definition.action.schedule,
+        trigger: { kind: 'check_in', minimumSeconds: 60 },
+      },
+    },
+  }
+  expect(
+    policies.handle(
+      {
+        path: `/api/v1/policies/${id}`,
+        method: 'POST',
+        body: {
+          operationId: crypto.randomUUID(),
+          expectedRevision: 0,
+          input: { action: 'put', enabled: true, definition },
+        },
+        actor: { principalId: crypto.randomUUID(), sessionId: crypto.randomUUID() },
+        query: new URLSearchParams(),
+        headers: {},
+      },
+      'normal',
+    )?.status,
+  ).toBe(200)
+  let at = automation.now()
+  const check = (scenario: 'normal' | 'unknown' = 'normal') =>
+    policies.reconcile(scenario, { kind: 'check_in', device: 'device-01', at: (at += 100) })
+  check()
+  check()
+  check()
+  expect(policies.executions()[0]?.execution).toBe('succeeded')
+  scope.revision++
+  check()
+  expect(policies.executions()).toHaveLength(1)
+  scope.members = []
+  policies.reconcile('normal')
+  scope.members = ['device-01']
+  policies.reconcile('normal')
+  check()
+  expect(policies.executions()).toHaveLength(2)
+  check('unknown')
+  scope.members = []
+  policies.reconcile('normal')
+  scope.members = ['device-01']
+  policies.reconcile('normal')
+  check()
+  expect(policies.executions()).toHaveLength(2)
+  expect(policies.executions()[1]?.execution).toBe('unknown')
 })

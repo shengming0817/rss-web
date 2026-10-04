@@ -42,6 +42,15 @@ it('accepts only the closed formal Policy and rejects the retired candidate DTO'
   ])
     expect(() => decodePolicy(value)).toThrow()
   expect(() => decodePolicy(policy, crypto.randomUUID())).toThrow()
+  expect(
+    selfService({
+      ...metadata,
+      description: 'Step one\nStep two',
+      prerequisites: 'One\nTwo',
+      sideEffects: 'First\nSecond',
+    }),
+  ).toMatchObject({ description: 'Step one\nStep two' })
+  expect(() => selfService({ ...metadata, description: 'bad\0value' })).toThrow()
   expect(selfService(metadata)).toMatchObject({ allowAi: false, riskLevel: 1 })
   for (const riskLevel of [0, 3, '2', null])
     expect(() => selfService({ ...metadata, riskLevel })).toThrow()
