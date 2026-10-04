@@ -69,8 +69,17 @@ function save(replay = false) {
       limits.value = v.limits
       saved.value = true
       pending.value = undefined
+      currentUsage.value = undefined
     },
-  )
+  ).then((ok) => {
+    if (ok && command.target)
+      void run(
+        () => client.usage(command.target!),
+        (v) => {
+          currentUsage.value = v
+        },
+      )
+  })
 }
 load()
 </script>

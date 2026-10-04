@@ -1,6 +1,6 @@
 import { shallowRef } from 'vue'
 import { runtimeKey } from '@rss/auth'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createRouter, createMemoryHistory, RouterView } from 'vue-router'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
@@ -612,6 +612,10 @@ it('administrator quota editing preserves exact commands after a lost response',
   await wrapper.findAll('select')[1]!.setValue('33333333-3333-4333-8333-333333333333')
   await flushPromises()
   expect(wrapper.find('input[type=number]').exists()).toBe(true)
+  await wrapper.find('input[type=number]').setValue('0')
+  await wrapper.find('form').trigger('submit')
+  await flushPromises()
+  expect(wrapper.find('tbody tr').findAll('td')[0]!.text()).toBe('0')
 })
 it('organization responsibility can be assigned and cleared without occupying personal quota', async () => {
   const { wrapper, devices, click } = await setup('registration-users', {}, { device: 'device-01' })
@@ -627,4 +631,26 @@ it('organization responsibility can be assigned and cleared without occupying pe
   expect((await devices.registration.responsibility('device-01')).user).toBeNull()
   expect((await devices.registration.me()).channels.every((c) => c.used === 0)).toBe(true)
   await click('重新读取')
+})
+
+it('refreshes Agent activation and stops presenting it as a pending enrollment to cancel', async () => {
+  const { wrapper, devices, click } = await setup('self-enrollments')
+  await wrapper.find('select').setValue('agent')
+  await click('生成一次性交付口令')
+  await wrapper.find('input[type=checkbox]').setValue(true)
+  await wrapper.findAll('form')[0]!.trigger('submit')
+  await flushPromises()
+  const receipt = await devices.registration.agentStatus(wrapper.find('dl dd').text())
+  const activated = vi.spyOn(devices.registration, 'agentStatus').mockResolvedValue({
+    ...receipt,
+    grant: { ...receipt.grant, state: 'consumed' },
+    activation: {
+      deviceId: 'activated-agent',
+      registrationId: '55555555-5555-4555-8555-555555555555',
+    },
+  })
+  await click('刷新状态与额度')
+  expect(activated).toHaveBeenCalled()
+  expect(wrapper.text()).toContain('activated-agent')
+  expect(wrapper.findAll('button').some((b) => b.text() === '取消注册授权')).toBe(false)
 })

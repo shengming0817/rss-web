@@ -8,6 +8,7 @@ import {
   identifier,
   integer,
   nullable,
+  record,
   unique,
   uuid,
 } from '../../../services/decode'
@@ -93,6 +94,31 @@ function grant(value: unknown, platform?: 'windows' | 'macos', id?: string) {
   if ((platform && result.platform !== platform) || (id && result.grantId !== id))
     throw new Error('Wrong grant')
   return result
+}
+export function agentProgress(value: unknown, id: string) {
+  const v = closed(value, ['grant', 'issuanceId', 'issuanceUnknown', 'activation'])
+  const issuanceId = nullable(v['issuanceId'], uuid)
+  const activation = nullable(v['activation'], (value) => {
+    const a = closed(value, ['wireVersion', 'issuanceId', 'operationId', 'runtime'])
+    if (a['wireVersion'] !== 1 || uuid(a['issuanceId']) !== issuanceId)
+      throw new Error('Wrong activation issuance')
+    uuid(a['operationId'])
+    // Runtime owns its collector definitions; this page consumes only its
+    // activated device and registration identity, never collector instructions.
+    const runtime = record(a['runtime'])
+    if (runtime['wireVersion'] !== 1 || runtime['source'] !== 'agent.builtin')
+      throw new Error('Wrong activation runtime')
+    return {
+      deviceId: identifier(runtime['deviceId']),
+      registrationId: uuid(runtime['registrationId']),
+    }
+  })
+  return {
+    grant: grant(v['grant'], undefined, id),
+    issuanceId,
+    issuanceUnknown: boolean(v['issuanceUnknown']),
+    activation,
+  }
 }
 export function createRegistrationClient(transport: HttpTransport, tenant: string) {
   const configurationPath = (target?: User) => {
@@ -206,6 +232,14 @@ export function createRegistrationClient(transport: HttpTransport, tenant: strin
         body: { wireVersion: 1, operationId: uuid(operation), secret, platform },
         successStatus: 200,
         decode: (v) => grant(v, platform),
+      }),
+    agentStatus: (id: string) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/agent-grants/{id}',
+        pathParams: { id: uuid(id) },
+        successStatus: 200,
+        decode: (v) => agentProgress(v, id),
       }),
     cancelAgent: (id: string, operation: string) =>
       transport.request({

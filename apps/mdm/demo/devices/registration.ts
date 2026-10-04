@@ -99,6 +99,23 @@ export function createRegistrationDemo(
       /^\/api\/v1\/registration-quotas\/(me|defaults|users\/([^/]+)\/([^/]+)(\/usage)?)$/.exec(path)
     const responsibility = /^\/api\/v1\/devices\/([^/]+)\/registration-user$/.exec(path)
     const agent = /^\/api\/v1\/self-enrollments\/agent(?:\/([^/]+)\/cancel)?$/.exec(path)
+    const status = /^\/api\/v1\/agent-grants\/([^/]+)$/.exec(path)
+    if (status && method === 'GET') {
+      const value = grants.get(uuid(status[1]))
+      if (!value || value.actor !== actor.principalId) return error('permission_denied', 403)
+      const grant = {
+        grantId: value.grantId,
+        state: value.state,
+        expiresAt: value.expiresAt,
+        platform: value.platform,
+      }
+      return ok({
+        grant: { wireVersion: 1, ...grant },
+        issuanceId: null,
+        issuanceUnknown: false,
+        activation: null,
+      })
+    }
     if (quota) {
       if (quota[1] === 'me')
         return method === 'GET' ? ok(usage(actor.principalId)) : error('malformed_request', 400)

@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
-import { configuration, usage, createRegistrationClient } from './registration'
+import { configuration, usage, createRegistrationClient, agentProgress } from './registration'
 const tenant = '11111111-1111-4111-8111-111111111111',
   instance = '44444444-4444-4444-8444-444444444444',
   principal = '22222222-2222-4222-8222-222222222222'
@@ -58,5 +58,35 @@ it('uses revisioned settings and rejects a receipt that changes the requested re
   await client.assign('org-device', principal, 0, null)
   await expect(client.assign('org-device', principal, 0, user)).rejects.toThrow(
     'Wrong responsibility',
+  )
+})
+
+it('binds Agent progress to its grant and activated issuance', () => {
+  const progress = {
+    grant: {
+      wireVersion: 1,
+      grantId: principal,
+      state: 'consumed',
+      expiresAt: 100,
+      platform: 'windows',
+    },
+    issuanceId: instance,
+    issuanceUnknown: false,
+    activation: {
+      wireVersion: 1,
+      issuanceId: instance,
+      operationId: principal,
+      runtime: {
+        wireVersion: 1,
+        source: 'agent.builtin',
+        deviceId: 'server-agent',
+        registrationId: principal,
+      },
+    },
+  }
+  expect(agentProgress(progress, principal).activation?.deviceId).toBe('server-agent')
+  expect(() => agentProgress(progress, instance)).toThrow('Wrong grant')
+  expect(() => agentProgress({ ...progress, issuanceId: principal }, principal)).toThrow(
+    'Wrong activation issuance',
   )
 })

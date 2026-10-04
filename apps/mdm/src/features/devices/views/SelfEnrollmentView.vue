@@ -23,6 +23,7 @@ const native = ref<
   Awaited<ReturnType<typeof runtime.devices.enrollment.status>> & { deviceId?: string }
 >()
 const agent = ref<Awaited<ReturnType<typeof client.agent>>>()
+const agentProgress = ref<Awaited<ReturnType<typeof client.agentStatus>>>()
 type Command = {
   kind: 'create' | 'resume' | 'cancel' | 'cancelAgent'
   operation: string
@@ -34,9 +35,14 @@ type Command = {
 const pending = ref<Command>()
 function refresh() {
   void run(
-    () => client.me(),
+    async () => ({
+      usage: await client.me(),
+      progress: agent.value ? await client.agentStatus(agent.value.grantId) : undefined,
+    }),
     (v) => {
-      usage.value = v
+      usage.value = v.usage
+      agentProgress.value = v.progress
+      if (v.progress) agent.value = v.progress.grant
     },
   )
 }
@@ -116,6 +122,7 @@ watch(
     clearSecret()
     native.value = undefined
     agent.value = undefined
+    agentProgress.value = undefined
     pending.value = undefined
     enrollmentId.value = ''
     usage.value = undefined
@@ -222,13 +229,22 @@ refresh()
       <dd>{{ agent.expiresAt }}</dd>
     </dl>
     <button
-      v-if="agent && ['available', 'consumed'].includes(agent.state)"
+      v-if="agent && !agentProgress?.activation && ['available', 'consumed'].includes(agent.state)"
       type="button"
       :disabled="busy || uncertain"
       @click="submit('cancelAgent')"
     >
-      {{ t('devices.cancel') }}
+      {{ t('registration.cancelAgent') }}
     </button>
+    <p v-if="agent">{{ t('registration.cancelAgentNote') }}</p>
+    <dl v-if="agentProgress?.activation">
+      <dt>{{ t('devices.status') }}</dt>
+      <dd>{{ t('registration.activated') }}</dd>
+      <dt>{{ t('devices.deviceId') }}</dt>
+      <dd>{{ agentProgress.activation.deviceId }}</dd>
+      <dt>{{ t('registration.agentRegistration') }}</dt>
+      <dd>{{ agentProgress.activation.registrationId }}</dd>
+    </dl>
     <dl v-if="native">
       <dt>{{ t('devices.enrollmentId') }}</dt>
       <dd>{{ native.enrollmentId }}</dd>
