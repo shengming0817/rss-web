@@ -2,7 +2,7 @@ import { createSession, createApi, loadConfig } from '@rss/auth/session'
 import { expect, it } from 'vitest'
 import { createIdentityTransport, isRssApiError } from '../../packages/api/src/identity'
 const tenant = '11111111-1111-4111-8111-111111111111'
-it('consumes v2 cookie/CSRF, host policy, account and provider operations through production transport', async ({
+it('consumes V1 cookie/CSRF, host policy, account and provider operations through production transport', async ({
   task,
 }) => {
   task.meta['step'] = 'config'
