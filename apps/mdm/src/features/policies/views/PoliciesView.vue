@@ -355,7 +355,11 @@ async function recover() {
       pending.value = undefined
     },
   )
-  if (confirmed && requester() === original.requester) await open(original.id)
+  if (confirmed && requester() === original.requester) {
+    if (route.query['id'] !== original.id)
+      await router.replace({ query: { ...route.query, id: original.id } })
+    else await open(original.id)
+  }
 }
 function save(event: Event) {
   if (!(event.target as HTMLFormElement).reportValidity()) return

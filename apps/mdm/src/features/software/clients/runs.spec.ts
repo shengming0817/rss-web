@@ -193,7 +193,8 @@ it('consumes current script evidence, redacts summaries and rejects obsolete or 
       nextCursor: null,
     }),
   )
-  const summary = (await createRunsClient({ request } as HttpTransport).list(id)).items[0]!.result!
+  const summary = (await createRunsClient({ request } as unknown as HttpTransport).list(id))
+    .items[0]!.result!
   expect(summary).toMatchObject({
     kind: 'script',
     collectedAt: 12,

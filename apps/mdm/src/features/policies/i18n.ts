@@ -422,7 +422,7 @@ export const policiesEn: typeof policiesZh = {
     disable: 'Disable entire Policy',
     enable: 'Enable entire Policy',
     executionHint:
-      'Saving and publishing do not execute. Discovery, invocation and results require formal backend APIs; this page does not execute or confirm for an employee.',
+      'Saving and publishing do not execute. Employees use the Agent directory and invocation APIs; this page does not execute or confirm for an employee.',
     recover: 'Check / retry original submission',
     recoverHint:
       'This sends the original request. If it was not accepted, this will submit the original operation. It never retries automatically.',
