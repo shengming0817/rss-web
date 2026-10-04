@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, toRaw, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
-import { operation, useOperation } from '../../../services/useOperation'
+import { operation, useOperation, type Operation } from '../../../services/useOperation'
 import {
   defaultSchedule,
   policyDefinition,
@@ -59,7 +59,29 @@ function fresh(
 const definition = ref(fresh()),
   ready = ref(false),
   enabled = ref(false),
-  pending = ref<{ id: string; operationId: string }>()
+  pending = ref<{ id: string; requester: string; body: Operation<PolicyChange> }>()
+function requester() {
+  const state = runtime.session.state.value
+  return state.status === 'authenticated' &&
+    state.tenant === runtime.tenant &&
+    state.identity &&
+    state.session
+    ? [state.tenant, state.identity.principalId, state.session.id].join('/')
+    : null
+}
+watch(
+  requester,
+  () => {
+    pending.value = undefined
+    ready.value = false
+    current.value = undefined
+    resource.value = undefined
+  },
+  { flush: 'sync' },
+)
+onBeforeUnmount(() => {
+  pending.value = undefined
+})
 const variants = computed(() =>
   resource.value?.id === definition.value.action.resource.id
     ? (resource.value.versions
@@ -299,18 +321,41 @@ function change(input: PolicyChange) {
     (typeof route.query['id'] === 'string' && current.value?.id !== route.query['id'])
   )
     return
-  const body = operation(input, current.value?.revision ?? 0),
+  const actor = requester()
+  if (!actor) return
+  const body = operation(structuredClone(input), current.value?.revision ?? 0),
     target = current.value?.id ?? id.value
-  pending.value = { id: target, operationId: body.operationId }
+  pending.value = { id: target, requester: actor, body }
   void runWrite(
     () => client.change(target, body),
     (p) => {
+      if (requester() !== actor) throw new Error('Policy requester changed')
       apply(p)
       pending.value = undefined
       list.value = undefined
       if (route.query['id'] !== p.id) void router.replace({ query: { ...route.query, id: p.id } })
     },
   )
+}
+async function recover() {
+  const original = pending.value
+  if (
+    !original ||
+    busy.value ||
+    !uncertain.value ||
+    original.requester !== requester() ||
+    (typeof route.query['id'] === 'string' && route.query['id'] !== original.id)
+  )
+    return
+  ready.value = false
+  const confirmed = await runWrite(
+    () => client.change(original.id, structuredClone(toRaw(original.body))),
+    () => {
+      if (requester() !== original.requester) throw new Error('Policy requester changed')
+      pending.value = undefined
+    },
+  )
+  if (confirmed && requester() === original.requester) await open(original.id)
 }
 function save(event: Event) {
   if (!(event.target as HTMLFormElement).reportValidity()) return
@@ -542,7 +587,13 @@ onMounted(async () => {
     </p>
     <p v-else>{{ t('policies.configurationHint') }}</p>
     <p v-if="uncertain && pending" role="alert">
-      {{ t('policies.selfService.unknown', { id: pending.operationId }) }}
+      {{ t('policies.selfService.unknown', { id: pending.body.operationId }) }}
     </p>
+    <template v-if="uncertain && pending">
+      <p>{{ t('policies.selfService.recoverHint') }}</p>
+      <button :disabled="busy || requester() !== pending.requester" @click="recover">
+        {{ t('policies.selfService.recover') }}
+      </button>
+    </template>
   </PolicyFrame>
 </template>

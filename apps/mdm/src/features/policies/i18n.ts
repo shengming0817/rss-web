@@ -42,7 +42,9 @@ export const policiesZh = {
     disable: '禁用整个 Policy',
     enable: '启用整个 Policy',
     executionHint:
-      '保存与发布不代表执行。自助目录、调用及结果需后台正式接口；此页面不代员工执行或确认。',
+      '保存与发布不代表执行。员工通过 Agent 自助目录与调用使用脚本；此页面不代员工执行或确认。',
+    recover: '核对／重试原提交',
+    recoverHint: '此操作发送原请求；若此前尚未受理，将提交原操作。不会自动重试。',
     unknown: '操作 {id} 结果未知。只读核对当前配置不能确认原操作回执；请核对后再继续，不自动重放。',
   },
   invalidDate: '请填写有效的 UTC 日期和时间。',
@@ -421,6 +423,9 @@ export const policiesEn: typeof policiesZh = {
     enable: 'Enable entire Policy',
     executionHint:
       'Saving and publishing do not execute. Discovery, invocation and results require formal backend APIs; this page does not execute or confirm for an employee.',
+    recover: 'Check / retry original submission',
+    recoverHint:
+      'This sends the original request. If it was not accepted, this will submit the original operation. It never retries automatically.',
     unknown:
       'Operation {id} has an unknown outcome. Current configuration does not verify its receipt. Reconcile the original operation before continuing; no automatic replay.',
   },

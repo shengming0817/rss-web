@@ -1,3 +1,4 @@
+import { ref } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import { createRouter, createMemoryHistory } from 'vue-router'
@@ -102,6 +103,12 @@ async function fixture(unknown = false, configuration = false) {
       definition: body.input.definition ?? old.definition,
     }
   })
+  const sessionState = ref({
+    status: 'authenticated',
+    tenant: '11111111-1111-4111-8111-111111111111',
+    identity: { principalId: actor.principalId },
+    session: { id: actor.sessionId },
+  })
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [{ path: '/', component: PoliciesView }],
@@ -113,6 +120,8 @@ async function fixture(unknown = false, configuration = false) {
       stubs: { RouterLink: true },
       provide: {
         [mdmKey as symbol]: {
+          session: { state: sessionState },
+          tenant: sessionState.value.tenant,
           policies: {
             policies: { read, list, change, preview, devices },
             resources: {
@@ -131,7 +140,7 @@ async function fixture(unknown = false, configuration = false) {
   const button = (text: string) => wrapper.findAll('button').find((b) => b.text() === text)!
   await button('加载资源版本').trigger('click')
   await flushPromises()
-  return { wrapper, change, read, button, router, preview, devices }
+  return { wrapper, change, read, button, router, preview, devices, sessionState }
 }
 it('reads a deep-linked formal Policy, retains false/1 and saves Resource parameter sources without schema copies', async () => {
   const f = await fixture()
@@ -315,5 +324,54 @@ it('shows the current configuration preview and all progress operations and diag
   const row = (await f.devices.mock.results[0]!.value).items[0]!
   for (const fact of [...row.operationIds, ...row.diagnoses])
     expect(f.wrapper.text()).toContain(fact)
+  f.wrapper.unmount()
+})
+
+it('recovers only on explicit action with the identical original request and reloads before opening writes', async () => {
+  const f = await fixture(true)
+  await f.wrapper.get('form').trigger('submit')
+  await flushPromises()
+  const original = structuredClone(f.change.mock.calls[0]!)
+  f.change.mockResolvedValueOnce({ ...(await f.read.mock.results[0]!.value), revision: 2 })
+  await f.button('核对／重试原提交').trigger('click')
+  await flushPromises()
+  expect(f.change.mock.calls[1]).toEqual(original)
+  expect(f.read).toHaveBeenCalledTimes(2)
+  expect(f.button('新建').attributes('disabled')).toBeUndefined()
+  expect(f.wrapper.findAll('button').some((b) => b.text() === '核对／重试原提交')).toBe(false)
+  f.wrapper.unmount()
+})
+it('keeps repeated Unknown recovery blocked and drops the original request on identity or target change', async () => {
+  for (const change of ['identity', 'target']) {
+    const f = await fixture(true)
+    await f.wrapper.get('form').trigger('submit')
+    await flushPromises()
+    await f.button('核对／重试原提交').trigger('click')
+    await flushPromises()
+    expect(f.change.mock.calls[1]).toEqual(f.change.mock.calls[0])
+    expect(f.button('新建').attributes('disabled')).toBeDefined()
+    if (change === 'identity')
+      f.sessionState.value = {
+        ...f.sessionState.value,
+        identity: { principalId: crypto.randomUUID() },
+      }
+    else await f.router.push({ query: { id: crypto.randomUUID() } })
+    await flushPromises()
+    expect(f.wrapper.findAll('button').some((b) => b.text() === '核对／重试原提交')).toBe(false)
+    expect(f.change).toHaveBeenCalledTimes(2)
+    f.wrapper.unmount()
+  }
+})
+it('keeps writes closed when the original receipt is confirmed but current configuration cannot be read', async () => {
+  const f = await fixture(true)
+  await f.wrapper.get('form').trigger('submit')
+  await flushPromises()
+  f.change.mockResolvedValueOnce(await f.read.mock.results[0]!.value)
+  f.read.mockRejectedValueOnce(new Error('unavailable'))
+  await f.button('核对／重试原提交').trigger('click')
+  await flushPromises()
+  expect(f.wrapper.get('form > fieldset').attributes('disabled')).toBeDefined()
+  await f.wrapper.get('form').trigger('submit')
+  expect(f.change).toHaveBeenCalledTimes(2)
   f.wrapper.unmount()
 })
