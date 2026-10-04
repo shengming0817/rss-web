@@ -1,3 +1,4 @@
+import { createPoliciesClient } from '../../policies/clients/policies'
 import type { HttpTransport } from '@rss/api/mdm'
 import type { Operation } from '../../../services/useOperation'
 import {
@@ -8,59 +9,29 @@ import {
   enumeration,
   identifier,
   nullable,
-  record,
   string,
   uuid,
 } from '../../../services/decode'
 import {
   eligibility,
-  resourceBinding,
   softwarePolicy,
   taskAdmission,
   type SoftwarePolicyDefinition,
 } from './assignment-model'
+import { resourceBinding } from '../../policies/clients/model'
 export type AssignmentChange =
   | { action: 'put'; enabled: boolean; definition: SoftwarePolicyDefinition }
   | { action: 'enable' | 'disable' }
 export function createAssignmentsClient(transport: HttpTransport) {
+  const policies = createPoliciesClient(transport)
   return {
-    list: (after?: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/policies',
-        query: { after },
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['items', 'nextCursor'])
-          return {
-            items: array(v['items'], (item) => {
-              const kind = enumeration(
-                record(record(record(item)['definition'])['behavior'])['kind'],
-                ['software', 'execution', 'configuration'] as const,
-              )
-              return kind === 'software' ? softwarePolicy(item) : null
-            }).filter((p) => p !== null),
-            nextCursor: nullable(v['nextCursor'], uuid),
-          }
-        },
-      }),
-    read: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/policies/{id}',
-        pathParams: { id },
-        successStatus: 200,
-        decode: (v) => softwarePolicy(v, id),
-      }),
-    change: (id: string, body: Operation<AssignmentChange>) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/policies/{id}',
-        pathParams: { id },
-        body,
-        successStatus: 200,
-        decode: (v) => softwarePolicy(v, id),
-      }),
+    list: async (after?: string) => {
+      const page = await policies.list(after, 'software')
+      return { ...page, items: page.items.map((p) => softwarePolicy(p)) }
+    },
+    read: async (id: string) => softwarePolicy(await policies.read(id), id),
+    change: async (id: string, body: Operation<AssignmentChange>) =>
+      softwarePolicy(await policies.change(id, body), id),
     preview: (definition: SoftwarePolicyDefinition, after?: string, scopeResult?: string) =>
       transport.request({
         method: 'POST',
@@ -72,10 +43,10 @@ export function createAssignmentsClient(transport: HttpTransport) {
             resource = resourceBinding(v['resource']),
             result = uuid(v['scopeResult'])
           if (
-            resource.id !== definition.resource.id ||
-            resource.version !== definition.resource.version ||
+            resource.id !== definition.action.resource.id ||
+            resource.version !== definition.action.resource.version ||
             JSON.stringify(Object.entries(resource.variants).sort()) !==
-              JSON.stringify(Object.entries(definition.resource.variants).sort()) ||
+              JSON.stringify(Object.entries(definition.action.resource.variants).sort()) ||
             (scopeResult && result !== scopeResult)
           )
             throw new Error('Wrong preview basis')

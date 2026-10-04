@@ -2,13 +2,15 @@ import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import type { SoftwarePolicyDefinition } from './assignment-model'
 import { createAssignmentsClient } from './assignments'
-import { nativeSchedule, resourceBinding } from './assignment-model'
+import { nativeSchedule, resourceBinding } from '../../policies/clients/model'
 const id = '11111111-1111-4111-8111-111111111111',
   versionId = '22222222-2222-4222-8222-222222222222'
 const definition: SoftwarePolicyDefinition = {
-  resource: { kind: 'software', id: 'app', version: '1', variants: { windows_x86_64: 'main' } },
   scope: id,
-  behavior: {
+  action: {
+    delivery: { kind: 'direct' },
+    resource: { kind: 'software', id: 'app', version: '1', variants: { windows_x86_64: 'main' } },
+
     kind: 'software',
     intent: 'required_install',
     admissionOperation: versionId,
@@ -26,7 +28,7 @@ const definition: SoftwarePolicyDefinition = {
 }
 const policy = { id, revision: 1, version: 1, versionId, enabled: true, definition }
 it('rejects native schedule and resource coordinates that the service cannot accept', () => {
-  const schedule = definition.behavior.schedule
+  const schedule = definition.action.schedule
   for (const trigger of [
     { kind: 'check_in', minimumSeconds: 59 },
     { kind: 'interval', anchor: 0, seconds: 31536001 },
@@ -57,7 +59,7 @@ it('rejects native schedule and resource coordinates that the service cannot acc
     }).window,
   ).not.toBeNull()
   for (const id of ['../app', 'app//name', 'name with spaces', 'a'.repeat(129)])
-    expect(() => resourceBinding({ ...definition.resource, id })).toThrow()
+    expect(() => resourceBinding({ ...definition.action.resource, id })).toThrow()
 })
 it('consumes the native Policy contract, including optional end and staged software behavior', async () => {
   const request = vi.fn(async (o: RequestOptions<unknown>) => o.decode(policy))
@@ -77,7 +79,7 @@ it('consumes the native Policy contract, including optional end and staged softw
 it('retains native cursor and scope-result fencing across previews', async () => {
   const request = vi.fn(async (o: RequestOptions<unknown>) =>
     o.decode({
-      resource: definition.resource,
+      resource: definition.action.resource,
       scopeResult: versionId,
       items: [],
       nextCursor: 'device-20',

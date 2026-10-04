@@ -14,7 +14,7 @@ import {
 } from '../../../services/decode'
 import type { Operation } from '../../../services/useOperation'
 import { registration, enrollmentSources } from '../../devices/clients/enrollment'
-import { resourceBinding } from './assignment-model'
+import { resourceBinding } from '../../policies/clients/model'
 import { candidate } from './candidate'
 function source(value: unknown) {
   const v = closed(value, ['registrationId', 'generation', 'source'])

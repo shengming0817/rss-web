@@ -3,26 +3,26 @@ import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { createScenario, TENANT } from '../scenario'
 import { createDeviceDemo } from '../devices/state'
 import { createAutomationDemo } from './state'
-import { createGroupsClient } from '../../src/features/devices/clients/groups'
-import { createEnrollmentClient } from '../../src/features/devices/clients/enrollment'
+import { seedScriptPolicies } from './seed'
 import { createPolicyClients } from '../../src/features/policies/client'
 const operation = <T>(input: T, expectedRevision = 0) => ({
   operationId: crypto.randomUUID(),
   expectedRevision,
   input,
 })
-it('carries Scope and resource edits through HTTP clients into continuous assignments and keeps preview, sources and unknown recovery honest', async () => {
+it('carries the shared formal Policy through the HTTP session, preserves existing false/1, and fences CAS', async () => {
   const devices = createDeviceDemo(),
     automation = createAutomationDemo(devices),
-    scenario = createScenario(
-      [automation.handle, devices.handle],
-      () => {
-        devices.reset()
-        automation.reset()
-      },
-      automation.tick,
-      automation.observe,
-    )
+    seed = seedScriptPolicies(automation)
+  const scenario = createScenario(
+    [automation.handle, devices.handle],
+    () => {
+      devices.reset()
+      automation.reset()
+    },
+    automation.tick,
+    automation.observe,
+  )
   const login = await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
@@ -41,101 +41,43 @@ it('carries Scope and resource edits through HTTP clients into continuous assign
           .filter(([, v]) => v !== undefined)
           .map(([k, v]) => [k, String(v)]),
       )
-      const r = await scenario.handle(o.method, `${path}?${query}`, o.body, {
-        ...headers,
-        ...Object.fromEntries(
-          Object.entries(o.headers ?? {}).map(([key, value]) => [key.toLowerCase(), value]),
-        ),
-      })
+      const r = await scenario.handle(o.method, `${path}?${query}`, o.body, headers)
       if (r.status !== o.successStatus)
         throw Object.assign(new Error('Rejected'), { status: r.status })
       return o.decode(r.body)
     },
   } as unknown as HttpTransport
-  const client = createPolicyClients(transport, TENANT, true),
-    scope = crypto.randomUUID()
-  await client.scopes.change(
-    scope,
-    operation({ action: 'put', definition: { targets: [], limitations: null, exclusions: [] } }),
-  )
-  await client.resources.change('fw', operation({ action: 'create', kind: 'configuration' }))
-  await client.resources.change(
-    'fw',
-    operation({ action: 'firewall_version', version: '1', enabled: true }, 1),
-  )
-  await client.resources.change('fw', operation({ action: 'activate', version: '1' }, 2))
-  const definition = {
-    source: 'resource' as const,
-    parameters: {},
-    resource: 'fw',
-    resourceVersion: '1',
-    scope,
-    enabled: true,
-    exitBehavior: 'cancel' as const,
-    trigger: { kind: 'on_change' as const },
-    validity: null,
+  const clients = createPolicyClients(transport, TENANT, true),
+    policies = clients.policies
+  expect((await policies.list()).items).toHaveLength(4)
+  const old = await policies.read(seed.ids[1]!)
+  expect(old.definition.selfService).toMatchObject({ allowAi: false, riskLevel: 1 })
+  const edited = {
+    ...old.definition,
+    selfService: { ...old.definition.selfService!, description: 'Edited purpose' },
   }
-  await client.policies.change('policy', operation({ action: 'put', definition }))
-  expect((await client.policies.read('policy')).members).toEqual([])
-  const before = (await client.executions.list()).items
-  await client.policies.preview('policy', definition)
-  expect((await client.executions.list()).items).toEqual(before)
-  const groups = createGroupsClient(transport),
-    group = crypto.randomUUID()
-  await groups.change(
-    group,
-    operation({ action: 'create', name: 'Pilot', description: '', criteria: null }),
+  const saved = await policies.change(
+    old.id,
+    operation({ action: 'put', enabled: true, definition: edited }, old.revision),
   )
-  await client.scopes.change(
-    scope,
-    operation(
-      {
-        action: 'put',
-        definition: { targets: [{ kind: 'group', id: group }], limitations: null, exclusions: [] },
-      },
-      1,
-    ),
-  )
-  const membership = await groups.change(
-    group,
-    operation({ action: 'members', add: ['device-01'], remove: [] }, 1),
-  )
-  expect((await client.policies.read('policy')).members).toEqual([])
-  await groups.status(group, membership.task!)
-  await groups.status(group, membership.task!)
-  const current = await client.policies.read('policy')
-  expect(current.revision).toBe(1)
-  expect(current.members[0]).toMatchObject({
-    device: 'device-01',
-    reason: 'applicable',
-    execution: expect.any(String),
+  expect(saved.definition.selfService).toMatchObject({
+    allowAi: false,
+    riskLevel: 1,
+    description: 'Edited purpose',
   })
-  const execution = await client.executions.read(current.members[0]!.execution!)
-  expect(execution).toMatchObject({
-    origin: { kind: 'policy', revision: 1, cancellation: 'none' },
-    receipt: 'not_received',
-    effect: 'unverified',
-    compliance: 'unknown',
-  })
-  const enrollment = createEnrollmentClient(transport)
-  const registration = (await enrollment.registrations('device-01')).items.find(
-    (r) => r.source === 'mdm.windows',
-  )!
-  await enrollment.revoke('device-01', registration.registrationId, crypto.randomUUID())
-  expect((await client.policies.read('policy')).members[0]?.reason).toBe('authorization')
-  expect((await client.executions.read(execution.id)).execution).toBe('cancelled')
-  const pause = operation(
-    { action: 'put' as const, definition: { ...definition, enabled: false } },
-    1,
-  )
-  scenario.set('unknown')
-  await expect(client.policies.change('policy', pause)).rejects.toMatchObject({ status: 503 })
-  scenario.set('normal')
-  expect((await client.policies.change('policy', pause)).revision).toBe(2)
-  expect((await client.executions.list()).items).toHaveLength(1)
+  expect(saved.versionId).toBe(old.versionId)
   await expect(
-    createPolicyClients(transport, TENANT, false).policies.read('policy'),
-  ).rejects.toThrow()
+    policies.change(old.id, operation({ action: 'disable' }, old.revision)),
+  ).rejects.toMatchObject({ status: 409 })
+  const disabled = await policies.change(old.id, operation({ action: 'disable' }, saved.revision))
+  expect(disabled.enabled).toBe(false)
+  expect(disabled.versionId).toBe(saved.versionId)
+  expect(disabled.definition.selfService?.published).toBe(true)
+  expect((await clients.executions.list()).items).toEqual([])
+  // Formal browser clients also consume these endpoints outside demo mode.
+  expect(await createPolicyClients(transport, TENANT, false).policies.read(old.id)).toEqual(
+    disabled,
+  )
   scenario.set('denied')
-  await expect(client.policies.read('policy')).rejects.toMatchObject({ status: 403 })
+  await expect(policies.read(old.id)).rejects.toMatchObject({ status: 403 })
 })

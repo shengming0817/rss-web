@@ -13,7 +13,7 @@ import {
   uuid,
 } from '../../../services/decode'
 import type { Operation } from '../../../services/useOperation'
-import { nativeSchedule, resourceBinding } from './assignment-model'
+import { nativeSchedule, resourceBinding } from '../../policies/clients/model'
 import { candidate } from './candidate'
 export function updateTarget(value: unknown) {
   const kind = enumeration(record(value)['kind'], ['os', 'third_party'] as const)

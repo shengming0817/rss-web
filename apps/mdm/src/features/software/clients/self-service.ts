@@ -11,7 +11,8 @@ import {
   uuid,
 } from '../../../services/decode'
 import type { Operation } from '../../../services/useOperation'
-import { nativeSchedule, resourceBinding, softwarePolicyDefinition } from './assignment-model'
+import { softwarePolicyDefinition } from './assignment-model'
+import { nativeSchedule, resourceBinding } from '../../policies/clients/model'
 import { candidate } from './candidate'
 export function selfServiceDefinition(value: unknown) {
   const v = closed(value, [
@@ -35,9 +36,11 @@ export function selfServiceDefinition(value: unknown) {
     runLifetimeSeconds: count(v['runLifetimeSeconds']),
   }
   softwarePolicyDefinition({
-    resource: d.resource,
     scope: d.scope,
-    behavior: {
+    action: {
+      delivery: { kind: 'direct' },
+      resource: d.resource,
+
       kind: 'software',
       intent: 'available_install',
       admissionOperation: d.admissionOperation,

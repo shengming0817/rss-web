@@ -160,7 +160,7 @@ it('rejects retired catalog statuses and workflow approvals without a concrete r
       }),
     ),
     client = createCatalogClient(t.http, tenant, true)
-  await expect(client.list('policies')).rejects.toThrow()
+  await expect(client.list('workflows')).rejects.toThrow()
   t.reply(
     envelope({
       snapshot,

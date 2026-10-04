@@ -8,6 +8,7 @@ import { createScopeDemo } from './scopes'
 import { createResourceDemo } from './resources'
 import { createNativeDemo } from './native'
 import { createPolicyDemo } from './policies'
+import { createPolicyStore } from './store'
 import { createConfigurationDemo } from './configurations'
 import { createWorkflowDemo } from './workflows'
 import type { DemoEvent } from './schedule'
@@ -36,6 +37,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         .filter((d) => authorization.can(actor, 'inventory_read', d.summary.id))
         .map((d) => ({ id: d.summary.id, platform: d.summary.platform, status: d.summary.status })),
   )
+  const policyStore = createPolicyStore()
   const resources = createResourceDemo(
     (id, version): boolean =>
       policies.references(id, version) ||
@@ -51,6 +53,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       { resolve: scopes.freeze, snapshot: scopes.snapshot },
       resources,
       admission,
+      policyStore,
     )
   const selfService = createSelfServiceDemo(devices, scopes, resources, admission, software)
   const bootstrap = createBootstrapDemo(devices, scopes, resources, admission)
@@ -58,12 +61,10 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
   const configurations = createConfigurationDemo(
     devices,
     scopes,
-    (id, version): boolean =>
-      policies.references(id, String(version), 'configuration') ||
-      workflows.referencesConfiguration(id, version),
-    (device, replacedPolicy) => policies.assignedConfigurations(device, replacedPolicy),
+    (id, version): boolean => workflows.referencesConfiguration(id, version),
+    () => [],
   )
-  const policies = createPolicyDemo(devices, scopes, resources, configurations)
+  const policies = createPolicyDemo(devices, scopes, resources, policyStore)
   const workflows = createWorkflowDemo(devices, scopes, resources, configurations),
     pages = createPages()
   function executions(): ExecutionSummary[] {
@@ -119,6 +120,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         scopes,
         resources,
         native,
+        policyStore,
         policies,
         configurations,
         workflows,
@@ -130,6 +132,8 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       ]) {
         const reply = owner.handle(request, scenario)
         if (reply) {
+          if (owner === policyStore && request.method === 'POST' && reply.status < 300)
+            software.reconcile()
           if (
             (owner === scopes || owner === resources) &&
             request.method === 'POST' &&
@@ -140,7 +144,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         }
       }
       const collection =
-        /^\/api\/v1\/mdm-candidate\/policies\/(scopes|resources|policies|workflows|approvals)$/.exec(
+        /^\/api\/v1\/mdm-candidate\/policies\/(scopes|resources|workflows|approvals)$/.exec(
           request.path,
         )
       const execution = /^\/api\/v1\/mdm-candidate\/executions(?:\/([^/]+))?$/.exec(request.path)
@@ -153,11 +157,9 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
             ? scopes.list()
             : name === 'resources'
               ? resources.list()
-              : name === 'policies'
-                ? policies.list()
-                : name === 'workflows'
-                  ? workflows.list()
-                  : workflows.approvals()
+              : name === 'workflows'
+                ? workflows.list()
+                : workflows.approvals()
         return candidate(
           pages.page<unknown>(request.path, scenario === 'empty' ? [] : items, request.query),
         )
@@ -228,6 +230,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         scopes,
         resources,
         native,
+        policyStore,
         policies,
         configurations,
         workflows,

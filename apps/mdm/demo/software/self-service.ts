@@ -148,9 +148,11 @@ export function createSelfServiceDemo(
           // Scope rolls back if binding fails; only this request owner can cancel the result.
           current.policy = scopes.forManagedDevices([current.device], (scope) =>
             software.createManagedPolicy({
-              resource: d.resource,
               scope,
-              behavior: {
+              action: {
+                delivery: { kind: 'direct' },
+                resource: d.resource,
+
                 kind: 'software',
                 intent: 'available_install',
                 admissionOperation: d.admissionOperation,

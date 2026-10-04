@@ -3,81 +3,100 @@ import { expect, it, vi } from 'vitest'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
+import { createAutomationDemo } from '../../../../demo/policies/state'
+import { createDeviceDemo } from '../../../../demo/devices/state'
+import { seedScriptPolicies } from '../../../../demo/policies/seed'
 import PoliciesView from './PoliciesView.vue'
-it('saves an empty assignment directly, preserves draft during progress reads and replays unknown writes exactly', async () => {
-  const definition = {
-    source: 'resource',
-    parameters: {},
-    resource: 'script',
-    resourceVersion: '1',
-    scope: 'scope',
-    enabled: true,
-    exitBehavior: 'cancel',
-    trigger: { kind: 'on_change' },
-    validity: null,
+import type { PolicyRead } from '../clients/model'
+async function fixture(unknown = false) {
+  const automation = createAutomationDemo(createDeviceDemo()),
+    seed = seedScriptPolicies(automation)
+  const actor = {
+    principalId: '22222222-2222-4222-8222-222222222222',
+    sessionId: crypto.randomUUID(),
   }
-  const policy = {
-    id: 'policy',
-    revision: 1,
-    archived: false,
-    definition,
-    computation: { sequence: 1, status: 'waiting', at: 1 },
-    members: [],
-  }
-  const read = vi.fn().mockResolvedValue(policy),
-    change = vi.fn().mockRejectedValueOnce(new Error('lost response')).mockResolvedValue(policy),
-    preview = vi.fn().mockResolvedValue([])
+  const old = automation.handle(
+    {
+      path: `/api/v1/policies/${seed.ids[1]}`,
+      method: 'GET',
+      body: undefined,
+      actor,
+      headers: {},
+      query: new URLSearchParams(),
+    },
+    'normal',
+  )!.body as PolicyRead
+  const read = vi.fn().mockResolvedValue(old),
+    list = vi.fn().mockResolvedValue({ items: [old], nextCursor: null })
+  const change = vi.fn(async (_id: string, body: { input: { definition?: unknown } }) => {
+    if (unknown) throw new Error('lost response')
+    return {
+      ...old,
+      revision: old.revision + 1,
+      definition: body.input.definition ?? old.definition,
+    }
+  })
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [{ path: '/', component: PoliciesView }],
   })
-  await router.push('/?id=policy')
-  const i18n = mdmI18n()
+  await router.push(`/?id=${old.id}`)
   const wrapper = mount(PoliciesView, {
     global: {
-      plugins: [router, i18n],
+      plugins: [router, mdmI18n()],
       stubs: { RouterLink: true },
       provide: {
         [mdmKey as symbol]: {
-          tenant: 'tenant',
-          demo: true,
           policies: {
-            policies: { read, change, preview },
-            catalog: { list: async () => ({ items: [], nextCursor: null }) },
+            policies: { read, list, change },
+            resources: {
+              read: vi.fn().mockResolvedValue(automation.resources.read(seed.resource)),
+            },
           },
         },
       },
     },
   })
   await flushPromises()
-  i18n.global.locale.value = 'en-US'
-  await flushPromises()
-  expect(wrapper.text()).toContain('Candidate continuous assignments')
-  expect(wrapper.text()).not.toContain('live policy execution')
-  i18n.global.locale.value = 'zh-CN'
-  await flushPromises()
   const button = (text: string) => wrapper.findAll('button').find((b) => b.text() === text)!
-  expect(wrapper.text()).toContain('等待 Scope 成员')
-  expect(wrapper.text()).not.toContain('保存冻结计划')
-  await wrapper.get('#policy-resource').setValue('draft')
-  await button('刷新进度（保留编辑）').trigger('click')
+  await button('加载资源版本').trigger('click')
   await flushPromises()
-  expect((wrapper.get('#policy-resource').element as HTMLInputElement).value).toBe('draft')
-  await button('预览').trigger('click')
+  return { wrapper, change, read, button }
+}
+it('reads a deep-linked formal Policy, retains false/1 and saves Resource parameter sources without schema copies', async () => {
+  const f = await fixture()
+  expect(f.read).toHaveBeenCalledTimes(1)
+  expect((f.wrapper.get('[data-field="allowAi"]').element as HTMLInputElement).checked).toBe(false)
+  expect((f.wrapper.get('[data-field="riskLevel"]').element as HTMLSelectElement).value).toBe('1')
+  expect(f.wrapper.find('#value-label').exists()).toBe(false)
+  expect(f.wrapper.find('#value-detail').exists()).toBe(true)
+  await f.wrapper.get('[data-field="published"]').setValue(false)
+  await f.wrapper.get('form').trigger('submit')
   await flushPromises()
-  expect(change).not.toHaveBeenCalled()
-  await wrapper.get('form').trigger('submit')
-  await flushPromises()
-  expect(change.mock.calls[0]?.[1]).toMatchObject({
-    expectedRevision: 1,
-    input: { action: 'put', definition: { resource: 'draft' } },
+  expect(f.change.mock.calls[0]?.[1]).toMatchObject({
+    input: {
+      action: 'put',
+      enabled: true,
+      definition: {
+        selfService: { published: false, allowAi: false, riskLevel: 1 },
+        action: { parameters: { label: { kind: 'input' }, detail: { kind: 'fixed', value: 1 } } },
+      },
+    },
   })
-  expect(button('新建').attributes('disabled')).toBeDefined()
-  await button('重放同一操作').trigger('click')
+  f.wrapper.unmount()
+})
+it('keeps an Unknown operation fenced after a configuration read and never replays it', async () => {
+  const f = await fixture(true)
+  await f.wrapper.get('form').trigger('submit')
   await flushPromises()
-  expect(change.mock.calls[1]).toEqual(change.mock.calls[0])
-  await button('新建').trigger('click')
-  expect((wrapper.get('#policy-resource').element as HTMLInputElement).value).toBe('')
-  expect((wrapper.get('#policy-scope').element as HTMLInputElement).value).toBe('')
-  wrapper.unmount()
+  expect(f.change).toHaveBeenCalledTimes(1)
+  expect(f.button('新建').attributes('disabled')).toBeDefined()
+  await f.button('重新载入配置（替换编辑）').trigger('click')
+  await flushPromises()
+  expect(f.read).toHaveBeenCalledTimes(2)
+  expect(f.button('新建').attributes('disabled')).toBeDefined()
+  await f.wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(f.change).toHaveBeenCalledTimes(1)
+  f.wrapper.unmount()
 })

@@ -322,9 +322,11 @@ export function createUpdatesDemo(
               rows.map((row) => row.device),
               (scope) =>
                 patches!.software.createManagedPolicy({
-                  resource: t.resource,
                   scope,
-                  behavior: {
+                  action: {
+                    delivery: { kind: 'direct' },
+                    resource: t.resource,
+
                     kind: 'software',
                     intent: 'required_install',
                     admissionOperation: t.admissionOperation,

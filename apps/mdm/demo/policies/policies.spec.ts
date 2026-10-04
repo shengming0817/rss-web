@@ -1,204 +1,213 @@
-import { randomUUID } from 'node:crypto'
 import { expect, it } from 'vitest'
-import { createPolicyDemo } from './policies'
+import { createAutomationDemo } from './state'
 import { createDeviceDemo } from '../devices/state'
+import { seedScriptPolicies } from './seed'
 import type { DemoRequest } from '../scenario'
-import type { ResourceRead } from '../../src/features/policies/clients/resources'
-const path = '/api/v1/mdm-candidate/policies/assignments/firewall'
+import type { PolicyRead } from '../../src/features/policies/clients/model'
 function fixture() {
-  const facts = createDeviceDemo().facts()
-  const scope = { id: randomUUID(), revision: 1, members: [] as string[], sources: [] }
-  const resource: ResourceRead = {
-    id: 'firewall',
-    revision: 1,
-    kind: 'configuration',
-    versions: [
-      {
-        id: '1',
-        state: 'active',
-        configuration: { enabled: true },
-        digest: Array(32).fill(1),
-        variants: [],
-      },
-    ],
+  const automation = createAutomationDemo(createDeviceDemo()),
+    seed = seedScriptPolicies(automation)
+  const actor = {
+    principalId: '22222222-2222-4222-8222-222222222222',
+    sessionId: crypto.randomUUID(),
   }
-  const policies = createPolicyDemo(
-    { facts: () => structuredClone(facts) },
-    { resolve: () => structuredClone(scope) },
-    { read: () => structuredClone(resource) },
-  )
-  const actor = { principalId: randomUUID(), sessionId: randomUUID() }
-  const definition = {
-    source: 'resource' as const,
-    parameters: {},
-    resource: 'firewall',
-    resourceVersion: '1',
-    scope: scope.id,
-    enabled: true,
-    exitBehavior: 'cancel',
-    trigger: { kind: 'on_change' },
-    validity: null,
+  function request(path: string, body?: unknown, query = new URLSearchParams()): DemoRequest {
+    return { path, body, query, actor, headers: {}, method: body === undefined ? 'GET' : 'POST' }
   }
-  const request = (url: string, body?: unknown): DemoRequest => ({
-    path: url,
-    body,
-    method: body === undefined ? 'GET' : 'POST',
-    actor,
-    headers: {},
-    query: new URLSearchParams(),
-  })
-  const write = (
-    revision: number,
-    input: unknown = { action: 'put', definition },
-    operationId = randomUUID(),
-  ) => policies.handle(request(path, { operationId, expectedRevision: revision, input }), 'normal')!
-  return { policies, scope, resource, facts, definition, request, write }
+  function write(id: string, revision: number, input: unknown, operationId = crypto.randomUUID()) {
+    return automation.handle(
+      request(`/api/v1/policies/${id}`, { operationId, expectedRevision: revision, input }),
+      'normal',
+    )!
+  }
+  function read(id: string) {
+    return automation.handle(request(`/api/v1/policies/${id}`), 'normal')!.body as PolicyRead
+  }
+  return { automation, seed, request, write, read }
 }
-it('enables empty scopes, reconciles membership without changing editing revision and never duplicates unchanged work', () => {
+it('seeds independently published, manual-only, withdrawn and disabled policies without admitting executions', () => {
   const f = fixture()
-  expect(f.write(0).status).toBe(200)
-  expect(f.policies.executions()).toEqual([])
-  f.scope.members = ['device-01']
-  f.policies.reconcile('normal', { kind: 'clock', at: 2000000000 })
-  expect(f.policies.executions()).toHaveLength(1)
-  f.policies.reconcile('normal', { kind: 'clock', at: 2000000001 })
-  expect(f.policies.executions()).toHaveLength(1)
-  expect(f.policies.handle(f.request(path), 'normal')?.body).toMatchObject({
-    policy: { revision: 1, computation: { status: 'ready' } },
-  })
-  f.scope.members = []
-  f.policies.reconcile('normal', { kind: 'clock', at: 2000000002 })
-  expect(f.policies.executions()[0]?.origin).toMatchObject({ cancellation: 'requested' })
-  f.scope.members = ['device-01']
-  f.policies.reconcile('normal', { kind: 'clock', at: 2000000003 })
-  expect(f.policies.executions()).toHaveLength(2)
-})
-it('keeps preview side effect free and fences CAS and exact replay', () => {
-  const f = fixture(),
-    operationId = randomUUID()
-  f.scope.members = ['device-01']
-  const preview = f.policies.handle(
-    f.request(`${path}/preview`, { definition: f.definition }),
-    'normal',
-  )!
-  expect(preview.status).toBe(200)
-  expect(f.policies.executions()).toEqual([])
-  expect(f.write(0, undefined, operationId).status).toBe(200)
-  expect(f.write(0, undefined, operationId).status).toBe(200)
-  expect(f.write(0).status).toBe(409)
   expect(
-    f.write(1, { action: 'put', definition: { ...f.definition, enabled: false } }, operationId)
-      .status,
-  ).toBe(409)
-  expect(f.policies.executions()).toHaveLength(1)
-})
-it('blocks individual unsupported members and keeps unknown attempts without blind reruns', () => {
-  const f = fixture()
-  f.scope.members = ['device-01', 'device-02']
-  f.write(0)
-  expect(f.policies.executions()).toHaveLength(1)
-  f.policies.reconcile('unknown', { kind: 'clock', at: 2000000000 })
-  const first = f.policies.executions()[0]!
-  expect(first.execution).toBe('unknown')
-  f.policies.reconcile('normal', { kind: 'clock', at: 2000000001 })
-  expect(f.policies.executions()).toHaveLength(1)
-  expect(f.policies.executions()[0]?.execution).toBe('unknown')
-  expect(f.policies.handle(f.request(path), 'normal')?.body).toMatchObject({
-    policy: {
-      members: expect.arrayContaining([
-        { device: 'device-02', reason: 'unsupported', execution: null, cancellable: false },
+    f.seed.ids
+      .map((id) => f.read(id))
+      .map((p) => [
+        p.enabled,
+        p.definition.selfService?.published,
+        p.definition.selfService?.allowAi,
+        p.definition.selfService?.riskLevel,
       ]),
-    },
-  })
-})
-it('changes resource revisions once and fences obsolete device identities', () => {
-  const f = fixture()
-  f.scope.members = ['device-01']
-  f.write(0)
-  f.resource.versions.push({ ...f.resource.versions[0]!, id: '2', digest: Array(32).fill(2) })
+  ).toEqual([
+    [true, true, true, 2],
+    [true, true, false, 1],
+    [true, false, true, 2],
+    [false, true, true, 2],
+  ])
   expect(
-    f.write(1, { action: 'put', definition: { ...f.definition, resourceVersion: '2' } }).status,
-  ).toBe(200)
-  expect(f.policies.executions()).toHaveLength(2)
-  const d = f.facts.find((d) => d.summary.id === 'device-01')!
-  d.registrations.forEach((r) => r.generation++)
-  f.policies.reconcile('normal', { kind: 'clock', at: 2000000000 })
-  expect(f.policies.executions()).toHaveLength(3)
-  expect(f.policies.executions().filter((r) => r.execution === 'cancelled')).toHaveLength(2)
-})
-it('honors interval events, disabled policies and scope re-entry without retrying unknown effects', () => {
-  const f = fixture()
-  f.scope.members = ['device-01']
+    f.automation.handle(f.request('/api/v1/mdm-candidate/executions'), 'normal')?.body,
+  ).toMatchObject({ items: [] })
   expect(
-    f.write(0, {
+    f.automation.handle(f.request('/api/v1/mdm-candidate/policies/assignments/legacy'), 'normal'),
+  ).toBeUndefined()
+})
+it('normalizes first-publication defaults, preserves existing values, and keeps withdrawal separate from disable', () => {
+  const f = fixture(),
+    id = crypto.randomUUID(),
+    metadata = {
+      published: true,
+      displayName: 'Support',
+      description: '',
+      prerequisites: '',
+      sideEffects: '',
+      category: 'Support',
+      keywords: [],
+    }
+  expect(
+    f.write(id, 0, {
       action: 'put',
-      definition: { ...f.definition, trigger: { kind: 'interval', seconds: 60 } },
+      enabled: true,
+      definition: { ...f.seed.definition, selfService: metadata },
     }).status,
   ).toBe(200)
-  expect(f.policies.executions()).toHaveLength(0)
-  f.policies.reconcile('normal', { kind: 'clock', at: 2000000000 })
-  f.policies.reconcile('normal', { kind: 'clock', at: 2000000000 })
-  expect(f.policies.executions()).toHaveLength(1)
-  f.policies.reconcile('unknown', { kind: 'clock', at: 2000000001 })
-  f.policies.reconcile('unknown', { kind: 'clock', at: 2000000002 })
-  f.scope.members = []
-  f.policies.reconcile('normal', { kind: 'clock', at: 2000000003 })
-  f.scope.members = ['device-01']
-  f.policies.reconcile('normal', { kind: 'clock', at: 2000000100 })
-  expect(f.policies.executions()).toHaveLength(1)
-  expect(f.policies.executions()[0]?.execution).toBe('unknown')
+  expect(f.read(id).definition.selfService).toMatchObject({ allowAi: true, riskLevel: 2 })
+  expect(
+    f.write(id, 1, {
+      action: 'put',
+      enabled: true,
+      definition: {
+        ...f.seed.definition,
+        selfService: { ...metadata, allowAi: false, riskLevel: 1 },
+      },
+    }).status,
+  ).toBe(200)
+  expect(
+    f.write(id, 2, {
+      action: 'put',
+      enabled: true,
+      definition: { ...f.seed.definition, selfService: { ...metadata, published: false } },
+    }).status,
+  ).toBe(200)
+  expect(f.read(id)).toMatchObject({
+    enabled: true,
+    definition: { selfService: { published: false, allowAi: false, riskLevel: 1 } },
+  })
+  expect(f.write(id, 3, { action: 'disable' }).status).toBe(200)
+  expect(f.read(id)).toMatchObject({
+    enabled: false,
+    definition: { selfService: { published: false } },
+  })
 })
-it('blocks offline and withdrawn identities per member and preserves confirmed results on archive', () => {
-  const f = fixture()
-  f.scope.members = ['device-01']
-  f.write(0)
-  f.policies.reconcile('partial', { kind: 'clock', at: 2000000000 })
-  expect(f.policies.executions()[0]?.execution).toBe('not_started')
-  f.policies.reconcile('normal', { kind: 'clock', at: 2000000001 })
-  f.policies.reconcile('normal', { kind: 'clock', at: 2000000002 })
-  expect(f.policies.executions()[0]?.execution).toBe('succeeded')
-  f.write(1, { action: 'archive' })
-  expect(f.policies.executions()[0]).toMatchObject({ execution: 'succeeded', effect: 'unverified' })
-  const other = fixture()
-  other.scope.members = ['device-01']
-  other.write(0)
-  other.facts.find((d) => d.summary.id === 'device-01')!.registrations = []
-  other.policies.reconcile('normal', { kind: 'clock', at: 2000000001 })
-  expect(other.policies.executions()[0]?.execution).toBe('cancelled')
+it('fences CAS and exact receipts, rejects fixed parameter drift and never lets a Policy redefine Resource schema', () => {
+  const f = fixture(),
+    id = f.seed.ids[0]!,
+    old = f.read(id),
+    operationId = crypto.randomUUID()
+  expect(f.write(id, 1, { action: 'disable' }, operationId).status).toBe(200)
+  expect(f.write(id, 1, { action: 'disable' }, operationId).status).toBe(200)
+  expect(f.write(id, 1, { action: 'enable' }, operationId).status).toBe(409)
+  expect(f.write(id, 1, { action: 'enable' }).status).toBe(409)
+  const change = (action: unknown) =>
+    f.write(id, 2, { action: 'put', enabled: true, definition: { ...old.definition, action } })
+  expect(
+    change({
+      ...old.definition.action,
+      parameters: { label: { kind: 'input' }, detail: { kind: 'fixed', value: 10 } },
+    }).status,
+  ).toBe(400)
+  expect(
+    change({
+      ...old.definition.action,
+      parameters: {
+        label: { kind: 'input', schema: { type: 'string' } },
+        detail: { kind: 'fixed', value: 1 },
+      },
+    }).status,
+  ).toBe(400)
+  expect(
+    change({
+      ...old.definition.action,
+      resource: { ...f.seed.definition.action.resource, variant: 'missing' },
+    }).status,
+  ).toBe(404)
+  expect(f.read(id)).toMatchObject({ revision: 2, enabled: false })
 })
-it('freezes execution basis and refuses terminal cancel while fencing deprecated resources', () => {
-  const f = fixture()
-  f.scope.members = ['device-01']
-  f.write(0)
-  const original = f.policies.executions()[0]!
-  expect(original.origin).toMatchObject({
-    kind: 'policy',
-    basis: {
-      resource: 'firewall',
-      version: '1',
-      scopeRevision: 1,
-      registrations: expect.any(Array),
+it('uses UUID cursors and action filtering from the same authoritative collection', () => {
+  const f = fixture(),
+    first = f.automation.handle(
+      f.request(
+        '/api/v1/policies',
+        undefined,
+        new URLSearchParams({ action: 'execution', limit: '2' }),
+      ),
+      'normal',
+    )!.body as { items: PolicyRead[]; nextCursor: string }
+  expect(first.items).toHaveLength(2)
+  const next = f.automation.handle(
+    f.request(
+      '/api/v1/policies',
+      undefined,
+      new URLSearchParams({ after: first.nextCursor, limit: '2' }),
+    ),
+    'normal',
+  )!.body as { items: PolicyRead[]; nextCursor: null }
+  expect(next.items).toHaveLength(2)
+  expect(next.nextCursor).toBeNull()
+  expect(
+    f.automation.handle(
+      f.request('/api/v1/policies', undefined, new URLSearchParams({ after: 'legacy-cursor' })),
+      'normal',
+    )?.status,
+  ).toBe(400)
+})
+it('admits only fixed-input Agent check-ins and preserves Unknown runs through later checks and disablement', () => {
+  const f = fixture(),
+    id = f.seed.ids[0]!,
+    old = f.read(id),
+    at = f.automation.now() + 1
+  expect(
+    f.automation.handle(
+      f.request(`/api/v1/scopes/${f.seed.scope}`, {
+        operationId: crypto.randomUUID(),
+        expectedRevision: 1,
+        input: {
+          action: 'put',
+          definition: {
+            targets: [{ kind: 'device', id: 'device-01' }],
+            limitations: null,
+            exclusions: [],
+          },
+        },
+      }),
+      'normal',
+    )?.status,
+  ).toBe(200)
+  f.automation.tick({ kind: 'check_in', device: 'device-01', at })
+  const executions = () =>
+    (
+      f.automation.handle(f.request('/api/v1/mdm-candidate/executions'), 'normal')!.body as {
+        items: { execution: string; origin: { kind: string; policy?: string } }[]
+      }
+    ).items.filter((r) => r.origin.kind === 'policy' && r.origin.policy === id)
+  expect(executions()).toEqual([])
+  const action = {
+    ...f.seed.definition.action,
+    parameters: { label: { kind: 'fixed', value: 'support' }, detail: { kind: 'fixed', value: 1 } },
+    schedule: {
+      ...f.seed.definition.action.schedule,
+      trigger: { kind: 'check_in', minimumSeconds: 60 },
     },
-  })
-  f.resource.versions[0]!.state = 'deprecated'
-  f.policies.reconcile('normal', { kind: 'clock', at: 2000000000 })
-  expect(f.policies.executions()[0]?.execution).toBe('cancelled')
-  expect(f.write(1, { action: 'cancel_run', execution: original.id }).status).toBe(409)
-  expect(f.policies.executions()[0]?.origin).toEqual({
-    ...original.origin,
-    cancellation: 'confirmed',
-  })
-})
-it('waits for predecessor cancellation before dispatching a replacement', () => {
-  const f = fixture()
-  f.scope.members = ['device-01']
-  f.write(0)
-  f.policies.reconcile('normal', { kind: 'clock', at: 2000000000 })
-  f.resource.versions.push({ ...f.resource.versions[0]!, id: '2' })
-  f.write(1, { action: 'put', definition: { ...f.definition, resourceVersion: '2' } })
-  expect(f.policies.executions()).toHaveLength(1)
-  expect(f.policies.executions()[0]?.origin).toMatchObject({ cancellation: 'requested' })
-  f.policies.reconcile('normal', { kind: 'clock', at: 2000000001 })
-  expect(f.policies.executions()).toHaveLength(2)
-  expect(f.policies.executions()[0]?.execution).toBe('cancelled')
+  }
+  expect(
+    f.write(id, 1, { action: 'put', enabled: true, definition: { ...old.definition, action } })
+      .status,
+  ).toBe(200)
+  f.automation.tick({ kind: 'clock', at: at + 1 })
+  expect(executions()).toEqual([])
+  f.automation.tick({ kind: 'check_in', device: 'device-01', at: at + 2 })
+  expect(executions()).toHaveLength(1)
+  f.automation.tick({ kind: 'check_in', device: 'device-01', at: at + 3 }, 'unknown')
+  expect(executions()[0]?.execution).toBe('unknown')
+  expect(f.write(id, 2, { action: 'disable' }).status).toBe(200)
+  f.automation.tick({ kind: 'check_in', device: 'device-01', at: at + 100 })
+  expect(executions()).toHaveLength(1)
+  expect(executions()[0]?.execution).toBe('unknown')
 })

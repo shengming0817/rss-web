@@ -1,4 +1,5 @@
 import Ajv from 'ajv'
+import type { ExecutionDefinition } from '../../src/features/policies/clients/model'
 import { record } from '../../src/services/decode'
 import {
   decodeScriptSpec,
@@ -93,4 +94,21 @@ export function validateScriptParameters(spec: ScriptSpec, value: Json) {
     !validator.validate(spec.parameters, parameters)
   )
     invalid()
+}
+
+/** Publication validates fixed fields against Resource; allowed inputs retain its constraints. */
+export function validateParameterSources(
+  spec: ScriptSpec,
+  sources: ExecutionDefinition['action']['parameters'],
+) {
+  const props = record(spec.parameters['properties'])
+  if (
+    Object.keys(props).length !== Object.keys(sources).length ||
+    Object.keys(sources).some((k) => !(k in props))
+  )
+    invalid()
+  for (const [name, source] of Object.entries(sources)) {
+    if (source.kind === 'fixed' && !validator.validate(props[name] as object, source.value))
+      invalid()
+  }
 }

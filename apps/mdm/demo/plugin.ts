@@ -3,6 +3,7 @@ import { mdmJsonBodyLimit, MDM_CONTENT_BODY_LIMIT, isMdmContentRequest } from '@
 import { createScenario } from './scenario'
 import { createDeviceDemo } from './devices/state'
 import { createAutomationDemo } from './policies/state'
+import { seedScriptPolicies } from './policies/seed'
 import { createPublicationDemo } from './software/publication'
 import { createCatalogDemo } from './software/catalog'
 import { createImportsDemo } from './software/imports'
@@ -15,6 +16,7 @@ export function demoPlugin(): Plugin {
     configureServer(server) {
       const devices = createDeviceDemo()
       const automation = createAutomationDemo(devices)
+      seedScriptPolicies(automation)
       const software = automation.admission
       const publication = createPublicationDemo(automation.resources)
       const imports = createImportsDemo(automation.resources, software)
@@ -29,6 +31,7 @@ export function demoPlugin(): Plugin {
           publication.reset()
           catalog.reset()
           imports.reset()
+          seedScriptPolicies(automation)
         },
         (event, scenario) => {
           devices.tick(event)

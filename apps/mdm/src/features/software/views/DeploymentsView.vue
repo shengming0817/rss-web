@@ -6,11 +6,10 @@ import { useMdm } from '../../../context'
 import { operation, useOperation, type Operation } from '../../../services/useOperation'
 import {
   softwarePolicyDefinition,
-  intents,
-  targets,
   type SoftwarePolicy,
   type SoftwarePolicyDefinition,
 } from '../clients/assignment-model'
+import { intents, targets } from '../../policies/clients/model'
 import type { AssignmentChange } from '../clients/assignments'
 import type { RunCursor, SoftwareRun } from '../clients/runs'
 import type { ResourceRead } from '../../policies/clients/resources'
@@ -29,9 +28,11 @@ const current = ref<SoftwarePolicy>(),
 function fresh(): SoftwarePolicyDefinition {
   const now = Math.floor(Date.now() / 1000)
   return {
-    resource: { kind: 'software', id: '', version: '1', variants: {} },
     scope: '',
-    behavior: {
+    action: {
+      delivery: { kind: 'direct' },
+      resource: { kind: 'software', id: '', version: '1', variants: {} },
+
       kind: 'software',
       intent: 'required_install',
       admissionOperation: '',
@@ -101,7 +102,7 @@ function read(value = uncertain.value ? pending?.id : id.value) {
   void run(() => client.read(value), apply)
 }
 function bindVersion() {
-  const target = { ...draft.value.resource }
+  const target = { ...draft.value.action.resource }
   void run(
     async () => {
       const [r, a] = await Promise.all([
@@ -115,8 +116,8 @@ function bindVersion() {
     },
     ({ r, v, operation }) => {
       resource.value = r
-      draft.value.behavior.admissionOperation = operation
-      draft.value.resource.variants = Object.fromEntries(
+      draft.value.action.admissionOperation = operation
+      draft.value.action.resource.variants = Object.fromEntries(
         targets.flatMap((target) => {
           const matches = v.variants.filter((v) => `${v.platform}_${v.architecture}` === target)
           return matches.length === 1 ? [[target, matches[0]!.key]] : []
@@ -127,20 +128,20 @@ function bindVersion() {
 }
 function resetBinding() {
   resource.value = undefined
-  draft.value.behavior.admissionOperation = ''
-  draft.value.resource.variants = {}
+  draft.value.action.admissionOperation = ''
+  draft.value.action.resource.variants = {}
 }
 function variants(target: string) {
   return (
     resource.value?.versions
-      .find((v) => v.id === draft.value.resource.version)
+      .find((v) => v.id === draft.value.action.resource.version)
       ?.variants.filter((v) => `${v.platform}_${v.architecture}` === target) ?? []
   )
 }
 function selectVariant(target: string, event: Event) {
   const value = (event.target as HTMLSelectElement).value
-  if (value) draft.value.resource.variants[target] = value
-  else delete draft.value.resource.variants[target]
+  if (value) draft.value.action.resource.variants[target] = value
+  else delete draft.value.action.resource.variants[target]
 }
 function replay() {
   const p = pending
@@ -231,7 +232,7 @@ function loadDetail(task: string) {
   }
 }
 function addStage() {
-  const stages = draft.value.behavior.rollout.stages,
+  const stages = draft.value.action.rollout.stages,
     last = stages.at(-1)!
   stages.push({ scope: '', opensAt: last.opensAt + 86400, minimumVerifiedPercent: 90 })
 }
@@ -257,7 +258,8 @@ watch(
     <ul>
       <li v-for="p in page?.items" :key="p.id">
         <button :disabled="busy || uncertain" @click="read(p.id)">
-          {{ p.definition.resource.id }} / {{ p.definition.resource.version }} · {{ p.id }} ·
+          {{ p.definition.action.resource.id }} / {{ p.definition.action.resource.version }} ·
+          {{ p.id }} ·
           {{ p.enabled ? t('software.enabled') : t('software.paused') }}
         </button>
       </li>
@@ -271,29 +273,27 @@ watch(
         <label for="deployment-resource">{{ t('software.targetResource') }}</label
         ><input
           id="deployment-resource"
-          v-model="draft.resource.id"
+          v-model="draft.action.resource.id"
           required
           @input="resetBinding"
         />
         <label for="deployment-version">{{ t('software.resourceVersion') }}</label
         ><input
           id="deployment-version"
-          v-model="draft.resource.version"
+          v-model="draft.action.resource.version"
           required
           @input="resetBinding"
         />
         <button data-action="bind-version" type="button" @click="bindVersion">
           {{ t('software.bindVersion') }}
         </button>
-        <p>
-          {{ t('software.admissionOperation') }}: {{ draft.behavior.admissionOperation || '—' }}
-        </p>
+        <p>{{ t('software.admissionOperation') }}: {{ draft.action.admissionOperation || '—' }}</p>
         <template v-if="resource">
           <template v-for="target in targets" :key="target"
             ><label :for="`variant-${target}`">{{ target }}</label
             ><select
               :id="`variant-${target}`"
-              :value="draft.resource.variants[target] ?? ''"
+              :value="draft.action.resource.variants[target] ?? ''"
               @change="selectVariant(target, $event)"
             >
               <option value="">{{ t('software.noVariant') }}</option>
@@ -303,7 +303,7 @@ watch(
         </template>
         <p v-else class="device-wrap">
           {{
-            Object.entries(draft.resource.variants)
+            Object.entries(draft.action.resource.variants)
               .map(([target, key]) => `${target}: ${key}`)
               .join(' · ')
           }}
@@ -311,17 +311,17 @@ watch(
         <label for="deployment-scope">{{ t('software.rootScope') }}</label
         ><input id="deployment-scope" v-model="draft.scope" required />
         <label for="deployment-intent">{{ t('software.intent') }}</label
-        ><select id="deployment-intent" v-model="draft.behavior.intent">
+        ><select id="deployment-intent" v-model="draft.action.intent">
           <option v-for="intent in intents" :key="intent" :value="intent">
             {{ t(`software.intent_${intent}`) }}
           </option>
         </select>
         <label><input v-model="enabled" type="checkbox" />{{ t('policies.enabled') }}</label>
-        <NativeScheduleEditor v-model="draft.behavior.schedule" />
+        <NativeScheduleEditor v-model="draft.action.schedule" />
         <label for="deployment-lifetime">{{ t('software.runLifetime') }}</label
         ><input
           id="deployment-lifetime"
-          v-model.number="draft.behavior.runLifetimeSeconds"
+          v-model.number="draft.action.runLifetimeSeconds"
           type="number"
           min="60"
           max="604800"
@@ -330,7 +330,7 @@ watch(
         <fieldset>
           <legend>{{ t('software.stages') }}</legend>
           <p>{{ t('software.stageHint') }}</p>
-          <fieldset v-for="(stage, index) in draft.behavior.rollout.stages" :key="index">
+          <fieldset v-for="(stage, index) in draft.action.rollout.stages" :key="index">
             <legend>{{ index + 1 }}</legend>
             <label :for="`stage-${index}-scope`">{{ t('policies.scopes') }}</label
             ><input
@@ -356,14 +356,14 @@ watch(
                       : Number(($event.target as HTMLInputElement).value)
                 "
               />
-              <button type="button" @click="draft.behavior.rollout.stages.splice(index, 1)">
+              <button type="button" @click="draft.action.rollout.stages.splice(index, 1)">
                 {{ t('policies.remove') }}
               </button></template
             >
           </fieldset>
           <button
             type="button"
-            :disabled="draft.behavior.rollout.stages.length >= 32"
+            :disabled="draft.action.rollout.stages.length >= 32"
             @click="addStage"
           >
             {{ t('software.addStage') }}

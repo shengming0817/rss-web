@@ -1,4 +1,36 @@
 export const policiesZh = {
+  selfService: {
+    title: '脚本自助设置',
+    publish: '发布脚本到自助服务',
+    publishHint: '保存发布配置不运行脚本。撤回只阻止新的自助调用，既有任务和效果保留。',
+    name: '自助展示名称',
+    description: '用途说明',
+    prerequisites: '前提条件',
+    effects: '副作用说明',
+    category: '分类',
+    keywords: '搜索关键词（每行一个）',
+    allowAi: '允许 AI 调用',
+    aiHint: '允许 AI 调用不代表自动执行；后台逐次检查许可与资格。',
+    manualHint: '仅关闭 AI 调用；员工人工自助仍可按原权限使用，风险等级保留。',
+    risk: '脚本风险等级',
+    risk1: '1：规则内直接执行',
+    risk2: '2：AI 调用需本人确认',
+    loadResource: '加载资源版本',
+    chooseVariant: '选择精确平台变体',
+    parameterHint: '参数约束由资源版本持有；固定值不能被调用者覆盖，动态输入仅开放明确允许的字段。',
+    fixed: '固定参数',
+    input: '调用时输入',
+    frequency: '执行频率',
+    once_per_version: '每版本一次',
+    once_per_entry: '每次加入范围一次',
+    every_trigger: '每次触发',
+    lifetime: '任务期限（秒）',
+    disable: '禁用整个 Policy',
+    enable: '启用整个 Policy',
+    executionHint:
+      '保存与发布不代表执行。自助目录、调用及结果需后台正式接口；此页面不代员工执行或确认。',
+    unknown: '操作 {id} 结果未知。只读核对当前配置不能确认原操作回执；请核对后再继续，不自动重放。',
+  },
   invalidDate: '请填写有效的 UTC 日期和时间。',
   workflowApprovalHint: '仅显式人工审批步骤或失败审批分支需要其他账户批准。普通步骤按调度继续。',
   pendingApprovalHint: '当前步骤等待其他账户批准。',
@@ -141,7 +173,7 @@ export const policiesZh = {
     repair: '受控修复',
   },
   policyHint:
-    '候选持续分配：保存资源版本、动态 Scope 和触发配置后生效。预览无执行副作用；Mock 不代表真实设备效果。',
+    'Policy 配置引用精确资源版本与 Scope；保存不代表执行，资格由后台决定。Mock 不代表真实设备效果。',
   storageRevision: '存储版本',
   pause: '暂停',
   resume: '恢复',
@@ -327,6 +359,43 @@ export const policiesZh = {
   independent: '当前人工审批必须由其他账户批准。',
 }
 export const policiesEn: typeof policiesZh = {
+  selfService: {
+    title: 'Script self-service',
+    publish: 'Publish script to Self Service',
+    publishHint:
+      'Saving publication does not run the script. Withdrawal blocks new calls; existing tasks and effects remain.',
+    name: 'Display name',
+    description: 'Purpose',
+    prerequisites: 'Prerequisites',
+    effects: 'Side effects',
+    category: 'Category',
+    keywords: 'Search keywords (one per line)',
+    allowAi: 'Allow AI invocation',
+    aiHint:
+      'AI permission does not start execution. The backend checks permission and eligibility for each call.',
+    manualHint:
+      'Only AI invocation is disabled. Manual self-service remains subject to existing permissions; the risk level is retained.',
+    risk: 'Script risk level',
+    risk1: '1: Execute within existing rules',
+    risk2: '2: AI invocation requires personal confirmation',
+    loadResource: 'Load resource version',
+    chooseVariant: 'Select exact platform variant',
+    parameterHint:
+      'The resource version owns constraints. Callers cannot override fixed values; only allowed fields accept input.',
+    fixed: 'Fixed value',
+    input: 'Invocation input',
+    frequency: 'Execution frequency',
+    once_per_version: 'Once per version',
+    once_per_entry: 'Once per membership entry',
+    every_trigger: 'Every trigger',
+    lifetime: 'Task lifetime (seconds)',
+    disable: 'Disable entire Policy',
+    enable: 'Enable entire Policy',
+    executionHint:
+      'Saving and publishing do not execute. Discovery, invocation and results require formal backend APIs; this page does not execute or confirm for an employee.',
+    unknown:
+      'Operation {id} has an unknown outcome. Current configuration does not verify its receipt. Reconcile the original operation before continuing; no automatic replay.',
+  },
   invalidDate: 'Enter a valid UTC date and time.',
   workflowApprovalHint:
     'Only explicit human approval steps or approval-on-failure branches require another account. Ordinary steps follow the schedule.',
@@ -472,7 +541,7 @@ export const policiesEn: typeof policiesZh = {
     repair: 'Controlled repair',
   },
   policyHint:
-    'Candidate continuous assignments take effect after saving the resource version, dynamic Scope and trigger. Preview has no execution effects; mock does not prove real device effects.',
+    'Policy configuration references an exact resource version and Scope. Saving does not execute; the backend decides eligibility. Mock does not prove real device effects.',
   storageRevision: 'Storage revision',
   pause: 'Pause',
   resume: 'Resume',

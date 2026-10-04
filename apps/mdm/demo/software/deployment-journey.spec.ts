@@ -123,14 +123,16 @@ it('carries source admission, import, native software Policy and Agent evidence 
   await policies.scopes.status(scope, scopeWrite.operationId)
   const id = crypto.randomUUID(),
     definition = {
-      resource: {
-        kind: 'software' as const,
-        id: 'browser',
-        version: 'release-1',
-        variants: { windows_x86_64: 'main' },
-      },
       scope,
-      behavior: {
+      action: {
+        delivery: { kind: 'direct' as const },
+        resource: {
+          kind: 'software' as const,
+          id: 'browser',
+          version: 'release-1',
+          variants: { windows_x86_64: 'main' },
+        },
+
         kind: 'software' as const,
         intent: 'required_install' as const,
         admissionOperation: approval.admission.operation,
@@ -203,10 +205,10 @@ it('carries source admission, import, native software Policy and Agent evidence 
           title: 'Browser request',
           description: '',
           enabled: true,
-          resource: definition.resource,
+          resource: definition.action.resource,
           scope,
           admissionOperation: approval.admission.operation,
-          schedule: definition.behavior.schedule,
+          schedule: definition.action.schedule,
           runLifetimeSeconds: 3600,
         },
       },

@@ -31,7 +31,7 @@ export function createSoftwareRuns(allowed: (run: RunRecord) => boolean) {
   const rows: RunRecord[] = []
   function userAction(r: RunRecord, now: number) {
     const s = r.value.state
-    return r.policy.definition.behavior.intent === 'available_install' &&
+    return r.policy.definition.action.intent === 'available_install' &&
       r.value.result === null &&
       s.execution === 'not_started' &&
       s.cancellation === 'none' &&
@@ -79,7 +79,7 @@ export function createSoftwareRuns(allowed: (run: RunRecord) => boolean) {
     now: number,
     effect: 'verified' | 'unknown' | 'waiting_reboot' | 'failed',
   ) {
-    const uninstall = r.policy.definition.behavior.intent === 'explicit_uninstall'
+    const uninstall = r.policy.definition.action.intent === 'explicit_uninstall'
     r.value.result = {
       kind: 'software',
       intent: uninstall ? 'uninstall' : 'install',
@@ -167,7 +167,7 @@ export function createSoftwareRuns(allowed: (run: RunRecord) => boolean) {
           s.execution === 'not_started' &&
           s.delivery.kind !== 'queued' &&
           s.delivery.leaseUntil! > event.at &&
-          (r.policy.definition.behavior.intent !== 'available_install' ||
+          (r.policy.definition.action.intent !== 'available_install' ||
             event.kind === 'software_start')
         ) {
           s.execution = 'running'
@@ -185,7 +185,7 @@ export function createSoftwareRuns(allowed: (run: RunRecord) => boolean) {
       const profile = softwareProfiles(device)[0]!
       const relevant = rows.filter(
         (r) =>
-          r.policy.definition.resource.id === policy.definition.resource.id &&
+          r.policy.definition.action.resource.id === policy.definition.action.resource.id &&
           r.value.device === device.summary.id,
       )
       const current = relevant.filter((r) => r.policy.versionId === policy.versionId)
@@ -205,8 +205,8 @@ export function createSoftwareRuns(allowed: (run: RunRecord) => boolean) {
         failures >= 3
       )
         return
-      const schedule = policy.definition.behavior.schedule
-      const stageScope = policy.definition.behavior.rollout.stages[stage]!.scope
+      const schedule = policy.definition.action.schedule
+      const stageScope = policy.definition.action.rollout.stages[stage]!.scope
       const last = current.filter((r) => r.stageScope === stageScope).at(-1)
       if (
         schedule.trigger.kind === 'check_in' &&
@@ -218,7 +218,7 @@ export function createSoftwareRuns(allowed: (run: RunRecord) => boolean) {
       if (!due) return
       const availableAt = Math.max(due.availableAt, now),
         deadline = Math.min(
-          availableAt + policy.definition.behavior.runLifetimeSeconds,
+          availableAt + policy.definition.action.runLifetimeSeconds,
           schedule.until ?? Infinity,
           due.windowEnd ?? Infinity,
         )

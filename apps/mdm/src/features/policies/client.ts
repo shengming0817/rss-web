@@ -11,7 +11,7 @@ export function createPolicyClients(transport: HttpTransport, tenant: string, de
   return {
     scopes: createScopesClient(transport),
     resources: createResourcesClient(transport),
-    policies: createPoliciesClient(transport, tenant, demo),
+    policies: createPoliciesClient(transport),
     native: createNativeClient(transport),
     catalog: createCatalogClient(transport, tenant, demo),
     configurations: createConfigurationsClient(transport, tenant, demo),

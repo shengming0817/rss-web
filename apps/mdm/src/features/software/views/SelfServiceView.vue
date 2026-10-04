@@ -14,7 +14,7 @@ import {
   type RequestPhase,
   type SelfServiceChange,
 } from '../clients/self-service'
-import { targets } from '../clients/assignment-model'
+import { targets } from '../../policies/clients/model'
 import type { ResourceRead } from '../../policies/clients/resources'
 import type { SoftwareRun } from '../clients/runs'
 import SoftwareFrame from '../components/SoftwareFrame.vue'
