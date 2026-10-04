@@ -130,3 +130,51 @@ it('shows Resource bounds, starts numeric fixed values within bounds, and follow
   )
   f.wrapper.unmount()
 })
+
+it.each(['not found', 'denied', 'network', 'invalid DTO'])(
+  'invalidates A before B read and keeps failed B unwritable (%s)',
+  async (reason) => {
+    const f = await fixture()
+    const old = (f.wrapper.get('#policy-id').element as HTMLInputElement).value
+    f.read.mockRejectedValueOnce(new Error(reason))
+    const target = crypto.randomUUID()
+    await f.router.push({ query: { id: target } })
+    await flushPromises()
+    expect((f.wrapper.get('#policy-id').element as HTMLInputElement).value).toBe(target)
+    expect(f.wrapper.find('#value-detail').exists()).toBe(false)
+    expect(f.wrapper.findAll('button').some((b) => b.text() === '停用')).toBe(false)
+    expect(f.wrapper.get('form > fieldset').attributes('disabled')).toBeDefined()
+    await f.wrapper.get('form').trigger('submit')
+    expect(f.change).not.toHaveBeenCalled()
+    f.router.back()
+    await flushPromises()
+    expect((f.wrapper.get('#policy-id').element as HTMLInputElement).value).toBe(old)
+    expect(f.wrapper.get('form > fieldset').attributes('disabled')).toBeUndefined()
+    f.wrapper.unmount()
+  },
+)
+it('fences pending and late B reads when navigating to C', async () => {
+  const f = await fixture()
+  const old = await f.read.mock.results[0]!.value
+  let finish!: (value: PolicyRead) => void
+  f.read.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  const b = crypto.randomUUID(),
+    c = crypto.randomUUID()
+  await f.router.push({ query: { id: b } })
+  expect(f.wrapper.get('form > fieldset').attributes('disabled')).toBeDefined()
+  await f.wrapper.get('form').trigger('submit')
+  expect(f.change).not.toHaveBeenCalled()
+  f.read.mockResolvedValueOnce({ ...old, id: c })
+  await f.router.push({ query: { id: c } })
+  await flushPromises()
+  finish({ ...old, id: b })
+  await flushPromises()
+  expect((f.wrapper.get('#policy-id').element as HTMLInputElement).value).toBe(c)
+  expect(f.wrapper.get('form > fieldset').attributes('disabled')).toBeUndefined()
+  f.wrapper.unmount()
+})

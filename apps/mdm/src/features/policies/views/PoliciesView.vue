@@ -39,6 +39,7 @@ function fresh(): ExecutionDefinition {
   }
 }
 const definition = ref(fresh()),
+  ready = ref(false),
   enabled = ref(false),
   pending = ref<{ id: string; operationId: string }>()
 const variants = computed(() =>
@@ -93,6 +94,7 @@ function numeric(schema: Record<string, Json>, name: string) {
 }
 function apply(p: PolicyRead) {
   if (p.definition.action.kind !== 'execution') throw new Error('Wrong policy action')
+  ready.value = true
   current.value = p
   id.value = p.id
   enabled.value = p.enabled
@@ -108,9 +110,27 @@ function load(after?: string) {
   )
 }
 function open(target = pending.value?.id ?? id.value) {
-  if (target) return run(() => client.read(target), apply)
+  if (!target || busy.value) return
+  ready.value = false
+  current.value = undefined
+  resource.value = undefined
+  definition.value = fresh()
+  enabled.value = false
+  id.value = target
+  return run(
+    () => client.read(target),
+    (p) => {
+      if (
+        p.id !== target ||
+        (typeof route.query['id'] === 'string' && route.query['id'] !== target)
+      )
+        throw new Error('Wrong Policy locator')
+      apply(p)
+    },
+  )
 }
 function resetDraft() {
+  ready.value = true
   current.value = undefined
   resource.value = undefined
   id.value = crypto.randomUUID()
@@ -133,6 +153,7 @@ watch(
     if (typeof target === 'string') void open(target)
     else resetDraft()
   },
+  { flush: 'sync' },
 )
 function bind() {
   const target = definition.value.action.resource.id
@@ -189,7 +210,13 @@ function parameter(name: string, event: Event) {
   }
 }
 function change(input: PolicyChange) {
-  if (busy.value || uncertain.value) return
+  if (
+    busy.value ||
+    uncertain.value ||
+    !ready.value ||
+    (typeof route.query['id'] === 'string' && current.value?.id !== route.query['id'])
+  )
+    return
   const body = operation(input, current.value?.revision ?? 0),
     target = current.value?.id ?? id.value
   pending.value = { id: target, operationId: body.operationId }
@@ -220,7 +247,8 @@ function save(event: Event) {
 }
 onMounted(async () => {
   await load()
-  if (id.value) await open()
+  if (id.value && !current.value) await open()
+  else if (!id.value) resetDraft()
 })
 </script>
 <template>
@@ -241,7 +269,7 @@ onMounted(async () => {
       {{ t('policies.next') }}
     </button>
     <form @submit.prevent="save">
-      <fieldset :disabled="busy || uncertain">
+      <fieldset :disabled="busy || uncertain || !ready">
         <label for="policy-id">{{ t('policies.id') }}</label
         ><input id="policy-id" v-model="id" :readonly="!!current" required />
         <label for="policy-resource">{{ t('policies.resources') }}</label
