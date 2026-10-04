@@ -15,7 +15,7 @@ it('requires the exact Agent variant and keeps native configuration conflicts in
       {
         id: '1',
         state: 'active',
-        configuration: null,
+
         digest: Array(32).fill(1),
         variants: [
           {
@@ -77,14 +77,18 @@ it('requires the exact Agent variant and keeps native configuration conflicts in
     format: 'windows_csp',
     versions: [{ version: 1, status: 'published', settings: [{ key: 'Camera', value: false }] }],
   }
-  expect(configurationApplicability(config, 1, windows, [config])).toBe('applicable')
   expect(
     configurationApplicability(config, 1, windows, [
-      config,
+      { id: config.id, platform: config.platform, settings: config.versions[0]!.settings },
+    ]),
+  ).toBe('applicable')
+  expect(
+    configurationApplicability(config, 1, windows, [
+      { id: config.id, platform: config.platform, settings: config.versions[0]!.settings },
       {
         ...config,
         id: 'two',
-        versions: [{ version: 1, status: 'published', settings: [{ key: 'Camera', value: true }] }],
+        settings: [{ key: 'Camera', value: true }],
       },
     ]),
   ).toBe('conflict')

@@ -51,7 +51,7 @@ export function createResourceUploads(
       purpose: {
         kind: 'resource',
         binding: {
-          storage_class: 'artifact',
+          storage_class: d.kind === 'configuration' ? 'native_configuration' : 'artifact',
           resource: id,
           version: version.id,
           variant: v.key,

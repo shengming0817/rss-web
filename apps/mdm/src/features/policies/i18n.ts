@@ -1,4 +1,13 @@
 export const policiesZh = {
+  operation: '操作',
+  actionKind: '策略类型',
+  configurationRetain: '保留配置效果',
+  configurationRemove: '最后一个分配退出后按资源移除配置',
+  configurationHint:
+    '持续配置使用不可变原生资源。保存不代表设备已生效；设备进度显示分配、操作与诊断。',
+  preview_eligible: '范围内',
+  preview_pending: '等待范围',
+  preview_excluded: '范围外',
   selfService: {
     minimum: '最小值：{value}',
     maximum: '最大值：{value}',
@@ -364,6 +373,15 @@ export const policiesZh = {
   independent: '当前人工审批必须由其他账户批准。',
 }
 export const policiesEn: typeof policiesZh = {
+  operation: 'Operation',
+  actionKind: 'Policy type',
+  configurationRetain: 'Retain configuration effects',
+  configurationRemove: 'Remove using the Resource after the last assignment exits',
+  configurationHint:
+    'Continuous configuration binds an immutable native Resource. Saving does not prove device effects; progress shows assignments, operations and diagnoses.',
+  preview_eligible: 'In scope',
+  preview_pending: 'Waiting for scope',
+  preview_excluded: 'Outside scope',
   selfService: {
     minimum: 'Minimum: {value}',
     maximum: 'Maximum: {value}',

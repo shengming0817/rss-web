@@ -23,7 +23,7 @@ const resource = {
   versions: [
     {
       id: 'v1',
-      configuration: null,
+
       digest,
       state: 'frozen',
       variants: [
@@ -75,7 +75,19 @@ it('keeps version creation and activation as separate CAS writes', async () => {
   await client.change(resource.id, {
     operationId,
     expectedRevision: 2,
-    input: { action: 'firewall_version', version: 'v2', enabled: true },
+    input: {
+      action: 'version',
+      kind: 'configuration',
+      version: 'v2',
+      variants: [
+        {
+          platform: 'windows',
+          architecture: 'x86_64',
+          key: 'default',
+          declaration: { kind: 'configuration', artifact },
+        },
+      ],
+    },
   })
   expect(request.mock.calls[0]![0]).toMatchObject({
     method: 'POST',
@@ -85,7 +97,19 @@ it('keeps version creation and activation as separate CAS writes', async () => {
     body: {
       operationId,
       expectedRevision: 2,
-      input: { action: 'firewall_version', version: 'v2', enabled: true },
+      input: {
+        action: 'version',
+        kind: 'configuration',
+        version: 'v2',
+        variants: [
+          {
+            platform: 'windows',
+            architecture: 'x86_64',
+            key: 'default',
+            declaration: { kind: 'configuration', artifact },
+          },
+        ],
+      },
     },
   })
   expect(request).toHaveBeenCalledTimes(1)
@@ -138,4 +162,57 @@ it('decodes complete SoftwareSpec and refuses the retired flat software contract
     ],
   }
   expect(decodeResource(value, resource.id)).toEqual(value)
+})
+
+it('decodes artifact-only native declarations and rejects retired Resource configuration fields', () => {
+  const native = {
+    ...resource,
+    kind: 'configuration',
+    versions: [
+      {
+        ...resource.versions[0],
+        variants: [
+          {
+            platform: 'windows',
+            architecture: 'x86_64',
+            key: 'default',
+            declaration: { kind: 'configuration', artifact },
+          },
+        ],
+      },
+    ],
+  }
+  expect(decodeResource(native, native.id)).toEqual(native)
+  expect(() =>
+    decodeResource(
+      { ...native, versions: [{ ...native.versions[0], configuration: null }] },
+      native.id,
+    ),
+  ).toThrow()
+  expect(() =>
+    decodeResource(
+      {
+        ...native,
+        versions: [
+          {
+            ...native.versions[0],
+            variants: [
+              {
+                ...native.versions[0]!.variants[0],
+                declaration: {
+                  kind: 'configuration',
+                  artifact,
+                  schema: 'old',
+                  apply: 'old',
+                  detect: 'old',
+                  remove: null,
+                },
+              },
+            ],
+          },
+        ],
+      },
+      native.id,
+    ),
+  ).toThrow()
 })

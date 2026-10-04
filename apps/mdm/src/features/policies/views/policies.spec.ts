@@ -8,14 +8,14 @@ import { createDeviceDemo } from '../../../../demo/devices/state'
 import { seedScriptPolicies } from '../../../../demo/policies/seed'
 import PoliciesView from './PoliciesView.vue'
 import type { PolicyRead } from '../clients/model'
-async function fixture(unknown = false) {
+async function fixture(unknown = false, configuration = false) {
   const automation = createAutomationDemo(createDeviceDemo()),
     seed = seedScriptPolicies(automation)
   const actor = {
     principalId: '22222222-2222-4222-8222-222222222222',
     sessionId: crypto.randomUUID(),
   }
-  const old = automation.handle(
+  const original = automation.handle(
     {
       path: `/api/v1/policies/${seed.ids[1]}`,
       method: 'GET',
@@ -26,6 +26,72 @@ async function fixture(unknown = false) {
     },
     'normal',
   )!.body as PolicyRead
+  const nativeResource = {
+    id: 'native-camera',
+    revision: 3,
+    kind: 'configuration',
+    versions: [
+      {
+        id: '1',
+        state: 'active',
+        digest: Array(32).fill(1),
+        variants: [
+          {
+            platform: 'windows',
+            architecture: 'x86_64',
+            key: 'default',
+            declaration: {
+              kind: 'configuration',
+              artifact: { reference: 'native.json', length: 30, sha256: Array(32).fill(1) },
+            },
+          },
+        ],
+      },
+    ],
+  }
+  const old: PolicyRead = configuration
+    ? {
+        ...original,
+        definition: {
+          scope: original.definition.scope,
+          action: {
+            kind: 'configuration',
+            resource: {
+              id: nativeResource.id,
+              version: '1',
+              platform: 'windows',
+              architecture: 'x86_64',
+              variant: 'default',
+            },
+            exit: 'retain',
+          },
+        },
+      }
+    : original
+  const preview = vi.fn().mockResolvedValue({
+      action: old.definition.action,
+      scopeResult: crypto.randomUUID(),
+      items: [
+        {
+          device: 'device-01',
+          eligibility: { state: 'eligible', entry: 1 },
+          taskAdmission: null,
+        },
+      ],
+      nextCursor: null,
+    }),
+    devices = vi.fn().mockResolvedValue({
+      items: [
+        {
+          device: 'device-01',
+          assignment: 'eligible',
+          taskAdmission: null,
+          operationIds: [crypto.randomUUID(), crypto.randomUUID()],
+          diagnoses: ['configuration_conflict', 'removing'],
+        },
+      ],
+      nextCursor: null,
+    })
   const read = vi.fn().mockResolvedValue(old),
     list = vi.fn().mockResolvedValue({ items: [old], nextCursor: null })
   const change = vi.fn(async (_id: string, body: { input: { definition?: unknown } }) => {
@@ -48,9 +114,13 @@ async function fixture(unknown = false) {
       provide: {
         [mdmKey as symbol]: {
           policies: {
-            policies: { read, list, change },
+            policies: { read, list, change, preview, devices },
             resources: {
-              read: vi.fn().mockResolvedValue(automation.resources.read(seed.resource)),
+              read: vi
+                .fn()
+                .mockResolvedValue(
+                  configuration ? nativeResource : automation.resources.read(seed.resource),
+                ),
             },
           },
         },
@@ -61,7 +131,7 @@ async function fixture(unknown = false) {
   const button = (text: string) => wrapper.findAll('button').find((b) => b.text() === text)!
   await button('加载资源版本').trigger('click')
   await flushPromises()
-  return { wrapper, change, read, button, router }
+  return { wrapper, change, read, button, router, preview, devices }
 }
 it('reads a deep-linked formal Policy, retains false/1 and saves Resource parameter sources without schema copies', async () => {
   const f = await fixture()
@@ -176,5 +246,74 @@ it('fences pending and late B reads when navigating to C', async () => {
   await flushPromises()
   expect((f.wrapper.get('#policy-id').element as HTMLInputElement).value).toBe(c)
   expect(f.wrapper.get('form > fieldset').attributes('disabled')).toBeUndefined()
+  f.wrapper.unmount()
+})
+
+it('authors continuous configuration with an exact Resource and exit behavior through the shared Policy client', async () => {
+  const f = await fixture(false, true)
+  expect((f.wrapper.get('#policy-action').element as HTMLSelectElement).value).toBe('configuration')
+  expect(f.wrapper.find('[data-field="published"]').exists()).toBe(false)
+  expect(f.wrapper.find('#policy-frequency').exists()).toBe(false)
+  await f.wrapper.get('#policy-exit').setValue('remove')
+  await f.wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(f.change.mock.calls[0]![1]).toMatchObject({
+    input: {
+      action: 'put',
+      enabled: true,
+      definition: {
+        action: {
+          kind: 'configuration',
+          resource: {
+            id: 'native-camera',
+            version: '1',
+            platform: 'windows',
+            architecture: 'x86_64',
+            variant: 'default',
+          },
+          exit: 'remove',
+        },
+      },
+    },
+  })
+  expect(f.change.mock.calls[0]![1].input.definition).not.toHaveProperty('selfService')
+  f.wrapper.unmount()
+})
+
+it('offers configuration creation in the Policy page and sends current exact bindings with revision zero', async () => {
+  const f = await fixture(false, true)
+  await f.button('新建').trigger('click')
+  await flushPromises()
+  await f.wrapper.get('#policy-action').setValue('configuration')
+  await f.wrapper.get('#policy-resource').setValue('native-camera')
+  await f.wrapper.get('#policy-scope').setValue(crypto.randomUUID())
+  await f.button('加载资源版本').trigger('click')
+  await flushPromises()
+  await f.wrapper.get('#policy-variant').setValue('0')
+  await f.wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(f.change.mock.calls[0]![1]).toMatchObject({
+    expectedRevision: 0,
+    input: {
+      action: 'put',
+      enabled: false,
+      definition: { action: { kind: 'configuration', exit: 'retain' } },
+    },
+  })
+  f.wrapper.unmount()
+})
+
+it('shows the current configuration preview and all progress operations and diagnoses', async () => {
+  const f = await fixture(false, true)
+  await f.button('预览').trigger('click')
+  await flushPromises()
+  expect(f.preview).toHaveBeenCalledTimes(1)
+  expect(f.preview.mock.calls[0]![0].action.kind).toBe('configuration')
+  await f.button('刷新进度（保留编辑）').trigger('click')
+  await flushPromises()
+  expect(f.devices).toHaveBeenCalledTimes(1)
+  const row = (await f.devices.mock.results[0]!.value).items[0]!
+  for (const fact of [...row.operationIds, ...row.diagnoses])
+    expect(f.wrapper.text()).toContain(fact)
   f.wrapper.unmount()
 })

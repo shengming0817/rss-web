@@ -43,7 +43,7 @@ function resource(declaration: unknown) {
       {
         id: '1',
         digest,
-        configuration: null,
+
         state: 'frozen',
         variants: [{ platform: 'windows', architecture: 'x86_64', key: 'main', declaration }],
       },

@@ -39,12 +39,7 @@ const id = ref(''),
   })
 const list = ref<Awaited<ReturnType<typeof runtime.policies.catalog.list>>>(),
   artifact = ref<Artifact>({ reference: 'content', length: 0, sha256: Array(32).fill(0) })
-const firewall = ref(false),
-  enabled = ref(true),
-  schema = ref(''),
-  apply = ref(''),
-  detect = ref(''),
-  remove = ref('')
+
 const spec = ref<ScriptSpec>({
   profile: 'power_shell7',
   runAs: 'system',
@@ -174,10 +169,6 @@ function addVersion() {
     })
     return
   }
-  if (firewall.value && resourceKind === 'configuration') {
-    change({ action: 'firewall_version', version: version.value, enabled: enabled.value })
-    return
-  }
   const a = structuredClone(toRaw(artifact.value))
   let declaration: Declaration
   if (resourceKind === 'script')
@@ -190,10 +181,6 @@ function addVersion() {
     declaration = {
       kind: resourceKind,
       artifact: a,
-      schema: schema.value,
-      apply: apply.value,
-      detect: detect.value,
-      remove: remove.value || null,
     }
   change({
     action: 'version',
@@ -461,51 +448,36 @@ watch(
       <form @submit.prevent="addVersion">
         <fieldset :disabled="busy || uncertain">
           <label for="resource-version">{{ t('policies.version') }}</label
-          ><input id="resource-version" v-model="version" required /><template
-            v-if="kind === 'configuration'"
-            ><label><input v-model="firewall" type="checkbox" />{{ t('policies.firewall') }}</label
-            ><label v-if="firewall"
-              ><input v-model="enabled" type="checkbox" />{{ t('policies.enabled') }}</label
-            ></template
-          ><template v-if="!firewall || kind !== 'configuration'"
-            ><label for="resource-platform">{{ t('policies.platform') }}</label
-            ><select id="resource-platform" v-model="target.platform">
-              <option value="windows">Windows</option>
-              <option value="macos">macOS</option></select
-            ><label for="resource-architecture">{{ t('policies.architecture') }}</label
-            ><select id="resource-architecture" v-model="target.architecture">
-              <option value="x86_64">x86_64</option>
-              <option value="aarch64">aarch64</option></select
-            ><label for="resource-variant">{{ t('policies.variant') }}</label
-            ><input id="resource-variant" v-model="target.variant" required /><label
-              for="resource-metadata"
-              >{{ t('policies.metadata') }}</label
-            ><input id="resource-metadata" type="file" @change="metadata" /><label
-              for="resource-reference"
-              >{{ t('policies.reference') }}</label
-            ><input id="resource-reference" v-model="artifact.reference" required />
-            <p>
-              {{ t('policies.length') }} {{ artifact.length }} · {{ t('policies.hash') }}
-              {{ hashText(artifact.sha256) }}
-            </p>
-            <ScriptDefinitionEditor
-              v-if="kind === 'script'"
-              v-model="spec" /><SoftwareDefinitionEditor
-              v-else-if="kind === 'software'"
-              :key="editorEpoch"
-              ref="softwareEditor" /><template v-else
-              ><label for="resource-schema">{{ t('policies.schema') }}</label
-              ><input id="resource-schema" v-model="schema" required /><label
-                for="resource-apply"
-                >{{ t('policies.apply') }}</label
-              ><input id="resource-apply" v-model="apply" required /><label for="resource-detect">{{
-                t('policies.detect')
-              }}</label
-              ><input id="resource-detect" v-model="detect" required /><label
-                for="resource-remove"
-                >{{ t('policies.uninstall') }}</label
-              ><input id="resource-remove" v-model="remove" /></template></template
-          ><template v-if="kind === 'software'">
+          ><input id="resource-version" v-model="version" required /><label
+            for="resource-platform"
+            >{{ t('policies.platform') }}</label
+          ><select id="resource-platform" v-model="target.platform">
+            <option value="windows">Windows</option>
+            <option value="macos">macOS</option></select
+          ><label for="resource-architecture">{{ t('policies.architecture') }}</label
+          ><select id="resource-architecture" v-model="target.architecture">
+            <option value="x86_64">x86_64</option>
+            <option value="aarch64">aarch64</option></select
+          ><label for="resource-variant">{{ t('policies.variant') }}</label
+          ><input id="resource-variant" v-model="target.variant" required /><label
+            for="resource-metadata"
+            >{{ t('policies.metadata') }}</label
+          ><input id="resource-metadata" type="file" @change="metadata" /><label
+            for="resource-reference"
+            >{{ t('policies.reference') }}</label
+          ><input id="resource-reference" v-model="artifact.reference" required />
+          <p>
+            {{ t('policies.length') }} {{ artifact.length }} · {{ t('policies.hash') }}
+            {{ hashText(artifact.sha256) }}
+          </p>
+          <ScriptDefinitionEditor
+            v-if="kind === 'script'"
+            v-model="spec"
+          /><SoftwareDefinitionEditor
+            v-else-if="kind === 'software'"
+            :key="editorEpoch"
+            ref="softwareEditor"
+          /><template v-if="kind === 'software'">
             <button type="button" data-action="stage-variant" @click="stageVariant">
               {{ t('software.stageVariant') }}
             </button>
@@ -523,7 +495,7 @@ watch(
             </ul> </template
           ><button
             type="submit"
-            :disabled="kind === 'software' ? !draftVariants.length : !firewall && !artifact.length"
+            :disabled="kind === 'software' ? !draftVariants.length : !artifact.length"
           >
             {{ t('policies.save') }}
           </button>

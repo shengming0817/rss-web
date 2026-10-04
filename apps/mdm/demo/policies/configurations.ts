@@ -1,4 +1,8 @@
-import { configurationApplicability, configurationConflicts } from './applicability'
+import {
+  configurationApplicability,
+  configurationConflicts,
+  type ConfigurationEffects,
+} from './applicability'
 import type { DomainHandler } from '../scenario'
 import type { createDeviceDemo } from '../devices/state'
 import type { createScopeDemo } from './scopes'
@@ -18,22 +22,12 @@ export function createConfigurationDemo(
   devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts'>,
   scopes: Pick<ReturnType<typeof createScopeDemo>, 'freeze'>,
   referenced: (id: string, version: number) => boolean,
-  assigned: (
-    device: string,
-    replacedPolicy?: string,
-  ) => { id: string; version: number }[] = () => [],
+  assigned: (device: string, replacedPolicy?: string) => ConfigurationEffects[],
 ) {
   const configurations = new Map<string, Configuration>(),
     previews = new Map<string, { value: Preview; revision: number; reads: number }>(),
     receipts = createReceipts(),
     pages = createPages()
-  function assignedVersions(device: string, replacedPolicy?: string) {
-    return assigned(device, replacedPolicy).flatMap((ref) => {
-      const c = configurations.get(ref.id),
-        v = c?.versions.find((v) => v.version === ref.version && v.status === 'published')
-      return c && v ? [{ ...c, versions: [v] }] : []
-    })
-  }
   const handle: DomainHandler = (request, scenario) => {
     const match =
       /^\/api\/v1\/mdm-candidate\/policies\/configurations(?:\/([^/]+)(?:\/(diff|previews)(?:\/([^/]+))?)?)?$/.exec(
@@ -98,12 +92,7 @@ export function createConfigurationDemo(
           const facts = devices.facts()
           const rows: Preview['rows'] = scope.members.map((device) => {
             const d = facts.find((d) => d.summary.id === device)
-            const reason = configurationApplicability(
-              state,
-              version.version,
-              d,
-              assignedVersions(device),
-            )
+            const reason = configurationApplicability(state, version.version, d, assigned(device))
             return {
               device,
               support:
@@ -121,7 +110,7 @@ export function createConfigurationDemo(
                       ? 'conflict'
                       : 'authorization',
               drift: 'unknown',
-              conflicts: configurationConflicts(state, version.version, assignedVersions(device)),
+              conflicts: configurationConflicts(state, version.version, assigned(device)),
             }
           })
           previews.set(op.operationId, {
@@ -203,7 +192,7 @@ export function createConfigurationDemo(
             c,
             version,
             devices.facts().find((d) => d.summary.id === device),
-            assignedVersions(device, replacedPolicy),
+            assigned(device, replacedPolicy),
           )
         : ('resource_unavailable' as const)
     },

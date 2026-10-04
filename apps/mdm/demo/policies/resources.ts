@@ -2,7 +2,7 @@ import { createResourceUploads } from './uploads'
 import { createHash } from 'node:crypto'
 import type { DomainHandler } from '../scenario'
 import { MDM_CONTENT_BODY_LIMIT } from '@rss/api/mdm-limits'
-import { boolean, closed, enumeration, identifier, record, uuid } from '../../src/services/decode'
+import { closed, enumeration, identifier, record, uuid } from '../../src/services/decode'
 import {
   decodeResource,
   declarationArtifacts,
@@ -85,7 +85,7 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
           ...(resource?.versions ?? []),
           {
             id: version,
-            configuration: null,
+
             digest: hash(JSON.stringify(declaration)),
             state: 'frozen',
             variants: input.variants,
@@ -180,7 +180,6 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
           action = enumeration(input['action'], [
             'create',
             'version',
-            'firewall_version',
             'activate',
             'deprecate',
             'archive',
@@ -200,34 +199,25 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
           next = structuredClone(state)
           const versionId = identifier(input['version']),
             existing = next.versions.find((v) => v.id === versionId)
-          if (action === 'version' || action === 'firewall_version') {
+          if (action === 'version') {
             if (existing) return error('operation_conflict')
-            const firewall = action === 'firewall_version'
-            closed(
-              input,
-              firewall
-                ? ['action', 'version', 'enabled']
-                : ['action', 'version', 'kind', 'variants'],
-            )
-            if (firewall ? state.kind !== 'configuration' : input['kind'] !== state.kind)
-              return error('malformed_request', 400)
-            const configuration = firewall ? { enabled: boolean(input['enabled']) } : null
+            closed(input, ['action', 'version', 'kind', 'variants'])
+            if (input['kind'] !== state.kind) return error('malformed_request', 400)
             const decoded = decodeResource(
               {
                 ...next,
                 versions: [
                   {
                     id: versionId,
-                    configuration,
                     digest: hash(JSON.stringify(input)),
                     state: 'frozen',
-                    variants: firewall ? [] : input['variants'],
+                    variants: input['variants'],
                   },
                 ],
               },
               id,
             ).versions[0]!
-            if (!firewall && !decoded.variants.length) return error('malformed_request', 400)
+            if (!decoded.variants.length) return error('malformed_request', 400)
             for (const v of decoded.variants) {
               validateScriptVariant(v)
               if (
@@ -279,6 +269,35 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
           ),
         )
       )
+    },
+    content: (binding: {
+      id: string
+      version: string
+      platform: Variant['platform']
+      architecture: Variant['architecture']
+      variant: string
+    }) => {
+      const variant = resources
+        .get(binding.id)
+        ?.versions.find((v) => v.id === binding.version)
+        ?.variants.find(
+          (v) =>
+            v.key === binding.variant &&
+            v.platform === binding.platform &&
+            v.architecture === binding.architecture,
+        )
+      return variant && variant.declaration.kind !== 'software'
+        ? contents
+            .get(
+              contentKey(
+                binding.id,
+                binding.version,
+                variant,
+                variant.declaration.artifact.reference,
+              ),
+            )
+            ?.slice()
+        : undefined
     },
     read: (id: string) => {
       const value = resources.get(id)

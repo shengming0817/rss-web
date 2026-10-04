@@ -7,6 +7,7 @@ import { candidate } from './http'
 import { createScopeDemo } from './scopes'
 import { createResourceDemo } from './resources'
 import { createNativeDemo } from './native'
+import { createConfigurationPolicies } from './configuration-claims'
 import { createPolicyDemo } from './policies'
 import { createPolicyStore } from './store'
 import { createConfigurationDemo } from './configurations'
@@ -58,11 +59,12 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
   const selfService = createSelfServiceDemo(devices, scopes, resources, admission, software)
   const bootstrap = createBootstrapDemo(devices, scopes, resources, admission)
   const updates = createUpdatesDemo(devices, scopes, { resources, admission, software })
+  const configurationPolicies = createConfigurationPolicies(devices, scopes, resources, policyStore)
   const configurations = createConfigurationDemo(
     devices,
     scopes,
     (id, version): boolean => workflows.referencesConfiguration(id, version),
-    () => [],
+    configurationPolicies.assigned,
   )
   const policies = createPolicyDemo(devices, scopes, resources, policyStore)
   const workflows = createWorkflowDemo(devices, scopes, resources, configurations),
@@ -122,6 +124,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         native,
         policyStore,
         policies,
+        configurationPolicies,
         configurations,
         workflows,
         admission,
@@ -135,13 +138,16 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
           if (owner === policyStore && request.method === 'POST' && reply.status < 300) {
             software.reconcile()
             policies.reconcile(scenario)
+            configurationPolicies.reconcile()
           }
           if (
             (owner === scopes || owner === resources) &&
             request.method === 'POST' &&
             reply.status < 300
-          )
+          ) {
             policies.reconcile(scenario)
+            configurationPolicies.reconcile()
+          }
           return reply
         }
       }
@@ -190,6 +196,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
     operations,
     security,
     resources,
+    configurationPolicies,
     scopes,
     admission,
     software,
@@ -208,12 +215,16 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         ) &&
         !path.includes('preview')
       const groupPublished = method === 'GET' && /^\/api\/v1\/groups\/[^/]+\/tasks\//.test(path)
-      if (deviceWrite || groupPublished) policies.reconcile(scenario)
+      if (deviceWrite || groupPublished) {
+        policies.reconcile(scenario)
+        configurationPolicies.reconcile()
+      }
     },
     tick(event: DemoEvent, scenario: Scenario = 'normal') {
       if (!security.tick(event, scenario)) return false
       if (!event.kind.startsWith('software_') && !event.kind.startsWith('bootstrap_')) {
         policies.reconcile(scenario, event)
+        configurationPolicies.reconcile()
         workflows.tick(event)
       }
       bootstrap.tick(event, scenario)
@@ -234,6 +245,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         native,
         policyStore,
         policies,
+        configurationPolicies,
         configurations,
         workflows,
         pages,

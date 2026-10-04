@@ -1,5 +1,5 @@
 import type { DemoDevice } from '../devices/fixtures'
-import type { Configuration } from '../../src/features/policies/clients/configurations'
+import type { Configuration, Setting } from '../../src/features/policies/clients/configurations'
 import type { ResourceRead } from '../../src/features/policies/clients/resources'
 export type Applicability =
   | 'applicable'
@@ -7,10 +7,15 @@ export type Applicability =
   | 'unsupported'
   | 'conflict'
   | 'resource_unavailable'
+export interface ConfigurationEffects {
+  id: string
+  platform: Configuration['platform']
+  settings: Setting[]
+}
 export function configurationConflicts(
   configuration: Configuration,
   version: number,
-  assigned: Configuration[],
+  assigned: ConfigurationEffects[],
 ): string[] {
   const selected = configuration.versions.find(
     (v) => v.version === version && v.status === 'published',
@@ -22,12 +27,8 @@ export function configurationConflicts(
         .filter(
           (c) =>
             c.platform === configuration.platform &&
-            c.versions.some(
-              (other) =>
-                other.status === 'published' &&
-                other.settings.some((s) =>
-                  selected.settings.some((next) => next.key === s.key && next.value !== s.value),
-                ),
+            c.settings.some((s) =>
+              selected.settings.some((next) => next.key === s.key && next.value !== s.value),
             ),
         )
         .map((c) => c.id),
@@ -38,7 +39,7 @@ export function configurationApplicability(
   configuration: Configuration,
   version: number,
   device: DemoDevice | undefined,
-  assigned: Configuration[],
+  assigned: ConfigurationEffects[],
 ): Applicability {
   const v = configuration.versions.find((v) => v.version === version && v.status === 'published')
   if (!v) return 'resource_unavailable'
@@ -62,7 +63,7 @@ export function resourceApplicability(
 ): Applicability {
   const v = resource.versions.find((v) => v.id === version && v.state === 'active')
   if (!v) return 'resource_unavailable'
-  const native = v.configuration !== null,
+  const native = resource.kind === 'configuration',
     channel = native ? 'mdm' : 'agent'
   if (
     !device ||
@@ -74,10 +75,6 @@ export function resourceApplicability(
   )
     return 'authorization'
   if (!device.summary.channels.includes(channel)) return 'unsupported'
-  if (native)
-    return device.summary.platform === 'windows' && device.nativeWindows
-      ? 'applicable'
-      : 'unsupported'
   return v.variants.filter(
     (v) =>
       v.platform === device.summary.platform &&
