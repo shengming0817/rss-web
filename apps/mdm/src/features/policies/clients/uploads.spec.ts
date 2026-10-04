@@ -3,14 +3,20 @@ import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { createUploadsClient, decodeUpload } from './uploads'
 const id = '11111111-1111-4111-8111-111111111111'
 const binding = {
-  resource: 'app',
-  version: '1',
-  variant: 'main',
-  platform: 'windows',
-  architecture: 'x86_64',
-  resource_digest: Array(32).fill(1),
-  source: { id: 'private', revision: '1', sha256: Array(32).fill(2) },
-  origin: null,
+  purpose: {
+    kind: 'resource',
+    binding: {
+      storage_class: 'artifact',
+      resource: 'app',
+      version: '1',
+      variant: 'main',
+      platform: 'windows',
+      architecture: 'x86_64',
+      resource_digest: Array(32).fill(1),
+      source: { id: 'private', revision: '1', sha256: Array(32).fill(2) },
+      origin: null,
+    },
+  },
   reference: 'installer',
   length: 20000000,
   sha256: Array(32).fill(3),
@@ -23,8 +29,25 @@ it('binds native upload status to resource/session and rejects malformed or cros
     { ...value, id: crypto.randomUUID() },
     { ...value, offset: binding.length + 1 },
     { ...value, complete: true },
-    { ...value, binding: { ...binding, resource: 'other' } },
+    {
+      ...value,
+      binding: {
+        ...binding,
+        purpose: { ...binding.purpose, binding: { ...binding.purpose.binding, resource: 'other' } },
+      },
+    },
     { ...value, binding: { ...binding, secret: 'extra' } },
+    {
+      ...value,
+      binding: {
+        ...binding.purpose.binding,
+        reference: binding.reference,
+        length: binding.length,
+        sha256: binding.sha256,
+        actor: binding.actor,
+      },
+    },
+    { ...value, binding: { ...binding, purpose: { kind: 'diagnostic', binding: {} } } },
   ])
     expect(() => decodeUpload(invalid, 'app', id)).toThrow()
 })
@@ -44,7 +67,13 @@ it('uses native begin/status/append/complete/receipt routes and rejects wrong co
     path: '/api/v1/resources/{id}/uploads/{upload}',
     query: target,
   })
-  reply = { ...value, binding: { ...binding, version: '2' } }
+  reply = {
+    ...value,
+    binding: {
+      ...binding,
+      purpose: { ...binding.purpose, binding: { ...binding.purpose.binding, version: '2' } },
+    },
+  }
   await expect(client.begin('app', id, target)).rejects.toThrow()
   reply = value
   await client.read('app', id)

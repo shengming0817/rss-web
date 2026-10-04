@@ -239,15 +239,16 @@ function select(event: Event) {
 function rememberUpload(value: UploadSession) {
   uploadSession.value = value
   uploadId.value = value.id
-  const b = value.binding
+  const b = value.binding,
+    r = b.purpose.binding
   uploadPending.value = {
-    id: b.resource,
+    id: r.resource,
     upload: value.id,
     target: {
-      version: b.version,
-      variant: b.variant,
-      platform: b.platform,
-      architecture: b.architecture,
+      version: r.version,
+      variant: r.variant,
+      platform: r.platform,
+      architecture: r.architecture,
       artifact: b.reference,
     },
     hash: hashText(b.sha256),

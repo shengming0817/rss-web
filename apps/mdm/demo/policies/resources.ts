@@ -41,11 +41,12 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
   const uploads = createResourceUploads(
     (id) => resources.get(id),
     (binding, bytes) => {
+      const r = binding.purpose.binding
       contents.set(
         contentKey(
-          binding.resource,
-          binding.version,
-          { platform: binding.platform, architecture: binding.architecture, key: binding.variant },
+          r.resource,
+          r.version,
+          { platform: r.platform, architecture: r.architecture, key: r.variant },
           binding.reference,
         ),
         bytes,
