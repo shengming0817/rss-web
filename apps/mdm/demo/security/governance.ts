@@ -122,7 +122,7 @@ export function createGovernanceDemo(
     })
   }
   const handle: DomainHandler = (request, scenario) => {
-    const match = /^\/api\/mdm-candidate\/v1\/security\/baselines(?:\/([^/]+)(\/devices)?)?$/.exec(
+    const match = /^\/api\/v1\/mdm-candidate\/security\/baselines(?:\/([^/]+)(\/devices)?)?$/.exec(
       request.path,
     )
     if (!match) return

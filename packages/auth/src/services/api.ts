@@ -36,7 +36,7 @@ export function createApi(owner: IdentitySession) {
         throw new Error('Session required')
       return owner.transport.request({
         method,
-        path: `/api/v2/tenants/{tenant}/${suffix}`,
+        path: `/api/v1/identity/tenants/{tenant}/${suffix}`,
         pathParams: { tenant: uuid(tenant) },
         headers: method === 'GET' ? {} : owner.headers(anonymousTenant === undefined),
         ...(body === undefined ? {} : { body }),

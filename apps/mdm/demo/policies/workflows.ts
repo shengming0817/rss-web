@@ -146,7 +146,7 @@ export function createWorkflowDemo(
   }
   const handle: DomainHandler = (request, scenario) => {
     const match =
-      /^\/api\/mdm-candidate\/v1\/policies\/workflows\/([^/]+)(?:\/runs(?:\/([^/]+)(?:\/(approve|cancel|reapprove))?)?)?$/.exec(
+      /^\/api\/v1\/mdm-candidate\/policies\/workflows\/([^/]+)(?:\/runs(?:\/([^/]+)(?:\/(approve|cancel|reapprove))?)?)?$/.exec(
         request.path,
       )
     if (!match) return

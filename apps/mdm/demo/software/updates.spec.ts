@@ -25,13 +25,13 @@ function fixture(platform: 'windows' | 'macos' = 'windows') {
     },
     0,
   )
-  scopes.handle(request(`/api/v2/scopes/${scope}`, put), 'normal')
+  scopes.handle(request(`/api/v1/scopes/${scope}`, put), 'normal')
   for (let i = 0; i < 2; i++)
-    scopes.handle(request(`/api/v2/scopes/${scope}/tasks/${put.operationId}`), 'normal')
+    scopes.handle(request(`/api/v1/scopes/${scope}/tasks/${put.operationId}`), 'normal')
   const facts = devices.facts(),
     { resources } = softwareResource()
   resources.handle(
-    request('/api/v3/resources/app', operation({ action: 'activate', version: '1' }, 2)),
+    request('/api/v1/resources/app', operation({ action: 'activate', version: '1' }, 2)),
     'normal',
   )
   let approved = true
@@ -48,7 +48,7 @@ function fixture(platform: 'windows' | 'macos' = 'windows') {
       software,
     }),
     id = randomUUID()
-  const path = `/api/mdm-candidate/v1/software/updates/${id}`
+  const path = `/api/v1/mdm-candidate/software/updates/${id}`
   const definition: UpdateDefinition = {
     title: 'Windows pilot',
     scope,
@@ -194,7 +194,7 @@ it('creates one managed native software policy for confirmed third-party gaps an
   expect(f.read().policy).toEqual(policy)
   expect(
     f.software.handle(
-      request(`/api/v2/policies/${policy.id}`, operation({ action: 'disable' }, 1)),
+      request(`/api/v1/policies/${policy.id}`, operation({ action: 'disable' }, 1)),
       'normal',
     )?.status,
   ).toBe(403)
@@ -231,7 +231,7 @@ it('uses shared HTTP session, exact receipts and explicit real-source unavailabi
     scenario = createScenario([f.demo.handle], f.demo.reset)
   const write = operation({ action: 'scan' }, 1)
   expect((await scenario.handle('POST', f.path, write)).status).toBe(401)
-  const login = await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  const login = await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
   })
@@ -255,11 +255,11 @@ it('uses shared HTTP session, exact receipts and explicit real-source unavailabi
   expect((await scenario.handle('GET', f.path)).status).toBe(403)
   scenario.set('empty')
   expect(
-    (await scenario.handle('GET', '/api/mdm-candidate/v1/software/updates')).body,
+    (await scenario.handle('GET', '/api/v1/mdm-candidate/software/updates')).body,
   ).toMatchObject({ items: [] })
   await scenario.handle(
     'POST',
-    '/api/mdm-candidate/v1/workspace/scenario',
+    '/api/v1/mdm-candidate/workspace/scenario',
     { scenario: 'normal', module: 'software', source: 'real' },
     headers,
   )
@@ -312,7 +312,7 @@ it.each(['deadline', 'authorization', 'registration', 'cancel'] as const)(
         const id = f.definition.scope
         f.scopes.handle(
           request(
-            `/api/v2/scopes/${id}`,
+            `/api/v1/scopes/${id}`,
             operation(
               {
                 action: 'put',

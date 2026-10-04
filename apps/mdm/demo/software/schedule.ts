@@ -1,12 +1,10 @@
 import { createHash } from 'node:crypto'
 import { calendar, civil, local } from '../policies/calendar'
-import {
-  nativeSchedule,
-  type SoftwarePolicyDefinition,
-} from '../../src/features/software/clients/assignment-model'
+import { type SoftwarePolicyDefinition } from '../../src/features/software/clients/assignment-model'
+import { nativeSchedule } from '../../src/features/policies/clients/model'
 /** Native software admission calls this only from an authenticated synthetic Agent poll. */
 export function nativeDue(
-  s: SoftwarePolicyDefinition['behavior']['schedule'],
+  s: SoftwarePolicyDefinition['action']['schedule'],
   now: number,
   device: string,
 ) {

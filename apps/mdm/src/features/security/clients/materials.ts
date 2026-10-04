@@ -25,7 +25,7 @@ export function createMaterialsClient(transport: HttpTransport, tenant: string, 
     list: (device: string, cursor?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/security/materials/{device}',
+        path: '/api/v1/mdm-candidate/security/materials/{device}',
         pathParams: { device },
         query: { limit: 20, cursor },
         successStatus: 200,
@@ -45,7 +45,7 @@ export function createMaterialsClient(transport: HttpTransport, tenant: string, 
     read: (device: string, kind: MaterialKind) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/security/materials/{device}/{kind}',
+        path: '/api/v1/mdm-candidate/security/materials/{device}/{kind}',
         pathParams: { device, kind },
         successStatus: 200,
         decode(value) {
@@ -57,7 +57,7 @@ export function createMaterialsClient(transport: HttpTransport, tenant: string, 
     reveal: (target: MaterialAccessTarget, body: DisclosureRequest, binding: DisclosureBinding) =>
       transport.request({
         method: 'POST',
-        path: '/api/mdm-candidate/v1/security/materials/{device}/{kind}/reveal',
+        path: '/api/v1/mdm-candidate/security/materials/{device}/{kind}/reveal',
         pathParams: { device: target.device, kind: target.material },
         body,
         successStatus: 200,

@@ -155,7 +155,7 @@ export function createCertificatesDemo(
   }
   const handle: DomainHandler = (request, scenario) => {
     const route =
-      /^\/api\/mdm-candidate\/v1\/security\/certificates(?:\/([^/]+)(?:\/(issue))?)?$/.exec(
+      /^\/api\/v1\/mdm-candidate\/security\/certificates(?:\/([^/]+)(?:\/(issue))?)?$/.exec(
         request.path,
       )
     if (!route) return

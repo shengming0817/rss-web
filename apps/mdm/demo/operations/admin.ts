@@ -262,17 +262,17 @@ export function createAdminDemo(
   }
   const handle: DomainHandler = (request, scenario) => {
     const path = request.path,
-      root = '/api/mdm-candidate/v1/operations'
+      root = '/api/v1/mdm-candidate/operations'
     if (!path.startsWith(root) || /^.*\/(?:audit|alerts)(?:\/|$)/.test(path)) {
       if (
-        !path.startsWith('/api/mdm-candidate/v1/integrations/') &&
-        !path.startsWith('/api/mdm-candidate/v1/authorization/delegations')
+        !path.startsWith('/api/v1/mdm-candidate/integrations/') &&
+        !path.startsWith('/api/v1/mdm-candidate/authorization/delegations')
       )
         return
     }
     try {
       if (request.method === 'GET') {
-        if (path === '/api/mdm-candidate/v1/authorization/delegations')
+        if (path === '/api/v1/mdm-candidate/authorization/delegations')
           return list(request, scenario, [
             {
               id: '88888888-8888-4888-8888-888888888888',
@@ -324,7 +324,7 @@ export function createAdminDemo(
         if (path === `${root}/maintenance`)
           return list(request, scenario, [...jobs.values()].reverse())
         const jobMatch =
-          /^\/api\/mdm-candidate\/v1\/operations\/(reports|maintenance)\/([^/]+)$/.exec(path)
+          /^\/api\/v1\/mdm-candidate\/operations\/(reports|maintenance)\/([^/]+)$/.exec(path)
         if (jobMatch) {
           const value =
             jobMatch[1] === 'reports' ? reports.get(uuid(jobMatch[2])) : jobs.get(uuid(jobMatch[2]))
@@ -335,10 +335,10 @@ export function createAdminDemo(
             return error('operation_not_found', 404)
           return value ? reply({ job: value }) : error('operation_not_found', 404)
         }
-        if (path === '/api/mdm-candidate/v1/integrations/connectors')
+        if (path === '/api/v1/mdm-candidate/integrations/connectors')
           return list(request, scenario, [...connectors.values()])
         const attempt =
-          /^\/api\/mdm-candidate\/v1\/integrations\/connectors\/([^/]+)\/attempts\/([^/]+)$/.exec(
+          /^\/api\/v1\/mdm-candidate\/integrations\/connectors\/([^/]+)\/attempts\/([^/]+)$/.exec(
             path,
           )
         if (attempt) {
@@ -349,7 +349,7 @@ export function createAdminDemo(
             : error('operation_not_found', 404)
         }
         const c =
-          /^\/api\/mdm-candidate\/v1\/integrations\/connectors\/([^/]+)(?:\/(deliveries))?$/.exec(
+          /^\/api\/v1\/mdm-candidate\/integrations\/connectors\/([^/]+)(?:\/(deliveries))?$/.exec(
             path,
           )
         if (c) {
@@ -449,7 +449,7 @@ export function createAdminDemo(
         })
       }
       const changeJob =
-        /^\/api\/mdm-candidate\/v1\/operations\/maintenance\/([^/]+)\/(pause|resume|cancel)$/.exec(
+        /^\/api\/v1\/mdm-candidate\/operations\/maintenance\/([^/]+)\/(pause|resume|cancel)$/.exec(
           path,
         )
       if (changeJob) {
@@ -473,7 +473,7 @@ export function createAdminDemo(
           return reply({ job })
         })
       }
-      const ruleMatch = /^\/api\/mdm-candidate\/v1\/operations\/alert-rules\/([^/]+)$/.exec(path)
+      const ruleMatch = /^\/api\/v1\/mdm-candidate\/operations\/alert-rules\/([^/]+)$/.exec(path)
       if (ruleMatch) {
         const id = uuid(ruleMatch[1]),
           definition = alertRuleDefinition(op.input)
@@ -492,7 +492,7 @@ export function createAdminDemo(
         })
       }
       const c =
-        /^\/api\/mdm-candidate\/v1\/integrations\/connectors\/([^/]+)(?:\/(test|deliver|deliveries\/([^/]+)\/retry))?$/.exec(
+        /^\/api\/v1\/mdm-candidate\/integrations\/connectors\/([^/]+)(?:\/(test|deliver|deliveries\/([^/]+)\/retry))?$/.exec(
           path,
         )
       if (!c) return

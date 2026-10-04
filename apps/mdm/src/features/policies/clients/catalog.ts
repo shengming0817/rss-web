@@ -11,13 +11,13 @@ import {
   uuid,
 } from '../../../services/decode'
 import { candidate } from './candidate'
-export type Collection = 'scopes' | 'resources' | 'policies' | 'workflows'
+export type Collection = 'scopes' | 'resources' | 'workflows'
 export function createCatalogClient(transport: HttpTransport, tenant: string, demo: boolean) {
   return {
     list: (collection: Collection, cursor?: string) =>
       transport.request({
         method: 'GET',
-        path: `/api/mdm-candidate/v1/policies/${collection}`,
+        path: `/api/v1/mdm-candidate/policies/${collection}`,
         query: { limit: 20, cursor },
         successStatus: 200,
         decode(value) {
@@ -33,11 +33,9 @@ export function createCatalogClient(transport: HttpTransport, tenant: string, de
                   revision: count(i['revision']),
                   status: enumeration(
                     i['status'],
-                    collection === 'policies'
-                      ? (['active', 'paused', 'archived'] as const)
-                      : collection === 'workflows'
-                        ? (['active', 'archived'] as const)
-                        : (['ready'] as const),
+                    collection === 'workflows'
+                      ? (['active', 'archived'] as const)
+                      : (['ready'] as const),
                   ),
                 }
               }),
@@ -50,7 +48,7 @@ export function createCatalogClient(transport: HttpTransport, tenant: string, de
     approvals: (cursor?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/policies/approvals',
+        path: '/api/v1/mdm-candidate/policies/approvals',
         query: { limit: 20, cursor },
         successStatus: 200,
         decode(value) {

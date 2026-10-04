@@ -130,10 +130,10 @@ export function createSecurityActions(
     }
   }
   const handle: DomainHandler = (request, scenario) => {
-    const dispatch = /^\/api\/mdm-candidate\/v1\/security\/requests\/([^/]+)\/dispatch$/.exec(
+    const dispatch = /^\/api\/v1\/mdm-candidate\/security\/requests\/([^/]+)\/dispatch$/.exec(
         request.path,
       ),
-      route = /^\/api\/mdm-candidate\/v1\/security\/actions(?:\/([^/]+))?$/.exec(request.path)
+      route = /^\/api\/v1\/mdm-candidate\/security\/actions(?:\/([^/]+))?$/.exec(request.path)
     if (!dispatch && !route) return
     if (scenario === 'denied') return error('permission_denied', 403)
     try {

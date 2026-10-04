@@ -15,7 +15,7 @@ it('verifies raw upload length and digest, permits exact bytes replay, and refus
   let revision = 0
   function change(input: unknown) {
     const reply = resources.handle(
-      request(`/api/v3/resources/${id}`, {
+      request(`/api/v1/resources/${id}`, {
         operationId: randomUUID(),
         expectedRevision: revision,
         input,
@@ -45,6 +45,7 @@ it('verifies raw upload length and digest, permits exact bytes replay, and refus
             },
             definition: {
               profile: 'posix_sh',
+              sql: null,
               runAs: 'system',
               encoding: 'utf8',
               parameters: {
@@ -73,16 +74,16 @@ it('verifies raw upload length and digest, permits exact bytes replay, and refus
   })
   expect(
     resources.handle(
-      request(`/api/v3/resources/${id}/content`, new ArrayBuffer(bytes.byteLength), query),
+      request(`/api/v1/resources/${id}/content`, new ArrayBuffer(bytes.byteLength), query),
       'normal',
     )?.status,
   ).toBe(409)
   expect(change({ action: 'activate', version: '1' }).status).toBe(409)
   expect(
-    resources.handle(request(`/api/v3/resources/${id}/content`, bytes, query), 'normal')?.status,
+    resources.handle(request(`/api/v1/resources/${id}/content`, bytes, query), 'normal')?.status,
   ).toBe(201)
   expect(
-    resources.handle(request(`/api/v3/resources/${id}/content`, bytes, query), 'normal')?.status,
+    resources.handle(request(`/api/v1/resources/${id}/content`, bytes, query), 'normal')?.status,
   ).toBe(201)
   expect(change({ action: 'activate', version: '1' }).status).toBe(200)
   referenced.add(`${id}/1`)

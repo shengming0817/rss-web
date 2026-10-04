@@ -5,18 +5,18 @@ export function observationTarget(
   path: string,
   operation: string | null,
 ): OperationsReference | null {
-  if (/^\/api\/mdm-candidate\/v1\/devices\/batch-previews(?:\/|$)/.test(path)) return null
+  if (/^\/api\/v1\/mdm-candidate\/devices\/batch-previews(?:\/|$)/.test(path)) return null
   const mappings: [RegExp, OperationsReference['kind']][] = [
     [/^\/api\/v1\/authorization\/rules\/([^/]+)/, 'authorization_rule'],
     [/^\/api\/v1\/authorization\/user-groups\/([^/]+)/, 'user_group'],
-    [/^\/api\/mdm-candidate\/v1\/integrations\/connectors\/([^/]+)/, 'connector'],
-    [/^\/api\/(?:v[23]\/devices|mdm-candidate\/v1\/devices)\/([^/]+)/, 'device'],
-    [/^\/api\/(?:v2\/policies|mdm-candidate\/v1\/policies\/assignments)\/([^/]+)/, 'policy'],
-    [/^\/api\/mdm-candidate\/v1\/policies\/workflows\/([^/]+)/, 'workflow'],
-    [/^\/api\/mdm-candidate\/v1\/software\/self-service\/requests\/([^/]+)/, 'software_request'],
-    [/^\/api\/mdm-candidate\/v1\/operations\/reports\/([^/]+)/, 'report'],
-    [/^\/api\/mdm-candidate\/v1\/operations\/maintenance\/([^/]+)/, 'job'],
-    [/^\/api\/mdm-candidate\/v1\/operations\/alert-rules\/([^/]+)/, 'alert_rule'],
+    [/^\/api\/v1\/mdm-candidate\/integrations\/connectors\/([^/]+)/, 'connector'],
+    [/^\/api\/(?:v1\/devices|v1\/mdm-candidate\/devices)\/([^/]+)/, 'device'],
+    [/^\/api\/(?:v1\/policies|v1\/mdm-candidate\/policies\/assignments)\/([^/]+)/, 'policy'],
+    [/^\/api\/v1\/mdm-candidate\/policies\/workflows\/([^/]+)/, 'workflow'],
+    [/^\/api\/v1\/mdm-candidate\/software\/self-service\/requests\/([^/]+)/, 'software_request'],
+    [/^\/api\/v1\/mdm-candidate\/operations\/reports\/([^/]+)/, 'report'],
+    [/^\/api\/v1\/mdm-candidate\/operations\/maintenance\/([^/]+)/, 'job'],
+    [/^\/api\/v1\/mdm-candidate\/operations\/alert-rules\/([^/]+)/, 'alert_rule'],
   ]
   for (const [pattern, kind] of mappings) {
     const match = pattern.exec(path)
@@ -28,12 +28,12 @@ export function observationTarget(
         return null
       }
   }
-  if (/^\/api\/mdm-candidate\/v1\/operations\/settings(?:\/|$)/.test(path))
+  if (/^\/api\/v1\/mdm-candidate\/operations\/settings(?:\/|$)/.test(path))
     return { kind: 'settings', id: 'configuration', device: null, revision: null }
   if (
     operation &&
-    (path === '/api/mdm-candidate/v1/operations/reports' ||
-      path === '/api/mdm-candidate/v1/operations/maintenance')
+    (path === '/api/v1/mdm-candidate/operations/reports' ||
+      path === '/api/v1/mdm-candidate/operations/maintenance')
   )
     return {
       kind: path.endsWith('/reports') ? 'report' : 'job',

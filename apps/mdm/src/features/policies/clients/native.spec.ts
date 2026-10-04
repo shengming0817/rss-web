@@ -64,7 +64,7 @@ it('uses native requestId and revision for approval/cancel, not script operation
   })
   expect(request.mock.calls[0]![0]).toMatchObject({
     method: 'POST',
-    path: '/api/v2/devices/{device}/operations',
+    path: '/api/v1/devices/{device}/operations',
     pathParams: { device: 'device-01' },
     successStatus: 202,
   })
@@ -72,14 +72,14 @@ it('uses native requestId and revision for approval/cancel, not script operation
   await client.approve('device-01', id, { requestId, expectedRevision: 1 })
   expect(request.mock.calls[1]![0]).toMatchObject({
     method: 'POST',
-    path: '/api/v2/devices/{device}/operations/{operation}/approve',
+    path: '/api/v1/devices/{device}/operations/{operation}/approve',
     body: { requestId, expectedRevision: 1 },
     successStatus: 200,
   })
   await client.cancel('device-01', id, { requestId, expectedRevision: 2 })
   expect(request.mock.calls[2]![0]).toMatchObject({
     method: 'POST',
-    path: '/api/v2/devices/{device}/operations/{operation}/cancel',
+    path: '/api/v1/devices/{device}/operations/{operation}/cancel',
     body: { requestId, expectedRevision: 2 },
     successStatus: 200,
   })

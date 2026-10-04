@@ -15,7 +15,7 @@ export function createExperienceDemo(
   const records = new Map<string, Experience>()
   const handle: DomainHandler = (request, scenario) => {
     const match =
-      /^\/api\/mdm-candidate\/v1\/security\/support\/devices\/([^/]+)\/experience$/.exec(
+      /^\/api\/v1\/mdm-candidate\/security\/support\/devices\/([^/]+)\/experience$/.exec(
         request.path,
       )
     if (!match) return

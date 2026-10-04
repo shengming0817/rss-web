@@ -28,7 +28,7 @@ export function createSecurityRequestsClient(
     list: (filter: RequestFilter = {}) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/security/requests',
+        path: '/api/v1/mdm-candidate/security/requests',
         query: { limit: 20, ...filter },
         successStatus: 200,
         decode(value) {
@@ -44,7 +44,7 @@ export function createSecurityRequestsClient(
     read: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/security/requests/{id}',
+        path: '/api/v1/mdm-candidate/security/requests/{id}',
         pathParams: { id },
         successStatus: 200,
         decode: (v) => read(v, id),
@@ -52,7 +52,7 @@ export function createSecurityRequestsClient(
     create: (body: Operation<SecurityRequestDefinition>) =>
       transport.request({
         method: 'POST',
-        path: '/api/mdm-candidate/v1/security/requests',
+        path: '/api/v1/mdm-candidate/security/requests',
         body,
         successStatus: 200,
         decode(value) {
@@ -74,7 +74,7 @@ export function createSecurityRequestsClient(
     ) =>
       transport.request({
         method: 'POST',
-        path: '/api/mdm-candidate/v1/security/requests/{id}/{action}',
+        path: '/api/v1/mdm-candidate/security/requests/{id}/{action}',
         pathParams: { id, action },
         body,
         successStatus: 200,

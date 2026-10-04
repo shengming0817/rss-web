@@ -67,7 +67,7 @@ async function save() {
   const settings: ProviderSettings = {
     issuer: issuer.value,
     clientId: client.value,
-    redirectUri: `${session.config.canonicalOrigin}/api/v2/oidc/callback`,
+    redirectUri: `${session.config.canonicalOrigin}/api/v1/identity/oidc/callback`,
     scopes: scopes.value.split(/\s+/).filter(Boolean),
     claims: {
       email: email.value || null,

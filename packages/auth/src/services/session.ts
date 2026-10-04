@@ -170,7 +170,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
       if (!tenant || !session || status !== 'authenticated') throw new Error('Session required')
       return transport.request({
         method: 'GET',
-        path: '/api/v2/tenants/{tenant}/session/security',
+        path: '/api/v1/identity/tenants/{tenant}/session/security',
         pathParams: { tenant },
         successStatus: 200,
         decode: sessionSecurity,
@@ -211,7 +211,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
         tenant,
         await transport.request({
           method: 'GET',
-          path: '/api/v2/tenants/{tenant}/session',
+          path: '/api/v1/identity/tenants/{tenant}/session',
           pathParams: { tenant },
           successStatus: 200,
           decode: sessionResponse,
@@ -246,7 +246,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
         tenant,
         await transport.request({
           method: 'POST',
-          path: '/api/v2/tenants/{tenant}/login',
+          path: '/api/v1/identity/tenants/{tenant}/login',
           pathParams: { tenant },
           headers: headers(false),
           body: { login, password },
@@ -285,7 +285,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
           tenant,
           await transport.request({
             method: 'POST',
-            path: '/api/v2/tenants/{tenant}/session/refresh',
+            path: '/api/v1/identity/tenants/{tenant}/session/refresh',
             pathParams: { tenant },
             headers: headers(),
             successStatus: 200,
@@ -335,7 +335,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
       try {
         await transport.request({
           method: 'POST',
-          path: `/api/v2/tenants/{tenant}/${all ? 'sessions/logout-all' : 'session/logout'}`,
+          path: `/api/v1/identity/tenants/{tenant}/${all ? 'sessions/logout-all' : 'session/logout'}`,
           pathParams: { tenant },
           headers: saved,
           successStatus: 204,
@@ -365,7 +365,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
     try {
       const value = await transport.request({
         method: 'GET',
-        path: '/api/identity-host/v1/tenants/{tenant}/context',
+        path: '/api/v1/identity-host/tenants/{tenant}/context',
         pathParams: { tenant },
         successStatus: 200,
         decode: hostContext,
@@ -418,7 +418,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
       try {
         const value = await transport.request({
           method: 'POST',
-          path: '/api/v2/tenants/{tenant}/session/reauthenticate',
+          path: '/api/v1/identity/tenants/{tenant}/session/reauthenticate',
           pathParams: { tenant },
           headers: headers(),
           body: { password },

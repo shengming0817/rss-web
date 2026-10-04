@@ -2,8 +2,9 @@
 import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import UtcTimeInput from '../../policies/components/UtcTimeInput.vue'
-import { nativeSchedule, type SoftwarePolicyDefinition } from '../clients/assignment-model'
-type Schedule = SoftwarePolicyDefinition['behavior']['schedule']
+import { type SoftwarePolicyDefinition } from '../clients/assignment-model'
+import { nativeSchedule } from '../../policies/clients/model'
+type Schedule = SoftwarePolicyDefinition['action']['schedule']
 const model = defineModel<Schedule>({ required: true })
 const id = useId(),
   { t } = useI18n()

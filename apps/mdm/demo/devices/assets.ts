@@ -51,21 +51,21 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
       },
     })
     selections.set(task, input.select)
-    return asset({ kind: 'accepted', task, statusUrl: `/api/v2/device-queries/${task}` }, 202)
+    return asset({ kind: 'accepted', task, statusUrl: `/api/v1/device-queries/${task}` }, 202)
   }
   const selections = new Map<string, string[]>()
   const handle: DomainHandler = (request, scenario) => {
     const { method, path, query } = request
-    if (path === '/api/v2/asset-fields' && method === 'GET')
+    if (path === '/api/v1/asset-fields' && method === 'GET')
       return asset({ kind: 'fields', dictionary: 'assets-v1', fields: catalog })
-    const detail = /^\/api\/v2\/devices\/([^/]+)\/inventory$/.exec(path)
+    const detail = /^\/api\/v1\/devices\/([^/]+)\/inventory$/.exec(path)
     if (detail && method === 'GET') {
       const device = devices().get(decodeURIComponent(detail[1]!))
       return device?.summary.inventoryAvailable
         ? asset({ kind: 'detail', device: device.inventory })
         : error('inventory_not_found', 404)
     }
-    const manual = /^\/api\/v2\/devices\/([^/]+)\/manual-fields\/([^/]+)$/.exec(path)
+    const manual = /^\/api\/v1\/devices\/([^/]+)\/manual-fields\/([^/]+)$/.exec(path)
     if (manual && method === 'PUT') {
       const op = operation(request.body),
         id = decodeURIComponent(manual[1]!),
@@ -107,7 +107,7 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
         return asset({ kind: 'assignment', device: id, field, revision: op.expectedRevision + 1 })
       })
     }
-    if (path === '/api/v2/device-queries' && method === 'POST') {
+    if (path === '/api/v1/device-queries' && method === 'POST') {
       const op = operation(request.body)
       return receipts.write(request, op.operationId, () =>
         op.expectedRevision === 0
@@ -116,7 +116,7 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
       )
     }
     const taskPath =
-      /^\/api\/v2\/device-queries\/([^/]+)(?:\/(items|facets)(?:\/(os_versions|channels|asset_states))?)?$/.exec(
+      /^\/api\/v1\/device-queries\/([^/]+)(?:\/(items|facets)(?:\/(os_versions|channels|asset_states))?)?$/.exec(
         path,
       )
     if (taskPath && method === 'GET') {
@@ -131,7 +131,7 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
           status: completed ? 'completed' : 'running',
           summary: search.summary,
           failure: null,
-          resultUrl: completed ? `/api/v2/device-queries/${task}/items` : null,
+          resultUrl: completed ? `/api/v1/device-queries/${task}/items` : null,
         })
       }
       if (search.reads < 2) return error('operation_conflict')
@@ -178,7 +178,7 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
       )
       return asset({ kind: 'facets', task, facet, items: page.items, nextCursor: page.nextCursor })
     }
-    if (path === '/api/v2/saved-queries' && method === 'GET') {
+    if (path === '/api/v1/saved-queries' && method === 'GET') {
       const after = query.get('after')
       const items = [...saved.values()]
         .filter((s) => s.definition && (!after || s.id > after))
@@ -189,7 +189,7 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
         next: items.length > 100 ? items[99]!.id : null,
       })
     }
-    const savedPath = /^\/api\/v2\/saved-queries\/([^/]+)(\/execute)?$/.exec(path)
+    const savedPath = /^\/api\/v1\/saved-queries\/([^/]+)(\/execute)?$/.exec(path)
     if (!savedPath) return
     const id = uuid(savedPath[1]),
       old = saved.get(id)

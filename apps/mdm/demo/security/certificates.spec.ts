@@ -8,7 +8,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date('2026-09-30T00:00:00Z'))
 })
 afterEach(() => vi.useRealTimers())
-const root = '/api/mdm-candidate/v1/security'
+const root = '/api/v1/mdm-candidate/security'
 async function setup() {
   const devices = createDeviceDemo(),
     automation = createAutomationDemo(devices),
@@ -20,7 +20,7 @@ async function setup() {
     )
   let headers: Record<string, string> = {}
   async function login(login: 'demo' | 'reviewer') {
-    const reply = await server.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+    const reply = await server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
       login,
       password: 'demo',
     })
@@ -39,7 +39,7 @@ async function setup() {
     path = `${root}/certificates/${id}`
   const read = async () => (await server.handle('GET', path)).body
   const event = (kind: string, task: string, at: number) =>
-    write('/api/mdm-candidate/v1/workspace/scenario', {
+    write('/api/v1/mdm-candidate/workspace/scenario', {
       event: { kind, task, at, device: 'device-01' },
     })
   return { server, write, login, id, path, read, event, now: body.asOf }
@@ -84,7 +84,7 @@ it('retains installed expiry through issuance and command success until independ
   )
   await f.event('security_result', dispatch.operationId, f.now + 2)
   expect(await f.read()).toMatchObject({ certificate: { validity: 'expiring' } })
-  const alerts = '/api/mdm-candidate/v1/operations/alerts?device=device-01'
+  const alerts = '/api/v1/mdm-candidate/operations/alerts?device=device-01'
   expect((await f.server.handle('GET', alerts)).body).toMatchObject({
     items: [expect.objectContaining({ code: 'certificate_expiry', state: 'open' })],
   })
@@ -99,7 +99,7 @@ it('retains installed expiry through issuance and command success until independ
     items: [expect.objectContaining({ code: 'certificate_expiry', state: 'resolved' })],
   })
   expect(
-    (await f.server.handle('GET', `/api/mdm-candidate/v1/executions/${dispatch.operationId}`)).body,
+    (await f.server.handle('GET', `/api/v1/mdm-candidate/executions/${dispatch.operationId}`)).body,
   ).toMatchObject({ execution: { effect: 'verified_present', compliance: 'unknown' } })
   // Advance the wall clock without reading certificates or injecting a certificate event.
   const expiringAt = f.now + 1 + 84 * 86400
@@ -113,7 +113,7 @@ it('retains installed expiry through issuance and command success until independ
       }),
     ],
   })
-  const audit = '/api/mdm-candidate/v1/operations/audit?action=alert_opened&from=' + expiringAt
+  const audit = '/api/v1/mdm-candidate/operations/audit?action=alert_opened&from=' + expiringAt
   expect((await f.server.handle('GET', audit)).body).toMatchObject({
     items: [expect.objectContaining({ at: expiringAt })],
   })
@@ -152,14 +152,14 @@ it('expires installed certificates with server time and does not clear their ale
   f.server.set('partial')
   await f.event('certificate_issued', issue.operationId, f.now + 1)
   f.server.set('normal')
-  await f.write('/api/mdm-candidate/v1/workspace/scenario', {
+  await f.write('/api/v1/mdm-candidate/workspace/scenario', {
     event: { kind: 'clock', at: f.now + 4000 },
   })
   expect(await f.read()).toMatchObject({
     certificate: { validity: 'expired', issuance: { state: 'failed', credential: null } },
   })
   expect(
-    (await f.server.handle('GET', '/api/mdm-candidate/v1/operations/alerts?device=device-01')).body,
+    (await f.server.handle('GET', '/api/v1/mdm-candidate/operations/alerts?device=device-01')).body,
   ).toMatchObject({
     items: [expect.objectContaining({ code: 'certificate_expiry', state: 'open' })],
   })
@@ -213,7 +213,7 @@ it('rejects mismatched fingerprints, out-of-order evidence and revoked registrat
   expect(
     (
       await f.write(
-        `/api/v3/devices/device-01/registrations/${c.source.registrationId}/revoke`,
+        `/api/v1/devices/device-01/registrations/${c.source.registrationId}/revoke`,
         {},
         { 'idempotency-key': crypto.randomUUID() },
       )
@@ -230,10 +230,10 @@ it('rejects mismatched fingerprints, out-of-order evidence and revoked registrat
     },
   })
   expect(
-    (await f.server.handle('GET', `/api/mdm-candidate/v1/executions/${dispatch.operationId}`)).body,
+    (await f.server.handle('GET', `/api/v1/mdm-candidate/executions/${dispatch.operationId}`)).body,
   ).toMatchObject({ execution: { effect: 'unknown', nativeCode: 'source_registration_changed' } })
   expect(
-    (await f.server.handle('GET', '/api/mdm-candidate/v1/operations/alerts?device=device-01')).body,
+    (await f.server.handle('GET', '/api/v1/mdm-candidate/operations/alerts?device=device-01')).body,
   ).toMatchObject({
     items: [
       expect.objectContaining({

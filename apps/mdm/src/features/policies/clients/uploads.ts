@@ -15,7 +15,11 @@ import type { UploadTarget } from './resources'
 import { softwareSource } from './software-definition'
 export function decodeUpload(value: unknown, resource: string, upload: string) {
   const v = closed(value, ['id', 'binding', 'offset', 'expires', 'complete'])
-  const b = closed(v['binding'], [
+  const b = closed(v['binding'], ['purpose', 'reference', 'length', 'sha256', 'actor'])
+  const purpose = closed(b['purpose'], ['kind', 'binding'])
+  enumeration(purpose['kind'], ['resource'] as const)
+  const r = closed(purpose['binding'], [
+    'storage_class',
     'resource',
     'version',
     'variant',
@@ -24,20 +28,25 @@ export function decodeUpload(value: unknown, resource: string, upload: string) {
     'resource_digest',
     'source',
     'origin',
-    'reference',
-    'length',
-    'sha256',
-    'actor',
   ])
   const binding = {
-    resource: identifier(b['resource']),
-    version: identifier(b['version']),
-    variant: identifier(b['variant']),
-    platform: enumeration(b['platform'], ['windows', 'macos'] as const),
-    architecture: enumeration(b['architecture'], ['x86_64', 'aarch64'] as const),
-    resource_digest: digest(b['resource_digest']),
-    source: nullable(b['source'], softwareSource),
-    origin: nullable(b['origin'], string),
+    purpose: {
+      kind: 'resource' as const,
+      binding: {
+        storage_class: enumeration(r['storage_class'], [
+          'artifact',
+          'native_configuration',
+        ] as const),
+        resource: identifier(r['resource']),
+        version: identifier(r['version']),
+        variant: identifier(r['variant']),
+        platform: enumeration(r['platform'], ['windows', 'macos'] as const),
+        architecture: enumeration(r['architecture'], ['x86_64', 'aarch64'] as const),
+        resource_digest: digest(r['resource_digest']),
+        source: nullable(r['source'], softwareSource),
+        origin: nullable(r['origin'], string),
+      },
+    },
     reference: identifier(b['reference']),
     length: count(b['length']),
     sha256: digest(b['sha256']),
@@ -52,7 +61,7 @@ export function decodeUpload(value: unknown, resource: string, upload: string) {
   }
   if (
     result.id !== upload ||
-    binding.resource !== resource ||
+    binding.purpose.binding.resource !== resource ||
     !binding.length ||
     !binding.actor ||
     result.offset > binding.length ||
@@ -63,7 +72,7 @@ export function decodeUpload(value: unknown, resource: string, upload: string) {
 }
 export type UploadSession = ReturnType<typeof decodeUpload>
 export function createUploadsClient(transport: HttpTransport) {
-  const path = '/api/v3/resources/{id}/uploads/{upload}'
+  const path = '/api/v1/resources/{id}/uploads/{upload}'
   return {
     begin: (id: string, upload: string, target: UploadTarget, signal?: AbortSignal) =>
       transport.request({
@@ -77,10 +86,10 @@ export function createUploadsClient(transport: HttpTransport) {
           const value = decodeUpload(v, id, upload),
             b = value.binding
           if (
-            b.version !== target.version ||
-            b.variant !== target.variant ||
-            b.platform !== target.platform ||
-            b.architecture !== target.architecture ||
+            b.purpose.binding.version !== target.version ||
+            b.purpose.binding.variant !== target.variant ||
+            b.purpose.binding.platform !== target.platform ||
+            b.purpose.binding.architecture !== target.architecture ||
             (target.artifact !== undefined && b.reference !== target.artifact)
           )
             throw new Error('Wrong upload selection')
@@ -122,7 +131,7 @@ export function createUploadsClient(transport: HttpTransport) {
     receipt: (id: string, upload: string, signal?: AbortSignal) =>
       transport.request({
         method: 'GET',
-        path: '/api/v3/resources/{id}/content/operations/{upload}',
+        path: '/api/v1/resources/{id}/content/operations/{upload}',
         pathParams: { id, upload },
         ...(signal ? { signal } : {}),
         successStatus: 200,

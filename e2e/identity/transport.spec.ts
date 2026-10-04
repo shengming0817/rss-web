@@ -2,7 +2,7 @@ import { createSession, createApi, loadConfig } from '@rss/auth/session'
 import { expect, it } from 'vitest'
 import { createIdentityTransport, isRssApiError } from '../../packages/api/src/identity'
 const tenant = '11111111-1111-4111-8111-111111111111'
-it('consumes v2 cookie/CSRF, host policy, account and provider operations through production transport', async ({
+it('consumes V1 cookie/CSRF, host policy, account and provider operations through production transport', async ({
   task,
 }) => {
   task.meta['step'] = 'config'
@@ -38,7 +38,7 @@ it('consumes v2 cookie/CSRF, host policy, account and provider operations throug
     const settings = {
       issuer: 'https://idp.example.test',
       clientId: 'reference',
-      redirectUri: `${config.canonicalOrigin}/api/v2/oidc/callback`,
+      redirectUri: `${config.canonicalOrigin}/api/v1/identity/oidc/callback`,
       scopes: ['openid'],
       claims: {
         email: null,
@@ -70,7 +70,7 @@ it('consumes v2 cookie/CSRF, host policy, account and provider operations throug
     await expect(
       transport.request({
         method: 'GET',
-        path: '/api/identity-host/v1/tenants/{tenant}/context',
+        path: '/api/v1/identity-host/tenants/{tenant}/context',
         pathParams: { tenant },
         successStatus: 200,
         decode: (v) => v,

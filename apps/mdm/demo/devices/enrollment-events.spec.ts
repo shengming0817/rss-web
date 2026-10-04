@@ -5,7 +5,7 @@ import { request } from '../software/fixtures'
 it('binds only an authorized pending enrollment and keeps Agent binding separate', () => {
   const devices = createDeviceDemo(),
     now = Math.floor(Date.now() / 1000)
-  const req = request('/api/v3/enrollments', {
+  const req = request('/api/v1/enrollments', {
     deviceId: 'device-05',
     source: 'agent.builtin',
     password: Buffer.alloc(32, 1).toString('base64url'),

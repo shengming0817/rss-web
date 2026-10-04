@@ -1,0 +1,77 @@
+<script setup lang="ts">
+import { computed, useId } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { initialSelfService, type SelfService } from '../clients/model'
+const model = defineModel<SelfService | undefined>()
+const id = useId(),
+  { t } = useI18n()
+const keywords = computed({
+  get: () => model.value?.keywords.join('\n') ?? '',
+  set: (v: string) => {
+    if (model.value)
+      model.value.keywords = v
+        .split('\n')
+        .map((k) => k.trim())
+        .filter(Boolean)
+  },
+})
+function publish(event: Event) {
+  const published = (event.target as HTMLInputElement).checked
+  if (!model.value && published) model.value = initialSelfService()
+  else if (model.value) model.value.published = published
+}
+</script>
+<template>
+  <fieldset>
+    <legend>{{ t('policies.selfService.title') }}</legend>
+    <label :for="`${id}-published`"
+      ><input
+        :id="`${id}-published`"
+        data-field="published"
+        type="checkbox"
+        :checked="model?.published ?? false"
+        @change="publish"
+      />{{ t('policies.selfService.publish') }}</label
+    >
+    <p>{{ t('policies.selfService.publishHint') }}</p>
+    <template v-if="model">
+      <label :for="`${id}-name`">{{ t('policies.selfService.name') }}</label
+      ><input
+        :id="`${id}-name`"
+        v-model="model.displayName"
+        data-field="displayName"
+        required
+        maxlength="256"
+      />
+      <label :for="`${id}-description`">{{ t('policies.selfService.description') }}</label
+      ><textarea :id="`${id}-description`" v-model="model.description" maxlength="4096" />
+      <label :for="`${id}-prerequisites`">{{ t('policies.selfService.prerequisites') }}</label
+      ><textarea :id="`${id}-prerequisites`" v-model="model.prerequisites" maxlength="4096" />
+      <label :for="`${id}-effects`">{{ t('policies.selfService.effects') }}</label
+      ><textarea :id="`${id}-effects`" v-model="model.sideEffects" maxlength="4096" />
+      <label :for="`${id}-category`">{{ t('policies.selfService.category') }}</label
+      ><input
+        :id="`${id}-category`"
+        v-model="model.category"
+        data-field="category"
+        required
+        maxlength="128"
+      />
+      <label :for="`${id}-keywords`">{{ t('policies.selfService.keywords') }}</label
+      ><textarea :id="`${id}-keywords`" v-model="keywords" />
+      <label :for="`${id}-ai`"
+        ><input :id="`${id}-ai`" v-model="model.allowAi" data-field="allowAi" type="checkbox" />{{
+          t('policies.selfService.allowAi')
+        }}</label
+      >
+      <p>
+        {{ t(model.allowAi ? 'policies.selfService.aiHint' : 'policies.selfService.manualHint') }}
+      </p>
+      <label :for="`${id}-risk`">{{ t('policies.selfService.risk') }}</label
+      ><select :id="`${id}-risk`" v-model.number="model.riskLevel" data-field="riskLevel">
+        <option :value="1">{{ t('policies.selfService.risk1') }}</option>
+        <option :value="2">{{ t('policies.selfService.risk2') }}</option>
+      </select>
+    </template>
+  </fieldset>
+</template>

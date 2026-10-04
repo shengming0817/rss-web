@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import { nativeDue } from './schedule'
 import type { SoftwarePolicyDefinition } from '../../src/features/software/clients/assignment-model'
-const schedule: SoftwarePolicyDefinition['behavior']['schedule'] = {
+const schedule: SoftwarePolicyDefinition['action']['schedule'] = {
   trigger: { kind: 'check_in', minimumSeconds: 60 },
   misfire: { kind: 'coalesce_one' },
   notBefore: 0,

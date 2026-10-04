@@ -17,7 +17,7 @@ describe('embedded Identity application', () => {
     for (const path of [...sources(), ...sources(resolve(root, 'packages/auth/src'))]) {
       const s = readFileSync(path, 'utf8')
       expect(s, relative(root, path)).not.toMatch(
-        /\/api\/v1\/|downstream|platform_administrator|hydra|@rss\/identity(?:['"/])|Authorization|X-Tenant-ID|accessToken|refreshToken|localStorage|indexedDB|console\.|\batob\(|jwt-decode/,
+        /\/api\/(?:v[234]\/|v1\/(?:tenants|oidc)\/|identity-host\/v1\/)|downstream|platform_administrator|hydra|@rss\/identity(?:['"/])|Authorization|X-Tenant-ID|accessToken|refreshToken|localStorage|indexedDB|console\.|\batob\(|jwt-decode/,
       )
       if (!path.endsWith('/main.ts')) expect(s).not.toContain('sessionStorage')
       if (!path.endsWith('/services/flow.ts')) expect(s).not.toMatch(/\.setItem\(/)

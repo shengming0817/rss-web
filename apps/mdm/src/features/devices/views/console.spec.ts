@@ -25,7 +25,7 @@ async function setup(
 ) {
   const domain = createDeviceDemo(),
     scenario = createScenario([domain.handle], domain.reset)
-  const login = await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  const login = await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
   })
@@ -125,7 +125,7 @@ it('opens the existing registration owner from a software source-policy deep lin
     { device: 'device-01' },
     { tab: 'credentials' },
   )
-  expect(requests.some((r) => r.path === '/api/v3/devices/{device}/registrations')).toBe(true)
+  expect(requests.some((r) => r.path === '/api/v1/devices/{device}/registrations')).toBe(true)
   expect(wrapper.text()).toContain('agent.builtin')
   await router.push({
     name: 'device-detail',
@@ -379,7 +379,7 @@ it('does not call a confirmed manual write unknown when its follow-up read fails
 
 it('replays the original search after a lost committed response, even after an intervening read', async () => {
   const { wrapper, requests, click, loseReply } = await setup('device-search')
-  loseReply.path = '/api/v2/device-queries'
+  loseReply.path = '/api/v1/device-queries'
   await wrapper.find('form').trigger('submit')
   await flushPromises()
   expect(wrapper.text()).toContain('提交结果未知')
@@ -387,9 +387,9 @@ it('replays the original search after a lost committed response, even after an i
   loseReply.path = ''
   await click('重新读取')
   await wrapper.find('form').trigger('submit')
-  expect(requests.filter((r) => r.path === '/api/v2/device-queries')).toHaveLength(1)
+  expect(requests.filter((r) => r.path === '/api/v1/device-queries')).toHaveLength(1)
   await click('明确重放原操作')
-  expect(requests.filter((r) => r.path === '/api/v2/device-queries').map((r) => r.body)).toEqual([
+  expect(requests.filter((r) => r.path === '/api/v1/device-queries').map((r) => r.body)).toEqual([
     original,
     original,
   ])

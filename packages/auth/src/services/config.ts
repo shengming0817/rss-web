@@ -8,7 +8,7 @@ export interface HostConfig {
 export async function loadConfig(transport: HttpTransport, origin: string): Promise<HostConfig> {
   return transport.request({
     method: 'GET',
-    path: '/api/identity-host/v1/config.json',
+    path: '/api/v1/identity-host/config.json',
     successStatus: 200,
     decode(value) {
       const v = object(value, ['canonicalOrigin', 'oidcEnabled'])

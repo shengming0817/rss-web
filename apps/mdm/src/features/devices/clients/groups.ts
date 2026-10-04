@@ -138,7 +138,7 @@ export function createGroupsClient(transport: HttpTransport) {
       task !== operation ||
       v['kind'] !== 'group' ||
       v['target'] !== id ||
-      v['statusUrl'] !== `/api/v2/groups/${id}/tasks/${task}`
+      v['statusUrl'] !== `/api/v1/groups/${id}/tasks/${task}`
     )
       throw new Error('Wrong group task')
     return { task, statusUrl: string(v['statusUrl']) }
@@ -147,7 +147,7 @@ export function createGroupsClient(transport: HttpTransport) {
     read: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/groups/{id}',
+        path: '/api/v1/groups/{id}',
         pathParams: { id },
         successStatus: 200,
         decode: (v) => decodeGroup(v, id),
@@ -155,7 +155,7 @@ export function createGroupsClient(transport: HttpTransport) {
     change: (id: string, body: Operation<GroupChange>) => {
       const options = {
         method: 'POST' as const,
-        path: '/api/v2/groups/{id}',
+        path: '/api/v1/groups/{id}',
         pathParams: { id },
         body,
       }
@@ -186,7 +186,7 @@ export function createGroupsClient(transport: HttpTransport) {
     preview: (id: string, body: Operation<Record<string, never>>) =>
       transport.request({
         method: 'POST',
-        path: '/api/v2/groups/{id}/previews',
+        path: '/api/v1/groups/{id}/previews',
         pathParams: { id },
         body,
         successStatus: 202,
@@ -195,7 +195,7 @@ export function createGroupsClient(transport: HttpTransport) {
     status: (group: string, task: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/groups/{group}/tasks/{task}',
+        path: '/api/v1/groups/{group}/tasks/{task}',
         pathParams: { group, task },
         successStatus: 200,
         decode: (value) => {
@@ -252,7 +252,7 @@ export function createGroupsClient(transport: HttpTransport) {
     page: (group: string, result: string, kind: GroupProjection, next?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/groups/{group}/results/{result}/{kind}',
+        path: '/api/v1/groups/{group}/results/{result}/{kind}',
         pathParams: { group, result, kind },
         query: { limit: 20, cursor: next },
         successStatus: 200,

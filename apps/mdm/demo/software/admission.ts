@@ -70,10 +70,10 @@ export function createAdmissionDemo(resources: ReturnType<typeof createResourceD
     return true
   }
   const handle: DomainHandler = (request, scenario) => {
-    const sourceRoute = /^\/api\/v3\/software\/sources\/([^/]+)\/revisions\/([^/]+)$/.exec(
+    const sourceRoute = /^\/api\/v1\/software\/sources\/([^/]+)\/revisions\/([^/]+)$/.exec(
         request.path,
       ),
-      versionRoute = /^\/api\/v3\/software\/resources\/([^/]+)\/versions\/([^/]+)$/.exec(
+      versionRoute = /^\/api\/v1\/software\/resources\/([^/]+)\/versions\/([^/]+)$/.exec(
         request.path,
       )
     const match = sourceRoute ?? versionRoute

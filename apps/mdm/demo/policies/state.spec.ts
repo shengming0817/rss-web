@@ -11,7 +11,7 @@ it('resolves device batch execution IDs through the same execution projection an
       devices.reset()
       automation.reset()
     })
-  const login = await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  const login = await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
   })
@@ -25,7 +25,7 @@ it('resolves device batch execution IDs through the same execution projection an
     (
       await scenario.handle(
         'POST',
-        '/api/mdm-candidate/v1/devices/batch-previews',
+        '/api/v1/mdm-candidate/devices/batch-previews',
         { operationId: id, expectedRevision: 0, input: { action: 'lost', devices: [device] } },
         headers,
       )
@@ -33,13 +33,13 @@ it('resolves device batch execution IDs through the same execution projection an
   ).toBe(200)
   const reply = await scenario.handle(
     'POST',
-    `/api/mdm-candidate/v1/devices/batch-previews/${id}/execute`,
+    `/api/v1/mdm-candidate/devices/batch-previews/${id}/execute`,
     { operationId: randomUUID(), expectedRevision: 1, input: { confirmed: true } },
     headers,
   )
   expect(reply.status).toBe(202)
   const execution = (reply.body as { targets: { execution: string }[] }).targets[0]!.execution
-  const detail = await scenario.handle('GET', `/api/mdm-candidate/v1/executions/${execution}`)
+  const detail = await scenario.handle('GET', `/api/v1/mdm-candidate/executions/${execution}`)
   expect(detail.status).toBe(200)
   expect(executionSummary((detail.body as { execution: unknown }).execution)).toMatchObject({
     id: execution,
@@ -50,10 +50,10 @@ it('resolves device batch execution IDs through the same execution projection an
   automation.reset()
   // Resetting automation cannot remove a device-owned batch execution.
   expect(
-    (await scenario.handle('GET', `/api/mdm-candidate/v1/executions/${execution}`)).status,
+    (await scenario.handle('GET', `/api/v1/mdm-candidate/executions/${execution}`)).status,
   ).toBe(200)
   devices.reset()
   expect(
-    (await scenario.handle('GET', `/api/mdm-candidate/v1/executions/${execution}`)).status,
+    (await scenario.handle('GET', `/api/v1/mdm-candidate/executions/${execution}`)).status,
   ).toBe(404)
 })

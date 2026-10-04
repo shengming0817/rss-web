@@ -110,7 +110,7 @@ it('uses exact async and CAS requests with one dispatch and no TTL', async () =>
     options.decode({
       tenantId: tenant,
       asset: options.path.endsWith('device-queries')
-        ? { kind: 'accepted', task, statusUrl: `/api/v2/device-queries/${task}` }
+        ? { kind: 'accepted', task, statusUrl: `/api/v1/device-queries/${task}` }
         : { kind: 'assignment', device: 'pending-device', field: 'custom.is_loaner', revision: 3 },
     }),
   )
@@ -122,7 +122,7 @@ it('uses exact async and CAS requests with one dispatch and no TTL', async () =>
   })
   expect(request.mock.calls[0]?.[0]).toMatchObject({
     method: 'POST',
-    path: '/api/v2/device-queries',
+    path: '/api/v1/device-queries',
     successStatus: 202,
   })
   await client.assign('pending-device', 'custom.is_loaner', {
@@ -132,7 +132,7 @@ it('uses exact async and CAS requests with one dispatch and no TTL', async () =>
   })
   expect(request.mock.calls[1]?.[0]).toMatchObject({
     method: 'PUT',
-    path: '/api/v2/devices/{device}/manual-fields/{field}',
+    path: '/api/v1/devices/{device}/manual-fields/{field}',
     body: { expectedRevision: 2, input: { action: 'null' } },
   })
   expect(request).toHaveBeenCalledTimes(2)

@@ -147,7 +147,7 @@ export function createNativeClient(transport: HttpTransport) {
   ) {
     return transport.request({
       method: 'POST',
-      path: `/api/v2/devices/{device}/operations/{operation}/${action}`,
+      path: `/api/v1/devices/{device}/operations/{operation}/${action}`,
       pathParams: { device, operation },
       body,
       successStatus: 200,
@@ -162,7 +162,7 @@ export function createNativeClient(transport: HttpTransport) {
     create: (device: string, body: { operationId: string; task: NativeTask; deadline: number }) =>
       transport.request({
         method: 'POST',
-        path: '/api/v2/devices/{device}/operations',
+        path: '/api/v1/devices/{device}/operations',
         pathParams: { device },
         body,
         successStatus: 202,
@@ -185,7 +185,7 @@ export function createNativeClient(transport: HttpTransport) {
     read: (device: string, operation: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/devices/{device}/operations/{operation}',
+        path: '/api/v1/devices/{device}/operations/{operation}',
         pathParams: { device, operation },
         successStatus: 200,
         decode: (v) => decodeNativeOperation(v, operation),

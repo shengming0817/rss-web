@@ -11,7 +11,7 @@ const query = new URLSearchParams({
 it('resumes from the acknowledged offset, requires complete, and isolates frozen upload ownership', () => {
   const { resources, bytes } = softwareResource(),
     upload = crypto.randomUUID(),
-    path = `/api/v3/resources/app/uploads/${upload}`
+    path = `/api/v1/resources/app/uploads/${upload}`
   const begin = () =>
     resources.handle({ ...request(path, undefined, undefined, query), method: 'POST' }, 'normal')!
   const started = begin()
@@ -43,14 +43,14 @@ it('resumes from the acknowledged offset, requires complete, and isolates frozen
       resources.handle({ ...request(`${path}/complete`), method: 'POST' }, 'normal')?.status,
     ).toBe(201)
   expect(
-    resources.handle(request(`/api/v3/resources/app/content/operations/${upload}`), 'normal')?.body,
+    resources.handle(request(`/api/v1/resources/app/content/operations/${upload}`), 'normal')?.body,
   ).toMatchObject({ operationId: upload, committed: true, resource: 'app', length: 3 })
   expect(append(3, bytes.slice(0, 1)).status).toBe(409)
 })
 it('retires a corrupt upload without publishing a receipt or allowing empty-payload completion', () => {
   const { resources } = softwareResource(),
     upload = crypto.randomUUID(),
-    path = `/api/v3/resources/app/uploads/${upload}`
+    path = `/api/v1/resources/app/uploads/${upload}`
   resources.handle({ ...request(path, undefined, undefined, query), method: 'POST' }, 'normal')
   resources.handle(
     {
@@ -75,7 +75,7 @@ it('retires a corrupt upload without publishing a receipt or allowing empty-payl
       ?.status,
   ).toBe(409)
   expect(
-    resources.handle(request(`/api/v3/resources/app/content/operations/${upload}`), 'normal')
+    resources.handle(request(`/api/v1/resources/app/content/operations/${upload}`), 'normal')
       ?.status,
   ).toBe(404)
 })
@@ -83,11 +83,11 @@ it('retires a corrupt upload without publishing a receipt or allowing empty-payl
 it('requires HTTP session/CSRF and recovers a committed unknown chunk by reading its original offset', async () => {
   const { resources, bytes } = softwareResource(),
     upload = crypto.randomUUID(),
-    path = `/api/v3/resources/app/uploads/${upload}`
+    path = `/api/v1/resources/app/uploads/${upload}`
   const server = createScenario([resources.handle])
   const beginPath = `${path}?${query.toString()}`
   expect((await server.handle('POST', beginPath)).status).toBe(401)
-  const login = await server.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  const login = await server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
   })
@@ -103,7 +103,7 @@ it('requires HTTP session/CSRF and recovers a committed unknown chunk by reading
   expect((await server.handle('GET', path)).body).toMatchObject({ offset: 3, complete: false })
   expect((await server.handle('POST', `${path}/complete`, undefined, headers)).status).toBe(201)
   expect(
-    (await server.handle('GET', `/api/v3/resources/app/content/operations/${upload}`)).body,
+    (await server.handle('GET', `/api/v1/resources/app/content/operations/${upload}`)).body,
   ).toMatchObject({ committed: true, operationId: upload })
 })
 
@@ -114,7 +114,7 @@ it('expires abandoned payloads on subsequent requests and retains committed rece
     const incomplete = crypto.randomUUID(),
       completed = crypto.randomUUID()
     for (const id of [incomplete, completed]) {
-      const path = `/api/v3/resources/app/uploads/${id}`
+      const path = `/api/v1/resources/app/uploads/${id}`
       expect(
         resources.handle(
           { ...request(path, undefined, undefined, query), method: 'POST' },
@@ -134,12 +134,12 @@ it('expires abandoned payloads on subsequent requests and retains committed rece
         ).toBe(201)
     }
     clock.mockReturnValue(2000086400000)
-    const receiptPath = `/api/v3/resources/app/content/operations/${completed}`
+    const receiptPath = `/api/v1/resources/app/content/operations/${completed}`
     expect(resources.handle(request(receiptPath), 'normal')?.body).toMatchObject({
       committed: true,
       operationId: completed,
     })
-    const path = `/api/v3/resources/app/uploads/${incomplete}`
+    const path = `/api/v1/resources/app/uploads/${incomplete}`
     expect(
       resources.handle({ ...request(path, undefined, undefined, query), method: 'POST' }, 'normal')
         ?.status,

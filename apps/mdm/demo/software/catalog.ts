@@ -72,7 +72,7 @@ export function createCatalogDemo(
   }
   const handle: DomainHandler = (request, scenario) => {
     const match =
-      /^\/api\/mdm-candidate\/v1\/software\/(catalog|sources|publications)(?:\/([^/]+))?$/.exec(
+      /^\/api\/v1\/mdm-candidate\/software\/(catalog|sources|publications)(?:\/([^/]+))?$/.exec(
         request.path,
       )
     if (!match) return

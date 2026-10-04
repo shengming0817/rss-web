@@ -133,7 +133,7 @@ export function createImportsDemo(
   }
   const handle: DomainHandler = (request, scenario) => {
     if (
-      !/^\/api\/mdm-candidate\/v1\/software\/(import-resolutions|imports)(?:\/|$)/.test(
+      !/^\/api\/v1\/mdm-candidate\/software\/(import-resolutions|imports)(?:\/|$)/.test(
         request.path,
       )
     )
@@ -170,7 +170,7 @@ export function createImportsDemo(
         resolutions.set(view.id, { view, material })
         return candidate({ resolution: view })
       }
-      const match = /^\/api\/mdm-candidate\/v1\/software\/imports(?:\/([^/]+))?$/.exec(request.path)
+      const match = /^\/api\/v1\/mdm-candidate\/software\/imports(?:\/([^/]+))?$/.exec(request.path)
       if (!match) return error('malformed_request', 400)
       if (!match[1] && request.method === 'GET') {
         if (scenario !== 'empty') advance(scenario)

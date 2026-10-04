@@ -1,411 +1,224 @@
-import { resourceApplicability } from './applicability'
 import { createHash, randomUUID } from 'node:crypto'
 import type { DomainHandler, Scenario } from '../scenario'
 import type { createDeviceDemo } from '../devices/state'
 import type { createScopeDemo } from './scopes'
-import type { createConfigurationDemo } from './configurations'
-import { validateScriptParameters } from './script-validation'
 import type { createResourceDemo } from './resources'
-import { closed, enumeration, identifier, record, uuid } from '../../src/services/decode'
-import {
-  policyDefinition,
-  type PolicyDefinition,
-  type PolicyRead,
-} from '../../src/features/policies/clients/policies'
 import type { ExecutionSummary } from '../../src/features/policies/clients/executions'
-import { createReceipts, error, operation } from '../http'
-import { candidate } from './http'
+import type { ExecutionDefinition } from '../../src/features/policies/clients/model'
+import { createPolicyStore } from './store'
+import { error } from '../http'
+import { resourceApplicability } from './applicability'
+import { validateParameterSources } from './script-validation'
+import { nativeDue } from '../software/schedule'
 import type { DemoEvent } from './schedule'
-interface State {
-  read: PolicyRead
-  current: Map<string, { fingerprint: string; execution: string; at: number }>
-}
+/** Script execution state consumes the shared authored Policy store; publication never admits a run. */
 export function createPolicyDemo(
   devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts'>,
   scopes: Pick<ReturnType<typeof createScopeDemo>, 'resolve'>,
   resources: Pick<ReturnType<typeof createResourceDemo>, 'read'>,
-  configurations: Pick<ReturnType<typeof createConfigurationDemo>, 'read' | 'assess'> = {
-    read: () => null,
-    assess: () => 'resource_unavailable',
-  },
+  store = createPolicyStore(),
 ) {
-  const policies = new Map<string, State>(),
-    runs = new Map<string, ExecutionSummary>(),
-    receipts = createReceipts()
-  let clock = Math.floor(Date.now() / 1000)
-  function selected(def: PolicyDefinition) {
-    if (def.source === 'configuration') {
-      const c = configurations.read(def.resource),
-        v = c?.versions.find((v) => String(v.version) === def.resourceVersion)
-      return c && v?.status === 'published'
-        ? {
-            fingerprint: JSON.stringify(v.settings),
-            digest: createHash('sha256').update(JSON.stringify(v.settings)).digest('hex'),
-            platform: c.platform,
-            script: false,
-            native: true,
-            version: null,
-          }
-        : null
-    }
-    const r = resources.read(def.resource),
-      v = r?.versions.find((v) => v.id === def.resourceVersion)
-    if (!r || !v || v.state !== 'active') return null
-    return {
-      fingerprint: JSON.stringify(v.digest),
-      digest: Buffer.from(v.digest).toString('hex'),
-      platform: v.configuration ? ('windows' as const) : null,
-      script: r.kind === 'script',
-      native: v.configuration !== null,
-      version: v,
-    }
+  const runs = new Map<string, ExecutionSummary>(),
+    admissions = new Map<string, string>(),
+    lastAdmissions = new Map<string, number>(),
+    versions = new Map<string, string>(),
+    entries = new Map<string, number>()
+  let members = new Set<string>()
+  function selected(d: ExecutionDefinition) {
+    const b = d.action.resource,
+      r = resources.read(b.id),
+      version = r?.versions.find((v) => v.id === b.version && v.state === 'active'),
+      variant = version?.variants.find(
+        (v) =>
+          v.key === b.variant &&
+          v.platform === b.platform &&
+          v.architecture === b.architecture &&
+          v.declaration.kind === 'script',
+      )
+    return r?.kind === 'script' && variant?.declaration.kind === 'script'
+      ? { resource: r, version: version!, variant, spec: variant.declaration.definition }
+      : null
   }
-  function members(
-    definition: PolicyDefinition,
-    scenario: Scenario,
-    replacedPolicy?: string,
-  ): PolicyRead['members'] {
-    const scope = scopes.resolve(definition.scope)
-    if (!scope) return []
-    const selection = selected(definition)
-    return scope.members.map((device) => {
-      const d = devices.facts().find((d) => d.summary.id === device)
-      const applicability =
-        definition.source === 'configuration'
-          ? configurations.assess(
-              definition.resource,
-              Number(definition.resourceVersion),
-              device,
-              replacedPolicy,
-            )
-          : (() => {
-              const r = resources.read(definition.resource)
-              return r
-                ? resourceApplicability(r, definition.resourceVersion, d)
-                : ('resource_unavailable' as const)
-            })()
-      const reason =
-        scenario === 'denied'
-          ? 'authorization'
-          : !definition.enabled
-            ? 'disabled'
-            : !selection
-              ? 'resource_unavailable'
-              : definition.validity &&
-                  (clock < definition.validity.start || clock >= definition.validity.end)
-                ? 'window'
-                : applicability !== 'applicable'
-                  ? applicability
-                  : scenario === 'partial' && device.endsWith('01')
-                    ? 'offline'
-                    : 'applicable'
-      return { device, reason, execution: null, cancellable: false }
-    })
-  }
-  function cancel(id: string) {
-    const run = runs.get(id)
-    if (
-      !run ||
-      run.origin.kind !== 'policy' ||
-      !['not_started', 'running', 'unknown'].includes(run.execution)
-    )
-      return
-    run.origin.cancellation = run.dispatch === 'queued' ? 'confirmed' : 'requested'
-    if (run.origin.cancellation === 'confirmed') {
-      run.execution = 'cancelled'
-      run.waitingReason = null
-    } else run.waitingReason = 'cancel_confirmation'
-  }
+  store.register('execution', (raw) => {
+    if (raw.action.kind !== 'execution') return error('malformed_request', 400)
+    const d = { ...raw, action: raw.action },
+      selection = selected(d)
+    if (!scopes.resolve(d.scope)) return error('scope_not_found', 404)
+    if (!selection) return error('resource_not_found', 404)
+    validateParameterSources(selection.spec, d.action.parameters)
+    return undefined
+  })
   function reconcile(scenario: Scenario, event?: DemoEvent) {
-    if (event && event.at < clock) return
-    if (event) clock = event.at
-    if (event)
-      for (const run of runs.values()) {
-        if (
-          run.origin.kind === 'policy' &&
-          run.origin.cancellation === 'requested' &&
-          run.execution !== 'unknown'
-        ) {
-          run.origin.cancellation = 'confirmed'
-          run.execution = 'cancelled'
-          run.waitingReason = null
+    const next = new Set<string>()
+    for (const p of store.values()) {
+      if (p.definition.action.kind !== 'execution') continue
+      for (const device of scopes.resolve(p.definition.scope)?.members ?? []) {
+        const key = JSON.stringify([p.id, device])
+        next.add(key)
+        if (!members.has(key)) entries.set(key, (entries.get(key) ?? 0) + 1)
+      }
+    }
+    members = next
+    for (const run of runs.values()) {
+      if (run.origin.kind !== 'policy') continue
+      const p = store.get(run.origin.policy),
+        d = p?.definition
+      const device = devices.facts().find((v) => v.summary.id === run.device)
+      const identity = device?.registrations
+        .filter((r) => r.status === 'active')
+        .map((r) => ({ id: r.registrationId, generation: r.generation }))
+      const valid =
+        p?.enabled &&
+        d?.action.kind === 'execution' &&
+        p.versionId === versions.get(run.id) &&
+        !!selected({ ...d, action: d.action }) &&
+        !!device &&
+        device.summary.platform === d.action.resource.platform &&
+        device.architecture === d.action.resource.architecture &&
+        resourceApplicability(
+          resources.read(d.action.resource.id)!,
+          d.action.resource.version,
+          device,
+        ) === 'applicable' &&
+        scopes.resolve(d.scope)?.members.includes(run.device) &&
+        JSON.stringify(identity) === JSON.stringify(run.origin.basis.registrations)
+      if (!valid && run.execution === 'not_started') {
+        run.execution = 'cancelled'
+        run.origin.cancellation = 'confirmed'
+      }
+      if (!valid && run.execution === 'running') run.origin.cancellation = 'requested'
+      if (!valid || run.execution === 'unknown') continue
+      if (event?.kind !== 'check_in' || event.device !== run.device) continue
+      if (run.execution === 'not_started') {
+        run.dispatch = 'published'
+        run.attempt = randomUUID()
+        run.execution = scenario === 'unknown' ? 'unknown' : 'running'
+      } else if (run.execution === 'running') {
+        run.receipt = 'received'
+        run.execution =
+          scenario === 'unknown' ? 'unknown' : scenario === 'partial' ? 'failed' : 'succeeded'
+        run.waitingReason = 'effect_verification'
+        run.origin.output = {
+          simulation: true,
+          message: 'Synthetic result; no device executed this script.',
         }
       }
-    for (const [id, state] of policies) {
-      const { read, current } = state,
-        def = read.definition
-      const rows = read.archived ? [] : members(def, scenario)
-      for (const [device, old] of current) {
-        if (!rows.some((r) => r.device === device)) {
-          if (def.exitBehavior === 'cancel' || read.archived) cancel(old.execution)
-          current.delete(device)
-        }
-      }
-      for (const row of rows) {
-        const old = current.get(row.device),
-          run = old ? runs.get(old.execution) : null
-        if (row.reason !== 'applicable') {
-          if (
-            ['authorization', 'resource_unavailable', 'window', 'unsupported', 'conflict'].includes(
-              row.reason,
-            ) ||
-            (row.reason === 'disabled' && def.exitBehavior === 'cancel')
-          ) {
-            if (old) cancel(old.execution)
-            current.delete(row.device)
-          }
-          row.execution = old?.execution ?? null
-          continue
-        }
-        const d = devices.facts().find((d) => d.summary.id === row.device)!
-        const selection = selected(def)
-        const fingerprint = JSON.stringify([
-          def.source,
-          def.resource,
-          def.resourceVersion,
-          selection?.fingerprint,
-          def.parameters,
-          d.architecture,
-          d.nativeWindows,
-          d.summary.platform,
-          d.summary.channels,
-          d.registrations
-            .filter((r) =>
-              selection?.native ? r.source.startsWith('mdm.') : r.source === 'agent.builtin',
-            )
-            .map((r) => [r.registrationId, r.generation, r.status]),
-        ])
-        const unknown = [...runs.values()].find(
-          (r) =>
-            r.origin.kind === 'policy' &&
-            r.origin.policy === id &&
-            r.device === row.device &&
-            r.execution === 'unknown',
-        )
-        if (unknown) {
-          row.reason = 'unknown'
-          row.execution = unknown.id
-          continue
-        }
-        const due =
-          def.trigger.kind === 'on_change' ||
-          (def.trigger.kind === 'check_in'
-            ? event?.kind === 'check_in' && event.device === row.device
-            : event?.kind === 'clock' && (!old || clock - old.at >= def.trigger.seconds!))
-        const changed = old?.fingerprint !== fingerprint
-        if (changed && old) cancel(old.execution)
-        const cancelling = [...runs.values()].find(
-          (r) =>
-            r.device === row.device &&
-            r.origin.kind === 'policy' &&
-            r.origin.policy === id &&
-            r.origin.cancellation === 'requested',
-        )
-        if (cancelling) {
-          row.reason = 'cancelling'
-          row.execution = cancelling.id
-          continue
-        }
-        if (
-          (!old || changed || (def.trigger.kind !== 'on_change' && due && old.at !== clock)) &&
-          due
-        ) {
-          const execution = randomUUID()
-          runs.set(execution, {
-            id: execution,
-            batch: null,
-            device: row.device,
-            origin: {
-              kind: 'policy',
-              policy: id,
-              revision: read.revision,
-              basis: {
-                source: def.source,
-                resource: def.resource,
-                version: def.resourceVersion,
-                resourceDigest: selection!.digest,
-                parameterDigest: createHash('sha256')
-                  .update(JSON.stringify(def.parameters))
-                  .digest('hex'),
-                scope: def.scope,
-                scopeRevision: scopes.resolve(def.scope)!.revision,
-                registrations: d.registrations
-                  .filter((r) => r.status === 'active')
-                  .map((r) => ({ id: r.registrationId, generation: r.generation })),
-                architecture: d.architecture ?? null,
-              },
-              cancellation: 'none',
-              output: null,
-            },
-            admission: 'accepted',
-            dispatch: 'queued',
-            receipt: 'not_received',
-            execution: 'not_started',
-            effect: 'unverified',
-            compliance: 'unknown',
-            attempt: null,
-            nativeCode: null,
-            waitingReason: 'device_receipt',
-          })
-          current.set(row.device, { fingerprint, execution, at: clock })
-        }
-        row.execution = current.get(row.device)?.execution ?? null
-        if (!row.execution) row.reason = 'trigger'
-        if (event && run && !changed && run.execution === 'not_started') {
-          run.attempt = randomUUID()
-          run.dispatch = 'published'
-          run.execution = scenario === 'unknown' ? 'unknown' : 'running'
-        } else if (event && run?.execution === 'running') {
-          run.receipt = 'received'
-          run.execution =
-            scenario === 'unknown' ? 'unknown' : scenario === 'partial' ? 'failed' : 'succeeded'
-          run.waitingReason = 'effect_verification'
-          if (run.origin.kind === 'policy')
-            run.origin.output = {
-              simulation: true,
-              message: 'Synthetic result; no device executed this assignment.',
-            }
-        }
-      }
-      for (const row of rows) {
-        const r = row.execution ? runs.get(row.execution) : undefined
-        row.cancellable =
-          !!r &&
+    }
+    if (event?.kind !== 'check_in' || !event.device) return
+    const device = devices.facts().find((v) => v.summary.id === event.device)
+    if (!device || scenario === 'denied' || scenario === 'unsupported') return
+    for (const p of store.values()) {
+      if (!p.enabled || p.definition.action.kind !== 'execution') continue
+      const d = { ...p.definition, action: p.definition.action },
+        a = d.action,
+        selection = selected(d)
+      if (
+        !selection ||
+        !scopes.resolve(d.scope)?.members.includes(event.device) ||
+        resourceApplicability(selection.resource, a.resource.version, device) !== 'applicable' ||
+        device.summary.platform !== a.resource.platform ||
+        device.architecture !== a.resource.architecture
+      )
+        continue
+      const due = nativeDue(a.schedule, event.at, event.device)
+      if (
+        !due ||
+        due.availableAt > event.at ||
+        Object.values(a.parameters).some((v) => v.kind === 'input')
+      )
+        continue
+      const pending = [...runs.values()].some(
+        (r) =>
+          r.device === event.device &&
           r.origin.kind === 'policy' &&
-          r.origin.cancellation === 'none' &&
-          ['not_started', 'running', 'unknown'].includes(r.execution)
-      }
-      read.members = rows
-      read.computation = {
-        sequence: read.computation.sequence + 1,
-        at: clock,
-        status: !scopes.resolve(def.scope) ? 'blocked' : rows.length ? 'ready' : 'waiting',
-      }
-    }
-  }
-  const handle: DomainHandler = (request, scenario) => {
-    const match = /^\/api\/mdm-candidate\/v1\/policies\/assignments\/([^/]+)(?:\/(preview))?$/.exec(
-      request.path,
-    )
-    if (!match) return
-    try {
-      if (scenario === 'denied') return error('permission_denied', 403)
-      const id = identifier(decodeURIComponent(match[1]!)),
-        state = policies.get(id)
-      if (request.method === 'GET' && !match[2])
-        return state
-          ? candidate({ policy: structuredClone(state.read) })
-          : error('policy_not_found', 404)
-      if (request.method !== 'POST') return
-      if (match[2] === 'preview') {
-        const v = closed(request.body, ['definition'])
-        return candidate({ members: members(policyDefinition(v['definition']), scenario, id) })
-      }
-      const op = operation(request.body)
-      return receipts.write(request, op.operationId, () => {
-        if (op.expectedRevision !== (state?.read.revision ?? 0) || state?.read.archived)
-          return error('operation_conflict')
-        const input = record(op.input),
-          action = enumeration(input['action'], ['put', 'archive', 'cancel_run'] as const)
-        if (action === 'put') {
-          closed(input, ['action', 'definition'])
-          const definition = policyDefinition(input['definition'])
-          if (!scopes.resolve(definition.scope)) return error('scope_not_found', 404)
-          const selection = selected(definition)
-          if (!selection) return error('operation_conflict')
-          if (selection.script)
-            for (const variant of selection.version!.variants) {
-              if (variant.declaration.kind === 'script')
-                validateScriptParameters(variant.declaration.definition, definition.parameters)
-            }
-          policies.set(id, {
-            read: {
-              id,
-              revision: (state?.read.revision ?? 0) + 1,
-              archived: false,
-              definition,
-              computation: state?.read.computation ?? { sequence: 0, status: 'waiting', at: clock },
-              members: [],
-            },
-            current: state?.current ?? new Map(),
-          })
-        } else {
-          if (!state) return error('policy_not_found', 404)
-          if (action === 'archive') {
-            closed(input, ['action'])
-            state.read.archived = true
-            state.read.revision++
-          } else {
-            closed(input, ['action', 'execution'])
-            const execution = uuid(input['execution'])
-            if (
-              !runs.has(execution) ||
-              runs.get(execution)?.origin.kind !== 'policy' ||
-              (runs.get(execution)!.origin as { policy?: string }).policy !== id
-            )
-              return error('operation_not_found', 404)
-            const run = runs.get(execution)!
-            if (
-              !['not_started', 'running', 'unknown'].includes(run.execution) ||
-              (run.origin.kind === 'policy' && run.origin.cancellation !== 'none')
-            )
-              return error('operation_conflict')
-            cancel(execution)
-          }
-        }
-        reconcile(scenario)
-        return candidate({ policy: structuredClone(policies.get(id)!.read) })
+          r.origin.policy === p.id &&
+          ['not_started', 'running', 'unknown'].includes(r.execution),
+      )
+      if (pending) continue
+      const registrations = device.registrations
+        .filter((r) => r.status === 'active')
+        .map((r) => ({ id: r.registrationId, generation: r.generation }))
+      const admissionBasis = JSON.stringify([p.id, p.versionId, event.device, registrations]),
+        previous = lastAdmissions.get(admissionBasis)
+      if (
+        a.schedule.trigger.kind === 'check_in' &&
+        previous !== undefined &&
+        event.at - previous < a.schedule.trigger.minimumSeconds
+      )
+        continue
+      const key = JSON.stringify([
+        p.id,
+        p.versionId,
+        registrations,
+        a.frequency === 'once_per_entry'
+          ? entries.get(JSON.stringify([p.id, event.device]))
+          : a.frequency === 'every_trigger'
+            ? due.coordinate
+            : null,
+      ])
+      if (admissions.has(key)) continue
+      const id = randomUUID()
+      runs.set(id, {
+        id,
+        batch: null,
+        device: event.device,
+        origin: {
+          kind: 'policy',
+          policy: p.id,
+          revision: p.revision,
+          basis: {
+            source: 'resource',
+            resource: a.resource.id,
+            version: a.resource.version,
+            resourceDigest: Buffer.from(selection.version.digest).toString('hex'),
+            parameterDigest: createHash('sha256')
+              .update(JSON.stringify(a.parameters))
+              .digest('hex'),
+            scope: d.scope,
+            scopeRevision: scopes.resolve(d.scope)!.revision,
+            registrations,
+            architecture: device.architecture ?? null,
+          },
+          cancellation: 'none',
+          output: null,
+        },
+        admission: 'accepted',
+        dispatch: 'queued',
+        receipt: 'not_received',
+        execution: 'not_started',
+        effect: 'unverified',
+        compliance: 'unknown',
+        attempt: null,
+        nativeCode: null,
+        waitingReason: 'device_receipt',
       })
-    } catch {
-      return error('malformed_request', 400)
+      versions.set(id, p.versionId)
+      admissions.set(key, id)
+      lastAdmissions.set(admissionBasis, event.at)
     }
   }
+  const handle: DomainHandler = (request, scenario) => store.handle(request, scenario)
   return {
     handle,
-    assignedConfigurations(device: string, replacedPolicy?: string) {
-      return [...policies.values()]
-        .filter(({ read }) => read.id !== replacedPolicy)
-        .flatMap(({ read }) => {
-          const d = read.definition
-          return !read.archived &&
-            d.enabled &&
-            d.source === 'configuration' &&
-            (!d.validity || (clock >= d.validity.start && clock < d.validity.end)) &&
-            scopes.resolve(d.scope)?.members.includes(device)
-            ? [{ id: d.resource, version: Number(d.resourceVersion) }]
-            : []
-        })
-    },
     reconcile,
+    references: (resource: string, version: string) =>
+      store
+        .values()
+        .some(
+          (p) =>
+            'resource' in p.definition.action &&
+            p.definition.action.resource.id === resource &&
+            p.definition.action.resource.version === version,
+        ),
     executions: () => structuredClone([...runs.values()]),
-    references: (
-      resource: string,
-      version: string,
-      source: 'resource' | 'configuration' = 'resource',
-    ) =>
-      [...policies.values()].some(
-        (p) =>
-          !p.read.archived &&
-          p.read.definition.source === source &&
-          p.read.definition.resource === resource &&
-          p.read.definition.resourceVersion === version,
-      ),
-    list: () =>
-      [...policies.values()].map((p) => ({
-        id: p.read.id,
-        label: p.read.id,
-        revision: p.read.revision,
-        status: p.read.archived
-          ? ('archived' as const)
-          : p.read.definition.enabled
-            ? ('active' as const)
-            : ('paused' as const),
-      })),
     reset() {
-      policies.clear()
       runs.clear()
-      receipts.reset()
-      clock = Math.floor(Date.now() / 1000)
+      admissions.clear()
+      lastAdmissions.clear()
+      versions.clear()
+      entries.clear()
+      members.clear()
+      store.reset()
     },
   }
 }

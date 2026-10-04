@@ -181,7 +181,7 @@ export function createUpdatesDemo(
     }
   }
   const handle: DomainHandler = (request, scenario) => {
-    const route = /^\/api\/mdm-candidate\/v1\/software\/updates(?:\/([^/]+))?$/.exec(request.path)
+    const route = /^\/api\/v1\/mdm-candidate\/software\/updates(?:\/([^/]+))?$/.exec(request.path)
     if (!route) return
     if (scenario === 'denied') return error('permission_denied', 403)
     try {
@@ -322,9 +322,11 @@ export function createUpdatesDemo(
               rows.map((row) => row.device),
               (scope) =>
                 patches!.software.createManagedPolicy({
-                  resource: t.resource,
                   scope,
-                  behavior: {
+                  action: {
+                    delivery: { kind: 'direct' },
+                    resource: t.resource,
+
                     kind: 'software',
                     intent: 'required_install',
                     admissionOperation: t.admissionOperation,

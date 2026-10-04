@@ -4,7 +4,7 @@ import { createPublicationDemo } from './publication'
 import { createScenario, TENANT } from '../scenario'
 import { createResourceDemo } from '../policies/resources'
 import { createAdmissionDemo } from './admission'
-const sourcePath = '/api/v3/software/sources/private/revisions/1'
+const sourcePath = '/api/v1/software/sources/private/revisions/1'
 it('requires the shared session and CSRF, reconciles a committed unknown write, and isolates linked software sources', async () => {
   const resources = createResourceDemo(() => false),
     admission = createAdmissionDemo(resources)
@@ -21,7 +21,7 @@ it('requires the shared session and CSRF, reconciles a committed unknown write, 
     },
   }
   expect((await scenario.handle('POST', sourcePath, body)).status).toBe(401)
-  const login = await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  const login = await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
   })
@@ -40,7 +40,7 @@ it('requires the shared session and CSRF, reconciles a committed unknown write, 
   expect(
     (await scenario.handle('POST', sourcePath, { ...body, expectedRevision: 1 }, headers)).status,
   ).toBe(409)
-  const controls = '/api/mdm-candidate/v1/workspace/scenario'
+  const controls = '/api/v1/mdm-candidate/workspace/scenario'
   expect(
     (
       await scenario.handle(
@@ -54,9 +54,9 @@ it('requires the shared session and CSRF, reconciles a committed unknown write, 
   for (const path of [
     sourcePath,
     '/api/v1/software-sources/private/candidates/one',
-    '/api/v2/policies',
-    '/api/v3/resources/app',
-    '/api/mdm-candidate/v1/software/catalog',
+    '/api/v1/policies',
+    '/api/v1/resources/app',
+    '/api/v1/mdm-candidate/software/catalog',
   ])
     expect((await scenario.handle('GET', path)).status).toBe(503)
   expect((await scenario.handle('GET', controls)).body).toMatchObject({
@@ -72,7 +72,7 @@ it('requires the shared session and CSRF, reconciles a committed unknown write, 
   scenario.set('denied')
   expect((await scenario.handle('GET', sourcePath)).status).toBe(403)
   scenario.reset()
-  await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
   })
@@ -83,7 +83,7 @@ it('keeps rejected publication writes definite through the shared HTTP error dec
   const resources = createResourceDemo(() => false),
     publication = createPublicationDemo(resources)
   const scenario = createScenario([publication.handle])
-  const login = await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  const login = await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
   })

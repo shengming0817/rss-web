@@ -21,7 +21,7 @@ it('carries source admission, import, native software Policy and Agent evidence 
     automation.tick,
     automation.observe,
   )
-  const login = await server.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  const login = await server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
   })
@@ -123,14 +123,16 @@ it('carries source admission, import, native software Policy and Agent evidence 
   await policies.scopes.status(scope, scopeWrite.operationId)
   const id = crypto.randomUUID(),
     definition = {
-      resource: {
-        kind: 'software' as const,
-        id: 'browser',
-        version: 'release-1',
-        variants: { windows_x86_64: 'main' },
-      },
       scope,
-      behavior: {
+      action: {
+        delivery: { kind: 'direct' as const },
+        resource: {
+          kind: 'software' as const,
+          id: 'browser',
+          version: 'release-1',
+          variants: { windows_x86_64: 'main' },
+        },
+
         kind: 'software' as const,
         intent: 'required_install' as const,
         admissionOperation: approval.admission.operation,
@@ -159,7 +161,7 @@ it('carries source admission, import, native software Policy and Agent evidence 
   const stored = await software.assignments.read(id)
   expect(stored.revision).toBe(1)
   expect((await software.assignments.change(id, body)).versionId).toBe(stored.versionId)
-  const control = '/api/mdm-candidate/v1/workspace/scenario',
+  const control = '/api/v1/mdm-candidate/workspace/scenario',
     at = 2000000000
   for (let step = 0; step < 3; step++)
     expect(
@@ -174,6 +176,7 @@ it('carries source admission, import, native software Policy and Agent evidence 
     ).toBe(204)
   const runs = await software.runs.list(id)
   expect(runs.items).toHaveLength(1)
+  expect(runs.items[0]!.attemptId).toBe(runs.items[0]!.state.delivery.attempt)
   expect(runs.items[0]!.result).toMatchObject({
     kind: 'software',
     observedVersion: '128.0',
@@ -203,10 +206,10 @@ it('carries source admission, import, native software Policy and Agent evidence 
           title: 'Browser request',
           description: '',
           enabled: true,
-          resource: definition.resource,
+          resource: definition.action.resource,
           scope,
           admissionOperation: approval.admission.operation,
-          schedule: definition.behavior.schedule,
+          schedule: definition.action.schedule,
           runLifetimeSeconds: 3600,
         },
       },

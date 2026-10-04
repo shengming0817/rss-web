@@ -121,13 +121,13 @@ export function createGroupDemo(devices: () => Map<string, DemoDevice>) {
       inputs: inputs(state.read),
     })
     return ok(
-      { task, kind: 'group', target: id, statusUrl: `/api/v2/groups/${id}/tasks/${task}` },
+      { task, kind: 'group', target: id, statusUrl: `/api/v1/groups/${id}/tasks/${task}` },
       202,
     )
   }
   const handle: DomainHandler = (request, scenario) => {
     const { path, method, query } = request
-    if (path === '/api/mdm-candidate/v1/groups' && method === 'GET')
+    if (path === '/api/v1/mdm-candidate/groups' && method === 'GET')
       return candidate(
         pages.page(
           path,
@@ -138,7 +138,7 @@ export function createGroupDemo(devices: () => Map<string, DemoDevice>) {
         ),
       )
     const match =
-      /^\/api\/v2\/groups\/([^/]+)(?:\/(previews|tasks|results)(?:\/([^/]+))?(?:\/(members|changes|decisions))?)?$/.exec(
+      /^\/api\/v1\/groups\/([^/]+)(?:\/(previews|tasks|results)(?:\/([^/]+))?(?:\/(members|changes|decisions))?)?$/.exec(
         path,
       )
     if (!match) return

@@ -3,7 +3,7 @@ import { createDeviceDemo } from '../devices/state'
 import { createAutomationDemo } from '../policies/state'
 import { createScenario, TENANT } from '../scenario'
 import { operation } from '../../src/services/useOperation'
-const root = '/api/mdm-candidate/v1/security'
+const root = '/api/v1/mdm-candidate/security'
 async function setup() {
   const devices = createDeviceDemo(),
     automation = createAutomationDemo(devices),
@@ -15,7 +15,7 @@ async function setup() {
     )
   let headers: Record<string, string> = {}
   async function login(login: 'demo' | 'reviewer') {
-    const response = await server.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+    const response = await server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
       login,
       password: 'demo',
     })
@@ -37,9 +37,9 @@ async function setup() {
     exclusions: [],
   }
   const scoped = operation({ action: 'put', definition: scopeDefinition })
-  expect((await write('POST', `/api/v2/scopes/${scope}`, scoped)).status).toBe(200)
-  await server.handle('GET', `/api/v2/scopes/${scope}/tasks/${scoped.operationId}`)
-  await server.handle('GET', `/api/v2/scopes/${scope}/tasks/${scoped.operationId}`)
+  expect((await write('POST', `/api/v1/scopes/${scope}`, scoped)).status).toBe(200)
+  await server.handle('GET', `/api/v1/scopes/${scope}/tasks/${scoped.operationId}`)
+  await server.handle('GET', `/api/v1/scopes/${scope}/tasks/${scoped.operationId}`)
   const ruleDefinition = {
     name: 'Office floor',
     severity: 'high',
@@ -53,10 +53,10 @@ async function setup() {
       value: { kind: 'integer', value: 1 },
     },
   }
-  const created = await write('PUT', `/api/v2/compliance-rules/${rule}`, operation(ruleDefinition))
+  const created = await write('PUT', `/api/v1/compliance-rules/${rule}`, operation(ruleDefinition))
   const task = (created.body as { task: string }).task
-  await server.handle('GET', `/api/v2/compliance-rules/${rule}/tasks/${task}`)
-  await server.handle('GET', `/api/v2/compliance-rules/${rule}/tasks/${task}`)
+  await server.handle('GET', `/api/v1/compliance-rules/${rule}/tasks/${task}`)
+  await server.handle('GET', `/api/v1/compliance-rules/${rule}/tasks/${task}`)
   const definition = {
     name: 'Managed workplace',
     enabled: true,
@@ -101,7 +101,7 @@ async function setup() {
 }
 it('keeps raw noncompliance intact through grace, separate approval and expiry', async () => {
   const f = await setup(),
-    nativePath = '/api/v2/devices/device-01/compliance'
+    nativePath = '/api/v1/devices/device-01/compliance'
   const native = (await f.server.handle('GET', nativePath)).body
   expect((await f.projection()).body).toMatchObject({
     items: [{ device: 'device-01', native, rules: [{ governance: 'grace', drift: 'none' }] }],
@@ -122,7 +122,7 @@ it('keeps raw noncompliance intact through grace, separate approval and expiry',
   expect((await f.server.handle('GET', nativePath)).body).toEqual(native)
   expect(
     (
-      await f.write('POST', '/api/mdm-candidate/v1/workspace/scenario', {
+      await f.write('POST', '/api/v1/mdm-candidate/workspace/scenario', {
         event: { kind: 'clock', at: f.now + 601 },
       })
     ).status,
@@ -133,7 +133,7 @@ it('keeps raw noncompliance intact through grace, separate approval and expiry',
   expect((await f.projection()).body).toMatchObject({
     items: [{ native, rules: [{ governance: 'action_required', request: null }] }],
   })
-  const audit = (await f.server.handle('GET', '/api/mdm-candidate/v1/operations/audit')).body
+  const audit = (await f.server.handle('GET', '/api/v1/mdm-candidate/operations/audit')).body
   expect(JSON.stringify(audit)).not.toContain('Private business justification')
 })
 it('pins exact rule revisions, rejects stale approval and replays unknown baseline edits', async () => {
@@ -145,7 +145,7 @@ it('pins exact rule revisions, rejects stale approval and replays unknown baseli
     (
       await f.write(
         'PUT',
-        `/api/v2/compliance-rules/${f.rule}`,
+        `/api/v1/compliance-rules/${f.rule}`,
         operation({ ...f.ruleDefinition, criteria: { kind: 'and', children: [] } }, 1),
       )
     ).status,
@@ -195,9 +195,9 @@ it('revokes and denies exceptions without hiding native evidence, and refuses ap
     (await f.write('POST', `${root}/requests/${second.operationId}/deny`, operation({}, 1))).body,
   ).toMatchObject({ request: { state: 'denied' } })
   const changed = operation({ action: 'put', definition: { ...f.scopeDefinition, targets: [] } }, 1)
-  await f.write('POST', `/api/v2/scopes/${f.scope}`, changed)
-  await f.server.handle('GET', `/api/v2/scopes/${f.scope}/tasks/${changed.operationId}`)
-  await f.server.handle('GET', `/api/v2/scopes/${f.scope}/tasks/${changed.operationId}`)
+  await f.write('POST', `/api/v1/scopes/${f.scope}`, changed)
+  await f.server.handle('GET', `/api/v1/scopes/${f.scope}/tasks/${changed.operationId}`)
+  await f.server.handle('GET', `/api/v1/scopes/${f.scope}/tasks/${changed.operationId}`)
   expect((await f.projection()).body).toMatchObject({
     items: [{ rules: [{ drift: 'scope_changed', governance: 'unknown' }] }],
   })
@@ -218,7 +218,7 @@ it('retains the original time and approval state across cursor pages while fresh
   const initial = (await f.server.handle('GET', `${root}/requests?state=approved&limit=1`))
     .body as { asOf: number; snapshot: string; nextCursor: string }
   expect(initial.nextCursor).toEqual(expect.any(String))
-  await f.write('POST', '/api/mdm-candidate/v1/workspace/scenario', {
+  await f.write('POST', '/api/v1/mdm-candidate/workspace/scenario', {
     event: { kind: 'clock', at: f.now + 121 },
   })
   const path = `${root}/requests?state=approved&limit=1&cursor=${encodeURIComponent(initial.nextCursor)}`

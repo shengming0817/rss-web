@@ -18,7 +18,7 @@ export function createAuditClient(transport: HttpTransport, tenant: string, demo
     list: (filter: AuditFilter = {}) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/operations/audit',
+        path: '/api/v1/mdm-candidate/operations/audit',
         query: { limit: 20, ...filter },
         successStatus: 200,
         decode(value) {
@@ -33,7 +33,7 @@ export function createAuditClient(transport: HttpTransport, tenant: string, demo
     read: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/operations/audit/{id}',
+        path: '/api/v1/mdm-candidate/operations/audit/{id}',
         pathParams: { id },
         successStatus: 200,
         decode(value) {

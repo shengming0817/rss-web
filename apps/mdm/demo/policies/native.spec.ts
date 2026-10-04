@@ -23,7 +23,7 @@ it('keeps protocol observations distinct and rejects direct firewall execution',
       .facts()
       .find((d) => d.summary.platform === platform && d.summary.channels.includes('mdm'))!
     const operationId = randomUUID(),
-      path = `/api/v2/devices/${device.summary.id}/operations`
+      path = `/api/v1/devices/${device.summary.id}/operations`
     const task =
       platform === 'windows'
         ? { kind: 'state_verify', field: 'model', expectedValue: 'Synthetic' }
@@ -61,7 +61,7 @@ it('keeps protocol observations distinct and rejects direct firewall execution',
   const device = devices.facts()[0]!.summary.id
   expect(
     native.handle(
-      request(`/api/v2/devices/${device}/operations`, {
+      request(`/api/v1/devices/${device}/operations`, {
         operationId: randomUUID(),
         task: { kind: 'firewall', enabled: true },
         deadline: 4102444800,

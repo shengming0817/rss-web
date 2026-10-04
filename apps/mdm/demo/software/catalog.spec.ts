@@ -3,7 +3,7 @@ import { createAdmissionDemo } from './admission'
 import { createPublicationDemo } from './publication'
 import { createCatalogDemo } from './catalog'
 import { operation, request, softwareResource } from './fixtures'
-const path = '/api/mdm-candidate/v1/software/catalog/app'
+const path = '/api/v1/mdm-candidate/software/catalog/app'
 it('projects the one Resource owner, persists licensed catalog metadata with CAS, and keeps unsampled usage unknown', () => {
   const { resources } = softwareResource(),
     admission = createAdmissionDemo(resources),
@@ -47,7 +47,7 @@ it('projects the one Resource owner, persists licensed catalog metadata with CAS
   expect(resources.read('app')?.revision).toBe(2)
   const filtered = demo.handle(
     request(
-      '/api/mdm-candidate/v1/software/catalog',
+      '/api/v1/mdm-candidate/software/catalog',
       undefined,
       undefined,
       new URLSearchParams({ query: 'editor' }),
@@ -58,7 +58,7 @@ it('projects the one Resource owner, persists licensed catalog metadata with CAS
     items: [{ metadata: { definition: { title: 'Example Editor' } } }],
   })
   expect(
-    demo.handle(request('/api/mdm-candidate/v1/software/catalog'), 'empty')?.body,
+    demo.handle(request('/api/v1/mdm-candidate/software/catalog'), 'empty')?.body,
   ).toMatchObject({ items: [] })
   expect(demo.handle(request(path), 'denied')?.status).toBe(403)
   demo.reset()

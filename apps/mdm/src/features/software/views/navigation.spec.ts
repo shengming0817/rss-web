@@ -82,9 +82,11 @@ const screens = [
       versionId: id,
       enabled: true,
       definition: {
-        resource: { kind: 'software', id, version: '1', variants: { windows_x86_64: 'main' } },
         scope: first,
-        behavior: {
+        action: {
+          delivery: { kind: 'direct' },
+          resource: { kind: 'software', id, version: '1', variants: { windows_x86_64: 'main' } },
+
           kind: 'software',
           intent: 'required_install',
           admissionOperation: first,

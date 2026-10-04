@@ -96,7 +96,7 @@ export function createCatalogClient(transport: HttpTransport, tenant: string, de
     list: (query = '', cursor?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/software/catalog',
+        path: '/api/v1/mdm-candidate/software/catalog',
         query: { query, cursor, limit: 20 },
         successStatus: 200,
         decode(value) {
@@ -111,7 +111,7 @@ export function createCatalogClient(transport: HttpTransport, tenant: string, de
     read: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/software/catalog/{id}',
+        path: '/api/v1/mdm-candidate/software/catalog/{id}',
         pathParams: { id },
         successStatus: 200,
         decode: (v) => read(v, id),
@@ -119,7 +119,7 @@ export function createCatalogClient(transport: HttpTransport, tenant: string, de
     change: (id: string, body: Operation<CatalogChange>) =>
       transport.request({
         method: 'POST',
-        path: '/api/mdm-candidate/v1/software/catalog/{id}',
+        path: '/api/v1/mdm-candidate/software/catalog/{id}',
         pathParams: { id },
         body,
         successStatus: 200,
@@ -133,7 +133,7 @@ export function createCatalogClient(transport: HttpTransport, tenant: string, de
     sources: (cursor?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/software/sources',
+        path: '/api/v1/mdm-candidate/software/sources',
         query: { cursor, limit: 20 },
         successStatus: 200,
         decode(value) {
@@ -158,7 +158,7 @@ export function createCatalogClient(transport: HttpTransport, tenant: string, de
     publications: (cursor?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/software/publications',
+        path: '/api/v1/mdm-candidate/software/publications',
         query: { cursor, limit: 20 },
         successStatus: 200,
         decode(value) {

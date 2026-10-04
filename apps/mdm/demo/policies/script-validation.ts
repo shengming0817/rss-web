@@ -1,4 +1,6 @@
+import { createHash } from 'node:crypto'
 import Ajv from 'ajv'
+import type { ExecutionDefinition } from '../../src/features/policies/clients/model'
 import { record } from '../../src/services/decode'
 import {
   decodeScriptSpec,
@@ -35,9 +37,19 @@ export function validateScriptVariant(variant: Variant) {
     required.length !== Object.keys(props).length ||
     new Set(required).size !== required.length ||
     Object.keys(props).some((key) => !required.includes(key)) ||
-    Object.keys(props).length !== Object.keys(spec.bindings).length
+    (spec.profile !== 'osquery' && Object.keys(props).length !== Object.keys(spec.bindings).length)
   )
     invalid()
+  if (spec.profile === 'osquery') {
+    const bytes = new TextEncoder().encode(spec.sql!),
+      artifact = variant.declaration.artifact
+    if (
+      artifact.length !== bytes.length ||
+      JSON.stringify(artifact.sha256) !==
+        JSON.stringify([...createHash('sha256').update(bytes).digest()])
+    )
+      invalid()
+  }
   const destinations = new Set<string>(),
     positions: number[] = []
   for (const [key, binding] of Object.entries(spec.bindings)) {
@@ -69,13 +81,10 @@ export function validateScriptVariant(variant: Variant) {
       invalid()
   }
   if (
-    spec.profile === 'osquery_info_v1' &&
+    spec.profile === 'osquery' &&
     (spec.runAs !== 'system' ||
       Object.keys(spec.bindings).length ||
-      spec.maxRows !== 1 ||
-      spec.purpose.kind !== 'collection' ||
-      Object.keys(spec.purpose.mappings).length !== 1 ||
-      spec.purpose.mappings['custom.osquery.version'] !== '/0/version')
+      spec.purpose.kind !== 'collection')
   )
     invalid()
 }
@@ -93,4 +102,21 @@ export function validateScriptParameters(spec: ScriptSpec, value: Json) {
     !validator.validate(spec.parameters, parameters)
   )
     invalid()
+}
+
+/** Publication validates fixed fields against Resource; allowed inputs retain its constraints. */
+export function validateParameterSources(
+  spec: ScriptSpec,
+  sources: ExecutionDefinition['action']['parameters'],
+) {
+  const props = record(spec.parameters['properties'])
+  if (
+    Object.keys(props).length !== Object.keys(sources).length ||
+    Object.keys(sources).some((k) => !(k in props))
+  )
+    invalid()
+  for (const [name, source] of Object.entries(sources)) {
+    if (source.kind === 'fixed' && !validator.validate(props[name] as object, source.value))
+      invalid()
+  }
 }

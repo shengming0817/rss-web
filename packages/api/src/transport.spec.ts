@@ -34,7 +34,7 @@ afterEach(() => vi.restoreAllMocks())
 describe('Identity HTTP execution', () => {
   it('encodes path parameters and preserves meaningful query values', async () => {
     const { mock, transport } = setup()
-    mock.onGet('/api/v2/tenants/test/accounts/a%2Fb').reply((config) => {
+    mock.onGet('/api/v1/identity/tenants/test/accounts/a%2Fb').reply((config) => {
       expect(config.baseURL).toBe('')
       expect(config.params).toEqual({ cursor: '', limit: 0, enabled: false })
       expect(config.headers?.['X-Identity-Request']).toBe('fixture')
@@ -44,7 +44,7 @@ describe('Identity HTTP execution', () => {
     await expect(
       transport.request({
         method: 'GET',
-        path: '/api/v2/tenants/{tenant}/accounts/{key}',
+        path: '/api/v1/identity/tenants/{tenant}/accounts/{key}',
         pathParams: { key: 'a/b' },
         query: { cursor: '', limit: 0, enabled: false, omitted: undefined },
         headers: { 'X-Identity-Request': 'fixture' },
@@ -56,7 +56,7 @@ describe('Identity HTTP execution', () => {
 
   it('passes a JSON body and accepts an exact 201', async () => {
     const { mock, transport } = setup()
-    mock.onPost('/api/v2/tenants/test/login').reply((config) => {
+    mock.onPost('/api/v1/identity/tenants/test/login').reply((config) => {
       expect(config.data).toBe(JSON.stringify({ username: 'alice', password: 'secret' }))
       expect(config.timeout).toBe(250)
       return [201, { ok: true }]
@@ -65,7 +65,7 @@ describe('Identity HTTP execution', () => {
     await expect(
       transport.request({
         method: 'POST',
-        path: '/api/v2/tenants/{tenant}/login',
+        path: '/api/v1/identity/tenants/{tenant}/login',
         body: { username: 'alice', password: 'secret' },
         timeoutMs: 250,
         successStatus: 201,
@@ -76,7 +76,7 @@ describe('Identity HTTP execution', () => {
 
   it('owns the closed no-store request cache directive', async () => {
     const { mock, transport } = setup()
-    mock.onGet('/api/v2/tenants/test/sessions/vault.db').reply((config) => {
+    mock.onGet('/api/v1/identity/tenants/test/sessions/vault.db').reply((config) => {
       expect(config.headers?.['Cache-Control']).toBe('no-store')
       expect(config.headers?.Pragma).toBeUndefined()
       return [200, { ok: true }]
@@ -85,7 +85,7 @@ describe('Identity HTTP execution', () => {
     await expect(
       transport.request({
         method: 'GET',
-        path: '/api/v2/tenants/{tenant}/sessions/{key}',
+        path: '/api/v1/identity/tenants/{tenant}/sessions/{key}',
         pathParams: { key: 'vault.db' },
         successStatus: 200,
         decode: decodeObject,
@@ -100,7 +100,7 @@ describe('Identity HTTP execution', () => {
       await expect(
         transport.request({
           method: 'GET',
-          path: '/api/v2/tenants/{tenant}/session',
+          path: '/api/v1/identity/tenants/{tenant}/session',
           headers: { [header]: 'forged' },
           successStatus: 200,
           decode: decodeObject,
@@ -117,7 +117,7 @@ describe('Identity HTTP execution', () => {
       await expect(
         transport.request({
           method: 'GET',
-          path: '/api/v2/tenants/{tenant}/sessions/key',
+          path: '/api/v1/identity/tenants/{tenant}/sessions/key',
           headers: { [header]: 'no-store' },
           successStatus: 200,
           decode: decodeObject,
@@ -129,11 +129,11 @@ describe('Identity HTTP execution', () => {
 
   it('returns void for 204 without touching an unexpected body', async () => {
     const { mock, transport } = setup()
-    mock.onDelete('/api/v2/tenants/test/accounts/key').reply(204, '<not-json>')
+    mock.onDelete('/api/v1/identity/tenants/test/accounts/key').reply(204, '<not-json>')
     await expect(
       transport.request({
         method: 'DELETE',
-        path: '/api/v2/tenants/{tenant}/accounts/{key}',
+        path: '/api/v1/identity/tenants/{tenant}/accounts/{key}',
         pathParams: { key: 'key' },
         successStatus: 204,
       }),
@@ -141,11 +141,11 @@ describe('Identity HTTP execution', () => {
   })
 
   it.each([
-    'https://evil.example/api/v2/tenants/{tenant}/x',
-    '//evil.example/api/v2/tenants/{tenant}/x',
+    'https://evil.example/api/v1/identity/tenants/{tenant}/x',
+    '//evil.example/api/v1/identity/tenants/{tenant}/x',
     '/healthz',
-    '/api/v2/tenants/{tenant}/x?raw=true',
-    '/api/v2/tenants/{tenant}/x#fragment',
+    '/api/v1/identity/tenants/{tenant}/x?raw=true',
+    '/api/v1/identity/tenants/{tenant}/x#fragment',
     '/api/../internal/x',
     '/api/%2e%2e/internal/x',
     '/api/%2Finternal/x',
@@ -162,7 +162,7 @@ describe('Identity HTTP execution', () => {
     await expect(
       transport.request({
         method: 'GET',
-        path: '/api/v2/tenants/{tenant}/items/{id}',
+        path: '/api/v1/identity/tenants/{tenant}/items/{id}',
         successStatus: 200,
         decode: decodeObject,
       }),
@@ -171,7 +171,7 @@ describe('Identity HTTP execution', () => {
       await expect(
         transport.request({
           method: 'GET',
-          path: '/api/v2/tenants/{tenant}/items/{id}',
+          path: '/api/v1/identity/tenants/{tenant}/items/{id}',
           pathParams: { id },
           successStatus: 200,
           decode: decodeObject,
@@ -181,7 +181,7 @@ describe('Identity HTTP execution', () => {
     await expect(
       transport.request({
         method: 'GET',
-        path: '/api/v2/tenants/{tenant}/items',
+        path: '/api/v1/identity/tenants/{tenant}/items',
         pathParams: { id: 'unused' },
         successStatus: 200,
         decode: decodeObject,
@@ -191,21 +191,23 @@ describe('Identity HTTP execution', () => {
 
   it('treats an unexpected success status and malformed success body as protocol errors', async () => {
     const { mock, transport } = setup()
-    mock.onGet('/api/v2/tenants/test/queued').reply(202, { ok: true })
+    mock.onGet('/api/v1/identity/tenants/test/queued').reply(202, { ok: true })
     await expect(
       transport.request({
         method: 'GET',
-        path: '/api/v2/tenants/{tenant}/queued',
+        path: '/api/v1/identity/tenants/{tenant}/queued',
         successStatus: 200,
         decode: decodeObject,
       }),
     ).rejects.toMatchObject({ cause: 'protocol', status: 202 })
 
-    mock.onGet('/api/v2/tenants/test/malformed').reply(200, { ok: false, secret: 'must-not-leak' })
+    mock
+      .onGet('/api/v1/identity/tenants/test/malformed')
+      .reply(200, { ok: false, secret: 'must-not-leak' })
     await expect(
       transport.request({
         method: 'GET',
-        path: '/api/v2/tenants/{tenant}/malformed',
+        path: '/api/v1/identity/tenants/{tenant}/malformed',
         successStatus: 200,
         decode: decodeObject,
       }),
@@ -219,28 +221,28 @@ describe('Identity HTTP execution', () => {
     await expect(
       transport.request({
         method: 'GET',
-        path: '/api/v2/tenants/{tenant}/abort',
+        path: '/api/v1/identity/tenants/{tenant}/abort',
         signal: controller.signal,
         successStatus: 200,
         decode: decodeObject,
       }),
     ).rejects.toMatchObject({ cause: 'aborted' })
 
-    mock.onGet('/api/v2/tenants/test/timeout').timeout()
+    mock.onGet('/api/v1/identity/tenants/test/timeout').timeout()
     await expect(
       transport.request({
         method: 'GET',
-        path: '/api/v2/tenants/{tenant}/timeout',
+        path: '/api/v1/identity/tenants/{tenant}/timeout',
         successStatus: 200,
         decode: decodeObject,
       }),
     ).rejects.toMatchObject({ cause: 'timeout' })
 
-    mock.onGet('/api/v2/tenants/test/network').networkError()
+    mock.onGet('/api/v1/identity/tenants/test/network').networkError()
     const caught = await transport
       .request({
         method: 'GET',
-        path: '/api/v2/tenants/{tenant}/network',
+        path: '/api/v1/identity/tenants/{tenant}/network',
         successStatus: 200,
         decode: decodeObject,
       })
@@ -255,12 +257,12 @@ describe('Identity HTTP execution', () => {
   it('maps an in-flight cancellation to aborted', async () => {
     const { mock, transport } = setup()
     mock
-      .onGet('/api/v2/tenants/test/slow')
+      .onGet('/api/v1/identity/tenants/test/slow')
       .reply(() => new Promise((resolve) => setTimeout(() => resolve([200, { ok: true }]), 25)))
     const controller = new AbortController()
     const pending = transport.request({
       method: 'GET',
-      path: '/api/v2/tenants/{tenant}/slow',
+      path: '/api/v1/identity/tenants/{tenant}/slow',
       signal: controller.signal,
       successStatus: 200,
       decode: decodeObject,

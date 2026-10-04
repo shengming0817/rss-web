@@ -57,7 +57,7 @@ it('binds candidate tenant, source and acknowledgment receipt to the exact reque
   expect(await client.alerts.acknowledge(id, body)).toEqual(confirmed)
   expect(request.mock.lastCall![0]).toMatchObject({
     method: 'POST',
-    path: '/api/mdm-candidate/v1/operations/alerts/{id}/acknowledge',
+    path: '/api/v1/mdm-candidate/operations/alerts/{id}/acknowledge',
     pathParams: { id },
     body,
   })

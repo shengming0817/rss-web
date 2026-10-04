@@ -31,7 +31,7 @@ async function fixture(component: Component) {
       automation.observe,
       automation.now,
     )
-  const login = await server.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  const login = await server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
   })

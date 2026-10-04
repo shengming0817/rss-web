@@ -281,10 +281,10 @@ export function createComplianceDemo(
   }
   const handle: DomainHandler = (request, scenario) => {
     const ruleRoute =
-      /^\/api\/v2\/compliance-rules(?:\/([^/]+)(?:\/(versions|recompute|tasks)(?:\/([^/]+))?)?)?$/.exec(
+      /^\/api\/v1\/compliance-rules(?:\/([^/]+)(?:\/(versions|recompute|tasks)(?:\/([^/]+))?)?)?$/.exec(
         request.path,
       )
-    const deviceRoute = /^\/api\/v2\/devices\/([^/]+)\/compliance(\/history)?$/.exec(request.path)
+    const deviceRoute = /^\/api\/v1\/devices\/([^/]+)\/compliance(\/history)?$/.exec(request.path)
     if (!ruleRoute && !deviceRoute) return
     if (scenario === 'denied') return error('permission_denied', 403)
     try {

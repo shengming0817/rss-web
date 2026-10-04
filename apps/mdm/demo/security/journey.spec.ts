@@ -27,7 +27,7 @@ async function setup() {
     )
   let headers: Record<string, string> = {}
   async function login(login: 'demo' | 'reviewer') {
-    const result = await server.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+    const result = await server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
       login,
       password: 'demo',
     })
@@ -63,7 +63,7 @@ async function setup() {
     policies = createPolicyClients(transport, TENANT, true)
   async function control(body: unknown) {
     expect(
-      (await server.handle('POST', '/api/mdm-candidate/v1/workspace/scenario', body, headers))
+      (await server.handle('POST', '/api/v1/mdm-candidate/workspace/scenario', body, headers))
         .status,
     ).toBe(204)
   }

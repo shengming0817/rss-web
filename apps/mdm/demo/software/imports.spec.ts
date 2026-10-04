@@ -8,7 +8,7 @@ function setup() {
   const resources = createResourceDemo(() => false),
     admission = createAdmissionDemo(resources)
   const imports = createImportsDemo(resources, admission)
-  const path = '/api/v3/software/sources/winget/revisions/1'
+  const path = '/api/v1/software/sources/winget/revisions/1'
   admission.handle(
     request(
       path,
@@ -41,7 +41,7 @@ function setup() {
     architecture: 'x86_64',
   })
   const resolution = imports.handle(
-    request('/api/mdm-candidate/v1/software/import-resolutions', undefined, undefined, query),
+    request('/api/v1/mdm-candidate/software/import-resolutions', undefined, undefined, query),
     'normal',
   )!
   return {
@@ -57,12 +57,12 @@ it('pins exact source and package coordinates, atomically imports all files, and
   query.set('version', 'latest')
   expect(
     imports.handle(
-      request('/api/mdm-candidate/v1/software/import-resolutions', undefined, undefined, query),
+      request('/api/v1/mdm-candidate/software/import-resolutions', undefined, undefined, query),
       'normal',
     )?.status,
   ).toBe(404)
   const id = crypto.randomUUID(),
-    path = `/api/mdm-candidate/v1/software/imports/${id}`
+    path = `/api/v1/mdm-candidate/software/imports/${id}`
   const start = operation(
     {
       action: 'start',
@@ -93,7 +93,7 @@ it('pins exact source and package coordinates, atomically imports all files, and
 })
 it('cancels queued jobs and reconciles committed unknown imports through the same Resource operation', () => {
   const { imports, resources, resolution } = setup()
-  const path = `/api/mdm-candidate/v1/software/imports/${crypto.randomUUID()}`
+  const path = `/api/v1/mdm-candidate/software/imports/${crypto.randomUUID()}`
   imports.handle(
     request(
       path,
@@ -114,7 +114,7 @@ it('cancels queued jobs and reconciles committed unknown imports through the sam
   expect(imports.handle(request(path, cancel), 'normal')?.status).toBe(200)
   imports.advance('normal')
   expect(resources.read('browser')).toBeNull()
-  const second = `/api/mdm-candidate/v1/software/imports/${crypto.randomUUID()}`
+  const second = `/api/v1/mdm-candidate/software/imports/${crypto.randomUUID()}`
   imports.handle(
     request(
       second,
@@ -147,7 +147,7 @@ it('cancels queued jobs and reconciles committed unknown imports through the sam
 })
 it('refuses work after source withdrawal', () => {
   const { imports, resources, resolution, admission } = setup()
-  const path = `/api/mdm-candidate/v1/software/imports/${crypto.randomUUID()}`
+  const path = `/api/v1/mdm-candidate/software/imports/${crypto.randomUUID()}`
   imports.handle(
     request(
       path,
@@ -166,7 +166,7 @@ it('refuses work after source withdrawal', () => {
   )
   admission.handle(
     request(
-      '/api/v3/software/sources/winget/revisions/1',
+      '/api/v1/software/sources/winget/revisions/1',
       operation({ action: 'withdraw', evidence: ['revoked'] }, 2),
     ),
     'normal',
@@ -179,7 +179,7 @@ it('refuses work after source withdrawal', () => {
 })
 it('rejects a concurrent Resource change and atomically rejects a corrupt imported file set', () => {
   const { imports, resources, resolution } = setup()
-  const path = `/api/mdm-candidate/v1/software/imports/${crypto.randomUUID()}`
+  const path = `/api/v1/mdm-candidate/software/imports/${crypto.randomUUID()}`
   imports.handle(
     request(
       path,
@@ -197,7 +197,7 @@ it('rejects a concurrent Resource change and atomically rejects a corrupt import
     'normal',
   )
   resources.handle(
-    request('/api/v3/resources/browser', operation({ action: 'create', kind: 'software' }, 0)),
+    request('/api/v1/resources/browser', operation({ action: 'create', kind: 'software' }, 0)),
     'normal',
   )
   imports.advance('normal')
@@ -230,7 +230,7 @@ it('rejects a concurrent Resource change and atomically rejects a corrupt import
 })
 it('resolves Brew as a pinned macOS user package and rejects cross-platform resolution', () => {
   const { resources, admission, imports } = setup()
-  const source = '/api/v3/software/sources/brew/revisions/1'
+  const source = '/api/v1/software/sources/brew/revisions/1'
   admission.handle(
     request(
       source,
@@ -263,12 +263,12 @@ it('resolves Brew as a pinned macOS user package and rejects cross-platform reso
     architecture: 'aarch64',
   })
   const reply = imports.handle(
-    request('/api/mdm-candidate/v1/software/import-resolutions', undefined, undefined, query),
+    request('/api/v1/mdm-candidate/software/import-resolutions', undefined, undefined, query),
     'normal',
   )!
   expect(reply.status).toBe(200)
   const resolution = (reply.body as { resolution: { id: string } }).resolution
-  const path = `/api/mdm-candidate/v1/software/imports/${crypto.randomUUID()}`
+  const path = `/api/v1/mdm-candidate/software/imports/${crypto.randomUUID()}`
   imports.handle(
     request(
       path,
@@ -296,7 +296,7 @@ it('resolves Brew as a pinned macOS user package and rejects cross-platform reso
   query.set('platform', 'windows')
   expect(
     imports.handle(
-      request('/api/mdm-candidate/v1/software/import-resolutions', undefined, undefined, query),
+      request('/api/v1/mdm-candidate/software/import-resolutions', undefined, undefined, query),
       'normal',
     )?.status,
   ).toBe(404)
@@ -306,7 +306,7 @@ it('returns a closed not-found error for a missing exact external package', () =
   const { imports, query } = setup()
   query.set('package', 'missing.package')
   const reply = imports.handle(
-    request('/api/mdm-candidate/v1/software/import-resolutions', undefined, undefined, query),
+    request('/api/v1/mdm-candidate/software/import-resolutions', undefined, undefined, query),
     'normal',
   )!
   expect(decodeMdmError(reply.status, reply.body)).toMatchObject({

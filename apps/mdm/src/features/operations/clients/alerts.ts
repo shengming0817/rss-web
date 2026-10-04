@@ -37,7 +37,7 @@ export function createAlertsClient(transport: HttpTransport, tenant: string, dem
     closure: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/operations/alerts/{id}/closure',
+        path: '/api/v1/mdm-candidate/operations/alerts/{id}/closure',
         pathParams: { id },
         successStatus: 200,
         decode: (value) => {
@@ -49,7 +49,7 @@ export function createAlertsClient(transport: HttpTransport, tenant: string, dem
     close: (id: string, body: Operation<{ note: string }>) =>
       transport.request({
         method: 'POST',
-        path: '/api/mdm-candidate/v1/operations/alerts/{id}/close',
+        path: '/api/v1/mdm-candidate/operations/alerts/{id}/close',
         pathParams: { id },
         body,
         successStatus: 200,
@@ -67,7 +67,7 @@ export function createAlertsClient(transport: HttpTransport, tenant: string, dem
     list: (filter: AlertFilter = {}) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/operations/alerts',
+        path: '/api/v1/mdm-candidate/operations/alerts',
         query: { limit: 20, ...filter },
         successStatus: 200,
         decode(value) {
@@ -82,7 +82,7 @@ export function createAlertsClient(transport: HttpTransport, tenant: string, dem
     read: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/operations/alerts/{id}',
+        path: '/api/v1/mdm-candidate/operations/alerts/{id}',
         pathParams: { id },
         successStatus: 200,
         decode: (v) => read(v, id),
@@ -90,7 +90,7 @@ export function createAlertsClient(transport: HttpTransport, tenant: string, dem
     acknowledge: (id: string, body: Operation<Record<string, never>>) =>
       transport.request({
         method: 'POST',
-        path: '/api/mdm-candidate/v1/operations/alerts/{id}/acknowledge',
+        path: '/api/v1/mdm-candidate/operations/alerts/{id}/acknowledge',
         pathParams: { id },
         body,
         successStatus: 200,

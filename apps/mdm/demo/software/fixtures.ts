@@ -63,14 +63,14 @@ export function softwareResource(packageName = 'Example.App') {
   }
   expect(
     resources.handle(
-      request('/api/v3/resources/app', operation({ action: 'create', kind: 'software' }, 0)),
+      request('/api/v1/resources/app', operation({ action: 'create', kind: 'software' }, 0)),
       'normal',
     )?.status,
   ).toBe(200)
   expect(
     resources.handle(
       request(
-        '/api/v3/resources/app',
+        '/api/v1/resources/app',
         operation(
           {
             action: 'version',
@@ -94,7 +94,7 @@ export function softwareResource(packageName = 'Example.App') {
   expect(
     resources.handle(
       request(
-        '/api/v3/resources/app/content',
+        '/api/v1/resources/app/content',
         bytes,
         publisher,
         new URLSearchParams({

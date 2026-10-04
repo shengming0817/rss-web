@@ -58,7 +58,7 @@ it('binds baseline writes and projections to tenant, source, identity and revisi
   expect(await client.put(id, body)).toEqual({ baseline, asOf: 100 })
   expect(request.mock.lastCall![0]).toMatchObject({
     method: 'PUT',
-    path: '/api/mdm-candidate/v1/security/baselines/{id}',
+    path: '/api/v1/mdm-candidate/security/baselines/{id}',
     pathParams: { id },
     body,
   })

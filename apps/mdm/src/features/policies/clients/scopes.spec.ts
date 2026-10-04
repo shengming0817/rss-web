@@ -98,7 +98,7 @@ it('uses exact Scope paths and CAS bodies without manufacturing a list or previe
   await expect(client.change(id, body)).resolves.toEqual(reply)
   expect(request.mock.calls[0]![0]).toMatchObject({
     method: 'POST',
-    path: '/api/v2/scopes/{id}',
+    path: '/api/v1/scopes/{id}',
     pathParams: { id },
     body,
     successStatus: 200,
@@ -107,7 +107,7 @@ it('uses exact Scope paths and CAS bodies without manufacturing a list or previe
   await client.read(id)
   expect(request.mock.calls[1]![0]).toMatchObject({
     method: 'GET',
-    path: '/api/v2/scopes/{id}',
+    path: '/api/v1/scopes/{id}',
     successStatus: 200,
   })
   reply = {
@@ -126,7 +126,7 @@ it('uses exact Scope paths and CAS bodies without manufacturing a list or previe
   await client.status(id, result)
   expect(request.mock.calls[2]![0]).toMatchObject({
     method: 'GET',
-    path: '/api/v2/scopes/{id}/tasks/{task}',
+    path: '/api/v1/scopes/{id}/tasks/{task}',
     pathParams: { id, task: result },
   })
   reply = {
@@ -142,7 +142,7 @@ it('uses exact Scope paths and CAS bodies without manufacturing a list or previe
   await client.page(id, result, 'members', 'opaque-tail')
   expect(request.mock.calls[3]![0]).toMatchObject({
     method: 'GET',
-    path: '/api/v2/scopes/{id}/results/{result}/{projection}',
+    path: '/api/v1/scopes/{id}/results/{result}/{projection}',
     pathParams: { id, result, projection: 'members' },
     query: { cursor: 'opaque-tail' },
   })

@@ -43,7 +43,7 @@ export function createDeviceDemo() {
   }
   const directory: DomainHandler = (request, scenario) => {
     const { path, method, query } = request
-    if (path === '/api/mdm-candidate/v1/devices' && method === 'GET') {
+    if (path === '/api/v1/mdm-candidate/devices' && method === 'GET') {
       const items = scenario === 'empty' ? [] : [...devices.values()].map((d) => d.summary)
       const page = pages.page(path, items, query)
       if (!statistics.has(page.snapshot))
@@ -60,7 +60,7 @@ export function createDeviceDemo() {
       })
     }
     const batchPath =
-      /^\/api\/mdm-candidate\/v1\/devices\/batch-previews(?:\/([^/]+)(?:\/(execute|cancel))?)?$/.exec(
+      /^\/api\/v1\/mdm-candidate\/devices\/batch-previews(?:\/([^/]+)(?:\/(execute|cancel))?)?$/.exec(
         path,
       )
     if (batchPath) {
@@ -162,7 +162,7 @@ export function createDeviceDemo() {
       })
     }
     const match =
-      /^\/api\/mdm-candidate\/v1\/devices\/([^/]+)(?:\/(hardware|software|history|assignment))?$/.exec(
+      /^\/api\/v1\/mdm-candidate\/devices\/([^/]+)(?:\/(hardware|software|history|assignment))?$/.exec(
         path,
       )
     if (!match) return
@@ -237,7 +237,7 @@ export function createDeviceDemo() {
   }
   const handle: DomainHandler = (request, scenario) => {
     if (
-      !/^\/api\/(?:v2\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v3\/(?:enrollments|devices)|mdm-candidate\/v1\/(?:devices|groups))(?:\/|$)/.test(
+      !/^\/api\/(?:v1\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v1\/(?:enrollments|devices)|v1\/mdm-candidate\/(?:devices|groups))(?:\/|$)/.test(
         request.path,
       )
     )

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { createScenario, TENANT } from './scenario'
 async function control(scenario: ReturnType<typeof createScenario>, body: unknown) {
-  const session = await scenario.handle('GET', `/api/v2/tenants/${TENANT}/session`)
-  return scenario.handle('POST', '/api/mdm-candidate/v1/workspace/scenario', body, {
+  const session = await scenario.handle('GET', `/api/v1/identity/tenants/${TENANT}/session`)
+  return scenario.handle('POST', '/api/v1/mdm-candidate/workspace/scenario', body, {
     'x-csrf-token': (session.body as { csrfToken: string }).csrfToken,
     'x-identity-request': '1',
   })
@@ -10,32 +10,34 @@ async function control(scenario: ReturnType<typeof createScenario>, body: unknow
 describe('HTTP demo state', () => {
   it('requires login, rotates CSRF and resets deterministically', async () => {
     const scenario = createScenario()
-    expect((await scenario.handle('GET', `/api/v2/tenants/${TENANT}/session`)).status).toBe(401)
-    const login = await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+    expect(
+      (await scenario.handle('GET', `/api/v1/identity/tenants/${TENANT}/session`)).status,
+    ).toBe(401)
+    const login = await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
       login: 'demo',
       password: 'demo',
     })
     expect(login.status).toBe(200)
-    expect((await scenario.handle('GET', '/api/mdm-candidate/v1/workspace')).status).toBe(200)
+    expect((await scenario.handle('GET', '/api/v1/mdm-candidate/workspace')).status).toBe(200)
     scenario.reset()
-    expect((await scenario.handle('GET', '/api/mdm-candidate/v1/workspace')).status).toBe(401)
+    expect((await scenario.handle('GET', '/api/v1/mdm-candidate/workspace')).status).toBe(401)
   })
   it('keeps explicit denied, unavailable and unknown scenarios distinct', async () => {
     const scenario = createScenario()
-    const login = await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+    const login = await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
       login: 'demo',
       password: 'demo',
     })
     scenario.set('forbidden')
-    expect((await scenario.handle('GET', '/api/mdm-candidate/v1/workspace')).status).toBe(403)
+    expect((await scenario.handle('GET', '/api/v1/mdm-candidate/workspace')).status).toBe(403)
     scenario.set('offline')
-    expect((await scenario.handle('GET', '/api/mdm-candidate/v1/workspace')).status).toBe(503)
+    expect((await scenario.handle('GET', '/api/v1/mdm-candidate/workspace')).status).toBe(503)
     scenario.set('unknown')
     expect(
       (
         await scenario.handle(
           'POST',
-          '/api/mdm-candidate/v1/workspace/change',
+          '/api/v1/mdm-candidate/workspace/change',
           {},
           {
             'x-csrf-token': (login.body as { csrfToken: string }).csrfToken,
@@ -51,17 +53,17 @@ describe('HTTP demo state', () => {
 
 it('enforces CSRF, rotates it on refresh, and clears authenticated state after logout', async () => {
   const scenario = createScenario()
-  const login = await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  const login = await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
   })
   const token = (login.body as { csrfToken: string }).csrfToken
-  expect((await scenario.handle('POST', `/api/v2/tenants/${TENANT}/session/refresh`)).status).toBe(
-    403,
-  )
+  expect(
+    (await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/session/refresh`)).status,
+  ).toBe(403)
   const refresh = await scenario.handle(
     'POST',
-    `/api/v2/tenants/${TENANT}/session/refresh`,
+    `/api/v1/identity/tenants/${TENANT}/session/refresh`,
     {},
     { 'x-csrf-token': token, 'x-identity-request': '1' },
   )
@@ -71,7 +73,7 @@ it('enforces CSRF, rotates it on refresh, and clears authenticated state after l
     (
       await scenario.handle(
         'POST',
-        `/api/v2/tenants/${TENANT}/session/logout`,
+        `/api/v1/identity/tenants/${TENANT}/session/logout`,
         {},
         { 'x-csrf-token': token, 'x-identity-request': '1' },
       )
@@ -81,13 +83,15 @@ it('enforces CSRF, rotates it on refresh, and clears authenticated state after l
     (
       await scenario.handle(
         'POST',
-        `/api/v2/tenants/${TENANT}/session/logout`,
+        `/api/v1/identity/tenants/${TENANT}/session/logout`,
         {},
         { 'x-csrf-token': next, 'x-identity-request': '1' },
       )
     ).status,
   ).toBe(204)
-  expect((await scenario.handle('GET', `/api/v2/tenants/${TENANT}/session`)).status).toBe(401)
+  expect((await scenario.handle('GET', `/api/v1/identity/tenants/${TENANT}/session`)).status).toBe(
+    401,
+  )
 })
 
 it('derives distinct actors and session IDs from authenticated accounts, never request data', async () => {
@@ -99,7 +103,7 @@ it('derives distinct actors and session IDs from authenticated accounts, never r
     },
   ])
   async function login(login: string) {
-    const reply = await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+    const reply = await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
       login,
       password: 'demo',
     })
@@ -111,9 +115,9 @@ it('derives distinct actors and session IDs from authenticated accounts, never r
     }
   }
   const author = await login('demo')
-  await scenario.handle('GET', '/api/v2/scopes/example', { principalId: 'forged' })
+  await scenario.handle('GET', '/api/v1/scopes/example', { principalId: 'forged' })
   const reviewer = await login('reviewer')
-  await scenario.handle('GET', '/api/v2/scopes/example')
+  await scenario.handle('GET', '/api/v1/scopes/example')
   const renewed = await login('demo')
   expect(author.identity.principalId).not.toBe(reviewer.identity.principalId)
   expect(author.session.id).not.toBe(renewed.session.id)
@@ -124,7 +128,7 @@ it('derives distinct actors and session IDs from authenticated accounts, never r
 })
 it('never falls back to mock for published policy or native-operation paths', async () => {
   const scenario = createScenario([() => ({ status: 200 })])
-  await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
   })
@@ -134,12 +138,12 @@ it('never falls back to mock for published policy or native-operation paths', as
     source: 'real',
   })
   for (const path of [
-    '/api/v2/scopes/id',
-    '/api/v3/resources/id',
-    '/api/v2/policies/id',
-    '/api/mdm-candidate/v1/policies/assignments/id',
-    '/api/v2/devices/device/operations/id',
-    '/api/mdm-candidate/v1/executions/id',
+    '/api/v1/scopes/id',
+    '/api/v1/resources/id',
+    '/api/v1/policies/id',
+    '/api/v1/mdm-candidate/policies/assignments/id',
+    '/api/v1/devices/device/operations/id',
+    '/api/v1/mdm-candidate/executions/id',
   ]) {
     expect((await scenario.handle('GET', path)).status, path).toBe(503)
   }
@@ -147,13 +151,13 @@ it('never falls back to mock for published policy or native-operation paths', as
 
 it('classifies native compliance under security before the generic device path', async () => {
   const scenario = createScenario([() => ({ status: 200 })])
-  await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
   })
   await control(scenario, { scenario: 'normal', module: 'security', source: 'real' })
   expect(
-    (await scenario.handle('GET', '/api/mdm-candidate/v1/workspace/scenario')).body,
+    (await scenario.handle('GET', '/api/v1/mdm-candidate/workspace/scenario')).body,
   ).toMatchObject({
     sources: {
       policies: 'real',
@@ -164,18 +168,18 @@ it('classifies native compliance under security before the generic device path',
     },
   })
   for (const path of [
-    '/api/v2/compliance-rules',
-    '/api/v2/compliance-rules/id/tasks/task',
-    '/api/v2/devices/device-01/compliance',
-    '/api/v2/devices/device-01/compliance/history',
-    '/api/mdm-candidate/v1/operations/audit',
-    '/api/mdm-candidate/v1/operations/alerts',
+    '/api/v1/compliance-rules',
+    '/api/v1/compliance-rules/id/tasks/task',
+    '/api/v1/devices/device-01/compliance',
+    '/api/v1/devices/device-01/compliance/history',
+    '/api/v1/mdm-candidate/operations/audit',
+    '/api/v1/mdm-candidate/operations/alerts',
   ])
     expect((await scenario.handle('GET', path)).status, path).toBe(503)
-  expect((await scenario.handle('GET', '/api/v2/devices/device-01/inventory')).status).toBe(200)
+  expect((await scenario.handle('GET', '/api/v1/devices/device-01/inventory')).status).toBe(200)
   await control(scenario, { scenario: 'normal', module: 'security', source: 'mock' })
   await control(scenario, { scenario: 'normal', module: 'devices', source: 'real' })
-  expect((await scenario.handle('GET', '/api/v2/devices/device-01/compliance')).status).toBe(200)
+  expect((await scenario.handle('GET', '/api/v1/devices/device-01/compliance')).status).toBe(200)
 })
 
 it('accepts bounded raw resource bytes while retaining the JSON request budget elsewhere', async () => {
@@ -185,7 +189,7 @@ it('accepts bounded raw resource bytes while retaining the JSON request budget e
       body: request.body instanceof ArrayBuffer ? request.body.byteLength : -1,
     }),
   ])
-  const login = await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  const login = await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
   })
@@ -194,20 +198,20 @@ it('accepts bounded raw resource bytes while retaining the JSON request budget e
     'x-identity-request': '1',
   }
   const content = new Uint8Array(20_000).buffer
-  expect(await scenario.handle('POST', '/api/v3/resources/id/content', content, headers)).toEqual({
+  expect(await scenario.handle('POST', '/api/v1/resources/id/content', content, headers)).toEqual({
     status: 201,
     body: 20_000,
   })
-  expect((await scenario.handle('POST', '/api/v3/resources/id', content, headers)).status).toBe(400)
+  expect((await scenario.handle('POST', '/api/v1/resources/id', content, headers)).status).toBe(400)
   expect(
-    (await scenario.handle('POST', '/api/v3/resources/id', { data: 'a'.repeat(20_000) }, headers))
+    (await scenario.handle('POST', '/api/v1/resources/id', { data: 'a'.repeat(20_000) }, headers))
       .status,
   ).toBe(413)
   expect(
     (
       await scenario.handle(
         'POST',
-        '/api/v3/resources/id/content',
+        '/api/v1/resources/id/content',
         new ArrayBuffer(16_777_217),
         headers,
       )
@@ -225,10 +229,10 @@ it('injects automation events only into the explicit mock source after login', a
       return true
     },
   )
-  const path = '/api/mdm-candidate/v1/workspace/scenario'
+  const path = '/api/v1/mdm-candidate/workspace/scenario'
   const event = { kind: 'clock', at: Math.floor(Date.now() / 1000) + 60 }
   expect((await scenario.handle('POST', path, { event })).status).toBe(401)
-  await scenario.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
   })

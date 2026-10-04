@@ -6,9 +6,15 @@ describe('MDM HTTP boundary', () => {
   it('rejects Identity paths, unversioned paths and local tenant/authorization headers', async () => {
     const transport = createMdmTransport()
     for (const path of [
-      '/api/v2/tenants/{tenant}/login',
+      '/api/v1/identity/tenants/{tenant}/login',
       '/api/private',
+      '/api/v2/devices',
+      '/api/v3/resources',
       '/api/v4/devices',
+      '/api/mdm-candidate/v1/workspace',
+      '/api/mdm-host/v1/config.json',
+      '/api/v1/agent/runtime/tasks',
+      '/api/v1/unknown',
       '//other.test/api/v1/devices',
     ]) {
       await expect(
@@ -64,7 +70,7 @@ it('rejects oversized UTF-8 JSON before dispatch and recognizes ingress 413 with
   await expect(
     transport.request({
       method: 'POST',
-      path: '/api/v2/groups/{id}',
+      path: '/api/v1/groups/{id}',
       pathParams: { id: 'group' },
       body: { value: '界'.repeat(6000) },
       successStatus: 200,
@@ -89,7 +95,7 @@ it('counts the complete encoded JSON body at the inclusive 16 KiB boundary', asy
   const request = (length: number) =>
     transport.request({
       method: 'PUT',
-      path: '/api/v2/groups/group',
+      path: '/api/v1/groups/group',
       body: { value: 'a'.repeat(length) },
       successStatus: 200,
       decode: (v) => v,
@@ -107,7 +113,7 @@ it('sends raw resource content unchanged only through the explicit content route
   const transport = createMdmTransport()
   spy.mockRestore()
   const bytes = new Uint8Array([0, 255, 128, 10]).buffer
-  mock.onPost('/api/v3/resources/script/content').reply((config) => {
+  mock.onPost('/api/v1/resources/script/content').reply((config) => {
     expect(config.data).toBe(bytes)
     expect(config.headers?.['Content-Type']).toBe('application/octet-stream')
     return [201, '']
@@ -115,7 +121,7 @@ it('sends raw resource content unchanged only through the explicit content route
   await expect(
     transport.request({
       method: 'POST',
-      path: '/api/v3/resources/{id}/content',
+      path: '/api/v1/resources/{id}/content',
       pathParams: { id: 'script' },
       headers: { 'Content-Type': 'application/octet-stream' },
       body: bytes,
@@ -128,7 +134,7 @@ it('sends raw resource content unchanged only through the explicit content route
   await expect(
     transport.request({
       method: 'POST',
-      path: '/api/v2/groups/group',
+      path: '/api/v1/groups/group',
       body: bytes,
       successStatus: 200,
       decode: (v) => v,
@@ -137,7 +143,7 @@ it('sends raw resource content unchanged only through the explicit content route
   await expect(
     transport.request({
       method: 'GET',
-      path: '/api/v3/resources/{id}/content',
+      path: '/api/v1/resources/{id}/content',
       pathParams: { id: 'script' },
       body: bytes,
       successStatus: 200,
@@ -157,7 +163,7 @@ it('enforces the exact resource content byte budget without widening JSON routes
   const upload = (body: unknown) =>
     transport.request({
       method: 'POST',
-      path: '/api/v3/resources/{id}/content',
+      path: '/api/v1/resources/{id}/content',
       pathParams: { id: 'script' },
       body,
       successStatus: 201,
@@ -184,9 +190,9 @@ it('allows the published software catalog and candidate console without widening
   const transport = createMdmTransport()
   spy.mockRestore()
   for (const path of [
-    '/api/v3/software/sources/private/revisions/1',
-    '/api/v3/software/resources/app/versions/1',
-    '/api/mdm-candidate/v1/software/catalog',
+    '/api/v1/software/sources/private/revisions/1',
+    '/api/v1/software/resources/app/versions/1',
+    '/api/v1/mdm-candidate/software/catalog',
   ])
     await expect(
       transport.request({ method: 'GET', path, successStatus: 200, decode: (v) => v }),
@@ -194,7 +200,7 @@ it('allows the published software catalog and candidate console without widening
   await expect(
     transport.request({
       method: 'GET',
-      path: '/api/v3/software-admin/secrets',
+      path: '/api/v1/software-admin/secrets',
       successStatus: 200,
       decode: (v) => v,
     }),
@@ -208,11 +214,11 @@ it('decodes a missing native software task through the transport as a definite n
   const spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance)
   const transport = createMdmTransport()
   spy.mockRestore()
-  mock.onGet('/api/v2/policies/policy/runs/missing').reply(404, { code: 'task_not_found' })
+  mock.onGet('/api/v1/policies/policy/runs/missing').reply(404, { code: 'task_not_found' })
   await expect(
     transport.request({
       method: 'GET',
-      path: '/api/v2/policies/policy/runs/missing',
+      path: '/api/v1/policies/policy/runs/missing',
       successStatus: 200,
       decode: (v) => v,
     }),
@@ -228,24 +234,24 @@ it('dispatches native compliance routes through the product boundary with no pat
     transport = createMdmTransport()
   spy.mockRestore()
   for (const path of [
-    '/api/v2/compliance-rules',
-    '/api/v2/compliance-rules/rule/versions/1',
-    '/api/v2/compliance-rules/rule/tasks/task',
-    '/api/v2/devices/device-01/compliance/history',
+    '/api/v1/compliance-rules',
+    '/api/v1/compliance-rules/rule/versions/1',
+    '/api/v1/compliance-rules/rule/tasks/task',
+    '/api/v1/devices/device-01/compliance/history',
   ])
     await expect(
       transport.request({ method: 'GET', path, successStatus: 200, decode: (v) => v }),
     ).resolves.toEqual({})
   expect(mock.history.get.map((v) => v.url)).toEqual([
-    '/api/v2/compliance-rules',
-    '/api/v2/compliance-rules/rule/versions/1',
-    '/api/v2/compliance-rules/rule/tasks/task',
-    '/api/v2/devices/device-01/compliance/history',
+    '/api/v1/compliance-rules',
+    '/api/v1/compliance-rules/rule/versions/1',
+    '/api/v1/compliance-rules/rule/tasks/task',
+    '/api/v1/devices/device-01/compliance/history',
   ])
   await expect(
     transport.request({
       method: 'GET',
-      path: '/api/v2/compliance-rules-admin',
+      path: '/api/v1/compliance-rules-admin',
       successStatus: 200,
       decode: (v) => v,
     }),
@@ -258,7 +264,7 @@ it('bounds raw upload chunks to PATCH sessions and decodes offset conflict witho
   const spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance)
   const transport = createMdmTransport()
   spy.mockRestore()
-  const path = '/api/v3/resources/app/uploads/session',
+  const path = '/api/v1/resources/app/uploads/session',
     bytes = new Uint8Array([1, 2]).buffer
   mock.onPatch(path).reply(409, { code: 'upload_offset_conflict', offset: 2 })
   await expect(

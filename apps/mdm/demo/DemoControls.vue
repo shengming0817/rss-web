@@ -18,7 +18,7 @@ async function load() {
   try {
     const value = await props.transport.request({
       method: 'GET',
-      path: '/api/mdm-candidate/v1/workspace/scenario',
+      path: '/api/v1/mdm-candidate/workspace/scenario',
       successStatus: 200,
       decode(value) {
         const v = record(value)
@@ -65,7 +65,7 @@ async function simulate() {
         ? (
             await props.transport.request({
               method: 'GET',
-              path: '/api/mdm-candidate/v1/workspace/scenario',
+              path: '/api/v1/mdm-candidate/workspace/scenario',
               successStatus: 200,
               decode: (value) => ({ asOf: count(record(value)['asOf']) }),
             })
@@ -73,7 +73,7 @@ async function simulate() {
         : eventAt.value
     await props.transport.request({
       method: 'POST',
-      path: '/api/mdm-candidate/v1/workspace/scenario',
+      path: '/api/v1/mdm-candidate/workspace/scenario',
       body: {
         event: {
           kind: eventKind.value,
@@ -124,7 +124,7 @@ async function apply(reset: boolean) {
   try {
     await props.transport.request({
       method: 'POST',
-      path: '/api/mdm-candidate/v1/workspace/scenario',
+      path: '/api/v1/mdm-candidate/workspace/scenario',
       body: { reset, scenario: active.value, module: module.value, source: source.value },
       successStatus: 204,
     })

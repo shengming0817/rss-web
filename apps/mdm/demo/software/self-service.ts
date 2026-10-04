@@ -75,7 +75,7 @@ export function createSelfServiceDemo(
   }
   const handle: DomainHandler = (request, scenario) => {
     const route =
-      /^\/api\/mdm-candidate\/v1\/software\/self-service\/(items|requests)(?:\/([^/]+))?$/.exec(
+      /^\/api\/v1\/mdm-candidate\/software\/self-service\/(items|requests)(?:\/([^/]+))?$/.exec(
         request.path,
       )
     if (!route) return
@@ -148,9 +148,11 @@ export function createSelfServiceDemo(
           // Scope rolls back if binding fails; only this request owner can cancel the result.
           current.policy = scopes.forManagedDevices([current.device], (scope) =>
             software.createManagedPolicy({
-              resource: d.resource,
               scope,
-              behavior: {
+              action: {
+                delivery: { kind: 'direct' },
+                resource: d.resource,
+
                 kind: 'software',
                 intent: 'available_install',
                 admissionOperation: d.admissionOperation,

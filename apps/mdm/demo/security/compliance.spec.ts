@@ -16,7 +16,7 @@ async function fixture(devices = createDeviceDemo()) {
     (event, scenario) => automation.tick(event, scenario),
     automation.observe,
   )
-  const login = await server.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  const login = await server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
   })
@@ -48,8 +48,8 @@ it('timestamps saved rules, recomputation and published evidence using the advan
   vi.spyOn(Date, 'now').mockReturnValue(1780000000000)
   const f = await fixture(),
     at = 1780003600,
-    path = `/api/v2/compliance-rules/${crypto.randomUUID()}`
-  await f.write('POST', '/api/mdm-candidate/v1/workspace/scenario', {
+    path = `/api/v1/compliance-rules/${crypto.randomUUID()}`
+  await f.write('POST', '/api/v1/mdm-candidate/workspace/scenario', {
     event: { kind: 'clock', at },
   })
   const created = await f.write('PUT', path, operation(definition))
@@ -61,7 +61,7 @@ it('timestamps saved rules, recomputation and published evidence using the advan
   await f.server.handle('GET', `${path}/tasks/${second}`)
   await f.server.handle('GET', `${path}/tasks/${second}`)
   const history = (
-    await f.server.handle('GET', `/api/v2/devices/device-01/compliance/history?from=${at}`)
+    await f.server.handle('GET', `/api/v1/devices/device-01/compliance/history?from=${at}`)
   ).body as { items: { evaluatedAt: number }[] }
   expect(history.items).toHaveLength(2)
   expect(history.items.every((item) => item.evaluatedAt === at)).toBe(true)
@@ -69,7 +69,7 @@ it('timestamps saved rules, recomputation and published evidence using the advan
     const audit = (
       await f.server.handle(
         'GET',
-        `/api/mdm-candidate/v1/operations/audit?action=${action}&from=${at}`,
+        `/api/v1/mdm-candidate/operations/audit?action=${action}&from=${at}`,
       )
     ).body as { items: { at: number }[] }
     expect(audit.items.length).toBeGreaterThan(0)
@@ -81,12 +81,12 @@ it('keeps native rule versions, pending previous evidence and immutable history 
   const clock = vi.spyOn(Date, 'now').mockReturnValue(1780000000000)
   const f = await fixture(),
     id = crypto.randomUUID(),
-    path = `/api/v2/compliance-rules/${id}`
+    path = `/api/v1/compliance-rules/${id}`
   const created = await f.write('PUT', path, operation(definition))
   expect(created.status).toBe(200)
   const receipt = created.body as { id: string; revision: number; task: string }
   expect(receipt).toMatchObject({ id, revision: 1 })
-  const currentPath = '/api/v2/devices/device-01/compliance'
+  const currentPath = '/api/v1/devices/device-01/compliance'
   expect((await f.server.handle('GET', currentPath)).body).toMatchObject({
     device: 'device-01',
     status: 'pending',
@@ -159,7 +159,7 @@ it('keeps native rule versions, pending previous evidence and immutable history 
     (
       await f.server.handle(
         'GET',
-        `/api/v2/devices/device-02/compliance/history?cursor=${encodeURIComponent(cursor)}`,
+        `/api/v1/devices/device-02/compliance/history?cursor=${encodeURIComponent(cursor)}`,
       )
     ).status,
   ).toBe(400)
@@ -176,8 +176,8 @@ it('keeps native rule versions, pending previous evidence and immutable history 
 it('replays exact unknown native operations and requires nonempty Criteria without treating no rules as compliant', async () => {
   const f = await fixture(),
     id = crypto.randomUUID(),
-    path = `/api/v2/compliance-rules/${id}`
-  expect((await f.server.handle('GET', '/api/v2/devices/device-01/compliance')).body).toMatchObject(
+    path = `/api/v1/compliance-rules/${id}`
+  expect((await f.server.handle('GET', '/api/v1/devices/device-01/compliance')).body).toMatchObject(
     { status: 'unknown', reason: 'no_rules', rules: [] },
   )
   expect((await f.write('PUT', path, operation({ ...definition, criteria: null }))).status).toBe(
@@ -207,21 +207,21 @@ it('keeps native rule list after pagination separate from history cursor paginat
       (
         await f.write(
           'PUT',
-          `/api/v2/compliance-rules/${id}`,
+          `/api/v1/compliance-rules/${id}`,
           operation({ ...definition, enabled: false }),
         )
       ).status,
     ).toBe(200)
-  const first = (await f.server.handle('GET', '/api/v2/compliance-rules')).body as {
+  const first = (await f.server.handle('GET', '/api/v1/compliance-rules')).body as {
     items: { id: string }[]
     nextCursor: string
   }
   expect(first.items.map((v) => v.id)).toEqual(ids.slice(0, 50))
   expect(first.nextCursor).toBe(ids[49])
   expect(
-    (await f.server.handle('GET', `/api/v2/compliance-rules?after=${first.nextCursor}`)).body,
+    (await f.server.handle('GET', `/api/v1/compliance-rules?after=${first.nextCursor}`)).body,
   ).toMatchObject({ items: [{ id: ids[50] }], nextCursor: null })
-  expect((await f.server.handle('GET', '/api/v2/compliance-rules?cursor=unsupported')).status).toBe(
+  expect((await f.server.handle('GET', '/api/v1/compliance-rules?cursor=unsupported')).status).toBe(
     400,
   )
 })
@@ -242,7 +242,7 @@ it('supersedes an unready frozen group input, then preserves old evidence when i
   )
   const f = await fixture(devices),
     id = crypto.randomUUID(),
-    path = `/api/v2/compliance-rules/${id}`
+    path = `/api/v1/compliance-rules/${id}`
   const input = { ...definition, target: { kind: 'groups', ids: [group] } }
   const task = (await f.write('PUT', path, operation(input))).body as { task: string }
   await f.server.handle('GET', `${path}/tasks/${task.task}`)
@@ -258,7 +258,7 @@ it('supersedes an unready frozen group input, then preserves old evidence when i
   }
   await f.server.handle('GET', `${path}/tasks/${next.task}`)
   await f.server.handle('GET', `${path}/tasks/${next.task}`)
-  const current = '/api/v2/devices/device-01/compliance'
+  const current = '/api/v1/devices/device-01/compliance'
   expect((await f.server.handle('GET', current)).body).toMatchObject({ status: 'non_compliant' })
   members = { ...members, members: [], memberSet: crypto.randomUUID(), memberVersion: 2 }
   expect((await f.server.handle('GET', current)).body).toMatchObject({
@@ -279,7 +279,7 @@ it('evaluates an empty static group as not applicable and retains history if its
   const f = await fixture(),
     group = '33333333-3333-4333-8333-333333333333',
     id = crypto.randomUUID(),
-    path = `/api/v2/compliance-rules/${id}`
+    path = `/api/v1/compliance-rules/${id}`
   const created = await f.write(
     'PUT',
     path,
@@ -290,12 +290,12 @@ it('evaluates an empty static group as not applicable and retains history if its
   expect((await f.server.handle('GET', `${path}/tasks/${task}`)).body).toMatchObject({
     phase: 'published',
   })
-  const current = '/api/v2/devices/device-01/compliance'
+  const current = '/api/v1/devices/device-01/compliance'
   expect((await f.server.handle('GET', current)).body).toMatchObject({
     status: 'not_applicable',
     rules: [{ current: { groups: [{ ready: true, memberSet: null }] } }],
   })
-  await f.write('POST', `/api/v2/groups/${group}`, operation({ action: 'delete' }, 1))
+  await f.write('POST', `/api/v1/groups/${group}`, operation({ action: 'delete' }, 1))
   expect((await f.server.handle('GET', current)).body).toMatchObject({
     status: 'pending',
     rules: [{ current: null, previous: { status: 'not_applicable' } }],
@@ -308,7 +308,7 @@ it('evaluates an empty static group as not applicable and retains history if its
 it('invalidates dynamic group inputs after fact changes even when the compliance condition did not use that field', async () => {
   const f = await fixture(),
     group = crypto.randomUUID(),
-    groupPath = `/api/v2/groups/${group}`
+    groupPath = `/api/v1/groups/${group}`
   const groupWrite = operation({
     action: 'create',
     name: 'Office members',
@@ -319,7 +319,7 @@ it('invalidates dynamic group inputs after fact changes even when the compliance
   await f.server.handle('GET', `${groupPath}/tasks/${groupWrite.operationId}`)
   await f.server.handle('GET', `${groupPath}/tasks/${groupWrite.operationId}`)
   const rule = crypto.randomUUID(),
-    path = `/api/v2/compliance-rules/${rule}`
+    path = `/api/v1/compliance-rules/${rule}`
   const { task } = (
     await f.write(
       'PUT',
@@ -333,13 +333,13 @@ it('invalidates dynamic group inputs after fact changes even when the compliance
   ).body as { task: string }
   await f.server.handle('GET', `${path}/tasks/${task}`)
   await f.server.handle('GET', `${path}/tasks/${task}`)
-  const current = '/api/v2/devices/device-01/compliance'
+  const current = '/api/v1/devices/device-01/compliance'
   expect((await f.server.handle('GET', current)).body).toMatchObject({ status: 'not_applicable' })
   expect(
     (
       await f.write(
         'PUT',
-        '/api/v2/devices/device-01/manual-fields/custom.office_floor',
+        '/api/v1/devices/device-01/manual-fields/custom.office_floor',
         operation({ action: 'set', value: { kind: 'integer', value: 2 } }, 1),
       )
     ).status,
@@ -366,7 +366,7 @@ it('uses active platform provenance and keeps partial tasks from publishing a co
   vi.spyOn(devices, 'facts').mockImplementation(() => structuredClone(facts))
   const f = await fixture(devices),
     rule = crypto.randomUUID(),
-    path = `/api/v2/compliance-rules/${rule}`
+    path = `/api/v1/compliance-rules/${rule}`
   const { task } = (
     await f.write(
       'PUT',
@@ -376,7 +376,7 @@ it('uses active platform provenance and keeps partial tasks from publishing a co
   ).body as { task: string }
   await f.server.handle('GET', `${path}/tasks/${task}`)
   await f.server.handle('GET', `${path}/tasks/${task}`)
-  const current = '/api/v2/devices/device-01/compliance'
+  const current = '/api/v1/devices/device-01/compliance'
   expect((await f.server.handle('GET', current)).body).toMatchObject({
     status: 'unknown',
     rules: [{ current: { reason: 'platform_unknown' } }],

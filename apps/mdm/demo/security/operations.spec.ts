@@ -8,7 +8,7 @@ it('records native security changes once and keeps alert acknowledgement indepen
   const devices = createDeviceDemo(),
     automation = createAutomationDemo(devices),
     server = createScenario([automation.handle, devices.handle])
-  const login = await server.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  const login = await server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
   })
@@ -18,9 +18,9 @@ it('records native security changes once and keeps alert acknowledgement indepen
   }
   const write = (method: string, path: string, body: unknown) =>
     server.handle(method, path, body, headers)
-  const root = '/api/mdm-candidate/v1/operations',
+  const root = '/api/v1/mdm-candidate/operations',
     id = crypto.randomUUID(),
-    path = `/api/v2/compliance-rules/${id}`
+    path = `/api/v1/compliance-rules/${id}`
   expect((await server.handle('GET', `${root}/audit`)).status).toBe(200)
   const definition = {
     name: 'Private administrator draft',
@@ -82,7 +82,7 @@ it('records native security changes once and keeps alert acknowledgement indepen
     (await write('POST', `${root}/alerts/${alert.id}/resolve`, operation({}, alert.revision + 1)))
       .status,
   ).toBe(400)
-  expect((await server.handle('GET', '/api/v2/devices/device-01/compliance')).body).toMatchObject({
+  expect((await server.handle('GET', '/api/v1/devices/device-01/compliance')).body).toMatchObject({
     status: 'non_compliant',
   })
   const changed = await write(
@@ -125,7 +125,7 @@ it('records native security changes once and keeps alert acknowledgement indepen
   ).toBe(400)
   const all = (await server.handle('GET', `${root}/audit`)).body
   expect(JSON.stringify(all)).not.toContain(definition.name)
-  await server.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+  await server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'reviewer',
     password: 'demo',
   })
@@ -144,8 +144,8 @@ it('uses the advanced scenario clock for alert transitions, acknowledgement and 
       () => {},
       (event, scenario) => automation.tick(event, scenario),
     ),
-    root = '/api/mdm-candidate/v1/operations',
-    login = await server.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+    root = '/api/v1/mdm-candidate/operations',
+    login = await server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
       login: 'demo',
       password: 'demo',
     }),
@@ -158,7 +158,7 @@ it('uses the advanced scenario clock for alert transitions, acknowledgement and 
         (
           await server.handle(
             'POST',
-            '/api/mdm-candidate/v1/workspace/scenario',
+            '/api/v1/mdm-candidate/workspace/scenario',
             { event: { kind: 'clock', at } },
             headers,
           )

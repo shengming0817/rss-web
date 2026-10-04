@@ -24,9 +24,11 @@ function setup() {
     { isAdmitted: () => approved },
   )
   const definition: SoftwarePolicyDefinition = {
-    resource: { kind: 'software', id: 'app', version: '1', variants: { windows_x86_64: 'main' } },
     scope: scope.id,
-    behavior: {
+    action: {
+      delivery: { kind: 'direct' },
+      resource: { kind: 'software', id: 'app', version: '1', variants: { windows_x86_64: 'main' } },
+
       kind: 'software',
       intent: 'required_install',
       admissionOperation: randomUUID(),
@@ -43,7 +45,7 @@ function setup() {
     },
   }
   const id = randomUUID(),
-    path = `/api/v2/policies/${id}`
+    path = `/api/v1/policies/${id}`
   const put = () =>
     owner.handle(
       request(path, operation({ action: 'put', enabled: true, definition }, 0)),
@@ -74,7 +76,7 @@ it('previews without creating work, fences scope results and requires explicit s
   const f = setup()
   const preview = () =>
     f.owner.handle(
-      request('/api/v2/policies/previews', {
+      request('/api/v1/policies/previews', {
         definition: f.definition,
         scopeResult: f.snapshot.result,
       }),
@@ -93,7 +95,7 @@ it('previews without creating work, fences scope results and requires explicit s
   })
   expect(
     f.owner.handle(
-      request('/api/v2/policies/previews', { definition: f.definition, scopeResult: randomUUID() }),
+      request('/api/v1/policies/previews', { definition: f.definition, scopeResult: randomUUID() }),
       'normal',
     )?.status,
   ).toBe(409)
@@ -126,7 +128,7 @@ it('only admits on Agent poll, retains independent delivery and verified result,
 it('available installation waits for explicit synthetic local consent; pause never erases unknown effects', () => {
   const f = setup(),
     at = 2000000000
-  f.definition.behavior.intent = 'available_install'
+  f.definition.action.intent = 'available_install'
   f.put()
   f.owner.tick({ kind: 'check_in', device: 'device-01', at }, 'normal')
   expect(f.runs()[0]?.userAction).toBe('waiting_user')
@@ -163,7 +165,7 @@ it('does not claim that zero exit proves effect and computes rollout from live m
 })
 it('keeps exact CAS replay and manual policies without a fabricated rerun route', () => {
   const f = setup()
-  f.definition.behavior.schedule.trigger = { kind: 'manual' }
+  f.definition.action.schedule.trigger = { kind: 'manual' }
   const body = operation({ action: 'put', enabled: true, definition: f.definition }, 0)
   expect(f.owner.handle(request(f.path, body), 'normal')?.status).toBe(200)
   expect(f.owner.handle(request(f.path, body), 'normal')?.status).toBe(200)
@@ -178,7 +180,7 @@ it('keeps the native semantic version across rollout-only edits and preserves ve
   const first = f.put().body as { versionId: string; version: number }
   for (let step = 0; step < 3; step++)
     f.owner.tick({ kind: 'check_in', device: 'device-01', at: at + step }, 'normal')
-  f.definition.behavior.rollout.stages[0]!.opensAt = at + 5
+  f.definition.action.rollout.stages[0]!.opensAt = at + 5
   const reply = f.owner.handle(
     request(f.path, operation({ action: 'put', enabled: true, definition: f.definition }, 1)),
     'normal',
@@ -215,7 +217,7 @@ it('opens the next stage only after independent verification and closes the gate
   const broad = { ...f.scope, id: randomUUID(), members: ['device-01', 'device-07'] }
   f.scopes.set(pilot.id, pilot)
   f.scopes.set(broad.id, broad)
-  f.definition.behavior.rollout.stages = [
+  f.definition.action.rollout.stages = [
     { scope: pilot.id, opensAt: 0, minimumVerifiedPercent: null },
     { scope: broad.id, opensAt: 1, minimumVerifiedPercent: 90 },
   ]
@@ -243,9 +245,9 @@ it('opens the next stage only after independent verification and closes the gate
 it('rejects uninstall without a declared command before preview or publication, and executes a supported uninstall', () => {
   const f = setup(),
     at = 2000000000
-  f.definition.behavior.intent = 'explicit_uninstall'
+  f.definition.action.intent = 'explicit_uninstall'
   const preview = () =>
-    f.owner.handle(request('/api/v2/policies/previews', { definition: f.definition }), 'normal')!
+    f.owner.handle(request('/api/v1/policies/previews', { definition: f.definition }), 'normal')!
   expect(preview()).toMatchObject({ status: 501, body: { code: 'action_not_supported' } })
   expect(f.put()).toMatchObject({ status: 501, body: { code: 'action_not_supported' } })
   f.owner.tick({ kind: 'check_in', device: 'device-01', at }, 'normal')
@@ -320,4 +322,46 @@ it('rejects late detection after registration generation changes or cancellation
     expect(f.runs()).toHaveLength(1)
     expect(f.runs()[0]?.effect).toBe('unknown')
   }
+})
+
+it('preserves current script history evidence through mock list/detail while redacting summary output', () => {
+  const f = setup(),
+    at = 2_000_000_000
+  f.put()
+  f.owner.tick({ kind: 'check_in', device: 'device-01', at }, 'normal')
+  const row = f.owner.runs.rows()[0]!
+  row.value.result = {
+    kind: 'script',
+    collectedAt: at,
+    receivedAt: at + 2,
+    exitCode: 0,
+    quality: 'complete',
+    schemaValid: true,
+    budgetValid: true,
+    outputReference: null,
+    output: { simulation: true },
+    trusted: false,
+    diagnostics: {
+      stdout: 'Synthetic historical script evidence',
+      stderr: '',
+      durationMs: 1,
+      executedAt: at,
+      failure: null,
+    },
+  }
+  expect(f.runs()[0]!.result).toMatchObject({
+    kind: 'script',
+    collectedAt: at,
+    receivedAt: at + 2,
+    trusted: false,
+  })
+  expect(f.runs()[0]!.result).not.toHaveProperty('output')
+  const detail = softwareRun(
+    f.owner.handle(request(`${f.path}/runs/${row.value.taskId}`), 'normal')!.body,
+    true,
+  )
+  expect(detail.result).toMatchObject({
+    output: { simulation: true },
+    diagnostics: { stdout: 'Synthetic historical script evidence' },
+  })
 })

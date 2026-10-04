@@ -46,7 +46,7 @@ describe('MDM session binding', () => {
       session,
     )
     await expect(
-      business.request({ method: 'POST', path: '/api/v2/devices', successStatus: 204 }),
+      business.request({ method: 'POST', path: '/api/v1/devices', successStatus: 204 }),
     ).rejects.toThrow()
     expect(calls).toBe(1)
     expect(session.state.value.status).toBe('authenticated')
@@ -74,7 +74,7 @@ describe('MDM session binding', () => {
     )
     const result = business.request({
       method: 'DELETE',
-      path: '/api/v2/devices',
+      path: '/api/v1/devices',
       successStatus: 204,
     })
     await dispatched
@@ -95,7 +95,7 @@ describe('MDM session binding', () => {
     await expect(
       business.request({
         method: 'GET',
-        path: '/api/v2/devices',
+        path: '/api/v1/devices',
         successStatus: 200,
         decode: (v) => v,
       }),
@@ -119,7 +119,7 @@ it('clears authority only on a same-session 401 and preserves caller idempotency
   await expect(
     business.request({
       method: 'POST',
-      path: '/api/v3/enrollments',
+      path: '/api/v1/enrollments',
       headers: { 'Idempotency-Key': 'stable-operation' },
       successStatus: 204,
     }),
@@ -150,7 +150,7 @@ it('does not let an old unauthorized response clear a newly accepted session', a
   )
   const response = business.request({
     method: 'GET',
-    path: '/api/v2/devices',
+    path: '/api/v1/devices',
     successStatus: 200,
     decode: (v) => v,
   })
@@ -179,7 +179,7 @@ it.each([
   await expect(
     business.request({
       method: 'GET',
-      path: '/api/v2/devices',
+      path: '/api/v1/devices',
       successStatus: 200,
       decode: (v) => v,
     }),
@@ -219,7 +219,7 @@ it.each(['refresh', 'reauthenticate'] as const)(
     )
     const response = business.request({
       method: 'POST',
-      path: '/api/v2/devices',
+      path: '/api/v1/devices',
       successStatus: 204,
     })
     const outcome = response.catch((error: unknown) => error)
@@ -252,7 +252,7 @@ it('keeps business reads concurrent but drains them before rotating credentials'
     } as HttpTransport,
     session,
   )
-  const request = { method: 'GET', path: '/api/v2/devices', successStatus: 204 } as const
+  const request = { method: 'GET', path: '/api/v1/devices', successStatus: 204 } as const
   const first = business.request(request).catch((error: unknown) => error)
   const second = business.request(request).catch((error: unknown) => error)
   await Promise.resolve()

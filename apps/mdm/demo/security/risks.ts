@@ -156,7 +156,7 @@ export function createRisksDemo(
   }
   const handle: DomainHandler = (request, scenario) => {
     const match =
-      /^\/api\/mdm-candidate\/v1\/security\/risks(?:\/([^/]+)(?:\/devices(?:\/([^/]+)(?:\/(history|reassess))?)?)?)?$/.exec(
+      /^\/api\/v1\/mdm-candidate\/security\/risks(?:\/([^/]+)(?:\/devices(?:\/([^/]+)(?:\/(history|reassess))?)?)?)?$/.exec(
         request.path,
       )
     if (!match) return

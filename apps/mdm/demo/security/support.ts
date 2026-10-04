@@ -215,7 +215,7 @@ export function createSupportDemo(
   const handle: DomainHandler = (req, scenario) => {
     const metrics = experiences.handle(req, scenario)
     if (metrics) return metrics
-    const route = /^\/api\/mdm-candidate\/v1\/security\/support\/(devices|requests)\/([^/]+)$/.exec(
+    const route = /^\/api\/v1\/mdm-candidate\/security\/support\/(devices|requests)\/([^/]+)$/.exec(
       req.path,
     )
     if (!route) return

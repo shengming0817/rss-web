@@ -11,7 +11,8 @@ import {
   uuid,
 } from '../../../services/decode'
 import type { Operation } from '../../../services/useOperation'
-import { nativeSchedule, resourceBinding, softwarePolicyDefinition } from './assignment-model'
+import { softwarePolicyDefinition } from './assignment-model'
+import { nativeSchedule, resourceBinding } from '../../policies/clients/model'
 import { candidate } from './candidate'
 export function selfServiceDefinition(value: unknown) {
   const v = closed(value, [
@@ -35,9 +36,11 @@ export function selfServiceDefinition(value: unknown) {
     runLifetimeSeconds: count(v['runLifetimeSeconds']),
   }
   softwarePolicyDefinition({
-    resource: d.resource,
     scope: d.scope,
-    behavior: {
+    action: {
+      delivery: { kind: 'direct' },
+      resource: d.resource,
+
       kind: 'software',
       intent: 'available_install',
       admissionOperation: d.admissionOperation,
@@ -133,7 +136,7 @@ export function createSelfServiceClient(transport: HttpTransport, tenant: string
     items: (cursor?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/software/self-service/items',
+        path: '/api/v1/mdm-candidate/software/self-service/items',
         query: { cursor, limit: 20 },
         successStatus: 200,
         decode: (v) => page(v, selfServiceItem),
@@ -141,7 +144,7 @@ export function createSelfServiceClient(transport: HttpTransport, tenant: string
     item: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/software/self-service/items/{id}',
+        path: '/api/v1/mdm-candidate/software/self-service/items/{id}',
         pathParams: { id },
         successStatus: 200,
         decode: (v) => selfServiceItem(envelope(v, ['item'])['item'], id),
@@ -149,7 +152,7 @@ export function createSelfServiceClient(transport: HttpTransport, tenant: string
     changeItem: (id: string, body: Operation<SelfServiceChange>) =>
       transport.request({
         method: 'POST',
-        path: '/api/mdm-candidate/v1/software/self-service/items/{id}',
+        path: '/api/v1/mdm-candidate/software/self-service/items/{id}',
         pathParams: { id },
         body,
         successStatus: 200,
@@ -162,7 +165,7 @@ export function createSelfServiceClient(transport: HttpTransport, tenant: string
     requests: (phase?: RequestPhase, cursor?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/software/self-service/requests',
+        path: '/api/v1/mdm-candidate/software/self-service/requests',
         query: { phase, cursor, limit: 20 },
         successStatus: 200,
         decode: (v) => page(v, installationRequest),
@@ -170,7 +173,7 @@ export function createSelfServiceClient(transport: HttpTransport, tenant: string
     request: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/mdm-candidate/v1/software/self-service/requests/{id}',
+        path: '/api/v1/mdm-candidate/software/self-service/requests/{id}',
         pathParams: { id },
         successStatus: 200,
         decode: (v) => installationRequest(envelope(v, ['request'])['request'], id),
@@ -178,7 +181,7 @@ export function createSelfServiceClient(transport: HttpTransport, tenant: string
     decide: (id: string, body: Operation<RequestChange>) =>
       transport.request({
         method: 'POST',
-        path: '/api/mdm-candidate/v1/software/self-service/requests/{id}',
+        path: '/api/v1/mdm-candidate/software/self-service/requests/{id}',
         pathParams: { id },
         body,
         successStatus: 200,

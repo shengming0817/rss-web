@@ -37,9 +37,10 @@ export function createIdentityTransport(): HttpTransport {
     async request(options: NoContentRequest | RequestOptions<unknown>) {
       const read =
         options.method === 'GET' &&
-        (options.path === '/api/identity-host/v1/config.json' ||
-          options.path === '/api/identity-host/v1/tenants/{tenant}/context')
-      if (!read && !options.path.startsWith('/api/v2/tenants/{tenant}/')) throw clientError()
+        (options.path === '/api/v1/identity-host/config.json' ||
+          options.path === '/api/v1/identity-host/tenants/{tenant}/context')
+      if (!read && !options.path.startsWith('/api/v1/identity/tenants/{tenant}/'))
+        throw clientError()
       const headers = Object.keys(options.headers ?? {}).map((v) => v.toLowerCase())
       if (headers.some((v) => !['x-identity-request', 'x-csrf-token'].includes(v)))
         throw clientError()

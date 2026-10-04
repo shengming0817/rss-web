@@ -24,8 +24,7 @@ export function createResourceUploads(
           v.platform === query.get('platform') &&
           v.architecture === query.get('architecture'),
       )
-    if (!version || !v || version.state === 'archived' || v.declaration.kind === 'configuration')
-      return
+    if (!version || !v || version.state === 'archived') return
     const d = v.declaration,
       artifact = query.has('artifact')
         ? declarationArtifacts(d).find((a) => a.reference === query.get('artifact'))
@@ -38,8 +37,8 @@ export function createResourceUploads(
       (d.kind === 'script' && artifact.length > MDM_CONTENT_BODY_LIMIT)
     )
       return
-    if (d.kind === 'script' && d.definition.profile === 'osquery_info_v1') {
-      const expected = new TextEncoder().encode('SELECT version FROM osquery_info;\n')
+    if (d.kind === 'script' && d.definition.profile === 'osquery') {
+      const expected = new TextEncoder().encode(d.definition.sql!)
       if (
         artifact.length !== expected.length ||
         JSON.stringify(artifact.sha256) !==
@@ -48,18 +47,25 @@ export function createResourceUploads(
         return
     }
     return {
-      resource: id,
-      version: version.id,
-      variant: v.key,
-      platform: v.platform,
-      architecture: v.architecture,
-      resource_digest: version.digest,
-      source: d.kind === 'software' ? d.definition.source : null,
-      origin:
-        d.kind === 'software'
-          ? (Object.values(d.definition.artifacts).find((a) => a.reference === artifact.reference)
-              ?.origin ?? null)
-          : null,
+      purpose: {
+        kind: 'resource',
+        binding: {
+          storage_class: d.kind === 'configuration' ? 'native_configuration' : 'artifact',
+          resource: id,
+          version: version.id,
+          variant: v.key,
+          platform: v.platform,
+          architecture: v.architecture,
+          resource_digest: version.digest,
+          source: d.kind === 'software' ? d.definition.source : null,
+          origin:
+            d.kind === 'software'
+              ? (Object.values(d.definition.artifacts).find(
+                  (a) => a.reference === artifact.reference,
+                )?.origin ?? null)
+              : null,
+        },
+      },
       reference: artifact.reference,
       length: artifact.length,
       sha256: artifact.sha256,
@@ -68,7 +74,7 @@ export function createResourceUploads(
   }
   const handle: DomainHandler = (request, scenario) => {
     const match =
-      /^\/api\/v3\/resources\/([^/]+)\/(uploads|content\/operations)\/([^/]+)(\/complete)?$/.exec(
+      /^\/api\/v1\/resources\/([^/]+)\/(uploads|content\/operations)\/([^/]+)(\/complete)?$/.exec(
         request.path,
       )
     if (!match) return
@@ -110,17 +116,18 @@ export function createResourceUploads(
       }
       if (!stored) return error('operation_not_found', 404)
       const { value } = stored,
-        b = value.binding
-      if (b.resource !== id) return error('permission_denied', 403)
+        b = value.binding,
+        r = b.purpose.binding
+      if (r.resource !== id) return error('permission_denied', 403)
       if (value.expires <= now || (!stored.chunks && !value.complete))
         return error('operation_conflict')
       const binding = resolve(
         id,
         new URLSearchParams({
-          version: b.version,
-          variant: b.variant,
-          platform: b.platform,
-          architecture: b.architecture,
+          version: r.version,
+          variant: r.variant,
+          platform: r.platform,
+          architecture: r.architecture,
           artifact: b.reference,
         }),
         actor,
@@ -167,7 +174,7 @@ export function createResourceUploads(
           operationId: upload,
           committed: true,
           resource: id,
-          version: b.version,
+          version: r.version,
           reference: b.reference,
           length: b.length,
           sha256: b.sha256,

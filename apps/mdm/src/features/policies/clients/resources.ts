@@ -8,13 +8,11 @@ import type { HttpTransport } from '@rss/api/mdm'
 import type { Operation } from '../../../services/useOperation'
 import {
   array,
-  boolean,
   closed,
   count,
   digest,
   enumeration,
   identifier,
-  nullable,
   record,
   unique,
 } from '../../../services/decode'
@@ -90,7 +88,8 @@ export const collectionFields = [
   'custom.osquery.version',
 ] as const
 export interface ScriptSpec {
-  profile: 'power_shell7' | 'posix_sh' | 'bash' | 'osquery_info_v1'
+  profile: 'power_shell7' | 'posix_sh' | 'bash' | 'osquery'
+  sql: string | null
   runAs: 'system' | 'logged_in_user'
   encoding: 'utf8'
   parameters: Record<string, Json>
@@ -106,6 +105,7 @@ export interface ScriptSpec {
 export function decodeScriptSpec(value: unknown): ScriptSpec {
   const v = closed(value, [
     'profile',
+    'sql',
     'runAs',
     'encoding',
     'parameters',
@@ -146,13 +146,27 @@ export function decodeScriptSpec(value: unknown): ScriptSpec {
             ]),
           ),
         }
-  return {
-    profile: enumeration(v['profile'], [
+  const profile = enumeration(v['profile'], [
       'power_shell7',
       'posix_sh',
       'bash',
-      'osquery_info_v1',
+      'osquery',
     ] as const),
+    sql = v['sql']
+  if (
+    !(
+      sql === null ||
+      (typeof sql === 'string' &&
+        sql.trim() &&
+        !sql.includes('\0') &&
+        new TextEncoder().encode(sql).byteLength <= 65536)
+    ) ||
+    (profile === 'osquery' ? sql === null : sql !== null)
+  )
+    throw new Error('Invalid script SQL template')
+  return {
+    profile,
+    sql: sql as string | null,
     runAs: enumeration(v['runAs'], ['system', 'logged_in_user'] as const),
     encoding: enumeration(v['encoding'], ['utf8'] as const),
     parameters: schema(v['parameters']),
@@ -175,10 +189,6 @@ export type Declaration =
   | {
       kind: 'configuration'
       artifact: Artifact
-      schema: string
-      apply: string
-      detect: string
-      remove: string | null
     }
 export interface Variant {
   platform: Platform
@@ -190,7 +200,6 @@ export type ResourceKind = Declaration['kind']
 export type ResourceChange =
   | { action: 'create'; kind: ResourceKind }
   | { action: 'version'; version: string; kind: ResourceKind; variants: Variant[] }
-  | { action: 'firewall_version'; version: string; enabled: boolean }
   | { action: 'activate' | 'deprecate' | 'archive'; version: string }
 function artifact(value: unknown): Artifact {
   const v = closed(value, ['reference', 'length', 'sha256'])
@@ -208,7 +217,7 @@ function declaration(value: unknown): Declaration {
       ? ['kind', 'artifact', 'definition']
       : kind === 'software'
         ? ['kind', 'definition']
-        : ['kind', 'artifact', 'schema', 'apply', 'detect', 'remove'],
+        : ['kind', 'artifact'],
   )
   if (kind === 'software') return { kind, definition: decodeSoftwareDefinition(v['definition']) }
   const a = artifact(v['artifact'])
@@ -216,10 +225,6 @@ function declaration(value: unknown): Declaration {
   return {
     kind,
     artifact: a,
-    schema: identifier(v['schema']),
-    apply: identifier(v['apply']),
-    detect: identifier(v['detect']),
-    remove: nullable(v['remove'], identifier),
   }
 }
 function variant(value: unknown): Variant {
@@ -244,7 +249,7 @@ export function decodeResource(value: unknown, id: string) {
     kind,
     versions: unique(
       array(v['versions'], (value) => {
-        const version = closed(value, ['id', 'configuration', 'digest', 'state', 'variants'])
+        const version = closed(value, ['id', 'digest', 'state', 'variants'])
         const variants = unique(
           array(version['variants'], variant),
           (v) => `${v.platform}/${v.architecture}/${v.key}`,
@@ -252,10 +257,6 @@ export function decodeResource(value: unknown, id: string) {
         if (variants.some((v) => v.declaration.kind !== kind)) throw new Error('Wrong declaration')
         return {
           id: identifier(version['id']),
-          configuration: nullable(version['configuration'], (value) => {
-            const c = closed(value, ['enabled'])
-            return { enabled: boolean(c['enabled']) }
-          }),
           digest: digest(version['digest']),
           state: enumeration(version['state'], [
             'frozen',
@@ -283,7 +284,7 @@ export function createResourcesClient(transport: HttpTransport) {
     read: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v3/resources/{id}',
+        path: '/api/v1/resources/{id}',
         pathParams: { id },
         successStatus: 200,
         decode: (v) => decodeResource(v, id),
@@ -291,7 +292,7 @@ export function createResourcesClient(transport: HttpTransport) {
     change: (id: string, body: Operation<ResourceChange>) =>
       transport.request({
         method: 'POST',
-        path: '/api/v3/resources/{id}',
+        path: '/api/v1/resources/{id}',
         pathParams: { id },
         body,
         successStatus: 200,

@@ -75,7 +75,7 @@ export function createNativeDemo(devices: Pick<ReturnType<typeof createDeviceDem
   }
   const handle: DomainHandler = (request, scenario) => {
     const match =
-      /^\/api\/v2\/devices\/([^/]+)\/operations(?:\/([^/]+)(?:\/(approve|cancel))?)?$/.exec(
+      /^\/api\/v1\/devices\/([^/]+)\/operations(?:\/([^/]+)(?:\/(approve|cancel))?)?$/.exec(
         request.path,
       )
     if (!match) return

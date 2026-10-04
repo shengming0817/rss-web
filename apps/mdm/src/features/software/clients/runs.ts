@@ -46,21 +46,37 @@ function result(value: unknown, detail: boolean) {
   // Native history spans immutable Policy versions, including prior script versions.
   if ('exitCode' in record(value)) {
     const v = closed(value, [
+      'collectedAt',
+      'receivedAt',
       'exitCode',
       'quality',
+      'budgetValid',
+      'outputReference',
       'schemaValid',
       'diagnostics',
       'trusted',
       ...(detail ? ['output'] : []),
     ])
+    const outputReference = nullable(v['outputReference'], (value) => {
+      const r = closed(value, ['bytes', 'sha256']),
+        hash = string(r['sha256'])
+      if (!/^[0-9a-f]{64}$/.test(hash)) throw new Error('Invalid output reference')
+      return { bytes: count(r['bytes']), sha256: hash }
+    })
+    if (detail && outputReference !== null && v['output'] !== null)
+      throw new Error('Inconsistent output reference')
     return {
       kind: 'script' as const,
+      collectedAt: integer(v['collectedAt']),
+      receivedAt: integer(v['receivedAt']),
+      budgetValid: boolean(v['budgetValid']),
+      outputReference,
       exitCode: nullable(v['exitCode'], integer),
       quality: enumeration(v['quality'], ['complete', 'partial', 'truncated', 'failed'] as const),
       schemaValid: boolean(v['schemaValid']),
       diagnostics: diagnostics(v['diagnostics'], detail),
       trusted: boolean(v['trusted']),
-      ...(detail ? { output: jsonValue(v['output'], 65536) } : {}),
+      ...(detail ? { output: jsonValue(v['output'], 1024 * 1024) } : {}),
     }
   }
   const v = closed(value, [
@@ -114,24 +130,90 @@ export function runState(value: unknown) {
     startedAt: nullable(v['startedAt'], integer),
   }
 }
-export function softwareRun(value: unknown, detail: boolean) {
+function scriptAuthorization(value: unknown) {
+  const kind = enumeration(record(value)['kind'], [
+    'policy',
+    'remote_operation',
+    'self_service',
+  ] as const)
+  if (kind === 'remote_operation') {
+    const v = closed(value, ['kind', 'operationId'])
+    return { kind, operationId: uuid(v['operationId']) }
+  }
+  if (kind === 'policy') {
+    const v = closed(value, ['kind', 'policyId', 'policyVersion'])
+    return { kind, policyId: uuid(v['policyId']), policyVersion: uuid(v['policyVersion']) }
+  }
   const v = closed(value, [
-    'taskId',
-    'device',
-    'registrationId',
-    'generation',
-    'availableAt',
-    'deadline',
-    'state',
-    'effect',
-    'userAction',
-    'result',
-    ...(detail ? ['policyId'] : ['occurrence']),
-  ])
+      'kind',
+      'requestId',
+      'actor',
+      'source',
+      'policyId',
+      'policyRevision',
+      'policyVersion',
+      'allowAi',
+      'riskLevel',
+      'confirmed',
+    ]),
+    actor = closed(v['actor'], ['tenantId', 'instanceId', 'principalId']),
+    source = enumeration(v['source'], ['human', 'ai'] as const),
+    allowAi = boolean(v['allowAi']),
+    confirmed = boolean(v['confirmed']),
+    riskLevel = count(v['riskLevel']),
+    policyRevision = count(v['policyRevision'])
+  if (
+    policyRevision === 0 ||
+    (riskLevel !== 1 && riskLevel !== 2) ||
+    (source === 'ai' && (!allowAi || (riskLevel === 2 && !confirmed)))
+  )
+    throw new Error('Invalid script authorization')
+  return {
+    kind,
+    requestId: uuid(v['requestId']),
+    actor: {
+      tenantId: uuid(actor['tenantId']),
+      instanceId: uuid(actor['instanceId']),
+      principalId: uuid(actor['principalId']),
+    },
+    source,
+    policyId: uuid(v['policyId']),
+    policyRevision,
+    policyVersion: uuid(v['policyVersion']),
+    allowAi,
+    riskLevel,
+    confirmed,
+  }
+}
+export function softwareRun(value: unknown, detail: boolean) {
+  const v = closed(
+    value,
+    [
+      'taskId',
+      'device',
+      'registrationId',
+      'generation',
+      'availableAt',
+      'deadline',
+      'state',
+      'effect',
+      'userAction',
+      'result',
+      ...(detail ? [] : ['occurrence']),
+    ],
+    ['attemptId', 'authorization', ...(detail ? ['policyId', 'operationId'] : [])],
+  )
   const state = runState(v['state']),
     deadline = integer(v['deadline'])
+  if (
+    'attemptId' in v &&
+    (state.delivery.kind === 'queued' || uuid(v['attemptId']) !== state.delivery.attempt)
+  )
+    throw new Error('Inconsistent run attempt')
   if (state.deadline !== deadline) throw new Error('Inconsistent run deadline')
   return {
+    ...('attemptId' in v ? { attemptId: uuid(v['attemptId']) } : {}),
+    ...('authorization' in v ? { authorization: scriptAuthorization(v['authorization']) } : {}),
     taskId: uuid(v['taskId']),
     device: identifier(v['device']),
     registrationId: uuid(v['registrationId']),
@@ -148,7 +230,12 @@ export function softwareRun(value: unknown, detail: boolean) {
     ] as const),
     userAction: nullable(v['userAction'], (v) => enumeration(v, ['waiting_user'] as const)),
     result: nullable(v['result'], (v) => result(v, detail)),
-    ...(detail ? { policyId: uuid(v['policyId']) } : { occurrence: string(v['occurrence']) }),
+    ...(detail
+      ? {
+          ...('policyId' in v ? { policyId: uuid(v['policyId']) } : {}),
+          ...('operationId' in v ? { operationId: uuid(v['operationId']) } : {}),
+        }
+      : { occurrence: string(v['occurrence']) }),
   }
 }
 export type SoftwareRun = ReturnType<typeof softwareRun>
@@ -161,7 +248,7 @@ export function createRunsClient(transport: HttpTransport) {
     list: (id: string, cursor?: RunCursor) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/policies/{id}/runs',
+        path: '/api/v1/policies/{id}/runs',
         pathParams: { id },
         query: { afterAt: cursor?.availableAt, afterId: cursor?.taskId },
         successStatus: 200,
@@ -179,7 +266,7 @@ export function createRunsClient(transport: HttpTransport) {
     read: (id: string, task: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/policies/{id}/runs/{task}',
+        path: '/api/v1/policies/{id}/runs/{task}',
         pathParams: { id, task },
         successStatus: 200,
         decode(value) {

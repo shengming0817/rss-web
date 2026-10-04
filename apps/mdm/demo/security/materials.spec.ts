@@ -8,7 +8,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date('2026-09-30T00:00:00Z'))
 })
 afterEach(() => vi.useRealTimers())
-const root = '/api/mdm-candidate/v1/security'
+const root = '/api/v1/mdm-candidate/security'
 async function setup() {
   const devices = createDeviceDemo(),
     automation = createAutomationDemo(devices),
@@ -20,7 +20,7 @@ async function setup() {
     )
   let headers: Record<string, string> = {}
   async function login(login: 'demo' | 'reviewer') {
-    const reply = await server.handle('POST', `/api/v2/tenants/${TENANT}/login`, {
+    const reply = await server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
       login,
       password: 'demo',
     })
@@ -101,9 +101,9 @@ it('binds one-time disclosure to the approved requester and fresh session withou
     `${root}/materials/device-01/bitlocker`,
     `${root}/requests`,
     `${root}/actions`,
-    '/api/mdm-candidate/v1/operations/audit',
-    '/api/mdm-candidate/v1/operations/alerts',
-    '/api/mdm-candidate/v1/executions',
+    '/api/v1/mdm-candidate/operations/audit',
+    '/api/v1/mdm-candidate/operations/alerts',
+    '/api/v1/mdm-candidate/executions',
   ]) {
     const read = await f.server.handle('GET', path)
     expect(JSON.stringify(read.body)).not.toContain((revealed.body as { secret: string }).secret)
@@ -172,7 +172,7 @@ it('keeps rotation acceptance and command success separate from new escrow obser
   expect((await f.server.handle('GET', path)).body).toMatchObject({
     material: { ...(initial as { material: object }).material, actions: ['rotate'] },
   })
-  await f.write('/api/mdm-candidate/v1/workspace/scenario', {
+  await f.write('/api/v1/mdm-candidate/workspace/scenario', {
     event: {
       kind: 'security_result',
       at: f.now + 1,
@@ -183,7 +183,7 @@ it('keeps rotation acceptance and command success separate from new escrow obser
   expect((await f.server.handle('GET', path)).body).toMatchObject({ material: { revision: 1 } })
   expect(
     (
-      await f.write('/api/mdm-candidate/v1/workspace/scenario', {
+      await f.write('/api/v1/mdm-candidate/workspace/scenario', {
         event: {
           kind: 'material_detect',
           at: f.now + 2,
@@ -199,7 +199,7 @@ it('keeps rotation acceptance and command success separate from new escrow obser
   const stale = f.request()
   expect((await f.write(`${root}/requests`, stale)).status).toBe(409)
   expect(
-    (await f.server.handle('GET', `/api/mdm-candidate/v1/executions/${dispatch.operationId}`)).body,
+    (await f.server.handle('GET', `/api/v1/mdm-candidate/executions/${dispatch.operationId}`)).body,
   ).toMatchObject({ execution: { effect: 'verified_present', compliance: 'unknown' } })
 })
 it('refuses revoked and expired authorizations and binds access to an existing volume', async () => {
@@ -233,7 +233,7 @@ it('refuses revoked and expired authorizations and binds access to an existing v
       })
     ).status,
   ).toBe(409)
-  await f.write('/api/mdm-candidate/v1/workspace/scenario', {
+  await f.write('/api/v1/mdm-candidate/workspace/scenario', {
     event: { kind: 'clock', at: f.now + 121 },
   })
   expect(
@@ -278,13 +278,13 @@ it.each(['filevault', 'laps', 'bootstrap_token', 'recovery_lock'] as const)(
     await f.login('demo')
     const op = operation({}, 2)
     expect((await f.write(`${root}/requests/${request.operationId}/dispatch`, op)).status).toBe(200)
-    await f.write('/api/mdm-candidate/v1/workspace/scenario', {
+    await f.write('/api/v1/mdm-candidate/workspace/scenario', {
       event: { kind: 'security_result', at: before.asOf + 1, task: op.operationId, device },
     })
     expect((await f.server.handle('GET', path)).body).toMatchObject({
       material: { revision: 1, details: before.material.details },
     })
-    await f.write('/api/mdm-candidate/v1/workspace/scenario', {
+    await f.write('/api/v1/mdm-candidate/workspace/scenario', {
       event: { kind: 'material_detect', at: before.asOf + 2, task: op.operationId, device },
     })
     const details =
@@ -331,7 +331,7 @@ it('settles an expired queued rotation before a material-only read and publishes
   expect((await f.server.handle('GET', path)).body).toMatchObject({
     material: { actions: ['reveal', 'rotate'] },
   })
-  const audit = '/api/mdm-candidate/v1/operations/audit?device=device-01&action=security_result'
+  const audit = '/api/v1/mdm-candidate/operations/audit?device=device-01&action=security_result'
   const entries = (await f.server.handle('GET', audit)).body
   expect(entries).toMatchObject({
     items: [{ target: { id: dispatch.operationId }, outcome: 'failed' }],

@@ -16,7 +16,7 @@ export function createComplianceClient(transport: HttpTransport) {
     list: (after?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/compliance-rules',
+        path: '/api/v1/compliance-rules',
         query: { after },
         successStatus: 200,
         decode(value) {
@@ -33,7 +33,7 @@ export function createComplianceClient(transport: HttpTransport) {
     read: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/compliance-rules/{id}',
+        path: '/api/v1/compliance-rules/{id}',
         pathParams: { id },
         successStatus: 200,
         decode: (v) => complianceRule(v, id),
@@ -41,7 +41,7 @@ export function createComplianceClient(transport: HttpTransport) {
     version: (id: string, revision: number) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/compliance-rules/{id}/versions/{revision}',
+        path: '/api/v1/compliance-rules/{id}/versions/{revision}',
         pathParams: { id, revision: String(revision) },
         successStatus: 200,
         decode: (v) => complianceRule(v, id, revision),
@@ -49,7 +49,7 @@ export function createComplianceClient(transport: HttpTransport) {
     put: (id: string, body: Operation<ComplianceDefinition>) =>
       transport.request({
         method: 'PUT',
-        path: '/api/v2/compliance-rules/{id}',
+        path: '/api/v1/compliance-rules/{id}',
         pathParams: { id },
         body,
         successStatus: 200,
@@ -65,7 +65,7 @@ export function createComplianceClient(transport: HttpTransport) {
     recompute: (id: string, body: Operation<Record<string, never>>) =>
       transport.request({
         method: 'POST',
-        path: '/api/v2/compliance-rules/{id}/recompute',
+        path: '/api/v1/compliance-rules/{id}/recompute',
         pathParams: { id },
         body,
         successStatus: 200,
@@ -74,7 +74,7 @@ export function createComplianceClient(transport: HttpTransport) {
     task: (id: string, task: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/compliance-rules/{id}/tasks/{task}',
+        path: '/api/v1/compliance-rules/{id}/tasks/{task}',
         pathParams: { id, task },
         successStatus: 200,
         decode: (v) => complianceTask(v, id, task),
@@ -82,7 +82,7 @@ export function createComplianceClient(transport: HttpTransport) {
     current: (device: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/devices/{device}/compliance',
+        path: '/api/v1/devices/{device}/compliance',
         pathParams: { device },
         successStatus: 200,
         decode: (v) => currentCompliance(v, device),
@@ -90,7 +90,7 @@ export function createComplianceClient(transport: HttpTransport) {
     history: (device: string, query: HistoryFilter = {}) =>
       transport.request({
         method: 'GET',
-        path: '/api/v2/devices/{device}/compliance/history',
+        path: '/api/v1/devices/{device}/compliance/history',
         pathParams: { device },
         query,
         successStatus: 200,

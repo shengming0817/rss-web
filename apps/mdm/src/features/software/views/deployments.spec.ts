@@ -73,8 +73,11 @@ it('saves the exact approved binding and preserves unknown mutation fencing afte
     expectedRevision: 0,
     input: {
       definition: {
-        resource: { id: 'app', version: '1', variants: { windows_x86_64: 'main' } },
-        behavior: { admissionOperation: admission },
+        action: {
+          delivery: { kind: 'direct' },
+          resource: { id: 'app', version: '1', variants: { windows_x86_64: 'main' } },
+          admissionOperation: admission,
+        },
       },
     },
   })

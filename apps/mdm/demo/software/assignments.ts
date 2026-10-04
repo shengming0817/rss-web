@@ -1,71 +1,81 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import type { DomainHandler, Scenario } from '../scenario'
-import { createReceipts, error, ok, operation } from '../http'
+import { error, ok } from '../http'
+import { createPolicyStore } from '../policies/store'
 import type { createDeviceDemo } from '../devices/state'
 import type { createResourceDemo } from '../policies/resources'
 import type { createScopeDemo } from '../policies/scopes'
 import type { createAdmissionDemo } from './admission'
 import type { DemoEvent } from '../policies/schedule'
-import { boolean, closed, enumeration, identifier, uuid } from '../../src/services/decode'
+import { closed, identifier, uuid } from '../../src/services/decode'
 import {
   softwarePolicyDefinition,
-  type SoftwarePolicy,
   type SoftwarePolicyDefinition,
-  type taskAdmission,
 } from '../../src/features/software/clients/assignment-model'
+import type { taskAdmission } from '../../src/features/policies/clients/model'
 import { createSoftwareRuns, softwareProfiles } from './runs'
 type Definition = SoftwarePolicyDefinition
-function semantic(d: Definition) {
-  const b = d.behavior,
-    s = b.schedule
-  return JSON.stringify([
-    { ...d.resource, variants: Object.entries(d.resource.variants).sort() },
-    b.intent,
-    b.admissionOperation,
-    { ...s, window: s.window ? { ...s.window, weekdays: [...s.window.weekdays].sort() } : null },
-    b.runLifetimeSeconds,
-  ])
-}
 export function createSoftwarePolicyDemo(
   devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts'>,
   scopes: Pick<ReturnType<typeof createScopeDemo>, 'resolve' | 'snapshot'>,
   resources: Pick<ReturnType<typeof createResourceDemo>, 'read'>,
   admission: Pick<ReturnType<typeof createAdmissionDemo>, 'isAdmitted'>,
+  store = createPolicyStore(),
 ) {
-  const policies = new Map<string, SoftwarePolicy>(),
-    receipts = createReceipts()
-  const managedPolicies = new Set<string>()
+  const policies = {
+    get(id: string) {
+      const p = store.get(id)
+      return p?.definition.action.kind === 'software'
+        ? { ...p, definition: softwarePolicyDefinition(p.definition) }
+        : undefined
+    },
+    values() {
+      return store
+        .values()
+        .filter((p) => p.definition.action.kind === 'software')
+        .map((p) => ({ ...p, definition: softwarePolicyDefinition(p.definition) }))
+    },
+  }
   let now = Math.floor(Date.now() / 1000)
   function admissionFailure(d: Definition) {
-    const r = resources.read(d.resource.id),
-      v = r?.versions.find((v) => v.id === d.resource.version)
+    const r = resources.read(d.action.resource.id),
+      v = r?.versions.find((v) => v.id === d.action.resource.version)
     if (
       r?.kind !== 'software' ||
       v?.state !== 'active' ||
-      !admission.isAdmitted(r.id, v.id, d.behavior.admissionOperation)
+      !admission.isAdmitted(r.id, v.id, d.action.admissionOperation)
     )
       return error('operation_conflict')
-    for (const [target, key] of Object.entries(d.resource.variants)) {
+    for (const [target, key] of Object.entries(d.action.resource.variants)) {
       const variant = v.variants.find(
         (v) => `${v.platform}_${v.architecture}` === target && v.key === key,
       )
       if (variant?.declaration.kind !== 'software') return error('operation_conflict')
       if (
-        d.behavior.intent === 'explicit_uninstall' &&
+        d.action.intent === 'explicit_uninstall' &&
         variant.declaration.definition.uninstall === null
       )
         return error('action_not_supported', 501)
     }
     return undefined
   }
+  store.register('software', (raw) => {
+    const definition = softwarePolicyDefinition(raw),
+      failure = admissionFailure(definition)
+    if (failure) return failure
+    return !scopes.resolve(definition.scope) ||
+      definition.action.rollout.stages.some((s) => !scopes.resolve(s.scope))
+      ? error('operation_conflict')
+      : undefined
+  })
   function members(d: Definition, index: number) {
     const root = scopes.resolve(d.scope)?.members ?? [],
       prior = new Set(
-        d.behavior.rollout.stages
+        d.action.rollout.stages
           .slice(0, index)
           .flatMap((s) => scopes.resolve(s.scope)?.members ?? []),
       )
-    return (scopes.resolve(d.behavior.rollout.stages[index]!.scope)?.members ?? []).filter(
+    return (scopes.resolve(d.action.rollout.stages[index]!.scope)?.members ?? []).filter(
       (v) => root.includes(v) && !prior.has(v),
     )
   }
@@ -89,7 +99,7 @@ export function createSoftwarePolicyDemo(
           .filter(
             (r) =>
               r.policy.versionId === version &&
-              r.stageScope === d.behavior.rollout.stages[index]!.scope &&
+              r.stageScope === d.action.rollout.stages[index]!.scope &&
               r.value.device === device,
           )
           .at(-1)
@@ -114,7 +124,7 @@ export function createSoftwarePolicyDemo(
     }
   }
   function open(d: Definition, version: string, stage: number) {
-    const s = d.behavior.rollout.stages[stage]!
+    const s = d.action.rollout.stages[stage]!
     if (now < s.opensAt) return false
     if (s.minimumVerifiedPercent === null) return true
     const prior = counts(d, version, stage - 1)
@@ -130,12 +140,12 @@ export function createSoftwarePolicyDemo(
     device: string,
   ): ReturnType<typeof taskAdmission> {
     if (!enabled) return { state: 'paused' }
-    if (now < d.behavior.schedule.notBefore || now >= (d.behavior.schedule.until ?? Infinity))
+    if (now < d.action.schedule.notBefore || now >= (d.action.schedule.until ?? Infinity))
       return { state: 'outside_window' }
     const root = scopes.resolve(d.scope)
     if (!root?.members.includes(device)) return { state: 'outside_scope' }
     let stage = -1
-    for (const [index, s] of d.behavior.rollout.stages.entries()) {
+    for (const [index, s] of d.action.rollout.stages.entries()) {
       const scope = scopes.resolve(s.scope)
       if (!scope) return { state: 'scope_pending', stage: index }
       if (scope.members.includes(device)) {
@@ -144,7 +154,7 @@ export function createSoftwarePolicyDemo(
       }
     }
     if (stage < 0) return { state: 'outside_stage' }
-    if (now < d.behavior.rollout.stages[stage]!.opensAt) return { state: 'scheduled', stage }
+    if (now < d.action.rollout.stages[stage]!.opensAt) return { state: 'scheduled', stage }
     if (!open(d, version, stage)) return { state: 'success_gate', stage }
     const profiles = softwareProfiles(devices.facts().find((d) => d.summary.id === device))
     if (!profiles.length) return { state: 'missing_registration', stage }
@@ -152,7 +162,7 @@ export function createSoftwarePolicyDemo(
     const p = profiles[0]!
     if (!p.capabilities.includes('software.execute.v3'))
       return { state: 'unsupported_capability', stage }
-    if (!d.resource.variants[`${p.platform}_${p.architecture}`])
+    if (!d.action.resource.variants[`${p.platform}_${p.architecture}`])
       return { state: 'missing_variant', stage }
     if (admissionFailure(d)) return { state: 'approval_withdrawn', stage }
     return { state: 'eligible', stage }
@@ -167,10 +177,15 @@ export function createSoftwarePolicyDemo(
     }
   }
   const handle: DomainHandler = (request, scenario) => {
-    if (!/^\/api\/v2\/policies(?:\/|$)/.test(request.path)) return
+    const authored = store.handle(request, scenario)
+    if (authored) {
+      if (request.method !== 'GET' && authored.status < 300) runs.recover()
+      return authored
+    }
+    if (!/^\/api\/v1\/policies(?:\/|$)/.test(request.path)) return
     if (scenario === 'denied') return error('permission_denied', 403)
     try {
-      if (request.path === '/api/v2/policies/previews' && request.method === 'POST') {
+      if (request.path === '/api/v1/policies/previews' && request.method === 'POST') {
         const input = closed(request.body, ['definition'], ['after', 'scopeResult']),
           d = softwarePolicyDefinition(input['definition'])
         const failure = admissionFailure(d)
@@ -184,7 +199,7 @@ export function createSoftwarePolicyDemo(
           (d) => d,
         )
         return ok({
-          resource: d.resource,
+          action: d.action,
           scopeResult: snapshot.result,
           nextCursor: result.nextCursor,
           items: result.items.map((device) => ({
@@ -199,13 +214,8 @@ export function createSoftwarePolicyDemo(
           })),
         })
       }
-      if (request.path === '/api/v2/policies' && request.method === 'GET') {
-        const after = request.query.get('after')
-        if (after) uuid(after)
-        return ok(page(scenario === 'empty' ? [] : [...policies.values()], after, (p) => p.id))
-      }
       const match =
-        /^\/api\/v2\/policies\/([^/]+)(?:\/(devices|software\/rollout|runs|reruns)(?:\/([^/]+))?)?$/.exec(
+        /^\/api\/v1\/policies\/([^/]+)(?:\/(devices|software\/rollout|runs|reruns)(?:\/([^/]+))?)?$/.exec(
           request.path,
         )
       if (!match) return
@@ -256,7 +266,7 @@ export function createSoftwarePolicyDemo(
             versionId: p.versionId,
             paused: !p.enabled,
             asOf: now,
-            stages: p.definition.behavior.rollout.stages.map((s, i) => ({
+            stages: p.definition.action.rollout.stages.map((s, i) => ({
               ...s,
               open: p.enabled && open(p.definition, p.versionId, i),
               ...counts(p.definition, p.versionId, i),
@@ -282,55 +292,14 @@ export function createSoftwarePolicyDemo(
                       ? 'excluded'
                       : 'pending',
                 taskAdmission: state,
-                operationId: null,
-                diagnosis: null,
+                operationIds: [],
+                diagnoses: [],
               }
             }),
           })
         }
         return ok(structuredClone(p))
       }
-      if (request.method !== 'POST' || suffix) return
-      if (managedPolicies.has(id)) return error('permission_denied', 403)
-      const op = operation(request.body)
-      return receipts.write(request, op.operationId, () => {
-        if (op.expectedRevision !== (p?.revision ?? 0)) return error('operation_conflict')
-        const input = closed(op.input, ['action'], ['definition', 'enabled']),
-          action = enumeration(input['action'], ['put', 'enable', 'disable'] as const)
-        let next: SoftwarePolicy
-        if (action === 'put') {
-          closed(input, ['action', 'definition', 'enabled'])
-          const definition = softwarePolicyDefinition(input['definition'])
-          const failure = admissionFailure(definition)
-          if (failure) return failure
-          if (
-            !scopes.resolve(definition.scope) ||
-            definition.behavior.rollout.stages.some((s) => !scopes.resolve(s.scope))
-          )
-            return error('operation_conflict')
-          next = {
-            id,
-            revision: op.expectedRevision + 1,
-            version:
-              p && semantic(p.definition) === semantic(definition)
-                ? p.version
-                : (p?.version ?? 0) + 1,
-            versionId:
-              p && semantic(p.definition) === semantic(definition) ? p.versionId : randomUUID(),
-            enabled: boolean(input['enabled']),
-            definition,
-          }
-        } else {
-          closed(input, ['action'])
-          if (!p) return error('policy_not_found', 404)
-          const failure = action === 'enable' ? admissionFailure(p.definition) : undefined
-          if (failure) return failure
-          next = { ...p, revision: p.revision + 1, enabled: action === 'enable' }
-        }
-        policies.set(id, next)
-        runs.recover()
-        return ok(structuredClone(next))
-      })
     } catch {
       return error('malformed_request', 400)
     }
@@ -343,29 +312,19 @@ export function createSoftwarePolicyDemo(
       const definition = softwarePolicyDefinition(input)
       if (admissionFailure(definition) || !scopes.resolve(definition.scope))
         throw new Error('Request assignment unavailable')
-      const p: SoftwarePolicy = {
-        id: randomUUID(),
-        revision: 1,
-        version: 1,
-        versionId: randomUUID(),
-        enabled: true,
-        definition,
-      }
-      policies.set(p.id, p)
-      managedPolicies.add(p.id)
-      return { id: p.id, versionId: p.versionId }
+      return store.createManaged(definition)
     },
     cancelManagedPolicy(id: string) {
-      const p = policies.get(id)
-      if (!p || !managedPolicies.has(id)) throw new Error('Wrong request assignment')
-      p.enabled = false
-      p.revision++
+      store.disableManaged(id)
       runs.recover()
     },
     references: (id: string, version: string) =>
       [...policies.values()].some(
-        (p) => p.definition.resource.id === id && p.definition.resource.version === version,
+        (p) =>
+          p.definition.action.resource.id === id &&
+          p.definition.action.resource.version === version,
       ),
+    reconcile: () => runs.recover(),
     tick(event: DemoEvent, scenario: Scenario) {
       if (event.at < now) return
       now = event.at
@@ -378,7 +337,7 @@ export function createSoftwarePolicyDemo(
         const state = management(p.definition, p.enabled, p.versionId, d.summary.id)
         if (state.state === 'eligible' && scenario !== 'unsupported') {
           const profile = softwareProfiles(d)[0]!,
-            binding = p.definition.resource
+            binding = p.definition.action.resource
           const selected = resources
             .read(binding.id)
             ?.versions.find((v) => v.id === binding.version)
@@ -402,10 +361,8 @@ export function createSoftwarePolicyDemo(
       runs.offer(d.summary.id, now)
     },
     reset() {
-      policies.clear()
-      receipts.reset()
+      store.reset()
       runs.reset()
-      managedPolicies.clear()
       now = Math.floor(Date.now() / 1000)
     },
   }

@@ -7,7 +7,9 @@ import { candidate } from './http'
 import { createScopeDemo } from './scopes'
 import { createResourceDemo } from './resources'
 import { createNativeDemo } from './native'
+import { createConfigurationPolicies } from './configuration-claims'
 import { createPolicyDemo } from './policies'
+import { createPolicyStore } from './store'
 import { createConfigurationDemo } from './configurations'
 import { createWorkflowDemo } from './workflows'
 import type { DemoEvent } from './schedule'
@@ -36,6 +38,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         .filter((d) => authorization.can(actor, 'inventory_read', d.summary.id))
         .map((d) => ({ id: d.summary.id, platform: d.summary.platform, status: d.summary.status })),
   )
+  const policyStore = createPolicyStore()
   const resources = createResourceDemo(
     (id, version): boolean =>
       policies.references(id, version) ||
@@ -51,19 +54,19 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       { resolve: scopes.freeze, snapshot: scopes.snapshot },
       resources,
       admission,
+      policyStore,
     )
   const selfService = createSelfServiceDemo(devices, scopes, resources, admission, software)
   const bootstrap = createBootstrapDemo(devices, scopes, resources, admission)
   const updates = createUpdatesDemo(devices, scopes, { resources, admission, software })
+  const configurationPolicies = createConfigurationPolicies(devices, scopes, resources, policyStore)
   const configurations = createConfigurationDemo(
     devices,
     scopes,
-    (id, version): boolean =>
-      policies.references(id, String(version), 'configuration') ||
-      workflows.referencesConfiguration(id, version),
-    (device, replacedPolicy) => policies.assignedConfigurations(device, replacedPolicy),
+    (id, version): boolean => workflows.referencesConfiguration(id, version),
+    configurationPolicies.assigned,
   )
-  const policies = createPolicyDemo(devices, scopes, resources, configurations)
+  const policies = createPolicyDemo(devices, scopes, resources, policyStore)
   const workflows = createWorkflowDemo(devices, scopes, resources, configurations),
     pages = createPages()
   function executions(): ExecutionSummary[] {
@@ -119,7 +122,9 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         scopes,
         resources,
         native,
+        policyStore,
         policies,
+        configurationPolicies,
         configurations,
         workflows,
         admission,
@@ -130,20 +135,27 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       ]) {
         const reply = owner.handle(request, scenario)
         if (reply) {
+          if (owner === policyStore && request.method === 'POST' && reply.status < 300) {
+            software.reconcile()
+            policies.reconcile(scenario)
+            configurationPolicies.reconcile()
+          }
           if (
             (owner === scopes || owner === resources) &&
             request.method === 'POST' &&
             reply.status < 300
-          )
+          ) {
             policies.reconcile(scenario)
+            configurationPolicies.reconcile()
+          }
           return reply
         }
       }
       const collection =
-        /^\/api\/mdm-candidate\/v1\/policies\/(scopes|resources|policies|workflows|approvals)$/.exec(
+        /^\/api\/v1\/mdm-candidate\/policies\/(scopes|resources|workflows|approvals)$/.exec(
           request.path,
         )
-      const execution = /^\/api\/mdm-candidate\/v1\/executions(?:\/([^/]+))?$/.exec(request.path)
+      const execution = /^\/api\/v1\/mdm-candidate\/executions(?:\/([^/]+))?$/.exec(request.path)
       if ((!collection && !execution) || request.method !== 'GET') return
       if (scenario === 'denied') return error('permission_denied', 403)
       if (collection) {
@@ -153,11 +165,9 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
             ? scopes.list()
             : name === 'resources'
               ? resources.list()
-              : name === 'policies'
-                ? policies.list()
-                : name === 'workflows'
-                  ? workflows.list()
-                  : workflows.approvals()
+              : name === 'workflows'
+                ? workflows.list()
+                : workflows.approvals()
         return candidate(
           pages.page<unknown>(request.path, scenario === 'empty' ? [] : items, request.query),
         )
@@ -186,6 +196,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
     operations,
     security,
     resources,
+    configurationPolicies,
     scopes,
     admission,
     software,
@@ -199,17 +210,21 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       if (event.status >= 300) return
       const deviceWrite =
         method !== 'GET' &&
-        /^\/api\/(?:v[23]\/(?:devices|enrollments|groups)|mdm-candidate\/v1\/devices)(?:\/|$)/.test(
+        /^\/api\/(?:v1\/(?:devices|enrollments|groups)|v1\/mdm-candidate\/devices)(?:\/|$)/.test(
           path,
         ) &&
         !path.includes('preview')
-      const groupPublished = method === 'GET' && /^\/api\/v2\/groups\/[^/]+\/tasks\//.test(path)
-      if (deviceWrite || groupPublished) policies.reconcile(scenario)
+      const groupPublished = method === 'GET' && /^\/api\/v1\/groups\/[^/]+\/tasks\//.test(path)
+      if (deviceWrite || groupPublished) {
+        policies.reconcile(scenario)
+        configurationPolicies.reconcile()
+      }
     },
     tick(event: DemoEvent, scenario: Scenario = 'normal') {
       if (!security.tick(event, scenario)) return false
       if (!event.kind.startsWith('software_') && !event.kind.startsWith('bootstrap_')) {
         policies.reconcile(scenario, event)
+        configurationPolicies.reconcile()
         workflows.tick(event)
       }
       bootstrap.tick(event, scenario)
@@ -228,7 +243,9 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         scopes,
         resources,
         native,
+        policyStore,
         policies,
+        configurationPolicies,
         configurations,
         workflows,
         pages,
