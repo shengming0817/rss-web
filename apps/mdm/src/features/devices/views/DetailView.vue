@@ -289,6 +289,14 @@ function selectTab(key: (typeof tabs)[number]) {
       <section v-if="tab === 'credentials'">
         <p>{{ t('devices.revokeNote') }}</p>
         <p>{{ t('devices.enrollmentNote') }}</p>
+        <RouterLink
+          :to="{
+            name: 'registration-users',
+            params: { tenant: runtime.tenant },
+            query: { device: id },
+          }"
+          >{{ t('registration.user') }}</RouterLink
+        >
         <label
           ><input v-model="confirmRevoke" type="checkbox" />{{ t('devices.confirmAction') }}</label
         >

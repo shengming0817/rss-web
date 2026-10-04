@@ -13,6 +13,7 @@ export const devicesZh = {
   denied: '请求被拒绝，请核实资源权限。',
   unsupported: '当前平台或服务不支持此操作。',
   notFound: '对象或操作不存在，请重新读取。',
+  registrationLimit: '已达到该渠道的注册额度。取消未完成注册或联系管理员调整额度。',
   limited: '请求受限，请稍后手动重试。',
   invalidRequest: '请求无效，请检查输入。',
   unavailable: '服务暂不可用。未自动重试。',
@@ -237,6 +238,8 @@ export const devicesEn: typeof devicesZh = {
   denied: 'Request denied. Verify resource permissions.',
   unsupported: 'This operation is not supported.',
   notFound: 'Object or operation not found; reload the current state.',
+  registrationLimit:
+    'This channel has reached its registration limit. Cancel a pending enrollment or ask an administrator to adjust the limit.',
   limited: 'Request limited; retry manually later.',
   invalidRequest: 'Invalid request; check the input.',
   unavailable: 'Service unavailable. No automatic retry.',

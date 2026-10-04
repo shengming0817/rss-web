@@ -1,3 +1,5 @@
+import { shallowRef } from 'vue'
+import { runtimeKey } from '@rss/auth'
 import { afterEach, expect, it } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createRouter, createMemoryHistory, RouterView } from 'vue-router'
@@ -79,7 +81,29 @@ async function setup(
     attachTo: document.body,
     global: {
       plugins: [router, mdmI18n()],
-      provide: { [mdmKey as symbol]: { devices, tenant: TENANT, demo: true } },
+      provide: {
+        [mdmKey as symbol]: {
+          devices,
+          tenant: TENANT,
+          demo: true,
+          session: { state: shallowRef({ session: { id: 'demo-session' } }) },
+        },
+        [runtimeKey as symbol]: {
+          api: {
+            accounts: async () => ({
+              accounts: [
+                {
+                  principalId: '33333333-3333-4333-8333-333333333333',
+                  login: 'reviewer',
+                  enabled: true,
+                  memberActive: true,
+                },
+              ],
+              next: null,
+            }),
+          },
+        },
+      },
     },
   })
   wrappers.push(wrapper)
@@ -553,4 +577,54 @@ it('marks credential details stale after an acknowledged revoke with a failed re
   devices.directory.detail = read
   await click('重新读取')
   expect(wrapper.text()).not.toContain('详情尚未刷新')
+})
+
+it('self enrollment works without the management frame and clears handoff secrets on submit and navigation', async () => {
+  const { wrapper, click, router } = await setup('self-enrollments')
+  expect(wrapper.text()).toContain('注册我的设备')
+  expect(wrapper.find('nav').exists()).toBe(false)
+  await click('生成一次性交付口令')
+  const password = wrapper.find('input[autocomplete=off]')
+  expect((password.element as HTMLInputElement).value).toHaveLength(43)
+  await wrapper.find('input[type=checkbox]').setValue(true)
+  await wrapper.findAll('form')[0]!.trigger('submit')
+  await flushPromises()
+  expect((password.element as HTMLInputElement).value).toBe('')
+  expect(wrapper.text()).toContain('self:')
+  expect(wrapper.find('tbody').text()).toContain('1')
+  await click('生成一次性交付口令')
+  await router.push({ name: 'devices', params: { tenant: TENANT } })
+  await flushPromises()
+  expect(wrapper.text()).not.toContain('self:')
+})
+it('administrator quota editing preserves exact commands after a lost response', async () => {
+  const { wrapper, scenario, click } = await setup('registration-quotas')
+  await wrapper.find('input[type=number]').setValue('0')
+  scenario.set('unknown')
+  await wrapper.find('form').trigger('submit')
+  await flushPromises()
+  expect(wrapper.text()).toContain('结果未知')
+  scenario.set('normal')
+  await click('核对后重试原操作')
+  expect(wrapper.text()).toContain('已保存')
+  await wrapper.find('select').setValue('override')
+  await flushPromises()
+  await wrapper.findAll('select')[1]!.setValue('33333333-3333-4333-8333-333333333333')
+  await flushPromises()
+  expect(wrapper.find('input[type=number]').exists()).toBe(true)
+})
+it('organization responsibility can be assigned and cleared without occupying personal quota', async () => {
+  const { wrapper, devices, click } = await setup('registration-users', {}, { device: 'device-01' })
+  await wrapper.find('select').setValue('33333333-3333-4333-8333-333333333333')
+  await wrapper.findAll('form')[1]!.trigger('submit')
+  await flushPromises()
+  expect(wrapper.text()).toContain('已保存')
+  const assigned = await devices.registration.responsibility('device-01')
+  expect(assigned.user?.principalId).toBe('33333333-3333-4333-8333-333333333333')
+  await wrapper.find('select').setValue('')
+  await wrapper.findAll('form')[1]!.trigger('submit')
+  await flushPromises()
+  expect((await devices.registration.responsibility('device-01')).user).toBeNull()
+  expect((await devices.registration.me()).channels.every((c) => c.used === 0)).toBe(true)
+  await click('重新读取')
 })

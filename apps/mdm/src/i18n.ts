@@ -1,3 +1,4 @@
+import { registrationZh, registrationEn } from './features/devices/i18n-registration'
 import { softwareZh, softwareEn } from './features/software/i18n'
 import { identityI18n } from '@rss/auth'
 import { policiesZh, policiesEn } from './features/policies/i18n'
@@ -76,6 +77,8 @@ const en: typeof zh = {
 }
 export function mdmI18n() {
   const i18n = identityI18n()
+  i18n.global.mergeLocaleMessage('zh-CN', { registration: registrationZh })
+  i18n.global.mergeLocaleMessage('en-US', { registration: registrationEn })
   i18n.global.mergeLocaleMessage('zh-CN', { mdm: zh })
   i18n.global.mergeLocaleMessage('en-US', { mdm: en })
   i18n.global.mergeLocaleMessage('zh-CN', { devices: devicesZh })
