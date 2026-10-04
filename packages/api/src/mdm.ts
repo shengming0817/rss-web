@@ -38,6 +38,7 @@ const statuses: Readonly<Record<string, number>> = {
   stale_plan: 409,
   owner_conflict: 409,
   request_limited: 429,
+  registration_limit: 429,
   audit_integrity_error: 500,
   audit_contract_error: 500,
   action_not_supported: 501,
@@ -80,7 +81,7 @@ export function decodeMdmError(status: number, value: unknown): RssApiError {
   return identityWireFailure(status, v['code'])
 }
 const paths =
-  /^\/api\/v1\/(?:(?:authorization|devices|software-sources|certificate-archive|asset-fields|device-queries|saved-queries|groups|scopes|policies|compliance-rules|resources|software|enrollments)(?:\/|$)|mdm-host\/config\.json$|mdm-candidate\/(?:workspace|devices|groups|policies|executions|software|security|support|authorization|audit|operations|integrations)(?:\/|$))/
+  /^\/api\/v1\/(?:(?:authorization|devices|software-sources|certificate-archive|asset-fields|device-queries|saved-queries|groups|scopes|policies|compliance-rules|resources|software|enrollments|self-enrollments|registration-quotas|agent-grants)(?:\/|$)|mdm-host\/config\.json$|mdm-candidate\/(?:workspace|devices|groups|policies|executions|software|security|support|authorization|audit|operations|integrations)(?:\/|$))/
 export function createMdmTransport(): HttpTransport {
   const instance = axios.create({ baseURL: '' })
   return {

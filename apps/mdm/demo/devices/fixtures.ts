@@ -144,6 +144,8 @@ export function makeDevices(): Map<string, DemoDevice> {
       const registrations = channels.map((channel) => ({
         registrationId: randomUUID(),
         enrollmentId: randomUUID(),
+        agentGrantId: null,
+        userContextId: null,
         source:
           channel === 'agent'
             ? ('agent.builtin' as const)

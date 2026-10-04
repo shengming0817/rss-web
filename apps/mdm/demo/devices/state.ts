@@ -237,7 +237,7 @@ export function createDeviceDemo() {
   }
   const handle: DomainHandler = (request, scenario) => {
     if (
-      !/^\/api\/(?:v1\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v1\/(?:enrollments|devices)|v1\/mdm-candidate\/(?:devices|groups))(?:\/|$)/.test(
+      !/^\/api\/(?:v1\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v1\/(?:enrollments|devices|self-enrollments|registration-quotas|agent-grants)|v1\/mdm-candidate\/(?:devices|groups))(?:\/|$)/.test(
         request.path,
       )
     )

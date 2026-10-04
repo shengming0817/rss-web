@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { expect, it } from 'vitest'
 import { createDeviceDemo } from './state'
 import { createScenario, TENANT } from '../scenario'
@@ -10,6 +11,19 @@ it('resets domain changes and blocks published device endpoints when real is sel
   })
   expect(login.status).toBe(200)
   expect((await scenario.handle('GET', '/api/v1/asset-fields')).status).toBe(200)
+  const headers = {
+    'x-csrf-token': (login.body as { csrfToken: string }).csrfToken,
+    'x-identity-request': '1',
+  }
+  const created = await scenario.handle(
+    'POST',
+    '/api/v1/self-enrollments/agent',
+    { wireVersion: 1, operationId: randomUUID(), secret: 'A'.repeat(43), platform: 'windows' },
+    headers,
+  )
+  expect(created.status).toBe(200)
+  const grantId = (created.body as { grantId: string }).grantId
+  expect((await scenario.handle('GET', `/api/v1/agent-grants/${grantId}`)).status).toBe(200)
   await scenario.handle(
     'POST',
     '/api/v1/mdm-candidate/workspace/scenario',
@@ -25,6 +39,8 @@ it('resets domain changes and blocks published device endpoints when real is sel
     '/api/v1/device-queries',
     '/api/v1/groups/x',
     '/api/v1/enrollments/x',
+    '/api/v1/registration-quotas/me',
+    `/api/v1/agent-grants/${grantId}`,
     '/api/v1/mdm-candidate/devices',
   ]) {
     expect((await scenario.handle('GET', path)).status).toBe(503)

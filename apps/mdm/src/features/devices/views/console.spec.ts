@@ -1,4 +1,6 @@
-import { afterEach, expect, it } from 'vitest'
+import { shallowRef } from 'vue'
+import { runtimeKey } from '@rss/auth'
+import { afterEach, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createRouter, createMemoryHistory, RouterView } from 'vue-router'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
@@ -79,7 +81,29 @@ async function setup(
     attachTo: document.body,
     global: {
       plugins: [router, mdmI18n()],
-      provide: { [mdmKey as symbol]: { devices, tenant: TENANT, demo: true } },
+      provide: {
+        [mdmKey as symbol]: {
+          devices,
+          tenant: TENANT,
+          demo: true,
+          session: { state: shallowRef({ session: { id: 'demo-session' } }) },
+        },
+        [runtimeKey as symbol]: {
+          api: {
+            accounts: async () => ({
+              accounts: [
+                {
+                  principalId: '33333333-3333-4333-8333-333333333333',
+                  login: 'reviewer',
+                  enabled: true,
+                  memberActive: true,
+                },
+              ],
+              next: null,
+            }),
+          },
+        },
+      },
     },
   })
   wrappers.push(wrapper)
@@ -93,7 +117,7 @@ async function setup(
     await button(text).trigger('click')
     await flushPromises()
   }
-  return { wrapper, router, scenario, devices, requests, button, click, loseReply }
+  return { wrapper, router, scenario, devices, domain, requests, button, click, loseReply }
 }
 it('renders pending directory, pages, previews partial actions, cancels and submits with confirmation', async () => {
   const { wrapper, click, scenario } = await setup()
@@ -553,4 +577,198 @@ it('marks credential details stale after an acknowledged revoke with a failed re
   devices.directory.detail = read
   await click('重新读取')
   expect(wrapper.text()).not.toContain('详情尚未刷新')
+})
+
+it('self enrollment works without the management frame and clears handoff secrets on submit and navigation', async () => {
+  const { wrapper, click, router } = await setup('self-enrollments')
+  expect(wrapper.text()).toContain('注册我的设备')
+  expect(wrapper.find('nav').exists()).toBe(false)
+  await click('生成一次性交付口令')
+  const password = wrapper.find('input[autocomplete=off]')
+  expect((password.element as HTMLInputElement).value).toHaveLength(43)
+  await wrapper.find('input[type=checkbox]').setValue(true)
+  await wrapper.findAll('form')[0]!.trigger('submit')
+  await flushPromises()
+  expect((password.element as HTMLInputElement).value).toBe('')
+  expect(wrapper.text()).toContain('self:')
+  expect(wrapper.find('tbody').text()).toContain('1')
+  await click('生成一次性交付口令')
+  await router.push({ name: 'devices', params: { tenant: TENANT } })
+  await flushPromises()
+  expect(wrapper.text()).not.toContain('self:')
+})
+it('administrator quota editing preserves exact commands after a lost response', async () => {
+  const { wrapper, scenario, click } = await setup('registration-quotas')
+  await wrapper.find('input[type=number]').setValue('0')
+  scenario.set('unknown')
+  await wrapper.find('form').trigger('submit')
+  await flushPromises()
+  expect(wrapper.text()).toContain('结果未知')
+  scenario.set('normal')
+  await click('核对后重试原操作')
+  expect(wrapper.text()).toContain('已保存')
+  await wrapper.find('select').setValue('override')
+  await flushPromises()
+  await wrapper.findAll('select')[1]!.setValue('33333333-3333-4333-8333-333333333333')
+  await flushPromises()
+  expect(wrapper.find('input[type=number]').exists()).toBe(true)
+  await wrapper.find('input[type=number]').setValue('0')
+  await wrapper.find('form').trigger('submit')
+  await flushPromises()
+  expect(wrapper.find('tbody tr').findAll('td')[0]!.text()).toBe('0')
+})
+it('organization responsibility can be assigned and cleared without occupying personal quota', async () => {
+  const { wrapper, devices, click } = await setup('registration-users', {}, { device: 'device-01' })
+  await wrapper.find('select').setValue('33333333-3333-4333-8333-333333333333')
+  await wrapper.findAll('form')[1]!.trigger('submit')
+  await flushPromises()
+  expect(wrapper.text()).toContain('已保存')
+  const assigned = await devices.registration.responsibility('device-01')
+  expect(assigned.user?.principalId).toBe('33333333-3333-4333-8333-333333333333')
+  await wrapper.find('select').setValue('')
+  await wrapper.findAll('form')[1]!.trigger('submit')
+  await flushPromises()
+  expect((await devices.registration.responsibility('device-01')).user).toBeNull()
+  expect((await devices.registration.me()).channels.every((c) => c.used === 0)).toBe(true)
+  await click('重新读取')
+})
+
+it('refreshes Agent activation and stops presenting it as a pending enrollment to cancel', async () => {
+  const { wrapper, devices, click } = await setup('self-enrollments')
+  await wrapper.find('select').setValue('agent')
+  await click('生成一次性交付口令')
+  await wrapper.find('input[type=checkbox]').setValue(true)
+  await wrapper.findAll('form')[0]!.trigger('submit')
+  await flushPromises()
+  const receipt = await devices.registration.agentStatus(wrapper.find('dl dd').text())
+  const activated = vi.spyOn(devices.registration, 'agentStatus').mockResolvedValue({
+    ...receipt,
+    grant: { ...receipt.grant, state: 'consumed' },
+    activation: {
+      deviceId: 'activated-agent',
+      registrationId: '55555555-5555-4555-8555-555555555555',
+    },
+  })
+  await click('刷新状态与额度')
+  expect(activated).toHaveBeenCalled()
+  expect(wrapper.text()).toContain('activated-agent')
+  expect(wrapper.findAll('button').some((b) => b.text() === '取消注册授权')).toBe(false)
+})
+
+it('invalidates the displayed native registration when the query target changes and cancels only the newly read target', async () => {
+  const { wrapper, devices, click } = await setup('self-enrollments')
+  const first = await devices.registration.enroll(
+    crypto.randomUUID(),
+    'A'.repeat(43),
+    'mdm.windows',
+    'Device',
+  )
+  const second = await devices.registration.enroll(
+    crypto.randomUUID(),
+    'A'.repeat(43),
+    'mdm.windows',
+    'Device',
+  )
+  const query = wrapper.findAll('form')[1]!
+  await query.find('input').setValue(first.enrollmentId)
+  await query.trigger('submit')
+  await flushPromises()
+  expect(wrapper.find('dl').text()).toContain(first.enrollmentId)
+  const cancel = vi.spyOn(devices.enrollment, 'cancel')
+  await query.find('input').setValue(second.enrollmentId)
+  expect(wrapper.find('dl').exists()).toBe(false)
+  expect(wrapper.findAll('button').some((b) => b.text() === '取消')).toBe(false)
+  expect(cancel).not.toHaveBeenCalled()
+  await query.trigger('submit')
+  await flushPromises()
+  await click('取消')
+  expect(cancel.mock.calls.map(([id]) => id)).toEqual([second.enrollmentId])
+  expect((await devices.enrollment.status(first.enrollmentId)).status).toBe('pending')
+  expect((await devices.enrollment.status(second.enrollmentId)).status).toBe('cancelled')
+})
+
+it('discards a native read that arrives after its query target changes', async () => {
+  const { wrapper, devices } = await setup('self-enrollments')
+  const first = await devices.registration.enroll(
+    crypto.randomUUID(),
+    'A'.repeat(43),
+    'mdm.windows',
+    'Device',
+  )
+  const second = await devices.registration.enroll(
+    crypto.randomUUID(),
+    'A'.repeat(43),
+    'mdm.windows',
+    'Device',
+  )
+  const read = devices.enrollment.status
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  vi.spyOn(devices.enrollment, 'status').mockImplementationOnce(async (id) => {
+    const result = await read(id)
+    await gate
+    return result
+  })
+  const query = wrapper.findAll('form')[1]!
+  await query.find('input').setValue(first.enrollmentId)
+  await query.trigger('submit')
+  expect(query.find('input').attributes('disabled')).toBeDefined()
+  // Also fence a programmatic edit while the request is in flight.
+  const input = query.find('input').element as HTMLInputElement
+  input.value = second.enrollmentId
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  release()
+  await flushPromises()
+  expect(wrapper.find('dl').exists()).toBe(false)
+  await query.trigger('submit')
+  await flushPromises()
+  expect(wrapper.find('dl').text()).toContain(second.enrollmentId)
+  expect(wrapper.find('dl').text()).not.toContain(first.enrollmentId)
+})
+
+it('refreshes native binding and resumes the same bound identity even when new enrollment is disabled', async () => {
+  const { wrapper, devices, domain, click } = await setup('self-enrollments')
+  await click('生成一次性交付口令')
+  await wrapper.find('input[type=checkbox]').setValue(true)
+  await wrapper.findAll('form')[0]!.trigger('submit')
+  await flushPromises()
+  const id = (wrapper.findAll('form')[1]!.find('input').element as HTMLInputElement).value
+  const deviceId = wrapper.findAll('dl dd')[1]!.text()
+  domain.tick({
+    kind: 'enrollment_bind',
+    device: deviceId,
+    enrollment: id,
+    at: Math.floor(Date.now() / 1000),
+  })
+  const bound = await devices.enrollment.status(id)
+  expect(bound.status).toBe('bound')
+  await devices.registration.change(crypto.randomUUID(), 0, {
+    agent: 20,
+    windows_mdm: 0,
+    macos_mdm: 20,
+  })
+  await click('刷新状态与额度')
+  expect(wrapper.find('dl').text()).toContain('已绑定')
+  expect(wrapper.find('dl').text()).toContain(deviceId)
+  expect(wrapper.findAll('button').some((b) => b.text() === '取消')).toBe(false)
+  const resume = vi.spyOn(devices.enrollment, 'resume')
+  const create = vi.spyOn(devices.registration, 'enroll')
+  await click('生成一次性交付口令')
+  await wrapper.find('input[type=checkbox]').setValue(true)
+  await click('更新口令并继续')
+  expect(resume.mock.calls.map(([target]) => target)).toEqual([id])
+  expect(create).not.toHaveBeenCalled()
+  expect(await devices.enrollment.status(id)).toMatchObject({
+    enrollmentId: id,
+    registrationId: bound.registrationId,
+    status: 'bound',
+  })
+  expect(
+    (await devices.registration.me()).channels.find((c) => c.channel === 'windows_mdm')?.used,
+  ).toBe(1)
+  await expect(devices.enrollment.cancel(id, crypto.randomUUID())).rejects.toMatchObject({
+    status: 409,
+  })
 })

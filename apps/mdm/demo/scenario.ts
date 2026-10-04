@@ -305,6 +305,31 @@ export function createScenario(
         return { status: 200, body: session() }
       }
     }
+    if (path === `/api/v1/identity/tenants/${TENANT}/accounts` && method === 'GET')
+      return principalId === PRINCIPAL
+        ? {
+            status: 200,
+            body: {
+              accounts: [
+                {
+                  principalId: PRINCIPAL,
+                  login: 'demo',
+                  enabled: true,
+                  memberActive: true,
+                  hasLocalPassword: true,
+                },
+                {
+                  principalId: REVIEWER,
+                  login: 'reviewer',
+                  enabled: true,
+                  memberActive: true,
+                  hasLocalPassword: true,
+                },
+              ],
+              nextCursor: null,
+            },
+          }
+        : { status: 403, body: { code: 'permission_denied' } }
     if (path === `/api/v1/identity/tenants/${TENANT}/sessions`)
       return { status: 200, body: { sessions: [session().session], nextCursor: null } }
     const expected = epoch
@@ -354,7 +379,7 @@ export function createScenario(
           ? 'software'
           : policyPath
             ? 'policies'
-            : /^\/api\/(?:v1\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v1\/(?:enrollments|devices))(?:\/|$)/.test(
+            : /^\/api\/(?:v1\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v1\/(?:enrollments|devices|self-enrollments|registration-quotas|agent-grants))(?:\/|$)/.test(
                   path,
                 )
               ? 'devices'

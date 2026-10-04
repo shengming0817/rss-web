@@ -16,10 +16,12 @@ const { t } = useI18n(),
   client = runtime.devices.enrollment,
   { run, runWrite, busy, failure, uncertain } = useOperation()
 const device = ref(''),
-  source = ref<EnrollmentSource>('agent.builtin'),
+  source = ref<EnrollmentSource>('mdm.windows'),
   password = ref(''),
   handedOff = ref(false),
   id = ref('')
+const windowsProfile = ref<'Full' | 'Device'>('Device')
+const nativeSources = enrollmentSources.filter((s) => s !== 'agent.builtin')
 const result = ref<Awaited<ReturnType<typeof client.status>>>(),
   op = ref<string>()
 type Pending = {
@@ -28,6 +30,7 @@ type Pending = {
   device: string
   source: EnrollmentSource
   enrollment: string
+  windowsProfile: 'Full' | 'Device'
 }
 let pending: Pending | undefined
 function submit(kind: Pending['kind'], replay = false) {
@@ -45,6 +48,7 @@ function submit(kind: Pending['kind'], replay = false) {
         device: device.value,
         source: source.value,
         enrollment: id.value,
+        windowsProfile: windowsProfile.value,
       }
   if (!command) return
   const secret = password.value
@@ -59,6 +63,7 @@ function submit(kind: Pending['kind'], replay = false) {
             deviceId: command.device,
             source: command.source,
             password: secret,
+            ...(command.source === 'mdm.windows' ? { windowsProfile: command.windowsProfile } : {}),
           })
         : command.kind === 'resume'
           ? client.resume(command.enrollment, command.operation, secret)
@@ -85,9 +90,9 @@ watch(
     result.value = undefined
     op.value = undefined
     device.value = typeof route.query['device'] === 'string' ? route.query['device'] : ''
-    source.value = enrollmentSources.includes(route.query['source'] as EnrollmentSource)
+    source.value = nativeSources.some((s) => s === route.query['source'])
       ? (route.query['source'] as EnrollmentSource)
-      : 'agent.builtin'
+      : 'mdm.windows'
     id.value = typeof route.query['enrollment'] === 'string' ? route.query['enrollment'] : ''
   },
   { immediate: true },
@@ -110,9 +115,15 @@ function generate() {
         ><label
           >{{ t('devices.source')
           }}<select v-model="source">
-            <option v-for="value in enrollmentSources" :key="value" :value="value">
+            <option v-for="value in nativeSources" :key="value" :value="value">
               {{ value }}
             </option>
+          </select></label
+        ><label v-if="source === 'mdm.windows'"
+          >{{ t('registration.profile')
+          }}<select v-model="windowsProfile">
+            <option value="Device">Device</option>
+            <option value="Full">Full</option>
           </select></label
         ><button type="button" @click="generate()">
           {{ t('devices.generate') }}

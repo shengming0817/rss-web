@@ -9,6 +9,24 @@ export const deviceFeature: MdmFeature = {
   },
   routes: [
     {
+      path: '/tenants/:tenant/my-enrollments',
+      name: 'self-enrollments',
+      component: () => import('./views/SelfEnrollmentView.vue'),
+      meta: { protected: true },
+    },
+    {
+      path: '/tenants/:tenant/registration-quotas',
+      name: 'registration-quotas',
+      component: () => import('./views/QuotaView.vue'),
+      meta: { protected: true },
+    },
+    {
+      path: '/tenants/:tenant/registration-users',
+      name: 'registration-users',
+      component: () => import('./views/RegistrationUserView.vue'),
+      meta: { protected: true },
+    },
+    {
       path: `${base}/search`,
       name: 'device-search',
       component: () => import('./views/SearchView.vue'),

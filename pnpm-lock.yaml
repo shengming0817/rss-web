@@ -101,6 +101,9 @@ importers:
       '@eslint/js':
         specifier: 'catalog:'
         version: 9.39.4
+      '@rss/api':
+        specifier: workspace:*
+        version: link:packages/api
       '@rss/auth':
         specifier: workspace:*
         version: link:packages/auth
