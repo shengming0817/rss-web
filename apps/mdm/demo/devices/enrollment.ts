@@ -162,12 +162,13 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
       const enrollment = enrollments.get(id)
       if (!enrollment || (enrollment.selfService && enrollment.actor !== request.actor.principalId))
         return error('permission_denied', 403)
-      if (enrollment.status !== 'pending') return error('operation_conflict')
       if (action === 'resume') {
+        if (enrollment.status === 'cancelled') return error('operation_conflict')
         const body = closed(request.body, ['password'])
         password(body['password'])
         if (
           enrollment.selfService &&
+          enrollment.status === 'pending' &&
           enrollment.expiresAt <= Math.floor(Date.now() / 1000) &&
           !registration.admit(
             request.actor.principalId,
@@ -177,6 +178,7 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
           return error('registration_limit', 429)
         enrollment.expiresAt = Math.floor(Date.now() / 1000) + 300
       } else if (action === 'cancel') {
+        if (enrollment.status !== 'pending') return error('operation_conflict')
         closed(request.body, [])
         enrollment.status = 'cancelled'
       } else return error('malformed_request', 400)

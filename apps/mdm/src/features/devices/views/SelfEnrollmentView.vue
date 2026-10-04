@@ -33,16 +33,27 @@ type Command = {
   id: string
 }
 const pending = ref<Command>()
+let nativeTargetVersion = 0
 function refresh() {
+  const knownNative = native.value,
+    version = nativeTargetVersion,
+    grantId = agent.value?.grantId
   void run(
     async () => ({
       usage: await client.me(),
-      progress: agent.value ? await client.agentStatus(agent.value.grantId) : undefined,
+      native: knownNative
+        ? await runtime.devices.enrollment.status(knownNative.enrollmentId)
+        : undefined,
+      progress: grantId ? await client.agentStatus(grantId) : undefined,
     }),
     (v) => {
       usage.value = v.usage
-      agentProgress.value = v.progress
-      if (v.progress) agent.value = v.progress.grant
+      if (v.native && version === nativeTargetVersion)
+        native.value = { ...knownNative, ...v.native }
+      if (grantId === agent.value?.grantId) {
+        agentProgress.value = v.progress
+        if (v.progress) agent.value = v.progress.grant
+      }
     },
   )
 }
@@ -64,10 +75,14 @@ function submit(kind: Command['kind'], replay = false) {
         channel: channel.value,
         platform: platform.value,
         profile: profile.value,
-        id: kind === 'cancelAgent' ? (agent.value?.grantId ?? '') : enrollmentId.value,
+        id:
+          kind === 'cancelAgent'
+            ? (agent.value?.grantId ?? '')
+            : (native.value?.enrollmentId ?? ''),
       }
   if (
     !command ||
+    (command.kind !== 'create' && !command.id) ||
     ((command.kind === 'create' || command.kind === 'resume') &&
       (!handedOff.value || !password.value))
   )
@@ -97,10 +112,17 @@ function submit(kind: Command['kind'], replay = false) {
           }
     },
     (v) => {
-      if (v.agent) agent.value = v.agent
+      if (v.agent) {
+        if (agent.value?.grantId !== v.agent.grantId) agentProgress.value = undefined
+        agent.value = v.agent
+      }
       if (v.native) {
-        native.value = v.native
+        const knownNative = native.value
         enrollmentId.value = v.native.enrollmentId
+        native.value = {
+          ...(knownNative?.enrollmentId === v.native.enrollmentId ? knownNative : {}),
+          ...v.native,
+        }
       }
       pending.value = undefined
     },
@@ -109,13 +131,26 @@ function submit(kind: Command['kind'], replay = false) {
   })
 }
 function status() {
+  const id = enrollmentId.value,
+    version = nativeTargetVersion
+  if (!id) return
   void run(
-    () => runtime.devices.enrollment.status(enrollmentId.value),
+    () => runtime.devices.enrollment.status(id),
     (v) => {
-      native.value = v
+      if (version === nativeTargetVersion && id === enrollmentId.value)
+        native.value = { ...native.value, ...v }
     },
   )
 }
+watch(
+  enrollmentId,
+  () => {
+    nativeTargetVersion++
+    native.value = undefined
+    clearSecret()
+  },
+  { flush: 'sync' },
+)
 watch(
   () => [route.fullPath, runtime.session.state.value.session?.id],
   () => {
@@ -256,11 +291,13 @@ refresh()
       <dd>{{ native.expiresAt }}</dd>
     </dl>
     <form @submit.prevent="status()">
-      <label>{{ t('devices.enrollmentId') }}<input v-model="enrollmentId" required /></label
+      <label
+        >{{ t('devices.enrollmentId')
+        }}<input v-model="enrollmentId" required :disabled="busy || uncertain" /></label
       ><button :disabled="busy">{{ t('devices.recover') }}</button>
     </form>
     <button
-      v-if="native?.status === 'pending'"
+      v-if="native && ['pending', 'bound'].includes(native.status)"
       type="button"
       :disabled="busy || uncertain || !password || !handedOff"
       @click="submit('resume')"
