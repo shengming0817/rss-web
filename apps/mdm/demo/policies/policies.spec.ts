@@ -54,6 +54,7 @@ it('normalizes first-publication defaults, preserves existing values, and keeps 
   const f = fixture(),
     id = crypto.randomUUID(),
     metadata = {
+      access: { kind: 'authenticated_user' },
       published: true,
       displayName: 'Support',
       description: '',
