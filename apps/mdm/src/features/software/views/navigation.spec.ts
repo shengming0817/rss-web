@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
+import { ref } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
@@ -145,6 +146,14 @@ for (const screen of screens) {
         provide: {
           [mdmKey as symbol]: {
             tenant: first,
+            session: {
+              state: ref({
+                status: 'authenticated',
+                tenant: first,
+                identity: { principalId: first },
+                session: { id: first },
+              }),
+            },
             demo: true,
             software: {
               [screen.module]: {

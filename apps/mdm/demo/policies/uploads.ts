@@ -61,9 +61,8 @@ export function createResourceUploads(
           source: d.kind === 'software' ? d.definition.source : null,
           origin:
             d.kind === 'software'
-              ? (Object.values(d.definition.artifacts).find(
-                  (a) => a.reference === artifact.reference,
-                )?.origin ?? null)
+              ? (declarationArtifacts(d).find((a) => a.reference === artifact.reference)?.origin ??
+                null)
               : null,
         },
       },

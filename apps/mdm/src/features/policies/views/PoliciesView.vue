@@ -407,7 +407,7 @@ onMounted(async () => {
     <button v-if="list?.nextCursor" :disabled="busy" @click="load(list.nextCursor)">
       {{ t('policies.next') }}
     </button>
-    <form @submit.prevent="save">
+    <form data-form="policy" @submit.prevent="save">
       <fieldset :disabled="busy || uncertain || !ready">
         <label for="policy-action">{{ t('policies.actionKind') }}</label
         ><select

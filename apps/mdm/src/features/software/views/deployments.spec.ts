@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
+import { ref } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
@@ -28,6 +29,14 @@ it('saves the exact approved binding and preserves unknown mutation fencing afte
       provide: {
         [mdmKey as symbol]: {
           tenant: scope,
+          session: {
+            state: ref({
+              status: 'authenticated',
+              tenant: scope,
+              identity: { principalId: scope },
+              session: { id: scope },
+            }),
+          },
           demo: true,
           policies: {
             resources: {

@@ -41,6 +41,12 @@ function literal(value: unknown): string {
     throw new Error('Invalid literal')
   return value
 }
+function materialText(value: unknown, max = 1024) {
+  const text = string(value)
+  if (!text || text.includes('\0') || new TextEncoder().encode(text).length > max)
+    throw new Error('Invalid software text')
+  return text
+}
 function dictionary<T>(value: unknown, decode: (v: unknown) => T, max: number): Record<string, T> {
   const entries = Object.entries(record(value))
   if (entries.length > max) throw new Error('Invalid software collection')
@@ -447,8 +453,8 @@ export function decodeSoftwareDefinition(value: unknown) {
   ])
   const result = {
     source: softwareSource(v['source']),
-    package: identifier(v['package']),
-    version: identifier(v['version']),
+    package: materialText(v['package']),
+    version: materialText(v['version']),
     provenance: provenance(v['provenance']),
     artifacts: dictionary(v['artifacts'], softwareArtifact, 64),
     behavior: behavior(v['behavior']),

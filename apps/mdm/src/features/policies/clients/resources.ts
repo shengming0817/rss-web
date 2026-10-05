@@ -314,6 +314,14 @@ export function createResourcesClient(transport: HttpTransport) {
 /** Every artifact is Resource-owned; software may carry auxiliary scripts as well as its installer. */
 export function declarationArtifacts(declaration: Declaration): Artifact[] {
   return declaration.kind === 'software'
-    ? Object.values(declaration.definition.artifacts)
+    ? [
+        ...Object.values(declaration.definition.artifacts),
+        ...(declaration.definition.provenance.kind === 'imported'
+          ? declaration.definition.provenance.files.map((file) => file.content)
+          : []),
+      ].filter(
+        (artifact, index, all) =>
+          all.findIndex((a) => a.reference === artifact.reference) === index,
+      )
     : [declaration.artifact]
 }
