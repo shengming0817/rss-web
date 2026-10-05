@@ -9,6 +9,8 @@ let phase = 'environment',
   result = 'failed',
   cleanup = 'passed'
 const journeys = []
+let diagnostic
+const failedStatuses = []
 let writes = 0,
   interrupted = false
 async function stop() {
@@ -44,7 +46,25 @@ async function put(policy, definition = policy.definition, expectedRevision = po
     },
   })
 }
+async function bindScript() {
+  if (!page.url().includes('/policies/assignments')) return
+  await page.getByRole('button', { name: '加载资源版本', exact: true }).click()
+  await page.waitForFunction(
+    () =>
+      document.querySelector('#policy-variant')?.options.length > 1 &&
+      !document.querySelector('[data-form="policy"] > fieldset')?.disabled,
+  )
+}
 async function save(id, form) {
+  await bindScript()
+  assert.deepEqual(
+    await page
+      .locator(form)
+      .evaluate((f) =>
+        [...f.elements].filter((e) => e.willValidate && !e.validity.valid).map((e) => e.id),
+      ),
+    [],
+  )
   const response = page.waitForResponse(
     (r) => r.url() === `${origin}/api/v1/policies/${id}` && r.request().method() === 'POST',
   )
@@ -57,18 +77,22 @@ async function save(id, form) {
   return read(id)
 }
 async function open(id, software = false) {
+  await page.waitForTimeout(1200)
   await page.goto(
     `${origin}/tenants/${fixture.tenant}/${software ? 'software/deployments' : 'policies/assignments'}?id=${id}`,
   )
   await page.locator('[data-field="access"]').waitFor()
+  await bindScript()
   await page
     .locator('[data-section="resource-identity"]')
     .getByText(/系统服务|本机登录用户/)
     .waitFor()
 }
 async function refresh(kind) {
+  await page.waitForTimeout(1200)
   await page.reload()
   await page.locator('[data-field="access"]').waitFor()
+  await bindScript()
   assert.equal(await page.locator('[data-field="access"]').inputValue(), kind)
 }
 async function login(account = fixture) {
@@ -89,6 +113,9 @@ try {
   context = await browser.newContext({ ignoreHTTPSErrors: true, locale: 'zh-CN' })
   page = await context.newPage()
   page.setDefaultTimeout(10000)
+  page.on('response', (response) => {
+    if (response.status() >= 400) failedStatuses.push(response.status())
+  })
   page.on('request', (request) => {
     if (request.method() === 'POST' && /\/api\/v1\/policies\//.test(request.url())) writes++
   })
@@ -163,9 +190,14 @@ try {
           'configuration-version': selection.source.configurationVersion,
         }))
           await selectors.locator(`input[id$="-${suffix}"]`).fill(String(value))
-      } else if (selection.kind === 'user_group')
+      } else if (selection.kind === 'user_group') {
+        await selectors.locator('select[id$="-group"]:enabled').waitFor()
+        while (!(await selectors.locator(`option[value="${selection.id}"]`).count())) {
+          await selectors.getByRole('button', { name: '下一页', exact: true }).click()
+          await selectors.locator('select[id$="-group"]:enabled').waitFor()
+        }
         await selectors.locator('select[id$="-group"]').selectOption(selection.id)
-      else {
+      } else {
         await selectors.locator('select[id$="-department"]').selectOption(selection.id)
         await selectors.locator('select[id$="-matching"]').selectOption(selection.matching)
       }
@@ -178,11 +210,13 @@ try {
       tenantId: fixture.tenant,
       principalId: fixture.principal,
     }
-    const expected = [user, ...fixture.selectors].map((s) => JSON.stringify(s)).sort()
-    assert.deepEqual(
-      saved.definition.selfService.access.selectors.map((s) => JSON.stringify(s)).sort(),
-      expected,
-    )
+    const key = (s) =>
+      [s.kind, s.id ?? s.principalId, s.matching ?? '', s.source?.providerId ?? s.instanceId].join(
+        '/',
+      )
+    const sorted = (items) => items.toSorted((a, b) => key(a).localeCompare(key(b)))
+    const expected = sorted([user, ...fixture.selectors])
+    assert.deepEqual(sorted(saved.definition.selfService.access.selectors), expected)
     await refresh('users')
     assert.equal(
       (await page.locator('li').filter({ hasText: fixture.principal }).count()) > 0,
@@ -255,6 +289,7 @@ try {
   const count = writes
   await page.locator('[data-form="deployment"]').evaluate((f) => f.requestSubmit())
   await page.locator('.device-console > [role="alert"]').waitFor()
+  await page.getByRole('status').filter({ hasText: '提交结果仍未知' }).waitFor()
   await page.locator('[data-action="read-policy"]').click()
   await page.waitForFunction(
     () => !document.querySelector('.device-console')?.getAttribute('aria-busy')?.includes('true'),
@@ -262,7 +297,10 @@ try {
   assert.equal(writes, count + 1)
   assert.equal(committedRevision, beforeUnknown.revision + 1)
   assert.equal((await read(fixture.software)).revision, committedRevision)
-  assert.equal(await page.locator('[data-form="deployment"] > fieldset').isDisabled(), true)
+  assert.equal(
+    await page.locator('[data-form="deployment"] > fieldset').evaluate((f) => f.disabled),
+    true,
+  )
   journeys.push(phase)
   await page.unrouteAll()
   phase = 'expired-session-no-replay'
@@ -296,7 +334,27 @@ try {
   assert.equal(writes, m + 1)
   journeys.push(phase)
   result = 'passed'
-} catch {
+} catch (error) {
+  const line = error.stack?.match(/policy-browser\.mjs:(\d+)/)?.[1]
+  diagnostic = {
+    category:
+      error instanceof assert.AssertionError
+        ? 'assertion'
+        : error.name === 'TimeoutError'
+          ? 'timeout'
+          : 'environment',
+    ...(line ? { line: Number(line) } : {}),
+    httpStatuses: failedStatuses.slice(-4),
+
+    alerts: page
+      ? (
+          await page
+            .locator('.device-console > [role="alert"]')
+            .allTextContents()
+            .catch(() => [])
+        ).map((s) => (s.includes('请求') ? 'request' : s.includes('资源') ? 'resource' : 'other'))
+      : [],
+  }
   result = 'failed'
 } finally {
   clearTimeout(deadline)
@@ -314,7 +372,7 @@ if (interrupted || cleanup !== 'passed') result = 'failed'
 console.log(
   JSON.stringify({
     result,
-    ...(result === 'failed' ? { phase, interrupted } : {}),
+    ...(result === 'failed' ? { phase, interrupted, diagnostic } : {}),
     journeys,
     cleanup,
   }),

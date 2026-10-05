@@ -100,11 +100,14 @@ function add() {
       model.value.some((s) => JSON.stringify(s) === JSON.stringify(selector))
     )
       throw new Error('Invalid selection')
-    model.value = [...model.value, selector]
+    model.value = [...model.value, selector].map(selfServiceSelector)
     failure.value = null
   } catch {
     failure.value = 'invalidRequest'
   }
+}
+function remove(index: number) {
+  model.value = model.value.filter((_, i) => i !== index).map(selfServiceSelector)
 }
 function label(s: SelfServiceSelector) {
   const coordinate = s.kind === 'user' ? `${s.principalId} (${s.instanceId}/${s.tenantId})` : s.id
@@ -125,7 +128,7 @@ function label(s: SelfServiceSelector) {
         <button
           type="button"
           :aria-label="`${t('policies.remove')} ${label(s)}`"
-          @click="model = model.filter((_, i) => i !== index)"
+          @click="remove(index)"
         >
           {{ t('policies.remove') }}
         </button>

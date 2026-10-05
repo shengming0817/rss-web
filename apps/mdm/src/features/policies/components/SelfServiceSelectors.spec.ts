@@ -1,6 +1,6 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
-import { defineComponent, ref } from 'vue'
+import { defineComponent, ref, toRaw } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
@@ -77,10 +77,13 @@ it('adds fixed user, department and active static group selections, rejects dupl
   await wrapper.get('select[id$="-group"]').setValue(id)
   await add()
   expect(selections.value[2]).toEqual({ kind: 'user_group', id })
+  expect(() => structuredClone(toRaw(selections.value))).not.toThrow()
+  await wrapper.findAll('li')[0]!.get('button').trigger('click')
+  expect(() => structuredClone(toRaw(selections.value))).not.toThrow()
   departments.mockRejectedValueOnce(new Error('not configured'))
   await wrapper.get('select[id$="-kind"]').setValue('department')
   await flushPromises()
   await add()
-  expect(selections.value).toHaveLength(3)
+  expect(selections.value).toHaveLength(2)
   wrapper.unmount()
 })
