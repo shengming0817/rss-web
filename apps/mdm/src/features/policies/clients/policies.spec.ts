@@ -22,6 +22,7 @@ const definition = {
 }
 const policy = { id, revision: 1, version: 1, versionId: id, enabled: true, definition }
 const metadata = {
+  access: { kind: 'authenticated_user' },
   published: true,
   displayName: 'Diagnostics',
   description: '',

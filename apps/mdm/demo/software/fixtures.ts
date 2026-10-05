@@ -33,33 +33,38 @@ export function softwareResource(packageName = 'Example.App') {
   const bytes = new Uint8Array([1, 2, 3]).buffer
   const digest = [...createHash('sha256').update(new Uint8Array(bytes)).digest()]
   const command = {
-    executor: 'msi',
-    entry: null,
     runAs: 'system',
     arguments: [],
     environment: {},
     timeoutSeconds: 60,
     outputBytes: 1024,
+    exitCodes: { success: [0], reboot: [3010] },
   }
   const definition = {
     source: { id: 'private', revision: '1', sha256: hash('source') },
     package: packageName,
     version: '1.0',
-    format: 'msi',
-    primary: 'installer',
     artifacts: { installer: { reference: 'installer', origin: null, length: 3, sha256: digest } },
-    install: command,
-    uninstall: null,
-    detect: {
-      kind: 'msi_product',
-      productCode: '{11111111-1111-4111-8111-111111111111}',
-      version: '1.0',
-    },
     reboot: 'report',
     downgrade: 'deny',
-    ownership: 'managed_only',
     dependencies: [],
-    bundle: null,
+    provenance: { kind: 'private' },
+    signatures: [],
+    export: { kind: 'disabled' },
+    behavior: {
+      kind: 'msi',
+      installer: 'installer',
+      scope: 'system',
+      install: command,
+      upgradeInvocation: command,
+      upgrade: 'in_place',
+      uninstall: null,
+      detect: {
+        kind: 'msi_product',
+        productCode: '{11111111-1111-4111-8111-111111111111}',
+        version: '1.0',
+      },
+    },
   }
   expect(
     resources.handle(

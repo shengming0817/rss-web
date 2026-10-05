@@ -21,7 +21,6 @@ const link = computed(() => {
     job: 'operations-settings',
     device: 'device-detail',
     policy: 'policy-policies',
-    software_request: 'software-self-service',
     workflow: 'policy-workflows',
     compliance_rule: 'security-rules',
     baseline: 'security-baselines',
@@ -41,9 +40,7 @@ const link = computed(() => {
           ? { rule: target.id }
           : target.kind === 'delegation'
             ? { id: target.id, kind: 'delegation' }
-            : target.kind === 'software_request'
-              ? { request: target.id }
-              : { id: target.id, ...(target.device ? { device: target.device } : {}) },
+            : { id: target.id, ...(target.device ? { device: target.device } : {}) },
   }
 })
 </script>

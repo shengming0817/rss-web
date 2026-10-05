@@ -18,7 +18,6 @@ import { createSoftwarePolicyDemo } from '../software/assignments'
 import { softwareExecution } from '../../src/features/software/clients/execution'
 import { createBootstrapDemo } from '../software/bootstrap'
 import { createUpdatesDemo } from '../software/updates'
-import { createSelfServiceDemo } from '../software/self-service'
 import { createSecurityDemo } from '../security/state'
 import { createOperationsDemo } from '../operations/state'
 import { createAuthorizationDemo } from '../operations/authorization'
@@ -44,7 +43,6 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       policies.references(id, version) ||
       workflows.references(id, version) ||
       software.references(id, version) ||
-      selfService.references(id, version) ||
       updates.references(id, version) ||
       bootstrap.references(id, version),
   )
@@ -56,7 +54,6 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       admission,
       policyStore,
     )
-  const selfService = createSelfServiceDemo(devices, scopes, resources, admission, software)
   const bootstrap = createBootstrapDemo(devices, scopes, resources, admission)
   const updates = createUpdatesDemo(devices, scopes, { resources, admission, software })
   const configurationPolicies = createConfigurationPolicies(devices, scopes, resources, policyStore)
@@ -129,7 +126,6 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         workflows,
         admission,
         software,
-        selfService,
         updates,
         bootstrap,
       ]) {
@@ -200,7 +196,6 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
     scopes,
     admission,
     software,
-    selfService,
     updates,
     bootstrap,
     handle,
@@ -230,7 +225,6 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       bootstrap.tick(event, scenario)
       updates.tick(event, scenario)
       software.tick(event, scenario)
-      selfService.tick(event)
       admin.tick(scenario)
       return true
     },
@@ -251,7 +245,6 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         pages,
         admission,
         software,
-        selfService,
         updates,
         bootstrap,
       ])

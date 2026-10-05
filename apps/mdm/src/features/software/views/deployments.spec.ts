@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
+import { ref } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
@@ -28,6 +29,14 @@ it('saves the exact approved binding and preserves unknown mutation fencing afte
       provide: {
         [mdmKey as symbol]: {
           tenant: scope,
+          session: {
+            state: ref({
+              status: 'authenticated',
+              tenant: scope,
+              identity: { principalId: scope },
+              session: { id: scope },
+            }),
+          },
           demo: true,
           policies: {
             resources: {
@@ -38,7 +47,63 @@ it('saves the exact approved binding and preserves unknown mutation fencing afte
                   {
                     id: '1',
                     state: 'active',
-                    variants: [{ platform: 'windows', architecture: 'x86_64', key: 'main' }],
+                    variants: [
+                      {
+                        platform: 'windows',
+                        architecture: 'x86_64',
+                        key: 'main',
+                        declaration: {
+                          kind: 'software',
+                          definition: {
+                            source: { id: 'private', revision: '1', sha256: Array(32).fill(1) },
+                            package: 'App',
+                            version: '1',
+                            provenance: { kind: 'private' },
+                            artifacts: {
+                              installer: {
+                                reference: 'installer',
+                                origin: null,
+                                length: 1,
+                                sha256: Array(32).fill(1),
+                              },
+                            },
+                            behavior: {
+                              kind: 'msi',
+                              installer: 'installer',
+                              scope: 'system',
+                              install: {
+                                runAs: 'system',
+                                arguments: [],
+                                environment: {},
+                                timeoutSeconds: 60,
+                                outputBytes: 1024,
+                                exitCodes: { success: [0], reboot: [] },
+                              },
+                              upgradeInvocation: {
+                                runAs: 'system',
+                                arguments: [],
+                                environment: {},
+                                timeoutSeconds: 60,
+                                outputBytes: 1024,
+                                exitCodes: { success: [0], reboot: [] },
+                              },
+                              upgrade: 'in_place',
+                              uninstall: null,
+                              detect: {
+                                kind: 'msi_product',
+                                productCode: '{11111111-1111-4111-8111-111111111111}',
+                                version: '1',
+                              },
+                            },
+                            signatures: [],
+                            reboot: 'report',
+                            downgrade: 'deny',
+                            dependencies: [],
+                            export: { kind: 'disabled' },
+                          },
+                        },
+                      },
+                    ],
                   },
                 ],
               }),

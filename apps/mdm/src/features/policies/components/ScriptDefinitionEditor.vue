@@ -96,8 +96,10 @@ function collection(event: Event) {
     ><label :for="`${id}-run-as`">{{ t('policies.runAs') }}</label
     ><select :id="`${id}-run-as`" v-model="model.runAs">
       <option value="system">{{ t('policies.system') }}</option>
-      <option value="logged_in_user">{{ t('policies.loggedInUser') }}</option></select
-    ><label :for="`${id}-timeout`">{{ t('policies.timeout') }}</label
+      <option value="logged_in_user">{{ t('policies.loggedInUser') }}</option>
+    </select>
+    <p>{{ t('policies.selfService.identityHint') }}</p>
+    <label :for="`${id}-timeout`">{{ t('policies.timeout') }}</label
     ><input
       :id="`${id}-timeout`"
       v-model.number="model.timeoutSeconds"

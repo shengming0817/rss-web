@@ -12,7 +12,6 @@ export interface DemoEvent {
     | 'software_detect'
     | 'software_reboot'
     | 'software_usage'
-    | 'software_request'
     | 'bootstrap_continue'
     | 'bootstrap_detect'
     | 'enrollment_bind'
@@ -36,7 +35,6 @@ export interface DemoEvent {
   resource?: string
   active?: boolean
   task?: string
-  item?: string
   enrollment?: string
 }
 export interface Occurrence {

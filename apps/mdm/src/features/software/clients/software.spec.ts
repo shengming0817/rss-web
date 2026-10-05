@@ -6,33 +6,38 @@ import { createPublicationClient } from './publication'
 const digest = Array<number>(32).fill(3)
 const operationId = '11111111-1111-4111-8111-111111111111'
 const command = {
-  executor: 'msi',
-  entry: null,
   runAs: 'system',
   arguments: [],
   environment: {},
   timeoutSeconds: 3600,
   outputBytes: 16384,
+  exitCodes: { success: [0], reboot: [3010] },
 }
 const definition = {
   source: { id: 'private', revision: '1', sha256: digest },
   package: 'Example.App',
   version: '1.0',
-  format: 'msi',
-  primary: 'installer',
   artifacts: { installer: { reference: 'installer', origin: null, length: 12, sha256: digest } },
-  install: command,
-  uninstall: null,
-  detect: {
-    kind: 'msi_product',
-    productCode: '{11111111-1111-4111-8111-111111111111}',
-    version: '1.0',
-  },
   reboot: 'report',
   downgrade: 'deny',
-  ownership: 'managed_only',
   dependencies: [],
-  bundle: null,
+  provenance: { kind: 'private' },
+  signatures: [],
+  export: { kind: 'disabled' },
+  behavior: {
+    kind: 'msi',
+    installer: 'installer',
+    scope: 'system',
+    install: command,
+    upgradeInvocation: command,
+    upgrade: 'in_place',
+    uninstall: null,
+    detect: {
+      kind: 'msi_product',
+      productCode: '{11111111-1111-4111-8111-111111111111}',
+      version: '1.0',
+    },
+  },
 }
 function resource(declaration: unknown) {
   return {

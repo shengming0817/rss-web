@@ -289,8 +289,10 @@ it('resolves Brew as a pinned macOS user package and rejects cross-platform reso
   expect(resources.read('editor')?.versions[0]?.variants[0]?.declaration).toMatchObject({
     kind: 'software',
     definition: {
-      format: 'brew',
-      install: { runAs: 'logged_in_user', arguments: ['install', 'example-editor@1.0'] },
+      behavior: {
+        kind: 'brew',
+        install: { runAs: 'logged_in_user', arguments: ['install', 'example-editor@1.0'] },
+      },
     },
   })
   query.set('platform', 'windows')

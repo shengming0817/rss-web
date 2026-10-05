@@ -1,4 +1,8 @@
 export const softwareZh = {
+  behavior: '原生安装行为（含运行身份与安装范围）',
+  provenance: '材料来源',
+  signatures: '签名要求',
+  exportDefinition: '原生发布元数据',
   resourceId: '软件资源标识',
   uploadSessionHint:
     '按块上传后，明确完成入库。中断后重新选择同一文件并上传；刷新页面后可填入原上传标识读取进度。未知结果不自动重试，文件和上传状态不持久化到浏览器。',
@@ -154,30 +158,9 @@ export const softwareZh = {
   weekday5: '周五',
   weekday6: '周六',
   weekday7: '周日',
-  selfService: '管理员自助软件管理',
-  selfServiceHint:
-    '管理员配置可申请的软件与目标范围，并处理员工从 Agent 本地界面发来的申请。本页不提供员工自助界面。',
-  offeredItems: '可申请的软件条目',
-  offerEnabled: '开放此条目供申请',
-  offerHint:
-    '目录发布不执行安装。所有申请都需要管理员审批；修改或关闭条目会阻止旧申请获批，已批准的申请需单独取消。',
-  installationRequests: '安装申请',
-  request_pending: '等待管理员审批',
-  request_approved: '管理员已批准',
-  request_denied: '申请已拒绝',
-  request_cancelled: '申请已取消',
-  approvalEffectHint:
-    '批准不表示已安装。获批请求进入单设备可选安装策略，仍等待本地用户继续；取消不回滚已经产生的效果。',
-  requestDecision: '审批与取消',
-  decisionNote: '处理说明',
-  decision_approve: '批准申请',
-  decision_deny: '拒绝申请',
-  decision_cancel: '取消申请',
-  requestPolicy: '查看请求拥有的只读策略',
-
   deployments: '软件部署',
   deploymentHint:
-    '通用软件由具备软件执行能力的 Agent 执行，策略绑定已准入的固定版本；可选安装等待设备本地用户继续。',
+    '通用软件由具备软件执行能力的 Agent 执行，策略绑定已准入的固定版本；可选安装仅在有效自助请求后进入安装链路，不因签到自动执行。',
   bindVersion: '读取已准入版本与平台变体',
   noVariant: '不分配此平台',
   rootScope: '总目标 Scope ID',
@@ -407,6 +390,10 @@ export const softwareZh = {
   sourceHint: '来源摘要从已批准的企业来源复制；来源登记不等于版本准入。',
 }
 export const softwareEn: typeof softwareZh = {
+  behavior: 'Native behavior (execution identity and installation scope)',
+  provenance: 'Material provenance',
+  signatures: 'Signature requirements',
+  exportDefinition: 'Native export metadata',
   resourceId: 'Software resource ID',
   uploadSessionHint:
     'Upload in chunks, then explicitly complete. Reselect the same file to resume; after refresh, enter the original upload ID to read progress. Unknown results never retry automatically. Files and upload state are not persisted in the browser.',
@@ -566,27 +553,6 @@ export const softwareEn: typeof softwareZh = {
   weekday5: 'Friday',
   weekday6: 'Saturday',
   weekday7: 'Sunday',
-  selfService: 'Administrator self-service management',
-  selfServiceHint:
-    'Configure software offerings and scope, then review requests from the local Agent interface. This page is for administrators.',
-  offeredItems: 'Software offerings',
-  offerEnabled: 'Offer this item for requests',
-  offerHint:
-    'Publishing creates no installation. Every request requires approval. Changing or disabling an item blocks approval of older requests; approved requests must be cancelled separately.',
-  installationRequests: 'Installation requests',
-  request_pending: 'Awaiting administrator approval',
-  request_approved: 'Approved by administrator',
-  request_denied: 'Request denied',
-  request_cancelled: 'Request cancelled',
-  approvalEffectHint:
-    'Approval is not installation. An approved request creates a single-device available-install policy and still waits for the local user. Cancellation does not roll back effects.',
-  requestDecision: 'Review and cancellation',
-  decisionNote: 'Decision note',
-  decision_approve: 'Approve request',
-  decision_deny: 'Deny request',
-  decision_cancel: 'Cancel request',
-  requestPolicy: 'View the request-owned policy',
-
   deployments: 'Software deployments',
   deploymentHint:
     'Software runs through capable Agents using an admitted, pinned version. Available installation waits for the local user.',

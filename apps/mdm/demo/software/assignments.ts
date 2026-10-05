@@ -1,3 +1,4 @@
+import { supportsSoftwareRemoval } from '../../src/features/policies/clients/software-definition'
 import { createHash } from 'node:crypto'
 import type { DomainHandler, Scenario } from '../scenario'
 import { error, ok } from '../http'
@@ -53,7 +54,7 @@ export function createSoftwarePolicyDemo(
       if (variant?.declaration.kind !== 'software') return error('operation_conflict')
       if (
         d.action.intent === 'explicit_uninstall' &&
-        variant.declaration.definition.uninstall === null
+        !supportsSoftwareRemoval(variant.declaration.definition)
       )
         return error('action_not_supported', 501)
     }
@@ -334,6 +335,7 @@ export function createSoftwarePolicyDemo(
       const d = devices.facts().find((d) => d.summary.id === event.device)
       if (!d) return
       for (const p of policies.values()) {
+        if (p.definition.action.intent === 'available_install') continue
         const state = management(p.definition, p.enabled, p.versionId, d.summary.id)
         if (state.state === 'eligible' && scenario !== 'unsupported') {
           const profile = softwareProfiles(d)[0]!,

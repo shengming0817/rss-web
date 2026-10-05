@@ -29,7 +29,8 @@
     "dev:mdm": "pnpm -F @rss/mdm-app dev",
     "dev:mdm:demo": "pnpm -F @rss/mdm-app demo",
     "build:mdm": "pnpm -F @rss/mdm-app build && node scripts/check-mdm-app-build.mjs",
-    "image:mdm": "bash scripts/build-mdm-image.sh"
+    "image:mdm": "bash scripts/build-mdm-image.sh",
+    "test:mdm:policy-browser": "node e2e/mdm/policy-browser.mjs"
   },
   "lint-staged": {
     "*.{ts,vue}": [
@@ -60,6 +61,7 @@
     "husky": "catalog:",
     "lint-staged": "catalog:",
     "@rss/auth": "workspace:*",
-    "@rss/api": "workspace:*"
+    "@rss/api": "workspace:*",
+    "playwright": "catalog:"
   }
 }

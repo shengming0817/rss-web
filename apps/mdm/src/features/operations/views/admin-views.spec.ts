@@ -173,9 +173,8 @@ it('saves and edits alert rules through the same HTTP owner', async () => {
   expect(f.wrapper.text()).toContain('Updated queue monitor')
   f.wrapper.unmount()
 })
-it('uses original software and workflow queues for approvals', async () => {
+it('uses the workflow queue for approvals', async () => {
   const f = await fixture(ApprovalsView)
-  expect(f.wrapper.text()).toContain('软件自助申请')
   expect(f.wrapper.text()).toContain('工作流审批')
   expect(f.wrapper.find('[role="alert"]').exists()).toBe(false)
   await f.wrapper.findAll('button')[0]!.trigger('click')

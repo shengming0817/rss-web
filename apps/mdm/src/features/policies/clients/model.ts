@@ -1,3 +1,4 @@
+import { selfServiceAccess } from './self-service-access'
 import {
   array,
   boolean,
@@ -195,6 +196,7 @@ function text(value: unknown, limit: number, required = false) {
 }
 export function selfService(value: unknown) {
   const v = closed(value, [
+    'access',
     'published',
     'displayName',
     'description',
@@ -217,8 +219,12 @@ export function selfService(value: unknown) {
     )
   )
     throw new Error('Invalid keywords')
+  const access = nullable(v['access'], selfServiceAccess)
+  const published = boolean(v['published'])
+  if (published && access === null) throw new Error('Choose a self-service access mode')
   return {
-    published: boolean(v['published']),
+    access,
+    published,
     displayName: text(v['displayName'], 256, true),
     description: text(v['description'], 4096),
     prerequisites: text(v['prerequisites'], 4096),
@@ -232,6 +238,7 @@ export function selfService(value: unknown) {
 export type SelfService = ReturnType<typeof selfService>
 export function initialSelfService(): SelfService {
   return {
+    access: null,
     published: true,
     displayName: '',
     description: '',
@@ -364,8 +371,18 @@ export function policyAction(value: unknown) {
 export function policyDefinition(value: unknown) {
   const v = closed(value, ['scope', 'action'], ['selfService']),
     action = policyAction(v['action'])
-  if ('selfService' in v && action.kind !== 'execution')
-    throw new Error('Only scripts support self-service')
+  if (
+    'selfService' in v &&
+    action.kind !== 'execution' &&
+    !(action.kind === 'software' && action.intent === 'available_install')
+  )
+    throw new Error('Self-service requires Execution or AvailableInstall')
+  if (
+    'selfService' in v &&
+    action.kind === 'software' &&
+    selfService(v['selfService']).riskLevel !== 2
+  )
+    throw new Error('Software self-service requires confirmation')
   return {
     scope: uuid(v['scope']),
     action,

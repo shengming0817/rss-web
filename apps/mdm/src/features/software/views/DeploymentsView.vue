@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { ref, toRaw, watch } from 'vue'
+import { onBeforeUnmount, ref, toRaw, watch } from 'vue'
+import SelfServiceEditor from '../../policies/components/SelfServiceEditor.vue'
+import ResourceIdentity from '../../policies/components/ResourceIdentity.vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -57,7 +59,37 @@ const devices = ref<Awaited<ReturnType<typeof client.devices>>>(),
   rollout = ref<Awaited<ReturnType<typeof client.rollout>>>()
 const history = ref<Awaited<ReturnType<typeof runtime.software.runs.list>>>(),
   detail = ref<SoftwareRun>()
-let pending: { id: string; body: Operation<AssignmentChange> } | undefined
+let pending: { id: string; requester: string; body: Operation<AssignmentChange> } | undefined
+function requester() {
+  const s = runtime.session.state.value
+  return s.status === 'authenticated' && s.tenant === runtime.tenant && s.identity && s.session
+    ? [s.tenant, s.identity.principalId, s.session.id].join('/')
+    : null
+}
+watch(
+  requester,
+  () => {
+    pending = undefined
+    current.value = undefined
+    resource.value = undefined
+    draft.value = fresh()
+    page.value = undefined
+    clearEvidence()
+  },
+  { flush: 'sync' },
+)
+onBeforeUnmount(() => {
+  pending = undefined
+})
+function intent(event: Event) {
+  const value = (event.target as HTMLSelectElement).value
+  if (!intents.includes(value as (typeof intents)[number])) return
+  if (value !== 'available_install' && draft.value.selfService) {
+    failure.value = 'removeBeforeSwitch'
+    return
+  }
+  draft.value.action.intent = value as (typeof intents)[number]
+}
 watch(
   draft,
   () => {
@@ -145,10 +177,12 @@ function selectVariant(target: string, event: Event) {
 }
 function replay() {
   const p = pending
-  if (!p) return
+  if (!p || p.requester !== requester()) return
   void runWrite(
     () => client.change(p.id, p.body),
     (v) => {
+      if (p.requester !== requester()) throw new Error('Policy requester changed')
+      pending = undefined
       apply(v)
       page.value = undefined
     },
@@ -156,7 +190,10 @@ function replay() {
 }
 function change(input: AssignmentChange) {
   if (busy.value || uncertain.value) return
+  const actor = requester()
+  if (!actor) return
   pending = {
+    requester: actor,
     id: current.value?.id ?? crypto.randomUUID(),
     body: operation(input, current.value?.revision ?? 0),
   }
@@ -308,14 +345,26 @@ watch(
               .join(' · ')
           }}
         </p>
-        <label for="deployment-scope">{{ t('software.rootScope') }}</label
+        <ResourceIdentity :binding="draft.action.resource" />
+        <label for="deployment-scope">{{ t('policies.selfService.deviceScope') }}</label
         ><input id="deployment-scope" v-model="draft.scope" required />
         <label for="deployment-intent">{{ t('software.intent') }}</label
-        ><select id="deployment-intent" v-model="draft.action.intent">
+        ><select id="deployment-intent" :value="draft.action.intent" @change="intent">
           <option v-for="intent in intents" :key="intent" :value="intent">
             {{ t(`software.intent_${intent}`) }}
           </option>
         </select>
+        <template v-if="draft.action.intent === 'available_install'">
+          <SelfServiceEditor v-model="draft.selfService" software />
+          <button
+            v-if="draft.selfService"
+            type="button"
+            data-action="remove-self-service"
+            @click="delete draft.selfService"
+          >
+            {{ t('policies.selfService.removeConfiguration') }}
+          </button>
+        </template>
         <label><input v-model="enabled" type="checkbox" />{{ t('policies.enabled') }}</label>
         <NativeScheduleEditor v-model="draft.action.schedule" />
         <label for="deployment-lifetime">{{ t('software.runLifetime') }}</label

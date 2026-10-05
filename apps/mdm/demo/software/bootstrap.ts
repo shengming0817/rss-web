@@ -58,14 +58,14 @@ export function createBootstrapDemo(
         // A synthetic release allowlist, not a claim that a package name proves production trust.
         return (
           s.package === 'RSS.DemoAgent' &&
-          s.format === (v.platform === 'windows' ? 'msi' : 'pkg') &&
-          s.install.executor === (v.platform === 'windows' ? 'msi' : 'package_installer') &&
-          s.install.runAs === 'system' &&
-          s.install.arguments.length === 0 &&
-          Object.keys(s.install.environment).length === 0 &&
+          (s.behavior.kind === 'msi' || s.behavior.kind === 'pkg') &&
+          s.behavior.kind === (v.platform === 'windows' ? 'msi' : 'pkg') &&
+          s.behavior.install.runAs === 'system' &&
+          s.behavior.install.arguments.length === 0 &&
+          Object.keys(s.behavior.install.environment).length === 0 &&
           s.dependencies.length === 0 &&
           Object.keys(s.artifacts).length === 1 &&
-          s.detect.kind !== 'script'
+          s.behavior.detect.kind !== 'script'
         )
       }),
     )

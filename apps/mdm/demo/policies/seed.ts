@@ -117,6 +117,7 @@ export function seedScriptPolicies(automation: ReturnType<typeof createAutomatio
       definition: {
         ...definition,
         selfService: {
+          access: { kind: 'authenticated_user' },
           published: state.published,
           allowAi: state.allowAi,
           riskLevel: state.riskLevel,

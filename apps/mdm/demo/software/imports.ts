@@ -31,48 +31,56 @@ function externalPackage(
     length: bytes.length,
     sha256: hash(bytes),
   })
-  const command = {
-    executor: ecosystem,
-    entry: null,
+  const invocation = {
     runAs: windows ? 'system' : 'logged_in_user',
     arguments: [],
     environment: {},
     timeoutSeconds: 3600,
     outputBytes: 16384,
+    exitCodes: { success: [0], reboot: [] },
+  }
+  const install = {
+    ...invocation,
+    arguments: windows
+      ? ['install', '--id', packageId, '--version', version, '--exact']
+      : ['install', `${packageId}@${version}`],
   }
   const definition = decodeSoftwareDefinition({
     source,
     package: packageId,
     version,
-    format: ecosystem,
-    primary: 'package',
+    provenance: { kind: 'private' },
+    signatures: [],
+    export: { kind: 'disabled' },
     artifacts: { package: file('package', payload), detect: file('detect', detector) },
-    install: {
-      ...command,
-      arguments: windows
-        ? ['install', '--id', packageId, '--version', version, '--exact']
-        : ['install', `${packageId}@${version}`],
-    },
-    uninstall: {
-      ...command,
-      arguments: windows
-        ? ['uninstall', '--id', packageId, '--exact']
-        : ['uninstall', `${packageId}@${version}`],
-    },
-    detect: {
-      kind: 'script',
-      command: {
-        ...command,
-        executor: windows ? 'power_shell7' : 'posix_sh',
-        entry: 'detect',
-        arguments: [],
+    behavior: {
+      kind: ecosystem,
+      installer: 'package',
+      scope: windows ? 'system' : 'user',
+      install,
+      upgradeInvocation: install,
+      upgrade: 'in_place',
+      uninstall: {
+        installer: 'package',
+        invocation: {
+          ...invocation,
+          arguments: windows
+            ? ['uninstall', '--id', packageId, '--exact']
+            : ['uninstall', `${packageId}@${version}`],
+        },
+      },
+      detect: {
+        kind: 'script',
+        command: {
+          interpreter: windows ? 'power_shell7' : 'posix_sh',
+          entry: 'detect',
+          invocation,
+        },
       },
     },
     reboot: 'report',
     downgrade: 'deny',
-    ownership: 'managed_only',
     dependencies: [],
-    bundle: null,
   })
   return {
     platform,

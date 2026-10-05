@@ -37,3 +37,12 @@ IDENTITY_BACKEND_FIXTURE=/absolute/path/to/rss-identity pnpm test:identity:joint
 该入口构建当前 UI，通过 jsdom 的生产 XMLHttpRequest transport 访问真实 HTTPS 宿主，覆盖 cookie/CSRF、账户、Provider、step-up 和故障语义。它不是实际浏览器或生产部署验收。中断与超时仍等待 fixture 清理；清理失败返回非零并显示恢复目录，不输出凭据和原始响应。不要求提交、干净 checkout 或源码/产物摘要证明，可复用构建缓存。
 
 历史来源记录保留在 [`docs/migration/20260809-001-gocell-web-source-baseline.md`](docs/migration/20260809-001-gocell-web-source-baseline.md)，不作为当前功能或操作入口。
+
+正式 Policy 自助配置的实际浏览器验收使用 Chromium 和独立 HTTPS MDM 开发环境（不接入 demo）：
+
+```bash
+pnpm exec playwright install chromium
+MDM_POLICY_BROWSER_FIXTURE=/absolute/path/to/private-fixture.json pnpm test:mdm:policy-browser
+```
+
+fixture 由隔离宿主准备，包含 `origin`（https://localhost:端口）、`tenant`、`instance`、`principal`、`login`、`passwordFile`，以及 `script`（迁移后 access=null/published=false、保留 false/1 的可编辑脚本 Policy）、`software`（已准入的 available_install Policy）和 `selectors`（同租户有效 IdP 群组、部门 exact/subtree、启用静态用户群组的正式 selector）。引用版本须已激活、设备 Scope 已发布；另含 `reader: {login,passwordFile}`（仅 policy_read/resource_read 的账户）；`departmentDirectory=true` 时在可信部门目录中选取，否则通过正式 API 预置固定部门引用并验证界面回读保留。生产 UI 由该宿主网关提供。入口更改这些可丢弃 Policy，覆盖脚本/软件三种访问模式及刷新、空范围、撤回保持后台配置、真实 400/401/403/409 与丢失已提交写响应后的锁定；退出关闭浏览器，不记录凭据、页面、网络响应或追踪。宿主资源由创建它的开发环境负责清理；此入口不证明 Windows/macOS 实际安装效果。

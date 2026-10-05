@@ -57,7 +57,6 @@ export function reference(value: unknown) {
       'job',
       'device',
       'policy',
-      'software_request',
       'workflow',
       'compliance_rule',
       'baseline',

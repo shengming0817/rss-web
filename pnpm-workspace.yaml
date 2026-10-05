@@ -27,6 +27,7 @@ catalog:
   # Synthetic HTTP demo validates the backend's finite JSON Schema subset.
   ajv: 6.15.0
   # —— 测试 ——
+  playwright: 1.63.0
   vitest: ^3.0.4
   '@vue/test-utils': ^2.4.6
   jsdom: ^25.0.1

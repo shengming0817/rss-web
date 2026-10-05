@@ -22,6 +22,7 @@ export function createPolicyStore() {
       const c = closed(
         d['selfService'],
         [
+          'access',
           'published',
           'displayName',
           'description',

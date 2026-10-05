@@ -15,6 +15,7 @@ import {
 import type { ResourceRead, ScriptSpec, Json } from '../clients/resources'
 import NativeScheduleEditor from '../../software/components/NativeScheduleEditor.vue'
 import SelfServiceEditor from '../components/SelfServiceEditor.vue'
+import ResourceIdentity from '../components/ResourceIdentity.vue'
 import PolicyFrame from '../components/PolicyFrame.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
@@ -109,6 +110,10 @@ const selectedVariant = computed(() => {
 function actionKind(event: Event) {
   const kind = (event.target as HTMLSelectElement).value
   if (current.value || (kind !== 'execution' && kind !== 'configuration')) return
+  if (definition.value.selfService) {
+    failure.value = 'removeBeforeSwitch'
+    return
+  }
   definition.value = { ...fresh(kind), scope: definition.value.scope }
   resource.value = undefined
   preview.value = undefined
@@ -402,7 +407,7 @@ onMounted(async () => {
     <button v-if="list?.nextCursor" :disabled="busy" @click="load(list.nextCursor)">
       {{ t('policies.next') }}
     </button>
-    <form @submit.prevent="save">
+    <form data-form="policy" @submit.prevent="save">
       <fieldset :disabled="busy || uncertain || !ready">
         <label for="policy-action">{{ t('policies.actionKind') }}</label
         ><select
@@ -440,9 +445,10 @@ onMounted(async () => {
             {{ v.platform }} / {{ v.architecture }} / {{ v.key }}
           </option>
         </select>
-        <label for="policy-scope">{{ t('policies.scopes') }}</label
+        <label for="policy-scope">{{ t('policies.selfService.deviceScope') }}</label
         ><input id="policy-scope" v-model="definition.scope" required />
         <template v-if="definition.action.kind === 'execution'">
+          <ResourceIdentity :binding="definition.action.resource" />
           <p>{{ t('policies.selfService.parameterHint') }}</p>
           <fieldset v-for="f in fields" :key="f.name">
             <legend>{{ f.name }}</legend>
@@ -518,6 +524,14 @@ onMounted(async () => {
           />
           <label><input v-model="enabled" type="checkbox" />{{ t('policies.active') }}</label>
           <SelfServiceEditor v-model="definition.selfService" />
+          <button
+            v-if="definition.selfService"
+            type="button"
+            data-action="remove-self-service"
+            @click="delete definition.selfService"
+          >
+            {{ t('policies.selfService.removeConfiguration') }}
+          </button>
         </template>
         <template v-else
           ><label for="policy-exit">{{ t('policies.exitBehavior') }}</label

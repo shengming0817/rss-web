@@ -7,7 +7,6 @@ import { createCatalogClient } from './clients/catalog'
 import { createImportsClient } from './clients/imports'
 import { createBootstrapClient } from './clients/bootstrap'
 import { createUpdatesClient } from './clients/updates'
-import { createSelfServiceClient } from './clients/self-service'
 export function createSoftwareClients(transport: HttpTransport, tenant: string, demo: boolean) {
   return {
     admission: createAdmissionClient(transport),
@@ -18,6 +17,5 @@ export function createSoftwareClients(transport: HttpTransport, tenant: string, 
     imports: createImportsClient(transport, tenant, demo),
     bootstrap: createBootstrapClient(transport, tenant, demo),
     updates: createUpdatesClient(transport, tenant, demo),
-    selfService: createSelfServiceClient(transport, tenant, demo),
   }
 }
