@@ -2,41 +2,45 @@
 import { ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Artifact } from '../../policies/clients/resources'
-import {
-  decodeSoftwareDefinition,
-  softwareFormats,
-} from '../../policies/clients/software-definition'
+import { decodeSoftwareDefinition } from '../../policies/clients/software-definition'
 const { t } = useI18n(),
   id = useId()
-const format = ref<(typeof softwareFormats)[number]>('msi'),
-  source = ref(''),
+const source = ref(''),
   sourceRevision = ref('1'),
   sourceDigest = ref(''),
   packageId = ref(''),
-  version = ref('1'),
-  reboot = ref<'forbid' | 'report'>('report'),
+  version = ref('1')
+const reboot = ref<'forbid' | 'report'>('report'),
   downgrade = ref(false),
-  ownership = ref(false),
-  detection = ref<'msi_product' | 'pkg_receipt' | 'script'>('msi_product'),
-  detectIdentity = ref(''),
-  detectVersion = ref('1'),
   artifacts = ref('{}'),
-  dependencies = ref('[]'),
-  bundle = ref('{}')
-const command = {
-  executor: 'msi',
-  entry: null,
+  dependencies = ref('[]')
+const invocation = {
   runAs: 'system',
   arguments: [],
   environment: {},
   timeoutSeconds: 3600,
   outputBytes: 16384,
+  exitCodes: { success: [0], reboot: [3010] },
 }
-const install = ref(JSON.stringify(command, null, 2)),
-  uninstall = ref('null'),
-  detectCommand = ref(
-    JSON.stringify({ ...command, executor: 'power_shell7', entry: 'detect' }, null, 2),
-  )
+const behavior = ref(
+  JSON.stringify(
+    {
+      kind: 'msi',
+      installer: 'installer',
+      scope: 'system',
+      install: invocation,
+      upgradeInvocation: invocation,
+      upgrade: 'in_place',
+      uninstall: null,
+      detect: { kind: 'msi_product', productCode: '', version: '1' },
+    },
+    null,
+    2,
+  ),
+)
+const provenance = ref('{"kind":"private"}'),
+  signatures = ref('[]'),
+  exportDefinition = ref('{"kind":"disabled"}')
 function validateJson(event: Event) {
   const input = event.target as HTMLTextAreaElement
   try {
@@ -57,26 +61,14 @@ function read(artifact: Artifact) {
     },
     package: packageId.value,
     version: version.value,
-    format: format.value,
-    primary: 'installer',
     artifacts: { ...JSON.parse(artifacts.value), installer: { ...artifact, origin: null } },
-    install: JSON.parse(install.value),
-    uninstall: JSON.parse(uninstall.value),
-    detect:
-      detection.value === 'script'
-        ? { kind: 'script', command: JSON.parse(detectCommand.value) }
-        : {
-            kind: detection.value,
-            ...(detection.value === 'msi_product'
-              ? { productCode: detectIdentity.value }
-              : { receipt: detectIdentity.value }),
-            version: detectVersion.value,
-          },
+    behavior: JSON.parse(behavior.value),
+    provenance: JSON.parse(provenance.value),
+    signatures: JSON.parse(signatures.value),
+    export: JSON.parse(exportDefinition.value),
+    dependencies: JSON.parse(dependencies.value),
     reboot: reboot.value,
     downgrade: downgrade.value ? 'allow' : 'deny',
-    ownership: ownership.value ? 'allow_user_existing' : 'managed_only',
-    dependencies: JSON.parse(dependencies.value),
-    bundle: format.value === 'bundle' ? JSON.parse(bundle.value) : null,
   })
 }
 defineExpose({ read })
@@ -85,12 +77,6 @@ defineExpose({ read })
   <fieldset>
     <legend>{{ t('software.definition') }}</legend>
     <p>{{ t('software.budget') }}</p>
-    <label :for="`${id}-format`">{{ t('software.format') }}</label>
-    <select :id="`${id}-format`" v-model="format">
-      <option v-for="item in softwareFormats" :key="item" :value="item">
-        {{ item === 'bundle' ? 'RSS ZIP' : item }}
-      </option>
-    </select>
     <label :for="`${id}-package`">{{ t('software.package') }}</label
     ><input :id="`${id}-package`" v-model="packageId" required />
     <label :for="`${id}-version`">{{ t('software.version') }}</label
@@ -102,51 +88,24 @@ defineExpose({ read })
     ><input :id="`${id}-source-revision`" v-model="sourceRevision" required />
     <label :for="`${id}-source-digest`">{{ t('software.sourceDigest') }}</label
     ><input :id="`${id}-source-digest`" v-model="sourceDigest" pattern="[a-fA-F0-9]{64}" required />
-    <p>{{ t('software.commandHint') }}</p>
-    <label :for="`${id}-install`">{{ t('software.install') }}</label
-    ><textarea :id="`${id}-install`" v-model="install" required @input="validateJson" />
-    <label :for="`${id}-uninstall`">{{ t('software.uninstall') }}</label
-    ><textarea :id="`${id}-uninstall`" v-model="uninstall" required @input="validateJson" />
-    <label :for="`${id}-detection`">{{ t('software.detection') }}</label
-    ><select :id="`${id}-detection`" v-model="detection">
-      <option
-        v-for="item in ['msi_product', 'pkg_receipt', 'script'] as const"
-        :key="item"
-        :value="item"
-      >
-        {{ t(`software.${item}`) }}
-      </option>
-    </select>
-    <template v-if="detection !== 'script'"
-      ><label :for="`${id}-detect-identity`">{{ t('software.detectIdentity') }}</label
-      ><input :id="`${id}-detect-identity`" v-model="detectIdentity" required /><label
-        :for="`${id}-detect-version`"
-        >{{ t('software.detectVersion') }}</label
-      ><input :id="`${id}-detect-version`" v-model="detectVersion" required
-    /></template>
-    <template v-else
-      ><label :for="`${id}-detect-command`">{{ t('software.detectCommand') }}</label
-      ><textarea
-        :id="`${id}-detect-command`"
-        v-model="detectCommand"
-        required
-        @input="validateJson"
-      />
-    </template>
+    <label :for="`${id}-behavior`">{{ t('software.behavior') }}</label
+    ><textarea :id="`${id}-behavior`" v-model="behavior" required @input="validateJson" />
+    <p>{{ t('policies.selfService.identityHint') }}</p>
+    <label :for="`${id}-provenance`">{{ t('software.provenance') }}</label
+    ><textarea :id="`${id}-provenance`" v-model="provenance" required @input="validateJson" />
+    <label :for="`${id}-signatures`">{{ t('software.signatures') }}</label
+    ><textarea :id="`${id}-signatures`" v-model="signatures" required @input="validateJson" />
+    <label :for="`${id}-export`">{{ t('software.exportDefinition') }}</label
+    ><textarea :id="`${id}-export`" v-model="exportDefinition" required @input="validateJson" />
     <label :for="`${id}-artifacts`">{{ t('software.artifacts') }}</label
     ><textarea :id="`${id}-artifacts`" v-model="artifacts" required @input="validateJson" />
     <label :for="`${id}-dependencies`">{{ t('software.dependencies') }}</label
     ><textarea :id="`${id}-dependencies`" v-model="dependencies" required @input="validateJson" />
-    <template v-if="format === 'bundle'"
-      ><label :for="`${id}-bundle`">{{ t('software.bundle') }}</label
-      ><textarea :id="`${id}-bundle`" v-model="bundle" required @input="validateJson" />
-    </template>
     <label :for="`${id}-reboot`">{{ t('software.reboot') }}</label
     ><select :id="`${id}-reboot`" v-model="reboot">
       <option value="report">{{ t('software.report') }}</option>
       <option value="forbid">{{ t('software.forbid') }}</option>
     </select>
-    <label><input v-model="downgrade" type="checkbox" />{{ t('software.downgrade') }}</label
-    ><label><input v-model="ownership" type="checkbox" />{{ t('software.ownership') }}</label>
+    <label><input v-model="downgrade" type="checkbox" />{{ t('software.downgrade') }}</label>
   </fieldset>
 </template>

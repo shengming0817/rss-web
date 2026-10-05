@@ -1,4 +1,8 @@
 export const softwareZh = {
+  behavior: '原生安装行为（含运行身份与安装范围）',
+  provenance: '材料来源',
+  signatures: '签名要求',
+  exportDefinition: '原生发布元数据',
   resourceId: '软件资源标识',
   uploadSessionHint:
     '按块上传后，明确完成入库。中断后重新选择同一文件并上传；刷新页面后可填入原上传标识读取进度。未知结果不自动重试，文件和上传状态不持久化到浏览器。',
@@ -407,6 +411,10 @@ export const softwareZh = {
   sourceHint: '来源摘要从已批准的企业来源复制；来源登记不等于版本准入。',
 }
 export const softwareEn: typeof softwareZh = {
+  behavior: 'Native behavior (execution identity and installation scope)',
+  provenance: 'Material provenance',
+  signatures: 'Signature requirements',
+  exportDefinition: 'Native export metadata',
   resourceId: 'Software resource ID',
   uploadSessionHint:
     'Upload in chunks, then explicitly complete. Reselect the same file to resume; after refresh, enter the original upload ID to read progress. Unknown results never retry automatically. Files and upload state are not persisted in the browser.',

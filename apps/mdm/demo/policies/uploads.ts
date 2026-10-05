@@ -1,3 +1,4 @@
+import { softwareInstaller } from '../../src/features/policies/clients/software-definition'
 import { createHash } from 'node:crypto'
 import type { DomainHandler } from '../scenario'
 import { error, ok } from '../http'
@@ -29,7 +30,7 @@ export function createResourceUploads(
       artifact = query.has('artifact')
         ? declarationArtifacts(d).find((a) => a.reference === query.get('artifact'))
         : d.kind === 'software'
-          ? d.definition.artifacts[d.definition.primary]
+          ? d.definition.artifacts[softwareInstaller(d.definition)]
           : d.artifact
     if (
       !artifact ||

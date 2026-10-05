@@ -1,3 +1,4 @@
+import { softwareInstaller } from '../../src/features/policies/clients/software-definition'
 import { createResourceUploads } from './uploads'
 import { createHash } from 'node:crypto'
 import type { DomainHandler } from '../scenario'
@@ -153,7 +154,9 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
                 (a) => a.reference === request.query.get('artifact'),
               )
             : variant.declaration.kind === 'software'
-              ? variant.declaration.definition.artifacts[variant.declaration.definition.primary]
+              ? variant.declaration.definition.artifacts[
+                  softwareInstaller(variant.declaration.definition)
+                ]
               : variant.declaration.artifact
         if (!artifact) return error('malformed_request', 400)
         if (

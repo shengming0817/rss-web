@@ -126,7 +126,7 @@ it('decodes the current attempt and all authorization branches and rejects malfo
   const self = {
     kind: 'self_service',
     requestId: task,
-    actor: { tenantId: id, instanceId: task, principalId: id },
+    subject: { kind: 'user', user: { tenantId: id, instanceId: task, principalId: id } },
     source: 'ai',
     policyId: id,
     policyRevision: 1,
@@ -145,7 +145,7 @@ it('decodes the current attempt and all authorization branches and rejects malfo
     { ...self, confirmed: false },
     { ...self, allowAi: false },
     { ...self, riskLevel: 3 },
-    { ...self, actor: { ...self.actor, token: 'secret' } },
+    { ...self, subject: { kind: 'user', user: { ...self.subject.user, token: 'secret' } } },
   ])
     expect(() => softwareRun({ ...run, authorization }, true)).toThrow()
   expect(() => softwareRun({ ...run, attemptId: id }, true)).toThrow('Inconsistent run attempt')

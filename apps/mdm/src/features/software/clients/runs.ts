@@ -147,7 +147,7 @@ function scriptAuthorization(value: unknown) {
   const v = closed(value, [
       'kind',
       'requestId',
-      'actor',
+      'subject',
       'source',
       'policyId',
       'policyRevision',
@@ -156,7 +156,26 @@ function scriptAuthorization(value: unknown) {
       'riskLevel',
       'confirmed',
     ]),
-    actor = closed(v['actor'], ['tenantId', 'instanceId', 'principalId']),
+    rawSubject = record(v['subject']),
+    subjectKind = enumeration(rawSubject['kind'], ['device', 'user'] as const),
+    subject =
+      subjectKind === 'device'
+        ? ({ kind: subjectKind, ...closed(rawSubject, ['kind']) } as { kind: 'device' })
+        : {
+            kind: subjectKind,
+            user: (() => {
+              const u = closed(closed(rawSubject, ['kind', 'user'])['user'], [
+                'tenantId',
+                'instanceId',
+                'principalId',
+              ])
+              return {
+                tenantId: uuid(u['tenantId']),
+                instanceId: uuid(u['instanceId']),
+                principalId: uuid(u['principalId']),
+              }
+            })(),
+          },
     source = enumeration(v['source'], ['human', 'ai'] as const),
     allowAi = boolean(v['allowAi']),
     confirmed = boolean(v['confirmed']),
@@ -171,11 +190,7 @@ function scriptAuthorization(value: unknown) {
   return {
     kind,
     requestId: uuid(v['requestId']),
-    actor: {
-      tenantId: uuid(actor['tenantId']),
-      instanceId: uuid(actor['instanceId']),
-      principalId: uuid(actor['principalId']),
-    },
+    subject,
     source,
     policyId: uuid(v['policyId']),
     policyRevision,
