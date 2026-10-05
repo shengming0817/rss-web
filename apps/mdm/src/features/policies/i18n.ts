@@ -33,6 +33,7 @@ export const policiesZh = {
     issuer: '可信签发方',
     sourceRevision: '来源配置版本',
     identity: '运行身份',
+    identityFailed: '无法读取精确资源的运行身份，请重试。',
     identity_system: '系统服务',
     identity_logged_in_user: '本机登录用户',
     identityHint:
@@ -450,6 +451,7 @@ export const policiesEn: typeof policiesZh = {
     issuer: 'Trusted issuer',
     sourceRevision: 'Source configuration version',
     identity: 'Execution identity',
+    identityFailed: 'Failed to read the exact resource identity. Retry the request.',
     identity_system: 'Managed system service',
     identity_logged_in_user: 'Local signed-in user',
     identityHint:

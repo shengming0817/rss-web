@@ -13,23 +13,20 @@ const runtime = useMdm(),
   resource = ref<ResourceRead>(),
   failed = ref(false)
 let generation = 0
-watch(
-  () => JSON.stringify(props.binding),
-  async () => {
-    const current = ++generation,
-      binding = structuredClone(toRaw(props.binding))
-    resource.value = undefined
-    failed.value = false
-    if (!binding.id || !binding.version) return
-    try {
-      const r = await runtime.policies.resources.read(binding.id)
-      if (current === generation && r.id === binding.id) resource.value = r
-    } catch {
-      if (current === generation) failed.value = true
-    }
-  },
-  { immediate: true },
-)
+async function load() {
+  const current = ++generation,
+    binding = structuredClone(toRaw(props.binding))
+  resource.value = undefined
+  failed.value = false
+  if (!binding.id || !binding.version) return
+  try {
+    const r = await runtime.policies.resources.read(binding.id)
+    if (current === generation && r.id === binding.id) resource.value = r
+  } catch {
+    if (current === generation) failed.value = true
+  }
+}
+watch(() => JSON.stringify(props.binding), load, { immediate: true })
 onBeforeUnmount(() => {
   generation++
 })
@@ -67,8 +64,17 @@ const rows = computed(() => {
 <template>
   <section :aria-label="t('policies.selfService.identity')" data-section="resource-identity">
     <p v-if="!rows.length" :role="failed ? 'alert' : 'status'">
-      {{ t('policies.selfService.identityUnavailable') }}
+      {{
+        t(
+          failed
+            ? 'policies.selfService.identityFailed'
+            : 'policies.selfService.identityUnavailable',
+        )
+      }}
     </p>
+    <button v-if="failed" type="button" data-action="retry-resource-identity" @click="load">
+      {{ t('policies.reload') }}
+    </button>
     <p v-for="row in rows" :key="row.key">
       {{ row.key }} · {{ t('policies.selfService.identity') }}:
       {{ t(`policies.selfService.identity_${row.runAs}`)

@@ -166,3 +166,38 @@ it.each([
     )
   },
 )
+it('accepts canonical UTF-8 path, publisher and publication text budgets', () => {
+  const publisher = '发行方'.repeat(100)
+  const long = {
+    ...spec,
+    package: 'a'.repeat(500),
+    version: 'v'.repeat(500),
+    provenance: {
+      kind: 'imported',
+      snapshot: 'fixed',
+      converter: 'converter-v1',
+      files: [
+        { path: `${'directory/'.repeat(30)}manifest.yaml`, content: spec.artifacts.installer },
+      ],
+    },
+    signatures: [{ artifact: 'installer', mechanism: 'authenticode', publisher }],
+    export: {
+      kind: 'winget',
+      locale: 'zh-CN',
+      name: 'Application',
+      publisher,
+      description: 'Description',
+      license: ' license '.repeat(100),
+    },
+  }
+  expect(decodeSoftwareDefinition(long)).toEqual(long)
+  expect(() =>
+    decodeSoftwareDefinition({
+      ...long,
+      signatures: [{ ...long.signatures[0], publisher: '中'.repeat(342) }],
+    }),
+  ).toThrow()
+  expect(() =>
+    decodeSoftwareDefinition({ ...long, export: { ...long.export, license: '中'.repeat(1366) } }),
+  ).toThrow()
+})

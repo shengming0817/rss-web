@@ -43,14 +43,19 @@ function literal(value: unknown): string {
 }
 function materialText(value: unknown, max = 1024) {
   const text = string(value)
-  if (!text || text.includes('\0') || new TextEncoder().encode(text).length > max)
+  if (!text || /\p{Cc}/u.test(text) || new TextEncoder().encode(text).length > max)
     throw new Error('Invalid software text')
   return text
 }
-function dictionary<T>(value: unknown, decode: (v: unknown) => T, max: number): Record<string, T> {
+function dictionary<T>(
+  value: unknown,
+  decode: (v: unknown) => T,
+  max: number,
+  keyDecode = identifier,
+): Record<string, T> {
   const entries = Object.entries(record(value))
   if (entries.length > max) throw new Error('Invalid software collection')
-  return Object.fromEntries(entries.map(([key, item]) => [identifier(key), decode(item)]))
+  return Object.fromEntries(entries.map(([key, item]) => [keyDecode(key), decode(item)]))
 }
 export function softwareSource(value: unknown) {
   const v = closed(value, ['id', 'revision', 'sha256'])
@@ -96,7 +101,7 @@ function script(value: unknown) {
   const v = closed(value, ['interpreter', 'entry', 'invocation'])
   return {
     interpreter: enumeration(v['interpreter'], ['power_shell7', 'posix_sh', 'bash'] as const),
-    entry: identifier(v['entry']),
+    entry: materialText(v['entry']),
     invocation: softwareInvocation(v['invocation']),
   }
 }
@@ -121,28 +126,28 @@ function detection(value: unknown) {
       productCode = identifier(v['productCode'])
     if (!/^\{[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\}$/i.test(productCode))
       throw new Error('Invalid product code')
-    return { kind, productCode, version: identifier(v['version']) }
+    return { kind, productCode, version: materialText(v['version']) }
   }
   if (kind === 'pkg_receipt') {
     const v = closed(value, ['kind', 'receipt', 'version'])
-    return { kind, receipt: identifier(v['receipt']), version: identifier(v['version']) }
+    return { kind, receipt: materialText(v['receipt'], 255), version: materialText(v['version']) }
   }
   if (kind === 'registry') {
     const v = closed(value, ['kind', 'scope', 'key', 'value', 'version'])
     return {
       kind,
       scope: scope(v['scope']),
-      key: identifier(v['key']),
-      value: string(v['value']),
-      version: identifier(v['version']),
+      key: materialText(v['key']),
+      value: materialText(v['value'], 255),
+      version: materialText(v['version']),
     }
   }
   const v = closed(value, ['kind', 'scope', 'path', 'version', 'sha256'])
   return {
     kind,
     scope: scope(v['scope']),
-    path: identifier(v['path']),
-    version: identifier(v['version']),
+    path: materialText(v['path']),
+    version: materialText(v['version']),
     sha256: digest(v['sha256']),
   }
 }
@@ -185,6 +190,7 @@ function manifest(value: unknown) {
         return { length: count(e['length']), sha256: digest(e['sha256']) }
       },
       4096,
+      materialText,
     ),
   }
 }
@@ -196,10 +202,10 @@ function dmgPayload(value: unknown) {
     return {
       kind,
       application: {
-        path: identifier(a['path']),
-        bundleId: identifier(a['bundleId']),
-        version: identifier(a['version']),
-        targetName: identifier(a['targetName']),
+        path: materialText(a['path']),
+        bundleId: materialText(a['bundleId'], 255),
+        version: materialText(a['version']),
+        targetName: materialText(a['targetName']),
       },
       uninstall: boolean(v['uninstall']),
     }
@@ -207,10 +213,10 @@ function dmgPayload(value: unknown) {
   const v = closed(value, ['kind', 'path', 'length', 'sha256', 'receipt', 'uninstall'])
   return {
     kind,
-    path: identifier(v['path']),
+    path: materialText(v['path']),
     length: bounded(v['length'], 1, Number.MAX_SAFE_INTEGER),
     sha256: digest(v['sha256']),
-    receipt: identifier(v['receipt']),
+    receipt: materialText(v['receipt'], 255),
     uninstall: nullable(v['uninstall'], removal),
   }
 }
@@ -222,8 +228,8 @@ function versionQuad(value: unknown) {
 function msixIdentity(value: unknown) {
   const v = closed(value, ['name', 'publisher', 'version', 'architecture', 'resourceId'])
   return {
-    name: identifier(v['name']),
-    publisher: identifier(v['publisher']),
+    name: materialText(v['name'], 255),
+    publisher: materialText(v['publisher']),
     version: versionQuad(v['version']),
     architecture: enumeration(v['architecture'], ['x86_64', 'aarch64', 'neutral'] as const),
     resourceId: string(v['resourceId']),
@@ -243,7 +249,7 @@ function msixContainer(value: unknown) {
     members: array(v['members'], (x) => {
       const m = closed(x, ['path', 'identity', 'length', 'sha256'])
       return {
-        path: identifier(m['path']),
+        path: materialText(m['path']),
         identity: msixIdentity(m['identity']),
         length: bounded(m['length'], 1, Number.MAX_SAFE_INTEGER),
         sha256: digest(m['sha256']),
@@ -300,7 +306,7 @@ function behavior(value: unknown) {
       'detect',
       'layout',
     ])
-    return { kind, ...native(v), layout: dictionary(v['layout'], identifier, 64) }
+    return { kind, ...native(v), layout: dictionary(v['layout'], identifier, 64, materialText) }
   }
   if (kind === 'bundle') {
     const v = closed(value, ['kind', 'archive', 'manifest', 'install', 'uninstall', 'detect'])
@@ -326,7 +332,7 @@ function behavior(value: unknown) {
     return {
       kind,
       image: identifier(v['image']),
-      volume: identifier(v['volume']),
+      volume: materialText(v['volume'], 255),
       scope: scope(v['scope']),
       invocation: softwareInvocation(v['invocation']),
       upgrade: upgrade(v['upgrade']),
@@ -369,11 +375,11 @@ function provenance(value: unknown) {
   const v = closed(value, ['kind', 'snapshot', 'converter', 'files'])
   return {
     kind,
-    snapshot: identifier(v['snapshot']),
-    converter: identifier(v['converter']),
+    snapshot: materialText(v['snapshot'], 128),
+    converter: materialText(v['converter'], 128),
     files: array(v['files'], (x) => {
       const f = closed(x, ['path', 'content'])
-      return { path: identifier(f['path']), content: softwareArtifact(f['content']) }
+      return { path: materialText(f['path']), content: softwareArtifact(f['content']) }
     }),
   }
 }
@@ -387,11 +393,11 @@ function softwareExport(value: unknown) {
     const v = closed(value, ['kind', 'locale', 'name', 'publisher', 'description', 'license'])
     return {
       kind,
-      locale: identifier(v['locale']),
-      name: identifier(v['name']),
-      publisher: identifier(v['publisher']),
-      description: string(v['description']),
-      license: identifier(v['license']),
+      locale: materialText(v['locale'], 4096),
+      name: materialText(v['name'], 4096),
+      publisher: materialText(v['publisher'], 4096),
+      description: materialText(v['description'], 4096),
+      license: materialText(v['license'], 4096),
     }
   }
   const v = closed(value, ['kind', 'name', 'description', 'homepage', 'payload']),
@@ -403,8 +409,8 @@ function softwareExport(value: unknown) {
           const b = closed(p, ['kind', 'path', 'receipts'])
           return {
             kind: pk,
-            path: identifier(b['path']),
-            receipts: array(b['receipts'], identifier),
+            path: materialText(b['path']),
+            receipts: array(b['receipts'], string),
           }
         })()
       : (() => {
@@ -422,18 +428,18 @@ function softwareExport(value: unknown) {
             kind: pk,
             artifact: identifier(b['artifact']),
             source: identifier(b['source']),
-            tag: identifier(b['tag']),
-            cellar: identifier(b['cellar']),
+            tag: materialText(b['tag'], 255),
+            cellar: materialText(b['cellar'], 255),
             revision: count(b['revision']),
             rebuild: count(b['rebuild']),
-            executable: identifier(b['executable']),
+            executable: materialText(b['executable'], 255),
           }
         })()
   return {
     kind,
-    name: identifier(v['name']),
-    description: string(v['description']),
-    homepage: string(v['homepage']),
+    name: materialText(v['name'], 4096),
+    description: materialText(v['description'], 4096),
+    homepage: materialText(v['homepage'], 4096),
     payload,
   }
 }
@@ -467,7 +473,7 @@ export function decodeSoftwareDefinition(value: unknown) {
           'apple_developer_id',
           'msix',
         ] as const),
-        publisher: identifier(s['publisher']),
+        publisher: materialText(s['publisher']),
       }
     }),
     reboot: enumeration(v['reboot'], ['forbid', 'report'] as const),

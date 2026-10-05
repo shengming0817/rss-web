@@ -45,4 +45,4 @@ pnpm exec playwright install chromium
 MDM_POLICY_BROWSER_FIXTURE=/absolute/path/to/private-fixture.json pnpm test:mdm:policy-browser
 ```
 
-fixture 由隔离宿主准备，包含 `origin`（https://localhost:端口）、`tenant`、`instance`、`principal`、`login`、`passwordFile`，以及 `script`（迁移后 access=null/published=false、保留 false/1 的可编辑脚本 Policy）、`software`（已准入的 available_install Policy）和 `selectors`（同租户有效 IdP 群组、部门 exact/subtree、启用静态用户群组的正式 selector）。引用版本须已激活、设备 Scope 已发布；生产 UI 由该宿主网关提供。入口更改这些可丢弃 Policy，覆盖访问保存、精确引用保持与丢失写响应后的锁定；退出关闭浏览器，不记录凭据、页面、网络响应或追踪。宿主资源由创建它的开发环境负责清理；此入口不证明 Windows/macOS 实际安装效果。
+fixture 由隔离宿主准备，包含 `origin`（https://localhost:端口）、`tenant`、`instance`、`principal`、`login`、`passwordFile`，以及 `script`（迁移后 access=null/published=false、保留 false/1 的可编辑脚本 Policy）、`software`（已准入的 available_install Policy）和 `selectors`（同租户有效 IdP 群组、部门 exact/subtree、启用静态用户群组的正式 selector）。引用版本须已激活、设备 Scope 已发布；另含 `reader: {login,passwordFile}`（仅 policy_read/resource_read 的账户）；`departmentDirectory=true` 时在可信部门目录中选取，否则通过正式 API 预置固定部门引用并验证界面回读保留。生产 UI 由该宿主网关提供。入口更改这些可丢弃 Policy，覆盖脚本/软件三种访问模式及刷新、空范围、撤回保持后台配置、真实 400/401/403/409 与丢失已提交写响应后的锁定；退出关闭浏览器，不记录凭据、页面、网络响应或追踪。宿主资源由创建它的开发环境负责清理；此入口不证明 Windows/macOS 实际安装效果。

@@ -27,7 +27,15 @@ const links = [
     </nav>
     <h1>{{ title }}</h1>
     <p v-if="runtime.demo" class="mdm-source">{{ t('mdm.mock') }} · {{ t('devices.noEffect') }}</p>
-    <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
+    <p v-if="failure" role="alert">
+      {{
+        t(
+          failure === 'removeBeforeSwitch'
+            ? 'policies.selfService.removeBeforeSwitch'
+            : `devices.${failure}`,
+        )
+      }}
+    </p>
     <slot />
   </section>
 </template>

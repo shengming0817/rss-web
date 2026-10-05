@@ -107,8 +107,12 @@ function add() {
   }
 }
 function label(s: SelfServiceSelector) {
-  const coordinate = s.kind === 'user' ? s.principalId : s.id
-  return `${t(`policies.selfService.selector_${s.kind}`)}: ${coordinate}${s.kind === 'department' ? ` (${t(`policies.selfService.${s.matching}`)})` : ''}`
+  const coordinate = s.kind === 'user' ? `${s.principalId} (${s.instanceId}/${s.tenantId})` : s.id
+  const origin =
+    'source' in s
+      ? ` · ${s.source.providerId} · ${s.source.issuer} · v${s.source.configurationVersion}`
+      : ''
+  return `${t(`policies.selfService.selector_${s.kind}`)}: ${coordinate}${origin}${s.kind === 'department' ? ` (${t(`policies.selfService.${s.matching}`)})` : ''}`
 }
 </script>
 <template>

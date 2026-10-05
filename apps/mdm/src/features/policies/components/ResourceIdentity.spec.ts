@@ -56,5 +56,8 @@ it('projects the exact version and fences a late prior-resource result without a
   await wrapper.setProps({ binding: { ...binding, id: 'third' } })
   await flushPromises()
   expect(wrapper.find('[role="alert"]').exists()).toBe(true)
+  await wrapper.get('[data-action="retry-resource-identity"]').trigger('click')
+  await flushPromises()
+  expect(wrapper.text()).toContain('登录用户')
   wrapper.unmount()
 })
