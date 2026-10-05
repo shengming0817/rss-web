@@ -335,6 +335,7 @@ export function createSoftwarePolicyDemo(
       const d = devices.facts().find((d) => d.summary.id === event.device)
       if (!d) return
       for (const p of policies.values()) {
+        if (p.definition.action.intent === 'available_install') continue
         const state = management(p.definition, p.enabled, p.versionId, d.summary.id)
         if (state.state === 'eligible' && scenario !== 'unsupported') {
           const profile = softwareProfiles(d)[0]!,

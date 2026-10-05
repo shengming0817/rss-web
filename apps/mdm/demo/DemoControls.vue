@@ -51,7 +51,6 @@ const eventKind = ref('clock'),
   eventAt = ref<number | ''>(''),
   eventDevice = ref('device-01'),
   eventResource = ref(''),
-  eventItem = ref(''),
   eventTask = ref(''),
   eventEnrollment = ref(''),
   eventActive = ref(true)
@@ -101,7 +100,6 @@ async function simulate() {
           ].includes(eventKind.value)
             ? { task: eventTask.value }
             : {}),
-          ...(eventKind.value === 'software_request' ? { item: eventItem.value } : {}),
           ...(eventKind.value === 'enrollment_bind' ? { enrollment: eventEnrollment.value } : {}),
           ...(['agent_binding', 'remote_consent'].includes(eventKind.value)
             ? { active: eventActive.value }
@@ -213,13 +211,6 @@ async function apply(reset: boolean) {
         </option>
         <option value="software_usage">
           {{ locale === 'zh-CN' ? '模拟独立软件使用采样' : 'Synthetic software usage observation' }}
-        </option>
-        <option value="software_request">
-          {{
-            locale === 'zh-CN'
-              ? '模拟本地用户提交安装申请'
-              : 'Synthetic local user installation request'
-          }}
         </option>
         <option value="enrollment_bind">
           {{
@@ -365,12 +356,6 @@ async function apply(reset: boolean) {
             : 'Explicit software execution and enrollment guidance capabilities'
         }}</label
       >
-      <template v-if="eventKind === 'software_request'"
-        ><label for="demo-event-item">{{
-          locale === 'zh-CN' ? '自助目录条目 ID' : 'Self-service item ID'
-        }}</label
-        ><input id="demo-event-item" v-model="eventItem"
-      /></template>
       <button :disabled="busy || !authenticated.value" @click="simulate">
         {{ locale === 'zh-CN' ? '注入模拟事件' : 'Inject synthetic event' }}
       </button>

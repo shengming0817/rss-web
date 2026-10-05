@@ -14,9 +14,6 @@ const { t } = useI18n(),
       <RouterLink :to="{ name: 'software-updates', params: { tenant: runtime.tenant } }">{{
         t('software.updates')
       }}</RouterLink>
-      <RouterLink :to="{ name: 'software-self-service', params: { tenant: runtime.tenant } }">{{
-        t('software.selfService')
-      }}</RouterLink>
       <RouterLink :to="{ name: 'software-deployments', params: { tenant: runtime.tenant } }">{{
         t('software.deployments')
       }}</RouterLink>
@@ -44,7 +41,11 @@ const { t } = useI18n(),
     </nav>
     <h1>{{ title }}</h1>
     <p v-if="runtime.demo" class="mdm-source">{{ t('mdm.mock') }} · {{ t('devices.noEffect') }}</p>
-    <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
+    <p v-if="failure" role="alert">
+      {{
+        t(failure === 'removeBeforeSwitch' ? 'policies.removeBeforeSwitch' : `devices.${failure}`)
+      }}
+    </p>
     <slot />
   </section>
 </template>

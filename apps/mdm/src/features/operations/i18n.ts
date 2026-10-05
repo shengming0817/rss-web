@@ -108,7 +108,6 @@ export const operationsZh = {
   resume: '恢复',
   cancel: '取消尚未执行的请求',
   approvalHint: '这里只聚合可见待审批入口；决定与执行状态由原业务模块持有。受理不代表设备效果。',
-  softwareRequests: '软件自助申请',
   workflowRequests: '工作流审批',
 
   navigation: '权限与运营导航',
@@ -160,7 +159,6 @@ export const operationsZh = {
     job: '运营任务',
     device: '设备',
     policy: '策略',
-    software_request: '软件申请',
     workflow: '工作流',
 
     compliance_rule: '合规规则',
@@ -330,7 +328,6 @@ export const operationsEn: typeof operationsZh = {
   cancel: 'Cancel pending request',
   approvalHint:
     'This page aggregates visible pending requests. Original business owners enforce decisions and execution. Acceptance does not prove device effect.',
-  softwareRequests: 'Self-service software requests',
   workflowRequests: 'Workflow approvals',
 
   navigation: 'Authorization and operations navigation',
@@ -387,7 +384,6 @@ export const operationsEn: typeof operationsZh = {
     job: 'Operations job',
     device: 'Device',
     policy: 'Policy',
-    software_request: 'Software request',
     workflow: 'Workflow',
 
     compliance_rule: 'Compliance rule',

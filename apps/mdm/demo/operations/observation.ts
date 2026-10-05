@@ -13,7 +13,6 @@ export function observationTarget(
     [/^\/api\/(?:v1\/devices|v1\/mdm-candidate\/devices)\/([^/]+)/, 'device'],
     [/^\/api\/(?:v1\/policies|v1\/mdm-candidate\/policies\/assignments)\/([^/]+)/, 'policy'],
     [/^\/api\/v1\/mdm-candidate\/policies\/workflows\/([^/]+)/, 'workflow'],
-    [/^\/api\/v1\/mdm-candidate\/software\/self-service\/requests\/([^/]+)/, 'software_request'],
     [/^\/api\/v1\/mdm-candidate\/operations\/reports\/([^/]+)/, 'report'],
     [/^\/api\/v1\/mdm-candidate\/operations\/maintenance\/([^/]+)/, 'job'],
     [/^\/api\/v1\/mdm-candidate\/operations\/alert-rules\/([^/]+)/, 'alert_rule'],

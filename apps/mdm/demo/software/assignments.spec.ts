@@ -125,20 +125,24 @@ it('only admits on Agent poll, retains independent delivery and verified result,
     items: [{ taskAdmission: { state: 'approval_withdrawn' } }, {}],
   })
 })
-it('available installation waits for explicit synthetic local consent; pause never erases unknown effects', () => {
+it('AvailableInstall does not prequeue or start without a self-service invocation', () => {
   const f = setup(),
     at = 2000000000
   f.definition.action.intent = 'available_install'
+  expect(f.put().status).toBe(200)
+  f.owner.tick({ kind: 'check_in', device: 'device-01', at }, 'normal')
+  f.owner.tick({ kind: 'software_start', device: 'device-01', at: at + 1 }, 'normal')
+  expect(f.runs()).toEqual([])
+})
+it('pausing RequiredInstall preserves unknown effects and does not restart on enable', () => {
+  const f = setup(),
+    at = 2000000000
   f.put()
   f.owner.tick({ kind: 'check_in', device: 'device-01', at }, 'normal')
-  expect(f.runs()[0]?.userAction).toBe('waiting_user')
   f.owner.tick({ kind: 'check_in', device: 'device-01', at: at + 1 }, 'normal')
-  expect(f.runs()[0]?.state.execution).toBe('not_started')
-  f.owner.tick({ kind: 'software_start', device: 'device-01', at: at + 2 }, 'normal')
   expect(f.runs()[0]?.state.execution).toBe('running')
   f.owner.handle(request(f.path, operation({ action: 'disable' }, 1)), 'normal')
-  expect(f.runs()[0]?.state.cancellation).toBe('requested')
-  f.owner.tick({ kind: 'check_in', device: 'device-01', at: at + 3 }, 'normal')
+  f.owner.tick({ kind: 'check_in', device: 'device-01', at: at + 2 }, 'normal')
   expect(f.runs()[0]?.state.execution).toBe('unknown')
   f.owner.handle(request(f.path, operation({ action: 'enable' }, 2)), 'normal')
   f.owner.tick({ kind: 'check_in', device: 'device-01', at: at + 1000 }, 'normal')

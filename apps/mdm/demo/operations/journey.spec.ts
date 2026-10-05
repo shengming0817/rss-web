@@ -185,7 +185,6 @@ it('records the exact business target and offline/unsupported failures without i
   const target = id()
   const cases: [string, string | null][] = [
     ['/api/v1/devices/device-01/operations', 'device-01'],
-    [`/api/v1/mdm-candidate/software/self-service/requests/${target}`, target],
     [`/api/v1/mdm-candidate/policies/assignments/${target}`, target],
     ['/api/v1/mdm-candidate/unrecognized', null],
   ]

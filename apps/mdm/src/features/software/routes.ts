@@ -20,12 +20,6 @@ export const softwareFeature: MdmFeature = {
       meta: { protected: true },
     },
     {
-      path: '/tenants/:tenant/software/self-service',
-      name: 'software-self-service',
-      component: () => import('./views/SelfServiceView.vue'),
-      meta: { protected: true },
-    },
-    {
       path: '/tenants/:tenant/software/deployments',
       name: 'software-deployments',
       component: () => import('./views/DeploymentsView.vue'),
