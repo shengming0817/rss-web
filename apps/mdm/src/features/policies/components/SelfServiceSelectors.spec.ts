@@ -1,6 +1,7 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import { defineComponent, ref } from 'vue'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
 import SelfServiceSelectors from './SelfServiceSelectors.vue'
@@ -24,9 +25,14 @@ it('adds fixed user, department and active static group selections, rejects dupl
     setup: () => ({ selections }),
     template: '<SelfServiceSelectors v-model="selections" />',
   })
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/', component: Host }],
+  })
+  await router.push('/')
   const wrapper = mount(Host, {
     global: {
-      plugins: [mdmI18n()],
+      plugins: [mdmI18n(), router],
       stubs: {
         TenantUserSelect: {
           template:
