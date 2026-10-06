@@ -139,20 +139,29 @@ try {
       }
       assert.equal(new URL(page.url()).pathname, `/tenants/${fixture.tenant}/operations/${route}`)
     }
-    for (const route of ['apple-account', 'apple-ade', 'windows-entra'])
-      await organizationRead(route)
-    coverage.push('authenticated-organization-reads')
+    const organizationRoutes = ['apple-account', 'apple-ade', 'windows-entra']
+    const enabledRoutes = fixture.organizationReadRoutes ?? organizationRoutes
+    assert.ok(Array.isArray(enabledRoutes))
+    assert.equal(new Set(enabledRoutes).size, enabledRoutes.length)
+    assert.ok(enabledRoutes.every((route) => organizationRoutes.includes(route)))
+    for (const route of enabledRoutes) await organizationRead(route)
+    if (enabledRoutes.length) coverage.push('authenticated-organization-reads')
+    for (const route of organizationRoutes)
+      if (!enabledRoutes.includes(route)) gaps.push(`configured-${route}-backend`)
     if (fixture.probeOrganizationReadFailure) {
       for (const status of [500, 200]) {
-        await page.route('**/api/v1/apple/organizations', (route) =>
-          route.fulfill({
+        let served = false
+        await page.route('**/api/v1/apple/organizations', (route) => {
+          served = true
+          return route.fulfill({
             status,
             contentType: 'application/json',
             body:
               status === 500 ? '{"code":"service_unavailable"}' : '{"items":[{"invalid":true}]}',
-          }),
-        )
+          })
+        })
         await assert.rejects(() => organizationRead('apple-account'))
+        assert.equal(served, true)
         await page.unroute('**/api/v1/apple/organizations')
       }
       coverage.push('organization-read-failure-oracles')
