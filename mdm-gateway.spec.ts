@@ -73,3 +73,27 @@ it('proxies only the published anonymous installer paths with TLS verification a
   expect(location[2]).toContain('limit_except GET { deny all; }')
   expect(location[2]).not.toMatch(/proxy_set_header (Cookie|Authorization|X-CSRF|X-Identity)/i)
 })
+
+it('applies the ADE token budget at the first matching regex location', () => {
+  const config = readFileSync(new URL('./deploy/mdm/gateway.conf.example', import.meta.url), 'utf8')
+  const locations = [...config.matchAll(/location ~ (?:"([^"\n]+)"|(\S+)) \{([^\n]+)/g)]
+  function budget(path: string) {
+    const match = locations.find((location) => new RegExp(location[1] ?? location[2]!).test(path))
+    return match?.[3]?.match(/client_max_body_size ([^;]+);/)?.[1] ?? '16k'
+  }
+  expect(budget('/api/v1/apple/organizations/id/ade/operations')).toBe('256k')
+  expect(budget('/api/v1/apple/organizations/id/ade/configuration')).toBe('256k')
+  expect(budget('/api/v1/apple/organizations/id/ade/profiles')).toBe('16k')
+  expect(budget('/api/v1/apple/organizations/id/ade/operations/extra')).toBe('16k')
+})
+it('keeps the TOU frame policy tied to the original request across SPA fallback', () => {
+  const config = readFileSync(new URL('./deploy/mdm/gateway.conf.example', import.meta.url), 'utf8')
+  expect(config).toContain('map $request_uri $mdm_frame_ancestors')
+  const rule = config.match(/~(\^\/enrollment\/[^\s]+) "https:\/\/login.microsoftonline.com"/)
+  expect(rule).not.toBeNull()
+  const path = new RegExp(rule![1]!)
+  expect(path.test('/enrollment/windows/entra/terms')).toBe(true)
+  expect(path.test('/enrollment/windows/entra/terms?mode=azureadjoin')).toBe(true)
+  for (const other of ['/index.html', '/downloads/agent', '/enrollment/windows/entra/terms/extra'])
+    expect(path.test(other)).toBe(false)
+})

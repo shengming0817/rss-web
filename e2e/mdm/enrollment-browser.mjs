@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import assert from 'node:assert/strict'
 import process from 'node:process'
+import { assertNativeCallback } from './enrollment-callback.mjs'
 let browser,
   context,
   phase = 'environment',
@@ -22,6 +23,9 @@ async function stop() {
 process.once('SIGINT', stop)
 process.once('SIGTERM', stop)
 const deadline = setTimeout(stop, 180000)
+function active() {
+  assert.equal(interrupted, false, 'Browser run cancelled')
+}
 function secret(path) {
   const mode = statSync(path).mode & 0o777
   assert.equal(mode & 0o077, 0)
@@ -35,10 +39,13 @@ try {
   assert.equal(parsed.origin, fixture.origin)
   assert.match(fixture.tenant, /^[0-9a-f-]{36}$/)
   const origin = parsed.origin
-  browser = await chromium.launch()
+  browser = await chromium.launch({ timeout: 10000 })
+  active()
   context = await browser.newContext({ ignoreHTTPSErrors: true, locale: 'zh-CN' })
+  active()
   const page = await context.newPage()
   page.setDefaultTimeout(10000)
+  active()
   phase = 'anonymous-downloads'
   await page.goto(`${origin}/downloads/agent`)
   await page.getByRole('heading', { name: '下载 Agent 安装器', exact: true }).waitFor()
@@ -72,6 +79,7 @@ try {
   )
   coverage.push('anonymous-private-boundary')
   async function login(account) {
+    active()
     await page.goto(`${origin}/tenants/${fixture.tenant}/login`)
     await page.locator('#login-name').fill(account.login)
     await page.locator('#login-password').fill(secret(account.passwordFile))
@@ -79,6 +87,7 @@ try {
     await page.waitForURL(/workspace/)
   }
   if (fixture.reader) {
+    active()
     phase = 'ordinary-user'
     await login(fixture.reader)
     assert.equal(await page.getByRole('link', { name: 'Agent 安装配置', exact: true }).count(), 0)
@@ -88,6 +97,7 @@ try {
     coverage.push('ordinary-user-no-configuration-form')
   } else gaps.push('ordinary-user-permissions')
   if (fixture.admin) {
+    active()
     phase = 'organization-read'
     await login(fixture.admin)
     for (const route of ['apple-account', 'apple-ade', 'windows-entra']) {
@@ -97,17 +107,20 @@ try {
     }
     coverage.push('authenticated-organization-pages')
     if (fixture.configurationReady) {
+      active()
       phase = 'configuration-lost-response'
       await page.goto(`${origin}/tenants/${fixture.tenant}/agent-configurations`)
       await page.getByRole('button', { name: '生成完整 JSON', exact: true }).waitFor()
       let commits = 0
       await page.route('**/api/v1/agent-configurations', async (route) => {
         if (route.request().method() !== 'POST') return route.continue()
-        const response = await route.fetch()
+        active()
+        const response = await route.fetch({ timeout: 10000 })
         assert.equal(response.status(), 200)
         commits++
         await route.abort('failed')
       })
+      active()
       await page.getByRole('button', { name: '生成完整 JSON', exact: true }).click()
       await page.getByText('提交结果未知', { exact: false }).first().waitFor()
       await page.unroute('**/api/v1/agent-configurations')
@@ -121,6 +134,7 @@ try {
     } else gaps.push('configuration-PKI-and-signer')
   } else gaps.push('administrator-organization-configuration')
   if (fixture.nativeStart) {
+    active()
     phase = 'native-tou'
     await context.clearCookies()
     const flow = fixture.nativeStart,
@@ -143,11 +157,11 @@ try {
     let finished = false
     await page.route('**/api/v1/windows/entra/terms/finish', async (route) => {
       assert.equal(route.request().method(), 'POST')
-      const response = await route.fetch({ maxRedirects: 0 })
+      active()
+      const response = await route.fetch({ maxRedirects: 0, timeout: 10000 })
       assert.equal(response.status(), 302)
       const callback = new URL(response.headers()['location'])
-      assert.equal(callback.origin, new URL(flow.callback).origin)
-      assert.equal(callback.pathname, new URL(flow.callback).pathname)
+      assertNativeCallback(callback, flow.callback)
       assert.equal(callback.searchParams.get('IsAccepted'), 'true')
       assert.equal(callback.searchParams.get('client-request-id'), requestId)
       assert.ok(callback.searchParams.get('OpaqueBlob'))
@@ -170,7 +184,17 @@ try {
   process.removeListener('SIGTERM', stop)
   for (const resource of [context, browser]) {
     try {
-      await resource?.close()
+      let timer
+      try {
+        await Promise.race([
+          resource?.close(),
+          new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error('Cleanup deadline')), 10000)
+          }),
+        ])
+      } finally {
+        clearTimeout(timer)
+      }
     } catch {
       cleanup = 'failed'
     }

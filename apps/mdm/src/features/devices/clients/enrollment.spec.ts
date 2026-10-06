@@ -19,7 +19,7 @@ it('keeps pending authorization separate from registration and rejects invented 
     instructions: {
       platform: 'macos',
       profileUrl: `/api/v1/enrollments/${id}/profile`,
-      enrollmentMethod: 'password',
+      enrollmentMethod: 'profile_based_device_enrollment',
     },
     progress: {
       profilePrepared: 'unknown',
@@ -31,6 +31,12 @@ it('keeps pending authorization separate from registration and rejects invented 
     },
   }
   expect(decodeEnrollment(response, id)).toEqual(response)
+  expect(() =>
+    decodeEnrollment(
+      { ...response, instructions: { ...response.instructions, enrollmentMethod: 'password' } },
+      id,
+    ),
+  ).toThrow()
   expect(() => decodeEnrollment({ ...response, status: 'installed' }, id)).toThrow()
   expect(() => decodeEnrollment(response, operation)).toThrow()
 })

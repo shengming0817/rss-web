@@ -80,7 +80,7 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
                   : {
                       platform: 'macos',
                       profileUrl: `/api/v1/enrollments/${e.enrollmentId}/profile`,
-                      enrollmentMethod: 'password',
+                      enrollmentMethod: 'profile_based_device_enrollment',
                     },
               progress: {
                 profilePrepared: 'unknown',

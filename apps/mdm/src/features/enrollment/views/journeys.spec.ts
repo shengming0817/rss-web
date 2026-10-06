@@ -210,11 +210,14 @@ it('reads MAA organizations and saves distinct account bindings without copying 
   await click('生成新组织 ID')
   await wrapper.find('input[maxlength="253"]').setValue('example.test')
   const form = wrapper.find('form')
-  await form.findAll('input')[1]!.setValue(crypto.randomUUID())
+  const server = crypto.randomUUID()
+  await form.findAll('input')[1]!.setValue(server)
   await form.findAll('input')[2]!.setValue('account')
   await form.trigger('submit')
   await flushPromises()
   expect(wrapper.text()).toContain('签名用途已配置')
+  expect(wrapper.find('dl').text()).toContain(server)
+  expect(wrapper.find('dl').text()).toContain('account')
   await wrapper.find('input[type=email]').setValue('managed@example.test')
   const mapping = wrapper.findAll('form')[1]!
   await mapping.findAll('input')[1]!.setValue(ADMIN)
@@ -253,4 +256,31 @@ it('edits Entra plaintext and refuses same-version text changes', async () => {
   await form.trigger('submit')
   await flushPromises()
   expect(wrapper.text()).toContain('冲突')
+})
+
+it('initializes the complete Entra draft after a session binding changes', async () => {
+  const { wrapper, runtime, state } = await setup(WindowsEntraView)
+  const first = await runtime.onboarding.entra.policy()
+  await runtime.onboarding.entra.save(first.revision, crypto.randomUUID(), {
+    enabled: true,
+    allUsers: true,
+    users: [],
+    termsVersion: 'next-version',
+    termsText: 'Next session terms',
+    allowBackground: true,
+  })
+  await wrapper.find('form input[type=text]').setValue('stale-version')
+  state.value = { ...state.value, session: { id: crypto.randomUUID() } }
+  await flushPromises()
+  expect((wrapper.get('form input[type=text]').element as HTMLInputElement).value).toBe(
+    'next-version',
+  )
+  expect((wrapper.get('form textarea').element as HTMLTextAreaElement).value).toBe(
+    'Next session terms',
+  )
+  expect(
+    wrapper
+      .findAll('form input[type=checkbox]')
+      .every((input) => (input.element as HTMLInputElement).checked),
+  ).toBe(true)
 })

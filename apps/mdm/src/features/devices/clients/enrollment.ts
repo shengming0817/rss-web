@@ -99,7 +99,7 @@ export function decodeEnrollment(value: unknown, id: string) {
         platform,
         discoveryUrl: https(i['discoveryUrl']),
         windowsProfile: enumeration(i['windowsProfile'], ['Full', 'Device'] as const),
-        enrollmentMethod: identifier(i['enrollmentMethod']),
+        enrollmentMethod: enumeration(i['enrollmentMethod'], ['entra_user_credential'] as const),
       }
     }
     if (platform === 'macos') {
@@ -107,19 +107,32 @@ export function decodeEnrollment(value: unknown, id: string) {
       const profileUrl = string(i['profileUrl'])
       if (profileUrl !== `/api/v1/enrollments/${id}/profile`)
         throw new Error('Wrong profile locator')
-      return { platform, profileUrl, enrollmentMethod: identifier(i['enrollmentMethod']) }
+      return {
+        platform,
+        profileUrl,
+        enrollmentMethod: enumeration(i['enrollmentMethod'], [
+          'profile_based_device_enrollment',
+        ] as const),
+      }
     }
     if (platform === 'macos_account') {
       closed(i, ['platform', 'managedAccount', 'enrollmentMethod'])
       return {
         platform,
         managedAccount: identifier(i['managedAccount']),
-        enrollmentMethod: identifier(i['enrollmentMethod']),
+        enrollmentMethod: enumeration(i['enrollmentMethod'], [
+          'account_driven_device_enrollment',
+        ] as const),
       }
     }
     if (platform === 'macos_ade') {
       closed(i, ['platform', 'enrollmentMethod'])
-      return { platform, enrollmentMethod: identifier(i['enrollmentMethod']) }
+      return {
+        platform,
+        enrollmentMethod: enumeration(i['enrollmentMethod'], [
+          'automated_device_enrollment',
+        ] as const),
+      }
     }
     closed(i, ['platform'])
     return { platform }

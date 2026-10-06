@@ -73,7 +73,12 @@ watch(
   canRead,
   (allowed) => {
     current.value = undefined
+    enabled.value = false
+    allUsers.value = false
+    users.value = ''
+    termsVersion.value = ''
     termsText.value = ''
+    allowBackground.value = false
     freshRead.value = false
     if (allowed) refresh()
   },

@@ -17,10 +17,9 @@ const usage = ref<Awaited<ReturnType<typeof client.me>>>(),
 const profile = ref<'Full' | 'Device'>('Device')
 const password = ref(''),
   handedOff = ref(false),
-  enrollmentId = ref('')
-const native = ref<
-  Awaited<ReturnType<typeof runtime.devices.enrollment.status>> & { deviceId?: string }
->()
+  enrollmentId = ref(''),
+  deviceId = ref('')
+const native = ref<Awaited<ReturnType<typeof runtime.devices.enrollment.status>>>()
 type Command = {
   kind: 'create' | 'resume' | 'cancel'
   operation: string
@@ -96,6 +95,7 @@ function submit(kind: Command['kind'], replay = false) {
     (v) => {
       if (v.native) {
         enrollmentId.value = v.native.enrollmentId
+        if ('deviceId' in v.native) deviceId.value = v.native.deviceId
         native.value = undefined
       }
       pending.value = undefined
@@ -120,6 +120,7 @@ watch(
   enrollmentId,
   () => {
     nativeTargetVersion++
+    deviceId.value = ''
     native.value = undefined
     clearSecret()
   },
@@ -226,7 +227,7 @@ refresh()
       <dt>{{ t('devices.enrollmentId') }}</dt>
       <dd>{{ native.enrollmentId }}</dd>
       <dt>{{ t('devices.deviceId') }}</dt>
-      <dd>{{ native.deviceId ?? '—' }}</dd>
+      <dd>{{ deviceId || '—' }}</dd>
       <dt>{{ t('devices.status') }}</dt>
       <dd>{{ t(`devices.${native.status}`) }}</dd>
       <dt>{{ t('devices.expires') }}</dt>

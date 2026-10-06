@@ -124,6 +124,12 @@ watch(
         <dd>{{ t('onboarding.notObserved') }}</dd>
         <dt>{{ t('onboarding.domain') }}</dt>
         <dd>{{ selected.domain }}</dd>
+        <dt>{{ t('onboarding.serverUuid') }}</dt>
+        <dd>{{ selected.serverUuid }}</dd>
+        <dt>{{ t('onboarding.signingKeyReference') }}</dt>
+        <dd>{{ selected.signingKey }}</dd>
+        <dt>{{ t('onboarding.enabled') }}</dt>
+        <dd>{{ t(`devices.${selected.enabled ? 'yes' : 'no'}`) }}</dd>
       </dl>
       <form v-if="canWrite && id" @submit.prevent="saveOrganization">
         <fieldset :disabled="busy || uncertain">
