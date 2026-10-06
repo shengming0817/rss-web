@@ -310,3 +310,47 @@ it('dispatches exact authorization JSON at 2 MiB while rejecting overflow and ot
   expect(mock.history.put).toHaveLength(1)
   expect(mock.history.post).toHaveLength(0)
 })
+
+it('uses shared binary execution only for published attachment endpoints and decodes bounded failures', async () => {
+  const instance = axios.create(),
+    mock = new AxiosMockAdapter(instance)
+  const spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance)
+  const transport = createMdmTransport()
+  spy.mockRestore()
+  const bytes = new Uint8Array([1, 2, 3]).buffer
+  mock.onPost('/api/v1/enrollments/test/profile').reply(200, bytes, {
+    'content-type': 'application/x-apple-aspen-config',
+    'content-disposition': 'attachment; filename=RSS-MDM.mobileconfig',
+  })
+  const options = {
+    method: 'POST' as const,
+    path: '/api/v1/enrollments/{id}/profile',
+    pathParams: { id: 'test' },
+    body: { password: 'fixture' },
+    responseType: 'arraybuffer' as const,
+    successStatus: 200 as const,
+    decode: (v: unknown) => v,
+  }
+  await expect(transport.request(options)).resolves.toMatchObject({
+    bytes,
+    contentType: 'application/x-apple-aspen-config',
+  })
+  mock
+    .onPost('/api/v1/enrollments/test/profile')
+    .reply(403, new TextEncoder().encode('{"code":"permission_denied"}').buffer)
+  await expect(transport.request(options)).rejects.toMatchObject({
+    code: 'permission_denied',
+    cause: 'wire',
+  })
+  await expect(transport.request({ ...options, path: '/api/v1/devices' })).rejects.toMatchObject({
+    cause: 'client',
+  })
+  for (const path of [
+    '/api/v1/self-enrollments/agent',
+    '/api/v1/agent-grants/{id}',
+    '/api/v1/agent/enroll/packages/latest',
+  ])
+    await expect(
+      transport.request({ method: 'GET', path, successStatus: 200, decode: (v) => v }),
+    ).rejects.toMatchObject({ cause: 'client' })
+})

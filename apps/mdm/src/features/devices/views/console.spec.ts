@@ -633,28 +633,6 @@ it('organization responsibility can be assigned and cleared without occupying pe
   await click('重新读取')
 })
 
-it('refreshes Agent activation and stops presenting it as a pending enrollment to cancel', async () => {
-  const { wrapper, devices, click } = await setup('self-enrollments')
-  await wrapper.find('select').setValue('agent')
-  await click('生成一次性交付口令')
-  await wrapper.find('input[type=checkbox]').setValue(true)
-  await wrapper.findAll('form')[0]!.trigger('submit')
-  await flushPromises()
-  const receipt = await devices.registration.agentStatus(wrapper.find('dl dd').text())
-  const activated = vi.spyOn(devices.registration, 'agentStatus').mockResolvedValue({
-    ...receipt,
-    grant: { ...receipt.grant, state: 'consumed' },
-    activation: {
-      deviceId: 'activated-agent',
-      registrationId: '55555555-5555-4555-8555-555555555555',
-    },
-  })
-  await click('刷新状态与额度')
-  expect(activated).toHaveBeenCalled()
-  expect(wrapper.text()).toContain('activated-agent')
-  expect(wrapper.findAll('button').some((b) => b.text() === '取消注册授权')).toBe(false)
-})
-
 it('invalidates the displayed native registration when the query target changes and cancels only the newly read target', async () => {
   const { wrapper, devices, click } = await setup('self-enrollments')
   const first = await devices.registration.enroll(

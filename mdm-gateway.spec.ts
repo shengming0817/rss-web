@@ -38,19 +38,38 @@ it('routes registration resources through the tenant business gateway without ac
   for (const allowed of [
     '/api/v1/registration-quotas/me',
     '/api/v1/registration-quotas/defaults',
-    '/api/v1/self-enrollments',
-    '/api/v1/self-enrollments/agent',
-    '/api/v1/agent-grants/id',
+    '/api/v1/agent-configurations/id',
+    '/api/v1/agent-enrollment-settings',
   ])
     expect(path.test(allowed)).toBe(true)
   for (const rejected of [
     '/api/v1/registration-quotas-extra',
     '/api/v1/self-enrollments-extra',
     '/api/v1/agent-grants-extra',
+    '/api/v1/agent-grants/id',
+    '/api/v1/self-enrollments/agent',
     '/api/v1/unrelated',
   ])
     expect(path.test(rejected)).toBe(false)
   expect(business[2]).toContain('limit_req zone=mdm_api burst=20 nodelay;')
   expect(business[2]).toContain('proxy_pass http://mdm:8080;')
   expect(config.indexOf(business[0])).toBeLessThan(config.indexOf('location /api/ { return 404; }'))
+})
+
+it('proxies only the published anonymous installer paths with TLS verification and no incoming credentials', () => {
+  const config = readFileSync(new URL('./deploy/mdm/gateway.conf.example', import.meta.url), 'utf8')
+  const location = config.match(
+    /location ~ "(\^\/api\/v1\/agent\/enroll\/packages[^"]+)" \{([\s\S]*?)\n {4}\}/,
+  )!
+  const pattern = new RegExp(location[1]!)
+  const id = '11111111-1111-4111-8111-111111111111'
+  for (const path of ['', `/${id}`, `/${id}/content`])
+    expect(pattern.test(`/api/v1/agent/enroll/packages${path}`)).toBe(true)
+  for (const path of ['/private', `/${id}/private`, `/${id}/content/extra`, '/enroll', '/latest'])
+    expect(pattern.test(`/api/v1/agent/enroll/packages${path}`)).toBe(false)
+  expect(location[2]).toContain('proxy_pass_request_headers off;')
+  expect(location[2]).toContain('proxy_ssl_verify on;')
+  expect(location[2]).toContain('proxy_ssl_server_name on;')
+  expect(location[2]).toContain('limit_except GET { deny all; }')
+  expect(location[2]).not.toMatch(/proxy_set_header (Cookie|Authorization|X-CSRF|X-Identity)/i)
 })

@@ -375,7 +375,7 @@ export function createScenario(
           ? 'software'
           : policyPath
             ? 'policies'
-            : /^\/api\/(?:v1\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v1\/(?:enrollments|devices|self-enrollments|registration-quotas|agent-grants))(?:\/|$)/.test(
+            : /^\/api\/(?:v1\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v1\/(?:enrollments|devices|self-enrollments|registration-quotas))(?:\/|$)/.test(
                   path,
                 )
               ? 'devices'

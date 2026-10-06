@@ -2,7 +2,7 @@ import { onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { isRssApiError } from '@rss/api/mdm'
 /** View-local late-response fencing. The app session remains the sole credential owner. */
-export function useOperation() {
+export function useOperation(unknownCodes: readonly string[] = []) {
   const busy = ref(false),
     uncertain = ref(false),
     failure = ref<string | null>(null)
@@ -41,7 +41,8 @@ export function useOperation() {
           (!isRssApiError(e) ||
             ['network', 'timeout', 'aborted', 'protocol'].includes(e.cause) ||
             e.code === 'operation_unknown' ||
-            e.code === 'operation_rollback_unconfirmed')
+            e.code === 'operation_rollback_unconfirmed' ||
+            unknownCodes.includes(e.code))
         )
           uncertain.value = true
         failure.value =

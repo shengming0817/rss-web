@@ -1,5 +1,4 @@
 /** Mutable quota settings share the existing enrollment and device lifecycle owner. */
-import { randomUUID } from 'node:crypto'
 import { TENANT, type DomainHandler } from '../scenario'
 import { ADMIN, INSTANCE } from '../operations/authorization'
 import { createReceipts, error, ok } from '../http'
@@ -24,16 +23,6 @@ export function createRegistrationDemo(
 ) {
   const settings = new Map<string, Config>(),
     responsibilities = new Map<string, { revision: number; user: ReturnType<typeof user> | null }>()
-  const grants = new Map<
-    string,
-    {
-      grantId: string
-      state: 'available' | 'revoked'
-      expiresAt: number
-      platform: 'windows' | 'macos'
-      actor: string
-    }
-  >()
   const receipts = createReceipts()
   const config = (target: string): Config =>
     settings.get(target) ?? {
@@ -71,9 +60,7 @@ export function createRegistrationDemo(
               ).length
         const reserved =
           channel === 'agent'
-            ? [...grants.values()].filter(
-                (g) => g.actor === actor && g.state === 'available' && g.expiresAt > now,
-              ).length
+            ? 0
             : owned.filter((e) => e.status === 'pending' && !e.registrationId && e.expiresAt > now)
                 .length
         const limit = overrides.limits[channel] ?? defaults.limits[channel] ?? 20,
@@ -98,24 +85,6 @@ export function createRegistrationDemo(
     const quota =
       /^\/api\/v1\/registration-quotas\/(me|defaults|users\/([^/]+)\/([^/]+)(\/usage)?)$/.exec(path)
     const responsibility = /^\/api\/v1\/devices\/([^/]+)\/registration-user$/.exec(path)
-    const agent = /^\/api\/v1\/self-enrollments\/agent(?:\/([^/]+)\/cancel)?$/.exec(path)
-    const status = /^\/api\/v1\/agent-grants\/([^/]+)$/.exec(path)
-    if (status && method === 'GET') {
-      const value = grants.get(uuid(status[1]))
-      if (!value || value.actor !== actor.principalId) return error('permission_denied', 403)
-      const grant = {
-        grantId: value.grantId,
-        state: value.state,
-        expiresAt: value.expiresAt,
-        platform: value.platform,
-      }
-      return ok({
-        grant: { wireVersion: 1, ...grant },
-        issuanceId: null,
-        issuanceUnknown: false,
-        activation: null,
-      })
-    }
     if (quota) {
       if (quota[1] === 'me')
         return method === 'GET' ? ok(usage(actor.principalId)) : error('malformed_request', 400)
@@ -160,43 +129,6 @@ export function createRegistrationDemo(
         return ok(value)
       })
     }
-    if (agent && method === 'POST') {
-      const raw = closed(
-        request.body,
-        agent[1] ? ['operationId'] : ['wireVersion', 'operationId', 'secret', 'platform'],
-      )
-      return receipts.write(request, uuid(raw['operationId']), () => {
-        let value
-        if (agent[1]) {
-          value = grants.get(uuid(agent[1]))
-          if (!value || value.actor !== actor.principalId) return error('permission_denied', 403)
-          value.state = 'revoked'
-        } else {
-          if (
-            raw['wireVersion'] !== 1 ||
-            typeof raw['secret'] !== 'string' ||
-            !/^[A-Za-z0-9_-]{43}$/.test(raw['secret'])
-          )
-            return error('malformed_request', 400)
-          if (!admit(actor.principalId, 'agent')) return error('registration_limit', 429)
-          value = {
-            grantId: randomUUID(),
-            state: 'available' as const,
-            expiresAt: Math.floor(Date.now() / 1000) + 300,
-            platform: enumeration(raw['platform'], ['windows', 'macos'] as const),
-            actor: actor.principalId,
-          }
-          grants.set(value.grantId, value)
-        }
-        const view = {
-          grantId: value.grantId,
-          state: value.state,
-          expiresAt: value.expiresAt,
-          platform: value.platform,
-        }
-        return ok({ wireVersion: 1, ...view })
-      })
-    }
     if (path !== '/api/v1/self-enrollments' || method !== 'POST') return
     const op = uuid(request.headers['idempotency-key'])
     return receipts.write(request, op, () => {
@@ -223,7 +155,6 @@ export function createRegistrationDemo(
     reset() {
       settings.clear()
       responsibilities.clear()
-      grants.clear()
       receipts.reset()
     },
   }

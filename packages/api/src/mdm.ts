@@ -5,7 +5,13 @@ import { decodeIdentityError } from './identity'
 import { execute } from './transport'
 import { clientError, identityWireFailure, protocolError } from './wire-error'
 import type { HttpTransport, NoContentRequest, RequestOptions, RssApiError } from './types'
-export type { HttpTransport, NoContentRequest, RequestOptions, RssApiError } from './types'
+export type {
+  BinaryResponse,
+  HttpTransport,
+  NoContentRequest,
+  RequestOptions,
+  RssApiError,
+} from './types'
 export { isRssApiError } from './wire-error'
 const statuses: Readonly<Record<string, number>> = {
   malformed_request: 400,
@@ -81,12 +87,32 @@ export function decodeMdmError(status: number, value: unknown): RssApiError {
   return identityWireFailure(status, v['code'])
 }
 const paths =
-  /^\/api\/v1\/(?:(?:authorization|devices|software-sources|certificate-archive|asset-fields|device-queries|saved-queries|groups|scopes|policies|compliance-rules|resources|software|enrollments|self-enrollments|registration-quotas|agent-grants)(?:\/|$)|mdm-host\/config\.json$|mdm-candidate\/(?:workspace|devices|groups|policies|executions|software|security|support|authorization|audit|operations|integrations)(?:\/|$))/
+  /^\/api\/v1\/(?:(?:authorization|devices|software-sources|certificate-archive|asset-fields|device-queries|saved-queries|groups|scopes|policies|compliance-rules|resources|software|enrollments|registration-quotas)(?:\/|$)|self-enrollments$|agent-(?:configurations|configuration-operations|enrollment-settings)(?:\/|$)|apple\/organizations(?:\/|$)|windows\/entra-policy$|windows\/entra\/terms\/context$|agent\/enroll\/packages(?:\/\{id\})?$|mdm-host\/config\.json$|mdm-candidate\/(?:workspace|devices|groups|policies|executions|software|security|support|authorization|audit|operations|integrations)(?:\/|$))/
 export function createMdmTransport(): HttpTransport {
   const instance = axios.create({ baseURL: '' })
   return {
     async request(options: NoContentRequest | RequestOptions<unknown>) {
       if (!paths.test(options.path)) throw clientError()
+      const publicRead =
+        options.path.startsWith('/api/v1/agent/enroll/packages') ||
+        options.path === '/api/v1/windows/entra/terms/context'
+      if (
+        publicRead &&
+        (options.method !== 'GET' ||
+          options.body !== undefined ||
+          Object.keys(options.headers ?? {}).length)
+      )
+        throw clientError()
+      if (
+        'responseType' in options &&
+        !(
+          (options.method === 'POST' && options.path === '/api/v1/agent-configurations') ||
+          (options.method === 'POST' && options.path === '/api/v1/enrollments/{id}/profile') ||
+          (options.method === 'GET' &&
+            options.path === '/api/v1/apple/organizations/{id}/ade/public-key')
+        )
+      )
+        throw clientError()
       const content = isMdmContentRequest(options.method, options.path)
       if (
         Object.entries(options.headers ?? {}).some(
@@ -127,7 +153,44 @@ export function createMdmTransport(): HttpTransport {
           mdmJsonBodyLimit(options.method, options.path)
       )
         throw decodeMdmError(413, undefined)
-      return execute(instance, 30_000, options, decodeMdmError)
+      return execute(
+        instance,
+        30_000,
+        options,
+        options.path.startsWith('/api/v1/agent-') ? decodeAgentError : decodeMdmError,
+      )
     },
   } as HttpTransport
+}
+
+/** Agent management has its own closed failure envelope, including issuance identity. */
+export function decodeAgentError(status: number, value: unknown): RssApiError {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const v = value as Record<string, unknown>
+    const agentStatuses: Readonly<Record<string, number>> = {
+      malformed_request: 400,
+      invalid_identity: 401,
+      permission_denied: 403,
+      grant_revoked: 403,
+      grant_expired: 403,
+      registration_limit: 429,
+      operation_conflict: 409,
+      issuance_unknown: 503,
+      activation_unknown: 503,
+      service_unavailable: 503,
+      credential_revoked: 401,
+      retired: 401,
+      certificate_expired: 401,
+    }
+    if (
+      Object.keys(v).sort().join() === 'code,issuanceId' &&
+      typeof v['code'] === 'string' &&
+      agentStatuses[v['code']] === status &&
+      (v['issuanceId'] === null ||
+        (typeof v['issuanceId'] === 'string' &&
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(v['issuanceId'])))
+    )
+      return identityWireFailure(status, v['code'])
+  }
+  return decodeMdmError(status, value)
 }

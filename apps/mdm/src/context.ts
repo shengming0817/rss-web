@@ -7,9 +7,11 @@ import type { createDeviceClients } from './features/devices/client'
 import type { createSoftwareClients } from './features/software/client'
 import type { createSecurityClients } from './features/security/client'
 import type { createOperationsClients } from './features/operations/client'
+import type { createOnboardingClients } from './features/enrollment/client'
 export interface MdmRuntime {
   session: IdentitySession
   transport: HttpTransport
+  onboarding: ReturnType<typeof createOnboardingClients>
   workspace: ReturnType<typeof createWorkspaceClient>
   devices: ReturnType<typeof createDeviceClients>
   policies: ReturnType<typeof createPolicyClients>

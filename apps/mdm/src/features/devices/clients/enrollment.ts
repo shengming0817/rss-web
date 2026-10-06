@@ -3,6 +3,9 @@ import {
   array,
   closed,
   count,
+  boolean,
+  identifier,
+  string,
   enumeration,
   integer,
   nullable,
@@ -14,7 +17,7 @@ export type EnrollmentSource = (typeof enrollmentSources)[number]
 export interface EnrollmentInput {
   deviceId: string
   password: string
-  source: EnrollmentSource
+  source: 'mdm.windows' | 'mdm.apple'
   windowsProfile?: 'Full' | 'Device'
 }
 const statusKeys = ['enrollmentId', 'status', 'expiresAt', 'registrationId', 'source']
@@ -27,10 +30,135 @@ function status(value: Record<string, unknown>) {
     source: enumeration(value['source'], enrollmentSources),
   }
 }
-export function decodeEnrollment(value: unknown, id: string) {
+export function decodeEnrollmentReceipt(value: unknown, id: string) {
   const result = status(closed(value, statusKeys))
   if (result.enrollmentId !== id) throw new Error('Wrong enrollment')
   return result
+}
+export function decodeEnrollment(value: unknown, id: string) {
+  const v = closed(value, [...statusKeys, 'instructions', 'progress'])
+  const result = {
+    enrollmentId: uuid(v['enrollmentId']),
+    status: enumeration(v['status'], ['pending', 'bound', 'cancelled', 'expired'] as const),
+    expiresAt: integer(v['expiresAt']),
+    registrationId: nullable(v['registrationId'], uuid),
+    source: enumeration(v['source'], ['mdm.windows', 'mdm.apple'] as const),
+  }
+  if (result.enrollmentId !== id) throw new Error('Wrong enrollment')
+  const i = closed(
+    v['instructions'],
+    ['platform'],
+    [
+      'server',
+      'discoveryUrl',
+      'username',
+      'windowsProfile',
+      'requiresLocalAdministrator',
+      'profileUrl',
+      'managedAccount',
+      'enrollmentMethod',
+    ],
+  )
+  const platform = enumeration(i['platform'], [
+    'windows',
+    'windows_entra',
+    'macos',
+    'macos_account',
+    'macos_ade',
+    'unavailable',
+  ] as const)
+  function https(value: unknown) {
+    const raw = string(value),
+      url = new URL(raw)
+    if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash)
+      throw new Error('Invalid native URL')
+    return raw
+  }
+  function instructions() {
+    if (platform === 'windows') {
+      closed(i, [
+        'platform',
+        'server',
+        'discoveryUrl',
+        'username',
+        'windowsProfile',
+        'requiresLocalAdministrator',
+      ])
+      return {
+        platform,
+        server: identifier(i['server']),
+        discoveryUrl: https(i['discoveryUrl']),
+        username: identifier(i['username']),
+        windowsProfile: enumeration(i['windowsProfile'], ['Full', 'Device'] as const),
+        requiresLocalAdministrator: boolean(i['requiresLocalAdministrator']),
+      }
+    }
+    if (platform === 'windows_entra') {
+      closed(i, ['platform', 'discoveryUrl', 'windowsProfile', 'enrollmentMethod'])
+      return {
+        platform,
+        discoveryUrl: https(i['discoveryUrl']),
+        windowsProfile: enumeration(i['windowsProfile'], ['Full', 'Device'] as const),
+        enrollmentMethod: identifier(i['enrollmentMethod']),
+      }
+    }
+    if (platform === 'macos') {
+      closed(i, ['platform', 'profileUrl', 'enrollmentMethod'])
+      const profileUrl = string(i['profileUrl'])
+      if (profileUrl !== `/api/v1/enrollments/${id}/profile`)
+        throw new Error('Wrong profile locator')
+      return { platform, profileUrl, enrollmentMethod: identifier(i['enrollmentMethod']) }
+    }
+    if (platform === 'macos_account') {
+      closed(i, ['platform', 'managedAccount', 'enrollmentMethod'])
+      return {
+        platform,
+        managedAccount: identifier(i['managedAccount']),
+        enrollmentMethod: identifier(i['enrollmentMethod']),
+      }
+    }
+    if (platform === 'macos_ade') {
+      closed(i, ['platform', 'enrollmentMethod'])
+      return { platform, enrollmentMethod: identifier(i['enrollmentMethod']) }
+    }
+    closed(i, ['platform'])
+    return { platform }
+  }
+  const p = closed(v['progress'], [
+    'profilePrepared',
+    'certificateIssued',
+    'firstAuthenticatedCheckIn',
+    'systemConfirmation',
+    'managementReady',
+    'diagnostic',
+  ])
+  const observation = (v: unknown) =>
+    enumeration(v, ['observed', 'unknown', 'not_applicable'] as const)
+  return {
+    ...result,
+    instructions: instructions(),
+    progress: {
+      profilePrepared: observation(p['profilePrepared']),
+      certificateIssued: boolean(p['certificateIssued']),
+      firstAuthenticatedCheckIn: boolean(p['firstAuthenticatedCheckIn']),
+      systemConfirmation: observation(p['systemConfirmation']),
+      managementReady: boolean(p['managementReady']),
+      diagnostic: enumeration(p['diagnostic'], [
+        'awaiting_system_confirmation',
+        'awaiting_certificate',
+        'awaiting_first_check_in',
+        'awaiting_device_token',
+        'reauthentication_required',
+        'expired',
+        'cancelled',
+        'revoked',
+        'superseded',
+        'credential_unavailable',
+        'channel_unavailable',
+        'ready',
+      ] as const),
+    },
+  }
 }
 function receipt(value: unknown, operationId: string, id?: string) {
   const v = closed(value, ['operationId', ...statusKeys])

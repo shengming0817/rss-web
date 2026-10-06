@@ -7,7 +7,7 @@ it('binds only an authorized pending enrollment and keeps Agent binding separate
     now = Math.floor(Date.now() / 1000)
   const req = request('/api/v1/enrollments', {
     deviceId: 'device-05',
-    source: 'agent.builtin',
+    source: 'mdm.windows',
     password: Buffer.alloc(32, 1).toString('base64url'),
   })
   req.headers['idempotency-key'] = randomUUID()
@@ -26,7 +26,7 @@ it('binds only an authorized pending enrollment and keeps Agent binding separate
     at: now,
   })
   const d = devices.facts().find((d) => d.summary.id === 'device-05')!
-  expect(d.registrations.find((r) => r.source === 'agent.builtin')).toMatchObject({
+  expect(d.registrations.find((r) => r.source === 'mdm.windows')).toMatchObject({
     status: 'active',
     generation: 1,
   })

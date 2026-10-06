@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
-import { type Channel } from '../clients/registration'
+import NativeFacts from '../../enrollment/components/NativeFacts.vue'
 import { generateEnrollmentPassword } from '../clients/enrollment'
 import RegistrationFrame from '../components/RegistrationFrame.vue'
 const { t } = useI18n(),
@@ -13,22 +13,18 @@ const { t } = useI18n(),
   client = runtime.devices.registration
 const { run, runWrite, busy, uncertain, failure } = useOperation()
 const usage = ref<Awaited<ReturnType<typeof client.me>>>(),
-  channel = ref<Channel>('windows_mdm')
-const platform = ref<'windows' | 'macos'>('windows'),
-  profile = ref<'Full' | 'Device'>('Device')
+  channel = ref<'windows_mdm' | 'macos_mdm'>('windows_mdm')
+const profile = ref<'Full' | 'Device'>('Device')
 const password = ref(''),
   handedOff = ref(false),
   enrollmentId = ref('')
 const native = ref<
   Awaited<ReturnType<typeof runtime.devices.enrollment.status>> & { deviceId?: string }
 >()
-const agent = ref<Awaited<ReturnType<typeof client.agent>>>()
-const agentProgress = ref<Awaited<ReturnType<typeof client.agentStatus>>>()
 type Command = {
-  kind: 'create' | 'resume' | 'cancel' | 'cancelAgent'
+  kind: 'create' | 'resume' | 'cancel'
   operation: string
-  channel: Channel
-  platform: 'windows' | 'macos'
+  channel: 'windows_mdm' | 'macos_mdm'
   profile: 'Full' | 'Device'
   id: string
 }
@@ -36,24 +32,18 @@ const pending = ref<Command>()
 let nativeTargetVersion = 0
 function refresh() {
   const knownNative = native.value,
-    version = nativeTargetVersion,
-    grantId = agent.value?.grantId
+    version = nativeTargetVersion
   void run(
     async () => ({
       usage: await client.me(),
-      native: knownNative
-        ? await runtime.devices.enrollment.status(knownNative.enrollmentId)
+      native: enrollmentId.value
+        ? await runtime.devices.enrollment.status(enrollmentId.value)
         : undefined,
-      progress: grantId ? await client.agentStatus(grantId) : undefined,
     }),
     (v) => {
       usage.value = v.usage
       if (v.native && version === nativeTargetVersion)
         native.value = { ...knownNative, ...v.native }
-      if (grantId === agent.value?.grantId) {
-        agentProgress.value = v.progress
-        if (v.progress) agent.value = v.progress.grant
-      }
     },
   )
 }
@@ -73,12 +63,8 @@ function submit(kind: Command['kind'], replay = false) {
         kind,
         operation: crypto.randomUUID(),
         channel: channel.value,
-        platform: platform.value,
         profile: profile.value,
-        id:
-          kind === 'cancelAgent'
-            ? (agent.value?.grantId ?? '')
-            : (native.value?.enrollmentId ?? ''),
+        id: native.value?.enrollmentId ?? '',
       }
   if (
     !command ||
@@ -92,37 +78,25 @@ function submit(kind: Command['kind'], replay = false) {
   pending.value = command
   void runWrite(
     async () => {
-      if (command.kind === 'cancelAgent')
-        return { agent: await client.cancelAgent(command.id, command.operation) }
       if (command.kind === 'cancel')
         return { native: await runtime.devices.enrollment.cancel(command.id, command.operation) }
       if (command.kind === 'resume')
         return {
           native: await runtime.devices.enrollment.resume(command.id, command.operation, secret),
         }
-      return command.channel === 'agent'
-        ? { agent: await client.agent(command.operation, secret, command.platform) }
-        : {
-            native: await client.enroll(
-              command.operation,
-              secret,
-              command.channel === 'windows_mdm' ? 'mdm.windows' : 'mdm.apple',
-              command.profile,
-            ),
-          }
+      return {
+        native: await client.enroll(
+          command.operation,
+          secret,
+          command.channel === 'windows_mdm' ? 'mdm.windows' : 'mdm.apple',
+          command.profile,
+        ),
+      }
     },
     (v) => {
-      if (v.agent) {
-        if (agent.value?.grantId !== v.agent.grantId) agentProgress.value = undefined
-        agent.value = v.agent
-      }
       if (v.native) {
-        const knownNative = native.value
         enrollmentId.value = v.native.enrollmentId
-        native.value = {
-          ...(knownNative?.enrollmentId === v.native.enrollmentId ? knownNative : {}),
-          ...v.native,
-        }
+        native.value = undefined
       }
       pending.value = undefined
     },
@@ -156,8 +130,6 @@ watch(
   () => {
     clearSecret()
     native.value = undefined
-    agent.value = undefined
-    agentProgress.value = undefined
     pending.value = undefined
     enrollmentId.value = ''
     usage.value = undefined
@@ -198,20 +170,13 @@ refresh()
           >{{ t('devices.source')
           }}<select v-model="channel" :disabled="uncertain">
             <option
-              v-for="c in usage?.channels"
+              v-for="c in usage?.channels.filter((c) => c.channel !== 'agent')"
               :key="c.channel"
               :value="c.channel"
               :disabled="!c.canEnroll"
             >
               {{ t(`registration.${c.channel}`) }}
             </option>
-          </select></label
-        >
-        <label v-if="channel === 'agent'"
-          >{{ t('devices.platform')
-          }}<select v-model="platform" :disabled="uncertain">
-            <option value="windows">Windows</option>
-            <option value="macos">macOS</option>
           </select></label
         >
         <label v-if="channel === 'windows_mdm'"
@@ -255,31 +220,8 @@ refresh()
         </button>
       </fieldset>
     </form>
-    <dl v-if="agent">
-      <dt>{{ t('registration.agentGrant') }}</dt>
-      <dd>{{ agent.grantId }}</dd>
-      <dt>{{ t('devices.status') }}</dt>
-      <dd>{{ agent.state }}</dd>
-      <dt>{{ t('devices.expires') }}</dt>
-      <dd>{{ agent.expiresAt }}</dd>
-    </dl>
-    <button
-      v-if="agent && !agentProgress?.activation && ['available', 'consumed'].includes(agent.state)"
-      type="button"
-      :disabled="busy || uncertain"
-      @click="submit('cancelAgent')"
-    >
-      {{ t('registration.cancelAgent') }}
-    </button>
-    <p v-if="agent">{{ t('registration.cancelAgentNote') }}</p>
-    <dl v-if="agentProgress?.activation">
-      <dt>{{ t('devices.status') }}</dt>
-      <dd>{{ t('registration.activated') }}</dd>
-      <dt>{{ t('devices.deviceId') }}</dt>
-      <dd>{{ agentProgress.activation.deviceId }}</dd>
-      <dt>{{ t('registration.agentRegistration') }}</dt>
-      <dd>{{ agentProgress.activation.registrationId }}</dd>
-    </dl>
+    <RouterLink :to="{ name: 'agent-downloads' }">{{ t('onboarding.downloads') }}</RouterLink>
+    <NativeFacts v-if="native" :value="native" />
     <dl v-if="native">
       <dt>{{ t('devices.enrollmentId') }}</dt>
       <dd>{{ native.enrollmentId }}</dd>

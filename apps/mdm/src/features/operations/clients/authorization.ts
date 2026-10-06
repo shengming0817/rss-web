@@ -42,6 +42,8 @@ export const tenantPermissions = [
   'compliance_rule_read',
   'compliance_write',
   'compliance_recompute',
+  'agent_enrollment_read',
+  'agent_enrollment_write',
   'authorization_read',
   'authorization_write',
   'user_group_read',

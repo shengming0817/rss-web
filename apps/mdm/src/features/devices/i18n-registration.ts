@@ -22,14 +22,9 @@ export const registrationZh = {
   responsibilityNote:
     '仅适用于组织注册的设备，可以为空。修改责任人不改变设备凭据，也不占个人额度。',
   selectUser: '选择用户后读取配置',
-  agentGrant: 'Agent 注册授权',
-  agentRegistration: 'Agent 注册标识',
   nativeGrant: 'MDM 注册授权',
   handoff: '先保存注册密码并交给要注册的设备，然后提交。页面不会保存密码。',
   refresh: '刷新状态与额度',
-  cancelAgent: '取消注册授权',
-  cancelAgentNote: '取消授权不会撤销已注册的设备；已注册设备继续占用额度。',
-  activated: '已注册',
   saved: '已保存',
   replay: '核对后重试原操作',
 }
@@ -57,15 +52,10 @@ export const registrationEn: typeof registrationZh = {
   responsibilityNote:
     'Organization devices only; this field may be empty. Changing responsibility preserves device credentials and remains exempt from personal quotas.',
   selectUser: 'Select a user to load configuration',
-  agentGrant: 'Agent enrollment authorization',
-  agentRegistration: 'Agent registration ID',
   nativeGrant: 'MDM enrollment authorization',
   handoff:
     'Save the enrollment password and hand it to the device before submitting. This page does not retain passwords.',
   refresh: 'Refresh status and usage',
-  cancelAgent: 'Cancel enrollment authorization',
-  cancelAgentNote: 'Canceling authorization preserves registered devices and their quota usage.',
-  activated: 'Registered',
   saved: 'Saved',
   replay: 'Verify and replay the original operation',
 }
