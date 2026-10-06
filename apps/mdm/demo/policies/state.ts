@@ -188,6 +188,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
     }
   }
   return {
+    authorization,
     now: security.now,
     operations,
     security,

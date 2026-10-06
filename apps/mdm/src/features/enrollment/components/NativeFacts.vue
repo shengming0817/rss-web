@@ -10,7 +10,7 @@ const { t } = useI18n(),
   runtime = useMdm(),
   delivery = useAttachment(),
   { url, filename } = delivery,
-  { run, busy, failure } = useOperation(),
+  { run, busy, failure } = useOperation([], () => runtime.session.state.value.session?.id),
   password = ref('')
 async function profile() {
   const secret = password.value

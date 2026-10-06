@@ -38,6 +38,11 @@ export function startMdm(
     session,
     [
       {
+        path: '/enrollment/windows/entra/terms',
+        name: 'entra-terms',
+        component: () => import('./features/enrollment/views/TermsView.vue'),
+      },
+      {
         path: '/downloads/agent',
         name: 'agent-downloads',
         component: () => import('./features/enrollment/views/DownloadsView.vue'),

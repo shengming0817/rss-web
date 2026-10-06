@@ -11,6 +11,9 @@ const { t } = useI18n(),
       <RouterLink
         v-for="name in [
           'organization',
+          'appleAccount',
+          'appleAde',
+          'windowsEntra',
           'authorization',
           'audit',
           'reports',
@@ -22,7 +25,13 @@ const { t } = useI18n(),
         ]"
         :key="name"
         :to="{ name: `operations-${name}`, params: { tenant: runtime.tenant } }"
-        >{{ t(`operations.${name}`) }}</RouterLink
+        >{{
+          t(
+            ['appleAccount', 'appleAde', 'windowsEntra'].includes(name)
+              ? `onboarding.${name}`
+              : `operations.${name}`,
+          )
+        }}</RouterLink
       >
     </nav>
     <h1>{{ title }}</h1>

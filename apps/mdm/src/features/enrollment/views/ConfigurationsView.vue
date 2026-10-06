@@ -16,11 +16,10 @@ const runtime = useMdm(),
   { t } = useI18n()
 const permission = usePermission('agent_enrollment_read', 'agent_enrollment_write')
 const { canRead, canWrite } = permission,
-  { run, runWrite, busy, uncertain, failure } = useOperation([
-    'service_unavailable',
-    'issuance_unknown',
-    'activation_unknown',
-  ])
+  { run, runWrite, busy, uncertain, failure } = useOperation(
+    ['service_unavailable', 'issuance_unknown', 'activation_unknown'],
+    () => runtime.session.state.value.session?.id,
+  )
 const delivery = useAttachment(),
   { url, filename } = delivery
 const settings = ref<Awaited<ReturnType<typeof client.settings>>>(),
@@ -97,7 +96,8 @@ async function create() {
   }
 }
 function read() {
-  if (!canRead.value || !configurationId.value) return
+  if (!canRead.value || !configurationId.value || (uncertain.value && pending.value === 'create'))
+    return
   void run(
     () => client.read(configurationId.value),
     (v) => {
@@ -125,7 +125,14 @@ function recover() {
   )
 }
 function revoke() {
-  if (!canWrite.value || busy.value || !current.value || current.value.state !== 'available') return
+  if (
+    !canWrite.value ||
+    busy.value ||
+    (uncertain.value && pending.value !== 'create') ||
+    !current.value ||
+    current.value.state !== 'available'
+  )
+    return
   pending.value = 'revoke'
   delivery.clear()
   void runWrite(
@@ -262,7 +269,8 @@ watch(
       </button>
       <form @submit.prevent="read">
         <label
-          >{{ t('onboarding.configurationId') }}<input v-model="configurationId" required /></label
+          >{{ t('onboarding.configurationId')
+          }}<input v-model="configurationId" required :disabled="busy || uncertain" /></label
         ><button :disabled="busy">{{ t('devices.reload') }}</button>
       </form>
       <dl v-if="current">

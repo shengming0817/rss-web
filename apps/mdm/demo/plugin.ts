@@ -1,3 +1,4 @@
+import { createOnboardingDemo } from './enrollment'
 import type { Plugin } from 'vite'
 import { mdmJsonBodyLimit, MDM_CONTENT_BODY_LIMIT, isMdmContentRequest } from '@rss/api/mdm-limits'
 import { createScenario } from './scenario'
@@ -17,6 +18,7 @@ export function demoPlugin(): Plugin {
       const devices = createDeviceDemo()
       const automation = createAutomationDemo(devices)
       seedScriptPolicies(automation)
+      const onboarding = createOnboardingDemo(automation.authorization.can)
       const software = automation.admission
       const publication = createPublicationDemo(automation.resources)
       const imports = createImportsDemo(automation.resources, software)
@@ -24,8 +26,16 @@ export function demoPlugin(): Plugin {
         devices.facts().map((d) => d.summary.id),
       )
       const scenario = createScenario(
-        [publication.handle, catalog.handle, imports.handle, automation.handle, devices.handle],
+        [
+          onboarding.handle,
+          publication.handle,
+          catalog.handle,
+          imports.handle,
+          automation.handle,
+          devices.handle,
+        ],
         () => {
+          onboarding.reset()
           devices.reset()
           automation.reset()
           publication.reset()
@@ -34,6 +44,7 @@ export function demoPlugin(): Plugin {
           seedScriptPolicies(automation)
         },
         (event, scenario) => {
+          if (event.kind === 'clock') onboarding.tick()
           devices.tick(event)
           const accepted = automation.tick(event, scenario)
           catalog.tick(event)
@@ -74,8 +85,15 @@ export function demoPlugin(): Plugin {
           res.writeHead(reply.status, {
             'Content-Type': 'application/json',
             'Cache-Control': 'no-store',
+            ...reply.headers,
           })
-          res.end(reply.body === undefined ? undefined : JSON.stringify(reply.body))
+          res.end(
+            reply.body instanceof ArrayBuffer
+              ? Buffer.from(reply.body)
+              : reply.body === undefined
+                ? undefined
+                : JSON.stringify(reply.body),
+          )
         } catch {
           res.writeHead(400, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({ code: 'malformed_request' }))
