@@ -322,7 +322,7 @@ export function createAppleClient(transport: HttpTransport) {
     accountMapping: (id: string, name: string, operation: string, body: AccountMapping) =>
       transport.request({
         method: 'PUT',
-        path: '/api/v1/apple/organizations/{id}/accounts/{account}',
+        path: '/api/v1/apple/organizations/{id}/account-enrollment/accounts/{account}',
         pathParams: { ...params(id), account: account(name) },
         headers: { 'Idempotency-Key': uuid(operation) },
         body,

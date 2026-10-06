@@ -11,7 +11,10 @@ const { t } = useI18n(),
   route = useRoute(),
   runtime = useMdm(),
   client = runtime.devices.enrollment,
-  { run, runWrite, busy, failure, uncertain } = useOperation()
+  { run, runWrite, busy, failure, uncertain } = useOperation(
+    [],
+    () => runtime.session.state.value.session?.id,
+  )
 const device = ref(''),
   source = ref<'mdm.windows' | 'mdm.apple'>('mdm.windows'),
   password = ref(''),
@@ -81,7 +84,7 @@ function recover() {
   )
 }
 watch(
-  () => [route.fullPath, runtime.session.state.value.session?.id],
+  [() => route.fullPath, () => runtime.session.state.value.session?.id],
   () => {
     password.value = ''
     handedOff.value = false

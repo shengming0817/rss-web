@@ -11,7 +11,10 @@ const { t } = useI18n(),
   route = useRoute(),
   runtime = useMdm(),
   client = runtime.devices.registration
-const { run, runWrite, busy, uncertain, failure } = useOperation()
+const { run, runWrite, busy, uncertain, failure } = useOperation(
+  [],
+  () => runtime.session.state.value.session?.id,
+)
 const usage = ref<Awaited<ReturnType<typeof client.me>>>(),
   channel = ref<'windows_mdm' | 'macos_mdm'>('windows_mdm')
 const profile = ref<'Full' | 'Device'>('Device')
@@ -128,7 +131,7 @@ watch(
   { flush: 'sync' },
 )
 watch(
-  () => [route.fullPath, runtime.session.state.value.session?.id],
+  [() => route.fullPath, () => runtime.session.state.value.session?.id],
   () => {
     clearSecret()
     native.value = undefined

@@ -110,12 +110,53 @@ try {
     active()
     phase = 'organization-read'
     await login(fixture.admin)
-    for (const route of ['apple-account', 'apple-ade', 'windows-entra']) {
+    async function organizationRead(route) {
+      active()
+      const api =
+        route === 'windows-entra' ? '/api/v1/windows/entra-policy' : '/api/v1/apple/organizations'
+      const response = page.waitForResponse(
+        (value) => value.request().method() === 'GET' && new URL(value.url()).pathname === api,
+      )
       await page.goto(`${origin}/tenants/${fixture.tenant}/operations/${route}`)
-      await page.locator('h1').waitFor()
+      const read = await response
+      assert.equal(read.status(), 200)
+      const facts = await read.json()
+      await page.locator('section.device-console[aria-busy=false]').waitFor()
+      assert.equal(await page.locator('[role=alert]').count(), 0)
+      assert.equal(await page.getByText('请求被拒绝', { exact: false }).count(), 0)
+      if (route === 'windows-entra') {
+        await page.locator('pre.enrollment-terms').waitFor({ state: 'attached' })
+        assert.equal(
+          await page.locator('pre.enrollment-terms').textContent(),
+          facts.policy.termsText,
+        )
+      } else {
+        assert.ok(Array.isArray(facts.items))
+        assert.equal(
+          await page.locator('select').first().locator('option').count(),
+          facts.items.length + 1,
+        )
+      }
       assert.equal(new URL(page.url()).pathname, `/tenants/${fixture.tenant}/operations/${route}`)
     }
-    coverage.push('authenticated-organization-pages')
+    for (const route of ['apple-account', 'apple-ade', 'windows-entra'])
+      await organizationRead(route)
+    coverage.push('authenticated-organization-reads')
+    if (fixture.probeOrganizationReadFailure) {
+      for (const status of [500, 200]) {
+        await page.route('**/api/v1/apple/organizations', (route) =>
+          route.fulfill({
+            status,
+            contentType: 'application/json',
+            body:
+              status === 500 ? '{"code":"service_unavailable"}' : '{"items":[{"invalid":true}]}',
+          }),
+        )
+        await assert.rejects(() => organizationRead('apple-account'))
+        await page.unroute('**/api/v1/apple/organizations')
+      }
+      coverage.push('organization-read-failure-oracles')
+    }
     if (fixture.configurationReady) {
       active()
       phase = 'configuration-lost-response'

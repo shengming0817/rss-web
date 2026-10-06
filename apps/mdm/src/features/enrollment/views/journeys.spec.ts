@@ -180,22 +180,38 @@ it('hides administrator configuration forms without authoritative permissions', 
   expect(calls).toEqual([])
 })
 it('delivers complete JSON explicitly and revokes the Blob URL when leaving the page', async () => {
-  const { wrapper, router, create, revoke } = await setup(ConfigurationsView)
+  const { wrapper, router, create, revoke, state } = await setup(ConfigurationsView)
   await wrapper.find('form').trigger('submit')
   await flushPromises()
   const link = wrapper.find('a[download="rss-agent-enrollment.json"]')
   expect(link.exists()).toBe(true)
   expect(create).toHaveBeenCalledTimes(1)
+  state.value = { ...state.value, session: { ...state.value.session } }
+  await flushPromises()
+  expect(wrapper.find('a[download]').exists()).toBe(true)
+  expect(revoke).not.toHaveBeenCalled()
   await router.push('/other')
   await flushPromises()
   expect(revoke).toHaveBeenCalledWith('blob:synthetic-delivery')
 })
 it('keeps null Unknown locked, finds metadata without secrets and revokes before creating a replacement', async () => {
-  const { wrapper, runtime, lost, click, calls } = await setup(ConfigurationsView)
+  const { wrapper, runtime, lost, click, calls, state } = await setup(ConfigurationsView)
   lost.path = '/api/v1/agent-configurations'
   await wrapper.find('form').trigger('submit')
   await flushPromises()
   expect(wrapper.text()).toContain('提交结果未知')
+  const originalOperation = wrapper.text()
+  state.value = {
+    ...state.value,
+    identity: { ...state.value.identity },
+    session: { ...state.value.session },
+  }
+  await flushPromises()
+  expect(wrapper.text()).toContain('提交结果未知')
+  expect(wrapper.text()).toBe(originalOperation)
+  await wrapper.find('form').trigger('submit')
+  await flushPromises()
+  expect(calls.filter((p) => p === 'POST /api/v1/agent-configurations')).toHaveLength(1)
   expect(wrapper.find('a[download]').exists()).toBe(false)
   const real = runtime.onboarding.configurations.operation,
     lookup = vi.spyOn(runtime.onboarding.configurations, 'operation').mockResolvedValueOnce(null)
@@ -288,4 +304,41 @@ it('initializes the complete Entra draft after a session binding changes', async
       .findAll('form input[type=checkbox]')
       .every((input) => (input.element as HTMLInputElement).checked),
   ).toBe(true)
+})
+
+it('selects only tenant-enabled targets in a macOS-only configuration', async () => {
+  const { wrapper, runtime, click } = await setup(ConfigurationsView)
+  const settings = await runtime.onboarding.configurations.settings()
+  await runtime.onboarding.configurations.saveSettings(crypto.randomUUID(), settings.revision, {
+    ...settings.values,
+    platforms: ['macos'],
+  })
+  await click('重新读取当前权限')
+  const create = vi.spyOn(runtime.onboarding.configurations, 'create')
+  await wrapper.find('form').trigger('submit')
+  await flushPromises()
+  expect(create.mock.calls[0]?.[0].targets).toEqual([{ platform: 'macos', architecture: 'x86_64' }])
+  expect(wrapper.find('a[download]').exists()).toBe(true)
+})
+it('explicitly retries an uncommitted unknown revocation with the original target and operation', async () => {
+  const { wrapper, runtime, click, state } = await setup(ConfigurationsView)
+  await wrapper.find('form').trigger('submit')
+  await flushPromises()
+  await wrapper.findAll('form')[1]!.trigger('submit')
+  await flushPromises()
+  const revoke = vi
+    .spyOn(runtime.onboarding.configurations, 'revoke')
+    .mockRejectedValueOnce(networkErrorForTest())
+  await click('确认撤销配置')
+  expect(wrapper.text()).toContain('提交结果未知')
+  state.value = { ...state.value, session: { ...state.value.session } }
+  await flushPromises()
+  await click('查询原操作结果')
+  expect(wrapper.text()).toContain('available')
+  expect(wrapper.find('fieldset').attributes('disabled')).toBeDefined()
+  await click('显式重试原撤销操作')
+  expect(revoke.mock.calls).toHaveLength(2)
+  expect(revoke.mock.calls[1]).toEqual(revoke.mock.calls[0])
+  expect(wrapper.text()).toContain('revoked')
+  expect(wrapper.find('fieldset').attributes('disabled')).toBeUndefined()
 })

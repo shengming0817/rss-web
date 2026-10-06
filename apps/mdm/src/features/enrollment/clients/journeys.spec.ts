@@ -11,16 +11,19 @@ import { adeOperation, adeStatus, appleOrganizations, setup } from './apple'
 import { entraPolicy, termsContext, text } from './entra'
 let domain: ReturnType<typeof createOnboardingDemo>,
   client: ReturnType<typeof createOnboardingClients>,
-  actor = ADMIN
+  actor = ADMIN,
+  paths: string[] = []
 const operation = () => crypto.randomUUID()
 beforeEach(() => {
   actor = ADMIN
+  paths = []
   domain = createOnboardingDemo((principal) => principal === ADMIN)
   const transport = {
     async request<T>(o: RequestOptions<T> | NoContentRequest) {
       const path = o.path.replace(/\{([^}]+)\}/g, (_m, key: string) =>
         encodeURIComponent(o.pathParams?.[key] ?? ''),
       )
+      paths.push(path)
       const reply = domain.handle(
         {
           method: o.method,
@@ -150,6 +153,9 @@ it('uses independent Apple organization configurations and immutable write recei
       enabled: true,
     }),
   ).toBe(1)
+  expect(paths).toContain(
+    `/api/v1/apple/organizations/${id}/account-enrollment/accounts/managed%40example.test`,
+  )
   const organizations = await client.apple.organizations()
   expect(organizations[0]?.accountEnrollment?.accounts[0]?.principalId).toBe(ADMIN)
   expect(organizations[0]?.ade).toBeNull()

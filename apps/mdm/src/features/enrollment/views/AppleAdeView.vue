@@ -225,7 +225,7 @@ watch(
   { immediate: true },
 )
 watch(
-  () => [canWrite.value, runtime.session.state.value.session?.id],
+  [() => canWrite.value, () => runtime.session.state.value.session?.id],
   () => {
     token.value = ''
     delivery.clear()

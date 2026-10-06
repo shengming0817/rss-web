@@ -247,7 +247,7 @@ export function createOnboardingDemo(can: (actor: string, permission: Permission
     }
     if (path === '/api/v1/apple/organizations') return ok({ items: [...organizations.values()] })
     const apple =
-      /^\/api\/v1\/apple\/organizations\/([^/]+)\/(account-enrollment|accounts\/([^/]+)|ade(?:\/(configuration|public-key|operations(?:\/([^/]+))?|profiles|devices))?)$/.exec(
+      /^\/api\/v1\/apple\/organizations\/([^/]+)\/(account-enrollment|account-enrollment\/accounts\/([^/]+)|ade(?:\/(configuration|public-key|operations(?:\/([^/]+))?|profiles|devices))?)$/.exec(
         path,
       )
     if (!apple) return error('malformed_request', 400)

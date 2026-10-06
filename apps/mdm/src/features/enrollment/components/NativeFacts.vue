@@ -31,7 +31,7 @@ async function profile() {
   }
 }
 watch(
-  () => [props.value.enrollmentId, runtime.session.state.value.session?.id],
+  [() => props.value.enrollmentId, () => runtime.session.state.value.session?.id],
   () => {
     password.value = ''
     delivery.clear()

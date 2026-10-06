@@ -2,7 +2,10 @@ import { onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { isRssApiError } from '@rss/api/mdm'
 /** View-local late-response fencing. The app session remains the sole credential owner. */
-export function useOperation(unknownCodes: readonly string[] = [], binding?: () => unknown) {
+export function useOperation(
+  unknownCodes: readonly string[] = [],
+  binding?: () => string | undefined | readonly (string | undefined)[],
+) {
   const busy = ref(false),
     uncertain = ref(false),
     failure = ref<string | null>(null)
@@ -10,7 +13,7 @@ export function useOperation(unknownCodes: readonly string[] = [], binding?: () 
   let generation = 0,
     disposed = false
   watch(
-    () => [route.fullPath, binding?.()],
+    [() => route.fullPath, () => JSON.stringify(binding?.())],
     () => {
       generation++
       uncertain.value = false

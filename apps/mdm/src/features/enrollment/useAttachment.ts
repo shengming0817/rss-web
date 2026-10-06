@@ -34,12 +34,12 @@ export function useAttachment() {
     }
   }
   watch(
-    () => [
-      route.fullPath,
-      runtime.session.state.value.status,
-      runtime.session.state.value.identity?.principalId,
-      runtime.session.state.value.session?.id,
-      runtime.session.state.value.tenant,
+    [
+      () => route.fullPath,
+      () => runtime.session.state.value.status,
+      () => runtime.session.state.value.identity?.principalId,
+      () => runtime.session.state.value.session?.id,
+      () => runtime.session.state.value.tenant,
     ],
     clear,
     { flush: 'sync' },

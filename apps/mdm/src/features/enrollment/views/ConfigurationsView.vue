@@ -27,7 +27,7 @@ const settings = ref<Awaited<ReturnType<typeof client.settings>>>(),
 const lifetime = ref<number | null>(null),
   finite = ref(true),
   amount = ref(1),
-  selectedTargets = ref<string[]>(['windows/x86_64']),
+  selectedTargets = ref<string[]>([]),
   channels = ref<(typeof releaseChannels)[number][]>(['production'])
 const defaultSeconds = ref(86400),
   grantSeconds = ref(300),
@@ -35,7 +35,9 @@ const defaultSeconds = ref(86400),
   configurationId = ref(''),
   operationId = ref(''),
   pending = ref<'create' | 'revoke' | 'settings'>(),
-  basisRead = ref(false)
+  basisRead = ref(false),
+  pendingRevocation = ref<{ id: string; operationId: string }>(),
+  revocationRead = ref(false)
 function refresh() {
   if (!canRead.value) return
   void run(
@@ -45,6 +47,11 @@ function refresh() {
       defaultSeconds.value = v.values.configurationDefaultSeconds
       grantSeconds.value = v.values.grantSeconds
       enabledPlatforms.value = [...v.values.platforms]
+      selectedTargets.value = selectedTargets.value.filter((value) =>
+        v.values.platforms.some((platform) => value.startsWith(platform + '/')),
+      )
+      if (!selectedTargets.value.length && v.values.platforms.length)
+        selectedTargets.value = [v.values.platforms[0] + '/x86_64']
       if (pending.value === 'settings') basisRead.value = true
     },
   )
@@ -56,7 +63,11 @@ async function create() {
     uncertain.value ||
     !settings.value ||
     !selectedTargets.value.length ||
-    !channels.value.length
+    !channels.value.length ||
+    selectedTargets.value.some(
+      (value) =>
+        !settings.value!.values.platforms.some((platform) => value.startsWith(platform + '/')),
+    )
   )
     return
   const op = crypto.randomUUID()
@@ -102,6 +113,7 @@ function read() {
     () => client.read(configurationId.value),
     (v) => {
       current.value = v
+      if (pending.value === 'revoke') revocationRead.value = true
     },
   )
 }
@@ -128,17 +140,27 @@ function revoke() {
   if (
     !canWrite.value ||
     busy.value ||
-    (uncertain.value && pending.value !== 'create') ||
+    (uncertain.value &&
+      pending.value !== 'create' &&
+      !(pending.value === 'revoke' && pendingRevocation.value && revocationRead.value)) ||
     !current.value ||
     current.value.state !== 'available'
   )
     return
+  const command = pendingRevocation.value ?? {
+    id: current.value.configuration.configurationId,
+    operationId: crypto.randomUUID(),
+  }
+  pendingRevocation.value = command
+  operationId.value = command.operationId
   pending.value = 'revoke'
+  revocationRead.value = false
   delivery.clear()
   void runWrite(
-    () => client.revoke(current.value!.configuration.configurationId, crypto.randomUUID()),
+    () => client.revoke(command.id, command.operationId),
     () => {
       pending.value = undefined
+      pendingRevocation.value = undefined
       uncertain.value = false
     },
   ).then((ok) => {
@@ -151,6 +173,8 @@ function confirmRecovery() {
     (current.value && current.value.state !== 'available')
   ) {
     pending.value = undefined
+    pendingRevocation.value = undefined
+    revocationRead.value = false
     uncertain.value = false
     basisRead.value = false
   }
@@ -188,10 +212,10 @@ watch(canWrite, () => {
   delivery.clear()
 })
 watch(
-  () => [
-    route.fullPath,
-    runtime.session.state.value.session?.id,
-    runtime.session.state.value.identity?.principalId,
+  [
+    () => route.fullPath,
+    () => runtime.session.state.value.session?.id,
+    () => runtime.session.state.value.identity?.principalId,
   ],
   () => {
     delivery.clear()
@@ -200,6 +224,8 @@ watch(
     operationId.value = ''
     configurationId.value = ''
     pending.value = undefined
+    pendingRevocation.value = undefined
+    revocationRead.value = false
     uncertain.value = false
   },
   { flush: 'sync' },
@@ -288,10 +314,10 @@ watch(
       <button
         v-if="canWrite && current?.state === 'available'"
         type="button"
-        :disabled="busy"
+        :disabled="busy || (!!pendingRevocation && !revocationRead)"
         @click="revoke"
       >
-        {{ t('onboarding.revokeConfiguration') }}
+        {{ t(pendingRevocation ? 'onboarding.retryRevoke' : 'onboarding.revokeConfiguration') }}
       </button>
       <button
         v-if="uncertain && (basisRead || (current && current.state !== 'available'))"
