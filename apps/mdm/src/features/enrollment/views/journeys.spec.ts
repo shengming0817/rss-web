@@ -5,6 +5,7 @@ import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
 import type { HttpTransport, RequestOptions, NoContentRequest } from '@rss/api/mdm'
 import { decodeMdmError } from '@rss/api/mdm'
 import { networkErrorForTest } from '@rss/api/testing'
+import { generateEnrollmentPassword } from '../../devices/clients/enrollment'
 import { mdmKey, type MdmRuntime } from '../../../context'
 import { mdmI18n } from '../../../i18n'
 import { createOnboardingClients } from '../client'
@@ -341,4 +342,35 @@ it('explicitly retries an uncommitted unknown revocation with the original targe
   expect(revoke.mock.calls[1]).toEqual(revoke.mock.calls[0])
   expect(wrapper.text()).toContain('revoked')
   expect(wrapper.find('fieldset').attributes('disabled')).toBeUndefined()
+})
+it('discards a rejected revocation before reading and revoking a different configuration', async () => {
+  const { wrapper, runtime, click } = await setup(ConfigurationsView)
+  const create = vi.spyOn(runtime.onboarding.configurations, 'create')
+  await wrapper.find('form').trigger('submit')
+  await flushPromises()
+  const idInput = wrapper.findAll('form')[1]!.find('input')
+  const originalId = (idInput.element as HTMLInputElement).value
+  const replacement = await runtime.onboarding.configurations.create({
+    ...create.mock.calls[0]![0],
+    operationId: crypto.randomUUID(),
+    secret: generateEnrollmentPassword(),
+  })
+  await wrapper.findAll('form')[1]!.trigger('submit')
+  await flushPromises()
+  const revoke = vi
+    .spyOn(runtime.onboarding.configurations, 'revoke')
+    .mockRejectedValueOnce(decodeMdmError(403, { code: 'permission_denied' }))
+  await click('确认撤销配置')
+  expect(wrapper.text()).toContain('请求被拒绝')
+  expect(wrapper.text()).not.toContain('提交结果未知')
+  expect(wrapper.text()).not.toContain('显式重试原撤销操作')
+  const replacementId = replacement.configuration.configurationId
+  await idInput.setValue(replacementId)
+  await wrapper.findAll('form')[1]!.trigger('submit')
+  await flushPromises()
+  await click('确认撤销配置')
+  expect(revoke.mock.calls.map(([id]) => id)).toEqual([originalId, replacementId])
+  expect((await runtime.onboarding.configurations.read(originalId)).state).toBe('available')
+  expect((await runtime.onboarding.configurations.read(replacementId)).state).toBe('revoked')
+  new Uint8Array(replacement.file.bytes).fill(0)
 })

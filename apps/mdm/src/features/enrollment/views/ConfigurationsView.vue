@@ -107,10 +107,10 @@ async function create() {
   }
 }
 function read() {
-  if (!canRead.value || !configurationId.value || (uncertain.value && pending.value === 'create'))
-    return
+  const id = pendingRevocation.value?.id ?? configurationId.value
+  if (!canRead.value || !id || (uncertain.value && pending.value === 'create')) return
   void run(
-    () => client.read(configurationId.value),
+    () => client.read(id),
     (v) => {
       current.value = v
       if (pending.value === 'revoke') revocationRead.value = true
@@ -144,7 +144,9 @@ function revoke() {
       pending.value !== 'create' &&
       !(pending.value === 'revoke' && pendingRevocation.value && revocationRead.value)) ||
     !current.value ||
-    current.value.state !== 'available'
+    current.value.state !== 'available' ||
+    (pendingRevocation.value &&
+      current.value.configuration.configurationId !== pendingRevocation.value.id)
   )
     return
   const command = pendingRevocation.value ?? {
@@ -165,6 +167,11 @@ function revoke() {
     },
   ).then((ok) => {
     if (ok) read()
+    else if (!uncertain.value && pendingRevocation.value?.operationId === command.operationId) {
+      pending.value = undefined
+      pendingRevocation.value = undefined
+      revocationRead.value = false
+    }
   })
 }
 function confirmRecovery() {
