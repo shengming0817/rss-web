@@ -156,6 +156,13 @@ async function selectToken(event: Event) {
     bytes.fill(0)
   }
 }
+function chooseProfile(profile: (typeof profiles.value)[number]) {
+  profileId.value = profile.id
+  profileName.value = profile.configuration.name
+  mandatory.value = profile.configuration.mandatory
+  removable.value = profile.configuration.removable
+  skip.value = [...profile.configuration.skip]
+}
 function saveProfile() {
   const old = profiles.value.find((p) => p.id === profileId.value)
   submit({
@@ -312,17 +319,7 @@ onBeforeUnmount(() => {
       </form>
       <ul>
         <li v-for="p in profiles" :key="p.id">
-          <button
-            type="button"
-            :disabled="blocked"
-            @click="
-              profileId = p.id
-              profileName = p.configuration.name
-              mandatory = p.configuration.mandatory
-              removable = p.configuration.removable
-              skip = [...p.configuration.skip]
-            "
-          >
+          <button type="button" :disabled="blocked" @click="chooseProfile(p)">
             {{ p.configuration.name }} · {{ p.id }} · {{ p.revision }} ·
             {{ p.remoteUuid ?? t('devices.unknown') }}
           </button>

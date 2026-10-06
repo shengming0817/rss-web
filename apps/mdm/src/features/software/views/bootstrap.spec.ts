@@ -18,6 +18,7 @@ it('keeps installation separate from registration, links the existing owner, and
       action: { kind: 'request_mdm', instructions: 'Contact support' } as {
         kind: string
         instructions?: string
+        resource?: { id: string; version: string }
       },
     },
     scopeRevision: 1,
@@ -95,7 +96,7 @@ it('keeps installation separate from registration, links the existing owner, and
   expect(
     (wrapper.get('[data-action="source-dispatch"]').element as HTMLButtonElement).disabled,
   ).toBe(false)
-  policy.definition.action = { kind: 'install_agent' }
+  policy.definition.action = { kind: 'install_agent', resource: { id, version: '1' } }
   await wrapper.get('[data-action="read-source-policy"]').trigger('click')
   await flushPromises()
   expect(wrapper.findAll('a').some((a) => a.attributes('href') === '/downloads/agent')).toBe(true)

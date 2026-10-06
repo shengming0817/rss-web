@@ -2,7 +2,7 @@ import { defineComponent, shallowRef } from 'vue'
 import { afterEach, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
-import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
+import type { HttpTransport, RequestOptions, NoContentRequest } from '@rss/api/mdm'
 import { decodeMdmError } from '@rss/api/mdm'
 import { networkErrorForTest } from '@rss/api/testing'
 import { mdmKey, type MdmRuntime } from '../../../context'
@@ -37,7 +37,7 @@ async function setup(view: unknown, allow = true) {
       session: { id: INSTANCE },
     })
   const transport = {
-    async request<T>(o: RequestOptions<T>) {
+    async request<T>(o: RequestOptions<T> | NoContentRequest) {
       const path = o.path.replace(/\{([^}]+)\}/g, (_m, key: string) =>
         encodeURIComponent(o.pathParams?.[key] ?? ''),
       )
@@ -61,10 +61,15 @@ async function setup(view: unknown, allow = true) {
       }
       if (reply.status !== o.successStatus) throw decodeMdmError(reply.status, reply.body)
       if (o.successStatus === 204) return undefined
+      const binary =
+        o.responseType === 'arraybuffer'
+          ? new ArrayBuffer((reply.body as ArrayBuffer).byteLength)
+          : undefined
+      if (binary) new Uint8Array(binary).set(new Uint8Array(reply.body as ArrayBuffer))
       return o.decode(
         o.responseType === 'arraybuffer'
           ? {
-              bytes: reply.body,
+              bytes: binary,
               contentType: reply.headers?.['Content-Type'],
               contentDisposition: reply.headers?.['Content-Disposition'],
             }
@@ -247,7 +252,7 @@ it('edits Entra plaintext and refuses same-version text changes', async () => {
     form = wrapper.find('form')
   await form.findAll('input[type=checkbox]')[0]!.setValue(true)
   await form.findAll('input[type=checkbox]')[1]!.setValue(true)
-  await form.find('input[type=text]').setValue('v1')
+  await form.find('input[maxlength="128"]').setValue('v1')
   await form.find('textarea').setValue('Corporate terms')
   await form.trigger('submit')
   await flushPromises()
@@ -269,10 +274,10 @@ it('initializes the complete Entra draft after a session binding changes', async
     termsText: 'Next session terms',
     allowBackground: true,
   })
-  await wrapper.find('form input[type=text]').setValue('stale-version')
+  await wrapper.find('form input[maxlength="128"]').setValue('stale-version')
   state.value = { ...state.value, session: { id: crypto.randomUUID() } }
   await flushPromises()
-  expect((wrapper.get('form input[type=text]').element as HTMLInputElement).value).toBe(
+  expect((wrapper.get('form input[maxlength="128"]').element as HTMLInputElement).value).toBe(
     'next-version',
   )
   expect((wrapper.get('form textarea').element as HTMLTextAreaElement).value).toBe(

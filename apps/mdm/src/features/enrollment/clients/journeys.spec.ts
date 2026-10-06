@@ -1,5 +1,5 @@
 import { beforeEach, expect, it } from 'vitest'
-import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
+import type { HttpTransport, RequestOptions, NoContentRequest } from '@rss/api/mdm'
 import { decodeMdmError } from '@rss/api/mdm'
 import { createOnboardingDemo } from '../../../../demo/enrollment'
 import { TENANT } from '../../../../demo/scenario'
@@ -17,7 +17,7 @@ beforeEach(() => {
   actor = ADMIN
   domain = createOnboardingDemo((principal) => principal === ADMIN)
   const transport = {
-    async request<T>(o: RequestOptions<T>) {
+    async request<T>(o: RequestOptions<T> | NoContentRequest) {
       const path = o.path.replace(/\{([^}]+)\}/g, (_m, key: string) =>
         encodeURIComponent(o.pathParams?.[key] ?? ''),
       )
@@ -40,10 +40,15 @@ beforeEach(() => {
       )!
       if (reply.status !== o.successStatus) throw decodeMdmError(reply.status, reply.body)
       if (o.successStatus === 204) return undefined
+      const binary =
+        o.responseType === 'arraybuffer'
+          ? new ArrayBuffer((reply.body as ArrayBuffer).byteLength)
+          : undefined
+      if (binary) new Uint8Array(binary).set(new Uint8Array(reply.body as ArrayBuffer))
       return o.decode(
         o.responseType === 'arraybuffer'
           ? {
-              bytes: reply.body,
+              bytes: binary,
               contentType: reply.headers?.['Content-Type'],
               contentDisposition: reply.headers?.['Content-Disposition'],
             }

@@ -65,6 +65,7 @@ async function setup(
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
+      { path: '/downloads/agent', name: 'agent-downloads', component: { template: '<div />' } },
       deviceFeature.entry,
       ...(deviceFeature.routes ?? []),
       policyFeature.entry,

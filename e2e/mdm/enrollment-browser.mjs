@@ -51,8 +51,17 @@ try {
   await page.getByRole('heading', { name: '下载 Agent 安装器', exact: true }).waitFor()
   assert.equal(new URL(page.url()).pathname, '/downloads/agent')
   const catalog = await context.request.get(`${origin}/api/v1/agent/enroll/packages`)
-  assert.equal(catalog.status(), 200)
-  const packages = await catalog.json()
+  let packages = []
+  if (fixture.agentListener === 'disabled') {
+    assert.ok([404, 502, 503].includes(catalog.status()))
+    await page.locator('[role=alert]').waitFor()
+    assert.equal(await page.locator('a[download]').count(), 0)
+    coverage.push('anonymous-disabled-listener-failure')
+    gaps.push('configured-Agent-listener')
+  } else {
+    assert.equal(catalog.status(), 200)
+    packages = await catalog.json()
+  }
   assert.ok(Array.isArray(packages))
   for (const item of packages) {
     await page.getByLabel('平台', { exact: true }).selectOption(item.target.platform)
@@ -71,7 +80,8 @@ try {
       item.installerSha256.map((n) => n.toString(16).padStart(2, '0')).join(''),
     )
   }
-  coverage.push(packages.length ? 'anonymous-real-installers' : 'anonymous-empty-catalog')
+  if (fixture.agentListener !== 'disabled')
+    coverage.push(packages.length ? 'anonymous-real-installers' : 'anonymous-empty-catalog')
   if (!packages.length) gaps.push('published-real-installers')
   assert.equal(
     (await context.request.get(`${origin}/api/v1/agent-enrollment-settings`)).status(),

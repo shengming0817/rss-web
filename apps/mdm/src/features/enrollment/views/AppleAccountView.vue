@@ -30,6 +30,11 @@ const selected = computed(
 function newOrganization() {
   id.value = crypto.randomUUID()
 }
+function confirmComparison() {
+  if (!freshRead.value || busy.value) return
+  uncertain.value = false
+  freshRead.value = false
+}
 function refresh() {
   if (!canRead.value) return
   void run(
@@ -182,14 +187,7 @@ watch(
         </fieldset>
       </form>
       <p v-if="uncertain">{{ t('onboarding.compareUnknown') }}</p>
-      <button
-        v-if="uncertain && freshRead"
-        type="button"
-        @click="
-          uncertain = false
-          freshRead = false
-        "
-      >
+      <button v-if="uncertain && freshRead" type="button" @click="confirmComparison">
         {{ t('onboarding.confirmComparison') }}
       </button>
     </template>

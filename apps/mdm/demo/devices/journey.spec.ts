@@ -79,15 +79,15 @@ it('freezes directory statistics and permits pending onboarding without claiming
   const { directory, enrollment } = await setup()
   const first = await directory.list()
   await enrollment.create(crypto.randomUUID(), {
-    deviceId: 'new-unknown-platform',
+    deviceId: 'new-native-platform',
     password: generateEnrollmentPassword(),
-    source: 'agent.builtin',
+    source: 'mdm.windows',
   })
   expect((await directory.list(first.nextCursor!)).statistics.total).toBe(first.statistics.total)
   expect((await directory.list()).statistics.total).toBe(first.statistics.total + 1)
-  expect((await directory.detail('new-unknown-platform')).device.platform).toBe('unknown')
+  expect((await directory.detail('new-native-platform')).device.platform).toBe('windows')
   const preview = await directory.preview(
-    operation({ action: 'onboard', devices: ['new-unknown-platform'] }),
+    operation({ action: 'onboard', devices: ['new-native-platform'] }),
   )
   expect(preview.targets[0]?.registration).toBeNull()
   const accepted = await directory.execute(
@@ -99,7 +99,7 @@ it('freezes directory statistics and permits pending onboarding without claiming
     receipt: 'pending',
     effect: 'unknown',
   })
-  expect((await enrollment.registrations('new-unknown-platform')).items).toEqual([])
+  expect((await enrollment.registrations('new-native-platform')).items).toEqual([])
 })
 it('freezes searches while manual changes preserve CAS, deleted history and exact replay', async () => {
   const { assets } = await setup()

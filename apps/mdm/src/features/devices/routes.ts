@@ -11,7 +11,7 @@ export const deviceFeature: MdmFeature = {
     {
       path: '/tenants/:tenant/agent-configurations',
       name: 'agent-configurations',
-      component: () => import('../../enrollment/views/ConfigurationsView.vue'),
+      component: () => import('../enrollment/views/ConfigurationsView.vue'),
       meta: { protected: true },
     },
     {

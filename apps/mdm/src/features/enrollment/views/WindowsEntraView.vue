@@ -21,6 +21,11 @@ const current = ref<Awaited<ReturnType<typeof client.policy>>>(),
   termsText = ref(''),
   allowBackground = ref(false),
   freshRead = ref(false)
+function confirmComparison() {
+  if (!freshRead.value || busy.value) return
+  uncertain.value = false
+  freshRead.value = false
+}
 function refresh() {
   if (!canRead.value) return
   void run(
@@ -128,14 +133,7 @@ watch(current, (value) => {
         {{ t('onboarding.loadCurrent') }}
       </button>
       <p v-if="uncertain">{{ t('onboarding.compareUnknown') }}</p>
-      <button
-        v-if="uncertain && freshRead"
-        type="button"
-        @click="
-          uncertain = false
-          freshRead = false
-        "
-      >
+      <button v-if="uncertain && freshRead" type="button" @click="confirmComparison">
         {{ t('onboarding.confirmComparison') }}
       </button>
     </template>

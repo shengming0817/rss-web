@@ -95,7 +95,8 @@ function submit(kind: Command['kind'], replay = false) {
     (v) => {
       if (v.native) {
         enrollmentId.value = v.native.enrollmentId
-        if ('deviceId' in v.native) deviceId.value = v.native.deviceId
+        if ('deviceId' in v.native && typeof v.native.deviceId === 'string')
+          deviceId.value = v.native.deviceId
         native.value = undefined
       }
       pending.value = undefined
@@ -222,7 +223,6 @@ refresh()
       </fieldset>
     </form>
     <RouterLink :to="{ name: 'agent-downloads' }">{{ t('onboarding.downloads') }}</RouterLink>
-    <NativeFacts v-if="native" :value="native" />
     <dl v-if="native">
       <dt>{{ t('devices.enrollmentId') }}</dt>
       <dd>{{ native.enrollmentId }}</dd>
@@ -233,6 +233,7 @@ refresh()
       <dt>{{ t('devices.expires') }}</dt>
       <dd>{{ native.expiresAt }}</dd>
     </dl>
+    <NativeFacts v-if="native" :value="native" />
     <form @submit.prevent="status()">
       <label
         >{{ t('devices.enrollmentId')
