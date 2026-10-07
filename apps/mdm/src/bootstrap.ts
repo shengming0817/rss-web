@@ -23,6 +23,7 @@ import { createPolicyClients } from './features/policies/client'
 import { createSoftwareClients } from './features/software/client'
 import { createSecurityClients } from './features/security/client'
 import { createOperationsClients } from './features/operations/client'
+import { createOnboardingClients } from './features/enrollment/client'
 import App from './App.vue'
 export function startMdm(
   transport: HttpTransport,
@@ -31,10 +32,21 @@ export function startMdm(
   demo: boolean,
 ) {
   const session = createSession(transport, config)
-  const business = bindSession(createMdmTransport(), session)
+  const publicTransport = createMdmTransport()
+  const business = bindSession(publicTransport, session)
   const router = identityRouter(
     session,
     [
+      {
+        path: '/enrollment/windows/entra/terms',
+        name: 'entra-terms',
+        component: () => import('./features/enrollment/views/TermsView.vue'),
+      },
+      {
+        path: '/downloads/agent',
+        name: 'agent-downloads',
+        component: () => import('./features/enrollment/views/DownloadsView.vue'),
+      },
       { path: '/', redirect: { name: 'workspace', params: { tenant } } },
       {
         path: '/tenants/:tenant/workspace',
@@ -56,6 +68,7 @@ export function startMdm(
   app.provide(mdmKey, {
     session,
     transport: business,
+    onboarding: createOnboardingClients(business, publicTransport, tenant),
     workspace: createWorkspaceClient(business, demo),
     devices: createDeviceClients(business, tenant, demo),
     policies: createPolicyClients(business, tenant, demo),

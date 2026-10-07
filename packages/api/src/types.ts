@@ -15,7 +15,14 @@ interface RequestBase {
 
 export interface RequestOptions<T> extends RequestBase {
   successStatus: 200 | 201 | 202
+  responseType?: 'arraybuffer'
   decode: Decoder<T>
+}
+
+export interface BinaryResponse {
+  bytes: ArrayBuffer
+  contentType: string | null
+  contentDisposition: string | null
 }
 
 export interface NoContentRequest extends RequestBase {

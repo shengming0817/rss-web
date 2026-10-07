@@ -289,19 +289,19 @@ watch(
           >{{ t('software.viewRegistrations') }}</RouterLink
         >
         <RouterLink
-          :to="{
-            name: 'device-enroll',
-            params: { tenant: runtime.tenant },
-            query: {
-              device: row.device,
-              source:
-                selected.definition.action.kind === 'install_agent'
-                  ? 'agent.builtin'
-                  : selected.definition.platform === 'windows'
-                    ? 'mdm.windows'
-                    : 'mdm.apple',
-            },
-          }"
+          :to="
+            selected.definition.action.kind === 'install_agent'
+              ? { name: 'agent-downloads' }
+              : {
+                  name: 'device-enroll',
+                  params: { tenant: runtime.tenant },
+                  query: {
+                    device: row.device,
+                    source:
+                      selected.definition.platform === 'windows' ? 'mdm.windows' : 'mdm.apple',
+                  },
+                }
+          "
           >{{ t('software.openEnrollmentOwner') }}</RouterLink
         >
         <button

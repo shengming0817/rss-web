@@ -1,22 +1,22 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
-import {
-  enrollmentSources,
-  generateEnrollmentPassword,
-  type EnrollmentSource,
-} from '../clients/enrollment'
+import { enrollmentSources, generateEnrollmentPassword } from '../clients/enrollment'
 import { useOperation } from '../../../services/useOperation'
+import NativeFacts from '../../enrollment/components/NativeFacts.vue'
 import DeviceFrame from '../components/DeviceFrame.vue'
 const { t } = useI18n(),
   route = useRoute(),
   runtime = useMdm(),
   client = runtime.devices.enrollment,
-  { run, runWrite, busy, failure, uncertain } = useOperation()
+  { run, runWrite, busy, failure, uncertain } = useOperation(
+    [],
+    () => runtime.session.state.value.session?.id,
+  )
 const device = ref(''),
-  source = ref<EnrollmentSource>('mdm.windows'),
+  source = ref<'mdm.windows' | 'mdm.apple'>('mdm.windows'),
   password = ref(''),
   handedOff = ref(false),
   id = ref('')
@@ -28,7 +28,7 @@ type Pending = {
   kind: 'create' | 'resume' | 'cancel'
   operation: string
   device: string
-  source: EnrollmentSource
+  source: 'mdm.windows' | 'mdm.apple'
   enrollment: string
   windowsProfile: 'Full' | 'Device'
 }
@@ -69,11 +69,13 @@ function submit(kind: Pending['kind'], replay = false) {
           ? client.resume(command.enrollment, command.operation, secret)
           : client.cancel(command.enrollment, command.operation),
     (v) => {
-      result.value = v
+      result.value = undefined
       id.value = v.enrollmentId
       pending = undefined
     },
-  )
+  ).then((ok) => {
+    if (ok) recover()
+  })
 }
 function recover() {
   void run(
@@ -82,7 +84,7 @@ function recover() {
   )
 }
 watch(
-  () => route.fullPath,
+  [() => route.fullPath, () => runtime.session.state.value.session?.id],
   () => {
     password.value = ''
     handedOff.value = false
@@ -91,12 +93,16 @@ watch(
     op.value = undefined
     device.value = typeof route.query['device'] === 'string' ? route.query['device'] : ''
     source.value = nativeSources.some((s) => s === route.query['source'])
-      ? (route.query['source'] as EnrollmentSource)
+      ? (route.query['source'] as 'mdm.windows' | 'mdm.apple')
       : 'mdm.windows'
     id.value = typeof route.query['enrollment'] === 'string' ? route.query['enrollment'] : ''
   },
   { immediate: true },
 )
+onBeforeUnmount(() => {
+  password.value = ''
+  handedOff.value = false
+})
 function generate() {
   password.value = generateEnrollmentPassword()
   handedOff.value = false
@@ -166,6 +172,7 @@ function generate() {
         {{ t('devices.cancel') }}
       </button>
     </form>
+    <NativeFacts v-if="result" :value="result" />
     <dl v-if="result">
       <dt>{{ t('devices.enrollmentId') }}</dt>
       <dd>{{ result.enrollmentId }}</dd>

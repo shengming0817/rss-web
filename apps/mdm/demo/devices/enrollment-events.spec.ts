@@ -7,7 +7,7 @@ it('binds only an authorized pending enrollment and keeps Agent binding separate
     now = Math.floor(Date.now() / 1000)
   const req = request('/api/v1/enrollments', {
     deviceId: 'device-05',
-    source: 'agent.builtin',
+    source: 'mdm.windows',
     password: Buffer.alloc(32, 1).toString('base64url'),
   })
   req.headers['idempotency-key'] = randomUUID()
@@ -26,18 +26,23 @@ it('binds only an authorized pending enrollment and keeps Agent binding separate
     at: now,
   })
   const d = devices.facts().find((d) => d.summary.id === 'device-05')!
-  expect(d.registrations.find((r) => r.source === 'agent.builtin')).toMatchObject({
+  expect(d.registrations.find((r) => r.enrollmentId === e.enrollmentId)).toMatchObject({
     status: 'active',
-    generation: 1,
+    generation: 2,
   })
-  expect(d.agentBindings).toEqual([])
-  devices.tick({ kind: 'agent_binding', device: 'device-05', active: false, at: now + 1 })
+  expect(d.agentBindings ?? []).toEqual([])
+  const agentDevice = devices
+    .facts()
+    .find((d) =>
+      d.registrations.some((r) => r.source === 'agent.builtin' && r.status === 'active'),
+    )!.summary.id
+  devices.tick({ kind: 'agent_binding', device: agentDevice, active: false, at: now + 1 })
   expect(
-    devices.facts().find((d) => d.summary.id === 'device-05')!.agentBindings?.[0]?.capabilities,
+    devices.facts().find((d) => d.summary.id === agentDevice)!.agentBindings?.[0]?.capabilities,
   ).toEqual([])
-  devices.tick({ kind: 'agent_binding', device: 'device-05', active: true, at: now + 2 })
+  devices.tick({ kind: 'agent_binding', device: agentDevice, active: true, at: now + 2 })
   expect(
-    devices.facts().find((d) => d.summary.id === 'device-05')!.agentBindings?.[0]?.capabilities,
+    devices.facts().find((d) => d.summary.id === agentDevice)!.agentBindings?.[0]?.capabilities,
   ).toContain('software.execute.v3')
   devices.tick({
     kind: 'enrollment_bind',

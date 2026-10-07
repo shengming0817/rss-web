@@ -9,6 +9,12 @@ export const deviceFeature: MdmFeature = {
   },
   routes: [
     {
+      path: '/tenants/:tenant/agent-configurations',
+      name: 'agent-configurations',
+      component: () => import('../enrollment/views/ConfigurationsView.vue'),
+      meta: { protected: true },
+    },
+    {
       path: '/tenants/:tenant/my-enrollments',
       name: 'self-enrollments',
       component: () => import('./views/SelfEnrollmentView.vue'),

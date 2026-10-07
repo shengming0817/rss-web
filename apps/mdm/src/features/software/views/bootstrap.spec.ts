@@ -15,7 +15,11 @@ it('keeps installation separate from registration, links the existing owner, and
       scope: id,
       platform: 'windows',
       enabled: true,
-      action: { kind: 'request_mdm', instructions: 'Contact support' },
+      action: { kind: 'request_mdm', instructions: 'Contact support' } as {
+        kind: string
+        instructions?: string
+        resource?: { id: string; version: string }
+      },
     },
     scopeRevision: 1,
     targets: [
@@ -45,6 +49,7 @@ it('keeps installation separate from registration, links the existing owner, and
         component: { template: '<div />' },
       },
       { path: '/:tenant/enroll', name: 'device-enroll', component: { template: '<div />' } },
+      { path: '/downloads/agent', name: 'agent-downloads', component: { template: '<div />' } },
     ],
   })
   await router.push('/')
@@ -90,6 +95,13 @@ it('keeps installation separate from registration, links the existing owner, and
   await flushPromises()
   expect(
     (wrapper.get('[data-action="source-dispatch"]').element as HTMLButtonElement).disabled,
+  ).toBe(false)
+  policy.definition.action = { kind: 'install_agent', resource: { id, version: '1' } }
+  await wrapper.get('[data-action="read-source-policy"]').trigger('click')
+  await flushPromises()
+  expect(wrapper.findAll('a').some((a) => a.attributes('href') === '/downloads/agent')).toBe(true)
+  expect(
+    wrapper.findAll('a').some((a) => a.attributes('href')?.includes('source=agent.builtin')),
   ).toBe(false)
   expect(change).toHaveBeenCalledTimes(1)
   wrapper.unmount()

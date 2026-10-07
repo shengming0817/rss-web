@@ -7,6 +7,12 @@ export const isMdmContentRequest = (method: string, path: string) =>
 
 /** Only the published authorization writes have a 2 MiB ingress contract. */
 export function mdmJsonBodyLimit(method: string, path: string) {
+  if (method === 'PUT' && path === '/api/v1/windows/entra-policy') return 128 * 1024
+  if (
+    (method === 'PUT' || method === 'POST') &&
+    /^\/api\/v1\/apple\/organizations\/[^/]+\/ade\/(?:configuration|operations)$/.test(path)
+  )
+    return 256 * 1024
   if (method === 'POST' && path === '/api/v1/certificate-archive/import') return 2 * 1024 * 1024
   return method === 'PUT' &&
     /^\/api\/v1\/authorization\/(?:rules|user-groups)\/(?:\{id\}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/.test(

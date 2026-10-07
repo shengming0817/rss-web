@@ -353,9 +353,7 @@ function selectTab(key: (typeof tabs)[number]) {
         </ul>
         <RouterLink
           :to="{
-            name: 'device-enroll',
-            params: { tenant: runtime.tenant },
-            query: { device: id, source: 'agent.builtin' },
+            name: 'agent-downloads',
           }"
           >{{ t('devices.mdmToAgent') }}</RouterLink
         >

@@ -78,3 +78,9 @@
 .condition-editor .condition-editor {
   margin-inline-start: 1rem;
 }
+
+.enrollment-terms {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+}

@@ -22,6 +22,7 @@ export type Scenario = (typeof scenarios)[number]
 export interface Reply {
   status: number
   body?: unknown
+  headers?: Record<string, string>
 }
 export interface DemoRequest {
   actor: { principalId: string; sessionId: string }
@@ -261,6 +262,25 @@ export function createScenario(
       epoch++
       return observedReply({ status: 200, body: session() }, 'identity_security')
     }
+    if (
+      method === 'GET' &&
+      ['/api/v1/agent/enroll/packages', '/api/v1/windows/entra/terms/context'].includes(path)
+    ) {
+      for (const handler of handlers) {
+        const reply = handler(
+          {
+            method,
+            path,
+            body,
+            query: parsed.searchParams,
+            headers: {},
+            actor: { principalId, sessionId },
+          },
+          active,
+        )
+        if (reply) return reply
+      }
+    }
     if (!signedIn)
       return {
         status: 401,
@@ -364,7 +384,7 @@ export function createScenario(
     const securityPath =
       /^\/api\/v1\/(?:compliance-rules(?:\/|$)|devices\/[^/]+\/compliance(?:\/|$))/.test(path)
     const operationsPath =
-      /^\/api\/(?:v1\/authorization(?:\/|$)|v1\/mdm-candidate\/(?:authorization|audit|operations|integrations)(?:\/|$))/.test(
+      /^\/api\/(?:v1\/(?:authorization|apple\/organizations|windows\/entra-policy|agent-configurations|agent-configuration-operations|agent-enrollment-settings)(?:\/|$)|v1\/mdm-candidate\/(?:authorization|audit|operations|integrations)(?:\/|$))/.test(
         path,
       )
     const module = operationsPath
@@ -375,7 +395,7 @@ export function createScenario(
           ? 'software'
           : policyPath
             ? 'policies'
-            : /^\/api\/(?:v1\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v1\/(?:enrollments|devices|self-enrollments|registration-quotas|agent-grants))(?:\/|$)/.test(
+            : /^\/api\/(?:v1\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v1\/(?:enrollments|devices|self-enrollments|registration-quotas))(?:\/|$)/.test(
                   path,
                 )
               ? 'devices'

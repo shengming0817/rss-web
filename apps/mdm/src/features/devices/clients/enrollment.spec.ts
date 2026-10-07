@@ -16,8 +16,27 @@ it('keeps pending authorization separate from registration and rejects invented 
     expiresAt: 300,
     registrationId: null,
     source: 'mdm.apple',
+    instructions: {
+      platform: 'macos',
+      profileUrl: `/api/v1/enrollments/${id}/profile`,
+      enrollmentMethod: 'profile_based_device_enrollment',
+    },
+    progress: {
+      profilePrepared: 'unknown',
+      certificateIssued: false,
+      firstAuthenticatedCheckIn: false,
+      systemConfirmation: 'unknown',
+      managementReady: false,
+      diagnostic: 'awaiting_system_confirmation',
+    },
   }
   expect(decodeEnrollment(response, id)).toEqual(response)
+  expect(() =>
+    decodeEnrollment(
+      { ...response, instructions: { ...response.instructions, enrollmentMethod: 'password' } },
+      id,
+    ),
+  ).toThrow()
   expect(() => decodeEnrollment({ ...response, status: 'installed' }, id)).toThrow()
   expect(() => decodeEnrollment(response, operation)).toThrow()
 })
@@ -32,7 +51,7 @@ it('uses the exact enrollment idempotency header and the snake-case revocation r
             status: 'pending',
             expiresAt: 300,
             registrationId: null,
-            source: 'agent.builtin',
+            source: 'mdm.windows',
           },
     ),
   )
@@ -40,7 +59,7 @@ it('uses the exact enrollment idempotency header and the snake-case revocation r
   await client.create(operation, {
     deviceId: 'device-1',
     password: generateEnrollmentPassword(),
-    source: 'agent.builtin',
+    source: 'mdm.windows',
   })
   expect(request.mock.calls[0]?.[0]).toMatchObject({
     method: 'POST',

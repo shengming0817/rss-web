@@ -2,10 +2,7 @@ import { createRegistrationDemo } from './registration'
 import { randomUUID } from 'node:crypto'
 import type { DomainHandler } from '../scenario'
 import { closed, enumeration, identifier, string, uuid } from '../../src/services/decode'
-import {
-  enrollmentSources,
-  type EnrollmentSource,
-} from '../../src/features/devices/clients/enrollment'
+import { type EnrollmentSource } from '../../src/features/devices/clients/enrollment'
 import type { DemoDevice } from './fixtures'
 import type { DemoEvent } from '../policies/schedule'
 import { createReceipts, error, ok } from '../http'
@@ -64,7 +61,43 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
       if (enrollmentPath?.[1]) {
         const e = enrollments.get(enrollmentPath[1])
         return e && (!e.selfService || e.actor === request.actor.principalId)
-          ? ok(view(e))
+          ? ok({
+              ...view(e),
+              status:
+                e.status === 'pending' && e.expiresAt <= Math.floor(Date.now() / 1000)
+                  ? 'expired'
+                  : e.status,
+              instructions:
+                e.source === 'mdm.windows'
+                  ? {
+                      platform: 'windows',
+                      server: 'native.demo.invalid',
+                      discoveryUrl: 'https://native.demo.invalid/EnrollmentServer/Discovery.svc',
+                      username: `${e.enrollmentId}@native.demo.invalid`,
+                      windowsProfile: 'Device',
+                      requiresLocalAdministrator: false,
+                    }
+                  : {
+                      platform: 'macos',
+                      profileUrl: `/api/v1/enrollments/${e.enrollmentId}/profile`,
+                      enrollmentMethod: 'profile_based_device_enrollment',
+                    },
+              progress: {
+                profilePrepared: 'unknown',
+                certificateIssued: e.status === 'bound',
+                firstAuthenticatedCheckIn: false,
+                systemConfirmation: 'unknown',
+                managementReady: false,
+                diagnostic:
+                  e.status === 'cancelled'
+                    ? 'cancelled'
+                    : e.status === 'bound'
+                      ? 'awaiting_first_check_in'
+                      : e.expiresAt <= Math.floor(Date.now() / 1000)
+                        ? 'expired'
+                        : 'awaiting_system_confirmation',
+              },
+            })
           : error('permission_denied', 403)
       }
       if (registrations) {
@@ -116,7 +149,7 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
       if (!id) {
         const body = closed(request.body, ['deviceId', 'password', 'source'], ['windowsProfile'])
         const deviceId = identifier(body['deviceId']),
-          source = enumeration(body['source'], enrollmentSources)
+          source = enumeration(body['source'], ['mdm.windows', 'mdm.apple'] as const)
         password(body['password'])
         const enrollmentId = randomUUID()
         let device = devices().get(deviceId)

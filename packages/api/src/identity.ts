@@ -35,6 +35,7 @@ export function createIdentityTransport(): HttpTransport {
   const instance = axios.create({ baseURL: '' })
   return {
     async request(options: NoContentRequest | RequestOptions<unknown>) {
+      if ('responseType' in options) throw clientError()
       const read =
         options.method === 'GET' &&
         (options.path === '/api/v1/identity-host/config.json' ||

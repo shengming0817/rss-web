@@ -8,6 +8,24 @@ export const operationsFeature: MdmFeature = {
   },
   routes: [
     {
+      path: '/tenants/:tenant/operations/windows-entra',
+      name: 'operations-windowsEntra',
+      component: () => import('../enrollment/views/WindowsEntraView.vue'),
+      meta: { protected: true },
+    },
+    {
+      path: '/tenants/:tenant/operations/apple-account',
+      name: 'operations-appleAccount',
+      component: () => import('../enrollment/views/AppleAccountView.vue'),
+      meta: { protected: true },
+    },
+    {
+      path: '/tenants/:tenant/operations/apple-ade',
+      name: 'operations-appleAde',
+      component: () => import('../enrollment/views/AppleAdeView.vue'),
+      meta: { protected: true },
+    },
+    {
       path: '/tenants/:tenant/operations/alert-rules',
       name: 'operations-alertRules',
       component: () => import('./views/AlertRulesView.vue'),

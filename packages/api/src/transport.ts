@@ -1,6 +1,12 @@
 import axios from 'axios'
 import type { AxiosInstance, AxiosRequestConfig } from 'axios'
-import type { NoContentRequest, QueryValue, RequestOptions, RssApiError } from './types'
+import type {
+  BinaryResponse,
+  NoContentRequest,
+  QueryValue,
+  RequestOptions,
+  RssApiError,
+} from './types'
 import {
   abortedError,
   clientError,
@@ -85,6 +91,7 @@ export function requestConfig(
     url: resolvePath(options.path, options.pathParams),
     timeout,
     validateStatus: () => true,
+    ...('responseType' in options ? { responseType: options.responseType } : {}),
     ...(options.query === undefined ? {} : { params: resolveQuery(options.query) }),
     headers,
     ...(options.body === undefined ? {} : { data: options.body }),
@@ -101,10 +108,38 @@ export async function execute<T>(
   if (options.signal?.aborted === true) throw abortedError()
   try {
     const response = await instance.request(requestConfig(options, defaultTimeoutMs))
-    if (response.status >= 400) throw decodeError(response.status, response.data)
+    if (response.status >= 400) {
+      let value: unknown = response.data
+      if ('responseType' in options && options.responseType === 'arraybuffer') {
+        if (!(value instanceof ArrayBuffer) || value.byteLength > 16_384)
+          throw protocolError(response.status)
+        try {
+          value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(value))
+        } catch {
+          throw protocolError(response.status)
+        }
+      }
+      throw decodeError(response.status, value)
+    }
     if (response.status !== options.successStatus) throw protocolError(response.status)
     if (options.successStatus === 204) return undefined
     try {
+      if (options.responseType === 'arraybuffer') {
+        const data: unknown = response.data
+        if (!(data instanceof ArrayBuffer)) throw protocolError(response.status)
+        const header = (name: string) => {
+          const value: unknown = response.headers[name]
+          if (value === undefined) return null
+          if (typeof value !== 'string') throw protocolError(response.status)
+          return value
+        }
+        const binary: BinaryResponse = {
+          bytes: data,
+          contentType: header('content-type'),
+          contentDisposition: header('content-disposition'),
+        }
+        return options.decode(binary)
+      }
       return options.decode(response.data)
     } catch {
       throw protocolError(response.status)
