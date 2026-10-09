@@ -87,10 +87,11 @@ async function setup(
   })
   await router.push({ name, params: { tenant: TENANT, ...params }, query })
   await router.isReady()
+  const i18n = mdmI18n()
   const wrapper = mount(RouterView, {
     attachTo: document.body,
     global: {
-      plugins: [router, mdmI18n()],
+      plugins: [router, i18n],
       provide: {
         [mdmKey as symbol]: {
           devices,
@@ -147,6 +148,7 @@ async function setup(
     click,
     loseReply,
     operations,
+    i18n,
   }
 }
 it('renders server view counters, endpoint references, pagination and empty state', async () => {
@@ -893,3 +895,100 @@ it('shows authorization read failure and retries without treating it as read-onl
   await flushPromises()
   expect(h.wrapper.find('[data-testid=association-panel]').exists()).toBe(true)
 })
+
+it('displays the exact new origin coordinates used to create after the open detail becomes stale', async () => {
+  const h = await setup('device-detail', { device: 'device-01' })
+  const before = await h.devices.directory.detail('device-01')
+  const receipt = await h.devices.enrollment.create(crypto.randomUUID(), {
+    deviceId: 'device-01',
+    password: 'A'.repeat(43),
+    source: before.primaryMdmRegistration!.source,
+    windowsProfile: 'Device',
+  })
+  h.domain.tick({
+    kind: 'enrollment_bind',
+    device: 'device-01',
+    enrollment: receipt.enrollmentId,
+    at: Math.floor(Date.now() / 1000),
+  })
+  const after = await h.devices.directory.detail('device-01')
+  expect(after.primaryMdmRegistration!.generation).toBe(
+    before.primaryMdmRegistration!.generation + 1,
+  )
+  const panel = await chooseAssociation(h)
+  const coordinates = panel.find('[data-testid=confirmation-coordinates]')
+  expect(coordinates.text()).toContain(after.primaryMdmRegistration!.registrationId)
+  expect(coordinates.text()).not.toContain(before.primaryMdmRegistration!.registrationId)
+  const displayed = coordinates.findAll('li').map((m) => m.text())
+  await h.click('确认关联')
+  const body = h.requests.findLast((r) => r.path === '/api/v1/device-associations')!.body as {
+    mdm: { device: string; registrationId: string; generation: number }
+    agent: { device: string; registrationId: string; generation: number }
+  }
+  for (const member of [body.mdm, body.agent])
+    expect(
+      displayed.some((text) =>
+        text.includes(`${member.device} · ${member.registrationId} / ${member.generation}`),
+      ),
+    ).toBe(true)
+})
+it.each(['confirm', 'revoke', 'inactive-revoke'])(
+  'shows the refreshed relation basis actually used by %s',
+  async (action) => {
+    const h = await setup('device-detail', { device: 'device-01' })
+    await chooseAssociation(h)
+    await h.click('确认关联')
+    await vi.waitFor(() => expect(h.router.currentRoute.value.name).toBe('device-view-detail'))
+    await flushPromises()
+    const id = String(h.router.currentRoute.value.params['view'])
+    const old = await h.devices.associations.get(id)
+    const current = await h.devices.associations.confirm({
+      operationId: crypto.randomUUID(),
+      associationId: id,
+      expectedVersion: old.version,
+      mdm: old.members.find((m) => m.channel === 'mdm')!,
+      agent: old.members.find((m) => m.channel === 'agent')!,
+      evidence: 'Other operator current evidence',
+    })
+    if (action === 'inactive-revoke')
+      await h.devices.enrollment.revoke(
+        current.members[0]!.device,
+        current.members[0]!.registrationId,
+        crypto.randomUUID(),
+      )
+    await h.click('读取当前关系与主注册')
+    const panel = h.wrapper.find('[data-testid=association-panel]'),
+      basis = panel.find('[data-testid=association-basis]')
+    expect(basis.text()).toContain(`${id} / ${current.version}`)
+    expect(basis.text()).toContain(current.evidence)
+    expect(basis.text()).not.toContain(old.evidence)
+    if (action === 'inactive-revoke')
+      expect(h.button('重新核实关联').attributes('disabled')).toBeDefined()
+    await panel.find('input[type=checkbox]').setValue(true)
+    await panel
+      .findAll('textarea')
+      [action === 'confirm' ? 0 : 1]!.setValue('Checked displayed current basis')
+    await h.click(action === 'confirm' ? '重新核实关联' : '解除关联')
+    const request = h.requests.findLast((r) => r.method === 'POST')!
+    expect(request.body).toMatchObject({ expectedVersion: current.version })
+    expect(request.path).toBe(
+      action === 'confirm'
+        ? '/api/v1/device-associations'
+        : '/api/v1/device-associations/{id}/revoke',
+    )
+  },
+)
+it.each(['zh-CN', 'en-US'] as const)(
+  'resolves all directory source options in %s',
+  async (locale) => {
+    const h = await setup()
+    h.i18n.global.locale.value = locale
+    await flushPromises()
+    expect(
+      h.wrapper
+        .findAll('select')[2]!
+        .findAll('option')
+        .map((o) => o.text()),
+    ).toEqual([locale === 'zh-CN' ? '全部' : 'All', 'Windows MDM', 'Apple MDM', 'Agent'])
+  },
+)

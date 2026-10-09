@@ -1,4 +1,6 @@
 export const devicesZh = {
+  submissionBasis: '本次提交的关系依据',
+  confirmationCoordinates: '本次提交的双方注册坐标',
   retryAuthority: '重新读取关联权限',
   endpointState: {
     active: '有效注册',
@@ -285,6 +287,8 @@ export const devicesZh = {
   },
 }
 export const devicesEn: typeof devicesZh = {
+  submissionBasis: 'Association basis for this submission',
+  confirmationCoordinates: 'Registration coordinates for this submission',
   retryAuthority: 'Read association permissions again',
   endpointState: {
     active: 'Active registration',

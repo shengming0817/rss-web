@@ -68,7 +68,7 @@ watch(
           }}<select v-model="source">
             <option value="">{{ t('devices.all') }}</option>
             <option v-for="s in ['mdm.windows', 'mdm.apple', 'agent.builtin']" :key="s" :value="s">
-              {{ t(`devices.endpointState.${s}`) }}
+              {{ t(`devices['${s}']`) }}
             </option>
           </select></label
         ><label><input v-model="descending" type="checkbox" />{{ t('devices.descending') }}</label

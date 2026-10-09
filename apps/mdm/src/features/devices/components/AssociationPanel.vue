@@ -57,6 +57,12 @@ const manageable = computed(
       ? props.association.members.every((m) => can(m.device))
       : !!props.endpoint && can(props.endpoint.id)),
 )
+const currentAssociation = computed(() => prepared.value?.association ?? props.association)
+const confirmationMembers = computed(() =>
+  props.association
+    ? (prepared.value?.members ?? [])
+    : [origin.value, target.value].filter((m): m is Member => !!m),
+)
 const target = computed(() => page.value?.items.find((m) => m.device === selected.value))
 const targetCurrent = computed(
   () =>
@@ -78,7 +84,7 @@ const canSubmit = computed(
     verified.value &&
     verificationText(evidence.value) &&
     (props.association
-      ? !!prepared.value
+      ? !!prepared.value && confirmationMembers.value.length === 2
       : !!origin.value && !!target.value && can(target.value.device) && targetCurrent.value),
 )
 function clear() {
@@ -144,6 +150,7 @@ async function candidates(after?: string) {
   verified.value = false
   prepared.value = undefined
   page.value = undefined
+  origin.value = undefined
   await run(
     async () => ({
       endpoint: await runtime.devices.directory.detail(props.endpoint!.id),
@@ -191,10 +198,11 @@ async function prepare() {
       }
     },
     (v) => {
-      if (v.members.every((m): m is Member => !!m)) {
-        prepared.value = { association: v.association, members: v.members }
-        stale.value = false
+      prepared.value = {
+        association: v.association,
+        members: v.members.filter((m): m is Member => !!m),
       }
+      stale.value = false
     },
   )
   handleFailure()
@@ -233,15 +241,15 @@ async function execute(value: PendingAssociation) {
 }
 function confirm() {
   if (!canSubmit.value) return
-  const members = prepared.value?.members ?? [origin.value!, target.value!],
+  const members = confirmationMembers.value,
     mdm = members.find((m) => m.channel === 'mdm')!,
     agent = members.find((m) => m.channel === 'agent')!
   void execute({
     kind: 'confirm',
     body: {
       operationId: crypto.randomUUID(),
-      associationId: prepared.value?.association.id ?? null,
-      expectedVersion: prepared.value?.association.version ?? 0,
+      associationId: currentAssociation.value?.id ?? null,
+      expectedVersion: currentAssociation.value?.version ?? 0,
       mdm: { ...mdm },
       agent: { ...agent },
       evidence: evidence.value,
@@ -250,7 +258,7 @@ function confirm() {
 }
 function revoke() {
   if (
-    !props.association ||
+    !currentAssociation.value ||
     !manageable.value ||
     busy.value ||
     locked.value ||
@@ -261,10 +269,10 @@ function revoke() {
     return
   void execute({
     kind: 'revoke',
-    id: props.association.id,
+    id: currentAssociation.value.id,
     body: {
       operationId: crypto.randomUUID(),
-      expectedVersion: prepared.value?.association.version ?? props.association.version,
+      expectedVersion: currentAssociation.value.version,
       reason: reason.value,
     },
   })
@@ -317,18 +325,16 @@ function replay() {
     >
     <fieldset :disabled="busy || locked">
       <template v-if="association"
-        ><p>
-          {{ association.id }} / {{ association.version }} ·
-          {{ t(`devices.associationState.${association.state}`) }} ·
-          {{ association.evidence }}
+        ><p v-if="currentAssociation" data-testid="association-basis">
+          {{ t('devices.submissionBasis') }}: {{ currentAssociation.id }} /
+          {{ currentAssociation.version }} ·
+          {{ t(`devices.associationState.${currentAssociation.state}`) }} ·
+          {{ currentAssociation.evidence }}
         </p>
         <button @click="prepare">{{ t('devices.prepareVerification') }}</button>
-        <p v-if="!prepared">{{ t('devices.currentRegistrationRequired') }}</p>
-        <ul v-if="prepared">
-          <li v-for="m in prepared.members" :key="m.device">
-            {{ m.channel }} · {{ m.device }} · {{ m.registrationId }} / {{ m.generation }}
-          </li>
-        </ul></template
+        <p v-if="!prepared || confirmationMembers.length !== 2">
+          {{ t('devices.currentRegistrationRequired') }}
+        </p></template
       >
       <template v-else-if="endpoint"
         ><label
@@ -391,6 +397,14 @@ function replay() {
           <p v-if="!targetCurrent" role="status">{{ t('devices.associationStale') }}</p>
         </section>
       </template>
+      <section v-if="confirmationMembers.length" data-testid="confirmation-coordinates">
+        <h3>{{ t('devices.confirmationCoordinates') }}</h3>
+        <ul>
+          <li v-for="m in confirmationMembers" :key="m.device">
+            {{ m.channel }} · {{ m.device }} · {{ m.registrationId }} / {{ m.generation }}
+          </li>
+        </ul>
+      </section>
       <label
         >{{ t('devices.verificationEvidence')
         }}<textarea v-model="evidence" maxlength="2048" /></label

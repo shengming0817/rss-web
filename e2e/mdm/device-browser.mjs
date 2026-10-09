@@ -106,6 +106,26 @@ try {
   }
   const panel = () => page.locator('[data-testid=association-panel]')
   const loaded = () => page.locator('section.device-console[aria-busy=false]').waitFor()
+  const advanceGeneration = (channel) => {
+    const fds = JSON.parse(process.env._MDM_BUILD_LEASE).fds
+    assert.ok(fds.length === 2 && fds.every((fd) => Number.isInteger(fd) && fd >= 3 && fd < 1024))
+    const stdio = Array(Math.max(...fds) + 1).fill('ignore')
+    stdio[1] = 'pipe'
+    stdio[2] = 'pipe'
+    fds.forEach((fd) => {
+      stdio[fd] = fd
+    })
+    const control = spawnSync(
+      'python3',
+      [
+        resolve(dirname(fileURLToPath(import.meta.url)), 'device-fixture-control.py'),
+        process.env.MDM_DEVICE_BROWSER_FIXTURE,
+        channel,
+      ],
+      { cwd: process.env.MDM_DEVICE_BACKEND, stdio, timeout: 30000 },
+    )
+    assert.equal(control.status, 0)
+  }
   phase = 'login'
   await page.goto(path('login'))
   await page.locator('#login-name').fill(fixture.login)
@@ -122,8 +142,19 @@ try {
   phase = 'unknown-create'
   await page.goto(path(`devices/${fixture.mdm}`))
   await panel().waitFor()
+  const oldMdm = await api(`/api/v1/devices/${fixture.mdm}`)
+  advanceGeneration('mdm')
+  const refreshedMdm = await api(`/api/v1/devices/${fixture.mdm}`),
+    oldRegistration = oldMdm.channels.find((c) => c.channel === 'mdm'),
+    currentRegistration = refreshedMdm.channels.find((c) => c.channel === 'mdm')
+  assert.equal(currentRegistration.generation, 2)
+  assert.notEqual(currentRegistration.registrationId, oldRegistration.registrationId)
   await page.getByRole('button', { name: '查找另一通道候选', exact: true }).click()
   await panel().getByRole('radio').first().check()
+  const coordinates = panel().locator('[data-testid=confirmation-coordinates]')
+  await coordinates.getByText(currentRegistration.registrationId, { exact: false }).waitFor()
+  assert.ok((await coordinates.textContent()).includes('/2'))
+  assert.ok(!(await coordinates.textContent()).includes(oldRegistration.registrationId))
   await page.getByLabel('核实说明与依据', { exact: true }).fill('Verified physical fixture input')
   await page.getByLabel('我已核实双方属于同一管理实例，确认双方注册坐标', { exact: true }).check()
   let original,
@@ -137,6 +168,8 @@ try {
     requests.push(route.request().postData())
     if (!original) {
       original = JSON.parse(route.request().postData())
+      assert.equal(original.mdm.registrationId, currentRegistration.registrationId)
+      assert.equal(original.mdm.generation, currentRegistration.generation)
       const response = await route.fetch()
       assert.equal(response.status(), 200)
       await route.abort('failed')
@@ -160,6 +193,7 @@ try {
   const id = new URL(page.url()).pathname.split('/').at(-1)
   let association = await api(`/api/v1/device-associations/${id}`)
   assert.equal(association.version, 1)
+  coverage.push('real-create-displayed-current-generation-without-refresh')
   coverage.push('committed-unknown-explicit-exact-replay')
   phase = 'sources'
   const view = await api(`/api/v1/device-views/association/${id}`)
@@ -200,32 +234,23 @@ try {
     true,
   )
   await page.getByRole('button', { name: '读取当前关系与主注册', exact: true }).click()
+  const basis = panel().locator('[data-testid=association-basis]')
+  await basis.getByText('Concurrent verification', { exact: false }).waitFor()
+  assert.ok((await basis.textContent()).includes('/2'))
   await panel()
     .getByLabel('我已核实双方属于同一管理实例，确认双方注册坐标', { exact: true })
     .check()
+  const nextConfirmation = page.waitForRequest(
+    (r) => r.method() === 'POST' && new URL(r.url()).pathname === '/api/v1/device-associations',
+  )
   await page.getByRole('button', { name: '重新核实关联', exact: true }).click()
+  assert.equal((await nextConfirmation).postDataJSON().expectedVersion, 2)
   await loaded()
   association = await api(`/api/v1/device-associations/${id}`)
   assert.equal(association.version, 3)
   coverage.push('real-cas-conflict-explicit-basis-refresh')
   phase = 'generation'
-  const fds = JSON.parse(process.env._MDM_BUILD_LEASE).fds
-  assert.ok(fds.length === 2 && fds.every((fd) => Number.isInteger(fd) && fd >= 3 && fd < 1024))
-  const stdio = Array(Math.max(...fds) + 1).fill('ignore')
-  stdio[1] = 'pipe'
-  stdio[2] = 'pipe'
-  fds.forEach((fd) => {
-    stdio[fd] = fd
-  })
-  const control = spawnSync(
-    'python3',
-    [
-      resolve(dirname(fileURLToPath(import.meta.url)), 'device-fixture-control.py'),
-      process.env.MDM_DEVICE_BROWSER_FIXTURE,
-    ],
-    { cwd: process.env.MDM_DEVICE_BACKEND, stdio, timeout: 30000 },
-  )
-  assert.equal(control.status, 0)
+  advanceGeneration('agent')
   await page.reload()
   await loaded()
   association = await api(`/api/v1/device-associations/${id}`)

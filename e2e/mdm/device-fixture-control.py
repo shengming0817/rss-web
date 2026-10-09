@@ -11,12 +11,16 @@ assert fixture['tenant']==TENANTS[0]
 e=Environment(Path.cwd(),group='device-browser')
 t=fixture['tenant']
 # Coordinates are fixed fixture input, never arbitrary browser request SQL.
-assert fixture['agent']=='fixture-agent'
+channel=sys.argv[2]
+assert channel in {'mdm','agent'}
+device=fixture[channel]
+assert device==f'fixture-{channel}'
+origin_column='request_id' if channel=='mdm' else 'agent_grant_id'
 r,credential,epoch=[str(uuid.uuid4()) for _ in range(3)]
 e.sql(f"""BEGIN;
 SET LOCAL rss.tenant_id = '{t}';
-CREATE TEMP TABLE old_registration AS SELECT * FROM mdm_access.registrations WHERE tenant_id='{t}' AND device='fixture-agent' AND channel='agent' AND purpose='primary' AND state='active';
+CREATE TEMP TABLE old_registration AS SELECT * FROM mdm_access.registrations WHERE tenant_id='{t}' AND device='{device}' AND channel='{channel}' AND purpose='primary' AND state='active';
 UPDATE mdm_access.registrations SET state='superseded' WHERE id IN(SELECT id FROM old_registration);
-INSERT INTO mdm_access.registrations(tenant_id,id,device,channel,generation,agent_grant_id,state,purpose,epoch) SELECT tenant_id,'{r}',device,channel,generation+1,agent_grant_id,'active',purpose,'{epoch}' FROM old_registration;
-INSERT INTO mdm_access.credentials(tenant_id,id,registration,channel,locator,state) VALUES('{t}','{credential}','{r}','agent',md5('{credential}')||md5('{r}'),'active');
+INSERT INTO mdm_access.registrations(tenant_id,id,device,channel,generation,{origin_column},state,purpose,epoch) SELECT tenant_id,'{r}',device,channel,generation+1,{origin_column},'active',purpose,'{epoch}' FROM old_registration;
+INSERT INTO mdm_access.credentials(tenant_id,id,registration,channel,locator,state) VALUES('{t}','{credential}','{r}','{channel}',md5('{credential}')||md5('{r}'),'active');
 COMMIT;""",'mdm_dev')
