@@ -14,6 +14,7 @@ async function fixture() {
       automation.observe,
       automation.now,
     )
+  devices.bindAuthorization(automation.authorization.can)
   const login = await server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
@@ -32,7 +33,7 @@ async function fixture() {
 it('connects native permission changes, denied device access and sanitized audit without replay duplication', async () => {
   const f = await fixture(),
     root = '/api/v1/mdm-candidate/operations/audit'
-  expect((await f.server.handle('GET', '/api/v1/mdm-candidate/devices/device-01')).status).toBe(200)
+  expect((await f.server.handle('GET', '/api/v1/devices/device-01/inventory')).status).toBe(200)
   const original = (await f.server.handle('GET', '/api/v1/authorization/rules')).body as {
     items: {
       id: string
@@ -54,7 +55,7 @@ it('connects native permission changes, denied device access and sanitized audit
   expect((await f.write('PUT', `/api/v1/authorization/rules/${ADMIN_RULE}`, body)).status).toBe(503)
   f.server.set('normal')
   expect((await f.write('PUT', `/api/v1/authorization/rules/${ADMIN_RULE}`, body)).status).toBe(200)
-  expect((await f.server.handle('GET', '/api/v1/mdm-candidate/devices/device-01')).status).toBe(403)
+  expect((await f.server.handle('GET', '/api/v1/devices/device-01/inventory')).status).toBe(403)
   const audit = (await f.server.handle('GET', `${root}?operation=${operationId}`)).body as {
     items: { stage: string; outcome: string }[]
   }
@@ -141,13 +142,14 @@ it('rechecks native inventory/assignment permissions and preserves single-device
       ),
     },
   })
-  for (const suffix of ['', '/hardware', '/software', '/history'])
-    expect(
-      (await f.server.handle('GET', `/api/v1/mdm-candidate/devices/device-01${suffix}`)).status,
-    ).toBe(200)
-  expect(
-    (await f.server.handle('GET', '/api/v1/mdm-candidate/devices/device-02/hardware')).status,
-  ).toBe(403)
+  for (const path of [
+    '/api/v1/devices/device-01',
+    '/api/v1/device-views/endpoint/device-01',
+    '/api/v1/devices/device-01/inventory',
+    '/api/v1/devices/device-01/timeline',
+  ])
+    expect((await f.server.handle('GET', path)).status).toBe(200)
+  expect((await f.server.handle('GET', '/api/v1/device-views/endpoint/device-02')).status).toBe(404)
   const login = await f.server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'reviewer',
     password: 'demo',
