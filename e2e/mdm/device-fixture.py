@@ -18,6 +18,7 @@ BACKEND = Path.cwd()
 sys.path.insert(0, str(BACKEND / 'hack'))
 from t2_environment import Environment, private
 from candidate_fixture import INSTANCE, TENANTS, ADMIN
+from build_run import lease_fds
 
 environment = Environment(BACKEND, group='device-browser')
 processes = []
@@ -90,7 +91,7 @@ try:
         time.sleep(.2)
     fixture=private(environment.root/'browser.json',dict(origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,principal=ADMIN,login='admin',passwordFile=str(environment.root/'account-password'),mdm='fixture-mdm',agent='fixture-agent',ruleId=rule_id,rule=rule))
     phase='browser'
-    browser=subprocess.run(['node',str(WEB/'e2e/mdm/device-browser.mjs')],cwd=WEB,env={**os.environ,'MDM_DEVICE_BROWSER_FIXTURE':str(fixture)},timeout=180)
+    browser=subprocess.run(['node',str(WEB/'e2e/mdm/device-browser.mjs')],cwd=WEB,env={**os.environ,'MDM_DEVICE_BROWSER_FIXTURE':str(fixture)},timeout=180,pass_fds=lease_fds())
     if browser.returncode: raise RuntimeError('browser')
     result='passed'
 except BaseException as error:

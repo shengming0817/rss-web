@@ -10,7 +10,7 @@ const props = defineProps<{
   field: string
   source: DeviceView['lists'][string]['sources'][number]
 }>()
-const emit = defineEmits<{ invalidated: [] }>()
+const emit = defineEmits<{ invalidated: [reason: 'cursorInvalidated' | 'denied' | 'notFound'] }>()
 const { t } = useI18n(),
   runtime = useMdm(),
   { run, busy, failure } = useOperation([], () => [...deviceBinding(runtime), props.source.cursor])
@@ -21,14 +21,18 @@ async function load(next?: string) {
     () => runtime.devices.views.items(props.view.reference, props.field, props.source, next),
     (v) => (page.value = v),
   )
-  if (failure.value === 'cursorInvalidated') {
+  if (
+    failure.value === 'cursorInvalidated' ||
+    failure.value === 'denied' ||
+    failure.value === 'notFound'
+  ) {
     page.value = undefined
-    emit('invalidated')
+    emit('invalidated', failure.value)
   }
 }
 </script>
 <template>
-  <section :aria-busy="busy">
+  <section :aria-busy="busy" :data-list-endpoint="source.endpoint">
     <h4>
       {{ source.endpoint }} · {{ source.evidence.source }} · {{ source.evidence.dataset ?? '—' }}
     </h4>

@@ -147,9 +147,9 @@ async function changed(a: Association) {
     params: { tenant: runtime.tenant, kind: 'association', view: a.id },
   })
 }
-function invalidated() {
-  view.value = undefined
-  failure.value = 'cursorInvalidated'
+function invalidated(reason: 'cursorInvalidated' | 'denied' | 'notFound') {
+  clear()
+  failure.value = reason
 }
 watch(
   () => [...deviceBinding(runtime), id.value],

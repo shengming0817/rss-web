@@ -91,8 +91,17 @@ export function qualityRun(value: unknown) {
     result: enumeration(v['result'], ['pending', 'snapshot', 'partial', 'failed'] as const),
     deliveryPending: boolean(v['deliveryPending']),
     fields: array(v['fields'], (item) => {
-      const f = closed(item, ['field', 'quality', 'status', 'receivedAt'])
+      const f = closed(item, [
+        'field',
+        'quality',
+        'status',
+        'receivedAt',
+        'itemCount',
+        'invalidItems',
+      ])
       return {
+        itemCount: count(f['itemCount']),
+        invalidItems: count(f['invalidItems']),
         field: fieldKey(f['field']),
         quality: enumeration(f['quality'], [
           'pending',

@@ -154,3 +154,50 @@ it('uses exact async and CAS requests with one dispatch and no TTL', async () =>
   })
   expect(request).toHaveBeenCalledTimes(2)
 })
+
+it('preserves formal quality field counts in a nonempty inventory response', () => {
+  const quality = [
+    {
+      source: 'manual',
+      channel: 'mdm',
+      registration: task,
+      registrationGeneration: 1,
+      epoch: task,
+      runId: task,
+      sequence: 0,
+      result: 'partial',
+      deliveryPending: false,
+      fields: [
+        {
+          field: 'custom.is_loaner',
+          quality: 'invalid',
+          status: null,
+          receivedAt: 2,
+          itemCount: 3,
+          invalidItems: 1,
+        },
+      ],
+    },
+  ]
+  expect(
+    decodeInventory(
+      { tenantId: tenant, asset: { kind: 'detail', device: { ...device, quality } } },
+      tenant,
+    ).quality,
+  ).toEqual(quality)
+  expect(() =>
+    decodeInventory(
+      {
+        tenantId: tenant,
+        asset: {
+          kind: 'detail',
+          device: {
+            ...device,
+            quality: [{ ...quality[0], fields: [{ ...quality[0]!.fields[0], invalidItems: -1 }] }],
+          },
+        },
+      },
+      tenant,
+    ),
+  ).toThrow()
+})

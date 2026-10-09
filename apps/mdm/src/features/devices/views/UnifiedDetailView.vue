@@ -52,9 +52,9 @@ function denied() {
   clear()
   failure.value = 'denied'
 }
-function invalidated() {
+function invalidated(reason: 'cursorInvalidated' | 'denied' | 'notFound') {
   clear()
-  failure.value = 'cursorInvalidated'
+  failure.value = reason
 }
 watch(
   () => [...deviceBinding(runtime), refValue.value.kind, refValue.value.id],

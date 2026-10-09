@@ -70,6 +70,7 @@ async function setup(
     },
   } as unknown as HttpTransport
   const devices = createDeviceClients(transport, TENANT, true)
+  const operations = createOperationsClients(transport, TENANT, true)
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -94,7 +95,7 @@ async function setup(
         [mdmKey as symbol]: {
           devices,
           transport,
-          operations: createOperationsClients(transport, TENANT, true),
+          operations,
           tenant: TENANT,
           demo: true,
           session: {
@@ -135,7 +136,18 @@ async function setup(
     await button(text).trigger('click')
     await flushPromises()
   }
-  return { wrapper, router, scenario, devices, domain, requests, button, click, loseReply }
+  return {
+    wrapper,
+    router,
+    scenario,
+    devices,
+    domain,
+    requests,
+    button,
+    click,
+    loseReply,
+    operations,
+  }
 }
 it('renders server view counters, endpoint references, pagination and empty state', async () => {
   const { wrapper, click, scenario, requests } = await setup()
@@ -842,4 +854,42 @@ it('clears sensitive counterpart facts when an association write loses authority
   expect(h.wrapper.find('[data-testid=association-panel]').exists()).toBe(false)
   expect(h.wrapper.text()).toContain('请求被拒绝')
   expect(h.wrapper.text()).not.toContain('Verified physical possession')
+})
+
+it.each([403, 404])(
+  'clears the entire unified view after source pagination loses access (%s)',
+  async (status) => {
+    const h = await setup('device-detail', { device: 'device-01' })
+    await chooseAssociation(h)
+    await h.click('确认关联')
+    await vi.waitFor(() => expect(h.router.currentRoute.value.name).toBe('device-view-detail'))
+    await flushPromises()
+    expect(h.wrapper.findComponent({ name: 'ViewFacts' }).exists()).toBe(true)
+    vi.spyOn(h.devices.views, 'items').mockRejectedValueOnce(
+      decodeMdmError(status, { code: status === 403 ? 'forbidden' : 'not_found' }),
+    )
+    const source = h.wrapper.findComponent({ name: 'SourceList' })
+    await source.find('button').trigger('click')
+    await flushPromises()
+    expect(h.wrapper.findComponent({ name: 'ViewFacts' }).exists()).toBe(false)
+    expect(h.wrapper.find('[data-testid=association-panel]').exists()).toBe(false)
+    expect(h.wrapper.find('[role=alert]').exists()).toBe(true)
+  },
+)
+it('shows authorization read failure and retries without treating it as read-only access', async () => {
+  const h = await setup('device-detail', { device: 'device-01' })
+  const effective = vi
+    .spyOn(h.operations.authorization, 'effective')
+    .mockRejectedValueOnce(decodeMdmError(503, { code: 'service_unavailable' }))
+  await h.router.push({ name: 'devices', params: { tenant: TENANT } })
+  await flushPromises()
+  await h.router.push({ name: 'device-detail', params: { tenant: TENANT, device: 'device-01' } })
+  await flushPromises()
+  const authority = h.wrapper.find('[data-testid=association-authority]')
+  expect(authority.find('[role=alert]').exists()).toBe(true)
+  expect(h.wrapper.find('[data-testid=association-panel]').exists()).toBe(false)
+  effective.mockRestore()
+  await authority.find('button').trigger('click')
+  await flushPromises()
+  expect(h.wrapper.find('[data-testid=association-panel]').exists()).toBe(true)
 })

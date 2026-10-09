@@ -104,7 +104,7 @@ async function refreshAuthority() {
       if (value.tenantId === runtime.tenant && value.principalId === s.identity?.principalId) {
         grants.value = value.grants
         authorityLoaded.value = true
-      }
+      } else throw new Error('Wrong authorization identity')
     },
   )
 }
@@ -283,6 +283,16 @@ function replay() {
 </script>
 <template>
   <section
+    v-if="!authorityLoaded && (busy || failure)"
+    :aria-busy="busy"
+    class="identity-card"
+    data-testid="association-authority"
+  >
+    <p>{{ t('devices.associationManagement') }}</p>
+    <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
+    <button :disabled="busy" @click="refreshAuthority">{{ t('devices.retryAuthority') }}</button>
+  </section>
+  <section
     v-if="manageable"
     :aria-busy="busy"
     class="identity-card"
@@ -308,7 +318,8 @@ function replay() {
     <fieldset :disabled="busy || locked">
       <template v-if="association"
         ><p>
-          {{ association.id }} / {{ association.version }} · {{ association.state }} ·
+          {{ association.id }} / {{ association.version }} ·
+          {{ t(`devices.associationState.${association.state}`) }} ·
           {{ association.evidence }}
         </p>
         <button @click="prepare">{{ t('devices.prepareVerification') }}</button>
@@ -351,12 +362,18 @@ function replay() {
         </button>
         <section v-if="candidateView">
           <h3>{{ t('devices.candidateFacts') }}</h3>
-          <p>{{ candidateDetail?.status }}</p>
+          <p>
+            {{
+              candidateDetail
+                ? t(`devices.endpointState.${candidateDetail.status}`)
+                : t('devices.unknown')
+            }}
+          </p>
           <dl>
             <template v-for="field in candidateView.fields" :key="field.field"
               ><dt>{{ field.field }}</dt>
               <dd>
-                {{ field.state.kind
+                {{ t(`devices.state.${field.state.kind}`)
                 }}<template v-if="field.state.kind === 'known'">
                   · {{ JSON.stringify(field.state.value.value) }}</template
                 >

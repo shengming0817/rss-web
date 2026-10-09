@@ -52,7 +52,9 @@ watch(
           >{{ t('devices.status')
           }}<select v-model="status">
             <option value="">{{ t('devices.all') }}</option>
-            <option v-for="s in endpointStatuses" :key="s" :value="s">{{ s }}</option>
+            <option v-for="s in endpointStatuses" :key="s" :value="s">
+              {{ t(`devices.endpointState.${s}`) }}
+            </option>
           </select></label
         ><label
           >{{ t('devices.channels')
@@ -66,7 +68,7 @@ watch(
           }}<select v-model="source">
             <option value="">{{ t('devices.all') }}</option>
             <option v-for="s in ['mdm.windows', 'mdm.apple', 'agent.builtin']" :key="s" :value="s">
-              {{ s }}
+              {{ t(`devices.endpointState.${s}`) }}
             </option>
           </select></label
         ><label><input v-model="descending" type="checkbox" />{{ t('devices.descending') }}</label
@@ -122,7 +124,13 @@ watch(
               · {{ item.reference.id }}</RouterLink
             >
           </td>
-          <td>{{ item.association?.state ?? item.endpoints[0]?.status }}</td>
+          <td>
+            {{
+              item.association
+                ? t(`devices.associationState.${item.association.state}`)
+                : t(`devices.endpointState.${item.endpoints[0]?.status}`)
+            }}
+          </td>
           <td>{{ item.endpoints.flatMap((e) => e.channels.map((c) => c.channel)).join(' + ') }}</td>
           <td>
             <ul>

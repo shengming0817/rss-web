@@ -52,18 +52,21 @@ try {
     evidence,
   })
   const writeRule = async (grants) => {
-    const rule = await api(`/api/v1/authorization/rules/${fixture.ruleId}`),
-      response = await context.request.post(
-        origin + `/api/v1/authorization/rules/${fixture.ruleId}`,
-        {
-          headers: await headers(),
-          data: {
-            operationId: randomUUID(),
-            expectedRevision: rule.revision,
-            value: { ...fixture.rule, grants },
-          },
+    const rule = (await api('/api/v1/authorization/rules')).items.find(
+      (r) => r.id === fixture.ruleId,
+    )
+    assert.ok(rule)
+    const response = await context.request.put(
+      origin + `/api/v1/authorization/rules/${fixture.ruleId}`,
+      {
+        headers: await headers(),
+        data: {
+          operationId: randomUUID(),
+          expectedRevision: rule.revision,
+          value: { ...fixture.rule, grants },
         },
-      )
+      },
+    )
     assert.equal(response.status(), 200)
   }
   const panel = () => page.locator('[data-testid=association-panel]')
@@ -104,7 +107,7 @@ try {
     } else await route.continue()
   })
   await page.getByRole('button', { name: '确认关联', exact: true }).click()
-  await page.getByText('关联写入结果未知', { exact: false }).waitFor()
+  await page.getByText('操作结果未知', { exact: false }).waitFor()
   assert.equal(await page.getByRole('button', { name: '确认关联', exact: true }).isDisabled(), true)
   // Vue navigation retains operation memory; a full browser restart deliberately does not persist it.
   await page.getByRole('link', { name: '设备目录', exact: true }).click()
@@ -131,11 +134,20 @@ try {
     .locator('details')
     .filter({ has: page.locator('summary').filter({ hasText: 'custom.browser_list' }) })
   await lists.locator('summary').first().click()
-  await lists.getByRole('button', { name: '展开此来源', exact: true }).first().click()
-  await lists.getByRole('button', { name: '下一页', exact: true }).waitFor()
-  assert.equal(await lists.locator('ol li').count(), 20)
-  await lists.getByRole('button', { name: '下一页', exact: true }).click()
-  assert.equal(await lists.locator('ol li').count(), 5)
+  const mdmList = lists
+    .locator('section')
+    .filter({ has: page.getByRole('heading', { name: new RegExp(fixture.mdm) }) })
+  await mdmList.getByRole('button', { name: '展开此来源', exact: true }).click()
+  await mdmList.getByRole('button', { name: '下一页', exact: true }).waitFor()
+  await page.waitForFunction(
+    (id) => document.querySelector(`[data-list-endpoint="${id}"] ol`)?.children.length === 20,
+    fixture.mdm,
+  )
+  await mdmList.getByRole('button', { name: '下一页', exact: true }).click()
+  await page.waitForFunction(
+    (id) => document.querySelector(`[data-list-endpoint="${id}"] ol`)?.children.length === 5,
+    fixture.mdm,
+  )
   coverage.push('manual-conflict-two-endpoints-source-pagination')
   phase = 'cas'
   await page.getByRole('button', { name: '读取当前关系与主注册', exact: true }).click()
@@ -161,13 +173,21 @@ try {
   assert.equal(association.version, 3)
   coverage.push('real-cas-conflict-explicit-basis-refresh')
   phase = 'generation'
+  const fds = JSON.parse(process.env._MDM_BUILD_LEASE).fds
+  assert.ok(fds.length === 2 && fds.every((fd) => Number.isInteger(fd) && fd >= 3 && fd < 1024))
+  const stdio = Array(Math.max(...fds) + 1).fill('ignore')
+  stdio[1] = 'pipe'
+  stdio[2] = 'pipe'
+  fds.forEach((fd) => {
+    stdio[fd] = fd
+  })
   const control = spawnSync(
     'python3',
     [
       resolve(dirname(fileURLToPath(import.meta.url)), 'device-fixture-control.py'),
       process.env.MDM_DEVICE_BROWSER_FIXTURE,
     ],
-    { cwd: process.env.MDM_DEVICE_BACKEND, stdio: 'pipe', timeout: 30000 },
+    { cwd: process.env.MDM_DEVICE_BACKEND, stdio, timeout: 30000 },
   )
   assert.equal(control.status, 0)
   await page.reload()

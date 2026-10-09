@@ -7,7 +7,7 @@ import ChannelCard from './ChannelCard.vue'
 import AssetValue from './AssetValue.vue'
 import SourceList from './SourceList.vue'
 defineProps<{ view: DeviceView; endpoints: EndpointDetail[] }>()
-const emit = defineEmits<{ invalidated: [] }>()
+const emit = defineEmits<{ invalidated: [reason: 'cursorInvalidated' | 'denied' | 'notFound'] }>()
 const { t } = useI18n(),
   runtime = useMdm()
 </script>
@@ -59,7 +59,7 @@ const { t } = useI18n(),
         :view="view"
         :field="String(field)"
         :source="source"
-        @invalidated="emit('invalidated')"
+        @invalidated="emit('invalidated', $event)"
       />
     </details>
   </section>

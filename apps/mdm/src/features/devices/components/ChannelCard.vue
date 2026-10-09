@@ -48,14 +48,17 @@ function capabilities(channel: string) {
       :to="{ name: 'device-detail', params: { tenant: runtime.tenant, device: endpoint.id } }"
       >{{ t('devices.originalEndpoint') }}</RouterLink
     >
-    <p>{{ t('devices.endpointStatus') }}: {{ endpoint.status }}</p>
+    <p>{{ t('devices.endpointStatus') }}: {{ t(`devices.endpointState.${endpoint.status}`) }}</p>
     <article v-for="channel in endpoint.channels" :key="channel.channel">
       <h3>{{ channel.channel === 'mdm' ? 'MDM' : 'Agent' }}</h3>
       <dl>
         <dt>{{ t('devices.deviceId') }}</dt>
         <dd>{{ endpoint.id }}</dd>
         <dt>{{ t('devices.registration') }}</dt>
-        <dd>{{ channel.registrationId }} / {{ channel.generation }} · {{ channel.status }}</dd>
+        <dd>
+          {{ channel.registrationId }} / {{ channel.generation }} ·
+          {{ t(`devices.endpointState.${channel.status}`) }}
+        </dd>
         <dt>{{ t('devices.source') }}</dt>
         <dd>{{ channel.source }}</dd>
         <dt>{{ t('devices.lastCommunication') }}</dt>
@@ -71,18 +74,22 @@ function capabilities(channel: string) {
       <ul>
         <li v-for="child in channel.children" :key="child.registrationId">
           {{ child.purpose }} · {{ child.registrationId }} / {{ child.generation }} ·
-          {{ child.status }} · {{ t(child.ready ? 'devices.ready' : 'devices.unknown') }}
+          {{ t(`devices.endpointState.${child.status}`) }} ·
+          {{ t(child.ready ? 'devices.ready' : 'devices.unknown') }}
         </li>
       </ul>
       <p v-if="channel.userContext">
         {{ t('devices.userContext') }} · {{ channel.userContext.id }} /
-        {{ channel.userContext.parentGeneration }} · {{ channel.userContext.registrationStatus }}
+        {{ channel.userContext.parentGeneration }} ·
+        {{ t(`devices.endpointState.${channel.userContext.registrationStatus}`) }}
       </p>
       <ul>
         <li v-for="capability in capabilities(channel.channel)" :key="capability.action">
           {{ capability.action }} · {{ t('devices.productSupport') }}:
-          {{ capability.productSupport.state }} ({{ capability.productSupport.reason ?? '—' }}) ·
-          {{ t('devices.devicePrerequisite') }}: {{ capability.devicePrerequisite.state }} ({{
+          {{ t(`devices.supportState.${capability.productSupport.state}`) }} ({{
+            capability.productSupport.reason ?? '—'
+          }}) · {{ t('devices.devicePrerequisite') }}:
+          {{ t(`devices.supportState.${capability.devicePrerequisite.state}`) }} ({{
             capability.devicePrerequisite.reason ?? '—'
           }}) · {{ t('devices.permission') }}:
           {{ t(capability.permission.allowed ? 'devices.yes' : 'devices.no') }}

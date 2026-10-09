@@ -1,4 +1,21 @@
 export const devicesZh = {
+  retryAuthority: '重新读取关联权限',
+  endpointState: {
+    active: '有效注册',
+    pending: '待注册',
+    revoked: '已撤销',
+    superseded: '已被新代次替代',
+    registered: '已登记',
+    cancelled: '已取消',
+    expired: '已过期',
+  },
+  supportState: {
+    supported: '支持',
+    unsupported: '不支持',
+    blocked: '受阻',
+    unknown: '未知',
+    ready: '已就绪',
+  },
   originalEndpoint: '原端点详情',
   endpointStatus: '端点状态',
   lastCommunication: '最近通信',
@@ -268,6 +285,23 @@ export const devicesZh = {
   },
 }
 export const devicesEn: typeof devicesZh = {
+  retryAuthority: 'Read association permissions again',
+  endpointState: {
+    active: 'Active registration',
+    pending: 'Pending',
+    revoked: 'Revoked',
+    superseded: 'Superseded',
+    registered: 'Registered',
+    cancelled: 'Cancelled',
+    expired: 'Expired',
+  },
+  supportState: {
+    supported: 'Supported',
+    unsupported: 'Unsupported',
+    blocked: 'Blocked',
+    unknown: 'Unknown',
+    ready: 'Ready',
+  },
   originalEndpoint: 'Original endpoint detail',
   endpointStatus: 'Endpoint status',
   lastCommunication: 'Last communication',
