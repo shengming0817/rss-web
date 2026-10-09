@@ -14,6 +14,7 @@ import { association } from './associations'
 import { endpoint, type Endpoint } from './endpoint-model'
 import {
   cursor,
+  pageToken,
   fieldKey,
   qualityRun,
   evidence,
@@ -129,7 +130,7 @@ export function decodeView(value: unknown, expected: ViewRef) {
                       evidence: evidence(last['evidence']),
                     }
                   }),
-                  cursor: identifier(source['cursor']),
+                  cursor: pageToken(source['cursor']),
                 }
               }),
               (s) => `${s.endpoint}:${sourceIdentity(s.evidence)}`,

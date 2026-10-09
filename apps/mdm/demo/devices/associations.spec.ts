@@ -120,3 +120,14 @@ it('projects a singly authorized endpoint without revealing its hidden counterpa
     h.associations.confirm({ ...h.body, operationId: crypto.randomUUID() }),
   ).rejects.toMatchObject({ status: 403 })
 })
+
+it('preserves signed source cursors up to the formal 16 KiB limit without treating them as resource IDs', async () => {
+  const h = await confirmation(),
+    ref = { kind: 'endpoint' as const, id: h.body.mdm.device },
+    wire = await h.views.detail(ref)
+  const token = 'opaque_'.repeat(2200)
+  wire.lists['device.software']!.sources[0]!.cursor = token
+  expect(decodeView(wire, ref).lists['device.software']!.sources[0]!.cursor).toBe(token)
+  wire.lists['device.software']!.sources[0]!.cursor = 'x'.repeat(16385)
+  expect(() => decodeView(wire, ref)).toThrow('Invalid cursor')
+})

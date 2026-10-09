@@ -149,11 +149,11 @@ export function inventory(value: unknown) {
               return {
                 state: listState(source['state']),
                 evidence: evidence(source['evidence']),
-                cursor: identifier(source['cursor']),
+                cursor: pageToken(source['cursor']),
               }
             }),
             itemKey: nullable(l['itemKey'], identifier),
-            cursor: identifier(l['cursor']),
+            cursor: pageToken(l['cursor']),
           },
         ]
       }),
@@ -303,7 +303,12 @@ export function assetEnvelope(value: unknown, tenant: string, kind: string, keys
   if (v['kind'] !== kind) throw new Error('Wrong asset response')
   return v
 }
-export const cursor = (v: unknown) => nullable(v, string)
+export function pageToken(value: unknown): string {
+  if (typeof value !== 'string' || !value || value.length > 16384 || /\p{Cc}/u.test(value))
+    throw new Error('Invalid cursor')
+  return value
+}
+export const cursor = (v: unknown) => nullable(v, pageToken)
 
 export const sourceIds = [
   'manual',

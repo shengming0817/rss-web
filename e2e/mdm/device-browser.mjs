@@ -12,7 +12,9 @@ let browser,
   page,
   phase = 'environment',
   result = 'failed'
-const coverage = []
+const coverage = [],
+  responses = [],
+  pageErrors = []
 const stop = () => browser?.close().catch(() => {})
 process.once('SIGINT', stop)
 process.once('SIGTERM', stop)
@@ -27,19 +29,51 @@ try {
   context = await browser.newContext({ ignoreHTTPSErrors: true, locale: 'zh-CN' })
   page = await context.newPage()
   page.setDefaultTimeout(10000)
+  page.on('response', (response) => {
+    const path = new URL(response.url()).pathname
+    if (path.startsWith('/api/v1/')) {
+      responses.push({ resource: path.split('/')[3], status: response.status() })
+      if (responses.length > 20) responses.shift()
+    }
+  })
+  page.on('pageerror', (error) => pageErrors.push(error.name))
+  // Pace both UI and fixture HTTP below the unchanged production gateway's 10 r/s limit.
+  let nextRequestAt = 0
+  const pace = async () => {
+    const now = Date.now(),
+      dispatchAt = Math.max(now, nextRequestAt)
+    nextRequestAt = dispatchAt + 200
+    if (dispatchAt > now) await new Promise((resolve) => setTimeout(resolve, dispatchAt - now))
+  }
+  await context.route('**/api/v1/**', async (route) => {
+    await pace()
+    await route.continue()
+  })
+  const request = async (method, url, options) => {
+    await pace()
+    return context.request[method](url, options)
+  }
   const path = (route) => `${origin}/tenants/${fixture.tenant}/${route}`
   const api = async (url) => {
-    const response = await context.request.get(origin + url)
+    const response = await request('get', origin + url)
+    if (response.status() !== 200) {
+      const error = await response.json().catch(() => ({}))
+      responses.push({
+        resource: url.split('/')[3],
+        status: response.status(),
+        code: /^[a-z_]{1,128}$/.test(error.code) ? error.code : undefined,
+      })
+    }
     assert.equal(response.status(), 200)
     return response.json()
   }
-  const headers = async () => ({
-    Origin: origin,
-    'X-Identity-Request': '1',
-    'X-CSRF-Token': (await api(`/api/v1/identity/tenants/${fixture.tenant}/session`)).csrfToken,
-  })
+  let csrfToken
+  const headers = async () => {
+    csrfToken ??= (await api(`/api/v1/identity/tenants/${fixture.tenant}/session`)).csrfToken
+    return { Origin: origin, 'X-Identity-Request': '1', 'X-CSRF-Token': csrfToken }
+  }
   const confirm = async (body) =>
-    context.request.post(origin + '/api/v1/device-associations', {
+    request('post', origin + '/api/v1/device-associations', {
       headers: await headers(),
       data: body,
     })
@@ -56,7 +90,8 @@ try {
       (r) => r.id === fixture.ruleId,
     )
     assert.ok(rule)
-    const response = await context.request.put(
+    const response = await request(
+      'put',
       origin + `/api/v1/authorization/rules/${fixture.ruleId}`,
       {
         headers: await headers(),
@@ -94,6 +129,7 @@ try {
   let original,
     requests = []
   await page.route('**/api/v1/device-associations', async (route) => {
+    await pace()
     if (route.request().method() !== 'POST') {
       await route.continue()
       return
@@ -212,7 +248,8 @@ try {
   phase = 'cursor-invalidated'
   const current = await api(`/api/v1/device-views/association/${id}`),
     source = current.lists['custom.browser_list'].sources.find((s) => s.endpoint === fixture.mdm)
-  const change = await context.request.put(
+  const change = await request(
+    'put',
     origin + `/api/v1/devices/${fixture.mdm}/manual-fields/custom.asset_tag`,
     {
       headers: await headers(),
@@ -224,7 +261,8 @@ try {
     },
   )
   assert.equal(change.status(), 200)
-  const invalidated = await context.request.get(
+  const invalidated = await request(
+    'get',
     origin +
       `/api/v1/device-views/association/${id}/inventory-lists/custom.browser_list?cursor=${encodeURIComponent(source.cursor)}&limit=20`,
   )
@@ -243,7 +281,7 @@ try {
   assert.ok(!JSON.stringify(scoped).includes(fixture.agent))
   assert.ok(!JSON.stringify(scoped).includes(id))
   assert.equal(
-    (await context.request.get(origin + `/api/v1/device-views/association/${id}`)).status(),
+    (await request('get', origin + `/api/v1/device-views/association/${id}`)).status(),
     404,
   )
   await page.reload()
@@ -273,7 +311,37 @@ try {
   result = 'passed'
 } catch (error) {
   const line = error.stack?.match(/device-browser\.mjs:(\d+)/)?.[1]
-  console.log(JSON.stringify({ phase, result: 'failed', line }))
+  const alerts =
+    (await page
+      ?.getByRole('alert')
+      .allTextContents()
+      .catch(() => [])) ?? []
+  const ui = page
+    ? {
+        consoleCount: await page
+          .locator('section.device-console')
+          .count()
+          .catch(() => 0),
+        login: await page
+          .locator('#login-name')
+          .count()
+          .catch(() => 0),
+        failures: ['输入或响应无效', '请求被拒绝', '对象或操作不存在', '服务暂不可用'].filter(
+          (text) => alerts.some((alert) => alert.includes(text)),
+        ),
+      }
+    : undefined
+  console.log(
+    JSON.stringify({
+      phase,
+      result: 'failed',
+      line,
+      classification: error.name,
+      ui,
+      responses,
+      pageErrors,
+    }),
+  )
 } finally {
   clearTimeout(timer)
   await context?.close().catch(() => {})

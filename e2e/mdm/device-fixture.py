@@ -4,6 +4,7 @@ Consumes rss-mdm's worktree environment/build lease and never edits its source.
 """
 import json
 import os
+import re
 from pathlib import Path
 import signal
 import ssl
@@ -44,12 +45,12 @@ def seed():
     user = dict(instanceId=INSTANCE, tenantId=tenant, principalId=ADMIN)
     rule = dict(subject=dict(kind='user', user=user), grants=[dict(operation=o, scope=dict(kind='all_devices')) for o in ['inventory_read','inventory_assign','device_association_write','credentials','enrollment']])
     rule_id = str(uuid.uuid4())
-    sql = [f"INSERT INTO mdm_access.authorization_rules(tenant_id,instance,id,revision,document) VALUES('{tenant}','{INSTANCE}','{rule_id}',1,{q(json.dumps(rule))}::jsonb)"]
+    sql = [f"SET rss.tenant_id = '{tenant}'", f"INSERT INTO mdm_access.authorization_rules(tenant_id,instance,id,revision,document) VALUES('{tenant}','{INSTANCE}','{rule_id}',1,{q(json.dumps(rule))}::jsonb)"]
     for device, channel, source in [('fixture-mdm','mdm','mdm.windows'), ('fixture-agent','agent','agent.builtin')]:
         registration, grant, request, credential = [str(uuid.uuid4()) for _ in range(4)]
         sql.append(f"INSERT INTO mdm_access.devices(tenant_id,id) VALUES('{tenant}','{device}')")
         if channel == 'mdm':
-            sql += [f"INSERT INTO mdm_access.grants(tenant_id,id,actor,instance,device,purpose,state,expires_at) VALUES('{tenant}','{grant}','fixture','{INSTANCE}','{device}','enrollment','consumed',clock_timestamp()+interval '1 hour')",
+            sql += [f"INSERT INTO mdm_access.grants(tenant_id,id,actor,instance,device,purpose,state,expires_at) VALUES('{tenant}','{grant}','fixture','{INSTANCE}','{device}','enrollment','consumed',clock_timestamp()+interval '2 minutes')",
                     f"INSERT INTO mdm_access.requests(tenant_id,id,grant_id,source,windows_profile) VALUES('{tenant}','{request}','{grant}','{source}','Device')"]
             column, origin = 'request_id', request
         else:
@@ -65,7 +66,14 @@ def seed():
     sql.append(f"INSERT INTO mdm.field_versions(tenant_id,field,version,revision,definition) VALUES('{tenant}','custom.browser_list',1,mdm.record_asset_change('{tenant}'::uuid,'catalog',jsonb_build_object('field','custom.browser_list'),ARRAY['custom.browser_list']),{q(json.dumps(definition))}::jsonb)")
     for index in range(24):
         sql.append(f"INSERT INTO mdm_access.devices(tenant_id,id) VALUES('{tenant}','extra-{index:02}')")
-    environment.sql(';'.join(sql)+';', 'mdm_dev')
+    try:
+        environment.sql(';'.join(sql)+';', 'mdm_dev')
+    except subprocess.CalledProcessError as error:
+        # Keep row values and SQL bodies private; expose only schema error identifiers.
+        message = error.stderr or ''
+        matches = re.findall(r'(?:constraint|column|function|relation) "([a-zA-Z0-9_.]+)"', message)
+        print(json.dumps(dict(phase='seed', classification='tenantBinding' if 'asset tenant mismatch' in message else 'schema', identifiers=matches)), flush=True)
+        raise
     return rule_id, rule
 
 try:
