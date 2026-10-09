@@ -1,58 +1,6 @@
 import { expect, it } from 'vitest'
-import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
-import { createScenario, TENANT } from '../scenario'
-import { createDeviceDemo } from './state'
-import { createAssetsClient } from '../../src/features/devices/clients/assets'
-import { createDirectoryClient } from '../../src/features/devices/clients/directory'
-import { createGroupsClient } from '../../src/features/devices/clients/groups'
-import {
-  createEnrollmentClient,
-  generateEnrollmentPassword,
-} from '../../src/features/devices/clients/enrollment'
-async function setup() {
-  const domain = createDeviceDemo(),
-    scenario = createScenario([domain.handle], domain.reset)
-  const login = await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
-    login: 'demo',
-    password: 'demo',
-  })
-  const headers = {
-    'x-csrf-token': (login.body as { csrfToken: string }).csrfToken,
-    'x-identity-request': '1',
-  }
-  const transport = {
-    async request<T>(o: RequestOptions<T>) {
-      const path = o.path.replace(/\{([^}]+)\}/g, (_, key: string) =>
-        encodeURIComponent(o.pathParams?.[key] ?? ''),
-      )
-      const query = new URLSearchParams(
-        Object.entries(o.query ?? {})
-          .filter(([, v]) => v !== undefined)
-          .map(([k, v]) => [k, String(v)]),
-      )
-      const reply = await scenario.handle(o.method, `${path}?${query}`, o.body, {
-        ...headers,
-        ...Object.fromEntries(
-          Object.entries(o.headers ?? {}).map(([k, v]) => [k.toLowerCase(), v]),
-        ),
-      })
-      if (reply.status !== o.successStatus)
-        throw Object.assign(new Error('Request rejected'), {
-          status: reply.status,
-          body: reply.body,
-        })
-      return o.decode(reply.body)
-    },
-  } as unknown as HttpTransport
-  return {
-    scenario,
-    headers,
-    assets: createAssetsClient(transport, TENANT),
-    directory: createDirectoryClient(transport, TENANT, true),
-    groups: createGroupsClient(transport),
-    enrollment: createEnrollmentClient(transport),
-  }
-}
+import { setup } from './test-harness'
+import { generateEnrollmentPassword } from '../../src/features/devices/clients/enrollment'
 const operation = <T>(input: T, expectedRevision = 0) => ({
   operationId: crypto.randomUUID(),
   expectedRevision,
@@ -75,22 +23,24 @@ it('replays a committed unknown write exactly and rejects changed content under 
     assets.assign('device-01', 'custom.is_loaner', { ...body, input: { action: 'delete' } }),
   ).rejects.toMatchObject({ status: 409 })
 })
-it('freezes directory statistics and permits pending onboarding without claiming registration', async () => {
-  const { directory, enrollment } = await setup()
+it('reads current endpoint statistics and permits pending onboarding without claiming registration', async () => {
+  const { directory, candidate, enrollment } = await setup()
   const first = await directory.list()
   await enrollment.create(crypto.randomUUID(), {
     deviceId: 'new-native-platform',
     password: generateEnrollmentPassword(),
     source: 'mdm.windows',
   })
-  expect((await directory.list(first.nextCursor!)).statistics.total).toBe(first.statistics.total)
+  expect((await directory.list(first.nextCursor!)).statistics.total).toBe(
+    first.statistics.total + 1,
+  )
   expect((await directory.list()).statistics.total).toBe(first.statistics.total + 1)
-  expect((await directory.detail('new-native-platform')).device.platform).toBe('windows')
-  const preview = await directory.preview(
+  expect((await directory.detail('new-native-platform')).channels).toEqual([])
+  const preview = await candidate.preview(
     operation({ action: 'onboard', devices: ['new-native-platform'] }),
   )
   expect(preview.targets[0]?.registration).toBeNull()
-  const accepted = await directory.execute(
+  const accepted = await candidate.execute(
     preview.id,
     operation({ confirmed: true }, preview.revision),
   )
@@ -133,7 +83,7 @@ it('keeps pending enrollment discoverable, cancellation readable, and reset remo
     source: 'mdm.apple',
   })
   expect(created.registrationId).toBeNull()
-  expect((await directory.detail('new-mac')).device).toMatchObject({
+  expect(await directory.detail('new-mac')).toMatchObject({
     status: 'pending',
     inventoryAvailable: false,
   })
@@ -141,7 +91,7 @@ it('keeps pending enrollment discoverable, cancellation readable, and reset remo
   await enrollment.cancel(created.enrollmentId, crypto.randomUUID())
   expect((await enrollment.status(created.enrollmentId)).status).toBe('cancelled')
   scenario.reset()
-  expect((await scenario.handle('GET', '/api/v1/mdm-candidate/devices/new-mac')).status).toBe(401)
+  expect((await scenario.handle('GET', '/api/v1/devices/new-mac')).status).toBe(401)
 })
 it('previews do not publish membership and stale tasks do not overwrite a newer definition', async () => {
   const { groups } = await setup()
@@ -176,13 +126,13 @@ it('previews do not publish membership and stale tasks do not overwrite a newer 
   expect((await groups.read(id)).group.name).toBe('Renamed')
 })
 it('rechecks frozen registration at execution and exposes partial blocks without effects', async () => {
-  const { directory, enrollment, scenario } = await setup()
-  const preview = await directory.preview(operation({ action: 'wipe', devices: ['device-01'] }))
+  const { candidate, enrollment, scenario } = await setup()
+  const preview = await candidate.preview(operation({ action: 'wipe', devices: ['device-01'] }))
   const registration = (await enrollment.registrations('device-01')).items.find(
     (r) => r.registrationId === preview.targets[0]?.registration,
   )!
   await enrollment.revoke('device-01', registration.registrationId, crypto.randomUUID())
-  const execution = await directory.execute(
+  const execution = await candidate.execute(
     preview.id,
     operation({ confirmed: true }, preview.revision),
   )
@@ -193,7 +143,7 @@ it('rechecks frozen registration at execution and exposes partial blocks without
     execution: null,
   })
   scenario.set('partial')
-  const partial = await directory.preview(
+  const partial = await candidate.preview(
     operation({
       action: 'retire',
       devices: ['device-02', 'device-04', 'device-05', 'device-06', 'device-07'],

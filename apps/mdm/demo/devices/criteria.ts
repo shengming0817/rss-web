@@ -1,5 +1,9 @@
 /** Synthetic server evaluation only. Browser components never calculate membership. */
-import type { Criteria, Inventory, Scalar } from '../../src/features/devices/clients/asset-model'
+import type {
+  Criteria,
+  Inventory,
+  ReadScalar,
+} from '../../src/features/devices/clients/asset-model'
 import { catalog } from './fixtures'
 export type Evaluation = {
   outcome: 'match' | 'no_match' | 'null' | 'missing' | 'unsupported' | 'deleted' | 'conflict'
@@ -39,7 +43,7 @@ export function evaluate(
   if (state.kind === 'null' && node.op !== 'is_null' && node.op !== 'is_not_null')
     return { decision: 'unknown', explanations: [{ path, outcome: 'null' }] }
   let matches = false
-  const same = (a: Scalar, b: Scalar) => a.kind === b.kind && a.value === b.value
+  const same = (a: ReadScalar, b: ReadScalar) => a.kind === b.kind && a.value === b.value
   if (node.op === 'is_null') matches = state.kind === 'null'
   else if (node.op === 'is_not_null') matches = state.kind === 'known'
   else if (state.kind === 'known') {
