@@ -153,7 +153,11 @@ try {
   await panel().getByRole('radio').first().check()
   const coordinates = panel().locator('[data-testid=confirmation-coordinates]')
   await coordinates.getByText(currentRegistration.registrationId, { exact: false }).waitFor()
-  assert.ok((await coordinates.textContent()).includes('/2'))
+  assert.ok(
+    (await coordinates.textContent()).includes(
+      currentRegistration.registrationId + ' / ' + currentRegistration.generation,
+    ),
+  )
   assert.ok(!(await coordinates.textContent()).includes(oldRegistration.registrationId))
   await page.getByLabel('核实说明与依据', { exact: true }).fill('Verified physical fixture input')
   await page.getByLabel('我已核实双方属于同一管理实例，确认双方注册坐标', { exact: true }).check()
@@ -236,7 +240,7 @@ try {
   await page.getByRole('button', { name: '读取当前关系与主注册', exact: true }).click()
   const basis = panel().locator('[data-testid=association-basis]')
   await basis.getByText('Concurrent verification', { exact: false }).waitFor()
-  assert.ok((await basis.textContent()).includes('/2'))
+  assert.ok((await basis.textContent()).includes(id + ' / 2'))
   await panel()
     .getByLabel('我已核实双方属于同一管理实例，确认双方注册坐标', { exact: true })
     .check()

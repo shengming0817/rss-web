@@ -94,11 +94,11 @@ if (args.includes('reset')) {
 }
 test(
   'waits for seven-second cleanup after forced execution cancellation and a second signal',
-  { timeout: 20000 },
+  { timeout: 30000 },
   () => exercise(false),
 )
 test(
   'fails and reports the recovery directory when independent cleanup fails',
-  { timeout: 20000 },
+  { timeout: 30000 },
   () => exercise(true),
 )

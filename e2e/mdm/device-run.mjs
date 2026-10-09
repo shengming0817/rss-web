@@ -23,7 +23,8 @@ async function run(command, args, cwd, timeoutMs) {
     cwd,
     env: process.env,
     timeoutMs,
-    graceMs: 5000,
+    // Let build_run finish its own five-second process-group cancellation first.
+    graceMs: phase === 'backend' ? 10000 : 5000,
     stdio: ['ignore', 'inherit', 'inherit'],
     onChild: (_child, terminate) => {
       active = terminate
