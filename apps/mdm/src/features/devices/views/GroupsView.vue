@@ -11,7 +11,7 @@ const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.devices.groups,
   { run, runWrite, busy, failure, uncertain } = useOperation()
-const list = ref<Awaited<ReturnType<typeof runtime.devices.directory.groups>>>(),
+const list = ref<Awaited<ReturnType<typeof runtime.devices.candidate.groups>>>(),
   fields = ref<FieldDefinition[]>([])
 const current = ref<GroupRead>(),
   id = ref(''),
@@ -33,7 +33,7 @@ function write<T>(request: () => Promise<T>, apply: (value: T) => void) {
 }
 function loadList(next?: string) {
   void run(
-    () => runtime.devices.directory.groups(next),
+    () => runtime.devices.candidate.groups(next),
     (v) => (list.value = v),
   )
 }
@@ -164,7 +164,7 @@ onMounted(() => {
   create()
   void run(
     async () => ({
-      list: await runtime.devices.directory.groups(),
+      list: await runtime.devices.candidate.groups(),
       fields: (await runtime.devices.assets.catalog()).fields,
     }),
     (v) => {

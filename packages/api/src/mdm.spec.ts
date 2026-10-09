@@ -354,3 +354,31 @@ it('uses shared binary execution only for published attachment endpoints and dec
       transport.request({ method: 'GET', path, successStatus: 200, decode: (v) => v }),
     ).rejects.toMatchObject({ cause: 'client' })
 })
+it('dispatches formal device views and associations through the shared boundary without retries', async () => {
+  const instance = axios.create(),
+    mock = new AxiosMockAdapter(instance)
+  mock.onGet('/api/v1/device-views').reply(409, { code: 'device_view_cursor_invalidated' })
+  mock.onPost('/api/v1/device-associations').reply(503, { code: 'operation_unknown' })
+  const spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance),
+    transport = createMdmTransport()
+  spy.mockRestore()
+  await expect(
+    transport.request({
+      method: 'GET',
+      path: '/api/v1/device-views',
+      successStatus: 200,
+      decode: (v) => v,
+    }),
+  ).rejects.toMatchObject({ cause: 'wire', status: 409, code: 'device_view_cursor_invalidated' })
+  await expect(
+    transport.request({
+      method: 'POST',
+      path: '/api/v1/device-associations',
+      body: { operationId: 'opaque' },
+      successStatus: 200,
+      decode: (v) => v,
+    }),
+  ).rejects.toMatchObject({ cause: 'wire', status: 503, code: 'operation_unknown' })
+  expect(mock.history.get).toHaveLength(1)
+  expect(mock.history.post).toHaveLength(1)
+})

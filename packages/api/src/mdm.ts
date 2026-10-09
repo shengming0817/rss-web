@@ -38,6 +38,7 @@ const statuses: Readonly<Record<string, number>> = {
   software_candidate_not_found: 404,
   group_rule_not_found: 404,
   operation_conflict: 409,
+  device_view_cursor_invalidated: 409,
   upload_offset_conflict: 409,
   capability_unknown: 409,
   platform_unsupported: 409,
@@ -87,7 +88,7 @@ export function decodeMdmError(status: number, value: unknown): RssApiError {
   return identityWireFailure(status, v['code'])
 }
 const paths =
-  /^\/api\/v1\/(?:(?:authorization|devices|software-sources|certificate-archive|asset-fields|device-queries|saved-queries|groups|scopes|policies|compliance-rules|resources|software|enrollments|registration-quotas)(?:\/|$)|self-enrollments$|agent-(?:configurations|configuration-operations|enrollment-settings)(?:\/|$)|apple\/organizations(?:\/|$)|windows\/entra-policy$|windows\/entra\/terms\/context$|agent\/enroll\/packages(?:\/\{id\})?$|mdm-host\/config\.json$|mdm-candidate\/(?:workspace|devices|groups|policies|executions|software|security|support|authorization|audit|operations|integrations)(?:\/|$))/
+  /^\/api\/v1\/(?:(?:authorization|devices|device-views|device-associations|software-sources|certificate-archive|asset-fields|device-queries|saved-queries|groups|scopes|policies|compliance-rules|resources|software|enrollments|registration-quotas)(?:\/|$)|self-enrollments$|agent-(?:configurations|configuration-operations|enrollment-settings)(?:\/|$)|apple\/organizations(?:\/|$)|windows\/entra-policy$|windows\/entra\/terms\/context$|agent\/enroll\/packages(?:\/\{id\})?$|mdm-host\/config\.json$|mdm-candidate\/(?:workspace|devices|groups|policies|executions|software|security|support|authorization|audit|operations|integrations)(?:\/|$))/
 export function createMdmTransport(): HttpTransport {
   const instance = axios.create({ baseURL: '' })
   return {
@@ -175,6 +176,7 @@ export function decodeAgentError(status: number, value: unknown): RssApiError {
       grant_expired: 403,
       registration_limit: 429,
       operation_conflict: 409,
+      device_view_cursor_invalidated: 409,
       issuance_unknown: 503,
       activation_unknown: 503,
       service_unavailable: 503,

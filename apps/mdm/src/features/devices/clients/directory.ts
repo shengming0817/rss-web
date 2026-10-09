@@ -1,322 +1,134 @@
-import type { Operation } from '../../../services/useOperation'
-/** Candidate devices-v1 projection, owned by rss-mdm; not a published backend contract. */
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
   boolean,
   closed,
   count,
-  enumeration,
   identifier,
   integer,
   nullable,
   unique,
   uuid,
 } from '../../../services/decode'
-import { cursor, resolvedField } from './asset-model'
-import { groupSummary } from './groups'
-export const lifecycleActions = [
-  'ade',
-  'windows_auto',
-  'onboard',
-  'reassign',
-  'lost',
-  'retire',
-  'wipe',
-  'add_agent',
-  'add_mdm',
-] as const
-export type LifecycleAction = (typeof lifecycleActions)[number]
-function envelope(value: unknown, tenant: string, demo: boolean, keys: string[]) {
-  const v = closed(value, ['contract', 'tenantId', 'source', ...keys])
-  if (v['contract'] !== 'devices-v1' || uuid(v['tenantId']) !== tenant)
-    throw new Error('Wrong candidate contract')
-  const source = enumeration(v['source'], ['real', 'mock'] as const)
-  if (!demo && source === 'mock') throw new Error('Unexpected simulated data')
-  return v
-}
-export function deviceSummary(value: unknown) {
-  const v = closed(value, [
-    'id',
-    'name',
-    'platform',
-    'status',
-    'inventoryAvailable',
-    'revision',
-    'channels',
-    'owner',
-    'department',
-  ])
+import { endpoint, endpointDetail } from './endpoint-model'
+import { cursor } from './asset-model'
+export function decodeDirectory(value: unknown) {
+  const v = closed(value, ['items', 'statistics', 'asOf', 'nextCursor']),
+    s = closed(v['statistics'], ['total', 'pending', 'active', 'revoked'])
   return {
-    id: identifier(v['id']),
-    name: identifier(v['name']),
-    platform: enumeration(v['platform'], ['windows', 'macos', 'unknown'] as const),
-    status: enumeration(v['status'], ['pending', 'registered', 'revoked', 'retired'] as const),
-    inventoryAvailable: boolean(v['inventoryAvailable']),
-    revision: count(v['revision']),
-    channels: unique(
-      array(v['channels'], (v) => enumeration(v, ['mdm', 'agent'] as const)),
-      (v) => v,
+    items: unique(
+      array(v['items'], (x) => {
+        const d = closed(x, [
+          'id',
+          'status',
+          'primaryMdmRegistration',
+          'channels',
+          'enrollments',
+          'inventoryAvailable',
+        ])
+        return { ...endpoint(d), inventoryAvailable: boolean(d['inventoryAvailable']) }
+      }),
+      (d) => d.id,
     ),
-    owner: nullable(v['owner'], identifier),
-    department: nullable(v['department'], identifier),
-  }
-}
-export type DeviceSummary = ReturnType<typeof deviceSummary>
-export function decodeDirectory(value: unknown, tenant: string, demo: boolean) {
-  const v = envelope(value, tenant, demo, ['snapshot', 'items', 'nextCursor', 'statistics'])
-  const s = closed(v['statistics'], ['total', 'pending', 'windows', 'macos', 'withInventory'])
-  return {
-    snapshot: uuid(v['snapshot']),
-    items: unique(array(v['items'], deviceSummary), (d) => d.id),
-    nextCursor: cursor(v['nextCursor']),
     statistics: {
       total: count(s['total']),
       pending: count(s['pending']),
-      windows: count(s['windows']),
-      macos: count(s['macos']),
-      withInventory: count(s['withInventory']),
+      active: count(s['active']),
+      revoked: count(s['revoked']),
+    },
+    asOf: integer(v['asOf']),
+    nextCursor: cursor(v['nextCursor']),
+  }
+}
+function timeline(value: unknown) {
+  const v = closed(value, ['items', 'nextCursor', 'coverage']),
+    coverage = closed(v['coverage'], ['indexedThrough', 'sourceThrough', 'complete'])
+  const items = array(v['items'], (x) => {
+    const e = closed(x, [
+      'source',
+      'eventId',
+      'position',
+      'recordedAt',
+      'observedAt',
+      'actorKind',
+      'actor',
+      'action',
+      'target',
+      'deviceId',
+      'operationId',
+      'relatedOperationIds',
+      'requestId',
+      'registrationId',
+      'registrationRequestId',
+      'instanceId',
+      'auditOutcome',
+      'phase',
+      'executionState',
+      'effect',
+      'requestWriteOutcome',
+      'supported',
+    ])
+    return {
+      source: identifier(e['source']),
+      eventId: identifier(e['eventId']),
+      position: count(e['position']),
+      recordedAt: integer(e['recordedAt']),
+      observedAt: integer(e['observedAt']),
+      actorKind: identifier(e['actorKind']),
+      actor: identifier(e['actor']),
+      action: identifier(e['action']),
+      target: nullable(e['target'], identifier),
+      deviceId: nullable(e['deviceId'], identifier),
+      operationId: nullable(e['operationId'], uuid),
+      relatedOperationIds: array(e['relatedOperationIds'], uuid),
+      requestId: nullable(e['requestId'], uuid),
+      registrationId: nullable(e['registrationId'], uuid),
+      registrationRequestId: nullable(e['registrationRequestId'], uuid),
+      instanceId: nullable(e['instanceId'], uuid),
+      auditOutcome: identifier(e['auditOutcome']),
+      phase: identifier(e['phase']),
+      executionState: nullable(e['executionState'], identifier),
+      effect: identifier(e['effect']),
+      requestWriteOutcome: nullable(e['requestWriteOutcome'], identifier),
+      supported: boolean(e['supported']),
+    }
+  })
+  return {
+    items,
+    nextCursor: cursor(v['nextCursor']),
+    coverage: {
+      indexedThrough: nullable(coverage['indexedThrough'], count),
+      sourceThrough: nullable(coverage['sourceThrough'], count),
+      complete: boolean(coverage['complete']),
     },
   }
 }
-export function decodeDeviceDetail(value: unknown, tenant: string, demo: boolean, id: string) {
-  const v = envelope(value, tenant, demo, ['device', 'readiness', 'capabilities', 'enrollments'])
-  const device = deviceSummary(v['device'])
-  if (device.id !== id) throw new Error('Wrong device')
+export function createDirectoryClient(transport: HttpTransport) {
   return {
-    device,
-    readiness: enumeration(v['readiness'], [
-      'unknown',
-      'pending_token',
-      'ready',
-      'offline',
-    ] as const),
-    capabilities: array(v['capabilities'], (item) => {
-      const c = closed(item, ['action', 'channel', 'support'])
-      return {
-        action: enumeration(c['action'], lifecycleActions),
-        channel: enumeration(c['channel'], ['mdm', 'agent'] as const),
-        support: enumeration(c['support'], ['supported', 'unsupported', 'unknown'] as const),
-      }
-    }),
-    enrollments: unique(array(v['enrollments'], uuid), (v) => v),
-  }
-}
-function batchTarget(value: unknown) {
-  const v = closed(value, [
-    'device',
-    'deviceRevision',
-    'registration',
-    'generation',
-    'blocked',
-    'execution',
-    'dispatch',
-    'receipt',
-    'effect',
-    'compliance',
-  ])
-  return {
-    device: identifier(v['device']),
-    deviceRevision: nullable(v['deviceRevision'], count),
-    registration: nullable(v['registration'], uuid),
-    generation: nullable(v['generation'], count),
-    blocked: nullable(v['blocked'], (v) =>
-      enumeration(v, [
-        'stale_generation',
-        'offline',
-        'permission_denied',
-        'unsupported',
-        'not_registered',
-        'conflict',
-      ] as const),
-    ),
-    execution: nullable(v['execution'], uuid),
-    dispatch: enumeration(v['dispatch'], [
-      'not_requested',
-      'accepted',
-      'blocked',
-      'unknown',
-    ] as const),
-    receipt: enumeration(v['receipt'], ['none', 'pending', 'acknowledged', 'failed'] as const),
-    effect: enumeration(v['effect'], ['unknown', 'not_observed', 'observed'] as const),
-    compliance: enumeration(v['compliance'], ['unknown', 'compliant', 'noncompliant'] as const),
-  }
-}
-export function decodeBatch(value: unknown, tenant: string, demo: boolean) {
-  const v = envelope(value, tenant, demo, ['id', 'revision', 'action', 'phase', 'targets'])
-  return {
-    id: uuid(v['id']),
-    revision: count(v['revision']),
-    action: enumeration(v['action'], lifecycleActions),
-    phase: enumeration(v['phase'], ['preview', 'accepted', 'cancelled'] as const),
-    targets: unique(array(v['targets'], batchTarget), (t) => t.device),
-  }
-}
-export type Batch = ReturnType<typeof decodeBatch>
-export function createDirectoryClient(transport: HttpTransport, tenant: string, demo: boolean) {
-  function batch(value: unknown, id: string) {
-    const result = decodeBatch(value, tenant, demo)
-    if (result.id !== id) throw new Error('Wrong batch')
-    return result
-  }
-  return {
-    list: (next?: string) =>
+    list: (after?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v1/mdm-candidate/devices',
-        query: { limit: 20, cursor: next },
+        path: '/api/v1/devices',
+        query: { limit: 20, after },
         successStatus: 200,
-        decode: (v) => decodeDirectory(v, tenant, demo),
+        decode: decodeDirectory,
       }),
     detail: (id: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v1/mdm-candidate/devices/{id}',
+        path: '/api/v1/devices/{id}',
         pathParams: { id },
         successStatus: 200,
-        decode: (v) => decodeDeviceDetail(v, tenant, demo, id),
-      }),
-    hardware: (id: string, next?: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/mdm-candidate/devices/{id}/hardware',
-        pathParams: { id },
-        query: { limit: 20, cursor: next },
-        successStatus: 200,
-        decode: (value) => {
-          const v = envelope(value, tenant, demo, ['device', 'snapshot', 'items', 'nextCursor'])
-          if (v['device'] !== id) throw new Error('Wrong hardware')
-          return {
-            snapshot: uuid(v['snapshot']),
-            items: array(v['items'], resolvedField),
-            nextCursor: cursor(v['nextCursor']),
-          }
-        },
-      }),
-    software: (id: string, next?: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/mdm-candidate/devices/{id}/software',
-        pathParams: { id },
-        query: { limit: 20, cursor: next },
-        successStatus: 200,
-        decode: (value) => {
-          const v = envelope(value, tenant, demo, [
-            'device',
-            'snapshot',
-            'state',
-            'items',
-            'nextCursor',
-          ])
-          if (v['device'] !== id) throw new Error('Wrong software')
-          return {
-            snapshot: uuid(v['snapshot']),
-            state: enumeration(v['state'], ['known', 'missing', 'unsupported', 'partial'] as const),
-            items: array(v['items'], (item) => {
-              const s = closed(item, ['id', 'name', 'version'])
-              return {
-                id: identifier(s['id']),
-                name: identifier(s['name']),
-                version: resolvedField(s['version']),
-              }
-            }),
-            nextCursor: cursor(v['nextCursor']),
-          }
-        },
+        decode: (v) => endpointDetail(v, id),
       }),
     history: (id: string, next?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v1/mdm-candidate/devices/{id}/history',
+        path: '/api/v1/devices/{id}/timeline',
         pathParams: { id },
         query: { limit: 20, cursor: next },
         successStatus: 200,
-        decode: (value) => {
-          const v = envelope(value, tenant, demo, ['device', 'snapshot', 'items', 'nextCursor'])
-          if (v['device'] !== id) throw new Error('Wrong history')
-          return {
-            snapshot: uuid(v['snapshot']),
-            items: array(v['items'], (item) => {
-              const e = closed(item, ['id', 'at', 'event', 'operation'])
-              return {
-                id: uuid(e['id']),
-                at: integer(e['at']),
-                event: enumeration(e['event'], [
-                  'enrollment_requested',
-                  'registration_bound',
-                  'credential_revoked',
-                  'assignment_changed',
-                  'action_accepted',
-                  'action_cancelled',
-                ] as const),
-                operation: nullable(e['operation'], uuid),
-              }
-            }),
-            nextCursor: cursor(v['nextCursor']),
-          }
-        },
-      }),
-    assign: (id: string, body: Operation<{ owner: string | null; department: string | null }>) =>
-      transport.request({
-        method: 'PUT',
-        path: '/api/v1/mdm-candidate/devices/{id}/assignment',
-        pathParams: { id },
-        body,
-        successStatus: 200,
-        decode: (v) => decodeDeviceDetail(v, tenant, demo, id),
-      }),
-    groups: (next?: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/mdm-candidate/groups',
-        query: { limit: 20, cursor: next },
-        successStatus: 200,
-        decode: (value) => {
-          const v = envelope(value, tenant, demo, ['snapshot', 'items', 'nextCursor'])
-          return {
-            snapshot: uuid(v['snapshot']),
-            items: array(v['items'], groupSummary),
-            nextCursor: cursor(v['nextCursor']),
-          }
-        },
-      }),
-    preview: (body: Operation<{ action: LifecycleAction; devices: string[] }>) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/mdm-candidate/devices/batch-previews',
-        body,
-        successStatus: 200,
-        decode: (v) => batch(v, body.operationId),
-      }),
-    execute: (id: string, body: Operation<{ confirmed: true }>) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/mdm-candidate/devices/batch-previews/{id}/execute',
-        pathParams: { id },
-        body,
-        successStatus: 202,
-        decode: (v) => batch(v, id),
-      }),
-    cancel: (id: string, body: Operation<Record<string, never>>) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/mdm-candidate/devices/batch-previews/{id}/cancel',
-        pathParams: { id },
-        body,
-        successStatus: 200,
-        decode: (v) => batch(v, id),
-      }),
-    batch: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/mdm-candidate/devices/batch-previews/{id}',
-        pathParams: { id },
-        successStatus: 200,
-        decode: (v) => {
-          const result = decodeBatch(v, tenant, demo)
-          if (result.id !== id) throw new Error('Wrong batch')
-          return result
-        },
+        decode: timeline,
       }),
   }
 }

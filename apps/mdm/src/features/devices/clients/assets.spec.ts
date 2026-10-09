@@ -7,6 +7,7 @@ const evidence = {
   source: 'manual',
   registration: null,
   registrationGeneration: null,
+  dataset: null,
   epoch: null,
   snapshotId: task,
   observedAt: 1,
@@ -31,6 +32,7 @@ const device = {
   device: 'pending-device',
   channels: [],
   fields: { 'custom.is_loaner': field },
+  lists: {},
   quality: [],
   revisions: { 'custom.is_loaner': 2 },
 }
@@ -83,23 +85,38 @@ it('accepts an empty tail page and keeps the server cursor opaque', () => {
 it('rejects duplicate catalog keys and malformed manual fields', () => {
   const field = {
     key: 'custom.is_loaner',
-    kind: 'boolean',
+    version: 1,
+    valueType: { kind: 'boolean' },
+    platforms: ['windows', 'macos'],
+    sensitivity: 'standard',
+    unit: null,
+    searchable: true,
+    itemKey: null,
     nullable: true,
     manual: true,
-    sources: ['manual'],
+    sources: { manual: 0 },
     operations: ['eq', 'is_null'],
   }
   expect(
     decodeCatalog(
-      { tenantId: tenant, asset: { kind: 'fields', dictionary: 'assets-v1', fields: [field] } },
+      { tenantId: tenant, asset: { kind: 'fields', dictionary: 'assets-v2', fields: [field] } },
       tenant,
     ).fields,
-  ).toEqual([field])
+  ).toEqual([
+    {
+      key: field.key,
+      kind: 'boolean',
+      manual: true,
+      nullable: true,
+      sources: ['manual'],
+      operations: field.operations,
+    },
+  ])
   expect(() =>
     decodeCatalog(
       {
         tenantId: tenant,
-        asset: { kind: 'fields', dictionary: 'assets-v1', fields: [field, field] },
+        asset: { kind: 'fields', dictionary: 'assets-v2', fields: [field, field] },
       },
       tenant,
     ),
