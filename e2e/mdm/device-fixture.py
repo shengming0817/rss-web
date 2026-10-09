@@ -25,7 +25,6 @@ environment = Environment(BACKEND, group='device-browser')
 processes = []
 phase = 'environment'
 result = 'failed'
-cleanup = 'passed'
 
 def stop(_signal=None, _frame=None):
     for child in reversed(processes):
@@ -110,7 +109,7 @@ finally:
         try: child.wait(timeout=5)
         except subprocess.TimeoutExpired:
             child.kill();child.wait(timeout=5)
-    try: environment.reset()
-    except BaseException: cleanup='failed'
-    print(json.dumps(dict(phase='device-fixture',result=result,cleanup=cleanup)),flush=True)
-    if result!='passed' or cleanup!='passed': sys.exit(1)
+    # The parent starts a fresh leased reset after this execution runner closes.
+    # Keep resource cleanup outside build_run's five-second cancellation window.
+    print(json.dumps(dict(phase='device-fixture',result=result)),flush=True)
+    if result!='passed': sys.exit(1)
