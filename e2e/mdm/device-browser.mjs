@@ -1,0 +1,263 @@
+// Production Vue + real MDM/Identity HTTPS/PG. Only a committed response is deliberately lost.
+import { chromium } from 'playwright'
+import { readFileSync, statSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { randomUUID } from 'node:crypto'
+import assert from 'node:assert/strict'
+import process from 'node:process'
+let browser,
+  context,
+  page,
+  phase = 'environment',
+  result = 'failed'
+const coverage = []
+const stop = () => browser?.close().catch(() => {})
+process.once('SIGINT', stop)
+process.once('SIGTERM', stop)
+const timer = setTimeout(stop, 170000)
+try {
+  const fixture = JSON.parse(readFileSync(process.env.MDM_DEVICE_BROWSER_FIXTURE, 'utf8')),
+    origin = new URL(fixture.origin).origin
+  assert.equal(new URL(origin).protocol, 'https:')
+  assert.equal(new URL(origin).hostname, 'localhost')
+  assert.equal(statSync(fixture.passwordFile).mode & 0o077, 0)
+  browser = await chromium.launch()
+  context = await browser.newContext({ ignoreHTTPSErrors: true, locale: 'zh-CN' })
+  page = await context.newPage()
+  page.setDefaultTimeout(10000)
+  const path = (route) => `${origin}/tenants/${fixture.tenant}/${route}`
+  const api = async (url) => {
+    const response = await context.request.get(origin + url)
+    assert.equal(response.status(), 200)
+    return response.json()
+  }
+  const headers = async () => ({
+    Origin: origin,
+    'X-Identity-Request': '1',
+    'X-CSRF-Token': (await api(`/api/v1/identity/tenants/${fixture.tenant}/session`)).csrfToken,
+  })
+  const confirm = async (body) =>
+    context.request.post(origin + '/api/v1/device-associations', {
+      headers: await headers(),
+      data: body,
+    })
+  const body = (a, evidence = 'Verified same fixture instance') => ({
+    operationId: randomUUID(),
+    associationId: a.id,
+    expectedVersion: a.version,
+    mdm: a.members.find((m) => m.channel === 'mdm'),
+    agent: a.members.find((m) => m.channel === 'agent'),
+    evidence,
+  })
+  const writeRule = async (grants) => {
+    const rule = await api(`/api/v1/authorization/rules/${fixture.ruleId}`),
+      response = await context.request.post(
+        origin + `/api/v1/authorization/rules/${fixture.ruleId}`,
+        {
+          headers: await headers(),
+          data: {
+            operationId: randomUUID(),
+            expectedRevision: rule.revision,
+            value: { ...fixture.rule, grants },
+          },
+        },
+      )
+    assert.equal(response.status(), 200)
+  }
+  const panel = () => page.locator('[data-testid=association-panel]')
+  const loaded = () => page.locator('section.device-console[aria-busy=false]').waitFor()
+  phase = 'login'
+  await page.goto(path('login'))
+  await page.locator('#login-name').fill(fixture.login)
+  await page.locator('#login-password').fill(readFileSync(fixture.passwordFile, 'utf8').trim())
+  await page.locator('form').evaluate((f) => f.requestSubmit())
+  await page.waitForURL(/workspace/)
+  phase = 'directory'
+  await page.goto(path('devices'))
+  await loaded()
+  await page.getByRole('button', { name: '下一页', exact: true }).click()
+  await loaded()
+  assert.ok((await page.locator('tbody').textContent()).includes(fixture.mdm))
+  coverage.push('real-directory-counters-and-pagination')
+  phase = 'unknown-create'
+  await page.goto(path(`devices/${fixture.mdm}`))
+  await panel().waitFor()
+  await page.getByRole('button', { name: '查找另一通道候选', exact: true }).click()
+  await panel().getByRole('radio').first().check()
+  await page.getByLabel('核实说明与依据', { exact: true }).fill('Verified physical fixture input')
+  await page.getByLabel('我已核实双方属于同一管理实例，确认双方注册坐标', { exact: true }).check()
+  let original,
+    requests = []
+  await page.route('**/api/v1/device-associations', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.continue()
+      return
+    }
+    requests.push(route.request().postData())
+    if (!original) {
+      original = JSON.parse(route.request().postData())
+      const response = await route.fetch()
+      assert.equal(response.status(), 200)
+      await route.abort('failed')
+    } else await route.continue()
+  })
+  await page.getByRole('button', { name: '确认关联', exact: true }).click()
+  await page.getByText('关联写入结果未知', { exact: false }).waitFor()
+  assert.equal(await page.getByRole('button', { name: '确认关联', exact: true }).isDisabled(), true)
+  // Vue navigation retains operation memory; a full browser restart deliberately does not persist it.
+  await page.getByRole('link', { name: '设备目录', exact: true }).click()
+  await loaded()
+  await page.getByRole('link', { name: fixture.mdm, exact: true }).first().click()
+  await panel().waitFor()
+  await page.getByLabel('我确认使用相同操作标识、身份及完整原正文幂等重放', { exact: true }).check()
+  await page.getByRole('button', { name: '幂等重放原关联操作', exact: true }).click()
+  await page.waitForURL(/device-views\/association\//)
+  await loaded()
+  assert.equal(requests.length, 2)
+  assert.equal(requests[0], requests[1])
+  await page.unroute('**/api/v1/device-associations')
+  const id = new URL(page.url()).pathname.split('/').at(-1)
+  let association = await api(`/api/v1/device-associations/${id}`)
+  assert.equal(association.version, 1)
+  coverage.push('committed-unknown-explicit-exact-replay')
+  phase = 'sources'
+  const view = await api(`/api/v1/device-views/association/${id}`)
+  assert.equal(view.fields['custom.asset_tag'].state.kind, 'conflict')
+  assert.equal(view.fields['custom.asset_tag'].sources.length, 2)
+  assert.equal(await page.locator('[data-endpoint]').count(), 2)
+  const lists = page
+    .locator('details')
+    .filter({ has: page.locator('summary').filter({ hasText: 'custom.browser_list' }) })
+  await lists.locator('summary').first().click()
+  await lists.getByRole('button', { name: '展开此来源', exact: true }).first().click()
+  await lists.getByRole('button', { name: '下一页', exact: true }).waitFor()
+  assert.equal(await lists.locator('ol li').count(), 20)
+  await lists.getByRole('button', { name: '下一页', exact: true }).click()
+  assert.equal(await lists.locator('ol li').count(), 5)
+  coverage.push('manual-conflict-two-endpoints-source-pagination')
+  phase = 'cas'
+  await page.getByRole('button', { name: '读取当前关系与主注册', exact: true }).click()
+  await panel().locator('[aria-busy=false]').count()
+  await panel().getByLabel('核实说明与依据', { exact: true }).fill('UI verification')
+  await panel()
+    .getByLabel('我已核实双方属于同一管理实例，确认双方注册坐标', { exact: true })
+    .check()
+  assert.equal((await confirm(body(association, 'Concurrent verification'))).status(), 200)
+  await page.getByRole('button', { name: '重新核实关联', exact: true }).click()
+  await page.getByText('版本或注册依据已变化', { exact: false }).waitFor()
+  assert.equal(
+    await page.getByRole('button', { name: '重新核实关联', exact: true }).isDisabled(),
+    true,
+  )
+  await page.getByRole('button', { name: '读取当前关系与主注册', exact: true }).click()
+  await panel()
+    .getByLabel('我已核实双方属于同一管理实例，确认双方注册坐标', { exact: true })
+    .check()
+  await page.getByRole('button', { name: '重新核实关联', exact: true }).click()
+  await loaded()
+  association = await api(`/api/v1/device-associations/${id}`)
+  assert.equal(association.version, 3)
+  coverage.push('real-cas-conflict-explicit-basis-refresh')
+  phase = 'generation'
+  const control = spawnSync(
+    'python3',
+    [
+      resolve(dirname(fileURLToPath(import.meta.url)), 'device-fixture-control.py'),
+      process.env.MDM_DEVICE_BROWSER_FIXTURE,
+    ],
+    { cwd: process.env.MDM_DEVICE_BACKEND, stdio: 'pipe', timeout: 30000 },
+  )
+  assert.equal(control.status, 0)
+  await page.reload()
+  await loaded()
+  association = await api(`/api/v1/device-associations/${id}`)
+  assert.equal(association.state, 'needs_verification')
+  assert.ok(
+    (await api(`/api/v1/device-views/association/${id}`)).endpoints
+      .find((e) => e.id === fixture.agent)
+      .channels.some((c) => c.generation === 2),
+  )
+  await page.getByRole('button', { name: '读取当前关系与主注册', exact: true }).click()
+  await panel().getByLabel('核实说明与依据', { exact: true }).fill('Verified current generation')
+  await panel()
+    .getByLabel('我已核实双方属于同一管理实例，确认双方注册坐标', { exact: true })
+    .check()
+  await page.getByRole('button', { name: '重新核实关联', exact: true }).click()
+  await loaded()
+  association = await api(`/api/v1/device-associations/${id}`)
+  assert.ok(association.members.some((m) => m.device === fixture.agent && m.generation === 2))
+  coverage.push('real-new-generation-pending-and-reverification')
+  phase = 'cursor-invalidated'
+  const current = await api(`/api/v1/device-views/association/${id}`),
+    source = current.lists['custom.browser_list'].sources.find((s) => s.endpoint === fixture.mdm)
+  const change = await context.request.put(
+    origin + `/api/v1/devices/${fixture.mdm}/manual-fields/custom.asset_tag`,
+    {
+      headers: await headers(),
+      data: {
+        operationId: randomUUID(),
+        expectedRevision: 1,
+        input: { action: 'set', value: { kind: 'string', value: 'changed fixture' } },
+      },
+    },
+  )
+  assert.equal(change.status(), 200)
+  const invalidated = await context.request.get(
+    origin +
+      `/api/v1/device-views/association/${id}/inventory-lists/custom.browser_list?cursor=${encodeURIComponent(source.cursor)}&limit=20`,
+  )
+  assert.equal(invalidated.status(), 409)
+  assert.equal((await invalidated.json()).code, 'device_view_cursor_invalidated')
+  coverage.push('real-authority-bound-list-cursor-invalidation')
+  phase = 'authorization'
+  await writeRule([{ operation: 'inventory_read', scope: { kind: 'all_devices' } }])
+  await page.reload()
+  await loaded()
+  assert.equal(await panel().count(), 0)
+  assert.equal((await confirm(body(association))).status(), 403)
+  await writeRule([{ operation: 'inventory_read', scope: { kind: 'device', id: fixture.mdm } }])
+  const scoped = await api('/api/v1/device-views')
+  assert.deepEqual(scoped.statistics, { endpointCount: 1, deviceViewCount: 1 })
+  assert.ok(!JSON.stringify(scoped).includes(fixture.agent))
+  assert.ok(!JSON.stringify(scoped).includes(id))
+  assert.equal(
+    (await context.request.get(origin + `/api/v1/device-views/association/${id}`)).status(),
+    404,
+  )
+  await page.reload()
+  await page.getByRole('alert').waitFor()
+  assert.equal(await page.locator('[data-endpoint]').count(), 0)
+  coverage.push('real-readonly-403-scoped-counterpart-404')
+  const anonymous = await browser.newContext({ ignoreHTTPSErrors: true })
+  assert.equal((await anonymous.request.get(origin + '/api/v1/device-views')).status(), 401)
+  await anonymous.close()
+  coverage.push('real-anonymous-401')
+  phase = 'revoke'
+  await writeRule(fixture.rule.grants)
+  await page.reload()
+  await panel().waitFor()
+  const registrations = await api(`/api/v1/devices/${fixture.agent}/registrations`)
+  await panel()
+    .getByLabel('解除原因', { exact: true })
+    .fill('Separate fixture management identities')
+  await panel()
+    .getByLabel('我已核实双方属于同一管理实例，确认双方注册坐标', { exact: true })
+    .check()
+  await page.getByRole('button', { name: '解除关联', exact: true }).click()
+  await page.waitForURL(/\/devices$/)
+  assert.equal((await api(`/api/v1/device-associations/${id}`)).state, 'revoked')
+  assert.deepEqual(await api(`/api/v1/devices/${fixture.agent}/registrations`), registrations)
+  coverage.push('real-revoke-retains-credentials')
+  result = 'passed'
+} catch (error) {
+  const line = error.stack?.match(/device-browser\.mjs:(\d+)/)?.[1]
+  console.log(JSON.stringify({ phase, result: 'failed', line }))
+} finally {
+  clearTimeout(timer)
+  await context?.close().catch(() => {})
+  await browser?.close().catch(() => {})
+  console.log(JSON.stringify({ phase: 'device-browser', result, coverage }))
+  if (result !== 'passed') process.exitCode = 1
+}
