@@ -31,9 +31,10 @@ export function endpointProjection(d: DemoDevice): Endpoint {
         : latest.length
           ? 'revoked'
           : 'registered',
-    primaryMdmRegistration: mdm
-      ? { registrationId: mdm.registrationId, generation: mdm.generation, source: mdm.source }
-      : null,
+    primaryMdmRegistration:
+      mdm && mdm.source !== 'agent.builtin'
+        ? { registrationId: mdm.registrationId, generation: mdm.generation, source: mdm.source }
+        : null,
     channels: latest.map((r) => ({
       channel: r.source === 'agent.builtin' ? 'agent' : 'mdm',
       registrationId: r.registrationId,
