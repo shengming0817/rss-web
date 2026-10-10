@@ -8,6 +8,9 @@ import { networkErrorForTest } from '@rss/api/testing'
 import { decodeMdmError } from '@rss/api/mdm'
 import { createScenario, TENANT } from '../../../../demo/scenario'
 import { createDeviceDemo } from '../../../../demo/devices/state'
+import { createAutomationDemo } from '../../../../demo/policies/state'
+import { ADMIN } from '../../../../demo/operations/authorization'
+import { createOperationsClients } from '../../operations/client'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
 import { policyFeature } from '../../policies/routes'
@@ -26,7 +29,12 @@ async function setup(
   query: Record<string, string> = {},
 ) {
   const domain = createDeviceDemo(),
-    scenario = createScenario([domain.handle], domain.reset)
+    automation = createAutomationDemo(domain),
+    scenario = createScenario([automation.handle, domain.handle], () => {
+      domain.reset()
+      automation.reset()
+    })
+  domain.bindAuthorization(automation.authorization.can)
   const login = await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',
@@ -62,6 +70,7 @@ async function setup(
     },
   } as unknown as HttpTransport
   const devices = createDeviceClients(transport, TENANT, true)
+  const operations = createOperationsClients(transport, TENANT, true)
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -78,16 +87,26 @@ async function setup(
   })
   await router.push({ name, params: { tenant: TENANT, ...params }, query })
   await router.isReady()
+  const i18n = mdmI18n()
   const wrapper = mount(RouterView, {
     attachTo: document.body,
     global: {
-      plugins: [router, mdmI18n()],
+      plugins: [router, i18n],
       provide: {
         [mdmKey as symbol]: {
           devices,
+          transport,
+          operations,
           tenant: TENANT,
           demo: true,
-          session: { state: shallowRef({ session: { id: 'demo-session' } }) },
+          session: {
+            state: shallowRef({
+              status: 'authenticated',
+              tenant: TENANT,
+              identity: { principalId: ADMIN },
+              session: { id: 'demo-session' },
+            }),
+          },
         },
         [runtimeKey as symbol]: {
           api: {
@@ -118,31 +137,30 @@ async function setup(
     await button(text).trigger('click')
     await flushPromises()
   }
-  return { wrapper, router, scenario, devices, domain, requests, button, click, loseReply }
+  return {
+    wrapper,
+    router,
+    scenario,
+    devices,
+    domain,
+    requests,
+    button,
+    click,
+    loseReply,
+    operations,
+    i18n,
+  }
 }
-it('renders pending directory, pages, previews partial actions, cancels and submits with confirmation', async () => {
-  const { wrapper, click, scenario } = await setup()
-  expect(wrapper.text()).toContain('Windows 3')
+it('renders server view counters, endpoint references, pagination and empty state', async () => {
+  const { wrapper, click, scenario, requests } = await setup()
+  expect(wrapper.text()).toContain('device-01')
+  expect(requests.some((r) => r.path === '/api/v1/device-views')).toBe(true)
+  expect(requests.some((r) => r.path === '/api/v1/mdm-candidate/devices')).toBe(false)
   await click('下一页')
-  expect(wrapper.text()).toContain('Windows 21')
-  expect(wrapper.findAll('button').some((b) => b.text() === '下一页')).toBe(false)
+  expect(wrapper.text()).toContain('device-21')
   scenario.set('empty')
   await click('重新读取')
   expect(wrapper.text()).toContain('当前没有结果')
-  scenario.set('normal')
-  await click('重新读取')
-  await wrapper.find('tbody input[type=checkbox]').setValue(true)
-  await click('预览 (1)')
-  expect(wrapper.text()).toContain('实际效果')
-  await click('取消')
-  expect(wrapper.text()).toContain('已取消')
-  scenario.set('partial')
-  await click('预览 (1)')
-  expect(wrapper.text()).toContain('离线')
-  await wrapper.findAll('input[type=checkbox]').at(-1)!.setValue(true)
-  await click('确认并受理操作')
-  expect(wrapper.text()).toContain('已受理')
-  expect(wrapper.text()).not.toContain('擦除成功')
 })
 it('opens the existing registration owner from a software source-policy deep link', async () => {
   const { wrapper, requests, router } = await setup(
@@ -169,6 +187,7 @@ it('opens the existing registration owner from a software source-policy deep lin
 it('renders detail tabs, edits manual null/delete with conflict drafts, and edits ownership', async () => {
   const { wrapper, click, scenario } = await setup('device-detail', { device: 'device-01' })
   expect(wrapper.text()).toContain('ThinkPad T14')
+  await click('Manual 字段')
   const manual = wrapper.findComponent({ name: 'ManualPanel' })
   await manual.find('select').setValue('custom.is_loaner')
   await manual.findAll('select')[1]!.setValue('delete')
@@ -184,14 +203,23 @@ it('renders detail tabs, edits manual null/delete with conflict drafts, and edit
   await manual.find('form').trigger('submit')
   await flushPromises()
   expect(manual.text()).toContain('显式空值')
-  await click('硬件')
-  expect(wrapper.text()).toContain('17179869184')
-  await click('软件')
+  await click('资产字段')
+  expect(wrapper.text()).toContain('device.model')
+  const list = wrapper
+    .findAll('details')
+    .find((d) => d.find('summary').text().includes('device.software'))!
+  await list.element.setAttribute('open', '')
+  await click('展开此来源')
+  expect(wrapper.text()).toContain('旧分页失效')
+  await click('重新读取')
+  const refreshed = wrapper
+    .findAll('details')
+    .find((d) => d.find('summary').text().includes('device.software'))!
+  refreshed.element.setAttribute('open', '')
+  await click('展开此来源')
   expect(wrapper.text()).toContain('Enterprise Browser')
   await click('历史')
-  expect(wrapper.text()).toContain('已绑定注册')
-  await click('能力与通道')
-  expect(wrapper.text()).toContain('MDM → Agent')
+  expect(wrapper.text()).toContain('registration_bound')
   await click('使用人与归属')
   const assignment = wrapper.findAll('form').find((f) => f.isVisible())!
   await assignment.find('input').setValue('new-owner')
@@ -200,7 +228,10 @@ it('renders detail tabs, edits manual null/delete with conflict drafts, and edit
   expect(wrapper.text()).toContain('new-owner')
   await click('注册凭据')
   expect(wrapper.text()).toContain('撤销服务端凭据不会擦除设备')
-  await wrapper.find('input[type=checkbox]').setValue(true)
+  await wrapper
+    .findAll('input[type=checkbox]')
+    .find((c) => c.isVisible())!
+    .setValue(true)
   await click('撤销凭据')
   expect(wrapper.text()).not.toContain('擦除成功')
 })
@@ -349,7 +380,7 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
   await flushPromises()
   await editor.findAll('select').at(-1)!.setValue('true')
   await click('保存动态条件')
-  const group = (await devices.directory.groups()).items.find((g) => g.name === 'Dynamic')!
+  const group = (await devices.candidate.groups()).items.find((g) => g.name === 'Dynamic')!
   expect((await devices.groups.read(group.id)).criteria).toMatchObject({
     value: { kind: 'boolean', value: true },
   })
@@ -387,7 +418,8 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
 })
 
 it('does not call a confirmed manual write unknown when its follow-up read fails', async () => {
-  const { wrapper, devices } = await setup('device-detail', { device: 'device-01' })
+  const { wrapper, devices, click } = await setup('device-detail', { device: 'device-01' })
+  await click('Manual 字段')
   const manual = wrapper.findComponent({ name: 'ManualPanel' })
   await manual.find('select').setValue('custom.is_loaner')
   await manual.findAll('select')[1]!.setValue('delete')
@@ -480,6 +512,7 @@ it('keeps an uncertain manual operation across tabs and replays the same request
   const { wrapper, click, scenario, requests } = await setup('device-detail', {
     device: 'device-01',
   })
+  await click('Manual 字段')
   let manual = wrapper.findComponent({ name: 'ManualPanel' })
   await manual.find('select').setValue('custom.is_loaner')
   await manual.findAll('select')[1]!.setValue('delete')
@@ -488,8 +521,8 @@ it('keeps an uncertain manual operation across tabs and replays the same request
   await flushPromises()
   const original = requests.find((r) => r.method === 'PUT')!.body
   scenario.set('normal')
-  await click('硬件')
   await click('资产字段')
+  await click('Manual 字段')
   manual = wrapper.findComponent({ name: 'ManualPanel' })
   expect(manual.text()).toContain('明确重放原操作')
   await click('明确重放原操作')
@@ -503,7 +536,10 @@ it('refreshes channels after revoking each credential and never shows ready with
   await click('注册凭据')
   const rows = (await devices.enrollment.registrations('device-01')).items
   for (let index = 0; index < rows.length; index++) {
-    await wrapper.find('input[type=checkbox]').setValue(true)
+    await wrapper
+      .findAll('input[type=checkbox]')
+      .find((c) => c.isVisible())!
+      .setValue(true)
     await wrapper
       .findAll('button')
       .find((b) => b.text() === '撤销凭据' && b.attributes('disabled') === undefined)!
@@ -511,8 +547,8 @@ it('refreshes channels after revoking each credential and never shows ready with
     await flushPromises()
   }
   const detail = await devices.directory.detail('device-01')
-  expect(detail.device.channels).toEqual([])
-  expect(detail.readiness).toBe('unknown')
+  expect(detail.channels.filter((c) => c.status === 'active')).toEqual([])
+  expect(detail.capabilities.every((c) => c.devicePrerequisite.state === 'blocked')).toBe(true)
   expect(wrapper.text()).not.toContain('mdm + agent')
 })
 it('reports oversized member changes as rejected without entering unknown recovery', async () => {
@@ -536,6 +572,7 @@ it('retains an in-flight manual write when tabs change before its unknown result
   const { wrapper, click, devices, requests } = await setup('device-detail', {
     device: 'device-01',
   })
+  await click('Manual 字段')
   const manual = wrapper.findComponent({ name: 'ManualPanel' })
   await manual.find('select').setValue('custom.is_loaner')
   await manual.findAll('select')[1]!.setValue('delete')
@@ -550,11 +587,11 @@ it('retains an in-flight manual write when tabs change before its unknown result
     throw networkErrorForTest()
   }
   await manual.find('form').trigger('submit')
-  await click('硬件')
+  await click('资产字段')
   release()
   await flushPromises()
   devices.assets.assign = assign
-  await click('资产字段')
+  await click('Manual 字段')
   expect(manual.text()).toContain('明确重放原操作')
   await click('明确重放原操作')
   const writes = requests.filter((r) => r.method === 'PUT')
@@ -568,12 +605,14 @@ it('marks credential details stale after an acknowledged revoke with a failed re
   devices.directory.detail = async () => {
     throw decodeMdmError(503, { code: 'service_unavailable' })
   }
-  await wrapper.find('input[type=checkbox]').setValue(true)
+  await wrapper
+    .findAll('input[type=checkbox]')
+    .find((c) => c.isVisible())!
+    .setValue(true)
   await click('撤销凭据')
-  expect(wrapper.text()).toContain('凭据已撤销。详情尚未刷新')
+  expect(wrapper.text()).toContain('暂不可用')
   expect(wrapper.text()).not.toContain('mdm + agent')
   expect(wrapper.text()).not.toContain('明确重放原操作')
-  await click('能力与通道')
   expect(wrapper.text()).not.toContain('已就绪')
   devices.directory.detail = read
   await click('重新读取')
@@ -587,7 +626,10 @@ it('self enrollment works without the management frame and clears handoff secret
   await click('生成一次性交付口令')
   const password = wrapper.find('input[autocomplete=off]')
   expect((password.element as HTMLInputElement).value).toHaveLength(43)
-  await wrapper.find('input[type=checkbox]').setValue(true)
+  await wrapper
+    .findAll('input[type=checkbox]')
+    .find((c) => c.isVisible())!
+    .setValue(true)
   await wrapper.findAll('form')[0]!.trigger('submit')
   await flushPromises()
   expect((password.element as HTMLInputElement).value).toBe('')
@@ -710,7 +752,10 @@ it('discards a native read that arrives after its query target changes', async (
 it('refreshes native binding and resumes the same bound identity even when new enrollment is disabled', async () => {
   const { wrapper, devices, domain, click } = await setup('self-enrollments')
   await click('生成一次性交付口令')
-  await wrapper.find('input[type=checkbox]').setValue(true)
+  await wrapper
+    .findAll('input[type=checkbox]')
+    .find((c) => c.isVisible())!
+    .setValue(true)
   await wrapper.findAll('form')[0]!.trigger('submit')
   await flushPromises()
   const id = (wrapper.findAll('form')[1]!.find('input').element as HTMLInputElement).value
@@ -735,7 +780,10 @@ it('refreshes native binding and resumes the same bound identity even when new e
   const resume = vi.spyOn(devices.enrollment, 'resume')
   const create = vi.spyOn(devices.registration, 'enroll')
   await click('生成一次性交付口令')
-  await wrapper.find('input[type=checkbox]').setValue(true)
+  await wrapper
+    .findAll('input[type=checkbox]')
+    .find((c) => c.isVisible())!
+    .setValue(true)
   await click('更新口令并继续')
   expect(resume.mock.calls.map(([target]) => target)).toEqual([id])
   expect(create).not.toHaveBeenCalled()
@@ -751,3 +799,196 @@ it('refreshes native binding and resumes the same bound identity even when new e
     status: 409,
   })
 })
+async function chooseAssociation(h: Awaited<ReturnType<typeof setup>>) {
+  await h.click('查找另一通道候选')
+  const panel = h.wrapper.find('[data-testid=association-panel]')
+  await panel.find('input[type=radio]').setValue(true)
+  await flushPromises()
+  await panel.find('textarea').setValue('Verified physical possession')
+  await panel.find('input[type=checkbox]').setValue(true)
+  return panel
+}
+it('creates a unified route and revokes the relation without credential writes', async () => {
+  const h = await setup('device-detail', { device: 'device-01' })
+  await chooseAssociation(h)
+  await h.click('确认关联')
+  await vi.waitFor(() => expect(h.router.currentRoute.value.name).toBe('device-view-detail'))
+  await flushPromises()
+  const panel = h.wrapper.find('[data-testid=association-panel]')
+  await panel.findAll('textarea')[1]!.setValue('Separate instances')
+  await panel.find('input[type=checkbox]').setValue(true)
+  await h.click('解除关联')
+  await vi.waitFor(() => expect(h.router.currentRoute.value.name).toBe('devices'))
+  await flushPromises()
+  expect(h.requests.filter((r) => r.method === 'POST').map((r) => r.path)).toEqual([
+    '/api/v1/device-associations',
+    '/api/v1/device-associations/{id}/revoke',
+  ])
+})
+it('locks an unknown association, survives navigation, and requires explicit exact POST replay', async () => {
+  const h = await setup('device-detail', { device: 'device-01' })
+  await chooseAssociation(h)
+  h.loseReply.path = '/api/v1/device-associations'
+  await h.click('确认关联')
+  const original = h.requests.find((r) => r.method === 'POST')!.body
+  await h.router.push({ name: 'devices', params: { tenant: TENANT } })
+  await flushPromises()
+  await h.router.push({ name: 'device-detail', params: { tenant: TENANT, device: 'device-01' } })
+  await flushPromises()
+  const panel = h.wrapper.find('[data-testid=association-panel]')
+  expect(panel.text()).toContain('结果未知')
+  expect(h.button('确认关联').attributes('disabled')).toBeDefined()
+  h.loseReply.path = ''
+  await panel.find('input[type=checkbox]').setValue(true)
+  await h.click('幂等重放原关联操作')
+  expect(h.requests.filter((r) => r.method === 'POST').map((r) => r.body)).toEqual([
+    original,
+    original,
+  ])
+  await vi.waitFor(() => expect(h.router.currentRoute.value.name).toBe('device-view-detail'))
+  await flushPromises()
+})
+it('clears sensitive counterpart facts when an association write loses authority', async () => {
+  const h = await setup('device-detail', { device: 'device-01' })
+  await chooseAssociation(h)
+  h.scenario.set('denied')
+  await h.click('确认关联')
+  expect(h.wrapper.find('[data-testid=association-panel]').exists()).toBe(false)
+  expect(h.wrapper.text()).toContain('请求被拒绝')
+  expect(h.wrapper.text()).not.toContain('Verified physical possession')
+})
+
+it.each([403, 404])(
+  'clears the entire unified view after source pagination loses access (%s)',
+  async (status) => {
+    const h = await setup('device-detail', { device: 'device-01' })
+    await chooseAssociation(h)
+    await h.click('确认关联')
+    await vi.waitFor(() => expect(h.router.currentRoute.value.name).toBe('device-view-detail'))
+    await flushPromises()
+    expect(h.wrapper.findComponent({ name: 'ViewFacts' }).exists()).toBe(true)
+    vi.spyOn(h.devices.views, 'items').mockRejectedValueOnce(
+      decodeMdmError(status, { code: status === 403 ? 'forbidden' : 'not_found' }),
+    )
+    const source = h.wrapper.findComponent({ name: 'SourceList' })
+    await source.find('button').trigger('click')
+    await flushPromises()
+    expect(h.wrapper.findComponent({ name: 'ViewFacts' }).exists()).toBe(false)
+    expect(h.wrapper.find('[data-testid=association-panel]').exists()).toBe(false)
+    expect(h.wrapper.find('[role=alert]').exists()).toBe(true)
+  },
+)
+it('shows authorization read failure and retries without treating it as read-only access', async () => {
+  const h = await setup('device-detail', { device: 'device-01' })
+  const effective = vi
+    .spyOn(h.operations.authorization, 'effective')
+    .mockRejectedValueOnce(decodeMdmError(503, { code: 'service_unavailable' }))
+  await h.router.push({ name: 'devices', params: { tenant: TENANT } })
+  await flushPromises()
+  await h.router.push({ name: 'device-detail', params: { tenant: TENANT, device: 'device-01' } })
+  await flushPromises()
+  const authority = h.wrapper.find('[data-testid=association-authority]')
+  expect(authority.find('[role=alert]').exists()).toBe(true)
+  expect(h.wrapper.find('[data-testid=association-panel]').exists()).toBe(false)
+  effective.mockRestore()
+  await authority.find('button').trigger('click')
+  await flushPromises()
+  expect(h.wrapper.find('[data-testid=association-panel]').exists()).toBe(true)
+})
+
+it('displays the exact new origin coordinates used to create after the open detail becomes stale', async () => {
+  const h = await setup('device-detail', { device: 'device-01' })
+  const before = await h.devices.directory.detail('device-01')
+  const receipt = await h.devices.enrollment.create(crypto.randomUUID(), {
+    deviceId: 'device-01',
+    password: 'A'.repeat(43),
+    source: before.primaryMdmRegistration!.source,
+    windowsProfile: 'Device',
+  })
+  h.domain.tick({
+    kind: 'enrollment_bind',
+    device: 'device-01',
+    enrollment: receipt.enrollmentId,
+    at: Math.floor(Date.now() / 1000),
+  })
+  const after = await h.devices.directory.detail('device-01')
+  expect(after.primaryMdmRegistration!.generation).toBe(
+    before.primaryMdmRegistration!.generation + 1,
+  )
+  const panel = await chooseAssociation(h)
+  const coordinates = panel.find('[data-testid=confirmation-coordinates]')
+  expect(coordinates.text()).toContain(after.primaryMdmRegistration!.registrationId)
+  expect(coordinates.text()).not.toContain(before.primaryMdmRegistration!.registrationId)
+  const displayed = coordinates.findAll('li').map((m) => m.text())
+  await h.click('确认关联')
+  const body = h.requests.findLast((r) => r.path === '/api/v1/device-associations')!.body as {
+    mdm: { device: string; registrationId: string; generation: number }
+    agent: { device: string; registrationId: string; generation: number }
+  }
+  for (const member of [body.mdm, body.agent])
+    expect(
+      displayed.some((text) =>
+        text.includes(`${member.device} · ${member.registrationId} / ${member.generation}`),
+      ),
+    ).toBe(true)
+})
+it.each(['confirm', 'revoke', 'inactive-revoke'])(
+  'shows the refreshed relation basis actually used by %s',
+  async (action) => {
+    const h = await setup('device-detail', { device: 'device-01' })
+    await chooseAssociation(h)
+    await h.click('确认关联')
+    await vi.waitFor(() => expect(h.router.currentRoute.value.name).toBe('device-view-detail'))
+    await flushPromises()
+    const id = String(h.router.currentRoute.value.params['view'])
+    const old = await h.devices.associations.get(id)
+    const current = await h.devices.associations.confirm({
+      operationId: crypto.randomUUID(),
+      associationId: id,
+      expectedVersion: old.version,
+      mdm: old.members.find((m) => m.channel === 'mdm')!,
+      agent: old.members.find((m) => m.channel === 'agent')!,
+      evidence: 'Other operator current evidence',
+    })
+    if (action === 'inactive-revoke')
+      await h.devices.enrollment.revoke(
+        current.members[0]!.device,
+        current.members[0]!.registrationId,
+        crypto.randomUUID(),
+      )
+    await h.click('读取当前关系与主注册')
+    const panel = h.wrapper.find('[data-testid=association-panel]'),
+      basis = panel.find('[data-testid=association-basis]')
+    expect(basis.text()).toContain(`${id} / ${current.version}`)
+    expect(basis.text()).toContain(current.evidence)
+    expect(basis.text()).not.toContain(old.evidence)
+    if (action === 'inactive-revoke')
+      expect(h.button('重新核实关联').attributes('disabled')).toBeDefined()
+    await panel.find('input[type=checkbox]').setValue(true)
+    await panel
+      .findAll('textarea')
+      [action === 'confirm' ? 0 : 1]!.setValue('Checked displayed current basis')
+    await h.click(action === 'confirm' ? '重新核实关联' : '解除关联')
+    const request = h.requests.findLast((r) => r.method === 'POST')!
+    expect(request.body).toMatchObject({ expectedVersion: current.version })
+    expect(request.path).toBe(
+      action === 'confirm'
+        ? '/api/v1/device-associations'
+        : '/api/v1/device-associations/{id}/revoke',
+    )
+  },
+)
+it.each(['zh-CN', 'en-US'] as const)(
+  'resolves all directory source options in %s',
+  async (locale) => {
+    const h = await setup()
+    h.i18n.global.locale.value = locale
+    await flushPromises()
+    expect(
+      h.wrapper
+        .findAll('select')[2]!
+        .findAll('option')
+        .map((o) => o.text()),
+    ).toEqual([locale === 'zh-CN' ? '全部' : 'All', 'Windows MDM', 'Apple MDM', 'Agent'])
+  },
+)

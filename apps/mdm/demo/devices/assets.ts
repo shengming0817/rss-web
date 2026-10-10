@@ -57,7 +57,27 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
   const handle: DomainHandler = (request, scenario) => {
     const { method, path, query } = request
     if (path === '/api/v1/asset-fields' && method === 'GET')
-      return asset({ kind: 'fields', dictionary: 'assets-v1', fields: catalog })
+      return asset({
+        kind: 'fields',
+        dictionary: 'assets-v2',
+        fields: catalog.map((f) => ({
+          key: f.key,
+          version: 1,
+          valueType:
+            f.kind === 'string'
+              ? { kind: 'string', maxLength: 256, allowEmpty: false }
+              : { kind: f.kind },
+          nullable: f.nullable,
+          manual: f.manual,
+          sources: Object.fromEntries(f.sources.map((s) => [s, 0])),
+          platforms: ['windows', 'macos'],
+          sensitivity: 'standard',
+          unit: null,
+          searchable: true,
+          itemKey: null,
+          operations: f.operations,
+        })),
+      })
     const detail = /^\/api\/v1\/devices\/([^/]+)\/inventory$/.exec(path)
     if (detail && method === 'GET') {
       const device = devices().get(decodeURIComponent(detail[1]!))
@@ -90,6 +110,7 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
             source: 'manual' as const,
             registration: null,
             registrationGeneration: null,
+            dataset: null,
             epoch: null,
             snapshotId: op.operationId,
             observedAt: Math.floor(Date.now() / 1000),

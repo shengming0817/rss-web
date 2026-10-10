@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
-import { lifecycleActions, type Batch, type LifecycleAction } from '../clients/directory'
+import { lifecycleActions, type Batch, type LifecycleAction } from '../clients/candidate-operations'
 import { operation, useOperation } from '../../../services/useOperation'
 const props = defineProps<{ devices: string[] }>()
 const { t } = useI18n(),
@@ -17,7 +17,7 @@ function preview() {
   confirmed.value = false
   batch.value = undefined
   const body = operation({ action: action.value, devices: [...props.devices] })
-  pending = () => clients.directory.preview(body)
+  pending = () => clients.candidate.preview(body)
   void runWrite(pending, (v) => {
     batch.value = v
   })
@@ -27,7 +27,7 @@ function execute() {
   if (!batch.value || !confirmed.value) return
   const id = batch.value.id,
     body = operation({ confirmed: true as const }, batch.value.revision)
-  pending = () => clients.directory.execute(id, body)
+  pending = () => clients.candidate.execute(id, body)
   void runWrite(pending, (v) => {
     batch.value = v
     confirmed.value = false
@@ -38,7 +38,7 @@ function cancel() {
   if (!batch.value) return
   const id = batch.value.id,
     body = operation({}, batch.value.revision)
-  pending = () => clients.directory.cancel(id, body)
+  pending = () => clients.candidate.cancel(id, body)
   void runWrite(pending, (v) => {
     batch.value = v
   })
@@ -105,7 +105,7 @@ function cancel() {
         :disabled="busy"
         @click="
           run(
-            () => clients.directory.batch(batch!.id),
+            () => clients.candidate.batch(batch!.id),
             (v) => (batch = v),
           )
         "

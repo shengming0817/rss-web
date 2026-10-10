@@ -1,31 +1,30 @@
 import { expect, it } from 'vitest'
-import { decodeDirectory, decodeBatch } from './directory'
+import { decodeDirectory } from './directory'
+import { decodeBatch } from './candidate-operations'
 const tenant = '11111111-1111-4111-8111-111111111111'
 const snapshot = '22222222-2222-4222-8222-222222222222'
 const metadata = { contract: 'devices-v1', tenantId: tenant, source: 'mock' }
-it('keeps pending devices visible without an inventory identity and denies mock in production', () => {
+it('decodes only the formal endpoint directory', () => {
   const response = {
-    ...metadata,
-    snapshot,
     items: [
       {
         id: 'pending',
-        name: 'Pending Mac',
-        platform: 'macos',
-        status: 'pending',
         inventoryAvailable: false,
-        revision: 1,
+        status: 'pending',
+        primaryMdmRegistration: null,
         channels: [],
-        owner: null,
-        department: null,
+        enrollments: [],
       },
     ],
+    statistics: { total: 1, pending: 1, active: 0, revoked: 0 },
+    asOf: 0,
     nextCursor: null,
-    statistics: { total: 1, pending: 1, windows: 0, macos: 1, withInventory: 0 },
   }
-  expect(decodeDirectory(response, tenant, true).items[0]?.inventoryAvailable).toBe(false)
-  expect(() => decodeDirectory(response, tenant, false)).toThrow()
-  expect(() => decodeDirectory({ ...response, tenantId: snapshot }, tenant, true)).toThrow()
+  expect(decodeDirectory(response).items[0]?.inventoryAvailable).toBe(false)
+  expect(() => decodeDirectory({ ...response, ...metadata })).toThrow()
+  expect(() =>
+    decodeDirectory({ ...response, items: [{ ...response.items[0], name: 'legacy' }] }),
+  ).toThrow()
 })
 it('keeps offline and stale-generation blocks separate from accepted execution facts', () => {
   const response = {

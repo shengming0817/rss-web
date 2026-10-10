@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Criteria, FieldDefinition, Scalar } from '../clients/asset-model'
+import { editableField } from '../clients/asset-model'
 import ScalarEditor from './ScalarEditor.vue'
 const props = defineProps<{
   modelValue: Criteria | null
@@ -23,7 +24,7 @@ const initial = (kind: Scalar['kind']): Scalar =>
       : { kind, value: 0 }
 function predicate(key: string, op?: FieldDefinition['operations'][number]) {
   const f = props.fields.find((f) => f.key === key)
-  if (!f) return
+  if (!f || !editableField(f)) return
   const operator = op ?? f.operations[0]!
   const base = { kind: 'predicate' as const, field: f.key, op: operator }
   emit(
@@ -72,7 +73,9 @@ function operand(index: number, value?: Scalar) {
         :value="modelValue.field"
         @change="predicate(($event.target as HTMLSelectElement).value)"
       >
-        <option v-for="f in fields" :key="f.key" :value="f.key">{{ f.key }} ({{ f.kind }})</option>
+        <option v-for="f in fields.filter(editableField)" :key="f.key" :value="f.key">
+          {{ f.key }} ({{ f.kind }})
+        </option>
       </select>
       <select
         :aria-label="t('devices.operator')"
@@ -102,7 +105,7 @@ function operand(index: number, value?: Scalar) {
         </button>
       </div>
       <button
-        v-if="modelValue.values && field"
+        v-if="modelValue.values && field && editableField(field)"
         type="button"
         @click="operand(modelValue.values.length, initial(field.kind))"
       >

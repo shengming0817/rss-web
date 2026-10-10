@@ -12,7 +12,10 @@ import {
   type Permission,
   type Revision,
 } from '../../src/features/operations/clients/authorization'
-import { lifecycleActions, type Batch } from '../../src/features/devices/clients/directory'
+import {
+  lifecycleActions,
+  type Batch,
+} from '../../src/features/devices/clients/candidate-operations'
 import type { AuditEntry } from '../../src/features/operations/clients/model'
 export const INSTANCE = '44444444-4444-4444-8444-444444444444'
 export const ADMIN = '22222222-2222-4222-8222-222222222222'
@@ -125,7 +128,8 @@ export function createAuthorizationDemo(
     const path = request.path
     if (path.startsWith('/api/v1/authorization')) return
     const deviceMatch =
-      /^\/api\/(?:v1\/devices|v1\/mdm-candidate\/devices)\/([^/]+)(?:\/(.*))?$/.exec(path)
+      /^\/api\/v1\/devices\/([^/]+)(?:\/(.*))?$/.exec(path) ??
+      /^\/api\/v1\/mdm-candidate\/devices\/([^/]+)\/(assignment)$/.exec(path)
     const actor = request.actor.principalId
     const batch =
       /^\/api\/v1\/mdm-candidate\/devices\/batch-previews(?:\/([^/]+)(?:\/(execute|cancel))?)?$/.exec(
@@ -172,7 +176,7 @@ export function createAuthorizationDemo(
         suffix = deviceMatch[2] ?? ''
       if (
         request.method === 'GET' &&
-        (!suffix || ['hardware', 'software', 'history', 'inventory'].includes(suffix)) &&
+        (!suffix || ['inventory', 'timeline', 'assignment'].includes(suffix)) &&
         !can(actor, 'inventory_read', device)
       )
         return error('permission_denied', 403)
@@ -182,11 +186,7 @@ export function createAuthorizationDemo(
         !can(actor, 'inventory_assign', device)
       )
         return error('permission_denied', 403)
-    } else if (
-      (path === '/api/v1/mdm-candidate/devices' ||
-        /^\/api\/v1\/(device-queries|saved-queries)(?:\/|$)/.test(path)) &&
-      !all()
-    )
+    } else if (/^\/api\/v1\/(device-queries|saved-queries)(?:\/|$)/.test(path) && !all())
       return error('permission_denied', 403)
     if (/^\/api\/v1\/mdm-candidate\/(?:authorization|integrations|operations)(?:\/|$)/.test(path)) {
       // Candidate management grants are demo decisions, never added to the real Permission enum.

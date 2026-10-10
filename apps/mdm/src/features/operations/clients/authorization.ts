@@ -13,6 +13,7 @@ import {
 } from '../../../services/decode'
 export const devicePermissions = [
   'inventory_read',
+  'device_association_write',
   'compliance_read',
   'inventory_collect',
   'inventory_assign',

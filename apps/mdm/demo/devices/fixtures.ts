@@ -1,5 +1,15 @@
 import { randomUUID } from 'node:crypto'
-import type { DeviceSummary } from '../../src/features/devices/clients/directory'
+interface DeviceSummary {
+  id: string
+  name: string
+  platform: 'windows' | 'macos' | 'unknown'
+  status: 'pending' | 'registered' | 'revoked' | 'retired'
+  inventoryAvailable: boolean
+  revision: number
+  channels: ('mdm' | 'agent')[]
+  owner: string | null
+  department: string | null
+}
 import type {
   FieldDefinition,
   Inventory,
@@ -76,6 +86,7 @@ export function fact(
     source,
     registration: null,
     registrationGeneration: null,
+    dataset: null,
     epoch: null,
     snapshotId: randomUUID(),
     observedAt: 1780000000,
@@ -171,7 +182,7 @@ export function makeDevices(): Map<string, DemoDevice> {
         {
           summary,
           architecture: platform === 'windows' ? 'x86_64' : 'aarch64',
-          inventory: { device: id, channels, fields, quality: [], revisions },
+          inventory: { device: id, channels, fields, lists: {}, quality: [], revisions },
           registrations,
           securityBindings: registrations.map((r) => ({
             registration: r.registrationId,

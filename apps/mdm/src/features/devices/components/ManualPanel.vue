@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import type { FieldDefinition, Inventory, ManualChange, Scalar } from '../clients/assets'
 import { operation, useOperation } from '../../../services/useOperation'
+import { editableField } from '../clients/asset-model'
 import ScalarEditor from './ScalarEditor.vue'
 import AssetValue from './AssetValue.vue'
 const props = defineProps<{ device: string; inventory: Inventory; fields: FieldDefinition[] }>()
@@ -14,7 +15,7 @@ const { t } = useI18n(),
 const key = ref(''),
   action = ref<'set' | 'null' | 'delete'>('set'),
   value = ref<Scalar>({ kind: 'string', value: '' })
-const manual = computed(() => props.fields.filter((f) => f.manual)),
+const manual = computed(() => props.fields.filter(editableField).filter((f) => f.manual)),
   selected = computed(() => props.inventory.fields[key.value])
 let pending: (() => Promise<void>) | undefined
 function change() {

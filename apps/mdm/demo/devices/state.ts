@@ -1,10 +1,15 @@
 import { randomUUID } from 'node:crypto'
 import type { DomainHandler } from '../scenario'
 import { array, closed, enumeration, identifier, nullable } from '../../src/services/decode'
-import { lifecycleActions, type Batch } from '../../src/features/devices/clients/directory'
-import { makeDevices, fact } from './fixtures'
+import {
+  lifecycleActions,
+  type Batch,
+} from '../../src/features/devices/clients/candidate-operations'
+import { makeDevices } from './fixtures'
+import { endpointProjection, endpointDetailProjection, createDeviceViewsDemo } from './views'
+import type { Permission } from '../../src/features/operations/clients/authorization'
+import { ok, createPages, createReceipts, error, operation } from '../http'
 import { candidate } from './http'
-import { createPages, createReceipts, error, operation } from '../http'
 import { createAssetDemo } from './assets'
 import { createGroupDemo } from './groups'
 import { createEnrollmentDemo } from './enrollment'
@@ -18,45 +23,82 @@ export function createDeviceDemo() {
   const pages = createPages(),
     receipts = createReceipts(),
     batches = new Map<string, Batch>()
-  const statistics = new Map<
-    string,
-    { total: number; pending: number; windows: number; macos: number; withInventory: number }
-  >()
-  function detail(id: string, offline = false) {
-    const d = devices.get(id)!
-    return {
-      device: d.summary,
-      readiness: offline
-        ? 'offline'
-        : d.summary.status === 'pending' || !d.summary.channels.length
-          ? 'unknown'
-          : d.summary.platform === 'macos'
-            ? 'pending_token'
-            : 'ready',
-      capabilities: lifecycleActions.map((action) => ({
-        action,
-        channel: action === 'add_agent' ? 'mdm' : 'agent',
-        support: 'unknown',
-      })),
-      enrollments: d.enrollments,
-    }
+  let can = (actor: string, permission: Permission, device?: string) => {
+    void actor
+    void permission
+    void device
+    return true
   }
+  const views = createDeviceViewsDemo(
+    () => devices,
+    () => can,
+  )
   const directory: DomainHandler = (request, scenario) => {
     const { path, method, query } = request
-    if (path === '/api/v1/mdm-candidate/devices' && method === 'GET') {
-      const items = scenario === 'empty' ? [] : [...devices.values()].map((d) => d.summary)
-      const page = pages.page(path, items, query)
-      if (!statistics.has(page.snapshot))
-        statistics.set(page.snapshot, {
+    if (path === '/api/v1/devices' && method === 'GET') {
+      const items =
+        scenario === 'empty'
+          ? []
+          : [...devices.values()]
+              .filter((d) => can(request.actor.principalId, 'inventory_read', d.summary.id))
+              .sort((a, b) => a.summary.id.localeCompare(b.summary.id))
+              .map((d) => ({
+                ...endpointProjection(d),
+                inventoryAvailable: d.summary.inventoryAvailable,
+              }))
+      const selected = items.filter((d) => d.id > (query.get('after') ?? '')),
+        limit = Number(query.get('limit') ?? 20)
+      return ok({
+        items: selected.slice(0, limit),
+        statistics: {
           total: items.length,
           pending: items.filter((d) => d.status === 'pending').length,
-          windows: items.filter((d) => d.platform === 'windows').length,
-          macos: items.filter((d) => d.platform === 'macos').length,
-          withInventory: items.filter((d) => d.inventoryAvailable).length,
-        })
-      return candidate({
-        ...page,
-        statistics: statistics.get(page.snapshot),
+          active: items.filter((d) => d.status === 'active').length,
+          revoked: items.filter((d) => d.status === 'revoked').length,
+        },
+        asOf: Math.floor(Date.now() / 1000),
+        nextCursor: selected.length > limit ? selected[limit - 1]!.id : null,
+      })
+    }
+    const endpointPath = /^\/api\/v1\/devices\/([^/]+)(?:\/(timeline))?$/.exec(path)
+    if (endpointPath && method === 'GET') {
+      const id = decodeURIComponent(endpointPath[1]!),
+        d = devices.get(id)
+      if (!d || !can(request.actor.principalId, 'inventory_read', id))
+        return error('inventory_not_found', 404)
+      if (!endpointPath[2]) return ok(endpointDetailProjection(d))
+      const page = pages.page(
+        path,
+        [...d.history].reverse().map((e) => ({
+          source: 'mdm.business',
+          eventId: e.id,
+          position: 1,
+          recordedAt: e.at,
+          observedAt: e.at,
+          actorKind: 'user',
+          actor: request.actor.principalId,
+          action: e.event,
+          target: id,
+          deviceId: id,
+          operationId: e.operation,
+          relatedOperationIds: [],
+          requestId: null,
+          registrationId: null,
+          registrationRequestId: null,
+          instanceId: null,
+          auditOutcome: 'succeeded',
+          phase: 'business',
+          executionState: null,
+          effect: 'unverified',
+          requestWriteOutcome: null,
+          supported: true,
+        })),
+        query,
+      )
+      return ok({
+        items: page.items,
+        nextCursor: page.nextCursor,
+        coverage: { indexedThrough: 1, sourceThrough: 1, complete: true },
       })
     }
     const batchPath =
@@ -161,90 +203,51 @@ export function createDeviceDemo() {
         return candidate(existing, 202)
       })
     }
-    const match =
-      /^\/api\/v1\/mdm-candidate\/devices\/([^/]+)(?:\/(hardware|software|history|assignment))?$/.exec(
-        path,
-      )
+    const match = /^\/api\/v1\/mdm-candidate\/devices\/([^/]+)\/assignment$/.exec(path)
     if (!match) return
     const id = decodeURIComponent(match[1]!),
       d = devices.get(id)
     if (!d) return error('management_device_not_found', 404)
-    if (method === 'PUT' && match[2] === 'assignment') {
-      const op = operation(request.body)
-      return receipts.write(request, op.operationId, () => {
-        if (d.summary.revision !== op.expectedRevision) return error('operation_conflict')
-        const v = closed(op.input, ['owner', 'department'])
-        d.summary.owner = nullable(v['owner'], identifier)
-        d.summary.department = nullable(v['department'], identifier)
-        d.summary.revision++
-        d.history.push({
-          id: randomUUID(),
-          at: Math.floor(Date.now() / 1000),
-          event: 'assignment_changed',
-          operation: op.operationId,
-        })
-        return candidate(detail(id))
+    const assignment = () => ({
+      id,
+      revision: d.summary.revision,
+      owner: d.summary.owner,
+      department: d.summary.department,
+    })
+    if (method === 'GET') return candidate(assignment())
+    if (method !== 'PUT') return
+    const op = operation(request.body)
+    return receipts.write(request, op.operationId, () => {
+      if (d.summary.revision !== op.expectedRevision) return error('operation_conflict')
+      const input = closed(op.input, ['owner', 'department'])
+      d.summary.owner = nullable(input['owner'], identifier)
+      d.summary.department = nullable(input['department'], identifier)
+      d.summary.revision++
+      d.history.push({
+        id: randomUUID(),
+        at: Math.floor(Date.now() / 1000),
+        event: 'assignment_changed',
+        operation: op.operationId,
       })
-    }
-    if (method !== 'GET') return
-    if (match[2] === 'hardware')
-      return candidate({
-        device: id,
-        ...pages.page(
-          path,
-          d.summary.inventoryAvailable
-            ? [
-                d.inventory.fields['device.model']!,
-                fact(
-                  'device.memory.bytes',
-                  { kind: 'integer', value: 17179869184 },
-                  'agent.builtin',
-                ),
-              ]
-            : [],
-          query,
-        ),
-      })
-    if (match[2] === 'software')
-      return candidate({
-        device: id,
-        state: d.summary.inventoryAvailable
-          ? scenario === 'partial'
-            ? 'partial'
-            : 'known'
-          : 'missing',
-        ...pages.page(
-          path,
-          d.summary.inventoryAvailable
-            ? [
-                {
-                  id: 'browser',
-                  name: 'Enterprise Browser',
-                  version: fact(
-                    'custom.software.browser.version',
-                    { kind: 'string', value: '128.0' },
-                    'agent.builtin',
-                  ),
-                },
-              ]
-            : [],
-          query,
-        ),
-      })
-    if (match[2] === 'history')
-      return candidate({ device: id, ...pages.page(path, [...d.history].reverse(), query) })
-    return candidate(detail(id))
+      return candidate(assignment())
+    })
   }
   const handle: DomainHandler = (request, scenario) => {
     if (
-      !/^\/api\/(?:v1\/(?:asset-fields|device-queries|devices|saved-queries|groups)|v1\/(?:enrollments|devices|self-enrollments|registration-quotas)|v1\/mdm-candidate\/(?:devices|groups))(?:\/|$)/.test(
+      !/^\/api\/(?:v1\/(?:asset-fields|device-queries|devices|device-views|device-associations|saved-queries|groups)|v1\/(?:enrollments|devices|self-enrollments|registration-quotas)|v1\/mdm-candidate\/(?:devices|groups))(?:\/|$)/.test(
         request.path,
       )
     )
       return
     if (scenario === 'denied') return error('permission_denied', 403)
     try {
-      for (const handler of [assets.handle, groups.handle, enrollments.handle, directory]) {
+      for (const handler of [
+        views.handle,
+        assets.handle,
+        groups.handle,
+        enrollments.handle,
+        directory,
+      ]) {
         const reply = handler(request, scenario)
         if (reply) return structuredClone(reply)
       }
@@ -254,6 +257,9 @@ export function createDeviceDemo() {
   }
   return {
     handle,
+    bindAuthorization: (value: typeof can) => {
+      can = value
+    },
     facts: () => structuredClone([...devices.values()]),
     publishedGroup: groups.published,
     batches: () => structuredClone([...batches.values()]),
@@ -316,7 +322,7 @@ export function createDeviceDemo() {
       pages.reset()
       receipts.reset()
       batches.clear()
-      statistics.clear()
+      views.reset()
     },
   }
 }

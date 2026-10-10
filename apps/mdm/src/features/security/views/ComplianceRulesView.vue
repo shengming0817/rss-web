@@ -21,7 +21,7 @@ const { t } = useI18n(),
   { run, runWrite, busy, failure, uncertain } = useOperation()
 const list = ref<Awaited<ReturnType<typeof client.list>>>(),
   fields = ref<FieldDefinition[]>([]),
-  groups = ref<Awaited<ReturnType<typeof runtime.devices.directory.groups>>>(),
+  groups = ref<Awaited<ReturnType<typeof runtime.devices.candidate.groups>>>(),
   current = ref<ComplianceRule>(),
   historical = ref<ComplianceRule>(),
   id = ref(''),
@@ -152,7 +152,7 @@ function loadVersion() {
 }
 function groupPage(cursor?: string) {
   void run(
-    () => runtime.devices.directory.groups(cursor),
+    () => runtime.devices.candidate.groups(cursor),
     (v) => (groups.value = v),
   )
 }

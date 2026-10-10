@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import type { ResolvedField, Scalar } from '../clients/asset-model'
+import type { ResolvedField, ReadScalar } from '../clients/asset-model'
 defineProps<{ field: ResolvedField }>()
 const { t } = useI18n()
-const display = (value: Scalar) =>
-  value.kind === 'boolean' ? t(`devices.${value.value ? 'yes' : 'no'}`) : String(value.value)
+const display = (value: ReadScalar) =>
+  value.kind === 'boolean'
+    ? t(`devices.${value.value ? 'yes' : 'no'}`)
+    : value.kind === 'object' || value.kind === 'array'
+      ? JSON.stringify(value.value)
+      : String(value.value)
 </script>
 <template>
   <div class="asset-value">
@@ -12,7 +16,10 @@ const display = (value: Scalar) =>
     <span v-if="field.state.kind === 'known'"> · {{ display(field.state.value) }}</span>
     <details v-if="field.sources.length">
       <summary>{{ t('devices.evidence') }}</summary>
-      <dl v-for="source in field.sources" :key="source.evidence.source">
+      <dl
+        v-for="source in field.sources"
+        :key="`${source.evidence.source}:${source.evidence.dataset}`"
+      >
         <dt>{{ t('devices.source') }}</dt>
         <dd>{{ source.evidence.source }}</dd>
         <dt>{{ t('devices.current') }}</dt>

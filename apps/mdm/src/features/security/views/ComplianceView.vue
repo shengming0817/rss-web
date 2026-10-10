@@ -81,7 +81,7 @@ onMounted(() => {
     <button :disabled="busy" @click="devices()">{{ t('security.chooseDevice') }}</button>
     <ul>
       <li v-for="item in directory?.items" :key="item.id">
-        <button :disabled="busy" @click="open(item.id)">{{ item.name }} · {{ item.id }}</button>
+        <button :disabled="busy" @click="open(item.id)">{{ item.id }}</button>
       </li>
     </ul>
     <button v-if="directory?.nextCursor" :disabled="busy" @click="devices(directory.nextCursor)">

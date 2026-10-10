@@ -399,7 +399,9 @@ export function createScenario(
                   path,
                 )
               ? 'devices'
-              : path.startsWith('/api/v1/mdm-candidate/groups')
+              : path.startsWith('/api/v1/device-views') ||
+                  path.startsWith('/api/v1/device-associations') ||
+                  path.startsWith('/api/v1/mdm-candidate/groups')
                 ? 'devices'
                 : path.split('/')[4]
     if (module && sources[module] === 'real')

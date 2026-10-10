@@ -113,11 +113,11 @@ onMounted(async () => {
       Promise.all([
         runtime.policies.catalog.list('scopes'),
         runtime.devices.directory.list(),
-        runtime.devices.directory.groups(),
+        runtime.devices.candidate.groups(),
       ]),
     ([l, d, g]) => {
       list.value = l
-      devices.value = d.items
+      devices.value = d.items.map((d) => ({ id: d.id, name: d.id }))
       groups.value = g.items
     },
   )

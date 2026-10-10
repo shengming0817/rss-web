@@ -63,7 +63,9 @@ export function useOperation(
                       : e.status === 400
                         ? 'invalidRequest'
                         : e.status === 409
-                          ? 'conflict'
+                          ? e.code === 'device_view_cursor_invalidated'
+                            ? 'cursorInvalidated'
+                            : 'conflict'
                           : e.code === 'operation_unknown' ||
                               e.code === 'operation_rollback_unconfirmed'
                             ? 'unknownWrite'
