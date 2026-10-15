@@ -32,8 +32,9 @@ function load(cursor?: string) {
     <UiButton type="button" variant="secondary" :disabled="disabled || busy" @click="load()">{{
       t('console.chooseLoaded')
     }}</UiButton>
+    <p v-if="page">{{ t('console.pageNotTotal') }}</p>
     <label v-if="page"
-      >{{ t('console.pageNotTotal')
+      >{{ t(`policies.${collection}`)
       }}<select v-model="value" class="ui-input" :disabled="disabled || busy">
         <option value="">{{ t('devices.select') }}</option>
         <option v-if="value && !page.items.some((item) => item.id === value)" :value="value">

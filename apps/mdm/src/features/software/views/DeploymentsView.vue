@@ -525,6 +525,10 @@ watch(
                   class="ui-input"
                   data-field="stage-scope"
                   required
+                /><CatalogLocator
+                  v-model="stage.scope"
+                  collection="scopes"
+                  :disabled="busy || uncertain"
                 />
                 <label :for="`stage-${index}-at`">{{ t('software.opensAt') }}</label
                 ><UiUtcDateTimeInput
