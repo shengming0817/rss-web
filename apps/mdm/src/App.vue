@@ -54,7 +54,7 @@ const section = computed(() =>
 const title = computed(() =>
   t(
     [
-      ...navigation.flatMap((group) => group.items),
+      ...navigation.flatMap<NavigationItem>((group) => [...group.items]),
       ...authDestinations,
       ...destinations.value,
     ].find((item) => item.name === parentName.value)?.label ?? 'console.overview',
