@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import { UiButton, UiDialog } from '@rss/core/components'
 import { onMounted, ref, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -26,6 +26,12 @@ const task = ref<string>(),
   status = ref<Awaited<ReturnType<typeof client.status>>>(),
   projection = ref<GroupProjection>('members'),
   result = ref<Awaited<ReturnType<typeof client.page>>>()
+const editing = ref(false),
+  deleting = ref(false)
+function beginCreate() {
+  create()
+  editing.value = true
+}
 let pending: (() => Promise<boolean>) | undefined
 function write<T>(request: () => Promise<T>, apply: (value: T) => void) {
   if (busy.value || uncertain.value) return
@@ -45,6 +51,7 @@ function open(group = id.value) {
     (v) => {
       id.value = v.group.id
       current.value = v
+      editing.value = false
       name.value = v.group.name
       description.value = v.group.description
       kind.value = v.group.kind
@@ -75,6 +82,8 @@ function change(input: GroupChange) {
     const acknowledged = await runWrite(
       async () => client.change(group, body),
       (receipt) => {
+        editing.value = false
+        deleting.value = false
         task.value = receipt.task ?? undefined
         status.value = undefined
         result.value = undefined
@@ -183,7 +192,12 @@ function openGroup(group: string) {
     <UiButton :disabled="!!busy" type="submit" @click="loadList()">{{
       t('devices.reload')
     }}</UiButton>
-    <ul>
+    <div class="console-toolbar">
+      <UiButton type="button" :disabled="busy || uncertain" @click="beginCreate">{{
+        t('devices.create')
+      }}</UiButton>
+    </div>
+    <ul class="console-object-list">
       <li v-for="group in list?.items" :key="group.id">
         <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="openGroup(group.id)">
           {{ group.name }} · {{ t(`devices.${group.kind}`) }} · {{ group.memberCount }}
@@ -198,19 +212,21 @@ function openGroup(group: string) {
     >
       {{ t('devices.next') }}
     </UiButton>
-    <form @submit.prevent="open()">
-      <label
-        >{{ t('devices.groupId')
-        }}<input
-          v-model="id"
-          class="ui-input"
-          required
-          :readonly="!!current || busy || uncertain" /></label
-      ><UiButton :disabled="!!(busy || uncertain)" type="submit">{{ t('devices.open') }}</UiButton>
-    </form>
-    <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="create">{{
-      t('devices.create')
-    }}</UiButton>
+    <details class="console-panel">
+      <summary>{{ t('console.advanced') }}</summary>
+      <form @submit.prevent="open()">
+        <label
+          >{{ t('devices.groupId')
+          }}<input
+            v-model="id"
+            class="ui-input"
+            required
+            :readonly="!!current || busy || uncertain" /></label
+        ><UiButton :disabled="!!(busy || uncertain)" type="submit">{{
+          t('devices.open')
+        }}</UiButton>
+      </form>
+    </details>
     <p v-if="current">
       {{ t('devices.revision') }} {{ current.group.revision }} · {{ t('devices.memberVersion') }}
       {{ current.group.memberVersion }} · {{ t('devices.memberCount') }}
@@ -231,7 +247,13 @@ function openGroup(group: string) {
         <CriteriaEditor :model-value="current.criteria" :fields="fields" />
       </fieldset>
     </section>
-    <form @submit.prevent="save">
+    <div v-if="current && !editing" class="console-toolbar">
+      <UiButton type="button" :disabled="busy || uncertain" @click="editing = true">{{
+        t('console.edit')
+      }}</UiButton>
+    </div>
+    <form v-show="editing" class="console-panel" @submit.prevent="save">
+      <h2>{{ t(current ? 'console.edit' : 'console.create') }}</h2>
       <fieldset :disabled="busy || uncertain">
         <label
           >{{ t('devices.name')
@@ -254,7 +276,7 @@ function openGroup(group: string) {
         </UiButton>
       </fieldset>
     </form>
-    <section v-if="current">
+    <section v-if="current" class="console-panel">
       <UiButton
         :disabled="!!busy"
         type="submit"
@@ -266,11 +288,7 @@ function openGroup(group: string) {
         "
       >
         {{ t('devices.compare') }}</UiButton
-      ><UiButton
-        :disabled="!!(busy || uncertain)"
-        type="submit"
-        @click="change({ action: 'delete' })"
-      >
+      ><UiButton :disabled="!!(busy || uncertain)" type="submit" @click="deleting = true">
         {{ t('devices.delete') }}
       </UiButton>
       <form v-if="current.group.kind === 'static'" @submit.prevent="changeMembers">
@@ -382,6 +400,26 @@ function openGroup(group: string) {
         </UiButton>
       </template>
     </section>
+    <UiDialog
+      :open="deleting"
+      :title="t('devices.delete')"
+      :close-label="t('console.close')"
+      kind="alertdialog"
+      :dismissible="!busy && !uncertain"
+      @update:open="deleting = $event"
+    >
+      <p>{{ current?.group.name }} · {{ current?.group.id }}</p>
+      <p>{{ t('devices.memberCount') }}: {{ current?.group.memberCount }}</p>
+      <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
+      <template #footer
+        ><UiButton :disabled="busy || uncertain" @click="change({ action: 'delete' })">{{
+          t('devices.delete')
+        }}</UiButton
+        ><UiButton v-if="uncertain && pending" :disabled="busy" @click="pending!()">{{
+          t('devices.replay')
+        }}</UiButton></template
+      >
+    </UiDialog>
     <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending!()">
       {{ t('devices.replay') }}
     </UiButton>

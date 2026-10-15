@@ -104,27 +104,30 @@ load()
       />
     </fieldset>
     <p v-if="mode === 'override' && !principal">{{ t('registration.selectUser') }}</p>
-    <form v-if="revision !== undefined" @submit.prevent="save()">
-      <fieldset :disabled="busy || uncertain">
-        <label v-for="channel in channels" :key="channel"
-          >{{ t(`registration.${channel}`) }}
-          <input
-            class="ui-input"
-            :value="limits[channel] ?? ''"
-            type="number"
-            min="0"
-            max="4294967295"
-            step="1"
-            :required="mode === 'defaults'"
-            @input="updateLimit(channel, $event)"
-          />
-          <UiButton v-if="mode === 'override'" type="button" @click="limits[channel] = null">
-            {{ t('registration.inherit') }}
-          </UiButton>
-        </label>
-        <UiButton type="submit">{{ t('registration.save') }}</UiButton>
-      </fieldset>
-    </form>
+    <section v-if="revision !== undefined" class="console-panel">
+      <h2>{{ t('registration.quotas') }}</h2>
+      <form @submit.prevent="save()">
+        <fieldset :disabled="busy || uncertain">
+          <label v-for="channel in channels" :key="channel"
+            >{{ t(`registration.${channel}`) }}
+            <input
+              class="ui-input"
+              :value="limits[channel] ?? ''"
+              type="number"
+              min="0"
+              max="4294967295"
+              step="1"
+              :required="mode === 'defaults'"
+              @input="updateLimit(channel, $event)"
+            />
+            <UiButton v-if="mode === 'override'" type="button" @click="limits[channel] = null">
+              {{ t('registration.inherit') }}
+            </UiButton>
+          </label>
+          <UiButton type="submit">{{ t('registration.save') }}</UiButton>
+        </fieldset>
+      </form>
+    </section>
     <UiButton v-if="uncertain && pending" type="button" :disabled="!!busy" @click="save(true)">
       {{ t('registration.replay') }}
     </UiButton>

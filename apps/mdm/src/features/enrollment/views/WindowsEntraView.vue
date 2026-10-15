@@ -111,32 +111,40 @@ watch(current, (value) => {
         <dd>{{ t(`devices.${current.policy.enabled ? 'yes' : 'no'}`) }}</dd>
       </dl>
       <pre v-if="current" class="enrollment-terms">{{ current.policy.termsText }}</pre>
-      <form v-if="canWrite && current" @submit.prevent="save">
-        <fieldset :disabled="busy || uncertain">
-          <legend>{{ t('onboarding.entraPolicy') }}</legend>
-          <label><input v-model="enabled" type="checkbox" />{{ t('onboarding.enabled') }}</label
-          ><label><input v-model="allUsers" type="checkbox" />{{ t('onboarding.allUsers') }}</label
-          ><label v-if="!allUsers"
-            >{{ t('onboarding.entraUsers') }}<textarea v-model="users" class="ui-input" /></label
-          ><label
-            >{{ t('onboarding.termsVersion')
-            }}<input
-              v-model="termsVersion"
-              class="ui-input"
-              maxlength="128"
-              :required="enabled" /></label
-          ><label
-            >{{ t('onboarding.termsText')
-            }}<textarea v-model="termsText" class="ui-input" :required="enabled" />
-          </label>
-          <p>{{ t('onboarding.termsBudget') }}</p>
-          <label
-            ><input v-model="allowBackground" type="checkbox" />{{
-              t('onboarding.allowBackground')
-            }}</label
-          ><UiButton type="submit">{{ t('registration.save') }}</UiButton>
-        </fieldset>
-      </form>
+      <details
+        v-if="canWrite && current"
+        class="console-panel console-task"
+        :open="uncertain || undefined"
+      >
+        <summary>{{ t('console.configure') }}</summary>
+        <form @submit.prevent="save">
+          <fieldset :disabled="busy || uncertain">
+            <legend>{{ t('onboarding.entraPolicy') }}</legend>
+            <label><input v-model="enabled" type="checkbox" />{{ t('onboarding.enabled') }}</label
+            ><label
+              ><input v-model="allUsers" type="checkbox" />{{ t('onboarding.allUsers') }}</label
+            ><label v-if="!allUsers"
+              >{{ t('onboarding.entraUsers') }}<textarea v-model="users" class="ui-input" /></label
+            ><label
+              >{{ t('onboarding.termsVersion')
+              }}<input
+                v-model="termsVersion"
+                class="ui-input"
+                maxlength="128"
+                :required="enabled" /></label
+            ><label
+              >{{ t('onboarding.termsText')
+              }}<textarea v-model="termsText" class="ui-input" :required="enabled" />
+            </label>
+            <p>{{ t('onboarding.termsBudget') }}</p>
+            <label
+              ><input v-model="allowBackground" type="checkbox" />{{
+                t('onboarding.allowBackground')
+              }}</label
+            ><UiButton type="submit">{{ t('registration.save') }}</UiButton>
+          </fieldset>
+        </form>
+      </details>
       <UiButton v-if="current" type="button" :disabled="!!busy" @click="load">
         {{ t('onboarding.loadCurrent') }}
       </UiButton>

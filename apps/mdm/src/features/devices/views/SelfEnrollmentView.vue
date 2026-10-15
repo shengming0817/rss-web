@@ -172,66 +172,69 @@ refresh()
       </table>
     </div>
     <p>{{ t('registration.handoff') }}</p>
-    <form @submit.prevent="submit('create')">
-      <fieldset :disabled="busy">
-        <label
-          >{{ t('devices.source')
-          }}<select v-model="channel" class="ui-input" :disabled="uncertain">
-            <option
-              v-for="c in usage?.channels.filter((c) => c.channel !== 'agent')"
-              :key="c.channel"
-              :value="c.channel"
-              :disabled="!c.canEnroll"
-            >
-              {{ t(`registration.${c.channel}`) }}
-            </option>
-          </select></label
-        >
-        <label v-if="channel === 'windows_mdm'"
-          >{{ t('registration.profile')
-          }}<select v-model="profile" class="ui-input" :disabled="uncertain">
-            <option value="Device">Device</option>
-            <option value="Full">Full</option>
-          </select></label
-        >
-        <UiButton type="button" :disabled="!!uncertain" @click="generate()">
-          {{ t('devices.generate') }}
-        </UiButton>
-        <label
-          >{{ t('devices.password')
-          }}<input
-            v-model="password"
-            class="ui-input"
-            required
-            pattern="[A-Za-z0-9_\-]{43}"
-            autocomplete="off"
-            spellcheck="false"
-        /></label>
-        <label
-          ><input v-model="handedOff" type="checkbox" required />{{ t('devices.handoff') }}</label
-        >
-        <UiButton
-          :disabled="
-            !!(
-              uncertain ||
-              !handedOff ||
-              !usage?.channels.find((c) => c.channel === channel)?.canEnroll
-            )
-          "
-          type="submit"
-        >
-          {{ t('devices.submitEnrollment') }}
-        </UiButton>
-        <UiButton
-          v-if="uncertain && pending"
-          type="button"
-          :disabled="!!(['create', 'resume'].includes(pending.kind) && (!password || !handedOff))"
-          @click="submit(pending!.kind, true)"
-        >
-          {{ t('devices.replay') }}
-        </UiButton>
-      </fieldset>
-    </form>
+    <section class="console-panel">
+      <h2>{{ t('console.prepareEnrollment') }}</h2>
+      <form @submit.prevent="submit('create')">
+        <fieldset :disabled="busy">
+          <label
+            >{{ t('devices.source')
+            }}<select v-model="channel" class="ui-input" :disabled="uncertain">
+              <option
+                v-for="c in usage?.channels.filter((c) => c.channel !== 'agent')"
+                :key="c.channel"
+                :value="c.channel"
+                :disabled="!c.canEnroll"
+              >
+                {{ t(`registration.${c.channel}`) }}
+              </option>
+            </select></label
+          >
+          <label v-if="channel === 'windows_mdm'"
+            >{{ t('registration.profile')
+            }}<select v-model="profile" class="ui-input" :disabled="uncertain">
+              <option value="Device">Device</option>
+              <option value="Full">Full</option>
+            </select></label
+          >
+          <UiButton type="button" :disabled="!!uncertain" @click="generate()">
+            {{ t('devices.generate') }}
+          </UiButton>
+          <label
+            >{{ t('devices.password')
+            }}<input
+              v-model="password"
+              class="ui-input"
+              required
+              pattern="[A-Za-z0-9_\-]{43}"
+              autocomplete="off"
+              spellcheck="false"
+          /></label>
+          <label
+            ><input v-model="handedOff" type="checkbox" required />{{ t('devices.handoff') }}</label
+          >
+          <UiButton
+            :disabled="
+              !!(
+                uncertain ||
+                !handedOff ||
+                !usage?.channels.find((c) => c.channel === channel)?.canEnroll
+              )
+            "
+            type="submit"
+          >
+            {{ t('devices.submitEnrollment') }}
+          </UiButton>
+          <UiButton
+            v-if="uncertain && pending"
+            type="button"
+            :disabled="!!(['create', 'resume'].includes(pending.kind) && (!password || !handedOff))"
+            @click="submit(pending!.kind, true)"
+          >
+            {{ t('devices.replay') }}
+          </UiButton>
+        </fieldset>
+      </form>
+    </section>
     <RouterLink :to="{ name: 'agent-downloads' }">{{ t('onboarding.downloads') }}</RouterLink>
     <dl v-if="native">
       <dt>{{ t('devices.enrollmentId') }}</dt>
@@ -244,16 +247,19 @@ refresh()
       <dd>{{ native.expiresAt }}</dd>
     </dl>
     <NativeFacts v-if="native" :value="native" />
-    <form @submit.prevent="status()">
-      <label
-        >{{ t('devices.enrollmentId')
-        }}<input
-          v-model="enrollmentId"
-          class="ui-input"
-          required
-          :disabled="busy || uncertain" /></label
-      ><UiButton :disabled="!!busy" type="submit">{{ t('devices.recover') }}</UiButton>
-    </form>
+    <section class="console-panel">
+      <h2>{{ t('console.enrollmentProgress') }}</h2>
+      <form @submit.prevent="status()">
+        <label
+          >{{ t('devices.enrollmentId')
+          }}<input
+            v-model="enrollmentId"
+            class="ui-input"
+            required
+            :disabled="busy || uncertain" /></label
+        ><UiButton :disabled="!!busy" type="submit">{{ t('devices.recover') }}</UiButton>
+      </form>
+    </section>
     <UiButton
       v-if="native && ['pending', 'bound'].includes(native.status)"
       type="button"

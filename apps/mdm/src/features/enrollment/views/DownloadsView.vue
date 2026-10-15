@@ -31,39 +31,46 @@ function refresh() {
 refresh()
 </script>
 <template>
-  <section :aria-busy="busy" class="device-console">
+  <section :aria-busy="busy" class="console-public-page">
     <h1>{{ t('onboarding.downloads') }}</h1>
     <p>{{ t('onboarding.downloadNote') }}</p>
     <p v-if="runtime.demo" class="mdm-source">{{ t('mdm.mock') }}</p>
     <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
-    <label
-      >{{ t('devices.platform')
-      }}<select v-model="platform" class="ui-input">
-        <option v-for="p in platforms" :key="p" :value="p">{{ p }}</option>
-      </select></label
-    >
-    <label
-      >{{ t('onboarding.architecture')
-      }}<select v-model="architecture" class="ui-input">
-        <option v-for="a in architectures" :key="a" :value="a">{{ a }}</option>
-      </select></label
-    >
-    <label
-      >{{ t('onboarding.channel')
-      }}<select v-model="channel" class="ui-input">
-        <option v-for="c in releaseChannels" :key="c" :value="c">{{ c }}</option>
-      </select></label
-    >
-    <UiButton type="button" :disabled="!!busy" @click="refresh">{{ t('devices.reload') }}</UiButton>
+    <div class="console-toolbar">
+      <label
+        >{{ t('devices.platform')
+        }}<select v-model="platform" class="ui-input">
+          <option v-for="p in platforms" :key="p" :value="p">{{ p }}</option>
+        </select></label
+      >
+      <label
+        >{{ t('onboarding.architecture')
+        }}<select v-model="architecture" class="ui-input">
+          <option v-for="a in architectures" :key="a" :value="a">{{ a }}</option>
+        </select></label
+      >
+      <label
+        >{{ t('onboarding.channel')
+        }}<select v-model="channel" class="ui-input">
+          <option v-for="c in releaseChannels" :key="c" :value="c">{{ c }}</option>
+        </select></label
+      >
+      <UiButton type="button" :disabled="!!busy" @click="refresh">{{
+        t('devices.reload')
+      }}</UiButton>
+    </div>
     <p v-if="!busy && !failure && !matching.length">{{ t('onboarding.noInstaller') }}</p>
-    <article v-for="p in matching" :key="p.releaseId">
+    <article v-for="p in matching" :key="p.releaseId" class="console-panel console-download">
       <h2>{{ p.version }} · {{ p.filename }}</h2>
       <p>{{ t('onboarding.fileSize') }}: {{ p.length }}</p>
-      <p>SHA-256: {{ p.installerSha256.map((n) => n.toString(16).padStart(2, '0')).join('') }}</p>
+      <details>
+        <summary>{{ t('console.advanced') }}</summary>
+        <p>SHA-256: {{ p.installerSha256.map((n) => n.toString(16).padStart(2, '0')).join('') }}</p>
+      </details>
       <a :href="runtime.onboarding.packages.content(p.releaseId)" :download="p.filename">{{
         t('onboarding.download')
       }}</a>
+      <p>{{ t('onboarding.sameDirectory') }}</p>
     </article>
-    <p>{{ t('onboarding.sameDirectory') }}</p>
   </section>
 </template>

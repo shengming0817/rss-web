@@ -624,3 +624,163 @@
   border-radius: 9px;
   overflow: hidden;
 }
+.console-reading-time {
+  font-size: 11px;
+  color: var(--fg-muted);
+  margin: 0;
+}
+.console-stat .console-stat-word {
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+.console-overview-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.console-overview-columns .console-page-header a,
+.console-panel > .console-page-header a {
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+.console-activity-list,
+.console-deployment-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.console-activity-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+.console-activity-list li > div {
+  flex: 1;
+  min-width: 0;
+}
+.console-activity-list a,
+.console-deployment-list a {
+  color: var(--fg);
+  text-decoration: none;
+  font-size: 13px;
+}
+.console-activity-list small,
+.console-deployment-list small {
+  display: block;
+  color: var(--fg-muted);
+  font-size: 11px;
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+}
+.console-activity-dot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--fg-muted);
+}
+.console-deployment-list li {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+.console-deployment-list li > a:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.console-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 14px;
+}
+.console-area-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+}
+.console-area {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px;
+}
+.console-area h3 {
+  font-size: 13px;
+  margin: 0 0 10px;
+}
+.console-area small {
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+.console-area a {
+  display: block;
+  margin-top: 14px;
+  color: var(--fg);
+  font-size: 12px;
+}
+.console-area p {
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+.console-wizard {
+  max-width: 1000px;
+}
+.console-wizard .ui-steps {
+  margin-bottom: 26px;
+}
+.console-wizard .console-form-section {
+  border: 0;
+  padding: 0;
+}
+@media (max-width: 1000px) {
+  .console-overview-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+.console-object-list {
+  display: grid;
+  gap: var(--space-2);
+  padding: 0;
+  list-style: none;
+}
+.console-object-list > li {
+  border-bottom: 1px solid var(--line);
+  padding-block: var(--space-2);
+}
+.console-object-list .ui-button {
+  justify-content: flex-start;
+  width: 100%;
+}
+.console-task > summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: var(--space-2);
+}
+.console-task[open] > summary {
+  margin-bottom: var(--space-4);
+}
+.console-public-page {
+  width: min(100%, 860px);
+  margin-inline: auto;
+  padding: var(--space-6);
+}
+.console-public-page > * + * {
+  margin-top: var(--space-4);
+}
+.console-download p,
+.console-download details {
+  overflow-wrap: anywhere;
+}
+.console-public-page .enrollment-terms {
+  white-space: pre-wrap;
+  font: inherit;
+  max-height: 55vh;
+  overflow: auto;
+  border: 1px solid var(--line);
+  padding: var(--space-4);
+}

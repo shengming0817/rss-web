@@ -114,73 +114,80 @@ function generate() {
     <p>{{ t('devices.guide') }}</p>
     <p>{{ t('devices.enrollmentNote') }}</p>
     <p>{{ t('devices.handoffNote') }}</p>
-    <form @submit.prevent="submit('create')">
-      <fieldset :disabled="busy">
-        <label
-          >{{ t('devices.deviceId')
-          }}<input
-            v-model="device"
-            class="ui-input"
-            required
-            maxlength="256"
-            autocomplete="off" /></label
-        ><label
-          >{{ t('devices.source')
-          }}<select v-model="source" class="ui-input">
-            <option v-for="value in nativeSources" :key="value" :value="value">
-              {{ value }}
-            </option>
-          </select></label
-        ><label v-if="source === 'mdm.windows'"
-          >{{ t('registration.profile')
-          }}<select v-model="windowsProfile" class="ui-input">
-            <option value="Device">Device</option>
-            <option value="Full">Full</option>
-          </select></label
-        ><UiButton type="button" @click="generate()">
-          {{ t('devices.generate') }}
-        </UiButton>
-        <label
-          >{{ t('devices.password')
-          }}<input
-            v-model="password"
-            class="ui-input"
-            type="text"
-            required
-            pattern="[A-Za-z0-9_\-]{43}"
-            autocomplete="off"
-            spellcheck="false" /></label
-        ><label
-          ><input v-model="handedOff" type="checkbox" required />{{ t('devices.handoff') }}</label
-        ><UiButton :disabled="!!(uncertain || !handedOff)" type="submit">{{
-          t('devices.submitEnrollment')
-        }}</UiButton>
-        <UiButton
-          v-if="id"
-          type="button"
-          :disabled="!!(uncertain || !handedOff || !password)"
-          @click="submit('resume')"
-        >
-          {{ t('devices.resume') }}
-        </UiButton>
-        <UiButton
-          v-if="uncertain && pending"
-          type="button"
-          :disabled="!!(pending.kind !== 'cancel' && (!handedOff || !password))"
-          @click="submit(pending!.kind, true)"
-        >
-          {{ t('devices.replay') }}
-        </UiButton>
-      </fieldset>
-    </form>
+    <section class="console-panel">
+      <h2>{{ t('console.prepareEnrollment') }}</h2>
+      <form @submit.prevent="submit('create')">
+        <fieldset :disabled="busy">
+          <label
+            >{{ t('devices.deviceId')
+            }}<input
+              v-model="device"
+              class="ui-input"
+              required
+              maxlength="256"
+              autocomplete="off" /></label
+          ><label
+            >{{ t('devices.source')
+            }}<select v-model="source" class="ui-input">
+              <option v-for="value in nativeSources" :key="value" :value="value">
+                {{ value }}
+              </option>
+            </select></label
+          ><label v-if="source === 'mdm.windows'"
+            >{{ t('registration.profile')
+            }}<select v-model="windowsProfile" class="ui-input">
+              <option value="Device">Device</option>
+              <option value="Full">Full</option>
+            </select></label
+          ><UiButton type="button" @click="generate()">
+            {{ t('devices.generate') }}
+          </UiButton>
+          <label
+            >{{ t('devices.password')
+            }}<input
+              v-model="password"
+              class="ui-input"
+              type="text"
+              required
+              pattern="[A-Za-z0-9_\-]{43}"
+              autocomplete="off"
+              spellcheck="false" /></label
+          ><label
+            ><input v-model="handedOff" type="checkbox" required />{{ t('devices.handoff') }}</label
+          ><UiButton :disabled="!!(uncertain || !handedOff)" type="submit">{{
+            t('devices.submitEnrollment')
+          }}</UiButton>
+          <UiButton
+            v-if="id"
+            type="button"
+            :disabled="!!(uncertain || !handedOff || !password)"
+            @click="submit('resume')"
+          >
+            {{ t('devices.resume') }}
+          </UiButton>
+          <UiButton
+            v-if="uncertain && pending"
+            type="button"
+            :disabled="!!(pending.kind !== 'cancel' && (!handedOff || !password))"
+            @click="submit(pending!.kind, true)"
+          >
+            {{ t('devices.replay') }}
+          </UiButton>
+        </fieldset>
+      </form>
+    </section>
     <p v-if="op">{{ t('devices.operation') }}: {{ op }}</p>
-    <form @submit.prevent="recover">
-      <label>{{ t('devices.enrollmentId') }}<input v-model="id" class="ui-input" required /></label
-      ><UiButton :disabled="!!busy" type="submit">{{ t('devices.recover') }}</UiButton
-      ><UiButton type="button" :disabled="!!(busy || uncertain || !id)" @click="submit('cancel')">
-        {{ t('devices.cancel') }}
-      </UiButton>
-    </form>
+    <section class="console-panel">
+      <h2>{{ t('console.enrollmentProgress') }}</h2>
+      <form @submit.prevent="recover">
+        <label
+          >{{ t('devices.enrollmentId') }}<input v-model="id" class="ui-input" required /></label
+        ><UiButton :disabled="!!busy" type="submit">{{ t('devices.recover') }}</UiButton
+        ><UiButton type="button" :disabled="!!(busy || uncertain || !id)" @click="submit('cancel')">
+          {{ t('devices.cancel') }}
+        </UiButton>
+      </form>
+    </section>
     <NativeFacts v-if="result" :value="result" />
     <dl v-if="result">
       <dt>{{ t('devices.enrollmentId') }}</dt>

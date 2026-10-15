@@ -247,58 +247,65 @@ watch(
       <UiButton type="button" :disabled="!!busy" @click="permission.refresh">
         {{ t('onboarding.refreshAccess') }}
       </UiButton>
-      <form v-if="canWrite && settings" @submit.prevent="create">
-        <fieldset :disabled="busy || uncertain">
-          <label
-            >{{ t('onboarding.lifetime')
-            }}<input
-              v-model.number="lifetime"
-              class="ui-input"
-              type="number"
-              min="1"
-              :max="settings.configurationMaxSeconds"
-          /></label>
-          <p>
-            {{ t('onboarding.defaultLifetime') }}:
-            {{ settings.values.configurationDefaultSeconds }} /
-            {{ settings.configurationMaxSeconds }}
-          </p>
-          <label><input v-model="finite" type="checkbox" />{{ t('onboarding.finite') }}</label>
-          <label v-if="finite"
-            >{{ t('onboarding.quantity')
-            }}<input
-              v-model.number="amount"
-              class="ui-input"
-              type="number"
-              required
-              min="1"
-              max="4294967295"
-          /></label>
-          <p v-else>{{ t('onboarding.unlimited') }}</p>
-          <fieldset>
-            <legend>{{ t('onboarding.targets') }}</legend>
-            <template v-for="p in platforms" :key="p"
-              ><label v-for="a in architectures" :key="a"
-                ><input
-                  v-model="selectedTargets"
-                  type="checkbox"
-                  :value="`${p}/${a}`"
-                  :disabled="!settings.values.platforms.includes(p)"
-                />{{ p }} / {{ a }}</label
-              ></template
-            >
+      <details
+        v-if="canWrite && settings"
+        class="console-panel console-task"
+        :open="uncertain || undefined"
+      >
+        <summary>{{ t('onboarding.createFile') }}</summary>
+        <form @submit.prevent="create">
+          <fieldset :disabled="busy || uncertain">
+            <label
+              >{{ t('onboarding.lifetime')
+              }}<input
+                v-model.number="lifetime"
+                class="ui-input"
+                type="number"
+                min="1"
+                :max="settings.configurationMaxSeconds"
+            /></label>
+            <p>
+              {{ t('onboarding.defaultLifetime') }}:
+              {{ settings.values.configurationDefaultSeconds }} /
+              {{ settings.configurationMaxSeconds }}
+            </p>
+            <label><input v-model="finite" type="checkbox" />{{ t('onboarding.finite') }}</label>
+            <label v-if="finite"
+              >{{ t('onboarding.quantity')
+              }}<input
+                v-model.number="amount"
+                class="ui-input"
+                type="number"
+                required
+                min="1"
+                max="4294967295"
+            /></label>
+            <p v-else>{{ t('onboarding.unlimited') }}</p>
+            <fieldset>
+              <legend>{{ t('onboarding.targets') }}</legend>
+              <template v-for="p in platforms" :key="p"
+                ><label v-for="a in architectures" :key="a"
+                  ><input
+                    v-model="selectedTargets"
+                    type="checkbox"
+                    :value="`${p}/${a}`"
+                    :disabled="!settings.values.platforms.includes(p)"
+                  />{{ p }} / {{ a }}</label
+                ></template
+              >
+            </fieldset>
+            <fieldset>
+              <legend>{{ t('onboarding.channel') }}</legend>
+              <label v-for="c in releaseChannels" :key="c"
+                ><input v-model="channels" type="checkbox" :value="c" />{{ c }}</label
+              >
+            </fieldset>
+            <UiButton :disabled="!!(!selectedTargets.length || !channels.length)" type="submit">
+              {{ t('onboarding.createFile') }}
+            </UiButton>
           </fieldset>
-          <fieldset>
-            <legend>{{ t('onboarding.channel') }}</legend>
-            <label v-for="c in releaseChannels" :key="c"
-              ><input v-model="channels" type="checkbox" :value="c" />{{ c }}</label
-            >
-          </fieldset>
-          <UiButton :disabled="!!(!selectedTargets.length || !channels.length)" type="submit">
-            {{ t('onboarding.createFile') }}
-          </UiButton>
-        </fieldset>
-      </form>
+        </form>
+      </details>
       <a v-if="url" :href="url" :download="filename"
         >{{ t('onboarding.saveFile') }} · {{ configurationFilename }}</a
       >
@@ -308,16 +315,19 @@ watch(
       <UiButton v-if="pending" type="button" :disabled="!!busy" @click="recover">
         {{ t('onboarding.readOutcome') }}
       </UiButton>
-      <form @submit.prevent="read">
-        <label
-          >{{ t('onboarding.configurationId')
-          }}<input
-            v-model="configurationId"
-            class="ui-input"
-            required
-            :disabled="busy || uncertain" /></label
-        ><UiButton :disabled="!!busy" type="submit">{{ t('devices.reload') }}</UiButton>
-      </form>
+      <section class="console-panel">
+        <h2>{{ t('onboarding.configurationId') }}</h2>
+        <form @submit.prevent="read">
+          <label
+            >{{ t('onboarding.configurationId')
+            }}<input
+              v-model="configurationId"
+              class="ui-input"
+              required
+              :disabled="busy || uncertain" /></label
+          ><UiButton :disabled="!!busy" type="submit">{{ t('devices.reload') }}</UiButton>
+        </form>
+      </section>
       <dl v-if="current">
         <dt>{{ t('devices.status') }}</dt>
         <dd>{{ current.state }}</dd>
@@ -346,33 +356,40 @@ watch(
       >
         {{ t('onboarding.confirmRecovery') }}
       </UiButton>
-      <form v-if="canWrite && settings" @submit.prevent="saveSettings">
-        <fieldset :disabled="busy || uncertain">
-          <legend>{{ t('onboarding.defaults') }}</legend>
-          <label
-            >{{ t('onboarding.defaultLifetime')
-            }}<input
-              v-model.number="defaultSeconds"
-              class="ui-input"
-              type="number"
-              min="1"
-              :max="settings.configurationMaxSeconds"
-              required /></label
-          ><label
-            >{{ t('onboarding.grantLifetime')
-            }}<input
-              v-model.number="grantSeconds"
-              class="ui-input"
-              type="number"
-              min="1"
-              :max="settings.grantMaxSeconds"
-              required /></label
-          ><label v-for="p in platforms" :key="p"
-            ><input v-model="enabledPlatforms" type="checkbox" :value="p" />{{ p }}</label
-          ><UiButton type="submit">{{ t('registration.save') }}</UiButton
-          ><UiButton type="button" @click="refresh">{{ t('devices.reload') }}</UiButton>
-        </fieldset>
-      </form>
+      <details
+        v-if="canWrite && settings"
+        class="console-panel console-task"
+        :open="uncertain || undefined"
+      >
+        <summary>{{ t('onboarding.defaults') }}</summary>
+        <form @submit.prevent="saveSettings">
+          <fieldset :disabled="busy || uncertain">
+            <legend>{{ t('onboarding.defaults') }}</legend>
+            <label
+              >{{ t('onboarding.defaultLifetime')
+              }}<input
+                v-model.number="defaultSeconds"
+                class="ui-input"
+                type="number"
+                min="1"
+                :max="settings.configurationMaxSeconds"
+                required /></label
+            ><label
+              >{{ t('onboarding.grantLifetime')
+              }}<input
+                v-model.number="grantSeconds"
+                class="ui-input"
+                type="number"
+                min="1"
+                :max="settings.grantMaxSeconds"
+                required /></label
+            ><label v-for="p in platforms" :key="p"
+              ><input v-model="enabledPlatforms" type="checkbox" :value="p" />{{ p }}</label
+            ><UiButton type="submit">{{ t('registration.save') }}</UiButton
+            ><UiButton type="button" @click="refresh">{{ t('devices.reload') }}</UiButton>
+          </fieldset>
+        </form>
+      </details>
     </template>
   </PageFrame>
 </template>

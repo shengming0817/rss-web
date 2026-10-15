@@ -46,7 +46,7 @@ onBeforeUnmount(() => {
 refresh()
 </script>
 <template>
-  <section class="device-console" :aria-busy="busy">
+  <section class="console-public-page" :aria-busy="busy">
     <h1>{{ t('onboarding.termsTitle') }}</h1>
     <p v-if="failure" role="alert">{{ t('onboarding.termsUnavailable') }}</p>
     <p v-if="expired" role="alert">{{ t('onboarding.termsExpired') }}</p>

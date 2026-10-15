@@ -246,7 +246,9 @@ onBeforeUnmount(() => {
         >{{ t('onboarding.organization')
         }}<select v-model="id" class="ui-input" :disabled="busy || uncertain">
           <option value="">{{ t('devices.select') }}</option>
-          <option v-for="o in organizations" :key="o.id" :value="o.id">{{ o.id }}</option>
+          <option v-for="o in organizations" :key="o.id" :value="o.id">
+            {{ o.accountEnrollment?.domain || o.ade?.orgId || o.id }} · {{ o.id }}
+          </option>
         </select></label
       >
       <label v-if="canWrite"
@@ -268,65 +270,91 @@ onBeforeUnmount(() => {
         <dt>{{ t('onboarding.externalVerification') }}</dt>
         <dd>{{ t('onboarding.notObserved') }}</dd>
       </dl>
-      <form v-if="canWrite && id" @submit.prevent="configure">
-        <fieldset :disabled="blocked">
-          <legend>{{ t('onboarding.organizationConfiguration') }}</legend>
-          <label
-            >{{ t('onboarding.serverUuid')
-            }}<input v-model="serverUuid" class="ui-input" required /></label
-          ><label
-            >{{ t('onboarding.appleOrganizationId')
-            }}<input v-model="orgId" class="ui-input" required maxlength="256" /></label
-          ><label><input v-model="enabled" type="checkbox" />{{ t('onboarding.enabled') }}</label
-          ><label
-            ><input v-model="rotateKey" type="checkbox" />{{ t('onboarding.rotateKey') }}</label
-          ><UiButton type="submit">{{ t('registration.save') }}</UiButton>
-        </fieldset>
-      </form>
+      <details
+        v-if="canWrite && id"
+        class="console-panel console-task"
+        :open="uncertain || undefined"
+      >
+        <summary>{{ t('console.configure') }}</summary>
+        <form @submit.prevent="configure">
+          <fieldset :disabled="blocked">
+            <legend>{{ t('onboarding.organizationConfiguration') }}</legend>
+            <label
+              >{{ t('onboarding.serverUuid')
+              }}<input v-model="serverUuid" class="ui-input" required /></label
+            ><label
+              >{{ t('onboarding.appleOrganizationId')
+              }}<input v-model="orgId" class="ui-input" required maxlength="256" /></label
+            ><label><input v-model="enabled" type="checkbox" />{{ t('onboarding.enabled') }}</label
+            ><label
+              ><input v-model="rotateKey" type="checkbox" />{{ t('onboarding.rotateKey') }}</label
+            ><UiButton type="submit">{{ t('registration.save') }}</UiButton>
+          </fieldset>
+        </form>
+      </details>
       <template v-if="status"
         ><UiButton type="button" :disabled="!!busy" @click="publicKey">
           {{ t('onboarding.exportPublicKey') }}</UiButton
         ><a v-if="url" :href="url" :download="filename">{{ t('onboarding.download') }}</a></template
       >
-      <form v-if="canWrite && status" @submit.prevent="importToken">
-        <fieldset :disabled="blocked">
-          <legend>{{ t('onboarding.importToken') }}</legend>
-          <label
-            >{{ t('onboarding.p7m')
-            }}<input class="ui-input" type="file" accept=".p7m" @change="selectToken" /></label
-          ><UiButton :disabled="!!!token" type="submit">{{ t('onboarding.importToken') }}</UiButton>
-        </fieldset>
-      </form>
-      <form v-if="canWrite && status" @submit.prevent="submit({ kind: 'sync', full: fullSync })">
-        <fieldset :disabled="blocked">
-          <label><input v-model="fullSync" type="checkbox" />{{ t('onboarding.fullSync') }}</label
-          ><UiButton type="submit">{{ t('onboarding.sync') }}</UiButton>
-        </fieldset>
-      </form>
-      <form v-if="canWrite && status" @submit.prevent="saveProfile">
-        <fieldset :disabled="blocked">
-          <legend>{{ t('onboarding.setupProfile') }}</legend>
-          <label
-            >{{ t('onboarding.profileId') }}<input v-model="profileId" class="ui-input" /></label
-          ><label
-            >{{ t('devices.name')
-            }}<input v-model="profileName" class="ui-input" required maxlength="128" /></label
-          ><label
-            ><input v-model="mandatory" type="checkbox" />{{ t('onboarding.mandatory') }}</label
-          ><label
-            ><input v-model="removable" type="checkbox" />{{ t('onboarding.removable') }}</label
-          >
-          <fieldset>
-            <legend>{{ t('onboarding.skipSetup') }}</legend>
-            <label v-for="pane in setupPanes" :key="pane"
-              ><input v-model="skip" type="checkbox" :value="pane" />{{ pane }}</label
-            >
+      <details
+        v-if="canWrite && status"
+        class="console-panel console-task"
+        :open="uncertain || undefined"
+      >
+        <summary>{{ t('onboarding.importToken') }}</summary>
+        <form @submit.prevent="importToken">
+          <fieldset :disabled="blocked">
+            <legend>{{ t('onboarding.importToken') }}</legend>
+            <label
+              >{{ t('onboarding.p7m')
+              }}<input class="ui-input" type="file" accept=".p7m" @change="selectToken" /></label
+            ><UiButton :disabled="!!!token" type="submit">{{
+              t('onboarding.importToken')
+            }}</UiButton>
           </fieldset>
-          <UiButton :disabled="!!(!mandatory && !removable)" type="submit">{{
-            t('registration.save')
-          }}</UiButton>
-        </fieldset>
-      </form>
+        </form>
+      </details>
+      <section v-if="canWrite && status" class="console-panel">
+        <h2>{{ t('onboarding.sync') }}</h2>
+        <form @submit.prevent="submit({ kind: 'sync', full: fullSync })">
+          <fieldset :disabled="blocked">
+            <label><input v-model="fullSync" type="checkbox" />{{ t('onboarding.fullSync') }}</label
+            ><UiButton type="submit">{{ t('onboarding.sync') }}</UiButton>
+          </fieldset>
+        </form>
+      </section>
+      <details
+        v-if="canWrite && status"
+        class="console-panel console-task"
+        :open="uncertain || undefined"
+      >
+        <summary>{{ t('onboarding.setupProfile') }}</summary>
+        <form @submit.prevent="saveProfile">
+          <fieldset :disabled="blocked">
+            <legend>{{ t('onboarding.setupProfile') }}</legend>
+            <label
+              >{{ t('onboarding.profileId') }}<input v-model="profileId" class="ui-input" /></label
+            ><label
+              >{{ t('devices.name')
+              }}<input v-model="profileName" class="ui-input" required maxlength="128" /></label
+            ><label
+              ><input v-model="mandatory" type="checkbox" />{{ t('onboarding.mandatory') }}</label
+            ><label
+              ><input v-model="removable" type="checkbox" />{{ t('onboarding.removable') }}</label
+            >
+            <fieldset>
+              <legend>{{ t('onboarding.skipSetup') }}</legend>
+              <label v-for="pane in setupPanes" :key="pane"
+                ><input v-model="skip" type="checkbox" :value="pane" />{{ pane }}</label
+              >
+            </fieldset>
+            <UiButton :disabled="!!(!mandatory && !removable)" type="submit">{{
+              t('registration.save')
+            }}</UiButton>
+          </fieldset>
+        </form>
+      </details>
       <ul>
         <li v-for="p in profiles" :key="p.id">
           <UiButton type="button" :disabled="!!blocked" @click="chooseProfile(p)">
@@ -360,27 +388,37 @@ onBeforeUnmount(() => {
       <UiButton v-if="cursor" type="button" :disabled="!!busy" @click="next">
         {{ t('devices.next') }}
       </UiButton>
-      <form v-if="canWrite && status" @submit.prevent="assignment(false)">
-        <fieldset :disabled="blocked">
+      <details
+        v-if="canWrite && status"
+        class="console-panel console-task"
+        :open="uncertain || undefined"
+      >
+        <summary>{{ t('console.targets') }}</summary>
+        <form @submit.prevent="assignment(false)">
+          <fieldset :disabled="blocked">
+            <label
+              >{{ t('onboarding.serials')
+              }}<textarea v-model="serials" class="ui-input" required /></label
+            ><UiButton type="submit">{{ t('onboarding.assignProfile') }}</UiButton
+            ><UiButton type="button" @click="assignment(true)">
+              {{ t('onboarding.clearAssignment') }}
+            </UiButton>
+          </fieldset>
+        </form>
+      </details>
+      <section class="console-panel">
+        <h2>{{ t('console.enrollmentProgress') }}</h2>
+        <form @submit.prevent="readOperation">
           <label
-            >{{ t('onboarding.serials')
-            }}<textarea v-model="serials" class="ui-input" required /></label
-          ><UiButton type="submit">{{ t('onboarding.assignProfile') }}</UiButton
-          ><UiButton type="button" @click="assignment(true)">
-            {{ t('onboarding.clearAssignment') }}
-          </UiButton>
-        </fieldset>
-      </form>
-      <form @submit.prevent="readOperation">
-        <label
-          >{{ t('devices.operation')
-          }}<input
-            v-model="operationId"
-            class="ui-input"
-            required
-            :disabled="busy || uncertain" /></label
-        ><UiButton :disabled="!!busy" type="submit">{{ t('onboarding.readOutcome') }}</UiButton>
-      </form>
+            >{{ t('devices.operation')
+            }}<input
+              v-model="operationId"
+              class="ui-input"
+              required
+              :disabled="busy || uncertain" /></label
+          ><UiButton :disabled="!!busy" type="submit">{{ t('onboarding.readOutcome') }}</UiButton>
+        </form>
+      </section>
       <p v-if="operation">{{ operation.kind }} · {{ t(`onboarding.ade_${operation.state}`) }}</p>
       <pre v-if="operation?.result">{{ JSON.stringify(operation.result, null, 2) }}</pre>
       <p>{{ t('onboarding.registrationNotImplied') }}</p>

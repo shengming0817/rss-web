@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import { UiButton, UiDialog } from '@rss/core/components'
 import { onMounted, ref, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -7,6 +7,7 @@ import type { Criteria, FieldDefinition, Query, SavedQuery } from '../clients/as
 import { operation, useOperation } from '../../../services/useOperation'
 import PageFrame from '../../../components/PageFrame.vue'
 import CriteriaEditor from '../components/CriteriaEditor.vue'
+import BatchPanel from '../components/BatchPanel.vue'
 import AssetValue from '../components/AssetValue.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
@@ -25,6 +26,14 @@ const facet = ref<'os_versions' | 'channels' | 'asset_states'>('os_versions'),
 const saved = ref<Awaited<ReturnType<typeof client.saved>>>(),
   current = ref<SavedQuery>(),
   name = ref('')
+const selected = ref<string[]>([]),
+  batchTargets = ref<string[]>([]),
+  batchOpen = ref(false),
+  batchLocked = ref(false)
+function openBatch() {
+  batchTargets.value = [...selected.value]
+  batchOpen.value = true
+}
 let pending: (() => Promise<boolean>) | undefined
 function write<T>(request: () => Promise<T>, apply: (value: T) => void) {
   if (busy.value || uncertain.value) return
@@ -42,6 +51,7 @@ function accepted(v: { task: string }) {
   task.value = v.task
   status.value = undefined
   page.value = undefined
+  selected.value = []
   facets.value = undefined
 }
 function search() {
@@ -61,7 +71,10 @@ function results(next?: string) {
   if (task.value)
     void run(
       () => client.items(task.value!, next),
-      (v) => (page.value = v),
+      (v) => {
+        page.value = v
+        selected.value = []
+      },
     )
 }
 function loadFacets(next?: string) {
@@ -133,7 +146,8 @@ function newSaved() {
 <template>
   <PageFrame :title="t('devices.search')" :busy="busy" :failure="failure">
     <p>{{ t('devices.noTtl') }}</p>
-    <form @submit.prevent="search">
+    <form class="console-panel" @submit.prevent="search">
+      <h2>{{ t('devices.search') }}</h2>
       <fieldset :disabled="busy || uncertain">
         <CriteriaEditor v-model="criteria" :fields="fields" />
         <label
@@ -174,16 +188,31 @@ function newSaved() {
         {{ t('devices.load') }}
       </UiButton>
     </section>
+    <div v-if="page?.items.length" class="console-toolbar">
+      <span>{{ t('console.selectedEndpoints') }}: {{ selected.length }}</span>
+      <UiButton :disabled="!selected.length" type="button" @click="openBatch">{{
+        t('devices.batch')
+      }}</UiButton>
+    </div>
     <div v-if="page?.items.length" class="ui-table-scroll">
       <table class="ui-table">
         <thead>
           <tr>
+            <th>{{ t('console.targets') }}</th>
             <th>{{ t('devices.deviceId') }}</th>
             <th>{{ t('devices.inventory') }}</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="device in page.items" :key="device.device">
+            <td>
+              <input
+                v-model="selected"
+                type="checkbox"
+                :value="device.device"
+                :aria-label="`${t('console.selectedEndpoints')}: ${device.device}`"
+              />
+            </td>
             <td>
               <RouterLink
                 :to="{
@@ -241,8 +270,8 @@ function newSaved() {
         {{ t('devices.next') }}
       </UiButton>
     </section>
-    <section>
-      <h2>{{ t('devices.saved') }}</h2>
+    <details class="console-panel">
+      <summary>{{ t('devices.saved') }}</summary>
       <UiButton :disabled="!!busy" type="submit" @click="loadSaved()">{{
         t('devices.reload')
       }}</UiButton>
@@ -306,7 +335,17 @@ function newSaved() {
           {{ t('devices.compare') }}
         </UiButton></template
       >
-    </section>
+    </details>
+    <UiDialog
+      :open="batchOpen"
+      :title="t('devices.batch')"
+      :description="t('console.scopeBound')"
+      :close-label="t('console.close')"
+      :dismissible="!batchLocked"
+      @update:open="batchOpen = $event"
+    >
+      <BatchPanel :devices="batchTargets" @lock="batchLocked = $event" />
+    </UiDialog>
     <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending!()">
       {{ t('devices.replay') }}
     </UiButton>

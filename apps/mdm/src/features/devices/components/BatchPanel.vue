@@ -1,17 +1,29 @@
 <script setup lang="ts">
 import { UiButton } from '@rss/core/components'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { lifecycleActions, type Batch, type LifecycleAction } from '../clients/candidate-operations'
 import { operation, useOperation } from '../../../services/useOperation'
 const props = defineProps<{ devices: string[] }>()
+const emit = defineEmits<{ lock: [value: boolean] }>()
 const { t } = useI18n(),
   { devices: clients, tenant } = useMdm(),
   { run, runWrite, busy, failure, uncertain } = useOperation()
 const action = ref<LifecycleAction>('onboard'),
   batch = ref<Batch>(),
   confirmed = ref(false)
+watch([busy, uncertain], () => emit('lock', busy.value || uncertain.value), {
+  immediate: true,
+  flush: 'sync',
+})
+watch(action, () => {
+  if (!busy.value && !uncertain.value) {
+    batch.value = undefined
+    confirmed.value = false
+    pending = undefined
+  }
+})
 let pending: (() => Promise<Batch>) | undefined
 function preview() {
   if (busy.value || uncertain.value) return
@@ -51,7 +63,7 @@ function cancel() {
     <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
     <label
       >{{ t('devices.actions') }}
-      <select v-model="action" class="ui-input" :disabled="busy">
+      <select v-model="action" class="ui-input" :disabled="busy || uncertain">
         <option v-for="id in lifecycleActions" :key="id" :value="id">
           {{ t(`devices.action.${id}`) }}
         </option>
