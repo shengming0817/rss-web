@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import { UiButton, UiDialog, UiTabs } from '@rss/core/components'
 import { utc } from '../presentation'
 import { onMounted, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -9,6 +9,19 @@ import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { user, type UserGroup } from '../clients/authorization'
 import PageFrame from '../../../components/PageFrame.vue'
+const confirmingAction = ref<'delete'>()
+function confirmAction() {
+  const action = confirmingAction.value
+  confirmingAction.value = undefined
+  if (action === 'delete') save(true)
+}
+const section = ref('groups')
+const editorOpen = ref(false)
+function beginCreate() {
+  if (busy.value || uncertain.value) return
+  create()
+  editorOpen.value = true
+}
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -207,145 +220,191 @@ onMounted(async () => {
     <RouterLink :to="{ name: 'device-groups', params: { tenant: runtime.tenant } }">{{
       t('devices.groups')
     }}</RouterLink>
-    <div class="console-inline-actions">
-      <UiButton :disabled="!!busy" type="submit" @click="load()">{{ t('devices.reload') }}</UiButton
-      ><UiButton :disabled="!!(busy || uncertain)" type="submit" @click="create()">
-        {{ t('operations.newGroup') }}
-      </UiButton>
-    </div>
-    <p v-if="page && !page.items.length">{{ t('operations.empty') }}</p>
-    <ul>
-      <li v-for="item in page?.items" :key="item.id">
-        <UiButton
-          v-if="item.value"
-          :disabled="!!(busy || uncertain)"
-          type="submit"
-          @click="open(item.id)"
-        >
-          {{ item.value.name }} · {{ item.value.memberCount }}</UiButton
-        ><span v-else>{{ item.id }} · {{ t('operations.deleted') }}</span> · {{ item.revision }}
-      </li>
-    </ul>
-    <UiButton
-      v-if="page?.nextCursor"
-      :disabled="!!busy"
-      type="submit"
-      @click="load(page.nextCursor)"
-    >
-      {{ t('devices.next') }}
-    </UiButton>
-    <p v-if="deleted">{{ t('operations.deleted') }} · {{ id }} / {{ revision }}</p>
-    <form @submit.prevent="save()">
-      <fieldset :disabled="busy || uncertain || deleted || missing">
-        <legend>{{ t('operations.groupEditor') }} · {{ id }} / {{ revision }}</legend>
-        <label
-          >{{ t('operations.name')
-          }}<input v-model="draft.name" class="ui-input" data-testid="group-name" required
-        /></label>
-        <label
-          ><input v-model="draft.enabled" type="checkbox" />{{ t('operations.enabled') }}</label
-        >
-        <label
-          >{{ t('operations.principal')
-          }}<input v-model="member" class="ui-input" data-testid="group-member"
-        /></label>
-        <UiButton type="button" data-testid="add-member" @click="add()">
-          {{ t('operations.addMember') }}
-        </UiButton>
-        <ul>
-          <li v-for="(value, index) in draft.members" :key="value.principalId">
-            {{ value.principalId
-            }}<UiButton type="button" @click="draft.members.splice(index, 1)">
-              {{ t('operations.removeMember') }}
-            </UiButton>
+    <UiTabs
+      v-model="section"
+      :label="t('operations.organization')"
+      :items="[
+        { value: 'groups', label: t('operations.groupEditor'), disabled: busy || uncertain },
+        { value: 'departments', label: t('operations.departments'), disabled: busy || uncertain },
+        { value: 'delegations', label: t('operations.delegations'), disabled: busy || uncertain },
+      ]"
+      keep-mounted
+      ><template #groups>
+        <div class="console-inline-actions">
+          <UiButton :disabled="!!busy" type="submit" @click="load()">{{
+            t('devices.reload')
+          }}</UiButton
+          ><UiButton :disabled="!!(busy || uncertain)" type="submit" @click="beginCreate()">
+            {{ t('operations.newGroup') }}
+          </UiButton>
+        </div>
+        <p v-if="page && !page.items.length">{{ t('operations.empty') }}</p>
+        <ul class="console-object-list">
+          <li v-for="item in page?.items" :key="item.id">
+            <UiButton
+              v-if="item.value"
+              :disabled="!!(busy || uncertain)"
+              type="submit"
+              @click="open(item.id)"
+            >
+              {{ item.value.name }} · {{ item.value.memberCount }}</UiButton
+            ><span v-else>{{ item.id }} · {{ t('operations.deleted') }}</span> · {{ item.revision }}
           </li>
         </ul>
-        <p>{{ t('operations.authorityWarning') }}</p>
-        <UiButton data-testid="save-group" :disabled="!!conflict" type="submit">
-          {{ t('devices.save') }}
+        <UiButton
+          v-if="page?.nextCursor"
+          :disabled="!!busy"
+          type="submit"
+          @click="load(page.nextCursor)"
+        >
+          {{ t('devices.next') }}
         </UiButton>
-        <UiButton v-if="editing" type="button" :disabled="!!conflict" @click="save(true)">
-          {{ t('operations.delete') }}
+        <p v-if="deleted">{{ t('operations.deleted') }} · {{ id }} / {{ revision }}</p>
+        <details
+          class="console-panel console-task"
+          :open="editorOpen || uncertain || undefined"
+          @toggle="editorOpen = ($event.target as HTMLDetailsElement).open"
+        >
+          <summary>{{ t('console.edit') }}</summary>
+          <form @submit.prevent="save()">
+            <fieldset :disabled="busy || uncertain || deleted || missing">
+              <legend>{{ t('operations.groupEditor') }} · {{ id }} / {{ revision }}</legend>
+              <label
+                >{{ t('operations.name')
+                }}<input v-model="draft.name" class="ui-input" data-testid="group-name" required
+              /></label>
+              <label
+                ><input v-model="draft.enabled" type="checkbox" />{{
+                  t('operations.enabled')
+                }}</label
+              >
+              <label
+                >{{ t('operations.principal')
+                }}<input v-model="member" class="ui-input" data-testid="group-member"
+              /></label>
+              <UiButton type="button" data-testid="add-member" @click="add()">
+                {{ t('operations.addMember') }}
+              </UiButton>
+              <ul>
+                <li v-for="(value, index) in draft.members" :key="value.principalId">
+                  {{ value.principalId
+                  }}<UiButton type="button" @click="draft.members.splice(index, 1)">
+                    {{ t('operations.removeMember') }}
+                  </UiButton>
+                </li>
+              </ul>
+              <p>{{ t('operations.authorityWarning') }}</p>
+              <UiButton data-testid="save-group" :disabled="!!conflict" type="submit">
+                {{ t('devices.save') }}
+              </UiButton>
+              <UiButton
+                v-if="editing"
+                type="button"
+                :disabled="!!conflict"
+                @click="confirmingAction = 'delete'"
+              >
+                {{ t('operations.delete') }}
+              </UiButton>
+            </fieldset>
+          </form>
+        </details>
+        <UiButton v-if="editing" :disabled="!!busy" type="submit" @click="open(id, false)">
+          {{ t('operations.compare') }}
         </UiButton>
-      </fieldset>
-    </form>
-    <UiButton v-if="editing" :disabled="!!busy" type="submit" @click="open(id, false)">
-      {{ t('operations.compare') }}
-    </UiButton>
-    <section v-if="remoteRevision !== undefined">
-      <h2>{{ t('operations.remote') }}</h2>
-      <p>
-        {{ remote?.name ?? t('operations.deleted') }} / {{ remoteRevision }} ·
-        {{ remote?.members.length ?? 0 }}
-      </p>
-      <UiButton v-if="remote" :disabled="!!(busy || uncertain)" type="submit" @click="adopt()">
-        {{ t('operations.adoptRevision') }}
-      </UiButton>
-    </section>
-    <UiButton
-      v-if="uncertain && pending"
-      data-testid="replay-write"
-      :disabled="!!busy"
-      type="submit"
-      @click="pending()"
+        <section v-if="remoteRevision !== undefined" class="console-panel">
+          <h2>{{ t('operations.remote') }}</h2>
+          <p>
+            {{ remote?.name ?? t('operations.deleted') }} / {{ remoteRevision }} ·
+            {{ remote?.members.length ?? 0 }}
+          </p>
+          <UiButton v-if="remote" :disabled="!!(busy || uncertain)" type="submit" @click="adopt()">
+            {{ t('operations.adoptRevision') }}
+          </UiButton>
+        </section>
+        <UiButton
+          v-if="uncertain && pending"
+          data-testid="replay-write"
+          :disabled="!!busy"
+          type="submit"
+          @click="pending()"
+        >
+          {{ t('policies.replay') }}
+        </UiButton> </template
+      ><template #departments>
+        <h2>{{ t('operations.departments') }}</h2>
+        <UiButton
+          :disabled="!!busy"
+          type="submit"
+          @click="
+            run(
+              () => client.departments(),
+              (v) => (department = v),
+            )
+          "
+        >
+          {{ t('devices.reload') }}
+        </UiButton>
+        <p v-if="department">{{ department.status }} · {{ t('operations.departmentHint') }}</p>
+        <ul v-if="department?.status === 'available'">
+          <li v-for="node in department.snapshot?.nodes" :key="node.id">
+            {{ node.displayName }} · {{ node.id }} / {{ node.parentId ?? '—' }}
+          </li>
+        </ul>
+        <p v-if="department?.status === 'available'">
+          {{ department.source?.issuer }} · {{ utc(department.observedAt!) }} —
+          {{ utc(department.expiresAt!) }} ·
+          {{ department.snapshotId }}
+        </p> </template
+      ><template #delegations>
+        <h2>{{ t('operations.delegations') }}</h2>
+        <p>{{ t('operations.delegationHint') }}</p>
+        <UiButton
+          :disabled="!!busy"
+          type="submit"
+          @click="
+            run(
+              () => runtime.operations.admin.delegations(),
+              (v) => (delegations = v),
+            )
+          "
+        >
+          {{ t('devices.reload') }}
+        </UiButton>
+        <ul>
+          <li v-for="item in delegations?.items" :key="item.id">
+            {{ item.principal }} · {{ item.department }} / {{ item.matching }} · {{ item.state }}
+          </li>
+        </ul>
+        <UiButton
+          v-if="delegations?.nextCursor"
+          :disabled="!!busy"
+          type="submit"
+          @click="
+            run(
+              () => runtime.operations.admin.delegations(delegations!.nextCursor!),
+              (v) => (delegations = v),
+            )
+          "
+        >
+          {{ t('devices.next') }}
+        </UiButton>
+      </template></UiTabs
     >
-      {{ t('policies.replay') }}
-    </UiButton>
-    <h2>{{ t('operations.departments') }}</h2>
-    <UiButton
-      :disabled="!!busy"
-      type="submit"
-      @click="
-        run(
-          () => client.departments(),
-          (v) => (department = v),
-        )
-      "
-    >
-      {{ t('devices.reload') }}
-    </UiButton>
-    <p v-if="department">{{ department.status }} · {{ t('operations.departmentHint') }}</p>
-    <ul v-if="department?.status === 'available'">
-      <li v-for="node in department.snapshot?.nodes" :key="node.id">
-        {{ node.displayName }} · {{ node.id }} / {{ node.parentId ?? '—' }}
-      </li>
-    </ul>
-    <p v-if="department?.status === 'available'">
-      {{ department.source?.issuer }} · {{ utc(department.observedAt!) }} —
-      {{ utc(department.expiresAt!) }} ·
-      {{ department.snapshotId }}
-    </p>
-    <h2>{{ t('operations.delegations') }}</h2>
-    <p>{{ t('operations.delegationHint') }}</p>
-    <UiButton
-      :disabled="!!busy"
-      type="submit"
-      @click="
-        run(
-          () => runtime.operations.admin.delegations(),
-          (v) => (delegations = v),
-        )
-      "
-    >
-      {{ t('devices.reload') }}
-    </UiButton>
-    <ul>
-      <li v-for="item in delegations?.items" :key="item.id">
-        {{ item.principal }} · {{ item.department }} / {{ item.matching }} · {{ item.state }}
-      </li>
-    </ul>
-    <UiButton
-      v-if="delegations?.nextCursor"
-      :disabled="!!busy"
-      type="submit"
-      @click="
-        run(
-          () => runtime.operations.admin.delegations(delegations!.nextCursor!),
-          (v) => (delegations = v),
-        )
-      "
-    >
-      {{ t('devices.next') }}
-    </UiButton>
-  </PageFrame>
+    <UiDialog
+      :open="!!confirmingAction"
+      :title="t('console.review')"
+      :description="t('console.scopeBound')"
+      :close-label="t('console.close')"
+      kind="alertdialog"
+      @update:open="!$event && (confirmingAction = undefined)"
+      ><p>{{ draft.name }} · {{ draft.members.length }}</p>
+      <p>{{ t('operations.authorityWarning') }}</p>
+      <p>{{ confirmingAction ? t(`console.confirmActions.${confirmingAction}`) : '' }}</p>
+      <template #footer
+        ><UiButton :disabled="busy || uncertain" @click="confirmAction">{{
+          t('identity.confirm')
+        }}</UiButton></template
+      ></UiDialog
+    ></PageFrame
+  >
 </template>

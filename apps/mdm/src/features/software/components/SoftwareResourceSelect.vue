@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { UiButton } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -9,12 +9,19 @@ const resource = defineModel<string>('resource', { required: true })
 const version = defineModel<string>('version', { required: true })
 const { t } = useI18n(),
   runtime = useMdm(),
-  { run, busy, failure } = useOperation()
+  { run, busy, failure } = useOperation([], () => runtime.session.state.value.session?.id)
 const appliedQuery = ref('')
 const query = ref(''),
   page = ref<Awaited<ReturnType<typeof runtime.software.catalog.list>>>()
 const selected = computed(() =>
   page.value?.items.find((item) => item.resource.id === resource.value),
+)
+watch(
+  () => runtime.session.state.value.session?.id,
+  () => {
+    page.value = undefined
+  },
+  { flush: 'sync' },
 )
 function load(cursor?: string) {
   const term = cursor ? appliedQuery.value : query.value

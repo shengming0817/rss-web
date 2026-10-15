@@ -90,12 +90,14 @@
   line-height: 1.65;
   font-size: 13px;
 }
-.auth-page form {
+.auth-page form,
+.auth-form {
   display: grid;
   gap: 12px;
   max-width: 640px;
 }
-.auth-page form > .ui-button {
+.auth-page form > .ui-button,
+.auth-form > .ui-button {
   justify-self: start;
 }
 .auth-page label {
@@ -177,4 +179,18 @@
     padding: 24px;
     margin-top: 2vh;
   }
+}
+
+.auth-task {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  margin-block: 12px;
+}
+.auth-task > summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+.auth-task form {
+  margin-top: 16px;
 }

@@ -15,6 +15,12 @@ import {
   type Subject,
 } from '../clients/authorization'
 import PageFrame from '../../../components/PageFrame.vue'
+const editorOpen = ref(false)
+function beginCreate() {
+  if (busy.value || uncertain.value) return
+  create()
+  editorOpen.value = true
+}
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.operations.authorization,
@@ -234,10 +240,10 @@ onMounted(async () => {
   <PageFrame :title="t('operations.authorization')" :busy="busy" :failure="failure">
     <p>{{ t('operations.authorityWarning') }}</p>
     <UiButton :disabled="!!busy" type="submit" @click="load()">{{ t('devices.reload') }}</UiButton
-    ><UiButton :disabled="!!(busy || uncertain)" type="submit" @click="create()">{{
+    ><UiButton :disabled="!!(busy || uncertain)" type="submit" @click="beginCreate()">{{
       t('operations.newRule')
     }}</UiButton>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="item in page?.items" :key="item.id">
         <UiButton
           v-if="item.value"
@@ -258,110 +264,123 @@ onMounted(async () => {
       {{ t('devices.next') }}
     </UiButton>
     <p v-if="deleted">{{ t('operations.deleted') }} · {{ id }} / {{ revision }}</p>
-    <form @submit.prevent="save()">
-      <fieldset :disabled="busy || uncertain || !effective || deleted || missing">
-        <legend>{{ t('operations.ruleEditor') }} · {{ id }} / {{ revision }}</legend>
-        <label
-          >{{ t('operations.subject')
-          }}<select v-model="kind" class="ui-input">
-            <option v-for="value in ['user', 'user_group', 'department', 'idp_group']" :key="value">
-              {{ value }}
-            </option>
-          </select></label
-        >
-        <label
-          >{{ t('operations.subjectId')
-          }}<input v-model="subjectId" class="ui-input" data-testid="subject-id" required
-        /></label>
-        <template v-if="kind === 'department' || kind === 'idp_group'"
-          ><label
-            >{{ t('operations.provider')
-            }}<input v-model="provider" class="ui-input" required /></label
-          ><label
-            >{{ t('operations.issuer') }}<input v-model="issuer" class="ui-input" required /></label
-          ><label
-            >{{ t('operations.sourceVersion')
-            }}<input
-              v-model.number="configurationVersion"
-              class="ui-input"
-              type="number"
-              min="1"
-              required /></label
-        ></template>
-        <label v-if="kind === 'department'"
-          >{{ t('operations.matching')
-          }}<select v-model="matching" class="ui-input">
-            <option>exact</option>
-            <option>subtree</option>
-          </select></label
-        >
-        <label
-          >{{ t('operations.permission')
-          }}<select
-            v-model="permission"
-            class="ui-input"
-            @change="
-              scope = (devicePermissions as readonly string[]).includes(permission)
-                ? 'all_devices'
-                : 'tenant'
-            "
+    <details
+      class="console-panel console-task"
+      :open="editorOpen || uncertain || undefined"
+      @toggle="editorOpen = ($event.target as HTMLDetailsElement).open"
+    >
+      <summary>{{ t('console.edit') }}</summary>
+      <form @submit.prevent="save()">
+        <fieldset :disabled="busy || uncertain || !effective || deleted || missing">
+          <legend>{{ t('operations.ruleEditor') }} · {{ id }} / {{ revision }}</legend>
+          <label
+            >{{ t('operations.subject')
+            }}<select v-model="kind" class="ui-input">
+              <option
+                v-for="value in ['user', 'user_group', 'department', 'idp_group']"
+                :key="value"
+              >
+                {{ value }}
+              </option>
+            </select></label
           >
-            <option v-for="value in permissions" :key="value">{{ value }}</option>
-          </select></label
-        >
-        <label
-          >{{ t('operations.scope')
-          }}<select v-model="scope" class="ui-input">
-            <option
-              v-for="value in (devicePermissions as readonly string[]).includes(permission)
-                ? ['all_devices', 'device']
-                : ['tenant']"
-              :key="value"
+          <label
+            >{{ t('operations.subjectId')
+            }}<input v-model="subjectId" class="ui-input" data-testid="subject-id" required
+          /></label>
+          <template v-if="kind === 'department' || kind === 'idp_group'"
+            ><label
+              >{{ t('operations.provider')
+              }}<input v-model="provider" class="ui-input" required /></label
+            ><label
+              >{{ t('operations.issuer')
+              }}<input v-model="issuer" class="ui-input" required /></label
+            ><label
+              >{{ t('operations.sourceVersion')
+              }}<input
+                v-model.number="configurationVersion"
+                class="ui-input"
+                type="number"
+                min="1"
+                required /></label
+          ></template>
+          <label v-if="kind === 'department'"
+            >{{ t('operations.matching')
+            }}<select v-model="matching" class="ui-input">
+              <option>exact</option>
+              <option>subtree</option>
+            </select></label
+          >
+          <label
+            >{{ t('operations.permission')
+            }}<select
+              v-model="permission"
+              class="ui-input"
+              @change="
+                scope = (devicePermissions as readonly string[]).includes(permission)
+                  ? 'all_devices'
+                  : 'tenant'
+              "
             >
-              {{ value }}
-            </option>
-          </select></label
-        >
-        <label v-if="scope === 'device'"
-          >{{ t('policies.device') }}<input v-model="device" class="ui-input" required
-        /></label>
-        <UiButton type="button" @click="addGrant()">{{ t('operations.addGrant') }}</UiButton>
-        <ul>
-          <li v-for="(g, index) in grants" :key="index">
-            {{ g.operation }} / {{ g.scope.kind }}
-            <RouterLink
-              v-if="g.scope.kind === 'device'"
-              :to="{
-                name: 'device-detail',
-                params: { tenant: runtime.tenant, device: g.scope.id },
-              }"
-              >{{ g.scope.id }}</RouterLink
-            >
-            <UiButton type="button" @click="grants.splice(index, 1)">
-              {{ t('operations.removeMember') }}
-            </UiButton>
-          </li>
-        </ul>
-        <label v-if="revision > 0"
-          ><input v-model="confirm" type="checkbox" />{{ t('operations.confirmAuthority') }}</label
-        >
-        <UiButton
-          data-testid="save-rule"
-          :disabled="!!(conflict || (revision > 0 && !confirm))"
-          type="submit"
-        >
-          {{ t('devices.save') }}
-        </UiButton>
-        <UiButton
-          v-if="revision > 0"
-          type="button"
-          :disabled="!!(conflict || !confirm)"
-          @click="save(true)"
-        >
-          {{ t('operations.delete') }}
-        </UiButton>
-      </fieldset>
-    </form>
+              <option v-for="value in permissions" :key="value">{{ value }}</option>
+            </select></label
+          >
+          <label
+            >{{ t('operations.scope')
+            }}<select v-model="scope" class="ui-input">
+              <option
+                v-for="value in (devicePermissions as readonly string[]).includes(permission)
+                  ? ['all_devices', 'device']
+                  : ['tenant']"
+                :key="value"
+              >
+                {{ value }}
+              </option>
+            </select></label
+          >
+          <label v-if="scope === 'device'"
+            >{{ t('policies.device') }}<input v-model="device" class="ui-input" required
+          /></label>
+          <UiButton type="button" @click="addGrant()">{{ t('operations.addGrant') }}</UiButton>
+          <ul>
+            <li v-for="(g, index) in grants" :key="index">
+              {{ g.operation }} / {{ g.scope.kind }}
+              <RouterLink
+                v-if="g.scope.kind === 'device'"
+                :to="{
+                  name: 'device-detail',
+                  params: { tenant: runtime.tenant, device: g.scope.id },
+                }"
+                >{{ g.scope.id }}</RouterLink
+              >
+              <UiButton type="button" @click="grants.splice(index, 1)">
+                {{ t('operations.removeMember') }}
+              </UiButton>
+            </li>
+          </ul>
+          <label v-if="revision > 0"
+            ><input v-model="confirm" type="checkbox" />{{
+              t('operations.confirmAuthority')
+            }}</label
+          >
+          <UiButton
+            data-testid="save-rule"
+            :disabled="!!(conflict || (revision > 0 && !confirm))"
+            type="submit"
+          >
+            {{ t('devices.save') }}
+          </UiButton>
+          <UiButton
+            v-if="revision > 0"
+            type="button"
+            :disabled="!!(conflict || !confirm)"
+            @click="save(true)"
+          >
+            {{ t('operations.delete') }}
+          </UiButton>
+        </fieldset>
+      </form>
+    </details>
     <UiButton v-if="revision > 0" :disabled="!!busy" type="submit" @click="compare()">
       {{ t('operations.compare') }}
     </UiButton>

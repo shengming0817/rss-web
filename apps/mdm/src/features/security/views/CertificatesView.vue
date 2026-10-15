@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiButton, UiUtcDateTimeInput } from '@rss/core/components'
+import { UiButton, UiDialog, UiUtcDateTimeInput } from '@rss/core/components'
 import { onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -7,6 +7,13 @@ import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
 import PageFrame from '../../../components/PageFrame.vue'
 import CertificateFacts from '../components/CertificateFacts.vue'
+const confirmSubmission = ref(false)
+const confirmingAction = ref<'issue'>()
+function confirmAction() {
+  const action = confirmingAction.value
+  confirmingAction.value = undefined
+  if (action === 'issue') issue()
+}
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -131,19 +138,28 @@ function changed() {
 }
 watch(() => route.fullPath, changed, { flush: 'sync' })
 onMounted(changed)
+function submitConfirmed() {
+  confirmSubmission.value = false
+  void request()
+}
 </script>
 <template>
   <PageFrame :title="t('security.certificates')" :busy="busy" :failure="failure">
     <p>{{ t('security.certificateHint') }}</p>
-    <form @submit.prevent="load()">
-      <label
-        >{{ t('policies.device')
-        }}<input v-model="device" class="ui-input" :readonly="busy || uncertain"
-      /></label>
-      <UiButton :disabled="!!(busy || uncertain)" type="submit">{{ t('devices.reload') }}</UiButton>
-    </form>
+    <section class="console-panel">
+      <h2>{{ t('console.activeFilters') }}</h2>
+      <form @submit.prevent="load()">
+        <label
+          >{{ t('policies.device')
+          }}<input v-model="device" class="ui-input" :readonly="busy || uncertain"
+        /></label>
+        <UiButton :disabled="!!(busy || uncertain)" type="submit">{{
+          t('devices.reload')
+        }}</UiButton>
+      </form>
+    </section>
     <p v-if="list && !list.items.length">{{ t('security.emptyCertificates') }}</p>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="c in list?.items" :key="c.id">
         <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(c.id)">
           {{ c.device }} · {{ c.profile.name }}
@@ -159,7 +175,7 @@ onMounted(changed)
     >
       {{ t('devices.next') }}
     </UiButton>
-    <section v-if="current" data-testid="certificate-detail">
+    <section v-if="current" class="console-panel" data-testid="certificate-detail">
       <h2>{{ current.certificate.device }}</h2>
       <CertificateFacts :certificate="current.certificate" />
       <UiButton
@@ -181,7 +197,7 @@ onMounted(changed)
         "
         data-testid="issue-certificate"
         type="submit"
-        @click="issue"
+        @click="confirmingAction = 'issue'"
       >
         {{
           t(
@@ -224,34 +240,37 @@ onMounted(changed)
         >
       </nav>
     </section>
-    <form v-if="requesting" data-testid="certificate-request" @submit.prevent="request">
-      <fieldset :disabled="busy || uncertain">
-        <legend>{{ t('security.deployCertificate') }}</legend>
-        <label
-          >{{ t('security.justification')
-          }}<textarea v-model="reason" class="ui-input" required maxlength="512" />
-        </label>
-        <label for="certificate-from">{{ t('security.validFrom') }}</label
-        ><UiUtcDateTimeInput
-          id="certificate-from"
-          required
-          :invalid-label="t('policies.invalidDate')"
-          :model-value="from"
-          :max="until - 1"
-          @update:model-value="from = $event ?? Number.NaN"
-        />
-        <label for="certificate-until">{{ t('security.validUntil') }}</label
-        ><UiUtcDateTimeInput
-          id="certificate-until"
-          required
-          :invalid-label="t('policies.invalidDate')"
-          :model-value="until"
-          :min="from + 1"
-          @update:model-value="until = $event ?? Number.NaN"
-        />
-        <UiButton type="submit">{{ t('security.submitRequest') }}</UiButton>
-      </fieldset>
-    </form>
+    <section v-if="requesting" class="console-panel">
+      <h2>{{ t('console.review') }}</h2>
+      <form data-testid="certificate-request" @submit.prevent="confirmSubmission = true">
+        <fieldset :disabled="busy || uncertain">
+          <legend>{{ t('security.deployCertificate') }}</legend>
+          <label
+            >{{ t('security.justification')
+            }}<textarea v-model="reason" class="ui-input" required maxlength="512" />
+          </label>
+          <label for="certificate-from">{{ t('security.validFrom') }}</label
+          ><UiUtcDateTimeInput
+            id="certificate-from"
+            required
+            :invalid-label="t('policies.invalidDate')"
+            :model-value="from"
+            :max="until - 1"
+            @update:model-value="from = $event ?? Number.NaN"
+          />
+          <label for="certificate-until">{{ t('security.validUntil') }}</label
+          ><UiUtcDateTimeInput
+            id="certificate-until"
+            required
+            :invalid-label="t('policies.invalidDate')"
+            :model-value="until"
+            :min="from + 1"
+            @update:model-value="until = $event ?? Number.NaN"
+          />
+          <UiButton type="submit">{{ t('security.submitRequest') }}</UiButton>
+        </fieldset>
+      </form>
+    </section>
     <p v-if="accepted">
       {{ t('security.requestId') }}
       <RouterLink
@@ -266,5 +285,33 @@ onMounted(changed)
     <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending()">
       {{ t('policies.replay') }}
     </UiButton>
-  </PageFrame>
+    <UiDialog
+      :open="!!confirmingAction"
+      :title="t('console.review')"
+      :description="t('console.scopeBound')"
+      :close-label="t('console.close')"
+      kind="alertdialog"
+      @update:open="!$event && (confirmingAction = undefined)"
+      ><p>{{ current?.certificate.device }} · {{ current?.certificate.profile.name }}</p>
+      <p>{{ confirmingAction ? t(`console.confirmActions.${confirmingAction}`) : '' }}</p>
+      <template #footer
+        ><UiButton :disabled="busy || uncertain" @click="confirmAction">{{
+          t('identity.confirm')
+        }}</UiButton></template
+      ></UiDialog
+    ><UiDialog
+      :open="confirmSubmission"
+      :title="t('console.review')"
+      :description="t('console.scopeBound')"
+      :close-label="t('console.close')"
+      kind="alertdialog"
+      @update:open="confirmSubmission = $event"
+      ><p>{{ current?.certificate.device }} · {{ current?.certificate.profile.name }}</p>
+      <template #footer
+        ><UiButton :disabled="busy || uncertain" @click="submitConfirmed">{{
+          t('identity.confirm')
+        }}</UiButton></template
+      ></UiDialog
+    ></PageFrame
+  >
 </template>

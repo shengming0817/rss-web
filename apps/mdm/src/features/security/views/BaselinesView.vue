@@ -8,6 +8,12 @@ import { operation, useOperation } from '../../../services/useOperation'
 import type { BaselineDefinition } from '../clients/governance-model'
 import type { SecurityRequestTarget } from '../clients/requests-model'
 import PageFrame from '../../../components/PageFrame.vue'
+const editorOpen = ref(false)
+function beginCreate() {
+  if (busy.value || uncertain.value) return
+  create()
+  editorOpen.value = true
+}
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -224,11 +230,11 @@ onMounted(routeChanged)
       :disabled="!!(busy || uncertain)"
       data-testid="new-baseline"
       type="submit"
-      @click="create"
+      @click="beginCreate"
     >
       {{ t('devices.create') }}</UiButton
     ><UiButton :disabled="!!busy" type="submit" @click="load()">{{ t('devices.reload') }}</UiButton>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="item in list?.items" :key="item.id">
         <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(item.id)">
           {{ item.definition.name }}
@@ -246,93 +252,105 @@ onMounted(routeChanged)
     >
       {{ t('devices.next') }}
     </UiButton>
-    <form @submit.prevent="open()">
-      <label
-        >{{ t('security.baselineId')
-        }}<input
-          v-model="id"
-          class="ui-input"
-          required
-          :readonly="busy || uncertain || !!current" /></label
-      ><UiButton :disabled="!!(busy || uncertain)" type="submit">{{ t('devices.open') }}</UiButton>
-    </form>
+    <details class="console-panel console-task" :open="uncertain || undefined">
+      <summary>{{ t('console.advanced') }}</summary>
+      <form @submit.prevent="open()">
+        <label
+          >{{ t('security.baselineId')
+          }}<input
+            v-model="id"
+            class="ui-input"
+            required
+            :readonly="busy || uncertain || !!current" /></label
+        ><UiButton :disabled="!!(busy || uncertain)" type="submit">{{
+          t('devices.open')
+        }}</UiButton>
+      </form>
+    </details>
     <p v-if="current">
       {{ t('devices.revision') }} {{ current.baseline.revision }} ·
       {{ t('security.scopeRevision') }} {{ current.baseline.scopeRevision }}
     </p>
-    <form data-testid="baseline-form" @submit.prevent="save">
-      <fieldset :disabled="busy || uncertain || !editable">
-        <label
-          >{{ t('devices.name')
-          }}<input
-            v-model="name"
-            class="ui-input"
-            data-testid="baseline-name"
-            maxlength="128"
-            required /></label
-        ><label><input v-model="enabled" type="checkbox" />{{ t('security.enabled') }}</label>
-        <label>{{ t('policies.scope') }}<input v-model="scope" class="ui-input" required /></label
-        ><UiButton type="button" @click="scopePage()">{{ t('security.chooseScope') }}</UiButton>
-        <ul>
-          <li v-for="item in scopes?.items" :key="item.id">
-            <UiButton type="button" @click="scope = item.id">
-              {{ item.label }} / {{ item.revision }}
-            </UiButton>
-          </li>
-        </ul>
-        <UiButton v-if="scopes?.nextCursor" type="button" @click="scopePage(scopes.nextCursor)">
-          {{ t('devices.next') }}
-        </UiButton>
-        <RouterLink :to="{ name: 'policy-scopes', params: { tenant: runtime.tenant } }">{{
-          t('policies.scopes')
-        }}</RouterLink>
-        <fieldset>
-          <legend>{{ t('security.pinnedRules') }}</legend>
-          <UiButton type="button" @click="rulePage()">{{ t('security.chooseRule') }}</UiButton>
+    <details
+      class="console-panel console-task"
+      :open="editorOpen || uncertain || undefined"
+      @toggle="editorOpen = ($event.target as HTMLDetailsElement).open"
+    >
+      <summary>{{ t('console.edit') }}</summary>
+      <form data-testid="baseline-form" @submit.prevent="save">
+        <fieldset :disabled="busy || uncertain || !editable">
+          <label
+            >{{ t('devices.name')
+            }}<input
+              v-model="name"
+              class="ui-input"
+              data-testid="baseline-name"
+              maxlength="128"
+              required /></label
+          ><label><input v-model="enabled" type="checkbox" />{{ t('security.enabled') }}</label>
+          <label>{{ t('policies.scope') }}<input v-model="scope" class="ui-input" required /></label
+          ><UiButton type="button" @click="scopePage()">{{ t('security.chooseScope') }}</UiButton>
           <ul>
-            <li v-for="item in rules?.items" :key="item.id">
-              <UiButton type="button" @click="selectRule(item.id, item.revision)">
-                {{ item.definition.name }} / {{ item.revision }}
+            <li v-for="item in scopes?.items" :key="item.id">
+              <UiButton type="button" @click="scope = item.id">
+                {{ item.label }} / {{ item.revision }}
               </UiButton>
             </li>
           </ul>
-          <UiButton v-if="rules?.nextCursor" type="button" @click="rulePage(rules.nextCursor)">
+          <UiButton v-if="scopes?.nextCursor" type="button" @click="scopePage(scopes.nextCursor)">
             {{ t('devices.next') }}
           </UiButton>
-          <label>{{ t('security.ruleId') }}<input v-model="ruleId" class="ui-input" /></label
-          ><label
-            >{{ t('devices.revision')
-            }}<input v-model.number="ruleVersion" class="ui-input" type="number" min="1" /></label
-          ><UiButton type="button" :disabled="!!!ruleId" @click="addPin">{{
-            t('devices.add')
-          }}</UiButton>
-          <ul>
-            <li v-for="pin in pins" :key="pin.id">
-              {{ pin.id }} / {{ pin.revision
-              }}<UiButton type="button" @click="pins = pins.filter((p) => p.id !== pin.id)">
-                {{ t('devices.remove') }}
-              </UiButton>
-            </li>
-          </ul>
+          <RouterLink :to="{ name: 'policy-scopes', params: { tenant: runtime.tenant } }">{{
+            t('policies.scopes')
+          }}</RouterLink>
+          <fieldset>
+            <legend>{{ t('security.pinnedRules') }}</legend>
+            <UiButton type="button" @click="rulePage()">{{ t('security.chooseRule') }}</UiButton>
+            <ul>
+              <li v-for="item in rules?.items" :key="item.id">
+                <UiButton type="button" @click="selectRule(item.id, item.revision)">
+                  {{ item.definition.name }} / {{ item.revision }}
+                </UiButton>
+              </li>
+            </ul>
+            <UiButton v-if="rules?.nextCursor" type="button" @click="rulePage(rules.nextCursor)">
+              {{ t('devices.next') }}
+            </UiButton>
+            <label>{{ t('security.ruleId') }}<input v-model="ruleId" class="ui-input" /></label
+            ><label
+              >{{ t('devices.revision')
+              }}<input v-model.number="ruleVersion" class="ui-input" type="number" min="1" /></label
+            ><UiButton type="button" :disabled="!!!ruleId" @click="addPin">{{
+              t('devices.add')
+            }}</UiButton>
+            <ul>
+              <li v-for="pin in pins" :key="pin.id">
+                {{ pin.id }} / {{ pin.revision
+                }}<UiButton type="button" @click="pins = pins.filter((p) => p.id !== pin.id)">
+                  {{ t('devices.remove') }}
+                </UiButton>
+              </li>
+            </ul>
+          </fieldset>
+          <label><input v-model="grace" type="checkbox" />{{ t('security.grace') }}</label
+          ><template v-if="grace"
+            ><label for="baseline-grace">{{ t('security.graceUntil') }}</label
+            ><UiUtcDateTimeInput
+              id="baseline-grace"
+              required
+              :invalid-label="t('policies.invalidDate')"
+              :model-value="graceUntil"
+              :max="asOf + 30 * 86400"
+              @update:model-value="graceUntil = $event ?? Number.NaN"
+          /></template>
+          <UiButton :disabled="!!!pins.length" type="submit">{{ t('devices.save') }}</UiButton>
         </fieldset>
-        <label><input v-model="grace" type="checkbox" />{{ t('security.grace') }}</label
-        ><template v-if="grace"
-          ><label for="baseline-grace">{{ t('security.graceUntil') }}</label
-          ><UiUtcDateTimeInput
-            id="baseline-grace"
-            required
-            :invalid-label="t('policies.invalidDate')"
-            :model-value="graceUntil"
-            :max="asOf + 30 * 86400"
-            @update:model-value="graceUntil = $event ?? Number.NaN"
-        /></template>
-        <UiButton :disabled="!!!pins.length" type="submit">{{ t('devices.save') }}</UiButton>
-      </fieldset>
-    </form>
+      </form>
+    </details>
     <UiButton v-if="current" :disabled="!!busy" type="submit" @click="compare">
       {{ t('security.compareLatest') }}
     </UiButton>
-    <section v-if="latest" data-testid="baseline-comparison">
+    <section v-if="latest" class="console-panel" data-testid="baseline-comparison">
       <h2>{{ t('security.serverVersion') }}</h2>
       <p>
         {{ latest.baseline.definition.name }} / {{ latest.baseline.revision }} ·
@@ -355,7 +373,7 @@ onMounted(routeChanged)
     <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending()">
       {{ t('policies.replay') }}
     </UiButton>
-    <section v-if="current">
+    <section v-if="current" class="console-panel">
       <h2>{{ t('security.governance') }}</h2>
       <UiButton :disabled="!!busy" type="submit" @click="readDevices()">{{
         t('security.readDevices')
@@ -425,36 +443,39 @@ onMounted(routeChanged)
         {{ t('devices.next') }}
       </UiButton>
     </section>
-    <form v-if="target" data-testid="exception-form" @submit.prevent="submitRequest">
-      <fieldset :disabled="busy || uncertain">
-        <legend>{{ t('security.requestException') }}</legend>
-        <p>{{ target.device }} · {{ target.rule }} / {{ target.ruleVersion }}</p>
-        <label
-          >{{ t('security.justification')
-          }}<textarea v-model="reason" class="ui-input" required maxlength="512" />
-        </label>
-        <label for="exception-from">{{ t('security.validFrom') }}</label
-        ><UiUtcDateTimeInput
-          id="exception-from"
-          required
-          :invalid-label="t('policies.invalidDate')"
-          :model-value="validFrom"
-          :max="validUntil - 1"
-          @update:model-value="validFrom = $event ?? Number.NaN"
-        />
-        <label for="exception-until">{{ t('security.validUntil') }}</label
-        ><UiUtcDateTimeInput
-          id="exception-until"
-          required
-          :invalid-label="t('policies.invalidDate')"
-          :model-value="validUntil"
-          :min="validFrom + 1"
-          :max="asOf + 30 * 86400"
-          @update:model-value="validUntil = $event ?? Number.NaN"
-        />
-        <UiButton type="submit">{{ t('security.submitRequest') }}</UiButton>
-      </fieldset>
-    </form>
+    <section v-if="target" class="console-panel">
+      <h2>{{ t('console.review') }}</h2>
+      <form data-testid="exception-form" @submit.prevent="submitRequest">
+        <fieldset :disabled="busy || uncertain">
+          <legend>{{ t('security.requestException') }}</legend>
+          <p>{{ target.device }} · {{ target.rule }} / {{ target.ruleVersion }}</p>
+          <label
+            >{{ t('security.justification')
+            }}<textarea v-model="reason" class="ui-input" required maxlength="512" />
+          </label>
+          <label for="exception-from">{{ t('security.validFrom') }}</label
+          ><UiUtcDateTimeInput
+            id="exception-from"
+            required
+            :invalid-label="t('policies.invalidDate')"
+            :model-value="validFrom"
+            :max="validUntil - 1"
+            @update:model-value="validFrom = $event ?? Number.NaN"
+          />
+          <label for="exception-until">{{ t('security.validUntil') }}</label
+          ><UiUtcDateTimeInput
+            id="exception-until"
+            required
+            :invalid-label="t('policies.invalidDate')"
+            :model-value="validUntil"
+            :min="validFrom + 1"
+            :max="asOf + 30 * 86400"
+            @update:model-value="validUntil = $event ?? Number.NaN"
+          />
+          <UiButton type="submit">{{ t('security.submitRequest') }}</UiButton>
+        </fieldset>
+      </form>
+    </section>
     <p v-if="requested">
       {{ t('security.requestId') }}
       <RouterLink

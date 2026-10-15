@@ -36,13 +36,16 @@ onMounted(changed)
 <template>
   <PageFrame :title="t('security.experience')" :busy="busy" :failure="failure">
     <p>{{ t('security.experienceHint') }}</p>
-    <form @submit.prevent="load">
-      <label
-        >{{ t('policies.device')
-        }}<input v-model="device" class="ui-input" :readonly="busy" required /></label
-      ><UiButton :disabled="!!busy" type="submit">{{ t('devices.open') }}</UiButton>
-    </form>
-    <section v-if="report" data-testid="experience-report">
+    <section class="console-panel">
+      <h2>{{ t('devices.deviceId') }}</h2>
+      <form @submit.prevent="load">
+        <label
+          >{{ t('policies.device')
+          }}<input v-model="device" class="ui-input" :readonly="busy" required /></label
+        ><UiButton :disabled="!!busy" type="submit">{{ t('devices.open') }}</UiButton>
+      </form>
+    </section>
+    <section v-if="report" class="console-panel" data-testid="experience-report">
       <h2>{{ report.experience.device }}</h2>
       <dl>
         <dt>{{ t('security.experienceWindow') }}</dt>

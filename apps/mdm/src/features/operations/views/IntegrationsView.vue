@@ -13,6 +13,12 @@ import {
   type Delivery,
 } from '../clients/admin-model'
 import PageFrame from '../../../components/PageFrame.vue'
+const editorOpen = ref(false)
+function beginCreate() {
+  if (busy.value || uncertain.value) return
+  create()
+  editorOpen.value = true
+}
 const { t } = useI18n(),
   client = useMdm().operations.admin.connectors,
   route = useRoute(),
@@ -162,10 +168,10 @@ onMounted(async () => {
   <PageFrame :title="t('operations.integrations')" :busy="busy" :failure="failure">
     <p>{{ t('operations.integrationHint') }}</p>
     <UiButton :disabled="!!busy" type="submit" @click="load()">{{ t('devices.reload') }}</UiButton
-    ><UiButton :disabled="!!(busy || uncertain)" type="submit" @click="create()">
+    ><UiButton :disabled="!!(busy || uncertain)" type="submit" @click="beginCreate()">
       {{ t('operations.newConnector') }}
     </UiButton>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="item in page?.items" :key="item.id">
         <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(item.id)">
           {{ item.definition.name }} · {{ item.definition.kind }} · {{ item.health }}
@@ -180,40 +186,47 @@ onMounted(async () => {
     >
       {{ t('devices.next') }}
     </UiButton>
-    <form @submit.prevent="save()">
-      <fieldset :disabled="busy || uncertain || missing">
-        <legend>{{ id }} / {{ revision }}</legend>
-        <label
-          >{{ t('operations.name')
-          }}<input
-            v-model="draft.name"
-            class="ui-input"
-            data-testid="connector-name"
-            required /></label
-        ><label
-          >{{ t('operations.connectorKind')
-          }}<select v-model="draft.kind" class="ui-input">
-            <option v-for="kind in connectorKinds" :key="kind">{{ kind }}</option>
-          </select></label
-        ><label
-          >{{ t('operations.endpoint')
-          }}<input
-            v-model="draft.endpoint"
-            class="ui-input"
-            data-testid="connector-endpoint"
-            type="url"
-            required /></label
-        ><label
-          >{{ t('operations.credentialRef')
-          }}<input v-model="draft.credentialRef" class="ui-input" /></label
-        ><label
-          ><input v-model="draft.enabled" type="checkbox" />{{ t('operations.enabled') }}</label
-        ><UiButton data-testid="save-connector" :disabled="!!conflict" type="submit">{{
-          t('devices.save')
-        }}</UiButton>
-      </fieldset>
-    </form>
-    <section v-if="selected">
+    <details
+      class="console-panel console-task"
+      :open="editorOpen || uncertain || undefined"
+      @toggle="editorOpen = ($event.target as HTMLDetailsElement).open"
+    >
+      <summary>{{ t('console.edit') }}</summary>
+      <form @submit.prevent="save()">
+        <fieldset :disabled="busy || uncertain || missing">
+          <legend>{{ id }} / {{ revision }}</legend>
+          <label
+            >{{ t('operations.name')
+            }}<input
+              v-model="draft.name"
+              class="ui-input"
+              data-testid="connector-name"
+              required /></label
+          ><label
+            >{{ t('operations.connectorKind')
+            }}<select v-model="draft.kind" class="ui-input">
+              <option v-for="kind in connectorKinds" :key="kind">{{ kind }}</option>
+            </select></label
+          ><label
+            >{{ t('operations.endpoint')
+            }}<input
+              v-model="draft.endpoint"
+              class="ui-input"
+              data-testid="connector-endpoint"
+              type="url"
+              required /></label
+          ><label
+            >{{ t('operations.credentialRef')
+            }}<input v-model="draft.credentialRef" class="ui-input" /></label
+          ><label
+            ><input v-model="draft.enabled" type="checkbox" />{{ t('operations.enabled') }}</label
+          ><UiButton data-testid="save-connector" :disabled="!!conflict" type="submit">{{
+            t('devices.save')
+          }}</UiButton>
+        </fieldset>
+      </form>
+    </details>
+    <section v-if="selected" class="console-panel">
       <h2>{{ selected.definition.name }}</h2>
       <p>{{ t('operations.health') }} {{ selected.health }} · {{ selected.operation }}</p>
       <p>{{ selected.definition.credentialRef ?? '—' }}</p>

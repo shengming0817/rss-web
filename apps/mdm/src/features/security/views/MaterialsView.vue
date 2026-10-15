@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiButton, UiUtcDateTimeInput } from '@rss/core/components'
+import { UiButton, UiDialog, UiUtcDateTimeInput } from '@rss/core/components'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -11,6 +11,7 @@ import { useMaterialDisclosure } from '../useMaterialDisclosure'
 import PageFrame from '../../../components/PageFrame.vue'
 import MaterialFacts from '../components/MaterialFacts.vue'
 import RequestFacts from '../components/RequestFacts.vue'
+const confirmSubmission = ref(false)
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -205,24 +206,32 @@ watch(
   { flush: 'sync' },
 )
 onMounted(() => void changed())
+function submitConfirmed() {
+  confirmSubmission.value = false
+  void submit()
+}
 </script>
 <template>
   <PageFrame :title="t('security.materials')" :busy="busy" :failure="failure">
     <p>{{ t('security.materialHint') }}</p>
-    <form @submit.prevent="load">
-      <fieldset :disabled="busy || uncertain">
-        <label>{{ t('policies.device') }}<input v-model="device" class="ui-input" required /></label
-        ><label
-          >{{ t('security.materialKind')
-          }}<select v-model="kind" class="ui-input">
-            <option v-for="item in materialKinds" :key="item" :value="item">
-              {{ t(`security.materialKinds.${item}`) }}
-            </option>
-          </select></label
-        ><UiButton type="submit">{{ t('devices.open') }}</UiButton>
-      </fieldset>
-    </form>
-    <section v-if="current">
+    <section class="console-panel">
+      <h2>{{ t('devices.deviceId') }}</h2>
+      <form @submit.prevent="load">
+        <fieldset :disabled="busy || uncertain">
+          <label
+            >{{ t('policies.device') }}<input v-model="device" class="ui-input" required /></label
+          ><label
+            >{{ t('security.materialKind')
+            }}<select v-model="kind" class="ui-input">
+              <option v-for="item in materialKinds" :key="item" :value="item">
+                {{ t(`security.materialKinds.${item}`) }}
+              </option>
+            </select></label
+          ><UiButton type="submit">{{ t('devices.open') }}</UiButton>
+        </fieldset>
+      </form>
+    </section>
+    <section v-if="current" class="console-panel">
       <h2>
         {{ current.material.device }} · {{ t(`security.materialKinds.${current.material.kind}`) }}
       </h2>
@@ -259,39 +268,42 @@ onMounted(() => void changed())
         >{{ t('operations.audit') }}</RouterLink
       >
     </section>
-    <form v-if="requesting && current" data-testid="material-request" @submit.prevent="submit">
-      <fieldset :disabled="busy || uncertain">
-        <legend>{{ t(`security.materialAction.${action}`) }}</legend>
-        <label v-if="current.material.kind === 'bitlocker'"
-          >{{ t('security.volume')
-          }}<select v-model="volume" class="ui-input" required>
-            <option v-for="v in selectableVolumes" :key="v.id" :value="v.id">
-              {{ v.id }}
-            </option>
-          </select></label
-        ><label
-          >{{ t('security.justification')
-          }}<textarea v-model="reason" class="ui-input" required maxlength="512" /></label
-        ><label for="material-from">{{ t('security.validFrom') }}</label
-        ><UiUtcDateTimeInput
-          id="material-from"
-          required
-          :invalid-label="t('policies.invalidDate')"
-          :model-value="from"
-          :max="until - 1"
-          @update:model-value="from = $event ?? Number.NaN"
-        /><label for="material-until">{{ t('security.validUntil') }}</label
-        ><UiUtcDateTimeInput
-          id="material-until"
-          required
-          :invalid-label="t('policies.invalidDate')"
-          :model-value="until"
-          :min="from + 1"
-          :max="from + (action === 'reveal' ? 900 : 30 * 86400)"
-          @update:model-value="until = $event ?? Number.NaN"
-        /><UiButton type="submit">{{ t('security.submitRequest') }}</UiButton>
-      </fieldset>
-    </form>
+    <section v-if="requesting && current" class="console-panel">
+      <h2>{{ t('console.review') }}</h2>
+      <form data-testid="material-request" @submit.prevent="confirmSubmission = true">
+        <fieldset :disabled="busy || uncertain">
+          <legend>{{ t(`security.materialAction.${action}`) }}</legend>
+          <label v-if="current.material.kind === 'bitlocker'"
+            >{{ t('security.volume')
+            }}<select v-model="volume" class="ui-input" required>
+              <option v-for="v in selectableVolumes" :key="v.id" :value="v.id">
+                {{ v.id }}
+              </option>
+            </select></label
+          ><label
+            >{{ t('security.justification')
+            }}<textarea v-model="reason" class="ui-input" required maxlength="512" /></label
+          ><label for="material-from">{{ t('security.validFrom') }}</label
+          ><UiUtcDateTimeInput
+            id="material-from"
+            required
+            :invalid-label="t('policies.invalidDate')"
+            :model-value="from"
+            :max="until - 1"
+            @update:model-value="from = $event ?? Number.NaN"
+          /><label for="material-until">{{ t('security.validUntil') }}</label
+          ><UiUtcDateTimeInput
+            id="material-until"
+            required
+            :invalid-label="t('policies.invalidDate')"
+            :model-value="until"
+            :min="from + 1"
+            :max="from + (action === 'reveal' ? 900 : 30 * 86400)"
+            @update:model-value="until = $event ?? Number.NaN"
+          /><UiButton type="submit">{{ t('security.submitRequest') }}</UiButton>
+        </fieldset>
+      </form>
+    </section>
     <p v-if="accepted">
       {{ t('security.requestId') }}
       <RouterLink
@@ -306,21 +318,24 @@ onMounted(() => void changed())
     <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending()">
       {{ t('policies.replay') }}
     </UiButton>
-    <section v-if="current && current.material.kind !== 'bootstrap_token'">
+    <section v-if="current && current.material.kind !== 'bootstrap_token'" class="console-panel">
       <h2>{{ t('security.disclosure') }}</h2>
       <p>{{ t('security.disclosureHint') }}</p>
-      <form @submit.prevent="readGrant">
-        <label
-          >{{ t('security.requestId')
-          }}<input
-            v-model="grantId"
-            class="ui-input"
-            :readonly="busy || uncertain"
-            required /></label
-        ><UiButton :disabled="!!(busy || uncertain)" type="submit">{{
-          t('devices.open')
-        }}</UiButton>
-      </form>
+      <section class="console-panel">
+        <h2>{{ t('security.disclosure') }}</h2>
+        <form @submit.prevent="readGrant">
+          <label
+            >{{ t('security.requestId')
+            }}<input
+              v-model="grantId"
+              class="ui-input"
+              :readonly="busy || uncertain"
+              required /></label
+          ><UiButton :disabled="!!(busy || uncertain)" type="submit">{{
+            t('devices.open')
+          }}</UiButton>
+        </form>
+      </section>
       <RequestFacts v-if="grant" :request="grant.request" :as-of="grant.asOf" /><UiButton
         :disabled="!!(busy || uncertain || !canReveal)"
         data-testid="reveal-material"
@@ -343,5 +358,19 @@ onMounted(() => void changed())
         <p data-testid="disclosed-secret" class="security-secret">{{ secret }}</p>
       </div>
     </section>
-  </PageFrame>
+    <UiDialog
+      :open="confirmSubmission"
+      :title="t('console.review')"
+      :description="t('console.scopeBound')"
+      :close-label="t('console.close')"
+      kind="alertdialog"
+      @update:open="confirmSubmission = $event"
+      ><p>{{ current?.material.device }} · {{ current?.material.kind }}</p>
+      <template #footer
+        ><UiButton :disabled="busy || uncertain" @click="submitConfirmed">{{
+          t('identity.confirm')
+        }}</UiButton></template
+      ></UiDialog
+    ></PageFrame
+  >
 </template>

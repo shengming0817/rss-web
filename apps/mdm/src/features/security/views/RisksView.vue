@@ -169,7 +169,7 @@ onMounted(changed)
       t('devices.reload')
     }}</UiButton>
     <p v-if="list && !list.items.length">{{ t('security.emptyRisks') }}</p>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="item in list?.items" :key="item.id">
         <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="openRisk(item.id)">
           {{ item.code }} · {{ item.title }}
@@ -185,7 +185,7 @@ onMounted(changed)
     >
       {{ t('devices.next') }}
     </UiButton>
-    <section v-if="risk">
+    <section v-if="risk" class="console-panel">
       <h2>{{ risk.risk.code }} · {{ risk.risk.title }}</h2>
       <dl>
         <dt>{{ t('security.provider') }}</dt>
@@ -227,20 +227,23 @@ onMounted(changed)
       >
         {{ t('devices.next') }}
       </UiButton>
-      <form @submit.prevent="openDevice()">
-        <label
-          >{{ t('policies.device')
-          }}<input
-            v-model="device"
-            class="ui-input"
-            :readonly="busy || uncertain"
-            required /></label
-        ><UiButton :disabled="!!(busy || uncertain)" type="submit">{{
-          t('devices.open')
-        }}</UiButton>
-      </form>
+      <section class="console-panel">
+        <h2>{{ t('devices.deviceId') }}</h2>
+        <form @submit.prevent="openDevice()">
+          <label
+            >{{ t('policies.device')
+            }}<input
+              v-model="device"
+              class="ui-input"
+              :readonly="busy || uncertain"
+              required /></label
+          ><UiButton :disabled="!!(busy || uncertain)" type="submit">{{
+            t('devices.open')
+          }}</UiButton>
+        </form>
+      </section>
     </section>
-    <section v-if="current" data-testid="current-risk">
+    <section v-if="current" class="console-panel" data-testid="current-risk">
       <h2>{{ current.assessment.device }}</h2>
       <p>{{ t('security.asOf') }} {{ at(current.asOf) }}</p>
       <RiskAssessmentFacts :assessment="current.assessment" />
@@ -311,33 +314,36 @@ onMounted(changed)
         {{ t('devices.next') }}
       </UiButton>
     </section>
-    <form v-if="requesting" data-testid="remediation-form" @submit.prevent="request">
-      <fieldset :disabled="busy || uncertain">
-        <legend>{{ t('security.requestRemediation') }}</legend>
-        <label
-          >{{ t('security.justification')
-          }}<textarea v-model="reason" class="ui-input" required maxlength="512" /></label
-        ><label for="remediation-from">{{ t('security.validFrom') }}</label
-        ><UiUtcDateTimeInput
-          id="remediation-from"
-          required
-          :invalid-label="t('policies.invalidDate')"
-          :model-value="from"
-          :max="until - 1"
-          @update:model-value="from = $event ?? Number.NaN"
-        /><label for="remediation-until">{{ t('security.validUntil') }}</label
-        ><UiUtcDateTimeInput
-          id="remediation-until"
-          required
-          :invalid-label="t('policies.invalidDate')"
-          :model-value="until"
-          :min="from + 1"
-          @update:model-value="until = $event ?? Number.NaN"
-        /><UiButton type="submit">
-          {{ t('security.submitRequest') }}
-        </UiButton>
-      </fieldset>
-    </form>
+    <section v-if="requesting" class="console-panel">
+      <h2>{{ t('console.review') }}</h2>
+      <form data-testid="remediation-form" @submit.prevent="request">
+        <fieldset :disabled="busy || uncertain">
+          <legend>{{ t('security.requestRemediation') }}</legend>
+          <label
+            >{{ t('security.justification')
+            }}<textarea v-model="reason" class="ui-input" required maxlength="512" /></label
+          ><label for="remediation-from">{{ t('security.validFrom') }}</label
+          ><UiUtcDateTimeInput
+            id="remediation-from"
+            required
+            :invalid-label="t('policies.invalidDate')"
+            :model-value="from"
+            :max="until - 1"
+            @update:model-value="from = $event ?? Number.NaN"
+          /><label for="remediation-until">{{ t('security.validUntil') }}</label
+          ><UiUtcDateTimeInput
+            id="remediation-until"
+            required
+            :invalid-label="t('policies.invalidDate')"
+            :model-value="until"
+            :min="from + 1"
+            @update:model-value="until = $event ?? Number.NaN"
+          /><UiButton type="submit">
+            {{ t('security.submitRequest') }}
+          </UiButton>
+        </fieldset>
+      </form>
+    </section>
     <p v-if="accepted">
       {{ t('security.requestId') }}
       <RouterLink

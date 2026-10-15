@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { UiButton } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -9,8 +9,15 @@ const props = defineProps<{ collection: Collection; disabled?: boolean }>()
 const value = defineModel<string>({ required: true })
 const { t } = useI18n(),
   runtime = useMdm()
-const { run, busy, failure } = useOperation()
+const { run, busy, failure } = useOperation([], () => runtime.session.state.value.session?.id)
 const page = ref<Awaited<ReturnType<typeof runtime.policies.catalog.list>>>()
+watch(
+  () => runtime.session.state.value.session?.id,
+  () => {
+    page.value = undefined
+  },
+  { flush: 'sync' },
+)
 function load(cursor?: string) {
   void run(
     () => runtime.policies.catalog.list(props.collection, cursor),

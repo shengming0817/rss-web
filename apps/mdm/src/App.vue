@@ -62,6 +62,13 @@ function closeNavigation() {
   commandOpen.value = false
 }
 function shortcut(event: KeyboardEvent) {
+  if (
+    !commandOpen.value &&
+    document.querySelector(
+      '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]',
+    )
+  )
+    return
   if (consoleMode.value && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
     event.preventDefault()
     commandOpen.value = !commandOpen.value

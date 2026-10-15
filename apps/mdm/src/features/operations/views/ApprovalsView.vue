@@ -24,7 +24,7 @@ onMounted(() => loadWorkflows())
     <UiButton :disabled="!!busy" type="submit" @click="loadWorkflows()">{{
       t('devices.reload')
     }}</UiButton>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="item in workflows?.items" :key="item.id">
         <RouterLink
           :to="{

@@ -74,16 +74,19 @@ onMounted(() => {
 <template>
   <PageFrame :title="t('security.compliance')" :busy="busy" :failure="failure">
     <p>{{ t('security.complianceHint') }}</p>
-    <form data-testid="open-device" @submit.prevent="open()">
-      <label
-        >{{ t('policies.device')
-        }}<input v-model="device" class="ui-input" required :readonly="busy" /></label
-      ><UiButton :disabled="!!busy" type="submit">{{ t('devices.open') }}</UiButton>
-    </form>
+    <section class="console-panel">
+      <h2>{{ t('devices.deviceId') }}</h2>
+      <form data-testid="open-device" @submit.prevent="open()">
+        <label
+          >{{ t('policies.device')
+          }}<input v-model="device" class="ui-input" required :readonly="busy" /></label
+        ><UiButton :disabled="!!busy" type="submit">{{ t('devices.open') }}</UiButton>
+      </form>
+    </section>
     <UiButton :disabled="!!busy" type="submit" @click="devices()">{{
       t('security.chooseDevice')
     }}</UiButton>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="item in directory?.items" :key="item.id">
         <UiButton :disabled="!!busy" type="submit" @click="open(item.id)">{{ item.id }}</UiButton>
       </li>
@@ -96,7 +99,7 @@ onMounted(() => {
     >
       {{ t('devices.next') }}
     </UiButton>
-    <section v-if="current" data-testid="current-compliance">
+    <section v-if="current" class="console-panel" data-testid="current-compliance">
       <h2>{{ current.device }} · {{ t(`security.state.${current.status}`) }}</h2>
       <RouterLink
         :to="{ name: 'device-detail', params: { tenant: runtime.tenant, device: current.device } }"
@@ -149,35 +152,38 @@ onMounted(() => {
         <p>{{ t('security.remediationVerification') }}</p>
       </article>
       <h2>{{ t('security.history') }}</h2>
-      <form data-testid="history-filter" @submit.prevent="loadHistory()">
-        <fieldset :disabled="busy">
-          <label
-            ><input v-model="bounded" type="checkbox" data-testid="bounded-history" />{{
-              t('security.filterTime')
-            }}</label
-          >
-          <template v-if="bounded"
-            ><label for="compliance-from">{{ t('security.from') }}</label
-            ><UiUtcDateTimeInput
-              id="compliance-from"
-              required
-              :invalid-label="t('policies.invalidDate')"
-              :model-value="from"
-              :max="until"
-              @update:model-value="from = $event ?? Number.NaN" /><label for="compliance-until">{{
-              t('security.until')
-            }}</label
-            ><UiUtcDateTimeInput
-              id="compliance-until"
-              required
-              :invalid-label="t('policies.invalidDate')"
-              :model-value="until"
-              :min="from"
-              @update:model-value="until = $event ?? Number.NaN"
-          /></template>
-          <UiButton type="submit">{{ t('security.readHistory') }}</UiButton>
-        </fieldset>
-      </form>
+      <section class="console-panel">
+        <h2>{{ t('security.history') }}</h2>
+        <form data-testid="history-filter" @submit.prevent="loadHistory()">
+          <fieldset :disabled="busy">
+            <label
+              ><input v-model="bounded" type="checkbox" data-testid="bounded-history" />{{
+                t('security.filterTime')
+              }}</label
+            >
+            <template v-if="bounded"
+              ><label for="compliance-from">{{ t('security.from') }}</label
+              ><UiUtcDateTimeInput
+                id="compliance-from"
+                required
+                :invalid-label="t('policies.invalidDate')"
+                :model-value="from"
+                :max="until"
+                @update:model-value="from = $event ?? Number.NaN" /><label for="compliance-until">{{
+                t('security.until')
+              }}</label
+              ><UiUtcDateTimeInput
+                id="compliance-until"
+                required
+                :invalid-label="t('policies.invalidDate')"
+                :model-value="until"
+                :min="from"
+                @update:model-value="until = $event ?? Number.NaN"
+            /></template>
+            <UiButton type="submit">{{ t('security.readHistory') }}</UiButton>
+          </fieldset>
+        </form>
+      </section>
       <p v-if="filter">
         {{
           filter.from === undefined

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { UiButton, UiDialog } from '@rss/core/components'
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useIdentity } from '../context'
 import { useOperation } from '../services/operation'
@@ -13,6 +13,16 @@ const loaded = ref(false)
 const next = ref<string | null>(null)
 const login = ref('')
 const password = ref('')
+const resetPassword = ref('')
+const creating = ref(false)
+function closeCreate() {
+  creating.value = false
+  password.value = ''
+}
+onBeforeUnmount(() => {
+  password.value = ''
+  resetPassword.value = ''
+})
 const resetTarget = ref<Account | null>(null)
 const pending = ref<{
   account: Account
@@ -34,6 +44,7 @@ async function create() {
   await run(async () => {
     await api.createAccount(login.value, secret)
     login.value = ''
+    closeCreate()
     await load()
   })
 }
@@ -47,18 +58,19 @@ async function confirm() {
     })
 }
 function openReset(account: Account) {
-  password.value = ''
+  closeCreate()
+  resetPassword.value = ''
   resetTarget.value = account
 }
 function closeReset() {
   resetTarget.value = null
-  password.value = ''
+  resetPassword.value = ''
 }
 async function reset() {
   const target = resetTarget.value
-  const secret = password.value
+  const secret = resetPassword.value
   resetTarget.value = null
-  password.value = ''
+  resetPassword.value = ''
   if (target)
     await run(async () => {
       await api.resetPassword(target.principalId, secret)
@@ -140,21 +152,34 @@ async function reset() {
       >
         {{ t('identity.more') }}
       </UiButton>
-      <form @submit.prevent="create">
-        <h2>{{ t('identity.createAccount') }}</h2>
-        <label for="account-login">{{ t('identity.username') }}</label
-        ><input id="account-login" v-model="login" class="ui-input" autocomplete="off" required />
-        <label for="account-password">{{ t('identity.password') }}</label
-        ><input
-          id="account-password"
-          v-model="password"
-          class="ui-input"
-          type="password"
-          autocomplete="new-password"
-          minlength="15"
-          required
-        /><UiButton type="submit" :disabled="!!busy">{{ t('identity.create') }}</UiButton>
-      </form>
+      <UiButton type="button" :disabled="busy" @click="creating = true">{{
+        t('identity.createAccount')
+      }}</UiButton>
+      <UiDialog
+        :open="creating"
+        :title="t('identity.createAccount')"
+        :close-label="t('identity.cancel')"
+        placement="right"
+        :dismissible="!busy"
+        @update:open="!$event && closeCreate()"
+      >
+        <p v-if="error" role="alert">{{ t(`identity.errors.${error}`) }}</p>
+        <form class="auth-form" @submit.prevent="create">
+          <h2>{{ t('identity.createAccount') }}</h2>
+          <label for="account-login">{{ t('identity.username') }}</label
+          ><input id="account-login" v-model="login" class="ui-input" autocomplete="off" required />
+          <label for="account-password">{{ t('identity.password') }}</label
+          ><input
+            id="account-password"
+            v-model="password"
+            class="ui-input"
+            type="password"
+            autocomplete="new-password"
+            minlength="15"
+            required
+          /><UiButton type="submit" :disabled="!!busy">{{ t('identity.create') }}</UiButton>
+        </form>
+      </UiDialog>
     </template>
     <UiDialog
       :open="pending !== null"
@@ -181,15 +206,15 @@ async function reset() {
     <UiDialog
       :open="resetTarget !== null"
       :title="t('identity.resetPassword')"
-      :description="t('identity.resetHelp')"
+      :description="`${resetTarget?.login ?? resetTarget?.principalId ?? ''} · ${t('identity.resetHelp')}`"
       :close-label="t('identity.cancel')"
       @update:open="!$event && closeReset()"
     >
-      <form @submit.prevent="reset">
+      <form class="auth-form" @submit.prevent="reset">
         <label for="reset-password">{{ t('identity.newPassword') }}</label>
         <input
           id="reset-password"
-          v-model="password"
+          v-model="resetPassword"
           class="ui-input"
           type="password"
           autocomplete="new-password"

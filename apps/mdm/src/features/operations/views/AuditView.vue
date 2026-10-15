@@ -86,64 +86,67 @@ onMounted(routeChanged)
 <template>
   <PageFrame :title="t('operations.audit')" :busy="busy" :failure="failure">
     <p>{{ t('operations.auditHint') }} · {{ t('operations.auditScope') }}</p>
-    <form data-testid="audit-filter" @submit.prevent="load()">
-      <fieldset :disabled="busy">
-        <label>{{ t('operations.actor') }}<input v-model="actor" class="ui-input" /></label
-        ><label>{{ t('operations.object') }}<input v-model="object" class="ui-input" /></label
-        ><label
-          >{{ t('operations.operation') }}<input v-model="operationId" class="ui-input" /></label
-        ><label
-          >{{ t('operations.outcome')
-          }}<select v-model="outcome" class="ui-input">
-            <option value="">{{ t('devices.all') }}</option>
-            <option
-              v-for="value in ['accepted', 'denied', 'failed', 'unknown', 'observed']"
-              :key="value"
-            >
-              {{ value }}
-            </option>
-          </select></label
-        ><label
-          >{{ t('operations.stream')
-          }}<select v-model="stream" class="ui-input">
-            <option value="">{{ t('devices.all') }}</option>
-            <option>mdm_business</option>
-            <option>identity_security</option>
-          </select></label
-        >
-        <label>{{ t('policies.device') }}<input v-model="device" class="ui-input" /></label>
-        <label
-          >{{ t('operations.action')
-          }}<select v-model="action" class="ui-input">
-            <option value="">{{ t('devices.all') }}</option>
-            <option v-for="item in auditActions" :key="item" :value="item">
-              {{ t(`operations.actionName.${item}`) }}
-            </option>
-          </select></label
-        >
-        <label><input v-model="bounded" type="checkbox" />{{ t('security.filterTime') }}</label>
-        <template v-if="bounded"
-          ><label for="audit-from">{{ t('security.from') }}</label
-          ><UiUtcDateTimeInput
-            id="audit-from"
-            required
-            :invalid-label="t('policies.invalidDate')"
-            :model-value="from"
-            :max="until"
-            @update:model-value="from = $event ?? Number.NaN" /><label for="audit-until">{{
-            t('security.until')
-          }}</label
-          ><UiUtcDateTimeInput
-            id="audit-until"
-            required
-            :invalid-label="t('policies.invalidDate')"
-            :model-value="until"
-            :min="from"
-            @update:model-value="until = $event ?? Number.NaN"
-        /></template>
-        <UiButton type="submit">{{ t('devices.reload') }}</UiButton>
-      </fieldset>
-    </form>
+    <section class="console-panel">
+      <h2>{{ t('console.activeFilters') }}</h2>
+      <form data-testid="audit-filter" @submit.prevent="load()">
+        <fieldset :disabled="busy">
+          <label>{{ t('operations.actor') }}<input v-model="actor" class="ui-input" /></label
+          ><label>{{ t('operations.object') }}<input v-model="object" class="ui-input" /></label
+          ><label
+            >{{ t('operations.operation') }}<input v-model="operationId" class="ui-input" /></label
+          ><label
+            >{{ t('operations.outcome')
+            }}<select v-model="outcome" class="ui-input">
+              <option value="">{{ t('devices.all') }}</option>
+              <option
+                v-for="value in ['accepted', 'denied', 'failed', 'unknown', 'observed']"
+                :key="value"
+              >
+                {{ value }}
+              </option>
+            </select></label
+          ><label
+            >{{ t('operations.stream')
+            }}<select v-model="stream" class="ui-input">
+              <option value="">{{ t('devices.all') }}</option>
+              <option>mdm_business</option>
+              <option>identity_security</option>
+            </select></label
+          >
+          <label>{{ t('policies.device') }}<input v-model="device" class="ui-input" /></label>
+          <label
+            >{{ t('operations.action')
+            }}<select v-model="action" class="ui-input">
+              <option value="">{{ t('devices.all') }}</option>
+              <option v-for="item in auditActions" :key="item" :value="item">
+                {{ t(`operations.actionName.${item}`) }}
+              </option>
+            </select></label
+          >
+          <label><input v-model="bounded" type="checkbox" />{{ t('security.filterTime') }}</label>
+          <template v-if="bounded"
+            ><label for="audit-from">{{ t('security.from') }}</label
+            ><UiUtcDateTimeInput
+              id="audit-from"
+              required
+              :invalid-label="t('policies.invalidDate')"
+              :model-value="from"
+              :max="until"
+              @update:model-value="from = $event ?? Number.NaN" /><label for="audit-until">{{
+              t('security.until')
+            }}</label
+            ><UiUtcDateTimeInput
+              id="audit-until"
+              required
+              :invalid-label="t('policies.invalidDate')"
+              :model-value="until"
+              :min="from"
+              @update:model-value="until = $event ?? Number.NaN"
+          /></template>
+          <UiButton type="submit">{{ t('devices.reload') }}</UiButton>
+        </fieldset>
+      </form>
+    </section>
     <p v-if="applied">
       {{ t('operations.applied') }} · {{ applied.device ?? t('devices.all') }} ·
       {{ applied.action ? t(`operations.actionName.${applied.action}`) : t('devices.all') }} ·
@@ -192,7 +195,7 @@ onMounted(routeChanged)
     >
       {{ t('devices.next') }}
     </UiButton>
-    <section v-if="selected" data-testid="audit-detail">
+    <section v-if="selected" class="console-panel" data-testid="audit-detail">
       <h2>{{ t('operations.auditDetail') }} · {{ selected.id }}</h2>
       <p>
         {{ selected.stream }} / {{ selected.stage }} / HTTP {{ selected.status ?? '—' }} ·

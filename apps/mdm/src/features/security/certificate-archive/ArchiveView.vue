@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import { UiButton, UiDialog } from '@rss/core/components'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -27,6 +27,32 @@ const runtime = useMdm(),
   route = useRoute(),
   op = useOperation(),
   { busy, failure, uncertain } = op
+const listingLoaded = ref(false)
+const confirmation = ref<
+  | { kind: 'export'; version: Version }
+  | {
+      kind: 'manage'
+      entry: string
+      revision: number
+      retired: boolean
+      recommended: number | null
+    }
+>()
+function confirmArchive() {
+  const action = confirmation.value
+  confirmation.value = undefined
+  if (!action || busy.value || uncertain.value) return
+  if (action.kind === 'export') {
+    if (selected.value?.id === action.version.entryId) void exportVersion(action.version)
+  } else if (selected.value?.id === action.entry && selected.value.revision === action.revision)
+    void manage(action.retired, action.recommended)
+}
+function clearImportOnClose(event: Event) {
+  if ((event.target as HTMLDetailsElement).open) return
+  for (const file of files.value) file.password = ''
+  files.value = []
+  if (fileInput.value) fileInput.value.value = ''
+}
 const vault = ref<Vault>(),
   items = ref<Entry[]>([]),
   nextAfter = ref<string | null>(null),
@@ -127,6 +153,8 @@ watch(
   sessionStamp,
   () => {
     clearSecrets()
+    listingLoaded.value = false
+    confirmation.value = undefined
     vault.value = undefined
     items.value = []
     history.value = []
@@ -176,6 +204,7 @@ async function load(after?: string) {
       nextAfter.value = page.nextAfter
       asOf.value = page.asOf
       alertCounts.value = page.alerts
+      listingLoaded.value = true
       reminderDays.value = settings.value.reminderDays
       categories.value = settings.value.categories
       categoryText.value = categories.value.join('\n')
@@ -475,7 +504,7 @@ onMounted(() => load())
     <UiButton type="button" :disabled="!!busy" @click="load()">
       {{ t('security.archive.refresh') }}
     </UiButton>
-    <p role="status">
+    <p v-if="listingLoaded" role="status">
       {{
         t('security.archive.alerts', {
           expired: alertCounts.expired,
@@ -484,6 +513,7 @@ onMounted(() => load())
         })
       }}
     </p>
+    <p>{{ t('console.loadedFilter') }}</p>
     <label for="archive-filter">{{ t('security.archive.status') }}</label
     ><select id="archive-filter" v-model="filter" class="ui-input">
       <option value="all">{{ t('security.archive.all') }}</option>
@@ -503,7 +533,8 @@ onMounted(() => load())
         {{ t(`security.archive.states.${value}`) }}
       </option>
     </select>
-    <p v-if="!displayed.length">{{ t('security.archive.empty') }}</p>
+    <p v-if="!listingLoaded">{{ t('console.reading') }}</p>
+    <p v-else-if="!displayed.length">{{ t('security.archive.empty') }}</p>
     <div v-else class="ui-table-scroll">
       <table class="ui-table">
         <thead>
@@ -535,12 +566,20 @@ onMounted(() => load())
     <UiButton v-if="nextAfter" type="button" :disabled="!!busy" @click="load(nextAfter)">
       {{ t('security.archive.more') }}
     </UiButton>
-    <section v-if="selected" :aria-label="t('security.archive.history')">
+    <section v-if="selected" class="console-panel" :aria-label="t('security.archive.history')">
       <h2>{{ selected.latest.metadata.name }} · {{ t('security.archive.history') }}</h2>
       <UiButton
         type="button"
         :disabled="!!(busy || uncertain)"
-        @click="manage(!selected.retired, selected.recommendedVersion)"
+        @click="
+          confirmation = {
+            kind: 'manage',
+            entry: selected.id,
+            revision: selected.revision,
+            retired: !selected.retired,
+            recommended: selected.recommendedVersion,
+          }
+        "
       >
         {{ t(selected.retired ? 'security.archive.restore' : 'security.archive.retire') }}
       </UiButton>
@@ -571,7 +610,7 @@ onMounted(() => load())
           </li>
         </ul>
       </div>
-      <article v-for="version in history" :key="version.version">
+      <article v-for="version in history" :key="version.version" class="console-panel">
         <h3>
           {{ t('security.archive.version') }} {{ version.version }} · {{ date(version.createdAt) }}
         </h3>
@@ -606,13 +645,21 @@ onMounted(() => load())
         <UiButton
           type="button"
           :disabled="!!(busy || uncertain || !unlocked)"
-          @click="exportVersion(version)"
+          @click="confirmation = { kind: 'export', version }"
         >
           {{ t('security.archive.export') }}</UiButton
         ><UiButton
           type="button"
           :disabled="!!(busy || uncertain)"
-          @click="manage(selected.retired, version.version)"
+          @click="
+            confirmation = {
+              kind: 'manage',
+              entry: selected.id,
+              revision: selected.revision,
+              retired: selected.retired,
+              recommended: version.version,
+            }
+          "
         >
           {{ t('security.archive.recommend') }}
         </UiButton>
@@ -635,7 +682,7 @@ onMounted(() => load())
       </ul>
       <UiButton type="button" @click="clearDownloads">{{ t('security.archive.clear') }}</UiButton>
     </section>
-    <details>
+    <details class="console-panel console-task" @toggle="clearImportOnClose">
       <summary>{{ t('security.archive.add') }}</summary>
       <form @submit.prevent="submit">
         <label for="archive-target">{{ t('security.archive.target') }}</label
@@ -800,7 +847,7 @@ onMounted(() => load())
         </UiButton>
       </form>
     </details>
-    <details>
+    <details class="console-panel console-task">
       <summary>{{ t('security.archive.settings') }}</summary>
       <form @submit.prevent="saveSettings">
         <label for="archive-reminder">{{ t('security.archive.reminderDays') }}</label
@@ -822,5 +869,29 @@ onMounted(() => load())
         </UiButton>
       </form>
     </details>
+    <UiDialog
+      :open="!!confirmation"
+      :title="t('console.review')"
+      :close-label="t('console.close')"
+      kind="alertdialog"
+      @update:open="!$event && (confirmation = undefined)"
+    >
+      <p>{{ selected?.latest.metadata.name }} · {{ selected?.id }}</p>
+      <template v-if="confirmation?.kind === 'export'"
+        ><p>{{ t('security.archive.export') }} · {{ confirmation.version.version }}</p>
+        <p v-if="confirmation.version.facts.some((file) => file.containsPrivateKey)">
+          {{ t('security.archive.privateKeyPresent') }}
+        </p></template
+      >
+      <p v-else-if="confirmation">
+        {{ t(confirmation.retired ? 'security.archive.retire' : 'security.archive.restore') }} ·
+        {{ t('security.archive.recommend') }} {{ confirmation.recommended ?? '—' }}
+      </p>
+      <template #footer
+        ><UiButton :disabled="busy || uncertain" @click="confirmArchive">{{
+          t('identity.confirm')
+        }}</UiButton></template
+      >
+    </UiDialog>
   </PageFrame>
 </template>

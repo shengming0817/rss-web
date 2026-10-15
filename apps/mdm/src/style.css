@@ -406,11 +406,7 @@
   color: var(--fg-muted);
   font-size: 12px;
 }
-.console-detail-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 260px;
-  gap: 20px;
-}
+
 .console-data-list {
   list-style: none;
   margin: 0;
@@ -426,14 +422,7 @@
 .console-data-list > li:last-child {
   border-bottom: 0;
 }
-.console-record-link {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-  gap: 16px;
-  text-align: start;
-}
+
 .console-task {
   border: 1px solid var(--line);
   border-radius: 9px;
@@ -453,11 +442,7 @@
 .console-task form {
   max-width: 850px;
 }
-.console-form-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
+
 .console-form-actions {
   display: flex;
   gap: 8px;
@@ -525,9 +510,6 @@
   .console-command-trigger kbd {
     display: none;
   }
-  .console-detail-layout {
-    grid-template-columns: 1fr;
-  }
 }
 @media (max-width: 800px) {
   .console-sidebar {
@@ -561,9 +543,7 @@
   .console-page-header h1 {
     font-size: 22px;
   }
-  .console-form-grid {
-    grid-template-columns: 1fr;
-  }
+
   .console-panel {
     padding: 16px;
   }

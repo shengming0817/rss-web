@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import { UiButton, UiDialog, UiTabs } from '@rss/core/components'
 import { utc } from '../presentation'
 import { onMounted, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -8,6 +8,14 @@ import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
 import { configurationValues, maintenanceKinds, type Maintenance } from '../clients/admin-model'
 import PageFrame from '../../../components/PageFrame.vue'
+const confirmingAction = ref<'activate' | 'cancel'>()
+function confirmAction() {
+  const action = confirmingAction.value
+  confirmingAction.value = undefined
+  if (action === 'activate') save(true)
+  if (action === 'cancel') change('cancel')
+}
+const section = ref('configuration')
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -152,173 +160,200 @@ onMounted(async () => {
 <template>
   <PageFrame :title="t('operations.settings')" :busy="busy" :failure="failure">
     <p>{{ t('operations.settingsHint') }}</p>
-    <p v-if="configuration">
-      {{ configuration.state }} · {{ t('operations.savedVersion') }}
-      {{ configuration.savedVersion }} / {{ t('operations.activeVersion') }}
-      {{ configuration.activeVersion }} · {{ configuration.revision }}
-    </p>
-    <form @submit.prevent="save()">
-      <fieldset :disabled="busy || uncertain">
-        <legend>{{ t('operations.configuration') }}</legend>
-        <label
-          >{{ t('operations.name')
-          }}<input
-            v-model="draft.name"
-            class="ui-input"
-            data-testid="configuration-name"
-            required /></label
-        ><label
-          >{{ t('operations.origin')
-          }}<input v-model="draft.publicOrigin" class="ui-input" type="url" required /></label
-        ><label
-          >{{ t('operations.certificateRef')
-          }}<input v-model="draft.certificateRef" class="ui-input" /></label
-        ><label
-          >APNs {{ t('operations.credentialRef')
-          }}<input v-model="draft.apnsRef" class="ui-input" /></label
-        ><UiButton data-testid="save-configuration" :disabled="!!conflict" type="submit">
-          {{ t('devices.save') }}</UiButton
+    <UiTabs
+      v-model="section"
+      :label="t('operations.settings')"
+      :items="[
+        {
+          value: 'configuration',
+          label: t('operations.configuration'),
+          disabled: busy || uncertain,
+        },
+        { value: 'diagnostics', label: t('operations.diagnostics'), disabled: busy || uncertain },
+        { value: 'maintenance', label: t('operations.maintenance'), disabled: busy || uncertain },
+      ]"
+      keep-mounted
+      ><template #configuration>
+        <p v-if="configuration">
+          {{ configuration.state }} · {{ t('operations.savedVersion') }}
+          {{ configuration.savedVersion }} / {{ t('operations.activeVersion') }}
+          {{ configuration.activeVersion }} · {{ configuration.revision }}
+        </p>
+        <details class="console-panel console-task" :open="uncertain || undefined">
+          <summary>{{ t('operations.configuration') }}</summary>
+          <form @submit.prevent="save()">
+            <fieldset :disabled="busy || uncertain">
+              <legend>{{ t('operations.configuration') }}</legend>
+              <label
+                >{{ t('operations.name')
+                }}<input
+                  v-model="draft.name"
+                  class="ui-input"
+                  data-testid="configuration-name"
+                  required /></label
+              ><label
+                >{{ t('operations.origin')
+                }}<input v-model="draft.publicOrigin" class="ui-input" type="url" required /></label
+              ><label
+                >{{ t('operations.certificateRef')
+                }}<input v-model="draft.certificateRef" class="ui-input" /></label
+              ><label
+                >APNs {{ t('operations.credentialRef')
+                }}<input v-model="draft.apnsRef" class="ui-input" /></label
+              ><UiButton data-testid="save-configuration" :disabled="!!conflict" type="submit">
+                {{ t('devices.save') }}</UiButton
+              ><UiButton
+                type="button"
+                data-testid="activate-configuration"
+                :disabled="!!(conflict || configuration?.state !== 'saved')"
+                @click="confirmingAction = 'activate'"
+              >
+                {{ t('operations.activate') }}
+              </UiButton>
+            </fieldset>
+          </form>
+        </details>
+        <UiButton :disabled="!!busy" type="submit" @click="read()">{{
+          t('operations.compare')
+        }}</UiButton
         ><UiButton
-          type="button"
-          data-testid="activate-configuration"
-          :disabled="!!(conflict || configuration?.state !== 'saved')"
-          @click="save(true)"
+          v-if="configuration && configuration.revision !== revision"
+          :disabled="!!(busy || uncertain)"
+          type="submit"
+          @click="adopt()"
         >
-          {{ t('operations.activate') }}
-        </UiButton>
-      </fieldset>
-    </form>
-    <UiButton :disabled="!!busy" type="submit" @click="read()">{{
-      t('operations.compare')
-    }}</UiButton
-    ><UiButton
-      v-if="configuration && configuration.revision !== revision"
-      :disabled="!!(busy || uncertain)"
-      type="submit"
-      @click="adopt()"
-    >
-      {{ t('operations.adoptRevision') }}
-    </UiButton>
-    <h2>{{ t('operations.diagnostics') }}</h2>
-    <UiButton :disabled="!!busy" type="submit" @click="health()">{{
-      t('devices.reload')
-    }}</UiButton>
-    <section v-if="diagnostics">
-      <p>
-        {{ diagnostics.scope }} ·
-        {{ diagnostics.complete ? t('operations.complete') : t('operations.partial') }} ·
-        {{ utc(diagnostics.asOf) }} · {{ diagnostics.deployment }}
-      </p>
-      <ul>
-        <li v-for="c in diagnostics.components" :key="c.name">
-          {{ c.name }} · {{ c.state }} · {{ c.expiresAt === null ? '—' : utc(c.expiresAt) }}
-        </li>
-      </ul>
-      <dl>
-        <dt>{{ t('operations.taskBacklog') }}</dt>
-        <dd>{{ diagnostics.taskBacklog ?? t('mdm.unknown') }}</dd>
-        <dt>{{ t('operations.projectionBacklog') }}</dt>
-        <dd>{{ diagnostics.projectionBacklog ?? t('mdm.unknown') }}</dd>
-        <dt>{{ t('operations.content') }}</dt>
-        <dd>{{ diagnostics.content }}</dd>
-      </dl>
-      <h3>{{ t('operations.agents') }}</h3>
-      <ul>
-        <li v-for="a in diagnostics.agents" :key="a.device">
-          <RouterLink
-            :to="{ name: 'device-detail', params: { tenant: runtime.tenant, device: a.device } }"
-            >{{ a.device }}</RouterLink
-          >
-          · {{ a.platform }} / {{ a.version ?? t('mdm.unknown') }} / {{ a.health }}
-        </li>
-      </ul>
-      <h3>{{ t('operations.backups') }}</h3>
-      <p>{{ diagnostics.backups.join(' · ') || t('operations.empty') }}</p>
-    </section>
-    <h2>{{ t('operations.maintenance') }}</h2>
-    <p>{{ t('operations.maintenanceHint') }}</p>
-    <form @submit.prevent="start()">
-      <fieldset :disabled="busy || uncertain">
-        <label
-          >{{ t('operations.action')
-          }}<select v-model="kind" class="ui-input">
-            <option v-for="value in maintenanceKinds" :key="value">{{ value }}</option>
-          </select></label
-        ><label
-          >{{ t('operations.targetVersion')
-          }}<input v-model="target" class="ui-input" required /></label
-        ><label
-          >{{ t('operations.updateMethod')
-          }}<select v-model="method" class="ui-input" :disabled="kind !== 'agent_upgrade'">
-            <option>full</option>
-            <option v-if="kind === 'agent_upgrade'">delta</option>
-          </select></label
-        ><UiButton data-testid="start-maintenance" type="submit">{{
-          t('operations.start')
+          {{ t('operations.adoptRevision') }}
+        </UiButton> </template
+      ><template #diagnostics>
+        <h2>{{ t('operations.diagnostics') }}</h2>
+        <UiButton :disabled="!!busy" type="submit" @click="health()">{{
+          t('devices.reload')
         }}</UiButton>
-      </fieldset>
-    </form>
-    <UiButton :disabled="!!busy" type="submit" @click="load()">{{
-      t('operations.history')
-    }}</UiButton>
-    <ul>
-      <li v-for="item in page?.items" :key="item.id">
-        <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(item.id)">
-          {{ item.id }} · {{ item.input.kind }} / {{ item.phase }}
+        <section v-if="diagnostics" class="console-panel">
+          <p>
+            {{ diagnostics.scope }} ·
+            {{ diagnostics.complete ? t('operations.complete') : t('operations.partial') }} ·
+            {{ utc(diagnostics.asOf) }} · {{ diagnostics.deployment }}
+          </p>
+          <ul>
+            <li v-for="c in diagnostics.components" :key="c.name">
+              {{ c.name }} · {{ c.state }} · {{ c.expiresAt === null ? '—' : utc(c.expiresAt) }}
+            </li>
+          </ul>
+          <dl>
+            <dt>{{ t('operations.taskBacklog') }}</dt>
+            <dd>{{ diagnostics.taskBacklog ?? t('mdm.unknown') }}</dd>
+            <dt>{{ t('operations.projectionBacklog') }}</dt>
+            <dd>{{ diagnostics.projectionBacklog ?? t('mdm.unknown') }}</dd>
+            <dt>{{ t('operations.content') }}</dt>
+            <dd>{{ diagnostics.content }}</dd>
+          </dl>
+          <h3>{{ t('operations.agents') }}</h3>
+          <ul>
+            <li v-for="a in diagnostics.agents" :key="a.device">
+              <RouterLink
+                :to="{
+                  name: 'device-detail',
+                  params: { tenant: runtime.tenant, device: a.device },
+                }"
+                >{{ a.device }}</RouterLink
+              >
+              · {{ a.platform }} / {{ a.version ?? t('mdm.unknown') }} / {{ a.health }}
+            </li>
+          </ul>
+          <h3>{{ t('operations.backups') }}</h3>
+          <p>{{ diagnostics.backups.join(' · ') || t('operations.empty') }}</p>
+        </section> </template
+      ><template #maintenance>
+        <h2>{{ t('operations.maintenance') }}</h2>
+        <p>{{ t('operations.maintenanceHint') }}</p>
+        <details class="console-panel console-task" :open="uncertain || undefined">
+          <summary>{{ t('operations.maintenance') }}</summary>
+          <form @submit.prevent="start()">
+            <fieldset :disabled="busy || uncertain">
+              <label
+                >{{ t('operations.action')
+                }}<select v-model="kind" class="ui-input">
+                  <option v-for="value in maintenanceKinds" :key="value">{{ value }}</option>
+                </select></label
+              ><label
+                >{{ t('operations.targetVersion')
+                }}<input v-model="target" class="ui-input" required /></label
+              ><label
+                >{{ t('operations.updateMethod')
+                }}<select v-model="method" class="ui-input" :disabled="kind !== 'agent_upgrade'">
+                  <option>full</option>
+                  <option v-if="kind === 'agent_upgrade'">delta</option>
+                </select></label
+              ><UiButton data-testid="start-maintenance" type="submit">{{
+                t('operations.start')
+              }}</UiButton>
+            </fieldset>
+          </form>
+        </details>
+        <UiButton :disabled="!!busy" type="submit" @click="load()">{{
+          t('operations.history')
+        }}</UiButton>
+        <ul class="console-object-list">
+          <li v-for="item in page?.items" :key="item.id">
+            <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(item.id)">
+              {{ item.id }} · {{ item.input.kind }} / {{ item.phase }}
+            </UiButton>
+          </li>
+        </ul>
+        <UiButton
+          v-if="page?.nextCursor"
+          :disabled="!!busy"
+          type="submit"
+          @click="load(page.nextCursor)"
+        >
+          {{ t('devices.next') }}
         </UiButton>
-      </li>
-    </ul>
-    <UiButton
-      v-if="page?.nextCursor"
-      :disabled="!!busy"
-      type="submit"
-      @click="load(page.nextCursor)"
+        <section v-if="selected" class="console-panel">
+          <h3>{{ selected.id }}</h3>
+          <p>{{ selected.phase }} / {{ selected.input.kind }} / {{ selected.input.target }}</p>
+          <dl>
+            <dt>{{ t('operations.effect') }}</dt>
+            <dd>{{ selected.effect }}</dd>
+            <dt>{{ t('operations.components') }}</dt>
+            <dd>{{ selected.components.join(' · ') || '—' }}</dd>
+            <dt>{{ t('operations.downloadBytes') }}</dt>
+            <dd>{{ selected.downloadBytes ?? t('mdm.unknown') }}</dd>
+            <dt>{{ t('operations.rebuild') }}</dt>
+            <dd>{{ selected.rebuild }}</dd>
+            <dt>{{ t('operations.fallback') }}</dt>
+            <dd>{{ selected.fallback ?? '—' }}</dd>
+            <dt>{{ t('operations.health') }}</dt>
+            <dd>{{ selected.health }}</dd>
+          </dl>
+          <UiButton :disabled="!!busy" type="submit" @click="open(selected.id)">{{
+            t('policies.refresh')
+          }}</UiButton
+          ><UiButton
+            v-if="selected.phase === 'accepted'"
+            :disabled="!!(busy || uncertain)"
+            type="submit"
+            @click="change('pause')"
+          >
+            {{ t('operations.pause') }}</UiButton
+          ><UiButton
+            v-if="selected.phase === 'paused'"
+            :disabled="!!(busy || uncertain)"
+            type="submit"
+            @click="change('resume')"
+          >
+            {{ t('operations.resume') }}</UiButton
+          ><UiButton
+            v-if="selected.phase === 'accepted'"
+            :disabled="!!(busy || uncertain)"
+            type="submit"
+            @click="confirmingAction = 'cancel'"
+          >
+            {{ t('operations.cancel') }}
+          </UiButton>
+        </section>
+      </template></UiTabs
     >
-      {{ t('devices.next') }}
-    </UiButton>
-    <section v-if="selected">
-      <h3>{{ selected.id }}</h3>
-      <p>{{ selected.phase }} / {{ selected.input.kind }} / {{ selected.input.target }}</p>
-      <dl>
-        <dt>{{ t('operations.effect') }}</dt>
-        <dd>{{ selected.effect }}</dd>
-        <dt>{{ t('operations.components') }}</dt>
-        <dd>{{ selected.components.join(' · ') || '—' }}</dd>
-        <dt>{{ t('operations.downloadBytes') }}</dt>
-        <dd>{{ selected.downloadBytes ?? t('mdm.unknown') }}</dd>
-        <dt>{{ t('operations.rebuild') }}</dt>
-        <dd>{{ selected.rebuild }}</dd>
-        <dt>{{ t('operations.fallback') }}</dt>
-        <dd>{{ selected.fallback ?? '—' }}</dd>
-        <dt>{{ t('operations.health') }}</dt>
-        <dd>{{ selected.health }}</dd>
-      </dl>
-      <UiButton :disabled="!!busy" type="submit" @click="open(selected.id)">{{
-        t('policies.refresh')
-      }}</UiButton
-      ><UiButton
-        v-if="selected.phase === 'accepted'"
-        :disabled="!!(busy || uncertain)"
-        type="submit"
-        @click="change('pause')"
-      >
-        {{ t('operations.pause') }}</UiButton
-      ><UiButton
-        v-if="selected.phase === 'paused'"
-        :disabled="!!(busy || uncertain)"
-        type="submit"
-        @click="change('resume')"
-      >
-        {{ t('operations.resume') }}</UiButton
-      ><UiButton
-        v-if="selected.phase === 'accepted'"
-        :disabled="!!(busy || uncertain)"
-        type="submit"
-        @click="change('cancel')"
-      >
-        {{ t('operations.cancel') }}
-      </UiButton>
-    </section>
     <UiButton
       v-if="uncertain && pending"
       data-testid="replay-write"
@@ -328,5 +363,20 @@ onMounted(async () => {
     >
       {{ t('policies.replay') }}
     </UiButton>
-  </PageFrame>
+    <UiDialog
+      :open="!!confirmingAction"
+      :title="t('console.review')"
+      :description="t('console.scopeBound')"
+      :close-label="t('console.close')"
+      kind="alertdialog"
+      @update:open="!$event && (confirmingAction = undefined)"
+      ><p>{{ configuration?.savedVersion }} · {{ selected?.input.target }}</p>
+      <p>{{ confirmingAction ? t(`console.confirmActions.${confirmingAction}`) : '' }}</p>
+      <template #footer
+        ><UiButton :disabled="busy || uncertain" @click="confirmAction">{{
+          t('identity.confirm')
+        }}</UiButton></template
+      ></UiDialog
+    ></PageFrame
+  >
 </template>

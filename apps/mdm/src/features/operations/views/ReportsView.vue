@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiButton, UiUtcDateTimeInput } from '@rss/core/components'
+import { UiButton, UiChart, UiUtcDateTimeInput } from '@rss/core/components'
 import { utc } from '../presentation'
 import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -66,30 +66,33 @@ onMounted(async () => {
 <template>
   <PageFrame :title="t('operations.reports')" :busy="busy" :failure="failure">
     <p>{{ t('operations.metricHint') }}</p>
-    <form @submit.prevent="refresh()">
-      <fieldset :disabled="busy">
-        <label for="report-from">{{ t('security.from') }}</label
-        ><UiUtcDateTimeInput
-          id="report-from"
-          required
-          :invalid-label="t('policies.invalidDate')"
-          :model-value="from"
-          :max="until"
-          @update:model-value="from = $event ?? Number.NaN"
-        /><label for="report-until">{{ t('security.until') }}</label
-        ><UiUtcDateTimeInput
-          id="report-until"
-          required
-          :invalid-label="t('policies.invalidDate')"
-          :model-value="until"
-          :min="from"
-          @update:model-value="until = $event ?? Number.NaN"
-        /><UiButton data-testid="refresh-metrics" type="submit">
-          {{ t('devices.reload') }}
-        </UiButton>
-      </fieldset>
-    </form>
-    <section v-if="metrics">
+    <section class="console-panel">
+      <h2>{{ t('console.activeFilters') }}</h2>
+      <form @submit.prevent="refresh()">
+        <fieldset :disabled="busy">
+          <label for="report-from">{{ t('security.from') }}</label
+          ><UiUtcDateTimeInput
+            id="report-from"
+            required
+            :invalid-label="t('policies.invalidDate')"
+            :model-value="from"
+            :max="until"
+            @update:model-value="from = $event ?? Number.NaN"
+          /><label for="report-until">{{ t('security.until') }}</label
+          ><UiUtcDateTimeInput
+            id="report-until"
+            required
+            :invalid-label="t('policies.invalidDate')"
+            :model-value="until"
+            :min="from"
+            @update:model-value="until = $event ?? Number.NaN"
+          /><UiButton data-testid="refresh-metrics" type="submit">
+            {{ t('devices.reload') }}
+          </UiButton>
+        </fieldset>
+      </form>
+    </section>
+    <section v-if="metrics" class="console-panel">
       <h2>{{ t('operations.metrics') }}</h2>
       <p>
         {{ metrics.scope }} ·
@@ -109,6 +112,13 @@ onMounted(async () => {
         <dt>{{ t('operations.pending') }}</dt>
         <dd>{{ metrics.pending ?? t('mdm.unknown') }}</dd>
       </dl>
+      <UiChart
+        kind="line"
+        :label="t('operations.trend') + ' · ' + t('operations.known')"
+        :points="metrics.trend.map((sample) => ({ label: utc(sample.at), value: sample.known }))"
+        :empty-label="t('operations.noSamples')"
+        :data-label="t('console.advanced')"
+      />
       <h3>{{ t('operations.trend') }}</h3>
       <p v-if="!metrics.trend.length">{{ t('operations.noSamples') }}</p>
       <ul>
@@ -127,7 +137,7 @@ onMounted(async () => {
     ><UiButton :disabled="!!busy" type="submit" @click="load()">{{
       t('operations.history')
     }}</UiButton>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="item in page?.items" :key="item.id">
         <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(item.id)">
           {{ item.id }} · {{ item.phase }}
@@ -142,7 +152,7 @@ onMounted(async () => {
     >
       {{ t('devices.next') }}
     </UiButton>
-    <section v-if="selected">
+    <section v-if="selected" class="console-panel">
       <h2>{{ selected.id }}</h2>
       <p>
         {{ selected.phase }} · {{ selected.operation }} · {{ utc(selected.range.from) }} —

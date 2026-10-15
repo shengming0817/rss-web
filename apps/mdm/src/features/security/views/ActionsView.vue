@@ -57,19 +57,22 @@ onMounted(changed)
 </script>
 <template>
   <PageFrame :title="t('security.actions')" :busy="busy" :failure="failure">
-    <form @submit.prevent="load()">
-      <fieldset :disabled="busy">
-        <label>{{ t('policies.device') }}<input v-model="device" class="ui-input" /></label
-        ><label>{{ t('security.requestId') }}<input v-model="request" class="ui-input" /></label
-        ><UiButton type="submit">{{ t('devices.reload') }}</UiButton>
-      </fieldset>
-    </form>
+    <section class="console-panel">
+      <h2>{{ t('console.activeFilters') }}</h2>
+      <form @submit.prevent="load()">
+        <fieldset :disabled="busy">
+          <label>{{ t('policies.device') }}<input v-model="device" class="ui-input" /></label
+          ><label>{{ t('security.requestId') }}<input v-model="request" class="ui-input" /></label
+          ><UiButton type="submit">{{ t('devices.reload') }}</UiButton>
+        </fieldset>
+      </form>
+    </section>
     <p v-if="page">
       {{ t('security.snapshotAt') }} {{ at(page.asOf) }} ·
       {{ applied?.device ?? t('devices.all') }} · {{ applied?.request ?? t('devices.all') }}
     </p>
     <p v-if="page && !page.items.length">{{ t('security.emptyActions') }}</p>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="item in page?.items" :key="item.id">
         <UiButton :disabled="!!busy" type="submit" @click="open(item.id)">
           {{ item.id }} · {{ item.target.device }}
@@ -86,7 +89,7 @@ onMounted(changed)
     >
       {{ t('devices.next') }}
     </UiButton>
-    <section v-if="selected">
+    <section v-if="selected" class="console-panel">
       <h2>{{ selected.action.id }} · {{ selected.action.target.device }}</h2>
       <p>{{ t('security.asOf') }} {{ at(selected.asOf) }}</p>
       <UiButton :disabled="!!busy" type="submit" @click="open(selected.action.id)">{{
