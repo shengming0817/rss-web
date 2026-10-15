@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useId, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import UtcTimeInput from './UtcTimeInput.vue'
+import { UiUtcDateTimeInput } from '@rss/core/components'
 import { decodeSchedule, type Schedule, type Trigger } from '../clients/schedule'
 const model = defineModel<Schedule>({ required: true })
 const { t } = useI18n(),
@@ -46,10 +46,20 @@ function window(event: Event) {
       </option></select
     ><template v-if="model.trigger.kind === 'once'"
       ><label :for="`${id}-at`">{{ t('policies.at') }}</label
-      ><UtcTimeInput :id="`${id}-at`" v-model="model.trigger.at" /></template
+      ><UiUtcDateTimeInput
+        :id="`${id}-at`"
+        required
+        :invalid-label="t('policies.invalidDate')"
+        :model-value="model.trigger.at"
+        @update:model-value="model.trigger.at = $event ?? Number.NaN" /></template
     ><template v-if="model.trigger.kind === 'interval'"
       ><label :for="`${id}-anchor`">{{ t('policies.anchor') }}</label
-      ><UtcTimeInput :id="`${id}-anchor`" v-model="model.trigger.anchor" /><label
+      ><UiUtcDateTimeInput
+        :id="`${id}-anchor`"
+        required
+        :invalid-label="t('policies.invalidDate')"
+        :model-value="model.trigger.anchor"
+        @update:model-value="model.trigger.anchor = $event ?? Number.NaN" /><label
         :for="`${id}-seconds`"
         >{{ t('policies.seconds') }}</label
       ><input
@@ -88,16 +98,23 @@ function window(event: Event) {
         max="1439"
         required /></template
     ><label :for="`${id}-not-before`">{{ t('policies.notBefore') }}</label
-    ><UtcTimeInput :id="`${id}-not-before`" v-model="model.notBefore" /><label
-      :for="`${id}-until`"
-      >{{ t('policies.until') }}</label
-    ><UtcTimeInput
+    ><UiUtcDateTimeInput
+      :id="`${id}-not-before`"
+      required
+      :invalid-label="t('policies.invalidDate')"
+      :model-value="model.notBefore"
+      @update:model-value="model.notBefore = $event ?? Number.NaN"
+    /><label :for="`${id}-until`">{{ t('policies.until') }}</label
+    ><UiUtcDateTimeInput
       :id="`${id}-until`"
-      v-model="model.until"
+      required
+      :invalid-label="t('policies.invalidDate')"
+      :model-value="model.until"
       :error="invalid"
       :description="invalid ? `${id}-validation` : ''"
       :min="model.notBefore + 1"
       :max="model.notBefore + 366 * 86400"
+      @update:model-value="model.until = $event ?? Number.NaN"
     /><label :for="`${id}-jitter`">{{ t('policies.jitter') }}</label
     ><input
       :id="`${id}-jitter`"

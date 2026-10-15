@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount, flushPromises, DOMWrapper } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import type { Component } from 'vue'
@@ -281,7 +281,7 @@ describe('Identity views use actual app session and decoder modules', () => {
         accounts: [accountValue],
         nextCursor: null,
       })
-      await wrapper
+      await new DOMWrapper(document.body)
         .get('[role=alertdialog]')
         .findAll('button')
         .find((b) => b.text() === '确认')!
@@ -293,14 +293,14 @@ describe('Identity views use actual app session and decoder modules', () => {
       .find((b) => b.text() === '重置密码')!
       .trigger('click')
     await flushPromises()
-    await wrapper.get('#reset-password').setValue('private reset password')
+    await new DOMWrapper(document.body).get('#reset-password').setValue('private reset password')
     f.replies.push(accountValue, {
       accounts: [accountValue],
       nextCursor: null,
     })
-    await wrapper.get('[role=dialog] form').trigger('submit')
+    await new DOMWrapper(document.body).get('[role=dialog] form').trigger('submit')
     await flushPromises()
-    expect(wrapper.find('#reset-password').exists()).toBe(false)
+    expect(new DOMWrapper(document.body).find('#reset-password').exists()).toBe(false)
     wrapper.unmount()
   })
   it('edits, tests and enables IdPs through versioned writes', async () => {
@@ -415,9 +415,11 @@ it('requires confirmation before revoking a provider and its sessions', async ()
     .find((b) => b.text() === '停用身份提供方')!
     .trigger('click')
   expect(f.request).toHaveBeenCalledTimes(count)
-  expect(wrapper.get('[role=alertdialog]').text()).toContain('已有联合会话将失效')
+  expect(new DOMWrapper(document.body).get('[role=alertdialog]').text()).toContain(
+    '已有联合会话将失效',
+  )
   f.replies.push(providerValue, { providers: [providerValue] })
-  await wrapper
+  await new DOMWrapper(document.body)
     .get('[role=alertdialog]')
     .findAll('button')
     .find((b) => b.text() === '确认')!

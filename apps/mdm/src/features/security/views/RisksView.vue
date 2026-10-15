@@ -6,7 +6,7 @@ import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
 import SecurityFrame from '../components/SecurityFrame.vue'
 import RiskAssessmentFacts from '../components/RiskAssessmentFacts.vue'
-import UtcTimeInput from '../../policies/components/UtcTimeInput.vue'
+import { UiUtcDateTimeInput } from '@rss/core/components'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -280,10 +280,22 @@ onMounted(changed)
           >{{ t('security.justification')
           }}<textarea v-model="reason" required maxlength="512" /></label
         ><label for="remediation-from">{{ t('security.validFrom') }}</label
-        ><UtcTimeInput id="remediation-from" v-model="from" :max="until - 1" /><label
-          for="remediation-until"
-          >{{ t('security.validUntil') }}</label
-        ><UtcTimeInput id="remediation-until" v-model="until" :min="from + 1" /><button>
+        ><UiUtcDateTimeInput
+          id="remediation-from"
+          required
+          :invalid-label="t('policies.invalidDate')"
+          :model-value="from"
+          :max="until - 1"
+          @update:model-value="from = $event ?? Number.NaN"
+        /><label for="remediation-until">{{ t('security.validUntil') }}</label
+        ><UiUtcDateTimeInput
+          id="remediation-until"
+          required
+          :invalid-label="t('policies.invalidDate')"
+          :model-value="until"
+          :min="from + 1"
+          @update:model-value="until = $event ?? Number.NaN"
+        /><button>
           {{ t('security.submitRequest') }}
         </button>
       </fieldset>

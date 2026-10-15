@@ -15,7 +15,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage --project '!root'",
+    "test:coverage": "vitest run --coverage --project '!root' && pnpm -F @rss/core test:coverage",
     "test:boundary": "vitest run --project root && node --test e2e/mdm/enrollment-callback.test.mjs e2e/mdm/device-run.test.mjs",
     "prepare": "husky",
     "test:mdm:joint": "vitest run --config e2e/mdm/vitest.config.ts",
@@ -32,7 +32,9 @@
     "image:mdm": "bash scripts/build-mdm-image.sh",
     "test:mdm:policy-browser": "node e2e/mdm/policy-browser.mjs",
     "test:mdm:enrollment-browser": "node e2e/mdm/enrollment-browser.mjs",
-    "test:mdm:device-browser": "node e2e/mdm/device-run.mjs"
+    "test:mdm:device-browser": "node e2e/mdm/device-run.mjs",
+    "dev:ui": "pnpm -F @rss/ui-preview dev",
+    "build:ui-preview": "pnpm -F @rss/ui-preview build"
   },
   "lint-staged": {
     "*.{ts,vue}": [

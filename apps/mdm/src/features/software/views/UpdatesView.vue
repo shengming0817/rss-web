@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, toRaw, watch } from 'vue'
+import { UiUtcDateTimeInput } from '@rss/core/components'
+import { ref, toRaw, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -35,13 +36,7 @@ function fresh(): UpdateDefinition {
 }
 const draft = ref(fresh()),
   invalid = ref(false)
-const deadline = computed({
-  get: () => new Date(draft.value.deadline * 1000).toISOString().slice(0, 16),
-  set: (v) => {
-    const n = Date.parse(`${v}Z`)
-    if (Number.isFinite(n)) draft.value.deadline = n / 1000
-  },
-})
+
 let pending: { id: string; body: Operation<UpdateChange> } | undefined
 function accept(value: UpdateRing) {
   selected.value = value
@@ -252,7 +247,13 @@ watch(
           required
         />
         <label for="update-deadline">{{ t('software.updateDeadline') }} (UTC)</label
-        ><input id="update-deadline" v-model="deadline" type="datetime-local" required />
+        ><UiUtcDateTimeInput
+          id="update-deadline"
+          :model-value="draft.deadline"
+          :invalid-label="t('policies.invalidDate')"
+          required
+          @update:model-value="draft.deadline = $event ?? Number.NaN"
+        />
         <template v-if="draft.target.kind === 'os'">
           <label for="update-notification">{{ t('software.notifyMinutes') }}</label
           ><input

@@ -18,7 +18,7 @@ import type { ResourceRead } from '../../policies/clients/resources'
 import SoftwareFrame from '../components/SoftwareFrame.vue'
 import NativeScheduleEditor from '../components/NativeScheduleEditor.vue'
 import SoftwareRunFacts from '../components/SoftwareRunFacts.vue'
-import UtcTimeInput from '../../policies/components/UtcTimeInput.vue'
+import { UiUtcDateTimeInput } from '@rss/core/components'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -389,7 +389,13 @@ watch(
               required
             />
             <label :for="`stage-${index}-at`">{{ t('software.opensAt') }}</label
-            ><UtcTimeInput :id="`stage-${index}-at`" v-model="stage.opensAt" />
+            ><UiUtcDateTimeInput
+              :id="`stage-${index}-at`"
+              required
+              :invalid-label="t('policies.invalidDate')"
+              :model-value="stage.opensAt"
+              @update:model-value="stage.opensAt = $event ?? Number.NaN"
+            />
             <template v-if="index > 0"
               ><label :for="`stage-${index}-gate`">{{ t('software.minimumVerified') }}</label
               ><input

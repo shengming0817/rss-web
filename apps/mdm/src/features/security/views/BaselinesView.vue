@@ -7,7 +7,7 @@ import { operation, useOperation } from '../../../services/useOperation'
 import type { BaselineDefinition } from '../clients/governance-model'
 import type { SecurityRequestTarget } from '../clients/requests-model'
 import SecurityFrame from '../components/SecurityFrame.vue'
-import UtcTimeInput from '../../policies/components/UtcTimeInput.vue'
+import { UiUtcDateTimeInput } from '@rss/core/components'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -297,7 +297,13 @@ onMounted(routeChanged)
         <label><input v-model="grace" type="checkbox" />{{ t('security.grace') }}</label
         ><template v-if="grace"
           ><label for="baseline-grace">{{ t('security.graceUntil') }}</label
-          ><UtcTimeInput id="baseline-grace" v-model="graceUntil" :max="asOf + 30 * 86400"
+          ><UiUtcDateTimeInput
+            id="baseline-grace"
+            required
+            :invalid-label="t('policies.invalidDate')"
+            :model-value="graceUntil"
+            :max="asOf + 30 * 86400"
+            @update:model-value="graceUntil = $event ?? Number.NaN"
         /></template>
         <button :disabled="!pins.length">{{ t('devices.save') }}</button>
       </fieldset>
@@ -396,13 +402,23 @@ onMounted(routeChanged)
           >{{ t('security.justification') }}<textarea v-model="reason" required maxlength="512" />
         </label>
         <label for="exception-from">{{ t('security.validFrom') }}</label
-        ><UtcTimeInput id="exception-from" v-model="validFrom" :max="validUntil - 1" />
+        ><UiUtcDateTimeInput
+          id="exception-from"
+          required
+          :invalid-label="t('policies.invalidDate')"
+          :model-value="validFrom"
+          :max="validUntil - 1"
+          @update:model-value="validFrom = $event ?? Number.NaN"
+        />
         <label for="exception-until">{{ t('security.validUntil') }}</label
-        ><UtcTimeInput
+        ><UiUtcDateTimeInput
           id="exception-until"
-          v-model="validUntil"
+          required
+          :invalid-label="t('policies.invalidDate')"
+          :model-value="validUntil"
           :min="validFrom + 1"
           :max="asOf + 30 * 86400"
+          @update:model-value="validUntil = $event ?? Number.NaN"
         />
         <button>{{ t('security.submitRequest') }}</button>
       </fieldset>

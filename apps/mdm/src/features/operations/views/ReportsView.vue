@@ -7,7 +7,7 @@ import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
 import type { Metrics, Report } from '../clients/admin-model'
 import OperationsFrame from '../components/OperationsFrame.vue'
-import UtcTimeInput from '../../policies/components/UtcTimeInput.vue'
+import { UiUtcDateTimeInput } from '@rss/core/components'
 const { t } = useI18n(),
   route = useRoute(),
   client = useMdm().operations.admin,
@@ -69,12 +69,22 @@ onMounted(async () => {
     <form @submit.prevent="refresh()">
       <fieldset :disabled="busy">
         <label for="report-from">{{ t('security.from') }}</label
-        ><UtcTimeInput id="report-from" v-model="from" :max="until" /><label for="report-until">{{
-          t('security.until')
-        }}</label
-        ><UtcTimeInput id="report-until" v-model="until" :min="from" /><button
-          data-testid="refresh-metrics"
-        >
+        ><UiUtcDateTimeInput
+          id="report-from"
+          required
+          :invalid-label="t('policies.invalidDate')"
+          :model-value="from"
+          :max="until"
+          @update:model-value="from = $event ?? Number.NaN"
+        /><label for="report-until">{{ t('security.until') }}</label
+        ><UiUtcDateTimeInput
+          id="report-until"
+          required
+          :invalid-label="t('policies.invalidDate')"
+          :model-value="until"
+          :min="from"
+          @update:model-value="until = $event ?? Number.NaN"
+        /><button data-testid="refresh-metrics">
           {{ t('devices.reload') }}
         </button>
       </fieldset>

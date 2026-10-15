@@ -6,6 +6,12 @@
 
 MDM 无后端演示：`pnpm dev:mdm:demo`；生产构建：`pnpm build:mdm`；镜像：`pnpm image:mdm --tag rss-mdm-web:my-version`。接入、候选合同与部署见 [MDM 与 Identity 独立前端](docs/architecture/20260926-2544-mdm-web.md)。
 
+## Web 组件开发
+
+`pnpm dev:ui` 启动独立组件展示页（仅 loopback）；可切换亮暗主题、中英文及禁用/只读/错误/加载/空态。展示入口不加载认证或业务 API，不进入产品镜像。组件契约见 [@rss/core](packages/core/README.md)。
+
+`make ci` 集中运行下列类型、lint、格式、测试、两产品构建扫描及组件展示构建，收集所有失败后返回非零；日志目录在命令结束时输出。修复后可按失败项定向复验。
+
 ## 开发与验证
 
 使用 Node.js 22、pnpm 11.4.0：

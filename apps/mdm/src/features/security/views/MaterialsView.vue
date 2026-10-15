@@ -10,7 +10,7 @@ import { useMaterialDisclosure } from '../useMaterialDisclosure'
 import SecurityFrame from '../components/SecurityFrame.vue'
 import MaterialFacts from '../components/MaterialFacts.vue'
 import RequestFacts from '../components/RequestFacts.vue'
-import UtcTimeInput from '../../policies/components/UtcTimeInput.vue'
+import { UiUtcDateTimeInput } from '@rss/core/components'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -268,14 +268,22 @@ onMounted(() => void changed())
           >{{ t('security.justification')
           }}<textarea v-model="reason" required maxlength="512" /></label
         ><label for="material-from">{{ t('security.validFrom') }}</label
-        ><UtcTimeInput id="material-from" v-model="from" :max="until - 1" /><label
-          for="material-until"
-          >{{ t('security.validUntil') }}</label
-        ><UtcTimeInput
+        ><UiUtcDateTimeInput
+          id="material-from"
+          required
+          :invalid-label="t('policies.invalidDate')"
+          :model-value="from"
+          :max="until - 1"
+          @update:model-value="from = $event ?? Number.NaN"
+        /><label for="material-until">{{ t('security.validUntil') }}</label
+        ><UiUtcDateTimeInput
           id="material-until"
-          v-model="until"
+          required
+          :invalid-label="t('policies.invalidDate')"
+          :model-value="until"
           :min="from + 1"
           :max="from + (action === 'reveal' ? 900 : 30 * 86400)"
+          @update:model-value="until = $event ?? Number.NaN"
         /><button>{{ t('security.submitRequest') }}</button>
       </fieldset>
     </form>

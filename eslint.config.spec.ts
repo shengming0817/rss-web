@@ -129,3 +129,22 @@ it('allows the shared upload limit in feature views while keeping transport fact
     ),
   ).toContain('no-restricted-imports')
 })
+
+it('isolates the component preview from product and authentication clients', async () => {
+  const file = 'apps/ui-preview/src/main.ts'
+  expect(
+    await ruleIds("import { x } from '@rss/core/components'; export const y = x", file),
+  ).not.toContain('no-restricted-imports')
+  for (const dependency of [
+    '@rss/auth',
+    '@rss/api/mdm',
+    '@rss/api/identity',
+    '@rss/mdm-app',
+    '@rss/core/src/index',
+  ]) {
+    expect(await ruleIds(`import { x } from '${dependency}'; export const y = x`, file)).toContain(
+      'no-restricted-imports',
+    )
+  }
+  expect(await ruleIds("fetch('/api/example')", file)).toContain('no-restricted-globals')
+})

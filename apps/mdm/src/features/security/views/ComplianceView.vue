@@ -8,7 +8,7 @@ import type { HistoryFilter } from '../clients/compliance'
 import type { CurrentCompliance } from '../clients/compliance-model'
 import AssessmentFacts from '../components/AssessmentFacts.vue'
 import SecurityFrame from '../components/SecurityFrame.vue'
-import UtcTimeInput from '../../policies/components/UtcTimeInput.vue'
+import { UiUtcDateTimeInput } from '@rss/core/components'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -149,10 +149,22 @@ onMounted(() => {
           >
           <template v-if="bounded"
             ><label for="compliance-from">{{ t('security.from') }}</label
-            ><UtcTimeInput id="compliance-from" v-model="from" :max="until" /><label
-              for="compliance-until"
-              >{{ t('security.until') }}</label
-            ><UtcTimeInput id="compliance-until" v-model="until" :min="from"
+            ><UiUtcDateTimeInput
+              id="compliance-from"
+              required
+              :invalid-label="t('policies.invalidDate')"
+              :model-value="from"
+              :max="until"
+              @update:model-value="from = $event ?? Number.NaN" /><label for="compliance-until">{{
+              t('security.until')
+            }}</label
+            ><UiUtcDateTimeInput
+              id="compliance-until"
+              required
+              :invalid-label="t('policies.invalidDate')"
+              :model-value="until"
+              :min="from"
+              @update:model-value="until = $event ?? Number.NaN"
           /></template>
           <button>{{ t('security.readHistory') }}</button>
         </fieldset>

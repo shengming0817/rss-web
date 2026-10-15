@@ -28,24 +28,5 @@ jobs:
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Format check
-        run: pnpm format:check
-
-      - name: Unit tests (with coverage)
-        run: pnpm test:coverage
-
-      # Boundary self-check (ESLint Node API) runs uninstrumented: under v8
-      # coverage the type-aware lint engine is ~12x slower and starves the
-      # vitest reporter RPC (onTaskUpdate timeout). Coverage adds no value for
-      # this enforcement spec, so it runs as its own fast step.
-      - name: Boundary self-check (no coverage)
-        run: pnpm test:boundary
-
-      - name: Build Identity and MDM and scan production assets
-        run: pnpm build
+      - name: Complete Web checks (collect all failures)
+        run: make ci

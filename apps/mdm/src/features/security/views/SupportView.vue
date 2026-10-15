@@ -13,7 +13,7 @@ import {
 import SecurityFrame from '../components/SecurityFrame.vue'
 import RequestFacts from '../components/RequestFacts.vue'
 import SupportFacts from '../components/SupportFacts.vue'
-import UtcTimeInput from '../../policies/components/UtcTimeInput.vue'
+import { UiUtcDateTimeInput } from '@rss/core/components'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -264,9 +264,24 @@ onMounted(changed)
           >{{ t('security.justification') }}<textarea v-model="reason" maxlength="512" required />
         </label>
         <label for="support-from">{{ t('security.validFrom') }}</label
-        ><UtcTimeInput id="support-from" v-model="from" :max="until - 1" />
+        ><UiUtcDateTimeInput
+          id="support-from"
+          required
+          :invalid-label="t('policies.invalidDate')"
+          :model-value="from"
+          :max="until - 1"
+          @update:model-value="from = $event ?? Number.NaN"
+        />
         <label for="support-until">{{ t('security.validUntil') }}</label
-        ><UtcTimeInput id="support-until" v-model="until" :min="from + 1" :max="from + 3600" />
+        ><UiUtcDateTimeInput
+          id="support-until"
+          required
+          :invalid-label="t('policies.invalidDate')"
+          :model-value="until"
+          :min="from + 1"
+          :max="from + 3600"
+          @update:model-value="until = $event ?? Number.NaN"
+        />
         <button :disabled="!allowed">{{ t('security.submitRequest') }}</button>
       </fieldset>
     </form>

@@ -20,7 +20,8 @@
   "dependencies": {
     "vue": "catalog:",
     "pinia": "catalog:",
-    "vue-i18n": "catalog:"
+    "vue-i18n": "catalog:",
+    "reka-ui": "catalog:"
   },
   "devDependencies": {
     "vitest": "catalog:",

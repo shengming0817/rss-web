@@ -6,7 +6,7 @@ import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
 import SecurityFrame from '../components/SecurityFrame.vue'
 import CertificateFacts from '../components/CertificateFacts.vue'
-import UtcTimeInput from '../../policies/components/UtcTimeInput.vue'
+import { UiUtcDateTimeInput } from '@rss/core/components'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -220,9 +220,23 @@ onMounted(changed)
           >{{ t('security.justification') }}<textarea v-model="reason" required maxlength="512" />
         </label>
         <label for="certificate-from">{{ t('security.validFrom') }}</label
-        ><UtcTimeInput id="certificate-from" v-model="from" :max="until - 1" />
+        ><UiUtcDateTimeInput
+          id="certificate-from"
+          required
+          :invalid-label="t('policies.invalidDate')"
+          :model-value="from"
+          :max="until - 1"
+          @update:model-value="from = $event ?? Number.NaN"
+        />
         <label for="certificate-until">{{ t('security.validUntil') }}</label
-        ><UtcTimeInput id="certificate-until" v-model="until" :min="from + 1" />
+        ><UiUtcDateTimeInput
+          id="certificate-until"
+          required
+          :invalid-label="t('policies.invalidDate')"
+          :model-value="until"
+          :min="from + 1"
+          @update:model-value="until = $event ?? Number.NaN"
+        />
         <button>{{ t('security.submitRequest') }}</button>
       </fieldset>
     </form>

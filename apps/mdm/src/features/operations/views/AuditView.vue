@@ -8,7 +8,7 @@ import { auditActions, type AuditEntry } from '../clients/model'
 import type { AuditFilter } from '../clients/audit'
 import OperationsFrame from '../components/OperationsFrame.vue'
 import OperationsReference from '../components/OperationsReference.vue'
-import UtcTimeInput from '../../policies/components/UtcTimeInput.vue'
+import { UiUtcDateTimeInput } from '@rss/core/components'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -123,10 +123,22 @@ onMounted(routeChanged)
         <label><input v-model="bounded" type="checkbox" />{{ t('security.filterTime') }}</label>
         <template v-if="bounded"
           ><label for="audit-from">{{ t('security.from') }}</label
-          ><UtcTimeInput id="audit-from" v-model="from" :max="until" /><label for="audit-until">{{
+          ><UiUtcDateTimeInput
+            id="audit-from"
+            required
+            :invalid-label="t('policies.invalidDate')"
+            :model-value="from"
+            :max="until"
+            @update:model-value="from = $event ?? Number.NaN" /><label for="audit-until">{{
             t('security.until')
           }}</label
-          ><UtcTimeInput id="audit-until" v-model="until" :min="from"
+          ><UiUtcDateTimeInput
+            id="audit-until"
+            required
+            :invalid-label="t('policies.invalidDate')"
+            :model-value="until"
+            :min="from"
+            @update:model-value="until = $event ?? Number.NaN"
         /></template>
         <button>{{ t('devices.reload') }}</button>
       </fieldset>

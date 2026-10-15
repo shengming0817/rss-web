@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
+import { UiTable, UiPagination } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
@@ -43,6 +44,22 @@ watch(
   },
   { immediate: true, flush: 'sync' },
 )
+type Row = NonNullable<typeof page.value>['items'][number]
+const columns = computed(() => [
+  { key: 'reference', label: t('devices.viewIdentity') },
+  { key: 'status', label: t('devices.status') },
+  { key: 'channels', label: t('devices.channels') },
+  { key: 'endpoints', label: t('devices.originalEndpoint') },
+])
+const rowKey = (item: Row) => `${item.reference.kind}:${item.reference.id}`
+function detail(item: Row) {
+  return item.reference.kind === 'endpoint'
+    ? { name: 'device-detail', params: { tenant: runtime.tenant, device: item.reference.id } }
+    : {
+        name: 'device-view-detail',
+        params: { tenant: runtime.tenant, kind: item.reference.kind, view: item.reference.id },
+      }
+}
 </script>
 <template>
   <DeviceFrame :title="t('devices.directory')" :busy="busy" :failure="failure">
@@ -86,71 +103,58 @@ watch(
         <strong>{{ page.statistics[key] }}</strong>
       </article>
     </div>
-    <table v-if="page?.items.length">
-      <thead>
-        <tr>
-          <th>{{ t('devices.viewIdentity') }}</th>
-          <th>{{ t('devices.status') }}</th>
-          <th>{{ t('devices.channels') }}</th>
-          <th>{{ t('devices.originalEndpoint') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="item in page.items" :key="`${item.reference.kind}:${item.reference.id}`">
-          <td>
+    <UiTable
+      v-if="page || busy"
+      :label="t('devices.directory')"
+      :rows="page?.items ?? []"
+      :columns="columns"
+      :row-key="rowKey"
+      :busy="busy"
+      :busy-label="t('devices.loading')"
+      :empty-label="t('devices.empty')"
+    >
+      <template #cell-reference="{ row }"
+        ><RouterLink :to="detail(row)"
+          >{{
+            t(
+              row.reference.kind === 'association'
+                ? 'devices.unifiedView'
+                : 'devices.originalEndpoint',
+            )
+          }}
+          · {{ row.reference.id }}</RouterLink
+        ></template
+      >
+      <template #cell-status="{ row }">{{
+        row.association
+          ? t(`devices.associationState.${row.association.state}`)
+          : t(`devices.endpointState.${row.endpoints[0]?.status}`)
+      }}</template>
+      <template #cell-channels="{ row }">{{
+        row.endpoints.flatMap((e) => e.channels.map((c) => c.channel)).join(' + ')
+      }}</template>
+      <template #cell-endpoints="{ row }"
+        ><ul>
+          <li v-for="endpoint in row.endpoints" :key="endpoint.id">
             <RouterLink
-              :to="
-                item.reference.kind === 'endpoint'
-                  ? {
-                      name: 'device-detail',
-                      params: { tenant: runtime.tenant, device: item.reference.id },
-                    }
-                  : {
-                      name: 'device-view-detail',
-                      params: {
-                        tenant: runtime.tenant,
-                        kind: item.reference.kind,
-                        view: item.reference.id,
-                      },
-                    }
-              "
-              >{{
-                t(
-                  item.reference.kind === 'association'
-                    ? 'devices.unifiedView'
-                    : 'devices.originalEndpoint',
-                )
-              }}
-              · {{ item.reference.id }}</RouterLink
+              :to="{
+                name: 'device-detail',
+                params: { tenant: runtime.tenant, device: endpoint.id },
+              }"
+              >{{ endpoint.id }}</RouterLink
             >
-          </td>
-          <td>
-            {{
-              item.association
-                ? t(`devices.associationState.${item.association.state}`)
-                : t(`devices.endpointState.${item.endpoints[0]?.status}`)
-            }}
-          </td>
-          <td>{{ item.endpoints.flatMap((e) => e.channels.map((c) => c.channel)).join(' + ') }}</td>
-          <td>
-            <ul>
-              <li v-for="endpoint in item.endpoints" :key="endpoint.id">
-                <RouterLink
-                  :to="{
-                    name: 'device-detail',
-                    params: { tenant: runtime.tenant, device: endpoint.id },
-                  }"
-                  >{{ endpoint.id }}</RouterLink
-                >
-              </li>
-            </ul>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-    <p v-else-if="page">{{ t('devices.empty') }}</p>
-    <button v-if="page?.nextCursor" :disabled="busy" @click="load(page.nextCursor)">
-      {{ t('devices.next') }}
-    </button>
+          </li>
+        </ul></template
+      >
+    </UiTable>
+    <UiPagination
+      v-if="page?.nextCursor"
+      :state="{ kind: 'cursor', hasPrevious: false, hasNext: true }"
+      :label="t('devices.directory')"
+      :previous-label="t('devices.previous')"
+      :next-label="t('devices.next')"
+      :busy="busy"
+      @navigate="$event === 'next' && load(page?.nextCursor ?? undefined)"
+    />
   </DeviceFrame>
 </template>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
-import { ModalShell } from '@rss/core/components'
+import { UiDialog } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
 import { useIdentity } from '../context'
 import { useOperation } from '../services/operation'
@@ -195,19 +195,20 @@ async function test(p: Provider) {
         <button type="submit" :disabled="busy || blocked">{{ t('identity.save') }}</button>
       </form>
     </template>
-    <ModalShell
+    <UiDialog
       :open="pending !== null"
-      title-id="provider-disable-title"
-      description-id="provider-disable-detail"
-      role="alertdialog"
-      @close="pending = null"
+      :title="t('identity.disableProvider')"
+      :description="`${pending?.settings.issuer ?? ''} · ${t('identity.disableProviderHelp')}`"
+      :close-label="t('identity.cancel')"
+      kind="alertdialog"
+      @update:open="!$event && (pending = null)"
     >
-      <h2 id="provider-disable-title">{{ t('identity.disableProvider') }}</h2>
-      <p id="provider-disable-detail">
-        {{ pending?.settings.issuer }} · {{ t('identity.disableProviderHelp') }}
-      </p>
-      <button @click="pending = null">{{ t('identity.cancel') }}</button>
-      <button :disabled="busy" @click="confirmDisable">{{ t('identity.confirm') }}</button>
-    </ModalShell>
+      <template #footer>
+        <button class="ui-button" @click="pending = null">{{ t('identity.cancel') }}</button>
+        <button class="ui-button ui-button--primary" :disabled="busy" @click="confirmDisable">
+          {{ t('identity.confirm') }}
+        </button>
+      </template>
+    </UiDialog>
   </section>
 </template>

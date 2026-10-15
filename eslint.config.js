@@ -307,4 +307,20 @@ export default tseslint.config(
   },
   // ── Prettier: 放最后关闭格式类规则，交给 prettier ─────────────────────────
   configPrettier,
+  {
+    files: ['apps/ui-preview/**/*.{ts,vue}'],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex: '^@rss/(?!core(?:/|$))',
+            message: 'Component preview consumes presentation only.',
+          },
+        ],
+        [NO_AXIOS_PATH],
+      ),
+      'no-restricted-globals': ['error', ...NO_NETWORK],
+      'no-restricted-properties': ['error', ...NO_NETWORK_PROPERTIES],
+    },
+  },
 )

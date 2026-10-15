@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ModalShell } from '@rss/core/components'
+import { UiDialog } from '@rss/core/components'
 import { useIdentity } from '../context'
 import { useOperation } from '../services/operation'
 import type { Account } from '../services/decode'
@@ -145,34 +145,43 @@ async function reset() {
         /><button type="submit" :disabled="busy">{{ t('identity.create') }}</button>
       </form>
     </template>
-    <ModalShell
+    <UiDialog
       :open="pending !== null"
-      title-id="change-title"
-      description-id="change-detail"
-      role="alertdialog"
-      @close="pending = null"
-      ><h2 id="change-title">{{ t('identity.confirmChange') }}</h2>
-      <p id="change-detail">
-        {{ pending?.account.login ?? pending?.account.principalId }} ·
-        {{ t('identity.changeHelp') }}
-      </p>
-      <button @click="pending = null">{{ t('identity.cancel') }}</button
-      ><button :disabled="busy" @click="confirm">{{ t('identity.confirm') }}</button></ModalShell
+      :title="t('identity.confirmChange')"
+      :description="`${pending?.account.login ?? pending?.account.principalId ?? ''} · ${t('identity.changeHelp')}`"
+      :close-label="t('identity.cancel')"
+      kind="alertdialog"
+      @update:open="!$event && (pending = null)"
     >
-    <ModalShell :open="resetTarget !== null" title-id="reset-title" @close="closeReset"
-      ><h2 id="reset-title">{{ t('identity.resetPassword') }}</h2>
-      <p>{{ t('identity.resetHelp') }}</p>
+      <template #footer>
+        <button class="ui-button" @click="pending = null">{{ t('identity.cancel') }}</button>
+        <button class="ui-button ui-button--primary" :disabled="busy" @click="confirm">
+          {{ t('identity.confirm') }}
+        </button>
+      </template>
+    </UiDialog>
+    <UiDialog
+      :open="resetTarget !== null"
+      :title="t('identity.resetPassword')"
+      :description="t('identity.resetHelp')"
+      :close-label="t('identity.cancel')"
+      @update:open="!$event && closeReset()"
+    >
       <form @submit.prevent="reset">
-        <label for="reset-password">{{ t('identity.newPassword') }}</label
-        ><input
+        <label for="reset-password">{{ t('identity.newPassword') }}</label>
+        <input
           id="reset-password"
           v-model="password"
+          class="ui-input"
           type="password"
           autocomplete="new-password"
           minlength="15"
           required
-        /><button type="submit" :disabled="busy">{{ t('identity.confirm') }}</button>
-      </form></ModalShell
-    >
+        />
+        <button class="ui-button ui-button--primary" type="submit" :disabled="busy">
+          {{ t('identity.confirm') }}
+        </button>
+      </form>
+    </UiDialog>
   </section>
 </template>

@@ -1,36 +1,65 @@
 :root {
-  --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-
-  --bg: oklch(0.995 0.002 270);
-  --bg-raised: oklch(1 0 0);
-  --line: oklch(0.92 0.004 270);
-  --fg: oklch(0.18 0.008 270);
-  --fg-muted: oklch(0.45 0.008 270);
-
-  --accent: oklch(0.58 0.19 268);
-
+  color-scheme: light;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --bg: #fff;
+  --bg-raised: #fff;
+  --bg-sunken: #f7f8fa;
+  --line: #e3e5e9;
+  --line-strong: #a8adb7;
+  --fg: #202124;
+  --fg-muted: #626873;
+  --accent: #4268bf;
+  --action-bg: #24262b;
+  --action-fg: #fff;
+  --success: #187151;
+  --success-bg: #edf8f2;
+  --warning: #8d5e10;
+  --warning-bg: #fff6e5;
+  --danger: #b43d45;
+  --danger-bg: #fff0f1;
+  --info: #365ca9;
+  --info-bg: #eff3ff;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-lg: 18px;
+  --r: 6px;
+  --r-lg: 10px;
   --r-xl: 14px;
-  --shadow-lg: 0 8px 28px rgba(17, 17, 26, 0.1), 0 2px 4px rgba(17, 17, 26, 0.04);
-
+  --shadow-lg: 0 8px 28px rgb(17 17 26 / 12%), 0 2px 4px rgb(17 17 26 / 4%);
+  --z-popover: 1000;
   --z-modal: 1000;
-
-  --overlay-bg: oklch(0 0 0 / 0.35);
+  --z-toast: 1100;
+  --overlay-bg: rgb(18 20 25 / 40%);
 }
-
 [data-theme='dark'] {
-  --bg: oklch(0.14 0.006 270);
-  --bg-raised: oklch(0.175 0.007 270);
-  --line: oklch(0.28 0.008 270);
-  --fg: oklch(0.96 0.004 270);
-  --fg-muted: oklch(0.68 0.008 270);
-
-  --accent: oklch(0.72 0.17 268);
-
-  --shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.35);
-
-  --overlay-bg: oklch(0 0 0 / 0.5);
+  color-scheme: dark;
+  --bg: #1b1c20;
+  --bg-raised: #22242a;
+  --bg-sunken: #16171b;
+  --line: #393c44;
+  --line-strong: #757b89;
+  --fg: #eeeef2;
+  --fg-muted: #b0b5c0;
+  --accent: #9aaff0;
+  --action-bg: #eeeef2;
+  --action-fg: #1b1c20;
+  --success: #8ed0ad;
+  --success-bg: #20382c;
+  --warning: #e5bc75;
+  --warning-bg: #3b3020;
+  --danger: #f0a3a9;
+  --danger-bg: #40272d;
+  --info: #a8bdf1;
+  --info-bg: #29334a;
+  --shadow-lg: 0 8px 28px rgb(0 0 0 / 45%);
+  --overlay-bg: rgb(0 0 0 / 55%);
 }
-
 * {
   box-sizing: border-box;
 }
@@ -44,20 +73,18 @@ body {
   color: var(--fg);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
-  font-feature-settings: 'cv11', 'ss01';
 }
-button {
-  font: inherit;
-  color: inherit;
-  background: none;
-  border: 0;
-  cursor: pointer;
-}
+button,
 input,
 textarea,
 select {
   font: inherit;
   color: inherit;
+}
+button {
+  cursor: pointer;
+  background: none;
+  border: 0;
 }
 a {
   color: inherit;
