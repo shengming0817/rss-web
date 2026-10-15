@@ -125,7 +125,7 @@ onMounted(() => list())
     </UiButton>
     <template v-if="!current && creating">
       <section class="console-panel">
-        <h2>{{ t('software.resolve') }}</h2>
+        <h2>{{ t('software.resolveImport') }}</h2>
         <form data-form="resolve" @submit.prevent="resolve">
           <fieldset :disabled="busy || uncertain">
             <label for="import-source">{{ t('software.source') }}</label

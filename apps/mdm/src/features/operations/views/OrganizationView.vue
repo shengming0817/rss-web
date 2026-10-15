@@ -50,6 +50,7 @@ async function load(after?: string) {
   )
 }
 async function open(group: string, replace = true) {
+  if (replace) section.value = 'groups'
   await run(
     async () => {
       for (let attempt = 0; attempt < 2; attempt++) {
@@ -86,6 +87,7 @@ async function open(group: string, replace = true) {
         draft.value = v.definition ?? fresh()
         deleted.value = v.definition === null
         editing.value = true
+        editorOpen.value = true
         remote.value = undefined
         remoteRevision.value = undefined
         conflict.value = false
@@ -166,6 +168,7 @@ function adopt() {
   failure.value = null
 }
 async function routeTarget() {
+  section.value = route.query['kind'] === 'delegation' ? 'delegations' : 'groups'
   if (typeof route.query['id'] === 'string') {
     if (route.query['kind'] === 'delegation') {
       await run(
@@ -224,9 +227,9 @@ onMounted(async () => {
       v-model="section"
       :label="t('operations.organization')"
       :items="[
-        { value: 'groups', label: t('operations.groupEditor'), disabled: busy || uncertain },
-        { value: 'departments', label: t('operations.departments'), disabled: busy || uncertain },
-        { value: 'delegations', label: t('operations.delegations'), disabled: busy || uncertain },
+        { value: 'groups', label: t('operations.groupEditor') },
+        { value: 'departments', label: t('operations.departments') },
+        { value: 'delegations', label: t('operations.delegations') },
       ]"
       keep-mounted
       ><template #groups>

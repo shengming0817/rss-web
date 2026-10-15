@@ -171,6 +171,14 @@ try {
     assert.equal(writes, count)
     assert.equal((await read(id)).revision, saved.revision)
     journeys.push(phase)
+    if (software) {
+      // The rejected preview leaves the draft on the review step. Return through
+      // the actual controls; do not depend on the department fallback reloading.
+      for (let step = 0; step < 3; step++)
+        await page.getByRole('button', { name: '上一步', exact: true }).click()
+      await page.locator('[data-field="access"]').waitFor({ state: 'visible' })
+      assert.equal(await page.locator('[data-field="access"]').isEnabled(), true)
+    }
     phase = `${software ? 'software' : 'script'}-users`
     // Seed fixed department references via the real API when this local login has no IdP directory.
     // The UI must preserve and identify them; a federated fixture can instead select them live.

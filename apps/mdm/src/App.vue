@@ -24,15 +24,20 @@ const personal = computed(() => route.name === 'self-enrollments')
 const consoleMode = computed(
   () => authenticated.value && route.meta['protected'] && !personal.value,
 )
-const authLinks = computed<NavigationItem[]>(() => [
+const authDestinations: NavigationItem[] = [
   { name: 'sessions', label: 'identity.sessions' },
-  ...(runtime.session.managementHint.value
-    ? [{ name: 'accounts', label: 'identity.accounts' }]
-    : []),
-  ...(runtime.session.providerHint.value
-    ? [{ name: 'providers', label: 'identity.providers' }]
-    : []),
-])
+  { name: 'accounts', label: 'identity.accounts' },
+  { name: 'providers', label: 'identity.providers' },
+]
+const authLinks = computed(() =>
+  authDestinations.filter((item) =>
+    item.name === 'accounts'
+      ? runtime.session.managementHint.value
+      : item.name === 'providers'
+        ? runtime.session.providerHint.value
+        : true,
+  ),
+)
 const destinations = computed<NavigationItem[]>(() => [
   { name: 'workspace', label: 'console.overview' },
   ...navigation
@@ -47,7 +52,13 @@ const section = computed(() =>
   navigation.find((group) => group.items.some((item) => item.name === parentName.value)),
 )
 const title = computed(() =>
-  t(destinations.value.find((item) => item.name === parentName.value)?.label ?? 'console.overview'),
+  t(
+    [
+      ...navigation.flatMap((group) => group.items),
+      ...authDestinations,
+      ...destinations.value,
+    ].find((item) => item.name === parentName.value)?.label ?? 'console.overview',
+  ),
 )
 const matches = computed(() =>
   destinations.value.filter((item) =>

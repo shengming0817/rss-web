@@ -140,6 +140,7 @@ async function open(id: string) {
   )
 }
 function routeTarget() {
+  section.value = typeof route.query['id'] === 'string' ? 'maintenance' : 'configuration'
   selected.value = undefined
   pending = undefined
   if (typeof route.query['id'] === 'string') void open(route.query['id'])
@@ -167,10 +168,9 @@ onMounted(async () => {
         {
           value: 'configuration',
           label: t('operations.configuration'),
-          disabled: busy || uncertain,
         },
-        { value: 'diagnostics', label: t('operations.diagnostics'), disabled: busy || uncertain },
-        { value: 'maintenance', label: t('operations.maintenance'), disabled: busy || uncertain },
+        { value: 'diagnostics', label: t('operations.diagnostics') },
+        { value: 'maintenance', label: t('operations.maintenance') },
       ]"
       keep-mounted
       ><template #configuration>
