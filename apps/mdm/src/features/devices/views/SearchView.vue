@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { onMounted, ref, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import type { Criteria, FieldDefinition, Query, SavedQuery } from '../clients/assets'
 import { operation, useOperation } from '../../../services/useOperation'
-import DeviceFrame from '../components/DeviceFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 import CriteriaEditor from '../components/CriteriaEditor.vue'
 import AssetValue from '../components/AssetValue.vue'
 const { t } = useI18n(),
@@ -130,14 +131,14 @@ function newSaved() {
 }
 </script>
 <template>
-  <DeviceFrame :title="t('devices.search')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('devices.search')" :busy="busy" :failure="failure">
     <p>{{ t('devices.noTtl') }}</p>
     <form @submit.prevent="search">
       <fieldset :disabled="busy || uncertain">
         <CriteriaEditor v-model="criteria" :fields="fields" />
         <label
           >{{ t('devices.sort') }}
-          <select v-model="sort">
+          <select v-model="sort" class="ui-input">
             <option value="">—</option>
             <option v-for="field in fields" :key="field.key" :value="field.key">
               {{ field.key }}
@@ -150,92 +151,116 @@ function newSaved() {
             ><input v-model="select" type="checkbox" :value="field.key" />{{ field.key }}</label
           >
         </fieldset>
-        <button type="submit" :disabled="!fields.length">{{ t('devices.run') }}</button>
+        <UiButton type="submit" :disabled="!!!fields.length">{{ t('devices.run') }}</UiButton>
       </fieldset>
     </form>
     <section v-if="task">
       <h2>{{ t('devices.task') }} {{ task }}</h2>
-      <button :disabled="busy" @click="refresh">{{ t('devices.refreshTask') }}</button>
+      <UiButton :disabled="!!busy" type="submit" @click="refresh">{{
+        t('devices.refreshTask')
+      }}</UiButton>
       <p v-if="status">
         {{ t(`devices.${status.status}`) }} · {{ t('devices.matched') }}
         {{ status.summary.matched }} · {{ t('devices.unknownMatches') }}
         {{ status.summary.unknown }} / {{ status.summary.total
         }}<span v-if="status.failure"> · {{ t('devices.failed') }}</span>
       </p>
-      <button
+      <UiButton
         v-if="status?.status === 'completed' && !status.failure"
-        :disabled="busy"
+        :disabled="!!busy"
+        type="submit"
         @click="results()"
       >
         {{ t('devices.load') }}
-      </button>
+      </UiButton>
     </section>
-    <table v-if="page?.items.length">
-      <thead>
-        <tr>
-          <th>{{ t('devices.deviceId') }}</th>
-          <th>{{ t('devices.inventory') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="device in page.items" :key="device.device">
-          <td>
-            <RouterLink
-              :to="{
-                name: 'device-detail',
-                params: { tenant: runtime.tenant, device: device.device },
-              }"
-              >{{ device.device }}</RouterLink
-            >
-          </td>
-          <td>
-            <dl>
-              <template v-for="field in device.fields" :key="field.field"
-                ><dt>{{ field.field }}</dt>
-                <dd><AssetValue :field="field" /></dd
-              ></template>
-            </dl>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <div v-if="page?.items.length" class="ui-table-scroll">
+      <table class="ui-table">
+        <thead>
+          <tr>
+            <th>{{ t('devices.deviceId') }}</th>
+            <th>{{ t('devices.inventory') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="device in page.items" :key="device.device">
+            <td>
+              <RouterLink
+                :to="{
+                  name: 'device-detail',
+                  params: { tenant: runtime.tenant, device: device.device },
+                }"
+                >{{ device.device }}</RouterLink
+              >
+            </td>
+            <td>
+              <dl>
+                <template v-for="field in device.fields" :key="field.field"
+                  ><dt>{{ field.field }}</dt>
+                  <dd><AssetValue :field="field" /></dd
+                ></template>
+              </dl>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
     <p v-else-if="page">{{ t('devices.empty') }}</p>
-    <button v-if="page?.nextCursor" :disabled="busy" @click="results(page.nextCursor)">
+    <UiButton
+      v-if="page?.nextCursor"
+      :disabled="!!busy"
+      type="submit"
+      @click="results(page.nextCursor)"
+    >
       {{ t('devices.next') }}
-    </button>
+    </UiButton>
     <section v-if="status?.status === 'completed' && !status.failure">
       <h2>{{ t('devices.facets') }}</h2>
       <p>{{ t('devices.facetNote') }}</p>
-      <select v-model="facet" :aria-label="t('devices.facets')" @change="facets = undefined">
+      <select
+        v-model="facet"
+        class="ui-input"
+        :aria-label="t('devices.facets')"
+        @change="facets = undefined"
+      >
         <option v-for="key in ['os_versions', 'channels', 'asset_states']" :key="key" :value="key">
           {{ t(`devices.${key}`) }}
         </option></select
-      ><button :disabled="busy" @click="loadFacets()">{{ t('devices.load') }}</button>
+      ><UiButton :disabled="!!busy" type="submit" @click="loadFacets()">{{
+        t('devices.load')
+      }}</UiButton>
       <ul>
         <li v-for="item in facets?.items" :key="item.label">{{ item.label }}: {{ item.total }}</li>
       </ul>
-      <button v-if="facets?.nextCursor" :disabled="busy" @click="loadFacets(facets.nextCursor)">
+      <UiButton
+        v-if="facets?.nextCursor"
+        :disabled="!!busy"
+        type="submit"
+        @click="loadFacets(facets.nextCursor)"
+      >
         {{ t('devices.next') }}
-      </button>
+      </UiButton>
     </section>
     <section>
       <h2>{{ t('devices.saved') }}</h2>
-      <button :disabled="busy" @click="loadSaved()">{{ t('devices.reload') }}</button>
+      <UiButton :disabled="!!busy" type="submit" @click="loadSaved()">{{
+        t('devices.reload')
+      }}</UiButton>
       <ul>
         <li v-for="item in saved?.items" :key="item.id">
-          <button :disabled="busy || uncertain" @click="load(item)">
+          <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="load(item)">
             {{ item.definition?.name }} · {{ item.revision }}
-          </button>
+          </UiButton>
         </li>
       </ul>
-      <button v-if="saved?.next" :disabled="busy" @click="loadSaved(saved.next)">
+      <UiButton v-if="saved?.next" :disabled="!!busy" type="submit" @click="loadSaved(saved.next)">
         {{ t('devices.next') }}
-      </button>
+      </UiButton>
       <p v-if="current">
         {{ current.id }} · {{ t('devices.revision') }} {{ current.revision }} ·
         {{ current.definition ? '' : t('devices.state.deleted') }}
       </p>
-      <section v-if="current?.definition" class="identity-card" data-testid="server-definition">
+      <section v-if="current?.definition" class="console-panel" data-testid="server-definition">
         <h3>{{ t('devices.current') }}</h3>
         <p>{{ current.definition.name }}</p>
         <p>
@@ -252,20 +277,25 @@ function newSaved() {
         </fieldset>
       </section>
       <form @submit.prevent="save()">
-        <label>{{ t('devices.name') }} <input v-model="name" required maxlength="256" /></label
-        ><button :disabled="busy || uncertain || current?.definition === null">
+        <label
+          >{{ t('devices.name') }}
+          <input v-model="name" class="ui-input" required maxlength="256" /></label
+        ><UiButton :disabled="!!(busy || uncertain || current?.definition === null)" type="submit">
           {{ t('devices.save') }}
-        </button>
+        </UiButton>
       </form>
-      <button :disabled="busy || uncertain" @click="newSaved()">
+      <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="newSaved()">
         {{ t('devices.create') }}
-      </button>
+      </UiButton>
       <template v-if="current?.definition"
-        ><button :disabled="busy || uncertain" @click="save(true)">{{ t('devices.delete') }}</button
-        ><button :disabled="busy || uncertain" @click="executeSaved">
-          {{ t('devices.executeSaved') }}</button
-        ><button
-          :disabled="busy"
+        ><UiButton :disabled="!!(busy || uncertain)" type="submit" @click="save(true)">{{
+          t('devices.delete')
+        }}</UiButton
+        ><UiButton :disabled="!!(busy || uncertain)" type="submit" @click="executeSaved">
+          {{ t('devices.executeSaved') }}</UiButton
+        ><UiButton
+          :disabled="!!busy"
+          type="submit"
           @click="
             run(
               () => client.readSaved(current!.id),
@@ -274,11 +304,11 @@ function newSaved() {
           "
         >
           {{ t('devices.compare') }}
-        </button></template
+        </UiButton></template
       >
     </section>
-    <button v-if="uncertain && pending" :disabled="busy" @click="pending!()">
+    <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending!()">
       {{ t('devices.replay') }}
-    </button>
-  </DeviceFrame>
+    </UiButton>
+  </PageFrame>
 </template>

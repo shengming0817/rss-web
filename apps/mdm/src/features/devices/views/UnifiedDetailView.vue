@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton, UiTabs, UiBadge } from '@rss/core/components'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -8,7 +9,7 @@ import { deviceBinding } from '../useDeviceBinding'
 import { reference, type DeviceView } from '../clients/device-views'
 import type { EndpointDetail } from '../clients/endpoint-model'
 import type { Association } from '../clients/associations'
-import DeviceFrame from '../components/DeviceFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 import ViewFacts from '../components/ViewFacts.vue'
 import AssociationPanel from '../components/AssociationPanel.vue'
 const { t } = useI18n(),
@@ -20,6 +21,7 @@ const { t } = useI18n(),
     id: String(route.params['view']),
   })),
   { run, busy, failure } = useOperation([], () => deviceBinding(runtime))
+const activeTab = ref('inventory')
 const view = ref<DeviceView>(),
   endpoints = ref<EndpointDetail[]>([])
 function clear() {
@@ -65,20 +67,39 @@ watch(
 )
 </script>
 <template>
-  <DeviceFrame :title="t('devices.unifiedView')" :busy="busy" :failure="failure"
-    ><button :disabled="busy" @click="load">{{ t('devices.reload') }}</button
+  <PageFrame :title="t('devices.unifiedView')" :busy="busy" :failure="failure"
+    ><template #actions
+      ><UiButton :disabled="busy" @click="load">{{ t('devices.reload') }}</UiButton></template
     ><template v-if="view"
-      ><p v-if="view.association">
-        {{ view.association.id }} / {{ view.association.version }} ·
-        {{ t(`devices.associationState.${view.association.state}`) }}
-      </p>
-      <AssociationPanel
-        v-if="view.association"
-        :association="view.association"
-        @changed="changed"
-        @denied="denied" /><ViewFacts
-        :view="view"
-        :endpoints="endpoints"
-        @invalidated="invalidated" /></template
-  ></DeviceFrame>
+      ><div class="console-object-summary">
+        <span class="console-object-mark" aria-hidden="true">◇</span>
+        <div>
+          <h2>{{ view.reference.id }}</h2>
+          <p>{{ t('devices.unifiedView') }}</p>
+        </div>
+        <UiBadge v-if="view.association">{{
+          t(`devices.associationState.${view.association.state}`)
+        }}</UiBadge>
+      </div>
+      <UiTabs
+        v-model="activeTab"
+        keep-mounted
+        :label="t('devices.unifiedView')"
+        :items="[
+          { value: 'inventory', label: t('devices.inventory') },
+          { value: 'association', label: t('devices.associationManagement') },
+        ]"
+      >
+        <template #inventory
+          ><ViewFacts :view="view" :endpoints="endpoints" @invalidated="invalidated"
+        /></template>
+        <template #association
+          ><AssociationPanel
+            v-if="view.association"
+            :association="view.association"
+            @changed="changed"
+            @denied="denied"
+        /></template>
+      </UiTabs> </template
+  ></PageFrame>
 </template>

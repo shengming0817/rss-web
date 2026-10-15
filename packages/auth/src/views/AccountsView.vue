@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { UiButton, UiDialog } from '@rss/core/components'
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiDialog } from '@rss/core/components'
 import { useIdentity } from '../context'
 import { useOperation } from '../services/operation'
 import type { Account } from '../services/decode'
@@ -67,7 +67,7 @@ async function reset() {
 }
 </script>
 <template>
-  <section class="identity-card">
+  <section class="auth-page">
     <h1>{{ t('identity.accounts') }}</h1>
     <p v-if="error" role="alert">{{ t(`identity.errors.${error}`) }}</p>
     <p v-if="session.state.value.navigation !== 'ready'" role="status">
@@ -77,72 +77,83 @@ async function reset() {
       {{ t('identity.errors.insufficient_privilege') }}
     </p>
     <template v-else>
-      <button :disabled="busy" @click="run(() => load())">
+      <UiButton :disabled="!!busy" type="submit" @click="run(() => load())">
         {{ t(loaded ? 'identity.reload' : 'identity.loadList') }}
-      </button>
+      </UiButton>
       <p v-if="!loaded" role="status">{{ t('identity.listNotLoaded') }}</p>
-      <div v-if="loaded" class="identity-table">
-        <table>
-          <thead>
-            <tr>
-              <th>{{ t('identity.account') }}</th>
-              <th>{{ t('identity.state') }}</th>
-              <th>{{ t('identity.actions') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="a in rows" :key="a.principalId">
-              <td>
-                {{ a.login ?? a.principalId }}<small>{{ a.principalId }}</small>
-              </td>
-              <td>
-                {{ t(a.enabled ? 'identity.enabled' : 'identity.disabled') }} ·
-                {{ t(a.memberActive ? 'identity.memberActive' : 'identity.memberInactive') }}
-              </td>
-              <td class="identity-actions">
-                <button
-                  :disabled="busy"
-                  @click="pending = { account: a, field: 'enabled', enabled: !a.enabled }"
-                >
-                  {{ t(a.enabled ? 'identity.disable' : 'identity.enable') }}
-                </button>
-                <button
-                  :disabled="busy"
-                  @click="pending = { account: a, field: 'membership', enabled: !a.memberActive }"
-                >
-                  {{ t(a.memberActive ? 'identity.disableMember' : 'identity.enableMember') }}
-                </button>
-                <button
-                  v-if="
-                    a.hasLocalPassword &&
-                    a.principalId !== session.state.value.identity?.principalId
-                  "
-                  :disabled="busy"
-                  @click="openReset(a)"
-                >
-                  {{ t('identity.resetPassword') }}
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <div v-if="loaded" class="auth-table">
+        <div class="ui-table-scroll">
+          <table class="ui-table">
+            <thead>
+              <tr>
+                <th>{{ t('identity.account') }}</th>
+                <th>{{ t('identity.state') }}</th>
+                <th>{{ t('identity.actions') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="a in rows" :key="a.principalId">
+                <td>
+                  {{ a.login ?? a.principalId }}<small>{{ a.principalId }}</small>
+                </td>
+                <td>
+                  {{ t(a.enabled ? 'identity.enabled' : 'identity.disabled') }} ·
+                  {{ t(a.memberActive ? 'identity.memberActive' : 'identity.memberInactive') }}
+                </td>
+                <td class="auth-actions">
+                  <UiButton
+                    :disabled="!!busy"
+                    type="submit"
+                    @click="pending = { account: a, field: 'enabled', enabled: !a.enabled }"
+                  >
+                    {{ t(a.enabled ? 'identity.disable' : 'identity.enable') }}
+                  </UiButton>
+                  <UiButton
+                    :disabled="!!busy"
+                    type="submit"
+                    @click="pending = { account: a, field: 'membership', enabled: !a.memberActive }"
+                  >
+                    {{ t(a.memberActive ? 'identity.disableMember' : 'identity.enableMember') }}
+                  </UiButton>
+                  <UiButton
+                    v-if="
+                      a.hasLocalPassword &&
+                      a.principalId !== session.state.value.identity?.principalId
+                    "
+                    :disabled="!!busy"
+                    type="submit"
+                    @click="openReset(a)"
+                  >
+                    {{ t('identity.resetPassword') }}
+                  </UiButton>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
-      <button v-if="next" :disabled="busy" @click="run(() => load(next ?? undefined))">
+      <UiButton
+        v-if="next"
+        :disabled="!!busy"
+        type="submit"
+        @click="run(() => load(next ?? undefined))"
+      >
         {{ t('identity.more') }}
-      </button>
+      </UiButton>
       <form @submit.prevent="create">
         <h2>{{ t('identity.createAccount') }}</h2>
         <label for="account-login">{{ t('identity.username') }}</label
-        ><input id="account-login" v-model="login" autocomplete="off" required />
+        ><input id="account-login" v-model="login" class="ui-input" autocomplete="off" required />
         <label for="account-password">{{ t('identity.password') }}</label
         ><input
           id="account-password"
           v-model="password"
+          class="ui-input"
           type="password"
           autocomplete="new-password"
           minlength="15"
           required
-        /><button type="submit" :disabled="busy">{{ t('identity.create') }}</button>
+        /><UiButton type="submit" :disabled="!!busy">{{ t('identity.create') }}</UiButton>
       </form>
     </template>
     <UiDialog
@@ -154,10 +165,17 @@ async function reset() {
       @update:open="!$event && (pending = null)"
     >
       <template #footer>
-        <button class="ui-button" @click="pending = null">{{ t('identity.cancel') }}</button>
-        <button class="ui-button ui-button--primary" :disabled="busy" @click="confirm">
+        <UiButton class="ui-button" type="submit" @click="pending = null">{{
+          t('identity.cancel')
+        }}</UiButton>
+        <UiButton
+          class="ui-button ui-button--primary"
+          :disabled="!!busy"
+          type="submit"
+          @click="confirm"
+        >
           {{ t('identity.confirm') }}
-        </button>
+        </UiButton>
       </template>
     </UiDialog>
     <UiDialog
@@ -178,9 +196,9 @@ async function reset() {
           minlength="15"
           required
         />
-        <button class="ui-button ui-button--primary" type="submit" :disabled="busy">
+        <UiButton class="ui-button ui-button--primary" type="submit" :disabled="!!busy">
           {{ t('identity.confirm') }}
-        </button>
+        </UiButton>
       </form>
     </UiDialog>
   </section>

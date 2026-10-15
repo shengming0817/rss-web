@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { onMounted, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { operation, useOperation, type Operation } from '../../../services/useOperation'
 import type { ImportChange, ImportJob, ImportQuery, ImportResolution } from '../clients/imports'
-import SoftwareFrame from '../components/SoftwareFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.software.imports
@@ -95,44 +96,51 @@ function start() {
 onMounted(() => list())
 </script>
 <template>
-  <SoftwareFrame :title="t('software.imports')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('software.imports')" :busy="busy" :failure="failure">
     <p>{{ t('software.importHint') }}</p>
-    <button :disabled="busy || uncertain" @click="create">{{ t('policies.create') }}</button>
-    <button :disabled="busy" @click="list()">{{ t('policies.reload') }}</button>
+    <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="create">{{
+      t('policies.create')
+    }}</UiButton>
+    <UiButton :disabled="!!busy" type="submit" @click="list()">{{ t('policies.reload') }}</UiButton>
     <p v-if="page && !page.items.length">{{ t('policies.empty') }}</p>
     <ul>
       <li v-for="job in page?.items" :key="job.id">
-        <button :disabled="busy || uncertain" @click="read(job.id)">
+        <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="read(job.id)">
           {{ job.resolution.package }} / {{ job.resolution.version }} ·
           {{ t(`software.import_${job.status}`) }}
-        </button>
+        </UiButton>
       </li>
     </ul>
-    <button v-if="page?.nextCursor" :disabled="busy" @click="list(page.nextCursor)">
+    <UiButton
+      v-if="page?.nextCursor"
+      :disabled="!!busy"
+      type="submit"
+      @click="list(page.nextCursor)"
+    >
       {{ t('policies.next') }}
-    </button>
+    </UiButton>
     <template v-if="!current">
       <form data-form="resolve" @submit.prevent="resolve">
         <fieldset :disabled="busy || uncertain">
           <label for="import-source">{{ t('software.source') }}</label
-          ><input id="import-source" v-model="query.source" required />
+          ><input id="import-source" v-model="query.source" class="ui-input" required />
           <label for="import-source-revision">{{ t('software.sourceRevision') }}</label
-          ><input id="import-source-revision" v-model="query.revision" required />
+          ><input id="import-source-revision" v-model="query.revision" class="ui-input" required />
           <label for="import-package">{{ t('software.package') }}</label
-          ><input id="import-package" v-model="query.package" required />
+          ><input id="import-package" v-model="query.package" class="ui-input" required />
           <label for="import-version">{{ t('software.version') }}</label
-          ><input id="import-version" v-model="query.version" required />
+          ><input id="import-version" v-model="query.version" class="ui-input" required />
           <label for="import-platform">{{ t('policies.platform') }}</label
-          ><select id="import-platform" v-model="query.platform">
+          ><select id="import-platform" v-model="query.platform" class="ui-input">
             <option value="windows">Windows</option>
             <option value="macos">macOS</option>
           </select>
           <label for="import-architecture">{{ t('policies.architecture') }}</label
-          ><select id="import-architecture" v-model="query.architecture">
+          ><select id="import-architecture" v-model="query.architecture" class="ui-input">
             <option value="x86_64">x86_64</option>
             <option value="aarch64">aarch64</option>
           </select>
-          <button type="submit">{{ t('software.resolveImport') }}</button>
+          <UiButton type="submit">{{ t('software.resolveImport') }}</UiButton>
         </fieldset>
       </form>
       <form v-if="resolution" data-form="start" @submit.prevent="start">
@@ -144,21 +152,22 @@ onMounted(() => list())
           <p>{{ t('software.resolutionExpiry') }} {{ resolution.expiresAt }}</p>
           <details>
             <summary>{{ t('software.contentDigest') }}</summary>
-            <p class="device-wrap">{{ resolution.definitionDigest.join(',') }}</p>
+            <p class="console-wrap">{{ resolution.definitionDigest.join(',') }}</p>
           </details>
           <label for="import-resource">{{ t('software.targetResource') }}</label
-          ><input id="import-resource" v-model="resource" required />
+          ><input id="import-resource" v-model="resource" class="ui-input" required />
           <label for="import-resource-version">{{ t('software.resourceVersion') }}</label
-          ><input id="import-resource-version" v-model="version" required />
+          ><input id="import-resource-version" v-model="version" class="ui-input" required />
           <label for="import-resource-revision">{{ t('software.importResourceRevision') }}</label
           ><input
             id="import-resource-revision"
             v-model.number="resourceRevision"
+            class="ui-input"
             type="number"
             min="0"
             required
           />
-          <button type="submit">{{ t('software.startImport') }}</button>
+          <UiButton type="submit">{{ t('software.startImport') }}</UiButton>
         </fieldset>
       </form>
     </template>
@@ -179,20 +188,22 @@ onMounted(() => list())
         <dt>{{ t('software.importOperation') }}</dt>
         <dd>{{ current.id }}</dd>
       </dl>
-      <button
+      <UiButton
         v-if="current.status === 'pending'"
-        :disabled="busy || uncertain"
+        :disabled="!!(busy || uncertain)"
+        type="submit"
         @click="change({ action: 'cancel' })"
       >
         {{ t('software.cancelImport') }}
-      </button>
-      <button
+      </UiButton>
+      <UiButton
         v-if="current.status === 'unknown'"
-        :disabled="busy || uncertain"
+        :disabled="!!(busy || uncertain)"
+        type="submit"
         @click="change({ action: 'reconcile' })"
       >
         {{ t('software.reconcileImport') }}
-      </button>
+      </UiButton>
       <RouterLink
         v-if="current.status === 'completed'"
         :to="{
@@ -203,9 +214,17 @@ onMounted(() => list())
         >{{ t('software.versionAdmission') }}</RouterLink
       >
     </section>
-    <button v-if="current || uncertain" data-action="read-import" :disabled="busy" @click="read()">
+    <UiButton
+      v-if="current || uncertain"
+      data-action="read-import"
+      :disabled="!!busy"
+      type="submit"
+      @click="read()"
+    >
       {{ t('software.reconcile') }}
-    </button>
-    <button v-if="uncertain" :disabled="busy" @click="replay">{{ t('policies.replay') }}</button>
-  </SoftwareFrame>
+    </UiButton>
+    <UiButton v-if="uncertain" :disabled="!!busy" type="submit" @click="replay">{{
+      t('policies.replay')
+    }}</UiButton>
+  </PageFrame>
 </template>

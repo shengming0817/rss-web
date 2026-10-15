@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton, UiTabs, UiBadge, UiDialog, UiMessage } from '@rss/core/components'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -9,7 +10,7 @@ import type { DeviceView } from '../clients/device-views'
 import type { EndpointDetail } from '../clients/endpoint-model'
 import type { Association } from '../clients/associations'
 import type { Inventory, FieldDefinition } from '../clients/assets'
-import DeviceFrame from '../components/DeviceFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 import ViewFacts from '../components/ViewFacts.vue'
 import ManualPanel from '../components/ManualPanel.vue'
 import AssociationPanel from '../components/AssociationPanel.vue'
@@ -30,8 +31,16 @@ const detail = ref<EndpointDetail>(),
   assignment = ref<Awaited<ReturnType<typeof clients.candidate.assignment>>>(),
   owner = ref(''),
   department = ref(''),
-  confirmRevoke = ref(false)
-const tabs = ['inventory', 'manual', 'credentials', 'history', 'assignment', 'actions'] as const,
+  revokeTarget = ref<string | null>(null)
+const tabs = [
+    'inventory',
+    'manual',
+    'credentials',
+    'history',
+    'assignment',
+    'actions',
+    'associationManagement',
+  ] as const,
   tab = ref<(typeof tabs)[number]>('inventory')
 let pending: (() => Promise<void>) | undefined
 function clear() {
@@ -44,7 +53,7 @@ function clear() {
   assignment.value = undefined
   owner.value = ''
   department.value = ''
-  confirmRevoke.value = false
+  revokeTarget.value = null
   pending = undefined
 }
 async function load() {
@@ -95,8 +104,9 @@ async function loadTab(next?: string) {
       },
     )
 }
-async function selectTab(key: (typeof tabs)[number]) {
-  tab.value = key
+async function selectTab(key: string) {
+  if (!(tabs as readonly string[]).includes(key)) return
+  tab.value = key as (typeof tabs)[number]
   await loadTab()
 }
 function assign() {
@@ -115,7 +125,7 @@ function assign() {
   void pending()
 }
 function revoke(registration: string) {
-  if (busy.value || uncertain.value || !confirmRevoke.value) return
+  if (busy.value || uncertain.value || revokeTarget.value !== registration) return
   const device = id.value,
     op = crypto.randomUUID()
   pending = async () => {
@@ -123,7 +133,7 @@ function revoke(registration: string) {
       await runWrite(
         () => clients.enrollment.revoke(device, registration, op),
         () => {
-          confirmRevoke.value = false
+          revokeTarget.value = null
           registrations.value = undefined
           detail.value = undefined
           view.value = undefined
@@ -176,121 +186,148 @@ watch(
 )
 </script>
 <template>
-  <DeviceFrame :title="`${t('devices.detail')} · ${id}`" :busy="busy" :failure="failure">
-    <button :disabled="busy" @click="load">{{ t('devices.reload') }}</button>
+  <PageFrame :title="`${t('devices.detail')} · ${id}`" :busy="busy" :failure="failure">
+    <template #actions
+      ><UiButton :disabled="busy" @click="load">{{ t('devices.reload') }}</UiButton></template
+    >
     <template v-if="detail && view">
-      <nav class="device-actions" :aria-label="t('devices.detail')">
-        <button
-          v-for="key in tabs"
-          :key="key"
-          :aria-pressed="tab === key"
-          :disabled="busy"
-          @click="selectTab(key)"
+      <div class="console-object-summary">
+        <span class="console-object-mark" aria-hidden="true">▱</span>
+        <div>
+          <h2>{{ id }}</h2>
+          <p>{{ t('devices.originalEndpoint') }}</p>
+        </div>
+        <UiBadge>{{ t(`devices.endpointState.${detail.status}`) }}</UiBadge
+        ><UiBadge v-for="channel in detail.channels" :key="channel.registrationId"
+          >{{ channel.channel }} · {{ channel.source }}</UiBadge
         >
-          {{ t(`devices.${key}`) }}
-        </button>
-      </nav>
-      <section v-show="tab === 'inventory'">
-        <AssociationPanel :endpoint="detail" @changed="changed" @denied="denied" /><ViewFacts
-          :view="view"
-          :endpoints="[detail]"
-          @invalidated="invalidated"
-        />
-      </section>
-      <section v-show="tab === 'manual'">
-        <p>{{ t('devices.manualOwner') }}: {{ id }}</p>
-        <ManualPanel
-          v-if="inventory"
-          :device="id"
-          :inventory="inventory"
-          :fields="fields"
-          @updated="inventory = $event"
-        />
-      </section>
-      <section v-if="tab === 'credentials'">
-        <p>{{ t('devices.revokeNote') }}</p>
-        <p>{{ t('devices.enrollmentNote') }}</p>
-        <RouterLink
-          :to="{
-            name: 'registration-users',
-            params: { tenant: runtime.tenant },
-            query: { device: id },
-          }"
-          >{{ t('registration.user') }}</RouterLink
-        ><label
-          ><input v-model="confirmRevoke" type="checkbox" />{{ t('devices.confirmAction') }}</label
-        >
-        <ul>
-          <li v-for="r in registrations?.items" :key="r.registrationId">
-            {{ r.registrationId }} · {{ r.source }} · {{ r.generation }} · {{ r.status
-            }}<button
-              :disabled="busy || uncertain || !confirmRevoke || r.status !== 'active'"
-              @click="revoke(r.registrationId)"
-            >
-              {{ t('devices.revoke') }}
-            </button>
-          </li>
-        </ul>
-        <button :disabled="busy" @click="loadTab()">{{ t('devices.reload') }}</button
-        ><button
-          v-if="registrations?.nextCursor"
-          :disabled="busy"
-          @click="loadTab(registrations.nextCursor)"
-        >
-          {{ t('devices.next') }}
-        </button>
-        <ul>
-          <li v-for="enrollment in detail.enrollments" :key="enrollment.enrollmentId">
+      </div>
+      <UiTabs
+        :model-value="tab"
+        :label="t('devices.detail')"
+        :items="tabs.map((value) => ({ value, label: t(`devices.${value}`), disabled: busy }))"
+        keep-mounted
+        @update:model-value="selectTab"
+      >
+        <template #inventory
+          ><section>
+            <ViewFacts :view="view" :endpoints="[detail]" @invalidated="invalidated" />
+          </section> </template
+        ><template #manual
+          ><section>
+            <p>{{ t('devices.manualOwner') }}: {{ id }}</p>
+            <ManualPanel
+              v-if="inventory"
+              :device="id"
+              :inventory="inventory"
+              :fields="fields"
+              @updated="inventory = $event"
+            />
+          </section> </template
+        ><template #credentials
+          ><section v-if="tab === 'credentials'">
+            <p>{{ t('devices.revokeNote') }}</p>
+            <p>{{ t('devices.enrollmentNote') }}</p>
             <RouterLink
               :to="{
-                name: 'device-enroll',
+                name: 'registration-users',
                 params: { tenant: runtime.tenant },
-                query: { enrollment: enrollment.enrollmentId, device: id },
+                query: { device: id },
               }"
-              >{{ enrollment.enrollmentId }} · {{ enrollment.status }}</RouterLink
+              >{{ t('registration.user') }}</RouterLink
             >
-          </li>
-        </ul>
-      </section>
-      <section v-if="tab === 'history'">
-        <p v-if="history">
-          {{ t('devices.historyCoverage') }}:
-          {{ t(history.coverage.complete ? 'devices.yes' : 'devices.no') }}
-        </p>
-        <ol>
-          <li v-for="fact in history?.items" :key="fact.eventId">
-            {{ fact.recordedAt }} · {{ fact.action }} · {{ fact.auditOutcome }} ·
-            {{ fact.registrationId ?? '—' }} · {{ fact.operationId ?? '—' }} · {{ fact.effect }}
-          </li>
-        </ol>
-        <button v-if="history?.nextCursor" :disabled="busy" @click="loadTab(history.nextCursor)">
-          {{ t('devices.next') }}
-        </button>
-      </section>
-      <section v-if="tab === 'assignment'">
-        <p>{{ t('devices.candidateOperation') }}</p>
-        <p v-if="assignment">
-          {{ t('devices.current') }}: {{ assignment.owner ?? '—' }} /
-          {{ assignment.department ?? '—' }} · {{ t('devices.revision') }} {{ assignment.revision }}
-        </p>
-        <form @submit.prevent="assign">
-          <fieldset :disabled="busy || uncertain || !assignment">
-            <label>{{ t('devices.owner') }}<input v-model="owner" maxlength="256" /></label
-            ><label
-              >{{ t('devices.department') }}<input v-model="department" maxlength="256" /></label
-            ><button>{{ t('devices.save') }}</button>
-          </fieldset>
-        </form>
-        <button :disabled="busy" @click="loadTab()">{{ t('devices.compare') }}</button>
-      </section>
-      <section v-if="tab === 'actions'">
-        <p>{{ t('devices.candidateOperation') }}</p>
-        <BatchPanel :devices="[id]" />
-      </section>
-      <button v-if="uncertain && pending" :disabled="busy" @click="pending()">
+            <ul>
+              <li v-for="r in registrations?.items" :key="r.registrationId">
+                {{ r.registrationId }} · {{ r.source }} · {{ r.generation }} · {{ r.status
+                }}<UiButton
+                  :disabled="!!(busy || uncertain || r.status !== 'active')"
+                  type="submit"
+                  @click="revokeTarget = r.registrationId"
+                >
+                  {{ t('devices.revoke') }}
+                </UiButton>
+              </li>
+            </ul>
+            <UiButton :disabled="!!busy" type="submit" @click="loadTab()">{{
+              t('devices.reload')
+            }}</UiButton
+            ><UiButton
+              v-if="registrations?.nextCursor"
+              :disabled="!!busy"
+              type="submit"
+              @click="loadTab(registrations.nextCursor)"
+            >
+              {{ t('devices.next') }}
+            </UiButton>
+            <ul>
+              <li v-for="enrollment in detail.enrollments" :key="enrollment.enrollmentId">
+                <RouterLink
+                  :to="{
+                    name: 'device-enroll',
+                    params: { tenant: runtime.tenant },
+                    query: { enrollment: enrollment.enrollmentId, device: id },
+                  }"
+                  >{{ enrollment.enrollmentId }} · {{ enrollment.status }}</RouterLink
+                >
+              </li>
+            </ul>
+          </section> </template
+        ><template #history
+          ><section v-if="tab === 'history'">
+            <p v-if="history">
+              {{ t('devices.historyCoverage') }}:
+              {{ t(history.coverage.complete ? 'devices.yes' : 'devices.no') }}
+            </p>
+            <ol>
+              <li v-for="fact in history?.items" :key="fact.eventId">
+                {{ fact.recordedAt }} · {{ fact.action }} · {{ fact.auditOutcome }} ·
+                {{ fact.registrationId ?? '—' }} · {{ fact.operationId ?? '—' }} · {{ fact.effect }}
+              </li>
+            </ol>
+            <UiButton
+              v-if="history?.nextCursor"
+              :disabled="!!busy"
+              type="submit"
+              @click="loadTab(history.nextCursor)"
+            >
+              {{ t('devices.next') }}
+            </UiButton>
+          </section> </template
+        ><template #assignment
+          ><section v-if="tab === 'assignment'">
+            <p>{{ t('devices.candidateOperation') }}</p>
+            <p v-if="assignment">
+              {{ t('devices.current') }}: {{ assignment.owner ?? '—' }} /
+              {{ assignment.department ?? '—' }} · {{ t('devices.revision') }}
+              {{ assignment.revision }}
+            </p>
+            <form @submit.prevent="assign">
+              <fieldset :disabled="busy || uncertain || !assignment">
+                <label
+                  >{{ t('devices.owner')
+                  }}<input v-model="owner" class="ui-input" maxlength="256" /></label
+                ><label
+                  >{{ t('devices.department')
+                  }}<input v-model="department" class="ui-input" maxlength="256" /></label
+                ><UiButton type="submit">{{ t('devices.save') }}</UiButton>
+              </fieldset>
+            </form>
+            <UiButton :disabled="!!busy" type="submit" @click="loadTab()">{{
+              t('devices.compare')
+            }}</UiButton>
+          </section> </template
+        ><template #actions
+          ><section v-if="tab === 'actions'">
+            <p>{{ t('devices.candidateOperation') }}</p>
+            <BatchPanel :devices="[id]" />
+          </section> </template
+        ><template #associationManagement
+          ><AssociationPanel :endpoint="detail" @changed="changed" @denied="denied" /></template
+      ></UiTabs>
+      <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending()">
         {{ t('devices.replay') }}
-      </button>
-      <nav class="device-actions" :aria-label="t('security.relatedRecords')">
+      </UiButton>
+      <nav class="console-inline-actions" :aria-label="t('security.relatedRecords')">
         <RouterLink
           :to="{ name: 'policy-scopes', params: { tenant: runtime.tenant }, query: { device: id } }"
           >{{ t('policies.scopes') }}</RouterLink
@@ -323,5 +360,33 @@ watch(
         >
       </nav>
     </template>
-  </DeviceFrame>
+    <UiDialog
+      :open="revokeTarget !== null"
+      :title="t('devices.revoke')"
+      :description="t('devices.revokeNote')"
+      :close-label="t('console.cancel')"
+      kind="alertdialog"
+      :dismissible="!busy && !uncertain"
+      @update:open="!$event && (revokeTarget = null)"
+      ><UiMessage v-if="failure" tone="danger" :title="t(`devices.${failure}`)" />
+      <p>{{ t('devices.detail') }}: {{ id }}</p>
+      <code>{{ revokeTarget }}</code>
+      <p v-if="uncertain">{{ t('devices.replay') }}</p>
+      <template #footer
+        ><UiButton v-if="!uncertain" :disabled="busy" @click="revokeTarget = null">{{
+          t('console.cancel')
+        }}</UiButton
+        ><UiButton v-if="uncertain && pending" :disabled="busy" @click="pending()">{{
+          t('devices.replay')
+        }}</UiButton
+        ><UiButton
+          v-else
+          variant="danger"
+          :disabled="busy || !revokeTarget"
+          @click="revokeTarget && revoke(revokeTarget)"
+          >{{ t('devices.confirmAction') }}</UiButton
+        ></template
+      ></UiDialog
+    >
+  </PageFrame>
 </template>

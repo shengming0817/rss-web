@@ -39,7 +39,7 @@ export default tseslint.config(
       'pnpm-lock.yaml',
       'worktrees/**',
       '.specify/**',
-      'docs/design/**/*.jsx', // 设计稿 JSX 非源码
+      'docs/design/**', // Approved standalone design references are not product source
       '**/node_modules/**',
     ],
   },

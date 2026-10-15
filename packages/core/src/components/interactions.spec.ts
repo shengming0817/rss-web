@@ -376,3 +376,20 @@ it('keeps readonly comboboxes focusable, closes an open popup, and prevents sele
     .trigger('click')
   expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['b'])
 })
+
+it('keeps opted-in tab state mounted without exposing its inactive panel', async () => {
+  const wrapper = mount(Ui.UiTabs, {
+    attachTo: document.body,
+    props: { modelValue: 'a', items: options, label: 'Persistent views', keepMounted: true },
+    slots: { a: '<input aria-label="Draft" />', b: 'Other content' },
+  })
+  await wrapper.get('input').setValue('Unsaved draft')
+  await wrapper.setProps({ modelValue: 'b' })
+  expect(wrapper.get('input').element.value).toBe('Unsaved draft')
+  expect(
+    (wrapper.get('input').element.closest('[role=tabpanel]') as HTMLElement).style.display,
+  ).toBe('none')
+  await wrapper.setProps({ modelValue: 'a' })
+  expect(wrapper.get('input').element.value).toBe('Unsaved draft')
+  expect(wrapper.get('[role=tabpanel][data-state=active]').isVisible()).toBe(true)
+})

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -9,7 +10,7 @@ import {
   type PublicationChange,
   type Ring,
 } from '../clients/publication'
-import SoftwareFrame from '../components/SoftwareFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.software.publication
@@ -138,49 +139,67 @@ function recover() {
 onMounted(() => list())
 </script>
 <template>
-  <SoftwareFrame :title="t('software.publications')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('software.publications')" :busy="busy" :failure="failure">
     <p>{{ t('software.publicationHint') }}</p>
-    <button :disabled="busy" @click="list()">{{ t('policies.reload') }}</button>
+    <UiButton :disabled="!!busy" type="submit" @click="list()">{{ t('policies.reload') }}</UiButton>
     <p v-if="directory && !directory.items.length">{{ t('policies.empty') }}</p>
     <ul>
       <li v-for="entry in directory?.items" :key="`${entry.source}/${entry.id}`">
-        <button :disabled="busy || uncertain" @click="openCandidate(entry.source, entry.id)">
+        <UiButton
+          :disabled="!!(busy || uncertain)"
+          type="submit"
+          @click="openCandidate(entry.source, entry.id)"
+        >
           {{ entry.source }} / {{ entry.id }} · {{ t(`software.disposition_${entry.disposition}`) }}
-        </button>
+        </UiButton>
       </li>
     </ul>
-    <button v-if="directory?.nextCursor" :disabled="busy" @click="list(directory.nextCursor)">
+    <UiButton
+      v-if="directory?.nextCursor"
+      :disabled="!!busy"
+      type="submit"
+      @click="list(directory.nextCursor)"
+    >
       {{ t('policies.next') }}
-    </button>
-    <button :disabled="busy || uncertain" @click="create">{{ t('policies.create') }}</button>
+    </UiButton>
+    <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="create">{{
+      t('policies.create')
+    }}</UiButton>
     <form @submit.prevent="load">
       <fieldset :disabled="busy || uncertain">
         <label for="publication-source">{{ t('software.publicationSource') }}</label
-        ><input id="publication-source" v-model="source" :readonly="!!current" required />
+        ><input
+          id="publication-source"
+          v-model="source"
+          class="ui-input"
+          :readonly="!!current"
+          required
+        />
         <label for="publication-id">{{ t('software.candidateId') }}</label
-        ><input id="publication-id" v-model="id" :readonly="!!current" required />
-        <button type="submit">{{ t('policies.open') }}</button>
+        ><input id="publication-id" v-model="id" class="ui-input" :readonly="!!current" required />
+        <UiButton type="submit">{{ t('policies.open') }}</UiButton>
       </fieldset>
     </form>
     <form v-if="!current" @submit.prevent="submit">
       <fieldset :disabled="busy || uncertain">
         <label for="publication-resource">{{ t('software.resourceId') }}</label
-        ><input id="publication-resource" v-model="resource" required />
+        ><input id="publication-resource" v-model="resource" class="ui-input" required />
         <label for="publication-version">{{ t('software.resourceVersion') }}</label
-        ><input id="publication-version" v-model="version" required />
+        ><input id="publication-version" v-model="version" class="ui-input" required />
         <label for="publication-resource-revision">{{ t('software.resourceRevision') }}</label
         ><input
           id="publication-resource-revision"
           v-model.number="resourceRevision"
+          class="ui-input"
           type="number"
           min="1"
           required
         />
         <label for="publication-payload">{{ t('software.publicationPayload') }}</label
-        ><textarea id="publication-payload" v-model="payload" rows="10" required />
-        <button type="submit" :disabled="!source || !id">
+        ><textarea id="publication-payload" v-model="payload" class="ui-input" rows="10" required />
+        <UiButton type="submit" :disabled="!!(!source || !id)">
           {{ t('software.createCandidate') }}
-        </button>
+        </UiButton>
       </fieldset>
     </form>
     <template v-if="current">
@@ -190,11 +209,16 @@ onMounted(() => list())
         <dt>{{ t('software.resourceRevision') }}</dt>
         <dd>{{ current.revision }}</dd>
         <dt>{{ t('software.contentDigest') }}</dt>
-        <dd class="device-wrap">{{ current.contentDigest.join(',') }}</dd>
+        <dd class="console-wrap">{{ current.contentDigest.join(',') }}</dd>
       </dl>
       <p>{{ t('software.actorSeparation') }}</p>
       <label for="publication-publisher">{{ t('software.publisherSubject') }}</label
-      ><input id="publication-publisher" v-model="publisher" :disabled="busy || uncertain" />
+      ><input
+        id="publication-publisher"
+        v-model="publisher"
+        class="ui-input"
+        :disabled="busy || uncertain"
+      />
       <article v-for="state in current.rings" :key="state.ring">
         <h2>{{ t(`software.ring_${state.ring}`) }}</h2>
         <p>
@@ -210,41 +234,56 @@ onMounted(() => list())
           <dt>{{ t('software.publisherSubject') }}</dt>
           <dd>{{ state.approval.publisher }}</dd>
         </dl>
-        <div class="device-actions">
-          <button
-            :disabled="busy || uncertain || current.disposition !== 'active' || !!state.publication"
+        <div class="console-inline-actions">
+          <UiButton
+            :disabled="
+              !!(busy || uncertain || current.disposition !== 'active' || !!state.publication)
+            "
+            type="submit"
             @click="change({ action: 'validate', ring: state.ring })"
           >
             {{ t('software.validateRelease') }}
-          </button>
-          <button
+          </UiButton>
+          <UiButton
             :disabled="
-              busy ||
-              uncertain ||
-              current.disposition !== 'active' ||
-              state.state !== 'validated' ||
-              !publisher
-            "
-            @click="change({ action: 'approve', ring: state.ring, publisherSubject: publisher })"
-          >
-            {{ t('software.approveRelease') }}
-          </button>
-          <button
-            :disabled="
-              busy || uncertain || current.disposition !== 'active' || state.state !== 'approved'
-            "
-            @click="change({ action: 'authorize', ring: state.ring })"
-          >
-            {{ t('software.authorizeRelease') }}
-          </button>
-          <template v-if="state.publication">
-            <button
-              :disabled="
+              !!(
                 busy ||
                 uncertain ||
                 current.disposition !== 'active' ||
-                state.publication.outcome !== 'unknown'
+                state.state !== 'validated' ||
+                !publisher
+              )
+            "
+            type="submit"
+            @click="change({ action: 'approve', ring: state.ring, publisherSubject: publisher })"
+          >
+            {{ t('software.approveRelease') }}
+          </UiButton>
+          <UiButton
+            :disabled="
+              !!(
+                busy ||
+                uncertain ||
+                current.disposition !== 'active' ||
+                state.state !== 'approved'
+              )
+            "
+            type="submit"
+            @click="change({ action: 'authorize', ring: state.ring })"
+          >
+            {{ t('software.authorizeRelease') }}
+          </UiButton>
+          <template v-if="state.publication">
+            <UiButton
+              :disabled="
+                !!(
+                  busy ||
+                  uncertain ||
+                  current.disposition !== 'active' ||
+                  state.publication.outcome !== 'unknown'
+                )
               "
+              type="submit"
               @click="
                 change({
                   action: 'publish',
@@ -255,9 +294,10 @@ onMounted(() => list())
               "
             >
               {{ t('software.publishRelease') }}
-            </button>
-            <button
-              :disabled="busy || uncertain"
+            </UiButton>
+            <UiButton
+              :disabled="!!(busy || uncertain)"
+              type="submit"
               @click="
                 change({
                   action: 'recover',
@@ -268,28 +308,32 @@ onMounted(() => list())
               "
             >
               {{ t('software.recoverRelease') }}
-            </button>
-            <button
+            </UiButton>
+            <UiButton
               :disabled="
-                busy ||
-                uncertain ||
-                current.disposition !== 'active' ||
-                state.publication.outcome !== 'not_applied'
+                !!(
+                  busy ||
+                  uncertain ||
+                  current.disposition !== 'active' ||
+                  state.publication.outcome !== 'not_applied'
+                )
               "
+              type="submit"
               @click="
                 change({ action: 'retry', ring: state.ring, attempt: state.publication.attempt })
               "
             >
               {{ t('software.retryRelease') }}
-            </button>
+            </UiButton>
           </template>
-          <button
+          <UiButton
             :data-action="`withdraw-${state.ring}`"
-            :disabled="busy || uncertain || current.disposition === 'quarantined'"
+            :disabled="!!(busy || uncertain || current.disposition === 'quarantined')"
+            type="submit"
             @click="change({ action: 'withdraw', ring: state.ring })"
           >
             {{ t('software.withdrawRelease') }}
-          </button>
+          </UiButton>
         </div>
       </article>
       <p>{{ t('software.withdrawalHint') }}</p>
@@ -304,15 +348,15 @@ onMounted(() => list())
     </template>
     <div v-if="uncertain" role="status">
       <p>{{ t('software.publicationUnknown') }}</p>
-      <button data-action="reconcile" :disabled="busy" @click="load">
+      <UiButton data-action="reconcile" :disabled="!!busy" type="submit" @click="load">
         {{ t('software.reconcile') }}
-      </button>
-      <button data-action="replay" :disabled="busy" @click="replay">
+      </UiButton>
+      <UiButton data-action="replay" :disabled="!!busy" type="submit" @click="replay">
         {{ t('policies.replay') }}
-      </button>
-      <button v-if="recovery" :disabled="busy" @click="recover">
+      </UiButton>
+      <UiButton v-if="recovery" :disabled="!!busy" type="submit" @click="recover">
         {{ t('software.recoverRelease') }}
-      </button>
+      </UiButton>
     </div>
-  </SoftwareFrame>
+  </PageFrame>
 </template>

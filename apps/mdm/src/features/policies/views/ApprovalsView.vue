@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
-import PolicyFrame from '../components/PolicyFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
   { run, runWrite, busy, failure, uncertain } = useOperation()
@@ -32,43 +33,50 @@ function approve(item: Item) {
 onMounted(() => load())
 </script>
 <template>
-  <PolicyFrame :title="t('policies.approvals')" :busy="busy" :failure="failure"
+  <PageFrame :title="t('policies.approvals')" :busy="busy" :failure="failure"
     ><p>{{ t('policies.independent') }}</p>
-    <button :disabled="busy" @click="load()">{{ t('policies.reload') }}</button>
+    <UiButton :disabled="!!busy" type="submit" @click="load()">{{ t('policies.reload') }}</UiButton>
     <p v-if="page && !page.items.length">{{ t('policies.empty') }}</p>
-    <table v-if="page?.items.length">
-      <thead>
-        <tr>
-          <th>{{ t('policies.name') }}</th>
-          <th>{{ t('policies.author') }}</th>
-          <th>{{ t('policies.revision') }}</th>
-          <th>{{ t('policies.detail') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="item in page.items" :key="`${item.kind}:${item.id}:${item.run}`">
-          <td>{{ item.label }} · {{ item.kind }}</td>
-          <td>{{ item.author }}</td>
-          <td>{{ item.revision }}</td>
-          <td>
-            <RouterLink
-              :to="{
-                name: 'policy-workflows',
-                params: { tenant: runtime.tenant },
-                query: { id: item.id, run: item.run ?? undefined },
-              }"
-              >{{ t('policies.detail') }}</RouterLink
-            ><button :disabled="busy || uncertain" @click="approve(item)">
-              {{ t('policies.approve') }}
-            </button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-    <button v-if="page?.nextCursor" :disabled="busy" @click="load(page.nextCursor)">
-      {{ t('policies.next') }}</button
-    ><button v-if="uncertain && pending" :disabled="busy" @click="pending()">
+    <div v-if="page?.items.length" class="ui-table-scroll">
+      <table class="ui-table">
+        <thead>
+          <tr>
+            <th>{{ t('policies.name') }}</th>
+            <th>{{ t('policies.author') }}</th>
+            <th>{{ t('policies.revision') }}</th>
+            <th>{{ t('policies.detail') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in page.items" :key="`${item.kind}:${item.id}:${item.run}`">
+            <td>{{ item.label }} · {{ item.kind }}</td>
+            <td>{{ item.author }}</td>
+            <td>{{ item.revision }}</td>
+            <td>
+              <RouterLink
+                :to="{
+                  name: 'policy-workflows',
+                  params: { tenant: runtime.tenant },
+                  query: { id: item.id, run: item.run ?? undefined },
+                }"
+                >{{ t('policies.detail') }}</RouterLink
+              ><UiButton :disabled="!!(busy || uncertain)" type="submit" @click="approve(item)">
+                {{ t('policies.approve') }}
+              </UiButton>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <UiButton
+      v-if="page?.nextCursor"
+      :disabled="!!busy"
+      type="submit"
+      @click="load(page.nextCursor)"
+    >
+      {{ t('policies.next') }}</UiButton
+    ><UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending()">
       {{ t('policies.replay') }}
-    </button></PolicyFrame
+    </UiButton></PageFrame
   >
 </template>

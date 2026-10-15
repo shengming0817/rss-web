@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -37,23 +38,23 @@ refresh()
     <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
     <label
       >{{ t('devices.platform')
-      }}<select v-model="platform">
+      }}<select v-model="platform" class="ui-input">
         <option v-for="p in platforms" :key="p" :value="p">{{ p }}</option>
       </select></label
     >
     <label
       >{{ t('onboarding.architecture')
-      }}<select v-model="architecture">
+      }}<select v-model="architecture" class="ui-input">
         <option v-for="a in architectures" :key="a" :value="a">{{ a }}</option>
       </select></label
     >
     <label
       >{{ t('onboarding.channel')
-      }}<select v-model="channel">
+      }}<select v-model="channel" class="ui-input">
         <option v-for="c in releaseChannels" :key="c" :value="c">{{ c }}</option>
       </select></label
     >
-    <button type="button" :disabled="busy" @click="refresh">{{ t('devices.reload') }}</button>
+    <UiButton type="button" :disabled="!!busy" @click="refresh">{{ t('devices.reload') }}</UiButton>
     <p v-if="!busy && !failure && !matching.length">{{ t('onboarding.noInstaller') }}</p>
     <article v-for="p in matching" :key="p.releaseId">
       <h2>{{ p.version }} · {{ p.filename }}</h2>

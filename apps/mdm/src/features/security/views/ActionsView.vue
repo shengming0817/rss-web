@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
-import SecurityFrame from '../components/SecurityFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 import SecurityActionFacts from '../components/SecurityActionFacts.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
@@ -55,12 +56,12 @@ watch(() => route.fullPath, changed, { flush: 'sync' })
 onMounted(changed)
 </script>
 <template>
-  <SecurityFrame :title="t('security.actions')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('security.actions')" :busy="busy" :failure="failure">
     <form @submit.prevent="load()">
       <fieldset :disabled="busy">
-        <label>{{ t('policies.device') }}<input v-model="device" /></label
-        ><label>{{ t('security.requestId') }}<input v-model="request" /></label
-        ><button>{{ t('devices.reload') }}</button>
+        <label>{{ t('policies.device') }}<input v-model="device" class="ui-input" /></label
+        ><label>{{ t('security.requestId') }}<input v-model="request" class="ui-input" /></label
+        ><UiButton type="submit">{{ t('devices.reload') }}</UiButton>
       </fieldset>
     </form>
     <p v-if="page">
@@ -70,21 +71,28 @@ onMounted(changed)
     <p v-if="page && !page.items.length">{{ t('security.emptyActions') }}</p>
     <ul>
       <li v-for="item in page?.items" :key="item.id">
-        <button :disabled="busy" @click="open(item.id)">
+        <UiButton :disabled="!!busy" type="submit" @click="open(item.id)">
           {{ item.id }} · {{ item.target.device }}
-        </button>
+        </UiButton>
         · {{ t(`policies.fact.${item.summary.execution}`) }} ·
         {{ t(`policies.fact.${item.summary.effect}`) }}
       </li>
     </ul>
-    <button v-if="page?.nextCursor" :disabled="busy" @click="load(page.nextCursor)">
+    <UiButton
+      v-if="page?.nextCursor"
+      :disabled="!!busy"
+      type="submit"
+      @click="load(page.nextCursor)"
+    >
       {{ t('devices.next') }}
-    </button>
+    </UiButton>
     <section v-if="selected">
       <h2>{{ selected.action.id }} · {{ selected.action.target.device }}</h2>
       <p>{{ t('security.asOf') }} {{ at(selected.asOf) }}</p>
-      <button :disabled="busy" @click="open(selected.action.id)">{{ t('policies.refresh') }}</button
+      <UiButton :disabled="!!busy" type="submit" @click="open(selected.action.id)">{{
+        t('policies.refresh')
+      }}</UiButton
       ><SecurityActionFacts :action="selected.action" />
     </section>
-  </SecurityFrame>
+  </PageFrame>
 </template>

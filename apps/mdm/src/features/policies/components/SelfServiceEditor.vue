@@ -64,6 +64,7 @@ function publish(event: Event) {
       ><select
         :id="`${id}-access`"
         v-model="accessKind"
+        class="ui-input"
         data-field="access"
         :required="model.published"
       >
@@ -79,26 +80,43 @@ function publish(event: Event) {
       ><input
         :id="`${id}-name`"
         v-model="model.displayName"
+        class="ui-input"
         data-field="displayName"
         required
         maxlength="256"
       />
       <label :for="`${id}-description`">{{ t('policies.selfService.description') }}</label
-      ><textarea :id="`${id}-description`" v-model="model.description" maxlength="4096" />
+      ><textarea
+        :id="`${id}-description`"
+        v-model="model.description"
+        class="ui-input"
+        maxlength="4096"
+      />
       <label :for="`${id}-prerequisites`">{{ t('policies.selfService.prerequisites') }}</label
-      ><textarea :id="`${id}-prerequisites`" v-model="model.prerequisites" maxlength="4096" />
+      ><textarea
+        :id="`${id}-prerequisites`"
+        v-model="model.prerequisites"
+        class="ui-input"
+        maxlength="4096"
+      />
       <label :for="`${id}-effects`">{{ t('policies.selfService.effects') }}</label
-      ><textarea :id="`${id}-effects`" v-model="model.sideEffects" maxlength="4096" />
+      ><textarea
+        :id="`${id}-effects`"
+        v-model="model.sideEffects"
+        class="ui-input"
+        maxlength="4096"
+      />
       <label :for="`${id}-category`">{{ t('policies.selfService.category') }}</label
       ><input
         :id="`${id}-category`"
         v-model="model.category"
+        class="ui-input"
         data-field="category"
         required
         maxlength="128"
       />
       <label :for="`${id}-keywords`">{{ t('policies.selfService.keywords') }}</label
-      ><textarea :id="`${id}-keywords`" v-model="keywords" />
+      ><textarea :id="`${id}-keywords`" v-model="keywords" class="ui-input" />
       <template v-if="!software">
         <label :for="`${id}-ai`"
           ><input :id="`${id}-ai`" v-model="model.allowAi" data-field="allowAi" type="checkbox" />{{
@@ -109,7 +127,12 @@ function publish(event: Event) {
           {{ t(model.allowAi ? 'policies.selfService.aiHint' : 'policies.selfService.manualHint') }}
         </p>
         <label :for="`${id}-risk`">{{ t('policies.selfService.risk') }}</label
-        ><select :id="`${id}-risk`" v-model.number="model.riskLevel" data-field="riskLevel">
+        ><select
+          :id="`${id}-risk`"
+          v-model.number="model.riskLevel"
+          class="ui-input"
+          data-field="riskLevel"
+        >
           <option :value="1">{{ t('policies.selfService.risk1') }}</option>
           <option :value="2">{{ t('policies.selfService.risk2') }}</option>
         </select>

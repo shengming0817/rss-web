@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
@@ -6,7 +7,7 @@ import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
 import { alertStates, type Alert } from '../clients/model'
 import type { AlertFilter } from '../clients/alerts'
-import OperationsFrame from '../components/OperationsFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 import OperationsReference from '../components/OperationsReference.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
@@ -118,20 +119,20 @@ watch(() => route.fullPath, routeChanged, { flush: 'sync' })
 onMounted(routeChanged)
 </script>
 <template>
-  <OperationsFrame :title="t('operations.alerts')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('operations.alerts')" :busy="busy" :failure="failure">
     <p>{{ t('operations.alertHint') }}</p>
     <form @submit.prevent="load()">
       <fieldset :disabled="busy">
-        <label>{{ t('policies.device') }}<input v-model="device" /></label
+        <label>{{ t('policies.device') }}<input v-model="device" class="ui-input" /></label
         ><label
           >{{ t('operations.alertState')
-          }}<select v-model="state">
+          }}<select v-model="state" class="ui-input">
             <option value="">{{ t('devices.all') }}</option>
             <option v-for="value in alertStates" :key="value" :value="value">
               {{ t(`operations.state.${value}`) }}
             </option>
           </select></label
-        ><button>{{ t('devices.reload') }}</button>
+        ><UiButton type="submit">{{ t('devices.reload') }}</UiButton>
       </fieldset>
     </form>
     <p v-if="applied">
@@ -141,22 +142,32 @@ onMounted(routeChanged)
     <p v-if="page && !page.items.length">{{ t('operations.emptyAlerts') }}</p>
     <ul>
       <li v-for="item in page?.items" :key="item.id">
-        <button :disabled="busy || uncertain" @click="open(item.id)">
+        <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(item.id)">
           {{ t(`operations.code.${item.code}`) }} · {{ item.target.device ?? item.target.id }}
-        </button>
+        </UiButton>
         · {{ t(`security.severity.${item.severity}`) }} ·
         {{ t(`operations.state.${item.state}`) }} ·
         {{ item.acknowledgment ? t('operations.acknowledged') : t('operations.unacknowledged') }}
       </li>
     </ul>
-    <button v-if="page?.nextCursor" :disabled="busy" @click="load(page.nextCursor)">
+    <UiButton
+      v-if="page?.nextCursor"
+      :disabled="!!busy"
+      type="submit"
+      @click="load(page.nextCursor)"
+    >
       {{ t('devices.next') }}
-    </button>
+    </UiButton>
     <section v-if="selected" data-testid="alert-detail">
       <h2>{{ t(`operations.code.${selected.code}`) }} · {{ selected.id }}</h2>
-      <button :disabled="busy" data-testid="refresh-alert" @click="open(selected.id)">
+      <UiButton
+        :disabled="!!busy"
+        data-testid="refresh-alert"
+        type="submit"
+        @click="open(selected.id)"
+      >
         {{ t('policies.refresh') }}
-      </button>
+      </UiButton>
       <dl>
         <dt>{{ t('operations.alertState') }}</dt>
         <dd data-testid="alert-state">{{ t(`operations.state.${selected.state}`) }}</dd>
@@ -187,14 +198,15 @@ onMounted(routeChanged)
           }}
         </dd>
       </dl>
-      <button
+      <UiButton
         v-if="selected.state === 'open' && !selected.acknowledgment"
-        :disabled="busy || uncertain"
+        :disabled="!!(busy || uncertain)"
         data-testid="acknowledge-alert"
+        type="submit"
         @click="acknowledge"
       >
         {{ t('operations.acknowledge') }}
-      </button>
+      </UiButton>
       <p>{{ t('operations.closeHint') }}</p>
       <p v-if="!closureKnown">{{ t('operations.closureUnknown') }}</p>
       <p v-if="closureKnown && closure">
@@ -203,13 +215,17 @@ onMounted(routeChanged)
       </p>
       <form v-if="selected.state === 'open' && closureKnown && !closure" @submit.prevent="close()">
         <fieldset :disabled="busy || uncertain">
-          <label>{{ t('operations.closeReason') }}<input v-model="note" required /></label
-          ><button data-testid="close-alert">{{ t('operations.closeTicket') }}</button>
+          <label
+            >{{ t('operations.closeReason')
+            }}<input v-model="note" class="ui-input" required /></label
+          ><UiButton data-testid="close-alert" type="submit">{{
+            t('operations.closeTicket')
+          }}</UiButton>
         </fieldset>
       </form>
-      <button v-if="uncertain && pending" :disabled="busy" @click="pending()">
+      <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending()">
         {{ t('policies.replay') }}
-      </button>
+      </UiButton>
     </section>
-  </OperationsFrame>
+  </PageFrame>
 </template>

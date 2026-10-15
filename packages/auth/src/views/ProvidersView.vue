@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { UiButton, UiDialog } from '@rss/core/components'
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
-import { UiDialog } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
 import { useIdentity } from '../context'
 import { useOperation } from '../services/operation'
@@ -115,7 +115,7 @@ async function test(p: Provider) {
 }
 </script>
 <template>
-  <section class="identity-card">
+  <section class="auth-page">
     <h1>{{ t('identity.providers') }}</h1>
     <p v-if="error" role="alert">{{ t(`identity.errors.${error}`) }}</p>
     <p v-if="report" role="status">{{ report }}</p>
@@ -126,73 +126,83 @@ async function test(p: Provider) {
       {{ t('identity.errors.insufficient_privilege') }}
     </p>
     <template v-else
-      ><div class="identity-actions">
-        <button :disabled="busy" @click="run(load)">
-          {{ t(loaded ? 'identity.reload' : 'identity.loadList') }}</button
-        ><button :disabled="busy || blocked" @click="clear">
+      ><div class="auth-actions">
+        <UiButton :disabled="!!busy" type="submit" @click="run(load)">
+          {{ t(loaded ? 'identity.reload' : 'identity.loadList') }}</UiButton
+        ><UiButton :disabled="!!(busy || blocked)" type="submit" @click="clear">
           {{ t('identity.newProvider') }}
-        </button>
+        </UiButton>
       </div>
       <p v-if="!loaded" role="status">{{ t('identity.listNotLoaded') }}</p>
-      <div v-if="loaded" class="identity-table">
-        <table>
-          <thead>
-            <tr>
-              <th>{{ t('identity.issuer') }}</th>
-              <th>{{ t('identity.state') }}</th>
-              <th>{{ t('identity.actions') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="p in rows" :key="p.id">
-              <td>
-                {{ p.settings.issuer }}<small>{{ p.id }}</small>
-              </td>
-              <td>
-                {{ t(p.enabled ? 'identity.enabled' : 'identity.disabled') }} · v{{ p.version }}
-              </td>
-              <td class="identity-actions">
-                <button :disabled="busy || blocked" @click="edit(p)">
-                  {{ t('identity.edit') }}</button
-                ><button :disabled="busy || blocked" @click="toggle(p)">
-                  {{
-                    t(p.enabled ? 'identity.disableProvider' : 'identity.enableProvider')
-                  }}</button
-                ><button :disabled="busy || blocked" @click="test(p)">
-                  {{ t('identity.test') }}
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <div v-if="loaded" class="auth-table">
+        <div class="ui-table-scroll">
+          <table class="ui-table">
+            <thead>
+              <tr>
+                <th>{{ t('identity.issuer') }}</th>
+                <th>{{ t('identity.state') }}</th>
+                <th>{{ t('identity.actions') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="p in rows" :key="p.id">
+                <td>
+                  {{ p.settings.issuer }}<small>{{ p.id }}</small>
+                </td>
+                <td>
+                  {{ t(p.enabled ? 'identity.enabled' : 'identity.disabled') }} · v{{ p.version }}
+                </td>
+                <td class="auth-actions">
+                  <UiButton :disabled="!!(busy || blocked)" type="submit" @click="edit(p)">
+                    {{ t('identity.edit') }}</UiButton
+                  ><UiButton :disabled="!!(busy || blocked)" type="submit" @click="toggle(p)">
+                    {{
+                      t(p.enabled ? 'identity.disableProvider' : 'identity.enableProvider')
+                    }}</UiButton
+                  ><UiButton :disabled="!!(busy || blocked)" type="submit" @click="test(p)">
+                    {{ t('identity.test') }}
+                  </UiButton>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
       <form @submit.prevent="save">
         <h2>{{ t(selected ? 'identity.editProvider' : 'identity.newProvider') }}</h2>
         <p>{{ t('identity.providerHelp') }}</p>
         <label for="issuer">{{ t('identity.issuer') }}</label
-        ><input id="issuer" v-model="issuer" type="url" :readonly="selected !== null" required />
+        ><input
+          id="issuer"
+          v-model="issuer"
+          class="ui-input"
+          type="url"
+          :readonly="selected !== null"
+          required
+        />
         <label for="client-id">{{ t('identity.client') }}</label
-        ><input id="client-id" v-model="client" required />
+        ><input id="client-id" v-model="client" class="ui-input" required />
         <label for="client-secret">{{ t('identity.clientSecret') }}</label
         ><input
           id="client-secret"
           v-model="clientSecret"
+          class="ui-input"
           type="password"
           autocomplete="new-password"
           required
         />
         <label for="ca-pem">{{ t('identity.caPem') }}</label>
-        <textarea id="ca-pem" v-model="caPem" autocomplete="off"></textarea>
+        <textarea id="ca-pem" v-model="caPem" class="ui-input" autocomplete="off"></textarea>
         <label for="scopes">{{ t('identity.scopes') }}</label
-        ><input id="scopes" v-model="scopes" required />
+        ><input id="scopes" v-model="scopes" class="ui-input" required />
         <label for="email-claim">{{ t('identity.emailClaim') }}</label
-        ><input id="email-claim" v-model="email" />
+        ><input id="email-claim" v-model="email" class="ui-input" />
         <label for="groups-claim">{{ t('identity.groupsClaim') }}</label
-        ><input id="groups-claim" v-model="groups" />
-        <label v-if="session.providerHint.value" class="identity-checkbox" for="jit"
+        ><input id="groups-claim" v-model="groups" class="ui-input" />
+        <label v-if="session.providerHint.value" class="auth-checkbox" for="jit"
           ><input id="jit" v-model="jit" type="checkbox" />{{ t('identity.jit') }}</label
         >
-        <button type="submit" :disabled="busy || blocked">{{ t('identity.save') }}</button>
+        <UiButton type="submit" :disabled="!!(busy || blocked)">{{ t('identity.save') }}</UiButton>
       </form>
     </template>
     <UiDialog
@@ -204,10 +214,17 @@ async function test(p: Provider) {
       @update:open="!$event && (pending = null)"
     >
       <template #footer>
-        <button class="ui-button" @click="pending = null">{{ t('identity.cancel') }}</button>
-        <button class="ui-button ui-button--primary" :disabled="busy" @click="confirmDisable">
+        <UiButton class="ui-button" type="submit" @click="pending = null">{{
+          t('identity.cancel')
+        }}</UiButton>
+        <UiButton
+          class="ui-button ui-button--primary"
+          :disabled="!!busy"
+          type="submit"
+          @click="confirmDisable"
+        >
           {{ t('identity.confirm') }}
-        </button>
+        </UiButton>
       </template>
     </UiDialog>
   </section>

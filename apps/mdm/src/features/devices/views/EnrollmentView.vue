@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { ref, watch, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -6,7 +7,7 @@ import { useMdm } from '../../../context'
 import { enrollmentSources, generateEnrollmentPassword } from '../clients/enrollment'
 import { useOperation } from '../../../services/useOperation'
 import NativeFacts from '../../enrollment/components/NativeFacts.vue'
-import DeviceFrame from '../components/DeviceFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 const { t } = useI18n(),
   route = useRoute(),
   runtime = useMdm(),
@@ -109,7 +110,7 @@ function generate() {
 }
 </script>
 <template>
-  <DeviceFrame :title="t('devices.enroll')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('devices.enroll')" :busy="busy" :failure="failure">
     <p>{{ t('devices.guide') }}</p>
     <p>{{ t('devices.enrollmentNote') }}</p>
     <p>{{ t('devices.handoffNote') }}</p>
@@ -117,27 +118,33 @@ function generate() {
       <fieldset :disabled="busy">
         <label
           >{{ t('devices.deviceId')
-          }}<input v-model="device" required maxlength="256" autocomplete="off" /></label
+          }}<input
+            v-model="device"
+            class="ui-input"
+            required
+            maxlength="256"
+            autocomplete="off" /></label
         ><label
           >{{ t('devices.source')
-          }}<select v-model="source">
+          }}<select v-model="source" class="ui-input">
             <option v-for="value in nativeSources" :key="value" :value="value">
               {{ value }}
             </option>
           </select></label
         ><label v-if="source === 'mdm.windows'"
           >{{ t('registration.profile')
-          }}<select v-model="windowsProfile">
+          }}<select v-model="windowsProfile" class="ui-input">
             <option value="Device">Device</option>
             <option value="Full">Full</option>
           </select></label
-        ><button type="button" @click="generate()">
+        ><UiButton type="button" @click="generate()">
           {{ t('devices.generate') }}
-        </button>
+        </UiButton>
         <label
           >{{ t('devices.password')
           }}<input
             v-model="password"
+            class="ui-input"
             type="text"
             required
             pattern="[A-Za-z0-9_\-]{43}"
@@ -145,32 +152,34 @@ function generate() {
             spellcheck="false" /></label
         ><label
           ><input v-model="handedOff" type="checkbox" required />{{ t('devices.handoff') }}</label
-        ><button :disabled="uncertain || !handedOff">{{ t('devices.submitEnrollment') }}</button>
-        <button
+        ><UiButton :disabled="!!(uncertain || !handedOff)" type="submit">{{
+          t('devices.submitEnrollment')
+        }}</UiButton>
+        <UiButton
           v-if="id"
           type="button"
-          :disabled="uncertain || !handedOff || !password"
+          :disabled="!!(uncertain || !handedOff || !password)"
           @click="submit('resume')"
         >
           {{ t('devices.resume') }}
-        </button>
-        <button
+        </UiButton>
+        <UiButton
           v-if="uncertain && pending"
           type="button"
-          :disabled="pending.kind !== 'cancel' && (!handedOff || !password)"
+          :disabled="!!(pending.kind !== 'cancel' && (!handedOff || !password))"
           @click="submit(pending!.kind, true)"
         >
           {{ t('devices.replay') }}
-        </button>
+        </UiButton>
       </fieldset>
     </form>
     <p v-if="op">{{ t('devices.operation') }}: {{ op }}</p>
     <form @submit.prevent="recover">
-      <label>{{ t('devices.enrollmentId') }}<input v-model="id" required /></label
-      ><button :disabled="busy">{{ t('devices.recover') }}</button
-      ><button type="button" :disabled="busy || uncertain || !id" @click="submit('cancel')">
+      <label>{{ t('devices.enrollmentId') }}<input v-model="id" class="ui-input" required /></label
+      ><UiButton :disabled="!!busy" type="submit">{{ t('devices.recover') }}</UiButton
+      ><UiButton type="button" :disabled="!!(busy || uncertain || !id)" @click="submit('cancel')">
         {{ t('devices.cancel') }}
-      </button>
+      </UiButton>
     </form>
     <NativeFacts v-if="result" :value="result" />
     <dl v-if="result">
@@ -190,5 +199,5 @@ function generate() {
       :to="{ name: 'device-detail', params: { tenant: runtime.tenant, device } }"
       >{{ t('devices.detail') }}</RouterLink
     >
-  </DeviceFrame>
+  </PageFrame>
 </template>

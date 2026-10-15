@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import type { User } from '../../operations/clients/authorization'
-import RegistrationFrame from '../components/RegistrationFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 import TenantUserSelect from '../components/TenantUserSelect.vue'
 const { t } = useI18n(),
   route = useRoute(),
@@ -71,26 +72,33 @@ watch(
 )
 </script>
 <template>
-  <RegistrationFrame :title="t('registration.user')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('registration.user')" :busy="busy" :failure="failure">
     <p>{{ t('registration.responsibilityNote') }}</p>
     <form @submit.prevent="load()">
       <fieldset :disabled="busy || uncertain">
         <label
           >{{ t('devices.deviceId')
-          }}<input v-model="device" required maxlength="256" @input="revision = undefined" /></label
-        ><button>{{ t('devices.reload') }}</button>
+          }}<input
+            v-model="device"
+            class="ui-input"
+            required
+            maxlength="256"
+            @input="revision = undefined" /></label
+        ><UiButton type="submit">{{ t('devices.reload') }}</UiButton>
       </fieldset>
     </form>
     <form v-if="revision !== undefined" @submit.prevent="save()">
       <fieldset :disabled="busy || uncertain">
-        <TenantUserSelect v-model="principal" :disabled="busy || uncertain" /><button>
+        <TenantUserSelect v-model="principal" :disabled="busy || uncertain" /><UiButton
+          type="submit"
+        >
           {{ t('registration.save') }}
-        </button>
+        </UiButton>
       </fieldset>
     </form>
-    <button v-if="uncertain && pending" type="button" :disabled="busy" @click="save(true)">
+    <UiButton v-if="uncertain && pending" type="button" :disabled="!!busy" @click="save(true)">
       {{ t('registration.replay') }}
-    </button>
+    </UiButton>
     <p v-if="saved" role="status">{{ t('registration.saved') }}</p>
-  </RegistrationFrame>
+  </PageFrame>
 </template>

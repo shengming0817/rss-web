@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -6,7 +7,7 @@ import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import type { ExecutionSummary } from '../clients/executions'
 import type { NativeOperation } from '../clients/native'
-import PolicyFrame from '../components/PolicyFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 import ExecutionFacts from '../components/ExecutionFacts.vue'
 import SoftwareRunFacts from '../../software/components/SoftwareRunFacts.vue'
 import BootstrapAttemptFacts from '../../software/components/BootstrapAttemptFacts.vue'
@@ -73,8 +74,8 @@ watch(
 onMounted(() => load())
 </script>
 <template>
-  <PolicyFrame :title="t('policies.detail')" :busy="busy" :failure="failure"
-    ><button :disabled="busy" @click="load">{{ t('policies.verify') }}</button
+  <PageFrame :title="t('policies.detail')" :busy="busy" :failure="failure"
+    ><UiButton :disabled="!!busy" type="submit" @click="load">{{ t('policies.verify') }}</UiButton
     ><template v-if="execution"
       ><h2>{{ execution.device }} · {{ execution.id }}</h2>
       <ExecutionFacts :execution="execution" /><RouterLink
@@ -163,27 +164,29 @@ onMounted(() => load())
         {{ t(`policies.state.${native.task.kind}`) }} ·
         {{ t(`policies.state.${native.commandStatus}`) }}
       </p>
-      <button
+      <UiButton
         v-if="
           native.authorization === 'blocked' &&
           !['cancelled', 'applied', 'rejected', 'timed_out', 'superseded'].includes(
             native.commandStatus,
           )
         "
-        :disabled="busy || uncertain"
+        :disabled="!!(busy || uncertain)"
+        type="submit"
         @click="change('approve')"
       >
-        {{ t('policies.reapprove') }}</button
-      ><button
+        {{ t('policies.reapprove') }}</UiButton
+      ><UiButton
         v-if="
           ['queued', 'published', 'received'].includes(native.commandStatus) &&
           !['succeeded', 'failed'].includes(native.observation.progress)
         "
-        :disabled="busy || uncertain"
+        :disabled="!!(busy || uncertain)"
+        type="submit"
         @click="change('cancel')"
       >
         {{ t('policies.cancel') }}
-      </button>
+      </UiButton>
     </section>
     <template v-if="software && execution?.origin.kind === 'software'">
       <RouterLink
@@ -196,8 +199,8 @@ onMounted(() => load())
       >
       <SoftwareRunFacts :run="software" />
     </template>
-    <button v-if="uncertain && pending" :disabled="busy" @click="pending()">
+    <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending()">
       {{ t('policies.replay') }}
-    </button></PolicyFrame
+    </UiButton></PageFrame
   >
 </template>

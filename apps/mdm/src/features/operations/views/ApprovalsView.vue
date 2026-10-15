@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
-import OperationsFrame from '../components/OperationsFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
   { run, busy, failure } = useOperation()
@@ -17,10 +18,12 @@ async function loadWorkflows(cursor?: string) {
 onMounted(() => loadWorkflows())
 </script>
 <template>
-  <OperationsFrame :title="t('operations.approvals')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('operations.approvals')" :busy="busy" :failure="failure">
     <p>{{ t('operations.approvalHint') }}</p>
     <h2>{{ t('operations.workflowRequests') }}</h2>
-    <button :disabled="busy" @click="loadWorkflows()">{{ t('devices.reload') }}</button>
+    <UiButton :disabled="!!busy" type="submit" @click="loadWorkflows()">{{
+      t('devices.reload')
+    }}</UiButton>
     <ul>
       <li v-for="item in workflows?.items" :key="item.id">
         <RouterLink
@@ -34,12 +37,13 @@ onMounted(() => loadWorkflows())
       </li>
     </ul>
     <p v-if="workflows && !workflows.items.length">{{ t('operations.empty') }}</p>
-    <button
+    <UiButton
       v-if="workflows?.nextCursor"
-      :disabled="busy"
+      :disabled="!!busy"
+      type="submit"
       @click="loadWorkflows(workflows.nextCursor)"
     >
       {{ t('devices.next') }}
-    </button>
-  </OperationsFrame>
+    </UiButton>
+  </PageFrame>
 </template>

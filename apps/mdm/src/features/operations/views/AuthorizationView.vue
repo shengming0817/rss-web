@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { onMounted, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
@@ -13,7 +14,7 @@ import {
   type Grant,
   type Subject,
 } from '../clients/authorization'
-import OperationsFrame from '../components/OperationsFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.operations.authorization,
@@ -230,31 +231,39 @@ onMounted(async () => {
 })
 </script>
 <template>
-  <OperationsFrame :title="t('operations.authorization')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('operations.authorization')" :busy="busy" :failure="failure">
     <p>{{ t('operations.authorityWarning') }}</p>
-    <button :disabled="busy" @click="load()">{{ t('devices.reload') }}</button
-    ><button :disabled="busy || uncertain" @click="create()">{{ t('operations.newRule') }}</button>
+    <UiButton :disabled="!!busy" type="submit" @click="load()">{{ t('devices.reload') }}</UiButton
+    ><UiButton :disabled="!!(busy || uncertain)" type="submit" @click="create()">{{
+      t('operations.newRule')
+    }}</UiButton>
     <ul>
       <li v-for="item in page?.items" :key="item.id">
-        <button
+        <UiButton
           v-if="item.value"
-          :disabled="busy || uncertain"
+          :disabled="!!(busy || uncertain)"
+          type="submit"
           @click="fill(item.value, item.id, item.revision)"
         >
-          {{ item.id }} / {{ item.revision }} · {{ item.value.subject.kind }}</button
+          {{ item.id }} / {{ item.revision }} · {{ item.value.subject.kind }}</UiButton
         ><span v-else>{{ item.id }} · {{ t('operations.deleted') }}</span>
       </li>
     </ul>
-    <button v-if="page?.nextCursor" :disabled="busy" @click="load(page.nextCursor)">
+    <UiButton
+      v-if="page?.nextCursor"
+      :disabled="!!busy"
+      type="submit"
+      @click="load(page.nextCursor)"
+    >
       {{ t('devices.next') }}
-    </button>
+    </UiButton>
     <p v-if="deleted">{{ t('operations.deleted') }} · {{ id }} / {{ revision }}</p>
     <form @submit.prevent="save()">
       <fieldset :disabled="busy || uncertain || !effective || deleted || missing">
         <legend>{{ t('operations.ruleEditor') }} · {{ id }} / {{ revision }}</legend>
         <label
           >{{ t('operations.subject')
-          }}<select v-model="kind">
+          }}<select v-model="kind" class="ui-input">
             <option v-for="value in ['user', 'user_group', 'department', 'idp_group']" :key="value">
               {{ value }}
             </option>
@@ -262,18 +271,26 @@ onMounted(async () => {
         >
         <label
           >{{ t('operations.subjectId')
-          }}<input v-model="subjectId" data-testid="subject-id" required
+          }}<input v-model="subjectId" class="ui-input" data-testid="subject-id" required
         /></label>
         <template v-if="kind === 'department' || kind === 'idp_group'"
-          ><label>{{ t('operations.provider') }}<input v-model="provider" required /></label
-          ><label>{{ t('operations.issuer') }}<input v-model="issuer" required /></label
+          ><label
+            >{{ t('operations.provider')
+            }}<input v-model="provider" class="ui-input" required /></label
+          ><label
+            >{{ t('operations.issuer') }}<input v-model="issuer" class="ui-input" required /></label
           ><label
             >{{ t('operations.sourceVersion')
-            }}<input v-model.number="configurationVersion" type="number" min="1" required /></label
+            }}<input
+              v-model.number="configurationVersion"
+              class="ui-input"
+              type="number"
+              min="1"
+              required /></label
         ></template>
         <label v-if="kind === 'department'"
           >{{ t('operations.matching')
-          }}<select v-model="matching">
+          }}<select v-model="matching" class="ui-input">
             <option>exact</option>
             <option>subtree</option>
           </select></label
@@ -282,6 +299,7 @@ onMounted(async () => {
           >{{ t('operations.permission')
           }}<select
             v-model="permission"
+            class="ui-input"
             @change="
               scope = (devicePermissions as readonly string[]).includes(permission)
                 ? 'all_devices'
@@ -293,7 +311,7 @@ onMounted(async () => {
         >
         <label
           >{{ t('operations.scope')
-          }}<select v-model="scope">
+          }}<select v-model="scope" class="ui-input">
             <option
               v-for="value in (devicePermissions as readonly string[]).includes(permission)
                 ? ['all_devices', 'device']
@@ -305,9 +323,9 @@ onMounted(async () => {
           </select></label
         >
         <label v-if="scope === 'device'"
-          >{{ t('policies.device') }}<input v-model="device" required
+          >{{ t('policies.device') }}<input v-model="device" class="ui-input" required
         /></label>
-        <button type="button" @click="addGrant()">{{ t('operations.addGrant') }}</button>
+        <UiButton type="button" @click="addGrant()">{{ t('operations.addGrant') }}</UiButton>
         <ul>
           <li v-for="(g, index) in grants" :key="index">
             {{ g.operation }} / {{ g.scope.kind }}
@@ -319,48 +337,54 @@ onMounted(async () => {
               }"
               >{{ g.scope.id }}</RouterLink
             >
-            <button type="button" @click="grants.splice(index, 1)">
+            <UiButton type="button" @click="grants.splice(index, 1)">
               {{ t('operations.removeMember') }}
-            </button>
+            </UiButton>
           </li>
         </ul>
         <label v-if="revision > 0"
           ><input v-model="confirm" type="checkbox" />{{ t('operations.confirmAuthority') }}</label
         >
-        <button data-testid="save-rule" :disabled="conflict || (revision > 0 && !confirm)">
+        <UiButton
+          data-testid="save-rule"
+          :disabled="!!(conflict || (revision > 0 && !confirm))"
+          type="submit"
+        >
           {{ t('devices.save') }}
-        </button>
-        <button
+        </UiButton>
+        <UiButton
           v-if="revision > 0"
           type="button"
-          :disabled="conflict || !confirm"
+          :disabled="!!(conflict || !confirm)"
           @click="save(true)"
         >
           {{ t('operations.delete') }}
-        </button>
+        </UiButton>
       </fieldset>
     </form>
-    <button v-if="revision > 0" :disabled="busy" @click="compare()">
+    <UiButton v-if="revision > 0" :disabled="!!busy" type="submit" @click="compare()">
       {{ t('operations.compare') }}
-    </button>
+    </UiButton>
     <p v-if="remoteRevision !== undefined">
       {{ t('operations.remote') }} · {{ remoteRevision }} ·
       {{ remote?.subject.kind ?? t('operations.deleted')
-      }}<button v-if="remote" :disabled="busy || uncertain" @click="adopt()">
+      }}<UiButton v-if="remote" :disabled="!!(busy || uncertain)" type="submit" @click="adopt()">
         {{ t('operations.adoptRevision') }}
-      </button>
+      </UiButton>
     </p>
-    <button
+    <UiButton
       v-if="uncertain && pending"
       data-testid="replay-write"
-      :disabled="busy"
+      :disabled="!!busy"
+      type="submit"
       @click="pending()"
     >
       {{ t('policies.replay') }}
-    </button>
+    </UiButton>
     <h2>{{ t('operations.effective') }}</h2>
-    <button
-      :disabled="busy"
+    <UiButton
+      :disabled="!!busy"
+      type="submit"
       @click="
         run(
           () => client.effective(),
@@ -369,7 +393,7 @@ onMounted(async () => {
       "
     >
       {{ t('devices.reload') }}
-    </button>
+    </UiButton>
     <ul>
       <li v-for="(g, index) in effective?.grants" :key="index">
         {{ g.operation }} / {{ g.scope.kind }}
@@ -383,5 +407,5 @@ onMounted(async () => {
         {{ g.observation?.snapshotId ?? '—' }} · {{ g.observation?.expiresAt ?? '—' }}
       </li>
     </ul>
-  </OperationsFrame>
+  </PageFrame>
 </template>

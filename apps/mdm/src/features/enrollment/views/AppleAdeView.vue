@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -6,7 +7,7 @@ import { useOperation } from '../../../services/useOperation'
 import { usePermission } from '../usePermission'
 import { useAttachment } from '../useAttachment'
 import { setupPanes, type AdeCommand } from '../clients/apple'
-import OperationsFrame from '../../operations/components/OperationsFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 const id = ref('')
 const runtime = useMdm(),
   client = runtime.onboarding.apple,
@@ -237,21 +238,24 @@ onBeforeUnmount(() => {
 })
 </script>
 <template>
-  <OperationsFrame :title="t('onboarding.appleAde')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('onboarding.appleAde')" :busy="busy" :failure="failure">
     <p>{{ t('onboarding.adeGuide') }}</p>
     <p v-if="!canRead">{{ t('devices.denied') }}</p>
     <template v-else>
       <label
         >{{ t('onboarding.organization')
-        }}<select v-model="id" :disabled="busy || uncertain">
+        }}<select v-model="id" class="ui-input" :disabled="busy || uncertain">
           <option value="">{{ t('devices.select') }}</option>
           <option v-for="o in organizations" :key="o.id" :value="o.id">{{ o.id }}</option>
         </select></label
       >
       <label v-if="canWrite"
-        >{{ t('onboarding.organizationId') }}<input v-model="id" :disabled="busy || uncertain"
+        >{{ t('onboarding.organizationId')
+        }}<input v-model="id" class="ui-input" :disabled="busy || uncertain"
       /></label>
-      <button type="button" :disabled="busy" @click="refresh">{{ t('devices.reload') }}</button>
+      <UiButton type="button" :disabled="!!busy" @click="refresh">{{
+        t('devices.reload')
+      }}</UiButton>
       <dl v-if="status">
         <dt>{{ t('devices.revision') }}</dt>
         <dd>{{ status.revision }}</dd>
@@ -267,19 +271,21 @@ onBeforeUnmount(() => {
       <form v-if="canWrite && id" @submit.prevent="configure">
         <fieldset :disabled="blocked">
           <legend>{{ t('onboarding.organizationConfiguration') }}</legend>
-          <label>{{ t('onboarding.serverUuid') }}<input v-model="serverUuid" required /></label
+          <label
+            >{{ t('onboarding.serverUuid')
+            }}<input v-model="serverUuid" class="ui-input" required /></label
           ><label
             >{{ t('onboarding.appleOrganizationId')
-            }}<input v-model="orgId" required maxlength="256" /></label
+            }}<input v-model="orgId" class="ui-input" required maxlength="256" /></label
           ><label><input v-model="enabled" type="checkbox" />{{ t('onboarding.enabled') }}</label
           ><label
             ><input v-model="rotateKey" type="checkbox" />{{ t('onboarding.rotateKey') }}</label
-          ><button>{{ t('registration.save') }}</button>
+          ><UiButton type="submit">{{ t('registration.save') }}</UiButton>
         </fieldset>
       </form>
       <template v-if="status"
-        ><button type="button" :disabled="busy" @click="publicKey">
-          {{ t('onboarding.exportPublicKey') }}</button
+        ><UiButton type="button" :disabled="!!busy" @click="publicKey">
+          {{ t('onboarding.exportPublicKey') }}</UiButton
         ><a v-if="url" :href="url" :download="filename">{{ t('onboarding.download') }}</a></template
       >
       <form v-if="canWrite && status" @submit.prevent="importToken">
@@ -287,22 +293,24 @@ onBeforeUnmount(() => {
           <legend>{{ t('onboarding.importToken') }}</legend>
           <label
             >{{ t('onboarding.p7m')
-            }}<input type="file" accept=".p7m" @change="selectToken" /></label
-          ><button :disabled="!token">{{ t('onboarding.importToken') }}</button>
+            }}<input class="ui-input" type="file" accept=".p7m" @change="selectToken" /></label
+          ><UiButton :disabled="!!!token" type="submit">{{ t('onboarding.importToken') }}</UiButton>
         </fieldset>
       </form>
       <form v-if="canWrite && status" @submit.prevent="submit({ kind: 'sync', full: fullSync })">
         <fieldset :disabled="blocked">
           <label><input v-model="fullSync" type="checkbox" />{{ t('onboarding.fullSync') }}</label
-          ><button>{{ t('onboarding.sync') }}</button>
+          ><UiButton type="submit">{{ t('onboarding.sync') }}</UiButton>
         </fieldset>
       </form>
       <form v-if="canWrite && status" @submit.prevent="saveProfile">
         <fieldset :disabled="blocked">
           <legend>{{ t('onboarding.setupProfile') }}</legend>
-          <label>{{ t('onboarding.profileId') }}<input v-model="profileId" /></label
+          <label
+            >{{ t('onboarding.profileId') }}<input v-model="profileId" class="ui-input" /></label
           ><label
-            >{{ t('devices.name') }}<input v-model="profileName" required maxlength="128" /></label
+            >{{ t('devices.name')
+            }}<input v-model="profileName" class="ui-input" required maxlength="128" /></label
           ><label
             ><input v-model="mandatory" type="checkbox" />{{ t('onboarding.mandatory') }}</label
           ><label
@@ -314,52 +322,64 @@ onBeforeUnmount(() => {
               ><input v-model="skip" type="checkbox" :value="pane" />{{ pane }}</label
             >
           </fieldset>
-          <button :disabled="!mandatory && !removable">{{ t('registration.save') }}</button>
+          <UiButton :disabled="!!(!mandatory && !removable)" type="submit">{{
+            t('registration.save')
+          }}</UiButton>
         </fieldset>
       </form>
       <ul>
         <li v-for="p in profiles" :key="p.id">
-          <button type="button" :disabled="blocked" @click="chooseProfile(p)">
+          <UiButton type="button" :disabled="!!blocked" @click="chooseProfile(p)">
             {{ p.configuration.name }} · {{ p.id }} · {{ p.revision }} ·
             {{ p.remoteUuid ?? t('devices.unknown') }}
-          </button>
+          </UiButton>
         </li>
       </ul>
-      <table>
-        <thead>
-          <tr>
-            <th>{{ t('onboarding.serial') }}</th>
-            <th>{{ t('onboarding.remoteProfile') }}</th>
-            <th>{{ t('devices.status') }}</th>
-            <th>{{ t('devices.observed') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="d in devices" :key="d.serial">
-            <td>{{ d.serial }}</td>
-            <td>{{ d.profileUuid ?? '—' }}</td>
-            <td>{{ d.deleted ? t('devices.deleted') : t('onboarding.registrationNotImplied') }}</td>
-            <td>{{ d.observedAt }}</td>
-          </tr>
-        </tbody>
-      </table>
-      <button v-if="cursor" type="button" :disabled="busy" @click="next">
+      <div class="ui-table-scroll">
+        <table class="ui-table">
+          <thead>
+            <tr>
+              <th>{{ t('onboarding.serial') }}</th>
+              <th>{{ t('onboarding.remoteProfile') }}</th>
+              <th>{{ t('devices.status') }}</th>
+              <th>{{ t('devices.observed') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="d in devices" :key="d.serial">
+              <td>{{ d.serial }}</td>
+              <td>{{ d.profileUuid ?? '—' }}</td>
+              <td>
+                {{ d.deleted ? t('devices.deleted') : t('onboarding.registrationNotImplied') }}
+              </td>
+              <td>{{ d.observedAt }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <UiButton v-if="cursor" type="button" :disabled="!!busy" @click="next">
         {{ t('devices.next') }}
-      </button>
+      </UiButton>
       <form v-if="canWrite && status" @submit.prevent="assignment(false)">
         <fieldset :disabled="blocked">
-          <label>{{ t('onboarding.serials') }}<textarea v-model="serials" required /></label
-          ><button>{{ t('onboarding.assignProfile') }}</button
-          ><button type="button" @click="assignment(true)">
+          <label
+            >{{ t('onboarding.serials')
+            }}<textarea v-model="serials" class="ui-input" required /></label
+          ><UiButton type="submit">{{ t('onboarding.assignProfile') }}</UiButton
+          ><UiButton type="button" @click="assignment(true)">
             {{ t('onboarding.clearAssignment') }}
-          </button>
+          </UiButton>
         </fieldset>
       </form>
       <form @submit.prevent="readOperation">
         <label
           >{{ t('devices.operation')
-          }}<input v-model="operationId" required :disabled="busy || uncertain" /></label
-        ><button :disabled="busy">{{ t('onboarding.readOutcome') }}</button>
+          }}<input
+            v-model="operationId"
+            class="ui-input"
+            required
+            :disabled="busy || uncertain" /></label
+        ><UiButton :disabled="!!busy" type="submit">{{ t('onboarding.readOutcome') }}</UiButton>
       </form>
       <p v-if="operation">{{ operation.kind }} · {{ t(`onboarding.ade_${operation.state}`) }}</p>
       <pre v-if="operation?.result">{{ JSON.stringify(operation.result, null, 2) }}</pre>
@@ -371,12 +391,15 @@ onBeforeUnmount(() => {
         "
       >
         <fieldset :disabled="busy">
-          <label>{{ t('onboarding.originalOperation') }}<input v-model="recoveryId" /></label
-          ><button v-if="['assign', 'clear'].includes(operation.kind)">
-            {{ t('onboarding.reconcile') }}</button
+          <label
+            >{{ t('onboarding.originalOperation')
+            }}<input v-model="recoveryId" class="ui-input" /></label
+          ><UiButton v-if="['assign', 'clear'].includes(operation.kind)" type="submit">
+            {{ t('onboarding.reconcile') }}</UiButton
           ><label v-if="operation.kind === 'profile'"
-            >{{ t('onboarding.remoteProfile') }}<input v-model="remoteProfile" required /></label
-          ><button
+            >{{ t('onboarding.remoteProfile')
+            }}<input v-model="remoteProfile" class="ui-input" required /></label
+          ><UiButton
             v-if="operation.kind === 'profile'"
             type="button"
             @click="
@@ -387,9 +410,9 @@ onBeforeUnmount(() => {
             "
           >
             {{ t('onboarding.resolve') }}
-          </button>
+          </UiButton>
         </fieldset>
       </form>
     </template>
-  </OperationsFrame>
+  </PageFrame>
 </template>

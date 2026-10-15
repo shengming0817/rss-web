@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Criteria, FieldDefinition, Scalar } from '../clients/asset-model'
@@ -61,7 +62,12 @@ function operand(index: number, value?: Scalar) {
 <template>
   <fieldset class="condition-editor">
     <legend>{{ t('devices.condition') }}</legend>
-    <select :aria-label="t('devices.kind')" :value="modelValue?.kind ?? 'all'" @change="kind">
+    <select
+      class="ui-input"
+      :aria-label="t('devices.kind')"
+      :value="modelValue?.kind ?? 'all'"
+      @change="kind"
+    >
       <option v-if="!depth" value="all">{{ t('devices.all') }}</option>
       <option value="predicate">{{ t('devices.predicate') }}</option>
       <option v-if="(depth ?? 0) < 8" value="and">{{ t('devices.and') }}</option>
@@ -69,6 +75,7 @@ function operand(index: number, value?: Scalar) {
     </select>
     <template v-if="modelValue?.kind === 'predicate'">
       <select
+        class="ui-input"
         :aria-label="t('devices.field')"
         :value="modelValue.field"
         @change="predicate(($event.target as HTMLSelectElement).value)"
@@ -78,6 +85,7 @@ function operand(index: number, value?: Scalar) {
         </option>
       </select>
       <select
+        class="ui-input"
         :aria-label="t('devices.operator')"
         :value="modelValue.op"
         @change="
@@ -96,21 +104,21 @@ function operand(index: number, value?: Scalar) {
         :model-value="modelValue.value"
         @update:model-value="emit('update:modelValue', { ...modelValue, value: $event })"
       />
-      <div v-for="(value, index) in modelValue.values" :key="index" class="device-actions">
-        <ScalarEditor :model-value="value" @update:model-value="operand(index, $event)" /><button
+      <div v-for="(value, index) in modelValue.values" :key="index" class="console-inline-actions">
+        <ScalarEditor :model-value="value" @update:model-value="operand(index, $event)" /><UiButton
           type="button"
           @click="operand(index)"
         >
           {{ t('devices.remove') }}
-        </button>
+        </UiButton>
       </div>
-      <button
+      <UiButton
         v-if="modelValue.values && field && editableField(field)"
         type="button"
         @click="operand(modelValue.values.length, initial(field.kind))"
       >
         {{ t('devices.add') }}
-      </button>
+      </UiButton>
     </template>
     <template v-else-if="modelValue">
       <div v-for="(item, index) in modelValue.children" :key="index">
@@ -119,14 +127,14 @@ function operand(index: number, value?: Scalar) {
           :fields="fields"
           :depth="(depth ?? 0) + 1"
           @update:model-value="child(index, $event)"
-        /><button type="button" @click="child(index, null)">{{ t('devices.remove') }}</button>
+        /><UiButton type="button" @click="child(index, null)">{{ t('devices.remove') }}</UiButton>
       </div>
-      <button
+      <UiButton
         type="button"
         @click="child(modelValue.children.length, { kind: 'and', children: [] })"
       >
         {{ t('devices.add') }}
-      </button>
+      </UiButton>
     </template>
   </fieldset>
 </template>

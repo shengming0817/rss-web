@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -45,64 +46,69 @@ function cancel() {
 }
 </script>
 <template>
-  <section :aria-busy="busy" class="identity-card">
+  <section :aria-busy="busy" class="console-panel">
     <h2>{{ t('devices.batch') }}</h2>
     <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
     <label
       >{{ t('devices.actions') }}
-      <select v-model="action" :disabled="busy">
+      <select v-model="action" class="ui-input" :disabled="busy">
         <option v-for="id in lifecycleActions" :key="id" :value="id">
           {{ t(`devices.action.${id}`) }}
         </option>
       </select></label
     >
-    <button :disabled="busy || uncertain || !devices.length" @click="preview">
+    <UiButton :disabled="!!(busy || uncertain || !devices.length)" type="submit" @click="preview">
       {{ t('devices.preview') }} ({{ devices.length }})
-    </button>
+    </UiButton>
     <template v-if="batch">
       <p>
         {{ t(`devices.action.${batch.action}`) }} · {{ batch.id }} ·
         {{ t(`devices.${batch.phase}`) }}
       </p>
-      <table>
-        <thead>
-          <tr>
-            <th>{{ t('devices.deviceId') }}</th>
-            <th>{{ t('devices.registration') }}</th>
-            <th>{{ t('devices.blocked') }}</th>
-            <th>{{ t('devices.dispatch') }}</th>
-            <th>{{ t('devices.receipt') }}</th>
-            <th>{{ t('devices.effect') }}</th>
-            <th>{{ t('devices.compliance') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="target in batch.targets" :key="target.device">
-            <td>{{ target.device }}</td>
-            <td>
-              {{ target.registration ?? '—' }} / {{ target.generation ?? '—' }} ·
-              {{ t('devices.revision') }} {{ target.deviceRevision ?? '—' }}
-            </td>
-            <td>{{ target.blocked ? t(`devices.${target.blocked}`) : '—' }}</td>
-            <td>{{ t(`devices.${target.dispatch}`) }}</td>
-            <td>{{ t(`devices.${target.receipt}`) }}</td>
-            <td>
-              {{ t(`devices.${target.effect === 'observed' ? 'observedEffect' : target.effect}`) }}
-            </td>
-            <td>{{ t(`devices.${target.compliance}`) }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="ui-table-scroll">
+        <table class="ui-table">
+          <thead>
+            <tr>
+              <th>{{ t('devices.deviceId') }}</th>
+              <th>{{ t('devices.registration') }}</th>
+              <th>{{ t('devices.blocked') }}</th>
+              <th>{{ t('devices.dispatch') }}</th>
+              <th>{{ t('devices.receipt') }}</th>
+              <th>{{ t('devices.effect') }}</th>
+              <th>{{ t('devices.compliance') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="target in batch.targets" :key="target.device">
+              <td>{{ target.device }}</td>
+              <td>
+                {{ target.registration ?? '—' }} / {{ target.generation ?? '—' }} ·
+                {{ t('devices.revision') }} {{ target.deviceRevision ?? '—' }}
+              </td>
+              <td>{{ target.blocked ? t(`devices.${target.blocked}`) : '—' }}</td>
+              <td>{{ t(`devices.${target.dispatch}`) }}</td>
+              <td>{{ t(`devices.${target.receipt}`) }}</td>
+              <td>
+                {{
+                  t(`devices.${target.effect === 'observed' ? 'observedEffect' : target.effect}`)
+                }}
+              </td>
+              <td>{{ t(`devices.${target.compliance}`) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <template v-if="batch.phase === 'preview'"
         ><label><input v-model="confirmed" type="checkbox" />{{ t('devices.confirmAction') }}</label
-        ><button :disabled="busy || uncertain || !confirmed" @click="execute">
-          {{ t('devices.execute') }}</button
-        ><button :disabled="busy || uncertain" @click="cancel">
+        ><UiButton :disabled="!!(busy || uncertain || !confirmed)" type="submit" @click="execute">
+          {{ t('devices.execute') }}</UiButton
+        ><UiButton :disabled="!!(busy || uncertain)" type="submit" @click="cancel">
           {{ t('devices.cancel') }}
-        </button></template
+        </UiButton></template
       >
-      <button
-        :disabled="busy"
+      <UiButton
+        :disabled="!!busy"
+        type="submit"
         @click="
           run(
             () => clients.candidate.batch(batch!.id),
@@ -111,7 +117,7 @@ function cancel() {
         "
       >
         {{ t('devices.reload') }}
-      </button>
+      </UiButton>
       <p v-for="target in batch.targets.filter((v) => v.execution)" :key="target.device">
         <RouterLink
           :to="{ name: 'policy-execution', params: { tenant, execution: target.execution } }"
@@ -119,12 +125,13 @@ function cancel() {
         >
       </p>
     </template>
-    <button
+    <UiButton
       v-if="uncertain && pending"
-      :disabled="busy"
+      :disabled="!!busy"
+      type="submit"
       @click="runWrite(pending!, (v) => (batch = v))"
     >
       {{ t('devices.replay') }}
-    </button>
+    </UiButton>
   </section>
 </template>

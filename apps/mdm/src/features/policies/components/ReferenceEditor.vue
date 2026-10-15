@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Reference } from '../clients/scopes'
@@ -22,26 +23,27 @@ function add() {
   <fieldset :disabled="disabled">
     <legend>{{ label }}</legend>
     <label :for="`${prefix}-kind`">{{ t('policies.source') }}</label
-    ><select :id="`${prefix}-kind`" v-model="kind">
+    ><select :id="`${prefix}-kind`" v-model="kind" class="ui-input">
       <option value="device">{{ t('policies.device') }}</option>
       <option value="group">{{ t('policies.group') }}</option></select
     ><label :for="`${prefix}-id`">{{ t('policies.id') }}</label
     ><input
       :id="`${prefix}-id`"
       v-model="id"
+      class="ui-input"
       :list="`${prefix}-options`"
       maxlength="256"
     /><datalist :id="`${prefix}-options`">
       <option v-for="item in kind === 'device' ? devices : groups" :key="item.id" :value="item.id">
         {{ item.name }}
       </option></datalist
-    ><button type="button" :disabled="!id" @click="add">{{ t('policies.add') }}</button>
+    ><UiButton type="button" :disabled="!!!id" @click="add">{{ t('policies.add') }}</UiButton>
     <ul>
       <li v-for="(item, index) in model" :key="`${item.kind}:${item.id}`">
         {{ t(`policies.${item.kind}`) }}: {{ item.id }}
-        <button type="button" @click="model = model.filter((_, i) => i !== index)">
+        <UiButton type="button" @click="model = model.filter((_, i) => i !== index)">
           {{ t('policies.remove') }}
-        </button>
+        </UiButton>
       </li>
     </ul>
   </fieldset>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -9,7 +10,7 @@ import { usePermission } from '../usePermission'
 import { useAttachment } from '../useAttachment'
 import { platforms, architectures, releaseChannels } from '../clients/packages'
 import { configurationFilename } from '../clients/configurations'
-import RegistrationFrame from '../../devices/components/RegistrationFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 const runtime = useMdm(),
   client = runtime.onboarding.configurations,
   route = useRoute(),
@@ -239,19 +240,20 @@ watch(
 )
 </script>
 <template>
-  <RegistrationFrame :title="t('onboarding.configurations')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('onboarding.configurations')" :busy="busy" :failure="failure">
     <p v-if="!canRead">{{ t('devices.denied') }}</p>
     <template v-else>
       <p>{{ t('onboarding.configurationNote') }}</p>
-      <button type="button" :disabled="busy" @click="permission.refresh">
+      <UiButton type="button" :disabled="!!busy" @click="permission.refresh">
         {{ t('onboarding.refreshAccess') }}
-      </button>
+      </UiButton>
       <form v-if="canWrite && settings" @submit.prevent="create">
         <fieldset :disabled="busy || uncertain">
           <label
             >{{ t('onboarding.lifetime')
             }}<input
               v-model.number="lifetime"
+              class="ui-input"
               type="number"
               min="1"
               :max="settings.configurationMaxSeconds"
@@ -264,7 +266,13 @@ watch(
           <label><input v-model="finite" type="checkbox" />{{ t('onboarding.finite') }}</label>
           <label v-if="finite"
             >{{ t('onboarding.quantity')
-            }}<input v-model.number="amount" type="number" required min="1" max="4294967295"
+            }}<input
+              v-model.number="amount"
+              class="ui-input"
+              type="number"
+              required
+              min="1"
+              max="4294967295"
           /></label>
           <p v-else>{{ t('onboarding.unlimited') }}</p>
           <fieldset>
@@ -286,9 +294,9 @@ watch(
               ><input v-model="channels" type="checkbox" :value="c" />{{ c }}</label
             >
           </fieldset>
-          <button :disabled="!selectedTargets.length || !channels.length">
+          <UiButton :disabled="!!(!selectedTargets.length || !channels.length)" type="submit">
             {{ t('onboarding.createFile') }}
-          </button>
+          </UiButton>
         </fieldset>
       </form>
       <a v-if="url" :href="url" :download="filename"
@@ -297,14 +305,18 @@ watch(
       <p>{{ t('onboarding.sameDirectory') }}</p>
       <p v-if="operationId">{{ t('devices.operation') }}: {{ operationId }}</p>
       <p v-if="uncertain">{{ t('onboarding.unknownConfiguration') }}</p>
-      <button v-if="pending" type="button" :disabled="busy" @click="recover">
+      <UiButton v-if="pending" type="button" :disabled="!!busy" @click="recover">
         {{ t('onboarding.readOutcome') }}
-      </button>
+      </UiButton>
       <form @submit.prevent="read">
         <label
           >{{ t('onboarding.configurationId')
-          }}<input v-model="configurationId" required :disabled="busy || uncertain" /></label
-        ><button :disabled="busy">{{ t('devices.reload') }}</button>
+          }}<input
+            v-model="configurationId"
+            class="ui-input"
+            required
+            :disabled="busy || uncertain" /></label
+        ><UiButton :disabled="!!busy" type="submit">{{ t('devices.reload') }}</UiButton>
       </form>
       <dl v-if="current">
         <dt>{{ t('devices.status') }}</dt>
@@ -318,22 +330,22 @@ watch(
         <dt>{{ t('devices.expires') }}</dt>
         <dd>{{ current.configuration.expiresAt }}</dd>
       </dl>
-      <button
+      <UiButton
         v-if="canWrite && current?.state === 'available'"
         type="button"
-        :disabled="busy || (!!pendingRevocation && !revocationRead)"
+        :disabled="!!(busy || (!!pendingRevocation && !revocationRead))"
         @click="revoke"
       >
         {{ t(pendingRevocation ? 'onboarding.retryRevoke' : 'onboarding.revokeConfiguration') }}
-      </button>
-      <button
+      </UiButton>
+      <UiButton
         v-if="uncertain && (basisRead || (current && current.state !== 'available'))"
         type="button"
-        :disabled="busy"
+        :disabled="!!busy"
         @click="confirmRecovery"
       >
         {{ t('onboarding.confirmRecovery') }}
-      </button>
+      </UiButton>
       <form v-if="canWrite && settings" @submit.prevent="saveSettings">
         <fieldset :disabled="busy || uncertain">
           <legend>{{ t('onboarding.defaults') }}</legend>
@@ -341,6 +353,7 @@ watch(
             >{{ t('onboarding.defaultLifetime')
             }}<input
               v-model.number="defaultSeconds"
+              class="ui-input"
               type="number"
               min="1"
               :max="settings.configurationMaxSeconds"
@@ -349,16 +362,17 @@ watch(
             >{{ t('onboarding.grantLifetime')
             }}<input
               v-model.number="grantSeconds"
+              class="ui-input"
               type="number"
               min="1"
               :max="settings.grantMaxSeconds"
               required /></label
           ><label v-for="p in platforms" :key="p"
             ><input v-model="enabledPlatforms" type="checkbox" :value="p" />{{ p }}</label
-          ><button>{{ t('registration.save') }}</button
-          ><button type="button" @click="refresh">{{ t('devices.reload') }}</button>
+          ><UiButton type="submit">{{ t('registration.save') }}</UiButton
+          ><UiButton type="button" @click="refresh">{{ t('devices.reload') }}</UiButton>
         </fieldset>
       </form>
     </template>
-  </RegistrationFrame>
+  </PageFrame>
 </template>

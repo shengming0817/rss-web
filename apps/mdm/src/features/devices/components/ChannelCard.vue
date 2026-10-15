@@ -42,7 +42,7 @@ function capabilities(channel: string) {
 }
 </script>
 <template>
-  <section class="identity-card" :data-endpoint="endpoint.id">
+  <section class="console-panel" :data-endpoint="endpoint.id">
     <h2>{{ endpoint.id }}</h2>
     <RouterLink
       :to="{ name: 'device-detail', params: { tenant: runtime.tenant, device: endpoint.id } }"

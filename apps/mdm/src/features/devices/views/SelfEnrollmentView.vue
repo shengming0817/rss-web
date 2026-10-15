@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -6,7 +7,7 @@ import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import NativeFacts from '../../enrollment/components/NativeFacts.vue'
 import { generateEnrollmentPassword } from '../clients/enrollment'
-import RegistrationFrame from '../components/RegistrationFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 const { t } = useI18n(),
   route = useRoute(),
   runtime = useMdm(),
@@ -145,35 +146,37 @@ onBeforeUnmount(clearSecret)
 refresh()
 </script>
 <template>
-  <RegistrationFrame :title="t('registration.self')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('registration.self')" :busy="busy" :failure="failure">
     <p>{{ t('registration.note') }}</p>
-    <button type="button" :disabled="busy" @click="refresh()">
+    <UiButton type="button" :disabled="!!busy" @click="refresh()">
       {{ t('registration.refresh') }}
-    </button>
-    <table v-if="usage">
-      <thead>
-        <tr>
-          <th>{{ t('devices.source') }}</th>
-          <th>{{ t('registration.limit') }}</th>
-          <th>{{ t('registration.active') }}</th>
-          <th>{{ t('registration.reserved') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="c in usage.channels" :key="c.channel">
-          <th>{{ t(`registration.${c.channel}`) }}</th>
-          <td>{{ c.limit }}</td>
-          <td>{{ c.active }}</td>
-          <td>{{ c.reserved }}</td>
-        </tr>
-      </tbody>
-    </table>
+    </UiButton>
+    <div v-if="usage" class="ui-table-scroll">
+      <table class="ui-table">
+        <thead>
+          <tr>
+            <th>{{ t('devices.source') }}</th>
+            <th>{{ t('registration.limit') }}</th>
+            <th>{{ t('registration.active') }}</th>
+            <th>{{ t('registration.reserved') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="c in usage.channels" :key="c.channel">
+            <th>{{ t(`registration.${c.channel}`) }}</th>
+            <td>{{ c.limit }}</td>
+            <td>{{ c.active }}</td>
+            <td>{{ c.reserved }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
     <p>{{ t('registration.handoff') }}</p>
     <form @submit.prevent="submit('create')">
       <fieldset :disabled="busy">
         <label
           >{{ t('devices.source')
-          }}<select v-model="channel" :disabled="uncertain">
+          }}<select v-model="channel" class="ui-input" :disabled="uncertain">
             <option
               v-for="c in usage?.channels.filter((c) => c.channel !== 'agent')"
               :key="c.channel"
@@ -186,18 +189,19 @@ refresh()
         >
         <label v-if="channel === 'windows_mdm'"
           >{{ t('registration.profile')
-          }}<select v-model="profile" :disabled="uncertain">
+          }}<select v-model="profile" class="ui-input" :disabled="uncertain">
             <option value="Device">Device</option>
             <option value="Full">Full</option>
           </select></label
         >
-        <button type="button" :disabled="uncertain" @click="generate()">
+        <UiButton type="button" :disabled="!!uncertain" @click="generate()">
           {{ t('devices.generate') }}
-        </button>
+        </UiButton>
         <label
           >{{ t('devices.password')
           }}<input
             v-model="password"
+            class="ui-input"
             required
             pattern="[A-Za-z0-9_\-]{43}"
             autocomplete="off"
@@ -206,23 +210,26 @@ refresh()
         <label
           ><input v-model="handedOff" type="checkbox" required />{{ t('devices.handoff') }}</label
         >
-        <button
+        <UiButton
           :disabled="
-            uncertain ||
-            !handedOff ||
-            !usage?.channels.find((c) => c.channel === channel)?.canEnroll
+            !!(
+              uncertain ||
+              !handedOff ||
+              !usage?.channels.find((c) => c.channel === channel)?.canEnroll
+            )
           "
+          type="submit"
         >
           {{ t('devices.submitEnrollment') }}
-        </button>
-        <button
+        </UiButton>
+        <UiButton
           v-if="uncertain && pending"
           type="button"
-          :disabled="['create', 'resume'].includes(pending.kind) && (!password || !handedOff)"
+          :disabled="!!(['create', 'resume'].includes(pending.kind) && (!password || !handedOff))"
           @click="submit(pending!.kind, true)"
         >
           {{ t('devices.replay') }}
-        </button>
+        </UiButton>
       </fieldset>
     </form>
     <RouterLink :to="{ name: 'agent-downloads' }">{{ t('onboarding.downloads') }}</RouterLink>
@@ -240,24 +247,28 @@ refresh()
     <form @submit.prevent="status()">
       <label
         >{{ t('devices.enrollmentId')
-        }}<input v-model="enrollmentId" required :disabled="busy || uncertain" /></label
-      ><button :disabled="busy">{{ t('devices.recover') }}</button>
+        }}<input
+          v-model="enrollmentId"
+          class="ui-input"
+          required
+          :disabled="busy || uncertain" /></label
+      ><UiButton :disabled="!!busy" type="submit">{{ t('devices.recover') }}</UiButton>
     </form>
-    <button
+    <UiButton
       v-if="native && ['pending', 'bound'].includes(native.status)"
       type="button"
-      :disabled="busy || uncertain || !password || !handedOff"
+      :disabled="!!(busy || uncertain || !password || !handedOff)"
       @click="submit('resume')"
     >
       {{ t('devices.resume') }}
-    </button>
-    <button
+    </UiButton>
+    <UiButton
       v-if="native?.status === 'pending'"
       type="button"
-      :disabled="busy || uncertain"
+      :disabled="!!(busy || uncertain)"
       @click="submit('cancel')"
     >
       {{ t('devices.cancel') }}
-    </button>
-  </RegistrationFrame>
+    </UiButton>
+  </PageFrame>
 </template>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { onMounted, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -11,7 +12,7 @@ import {
   type Setting,
 } from '../clients/configurations'
 import type { Platform } from '../clients/resources'
-import PolicyFrame from '../components/PolicyFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.policies.configurations,
@@ -154,37 +155,60 @@ function type(index: number, event: Event) {
 onMounted(() => load())
 </script>
 <template>
-  <PolicyFrame :title="t('policies.configurations')" :busy="busy" :failure="failure"
+  <PageFrame :title="t('policies.configurations')" :busy="busy" :failure="failure"
     ><p>{{ t('policies.candidate') }}</p>
-    <button :disabled="busy || uncertain" @click="create">{{ t('policies.create') }}</button
-    ><button :disabled="busy" @click="load()">{{ t('policies.reload') }}</button>
+    <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="create">{{
+      t('policies.create')
+    }}</UiButton
+    ><UiButton :disabled="!!busy" type="submit" @click="load()">{{
+      t('policies.reload')
+    }}</UiButton>
     <p v-if="list && !list.items.length">{{ t('policies.empty') }}</p>
     <ul>
       <li v-for="item in list?.items" :key="item.id">
-        <button :disabled="busy || uncertain" @click="open(item.id)">{{ item.name }}</button> ·
+        <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(item.id)">{{
+          item.name
+        }}</UiButton>
+        ·
         {{ item.format }}
       </li>
     </ul>
-    <button v-if="list?.nextCursor" :disabled="busy" @click="load(list.nextCursor)">
+    <UiButton
+      v-if="list?.nextCursor"
+      :disabled="!!busy"
+      type="submit"
+      @click="load(list.nextCursor)"
+    >
       {{ t('policies.next') }}
-    </button>
+    </UiButton>
     <form @submit.prevent="save">
       <fieldset :disabled="busy || uncertain">
         <label for="configuration-id">{{ t('policies.id') }}</label
-        ><input id="configuration-id" v-model="id" :readonly="!!current" required /><button
-          type="button"
-          @click="open()"
-        >
-          {{ t('policies.open') }}</button
+        ><input
+          id="configuration-id"
+          v-model="id"
+          class="ui-input"
+          :readonly="!!current"
+          required
+        /><UiButton type="button" @click="open()"> {{ t('policies.open') }}</UiButton
         ><label for="configuration-name">{{ t('policies.name') }}</label
-        ><input id="configuration-name" v-model="name" :readonly="!!current" required /><label
-          for="configuration-platform"
-          >{{ t('policies.platform') }}</label
-        ><select id="configuration-platform" v-model="platform" :disabled="!!current">
+        ><input
+          id="configuration-name"
+          v-model="name"
+          class="ui-input"
+          :readonly="!!current"
+          required
+        /><label for="configuration-platform">{{ t('policies.platform') }}</label
+        ><select
+          id="configuration-platform"
+          v-model="platform"
+          class="ui-input"
+          :disabled="!!current"
+        >
           <option value="windows">Windows</option>
           <option value="macos">macOS</option></select
         ><label for="configuration-format">{{ t('policies.format') }}</label
-        ><select id="configuration-format" v-model="format" :disabled="!!current">
+        ><select id="configuration-format" v-model="format" class="ui-input" :disabled="!!current">
           <option
             v-for="item in configurationFormats.filter((item) =>
               platform === 'windows' ? item.startsWith('windows_') : item.startsWith('apple_'),
@@ -195,15 +219,19 @@ onMounted(() => load())
             {{ item }}
           </option></select
         ><template v-if="current"
-          ><button type="button" @click="template">{{ t('policies.loadTemplate') }}</button>
+          ><UiButton type="button" @click="template">{{ t('policies.loadTemplate') }}</UiButton>
           <p>{{ t('policies.templateHint') }}</p>
           <div v-for="(setting, index) in settings" :key="index">
             <label :for="`setting-${index}`">{{ t('policies.setting') }}</label
-            ><input :id="`setting-${index}`" v-model="setting.key" required /><label
-              :for="`setting-type-${index}`"
-              >{{ t('policies.kind') }}</label
+            ><input
+              :id="`setting-${index}`"
+              v-model="setting.key"
+              class="ui-input"
+              required
+            /><label :for="`setting-type-${index}`">{{ t('policies.kind') }}</label
             ><select
               :id="`setting-type-${index}`"
+              class="ui-input"
               :value="typeof setting.value"
               @change="type(index, $event)"
             >
@@ -220,122 +248,151 @@ onMounted(() => load())
               v-else-if="typeof setting.value === 'number'"
               :id="`setting-value-${index}`"
               v-model.number="setting.value"
+              class="ui-input"
               type="number"
               step="any"
               required
-            /><input v-else :id="`setting-value-${index}`" v-model="setting.value" /><button
-              type="button"
-              @click="settings.splice(index, 1)"
-            >
+            /><input
+              v-else
+              :id="`setting-value-${index}`"
+              v-model="setting.value"
+              class="ui-input"
+            /><UiButton type="button" @click="settings.splice(index, 1)">
               {{ t('policies.remove') }}
-            </button>
+            </UiButton>
           </div>
-          <button type="button" @click="settings.push({ key: '', value: '' })">
+          <UiButton type="button" @click="settings.push({ key: '', value: '' })">
             {{ t('policies.add') }}
-          </button></template
-        ><button type="submit">{{ t('policies.save') }}</button>
+          </UiButton></template
+        ><UiButton type="submit">{{ t('policies.save') }}</UiButton>
       </fieldset>
     </form>
     <template v-if="current"
-      ><table>
-        <thead>
-          <tr>
-            <th>{{ t('policies.version') }}</th>
-            <th>{{ t('policies.status') }}</th>
-            <th>{{ t('policies.detail') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="item in current.versions" :key="item.version">
-            <td>{{ item.version }}</td>
-            <td>{{ t(`policies.state.${item.status}`) }}</td>
-            <td>
-              <button :disabled="busy || uncertain" @click="copySettings(item.settings)">
-                {{ t('policies.copySettings') }}</button
-              ><button
-                :disabled="busy || uncertain || item.status !== 'draft'"
-                @click="change({ action: 'publish', version: item.version })"
-              >
-                {{ t('policies.publish') }}</button
-              ><button
-                :disabled="busy || uncertain || item.status === 'archived'"
-                @click="change({ action: 'archive', version: item.version })"
-              >
-                {{ t('policies.archive') }}
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      ><div class="ui-table-scroll">
+        <table class="ui-table">
+          <thead>
+            <tr>
+              <th>{{ t('policies.version') }}</th>
+              <th>{{ t('policies.status') }}</th>
+              <th>{{ t('policies.detail') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in current.versions" :key="item.version">
+              <td>{{ item.version }}</td>
+              <td>{{ t(`policies.state.${item.status}`) }}</td>
+              <td>
+                <UiButton
+                  :disabled="!!(busy || uncertain)"
+                  type="submit"
+                  @click="copySettings(item.settings)"
+                >
+                  {{ t('policies.copySettings') }}</UiButton
+                ><UiButton
+                  :disabled="!!(busy || uncertain || item.status !== 'draft')"
+                  type="submit"
+                  @click="change({ action: 'publish', version: item.version })"
+                >
+                  {{ t('policies.publish') }}</UiButton
+                ><UiButton
+                  :disabled="!!(busy || uncertain || item.status === 'archived')"
+                  type="submit"
+                  @click="change({ action: 'archive', version: item.version })"
+                >
+                  {{ t('policies.archive') }}
+                </UiButton>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <fieldset :disabled="busy">
         <legend>{{ t('policies.diff') }}</legend>
         <label for="configuration-from">{{ t('policies.before') }}</label
-        ><input id="configuration-from" v-model.number="from" type="number" min="1" /><label
-          for="configuration-to"
-          >{{ t('policies.after') }}</label
-        ><input id="configuration-to" v-model.number="to" type="number" min="1" /><button
-          @click="diff"
-        >
+        ><input
+          id="configuration-from"
+          v-model.number="from"
+          class="ui-input"
+          type="number"
+          min="1"
+        /><label for="configuration-to">{{ t('policies.after') }}</label
+        ><input
+          id="configuration-to"
+          v-model.number="to"
+          class="ui-input"
+          type="number"
+          min="1"
+        /><UiButton type="submit" @click="diff">
           {{ t('policies.open') }}
-        </button>
+        </UiButton>
       </fieldset>
-      <table v-if="difference">
-        <thead>
-          <tr>
-            <th>{{ t('policies.setting') }}</th>
-            <th>{{ t('policies.before') }}</th>
-            <th>{{ t('policies.after') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="item in difference" :key="item.key">
-            <td>{{ item.key }}</td>
-            <td>{{ item.before ?? '—' }}</td>
-            <td>{{ item.after ?? '—' }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div v-if="difference" class="ui-table-scroll">
+        <table class="ui-table">
+          <thead>
+            <tr>
+              <th>{{ t('policies.setting') }}</th>
+              <th>{{ t('policies.before') }}</th>
+              <th>{{ t('policies.after') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in difference" :key="item.key">
+              <td>{{ item.key }}</td>
+              <td>{{ item.before ?? '—' }}</td>
+              <td>{{ item.after ?? '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <fieldset :disabled="busy || uncertain">
         <legend>{{ t('policies.preview') }}</legend>
         <label for="configuration-scope">{{ t('policies.scopes') }}</label
-        ><input id="configuration-scope" v-model="scope" /><label for="configuration-version">{{
-          t('policies.version')
-        }}</label
-        ><input id="configuration-version" v-model.number="version" type="number" min="1" /><button
-          @click="startPreview"
-        >
+        ><input id="configuration-scope" v-model="scope" class="ui-input" /><label
+          for="configuration-version"
+          >{{ t('policies.version') }}</label
+        ><input
+          id="configuration-version"
+          v-model.number="version"
+          class="ui-input"
+          type="number"
+          min="1"
+        /><UiButton type="submit" @click="startPreview">
           {{ t('policies.preview') }}
-        </button>
+        </UiButton>
       </fieldset>
-      <button v-if="task" :disabled="busy" @click="refresh">{{ t('policies.refresh') }}</button
+      <UiButton v-if="task" :disabled="!!busy" type="submit" @click="refresh">{{
+        t('policies.refresh')
+      }}</UiButton
       ><template v-if="preview"
         ><p>
           {{ t(`policies.state.${preview.status}`) }} · {{ t('policies.revision') }}
           {{ preview.scopeRevision }}
         </p>
-        <table>
-          <thead>
-            <tr>
-              <th>{{ t('policies.device') }}</th>
-              <th>{{ t('policies.support') }}</th>
-              <th>{{ t('policies.reason') }}</th>
-              <th>{{ t('policies.drift') }}</th>
-              <th>{{ t('policies.conflicts') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in preview.rows" :key="row.device">
-              <td>{{ row.device }}</td>
-              <td>{{ t(`policies.state.${row.support}`) }}</td>
-              <td>{{ row.reason ? t(`policies.state.${row.reason}`) : '—' }}</td>
-              <td>{{ t(`policies.state.${row.drift}`) }}</td>
-              <td>{{ row.conflicts.join(', ') }}</td>
-            </tr>
-          </tbody>
-        </table></template
+        <div class="ui-table-scroll">
+          <table class="ui-table">
+            <thead>
+              <tr>
+                <th>{{ t('policies.device') }}</th>
+                <th>{{ t('policies.support') }}</th>
+                <th>{{ t('policies.reason') }}</th>
+                <th>{{ t('policies.drift') }}</th>
+                <th>{{ t('policies.conflicts') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in preview.rows" :key="row.device">
+                <td>{{ row.device }}</td>
+                <td>{{ t(`policies.state.${row.support}`) }}</td>
+                <td>{{ row.reason ? t(`policies.state.${row.reason}`) : '—' }}</td>
+                <td>{{ t(`policies.state.${row.drift}`) }}</td>
+                <td>{{ row.conflicts.join(', ') }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div></template
       ></template
-    ><button v-if="uncertain && pending" :disabled="busy" @click="pending()">
+    ><UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending()">
       {{ t('policies.replay') }}
-    </button></PolicyFrame
+    </UiButton></PageFrame
   >
 </template>

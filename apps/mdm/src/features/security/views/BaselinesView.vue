@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton, UiUtcDateTimeInput } from '@rss/core/components'
 import { onMounted, ref, toRaw, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -6,8 +7,7 @@ import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
 import type { BaselineDefinition } from '../clients/governance-model'
 import type { SecurityRequestTarget } from '../clients/requests-model'
-import SecurityFrame from '../components/SecurityFrame.vue'
-import { UiUtcDateTimeInput } from '@rss/core/components'
+import PageFrame from '../../../components/PageFrame.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -218,29 +218,43 @@ watch(() => route.fullPath, routeChanged, { flush: 'sync' })
 onMounted(routeChanged)
 </script>
 <template>
-  <SecurityFrame :title="t('security.baselines')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('security.baselines')" :busy="busy" :failure="failure">
     <p>{{ t('security.baselineHint') }}</p>
-    <button :disabled="busy || uncertain" data-testid="new-baseline" @click="create">
-      {{ t('devices.create') }}</button
-    ><button :disabled="busy" @click="load()">{{ t('devices.reload') }}</button>
+    <UiButton
+      :disabled="!!(busy || uncertain)"
+      data-testid="new-baseline"
+      type="submit"
+      @click="create"
+    >
+      {{ t('devices.create') }}</UiButton
+    ><UiButton :disabled="!!busy" type="submit" @click="load()">{{ t('devices.reload') }}</UiButton>
     <ul>
       <li v-for="item in list?.items" :key="item.id">
-        <button :disabled="busy || uncertain" @click="open(item.id)">
+        <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(item.id)">
           {{ item.definition.name }}
-        </button>
+        </UiButton>
         · {{ item.revision }} ·
         {{ t(item.definition.enabled ? 'security.enabled' : 'security.disabled') }}
       </li>
     </ul>
     <p v-if="list && !list.items.length">{{ t('security.emptyBaselines') }}</p>
-    <button v-if="list?.nextCursor" :disabled="busy" @click="load(list.nextCursor)">
+    <UiButton
+      v-if="list?.nextCursor"
+      :disabled="!!busy"
+      type="submit"
+      @click="load(list.nextCursor)"
+    >
       {{ t('devices.next') }}
-    </button>
+    </UiButton>
     <form @submit.prevent="open()">
       <label
         >{{ t('security.baselineId')
-        }}<input v-model="id" required :readonly="busy || uncertain || !!current" /></label
-      ><button :disabled="busy || uncertain">{{ t('devices.open') }}</button>
+        }}<input
+          v-model="id"
+          class="ui-input"
+          required
+          :readonly="busy || uncertain || !!current" /></label
+      ><UiButton :disabled="!!(busy || uncertain)" type="submit">{{ t('devices.open') }}</UiButton>
     </form>
     <p v-if="current">
       {{ t('devices.revision') }} {{ current.baseline.revision }} ·
@@ -250,47 +264,54 @@ onMounted(routeChanged)
       <fieldset :disabled="busy || uncertain || !editable">
         <label
           >{{ t('devices.name')
-          }}<input v-model="name" data-testid="baseline-name" maxlength="128" required /></label
+          }}<input
+            v-model="name"
+            class="ui-input"
+            data-testid="baseline-name"
+            maxlength="128"
+            required /></label
         ><label><input v-model="enabled" type="checkbox" />{{ t('security.enabled') }}</label>
-        <label>{{ t('policies.scope') }}<input v-model="scope" required /></label
-        ><button type="button" @click="scopePage()">{{ t('security.chooseScope') }}</button>
+        <label>{{ t('policies.scope') }}<input v-model="scope" class="ui-input" required /></label
+        ><UiButton type="button" @click="scopePage()">{{ t('security.chooseScope') }}</UiButton>
         <ul>
           <li v-for="item in scopes?.items" :key="item.id">
-            <button type="button" @click="scope = item.id">
+            <UiButton type="button" @click="scope = item.id">
               {{ item.label }} / {{ item.revision }}
-            </button>
+            </UiButton>
           </li>
         </ul>
-        <button v-if="scopes?.nextCursor" type="button" @click="scopePage(scopes.nextCursor)">
+        <UiButton v-if="scopes?.nextCursor" type="button" @click="scopePage(scopes.nextCursor)">
           {{ t('devices.next') }}
-        </button>
+        </UiButton>
         <RouterLink :to="{ name: 'policy-scopes', params: { tenant: runtime.tenant } }">{{
           t('policies.scopes')
         }}</RouterLink>
         <fieldset>
           <legend>{{ t('security.pinnedRules') }}</legend>
-          <button type="button" @click="rulePage()">{{ t('security.chooseRule') }}</button>
+          <UiButton type="button" @click="rulePage()">{{ t('security.chooseRule') }}</UiButton>
           <ul>
             <li v-for="item in rules?.items" :key="item.id">
-              <button type="button" @click="selectRule(item.id, item.revision)">
+              <UiButton type="button" @click="selectRule(item.id, item.revision)">
                 {{ item.definition.name }} / {{ item.revision }}
-              </button>
+              </UiButton>
             </li>
           </ul>
-          <button v-if="rules?.nextCursor" type="button" @click="rulePage(rules.nextCursor)">
+          <UiButton v-if="rules?.nextCursor" type="button" @click="rulePage(rules.nextCursor)">
             {{ t('devices.next') }}
-          </button>
-          <label>{{ t('security.ruleId') }}<input v-model="ruleId" /></label
+          </UiButton>
+          <label>{{ t('security.ruleId') }}<input v-model="ruleId" class="ui-input" /></label
           ><label
             >{{ t('devices.revision')
-            }}<input v-model.number="ruleVersion" type="number" min="1" /></label
-          ><button type="button" :disabled="!ruleId" @click="addPin">{{ t('devices.add') }}</button>
+            }}<input v-model.number="ruleVersion" class="ui-input" type="number" min="1" /></label
+          ><UiButton type="button" :disabled="!!!ruleId" @click="addPin">{{
+            t('devices.add')
+          }}</UiButton>
           <ul>
             <li v-for="pin in pins" :key="pin.id">
               {{ pin.id }} / {{ pin.revision
-              }}<button type="button" @click="pins = pins.filter((p) => p.id !== pin.id)">
+              }}<UiButton type="button" @click="pins = pins.filter((p) => p.id !== pin.id)">
                 {{ t('devices.remove') }}
-              </button>
+              </UiButton>
             </li>
           </ul>
         </fieldset>
@@ -305,12 +326,12 @@ onMounted(routeChanged)
             :max="asOf + 30 * 86400"
             @update:model-value="graceUntil = $event ?? Number.NaN"
         /></template>
-        <button :disabled="!pins.length">{{ t('devices.save') }}</button>
+        <UiButton :disabled="!!!pins.length" type="submit">{{ t('devices.save') }}</UiButton>
       </fieldset>
     </form>
-    <button v-if="current" :disabled="busy" @click="compare">
+    <UiButton v-if="current" :disabled="!!busy" type="submit" @click="compare">
       {{ t('security.compareLatest') }}
-    </button>
+    </UiButton>
     <section v-if="latest" data-testid="baseline-comparison">
       <h2>{{ t('security.serverVersion') }}</h2>
       <p>
@@ -327,19 +348,21 @@ onMounted(routeChanged)
           {{ pin.id }} / {{ pin.revision }}
         </li>
       </ul>
-      <button :disabled="busy || uncertain" @click="apply(latest)">
+      <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="apply(latest)">
         {{ t('security.adoptLatest') }}
-      </button>
+      </UiButton>
     </section>
-    <button v-if="uncertain && pending" :disabled="busy" @click="pending()">
+    <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending()">
       {{ t('policies.replay') }}
-    </button>
+    </UiButton>
     <section v-if="current">
       <h2>{{ t('security.governance') }}</h2>
-      <button :disabled="busy" @click="readDevices()">{{ t('security.readDevices') }}</button>
+      <UiButton :disabled="!!busy" type="submit" @click="readDevices()">{{
+        t('security.readDevices')
+      }}</UiButton>
       <p v-if="page">{{ t('security.snapshotAt') }} {{ at(page.asOf) }}</p>
       <p v-if="page && !page.items.length">{{ t('security.emptyTargets') }}</p>
-      <article v-for="row in page?.items" :key="row.device" class="identity-card">
+      <article v-for="row in page?.items" :key="row.device" class="console-panel">
         <h3>
           {{ row.device }} · {{ t('security.nativeConclusion') }}
           {{ t(`security.state.${row.native.status}`) }}
@@ -352,54 +375,63 @@ onMounted(routeChanged)
           }"
           >{{ t('security.evidence') }}</RouterLink
         >
-        <table>
-          <thead>
-            <tr>
-              <th>{{ t('security.ruleRevision') }}</th>
-              <th>{{ t('security.nativeConclusion') }}</th>
-              <th>{{ t('security.driftLabel') }}</th>
-              <th>{{ t('security.governance') }}</th>
-              <th>{{ t('security.requests') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="rule in row.rules" :key="rule.ruleId">
-              <td>{{ rule.ruleId }} / {{ rule.ruleVersion }}</td>
-              <td>{{ t(`security.state.${rule.nativeStatus}`) }}</td>
-              <td>{{ t(`security.drift.${rule.drift}`) }}</td>
-              <td>{{ t(`security.governanceState.${rule.governance}`) }}</td>
-              <td>
-                <RouterLink
-                  v-if="rule.request"
-                  :to="{
-                    name: 'security-requests',
-                    params: { tenant: runtime.tenant },
-                    query: { id: rule.request },
-                  }"
-                  >{{ rule.request }}</RouterLink
-                >
-                <button
-                  v-if="rule.drift === 'none' && rule.nativeStatus === 'non_compliant'"
-                  :disabled="busy || uncertain"
-                  @click="requestException(row.device, rule.ruleId, rule.ruleVersion)"
-                >
-                  {{ t('security.requestException') }}
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="ui-table-scroll">
+          <table class="ui-table">
+            <thead>
+              <tr>
+                <th>{{ t('security.ruleRevision') }}</th>
+                <th>{{ t('security.nativeConclusion') }}</th>
+                <th>{{ t('security.driftLabel') }}</th>
+                <th>{{ t('security.governance') }}</th>
+                <th>{{ t('security.requests') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="rule in row.rules" :key="rule.ruleId">
+                <td>{{ rule.ruleId }} / {{ rule.ruleVersion }}</td>
+                <td>{{ t(`security.state.${rule.nativeStatus}`) }}</td>
+                <td>{{ t(`security.drift.${rule.drift}`) }}</td>
+                <td>{{ t(`security.governanceState.${rule.governance}`) }}</td>
+                <td>
+                  <RouterLink
+                    v-if="rule.request"
+                    :to="{
+                      name: 'security-requests',
+                      params: { tenant: runtime.tenant },
+                      query: { id: rule.request },
+                    }"
+                    >{{ rule.request }}</RouterLink
+                  >
+                  <UiButton
+                    v-if="rule.drift === 'none' && rule.nativeStatus === 'non_compliant'"
+                    :disabled="!!(busy || uncertain)"
+                    type="submit"
+                    @click="requestException(row.device, rule.ruleId, rule.ruleVersion)"
+                  >
+                    {{ t('security.requestException') }}
+                  </UiButton>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </article>
-      <button v-if="page?.nextCursor" :disabled="busy" @click="readDevices(page.nextCursor)">
+      <UiButton
+        v-if="page?.nextCursor"
+        :disabled="!!busy"
+        type="submit"
+        @click="readDevices(page.nextCursor)"
+      >
         {{ t('devices.next') }}
-      </button>
+      </UiButton>
     </section>
     <form v-if="target" data-testid="exception-form" @submit.prevent="submitRequest">
       <fieldset :disabled="busy || uncertain">
         <legend>{{ t('security.requestException') }}</legend>
         <p>{{ target.device }} · {{ target.rule }} / {{ target.ruleVersion }}</p>
         <label
-          >{{ t('security.justification') }}<textarea v-model="reason" required maxlength="512" />
+          >{{ t('security.justification')
+          }}<textarea v-model="reason" class="ui-input" required maxlength="512" />
         </label>
         <label for="exception-from">{{ t('security.validFrom') }}</label
         ><UiUtcDateTimeInput
@@ -420,7 +452,7 @@ onMounted(routeChanged)
           :max="asOf + 30 * 86400"
           @update:model-value="validUntil = $event ?? Number.NaN"
         />
-        <button>{{ t('security.submitRequest') }}</button>
+        <UiButton type="submit">{{ t('security.submitRequest') }}</UiButton>
       </fieldset>
     </form>
     <p v-if="requested">
@@ -434,5 +466,5 @@ onMounted(routeChanged)
         >{{ requested }}</RouterLink
       >
     </p>
-  </SecurityFrame>
+  </PageFrame>
 </template>

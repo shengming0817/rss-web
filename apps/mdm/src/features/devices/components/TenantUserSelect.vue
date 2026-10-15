@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { ref } from 'vue'
 import { useIdentity } from '@rss/auth'
 import { useI18n } from 'vue-i18n'
@@ -25,6 +26,7 @@ load()
   <label
     >{{ t('registration.user') }}
     <select
+      class="ui-input"
       :value="modelValue"
       :disabled="disabled || busy"
       @change="emit('update:modelValue', ($event.target as HTMLSelectElement).value)"
@@ -47,10 +49,10 @@ load()
     </select>
   </label>
   <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
-  <button type="button" :disabled="disabled || busy" @click="load()">
+  <UiButton type="button" :disabled="!!(disabled || busy)" @click="load()">
     {{ t('devices.reload') }}
-  </button>
-  <button v-if="cursor" type="button" :disabled="disabled || busy" @click="load(true)">
+  </UiButton>
+  <UiButton v-if="cursor" type="button" :disabled="!!(disabled || busy)" @click="load(true)">
     {{ t('registration.more') }}
-  </button>
+  </UiButton>
 </template>

@@ -21,6 +21,7 @@ function input(event: Event) {
 <template>
   <select
     v-if="modelValue.kind === 'boolean'"
+    class="ui-input"
     :aria-label="t('devices.value')"
     :value="String(modelValue.value)"
     @change="input"
@@ -30,6 +31,7 @@ function input(event: Event) {
   </select>
   <input
     v-else
+    class="ui-input"
     :aria-label="t('devices.value')"
     :type="modelValue.kind === 'string' ? 'text' : 'number'"
     :value="modelValue.value"

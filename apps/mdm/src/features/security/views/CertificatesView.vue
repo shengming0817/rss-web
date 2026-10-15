@@ -1,12 +1,12 @@
 <script setup lang="ts">
+import { UiButton, UiUtcDateTimeInput } from '@rss/core/components'
 import { onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
-import SecurityFrame from '../components/SecurityFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 import CertificateFacts from '../components/CertificateFacts.vue'
-import { UiUtcDateTimeInput } from '@rss/core/components'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -133,44 +133,54 @@ watch(() => route.fullPath, changed, { flush: 'sync' })
 onMounted(changed)
 </script>
 <template>
-  <SecurityFrame :title="t('security.certificates')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('security.certificates')" :busy="busy" :failure="failure">
     <p>{{ t('security.certificateHint') }}</p>
     <form @submit.prevent="load()">
       <label
-        >{{ t('policies.device') }}<input v-model="device" :readonly="busy || uncertain"
+        >{{ t('policies.device')
+        }}<input v-model="device" class="ui-input" :readonly="busy || uncertain"
       /></label>
-      <button :disabled="busy || uncertain">{{ t('devices.reload') }}</button>
+      <UiButton :disabled="!!(busy || uncertain)" type="submit">{{ t('devices.reload') }}</UiButton>
     </form>
     <p v-if="list && !list.items.length">{{ t('security.emptyCertificates') }}</p>
     <ul>
       <li v-for="c in list?.items" :key="c.id">
-        <button :disabled="busy || uncertain" @click="open(c.id)">
+        <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(c.id)">
           {{ c.device }} · {{ c.profile.name }}
-        </button>
+        </UiButton>
         · {{ t(`security.certificateStates.${c.validity}`) }}
       </li>
     </ul>
-    <button v-if="list?.nextCursor" :disabled="busy || uncertain" @click="load(list.nextCursor)">
+    <UiButton
+      v-if="list?.nextCursor"
+      :disabled="!!(busy || uncertain)"
+      type="submit"
+      @click="load(list.nextCursor)"
+    >
       {{ t('devices.next') }}
-    </button>
+    </UiButton>
     <section v-if="current" data-testid="certificate-detail">
       <h2>{{ current.certificate.device }}</h2>
       <CertificateFacts :certificate="current.certificate" />
-      <button
-        :disabled="busy"
+      <UiButton
+        :disabled="!!busy"
         data-testid="refresh-certificate"
+        type="submit"
         @click="open(current.certificate.id)"
       >
         {{ t('policies.refresh') }}
-      </button>
-      <button
+      </UiButton>
+      <UiButton
         :disabled="
-          busy ||
-          uncertain ||
-          !current.certificate.source ||
-          ['requested', 'unknown'].includes(current.certificate.issuance?.state ?? '')
+          !!(
+            busy ||
+            uncertain ||
+            !current.certificate.source ||
+            ['requested', 'unknown'].includes(current.certificate.issuance?.state ?? '')
+          )
         "
         data-testid="issue-certificate"
+        type="submit"
         @click="issue"
       >
         {{
@@ -180,20 +190,21 @@ onMounted(changed)
               : 'security.issueCertificate',
           )
         }}
-      </button>
-      <button
+      </UiButton>
+      <UiButton
         v-if="
           current.certificate.issuance?.credential &&
           current.certificate.issuance.credential.fingerprint !==
             current.certificate.installed?.credential.fingerprint
         "
-        :disabled="busy || uncertain || !current.certificate.source"
+        :disabled="!!(busy || uncertain || !current.certificate.source)"
         data-testid="deploy-certificate"
+        type="submit"
         @click="beginRequest"
       >
         {{ t('security.deployCertificate') }}
-      </button>
-      <nav class="device-actions" :aria-label="t('security.relatedRecords')">
+      </UiButton>
+      <nav class="console-inline-actions" :aria-label="t('security.relatedRecords')">
         <RouterLink
           :to="{
             name: 'device-detail',
@@ -217,7 +228,8 @@ onMounted(changed)
       <fieldset :disabled="busy || uncertain">
         <legend>{{ t('security.deployCertificate') }}</legend>
         <label
-          >{{ t('security.justification') }}<textarea v-model="reason" required maxlength="512" />
+          >{{ t('security.justification')
+          }}<textarea v-model="reason" class="ui-input" required maxlength="512" />
         </label>
         <label for="certificate-from">{{ t('security.validFrom') }}</label
         ><UiUtcDateTimeInput
@@ -237,7 +249,7 @@ onMounted(changed)
           :min="from + 1"
           @update:model-value="until = $event ?? Number.NaN"
         />
-        <button>{{ t('security.submitRequest') }}</button>
+        <UiButton type="submit">{{ t('security.submitRequest') }}</UiButton>
       </fieldset>
     </form>
     <p v-if="accepted">
@@ -251,8 +263,8 @@ onMounted(changed)
         >{{ accepted }}</RouterLink
       >
     </p>
-    <button v-if="uncertain && pending" :disabled="busy" @click="pending()">
+    <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending()">
       {{ t('policies.replay') }}
-    </button>
-  </SecurityFrame>
+    </UiButton>
+  </PageFrame>
 </template>

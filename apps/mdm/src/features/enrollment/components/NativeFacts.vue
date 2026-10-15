@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -69,11 +70,14 @@ onBeforeUnmount(() => {
           >{{ t('devices.password')
           }}<input
             v-model="password"
+            class="ui-input"
             type="password"
             autocomplete="off"
             required
             pattern="[A-Za-z0-9_\-]{43}" /></label
-        ><button :disabled="busy || !password">{{ t('onboarding.downloadProfile') }}</button>
+        ><UiButton :disabled="!!(busy || !password)" type="submit">{{
+          t('onboarding.downloadProfile')
+        }}</UiButton>
       </form>
       <a v-if="url" :href="url" :download="filename">{{ t('onboarding.saveProfile') }}</a>
     </template>

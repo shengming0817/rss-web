@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { utc } from '../presentation'
 import { onMounted, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -11,7 +12,7 @@ import {
   type Connector,
   type Delivery,
 } from '../clients/admin-model'
-import OperationsFrame from '../components/OperationsFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 const { t } = useI18n(),
   client = useMdm().operations.admin.connectors,
   route = useRoute(),
@@ -158,72 +159,98 @@ onMounted(async () => {
 })
 </script>
 <template>
-  <OperationsFrame :title="t('operations.integrations')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('operations.integrations')" :busy="busy" :failure="failure">
     <p>{{ t('operations.integrationHint') }}</p>
-    <button :disabled="busy" @click="load()">{{ t('devices.reload') }}</button
-    ><button :disabled="busy || uncertain" @click="create()">
+    <UiButton :disabled="!!busy" type="submit" @click="load()">{{ t('devices.reload') }}</UiButton
+    ><UiButton :disabled="!!(busy || uncertain)" type="submit" @click="create()">
       {{ t('operations.newConnector') }}
-    </button>
+    </UiButton>
     <ul>
       <li v-for="item in page?.items" :key="item.id">
-        <button :disabled="busy || uncertain" @click="open(item.id)">
+        <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(item.id)">
           {{ item.definition.name }} · {{ item.definition.kind }} · {{ item.health }}
-        </button>
+        </UiButton>
       </li>
     </ul>
-    <button v-if="page?.nextCursor" :disabled="busy" @click="load(page.nextCursor)">
+    <UiButton
+      v-if="page?.nextCursor"
+      :disabled="!!busy"
+      type="submit"
+      @click="load(page.nextCursor)"
+    >
       {{ t('devices.next') }}
-    </button>
+    </UiButton>
     <form @submit.prevent="save()">
       <fieldset :disabled="busy || uncertain || missing">
         <legend>{{ id }} / {{ revision }}</legend>
         <label
           >{{ t('operations.name')
-          }}<input v-model="draft.name" data-testid="connector-name" required /></label
+          }}<input
+            v-model="draft.name"
+            class="ui-input"
+            data-testid="connector-name"
+            required /></label
         ><label
           >{{ t('operations.connectorKind')
-          }}<select v-model="draft.kind">
+          }}<select v-model="draft.kind" class="ui-input">
             <option v-for="kind in connectorKinds" :key="kind">{{ kind }}</option>
           </select></label
         ><label
           >{{ t('operations.endpoint')
           }}<input
             v-model="draft.endpoint"
+            class="ui-input"
             data-testid="connector-endpoint"
             type="url"
             required /></label
-        ><label>{{ t('operations.credentialRef') }}<input v-model="draft.credentialRef" /></label
+        ><label
+          >{{ t('operations.credentialRef')
+          }}<input v-model="draft.credentialRef" class="ui-input" /></label
         ><label
           ><input v-model="draft.enabled" type="checkbox" />{{ t('operations.enabled') }}</label
-        ><button data-testid="save-connector" :disabled="conflict">{{ t('devices.save') }}</button>
+        ><UiButton data-testid="save-connector" :disabled="!!conflict" type="submit">{{
+          t('devices.save')
+        }}</UiButton>
       </fieldset>
     </form>
     <section v-if="selected">
       <h2>{{ selected.definition.name }}</h2>
       <p>{{ t('operations.health') }} {{ selected.health }} · {{ selected.operation }}</p>
       <p>{{ selected.definition.credentialRef ?? '—' }}</p>
-      <button :disabled="busy" @click="open(id, false)">{{ t('operations.compare') }}</button>
+      <UiButton :disabled="!!busy" type="submit" @click="open(id, false)">{{
+        t('operations.compare')
+      }}</UiButton>
       <p v-if="selected.revision !== revision">
         {{ t('operations.remote') }} {{ selected.revision
-        }}<button :disabled="busy || uncertain" @click="adopt()">
+        }}<UiButton :disabled="!!(busy || uncertain)" type="submit" @click="adopt()">
           {{ t('operations.adoptRevision') }}
-        </button>
+        </UiButton>
       </p>
-      <button
-        :disabled="busy || uncertain || conflict || !selected.definition.enabled"
+      <UiButton
+        :disabled="!!(busy || uncertain || conflict || !selected.definition.enabled)"
+        type="submit"
         @click="action('test')"
       >
-        {{ t('operations.testConnector') }}</button
-      ><button
-        :disabled="busy || uncertain || conflict || !selected.definition.enabled"
+        {{ t('operations.testConnector') }}</UiButton
+      ><UiButton
+        :disabled="!!(busy || uncertain || conflict || !selected.definition.enabled)"
+        type="submit"
         @click="action('deliver')"
       >
-        {{ t('operations.deliver') }}</button
-      ><button :disabled="busy" @click="deliveries()">{{ t('operations.deliveries') }}</button>
+        {{ t('operations.deliver') }}</UiButton
+      ><UiButton :disabled="!!busy" type="submit" @click="deliveries()">{{
+        t('operations.deliveries')
+      }}</UiButton>
     </section>
-    <button v-if="test" data-testid="refresh-attempt" :disabled="busy" @click="refreshAttempt()">
+    <UiButton
+      v-if="test"
+      data-testid="refresh-attempt"
+      :disabled="!!busy"
+      type="submit"
+      @click="refreshAttempt()"
+    >
       {{ t('policies.refresh') }}
-    </button>
+    </UiButton>
     <p v-if="test">
       {{ t('operations.attempt') }} {{ test.id }} · {{ test.kind }} / {{ test.state }} ·
       {{ test.reason ?? '—' }}
@@ -232,25 +259,32 @@ onMounted(async () => {
       <li v-for="item in attempts?.items" :key="item.id">
         {{ item.id }} · {{ item.state }} / {{ item.attempt }} · {{ utc(item.at) }} ·
         {{ item.reason ?? '—' }} · {{ item.previous ?? '—'
-        }}<button
+        }}<UiButton
           v-if="item.state === 'failed'"
-          :disabled="busy || uncertain"
+          :disabled="!!(busy || uncertain)"
+          type="submit"
           @click="action('deliver', item)"
         >
           {{ t('operations.retryDelivery') }}
-        </button>
+        </UiButton>
       </li>
     </ul>
-    <button v-if="attempts?.nextCursor" :disabled="busy" @click="deliveries(attempts.nextCursor)">
+    <UiButton
+      v-if="attempts?.nextCursor"
+      :disabled="!!busy"
+      type="submit"
+      @click="deliveries(attempts.nextCursor)"
+    >
       {{ t('devices.next') }}
-    </button>
-    <button
+    </UiButton>
+    <UiButton
       v-if="uncertain && pending"
       data-testid="replay-write"
-      :disabled="busy"
+      :disabled="!!busy"
+      type="submit"
       @click="pending()"
     >
       {{ t('policies.replay') }}
-    </button>
-  </OperationsFrame>
+    </UiButton>
+  </PageFrame>
 </template>

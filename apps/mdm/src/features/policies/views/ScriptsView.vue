@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
-import PolicyFrame from '../components/PolicyFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 const { t } = useI18n(),
   runtime = useMdm()
 </script>
 <template>
-  <PolicyFrame :title="t('policies.scripts')">
+  <PageFrame :title="t('policies.scripts')">
     <p>{{ t('policies.scriptAssignment') }}</p>
     <RouterLink :to="{ name: 'policy-resources', params: { tenant: runtime.tenant } }">{{
       t('policies.resources')
@@ -17,5 +17,5 @@ const { t } = useI18n(),
     <RouterLink :to="{ name: 'policy-workflows', params: { tenant: runtime.tenant } }">{{
       t('policies.generalQuery')
     }}</RouterLink>
-  </PolicyFrame>
+  </PageFrame>
 </template>

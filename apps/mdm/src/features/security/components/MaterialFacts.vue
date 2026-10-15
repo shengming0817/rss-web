@@ -42,24 +42,26 @@ const booleanText = (v: boolean | null) =>
   </dl>
   <template v-if="material.kind === 'bitlocker' && material.details"
     ><p>TPM · {{ t(`security.materialState.${material.details.tpm}`) }}</p>
-    <table>
-      <thead>
-        <tr>
-          <th>{{ t('security.volume') }}</th>
-          <th>{{ t('security.encryption') }}</th>
-          <th>{{ t('security.escrow') }}</th>
-          <th>{{ t('security.keyReference') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="v in material.details.volumes" :key="v.id">
-          <td>{{ v.id }} · {{ t(`security.volumeRole.${v.role}`) }}</td>
-          <td>{{ t(`security.materialState.${v.encryption}`) }}</td>
-          <td>{{ t(`security.materialState.${v.escrow}`) }}</td>
-          <td>{{ v.keyId ?? '—' }}</td>
-        </tr>
-      </tbody>
-    </table></template
+    <div class="ui-table-scroll">
+      <table class="ui-table">
+        <thead>
+          <tr>
+            <th>{{ t('security.volume') }}</th>
+            <th>{{ t('security.encryption') }}</th>
+            <th>{{ t('security.escrow') }}</th>
+            <th>{{ t('security.keyReference') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="v in material.details.volumes" :key="v.id">
+            <td>{{ v.id }} · {{ t(`security.volumeRole.${v.role}`) }}</td>
+            <td>{{ t(`security.materialState.${v.encryption}`) }}</td>
+            <td>{{ t(`security.materialState.${v.escrow}`) }}</td>
+            <td>{{ v.keyId ?? '—' }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div></template
   >
   <dl v-else-if="material.kind === 'filevault' && material.details">
     <dt>{{ t('security.encryption') }}</dt>

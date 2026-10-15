@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton, UiUtcDateTimeInput } from '@rss/core/components'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -7,10 +8,9 @@ import { operation, useOperation } from '../../../services/useOperation'
 import { hasEscrow, materialKinds, type MaterialKind } from '../clients/materials-model'
 import { requestTarget } from '../clients/requests-model'
 import { useMaterialDisclosure } from '../useMaterialDisclosure'
-import SecurityFrame from '../components/SecurityFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 import MaterialFacts from '../components/MaterialFacts.vue'
 import RequestFacts from '../components/RequestFacts.vue'
-import { UiUtcDateTimeInput } from '@rss/core/components'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -207,36 +207,41 @@ watch(
 onMounted(() => void changed())
 </script>
 <template>
-  <SecurityFrame :title="t('security.materials')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('security.materials')" :busy="busy" :failure="failure">
     <p>{{ t('security.materialHint') }}</p>
     <form @submit.prevent="load">
       <fieldset :disabled="busy || uncertain">
-        <label>{{ t('policies.device') }}<input v-model="device" required /></label
+        <label>{{ t('policies.device') }}<input v-model="device" class="ui-input" required /></label
         ><label
           >{{ t('security.materialKind')
-          }}<select v-model="kind">
+          }}<select v-model="kind" class="ui-input">
             <option v-for="item in materialKinds" :key="item" :value="item">
               {{ t(`security.materialKinds.${item}`) }}
             </option>
           </select></label
-        ><button>{{ t('devices.open') }}</button>
+        ><UiButton type="submit">{{ t('devices.open') }}</UiButton>
       </fieldset>
     </form>
     <section v-if="current">
       <h2>
         {{ current.material.device }} · {{ t(`security.materialKinds.${current.material.kind}`) }}
       </h2>
-      <MaterialFacts :material="current.material" /><button :disabled="busy" @click="load">
+      <MaterialFacts :material="current.material" /><UiButton
+        :disabled="!!busy"
+        type="submit"
+        @click="load"
+      >
         {{ t('policies.refresh') }}
-      </button>
-      <button
+      </UiButton>
+      <UiButton
         v-for="value in current.material.actions"
         :key="value"
-        :disabled="busy || uncertain"
+        :disabled="!!(busy || uncertain)"
+        type="submit"
         @click="begin(value)"
       >
         {{ t(`security.materialAction.${value}`) }}
-      </button>
+      </UiButton>
       <RouterLink
         :to="{
           name: 'security-actions',
@@ -259,14 +264,14 @@ onMounted(() => void changed())
         <legend>{{ t(`security.materialAction.${action}`) }}</legend>
         <label v-if="current.material.kind === 'bitlocker'"
           >{{ t('security.volume')
-          }}<select v-model="volume" required>
+          }}<select v-model="volume" class="ui-input" required>
             <option v-for="v in selectableVolumes" :key="v.id" :value="v.id">
               {{ v.id }}
             </option>
           </select></label
         ><label
           >{{ t('security.justification')
-          }}<textarea v-model="reason" required maxlength="512" /></label
+          }}<textarea v-model="reason" class="ui-input" required maxlength="512" /></label
         ><label for="material-from">{{ t('security.validFrom') }}</label
         ><UiUtcDateTimeInput
           id="material-from"
@@ -284,7 +289,7 @@ onMounted(() => void changed())
           :min="from + 1"
           :max="from + (action === 'reveal' ? 900 : 30 * 86400)"
           @update:model-value="until = $event ?? Number.NaN"
-        /><button>{{ t('security.submitRequest') }}</button>
+        /><UiButton type="submit">{{ t('security.submitRequest') }}</UiButton>
       </fieldset>
     </form>
     <p v-if="accepted">
@@ -298,27 +303,38 @@ onMounted(() => void changed())
         >{{ accepted }}</RouterLink
       >
     </p>
-    <button v-if="uncertain && pending" :disabled="busy" @click="pending()">
+    <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending()">
       {{ t('policies.replay') }}
-    </button>
+    </UiButton>
     <section v-if="current && current.material.kind !== 'bootstrap_token'">
       <h2>{{ t('security.disclosure') }}</h2>
       <p>{{ t('security.disclosureHint') }}</p>
       <form @submit.prevent="readGrant">
         <label
           >{{ t('security.requestId')
-          }}<input v-model="grantId" :readonly="busy || uncertain" required /></label
-        ><button :disabled="busy || uncertain">{{ t('devices.open') }}</button>
+          }}<input
+            v-model="grantId"
+            class="ui-input"
+            :readonly="busy || uncertain"
+            required /></label
+        ><UiButton :disabled="!!(busy || uncertain)" type="submit">{{
+          t('devices.open')
+        }}</UiButton>
       </form>
-      <RequestFacts v-if="grant" :request="grant.request" :as-of="grant.asOf" /><button
-        :disabled="busy || uncertain || !canReveal"
+      <RequestFacts v-if="grant" :request="grant.request" :as-of="grant.asOf" /><UiButton
+        :disabled="!!(busy || uncertain || !canReveal)"
         data-testid="reveal-material"
+        type="submit"
         @click="reveal"
       >
-        {{ t('security.revealOnce') }}</button
-      ><button :disabled="!secret && !disclosure.busy.value" @click="disclosure.clear">
+        {{ t('security.revealOnce') }}</UiButton
+      ><UiButton
+        :disabled="!!(!secret && !disclosure.busy.value)"
+        type="submit"
+        @click="disclosure.clear"
+      >
         {{ t('security.clearSecret') }}
-      </button>
+      </UiButton>
       <p v-if="disclosureFailure" role="alert">{{ t(`security.${disclosureFailure}`) }}</p>
       <div v-if="secret" role="status">
         <p>
@@ -327,5 +343,5 @@ onMounted(() => void changed())
         <p data-testid="disclosed-secret" class="security-secret">{{ secret }}</p>
       </div>
     </section>
-  </SecurityFrame>
+  </PageFrame>
 </template>

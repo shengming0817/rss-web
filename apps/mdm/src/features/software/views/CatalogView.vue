@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
@@ -10,7 +11,7 @@ import {
   type CatalogDefinition,
   type CatalogEntry,
 } from '../clients/catalog'
-import SoftwareFrame from '../components/SoftwareFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 import VersionAdmission from '../components/VersionAdmission.vue'
 const { t } = useI18n(),
   route = useRoute(),
@@ -102,7 +103,7 @@ watch(
 )
 </script>
 <template>
-  <SoftwareFrame :title="t('software.catalog')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('software.catalog')" :busy="busy" :failure="failure">
     <p>{{ t('software.catalogHint') }}</p>
     <RouterLink
       :to="{
@@ -114,30 +115,42 @@ watch(
     >
     <form @submit.prevent="list()">
       <label for="software-search">{{ t('software.search') }}</label
-      ><input id="software-search" v-model="query" :disabled="busy || uncertain" /><button
+      ><input
+        id="software-search"
+        v-model="query"
+        class="ui-input"
         :disabled="busy || uncertain"
-      >
+      /><UiButton :disabled="!!(busy || uncertain)" type="submit">
         {{ t('policies.reload') }}
-      </button>
+      </UiButton>
     </form>
     <p v-if="page && !page.items.length">{{ t('policies.empty') }}</p>
     <ul>
       <li v-for="item in page?.items" :key="item.resource.id">
-        <button :disabled="busy || uncertain" @click="open(item.resource.id)">
+        <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(item.resource.id)">
           {{ item.metadata.definition.title }} · {{ item.resource.id }}
-        </button>
+        </UiButton>
       </li>
     </ul>
-    <button v-if="page?.nextCursor" :disabled="busy || uncertain" @click="list(page.nextCursor)">
+    <UiButton
+      v-if="page?.nextCursor"
+      :disabled="!!(busy || uncertain)"
+      type="submit"
+      @click="list(page.nextCursor)"
+    >
       {{ t('policies.next') }}
-    </button>
+    </UiButton>
     <form @submit.prevent="open()">
       <label for="catalog-id">Resource ID</label
-      ><input id="catalog-id" v-model="id" :disabled="busy || uncertain" required /><button
+      ><input
+        id="catalog-id"
+        v-model="id"
+        class="ui-input"
         :disabled="busy || uncertain"
-      >
+        required
+      /><UiButton :disabled="!!(busy || uncertain)" type="submit">
         {{ t('policies.open') }}
-      </button>
+      </UiButton>
     </form>
     <template v-if="current && draft">
       <h2>{{ current.metadata.definition.title }}</h2>
@@ -152,13 +165,18 @@ watch(
       <form @submit.prevent="save">
         <fieldset :disabled="busy || uncertain">
           <label for="catalog-title">{{ t('software.catalogTitle') }}</label
-          ><input id="catalog-title" v-model="draft.title" required />
+          ><input id="catalog-title" v-model="draft.title" class="ui-input" required />
           <label for="catalog-category">{{ t('software.category') }}</label
-          ><input id="catalog-category" v-model="draft.category" />
+          ><input id="catalog-category" v-model="draft.category" class="ui-input" />
           <label for="catalog-description">{{ t('software.description') }}</label
-          ><input id="catalog-description" v-model="draft.description" />
+          ><input id="catalog-description" v-model="draft.description" class="ui-input" />
           <label for="catalog-license">{{ t('software.license') }}</label
-          ><select id="catalog-license" v-model="draft.license.kind" @change="resetLicense">
+          ><select
+            id="catalog-license"
+            v-model="draft.license.kind"
+            class="ui-input"
+            @change="resetLicense"
+          >
             <option v-for="kind in ['unknown', 'free', 'commercial']" :key="kind" :value="kind">
               {{ t(`software.license_${kind}`) }}
             </option>
@@ -167,6 +185,7 @@ watch(
             <label for="catalog-seats">{{ t('software.licenseSeats') }}</label
             ><input
               id="catalog-seats"
+              class="ui-input"
               :value="draft.license.seats"
               type="number"
               min="0"
@@ -180,6 +199,7 @@ watch(
             <label for="catalog-expiry">{{ t('software.licenseExpiry') }}</label
             ><input
               id="catalog-expiry"
+              class="ui-input"
               :value="draft.license.expiresAt"
               type="number"
               min="0"
@@ -192,9 +212,9 @@ watch(
             />
           </template>
           <label for="catalog-supersedes">{{ t('software.supersedes') }}</label
-          ><textarea id="catalog-supersedes" v-model="supersedes" />
+          ><textarea id="catalog-supersedes" v-model="supersedes" class="ui-input" />
           <p>{{ t('software.supersedenceHint') }}</p>
-          <button type="submit">{{ t('policies.save') }}</button>
+          <UiButton type="submit">{{ t('policies.save') }}</UiButton>
         </fieldset>
       </form>
       <h3>{{ t('software.usage') }}</h3>
@@ -213,7 +233,7 @@ watch(
         </dd>
       </dl>
       <label for="catalog-version">{{ t('software.resourceVersion') }}</label
-      ><select id="catalog-version" v-model="selectedVersion">
+      ><select id="catalog-version" v-model="selectedVersion" class="ui-input">
         <option v-for="v in current.resource.versions" :key="v.id" :value="v.id">
           {{ v.id }} · {{ v.state }}
         </option>
@@ -222,44 +242,46 @@ watch(
         v-for="v in current.resource.versions.filter((v) => v.id === selectedVersion)"
         :key="v.id"
       >
-        <table>
-          <thead>
-            <tr>
-              <th>{{ t('policies.platform') }}</th>
-              <th>{{ t('policies.architecture') }}</th>
-              <th>{{ t('policies.variant') }}</th>
-              <th>{{ t('software.package') }}</th>
-              <th>{{ t('software.dependencies') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="variant in v.variants"
-              :key="`${variant.platform}/${variant.architecture}/${variant.key}`"
-            >
-              <td>{{ variant.platform }}</td>
-              <td>{{ variant.architecture }}</td>
-              <td>{{ variant.key }}</td>
-              <td>
-                {{
-                  variant.declaration.kind === 'software'
-                    ? `${variant.declaration.definition.package} / ${variant.declaration.definition.version}`
-                    : '—'
-                }}
-              </td>
-              <td>
-                <ul v-if="variant.declaration.kind === 'software'">
-                  <li
-                    v-for="d in variant.declaration.definition.dependencies"
-                    :key="`${d.resource}/${d.version}`"
-                  >
-                    {{ d.resource }} / {{ d.version }}
-                  </li>
-                </ul>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="ui-table-scroll">
+          <table class="ui-table">
+            <thead>
+              <tr>
+                <th>{{ t('policies.platform') }}</th>
+                <th>{{ t('policies.architecture') }}</th>
+                <th>{{ t('policies.variant') }}</th>
+                <th>{{ t('software.package') }}</th>
+                <th>{{ t('software.dependencies') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="variant in v.variants"
+                :key="`${variant.platform}/${variant.architecture}/${variant.key}`"
+              >
+                <td>{{ variant.platform }}</td>
+                <td>{{ variant.architecture }}</td>
+                <td>{{ variant.key }}</td>
+                <td>
+                  {{
+                    variant.declaration.kind === 'software'
+                      ? `${variant.declaration.definition.package} / ${variant.declaration.definition.version}`
+                      : '—'
+                  }}
+                </td>
+                <td>
+                  <ul v-if="variant.declaration.kind === 'software'">
+                    <li
+                      v-for="d in variant.declaration.definition.dependencies"
+                      :key="`${d.resource}/${d.version}`"
+                    >
+                      {{ d.resource }} / {{ d.version }}
+                    </li>
+                  </ul>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         <VersionAdmission
           v-if="v.state !== 'archived'"
           :key="`${current.resource.id}/${v.id}`"
@@ -269,8 +291,12 @@ watch(
       </template>
     </template>
     <div v-if="uncertain">
-      <button :disabled="busy" @click="open(pending?.id)">{{ t('software.reconcile') }}</button
-      ><button :disabled="busy" @click="replay">{{ t('policies.replay') }}</button>
+      <UiButton :disabled="!!busy" type="submit" @click="open(pending?.id)">{{
+        t('software.reconcile')
+      }}</UiButton
+      ><UiButton :disabled="!!busy" type="submit" @click="replay">{{
+        t('policies.replay')
+      }}</UiButton>
     </div>
-  </SoftwareFrame>
+  </PageFrame>
 </template>

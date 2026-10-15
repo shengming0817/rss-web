@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { computed, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -293,17 +294,19 @@ function replay() {
   <section
     v-if="!authorityLoaded && (busy || failure)"
     :aria-busy="busy"
-    class="identity-card"
+    class="console-panel"
     data-testid="association-authority"
   >
     <p>{{ t('devices.associationManagement') }}</p>
     <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
-    <button :disabled="busy" @click="refreshAuthority">{{ t('devices.retryAuthority') }}</button>
+    <UiButton :disabled="!!busy" type="submit" @click="refreshAuthority">{{
+      t('devices.retryAuthority')
+    }}</UiButton>
   </section>
   <section
     v-if="manageable"
     :aria-busy="busy"
-    class="identity-card"
+    class="console-panel"
     data-testid="association-panel"
   >
     <h2>{{ t('devices.associationManagement') }}</h2>
@@ -319,9 +322,9 @@ function replay() {
         ><input v-model="replayConfirmed" type="checkbox" :disabled="busy" />{{
           t('devices.confirmReplay')
         }}</label
-      ><button :disabled="busy || !replayConfirmed" @click="replay">
+      ><UiButton :disabled="!!(busy || !replayConfirmed)" type="submit" @click="replay">
         {{ t('devices.replayAssociation') }}
-      </button></template
+      </UiButton></template
     >
     <fieldset :disabled="busy || locked">
       <template v-if="association"
@@ -331,7 +334,7 @@ function replay() {
           {{ t(`devices.associationState.${currentAssociation.state}`) }} ·
           {{ currentAssociation.evidence }}
         </p>
-        <button @click="prepare">{{ t('devices.prepareVerification') }}</button>
+        <UiButton type="submit" @click="prepare">{{ t('devices.prepareVerification') }}</UiButton>
         <p v-if="!prepared || confirmationMembers.length !== 2">
           {{ t('devices.currentRegistrationRequired') }}
         </p></template
@@ -339,7 +342,7 @@ function replay() {
       <template v-else-if="endpoint"
         ><label
           >{{ t('devices.originChannel')
-          }}<select v-model="channel">
+          }}<select v-model="channel" class="ui-input">
             <option
               v-for="c in endpoint.channels.filter((c) => c.status === 'active')"
               :key="c.channel"
@@ -348,7 +351,7 @@ function replay() {
               {{ c.channel }}
             </option>
           </select></label
-        ><button @click="candidates()">{{ t('devices.findCandidate') }}</button>
+        ><UiButton type="submit" @click="candidates()">{{ t('devices.findCandidate') }}</UiButton>
         <p v-if="page">{{ t('devices.candidateNote') }}</p>
         <p v-if="page && !page.items.length">{{ t('devices.emptyCandidates') }}</p>
         <fieldset v-if="page?.items.length">
@@ -363,9 +366,9 @@ function replay() {
             />{{ m.channel }} · {{ m.device }} · {{ m.registrationId }} / {{ m.generation }}</label
           >
         </fieldset>
-        <button v-if="page?.nextCursor" @click="candidates(page.nextCursor)">
+        <UiButton v-if="page?.nextCursor" type="submit" @click="candidates(page.nextCursor)">
           {{ t('devices.next') }}
-        </button>
+        </UiButton>
         <section v-if="candidateView">
           <h3>{{ t('devices.candidateFacts') }}</h3>
           <p>
@@ -407,17 +410,23 @@ function replay() {
       </section>
       <label
         >{{ t('devices.verificationEvidence')
-        }}<textarea v-model="evidence" maxlength="2048" /></label
+        }}<textarea v-model="evidence" class="ui-input" maxlength="2048" /></label
       ><label
         ><input v-model="verified" type="checkbox" />{{ t('devices.confirmSameInstance') }}</label
-      ><button :disabled="!canSubmit" @click="confirm">
+      ><UiButton :disabled="!!!canSubmit" type="submit" @click="confirm">
         {{ t(association ? 'devices.reverifyAssociation' : 'devices.confirmAssociation') }}
-      </button>
+      </UiButton>
       <template v-if="association"
-        ><label>{{ t('devices.revokeReason') }}<textarea v-model="reason" maxlength="2048" /></label
-        ><button :disabled="!verified || !verificationText(reason) || stale" @click="revoke">
+        ><label
+          >{{ t('devices.revokeReason')
+          }}<textarea v-model="reason" class="ui-input" maxlength="2048" /></label
+        ><UiButton
+          :disabled="!!(!verified || !verificationText(reason) || stale)"
+          type="submit"
+          @click="revoke"
+        >
           {{ t('devices.revokeAssociation') }}
-        </button></template
+        </UiButton></template
       >
     </fieldset>
   </section>

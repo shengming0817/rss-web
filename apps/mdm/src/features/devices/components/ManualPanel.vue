@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -55,7 +56,7 @@ function submit() {
       <fieldset :disabled="busy || uncertain">
         <label
           >{{ t('devices.field')
-          }}<select v-model="key" required @change="change">
+          }}<select v-model="key" class="ui-input" required @change="change">
             <option value="">—</option>
             <option v-for="f in manual" :key="f.key" :value="f.key">{{ f.key }}</option>
           </select></label
@@ -64,19 +65,20 @@ function submit() {
           ><p>{{ t('devices.revision') }} {{ inventory.revisions[key] ?? 0 }}</p>
           <AssetValue v-if="selected" :field="selected" /><label
             >{{ t('devices.draft')
-            }}<select v-model="action">
+            }}<select v-model="action" class="ui-input">
               <option v-for="a in ['set', 'null', 'delete']" :key="a" :value="a">
                 {{ t(`devices.${a}`) }}
               </option>
             </select></label
-          ><ScalarEditor v-if="action === 'set'" v-model="value" /><button>
+          ><ScalarEditor v-if="action === 'set'" v-model="value" /><UiButton type="submit">
             {{ t('devices.save') }}
-          </button></template
+          </UiButton></template
         >
       </fieldset>
     </form>
-    <button
-      :disabled="busy"
+    <UiButton
+      :disabled="!!busy"
+      type="submit"
       @click="
         run(
           () => client.inventory(device),
@@ -85,9 +87,9 @@ function submit() {
       "
     >
       {{ t('devices.compare') }}
-    </button>
-    <button v-if="uncertain && pending" :disabled="busy" @click="pending!()">
+    </UiButton>
+    <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending!()">
       {{ t('devices.replay') }}
-    </button>
+    </UiButton>
   </section>
 </template>

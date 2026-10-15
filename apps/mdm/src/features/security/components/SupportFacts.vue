@@ -83,21 +83,23 @@ const { t } = useI18n(),
       <dt>{{ t('security.retainedUntil') }}</dt>
       <dd>{{ at(support.details.availableUntil) }}</dd>
     </dl>
-    <table v-if="support.details.collection">
-      <thead>
-        <tr>
-          <th>{{ t('security.diagnosticArtifact') }}</th>
-          <th>{{ t('security.diagnosticRecords') }}</th>
-          <th>{{ t('security.diagnosticBytes') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="a in support.details.collection.artifacts" :key="a.kind">
-          <td>{{ t(`security.diagnosticKinds.${a.kind}`) }}</td>
-          <td>{{ a.records }}</td>
-          <td>{{ a.bytes }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <div v-if="support.details.collection" class="ui-table-scroll">
+      <table class="ui-table">
+        <thead>
+          <tr>
+            <th>{{ t('security.diagnosticArtifact') }}</th>
+            <th>{{ t('security.diagnosticRecords') }}</th>
+            <th>{{ t('security.diagnosticBytes') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="a in support.details.collection.artifacts" :key="a.kind">
+            <td>{{ t(`security.diagnosticKinds.${a.kind}`) }}</td>
+            <td>{{ a.records }}</td>
+            <td>{{ a.bytes }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </section>
 </template>

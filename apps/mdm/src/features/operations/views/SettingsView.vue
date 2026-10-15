@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { utc } from '../presentation'
 import { onMounted, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -6,7 +7,7 @@ import { useRoute } from 'vue-router'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
 import { configurationValues, maintenanceKinds, type Maintenance } from '../clients/admin-model'
-import OperationsFrame from '../components/OperationsFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -149,7 +150,7 @@ onMounted(async () => {
 })
 </script>
 <template>
-  <OperationsFrame :title="t('operations.settings')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('operations.settings')" :busy="busy" :failure="failure">
     <p>{{ t('operations.settingsHint') }}</p>
     <p v-if="configuration">
       {{ configuration.state }} · {{ t('operations.savedVersion') }}
@@ -161,34 +162,47 @@ onMounted(async () => {
         <legend>{{ t('operations.configuration') }}</legend>
         <label
           >{{ t('operations.name')
-          }}<input v-model="draft.name" data-testid="configuration-name" required /></label
+          }}<input
+            v-model="draft.name"
+            class="ui-input"
+            data-testid="configuration-name"
+            required /></label
         ><label
           >{{ t('operations.origin')
-          }}<input v-model="draft.publicOrigin" type="url" required /></label
-        ><label>{{ t('operations.certificateRef') }}<input v-model="draft.certificateRef" /></label
-        ><label>APNs {{ t('operations.credentialRef') }}<input v-model="draft.apnsRef" /></label
-        ><button data-testid="save-configuration" :disabled="conflict">
-          {{ t('devices.save') }}</button
-        ><button
+          }}<input v-model="draft.publicOrigin" class="ui-input" type="url" required /></label
+        ><label
+          >{{ t('operations.certificateRef')
+          }}<input v-model="draft.certificateRef" class="ui-input" /></label
+        ><label
+          >APNs {{ t('operations.credentialRef')
+          }}<input v-model="draft.apnsRef" class="ui-input" /></label
+        ><UiButton data-testid="save-configuration" :disabled="!!conflict" type="submit">
+          {{ t('devices.save') }}</UiButton
+        ><UiButton
           type="button"
           data-testid="activate-configuration"
-          :disabled="conflict || configuration?.state !== 'saved'"
+          :disabled="!!(conflict || configuration?.state !== 'saved')"
           @click="save(true)"
         >
           {{ t('operations.activate') }}
-        </button>
+        </UiButton>
       </fieldset>
     </form>
-    <button :disabled="busy" @click="read()">{{ t('operations.compare') }}</button
-    ><button
+    <UiButton :disabled="!!busy" type="submit" @click="read()">{{
+      t('operations.compare')
+    }}</UiButton
+    ><UiButton
       v-if="configuration && configuration.revision !== revision"
-      :disabled="busy || uncertain"
+      :disabled="!!(busy || uncertain)"
+      type="submit"
       @click="adopt()"
     >
       {{ t('operations.adoptRevision') }}
-    </button>
+    </UiButton>
     <h2>{{ t('operations.diagnostics') }}</h2>
-    <button :disabled="busy" @click="health()">{{ t('devices.reload') }}</button>
+    <UiButton :disabled="!!busy" type="submit" @click="health()">{{
+      t('devices.reload')
+    }}</UiButton>
     <section v-if="diagnostics">
       <p>
         {{ diagnostics.scope }} ·
@@ -227,30 +241,41 @@ onMounted(async () => {
       <fieldset :disabled="busy || uncertain">
         <label
           >{{ t('operations.action')
-          }}<select v-model="kind">
+          }}<select v-model="kind" class="ui-input">
             <option v-for="value in maintenanceKinds" :key="value">{{ value }}</option>
           </select></label
-        ><label>{{ t('operations.targetVersion') }}<input v-model="target" required /></label
+        ><label
+          >{{ t('operations.targetVersion')
+          }}<input v-model="target" class="ui-input" required /></label
         ><label
           >{{ t('operations.updateMethod')
-          }}<select v-model="method" :disabled="kind !== 'agent_upgrade'">
+          }}<select v-model="method" class="ui-input" :disabled="kind !== 'agent_upgrade'">
             <option>full</option>
             <option v-if="kind === 'agent_upgrade'">delta</option>
           </select></label
-        ><button data-testid="start-maintenance">{{ t('operations.start') }}</button>
+        ><UiButton data-testid="start-maintenance" type="submit">{{
+          t('operations.start')
+        }}</UiButton>
       </fieldset>
     </form>
-    <button :disabled="busy" @click="load()">{{ t('operations.history') }}</button>
+    <UiButton :disabled="!!busy" type="submit" @click="load()">{{
+      t('operations.history')
+    }}</UiButton>
     <ul>
       <li v-for="item in page?.items" :key="item.id">
-        <button :disabled="busy || uncertain" @click="open(item.id)">
+        <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(item.id)">
           {{ item.id }} · {{ item.input.kind }} / {{ item.phase }}
-        </button>
+        </UiButton>
       </li>
     </ul>
-    <button v-if="page?.nextCursor" :disabled="busy" @click="load(page.nextCursor)">
+    <UiButton
+      v-if="page?.nextCursor"
+      :disabled="!!busy"
+      type="submit"
+      @click="load(page.nextCursor)"
+    >
       {{ t('devices.next') }}
-    </button>
+    </UiButton>
     <section v-if="selected">
       <h3>{{ selected.id }}</h3>
       <p>{{ selected.phase }} / {{ selected.input.kind }} / {{ selected.input.target }}</p>
@@ -268,34 +293,40 @@ onMounted(async () => {
         <dt>{{ t('operations.health') }}</dt>
         <dd>{{ selected.health }}</dd>
       </dl>
-      <button :disabled="busy" @click="open(selected.id)">{{ t('policies.refresh') }}</button
-      ><button
+      <UiButton :disabled="!!busy" type="submit" @click="open(selected.id)">{{
+        t('policies.refresh')
+      }}</UiButton
+      ><UiButton
         v-if="selected.phase === 'accepted'"
-        :disabled="busy || uncertain"
+        :disabled="!!(busy || uncertain)"
+        type="submit"
         @click="change('pause')"
       >
-        {{ t('operations.pause') }}</button
-      ><button
+        {{ t('operations.pause') }}</UiButton
+      ><UiButton
         v-if="selected.phase === 'paused'"
-        :disabled="busy || uncertain"
+        :disabled="!!(busy || uncertain)"
+        type="submit"
         @click="change('resume')"
       >
-        {{ t('operations.resume') }}</button
-      ><button
+        {{ t('operations.resume') }}</UiButton
+      ><UiButton
         v-if="selected.phase === 'accepted'"
-        :disabled="busy || uncertain"
+        :disabled="!!(busy || uncertain)"
+        type="submit"
         @click="change('cancel')"
       >
         {{ t('operations.cancel') }}
-      </button>
+      </UiButton>
     </section>
-    <button
+    <UiButton
       v-if="uncertain && pending"
       data-testid="replay-write"
-      :disabled="busy"
+      :disabled="!!busy"
+      type="submit"
       @click="pending()"
     >
       {{ t('policies.replay') }}
-    </button>
-  </OperationsFrame>
+    </UiButton>
+  </PageFrame>
 </template>

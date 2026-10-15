@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { computed, onBeforeUnmount, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -72,9 +73,9 @@ const rows = computed(() => {
         )
       }}
     </p>
-    <button v-if="failed" type="button" data-action="retry-resource-identity" @click="load">
+    <UiButton v-if="failed" type="button" data-action="retry-resource-identity" @click="load">
       {{ t('policies.reload') }}
-    </button>
+    </UiButton>
     <p v-for="row in rows" :key="row.key">
       {{ row.key }} · {{ t('policies.selfService.identity') }}:
       {{ t(`policies.selfService.identity_${row.runAs}`)

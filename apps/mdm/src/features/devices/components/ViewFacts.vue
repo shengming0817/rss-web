@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiBadge, UiDisclosure } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import type { DeviceView } from '../clients/device-views'
@@ -12,27 +13,35 @@ const { t } = useI18n(),
   runtime = useMdm()
 </script>
 <template>
-  <div class="mdm-grid">
-    <ChannelCard
-      v-for="endpoint in view.endpoints"
-      :key="endpoint.id"
-      :endpoint="endpoint"
-      :detail="endpoints.find((e) => e.id === endpoint.id)"
-      :view="view"
-    />
-  </div>
-  <section>
+  <UiDisclosure :label="t('devices.channels')"
+    ><div class="console-stat-grid">
+      <ChannelCard
+        v-for="endpoint in view.endpoints"
+        :key="endpoint.id"
+        :endpoint="endpoint"
+        :detail="endpoints.find((e) => e.id === endpoint.id)"
+        :view="view"
+      /></div
+  ></UiDisclosure>
+  <section class="console-panel">
     <h2>{{ t('devices.inventory') }}</h2>
     <p>{{ t('devices.noTtl') }}</p>
     <dl>
       <template v-for="field in view.fields" :key="field.field"
         ><dt>{{ field.field }}</dt>
         <dd>
-          <strong>{{ t(`devices.state.${field.state.kind}`) }}</strong
+          <UiBadge :tone="field.state.kind === 'conflict' ? 'warning' : 'neutral'">{{
+            t(`devices.state.${field.state.kind}`)
+          }}</UiBadge
           ><span v-if="field.state.kind === 'known'">
-            · {{ JSON.stringify(field.state.value.value) }}</span
+            ·
+            {{
+              typeof field.state.value.value === 'string'
+                ? field.state.value.value
+                : JSON.stringify(field.state.value.value)
+            }}</span
           >
-          <details v-if="field.sources.length">
+          <details v-if="field.sources.length" class="console-evidence">
             <summary>{{ t('devices.evidence') }}</summary>
             <section
               v-for="source in field.sources"
@@ -48,7 +57,7 @@ const { t } = useI18n(),
     </dl>
     <p v-if="!Object.keys(view.fields).length">{{ t('devices.noInventory') }}</p>
   </section>
-  <section>
+  <section class="console-panel">
     <h2>{{ t('devices.sourceLists') }}</h2>
     <details v-for="(list, field) in view.lists" :key="field">
       <summary>{{ field }} · {{ t(`devices.state.${list.state.kind}`) }}</summary>
