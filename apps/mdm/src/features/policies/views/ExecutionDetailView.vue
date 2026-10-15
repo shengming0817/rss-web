@@ -131,11 +131,14 @@ onMounted(() => load())
         >{{ t('software.bootstrap') }}</RouterLink
       ><BootstrapAttemptFacts :attempt="bootstrap"
     /></template>
-    <section v-if="execution?.origin.kind === 'policy' && execution.origin.output !== null">
+    <section
+      v-if="execution?.origin.kind === 'policy' && execution.origin.output !== null"
+      class="console-panel"
+    >
       <h2>{{ t('policies.output') }}</h2>
       <pre>{{ JSON.stringify(execution.origin.output, null, 2) }}</pre>
     </section>
-    <section v-if="execution?.origin.kind === 'policy'">
+    <section v-if="execution?.origin.kind === 'policy'" class="console-panel">
       <h2>{{ t('policies.executionBasis') }}</h2>
       <p>
         {{ execution.origin.basis.source }} · {{ execution.origin.basis.resource }} /
@@ -151,7 +154,7 @@ onMounted(() => load())
         </li>
       </ul>
     </section>
-    <section v-if="native">
+    <section v-if="native" class="console-panel">
       <h2>{{ native.observation.protocol }}</h2>
       <dl>
         <template v-for="(value, key) in native.observation" :key="key"

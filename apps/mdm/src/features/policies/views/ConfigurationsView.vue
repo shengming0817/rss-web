@@ -17,6 +17,7 @@ const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.policies.configurations,
   { run, runWrite, busy, failure, uncertain } = useOperation()
+const editing = ref(false)
 const list = ref<Awaited<ReturnType<typeof client.list>>>(),
   current = ref<Configuration>(),
   id = ref(''),
@@ -42,6 +43,7 @@ function load(cursor?: string) {
   )
 }
 function apply(v: Configuration) {
+  editing.value = false
   current.value = v
   id.value = v.id
   name.value = v.name
@@ -63,6 +65,7 @@ function open(value = id.value) {
 }
 function create() {
   if (busy.value || uncertain.value) return
+  editing.value = true
   id.value = crypto.randomUUID()
   current.value = undefined
   name.value = ''
@@ -95,6 +98,7 @@ function save() {
   )
 }
 function copySettings(value: Setting[]) {
+  editing.value = true
   settings.value = structuredClone(toRaw(value))
 }
 function template() {
@@ -164,7 +168,7 @@ onMounted(() => load())
       t('policies.reload')
     }}</UiButton>
     <p v-if="list && !list.items.length">{{ t('policies.empty') }}</p>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="item in list?.items" :key="item.id">
         <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(item.id)">{{
           item.name
@@ -181,7 +185,22 @@ onMounted(() => load())
     >
       {{ t('policies.next') }}
     </UiButton>
-    <form @submit.prevent="save">
+    <div v-if="current && !editing" class="console-toolbar">
+      <UiButton type="button" :disabled="busy || uncertain" @click="editing = true">{{
+        t('console.edit')
+      }}</UiButton>
+    </div>
+    <form v-show="editing" class="console-panel" @submit.prevent="save">
+      <div class="console-page-header">
+        <h2>{{ t(current ? 'console.edit' : 'console.create') }}</h2>
+        <UiButton
+          type="button"
+          variant="ghost"
+          :disabled="busy || uncertain"
+          @click="editing = false"
+          >{{ t('console.close') }}</UiButton
+        >
+      </div>
       <fieldset :disabled="busy || uncertain">
         <label for="configuration-id">{{ t('policies.id') }}</label
         ><input

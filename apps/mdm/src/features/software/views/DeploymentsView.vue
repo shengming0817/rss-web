@@ -22,6 +22,8 @@ import { intents, targets } from '../../policies/clients/model'
 import type { AssignmentChange } from '../clients/assignments'
 import type { RunCursor, SoftwareRun } from '../clients/runs'
 import type { ResourceRead } from '../../policies/clients/resources'
+import SoftwareResourceSelect from '../components/SoftwareResourceSelect.vue'
+import CatalogLocator from '../../policies/components/CatalogLocator.vue'
 import PageFrame from '../../../components/PageFrame.vue'
 import NativeScheduleEditor from '../components/NativeScheduleEditor.vue'
 import SoftwareRunFacts from '../components/SoftwareRunFacts.vue'
@@ -382,7 +384,11 @@ watch(
             class="console-form-section"
           >
             <legend>{{ t('console.content') }}</legend>
-            <label for="deployment-resource">{{ t('software.targetResource') }}</label
+            <SoftwareResourceSelect
+              v-model:resource="draft.action.resource.id"
+              v-model:version="draft.action.resource.version"
+              :disabled="busy || uncertain"
+            /><label for="deployment-resource">{{ t('software.targetResource') }}</label
             ><input
               id="deployment-resource"
               v-model="draft.action.resource.id"
@@ -460,7 +466,16 @@ watch(
           >
             <legend>{{ t('console.targets') }}</legend>
             <label for="deployment-scope">{{ t('policies.selfService.deviceScope') }}</label
-            ><input id="deployment-scope" v-model="draft.scope" class="ui-input" required />
+            ><input
+              id="deployment-scope"
+              v-model="draft.scope"
+              class="ui-input"
+              required
+            /><CatalogLocator
+              v-model="draft.scope"
+              collection="scopes"
+              :disabled="busy || uncertain"
+            />
           </fieldset>
           <fieldset
             v-show="wizardStep === 2"
@@ -531,7 +546,7 @@ watch(
               </UiButton>
             </fieldset>
           </fieldset>
-          <section v-show="wizardStep === 3" data-wizard-step="3">
+          <section v-show="wizardStep === 3" class="console-panel" data-wizard-step="3">
             <h3>{{ t('console.review') }}</h3>
             <dl>
               <dt>{{ t('software.targetResource') }}</dt>
@@ -627,7 +642,7 @@ watch(
       ><UiButton :disabled="!!busy" type="submit" @click="loadRuns()">{{
         t('software.runHistory')
       }}</UiButton>
-      <section v-if="devices">
+      <section v-if="devices" class="console-panel">
         <h3>{{ t('software.deviceAdmission') }}</h3>
         <p v-if="!devices.items.length">{{ t('policies.empty') }}</p>
         <ul>
@@ -653,11 +668,11 @@ watch(
           {{ t('policies.next') }}
         </UiButton>
       </section>
-      <section v-if="rollout">
+      <section v-if="rollout" class="console-panel">
         <h3>{{ t('software.rollout') }}</h3>
         <p>{{ utc(rollout.asOf) }} · {{ t('software.rolloutHint') }}</p>
         <p>{{ t('software.policyVersion') }}: {{ rollout.versionId }}</p>
-        <article v-for="(stage, index) in rollout.stages" :key="stage.scope">
+        <article v-for="(stage, index) in rollout.stages" :key="stage.scope" class="console-panel">
           <h4>
             {{ index + 1 }} · {{ stage.open ? t('software.stageOpen') : t('software.stageClosed') }}
           </h4>
@@ -689,10 +704,10 @@ watch(
           </dl>
         </article>
       </section>
-      <section v-if="history">
+      <section v-if="history" class="console-panel">
         <h3>{{ t('software.runHistory') }}</h3>
         <p v-if="!history.items.length">{{ t('policies.empty') }}</p>
-        <article v-for="r in history.items" :key="r.taskId">
+        <article v-for="r in history.items" :key="r.taskId" class="console-panel">
           <SoftwareRunFacts :run="r" /><UiButton
             :disabled="!!busy"
             type="submit"

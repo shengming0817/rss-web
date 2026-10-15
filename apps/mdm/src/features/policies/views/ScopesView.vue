@@ -13,6 +13,7 @@ const { t } = useI18n(),
   client = runtime.policies.scopes,
   route = useRoute(),
   { run, runWrite, busy, failure, uncertain } = useOperation()
+const editing = ref(false)
 const id = ref(''),
   current = ref<ScopeRead>(),
   targets = ref<Reference[]>([]),
@@ -34,6 +35,7 @@ function load(cursor?: string) {
   )
 }
 function apply(value: ScopeRead) {
+  editing.value = false
   current.value = value
   id.value = value.id
   targets.value = value.definition.targets
@@ -55,6 +57,7 @@ function open(value = id.value) {
 }
 function create() {
   if (busy.value || uncertain.value) return
+  editing.value = true
   current.value = undefined
   id.value = crypto.randomUUID()
   targets.value = []
@@ -143,7 +146,7 @@ onMounted(async () => {
       t('policies.reload')
     }}</UiButton>
     <p v-if="list && !list.items.length">{{ t('policies.empty') }}</p>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="item in list?.items" :key="item.id">
         <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(item.id)">{{
           item.label
@@ -160,7 +163,47 @@ onMounted(async () => {
     >
       {{ t('policies.next') }}
     </UiButton>
-    <form @submit.prevent="save">
+    <section v-if="current && !editing" class="console-panel">
+      <h2>{{ t('console.summary') }}</h2>
+      <p>{{ current.id }} · {{ t('policies.revision') }} {{ current.revision }}</p>
+      <fieldset disabled>
+        <ReferenceEditor
+          :model-value="current.definition.targets"
+          :label="t('policies.targets')"
+          :devices="devices"
+          :groups="groups"
+        />
+        <p v-if="current.definition.limitations === null">{{ t('policies.unlimited') }}</p>
+        <ReferenceEditor
+          v-else
+          :model-value="current.definition.limitations"
+          :label="t('policies.limitations')"
+          :devices="devices"
+          :groups="groups"
+        /><ReferenceEditor
+          :model-value="current.definition.exclusions"
+          :label="t('policies.exclusions')"
+          :devices="devices"
+          :groups="groups"
+        />
+      </fieldset>
+    </section>
+    <div v-if="current && !editing" class="console-toolbar">
+      <UiButton type="button" :disabled="busy || uncertain" @click="editing = true">{{
+        t('console.edit')
+      }}</UiButton>
+    </div>
+    <form v-show="editing" class="console-panel" @submit.prevent="save">
+      <div class="console-page-header">
+        <h2>{{ t(current ? 'console.edit' : 'console.create') }}</h2>
+        <UiButton
+          type="button"
+          variant="ghost"
+          :disabled="busy || uncertain"
+          @click="editing = false"
+          >{{ t('console.close') }}</UiButton
+        >
+      </div>
       <fieldset :disabled="busy || uncertain">
         <label for="scope-id">{{ t('policies.id') }}</label
         ><input
@@ -201,7 +244,8 @@ onMounted(async () => {
     <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending()">
       {{ t('policies.replay') }}
     </UiButton>
-    <section v-if="task">
+    <section v-if="task" class="console-panel">
+      <h2>{{ t('console.result') }}</h2>
       <p>{{ task }} · {{ status ? t(`policies.state.${status.status}`) : '—' }}</p>
       <UiButton :disabled="!!busy" type="submit" @click="refresh">{{
         t('policies.refresh')

@@ -11,6 +11,7 @@ import {
   type Ring,
 } from '../clients/publication'
 import PageFrame from '../../../components/PageFrame.vue'
+const creating = ref(false)
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.software.publication
@@ -41,6 +42,7 @@ function openCandidate(sourceId: string, candidateId: string) {
     (v) => {
       if (selected.value?.source !== sourceId || selected.value?.id !== candidateId)
         publisher.value = ''
+      creating.value = false
       current.value = v
       source.value = sourceId
       id.value = candidateId
@@ -69,6 +71,7 @@ const recovery = computed(() => {
 })
 function create() {
   if (busy.value || uncertain.value) return
+  creating.value = true
   current.value = undefined
   selected.value = undefined
   pending = undefined
@@ -90,6 +93,7 @@ function load() {
     (value) => {
       if (selected.value?.source !== target.source || selected.value?.id !== target.id)
         publisher.value = ''
+      creating.value = false
       current.value = value
       selected.value = target
       // This native read has no operation receipt, so it cannot settle an unknown write.
@@ -102,6 +106,7 @@ function replay() {
   void runWrite(
     () => client.change(p.source, p.id, p.body),
     (value) => {
+      creating.value = false
       current.value = value
       selected.value = { source: p.source, id: p.id }
       publisher.value = ''
@@ -143,7 +148,7 @@ onMounted(() => list())
     <p>{{ t('software.publicationHint') }}</p>
     <UiButton :disabled="!!busy" type="submit" @click="list()">{{ t('policies.reload') }}</UiButton>
     <p v-if="directory && !directory.items.length">{{ t('policies.empty') }}</p>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="entry in directory?.items" :key="`${entry.source}/${entry.id}`">
         <UiButton
           :disabled="!!(busy || uncertain)"
@@ -165,43 +170,61 @@ onMounted(() => list())
     <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="create">{{
       t('policies.create')
     }}</UiButton>
-    <form @submit.prevent="load">
-      <fieldset :disabled="busy || uncertain">
-        <label for="publication-source">{{ t('software.publicationSource') }}</label
-        ><input
-          id="publication-source"
-          v-model="source"
-          class="ui-input"
-          :readonly="!!current"
-          required
-        />
-        <label for="publication-id">{{ t('software.candidateId') }}</label
-        ><input id="publication-id" v-model="id" class="ui-input" :readonly="!!current" required />
-        <UiButton type="submit">{{ t('policies.open') }}</UiButton>
-      </fieldset>
-    </form>
-    <form v-if="!current" @submit.prevent="submit">
-      <fieldset :disabled="busy || uncertain">
-        <label for="publication-resource">{{ t('software.resourceId') }}</label
-        ><input id="publication-resource" v-model="resource" class="ui-input" required />
-        <label for="publication-version">{{ t('software.resourceVersion') }}</label
-        ><input id="publication-version" v-model="version" class="ui-input" required />
-        <label for="publication-resource-revision">{{ t('software.resourceRevision') }}</label
-        ><input
-          id="publication-resource-revision"
-          v-model.number="resourceRevision"
-          class="ui-input"
-          type="number"
-          min="1"
-          required
-        />
-        <label for="publication-payload">{{ t('software.publicationPayload') }}</label
-        ><textarea id="publication-payload" v-model="payload" class="ui-input" rows="10" required />
-        <UiButton type="submit" :disabled="!!(!source || !id)">
-          {{ t('software.createCandidate') }}
-        </UiButton>
-      </fieldset>
-    </form>
+    <details class="console-panel console-task" :open="uncertain || undefined">
+      <summary>{{ t('console.advanced') }}</summary>
+      <form @submit.prevent="load">
+        <fieldset :disabled="busy || uncertain">
+          <label for="publication-source">{{ t('software.publicationSource') }}</label
+          ><input
+            id="publication-source"
+            v-model="source"
+            class="ui-input"
+            :readonly="!!current"
+            required
+          />
+          <label for="publication-id">{{ t('software.candidateId') }}</label
+          ><input
+            id="publication-id"
+            v-model="id"
+            class="ui-input"
+            :readonly="!!current"
+            required
+          />
+          <UiButton type="submit">{{ t('policies.open') }}</UiButton>
+        </fieldset>
+      </form>
+    </details>
+    <section v-if="!current && creating" class="console-panel">
+      <h2>{{ t('console.create') }}</h2>
+      <form @submit.prevent="submit">
+        <fieldset :disabled="busy || uncertain">
+          <label for="publication-resource">{{ t('software.resourceId') }}</label
+          ><input id="publication-resource" v-model="resource" class="ui-input" required />
+          <label for="publication-version">{{ t('software.resourceVersion') }}</label
+          ><input id="publication-version" v-model="version" class="ui-input" required />
+          <label for="publication-resource-revision">{{ t('software.resourceRevision') }}</label
+          ><input
+            id="publication-resource-revision"
+            v-model.number="resourceRevision"
+            class="ui-input"
+            type="number"
+            min="1"
+            required
+          />
+          <label for="publication-payload">{{ t('software.publicationPayload') }}</label
+          ><textarea
+            id="publication-payload"
+            v-model="payload"
+            class="ui-input"
+            rows="10"
+            required
+          />
+          <UiButton type="submit" :disabled="!!(!source || !id)">
+            {{ t('software.createCandidate') }}
+          </UiButton>
+        </fieldset>
+      </form>
+    </section>
     <template v-if="current">
       <dl>
         <dt>{{ t('policies.status') }}</dt>
@@ -219,7 +242,7 @@ onMounted(() => list())
         class="ui-input"
         :disabled="busy || uncertain"
       />
-      <article v-for="state in current.rings" :key="state.ring">
+      <article v-for="state in current.rings" :key="state.ring" class="console-panel">
         <h2>{{ t(`software.ring_${state.ring}`) }}</h2>
         <p>
           {{ t(`software.release_${state.state}`)

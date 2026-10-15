@@ -125,7 +125,7 @@ watch(
       </UiButton>
     </form>
     <p v-if="page && !page.items.length">{{ t('policies.empty') }}</p>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="item in page?.items" :key="item.resource.id">
         <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(item.resource.id)">
           {{ item.metadata.definition.title }} · {{ item.resource.id }}
@@ -140,18 +140,21 @@ watch(
     >
       {{ t('policies.next') }}
     </UiButton>
-    <form @submit.prevent="open()">
-      <label for="catalog-id">Resource ID</label
-      ><input
-        id="catalog-id"
-        v-model="id"
-        class="ui-input"
-        :disabled="busy || uncertain"
-        required
-      /><UiButton :disabled="!!(busy || uncertain)" type="submit">
-        {{ t('policies.open') }}
-      </UiButton>
-    </form>
+    <details class="console-panel console-task" :open="uncertain || undefined">
+      <summary>{{ t('console.advanced') }}</summary>
+      <form @submit.prevent="open()">
+        <label for="catalog-id">Resource ID</label
+        ><input
+          id="catalog-id"
+          v-model="id"
+          class="ui-input"
+          :disabled="busy || uncertain"
+          required
+        /><UiButton :disabled="!!(busy || uncertain)" type="submit">
+          {{ t('policies.open') }}
+        </UiButton>
+      </form>
+    </details>
     <template v-if="current && draft">
       <h2>{{ current.metadata.definition.title }}</h2>
       <RouterLink
@@ -162,61 +165,64 @@ watch(
         }"
         >{{ t('software.authorPackage') }}</RouterLink
       >
-      <form @submit.prevent="save">
-        <fieldset :disabled="busy || uncertain">
-          <label for="catalog-title">{{ t('software.catalogTitle') }}</label
-          ><input id="catalog-title" v-model="draft.title" class="ui-input" required />
-          <label for="catalog-category">{{ t('software.category') }}</label
-          ><input id="catalog-category" v-model="draft.category" class="ui-input" />
-          <label for="catalog-description">{{ t('software.description') }}</label
-          ><input id="catalog-description" v-model="draft.description" class="ui-input" />
-          <label for="catalog-license">{{ t('software.license') }}</label
-          ><select
-            id="catalog-license"
-            v-model="draft.license.kind"
-            class="ui-input"
-            @change="resetLicense"
-          >
-            <option v-for="kind in ['unknown', 'free', 'commercial']" :key="kind" :value="kind">
-              {{ t(`software.license_${kind}`) }}
-            </option>
-          </select>
-          <template v-if="draft.license.kind === 'commercial'">
-            <label for="catalog-seats">{{ t('software.licenseSeats') }}</label
-            ><input
-              id="catalog-seats"
+      <details class="console-panel console-task" :open="uncertain || undefined">
+        <summary>{{ t('console.edit') }}</summary>
+        <form @submit.prevent="save">
+          <fieldset :disabled="busy || uncertain">
+            <label for="catalog-title">{{ t('software.catalogTitle') }}</label
+            ><input id="catalog-title" v-model="draft.title" class="ui-input" required />
+            <label for="catalog-category">{{ t('software.category') }}</label
+            ><input id="catalog-category" v-model="draft.category" class="ui-input" />
+            <label for="catalog-description">{{ t('software.description') }}</label
+            ><input id="catalog-description" v-model="draft.description" class="ui-input" />
+            <label for="catalog-license">{{ t('software.license') }}</label
+            ><select
+              id="catalog-license"
+              v-model="draft.license.kind"
               class="ui-input"
-              :value="draft.license.seats"
-              type="number"
-              min="0"
-              @input="
-                draft.license.seats =
-                  ($event.target as HTMLInputElement).value === ''
-                    ? null
-                    : Number(($event.target as HTMLInputElement).value)
-              "
-            />
-            <label for="catalog-expiry">{{ t('software.licenseExpiry') }}</label
-            ><input
-              id="catalog-expiry"
-              class="ui-input"
-              :value="draft.license.expiresAt"
-              type="number"
-              min="0"
-              @input="
-                draft.license.expiresAt =
-                  ($event.target as HTMLInputElement).value === ''
-                    ? null
-                    : Number(($event.target as HTMLInputElement).value)
-              "
-            />
-          </template>
-          <label for="catalog-supersedes">{{ t('software.supersedes') }}</label
-          ><textarea id="catalog-supersedes" v-model="supersedes" class="ui-input" />
-          <p>{{ t('software.supersedenceHint') }}</p>
-          <UiButton type="submit">{{ t('policies.save') }}</UiButton>
-        </fieldset>
-      </form>
+              @change="resetLicense"
+            >
+              <option v-for="kind in ['unknown', 'free', 'commercial']" :key="kind" :value="kind">
+                {{ t(`software.license_${kind}`) }}
+              </option>
+            </select>
+            <template v-if="draft.license.kind === 'commercial'">
+              <label for="catalog-seats">{{ t('software.licenseSeats') }}</label
+              ><input
+                id="catalog-seats"
+                class="ui-input"
+                :value="draft.license.seats"
+                type="number"
+                min="0"
+                @input="
+                  draft.license.seats =
+                    ($event.target as HTMLInputElement).value === ''
+                      ? null
+                      : Number(($event.target as HTMLInputElement).value)
+                "
+              />
+              <label for="catalog-expiry">{{ t('software.licenseExpiry') }}</label
+              ><input
+                id="catalog-expiry"
+                class="ui-input"
+                :value="draft.license.expiresAt"
+                type="number"
+                min="0"
+                @input="
+                  draft.license.expiresAt =
+                    ($event.target as HTMLInputElement).value === ''
+                      ? null
+                      : Number(($event.target as HTMLInputElement).value)
+                "
+              />
+            </template>
+            <label for="catalog-supersedes">{{ t('software.supersedes') }}</label
+            ><textarea id="catalog-supersedes" v-model="supersedes" class="ui-input" />
+            <p>{{ t('software.supersedenceHint') }}</p>
+            <UiButton type="submit">{{ t('policies.save') }}</UiButton>
+          </fieldset>
+        </form>
+      </details>
       <h3>{{ t('software.usage') }}</h3>
       <p>{{ t('software.usageHint') }}</p>
       <dl>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import { UiButton, UiDialog } from '@rss/core/components'
 import { onMounted, ref, toRaw, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -7,14 +7,23 @@ import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
 import type { Workflow, WorkflowDefinition, WorkflowRun } from '../clients/workflows'
 import type { FieldDefinition } from '../../devices/clients/asset-model'
+import CatalogLocator from '../components/CatalogLocator.vue'
 import PageFrame from '../../../components/PageFrame.vue'
 import ScheduleEditor from '../components/ScheduleEditor.vue'
 import WorkflowStepEditor from '../components/WorkflowStepEditor.vue'
+const confirmingAction = ref<'start' | 'archive'>()
+function confirmAction() {
+  const action = confirmingAction.value
+  confirmingAction.value = undefined
+  if (action === 'start') start()
+  if (action === 'archive') archive()
+}
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.policies.workflows,
   route = useRoute(),
   { run, runWrite, busy, failure, uncertain } = useOperation()
+const editing = ref(false)
 const id = ref(typeof route.query['id'] === 'string' ? route.query['id'] : ''),
   current = ref<Workflow>(),
   activeRun = ref<WorkflowRun>(),
@@ -45,6 +54,7 @@ function load(cursor?: string) {
   )
 }
 function apply(v: Workflow) {
+  editing.value = false
   current.value = v
   id.value = v.id
   definition.value = structuredClone(v.definition)
@@ -62,6 +72,7 @@ async function open(target = id.value) {
 }
 function create() {
   if (busy.value || uncertain.value) return
+  editing.value = true
   id.value = crypto.randomUUID()
   current.value = undefined
   activeRun.value = undefined
@@ -174,7 +185,7 @@ onMounted(async () => {
       t('policies.reload')
     }}</UiButton>
     <p v-if="list && !list.items.length">{{ t('policies.empty') }}</p>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="item in list?.items" :key="item.id">
         <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(item.id)">{{
           item.label
@@ -189,7 +200,22 @@ onMounted(async () => {
     >
       {{ t('policies.next') }}
     </UiButton>
-    <form @submit.prevent="save">
+    <div v-if="current && !editing" class="console-toolbar">
+      <UiButton type="button" :disabled="busy || uncertain" @click="editing = true">{{
+        t('console.edit')
+      }}</UiButton>
+    </div>
+    <form v-show="editing" class="console-panel" @submit.prevent="save">
+      <div class="console-page-header">
+        <h2>{{ t(current ? 'console.edit' : 'console.create') }}</h2>
+        <UiButton
+          type="button"
+          variant="ghost"
+          :disabled="busy || uncertain"
+          @click="editing = false"
+          >{{ t('console.close') }}</UiButton
+        >
+      </div>
       <fieldset :disabled="busy || uncertain || current?.status === 'archived'">
         <label for="workflow-id">{{ t('policies.id') }}</label
         ><input
@@ -208,8 +234,15 @@ onMounted(async () => {
           v-model="definition.scope"
           class="ui-input"
           required
-        /><ScheduleEditor v-model="definition.schedule" />
-        <div v-for="(step, index) in definition.steps" :key="step.id">
+        /><CatalogLocator
+          v-model="definition.scope"
+          collection="scopes"
+          :disabled="busy || uncertain"
+        />
+        <h3>{{ t('console.schedule') }}</h3>
+        <ScheduleEditor v-model="definition.schedule" />
+        <div v-for="(step, index) in definition.steps" :key="step.id" class="console-panel">
+          <h3>{{ index + 1 }} · {{ t('policies.workflows') }}</h3>
           <WorkflowStepEditor v-model="definition.steps[index]!" :fields="fields" /><UiButton
             type="button"
             :disabled="!!(index === 0)"
@@ -233,7 +266,9 @@ onMounted(async () => {
         </UiButton>
       </fieldset>
     </form>
-    <section v-if="current">
+    <section v-if="current" class="console-panel">
+      <h2>{{ current.definition.name }}</h2>
+      <p>{{ t('policies.scopes') }}: {{ current.definition.scope }}</p>
       <p>
         {{ t('policies.version') }} {{ current.version }} · {{ t('policies.revision') }}
         {{ current.revision }}
@@ -241,13 +276,13 @@ onMounted(async () => {
       <UiButton
         :disabled="!!(busy || uncertain || current.status === 'archived')"
         type="submit"
-        @click="archive"
+        @click="confirmingAction = 'archive'"
       >
         {{ t('policies.archive') }}</UiButton
       ><UiButton
         :disabled="!!(busy || uncertain || current.status === 'archived')"
         type="submit"
-        @click="start"
+        @click="confirmingAction = 'start'"
       >
         {{ t('policies.startWorkflow') }}</UiButton
       ><UiButton :disabled="!!busy" type="submit" @click="page()">{{
@@ -269,7 +304,7 @@ onMounted(async () => {
         {{ t('policies.next') }}
       </UiButton>
     </section>
-    <section v-if="activeRun">
+    <section v-if="activeRun" class="console-panel">
       <h2>{{ activeRun.id }}</h2>
       <p>
         {{ t(`policies.state.${activeRun.state}`) }} ·
@@ -308,7 +343,23 @@ onMounted(async () => {
       </ul>
     </section>
     <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending()">
-      {{ t('policies.replay') }}
-    </UiButton></PageFrame
+      {{ t('policies.replay') }} </UiButton
+    ><UiDialog
+      :open="!!confirmingAction"
+      :title="t('console.review')"
+      :description="t('console.scopeBound')"
+      :close-label="t('console.close')"
+      kind="alertdialog"
+      @update:open="!$event && (confirmingAction = undefined)"
+      ><p>
+        {{ current?.definition.name }} · {{ current?.definition.scope }} · {{ current?.version }}
+      </p>
+      <p>{{ confirmingAction ? t(`console.confirmActions.${confirmingAction}`) : '' }}</p>
+      <template #footer
+        ><UiButton :disabled="busy || uncertain" @click="confirmAction">{{
+          t('identity.confirm')
+        }}</UiButton></template
+      ></UiDialog
+    ></PageFrame
   >
 </template>

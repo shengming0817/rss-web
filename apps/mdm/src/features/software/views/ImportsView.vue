@@ -6,6 +6,7 @@ import { useMdm } from '../../../context'
 import { operation, useOperation, type Operation } from '../../../services/useOperation'
 import type { ImportChange, ImportJob, ImportQuery, ImportResolution } from '../clients/imports'
 import PageFrame from '../../../components/PageFrame.vue'
+const creating = ref(false)
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.software.imports
@@ -50,6 +51,7 @@ function resolve() {
 }
 function create() {
   if (busy.value || uncertain.value) return
+  creating.value = true
   current.value = undefined
   resolution.value = undefined
   pending = undefined
@@ -59,6 +61,7 @@ function read(id = uncertain.value ? pending?.id : current.value?.id) {
   void run(
     () => client.read(id),
     (v) => {
+      creating.value = false
       current.value = v
       if (pending && v.operation === pending.body.operationId) uncertain.value = false
     },
@@ -70,6 +73,7 @@ function replay() {
   void runWrite(
     () => client.change(p.id, p.body),
     (v) => {
+      creating.value = false
       current.value = v
       page.value = undefined
     },
@@ -103,7 +107,7 @@ onMounted(() => list())
     }}</UiButton>
     <UiButton :disabled="!!busy" type="submit" @click="list()">{{ t('policies.reload') }}</UiButton>
     <p v-if="page && !page.items.length">{{ t('policies.empty') }}</p>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="job in page?.items" :key="job.id">
         <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="read(job.id)">
           {{ job.resolution.package }} / {{ job.resolution.version }} ·
@@ -119,59 +123,70 @@ onMounted(() => list())
     >
       {{ t('policies.next') }}
     </UiButton>
-    <template v-if="!current">
-      <form data-form="resolve" @submit.prevent="resolve">
-        <fieldset :disabled="busy || uncertain">
-          <label for="import-source">{{ t('software.source') }}</label
-          ><input id="import-source" v-model="query.source" class="ui-input" required />
-          <label for="import-source-revision">{{ t('software.sourceRevision') }}</label
-          ><input id="import-source-revision" v-model="query.revision" class="ui-input" required />
-          <label for="import-package">{{ t('software.package') }}</label
-          ><input id="import-package" v-model="query.package" class="ui-input" required />
-          <label for="import-version">{{ t('software.version') }}</label
-          ><input id="import-version" v-model="query.version" class="ui-input" required />
-          <label for="import-platform">{{ t('policies.platform') }}</label
-          ><select id="import-platform" v-model="query.platform" class="ui-input">
-            <option value="windows">Windows</option>
-            <option value="macos">macOS</option>
-          </select>
-          <label for="import-architecture">{{ t('policies.architecture') }}</label
-          ><select id="import-architecture" v-model="query.architecture" class="ui-input">
-            <option value="x86_64">x86_64</option>
-            <option value="aarch64">aarch64</option>
-          </select>
-          <UiButton type="submit">{{ t('software.resolveImport') }}</UiButton>
-        </fieldset>
-      </form>
-      <form v-if="resolution" data-form="start" @submit.prevent="start">
-        <fieldset :disabled="busy || uncertain">
-          <p>
-            {{ resolution.ecosystem }} · {{ resolution.package }} / {{ resolution.version }} ·
-            {{ resolution.platform }} / {{ resolution.architecture }}
-          </p>
-          <p>{{ t('software.resolutionExpiry') }} {{ resolution.expiresAt }}</p>
-          <details>
-            <summary>{{ t('software.contentDigest') }}</summary>
-            <p class="console-wrap">{{ resolution.definitionDigest.join(',') }}</p>
-          </details>
-          <label for="import-resource">{{ t('software.targetResource') }}</label
-          ><input id="import-resource" v-model="resource" class="ui-input" required />
-          <label for="import-resource-version">{{ t('software.resourceVersion') }}</label
-          ><input id="import-resource-version" v-model="version" class="ui-input" required />
-          <label for="import-resource-revision">{{ t('software.importResourceRevision') }}</label
-          ><input
-            id="import-resource-revision"
-            v-model.number="resourceRevision"
-            class="ui-input"
-            type="number"
-            min="0"
-            required
-          />
-          <UiButton type="submit">{{ t('software.startImport') }}</UiButton>
-        </fieldset>
-      </form>
+    <template v-if="!current && creating">
+      <section class="console-panel">
+        <h2>{{ t('software.resolve') }}</h2>
+        <form data-form="resolve" @submit.prevent="resolve">
+          <fieldset :disabled="busy || uncertain">
+            <label for="import-source">{{ t('software.source') }}</label
+            ><input id="import-source" v-model="query.source" class="ui-input" required />
+            <label for="import-source-revision">{{ t('software.sourceRevision') }}</label
+            ><input
+              id="import-source-revision"
+              v-model="query.revision"
+              class="ui-input"
+              required
+            />
+            <label for="import-package">{{ t('software.package') }}</label
+            ><input id="import-package" v-model="query.package" class="ui-input" required />
+            <label for="import-version">{{ t('software.version') }}</label
+            ><input id="import-version" v-model="query.version" class="ui-input" required />
+            <label for="import-platform">{{ t('policies.platform') }}</label
+            ><select id="import-platform" v-model="query.platform" class="ui-input">
+              <option value="windows">Windows</option>
+              <option value="macos">macOS</option>
+            </select>
+            <label for="import-architecture">{{ t('policies.architecture') }}</label
+            ><select id="import-architecture" v-model="query.architecture" class="ui-input">
+              <option value="x86_64">x86_64</option>
+              <option value="aarch64">aarch64</option>
+            </select>
+            <UiButton type="submit">{{ t('software.resolveImport') }}</UiButton>
+          </fieldset>
+        </form>
+      </section>
+      <section v-if="resolution" class="console-panel">
+        <h2>{{ t('console.review') }}</h2>
+        <form data-form="start" @submit.prevent="start">
+          <fieldset :disabled="busy || uncertain">
+            <p>
+              {{ resolution.ecosystem }} · {{ resolution.package }} / {{ resolution.version }} ·
+              {{ resolution.platform }} / {{ resolution.architecture }}
+            </p>
+            <p>{{ t('software.resolutionExpiry') }} {{ resolution.expiresAt }}</p>
+            <details>
+              <summary>{{ t('software.contentDigest') }}</summary>
+              <p class="console-wrap">{{ resolution.definitionDigest.join(',') }}</p>
+            </details>
+            <label for="import-resource">{{ t('software.targetResource') }}</label
+            ><input id="import-resource" v-model="resource" class="ui-input" required />
+            <label for="import-resource-version">{{ t('software.resourceVersion') }}</label
+            ><input id="import-resource-version" v-model="version" class="ui-input" required />
+            <label for="import-resource-revision">{{ t('software.importResourceRevision') }}</label
+            ><input
+              id="import-resource-revision"
+              v-model.number="resourceRevision"
+              class="ui-input"
+              type="number"
+              min="0"
+              required
+            />
+            <UiButton type="submit">{{ t('software.startImport') }}</UiButton>
+          </fieldset>
+        </form>
+      </section>
     </template>
-    <section v-if="current">
+    <section v-if="current" class="console-panel">
       <h2>{{ current.resolution.package }} / {{ current.resolution.version }}</h2>
       <p>
         {{ t(`software.import_${current.status}`) }} · {{ t('policies.revision') }}

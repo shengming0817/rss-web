@@ -784,3 +784,32 @@
   border: 1px solid var(--line);
   padding: var(--space-4);
 }
+
+.console-journey {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: var(--space-4);
+  list-style: none;
+  padding: 0;
+}
+.console-step-number {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+.console-locator {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  align-items: end;
+  margin-block: var(--space-2);
+}
+.console-software-picker {
+  display: grid;
+  gap: var(--space-3);
+}

@@ -28,6 +28,7 @@ const { t } = useI18n(),
   route = useRoute(),
   client = runtime.policies.resources,
   { run, runWrite, busy, failure, uncertain } = useOperation()
+const creating = ref(false)
 const id = ref(''),
   current = ref<ResourceRead>(),
   kind = ref<ResourceKind>('script'),
@@ -100,6 +101,7 @@ function open(value = id.value) {
     void run(
       () => client.read(value),
       (v) => {
+        creating.value = false
         current.value = v
         id.value = v.id
         kind.value = v.kind
@@ -109,6 +111,7 @@ function open(value = id.value) {
 }
 function create() {
   if (busy.value || uncertain.value) return
+  creating.value = true
   id.value = `resource-${crypto.randomUUID()}`
   current.value = undefined
   resetDraft()
@@ -125,6 +128,7 @@ function change(input: ResourceChange) {
       await run(
         () => client.read(resource),
         (v) => {
+          creating.value = false
           current.value = v
           id.value = v.id
           kind.value = v.kind
@@ -395,7 +399,7 @@ watch(
       t('policies.reload')
     }}</UiButton>
     <p v-if="list && !list.items.length">{{ t('policies.empty') }}</p>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="item in list?.items" :key="item.id">
         <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(item.id)">{{
           item.label
@@ -410,7 +414,7 @@ watch(
     >
       {{ t('policies.next') }}
     </UiButton>
-    <fieldset :disabled="busy || uncertain">
+    <fieldset v-show="creating" class="console-panel" :disabled="busy || uncertain">
       <label for="resource-id">{{ t('policies.id') }}</label
       ><input
         id="resource-id"
@@ -469,63 +473,75 @@ watch(
           </tbody>
         </table>
       </div>
-      <form @submit.prevent="addVersion">
-        <fieldset :disabled="busy || uncertain">
-          <label for="resource-version">{{ t('policies.version') }}</label
-          ><input id="resource-version" v-model="version" class="ui-input" required /><label
-            for="resource-platform"
-            >{{ t('policies.platform') }}</label
-          ><select id="resource-platform" v-model="target.platform" class="ui-input">
-            <option value="windows">Windows</option>
-            <option value="macos">macOS</option></select
-          ><label for="resource-architecture">{{ t('policies.architecture') }}</label
-          ><select id="resource-architecture" v-model="target.architecture" class="ui-input">
-            <option value="x86_64">x86_64</option>
-            <option value="aarch64">aarch64</option></select
-          ><label for="resource-variant">{{ t('policies.variant') }}</label
-          ><input id="resource-variant" v-model="target.variant" class="ui-input" required /><label
-            for="resource-metadata"
-            >{{ t('policies.metadata') }}</label
-          ><input id="resource-metadata" class="ui-input" type="file" @change="metadata" /><label
-            for="resource-reference"
-            >{{ t('policies.reference') }}</label
-          ><input id="resource-reference" v-model="artifact.reference" class="ui-input" required />
-          <p>
-            {{ t('policies.length') }} {{ artifact.length }} · {{ t('policies.hash') }}
-            {{ hashText(artifact.sha256) }}
-          </p>
-          <ScriptDefinitionEditor
-            v-if="kind === 'script'"
-            v-model="spec"
-          /><SoftwareDefinitionEditor
-            v-else-if="kind === 'software'"
-            :key="editorEpoch"
-            ref="softwareEditor"
-          /><template v-if="kind === 'software'">
-            <UiButton type="button" data-action="stage-variant" @click="stageVariant">
-              {{ t('software.stageVariant') }}
+      <details class="console-panel console-task" :open="uncertain || undefined">
+        <summary>{{ t('policies.version') }}</summary>
+        <form @submit.prevent="addVersion">
+          <fieldset :disabled="busy || uncertain">
+            <label for="resource-version">{{ t('policies.version') }}</label
+            ><input id="resource-version" v-model="version" class="ui-input" required /><label
+              for="resource-platform"
+              >{{ t('policies.platform') }}</label
+            ><select id="resource-platform" v-model="target.platform" class="ui-input">
+              <option value="windows">Windows</option>
+              <option value="macos">macOS</option></select
+            ><label for="resource-architecture">{{ t('policies.architecture') }}</label
+            ><select id="resource-architecture" v-model="target.architecture" class="ui-input">
+              <option value="x86_64">x86_64</option>
+              <option value="aarch64">aarch64</option></select
+            ><label for="resource-variant">{{ t('policies.variant') }}</label
+            ><input
+              id="resource-variant"
+              v-model="target.variant"
+              class="ui-input"
+              required
+            /><label for="resource-metadata">{{ t('policies.metadata') }}</label
+            ><input id="resource-metadata" class="ui-input" type="file" @change="metadata" /><label
+              for="resource-reference"
+              >{{ t('policies.reference') }}</label
+            ><input
+              id="resource-reference"
+              v-model="artifact.reference"
+              class="ui-input"
+              required
+            />
+            <p>
+              {{ t('policies.length') }} {{ artifact.length }} · {{ t('policies.hash') }}
+              {{ hashText(artifact.sha256) }}
+            </p>
+            <ScriptDefinitionEditor
+              v-if="kind === 'script'"
+              v-model="spec"
+            /><SoftwareDefinitionEditor
+              v-else-if="kind === 'software'"
+              :key="editorEpoch"
+              ref="softwareEditor"
+            /><template v-if="kind === 'software'">
+              <UiButton type="button" data-action="stage-variant" @click="stageVariant">
+                {{ t('software.stageVariant') }}
+              </UiButton>
+              <p>{{ t('software.variantDraftHint') }}</p>
+              <ul>
+                <li
+                  v-for="(v, index) in draftVariants"
+                  :key="`${v.platform}/${v.architecture}/${v.key}`"
+                >
+                  {{ v.platform }} / {{ v.architecture }} / {{ v.key }}
+                  <UiButton type="button" @click="draftVariants.splice(index, 1)">
+                    {{ t('software.removeVariant') }}
+                  </UiButton>
+                </li>
+              </ul> </template
+            ><UiButton
+              type="submit"
+              :disabled="!!(kind === 'software' ? !draftVariants.length : !artifact.length)"
+            >
+              {{ t('policies.save') }}
             </UiButton>
-            <p>{{ t('software.variantDraftHint') }}</p>
-            <ul>
-              <li
-                v-for="(v, index) in draftVariants"
-                :key="`${v.platform}/${v.architecture}/${v.key}`"
-              >
-                {{ v.platform }} / {{ v.architecture }} / {{ v.key }}
-                <UiButton type="button" @click="draftVariants.splice(index, 1)">
-                  {{ t('software.removeVariant') }}
-                </UiButton>
-              </li>
-            </ul> </template
-          ><UiButton
-            type="submit"
-            :disabled="!!(kind === 'software' ? !draftVariants.length : !artifact.length)"
-          >
-            {{ t('policies.save') }}
-          </UiButton>
-        </fieldset>
-      </form>
-      <section>
+          </fieldset>
+        </form>
+      </details>
+      <section class="console-panel">
+        <h2>{{ t('policies.upload') }}</h2>
         <p>{{ t('software.uploadSessionHint') }}</p>
         <label for="resource-upload-id">{{ t('software.uploadSessionId') }}</label>
         <input

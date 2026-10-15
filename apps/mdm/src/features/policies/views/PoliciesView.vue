@@ -17,6 +17,7 @@ import type { ResourceRead, ScriptSpec, Json } from '../clients/resources'
 import NativeScheduleEditor from '../../software/components/NativeScheduleEditor.vue'
 import SelfServiceEditor from '../components/SelfServiceEditor.vue'
 import ResourceIdentity from '../components/ResourceIdentity.vue'
+import CatalogLocator from '../components/CatalogLocator.vue'
 import PageFrame from '../../../components/PageFrame.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
@@ -27,6 +28,7 @@ const { run, runWrite, busy, failure, uncertain } = useOperation()
 const list = ref<Awaited<ReturnType<typeof client.list>>>(),
   current = ref<PolicyRead>(),
   resource = ref<ResourceRead>()
+const editing = ref(false)
 const id = ref(typeof route.query['id'] === 'string' ? route.query['id'] : '')
 function fresh(
   kind: 'execution' | 'configuration' = 'execution',
@@ -183,6 +185,7 @@ function numeric(schema: Record<string, Json>, name: string) {
   return typeof schema[name] === 'number' ? schema[name] : undefined
 }
 function apply(p: PolicyRead) {
+  editing.value = false
   if (p.definition.action.kind !== 'execution' && p.definition.action.kind !== 'configuration')
     throw new Error('Wrong policy action')
   ready.value = true
@@ -247,6 +250,7 @@ function select(target: string) {
 }
 function create() {
   if (busy.value || uncertain.value) return
+  editing.value = true
   if (route.query['id']) void router.push({ query: { ...route.query, id: undefined } })
   else resetDraft()
 }
@@ -401,7 +405,7 @@ onMounted(async () => {
       t('policies.reload')
     }}</UiButton>
     <p v-if="list && !list.items.length">{{ t('policies.empty') }}</p>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="item in list?.items" :key="item.id">
         <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="select(item.id)">
           {{ item.definition.selfService?.displayName ?? item.id }} ·
@@ -417,7 +421,22 @@ onMounted(async () => {
     >
       {{ t('policies.next') }}
     </UiButton>
-    <form data-form="policy" @submit.prevent="save">
+    <div v-if="current && !editing" class="console-toolbar">
+      <UiButton type="button" :disabled="busy || uncertain" @click="editing = true">{{
+        t('console.edit')
+      }}</UiButton>
+    </div>
+    <form v-show="editing" class="console-panel" data-form="policy" @submit.prevent="save">
+      <div class="console-page-header">
+        <h2>{{ t(current ? 'console.edit' : 'console.create') }}</h2>
+        <UiButton
+          type="button"
+          variant="ghost"
+          :disabled="busy || uncertain"
+          @click="editing = false"
+          >{{ t('console.close') }}</UiButton
+        >
+      </div>
       <fieldset :disabled="busy || uncertain || !ready">
         <label for="policy-action">{{ t('policies.actionKind') }}</label
         ><select
@@ -470,7 +489,16 @@ onMounted(async () => {
           </option>
         </select>
         <label for="policy-scope">{{ t('policies.selfService.deviceScope') }}</label
-        ><input id="policy-scope" v-model="definition.scope" class="ui-input" required />
+        ><input
+          id="policy-scope"
+          v-model="definition.scope"
+          class="ui-input"
+          required
+        /><CatalogLocator
+          v-model="definition.scope"
+          collection="scopes"
+          :disabled="busy || uncertain"
+        />
         <template v-if="definition.action.kind === 'execution'">
           <ResourceIdentity :binding="definition.action.resource" />
           <p>{{ t('policies.selfService.parameterHint') }}</p>

@@ -1,4 +1,19 @@
 export const consoleZh = {
+  loadedFilter: '此筛选仅应用于当前已加载条目。',
+  confirmActions: {
+    approve: '批准申请',
+    deny: '拒绝申请',
+    revoke: '撤销授权',
+    dispatch: '提交下发',
+    issue: '签发证书',
+    delete: '删除对象',
+    activate: '激活配置',
+    cancel: '取消任务',
+    start: '启动工作流',
+    archive: '归档工作流',
+  },
+  chooseLoaded: '从授权目录选择',
+  selectionNotAdmission: '选择内容后仍需读取并验证版本、变体与准入状态。',
   readAt: '读取时间',
   authorizedDirectory: '服务端返回的当前授权目录统计',
   pendingRequests: '有待处理请求',
@@ -57,6 +72,22 @@ export const consoleZh = {
   scopeBound: '仅针对明确选择的对象；预览不代表设备已生效。',
 }
 export const consoleEn: typeof consoleZh = {
+  loadedFilter: 'This filter applies only to loaded entries.',
+  confirmActions: {
+    approve: 'Approve request',
+    deny: 'Deny request',
+    revoke: 'Revoke grant',
+    dispatch: 'Dispatch',
+    issue: 'Issue certificate',
+    delete: 'Delete object',
+    activate: 'Activate configuration',
+    cancel: 'Cancel task',
+    start: 'Start workflow',
+    archive: 'Archive workflow',
+  },
+  chooseLoaded: 'Choose from authorized directory',
+  selectionNotAdmission:
+    'Selection still requires reading and validating the version, variants and admission.',
   readAt: 'Read at',
   authorizedDirectory: 'Current authorized directory statistics returned by the server',
   pendingRequests: 'Requests to review',

@@ -11,8 +11,11 @@ import {
   type BootstrapPolicy,
   type BootstrapChange,
 } from '../clients/bootstrap'
+import SoftwareResourceSelect from '../components/SoftwareResourceSelect.vue'
+import CatalogLocator from '../../policies/components/CatalogLocator.vue'
 import PageFrame from '../../../components/PageFrame.vue'
 import BootstrapAttemptFacts from '../components/BootstrapAttemptFacts.vue'
+const editing = ref(false)
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -38,6 +41,7 @@ function fresh(): BootstrapDefinition {
 const draft = ref(fresh())
 let pending: { id: string; body: Operation<BootstrapChange> } | undefined
 function accept(v: BootstrapPolicy) {
+  editing.value = false
   selected.value = v
   draft.value = structuredClone(v.definition)
   if (pending?.id === v.id && pending.body.operationId === v.operation) uncertain.value = false
@@ -56,6 +60,7 @@ function list(cursor?: string) {
 }
 function create() {
   if (busy.value || uncertain.value) return
+  editing.value = true
   selected.value = undefined
   pending = undefined
   draft.value = fresh()
@@ -155,7 +160,7 @@ watch(
       {{ t('software.newSourcePolicy') }}
     </UiButton>
     <p v-if="page && !page.items.length">{{ t('policies.empty') }}</p>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="item in page?.items" :key="item.id">
         <UiButton
           data-action="open-source-policy"
@@ -176,13 +181,33 @@ watch(
     >
       {{ t('policies.next') }}
     </UiButton>
-    <form @submit.prevent="change({ action: 'put', definition: draft })">
+    <div v-if="selected && !editing" class="console-toolbar">
+      <UiButton type="button" :disabled="busy || uncertain" @click="editing = true">{{
+        t('console.edit')
+      }}</UiButton>
+    </div>
+    <form
+      v-show="editing"
+      class="console-panel"
+      @submit.prevent="change({ action: 'put', definition: draft })"
+    >
+      <div class="console-page-header">
+        <h2>{{ t(selected ? 'console.edit' : 'console.create') }}</h2>
+        <UiButton type="button" :disabled="busy || uncertain" @click="editing = false">{{
+          t('console.close')
+        }}</UiButton>
+      </div>
       <fieldset :disabled="busy || uncertain">
         <legend>{{ t('software.sourcePolicy') }}</legend>
         <label for="bootstrap-title">{{ t('software.displayTitle') }}</label
         ><input id="bootstrap-title" v-model="draft.title" class="ui-input" required />
         <label for="bootstrap-scope">{{ t('software.updateScope') }}</label
-        ><input id="bootstrap-scope" v-model="draft.scope" class="ui-input" required />
+        ><input
+          id="bootstrap-scope"
+          v-model="draft.scope"
+          class="ui-input"
+          required
+        /><CatalogLocator v-model="draft.scope" collection="scopes" :disabled="busy || uncertain" />
         <label for="bootstrap-platform">{{ t('policies.platform') }}</label
         ><select id="bootstrap-platform" v-model="draft.platform" class="ui-input">
           <option value="windows">Windows</option>
@@ -196,7 +221,11 @@ watch(
         <template v-if="draft.action.kind === 'install_agent'">
           <p>{{ t('software.agentPackageHint') }}</p>
           <p v-if="runtime.demo">{{ t('software.demoAgentPackage') }}</p>
-          <label for="bootstrap-resource">{{ t('software.patchResource') }}</label
+          <SoftwareResourceSelect
+            v-model:resource="draft.action.resource.id"
+            v-model:version="draft.action.resource.version"
+            :disabled="busy || uncertain"
+          /><label for="bootstrap-resource">{{ t('software.patchResource') }}</label
           ><input
             id="bootstrap-resource"
             v-model="draft.action.resource.id"
@@ -248,7 +277,7 @@ watch(
     >
       {{ t('policies.verify') }}
     </UiButton>
-    <section v-if="selected">
+    <section v-if="selected" class="console-panel">
       <h2>{{ selected.definition.title }} · {{ selected.id }}</h2>
       <p>
         {{ t('policies.revision') }} {{ selected.revision }} · {{ t('policies.scopes') }}
@@ -266,7 +295,7 @@ watch(
           {{ t(`software.sourceCommand_${action}`) }}
         </UiButton>
       </div>
-      <article v-for="row in selected.targets" :key="row.device">
+      <article v-for="row in selected.targets" :key="row.device" class="console-panel">
         <h3>{{ row.device }} · {{ t(`software.bootstrapAdmission_${row.admission}`) }}</h3>
         <dl>
           <dt>{{ t('software.observedSource') }}</dt>

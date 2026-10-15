@@ -62,7 +62,7 @@ onMounted(() => load())
         {{ t('policies.reload') }}
       </UiButton>
     </form>
-    <details>
+    <details class="console-panel console-task" :open="uncertain || undefined">
       <summary>{{ t('policies.nativeAction') }}</summary>
       <form @submit.prevent="submit">
         <fieldset :disabled="busy || uncertain">
@@ -116,7 +116,7 @@ onMounted(() => load())
       </UiButton>
     </details>
     <p v-if="page && !page.items.length">{{ t('policies.empty') }}</p>
-    <article v-for="item in page?.items" :key="item.id">
+    <article v-for="item in page?.items" :key="item.id" class="console-panel">
       <h2>
         <RouterLink
           :to="{ name: 'policy-execution', params: { tenant: runtime.tenant, execution: item.id } }"

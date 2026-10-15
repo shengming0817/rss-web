@@ -11,7 +11,10 @@ import {
   type UpdateDefinition,
   type UpdateRing,
 } from '../clients/updates'
+import SoftwareResourceSelect from '../components/SoftwareResourceSelect.vue'
+import CatalogLocator from '../../policies/components/CatalogLocator.vue'
 import PageFrame from '../../../components/PageFrame.vue'
+const editing = ref(false)
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.software.updates,
@@ -39,6 +42,7 @@ const draft = ref(fresh()),
 
 let pending: { id: string; body: Operation<UpdateChange> } | undefined
 function accept(value: UpdateRing) {
+  editing.value = false
   selected.value = value
   draft.value = structuredClone(value.definition)
   if (pending?.id === value.id && pending.body.operationId === value.operation)
@@ -58,6 +62,7 @@ function list(cursor?: string) {
 }
 function create() {
   if (busy.value || uncertain.value) return
+  editing.value = true
   selected.value = undefined
   pending = undefined
   draft.value = fresh()
@@ -179,7 +184,7 @@ watch(
       t('software.newRing')
     }}</UiButton>
     <p v-if="page && !page.items.length">{{ t('policies.empty') }}</p>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="item in page?.items" :key="item.id">
         <UiButton
           data-action="open-ring"
@@ -199,13 +204,32 @@ watch(
     >
       {{ t('policies.next') }}
     </UiButton>
-    <form @submit.prevent="change({ action: 'put', definition: draft })">
+    <div v-if="selected && !editing" class="console-toolbar">
+      <UiButton type="button" :disabled="busy || uncertain" @click="editing = true">{{
+        t('console.edit')
+      }}</UiButton>
+    </div>
+    <form
+      v-show="editing"
+      class="console-panel"
+      @submit.prevent="change({ action: 'put', definition: draft })"
+    >
+      <div class="console-page-header">
+        <h2>{{ t(selected ? 'console.edit' : 'console.create') }}</h2>
+        <UiButton type="button" :disabled="busy || uncertain" @click="editing = false">{{
+          t('console.close')
+        }}</UiButton>
+      </div>
       <fieldset :disabled="busy || uncertain">
         <legend>{{ t('software.ringDefinition') }}</legend>
         <label for="update-title">{{ t('software.displayTitle') }}</label
         ><input id="update-title" v-model="draft.title" class="ui-input" required />
         <label for="update-scope">{{ t('software.updateScope') }}</label
-        ><input id="update-scope" v-model="draft.scope" class="ui-input" required />
+        ><input id="update-scope" v-model="draft.scope" class="ui-input" required /><CatalogLocator
+          v-model="draft.scope"
+          collection="scopes"
+          :disabled="busy || uncertain"
+        />
         <label for="update-platform">{{ t('policies.platform') }}</label
         ><select id="update-platform" v-model="draft.platform" class="ui-input">
           <option value="windows">Windows</option>
@@ -231,7 +255,11 @@ watch(
           </select>
         </template>
         <template v-else>
-          <label for="patch-resource">{{ t('software.patchResource') }}</label
+          <SoftwareResourceSelect
+            v-model:resource="draft.target.resource.id"
+            v-model:version="draft.target.resource.version"
+            :disabled="busy || uncertain"
+          /><label for="patch-resource">{{ t('software.patchResource') }}</label
           ><input
             id="patch-resource"
             v-model="draft.target.resource.id"
@@ -340,7 +368,7 @@ watch(
     >
       {{ t('policies.verify') }}
     </UiButton>
-    <section v-if="selected">
+    <section v-if="selected" class="console-panel">
       <h2>{{ selected.definition.title }} · {{ selected.id }}</h2>
       <p>
         {{ t('policies.revision') }} {{ selected.revision }} · {{ t('policies.scopes') }}
