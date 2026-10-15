@@ -288,7 +288,7 @@ describe('Identity views use actual app session and decoder modules', () => {
     await flushPromises()
     await wrapper
       .findAll('button')
-      .find((b) => b.text() === '创建账户')!
+      .find((b) => b.text() === '创建本地账户')!
       .trigger('click')
     await flushPromises()
     await new DOMWrapper(document.body).get('#account-login').setValue('newmember')
@@ -471,10 +471,10 @@ it('requires confirmation before revoking a provider and its sessions', async ()
   wrapper.unmount()
 })
 
-it('does not erase provider edits when the initial list finishes late', async () => {
+it('keeps the provider editor closed during initial read and opens it explicitly afterwards', async () => {
   const f = fixture()
   await f.login()
-  let finish!: (v: unknown) => void
+  let finish!: (value: unknown) => void
   f.replies.push(
     () =>
       new Promise((resolve) => {
@@ -482,17 +482,25 @@ it('does not erase provider edits when the initial list finishes late', async ()
       }),
   )
   const { wrapper } = await view(ProvidersView, f, 'providers')
-  await wrapper.get('#issuer').setValue('https://new.example.test')
-  await wrapper.get('#client-id').setValue('new-client')
-  await wrapper.get('#client-secret').setValue('new-secret@1')
+  const create = () => wrapper.findAll('button').find((b) => b.text() === '新增身份提供方')!
+  expect(create().attributes('disabled')).toBeDefined()
+  expect(new DOMWrapper(document.body).find('#issuer').exists()).toBe(false)
   finish({ providers: [] })
   await flushPromises()
-  expect((wrapper.get('#issuer').element as HTMLInputElement).value).toBe(
-    'https://new.example.test',
-  )
-  expect((wrapper.get('#client-id').element as HTMLInputElement).value).toBe('new-client')
-  expect((wrapper.get('#client-secret').element as HTMLInputElement).value).toBe('new-secret@1')
+  await create().trigger('click')
+  await flushPromises()
+  const body = new DOMWrapper(document.body)
+  await body.get('#issuer').setValue('https://new.example.test')
+  await body.get('#client-id').setValue('new-client')
+  await body.get('#client-secret').setValue('new-secret@1')
+  expect((body.get('#client-secret').element as HTMLInputElement).value).toBe('new-secret@1')
+  await body.get('[role=dialog] button[aria-label="取消"]').trigger('click')
+  await flushPromises()
+  await create().trigger('click')
+  await flushPromises()
+  expect((body.get('#client-secret').element as HTMLInputElement).value).toBe('')
   wrapper.unmount()
+  f.session.clear()
 })
 
 it('clears prior-owner rows, pagination and password drafts when visibility rechecks another account', async () => {
@@ -694,7 +702,12 @@ it.each([
       await flushPromises()
       expect(wrapper.text()).not.toContain('列表尚未加载')
       expect(wrapper.get('tbody').text()).toContain(text)
-      expect(wrapper.find('form').exists()).toBe(true)
+      expect(wrapper.find('form').exists()).toBe(false)
+      expect(
+        wrapper
+          .findAll('button')
+          .some((button) => /创建本地账户|新增身份提供方/.test(button.text())),
+      ).toBe(true)
       expect(f.request).toHaveBeenCalledTimes(before + 2)
       expect(f.session.state.value.status).toBe('authenticated')
     } finally {

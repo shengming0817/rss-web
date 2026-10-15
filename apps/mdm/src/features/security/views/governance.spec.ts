@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, DOMWrapper } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import { shallowRef } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -117,6 +117,7 @@ it('keeps an unknown decision locked across reads and loads expiry after replayi
     decide = vi.fn().mockRejectedValueOnce(new Error('lost')).mockResolvedValue(approved)
   const { wrapper, button } = await setup(RequestsView, { requests: { read, decide } })
   await wrapper.get('[data-testid="approve-request"]').trigger('click')
+  await confirmDialog()
   await flushPromises()
   const frozen = structuredClone(decide.mock.calls[0])
   await wrapper.get('[data-testid="refresh-request"]').trigger('click')
@@ -165,6 +166,7 @@ it('replays the original dispatch after the displayed approval has expired', asy
     other,
   )
   await wrapper.get('[data-testid="dispatch-security"]').trigger('click')
+  await confirmDialog()
   await flushPromises()
   const frozen = structuredClone(dispatch.mock.calls[0])
   read.mockResolvedValue({ request: { ...request, state: 'expired', revision: 3 }, asOf: 201 })
@@ -296,3 +298,13 @@ it.each([false, true])(
     wrapper.unmount()
   },
 )
+
+async function confirmDialog() {
+  await flushPromises()
+  await new DOMWrapper(document.body)
+    .get('[role=alertdialog]')
+    .findAll('button')
+    .find((b) => b.text() === '确认')!
+    .trigger('click')
+  await flushPromises()
+}

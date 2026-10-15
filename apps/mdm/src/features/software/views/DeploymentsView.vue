@@ -474,7 +474,7 @@ watch(
                 {{ t('policies.selfService.removeConfiguration') }}
               </UiButton>
             </template>
-            <label><input v-model="enabled" type="checkbox" />{{ t('policies.enabled') }}</label>
+            <label><input v-model="enabled" type="checkbox" />{{ t('software.enabled') }}</label>
           </fieldset>
           <fieldset
             v-show="wizardStep === 1"
@@ -575,7 +575,7 @@ watch(
               <dd>{{ t(`software.intent_${draft.action.intent}`) }}</dd>
               <dt>{{ t('software.stages') }}</dt>
               <dd>{{ draft.action.rollout.stages.length }}</dd>
-              <dt>{{ t('policies.enabled') }}</dt>
+              <dt>{{ t('software.enabled') }}</dt>
               <dd>{{ enabled ? t('software.enabled') : t('software.paused') }}</dd>
             </dl>
             <details class="console-evidence">

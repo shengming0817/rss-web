@@ -296,6 +296,9 @@
   box-shadow: var(--shadow-lg);
   z-index: var(--z-popover);
 }
+.ui-tabs-root {
+  min-width: 0;
+}
 .ui-tabs {
   display: flex;
   gap: var(--space-4);

@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, DOMWrapper } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { mdmKey } from '../../../context'
@@ -58,6 +58,7 @@ it('keeps an unknown issuance frozen across reads and refreshes after its histor
       .mockResolvedValue({ certificate, asOf: 100 }),
     { wrapper } = await setup({ read, issue })
   await wrapper.get('[data-testid="issue-certificate"]').trigger('click')
+  await confirmDialog()
   await flushPromises()
   const frozen = structuredClone(issue.mock.calls[0]![1])
   read.mockResolvedValue({
@@ -105,6 +106,7 @@ it('pins deployment to the issued fingerprint and fences certificate responses a
   await wrapper.get('[data-testid="deploy-certificate"]').trigger('click')
   await wrapper.get('textarea').setValue('Deploy the new synthetic credential')
   await wrapper.get('[data-testid="certificate-request"]').trigger('submit')
+  await confirmDialog()
   await flushPromises()
   expect(create.mock.calls[0]![0].input.target).toEqual({
     kind: 'certificate_deploy',
@@ -168,3 +170,13 @@ it('keeps the applied device with its cursor and removes stale pagination when a
     wrapper.unmount()
   }
 })
+
+async function confirmDialog() {
+  await flushPromises()
+  await new DOMWrapper(document.body)
+    .get('[role=alertdialog]')
+    .findAll('button')
+    .find((b) => b.text() === '确认')!
+    .trigger('click')
+  await flushPromises()
+}

@@ -68,6 +68,11 @@ it('registers an immutable source, blocks ambiguous writes and explicitly replay
     },
   })
   await flushPromises()
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text() === '新建')!
+    .trigger('click')
+  await flushPromises()
   await wrapper.get('#source-id').setValue('private')
   await wrapper.findAll('form')[1]!.trigger('submit')
   await flushPromises()

@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount, flushPromises, DOMWrapper } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import {
   createMdmTransport,
@@ -31,15 +31,17 @@ it('translates all option labels while retaining their protocol values', async (
     props: { transport: createMdmTransport(), authenticated: ref(true) },
     global: { plugins: [i18n] },
   })
+  await wrapper.get('button').trigger('click')
   await flushPromises()
-  expect(wrapper.get('#demo-scenario option[value="normal"]').text()).toBe('正常')
-  expect(wrapper.get('#demo-module option[value="devices"]').text()).toBe('设备与资产')
-  expect(wrapper.get('#demo-source option[value="real"]').text()).toBe('真实接口')
-  await wrapper.get('#demo-scenario').setValue('conflict')
+  const body = new DOMWrapper(document.body)
+  expect(body.get('#demo-scenario option[value="normal"]').text()).toBe('正常')
+  expect(body.get('#demo-module option[value="devices"]').text()).toBe('设备与资产')
+  expect(body.get('#demo-source option[value="real"]').text()).toBe('真实接口')
+  await body.get('#demo-scenario').setValue('conflict')
   i18n.global.locale.value = 'en-US'
   await flushPromises()
-  expect(wrapper.get('#demo-scenario option[value="normal"]').text()).toBe('Normal')
-  expect((wrapper.get('#demo-scenario').element as HTMLSelectElement).value).toBe('conflict')
+  expect(body.get('#demo-scenario option[value="normal"]').text()).toBe('Normal')
+  expect((body.get('#demo-scenario').element as HTMLSelectElement).value).toBe('conflict')
   wrapper.unmount()
 })
 it('labels consent targets as request IDs, refreshes automatic time on submit and reports rejected events', async () => {
@@ -65,12 +67,14 @@ it('labels consent targets as request IDs, refreshes automatic time on submit an
     props: { transport: { request } as HttpTransport, authenticated: ref(true) },
     global: { plugins: [i18n] },
   })
+  await wrapper.get('button').trigger('click')
   await flushPromises()
-  await wrapper.get('#demo-event-kind').setValue('remote_consent')
-  expect(wrapper.get('label[for="demo-event-task"]').text()).toBe('申请 ID（远程支持申请）')
-  await wrapper.get('#demo-event-task').setValue('33333333-3333-4333-8333-333333333333')
+  const body = new DOMWrapper(document.body)
+  await body.get('#demo-event-kind').setValue('remote_consent')
+  expect(body.get('label[for="demo-event-task"]').text()).toBe('申请 ID（远程支持申请）')
+  await body.get('#demo-event-task').setValue('33333333-3333-4333-8333-333333333333')
   asOf += 3600
-  await wrapper.get('details button').trigger('click')
+  await body.get('details button').trigger('click')
   await flushPromises()
   expect(request).toHaveBeenLastCalledWith(
     expect.objectContaining({
@@ -85,11 +89,11 @@ it('labels consent targets as request IDs, refreshes automatic time on submit an
       },
     }),
   )
-  expect(wrapper.get('[role="alert"]').text()).toContain('未确认')
-  await wrapper.get('#demo-event-kind').setValue('remote_revoke')
-  expect(wrapper.get('label[for="demo-event-task"]').text()).toBe('申请 ID（远程支持申请）')
-  await wrapper.get('#demo-event-at').setValue(1780000001)
-  await wrapper.get('details button').trigger('click')
+  expect(body.get('[role="alert"]').text()).toContain('未确认')
+  await body.get('#demo-event-kind').setValue('remote_revoke')
+  expect(body.get('label[for="demo-event-task"]').text()).toBe('申请 ID（远程支持申请）')
+  await body.get('#demo-event-at').setValue(1780000001)
+  await body.get('details button').trigger('click')
   await flushPromises()
   expect(request).toHaveBeenLastCalledWith(
     expect.objectContaining({
@@ -103,7 +107,7 @@ it('labels consent targets as request IDs, refreshes automatic time on submit an
       },
     }),
   )
-  await wrapper.get('#demo-event-kind').setValue('remote_ended')
-  expect(wrapper.get('label[for="demo-event-task"]').text()).toBe('原任务 ID（运行详情）')
+  await body.get('#demo-event-kind').setValue('remote_ended')
+  expect(body.get('label[for="demo-event-task"]').text()).toBe('原任务 ID（运行详情）')
   wrapper.unmount()
 })

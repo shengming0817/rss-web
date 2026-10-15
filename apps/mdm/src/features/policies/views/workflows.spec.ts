@@ -1,3 +1,4 @@
+import { ref } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { expect, it } from 'vitest'
@@ -30,6 +31,7 @@ it('shows a second-subject requirement only for a pending explicit approval and 
         stubs: { RouterLink: true },
         provide: {
           [mdmKey as symbol]: {
+            session: { state: ref({ session: { id: 'test-session' } }) },
             tenant: 'tenant',
             demo: false,
             devices: { assets: { catalog: async () => ({ fields: [] }) } },

@@ -5,7 +5,7 @@ defineProps<{ label: string; items: readonly UiOption[]; keepMounted?: boolean }
 const model = defineModel<string>({ required: true })
 </script>
 <template>
-  <TabsRoot v-model="model"
+  <TabsRoot v-model="model" class="ui-tabs-root"
     ><TabsList class="ui-tabs" :aria-label="label"
       ><TabsTrigger
         v-for="item in items"

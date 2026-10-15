@@ -71,6 +71,11 @@ it('starts from a pinned resolution and fences further submissions until an unkn
     },
   })
   await flushPromises()
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text() === '新建')!
+    .trigger('click')
+  await flushPromises()
   await wrapper.get('#import-source').setValue('winget')
   await wrapper.get('#import-package').setValue('Example.Browser')
   await wrapper.get('#import-version').setValue('128.0')

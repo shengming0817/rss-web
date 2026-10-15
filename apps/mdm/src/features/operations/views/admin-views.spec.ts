@@ -6,7 +6,7 @@ import AlertRulesView from './AlertRulesView.vue'
 import ApprovalsView from './ApprovalsView.vue'
 import AuditView from './AuditView.vue'
 import AlertsView from './AlertsView.vue'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount, flushPromises, DOMWrapper } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { decodeMdmError } from '@rss/api/mdm'
@@ -150,6 +150,7 @@ it('separates saved and active configuration and maintenance effect facts', asyn
   await flushPromises()
   expect(f.wrapper.text()).toContain('saved')
   await f.wrapper.get('[data-testid="activate-configuration"]').trigger('click')
+  await confirmDialog()
   await flushPromises()
   expect(f.wrapper.text()).toContain('restart_required')
   await f.wrapper.get('[data-testid="start-maintenance"]').trigger('click')
@@ -296,6 +297,7 @@ it('reconciles active configuration and completed maintenance after unknown repl
   await flushPromises()
   f.server.set('unknown')
   await f.wrapper.get('[data-testid="activate-configuration"]').trigger('click')
+  await confirmDialog()
   await flushPromises()
   f.automation.tick({ kind: 'clock', at: f.automation.now() + 100 }, 'normal')
   f.server.set('normal')
@@ -619,3 +621,13 @@ it('does not apply a connector read after its route target has changed', async (
   )
   f.wrapper.unmount()
 })
+
+async function confirmDialog() {
+  await flushPromises()
+  await new DOMWrapper(document.body)
+    .get('[role=alertdialog]')
+    .findAll('button')
+    .find((b) => b.text() === '确认')!
+    .trigger('click')
+  await flushPromises()
+}

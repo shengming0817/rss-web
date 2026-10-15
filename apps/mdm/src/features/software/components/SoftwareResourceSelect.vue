@@ -51,7 +51,7 @@ function choose(event: Event) {
         @keydown.enter.prevent="load()"
     /></label>
     <UiButton type="button" :disabled="props.disabled || busy" @click="load()">{{
-      t('devices.search')
+      t('console.search')
     }}</UiButton>
     <template v-if="page"
       ><p>{{ t('console.pageNotTotal') }}</p>

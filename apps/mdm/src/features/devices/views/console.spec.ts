@@ -1,7 +1,7 @@
 import { shallowRef } from 'vue'
 import { runtimeKey } from '@rss/auth'
 import { afterEach, expect, it, vi } from 'vitest'
-import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import { flushPromises, mount, DOMWrapper, type VueWrapper } from '@vue/test-utils'
 import { createRouter, createMemoryHistory, RouterView } from 'vue-router'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { networkErrorForTest } from '@rss/api/testing'
@@ -134,9 +134,18 @@ async function setup(
     return result
   }
   const click = async (text: string) => {
-    await button(text).trigger('click')
+    const target = button(text)
+    await target.trigger(target.attributes('role') === 'tab' ? 'mousedown' : 'click', {
+      button: 0,
+      ctrlKey: false,
+    })
     await flushPromises()
   }
+  if (name === 'device-search') {
+    await wrapper.get('details > summary').trigger('click')
+    await flushPromises()
+  }
+  if (name === 'device-groups') await click('创建')
   return {
     wrapper,
     router,
@@ -150,6 +159,14 @@ async function setup(
     operations,
     i18n,
   }
+}
+async function confirmCredential() {
+  const dialog = new DOMWrapper(document.body).get('[role=alertdialog]')
+  await dialog
+    .findAll('button')
+    .find((button) => button.text() === '我已核对目标、世代和风险，确认操作')!
+    .trigger('click')
+  await flushPromises()
 }
 it('renders server view counters, endpoint references, pagination and empty state', async () => {
   const { wrapper, click, scenario, requests } = await setup()
@@ -228,11 +245,8 @@ it('renders detail tabs, edits manual null/delete with conflict drafts, and edit
   expect(wrapper.text()).toContain('new-owner')
   await click('注册凭据')
   expect(wrapper.text()).toContain('撤销服务端凭据不会擦除设备')
-  await wrapper
-    .findAll('input[type=checkbox]')
-    .find((c) => c.isVisible())!
-    .setValue(true)
   await click('撤销凭据')
+  await confirmCredential()
   expect(wrapper.text()).not.toContain('擦除成功')
 })
 it('executes asynchronous searches, facets, and personal saved query create/read/delete', async () => {
@@ -316,7 +330,7 @@ it('clears enrollment password at submission, supports recovery, and never persi
   expect(originalOperation).toBeDefined()
   await password.setValue(originalPassword)
   await form.find('input[type=checkbox]').setValue(true)
-  expect(form.find('button:not([type])').attributes('disabled')).toBeDefined()
+  expect(form.find('button[type=submit]').attributes('disabled')).toBeDefined()
   await click('明确重放原操作')
   expect(
     wrapper
@@ -379,6 +393,7 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
   await form.trigger('submit')
   await flushPromises()
   await editor.findAll('select').at(-1)!.setValue('true')
+  await click('编辑')
   await click('保存动态条件')
   const group = (await devices.candidate.groups()).items.find((g) => g.name === 'Dynamic')!
   expect((await devices.groups.read(group.id)).criteria).toMatchObject({
@@ -391,7 +406,9 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
   await click('载入')
   expect(wrapper.text()).toContain('当前已发布成员集: 否')
   expect(wrapper.text()).toContain('未采集')
-  expect(wrapper.find('details').text()).toContain('manual')
+  expect(
+    wrapper.findAll('details').find((detail) => detail.text().includes('manual')),
+  ).toBeDefined()
   await click('重算并发布成员')
   await click('读取任务状态')
   await click('读取任务状态')
@@ -537,14 +554,11 @@ it('refreshes channels after revoking each credential and never shows ready with
   const rows = (await devices.enrollment.registrations('device-01')).items
   for (let index = 0; index < rows.length; index++) {
     await wrapper
-      .findAll('input[type=checkbox]')
-      .find((c) => c.isVisible())!
-      .setValue(true)
-    await wrapper
       .findAll('button')
       .find((b) => b.text() === '撤销凭据' && b.attributes('disabled') === undefined)!
       .trigger('click')
     await flushPromises()
+    await confirmCredential()
   }
   const detail = await devices.directory.detail('device-01')
   expect(detail.channels.filter((c) => c.status === 'active')).toEqual([])
@@ -605,11 +619,8 @@ it('marks credential details stale after an acknowledged revoke with a failed re
   devices.directory.detail = async () => {
     throw decodeMdmError(503, { code: 'service_unavailable' })
   }
-  await wrapper
-    .findAll('input[type=checkbox]')
-    .find((c) => c.isVisible())!
-    .setValue(true)
   await click('撤销凭据')
+  await confirmCredential()
   expect(wrapper.text()).toContain('暂不可用')
   expect(wrapper.text()).not.toContain('mdm + agent')
   expect(wrapper.text()).not.toContain('明确重放原操作')
@@ -624,18 +635,16 @@ it('self enrollment works without the management frame and clears handoff secret
   expect(wrapper.text()).toContain('注册我的设备')
   expect(wrapper.find('nav').exists()).toBe(false)
   await click('生成一次性交付口令')
+  await wrapper.find('form input[type=checkbox]').setValue(true)
   const password = wrapper.find('input[autocomplete=off]')
   expect((password.element as HTMLInputElement).value).toHaveLength(43)
-  await wrapper
-    .findAll('input[type=checkbox]')
-    .find((c) => c.isVisible())!
-    .setValue(true)
   await wrapper.findAll('form')[0]!.trigger('submit')
   await flushPromises()
   expect((password.element as HTMLInputElement).value).toBe('')
   expect(wrapper.text()).toContain('self:')
   expect(wrapper.find('tbody').text()).toContain('1')
   await click('生成一次性交付口令')
+  await wrapper.find('form input[type=checkbox]').setValue(true)
   await router.push({ name: 'devices', params: { tenant: TENANT } })
   await flushPromises()
   expect(wrapper.text()).not.toContain('self:')
@@ -752,10 +761,7 @@ it('discards a native read that arrives after its query target changes', async (
 it('refreshes native binding and resumes the same bound identity even when new enrollment is disabled', async () => {
   const { wrapper, devices, domain, click } = await setup('self-enrollments')
   await click('生成一次性交付口令')
-  await wrapper
-    .findAll('input[type=checkbox]')
-    .find((c) => c.isVisible())!
-    .setValue(true)
+  await wrapper.find('form input[type=checkbox]').setValue(true)
   await wrapper.findAll('form')[0]!.trigger('submit')
   await flushPromises()
   const id = (wrapper.findAll('form')[1]!.find('input').element as HTMLInputElement).value
@@ -780,10 +786,7 @@ it('refreshes native binding and resumes the same bound identity even when new e
   const resume = vi.spyOn(devices.enrollment, 'resume')
   const create = vi.spyOn(devices.registration, 'enroll')
   await click('生成一次性交付口令')
-  await wrapper
-    .findAll('input[type=checkbox]')
-    .find((c) => c.isVisible())!
-    .setValue(true)
+  await wrapper.find('form input[type=checkbox]').setValue(true)
   await click('更新口令并继续')
   expect(resume.mock.calls.map(([target]) => target)).toEqual([id])
   expect(create).not.toHaveBeenCalled()
@@ -800,6 +803,7 @@ it('refreshes native binding and resumes the same bound identity even when new e
   })
 })
 async function chooseAssociation(h: Awaited<ReturnType<typeof setup>>) {
+  await h.click('设备关联管理')
   await h.click('查找另一通道候选')
   const panel = h.wrapper.find('[data-testid=association-panel]')
   await panel.find('input[type=radio]').setValue(true)
@@ -814,6 +818,7 @@ it('creates a unified route and revokes the relation without credential writes',
   await h.click('确认关联')
   await vi.waitFor(() => expect(h.router.currentRoute.value.name).toBe('device-view-detail'))
   await flushPromises()
+  await h.click('设备关联管理')
   const panel = h.wrapper.find('[data-testid=association-panel]')
   await panel.findAll('textarea')[1]!.setValue('Separate instances')
   await panel.find('input[type=checkbox]').setValue(true)
@@ -835,6 +840,7 @@ it('locks an unknown association, survives navigation, and requires explicit exa
   await flushPromises()
   await h.router.push({ name: 'device-detail', params: { tenant: TENANT, device: 'device-01' } })
   await flushPromises()
+  await h.click('设备关联管理')
   const panel = h.wrapper.find('[data-testid=association-panel]')
   expect(panel.text()).toContain('结果未知')
   expect(h.button('确认关联').attributes('disabled')).toBeDefined()
@@ -956,6 +962,7 @@ it.each(['confirm', 'revoke', 'inactive-revoke'])(
         current.members[0]!.registrationId,
         crypto.randomUUID(),
       )
+    await h.click('设备关联管理')
     await h.click('读取当前关系与主注册')
     const panel = h.wrapper.find('[data-testid=association-panel]'),
       basis = panel.find('[data-testid=association-basis]')
