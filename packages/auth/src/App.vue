@@ -6,13 +6,13 @@ import { useTheme } from '@rss/core/composables'
 import { useIdentity } from './context'
 import { useSessionLifecycle } from './useSessionLifecycle'
 const { session } = useIdentity()
-const { activity } = useSessionLifecycle()
+useSessionLifecycle()
 const router = useRouter()
 const { t, locale } = useI18n()
 const theme = useTheme()
 </script>
 <template>
-  <div class="auth-host" @pointerdown="activity" @keydown="activity">
+  <div class="auth-host">
     <a class="auth-skip" href="#identity-main">{{ t('identity.skip') }}</a>
     <header class="auth-host-header">
       <RouterLink to="/" class="auth-brand"

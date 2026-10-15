@@ -121,7 +121,7 @@ try {
       const read = await response
       assert.equal(read.status(), 200)
       const facts = await read.json()
-      await page.locator('section.device-console[aria-busy=false]').waitFor()
+      await page.locator('section.console-page:not([aria-busy="true"])').waitFor()
       assert.equal(await page.locator('[role=alert]').count(), 0)
       assert.equal(await page.getByText('请求被拒绝', { exact: false }).count(), 0)
       if (route === 'windows-entra') {
@@ -170,6 +170,7 @@ try {
       active()
       phase = 'configuration-lost-response'
       await page.goto(`${origin}/tenants/${fixture.tenant}/agent-configurations`)
+      await page.locator('summary').filter({ hasText: '生成完整 JSON' }).click()
       await page.getByRole('button', { name: '生成完整 JSON', exact: true }).waitFor()
       let commits = 0
       await page.route('**/api/v1/agent-configurations', async (route) => {

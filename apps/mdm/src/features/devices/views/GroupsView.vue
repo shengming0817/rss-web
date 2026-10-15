@@ -28,6 +28,21 @@ const task = ref<string>(),
   result = ref<Awaited<ReturnType<typeof client.page>>>()
 const editing = ref(false),
   deleting = ref(false)
+function cancelEdit() {
+  if (busy.value || uncertain.value) return
+  if (current.value) {
+    name.value = current.value.group.name
+    description.value = current.value.group.description
+    kind.value = current.value.group.kind
+    criteria.value = structuredClone(toRaw(current.value.criteria))
+  } else {
+    name.value = ''
+    description.value = ''
+    criteria.value = null
+    kind.value = 'static'
+  }
+  editing.value = false
+}
 function beginCreate() {
   create()
   editing.value = true
@@ -253,7 +268,12 @@ function openGroup(group: string) {
       }}</UiButton>
     </div>
     <form v-show="editing" class="console-panel" @submit.prevent="save">
-      <h2>{{ t(current ? 'console.edit' : 'console.create') }}</h2>
+      <div class="console-page-header">
+        <h2>{{ t(current ? 'console.edit' : 'console.create') }}</h2>
+        <UiButton type="button" :disabled="busy || uncertain" @click="cancelEdit">{{
+          t('console.cancel')
+        }}</UiButton>
+      </div>
       <fieldset :disabled="busy || uncertain">
         <label
           >{{ t('devices.name')

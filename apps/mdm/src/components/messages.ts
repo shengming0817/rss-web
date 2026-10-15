@@ -1,4 +1,6 @@
 export const consoleZh = {
+  previewReady: '当前草稿已取得目标预览。',
+  previewRequired: '提交前请预览当前草稿的有效目标；修改配置后需重新预览。',
   loadedFilter: '此筛选仅应用于当前已加载条目。',
   confirmActions: {
     approve: '批准申请',
@@ -72,6 +74,8 @@ export const consoleZh = {
   scopeBound: '仅针对明确选择的对象；预览不代表设备已生效。',
 }
 export const consoleEn: typeof consoleZh = {
+  previewReady: 'Target preview is available for the current draft.',
+  previewRequired: 'Preview the effective targets before saving. Changes require a new preview.',
   loadedFilter: 'This filter applies only to loaded entries.',
   confirmActions: {
     approve: 'Approve request',

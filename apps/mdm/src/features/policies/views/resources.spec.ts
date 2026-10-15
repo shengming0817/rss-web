@@ -191,7 +191,7 @@ it('resumes the same upload after a lost chunk response, rejects different bytes
   await select('wrong')
   await button().trigger('click')
   await vi.waitFor(() =>
-    expect(wrapper.get('section.device-console').attributes('aria-busy')).toBe('false'),
+    expect(wrapper.get('section.console-page').attributes('aria-busy')).toBeUndefined(),
   )
   await flushPromises()
   expect(wrapper.text()).toContain('所选文件与原上传内容不一致')

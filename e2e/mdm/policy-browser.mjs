@@ -55,6 +55,16 @@ async function bindScript() {
       !document.querySelector('[data-form="policy"] > fieldset')?.disabled,
   )
 }
+async function prepareSave(form) {
+  if (!form.includes('deployment')) return
+  for (let step = 0; step < 3; step++) {
+    const next = page.getByRole('button', { name: '下一步', exact: true })
+    if (!(await next.isVisible())) break
+    await next.click()
+  }
+  await page.getByRole('button', { name: '预览目标准入', exact: true }).click()
+  await page.locator('.console-page:not([aria-busy="true"])').waitFor()
+}
 async function save(id, form) {
   await bindScript()
   assert.deepEqual(
@@ -68,6 +78,7 @@ async function save(id, form) {
   const response = page.waitForResponse(
     (r) => r.url() === `${origin}/api/v1/policies/${id}` && r.request().method() === 'POST',
   )
+  await prepareSave(form)
   await page.locator(form).evaluate((f) => f.requestSubmit())
   assert.equal((await response).status(), 200)
   await page.waitForFunction(
@@ -81,6 +92,7 @@ async function open(id, software = false) {
   await page.goto(
     `${origin}/tenants/${fixture.tenant}/${software ? 'software/deployments' : 'policies/assignments'}?id=${id}`,
   )
+  await page.getByRole('button', { name: '编辑', exact: true }).click()
   await page.locator('[data-field="access"]').waitFor()
   await bindScript()
   await page
@@ -91,6 +103,7 @@ async function open(id, software = false) {
 async function refresh(kind) {
   await page.waitForTimeout(1200)
   await page.reload()
+  await page.getByRole('button', { name: '编辑', exact: true }).click()
   await page.locator('[data-field="access"]').waitFor()
   await bindScript()
   assert.equal(await page.locator('[data-field="access"]').inputValue(), kind)
@@ -152,8 +165,9 @@ try {
     phase = `${software ? 'software' : 'script'}-empty-users`
     await page.locator('[data-field="access"]').selectOption('users')
     const count = writes
+    await prepareSave(form)
     await page.locator(form).evaluate((f) => f.requestSubmit())
-    await page.locator('.device-console > [role="alert"]').waitFor()
+    await page.locator('.console-page-error[role="alert"]').waitFor()
     assert.equal(writes, count)
     assert.equal((await read(id)).revision, saved.revision)
     journeys.push(phase)
@@ -239,9 +253,10 @@ try {
       (r) => r.url() === `${origin}/api/v1/policies/${id}` && r.request().method() === 'POST',
     )
     const n = writes
+    await prepareSave(form)
     await page.locator(form).evaluate((f) => f.requestSubmit())
     assert.equal((await conflict).status(), 409)
-    await page.locator('.device-console > [role="alert"]').waitFor()
+    await page.locator('.console-page-error[role="alert"]').waitFor()
     assert.equal(writes, n + 1)
     await refresh('users')
     journeys.push(phase)
@@ -287,12 +302,13 @@ try {
     await route.abort('connectionreset')
   })
   const count = writes
+  await prepareSave('[data-form="deployment"]')
   await page.locator('[data-form="deployment"]').evaluate((f) => f.requestSubmit())
-  await page.locator('.device-console > [role="alert"]').waitFor()
+  await page.locator('.console-page-error[role="alert"]').waitFor()
   await page.getByRole('status').filter({ hasText: '提交结果仍未知' }).waitFor()
   await page.locator('[data-action="read-policy"]').click()
   await page.waitForFunction(
-    () => !document.querySelector('.device-console')?.getAttribute('aria-busy')?.includes('true'),
+    () => !document.querySelector('.console-page')?.getAttribute('aria-busy')?.includes('true'),
   )
   assert.equal(writes, count + 1)
   assert.equal(committedRevision, beforeUnknown.revision + 1)
@@ -330,7 +346,7 @@ try {
   const m = writes
   await page.locator('[data-form="policy"]').evaluate((f) => f.requestSubmit())
   assert.equal((await denied).status(), 403)
-  await page.locator('.device-console > [role="alert"]').waitFor()
+  await page.locator('.console-page-error[role="alert"]').waitFor()
   assert.equal(writes, m + 1)
   journeys.push(phase)
   result = 'passed'
@@ -349,7 +365,7 @@ try {
     alerts: page
       ? (
           await page
-            .locator('.device-console > [role="alert"]')
+            .locator('.console-page-error[role="alert"]')
             .allTextContents()
             .catch(() => [])
         ).map((s) => (s.includes('请求') ? 'request' : s.includes('资源') ? 'resource' : 'other'))

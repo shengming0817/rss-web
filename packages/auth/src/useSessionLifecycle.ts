@@ -13,8 +13,16 @@ export function useSessionLifecycle() {
     },
     { immediate: true },
   )
-  onMounted(() => window.addEventListener('pagehide', session.leavePage))
-  onBeforeUnmount(() => window.removeEventListener('pagehide', session.leavePage))
+  onMounted(() => {
+    window.addEventListener('pagehide', session.leavePage)
+    document.addEventListener('pointerdown', activity, true)
+    document.addEventListener('keydown', activity, true)
+  })
+  onBeforeUnmount(() => {
+    window.removeEventListener('pagehide', session.leavePage)
+    document.removeEventListener('pointerdown', activity, true)
+    document.removeEventListener('keydown', activity, true)
+  })
   watch(
     () => [session.state.value.status, session.logoutOutcome.value] as const,
     ([status, logoutOutcome]) => {
@@ -44,5 +52,4 @@ export function useSessionLifecycle() {
   function activity(event: Event) {
     if (event.isTrusted) void session.activity().catch(() => undefined)
   }
-  return { activity }
 }

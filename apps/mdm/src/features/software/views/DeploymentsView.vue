@@ -6,7 +6,7 @@ import {
   UiProgress,
   UiUtcDateTimeInput,
 } from '@rss/core/components'
-import { onBeforeUnmount, ref, toRaw, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, toRaw, watch } from 'vue'
 import SelfServiceEditor from '../../policies/components/SelfServiceEditor.vue'
 import ResourceIdentity from '../../policies/components/ResourceIdentity.vue'
 import { useRoute } from 'vue-router'
@@ -67,6 +67,17 @@ const draft = ref(fresh()),
   resource = ref<ResourceRead>()
 const page = ref<Awaited<ReturnType<typeof client.list>>>(),
   preview = ref<Awaited<ReturnType<typeof client.preview>>>()
+const previewBasis = ref('')
+const draftBasis = () => JSON.stringify({ definition: draft.value, enabled: enabled.value })
+const previewReady = computed(() => !!preview.value && previewBasis.value === draftBasis())
+watch(
+  [draft, enabled],
+  () => {
+    preview.value = undefined
+    previewBasis.value = ''
+  },
+  { deep: true, flush: 'sync' },
+)
 const devices = ref<Awaited<ReturnType<typeof client.devices>>>(),
   rollout = ref<Awaited<ReturnType<typeof client.rollout>>>()
 const history = ref<Awaited<ReturnType<typeof runtime.software.runs.list>>>(),
@@ -238,6 +249,7 @@ function change(input: AssignmentChange) {
   replay()
 }
 function save() {
+  if (!previewReady.value) return
   try {
     change({
       action: 'put',
@@ -249,12 +261,17 @@ function save() {
   }
 }
 function check(after?: string, scopeResult?: string) {
+  if (busy.value || uncertain.value) return
+  previewBasis.value = ''
+  const basis = draftBasis()
   try {
     const d = softwarePolicyDefinition(toRaw(draft.value))
     void run(
       () => client.preview(d, after, scopeResult),
       (v) => {
+        if (basis !== draftBasis()) return
         preview.value = v
+        previewBasis.value = basis
       },
     )
   } catch {
@@ -388,6 +405,7 @@ watch(
               v-model:resource="draft.action.resource.id"
               v-model:version="draft.action.resource.version"
               :disabled="busy || uncertain"
+              @change="resetBinding"
             /><label for="deployment-resource">{{ t('software.targetResource') }}</label
             ><input
               id="deployment-resource"
@@ -565,6 +583,9 @@ watch(
               <ResourceIdentity :binding="draft.action.resource" />
               <pre>{{ JSON.stringify(draft, null, 2) }}</pre>
             </details>
+            <p role="status">
+              {{ t(previewReady ? 'console.previewReady' : 'console.previewRequired') }}
+            </p>
             <UiButton type="button" @click="check()">{{ t('software.preview') }}</UiButton>
           </section>
           <div class="console-form-actions">
@@ -574,7 +595,9 @@ watch(
             ><UiButton v-if="wizardStep < 3" type="button" variant="primary" @click="nextStep">{{
               t('console.next')
             }}</UiButton
-            ><UiButton v-else type="submit" variant="primary">{{ t('policies.save') }}</UiButton>
+            ><UiButton v-else type="submit" variant="primary" :disabled="!previewReady">{{
+              t('policies.save')
+            }}</UiButton>
           </div>
         </fieldset>
       </form>

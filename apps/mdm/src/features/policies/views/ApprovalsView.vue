@@ -88,7 +88,7 @@ onMounted(() => load())
           {{ confirming.revision }}
         </p></template
       >
-      <p v-if="failure" role="alert">{{ t(`policies.${failure}`) }}</p>
+      <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
       <template #footer
         ><UiButton
           :disabled="busy || uncertain || !confirming"

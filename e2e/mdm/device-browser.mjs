@@ -105,7 +105,7 @@ try {
     assert.equal(response.status(), 200)
   }
   const panel = () => page.locator('[data-testid=association-panel]')
-  const loaded = () => page.locator('section.device-console[aria-busy=false]').waitFor()
+  const loaded = () => page.locator('section.console-page:not([aria-busy="true"])').waitFor()
   const advanceGeneration = (channel) => {
     const fds = JSON.parse(process.env._MDM_BUILD_LEASE).fds
     assert.ok(fds.length === 2 && fds.every((fd) => Number.isInteger(fd) && fd >= 3 && fd < 1024))
@@ -141,6 +141,7 @@ try {
   coverage.push('real-directory-counters-and-pagination')
   phase = 'unknown-create'
   await page.goto(path(`devices/${fixture.mdm}`))
+  await page.getByRole('tab', { name: '设备关联管理', exact: true }).click()
   await panel().waitFor()
   const oldMdm = await api(`/api/v1/devices/${fixture.mdm}`)
   advanceGeneration('mdm')
@@ -186,6 +187,7 @@ try {
   await page.getByRole('link', { name: '设备目录', exact: true }).click()
   await loaded()
   await page.getByRole('link', { name: fixture.mdm, exact: true }).first().click()
+  await page.getByRole('tab', { name: '设备关联管理', exact: true }).click()
   await panel().waitFor()
   await page.getByLabel('我确认使用相同操作标识、身份及完整原正文幂等重放', { exact: true }).check()
   await page.getByRole('button', { name: '幂等重放原关联操作', exact: true }).click()
@@ -324,6 +326,7 @@ try {
   phase = 'revoke'
   await writeRule(fixture.rule.grants)
   await page.reload()
+  await page.getByRole('tab', { name: '设备关联管理', exact: true }).click()
   await panel().waitFor()
   const registrations = await api(`/api/v1/devices/${fixture.agent}/registrations`)
   await panel()
@@ -348,7 +351,7 @@ try {
   const ui = page
     ? {
         consoleCount: await page
-          .locator('section.device-console')
+          .locator('section.console-page')
           .count()
           .catch(() => 0),
         login: await page

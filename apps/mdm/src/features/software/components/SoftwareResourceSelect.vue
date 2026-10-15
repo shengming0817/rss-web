@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 const props = defineProps<{ disabled?: boolean }>()
+const emit = defineEmits<{ change: [] }>()
 const resource = defineModel<string>('resource', { required: true })
 const version = defineModel<string>('version', { required: true })
 const { t } = useI18n(),
@@ -36,6 +37,7 @@ function load(cursor?: string) {
 function choose(event: Event) {
   resource.value = (event.target as HTMLSelectElement).value
   version.value = ''
+  emit('change')
 }
 </script>
 <template>
@@ -70,7 +72,12 @@ function choose(event: Event) {
       >
       <label v-if="selected"
         >{{ t('policies.version')
-        }}<select v-model="version" class="ui-input" :disabled="props.disabled || busy">
+        }}<select
+          v-model="version"
+          class="ui-input"
+          :disabled="props.disabled || busy"
+          @change="emit('change')"
+        >
           <option value="">{{ t('devices.select') }}</option>
           <option
             v-if="version && !selected.resource.versions.some((item) => item.id === version)"

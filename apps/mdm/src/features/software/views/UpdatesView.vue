@@ -259,6 +259,7 @@ watch(
             v-model:resource="draft.target.resource.id"
             v-model:version="draft.target.resource.version"
             :disabled="busy || uncertain"
+            @change="resetBinding"
           /><label for="patch-resource">{{ t('software.patchResource') }}</label
           ><input
             id="patch-resource"

@@ -13,7 +13,7 @@ const { t, locale } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
   theme = useTheme()
-const { activity } = useSessionLifecycle()
+useSessionLifecycle()
 const { canRead: canManageAgent } = usePermission('agent_enrollment_read', 'agent_enrollment_write')
 const collapsed = ref(false),
   mobileOpen = ref(false),
@@ -85,12 +85,7 @@ onMounted(() => document.addEventListener('keydown', shortcut))
 onBeforeUnmount(() => document.removeEventListener('keydown', shortcut))
 </script>
 <template>
-  <div
-    class="mdm-app"
-    :class="{ 'has-console': consoleMode, 'sidebar-collapsed': collapsed }"
-    @pointerdown="activity"
-    @keydown="activity"
-  >
+  <div class="mdm-app" :class="{ 'has-console': consoleMode, 'sidebar-collapsed': collapsed }">
     <a class="console-skip" href="#identity-main">{{ t('identity.skip') }}</a>
     <aside v-if="consoleMode" class="console-sidebar">
       <RouterLink :to="destination('workspace')" class="console-brand"
