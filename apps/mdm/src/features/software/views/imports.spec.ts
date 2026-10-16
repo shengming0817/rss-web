@@ -39,9 +39,10 @@ it('starts from a pinned resolution and fences further submissions until an unkn
     routes: [{ path: '/', component: ImportsView }],
   })
   await router.push('/')
+  const messages = mdmI18n()
   const wrapper = mount(ImportsView, {
     global: {
-      plugins: [router, mdmI18n()],
+      plugins: [router, messages],
       stubs: { RouterLink: true },
       provide: {
         [mdmKey as symbol]: {
@@ -70,6 +71,17 @@ it('starts from a pinned resolution and fences further submissions until an unkn
       },
     },
   })
+  await flushPromises()
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text() === '新建')!
+    .trigger('click')
+  await flushPromises()
+  expect(wrapper.findAll('h2').map((heading) => heading.text())).toContain('解析精确版本')
+  messages.global.locale.value = 'en-US'
+  await flushPromises()
+  expect(wrapper.findAll('h2').map((heading) => heading.text())).toContain('Resolve exact version')
+  messages.global.locale.value = 'zh-CN'
   await flushPromises()
   await wrapper.get('#import-source').setValue('winget')
   await wrapper.get('#import-package').setValue('Example.Browser')

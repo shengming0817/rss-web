@@ -1,12 +1,12 @@
 <script setup lang="ts">
+import { UiButton, UiUtcDateTimeInput } from '@rss/core/components'
 import { onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
-import SecurityFrame from '../components/SecurityFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 import RiskAssessmentFacts from '../components/RiskAssessmentFacts.vue'
-import { UiUtcDateTimeInput } from '@rss/core/components'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -163,22 +163,29 @@ watch(() => route.fullPath, changed, { flush: 'sync' })
 onMounted(changed)
 </script>
 <template>
-  <SecurityFrame :title="t('security.risks')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('security.risks')" :busy="busy" :failure="failure">
     <p>{{ t('security.riskHint') }}</p>
-    <button :disabled="busy" @click="listRisks()">{{ t('devices.reload') }}</button>
+    <UiButton :disabled="!!busy" type="submit" @click="listRisks()">{{
+      t('devices.reload')
+    }}</UiButton>
     <p v-if="list && !list.items.length">{{ t('security.emptyRisks') }}</p>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="item in list?.items" :key="item.id">
-        <button :disabled="busy || uncertain" @click="openRisk(item.id)">
+        <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="openRisk(item.id)">
           {{ item.code }} · {{ item.title }}
-        </button>
+        </UiButton>
         · {{ t(`security.riskSeverity.${item.severity}`) }} · {{ item.provider }}
       </li>
     </ul>
-    <button v-if="list?.nextCursor" :disabled="busy" @click="listRisks(list.nextCursor)">
+    <UiButton
+      v-if="list?.nextCursor"
+      :disabled="!!busy"
+      type="submit"
+      @click="listRisks(list.nextCursor)"
+    >
       {{ t('devices.next') }}
-    </button>
-    <section v-if="risk">
+    </UiButton>
+    <section v-if="risk" class="console-panel">
       <h2>{{ risk.risk.code }} · {{ risk.risk.title }}</h2>
       <dl>
         <dt>{{ t('security.provider') }}</dt>
@@ -195,51 +202,78 @@ onMounted(changed)
           {{ risk.risk.software.fixedVersion ?? t('security.state.unknown') }}
         </dd>
       </dl>
-      <button :disabled="busy" @click="loadDevices()">{{ t('security.affectedDevices') }}</button>
+      <UiButton :disabled="!!busy" type="submit" @click="loadDevices()">{{
+        t('security.affectedDevices')
+      }}</UiButton>
       <p v-if="devices">{{ t('security.snapshotAt') }} {{ at(devices.asOf) }}</p>
       <ul>
         <li v-for="item in devices?.items" :key="item.device">
-          <button :disabled="busy || uncertain" @click="openDevice(item.device)">
+          <UiButton
+            :disabled="!!(busy || uncertain)"
+            type="submit"
+            @click="openDevice(item.device)"
+          >
             {{ item.device }}
-          </button>
+          </UiButton>
           · {{ t(`security.riskState.${item.state}`) }} ·
           {{ item.software.version ?? t('security.state.unknown') }} · {{ at(item.evaluatedAt) }}
         </li>
       </ul>
-      <button v-if="devices?.nextCursor" :disabled="busy" @click="loadDevices(devices.nextCursor)">
+      <UiButton
+        v-if="devices?.nextCursor"
+        :disabled="!!busy"
+        type="submit"
+        @click="loadDevices(devices.nextCursor)"
+      >
         {{ t('devices.next') }}
-      </button>
-      <form @submit.prevent="openDevice()">
-        <label
-          >{{ t('policies.device')
-          }}<input v-model="device" :readonly="busy || uncertain" required /></label
-        ><button :disabled="busy || uncertain">{{ t('devices.open') }}</button>
-      </form>
+      </UiButton>
+      <section class="console-panel">
+        <h2>{{ t('devices.deviceId') }}</h2>
+        <form @submit.prevent="openDevice()">
+          <label
+            >{{ t('policies.device')
+            }}<input
+              v-model="device"
+              class="ui-input"
+              :readonly="busy || uncertain"
+              required /></label
+          ><UiButton :disabled="!!(busy || uncertain)" type="submit">{{
+            t('devices.open')
+          }}</UiButton>
+        </form>
+      </section>
     </section>
-    <section v-if="current" data-testid="current-risk">
+    <section v-if="current" class="console-panel" data-testid="current-risk">
       <h2>{{ current.assessment.device }}</h2>
       <p>{{ t('security.asOf') }} {{ at(current.asOf) }}</p>
       <RiskAssessmentFacts :assessment="current.assessment" />
-      <button
-        :disabled="busy"
+      <UiButton
+        :disabled="!!busy"
         data-testid="refresh-risk"
+        type="submit"
         @click="openDevice(current.assessment.device)"
       >
-        {{ t('policies.refresh') }}</button
-      ><button :disabled="busy || uncertain" data-testid="reassess-risk" @click="reassess">
+        {{ t('policies.refresh') }}</UiButton
+      ><UiButton
+        :disabled="!!(busy || uncertain)"
+        data-testid="reassess-risk"
+        type="submit"
+        @click="reassess"
+      >
         {{ t('security.reassess') }}
-      </button>
-      <button
+      </UiButton>
+      <UiButton
         v-if="
           current.assessment.state === 'affected' && current.assessment.patch.state === 'available'
         "
-        :disabled="busy || uncertain"
+        :disabled="!!(busy || uncertain)"
         data-testid="request-remediation"
+        type="submit"
         @click="beginRequest"
       >
         {{ t('security.requestRemediation') }}
-      </button>
-      <nav class="device-actions" :aria-label="t('security.relatedRecords')">
+      </UiButton>
+      <nav class="console-inline-actions" :aria-label="t('security.relatedRecords')">
         <RouterLink
           :to="{
             name: 'device-detail',
@@ -262,44 +296,54 @@ onMounted(changed)
           >{{ t('operations.alerts') }}</RouterLink
         >
       </nav>
-      <button :disabled="busy" @click="readHistory()">{{ t('security.history') }}</button>
+      <UiButton :disabled="!!busy" type="submit" @click="readHistory()">{{
+        t('security.history')
+      }}</UiButton>
       <details v-for="item in history?.items" :key="item.id">
         <summary>
           {{ item.id }} · {{ at(item.evaluatedAt) }} · {{ t('security.historical') }}
         </summary>
         <RiskAssessmentFacts :assessment="item" />
       </details>
-      <button v-if="history?.nextCursor" :disabled="busy" @click="readHistory(history.nextCursor)">
+      <UiButton
+        v-if="history?.nextCursor"
+        :disabled="!!busy"
+        type="submit"
+        @click="readHistory(history.nextCursor)"
+      >
         {{ t('devices.next') }}
-      </button>
+      </UiButton>
     </section>
-    <form v-if="requesting" data-testid="remediation-form" @submit.prevent="request">
-      <fieldset :disabled="busy || uncertain">
-        <legend>{{ t('security.requestRemediation') }}</legend>
-        <label
-          >{{ t('security.justification')
-          }}<textarea v-model="reason" required maxlength="512" /></label
-        ><label for="remediation-from">{{ t('security.validFrom') }}</label
-        ><UiUtcDateTimeInput
-          id="remediation-from"
-          required
-          :invalid-label="t('policies.invalidDate')"
-          :model-value="from"
-          :max="until - 1"
-          @update:model-value="from = $event ?? Number.NaN"
-        /><label for="remediation-until">{{ t('security.validUntil') }}</label
-        ><UiUtcDateTimeInput
-          id="remediation-until"
-          required
-          :invalid-label="t('policies.invalidDate')"
-          :model-value="until"
-          :min="from + 1"
-          @update:model-value="until = $event ?? Number.NaN"
-        /><button>
-          {{ t('security.submitRequest') }}
-        </button>
-      </fieldset>
-    </form>
+    <section v-if="requesting" class="console-panel">
+      <h2>{{ t('console.review') }}</h2>
+      <form data-testid="remediation-form" @submit.prevent="request">
+        <fieldset :disabled="busy || uncertain">
+          <legend>{{ t('security.requestRemediation') }}</legend>
+          <label
+            >{{ t('security.justification')
+            }}<textarea v-model="reason" class="ui-input" required maxlength="512" /></label
+          ><label for="remediation-from">{{ t('security.validFrom') }}</label
+          ><UiUtcDateTimeInput
+            id="remediation-from"
+            required
+            :invalid-label="t('policies.invalidDate')"
+            :model-value="from"
+            :max="until - 1"
+            @update:model-value="from = $event ?? Number.NaN"
+          /><label for="remediation-until">{{ t('security.validUntil') }}</label
+          ><UiUtcDateTimeInput
+            id="remediation-until"
+            required
+            :invalid-label="t('policies.invalidDate')"
+            :model-value="until"
+            :min="from + 1"
+            @update:model-value="until = $event ?? Number.NaN"
+          /><UiButton type="submit">
+            {{ t('security.submitRequest') }}
+          </UiButton>
+        </fieldset>
+      </form>
+    </section>
     <p v-if="accepted">
       {{ t('security.requestId') }}
       <RouterLink
@@ -311,8 +355,8 @@ onMounted(changed)
         >{{ accepted }}</RouterLink
       >
     </p>
-    <button v-if="uncertain && pending" :disabled="busy" @click="pending()">
+    <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending()">
       {{ t('policies.replay') }}
-    </button>
-  </SecurityFrame>
+    </UiButton>
+  </PageFrame>
 </template>

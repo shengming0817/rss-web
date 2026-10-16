@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount, flushPromises, DOMWrapper } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { decodeIdentityError } from '@rss/api/identity'
 import App from '../App.vue'
@@ -27,6 +27,14 @@ async function failedLogout(all = false) {
     .findAll('button')
     .find((button) => button.text() === (all ? '退出全部会话' : '退出当前会话'))!
     .trigger('click')
+  if (all) {
+    await flushPromises()
+    await new DOMWrapper(document.body)
+      .get('[role=alertdialog]')
+      .findAll('button')
+      .find((b) => b.text() === '确认')!
+      .trigger('click')
+  }
   await flushPromises()
   expect(wrapper.get('[role=alert]').text()).toContain('尚未确认')
   return {

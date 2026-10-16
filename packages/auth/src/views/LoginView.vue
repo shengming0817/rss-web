@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -69,8 +70,8 @@ onMounted(() => {
 })
 </script>
 <template>
-  <section class="identity-card identity-login" aria-labelledby="login-title">
-    <p class="identity-eyebrow">RSS Identity</p>
+  <section class="auth-page auth-login" aria-labelledby="login-title">
+    <p class="auth-eyebrow">RSS Identity</p>
     <h1 id="login-title">{{ t('identity.login') }}</h1>
     <p>{{ t('identity.loginDescription') }}</p>
     <p v-if="route.query['reason'] === 'expired'" role="status">{{ t('identity.expired') }}</p>
@@ -78,31 +79,46 @@ onMounted(() => {
     <template
       v-if="session.state.value.status === 'authenticated' && session.state.value.tenant === tenant"
     >
-      <button class="btn btn-primary" :disabled="busy" @click="run(continueFlow)">
+      <UiButton class="btn btn-primary" :disabled="!!busy" type="submit" @click="run(continueFlow)">
         {{ t('identity.continue') }}
-      </button>
+      </UiButton>
     </template>
     <form v-else-if="tenant" @submit.prevent="submit">
       <label for="login-name">{{ t('identity.username') }}</label
-      ><input id="login-name" v-model="login" autocomplete="username" required :disabled="busy" />
+      ><input
+        id="login-name"
+        v-model="login"
+        class="ui-input"
+        autocomplete="username"
+        required
+        :disabled="busy"
+      />
       <label for="login-password">{{ t('identity.password') }}</label
       ><input
         id="login-password"
         v-model="password"
+        class="ui-input"
         type="password"
         autocomplete="current-password"
         required
         :disabled="busy"
       />
-      <button class="btn btn-primary" type="submit" :disabled="busy">
+      <UiButton class="btn btn-primary" type="submit" :disabled="!!busy">
         {{ t('identity.login') }}
-      </button>
+      </UiButton>
     </form>
-    <div class="identity-actions">
-      <button v-for="p in providers" :key="p.id" class="btn" :disabled="busy" @click="sso(p.id)">
+    <div class="auth-actions">
+      <UiButton
+        v-for="p in providers"
+        :key="p.id"
+        class="btn"
+        :disabled="!!busy"
+        type="submit"
+        @click="sso(p.id)"
+      >
         {{ t('identity.sso') }} · {{ p.label }}
-      </button>
+      </UiButton>
     </div>
-    <p class="identity-muted">{{ t('identity.recoveryHelp') }}</p>
+    <p class="auth-muted">{{ t('identity.recoveryHelp') }}</p>
   </section>
 </template>

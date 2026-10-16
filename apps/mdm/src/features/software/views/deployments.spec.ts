@@ -5,6 +5,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
 import DeploymentsView from './DeploymentsView.vue'
+import SoftwareResourceSelect from '../components/SoftwareResourceSelect.vue'
 it('saves the exact approved binding and preserves unknown mutation fencing after a read', async () => {
   const scope = '11111111-1111-4111-8111-111111111111',
     admission = '22222222-2222-4222-8222-222222222222'
@@ -112,6 +113,9 @@ it('saves the exact approved binding and preserves unknown mutation fencing afte
           software: {
             assignments: {
               list: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
+              preview: vi
+                .fn()
+                .mockResolvedValue({ items: [], nextCursor: null, scopeResult: scope }),
               change,
               read,
             },
@@ -126,11 +130,45 @@ it('saves the exact approved binding and preserves unknown mutation fencing afte
     },
   })
   await flushPromises()
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text() === '新建')!
+    .trigger('click')
   await wrapper.get('#deployment-resource').setValue('app')
   await wrapper.get('[data-action="bind-version"]').trigger('click')
   await flushPromises()
+  const picker = wrapper.findComponent(SoftwareResourceSelect)
+  picker.vm.$emit('update:resource', 'another-app')
+  picker.vm.$emit('change')
+  await flushPromises()
+  expect(wrapper.text()).not.toContain(admission)
+  await wrapper.get('#deployment-resource').setValue('app')
+  await wrapper.get('[data-action="bind-version"]').trigger('click')
+  await flushPromises()
+  expect(change).not.toHaveBeenCalled()
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text() === '下一步')!
+    .trigger('click')
   await wrapper.get('#deployment-scope').setValue(scope)
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text() === '下一步')!
+    .trigger('click')
   await wrapper.get('[data-field="stage-scope"]').setValue(scope)
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text() === '下一步')!
+    .trigger('click')
+  expect(change).not.toHaveBeenCalled()
+  expect(
+    wrapper.get('[data-form="deployment"] button[type=submit]').attributes('disabled'),
+  ).toBeDefined()
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text() === '预览目标准入')!
+    .trigger('click')
+  await flushPromises()
   await wrapper.get('[data-form="deployment"]').trigger('submit')
   await flushPromises()
   expect(change).toHaveBeenCalledTimes(1)

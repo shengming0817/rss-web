@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { usePermission } from '../usePermission'
 import { useOperation } from '../../../services/useOperation'
-import OperationsFrame from '../../operations/components/OperationsFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 const runtime = useMdm(),
   client = runtime.onboarding.entra,
   { t } = useI18n(),
@@ -94,11 +95,13 @@ watch(current, (value) => {
 })
 </script>
 <template>
-  <OperationsFrame :title="t('onboarding.windowsEntra')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('onboarding.windowsEntra')" :busy="busy" :failure="failure">
     <p>{{ t('onboarding.entraGuide') }}</p>
     <p v-if="!canRead">{{ t('devices.denied') }}</p>
     <template v-else>
-      <button type="button" :disabled="busy" @click="refresh">{{ t('devices.reload') }}</button>
+      <UiButton type="button" :disabled="!!busy" @click="refresh">{{
+        t('devices.reload')
+      }}</UiButton>
       <dl v-if="current">
         <dt>{{ t('devices.revision') }}</dt>
         <dd>{{ current.revision }}</dd>
@@ -108,34 +111,47 @@ watch(current, (value) => {
         <dd>{{ t(`devices.${current.policy.enabled ? 'yes' : 'no'}`) }}</dd>
       </dl>
       <pre v-if="current" class="enrollment-terms">{{ current.policy.termsText }}</pre>
-      <form v-if="canWrite && current" @submit.prevent="save">
-        <fieldset :disabled="busy || uncertain">
-          <legend>{{ t('onboarding.entraPolicy') }}</legend>
-          <label><input v-model="enabled" type="checkbox" />{{ t('onboarding.enabled') }}</label
-          ><label><input v-model="allUsers" type="checkbox" />{{ t('onboarding.allUsers') }}</label
-          ><label v-if="!allUsers"
-            >{{ t('onboarding.entraUsers') }}<textarea v-model="users" /></label
-          ><label
-            >{{ t('onboarding.termsVersion')
-            }}<input v-model="termsVersion" maxlength="128" :required="enabled" /></label
-          ><label
-            >{{ t('onboarding.termsText') }}<textarea v-model="termsText" :required="enabled" />
-          </label>
-          <p>{{ t('onboarding.termsBudget') }}</p>
-          <label
-            ><input v-model="allowBackground" type="checkbox" />{{
-              t('onboarding.allowBackground')
-            }}</label
-          ><button>{{ t('registration.save') }}</button>
-        </fieldset>
-      </form>
-      <button v-if="current" type="button" :disabled="busy" @click="load">
+      <details
+        v-if="canWrite && current"
+        class="console-panel console-task"
+        :open="uncertain || undefined"
+      >
+        <summary>{{ t('console.configure') }}</summary>
+        <form @submit.prevent="save">
+          <fieldset :disabled="busy || uncertain">
+            <legend>{{ t('onboarding.entraPolicy') }}</legend>
+            <label><input v-model="enabled" type="checkbox" />{{ t('onboarding.enabled') }}</label
+            ><label
+              ><input v-model="allUsers" type="checkbox" />{{ t('onboarding.allUsers') }}</label
+            ><label v-if="!allUsers"
+              >{{ t('onboarding.entraUsers') }}<textarea v-model="users" class="ui-input" /></label
+            ><label
+              >{{ t('onboarding.termsVersion')
+              }}<input
+                v-model="termsVersion"
+                class="ui-input"
+                maxlength="128"
+                :required="enabled" /></label
+            ><label
+              >{{ t('onboarding.termsText')
+              }}<textarea v-model="termsText" class="ui-input" :required="enabled" />
+            </label>
+            <p>{{ t('onboarding.termsBudget') }}</p>
+            <label
+              ><input v-model="allowBackground" type="checkbox" />{{
+                t('onboarding.allowBackground')
+              }}</label
+            ><UiButton type="submit">{{ t('registration.save') }}</UiButton>
+          </fieldset>
+        </form>
+      </details>
+      <UiButton v-if="current" type="button" :disabled="!!busy" @click="load">
         {{ t('onboarding.loadCurrent') }}
-      </button>
+      </UiButton>
       <p v-if="uncertain">{{ t('onboarding.compareUnknown') }}</p>
-      <button v-if="uncertain && freshRead" type="button" @click="confirmComparison">
+      <UiButton v-if="uncertain && freshRead" type="button" @click="confirmComparison">
         {{ t('onboarding.confirmComparison') }}
-      </button>
+      </UiButton>
     </template>
-  </OperationsFrame>
+  </PageFrame>
 </template>

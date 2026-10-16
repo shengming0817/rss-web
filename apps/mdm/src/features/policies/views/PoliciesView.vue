@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -16,7 +17,8 @@ import type { ResourceRead, ScriptSpec, Json } from '../clients/resources'
 import NativeScheduleEditor from '../../software/components/NativeScheduleEditor.vue'
 import SelfServiceEditor from '../components/SelfServiceEditor.vue'
 import ResourceIdentity from '../components/ResourceIdentity.vue'
-import PolicyFrame from '../components/PolicyFrame.vue'
+import CatalogLocator from '../components/CatalogLocator.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.policies.policies,
@@ -26,6 +28,7 @@ const { run, runWrite, busy, failure, uncertain } = useOperation()
 const list = ref<Awaited<ReturnType<typeof client.list>>>(),
   current = ref<PolicyRead>(),
   resource = ref<ResourceRead>()
+const editing = ref(false)
 const id = ref(typeof route.query['id'] === 'string' ? route.query['id'] : '')
 function fresh(
   kind: 'execution' | 'configuration' = 'execution',
@@ -182,6 +185,7 @@ function numeric(schema: Record<string, Json>, name: string) {
   return typeof schema[name] === 'number' ? schema[name] : undefined
 }
 function apply(p: PolicyRead) {
+  editing.value = false
   if (p.definition.action.kind !== 'execution' && p.definition.action.kind !== 'configuration')
     throw new Error('Wrong policy action')
   ready.value = true
@@ -246,6 +250,7 @@ function select(target: string) {
 }
 function create() {
   if (busy.value || uncertain.value) return
+  editing.value = true
   if (route.query['id']) void router.push({ query: { ...route.query, id: undefined } })
   else resetDraft()
 }
@@ -391,27 +396,52 @@ onMounted(async () => {
 })
 </script>
 <template>
-  <PolicyFrame :title="t('policies.policies')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('policies.policies')" :busy="busy" :failure="failure">
     <p>{{ t('policies.policyHint') }}</p>
-    <button :disabled="busy || uncertain" @click="create">{{ t('policies.create') }}</button
-    ><button :disabled="busy" @click="load()">{{ t('policies.reload') }}</button>
+    <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="create">{{
+      t('policies.create')
+    }}</UiButton
+    ><UiButton :disabled="!!busy" type="submit" @click="load()">{{
+      t('policies.reload')
+    }}</UiButton>
     <p v-if="list && !list.items.length">{{ t('policies.empty') }}</p>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="item in list?.items" :key="item.id">
-        <button :disabled="busy || uncertain" @click="select(item.id)">
+        <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="select(item.id)">
           {{ item.definition.selfService?.displayName ?? item.id }} ·
           {{ t(item.enabled ? 'policies.state.active' : 'policies.state.paused') }}
-        </button>
+        </UiButton>
       </li>
     </ul>
-    <button v-if="list?.nextCursor" :disabled="busy" @click="load(list.nextCursor)">
+    <UiButton
+      v-if="list?.nextCursor"
+      :disabled="!!busy"
+      type="submit"
+      @click="load(list.nextCursor)"
+    >
       {{ t('policies.next') }}
-    </button>
-    <form data-form="policy" @submit.prevent="save">
+    </UiButton>
+    <div v-if="current && !editing" class="console-toolbar">
+      <UiButton type="button" :disabled="busy || uncertain" @click="editing = true">{{
+        t('console.edit')
+      }}</UiButton>
+    </div>
+    <form v-show="editing" class="console-panel" data-form="policy" @submit.prevent="save">
+      <div class="console-page-header">
+        <h2>{{ t(current ? 'console.edit' : 'console.create') }}</h2>
+        <UiButton
+          type="button"
+          variant="ghost"
+          :disabled="busy || uncertain"
+          @click="editing = false"
+          >{{ t('console.close') }}</UiButton
+        >
+      </div>
       <fieldset :disabled="busy || uncertain || !ready">
         <label for="policy-action">{{ t('policies.actionKind') }}</label
         ><select
           id="policy-action"
+          class="ui-input"
           :value="definition.action.kind"
           :disabled="!!current"
           @change="actionKind"
@@ -420,15 +450,28 @@ onMounted(async () => {
           <option value="configuration">{{ t('policies.configurations') }}</option>
         </select>
         <label for="policy-id">{{ t('policies.id') }}</label
-        ><input id="policy-id" v-model="id" :readonly="!!current" required />
+        ><input id="policy-id" v-model="id" class="ui-input" :readonly="!!current" required />
         <label for="policy-resource">{{ t('policies.resources') }}</label
-        ><input id="policy-resource" v-model="definition.action.resource.id" required />
+        ><input
+          id="policy-resource"
+          v-model="definition.action.resource.id"
+          class="ui-input"
+          required
+        />
         <label for="policy-version">{{ t('policies.version') }}</label
-        ><input id="policy-version" v-model="definition.action.resource.version" required />
-        <button type="button" @click="bind">{{ t('policies.selfService.loadResource') }}</button>
+        ><input
+          id="policy-version"
+          v-model="definition.action.resource.version"
+          class="ui-input"
+          required
+        />
+        <UiButton type="button" @click="bind">{{
+          t('policies.selfService.loadResource')
+        }}</UiButton>
         <label for="policy-variant">{{ t('policies.variant') }}</label
         ><select
           id="policy-variant"
+          class="ui-input"
           :value="
             variants.findIndex(
               (v) =>
@@ -446,7 +489,16 @@ onMounted(async () => {
           </option>
         </select>
         <label for="policy-scope">{{ t('policies.selfService.deviceScope') }}</label
-        ><input id="policy-scope" v-model="definition.scope" required />
+        ><input
+          id="policy-scope"
+          v-model="definition.scope"
+          class="ui-input"
+          required
+        /><CatalogLocator
+          v-model="definition.scope"
+          collection="scopes"
+          :disabled="busy || uncertain"
+        />
         <template v-if="definition.action.kind === 'execution'">
           <ResourceIdentity :binding="definition.action.resource" />
           <p>{{ t('policies.selfService.parameterHint') }}</p>
@@ -455,6 +507,7 @@ onMounted(async () => {
             <label :for="`source-${f.name}`">{{ t('policies.source') }}</label
             ><select
               :id="`source-${f.name}`"
+              class="ui-input"
               :value="definition.action.parameters[f.name]?.kind"
               @change="source(f.name, $event)"
             >
@@ -474,6 +527,7 @@ onMounted(async () => {
               <select
                 v-if="f.choices"
                 :id="`value-${f.name}`"
+                class="ui-input"
                 :value="f.choices.findIndex((v) => v === fixedValue(f.name))"
                 required
                 @change="choice(f.name, $event)"
@@ -486,6 +540,7 @@ onMounted(async () => {
               <input
                 v-else
                 :id="`value-${f.name}`"
+                class="ui-input"
                 :type="f.type === 'boolean' ? 'checkbox' : f.type === 'integer' ? 'number' : 'text'"
                 :checked="fixedValue(f.name) === true"
                 :value="fixedValue(f.name)"
@@ -504,7 +559,7 @@ onMounted(async () => {
           </fieldset>
           <NativeScheduleEditor v-model="definition.action.schedule" />
           <label for="policy-frequency">{{ t('policies.selfService.frequency') }}</label
-          ><select id="policy-frequency" v-model="definition.action.frequency">
+          ><select id="policy-frequency" v-model="definition.action.frequency" class="ui-input">
             <option
               v-for="value in ['once_per_version', 'once_per_entry', 'every_trigger']"
               :key="value"
@@ -517,6 +572,7 @@ onMounted(async () => {
           ><input
             id="policy-lifetime"
             v-model.number="definition.action.runLifetimeSeconds"
+            class="ui-input"
             type="number"
             min="60"
             max="604800"
@@ -524,18 +580,18 @@ onMounted(async () => {
           />
           <label><input v-model="enabled" type="checkbox" />{{ t('policies.active') }}</label>
           <SelfServiceEditor v-model="definition.selfService" />
-          <button
+          <UiButton
             v-if="definition.selfService"
             type="button"
             data-action="remove-self-service"
             @click="delete definition.selfService"
           >
             {{ t('policies.selfService.removeConfiguration') }}
-          </button>
+          </UiButton>
         </template>
         <template v-else
           ><label for="policy-exit">{{ t('policies.exitBehavior') }}</label
-          ><select id="policy-exit" v-model="definition.action.exit">
+          ><select id="policy-exit" v-model="definition.action.exit" class="ui-input">
             <option value="retain">{{ t('policies.configurationRetain') }}</option>
             <option value="remove">{{ t('policies.configurationRemove') }}</option>
           </select></template
@@ -543,51 +599,59 @@ onMounted(async () => {
         <label v-if="definition.action.kind === 'configuration'"
           ><input v-model="enabled" type="checkbox" />{{ t('policies.active') }}</label
         >
-        <button type="submit" :disabled="!id || !selectedVariant">{{ t('policies.save') }}</button>
+        <UiButton type="submit" :disabled="!!(!id || !selectedVariant)">{{
+          t('policies.save')
+        }}</UiButton>
       </fieldset>
     </form>
-    <button v-if="!current && route.query['id']" :disabled="busy" @click="open()">
+    <UiButton v-if="!current && route.query['id']" :disabled="!!busy" type="submit" @click="open()">
       {{ t('policies.reloadDefinition') }}
-    </button>
+    </UiButton>
     <template v-if="current"
       ><p>
         {{ t('policies.revision') }} {{ current.revision }} · {{ t('policies.version') }}
         {{ current.version }}
       </p>
-      <button :disabled="busy" @click="open()">{{ t('policies.reloadDefinition') }}</button
-      ><button
-        :disabled="busy || uncertain"
+      <UiButton :disabled="!!busy" type="submit" @click="open()">{{
+        t('policies.reloadDefinition')
+      }}</UiButton
+      ><UiButton
+        :disabled="!!(busy || uncertain)"
+        type="submit"
         @click="change({ action: current.enabled ? 'disable' : 'enable' })"
       >
         {{ t(current.enabled ? 'policies.selfService.disable' : 'policies.selfService.enable') }}
-      </button></template
+      </UiButton></template
     >
-    <button
+    <UiButton
       v-if="definition.action.kind === 'configuration'"
-      :disabled="busy || uncertain || !ready || !selectedVariant"
+      :disabled="!!(busy || uncertain || !ready || !selectedVariant)"
+      type="submit"
       @click="check()"
     >
       {{ t('policies.preview') }}
-    </button>
+    </UiButton>
     <ul v-if="preview">
       <li v-for="d in preview.items" :key="d.device">
         {{ d.device }} · {{ t(`policies.preview_${d.eligibility.state}`) }}
       </li>
     </ul>
-    <button
+    <UiButton
       v-if="preview?.nextCursor"
-      :disabled="busy"
+      :disabled="!!busy"
+      type="submit"
       @click="check(preview.nextCursor, preview.scopeResult)"
     >
       {{ t('policies.next') }}
-    </button>
-    <button
+    </UiButton>
+    <UiButton
       v-if="current && definition.action.kind === 'configuration'"
-      :disabled="busy"
+      :disabled="!!busy"
+      type="submit"
       @click="loadProgress()"
     >
       {{ t('policies.refreshProgress') }}
-    </button>
+    </UiButton>
     <ul v-if="progress">
       <li v-for="d in progress.items" :key="d.device">
         {{ d.device }} · {{ t(`policies.preview_${d.assignment}`) }}
@@ -597,9 +661,14 @@ onMounted(async () => {
         </ul>
       </li>
     </ul>
-    <button v-if="progress?.nextCursor" :disabled="busy" @click="loadProgress(progress.nextCursor)">
+    <UiButton
+      v-if="progress?.nextCursor"
+      :disabled="!!busy"
+      type="submit"
+      @click="loadProgress(progress.nextCursor)"
+    >
       {{ t('policies.next') }}
-    </button>
+    </UiButton>
     <p v-if="definition.action.kind === 'execution'">
       {{ t('policies.selfService.executionHint') }}
     </p>
@@ -609,9 +678,13 @@ onMounted(async () => {
     </p>
     <template v-if="uncertain && pending">
       <p>{{ t('policies.selfService.recoverHint') }}</p>
-      <button :disabled="busy || requester() !== pending.requester" @click="recover">
+      <UiButton
+        :disabled="!!(busy || requester() !== pending.requester)"
+        type="submit"
+        @click="recover"
+      >
         {{ t('policies.selfService.recover') }}
-      </button>
+      </UiButton>
     </template>
-  </PolicyFrame>
+  </PageFrame>
 </template>

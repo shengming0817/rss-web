@@ -40,7 +40,7 @@ function window(event: Event) {
     <p>{{ t('policies.scheduleHint') }}</p>
     <p v-if="invalid" :id="`${id}-validation`" role="alert">{{ invalid }}</p>
     <label :for="`${id}-trigger`">{{ t('policies.trigger') }}</label
-    ><select :id="`${id}-trigger`" :value="model.trigger.kind" @change="trigger">
+    ><select :id="`${id}-trigger`" class="ui-input" :value="model.trigger.kind" @change="trigger">
       <option v-for="kind in triggers" :key="kind" :value="kind">
         {{ t(`policies.triggerKind.${kind}`) }}
       </option></select
@@ -65,6 +65,7 @@ function window(event: Event) {
       ><input
         :id="`${id}-seconds`"
         v-model.number="model.trigger.seconds"
+        class="ui-input"
         type="number"
         min="60"
         max="31536000"
@@ -74,18 +75,20 @@ function window(event: Event) {
       ><input
         :id="`${id}-minimum`"
         v-model.number="model.trigger.minimumSeconds"
+        class="ui-input"
         type="number"
         min="60"
         max="31536000"
         required /></template
     ><template v-if="model.trigger.kind === 'weekly'"
       ><label :for="`${id}-zone`">{{ t('policies.zone') }}</label
-      ><input :id="`${id}-zone`" v-model="model.trigger.zone" required /><label
+      ><input :id="`${id}-zone`" v-model="model.trigger.zone" class="ui-input" required /><label
         :for="`${id}-weekday`"
         >{{ t('policies.weekday') }}</label
       ><input
         :id="`${id}-weekday`"
         v-model.number="model.trigger.weekday"
+        class="ui-input"
         type="number"
         min="1"
         max="7"
@@ -93,6 +96,7 @@ function window(event: Event) {
       ><input
         :id="`${id}-minute`"
         v-model.number="model.trigger.minute"
+        class="ui-input"
         type="number"
         min="0"
         max="1439"
@@ -119,12 +123,13 @@ function window(event: Event) {
     ><input
       :id="`${id}-jitter`"
       v-model.number="model.jitterSeconds"
+      class="ui-input"
       type="number"
       min="0"
       max="3600"
       required
     /><label :for="`${id}-misfire`">{{ t('policies.misfire') }}</label
-    ><select :id="`${id}-misfire`" v-model="model.misfire">
+    ><select :id="`${id}-misfire`" v-model="model.misfire" class="ui-input">
       <option value="skip">{{ t('policies.skip') }}</option>
       <option value="coalesce_one">{{ t('policies.coalesce') }}</option></select
     ><label
@@ -133,7 +138,7 @@ function window(event: Event) {
       }}</label
     ><template v-if="model.window"
       ><label :for="`${id}-window-zone`">{{ t('policies.zone') }}</label
-      ><input :id="`${id}-window-zone`" v-model="model.window.zone" required />
+      ><input :id="`${id}-window-zone`" v-model="model.window.zone" class="ui-input" required />
       <fieldset>
         <legend>{{ t('policies.weekday') }}</legend>
         <label v-for="day in 7" :key="day"
@@ -144,6 +149,7 @@ function window(event: Event) {
       ><input
         :id="`${id}-window-start`"
         v-model.number="model.window.startMinute"
+        class="ui-input"
         type="number"
         min="0"
         max="1439"
@@ -151,6 +157,7 @@ function window(event: Event) {
       ><input
         :id="`${id}-window-end`"
         v-model.number="model.window.endMinute"
+        class="ui-input"
         type="number"
         min="0"
         max="1440"

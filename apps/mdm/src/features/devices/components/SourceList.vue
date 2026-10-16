@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -52,16 +53,21 @@ async function load(next?: string) {
       {{ source.lastKnown.evidence.snapshotId }} · {{ source.lastKnown.evidence.observedAt }}
     </p>
     <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
-    <button v-if="source.state.kind === 'known'" :disabled="busy" @click="load()">
+    <UiButton v-if="source.state.kind === 'known'" :disabled="!!busy" type="submit" @click="load()">
       {{ t('devices.expandSource') }}
-    </button>
+    </UiButton>
     <ol v-if="page">
       <li v-for="(item, index) in page.items" :key="index">
         <pre>{{ JSON.stringify(item, null, 2) }}</pre>
       </li>
     </ol>
-    <button v-if="page?.nextCursor" :disabled="busy" @click="load(page.nextCursor)">
+    <UiButton
+      v-if="page?.nextCursor"
+      :disabled="!!busy"
+      type="submit"
+      @click="load(page.nextCursor)"
+    >
       {{ t('devices.next') }}
-    </button>
+    </UiButton>
   </section>
 </template>

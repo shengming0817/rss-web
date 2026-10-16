@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import { UiButton, UiDialog } from '@rss/core/components'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { isRssApiError } from '@rss/api/mdm'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
-import SecurityFrame from '../components/SecurityFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 import {
   formats,
   profiles,
@@ -26,6 +27,32 @@ const runtime = useMdm(),
   route = useRoute(),
   op = useOperation(),
   { busy, failure, uncertain } = op
+const listingLoaded = ref(false)
+const confirmation = ref<
+  | { kind: 'export'; version: Version }
+  | {
+      kind: 'manage'
+      entry: string
+      revision: number
+      retired: boolean
+      recommended: number | null
+    }
+>()
+function confirmArchive() {
+  const action = confirmation.value
+  confirmation.value = undefined
+  if (!action || busy.value || uncertain.value) return
+  if (action.kind === 'export') {
+    if (selected.value?.id === action.version.entryId) void exportVersion(action.version)
+  } else if (selected.value?.id === action.entry && selected.value.revision === action.revision)
+    void manage(action.retired, action.recommended)
+}
+function clearImportOnClose(event: Event) {
+  if ((event.target as HTMLDetailsElement).open) return
+  for (const file of files.value) file.password = ''
+  files.value = []
+  if (fileInput.value) fileInput.value.value = ''
+}
 const vault = ref<Vault>(),
   items = ref<Entry[]>([]),
   nextAfter = ref<string | null>(null),
@@ -126,6 +153,8 @@ watch(
   sessionStamp,
   () => {
     clearSecrets()
+    listingLoaded.value = false
+    confirmation.value = undefined
     vault.value = undefined
     items.value = []
     history.value = []
@@ -175,6 +204,7 @@ async function load(after?: string) {
       nextAfter.value = page.nextAfter
       asOf.value = page.asOf
       alertCounts.value = page.alerts
+      listingLoaded.value = true
       reminderDays.value = settings.value.reminderDays
       categories.value = settings.value.categories
       categoryText.value = categories.value.join('\n')
@@ -410,14 +440,14 @@ function date(value: number) {
 onMounted(() => load())
 </script>
 <template>
-  <SecurityFrame :title="t('security.certificate-archive')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('security.certificate-archive')" :busy="busy" :failure="failure">
     <p>{{ t('security.archive.hint') }}</p>
     <p v-if="diagnosis" role="alert">{{ t(`security.archive.errors.${diagnosis}`) }}</p>
     <p v-if="uncertain" role="status">
       {{ t('security.archive.unknown') }} <code>{{ pending }}</code
-      ><button type="button" :disabled="busy" @click="recover">
+      ><UiButton type="button" :disabled="!!busy" @click="recover">
         {{ t('security.archive.recover') }}
-      </button>
+      </UiButton>
     </p>
     <section v-if="vault" :aria-label="t('security.archive.vault')">
       <p>
@@ -429,18 +459,19 @@ onMounted(() => load())
         ><input
           id="archive-password"
           v-model="password"
+          class="ui-input"
           type="password"
           autocomplete="off"
           minlength="12"
           required
         />
-        <button type="submit" :disabled="busy || uncertain">
+        <UiButton type="submit" :disabled="!!(busy || uncertain)">
           {{ t(vault.initialized ? 'security.archive.unlock' : 'security.archive.initialize') }}
-        </button>
+        </UiButton>
       </form>
-      <button v-if="unlocked" type="button" :disabled="busy" @click="lock">
+      <UiButton v-if="unlocked" type="button" :disabled="!!busy" @click="lock">
         {{ t('security.archive.lock') }}
-      </button>
+      </UiButton>
       <details v-if="vault.initialized">
         <summary>{{ t('security.archive.changePassword') }}</summary>
         <form @submit.prevent="changePassword">
@@ -448,6 +479,7 @@ onMounted(() => load())
           ><input
             id="archive-old"
             v-model="oldPassword"
+            class="ui-input"
             type="password"
             autocomplete="off"
             minlength="12"
@@ -457,21 +489,22 @@ onMounted(() => load())
           ><input
             id="archive-new"
             v-model="newPassword"
+            class="ui-input"
             type="password"
             autocomplete="off"
             minlength="12"
             required
           />
-          <button type="submit" :disabled="busy || uncertain">
+          <UiButton type="submit" :disabled="!!(busy || uncertain)">
             {{ t('security.archive.changePassword') }}
-          </button>
+          </UiButton>
         </form>
       </details>
     </section>
-    <button type="button" :disabled="busy" @click="load()">
+    <UiButton type="button" :disabled="!!busy" @click="load()">
       {{ t('security.archive.refresh') }}
-    </button>
-    <p role="status">
+    </UiButton>
+    <p v-if="listingLoaded" role="status">
       {{
         t('security.archive.alerts', {
           expired: alertCounts.expired,
@@ -480,8 +513,9 @@ onMounted(() => load())
         })
       }}
     </p>
+    <p>{{ t('console.loadedFilter') }}</p>
     <label for="archive-filter">{{ t('security.archive.status') }}</label
-    ><select id="archive-filter" v-model="filter">
+    ><select id="archive-filter" v-model="filter" class="ui-input">
       <option value="all">{{ t('security.archive.all') }}</option>
       <option
         v-for="value in [
@@ -499,47 +533,58 @@ onMounted(() => load())
         {{ t(`security.archive.states.${value}`) }}
       </option>
     </select>
-    <p v-if="!displayed.length">{{ t('security.archive.empty') }}</p>
-    <table v-else>
-      <thead>
-        <tr>
-          <th>{{ t('security.archive.name') }}</th>
-          <th>{{ t('security.archive.category') }}</th>
-          <th>{{ t('security.archive.status') }}</th>
-          <th>{{ t('security.archive.version') }}</th>
-          <th>{{ t('security.archive.owner') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="entry in displayed" :key="entry.id">
-          <td>
-            <button type="button" :disabled="busy" @click="open(entry)">
-              {{ entry.latest.metadata.name }}</button
-            ><span v-if="entry.retired"> · {{ t('security.archive.retired') }}</span>
-          </td>
-          <td>{{ entry.latest.metadata.category }}</td>
-          <td>
-            {{ t(`security.archive.states.${validity(entry.latest.facts, asOf, reminderDays)}`) }}
-          </td>
-          <td>{{ entry.latest.version }}</td>
-          <td>{{ entry.latest.metadata.owner }}</td>
-        </tr>
-      </tbody>
-    </table>
-    <button v-if="nextAfter" type="button" :disabled="busy" @click="load(nextAfter)">
+    <p v-if="!listingLoaded">{{ t('console.reading') }}</p>
+    <p v-else-if="!displayed.length">{{ t('security.archive.empty') }}</p>
+    <div v-else class="ui-table-scroll">
+      <table class="ui-table">
+        <thead>
+          <tr>
+            <th>{{ t('security.archive.name') }}</th>
+            <th>{{ t('security.archive.category') }}</th>
+            <th>{{ t('security.archive.status') }}</th>
+            <th>{{ t('security.archive.version') }}</th>
+            <th>{{ t('security.archive.owner') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="entry in displayed" :key="entry.id">
+            <td>
+              <UiButton type="button" :disabled="!!busy" @click="open(entry)">
+                {{ entry.latest.metadata.name }}</UiButton
+              ><span v-if="entry.retired"> · {{ t('security.archive.retired') }}</span>
+            </td>
+            <td>{{ entry.latest.metadata.category }}</td>
+            <td>
+              {{ t(`security.archive.states.${validity(entry.latest.facts, asOf, reminderDays)}`) }}
+            </td>
+            <td>{{ entry.latest.version }}</td>
+            <td>{{ entry.latest.metadata.owner }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <UiButton v-if="nextAfter" type="button" :disabled="!!busy" @click="load(nextAfter)">
       {{ t('security.archive.more') }}
-    </button>
-    <section v-if="selected" :aria-label="t('security.archive.history')">
+    </UiButton>
+    <section v-if="selected" class="console-panel" :aria-label="t('security.archive.history')">
       <h2>{{ selected.latest.metadata.name }} · {{ t('security.archive.history') }}</h2>
-      <button
+      <UiButton
         type="button"
-        :disabled="busy || uncertain"
-        @click="manage(!selected.retired, selected.recommendedVersion)"
+        :disabled="!!(busy || uncertain)"
+        @click="
+          confirmation = {
+            kind: 'manage',
+            entry: selected.id,
+            revision: selected.revision,
+            retired: !selected.retired,
+            recommended: selected.recommendedVersion,
+          }
+        "
       >
         {{ t(selected.retired ? 'security.archive.restore' : 'security.archive.retire') }}
-      </button>
+      </UiButton>
       <label for="archive-comparison">{{ t('security.archive.compare') }}</label
-      ><select id="archive-comparison" v-model="comparison">
+      ><select id="archive-comparison" v-model="comparison" class="ui-input">
         <option :value="undefined">{{ t('security.archive.none') }}</option>
         <option v-for="version in history" :key="version.version" :value="version.version">
           {{ version.version }}
@@ -565,7 +610,7 @@ onMounted(() => load())
           </li>
         </ul>
       </div>
-      <article v-for="version in history" :key="version.version">
+      <article v-for="version in history" :key="version.version" class="console-panel">
         <h3>
           {{ t('security.archive.version') }} {{ version.version }} · {{ date(version.createdAt) }}
         </h3>
@@ -597,28 +642,36 @@ onMounted(() => load())
             <dd>{{ date(cert.notBefore) }} — {{ date(cert.notAfter) }}</dd>
           </dl>
         </section>
-        <button
+        <UiButton
           type="button"
-          :disabled="busy || uncertain || !unlocked"
-          @click="exportVersion(version)"
+          :disabled="!!(busy || uncertain || !unlocked)"
+          @click="confirmation = { kind: 'export', version }"
         >
-          {{ t('security.archive.export') }}</button
-        ><button
+          {{ t('security.archive.export') }}</UiButton
+        ><UiButton
           type="button"
-          :disabled="busy || uncertain"
-          @click="manage(selected.retired, version.version)"
+          :disabled="!!(busy || uncertain)"
+          @click="
+            confirmation = {
+              kind: 'manage',
+              entry: selected.id,
+              revision: selected.revision,
+              retired: selected.retired,
+              recommended: version.version,
+            }
+          "
         >
           {{ t('security.archive.recommend') }}
-        </button>
+        </UiButton>
       </article>
-      <button
+      <UiButton
         v-if="history.length && history.length % 50 === 0"
         type="button"
-        :disabled="busy"
+        :disabled="!!busy"
         @click="moreHistory"
       >
         {{ t('security.archive.more') }}
-      </button>
+      </UiButton>
     </section>
     <section v-if="downloads.length" :aria-label="t('security.archive.downloads')">
       <p>{{ t('security.archive.downloadHint') }}</p>
@@ -627,13 +680,13 @@ onMounted(() => load())
           <a :href="file.url" :download="file.name">{{ file.name }}</a>
         </li>
       </ul>
-      <button type="button" @click="clearDownloads">{{ t('security.archive.clear') }}</button>
+      <UiButton type="button" @click="clearDownloads">{{ t('security.archive.clear') }}</UiButton>
     </section>
-    <details>
+    <details class="console-panel console-task" @toggle="clearImportOnClose">
       <summary>{{ t('security.archive.add') }}</summary>
       <form @submit.prevent="submit">
         <label for="archive-target">{{ t('security.archive.target') }}</label
-        ><select id="archive-target" v-model="target">
+        ><select id="archive-target" v-model="target" class="ui-input">
           <option value="">{{ t('security.archive.newEntry') }}</option>
           <option v-if="target && !items.some((e) => e.id === target)" :value="target" disabled>
             {{ target }} · {{ t('devices.notFound') }}
@@ -643,11 +696,12 @@ onMounted(() => load())
           </option>
         </select>
         <label for="archive-name">{{ t('security.archive.name') }}</label
-        ><input id="archive-name" v-model="meta.name" required maxlength="256" />
+        ><input id="archive-name" v-model="meta.name" class="ui-input" required maxlength="256" />
         <label for="archive-category">{{ t('security.archive.category') }}</label
         ><input
           id="archive-category"
           v-model="meta.category"
+          class="ui-input"
           list="archive-categories"
           required
           maxlength="128"
@@ -655,25 +709,32 @@ onMounted(() => load())
           <option v-for="category in categories" :key="category" :value="category" />
         </datalist>
         <label for="archive-labels">{{ t('security.archive.labels') }}</label
-        ><input id="archive-labels" v-model="meta.labels" />
+        ><input id="archive-labels" v-model="meta.labels" class="ui-input" />
         <label for="archive-usages">{{ t('security.archive.usages') }}</label
-        ><textarea id="archive-usages" v-model="meta.usages" />
+        ><textarea id="archive-usages" v-model="meta.usages" class="ui-input" />
         <label for="archive-owner">{{ t('security.archive.owner') }}</label
-        ><input id="archive-owner" v-model="meta.owner" maxlength="256" />
+        ><input id="archive-owner" v-model="meta.owner" class="ui-input" maxlength="256" />
         <label for="archive-notes">{{ t('security.archive.notes') }}</label
-        ><textarea id="archive-notes" v-model="meta.notes" maxlength="4096" />
+        ><textarea id="archive-notes" v-model="meta.notes" class="ui-input" maxlength="4096" />
         <label for="archive-mode">{{ t('security.archive.mode') }}</label
-        ><select id="archive-mode" v-model="mode">
+        ><select id="archive-mode" v-model="mode" class="ui-input">
           <option value="import">{{ t('security.archive.import') }}</option>
           <option value="generate">{{ t('security.archive.generate') }}</option>
           <option v-if="target" value="metadata">{{ t('security.archive.editMetadata') }}</option>
         </select>
         <template v-if="mode === 'import'"
           ><label for="archive-file">{{ t('security.archive.files') }}</label
-          ><input id="archive-file" ref="fileInput" type="file" multiple @change="selectFiles" />
+          ><input
+            id="archive-file"
+            ref="fileInput"
+            class="ui-input"
+            type="file"
+            multiple
+            @change="selectFiles"
+          />
           <p>{{ t('security.archive.importHint') }}</p>
           <label for="archive-format">{{ t('security.archive.format') }}</label
-          ><select id="archive-format" v-model="format">
+          ><select id="archive-format" v-model="format" class="ui-input">
             <option v-for="value in formats" :key="value" :value="value">
               {{ t(`security.archive.formats.${value}`) }}
             </option>
@@ -681,7 +742,7 @@ onMounted(() => load())
           <section v-for="(row, index) in files" :key="index">
             <h3>{{ row.file.name }}</h3>
             <label :for="`archive-file-format-${index}`">{{ t('security.archive.format') }}</label>
-            <select :id="`archive-file-format-${index}`" v-model="row.format">
+            <select :id="`archive-file-format-${index}`" v-model="row.format" class="ui-input">
               <option v-for="value in formats" :key="value" :value="value">
                 {{ t(`security.archive.formats.${value}`) }}
               </option>
@@ -692,12 +753,13 @@ onMounted(() => load())
             <input
               :id="`archive-file-password-${index}`"
               v-model="row.password"
+              class="ui-input"
               type="password"
               autocomplete="off"
             />
           </section>
           <label for="archive-request-reference">{{ t('security.archive.requestReference') }}</label
-          ><select id="archive-request-reference" v-model="requestReference">
+          ><select id="archive-request-reference" v-model="requestReference" class="ui-input">
             <option value="">{{ t('security.archive.none') }}</option>
             <option
               v-for="choice in referenceVersions.filter((c) =>
@@ -712,35 +774,48 @@ onMounted(() => load())
         >
         <template v-else-if="mode === 'generate'"
           ><label for="archive-profile">{{ t('security.archive.profile') }}</label
-          ><select id="archive-profile" v-model="profile">
+          ><select id="archive-profile" v-model="profile" class="ui-input">
             <option v-for="value in profiles" :key="value" :value="value">
               {{ t(`security.archive.profiles.${value}`) }}
             </option>
           </select>
           <p>{{ t('security.archive.externalHint') }}</p>
           <label for="archive-algorithm">{{ t('security.archive.algorithm') }}</label
-          ><select id="archive-algorithm" v-model="algorithm">
+          ><select id="archive-algorithm" v-model="algorithm" class="ui-input">
             <option value="rsa2048">RSA 2048</option>
             <option value="rsa3072">RSA 3072</option>
             <option value="p256">P-256</option></select
           ><label for="archive-common-name">{{ t('security.archive.commonName') }}</label
-          ><input id="archive-common-name" v-model="commonName" required maxlength="256" /><label
-            for="archive-organization"
-            >{{ t('security.archive.organization') }}</label
-          ><input id="archive-organization" v-model="organization" maxlength="256" /><label
-            for="archive-sans"
-            >{{ t('security.archive.sans') }}</label
-          ><textarea id="archive-sans" v-model="sans" /><label for="archive-days">{{
-            t('security.archive.days')
+          ><input
+            id="archive-common-name"
+            v-model="commonName"
+            class="ui-input"
+            required
+            maxlength="256" /><label for="archive-organization">{{
+            t('security.archive.organization')
           }}</label
-          ><input id="archive-days" v-model.number="days" type="number" min="0" max="36500" /><label
-            v-if="profile === 'https'"
-            for="archive-issuer"
-            >{{ t('security.archive.issuerReference') }}</label
+          ><input
+            id="archive-organization"
+            v-model="organization"
+            class="ui-input"
+            maxlength="256" /><label for="archive-sans">{{ t('security.archive.sans') }}</label
+          ><textarea id="archive-sans" v-model="sans" class="ui-input" /><label
+            for="archive-days"
+            >{{ t('security.archive.days') }}</label
+          ><input
+            id="archive-days"
+            v-model.number="days"
+            class="ui-input"
+            type="number"
+            min="0"
+            max="36500" /><label v-if="profile === 'https'" for="archive-issuer">{{
+            t('security.archive.issuerReference')
+          }}</label
           ><select
             v-if="profile === 'https'"
             id="archive-issuer"
             v-model="issuerReference"
+            class="ui-input"
             required
           >
             <option value="">{{ t('security.archive.none') }}</option>
@@ -763,33 +838,60 @@ onMounted(() => load())
             v-if="profile === 'scep_template'"
             id="archive-scep"
             v-model="scepUrl"
+            class="ui-input"
             type="url"
             required
         /></template>
-        <button type="submit" :disabled="busy || uncertain || !unlocked">
+        <UiButton type="submit" :disabled="!!(busy || uncertain || !unlocked)">
           {{ t('security.archive.save') }}
-        </button>
+        </UiButton>
       </form>
     </details>
-    <details>
+    <details class="console-panel console-task">
       <summary>{{ t('security.archive.settings') }}</summary>
       <form @submit.prevent="saveSettings">
         <label for="archive-reminder">{{ t('security.archive.reminderDays') }}</label
         ><input
           id="archive-reminder"
           v-model.number="reminderDays"
+          class="ui-input"
           type="number"
           min="0"
           max="3650"
           required
         /><label for="archive-category-settings">{{ t('security.archive.categories') }}</label
-        ><textarea id="archive-category-settings" v-model="categoryText" /><button
-          type="submit"
-          :disabled="busy || uncertain"
-        >
+        ><textarea
+          id="archive-category-settings"
+          v-model="categoryText"
+          class="ui-input"
+        /><UiButton type="submit" :disabled="!!(busy || uncertain)">
           {{ t('security.archive.save') }}
-        </button>
+        </UiButton>
       </form>
     </details>
-  </SecurityFrame>
+    <UiDialog
+      :open="!!confirmation"
+      :title="t('console.review')"
+      :close-label="t('console.close')"
+      kind="alertdialog"
+      @update:open="!$event && (confirmation = undefined)"
+    >
+      <p>{{ selected?.latest.metadata.name }} · {{ selected?.id }}</p>
+      <template v-if="confirmation?.kind === 'export'"
+        ><p>{{ t('security.archive.export') }} · {{ confirmation.version.version }}</p>
+        <p v-if="confirmation.version.facts.some((file) => file.containsPrivateKey)">
+          {{ t('security.archive.privateKeyPresent') }}
+        </p></template
+      >
+      <p v-else-if="confirmation">
+        {{ t(confirmation.retired ? 'security.archive.retire' : 'security.archive.restore') }} ·
+        {{ t('security.archive.recommend') }} {{ confirmation.recommended ?? '—' }}
+      </p>
+      <template #footer
+        ><UiButton :disabled="busy || uncertain" @click="confirmArchive">{{
+          t('identity.confirm')
+        }}</UiButton></template
+      >
+    </UiDialog>
+  </PageFrame>
 </template>

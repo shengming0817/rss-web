@@ -78,31 +78,73 @@ defineExpose({ read })
     <legend>{{ t('software.definition') }}</legend>
     <p>{{ t('software.budget') }}</p>
     <label :for="`${id}-package`">{{ t('software.package') }}</label
-    ><input :id="`${id}-package`" v-model="packageId" required />
+    ><input :id="`${id}-package`" v-model="packageId" class="ui-input" required />
     <label :for="`${id}-version`">{{ t('software.version') }}</label
-    ><input :id="`${id}-version`" v-model="version" required />
+    ><input :id="`${id}-version`" v-model="version" class="ui-input" required />
     <p>{{ t('software.sourceHint') }}</p>
     <label :for="`${id}-source`">{{ t('software.source') }}</label
-    ><input :id="`${id}-source`" v-model="source" required />
+    ><input :id="`${id}-source`" v-model="source" class="ui-input" required />
     <label :for="`${id}-source-revision`">{{ t('software.sourceRevision') }}</label
-    ><input :id="`${id}-source-revision`" v-model="sourceRevision" required />
+    ><input :id="`${id}-source-revision`" v-model="sourceRevision" class="ui-input" required />
     <label :for="`${id}-source-digest`">{{ t('software.sourceDigest') }}</label
-    ><input :id="`${id}-source-digest`" v-model="sourceDigest" pattern="[a-fA-F0-9]{64}" required />
+    ><input
+      :id="`${id}-source-digest`"
+      v-model="sourceDigest"
+      class="ui-input"
+      pattern="[a-fA-F0-9]{64}"
+      required
+    />
     <label :for="`${id}-behavior`">{{ t('software.behavior') }}</label
-    ><textarea :id="`${id}-behavior`" v-model="behavior" required @input="validateJson" />
+    ><textarea
+      :id="`${id}-behavior`"
+      v-model="behavior"
+      class="ui-input"
+      required
+      @input="validateJson"
+    />
     <p>{{ t('policies.selfService.identityHint') }}</p>
     <label :for="`${id}-provenance`">{{ t('software.provenance') }}</label
-    ><textarea :id="`${id}-provenance`" v-model="provenance" required @input="validateJson" />
+    ><textarea
+      :id="`${id}-provenance`"
+      v-model="provenance"
+      class="ui-input"
+      required
+      @input="validateJson"
+    />
     <label :for="`${id}-signatures`">{{ t('software.signatures') }}</label
-    ><textarea :id="`${id}-signatures`" v-model="signatures" required @input="validateJson" />
+    ><textarea
+      :id="`${id}-signatures`"
+      v-model="signatures"
+      class="ui-input"
+      required
+      @input="validateJson"
+    />
     <label :for="`${id}-export`">{{ t('software.exportDefinition') }}</label
-    ><textarea :id="`${id}-export`" v-model="exportDefinition" required @input="validateJson" />
+    ><textarea
+      :id="`${id}-export`"
+      v-model="exportDefinition"
+      class="ui-input"
+      required
+      @input="validateJson"
+    />
     <label :for="`${id}-artifacts`">{{ t('software.artifacts') }}</label
-    ><textarea :id="`${id}-artifacts`" v-model="artifacts" required @input="validateJson" />
+    ><textarea
+      :id="`${id}-artifacts`"
+      v-model="artifacts"
+      class="ui-input"
+      required
+      @input="validateJson"
+    />
     <label :for="`${id}-dependencies`">{{ t('software.dependencies') }}</label
-    ><textarea :id="`${id}-dependencies`" v-model="dependencies" required @input="validateJson" />
+    ><textarea
+      :id="`${id}-dependencies`"
+      v-model="dependencies"
+      class="ui-input"
+      required
+      @input="validateJson"
+    />
     <label :for="`${id}-reboot`">{{ t('software.reboot') }}</label
-    ><select :id="`${id}-reboot`" v-model="reboot">
+    ><select :id="`${id}-reboot`" v-model="reboot" class="ui-input">
       <option value="report">{{ t('software.report') }}</option>
       <option value="forbid">{{ t('software.forbid') }}</option>
     </select>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton, UiDialog, UiUtcDateTimeInput } from '@rss/core/components'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -10,10 +11,10 @@ import {
   supportKinds,
   type SupportTarget,
 } from '../clients/support-model'
-import SecurityFrame from '../components/SecurityFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 import RequestFacts from '../components/RequestFacts.vue'
 import SupportFacts from '../components/SupportFacts.vue'
-import { UiUtcDateTimeInput } from '@rss/core/components'
+const confirmSubmission = ref(false)
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -187,124 +188,146 @@ function changed() {
 }
 watch(() => route.fullPath, changed, { flush: 'sync' })
 onMounted(changed)
+function submitConfirmed() {
+  confirmSubmission.value = false
+  void create()
+}
 </script>
 <template>
-  <SecurityFrame :title="t('security.support')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('security.support')" :busy="busy" :failure="failure">
     <p>{{ t('security.supportHint') }}</p>
-    <form @submit.prevent="load()">
-      <label
-        >{{ t('policies.device')
-        }}<input v-model="device" :readonly="busy || uncertain" required /></label
-      ><button :disabled="busy || uncertain">{{ t('devices.open') }}</button>
-    </form>
-    <form v-if="context" data-testid="support-form" @submit.prevent="create">
-      <fieldset :disabled="busy || uncertain">
-        <legend>
-          {{ context.context.device }} · {{ context.context.platform }} /
-          {{ context.context.revision }}
-        </legend>
-        <p>
-          {{ t('security.frozenSource') }}:
-          {{
-            context.context.source
-              ? `${context.context.source.source} · ${context.context.source.registrationId} / ${context.context.source.generation}`
-              : t('security.state.unknown')
-          }}
-        </p>
+    <section class="console-panel">
+      <h2>{{ t('devices.deviceId') }}</h2>
+      <form @submit.prevent="load()">
         <label
-          >{{ t('security.supportKind')
-          }}<select v-model="kind">
-            <option v-for="k in supportKinds" :key="k" :value="k">
-              {{ t(`security.supportKinds.${k}`) }}
-            </option>
-          </select></label
-        >
-        <template v-if="kind === 'elevation'"
-          ><label
-            >{{ t('security.supportAccount')
-            }}<select v-model="account">
-              <option v-for="a in context.context.accounts" :key="a.id" :value="a.id">
-                {{ a.name }} · {{ a.id }}
+          >{{ t('policies.device')
+          }}<input
+            v-model="device"
+            class="ui-input"
+            :readonly="busy || uncertain"
+            required /></label
+        ><UiButton :disabled="!!(busy || uncertain)" type="submit">{{
+          t('devices.open')
+        }}</UiButton>
+      </form>
+    </section>
+    <section v-if="context" class="console-panel">
+      <h2>{{ t('console.newTask') }}</h2>
+      <form data-testid="support-form" @submit.prevent="confirmSubmission = true">
+        <fieldset :disabled="busy || uncertain">
+          <legend>
+            {{ context.context.device }} · {{ context.context.platform }} /
+            {{ context.context.revision }}
+          </legend>
+          <p>
+            {{ t('security.frozenSource') }}:
+            {{
+              context.context.source
+                ? `${context.context.source.source} · ${context.context.source.registrationId} / ${context.context.source.generation}`
+                : t('security.state.unknown')
+            }}
+          </p>
+          <label
+            >{{ t('security.supportKind')
+            }}<select v-model="kind" class="ui-input">
+              <option v-for="k in supportKinds" :key="k" :value="k">
+                {{ t(`security.supportKinds.${k}`) }}
               </option>
             </select></label
           >
-          <label
-            >{{ t('security.supportProgram')
-            }}<select v-model="program">
-              <option v-for="p in context.context.programs" :key="p.id" :value="p.id">
-                {{ p.name }} · {{ p.path }} · {{ p.publisher }} · {{ p.sha256 }}
-              </option>
-            </select></label
-          ></template
-        >
-        <template v-else-if="kind === 'diagnostics'"
-          ><label v-for="a in diagnosticKinds" :key="a"
-            ><input v-model="artifacts" type="checkbox" :value="a" />{{
-              t(`security.diagnosticKinds.${a}`)
-            }}</label
+          <template v-if="kind === 'elevation'"
+            ><label
+              >{{ t('security.supportAccount')
+              }}<select v-model="account" class="ui-input">
+                <option v-for="a in context.context.accounts" :key="a.id" :value="a.id">
+                  {{ a.name }} · {{ a.id }}
+                </option>
+              </select></label
+            >
+            <label
+              >{{ t('security.supportProgram')
+              }}<select v-model="program" class="ui-input">
+                <option v-for="p in context.context.programs" :key="p.id" :value="p.id">
+                  {{ p.name }} · {{ p.path }} · {{ p.publisher }} · {{ p.sha256 }}
+                </option>
+              </select></label
+            ></template
           >
+          <template v-else-if="kind === 'diagnostics'"
+            ><label v-for="a in diagnosticKinds" :key="a"
+              ><input v-model="artifacts" type="checkbox" :value="a" />{{
+                t(`security.diagnosticKinds.${a}`)
+              }}</label
+            >
+            <label
+              >{{ t('security.retentionSeconds')
+              }}<input
+                v-model.number="retention"
+                class="ui-input"
+                type="number"
+                min="1"
+                max="604800"
+                required /></label
+          ></template>
+          <label v-else
+            >{{ t('security.remoteMode')
+            }}<select v-model="mode" class="ui-input">
+              <option value="view">{{ t('security.remoteModes.view') }}</option>
+              <option value="control">{{ t('security.remoteModes.control') }}</option>
+            </select></label
+          >
+          <p v-if="!allowed" role="status">{{ t('security.supportUnavailable') }}</p>
           <label
-            >{{ t('security.retentionSeconds')
-            }}<input
-              v-model.number="retention"
-              type="number"
-              min="1"
-              max="604800"
-              required /></label
-        ></template>
-        <label v-else
-          >{{ t('security.remoteMode')
-          }}<select v-model="mode">
-            <option value="view">{{ t('security.remoteModes.view') }}</option>
-            <option value="control">{{ t('security.remoteModes.control') }}</option>
-          </select></label
-        >
-        <p v-if="!allowed" role="status">{{ t('security.supportUnavailable') }}</p>
-        <label
-          >{{ t('security.justification') }}<textarea v-model="reason" maxlength="512" required />
-        </label>
-        <label for="support-from">{{ t('security.validFrom') }}</label
-        ><UiUtcDateTimeInput
-          id="support-from"
-          required
-          :invalid-label="t('policies.invalidDate')"
-          :model-value="from"
-          :max="until - 1"
-          @update:model-value="from = $event ?? Number.NaN"
-        />
-        <label for="support-until">{{ t('security.validUntil') }}</label
-        ><UiUtcDateTimeInput
-          id="support-until"
-          required
-          :invalid-label="t('policies.invalidDate')"
-          :model-value="until"
-          :min="from + 1"
-          :max="from + 3600"
-          @update:model-value="until = $event ?? Number.NaN"
-        />
-        <button :disabled="!allowed">{{ t('security.submitRequest') }}</button>
-      </fieldset>
-    </form>
-    <section v-if="current" data-testid="support-detail">
+            >{{ t('security.justification')
+            }}<textarea v-model="reason" class="ui-input" maxlength="512" required />
+          </label>
+          <label for="support-from">{{ t('security.validFrom') }}</label
+          ><UiUtcDateTimeInput
+            id="support-from"
+            required
+            :invalid-label="t('policies.invalidDate')"
+            :model-value="from"
+            :max="until - 1"
+            @update:model-value="from = $event ?? Number.NaN"
+          />
+          <label for="support-until">{{ t('security.validUntil') }}</label
+          ><UiUtcDateTimeInput
+            id="support-until"
+            required
+            :invalid-label="t('policies.invalidDate')"
+            :model-value="until"
+            :min="from + 1"
+            :max="from + 3600"
+            @update:model-value="until = $event ?? Number.NaN"
+          />
+          <UiButton :disabled="!!!allowed" type="submit">{{
+            t('security.submitRequest')
+          }}</UiButton>
+        </fieldset>
+      </form>
+    </section>
+    <section v-if="current" class="console-panel" data-testid="support-detail">
       <h2>{{ current.request.request.target.device }} · {{ current.request.request.id }}</h2>
       <RequestFacts :request="current.request.request" :as-of="current.request.asOf" /><SupportFacts
         :support="current.support.support"
         :as-of="current.support.asOf"
       />
-      <button
-        :disabled="busy"
+      <UiButton
+        :disabled="!!busy"
         data-testid="refresh-support"
+        type="submit"
         @click="open(current.request.request.id)"
       >
         {{ t('policies.refresh') }}
-      </button>
-      <button
-        :disabled="busy || uncertain || !canDispatch"
+      </UiButton>
+      <UiButton
+        :disabled="!!(busy || uncertain || !canDispatch)"
         data-testid="dispatch-support"
+        type="submit"
         @click="dispatch"
       >
         {{ t('security.dispatch') }}
-      </button>
+      </UiButton>
       <RouterLink
         :to="{
           name: 'security-requests',
@@ -334,7 +357,7 @@ onMounted(changed)
         >{{ accepted }}</RouterLink
       >
     </p>
-    <nav v-if="device" class="device-actions" :aria-label="t('security.relatedRecords')">
+    <nav v-if="device" class="console-inline-actions" :aria-label="t('security.relatedRecords')">
       <RouterLink
         v-for="name in ['security-requests', 'operations-audit']"
         :key="name"
@@ -345,8 +368,22 @@ onMounted(changed)
         t('policies.device')
       }}</RouterLink>
     </nav>
-    <button v-if="uncertain && pending" :disabled="busy" @click="pending()">
+    <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending()">
       {{ t('policies.replay') }}
-    </button>
-  </SecurityFrame>
+    </UiButton>
+    <UiDialog
+      :open="confirmSubmission"
+      :title="t('console.review')"
+      :description="t('console.scopeBound')"
+      :close-label="t('console.close')"
+      kind="alertdialog"
+      @update:open="confirmSubmission = $event"
+      ><p>{{ device }}</p>
+      <template #footer
+        ><UiButton :disabled="busy || uncertain" @click="submitConfirmed">{{
+          t('identity.confirm')
+        }}</UiButton></template
+      ></UiDialog
+    ></PageFrame
+  >
 </template>

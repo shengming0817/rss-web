@@ -140,6 +140,14 @@ describe('Identity views use actual app session and decoder modules', () => {
         .findAll('button')
         .find((b) => b.text() === label)!
         .trigger('click')
+      if (label === '退出全部会话') {
+        await flushPromises()
+        await new DOMWrapper(document.body)
+          .get('[role=alertdialog]')
+          .findAll('button')
+          .find((b) => b.text() === '确认')!
+          .trigger('click')
+      }
       await flushPromises()
       expect(router.currentRoute.value.name).toBe('login')
       wrapper.unmount()
@@ -161,6 +169,14 @@ describe('Identity views use actual app session and decoder modules', () => {
           .findAll('button')
           .find((b) => b.text() === label)!
           .trigger('click')
+        if (label === '退出全部会话') {
+          await flushPromises()
+          await new DOMWrapper(document.body)
+            .get('[role=alertdialog]')
+            .findAll('button')
+            .find((b) => b.text() === '确认')!
+            .trigger('click')
+        }
         await flushPromises()
         expect(router.currentRoute.value.name).toBe('sessions')
         expect(wrapper.get('[role=alert]').text()).toMatch(/不能作为成功|尚未确认/)
@@ -225,6 +241,14 @@ describe('Identity views use actual app session and decoder modules', () => {
           .findAll('button')
           .find((b) => b.text() === label)!
           .trigger('click')
+        if (label === '退出全部会话') {
+          await flushPromises()
+          await new DOMWrapper(document.body)
+            .get('[role=alertdialog]')
+            .findAll('button')
+            .find((b) => b.text() === '确认')!
+            .trigger('click')
+        }
         await flushPromises()
         expect(router.currentRoute.value.name).toBe('sessions')
         expect(f.session.state.value.status).not.toBe('authenticated')
@@ -262,20 +286,33 @@ describe('Identity views use actual app session and decoder modules', () => {
       .find((b) => b.text() === '加载更多')!
       .trigger('click')
     await flushPromises()
-    await wrapper.get('#account-login').setValue('newmember')
-    await wrapper.get('#account-password').setValue('private new password')
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === '创建本地账户')!
+      .trigger('click')
+    await flushPromises()
+    await new DOMWrapper(document.body).get('#account-login').setValue('newmember')
+    await new DOMWrapper(document.body).get('#account-password').setValue('private new password')
     f.replies.push(accountValue, {
       accounts: [accountValue],
       nextCursor: null,
     })
-    await wrapper.findAll('form')[0]!.trigger('submit')
+    await new DOMWrapper(document.body).get('[role=dialog] form').trigger('submit')
     await flushPromises()
-    expect((wrapper.get('#account-password').element as HTMLInputElement).value).toBe('')
+    expect(new DOMWrapper(document.body).find('#account-password').exists()).toBe(false)
     for (const label of ['停用账户', '停用成员']) {
       await wrapper
         .findAll('button')
         .find((b) => b.text() === label)!
         .trigger('click')
+      if (label === '退出全部会话') {
+        await flushPromises()
+        await new DOMWrapper(document.body)
+          .get('[role=alertdialog]')
+          .findAll('button')
+          .find((b) => b.text() === '确认')!
+          .trigger('click')
+      }
       await flushPromises()
       f.replies.push(accountValue, {
         accounts: [accountValue],
@@ -320,12 +357,12 @@ describe('Identity views use actual app session and decoder modules', () => {
       .findAll('button')
       .find((b) => b.text() === '编辑')!
       .trigger('click')
-    await wrapper.get('#client-id').setValue('updated')
+    await new DOMWrapper(document.body).get('#client-id').setValue('updated')
     f.replies.push(
       { ...configuredProvider, version: 2 },
       { providers: [{ ...configuredProvider, version: 2 }] },
     )
-    await wrapper.get('form').trigger('submit')
+    await new DOMWrapper(document.body).get('[role=dialog] form').trigger('submit')
     await flushPromises()
     expect(f.request.mock.calls.findLast(([r]) => r.method === 'PUT')?.[0].body).toMatchObject({
       settings: { clientId: 'updated', claims: { departmentSnapshot } },
@@ -363,11 +400,16 @@ describe('Identity views use actual app session and decoder modules', () => {
       .find((b) => b.text() === '启用身份提供方')!
       .trigger('click')
     await flushPromises()
-    await wrapper.get('#issuer').setValue('https://second.test')
-    await wrapper.get('#client-id').setValue('second')
-    await wrapper.get('#client-secret').setValue('second@1')
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === '新增身份提供方')!
+      .trigger('click')
+    await flushPromises()
+    await new DOMWrapper(document.body).get('#issuer').setValue('https://second.test')
+    await new DOMWrapper(document.body).get('#client-id').setValue('second')
+    await new DOMWrapper(document.body).get('#client-secret').setValue('second@1')
     f.replies.push(configuredProvider, { providers: [configuredProvider] })
-    await wrapper.get('form').trigger('submit')
+    await new DOMWrapper(document.body).get('[role=dialog] form').trigger('submit')
     await flushPromises()
     expect(
       f.request.mock.calls.findLast(
@@ -429,10 +471,10 @@ it('requires confirmation before revoking a provider and its sessions', async ()
   wrapper.unmount()
 })
 
-it('does not erase provider edits when the initial list finishes late', async () => {
+it('keeps the provider editor closed during initial read and opens it explicitly afterwards', async () => {
   const f = fixture()
   await f.login()
-  let finish!: (v: unknown) => void
+  let finish!: (value: unknown) => void
   f.replies.push(
     () =>
       new Promise((resolve) => {
@@ -440,17 +482,25 @@ it('does not erase provider edits when the initial list finishes late', async ()
       }),
   )
   const { wrapper } = await view(ProvidersView, f, 'providers')
-  await wrapper.get('#issuer').setValue('https://new.example.test')
-  await wrapper.get('#client-id').setValue('new-client')
-  await wrapper.get('#client-secret').setValue('new-secret@1')
+  const create = () => wrapper.findAll('button').find((b) => b.text() === '新增身份提供方')!
+  expect(create().attributes('disabled')).toBeDefined()
+  expect(new DOMWrapper(document.body).find('#issuer').exists()).toBe(false)
   finish({ providers: [] })
   await flushPromises()
-  expect((wrapper.get('#issuer').element as HTMLInputElement).value).toBe(
-    'https://new.example.test',
-  )
-  expect((wrapper.get('#client-id').element as HTMLInputElement).value).toBe('new-client')
-  expect((wrapper.get('#client-secret').element as HTMLInputElement).value).toBe('new-secret@1')
+  await create().trigger('click')
+  await flushPromises()
+  const body = new DOMWrapper(document.body)
+  await body.get('#issuer').setValue('https://new.example.test')
+  await body.get('#client-id').setValue('new-client')
+  await body.get('#client-secret').setValue('new-secret@1')
+  expect((body.get('#client-secret').element as HTMLInputElement).value).toBe('new-secret@1')
+  await body.get('[role=dialog] button[aria-label="取消"]').trigger('click')
+  await flushPromises()
+  await create().trigger('click')
+  await flushPromises()
+  expect((body.get('#client-secret').element as HTMLInputElement).value).toBe('')
   wrapper.unmount()
+  f.session.clear()
 })
 
 it('clears prior-owner rows, pagination and password drafts when visibility rechecks another account', async () => {
@@ -652,7 +702,12 @@ it.each([
       await flushPromises()
       expect(wrapper.text()).not.toContain('列表尚未加载')
       expect(wrapper.get('tbody').text()).toContain(text)
-      expect(wrapper.find('form').exists()).toBe(true)
+      expect(wrapper.find('form').exists()).toBe(false)
+      expect(
+        wrapper
+          .findAll('button')
+          .some((button) => /创建本地账户|新增身份提供方/.test(button.text())),
+      ).toBe(true)
       expect(f.request).toHaveBeenCalledTimes(before + 2)
       expect(f.session.state.value.status).toBe('authenticated')
     } finally {
@@ -678,6 +733,27 @@ it.each(['login', 'continue', 'resume'])('uses the app landing route after %s', 
   } else if (mode === 'continue') await wrapper.get('button').trigger('click')
   await flushPromises()
   expect(router.currentRoute.value.name).toBe('workspace')
+  wrapper.unmount()
+  f.session.clear()
+})
+
+it('does not revoke sessions until logout-all is confirmed', async () => {
+  const f = fixture(false)
+  await f.login()
+  f.replies.push({ sessions: [], nextCursor: null })
+  const { wrapper } = await view(SessionsView, f)
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text() === '退出全部会话')!
+    .trigger('click')
+  await flushPromises()
+  expect(f.request.mock.calls.filter(([r]) => r.path.endsWith('/logout-all'))).toHaveLength(0)
+  await new DOMWrapper(document.body)
+    .get('[role=alertdialog] button[aria-label="取消"]')
+    .trigger('click')
+  await flushPromises()
+  expect(f.request.mock.calls.filter(([r]) => r.path.endsWith('/logout-all'))).toHaveLength(0)
+  expect(f.session.state.value.status).toBe('authenticated')
   wrapper.unmount()
   f.session.clear()
 })

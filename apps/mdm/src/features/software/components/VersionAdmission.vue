@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -67,22 +68,33 @@ onMounted(load)
       ><textarea
         :id="`admission-evidence-${version}`"
         v-model="evidence"
+        class="ui-input"
         :disabled="busy || uncertain"
       />
-      <button
-        :disabled="busy || uncertain || !evidence.trim() || current.admission?.state === 'approved'"
+      <UiButton
+        :disabled="
+          !!(busy || uncertain || !evidence.trim() || current.admission?.state === 'approved')
+        "
+        type="submit"
         @click="change('approve')"
       >
         {{ t('software.approveAdmission') }}
-      </button>
-      <button
-        :disabled="busy || uncertain || !evidence.trim() || current.admission?.state !== 'approved'"
+      </UiButton>
+      <UiButton
+        :disabled="
+          !!(busy || uncertain || !evidence.trim() || current.admission?.state !== 'approved')
+        "
+        type="submit"
         @click="change('withdraw')"
       >
         {{ t('software.withdrawAdmission') }}
-      </button>
+      </UiButton>
     </template>
-    <button :disabled="busy" @click="load">{{ t('software.reconcile') }}</button>
-    <button v-if="uncertain" :disabled="busy" @click="replay">{{ t('policies.replay') }}</button>
+    <UiButton :disabled="!!busy" type="submit" @click="load">{{
+      t('software.reconcile')
+    }}</UiButton>
+    <UiButton v-if="uncertain" :disabled="!!busy" type="submit" @click="replay">{{
+      t('policies.replay')
+    }}</UiButton>
   </section>
 </template>

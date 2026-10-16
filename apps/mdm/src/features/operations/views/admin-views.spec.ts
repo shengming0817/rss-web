@@ -6,7 +6,7 @@ import AlertRulesView from './AlertRulesView.vue'
 import ApprovalsView from './ApprovalsView.vue'
 import AuditView from './AuditView.vue'
 import AlertsView from './AlertsView.vue'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount, flushPromises, DOMWrapper } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { decodeMdmError } from '@rss/api/mdm'
@@ -150,6 +150,7 @@ it('separates saved and active configuration and maintenance effect facts', asyn
   await flushPromises()
   expect(f.wrapper.text()).toContain('saved')
   await f.wrapper.get('[data-testid="activate-configuration"]').trigger('click')
+  await confirmDialog()
   await flushPromises()
   expect(f.wrapper.text()).toContain('restart_required')
   await f.wrapper.get('[data-testid="start-maintenance"]').trigger('click')
@@ -296,6 +297,7 @@ it('reconciles active configuration and completed maintenance after unknown repl
   await flushPromises()
   f.server.set('unknown')
   await f.wrapper.get('[data-testid="activate-configuration"]').trigger('click')
+  await confirmDialog()
   await flushPromises()
   f.automation.tick({ kind: 'clock', at: f.automation.now() + 100 }, 'normal')
   f.server.set('normal')
@@ -330,11 +332,15 @@ it('opens group/report/job links and follows target query changes', async () => 
     })
   await group.router.push({ path: '/', query: { id } })
   await flushPromises()
+  expect(group.wrapper.get('[data-testid="group-name"]').isVisible()).toBe(true)
+  expect(group.wrapper.get('details').attributes('open')).toBeDefined()
   expect((group.wrapper.get('[data-testid="group-name"]').element as HTMLInputElement).value).toBe(
     'Linked group',
   )
   await group.router.push({ path: '/', query: { id: other } })
   await flushPromises()
+  expect(group.wrapper.get('[data-testid="group-name"]').isVisible()).toBe(true)
+  expect(group.wrapper.get('details').attributes('open')).toBeDefined()
   expect((group.wrapper.get('[data-testid="group-name"]').element as HTMLInputElement).value).toBe(
     'Second linked group',
   )
@@ -357,7 +363,15 @@ it('opens group/report/job links and follows target query changes', async () => 
     })
   await settings.router.push({ path: '/', query: { id: job.id } })
   await flushPromises()
-  expect(settings.wrapper.text()).toContain('linked-backup')
+  expect(settings.wrapper.get('[role=tabpanel][data-state=active]').text()).toContain(
+    'linked-backup',
+  )
+  expect(
+    settings.wrapper
+      .findAll('h3')
+      .find((heading) => heading.text() === job.id)!
+      .isVisible(),
+  ).toBe(true)
   settings.wrapper.unmount()
 })
 it('locates a native rule beyond page one and reports missing/tombstone targets', async () => {
@@ -618,4 +632,81 @@ it('does not apply a connector read after its route target has changed', async (
     'Current B',
   )
   f.wrapper.unmount()
+})
+
+async function confirmDialog() {
+  await flushPromises()
+  await new DOMWrapper(document.body)
+    .get('[role=alertdialog]')
+    .findAll('button')
+    .find((b) => b.text() === '确认')!
+    .trigger('click')
+  await flushPromises()
+}
+
+it('keeps diagnostics reachable without clearing an unknown maintenance operation', async () => {
+  const f = await fixture(SettingsView)
+  const mutations: unknown[] = []
+  f.inspect((request) => {
+    if (request.method === 'POST' && request.path.includes('maintenance'))
+      mutations.push(structuredClone(request.body))
+  })
+  try {
+    const tab = (label: string) =>
+      f.wrapper.findAll('[role=tab]').find((button) => button.text() === label)!
+    await tab('维护与升级活动').trigger('mousedown', { button: 0, ctrlKey: false })
+    await f.wrapper.get('[role=tabpanel][data-state=active] summary').trigger('click')
+    f.server.set('unknown')
+    await f.wrapper.get('[data-testid=start-maintenance]').trigger('click')
+    await flushPromises()
+    expect(mutations).toHaveLength(1)
+    expect(tab('依赖与运行诊断').attributes('disabled')).toBeUndefined()
+    await tab('依赖与运行诊断').trigger('mousedown', { button: 0, ctrlKey: false })
+    await flushPromises()
+    const diagnostics = f.wrapper.get('[role=tabpanel][data-state=active]')
+    expect(diagnostics.text()).toContain('依赖与运行诊断')
+    await diagnostics.get('button').trigger('click')
+    await flushPromises()
+    expect(mutations).toHaveLength(1)
+    expect(f.wrapper.get('[data-testid=replay-write]').isVisible()).toBe(true)
+    await tab('维护与升级活动').trigger('mousedown', { button: 0, ctrlKey: false })
+    await flushPromises()
+    expect(f.wrapper.get('[data-testid=start-maintenance]').element.matches(':disabled')).toBe(true)
+    f.server.set('normal')
+    await f.wrapper.get('[data-testid=replay-write]').trigger('click')
+    await flushPromises()
+    expect(mutations).toHaveLength(2)
+    expect(mutations[1]).toEqual(mutations[0])
+  } finally {
+    f.wrapper.unmount()
+  }
+})
+
+it('selects the delegation panel for audit deep links and returns to groups on query change', async () => {
+  const f = await fixture(OrganizationView)
+  try {
+    const page = await f.clients.admin.delegations()
+    expect(page.items.length).toBeGreaterThan(0)
+    await f.router.push({ path: '/', query: { id: page.items[0]!.id, kind: 'delegation' } })
+    await flushPromises()
+    expect(
+      f.wrapper
+        .findAll('[role=tab]')
+        .find((tab) => tab.text() === '组织委派')!
+        .attributes('aria-selected'),
+    ).toBe('true')
+    expect(f.wrapper.get('[role=tabpanel][data-state=active]').text()).toContain(
+      page.items[0]!.principal,
+    )
+    await f.router.push({ path: '/', query: {} })
+    await flushPromises()
+    expect(
+      f.wrapper
+        .findAll('[role=tab]')
+        .find((tab) => tab.text() === '用户组与完整成员')!
+        .attributes('aria-selected'),
+    ).toBe('true')
+  } finally {
+    f.wrapper.unmount()
+  }
 })

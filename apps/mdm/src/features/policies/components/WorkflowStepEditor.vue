@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { FieldDefinition } from '../../devices/clients/asset-model'
@@ -36,71 +37,86 @@ function parameters(event: Event) {
   <fieldset>
     <legend>{{ t('policies.step') }}</legend>
     <label :for="`${id}-name`">{{ t('policies.name') }}</label
-    ><input :id="`${id}-name`" v-model="model.name" required /><label :for="`${id}-kind`">{{
-      t('policies.kind')
-    }}</label
-    ><select :id="`${id}-kind`" :value="model.action.kind" @change="kind">
+    ><input :id="`${id}-name`" v-model="model.name" class="ui-input" required /><label
+      :for="`${id}-kind`"
+      >{{ t('policies.kind') }}</label
+    ><select :id="`${id}-kind`" class="ui-input" :value="model.action.kind" @change="kind">
       <option v-for="option in kinds" :key="option" :value="option">
         {{ t(`policies.stepKind.${option}`) }}
       </option></select
     ><template v-if="model.action.kind === 'configuration'"
       ><label :for="`${id}-configuration`">{{ t('policies.configurations') }}</label
-      ><input :id="`${id}-configuration`" v-model="model.action.configuration" required /><label
-        :for="`${id}-version`"
-        >{{ t('policies.version') }}</label
+      ><input
+        :id="`${id}-configuration`"
+        v-model="model.action.configuration"
+        class="ui-input"
+        required /><label :for="`${id}-version`">{{ t('policies.version') }}</label
       ><input
         :id="`${id}-version`"
         v-model.number="model.action.version"
+        class="ui-input"
         type="number"
         min="1"
         required /></template
     ><template v-else-if="model.action.kind === 'script' || model.action.kind === 'repair'"
       ><label :for="`${id}-resource`">{{ t('policies.resources') }}</label
-      ><input :id="`${id}-resource`" v-model="model.action.resource" required /><label
-        :for="`${id}-version`"
-        >{{ t('policies.version') }}</label
-      ><input :id="`${id}-version`" v-model="model.action.version" required /><label
-        :for="`${id}-variant`"
-        >{{ t('policies.variant') }}</label
-      ><input :id="`${id}-variant`" v-model="model.action.variant" required /><label
-        :for="`${id}-parameters`"
-        >{{ t('policies.parameters') }}</label
+      ><input
+        :id="`${id}-resource`"
+        v-model="model.action.resource"
+        class="ui-input"
+        required
+      /><label :for="`${id}-version`">{{ t('policies.version') }}</label
+      ><input
+        :id="`${id}-version`"
+        v-model="model.action.version"
+        class="ui-input"
+        required
+      /><label :for="`${id}-variant`">{{ t('policies.variant') }}</label
+      ><input
+        :id="`${id}-variant`"
+        v-model="model.action.variant"
+        class="ui-input"
+        required
+      /><label :for="`${id}-parameters`">{{ t('policies.parameters') }}</label
       ><textarea
         :id="`${id}-parameters`"
+        class="ui-input"
         :value="JSON.stringify(model.action.parameters, null, 2)"
         rows="4"
         @input="parameters"
       /></template
     ><template v-else-if="model.action.kind === 'query'"
       ><label :for="`${id}-sql`">SQL</label
-      ><textarea :id="`${id}-sql`" v-model="model.action.sql" required rows="4" />
+      ><textarea :id="`${id}-sql`" v-model="model.action.sql" class="ui-input" required rows="4" />
       <div v-for="(mapping, index) in model.action.mappings" :key="index">
         <label :for="`${id}-field-${index}`">{{ t('policies.field') }}</label
-        ><select :id="`${id}-field-${index}`" v-model="mapping.field">
+        ><select :id="`${id}-field-${index}`" v-model="mapping.field" class="ui-input">
           <option v-for="field in fields" :key="field.key" :value="field.key">
             {{ field.key }}
           </option></select
         ><label :for="`${id}-pointer-${index}`">JSON Pointer</label
-        ><input :id="`${id}-pointer-${index}`" v-model="mapping.pointer" required /><button
-          type="button"
-          @click="model.action.mappings.splice(index, 1)"
-        >
+        ><input
+          :id="`${id}-pointer-${index}`"
+          v-model="mapping.pointer"
+          class="ui-input"
+          required
+        /><UiButton type="button" @click="model.action.mappings.splice(index, 1)">
           {{ t('policies.remove') }}
-        </button>
+        </UiButton>
       </div>
-      <button
+      <UiButton
         type="button"
-        :disabled="!fields.length"
+        :disabled="!!!fields.length"
         @click="model.action.mappings.push({ field: fields[0]!.key, pointer: '/0/value' })"
       >
         {{ t('policies.addMapping') }}
-      </button></template
+      </UiButton></template
     >
     <h3>{{ t('policies.condition') }}</h3>
     <CriteriaEditor v-model="model.condition" :fields="fields" /><label :for="`${id}-failure`">{{
       t('policies.onFailure')
     }}</label
-    ><select :id="`${id}-failure`" v-model="model.onFailure">
+    ><select :id="`${id}-failure`" v-model="model.onFailure" class="ui-input">
       <option value="stop">{{ t('policies.stop') }}</option>
       <option value="continue">{{ t('policies.continue') }}</option>
       <option value="approval">{{ t('policies.approve') }}</option>

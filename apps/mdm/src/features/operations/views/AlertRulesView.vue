@@ -1,11 +1,18 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { onMounted, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
 import { signals, alertRuleDefinition, type AlertRule } from '../clients/admin-model'
-import OperationsFrame from '../components/OperationsFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
+const editorOpen = ref(false)
+function beginCreate() {
+  if (busy.value || uncertain.value) return
+  create()
+  editorOpen.value = true
+}
 const { t } = useI18n(),
   route = useRoute(),
   client = useMdm().operations.admin.alertRules,
@@ -100,55 +107,81 @@ onMounted(async () => {
 })
 </script>
 <template>
-  <OperationsFrame :title="t('operations.alertRules')" :busy="busy" :failure="failure"
+  <PageFrame :title="t('operations.alertRules')" :busy="busy" :failure="failure"
     ><p>{{ t('operations.alertRuleHint') }}</p>
-    <button :disabled="busy" @click="load()">{{ t('devices.reload') }}</button
-    ><button :disabled="busy || uncertain" @click="create()">{{ t('operations.newRule') }}</button>
-    <ul>
+    <UiButton :disabled="!!busy" type="submit" @click="load()">{{ t('devices.reload') }}</UiButton
+    ><UiButton :disabled="!!(busy || uncertain)" type="submit" @click="beginCreate()">{{
+      t('operations.newRule')
+    }}</UiButton>
+    <ul class="console-object-list">
       <li v-for="item in page?.items" :key="item.id">
-        <button :disabled="busy || uncertain" @click="open(item)">
+        <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(item)">
           {{ item.definition.name }} · {{ item.definition.signal }} / {{ item.revision }}
-        </button>
+        </UiButton>
       </li>
     </ul>
-    <button v-if="page?.nextCursor" :disabled="busy" @click="load(page.nextCursor)">
+    <UiButton
+      v-if="page?.nextCursor"
+      :disabled="!!busy"
+      type="submit"
+      @click="load(page.nextCursor)"
+    >
       {{ t('devices.next') }}
-    </button>
-    <form @submit.prevent="save()">
-      <fieldset :disabled="busy || uncertain">
-        <legend>{{ id }} / {{ revision }}</legend>
-        <label
-          >{{ t('operations.name')
-          }}<input v-model="draft.name" data-testid="alert-rule-name" required /></label
-        ><label
-          >{{ t('operations.signal')
-          }}<select v-model="draft.signal">
-            <option v-for="value in signals" :key="value">{{ value }}</option>
-          </select></label
-        ><label
-          >{{ t('operations.threshold')
-          }}<input v-model.number="draft.threshold" type="number" min="0" required /></label
-        ><label
-          ><input v-model="draft.enabled" type="checkbox" />{{ t('operations.enabled') }}</label
-        ><button data-testid="save-alert-rule" :disabled="conflict">{{ t('devices.save') }}</button>
-      </fieldset>
-    </form>
-    <button v-if="revision" :disabled="busy" @click="compare()">
+    </UiButton>
+    <details
+      class="console-panel console-task"
+      :open="editorOpen || uncertain || undefined"
+      @toggle="editorOpen = ($event.target as HTMLDetailsElement).open"
+    >
+      <summary>{{ t('console.edit') }}</summary>
+      <form @submit.prevent="save()">
+        <fieldset :disabled="busy || uncertain">
+          <legend>{{ id }} / {{ revision }}</legend>
+          <label
+            >{{ t('operations.name')
+            }}<input
+              v-model="draft.name"
+              class="ui-input"
+              data-testid="alert-rule-name"
+              required /></label
+          ><label
+            >{{ t('operations.signal')
+            }}<select v-model="draft.signal" class="ui-input">
+              <option v-for="value in signals" :key="value">{{ value }}</option>
+            </select></label
+          ><label
+            >{{ t('operations.threshold')
+            }}<input
+              v-model.number="draft.threshold"
+              class="ui-input"
+              type="number"
+              min="0"
+              required /></label
+          ><label
+            ><input v-model="draft.enabled" type="checkbox" />{{ t('operations.enabled') }}</label
+          ><UiButton data-testid="save-alert-rule" :disabled="!!conflict" type="submit">{{
+            t('devices.save')
+          }}</UiButton>
+        </fieldset>
+      </form>
+    </details>
+    <UiButton v-if="revision" :disabled="!!busy" type="submit" @click="compare()">
       {{ t('operations.compare') }}
-    </button>
+    </UiButton>
     <p v-if="remote">
       {{ remote.definition.name }} / {{ remote.revision
-      }}<button :disabled="busy || uncertain" @click="adopt()">
+      }}<UiButton :disabled="!!(busy || uncertain)" type="submit" @click="adopt()">
         {{ t('operations.adoptRevision') }}
-      </button>
+      </UiButton>
     </p>
-    <button
+    <UiButton
       v-if="uncertain && pending"
       data-testid="replay-write"
-      :disabled="busy"
+      :disabled="!!busy"
+      type="submit"
       @click="pending()"
     >
       {{ t('policies.replay') }}
-    </button></OperationsFrame
+    </UiButton></PageFrame
   >
 </template>

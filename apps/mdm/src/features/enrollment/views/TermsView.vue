@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -45,7 +46,7 @@ onBeforeUnmount(() => {
 refresh()
 </script>
 <template>
-  <section class="device-console" :aria-busy="busy">
+  <section class="console-public-page" :aria-busy="busy">
     <h1>{{ t('onboarding.termsTitle') }}</h1>
     <p v-if="failure" role="alert">{{ t('onboarding.termsUnavailable') }}</p>
     <p v-if="expired" role="alert">{{ t('onboarding.termsExpired') }}</p>
@@ -55,12 +56,12 @@ refresh()
       <pre class="enrollment-terms">{{ context.termsText }}</pre>
       <form method="post" action="/api/v1/windows/entra/terms/finish">
         <input type="hidden" name="csrfToken" :value="context.csrfToken" />
-        <button name="accepted" value="true">{{ t('onboarding.accept') }}</button>
-        <button v-if="context.canDecline" name="accepted" value="false">
+        <UiButton name="accepted" value="true" type="submit">{{ t('onboarding.accept') }}</UiButton>
+        <UiButton v-if="context.canDecline" name="accepted" value="false" type="submit">
           {{ t('onboarding.decline') }}
-        </button>
+        </UiButton>
       </form>
     </template>
-    <button type="button" :disabled="busy" @click="refresh">{{ t('devices.reload') }}</button>
+    <UiButton type="button" :disabled="!!busy" @click="refresh">{{ t('devices.reload') }}</UiButton>
   </section>
 </template>

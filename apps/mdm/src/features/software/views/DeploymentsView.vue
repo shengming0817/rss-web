@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, toRaw, watch } from 'vue'
+import {
+  UiButton,
+  UiStepIndicator,
+  UiBadge,
+  UiProgress,
+  UiUtcDateTimeInput,
+} from '@rss/core/components'
+import { computed, onBeforeUnmount, ref, toRaw, watch } from 'vue'
 import SelfServiceEditor from '../../policies/components/SelfServiceEditor.vue'
 import ResourceIdentity from '../../policies/components/ResourceIdentity.vue'
 import { useRoute } from 'vue-router'
@@ -15,15 +22,20 @@ import { intents, targets } from '../../policies/clients/model'
 import type { AssignmentChange } from '../clients/assignments'
 import type { RunCursor, SoftwareRun } from '../clients/runs'
 import type { ResourceRead } from '../../policies/clients/resources'
-import SoftwareFrame from '../components/SoftwareFrame.vue'
+import SoftwareResourceSelect from '../components/SoftwareResourceSelect.vue'
+import CatalogLocator from '../../policies/components/CatalogLocator.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 import NativeScheduleEditor from '../components/NativeScheduleEditor.vue'
 import SoftwareRunFacts from '../components/SoftwareRunFacts.vue'
-import { UiUtcDateTimeInput } from '@rss/core/components'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
   client = runtime.software.assignments
 const { run, runWrite, busy, failure, uncertain } = useOperation()
+const editing = ref(false),
+  wizardStep = ref(0),
+  editorForm = ref<HTMLFormElement>()
+const wizardLabels = ['content', 'targets', 'schedule', 'review'] as const
 const current = ref<SoftwarePolicy>(),
   id = ref(''),
   enabled = ref(true)
@@ -55,6 +67,17 @@ const draft = ref(fresh()),
   resource = ref<ResourceRead>()
 const page = ref<Awaited<ReturnType<typeof client.list>>>(),
   preview = ref<Awaited<ReturnType<typeof client.preview>>>()
+const previewBasis = ref('')
+const draftBasis = () => JSON.stringify({ definition: draft.value, enabled: enabled.value })
+const previewReady = computed(() => !!preview.value && previewBasis.value === draftBasis())
+watch(
+  [draft, enabled],
+  () => {
+    preview.value = undefined
+    previewBasis.value = ''
+  },
+  { deep: true, flush: 'sync' },
+)
 const devices = ref<Awaited<ReturnType<typeof client.devices>>>(),
   rollout = ref<Awaited<ReturnType<typeof client.rollout>>>()
 const history = ref<Awaited<ReturnType<typeof runtime.software.runs.list>>>(),
@@ -121,6 +144,31 @@ function create() {
   pending = undefined
   clearEvidence()
 }
+function beginCreate() {
+  if (busy.value || uncertain.value) return
+  create()
+  editing.value = true
+  wizardStep.value = 0
+}
+function beginEdit() {
+  if (busy.value || uncertain.value) return
+  editing.value = true
+  wizardStep.value = 0
+}
+function nextStep() {
+  const section = editorForm.value?.querySelector(`[data-wizard-step="${wizardStep.value}"]`)
+  for (const input of section?.querySelectorAll<
+    HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+  >('input,select,textarea') ?? [])
+    if (!input.reportValidity()) return
+  wizardStep.value = Math.min(3, wizardStep.value + 1)
+}
+function cancelEdit() {
+  if (busy.value || uncertain.value) return
+  if (current.value) apply(current.value)
+  else create()
+  editing.value = false
+}
 function list(after?: string) {
   void run(
     () => client.list(after),
@@ -184,6 +232,7 @@ function replay() {
       if (p.requester !== requester()) throw new Error('Policy requester changed')
       pending = undefined
       apply(v)
+      editing.value = false
       page.value = undefined
     },
   )
@@ -200,6 +249,7 @@ function change(input: AssignmentChange) {
   replay()
 }
 function save() {
+  if (!previewReady.value) return
   try {
     change({
       action: 'put',
@@ -211,12 +261,17 @@ function save() {
   }
 }
 function check(after?: string, scopeResult?: string) {
+  if (busy.value || uncertain.value) return
+  previewBasis.value = ''
+  const basis = draftBasis()
   try {
     const d = softwarePolicyDefinition(toRaw(draft.value))
     void run(
       () => client.preview(d, after, scopeResult),
       (v) => {
+        if (basis !== draftBasis()) return
         preview.value = v
+        previewBasis.value = basis
       },
     )
   } catch {
@@ -278,6 +333,8 @@ const utc = (at: number) =>
 watch(
   () => route.fullPath,
   () => {
+    editing.value = false
+    wizardStep.value = 0
     create()
     page.value = undefined
     if (typeof route.query['id'] === 'string') read(route.query['id'])
@@ -287,148 +344,269 @@ watch(
 )
 </script>
 <template>
-  <SoftwareFrame :title="t('software.deployments')" :busy="busy" :failure="failure">
-    <p>{{ t('software.deploymentHint') }}</p>
-    <button :disabled="busy || uncertain" @click="create">{{ t('policies.create') }}</button>
-    <button :disabled="busy" @click="list()">{{ t('policies.reload') }}</button>
+  <PageFrame :title="t('software.deployments')" :busy="busy" :failure="failure">
+    <template #actions
+      ><UiButton variant="primary" :disabled="busy || uncertain" @click="beginCreate">{{
+        t('policies.create')
+      }}</UiButton
+      ><UiButton :disabled="busy" @click="list()">{{ t('policies.reload') }}</UiButton></template
+    >
+    <p class="console-page-description">{{ t('software.deploymentHint') }}</p>
     <p v-if="page && !page.items.length">{{ t('policies.empty') }}</p>
-    <ul>
+    <ul v-if="!editing" class="console-data-list">
       <li v-for="p in page?.items" :key="p.id">
-        <button :disabled="busy || uncertain" @click="read(p.id)">
+        <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="read(p.id)">
           {{ p.definition.action.resource.id }} / {{ p.definition.action.resource.version }} ·
           {{ p.id }} ·
           {{ p.enabled ? t('software.enabled') : t('software.paused') }}
-        </button>
+        </UiButton>
       </li>
     </ul>
-    <button v-if="page?.nextCursor" :disabled="busy" @click="list(page.nextCursor)">
+    <UiButton
+      v-if="page?.nextCursor"
+      :disabled="!!busy"
+      type="submit"
+      @click="list(page.nextCursor)"
+    >
       {{ t('policies.next') }}
-    </button>
-    <form data-form="deployment" @submit.prevent="save">
-      <fieldset :disabled="busy || uncertain">
-        <legend>{{ current ? current.id : t('policies.create') }}</legend>
-        <label for="deployment-resource">{{ t('software.targetResource') }}</label
-        ><input
-          id="deployment-resource"
-          v-model="draft.action.resource.id"
-          required
-          @input="resetBinding"
-        />
-        <label for="deployment-version">{{ t('software.resourceVersion') }}</label
-        ><input
-          id="deployment-version"
-          v-model="draft.action.resource.version"
-          required
-          @input="resetBinding"
-        />
-        <button data-action="bind-version" type="button" @click="bindVersion">
-          {{ t('software.bindVersion') }}
-        </button>
-        <p>{{ t('software.admissionOperation') }}: {{ draft.action.admissionOperation || '—' }}</p>
-        <template v-if="resource">
-          <template v-for="target in targets" :key="target"
-            ><label :for="`variant-${target}`">{{ target }}</label
-            ><select
-              :id="`variant-${target}`"
-              :value="draft.action.resource.variants[target] ?? ''"
-              @change="selectVariant(target, $event)"
-            >
-              <option value="">{{ t('software.noVariant') }}</option>
-              <option v-for="v in variants(target)" :key="v.key" :value="v.key">{{ v.key }}</option>
-            </select></template
+    </UiButton>
+    <section v-show="editing" class="console-panel console-wizard">
+      <header class="console-page-header">
+        <div>
+          <h2>
+            {{ current ? t('console.edit') : t('policies.create') }} ·
+            {{ t('software.deployments') }}
+          </h2>
+          <p class="console-page-description">{{ t('console.scopeBound') }}</p>
+        </div>
+        <UiButton :disabled="busy || uncertain" @click="cancelEdit">{{
+          t('console.cancel')
+        }}</UiButton>
+      </header>
+      <UiStepIndicator
+        :steps="wizardLabels.map((label) => t(`console.${label}`))"
+        :current="wizardStep"
+        :label="t('software.deployments')"
+      />
+      <form
+        ref="editorForm"
+        data-form="deployment"
+        @submit.prevent="wizardStep === 3 ? save() : nextStep()"
+      >
+        <fieldset :disabled="busy || uncertain" class="console-form-section">
+          <fieldset
+            v-show="wizardStep === 0"
+            :disabled="wizardStep !== 0"
+            data-wizard-step="0"
+            class="console-form-section"
           >
-        </template>
-        <p v-else class="device-wrap">
-          {{
-            Object.entries(draft.action.resource.variants)
-              .map(([target, key]) => `${target}: ${key}`)
-              .join(' · ')
-          }}
-        </p>
-        <ResourceIdentity :binding="draft.action.resource" />
-        <label for="deployment-scope">{{ t('policies.selfService.deviceScope') }}</label
-        ><input id="deployment-scope" v-model="draft.scope" required />
-        <label for="deployment-intent">{{ t('software.intent') }}</label
-        ><select id="deployment-intent" :value="draft.action.intent" @change="intent">
-          <option v-for="intent in intents" :key="intent" :value="intent">
-            {{ t(`software.intent_${intent}`) }}
-          </option>
-        </select>
-        <template v-if="draft.action.intent === 'available_install'">
-          <SelfServiceEditor v-model="draft.selfService" software />
-          <button
-            v-if="draft.selfService"
-            type="button"
-            data-action="remove-self-service"
-            @click="delete draft.selfService"
-          >
-            {{ t('policies.selfService.removeConfiguration') }}
-          </button>
-        </template>
-        <label><input v-model="enabled" type="checkbox" />{{ t('policies.enabled') }}</label>
-        <NativeScheduleEditor v-model="draft.action.schedule" />
-        <label for="deployment-lifetime">{{ t('software.runLifetime') }}</label
-        ><input
-          id="deployment-lifetime"
-          v-model.number="draft.action.runLifetimeSeconds"
-          type="number"
-          min="60"
-          max="604800"
-          required
-        />
-        <fieldset>
-          <legend>{{ t('software.stages') }}</legend>
-          <p>{{ t('software.stageHint') }}</p>
-          <fieldset v-for="(stage, index) in draft.action.rollout.stages" :key="index">
-            <legend>{{ index + 1 }}</legend>
-            <label :for="`stage-${index}-scope`">{{ t('policies.scopes') }}</label
+            <legend>{{ t('console.content') }}</legend>
+            <SoftwareResourceSelect
+              v-model:resource="draft.action.resource.id"
+              v-model:version="draft.action.resource.version"
+              :disabled="busy || uncertain"
+              @change="resetBinding"
+            /><label for="deployment-resource">{{ t('software.targetResource') }}</label
             ><input
-              :id="`stage-${index}-scope`"
-              v-model="stage.scope"
-              data-field="stage-scope"
+              id="deployment-resource"
+              v-model="draft.action.resource.id"
+              class="ui-input"
               required
+              @input="resetBinding"
             />
-            <label :for="`stage-${index}-at`">{{ t('software.opensAt') }}</label
-            ><UiUtcDateTimeInput
-              :id="`stage-${index}-at`"
+            <label for="deployment-version">{{ t('software.resourceVersion') }}</label
+            ><input
+              id="deployment-version"
+              v-model="draft.action.resource.version"
+              class="ui-input"
               required
-              :invalid-label="t('policies.invalidDate')"
-              :model-value="stage.opensAt"
-              @update:model-value="stage.opensAt = $event ?? Number.NaN"
+              @input="resetBinding"
             />
-            <template v-if="index > 0"
-              ><label :for="`stage-${index}-gate`">{{ t('software.minimumVerified') }}</label
-              ><input
-                :id="`stage-${index}-gate`"
-                :value="stage.minimumVerifiedPercent ?? ''"
-                type="number"
-                min="0"
-                max="100"
-                @input="
-                  stage.minimumVerifiedPercent =
-                    ($event.target as HTMLInputElement).value === ''
-                      ? null
-                      : Number(($event.target as HTMLInputElement).value)
-                "
-              />
-              <button type="button" @click="draft.action.rollout.stages.splice(index, 1)">
-                {{ t('policies.remove') }}
-              </button></template
+            <UiButton data-action="bind-version" type="button" @click="bindVersion">
+              {{ t('software.bindVersion') }}
+            </UiButton>
+            <p>
+              {{ t('software.admissionOperation') }}: {{ draft.action.admissionOperation || '—' }}
+            </p>
+            <template v-if="resource">
+              <template v-for="target in targets" :key="target"
+                ><label :for="`variant-${target}`">{{ target }}</label
+                ><select
+                  :id="`variant-${target}`"
+                  class="ui-input"
+                  :value="draft.action.resource.variants[target] ?? ''"
+                  @change="selectVariant(target, $event)"
+                >
+                  <option value="">{{ t('software.noVariant') }}</option>
+                  <option v-for="v in variants(target)" :key="v.key" :value="v.key">
+                    {{ v.key }}
+                  </option>
+                </select></template
+              >
+            </template>
+            <p v-else class="console-wrap">
+              {{
+                Object.entries(draft.action.resource.variants)
+                  .map(([target, key]) => `${target}: ${key}`)
+                  .join(' · ')
+              }}
+            </p>
+            <ResourceIdentity :binding="draft.action.resource" />
+            <label for="deployment-intent">{{ t('software.intent') }}</label
+            ><select
+              id="deployment-intent"
+              class="ui-input"
+              :value="draft.action.intent"
+              @change="intent"
             >
+              <option v-for="optionIntent in intents" :key="optionIntent" :value="optionIntent">
+                {{ t(`software.intent_${optionIntent}`) }}
+              </option>
+            </select>
+            <template v-if="draft.action.intent === 'available_install'">
+              <SelfServiceEditor v-model="draft.selfService" software />
+              <UiButton
+                v-if="draft.selfService"
+                type="button"
+                data-action="remove-self-service"
+                @click="delete draft.selfService"
+              >
+                {{ t('policies.selfService.removeConfiguration') }}
+              </UiButton>
+            </template>
+            <label><input v-model="enabled" type="checkbox" />{{ t('software.enabled') }}</label>
           </fieldset>
-          <button
-            type="button"
-            :disabled="draft.action.rollout.stages.length >= 32"
-            @click="addStage"
+          <fieldset
+            v-show="wizardStep === 1"
+            :disabled="wizardStep !== 1"
+            data-wizard-step="1"
+            class="console-form-section"
           >
-            {{ t('software.addStage') }}
-          </button>
+            <legend>{{ t('console.targets') }}</legend>
+            <label for="deployment-scope">{{ t('policies.selfService.deviceScope') }}</label
+            ><input
+              id="deployment-scope"
+              v-model="draft.scope"
+              class="ui-input"
+              required
+            /><CatalogLocator
+              v-model="draft.scope"
+              collection="scopes"
+              :disabled="busy || uncertain"
+            />
+          </fieldset>
+          <fieldset
+            v-show="wizardStep === 2"
+            :disabled="wizardStep !== 2"
+            data-wizard-step="2"
+            class="console-form-section"
+          >
+            <legend>{{ t('console.schedule') }}</legend>
+            <NativeScheduleEditor v-model="draft.action.schedule" />
+            <label for="deployment-lifetime">{{ t('software.runLifetime') }}</label
+            ><input
+              id="deployment-lifetime"
+              v-model.number="draft.action.runLifetimeSeconds"
+              class="ui-input"
+              type="number"
+              min="60"
+              max="604800"
+              required
+            />
+            <fieldset>
+              <legend>{{ t('software.stages') }}</legend>
+              <p>{{ t('software.stageHint') }}</p>
+              <fieldset v-for="(stage, index) in draft.action.rollout.stages" :key="index">
+                <legend>{{ index + 1 }}</legend>
+                <label :for="`stage-${index}-scope`">{{ t('policies.scopes') }}</label
+                ><input
+                  :id="`stage-${index}-scope`"
+                  v-model="stage.scope"
+                  class="ui-input"
+                  data-field="stage-scope"
+                  required
+                /><CatalogLocator
+                  v-model="stage.scope"
+                  collection="scopes"
+                  :disabled="busy || uncertain"
+                />
+                <label :for="`stage-${index}-at`">{{ t('software.opensAt') }}</label
+                ><UiUtcDateTimeInput
+                  :id="`stage-${index}-at`"
+                  required
+                  :invalid-label="t('policies.invalidDate')"
+                  :model-value="stage.opensAt"
+                  @update:model-value="stage.opensAt = $event ?? Number.NaN"
+                />
+                <template v-if="index > 0"
+                  ><label :for="`stage-${index}-gate`">{{ t('software.minimumVerified') }}</label
+                  ><input
+                    :id="`stage-${index}-gate`"
+                    class="ui-input"
+                    :value="stage.minimumVerifiedPercent ?? ''"
+                    type="number"
+                    min="0"
+                    max="100"
+                    @input="
+                      stage.minimumVerifiedPercent =
+                        ($event.target as HTMLInputElement).value === ''
+                          ? null
+                          : Number(($event.target as HTMLInputElement).value)
+                    "
+                  />
+                  <UiButton type="button" @click="draft.action.rollout.stages.splice(index, 1)">
+                    {{ t('policies.remove') }}
+                  </UiButton></template
+                >
+              </fieldset>
+              <UiButton
+                type="button"
+                :disabled="!!(draft.action.rollout.stages.length >= 32)"
+                @click="addStage"
+              >
+                {{ t('software.addStage') }}
+              </UiButton>
+            </fieldset>
+          </fieldset>
+          <section v-show="wizardStep === 3" class="console-panel" data-wizard-step="3">
+            <h3>{{ t('console.review') }}</h3>
+            <dl>
+              <dt>{{ t('software.targetResource') }}</dt>
+              <dd>{{ draft.action.resource.id }} / {{ draft.action.resource.version }}</dd>
+              <dt>{{ t('policies.scopes') }}</dt>
+              <dd>{{ draft.scope }}</dd>
+              <dt>{{ t('software.intent') }}</dt>
+              <dd>{{ t(`software.intent_${draft.action.intent}`) }}</dd>
+              <dt>{{ t('software.stages') }}</dt>
+              <dd>{{ draft.action.rollout.stages.length }}</dd>
+              <dt>{{ t('software.enabled') }}</dt>
+              <dd>{{ enabled ? t('software.enabled') : t('software.paused') }}</dd>
+            </dl>
+            <details class="console-evidence">
+              <summary>{{ t('console.advanced') }}</summary>
+              <ResourceIdentity :binding="draft.action.resource" />
+              <pre>{{ JSON.stringify(draft, null, 2) }}</pre>
+            </details>
+            <p role="status">
+              {{ t(previewReady ? 'console.previewReady' : 'console.previewRequired') }}
+            </p>
+            <UiButton type="button" @click="check()">{{ t('software.preview') }}</UiButton>
+          </section>
+          <div class="console-form-actions">
+            <UiButton v-if="wizardStep > 0" type="button" @click="wizardStep--">{{
+              t('console.back')
+            }}</UiButton
+            ><UiButton v-if="wizardStep < 3" type="button" variant="primary" @click="nextStep">{{
+              t('console.next')
+            }}</UiButton
+            ><UiButton v-else type="submit" variant="primary" :disabled="!previewReady">{{
+              t('policies.save')
+            }}</UiButton>
+          </div>
         </fieldset>
-        <button type="button" @click="check()">{{ t('software.preview') }}</button
-        ><button type="submit">{{ t('policies.save') }}</button>
-      </fieldset>
-    </form>
-    <section v-if="preview">
+      </form>
+    </section>
+    <section v-if="preview" class="console-panel">
       <h2>{{ t('software.preview') }}</h2>
       <p>{{ t('software.previewHint') }}</p>
       <p>{{ preview.scopeResult }}</p>
@@ -439,37 +617,59 @@ watch(
           {{ d.taskAdmission ? t(`software.admission_${d.taskAdmission.state}`) : '—' }}
         </li>
       </ul>
-      <button
+      <UiButton
         v-if="preview.nextCursor"
-        :disabled="busy || uncertain"
+        :disabled="!!(busy || uncertain)"
+        type="submit"
         @click="check(preview.nextCursor, preview.scopeResult)"
       >
         {{ t('policies.next') }}
-      </button>
+      </UiButton>
     </section>
-    <button v-if="current || uncertain" data-action="read-policy" :disabled="busy" @click="read()">
+    <UiButton
+      v-if="current || uncertain"
+      data-action="read-policy"
+      :disabled="!!busy"
+      type="submit"
+      @click="read()"
+    >
       {{ t('software.reconcile') }}
-    </button>
+    </UiButton>
     <p v-if="uncertain" role="status">{{ t('software.policyUnknown') }}</p>
-    <button v-if="uncertain" :disabled="busy" @click="replay">{{ t('policies.replay') }}</button>
-    <section v-if="current">
-      <h2>{{ t('software.deploymentState') }}</h2>
+    <UiButton v-if="uncertain" :disabled="!!busy" type="submit" @click="replay">{{
+      t('policies.replay')
+    }}</UiButton>
+    <section v-if="current && !editing" class="console-panel">
+      <div class="console-page-header">
+        <h2>{{ t('software.deploymentState') }}</h2>
+        <UiButton :disabled="busy || uncertain" @click="beginEdit">{{
+          t('console.edit')
+        }}</UiButton>
+      </div>
+      <UiBadge>{{ current.enabled ? t('software.enabled') : t('software.paused') }}</UiBadge>
       <p>
         {{ t('policies.revision') }} {{ current.revision }} · {{ t('software.policyVersion') }}
         {{ current.version }} · {{ current.enabled ? t('software.enabled') : t('software.paused') }}
       </p>
       <p>{{ t('software.pauseHint') }}</p>
-      <button
-        :disabled="busy || uncertain"
+      <UiButton
+        :disabled="!!(busy || uncertain)"
         data-action="toggle-policy"
+        type="submit"
         @click="change({ action: current.enabled ? 'disable' : 'enable' })"
       >
         {{ current.enabled ? t('software.pause') : t('software.resume') }}
-      </button>
-      <button :disabled="busy" @click="loadDevices()">{{ t('software.deviceAdmission') }}</button
-      ><button :disabled="busy" @click="loadRollout">{{ t('software.rollout') }}</button
-      ><button :disabled="busy" @click="loadRuns()">{{ t('software.runHistory') }}</button>
-      <section v-if="devices">
+      </UiButton>
+      <UiButton :disabled="!!busy" type="submit" @click="loadDevices()">{{
+        t('software.deviceAdmission')
+      }}</UiButton
+      ><UiButton :disabled="!!busy" type="submit" @click="loadRollout">{{
+        t('software.rollout')
+      }}</UiButton
+      ><UiButton :disabled="!!busy" type="submit" @click="loadRuns()">{{
+        t('software.runHistory')
+      }}</UiButton>
+      <section v-if="devices" class="console-panel">
         <h3>{{ t('software.deviceAdmission') }}</h3>
         <p v-if="!devices.items.length">{{ t('policies.empty') }}</p>
         <ul>
@@ -486,15 +686,20 @@ watch(
             </ul>
           </li>
         </ul>
-        <button v-if="devices.nextCursor" :disabled="busy" @click="loadDevices(devices.nextCursor)">
+        <UiButton
+          v-if="devices.nextCursor"
+          :disabled="!!busy"
+          type="submit"
+          @click="loadDevices(devices.nextCursor)"
+        >
           {{ t('policies.next') }}
-        </button>
+        </UiButton>
       </section>
-      <section v-if="rollout">
+      <section v-if="rollout" class="console-panel">
         <h3>{{ t('software.rollout') }}</h3>
         <p>{{ utc(rollout.asOf) }} · {{ t('software.rolloutHint') }}</p>
         <p>{{ t('software.policyVersion') }}: {{ rollout.versionId }}</p>
-        <article v-for="(stage, index) in rollout.stages" :key="stage.scope">
+        <article v-for="(stage, index) in rollout.stages" :key="stage.scope" class="console-panel">
           <h4>
             {{ index + 1 }} · {{ stage.open ? t('software.stageOpen') : t('software.stageClosed') }}
           </h4>
@@ -502,6 +707,11 @@ watch(
             {{ stage.scope }} · {{ utc(stage.opensAt) }} ·
             {{ stage.minimumVerifiedPercent === null ? '—' : `${stage.minimumVerifiedPercent}%` }}
           </p>
+          <UiProgress
+            v-if="stage.totalTargets > 0"
+            :value="(stage.verifiedSuccess / stage.totalTargets) * 100"
+            :label="t('software.verifiedSuccess')"
+          />
           <dl>
             <template
               v-for="field in [
@@ -521,12 +731,16 @@ watch(
           </dl>
         </article>
       </section>
-      <section v-if="history">
+      <section v-if="history" class="console-panel">
         <h3>{{ t('software.runHistory') }}</h3>
         <p v-if="!history.items.length">{{ t('policies.empty') }}</p>
-        <article v-for="r in history.items" :key="r.taskId">
-          <SoftwareRunFacts :run="r" /><button :disabled="busy" @click="loadDetail(r.taskId)">
-            {{ t('software.readEvidence') }}</button
+        <article v-for="r in history.items" :key="r.taskId" class="console-panel">
+          <SoftwareRunFacts :run="r" /><UiButton
+            :disabled="!!busy"
+            type="submit"
+            @click="loadDetail(r.taskId)"
+          >
+            {{ t('software.readEvidence') }}</UiButton
           ><RouterLink
             :to="{
               name: 'policy-execution',
@@ -535,11 +749,16 @@ watch(
             >{{ t('policies.executions') }}</RouterLink
           >
         </article>
-        <button v-if="history.nextCursor" :disabled="busy" @click="loadRuns(history.nextCursor)">
+        <UiButton
+          v-if="history.nextCursor"
+          :disabled="!!busy"
+          type="submit"
+          @click="loadRuns(history.nextCursor)"
+        >
           {{ t('policies.next') }}
-        </button>
+        </UiButton>
       </section>
       <SoftwareRunFacts v-if="detail" :run="detail" />
     </section>
-  </SoftwareFrame>
+  </PageFrame>
 </template>

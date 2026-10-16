@@ -1,3 +1,4 @@
+import { ref } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -59,6 +60,7 @@ it('keeps installation separate from registration, links the existing owner, and
       stubs: { SoftwareFrame: { template: '<div><slot /></div>' } },
       provide: {
         [mdmKey as symbol]: {
+          session: { state: ref({ session: { id: 'test-session' } }) },
           tenant: id,
           demo: true,
           software: {

@@ -1,17 +1,19 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { onMounted, ref, toRaw } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
 import type { Reference, ScopeRead, ScopeProjection, ScopeChange } from '../clients/scopes'
-import PolicyFrame from '../components/PolicyFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 import ReferenceEditor from '../components/ReferenceEditor.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.policies.scopes,
   route = useRoute(),
   { run, runWrite, busy, failure, uncertain } = useOperation()
+const editing = ref(false)
 const id = ref(''),
   current = ref<ScopeRead>(),
   targets = ref<Reference[]>([]),
@@ -33,6 +35,7 @@ function load(cursor?: string) {
   )
 }
 function apply(value: ScopeRead) {
+  editing.value = false
   current.value = value
   id.value = value.id
   targets.value = value.definition.targets
@@ -54,6 +57,7 @@ function open(value = id.value) {
 }
 function create() {
   if (busy.value || uncertain.value) return
+  editing.value = true
   current.value = undefined
   id.value = crypto.randomUUID()
   targets.value = []
@@ -133,29 +137,84 @@ onMounted(async () => {
 })
 </script>
 <template>
-  <PolicyFrame :title="t('policies.scopes')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('policies.scopes')" :busy="busy" :failure="failure">
     <p>{{ t('policies.scopeHint') }}</p>
-    <button :disabled="busy || uncertain" @click="create">{{ t('policies.create') }}</button
-    ><button :disabled="busy" @click="load()">{{ t('policies.reload') }}</button>
+    <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="create">{{
+      t('policies.create')
+    }}</UiButton
+    ><UiButton :disabled="!!busy" type="submit" @click="load()">{{
+      t('policies.reload')
+    }}</UiButton>
     <p v-if="list && !list.items.length">{{ t('policies.empty') }}</p>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="item in list?.items" :key="item.id">
-        <button :disabled="busy || uncertain" @click="open(item.id)">{{ item.label }}</button> ·
+        <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(item.id)">{{
+          item.label
+        }}</UiButton>
+        ·
         {{ item.revision }}
       </li>
     </ul>
-    <button v-if="list?.nextCursor" :disabled="busy" @click="load(list.nextCursor)">
+    <UiButton
+      v-if="list?.nextCursor"
+      :disabled="!!busy"
+      type="submit"
+      @click="load(list.nextCursor)"
+    >
       {{ t('policies.next') }}
-    </button>
-    <form @submit.prevent="save">
+    </UiButton>
+    <section v-if="current && !editing" class="console-panel">
+      <h2>{{ t('console.summary') }}</h2>
+      <p>{{ current.id }} · {{ t('policies.revision') }} {{ current.revision }}</p>
+      <fieldset disabled>
+        <ReferenceEditor
+          :model-value="current.definition.targets"
+          :label="t('policies.targets')"
+          :devices="devices"
+          :groups="groups"
+        />
+        <p v-if="current.definition.limitations === null">{{ t('policies.unlimited') }}</p>
+        <ReferenceEditor
+          v-else
+          :model-value="current.definition.limitations"
+          :label="t('policies.limitations')"
+          :devices="devices"
+          :groups="groups"
+        /><ReferenceEditor
+          :model-value="current.definition.exclusions"
+          :label="t('policies.exclusions')"
+          :devices="devices"
+          :groups="groups"
+        />
+      </fieldset>
+    </section>
+    <div v-if="current && !editing" class="console-toolbar">
+      <UiButton type="button" :disabled="busy || uncertain" @click="editing = true">{{
+        t('console.edit')
+      }}</UiButton>
+    </div>
+    <form v-show="editing" class="console-panel" @submit.prevent="save">
+      <div class="console-page-header">
+        <h2>{{ t(current ? 'console.edit' : 'console.create') }}</h2>
+        <UiButton
+          type="button"
+          variant="ghost"
+          :disabled="busy || uncertain"
+          @click="editing = false"
+          >{{ t('console.close') }}</UiButton
+        >
+      </div>
       <fieldset :disabled="busy || uncertain">
         <label for="scope-id">{{ t('policies.id') }}</label
-        ><input id="scope-id" v-model="id" required :readonly="!!current" /><button
-          type="button"
-          @click="open()"
-        >
+        ><input
+          id="scope-id"
+          v-model="id"
+          class="ui-input"
+          required
+          :readonly="!!current"
+        /><UiButton type="button" @click="open()">
           {{ t('policies.open') }}
-        </button>
+        </UiButton>
         <ReferenceEditor
           v-model="targets"
           :label="t('policies.targets')"
@@ -176,25 +235,30 @@ onMounted(async () => {
           :label="t('policies.exclusions')"
           :devices="devices"
           :groups="groups"
-        /><button type="submit">{{ t('policies.save') }}</button
-        ><button v-if="current" type="button" @click="change({ action: 'delete' })">
+        /><UiButton type="submit">{{ t('policies.save') }}</UiButton
+        ><UiButton v-if="current" type="button" @click="change({ action: 'delete' })">
           {{ t('policies.remove') }}
-        </button>
+        </UiButton>
       </fieldset>
     </form>
-    <button v-if="uncertain && pending" :disabled="busy" @click="pending()">
+    <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending()">
       {{ t('policies.replay') }}
-    </button>
-    <section v-if="task">
+    </UiButton>
+    <section v-if="task" class="console-panel">
+      <h2>{{ t('console.result') }}</h2>
       <p>{{ task }} · {{ status ? t(`policies.state.${status.status}`) : '—' }}</p>
-      <button :disabled="busy" @click="refresh">{{ t('policies.refresh') }}</button
+      <UiButton :disabled="!!busy" type="submit" @click="refresh">{{
+        t('policies.refresh')
+      }}</UiButton
       ><template v-if="status?.status === 'completed'"
         ><p>{{ t('policies.frozen') }}</p>
         <label for="scope-projection">{{ t('policies.detail') }}</label
-        ><select id="scope-projection" v-model="projection">
+        ><select id="scope-projection" v-model="projection" class="ui-input">
           <option value="members">{{ t('policies.members') }}</option>
           <option value="decisions">{{ t('policies.decisions') }}</option></select
-        ><button :disabled="busy" @click="page()">{{ t('policies.open') }}</button>
+        ><UiButton :disabled="!!busy" type="submit" @click="page()">{{
+          t('policies.open')
+        }}</UiButton>
         <template v-if="result"
           ><p>
             {{ t('policies.targets') }} {{ result.totalObjects }} · {{ t('policies.members') }}
@@ -203,52 +267,63 @@ onMounted(async () => {
           <ul v-if="result.page.kind === 'members'">
             <li v-for="device in result.page.items" :key="device">{{ device }}</li>
           </ul>
-          <table v-else>
-            <thead>
-              <tr>
-                <th>{{ t('policies.device') }}</th>
-                <th>{{ t('policies.identity') }}</th>
-                <th>{{ t('policies.reason') }}</th>
-                <th>{{ t('policies.source') }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in result.page.items" :key="item.device">
-                <td>{{ item.device }}</td>
-                <td>{{ t(`policies.state.${item.identity}`) }}</td>
-                <td>
-                  {{ item.reasons.map((reason) => t(`policies.state.${reason}`)).join(', ') }}
-                </td>
-                <td>
-                  {{ item.sources.map((index) => result!.sources[index]!.reference.id).join(', ') }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <table>
-            <thead>
-              <tr>
-                <th>{{ t('policies.source') }}</th>
-                <th>{{ t('policies.sourceVersion') }}</th>
-                <th>{{ t('policies.revision') }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="source in result.sources"
-                :key="`${source.reference.kind}:${source.reference.id}`"
-              >
-                <td>{{ t(`policies.${source.reference.kind}`) }} {{ source.reference.id }}</td>
-                <td>{{ source.memberVersion }} · {{ source.memberSet ?? '—' }}</td>
-                <td>{{ source.definitionVersion }}</td>
-              </tr>
-            </tbody>
-          </table></template
+          <div v-else class="ui-table-scroll">
+            <table class="ui-table">
+              <thead>
+                <tr>
+                  <th>{{ t('policies.device') }}</th>
+                  <th>{{ t('policies.identity') }}</th>
+                  <th>{{ t('policies.reason') }}</th>
+                  <th>{{ t('policies.source') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in result.page.items" :key="item.device">
+                  <td>{{ item.device }}</td>
+                  <td>{{ t(`policies.state.${item.identity}`) }}</td>
+                  <td>
+                    {{ item.reasons.map((reason) => t(`policies.state.${reason}`)).join(', ') }}
+                  </td>
+                  <td>
+                    {{
+                      item.sources.map((index) => result!.sources[index]!.reference.id).join(', ')
+                    }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="ui-table-scroll">
+            <table class="ui-table">
+              <thead>
+                <tr>
+                  <th>{{ t('policies.source') }}</th>
+                  <th>{{ t('policies.sourceVersion') }}</th>
+                  <th>{{ t('policies.revision') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="source in result.sources"
+                  :key="`${source.reference.kind}:${source.reference.id}`"
+                >
+                  <td>{{ t(`policies.${source.reference.kind}`) }} {{ source.reference.id }}</td>
+                  <td>{{ source.memberVersion }} · {{ source.memberSet ?? '—' }}</td>
+                  <td>{{ source.definitionVersion }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div></template
         >
-        <button v-if="result?.nextCursor" :disabled="busy" @click="page(result.nextCursor)">
+        <UiButton
+          v-if="result?.nextCursor"
+          :disabled="!!busy"
+          type="submit"
+          @click="page(result.nextCursor)"
+        >
           {{ t('policies.next') }}
-        </button></template
+        </UiButton></template
       >
     </section>
-  </PolicyFrame>
+  </PageFrame>
 </template>

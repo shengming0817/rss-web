@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { decodeScriptSpec, type ScriptSpec } from '../clients/resources'
@@ -82,10 +83,10 @@ function collection(event: Event) {
 <template>
   <fieldset>
     <legend>{{ t('policies.scriptDefinition') }}</legend>
-    <button type="button" @click="osqueryTemplate">{{ t('policies.osqueryTemplate') }}</button>
+    <UiButton type="button" @click="osqueryTemplate">{{ t('policies.osqueryTemplate') }}</UiButton>
     <p v-if="model.profile === 'osquery'">{{ t('policies.osqueryHint') }}</p>
     <label :for="`${id}-profile`">{{ t('policies.profile') }}</label
-    ><select :id="`${id}-profile`" :value="model.profile" @change="changeProfile">
+    ><select :id="`${id}-profile`" class="ui-input" :value="model.profile" @change="changeProfile">
       <option
         v-for="profile in ['power_shell7', 'posix_sh', 'bash', 'osquery']"
         :key="profile"
@@ -94,7 +95,7 @@ function collection(event: Event) {
         {{ profile }}
       </option></select
     ><label :for="`${id}-run-as`">{{ t('policies.runAs') }}</label
-    ><select :id="`${id}-run-as`" v-model="model.runAs">
+    ><select :id="`${id}-run-as`" v-model="model.runAs" class="ui-input">
       <option value="system">{{ t('policies.system') }}</option>
       <option value="logged_in_user">{{ t('policies.loggedInUser') }}</option>
     </select>
@@ -103,6 +104,7 @@ function collection(event: Event) {
     ><input
       :id="`${id}-timeout`"
       v-model.number="model.timeoutSeconds"
+      class="ui-input"
       type="number"
       min="1"
       max="3600"
@@ -111,6 +113,7 @@ function collection(event: Event) {
     ><input
       :id="`${id}-bytes`"
       v-model.number="model.outputBytes"
+      class="ui-input"
       type="number"
       min="1"
       max="1048576"
@@ -119,6 +122,7 @@ function collection(event: Event) {
     ><input
       :id="`${id}-rows`"
       v-model.number="model.maxRows"
+      class="ui-input"
       type="number"
       min="1"
       max="1000"
@@ -126,18 +130,21 @@ function collection(event: Event) {
     /><label :for="`${id}-parameters`">{{ t('policies.parameterSchema') }}</label
     ><textarea
       :id="`${id}-parameters`"
+      class="ui-input"
       :value="parameters"
       rows="5"
       @input="json($event, 'parameters')"
     /><label :for="`${id}-output`">{{ t('policies.outputSchema') }}</label
     ><textarea
       :id="`${id}-output`"
+      class="ui-input"
       :value="output"
       rows="5"
       @input="json($event, 'output')"
     /><label :for="`${id}-bindings`">{{ t('policies.bindings') }}</label
     ><textarea
       :id="`${id}-bindings`"
+      class="ui-input"
       :value="bindings"
       rows="3"
       @input="json($event, 'bindings')"
@@ -151,6 +158,7 @@ function collection(event: Event) {
       ><label :for="`${id}-mappings`">{{ t('policies.mappings') }}</label
       ><textarea
         :id="`${id}-mappings`"
+        class="ui-input"
         :value="mappings"
         rows="3"
         @input="json($event, 'mappings')"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiUtcDateTimeInput } from '@rss/core/components'
+import { UiButton, UiUtcDateTimeInput } from '@rss/core/components'
 import { ref, toRaw, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -11,7 +11,10 @@ import {
   type UpdateDefinition,
   type UpdateRing,
 } from '../clients/updates'
-import SoftwareFrame from '../components/SoftwareFrame.vue'
+import SoftwareResourceSelect from '../components/SoftwareResourceSelect.vue'
+import CatalogLocator from '../../policies/components/CatalogLocator.vue'
+import PageFrame from '../../../components/PageFrame.vue'
+const editing = ref(false)
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.software.updates,
@@ -39,6 +42,7 @@ const draft = ref(fresh()),
 
 let pending: { id: string; body: Operation<UpdateChange> } | undefined
 function accept(value: UpdateRing) {
+  editing.value = false
   selected.value = value
   draft.value = structuredClone(value.definition)
   if (pending?.id === value.id && pending.body.operationId === value.operation)
@@ -58,6 +62,7 @@ function list(cursor?: string) {
 }
 function create() {
   if (busy.value || uncertain.value) return
+  editing.value = true
   selected.value = undefined
   pending = undefined
   draft.value = fresh()
@@ -172,41 +177,72 @@ watch(
 )
 </script>
 <template>
-  <SoftwareFrame :title="t('software.updates')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('software.updates')" :busy="busy" :failure="failure">
     <p>{{ t('software.updatesHint') }}</p>
-    <button :disabled="busy" @click="list()">{{ t('policies.reload') }}</button>
-    <button :disabled="busy || uncertain" @click="create">{{ t('software.newRing') }}</button>
+    <UiButton :disabled="!!busy" type="submit" @click="list()">{{ t('policies.reload') }}</UiButton>
+    <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="create">{{
+      t('software.newRing')
+    }}</UiButton>
     <p v-if="page && !page.items.length">{{ t('policies.empty') }}</p>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="item in page?.items" :key="item.id">
-        <button data-action="open-ring" :disabled="busy || uncertain" @click="read(item.id)">
+        <UiButton
+          data-action="open-ring"
+          :disabled="!!(busy || uncertain)"
+          type="submit"
+          @click="read(item.id)"
+        >
           {{ item.definition.title }} · {{ item.id }}
-        </button>
+        </UiButton>
       </li>
     </ul>
-    <button v-if="page?.nextCursor" :disabled="busy" @click="list(page.nextCursor)">
+    <UiButton
+      v-if="page?.nextCursor"
+      :disabled="!!busy"
+      type="submit"
+      @click="list(page.nextCursor)"
+    >
       {{ t('policies.next') }}
-    </button>
-    <form @submit.prevent="change({ action: 'put', definition: draft })">
+    </UiButton>
+    <div v-if="selected && !editing" class="console-toolbar">
+      <UiButton type="button" :disabled="busy || uncertain" @click="editing = true">{{
+        t('console.edit')
+      }}</UiButton>
+    </div>
+    <form
+      v-show="editing"
+      class="console-panel"
+      @submit.prevent="change({ action: 'put', definition: draft })"
+    >
+      <div class="console-page-header">
+        <h2>{{ t(selected ? 'console.edit' : 'console.create') }}</h2>
+        <UiButton type="button" :disabled="busy || uncertain" @click="editing = false">{{
+          t('console.close')
+        }}</UiButton>
+      </div>
       <fieldset :disabled="busy || uncertain">
         <legend>{{ t('software.ringDefinition') }}</legend>
         <label for="update-title">{{ t('software.displayTitle') }}</label
-        ><input id="update-title" v-model="draft.title" required />
+        ><input id="update-title" v-model="draft.title" class="ui-input" required />
         <label for="update-scope">{{ t('software.updateScope') }}</label
-        ><input id="update-scope" v-model="draft.scope" required />
+        ><input id="update-scope" v-model="draft.scope" class="ui-input" required /><CatalogLocator
+          v-model="draft.scope"
+          collection="scopes"
+          :disabled="busy || uncertain"
+        />
         <label for="update-platform">{{ t('policies.platform') }}</label
-        ><select id="update-platform" v-model="draft.platform">
+        ><select id="update-platform" v-model="draft.platform" class="ui-input">
           <option value="windows">Windows</option>
           <option value="macos">macOS</option>
         </select>
         <label for="update-kind">{{ t('policies.kind') }}</label
-        ><select id="update-kind" :value="draft.target.kind" @change="kind">
+        ><select id="update-kind" class="ui-input" :value="draft.target.kind" @change="kind">
           <option value="os">{{ t('software.osUpdate') }}</option>
           <option value="third_party">{{ t('software.thirdPartyPatch') }}</option>
         </select>
         <template v-if="draft.target.kind === 'os'">
           <label for="update-release">{{ t('software.updateRelease') }}</label
-          ><select id="update-release" v-model="draft.target.release" required>
+          ><select id="update-release" v-model="draft.target.release" class="ui-input" required>
             <option value="" disabled>—</option>
             <option
               v-for="release in releases.filter((r) => r.platform === draft.platform)"
@@ -219,10 +255,16 @@ watch(
           </select>
         </template>
         <template v-else>
-          <label for="patch-resource">{{ t('software.patchResource') }}</label
+          <SoftwareResourceSelect
+            v-model:resource="draft.target.resource.id"
+            v-model:version="draft.target.resource.version"
+            :disabled="busy || uncertain"
+            @change="resetBinding"
+          /><label for="patch-resource">{{ t('software.patchResource') }}</label
           ><input
             id="patch-resource"
             v-model="draft.target.resource.id"
+            class="ui-input"
             required
             @input="resetBinding"
           />
@@ -230,10 +272,11 @@ watch(
           ><input
             id="patch-version"
             v-model="draft.target.resource.version"
+            class="ui-input"
             required
             @input="resetBinding"
           />
-          <button type="button" @click="bind">{{ t('software.bindPatch') }}</button>
+          <UiButton type="button" @click="bind">{{ t('software.bindPatch') }}</UiButton>
           <p>{{ draft.target.admissionOperation || t('software.notAdmitted') }}</p>
           <p>{{ t('software.patchHint') }}</p>
         </template>
@@ -241,6 +284,7 @@ watch(
         ><input
           id="update-deferral"
           v-model.number="draft.deferDays"
+          class="ui-input"
           type="number"
           min="0"
           max="365"
@@ -259,13 +303,14 @@ watch(
           ><input
             id="update-notification"
             v-model.number="draft.notifyMinutes"
+            class="ui-input"
             type="number"
             min="0"
             max="10080"
             required
           />
           <label for="update-reboot">{{ t('software.reboot') }}</label
-          ><select id="update-reboot" v-model="draft.reboot">
+          ><select id="update-reboot" v-model="draft.reboot" class="ui-input">
             <option value="user">{{ t('software.rebootUser') }}</option>
             <option v-if="draft.window" value="maintenance">
               {{ t('software.rebootWindow') }}
@@ -279,11 +324,12 @@ watch(
         >
         <template v-if="draft.window">
           <label for="update-zone">{{ t('software.windowZone') }}</label
-          ><input id="update-zone" v-model="draft.window.zone" required />
+          ><input id="update-zone" v-model="draft.window.zone" class="ui-input" required />
           <label for="update-start">{{ t('software.windowStart') }}</label
           ><input
             id="update-start"
             v-model.number="draft.window.startMinute"
+            class="ui-input"
             type="number"
             min="0"
             max="1439"
@@ -293,6 +339,7 @@ watch(
           ><input
             id="update-end"
             v-model.number="draft.window.endMinute"
+            class="ui-input"
             type="number"
             min="0"
             max="1440"
@@ -305,34 +352,41 @@ watch(
           >
         </template>
         <label><input v-model="draft.enabled" type="checkbox" />{{ t('policies.enabled') }}</label>
-        <button type="submit">{{ t('policies.save') }}</button>
+        <UiButton type="submit">{{ t('policies.save') }}</UiButton>
       </fieldset>
     </form>
     <p v-if="invalid" role="alert">{{ t('software.invalidUpdate') }}</p>
     <p v-if="uncertain" role="alert">{{ t('software.updateUnknown') }}</p>
-    <button v-if="uncertain && pending" :disabled="busy" @click="replay">
+    <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="replay">
       {{ t('policies.replay') }}
-    </button>
-    <button v-if="pending || selected" data-action="read-ring" :disabled="busy" @click="read()">
+    </UiButton>
+    <UiButton
+      v-if="pending || selected"
+      data-action="read-ring"
+      :disabled="!!busy"
+      type="submit"
+      @click="read()"
+    >
       {{ t('policies.verify') }}
-    </button>
-    <section v-if="selected">
+    </UiButton>
+    <section v-if="selected" class="console-panel">
       <h2>{{ selected.definition.title }} · {{ selected.id }}</h2>
       <p>
         {{ t('policies.revision') }} {{ selected.revision }} · {{ t('policies.scopes') }}
         {{ selected.scopeRevision ?? '—' }} ·
         {{ selected.definition.enabled ? t('policies.enabled') : t('software.update_paused') }}
       </p>
-      <div class="device-actions">
-        <button
+      <div class="console-inline-actions">
+        <UiButton
           v-for="action in ['scan', 'install', 'pause', 'resume'] as const"
           :key="action"
           :data-action="`update-${action}`"
-          :disabled="busy || uncertain"
+          :disabled="!!(busy || uncertain)"
+          type="submit"
           @click="change({ action })"
         >
           {{ t(`software.updateAction_${action}`) }}
-        </button>
+        </UiButton>
       </div>
       <RouterLink
         v-if="selected.policy"
@@ -344,78 +398,83 @@ watch(
         >{{ t('software.patchRuns') }}</RouterLink
       >
       <p>{{ t('software.gapHint') }}</p>
-      <table>
-        <thead>
-          <tr>
-            <th>{{ t('policies.device') }}</th>
-            <th>{{ t('software.updateGap') }}</th>
-            <th>{{ t('software.observation') }}</th>
-            <th>{{ t('software.updatePhase') }}</th>
-            <th>{{ t('policies.effect') }}</th>
-            <th>{{ t('policies.detail') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in selected.devices" :key="row.device">
-            <td>
-              <RouterLink
-                :to="{
-                  name: 'device-detail',
-                  params: { tenant: runtime.tenant, device: row.device },
-                }"
-                >{{ row.device }}</RouterLink
-              >
-              <p>
-                {{ row.registration?.source ?? '—' }} / {{ row.registration?.id ?? '—' }} /
-                {{ row.registration?.generation ?? '—' }}
-              </p>
-            </td>
-            <td>{{ t(`software.gap_${row.gap}`) }}</td>
-            <td>
-              {{ row.observedAt === null ? '—' : new Date(row.observedAt * 1000).toISOString() }} ·
-              {{ t(`software.updateSource_${row.source}`) }}
-            </td>
-            <td>
-              {{ t(`software.update_${row.phase}`) }}
-              <p v-if="row.waiting">{{ t(`software.updateWait_${row.waiting}`) }}</p>
-              <p v-if="row.rebootRequestedAt !== null">
-                {{ t('software.rebootRequestedAt') }}
-                {{ new Date(row.rebootRequestedAt * 1000).toISOString() }}
-              </p>
-              <p v-if="row.notifiedAt !== null">
-                {{ t('software.notifiedAt') }} {{ new Date(row.notifiedAt * 1000).toISOString() }}
-              </p>
-            </td>
-            <td>{{ t(`software.updateEffect_${row.effect}`) }}</td>
-            <td>
-              <p v-if="row.code">{{ row.code }}</p>
-              <RouterLink
-                v-if="row.execution"
-                :to="{
-                  name: 'policy-execution',
-                  params: { tenant: runtime.tenant, execution: row.execution },
-                }"
-                >{{ t('policies.detail') }}</RouterLink
-              >
-              <p>{{ row.attempt ?? '—' }}</p>
-              <button
-                v-if="row.phase === 'failed' && !selected.policy"
-                :disabled="busy || uncertain"
-                @click="change({ action: 'retry', device: row.device })"
-              >
-                {{ t('software.updateAction_retry') }}
-              </button>
-              <button
-                v-if="row.phase === 'unknown' && !selected.policy"
-                :disabled="busy || uncertain"
-                @click="change({ action: 'reconcile', device: row.device })"
-              >
-                {{ t('software.updateAction_reconcile') }}
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="ui-table-scroll">
+        <table class="ui-table">
+          <thead>
+            <tr>
+              <th>{{ t('policies.device') }}</th>
+              <th>{{ t('software.updateGap') }}</th>
+              <th>{{ t('software.observation') }}</th>
+              <th>{{ t('software.updatePhase') }}</th>
+              <th>{{ t('policies.effect') }}</th>
+              <th>{{ t('policies.detail') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in selected.devices" :key="row.device">
+              <td>
+                <RouterLink
+                  :to="{
+                    name: 'device-detail',
+                    params: { tenant: runtime.tenant, device: row.device },
+                  }"
+                  >{{ row.device }}</RouterLink
+                >
+                <p>
+                  {{ row.registration?.source ?? '—' }} / {{ row.registration?.id ?? '—' }} /
+                  {{ row.registration?.generation ?? '—' }}
+                </p>
+              </td>
+              <td>{{ t(`software.gap_${row.gap}`) }}</td>
+              <td>
+                {{ row.observedAt === null ? '—' : new Date(row.observedAt * 1000).toISOString() }}
+                ·
+                {{ t(`software.updateSource_${row.source}`) }}
+              </td>
+              <td>
+                {{ t(`software.update_${row.phase}`) }}
+                <p v-if="row.waiting">{{ t(`software.updateWait_${row.waiting}`) }}</p>
+                <p v-if="row.rebootRequestedAt !== null">
+                  {{ t('software.rebootRequestedAt') }}
+                  {{ new Date(row.rebootRequestedAt * 1000).toISOString() }}
+                </p>
+                <p v-if="row.notifiedAt !== null">
+                  {{ t('software.notifiedAt') }} {{ new Date(row.notifiedAt * 1000).toISOString() }}
+                </p>
+              </td>
+              <td>{{ t(`software.updateEffect_${row.effect}`) }}</td>
+              <td>
+                <p v-if="row.code">{{ row.code }}</p>
+                <RouterLink
+                  v-if="row.execution"
+                  :to="{
+                    name: 'policy-execution',
+                    params: { tenant: runtime.tenant, execution: row.execution },
+                  }"
+                  >{{ t('policies.detail') }}</RouterLink
+                >
+                <p>{{ row.attempt ?? '—' }}</p>
+                <UiButton
+                  v-if="row.phase === 'failed' && !selected.policy"
+                  :disabled="!!(busy || uncertain)"
+                  type="submit"
+                  @click="change({ action: 'retry', device: row.device })"
+                >
+                  {{ t('software.updateAction_retry') }}
+                </UiButton>
+                <UiButton
+                  v-if="row.phase === 'unknown' && !selected.policy"
+                  :disabled="!!(busy || uncertain)"
+                  type="submit"
+                  @click="change({ action: 'reconcile', device: row.device })"
+                >
+                  {{ t('software.updateAction_reconcile') }}
+                </UiButton>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
-  </SoftwareFrame>
+  </PageFrame>
 </template>

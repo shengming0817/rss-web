@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton, UiDialog } from '@rss/core/components'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -7,7 +8,16 @@ import { operation, useOperation } from '../../../services/useOperation'
 import { requestStates, type SecurityRequest } from '../clients/requests-model'
 import type { RequestFilter } from '../clients/requests'
 import RequestFacts from '../components/RequestFacts.vue'
-import SecurityFrame from '../components/SecurityFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
+const confirmingAction = ref<'approve' | 'deny' | 'revoke' | 'dispatch'>()
+function confirmAction() {
+  const action = confirmingAction.value
+  confirmingAction.value = undefined
+  if (action === 'approve') decide('approve')
+  if (action === 'deny') decide('deny')
+  if (action === 'revoke') decide('revoke')
+  if (action === 'dispatch') dispatch()
+}
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -122,39 +132,49 @@ watch(() => route.fullPath, routeChanged, { flush: 'sync' })
 onMounted(routeChanged)
 </script>
 <template>
-  <SecurityFrame :title="t('security.requests')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('security.requests')" :busy="busy" :failure="failure">
     <p>{{ t('security.requestHint') }}</p>
-    <form @submit.prevent="load()">
-      <fieldset :disabled="busy">
-        <label>{{ t('policies.device') }}<input v-model="device" /></label
-        ><label
-          >{{ t('security.requestState')
-          }}<select v-model="state">
-            <option value="">{{ t('devices.all') }}</option>
-            <option v-for="value in requestStates" :key="value" :value="value">
-              {{ t(`security.requestsState.${value}`) }}
-            </option>
-          </select></label
-        ><button>{{ t('devices.reload') }}</button>
-      </fieldset>
-    </form>
+    <section class="console-panel">
+      <h2>{{ t('console.activeFilters') }}</h2>
+      <form @submit.prevent="load()">
+        <fieldset :disabled="busy">
+          <label>{{ t('policies.device') }}<input v-model="device" class="ui-input" /></label
+          ><label
+            >{{ t('security.requestState')
+            }}<select v-model="state" class="ui-input">
+              <option value="">{{ t('devices.all') }}</option>
+              <option v-for="value in requestStates" :key="value" :value="value">
+                {{ t(`security.requestsState.${value}`) }}
+              </option>
+            </select></label
+          ><UiButton type="submit">{{ t('devices.reload') }}</UiButton>
+        </fieldset>
+      </form>
+    </section>
     <p v-if="page">
       {{ t('security.snapshotAt') }} {{ at(page.asOf) }} · {{ t('operations.applied') }}
       {{ applied?.device ?? t('devices.all') }} ·
       {{ applied?.state ? t(`security.requestsState.${applied.state}`) : t('devices.all') }}
     </p>
     <p v-if="page && !page.items.length">{{ t('security.emptyRequests') }}</p>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="item in page?.items" :key="item.id">
-        <button :disabled="busy || uncertain" @click="open(item.id)">{{ item.id }}</button> ·
-        {{ item.target.device }} · {{ t(`security.requestsState.${item.state}`) }} ·
+        <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(item.id)">{{
+          item.id
+        }}</UiButton>
+        · {{ item.target.device }} · {{ t(`security.requestsState.${item.state}`) }} ·
         {{ item.requester }}
       </li>
     </ul>
-    <button v-if="page?.nextCursor" :disabled="busy" @click="load(page.nextCursor)">
+    <UiButton
+      v-if="page?.nextCursor"
+      :disabled="!!busy"
+      type="submit"
+      @click="load(page.nextCursor)"
+    >
       {{ t('devices.next') }}
-    </button>
-    <section v-if="selected" data-testid="security-request">
+    </UiButton>
+    <section v-if="selected" class="console-panel" data-testid="security-request">
       <h2>{{ selected.request.id }}</h2>
       <RequestFacts :request="selected.request" :as-of="selected.asOf" />
       <template
@@ -165,14 +185,15 @@ onMounted(routeChanged)
         "
       >
         <p>{{ t('security.dispatchHint') }}</p>
-        <button
+        <UiButton
           v-if="selected.request.state === 'approved' && !actionId"
-          :disabled="busy || uncertain || !isRequester"
+          :disabled="!!(busy || uncertain || !isRequester)"
           data-testid="dispatch-security"
-          @click="dispatch"
+          type="submit"
+          @click="confirmingAction = 'dispatch'"
         >
           {{ t('security.dispatch') }}
-        </button>
+        </UiButton>
         <RouterLink
           :to="{
             name: 'security-actions',
@@ -193,30 +214,41 @@ onMounted(routeChanged)
           >
         </p>
       </template>
-      <button :disabled="busy" data-testid="refresh-request" @click="open(selected.request.id)">
-        {{ t('policies.refresh') }}
-      </button>
-      <template v-if="selected.request.state === 'pending'"
-        ><button
-          :disabled="busy || uncertain || !canDecide"
-          data-testid="approve-request"
-          @click="decide('approve')"
-        >
-          {{ t('security.approve') }}</button
-        ><button :disabled="busy || uncertain || !canDecide" @click="decide('deny')">
-          {{ t('security.deny') }}
-        </button></template
+      <UiButton
+        :disabled="!!busy"
+        data-testid="refresh-request"
+        type="submit"
+        @click="open(selected.request.id)"
       >
-      <button
+        {{ t('policies.refresh') }}
+      </UiButton>
+      <template v-if="selected.request.state === 'pending'"
+        ><UiButton
+          :disabled="!!(busy || uncertain || !canDecide)"
+          data-testid="approve-request"
+          type="submit"
+          @click="confirmingAction = 'approve'"
+        >
+          {{ t('security.approve') }}</UiButton
+        ><UiButton
+          :disabled="!!(busy || uncertain || !canDecide)"
+          type="submit"
+          @click="confirmingAction = 'deny'"
+        >
+          {{ t('security.deny') }}
+        </UiButton></template
+      >
+      <UiButton
         v-if="['pending', 'approved'].includes(selected.request.state)"
-        :disabled="busy || uncertain || !canRevoke"
-        @click="decide('revoke')"
+        :disabled="!!(busy || uncertain || !canRevoke)"
+        type="submit"
+        @click="confirmingAction = 'revoke'"
       >
         {{ t('security.revoke') }}
-      </button>
-      <button v-if="uncertain && pending" :disabled="busy" @click="pending()">
+      </UiButton>
+      <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending()">
         {{ t('policies.replay') }}
-      </button>
+      </UiButton>
       <RouterLink
         :to="{
           name: 'operations-audit',
@@ -226,5 +258,20 @@ onMounted(routeChanged)
         >{{ t('operations.audit') }}</RouterLink
       >
     </section>
-  </SecurityFrame>
+    <UiDialog
+      :open="!!confirmingAction"
+      :title="t('console.review')"
+      :description="t('console.scopeBound')"
+      :close-label="t('console.close')"
+      kind="alertdialog"
+      @update:open="!$event && (confirmingAction = undefined)"
+      ><RequestFacts v-if="selected" :request="selected.request" :as-of="selected.asOf" />
+      <p>{{ confirmingAction ? t(`console.confirmActions.${confirmingAction}`) : '' }}</p>
+      <template #footer
+        ><UiButton :disabled="busy || uncertain" @click="confirmAction">{{
+          t('identity.confirm')
+        }}</UiButton></template
+      ></UiDialog
+    ></PageFrame
+  >
 </template>

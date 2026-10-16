@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { onMounted, ref, toRaw, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -13,7 +14,13 @@ import {
   type ComplianceTask,
 } from '../clients/compliance-model'
 import CriteriaEditor from '../../devices/components/CriteriaEditor.vue'
-import SecurityFrame from '../components/SecurityFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
+const editorOpen = ref(false)
+function beginCreate() {
+  if (busy.value || uncertain.value) return
+  create()
+  editorOpen.value = true
+}
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -183,101 +190,144 @@ onMounted(async () => {
 })
 </script>
 <template>
-  <SecurityFrame :title="t('security.rules')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('security.rules')" :busy="busy" :failure="failure">
     <p>{{ t('security.ruleHint') }}</p>
-    <button :disabled="busy || uncertain" data-testid="new-rule" @click="create">
+    <UiButton
+      :disabled="!!(busy || uncertain)"
+      data-testid="new-rule"
+      type="submit"
+      @click="beginCreate"
+    >
       {{ t('devices.create') }}
-    </button>
-    <button :disabled="busy" @click="load()">{{ t('devices.reload') }}</button>
+    </UiButton>
+    <UiButton :disabled="!!busy" type="submit" @click="load()">{{ t('devices.reload') }}</UiButton>
     <p v-if="list && !list.items.length">{{ t('security.empty') }}</p>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="rule in list?.items" :key="rule.id">
-        <button :disabled="busy || uncertain" @click="open(rule.id)">
+        <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(rule.id)">
           {{ rule.definition.name }}
-        </button>
+        </UiButton>
         · {{ rule.revision }} · {{ t(`security.severity.${rule.definition.severity}`) }} ·
         {{ t(rule.definition.enabled ? 'security.enabled' : 'security.disabled') }}
       </li>
     </ul>
-    <button v-if="list?.nextCursor" :disabled="busy" @click="load(list.nextCursor)">
+    <UiButton
+      v-if="list?.nextCursor"
+      :disabled="!!busy"
+      type="submit"
+      @click="load(list.nextCursor)"
+    >
       {{ t('devices.next') }}
-    </button>
-    <form data-testid="open-rule" @submit.prevent="open()">
-      <label
-        >{{ t('security.ruleId')
-        }}<input v-model="id" required :readonly="busy || uncertain || !!current" /></label
-      ><button :disabled="busy || uncertain">{{ t('devices.open') }}</button>
-    </form>
-    <p v-if="current">{{ t('devices.revision') }} {{ current.revision }}</p>
-    <form data-testid="edit-rule" @submit.prevent="save">
-      <fieldset :disabled="busy || uncertain || !editable">
+    </UiButton>
+    <details class="console-panel console-task" :open="uncertain || undefined">
+      <summary>{{ t('console.advanced') }}</summary>
+      <form data-testid="open-rule" @submit.prevent="open()">
         <label
-          >{{ t('devices.name')
-          }}<input v-model="name" data-testid="rule-name" maxlength="128" required
-        /></label>
-        <label><input v-model="enabled" type="checkbox" />{{ t('security.enabled') }}</label>
-        <label
-          >{{ t('security.severityLabel')
-          }}<select v-model="severity">
-            <option v-for="value in severities" :key="value" :value="value">
-              {{ t(`security.severity.${value}`) }}
-            </option>
-          </select></label
-        >
-        <label
-          >{{ t('security.platform')
-          }}<select v-model="platform">
-            <option v-for="value in platforms" :key="value" :value="value">
-              {{ t(`security.platforms.${value}`) }}
-            </option>
-          </select></label
-        >
-        <label
-          >{{ t('security.target')
-          }}<select v-model="target">
-            <option value="all">{{ t('devices.all') }}</option>
-            <option value="groups">{{ t('devices.groups') }}</option>
-          </select></label
-        >
-        <template v-if="target === 'groups'">
-          <label
-            >{{ t('security.groupIds') }}<textarea v-model="groupIds" required rows="3" />
-          </label>
-          <button type="button" @click="groupPage()">{{ t('security.chooseGroups') }}</button>
-          <ul>
-            <li v-for="group in groups?.items" :key="group.id">
-              <button type="button" @click="addGroup(group.id)">{{ group.name }}</button> ·
-              {{ group.id }}
-            </li>
-          </ul>
-          <button v-if="groups?.nextCursor" type="button" @click="groupPage(groups.nextCursor)">
-            {{ t('devices.next') }}
-          </button>
-        </template>
-        <CriteriaEditor v-model="criteria" :fields="fields" />
-        <p v-if="!criteria">{{ t('security.criteriaRequired') }}</p>
-        <button :disabled="!criteria" data-testid="save-rule">{{ t('devices.save') }}</button>
-      </fieldset>
-    </form>
-    <button v-if="uncertain && pending" :disabled="busy" @click="pending()">
-      {{ t('policies.replay') }}
-    </button>
-    <button v-if="current?.definition.enabled" :disabled="busy || uncertain" @click="recompute">
-      {{ t('security.recompute') }}
-    </button>
-    <section v-if="current">
-      <h2>{{ t('security.immutableVersion') }}</h2>
-      <form @submit.prevent="loadVersion">
-        <label
-          >{{ t('devices.revision')
+          >{{ t('security.ruleId')
           }}<input
-            v-model.number="version"
-            type="number"
-            min="1"
-            :max="current.revision"
-            required /></label
-        ><button :disabled="busy">{{ t('devices.open') }}</button>
+            v-model="id"
+            class="ui-input"
+            required
+            :readonly="busy || uncertain || !!current" /></label
+        ><UiButton :disabled="!!(busy || uncertain)" type="submit">{{
+          t('devices.open')
+        }}</UiButton>
       </form>
+    </details>
+    <p v-if="current">{{ t('devices.revision') }} {{ current.revision }}</p>
+    <details
+      class="console-panel console-task"
+      :open="editorOpen || uncertain || undefined"
+      @toggle="editorOpen = ($event.target as HTMLDetailsElement).open"
+    >
+      <summary>{{ t('console.edit') }}</summary>
+      <form data-testid="edit-rule" @submit.prevent="save">
+        <fieldset :disabled="busy || uncertain || !editable">
+          <label
+            >{{ t('devices.name')
+            }}<input
+              v-model="name"
+              class="ui-input"
+              data-testid="rule-name"
+              maxlength="128"
+              required
+          /></label>
+          <label><input v-model="enabled" type="checkbox" />{{ t('security.enabled') }}</label>
+          <label
+            >{{ t('security.severityLabel')
+            }}<select v-model="severity" class="ui-input">
+              <option v-for="value in severities" :key="value" :value="value">
+                {{ t(`security.severity.${value}`) }}
+              </option>
+            </select></label
+          >
+          <label
+            >{{ t('security.platform')
+            }}<select v-model="platform" class="ui-input">
+              <option v-for="value in platforms" :key="value" :value="value">
+                {{ t(`security.platforms.${value}`) }}
+              </option>
+            </select></label
+          >
+          <label
+            >{{ t('security.target')
+            }}<select v-model="target" class="ui-input">
+              <option value="all">{{ t('devices.all') }}</option>
+              <option value="groups">{{ t('devices.groups') }}</option>
+            </select></label
+          >
+          <template v-if="target === 'groups'">
+            <label
+              >{{ t('security.groupIds')
+              }}<textarea v-model="groupIds" class="ui-input" required rows="3" />
+            </label>
+            <UiButton type="button" @click="groupPage()">{{ t('security.chooseGroups') }}</UiButton>
+            <ul>
+              <li v-for="group in groups?.items" :key="group.id">
+                <UiButton type="button" @click="addGroup(group.id)">{{ group.name }}</UiButton> ·
+                {{ group.id }}
+              </li>
+            </ul>
+            <UiButton v-if="groups?.nextCursor" type="button" @click="groupPage(groups.nextCursor)">
+              {{ t('devices.next') }}
+            </UiButton>
+          </template>
+          <CriteriaEditor v-model="criteria" :fields="fields" />
+          <p v-if="!criteria">{{ t('security.criteriaRequired') }}</p>
+          <UiButton :disabled="!!!criteria" data-testid="save-rule" type="submit">{{
+            t('devices.save')
+          }}</UiButton>
+        </fieldset>
+      </form>
+    </details>
+    <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending()">
+      {{ t('policies.replay') }}
+    </UiButton>
+    <UiButton
+      v-if="current?.definition.enabled"
+      :disabled="!!(busy || uncertain)"
+      type="submit"
+      @click="recompute"
+    >
+      {{ t('security.recompute') }}
+    </UiButton>
+    <section v-if="current" class="console-panel">
+      <h2>{{ t('security.immutableVersion') }}</h2>
+      <section class="console-panel">
+        <h2>{{ t('security.immutableVersion') }}</h2>
+        <form @submit.prevent="loadVersion">
+          <label
+            >{{ t('devices.revision')
+            }}<input
+              v-model.number="version"
+              class="ui-input"
+              type="number"
+              min="1"
+              :max="current.revision"
+              required /></label
+          ><UiButton :disabled="!!busy" type="submit">{{ t('devices.open') }}</UiButton>
+        </form>
+      </section>
       <div v-if="historical" data-testid="rule-version">
         <p>
           {{ historical.definition.name }} · {{ historical.revision }} ·
@@ -297,14 +347,22 @@ onMounted(async () => {
         </fieldset>
       </div>
     </section>
-    <section v-if="id">
+    <section v-if="id" class="console-panel">
       <h2>{{ t('security.evaluationTask') }}</h2>
-      <form @submit.prevent="refreshTask">
-        <label
-          >{{ t('security.taskId')
-          }}<input v-model="taskId" required :readonly="busy" @input="task = undefined" /></label
-        ><button :disabled="busy">{{ t('policies.refresh') }}</button>
-      </form>
+      <section class="console-panel">
+        <h2>{{ t('security.evaluationTask') }}</h2>
+        <form @submit.prevent="refreshTask">
+          <label
+            >{{ t('security.taskId')
+            }}<input
+              v-model="taskId"
+              class="ui-input"
+              required
+              :readonly="busy"
+              @input="task = undefined" /></label
+          ><UiButton :disabled="!!busy" type="submit">{{ t('policies.refresh') }}</UiButton>
+        </form>
+      </section>
       <dl v-if="task" data-testid="evaluation-task">
         <dt>{{ t('security.phase') }}</dt>
         <dd>{{ t(`security.state.${task.phase}`) }}</dd>
@@ -320,5 +378,5 @@ onMounted(async () => {
         <dd>{{ task.diagnostic ? t('security.groupInputPending') : '—' }}</dd>
       </dl>
     </section>
-  </SecurityFrame>
+  </PageFrame>
 </template>

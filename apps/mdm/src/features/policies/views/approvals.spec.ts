@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, DOMWrapper } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { mdmKey } from '../../../context'
@@ -39,6 +39,13 @@ it('keeps explicit workflow approvals without ordinary script approval', async (
   })
   await flushPromises()
   await wrapper
+    .findAll('button')
+    .find((b) => b.text() === '批准')!
+    .trigger('click')
+  await flushPromises()
+  expect(workflow).not.toHaveBeenCalled()
+  await new DOMWrapper(document.body)
+    .get('[role=dialog]')
     .findAll('button')
     .find((b) => b.text() === '批准')!
     .trigger('click')

@@ -1,3 +1,4 @@
+import { ref } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -43,6 +44,7 @@ it('fences an unknown deployment write until the exact ring operation is observe
       stubs: { RouterLink: true },
       provide: {
         [mdmKey as symbol]: {
+          session: { state: ref({ session: { id: 'test-session' } }) },
           tenant: id,
           demo: true,
           software: {

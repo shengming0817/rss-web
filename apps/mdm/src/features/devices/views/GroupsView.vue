@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import { UiButton, UiDialog } from '@rss/core/components'
 import { onMounted, ref, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
 import type { Criteria, FieldDefinition } from '../clients/assets'
 import type { GroupChange, GroupProjection, GroupRead } from '../clients/groups'
-import DeviceFrame from '../components/DeviceFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 import CriteriaEditor from '../components/CriteriaEditor.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
@@ -25,6 +26,27 @@ const task = ref<string>(),
   status = ref<Awaited<ReturnType<typeof client.status>>>(),
   projection = ref<GroupProjection>('members'),
   result = ref<Awaited<ReturnType<typeof client.page>>>()
+const editing = ref(false),
+  deleting = ref(false)
+function cancelEdit() {
+  if (busy.value || uncertain.value) return
+  if (current.value) {
+    name.value = current.value.group.name
+    description.value = current.value.group.description
+    kind.value = current.value.group.kind
+    criteria.value = structuredClone(toRaw(current.value.criteria))
+  } else {
+    name.value = ''
+    description.value = ''
+    criteria.value = null
+    kind.value = 'static'
+  }
+  editing.value = false
+}
+function beginCreate() {
+  create()
+  editing.value = true
+}
 let pending: (() => Promise<boolean>) | undefined
 function write<T>(request: () => Promise<T>, apply: (value: T) => void) {
   if (busy.value || uncertain.value) return
@@ -44,6 +66,7 @@ function open(group = id.value) {
     (v) => {
       id.value = v.group.id
       current.value = v
+      editing.value = false
       name.value = v.group.name
       description.value = v.group.description
       kind.value = v.group.kind
@@ -74,6 +97,8 @@ function change(input: GroupChange) {
     const acknowledged = await runWrite(
       async () => client.change(group, body),
       (receipt) => {
+        editing.value = false
+        deleting.value = false
         task.value = receipt.task ?? undefined
         status.value = undefined
         result.value = undefined
@@ -178,31 +203,51 @@ function openGroup(group: string) {
 }
 </script>
 <template>
-  <DeviceFrame :title="t('devices.groups')" :busy="busy" :failure="failure">
-    <button :disabled="busy" @click="loadList()">{{ t('devices.reload') }}</button>
-    <ul>
+  <PageFrame :title="t('devices.groups')" :busy="busy" :failure="failure">
+    <UiButton :disabled="!!busy" type="submit" @click="loadList()">{{
+      t('devices.reload')
+    }}</UiButton>
+    <div class="console-toolbar">
+      <UiButton type="button" :disabled="busy || uncertain" @click="beginCreate">{{
+        t('devices.create')
+      }}</UiButton>
+    </div>
+    <ul class="console-object-list">
       <li v-for="group in list?.items" :key="group.id">
-        <button :disabled="busy || uncertain" @click="openGroup(group.id)">
+        <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="openGroup(group.id)">
           {{ group.name }} · {{ t(`devices.${group.kind}`) }} · {{ group.memberCount }}
-        </button>
+        </UiButton>
       </li>
     </ul>
-    <button v-if="list?.nextCursor" :disabled="busy" @click="loadList(list.nextCursor)">
+    <UiButton
+      v-if="list?.nextCursor"
+      :disabled="!!busy"
+      type="submit"
+      @click="loadList(list.nextCursor)"
+    >
       {{ t('devices.next') }}
-    </button>
-    <form @submit.prevent="open()">
-      <label
-        >{{ t('devices.groupId')
-        }}<input v-model="id" required :readonly="!!current || busy || uncertain" /></label
-      ><button :disabled="busy || uncertain">{{ t('devices.open') }}</button>
-    </form>
-    <button :disabled="busy || uncertain" @click="create">{{ t('devices.create') }}</button>
+    </UiButton>
+    <details class="console-panel">
+      <summary>{{ t('console.advanced') }}</summary>
+      <form @submit.prevent="open()">
+        <label
+          >{{ t('devices.groupId')
+          }}<input
+            v-model="id"
+            class="ui-input"
+            required
+            :readonly="!!current || busy || uncertain" /></label
+        ><UiButton :disabled="!!(busy || uncertain)" type="submit">{{
+          t('devices.open')
+        }}</UiButton>
+      </form>
+    </details>
     <p v-if="current">
       {{ t('devices.revision') }} {{ current.group.revision }} · {{ t('devices.memberVersion') }}
       {{ current.group.memberVersion }} · {{ t('devices.memberCount') }}
       {{ current.group.memberCount }}
     </p>
-    <section v-if="current" class="identity-card" data-testid="server-definition">
+    <section v-if="current" class="console-panel" data-testid="server-definition">
       <h2>{{ t('devices.current') }}</h2>
       <RouterLink
         :to="{
@@ -217,27 +262,44 @@ function openGroup(group: string) {
         <CriteriaEditor :model-value="current.criteria" :fields="fields" />
       </fieldset>
     </section>
-    <form @submit.prevent="save">
+    <div v-if="current && !editing" class="console-toolbar">
+      <UiButton type="button" :disabled="busy || uncertain" @click="editing = true">{{
+        t('console.edit')
+      }}</UiButton>
+    </div>
+    <form v-show="editing" class="console-panel" @submit.prevent="save">
+      <div class="console-page-header">
+        <h2>{{ t(current ? 'console.edit' : 'console.create') }}</h2>
+        <UiButton type="button" :disabled="busy || uncertain" @click="cancelEdit">{{
+          t('console.cancel')
+        }}</UiButton>
+      </div>
       <fieldset :disabled="busy || uncertain">
-        <label>{{ t('devices.name') }}<input v-model="name" required maxlength="256" /></label
+        <label
+          >{{ t('devices.name')
+          }}<input v-model="name" class="ui-input" required maxlength="256" /></label
         ><label
-          >{{ t('devices.description') }}<input v-model="description" maxlength="4096" /></label
+          >{{ t('devices.description')
+          }}<input v-model="description" class="ui-input" maxlength="4096" /></label
         ><label
           >{{ t('devices.kind')
-          }}<select v-model="kind" :disabled="!!current">
+          }}<select v-model="kind" class="ui-input" :disabled="!!current">
             <option value="static">{{ t('devices.static') }}</option>
             <option value="dynamic">{{ t('devices.dynamic') }}</option>
           </select></label
-        ><CriteriaEditor v-if="kind === 'dynamic'" v-model="criteria" :fields="fields" /><button>
-          {{ t('devices.save') }}</button
-        ><button v-if="current && kind === 'dynamic'" type="button" @click="saveRule">
+        ><CriteriaEditor v-if="kind === 'dynamic'" v-model="criteria" :fields="fields" /><UiButton
+          type="submit"
+        >
+          {{ t('devices.save') }}</UiButton
+        ><UiButton v-if="current && kind === 'dynamic'" type="button" @click="saveRule">
           {{ t('devices.rule') }}
-        </button>
+        </UiButton>
       </fieldset>
     </form>
-    <section v-if="current">
-      <button
-        :disabled="busy"
+    <section v-if="current" class="console-panel">
+      <UiButton
+        :disabled="!!busy"
+        type="submit"
         @click="
           run(
             () => client.read(id),
@@ -245,24 +307,36 @@ function openGroup(group: string) {
           )
         "
       >
-        {{ t('devices.compare') }}</button
-      ><button :disabled="busy || uncertain" @click="change({ action: 'delete' })">
+        {{ t('devices.compare') }}</UiButton
+      ><UiButton :disabled="!!(busy || uncertain)" type="submit" @click="deleting = true">
         {{ t('devices.delete') }}
-      </button>
+      </UiButton>
       <form v-if="current.group.kind === 'static'" @submit.prevent="changeMembers">
-        <label>{{ t('devices.memberIds') }}<textarea v-model="members" required /></label
+        <label
+          >{{ t('devices.memberIds')
+          }}<textarea v-model="members" class="ui-input" required /></label
         ><label><input v-model="remove" type="checkbox" />{{ t('devices.remove') }}</label
-        ><button :disabled="busy || uncertain">{{ t('devices.save') }}</button>
+        ><UiButton :disabled="!!(busy || uncertain)" type="submit">{{
+          t('devices.save')
+        }}</UiButton>
       </form>
       <p>{{ t('devices.previewNote') }}</p>
-      <button :disabled="busy || uncertain" @click="preview">{{ t('devices.previewSaved') }}</button
-      ><button :disabled="busy || uncertain" @click="change({ action: 'recompute' })">
+      <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="preview">{{
+        t('devices.previewSaved')
+      }}</UiButton
+      ><UiButton
+        :disabled="!!(busy || uncertain)"
+        type="submit"
+        @click="change({ action: 'recompute' })"
+      >
         {{ t('devices.recompute') }}
-      </button>
+      </UiButton>
     </section>
     <section v-if="task">
       <h2>{{ t('devices.task') }} {{ task }}</h2>
-      <button :disabled="busy" @click="refresh">{{ t('devices.refreshTask') }}</button>
+      <UiButton :disabled="!!busy" type="submit" @click="refresh">{{
+        t('devices.refreshTask')
+      }}</UiButton>
       <p v-if="status">
         {{ t(`devices.${status.status}`) }} · {{ t('devices.memberCount') }} {{ status.members }}
       </p>
@@ -276,11 +350,18 @@ function openGroup(group: string) {
         <dd>{{ status.failureDetail.device ?? '—' }}</dd>
       </dl>
       <template v-if="status?.status === 'completed' && !status.failure"
-        ><select v-model="projection" :aria-label="t('devices.kind')" @change="result = undefined">
+        ><select
+          v-model="projection"
+          class="ui-input"
+          :aria-label="t('devices.kind')"
+          @change="result = undefined"
+        >
           <option v-for="key in ['members', 'changes', 'decisions']" :key="key" :value="key">
             {{ t(`devices.${key}`) }}
           </option></select
-        ><button :disabled="busy" @click="page()">{{ t('devices.load') }}</button></template
+        ><UiButton :disabled="!!busy" type="submit" @click="page()">{{
+          t('devices.load')
+        }}</UiButton></template
       >
       <template v-if="result"
         ><p>
@@ -329,13 +410,38 @@ function openGroup(group: string) {
             </details>
           </li>
         </ul>
-        <button v-if="result.nextCursor" :disabled="busy" @click="page(result.nextCursor)">
+        <UiButton
+          v-if="result.nextCursor"
+          :disabled="!!busy"
+          type="submit"
+          @click="page(result.nextCursor)"
+        >
           {{ t('devices.next') }}
-        </button>
+        </UiButton>
       </template>
     </section>
-    <button v-if="uncertain && pending" :disabled="busy" @click="pending!()">
+    <UiDialog
+      :open="deleting"
+      :title="t('devices.delete')"
+      :close-label="t('console.close')"
+      kind="alertdialog"
+      :dismissible="!busy && !uncertain"
+      @update:open="deleting = $event"
+    >
+      <p>{{ current?.group.name }} · {{ current?.group.id }}</p>
+      <p>{{ t('devices.memberCount') }}: {{ current?.group.memberCount }}</p>
+      <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
+      <template #footer
+        ><UiButton :disabled="busy || uncertain" @click="change({ action: 'delete' })">{{
+          t('devices.delete')
+        }}</UiButton
+        ><UiButton v-if="uncertain && pending" :disabled="busy" @click="pending!()">{{
+          t('devices.replay')
+        }}</UiButton></template
+      >
+    </UiDialog>
+    <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending!()">
       {{ t('devices.replay') }}
-    </button>
-  </DeviceFrame>
+    </UiButton>
+  </PageFrame>
 </template>

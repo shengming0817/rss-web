@@ -54,6 +54,6 @@ it('shows missing metrics as unknown and fences late evidence on device navigati
   await flushPromises()
   finish({ experience: { ...report, device: 'device-02' }, asOf: 100 })
   await flushPromises()
-  expect(wrapper.get('h2').text()).toBe('device-03')
+  expect(wrapper.findAll('h2').at(-1)!.text()).toBe('device-03')
   wrapper.unmount()
 })

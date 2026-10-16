@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiButton, UiTabs, UiDialog } from '@rss/core/components'
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -12,6 +13,18 @@ const { busy, error, run, checkpoint } = useOperation()
 const rows = ref<Session[]>([])
 const next = ref<string | null>(null)
 const current = ref('')
+const tab = ref('sessions'),
+  confirmAll = ref(false)
+function clearLocalSecrets() {
+  password.value = ''
+  current.value = ''
+  reauthPassword.value = ''
+  linkPassword.value = ''
+}
+function clearClosedSecrets(event: Event) {
+  if (!(event.target as HTMLDetailsElement).open) clearLocalSecrets()
+}
+watch(tab, clearLocalSecrets)
 const password = ref('')
 const reauthPassword = ref('')
 const linkPassword = ref('')
@@ -155,141 +168,213 @@ onBeforeUnmount(() => {
   reauthPassword.value = ''
   linkPassword.value = ''
 })
+function submitConfirmed() {
+  confirmAll.value = false
+  void logout(true)
+}
 </script>
 <template>
-  <section class="identity-card">
+  <section class="auth-page">
     <h1>{{ t('identity.sessions') }}</h1>
-    <section v-if="session.config.oidcEnabled" aria-labelledby="security-title">
-      <h2 id="security-title">{{ t('identity.authentication') }}</h2>
-      <template v-if="session.state.value.security">
-        <p>
-          {{ t('identity.authTime') }}:
-          {{
-            session.state.value.security.authentication.authTime === null
-              ? t('identity.noAuthTime')
-              : new Date(
-                  session.state.value.security.authentication.authTime * 1000,
-                ).toLocaleString()
-          }}
-        </p>
-        <p>
-          {{ t('identity.strength') }}:
-          {{ t('identity.' + session.state.value.security.authentication.acr) }}
-        </p>
-        <p>
-          {{ t('identity.methods') }}:
-          {{
-            session.state.value.security.authentication.amr
-              .map((m) => t('identity.method_' + m))
-              .join(' · ') || t('identity.noMethods')
-          }}
-        </p>
-        <p v-if="!session.state.value.security.eligibleStepUpProviders.length">
-          {{ t('identity.noStepUp') }}
-        </p>
-        <button
-          v-for="p in session.state.value.security.eligibleStepUpProviders"
-          :key="p.providerId"
-          :disabled="busy"
-          @click="stepUp(p.providerId)"
-        >
-          {{ t('identity.stepUp') }} · {{ p.label }}
-        </button>
-      </template>
-      <button :disabled="busy || !owner" @click="run(() => session.loadSecurity())">
-        {{ t('identity.reloadSecurity') }}
-      </button>
-    </section>
     <p v-if="session.logoutOutcome.value === 'unconfirmed'" role="alert">
       {{ t('identity.logoutUnconfirmed') }}
     </p>
     <p v-else-if="error" role="alert">{{ t(`identity.errors.${error}`) }}</p>
-    <div class="identity-actions">
-      <button :disabled="busy" @click="run(reloadSessions)">{{ t('identity.reload') }}</button
-      ><button :disabled="busy || !owner" @click="logout(false)">{{ t('identity.logout') }}</button
-      ><button :disabled="busy || !owner" @click="logout(true)">
-        {{ t('identity.logoutAll') }}
-      </button>
-      <RouterLink
-        v-if="session.logoutOutcome.value === 'unconfirmed' && !owner"
-        :to="{ name: 'login', params: { tenant: session.state.value.tenant } }"
-      >
-        {{ t('identity.login') }}
-      </RouterLink>
-    </div>
-    <div class="identity-table">
-      <table>
-        <thead>
-          <tr>
-            <th>{{ t('identity.session') }}</th>
-            <th>{{ t('identity.expires') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in rows" :key="row.id">
-            <td>
-              {{ row.id }}
-              <span v-if="row.id === session.state.value.session?.id"
-                >({{ t('identity.current') }})</span
-              >
-            </td>
-            <td>{{ new Date(row.idleExpiresAt * 1000).toLocaleString() }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <button v-if="next" :disabled="busy" @click="run(() => load(next ?? undefined))">
-      {{ t('identity.more') }}
-    </button>
-    <form v-if="session.state.value.identity?.hasLocalPassword" @submit.prevent="change">
-      <h2>{{ t('identity.changePassword') }}</h2>
-      <label for="current-password">{{ t('identity.currentPassword') }}</label
-      ><input
-        id="current-password"
-        v-model="current"
-        type="password"
-        autocomplete="current-password"
-        required
-      /><label for="new-password">{{ t('identity.newPassword') }}</label
-      ><input
-        id="new-password"
-        v-model="password"
-        type="password"
-        autocomplete="new-password"
-        minlength="15"
-        required
-      /><button type="submit" :disabled="busy">{{ t('identity.changePassword') }}</button>
-    </form>
-    <form v-if="session.state.value.identity?.hasLocalPassword" @submit.prevent="reauthenticate">
-      <h2>{{ t('identity.reauthenticate') }}</h2>
-      <label for="reauth-password">{{ t('identity.currentPassword') }}</label>
-      <input
-        id="reauth-password"
-        v-model="reauthPassword"
-        type="password"
-        autocomplete="current-password"
-        required
-      />
-      <button :disabled="busy">{{ t('identity.reauthenticate') }}</button>
-    </form>
-    <form v-if="session.config.oidcEnabled && providers.length" @submit.prevent="link">
-      <h2>{{ t('identity.linkProvider') }}</h2>
-      <label for="link-provider">{{ t('identity.providers') }}</label>
-      <select id="link-provider" v-model="selectedProvider" required>
-        <option v-for="p in providers" :key="p.id" :value="p.id">{{ p.label }}</option>
-      </select>
-      <template v-if="session.state.value.identity?.hasLocalPassword">
-        <label for="link-password">{{ t('identity.currentPassword') }}</label>
-        <input
-          id="link-password"
-          v-model="linkPassword"
-          type="password"
-          autocomplete="current-password"
-          required
-        />
-      </template>
-      <button :disabled="busy">{{ t('identity.linkProvider') }}</button>
-    </form>
-    <p class="identity-muted">{{ t('identity.logoutHelp') }}</p>
+    <p class="auth-muted">{{ t('identity.logoutHelp') }}</p>
+    <UiTabs
+      v-model="tab"
+      :label="t('identity.sessions')"
+      :items="[
+        { value: 'sessions', label: t('identity.sessions') },
+        { value: 'security', label: t('identity.authentication') },
+      ]"
+      keep-mounted
+      ><template #sessions
+        ><div class="auth-actions">
+          <UiButton :disabled="!!busy" type="submit" @click="run(reloadSessions)">{{
+            t('identity.reload')
+          }}</UiButton
+          ><UiButton :disabled="!!(busy || !owner)" type="submit" @click="logout(false)">{{
+            t('identity.logout')
+          }}</UiButton
+          ><UiButton :disabled="!!(busy || !owner)" type="submit" @click="confirmAll = true">
+            {{ t('identity.logoutAll') }}
+          </UiButton>
+          <RouterLink
+            v-if="session.logoutOutcome.value === 'unconfirmed' && !owner"
+            :to="{ name: 'login', params: { tenant: session.state.value.tenant } }"
+          >
+            {{ t('identity.login') }}
+          </RouterLink>
+        </div>
+        <div class="auth-table">
+          <div class="ui-table-scroll">
+            <table class="ui-table">
+              <thead>
+                <tr>
+                  <th>{{ t('identity.session') }}</th>
+                  <th>{{ t('identity.expires') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in rows" :key="row.id">
+                  <td>
+                    {{ row.id }}
+                    <span v-if="row.id === session.state.value.session?.id"
+                      >({{ t('identity.current') }})</span
+                    >
+                  </td>
+                  <td>{{ new Date(row.idleExpiresAt * 1000).toLocaleString() }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <UiButton
+          v-if="next"
+          :disabled="!!busy"
+          type="submit"
+          @click="run(() => load(next ?? undefined))"
+        >
+          {{ t('identity.more') }}
+        </UiButton></template
+      ><template #security
+        ><section v-if="session.config.oidcEnabled" aria-labelledby="security-title">
+          <h2 id="security-title">{{ t('identity.authentication') }}</h2>
+          <template v-if="session.state.value.security">
+            <p>
+              {{ t('identity.authTime') }}:
+              {{
+                session.state.value.security.authentication.authTime === null
+                  ? t('identity.noAuthTime')
+                  : new Date(
+                      session.state.value.security.authentication.authTime * 1000,
+                    ).toLocaleString()
+              }}
+            </p>
+            <p>
+              {{ t('identity.strength') }}:
+              {{ t('identity.' + session.state.value.security.authentication.acr) }}
+            </p>
+            <p>
+              {{ t('identity.methods') }}:
+              {{
+                session.state.value.security.authentication.amr
+                  .map((m) => t('identity.method_' + m))
+                  .join(' · ') || t('identity.noMethods')
+              }}
+            </p>
+            <p v-if="!session.state.value.security.eligibleStepUpProviders.length">
+              {{ t('identity.noStepUp') }}
+            </p>
+            <UiButton
+              v-for="p in session.state.value.security.eligibleStepUpProviders"
+              :key="p.providerId"
+              :disabled="!!busy"
+              type="submit"
+              @click="stepUp(p.providerId)"
+            >
+              {{ t('identity.stepUp') }} · {{ p.label }}
+            </UiButton>
+          </template>
+          <UiButton
+            :disabled="!!(busy || !owner)"
+            type="submit"
+            @click="run(() => session.loadSecurity())"
+          >
+            {{ t('identity.reloadSecurity') }}
+          </UiButton>
+        </section>
+        <details
+          v-if="session.state.value.identity?.hasLocalPassword"
+          class="auth-task"
+          @toggle="clearClosedSecrets"
+        >
+          <summary>{{ t('identity.changePassword') }}</summary>
+          <form @submit.prevent="change">
+            <h2>{{ t('identity.changePassword') }}</h2>
+            <label for="current-password">{{ t('identity.currentPassword') }}</label
+            ><input
+              id="current-password"
+              v-model="current"
+              class="ui-input"
+              type="password"
+              autocomplete="current-password"
+              required
+            /><label for="new-password">{{ t('identity.newPassword') }}</label
+            ><input
+              id="new-password"
+              v-model="password"
+              class="ui-input"
+              type="password"
+              autocomplete="new-password"
+              minlength="15"
+              required
+            /><UiButton type="submit" :disabled="!!busy">{{
+              t('identity.changePassword')
+            }}</UiButton>
+          </form>
+        </details>
+        <details
+          v-if="session.state.value.identity?.hasLocalPassword"
+          class="auth-task"
+          @toggle="clearClosedSecrets"
+        >
+          <summary>{{ t('identity.reauthenticate') }}</summary>
+          <form @submit.prevent="reauthenticate">
+            <h2>{{ t('identity.reauthenticate') }}</h2>
+            <label for="reauth-password">{{ t('identity.currentPassword') }}</label>
+            <input
+              id="reauth-password"
+              v-model="reauthPassword"
+              class="ui-input"
+              type="password"
+              autocomplete="current-password"
+              required
+            />
+            <UiButton :disabled="!!busy" type="submit">{{ t('identity.reauthenticate') }}</UiButton>
+          </form>
+        </details>
+        <details
+          v-if="session.config.oidcEnabled && providers.length"
+          class="auth-task"
+          @toggle="clearClosedSecrets"
+        >
+          <summary>{{ t('identity.linkProvider') }}</summary>
+          <form @submit.prevent="link">
+            <h2>{{ t('identity.linkProvider') }}</h2>
+            <label for="link-provider">{{ t('identity.providers') }}</label>
+            <select id="link-provider" v-model="selectedProvider" class="ui-input" required>
+              <option v-for="p in providers" :key="p.id" :value="p.id">{{ p.label }}</option>
+            </select>
+            <template v-if="session.state.value.identity?.hasLocalPassword">
+              <label for="link-password">{{ t('identity.currentPassword') }}</label>
+              <input
+                id="link-password"
+                v-model="linkPassword"
+                class="ui-input"
+                type="password"
+                autocomplete="current-password"
+                required
+              />
+            </template>
+            <UiButton :disabled="!!busy" type="submit">{{ t('identity.linkProvider') }}</UiButton>
+          </form>
+        </details></template
+      ></UiTabs
+    >
+    <UiDialog
+      :open="confirmAll"
+      :title="t('identity.logoutAll')"
+      :description="t('identity.logoutHelp')"
+      :close-label="t('identity.cancel')"
+      kind="alertdialog"
+      @update:open="confirmAll = $event"
+      ><template #footer
+        ><UiButton :disabled="busy || !owner" @click="submitConfirmed">{{
+          t('identity.confirm')
+        }}</UiButton></template
+      ></UiDialog
+    >
   </section>
 </template>

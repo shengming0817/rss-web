@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import { UiButton } from '@rss/core/components'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { operation, useOperation, type Operation } from '../../../services/useOperation'
 import type { SourceChange, SourceDefinition } from '../clients/admission'
-import SoftwareFrame from '../components/SoftwareFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
+const creating = ref(false)
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.software.admission,
@@ -35,6 +37,7 @@ function openSource(sourceId: string, sourceRevision: string) {
         current.value?.source.revision !== sourceRevision
       )
         evidence.value = ''
+      creating.value = false
       current.value = v
       id.value = sourceId
       revision.value = sourceRevision
@@ -44,6 +47,7 @@ function openSource(sourceId: string, sourceRevision: string) {
 let pending: { id: string; revision: string; body: Operation<SourceChange> } | undefined
 function create() {
   if (busy.value || uncertain.value) return
+  creating.value = true
   current.value = undefined
   pending = undefined
   id.value = ''
@@ -62,6 +66,7 @@ function load() {
         current.value?.source.revision !== value.source.revision
       )
         evidence.value = ''
+      creating.value = false
       current.value = value
       id.value = value.source.id
       revision.value = value.source.revision
@@ -78,6 +83,7 @@ function replay() {
   void runWrite(
     () => client.changeSource(p.id, p.revision, p.body),
     (value) => {
+      creating.value = false
       current.value = value
       evidence.value = ''
     },
@@ -110,59 +116,82 @@ function register() {
 onMounted(() => list())
 </script>
 <template>
-  <SoftwareFrame :title="t('software.sources')" :busy="busy" :failure="failure">
+  <PageFrame :title="t('software.sources')" :busy="busy" :failure="failure">
     <p>{{ t('software.admissionHint') }}</p>
-    <button :disabled="busy" @click="list()">{{ t('policies.reload') }}</button>
+    <UiButton :disabled="!!busy" type="submit" @click="list()">{{ t('policies.reload') }}</UiButton>
     <p v-if="directory && !directory.items.length">{{ t('policies.empty') }}</p>
-    <ul>
+    <ul class="console-object-list">
       <li v-for="entry in directory?.items" :key="`${entry.source.id}/${entry.source.revision}`">
-        <button
-          :disabled="busy || uncertain"
+        <UiButton
+          :disabled="!!(busy || uncertain)"
+          type="submit"
           @click="openSource(entry.source.id, entry.source.revision)"
         >
           {{ entry.source.id }} / {{ entry.source.revision }} ·
           {{ t(`software.${entry.admission.state}`) }}
-        </button>
+        </UiButton>
       </li>
     </ul>
-    <button v-if="directory?.nextCursor" :disabled="busy" @click="list(directory.nextCursor)">
+    <UiButton
+      v-if="directory?.nextCursor"
+      :disabled="!!busy"
+      type="submit"
+      @click="list(directory.nextCursor)"
+    >
       {{ t('policies.next') }}
-    </button>
+    </UiButton>
     <p v-if="directory?.bindings.length">
       {{ t('software.publicationSource') }}:
       {{ directory.bindings.map((b) => `${b.id} (${b.kind})`).join(', ') }}
     </p>
-    <button :disabled="busy || uncertain" @click="create">{{ t('policies.create') }}</button>
-    <form @submit.prevent="load">
-      <fieldset :disabled="busy || uncertain">
-        <label for="source-id">{{ t('software.source') }}</label
-        ><input id="source-id" v-model="id" required :readonly="!!current" />
-        <label for="source-revision">{{ t('software.sourceRevision') }}</label
-        ><input id="source-revision" v-model="revision" required :readonly="!!current" />
-        <button type="submit">{{ t('policies.open') }}</button>
-      </fieldset>
-    </form>
-    <form v-if="!current" @submit.prevent="register">
-      <fieldset :disabled="busy || uncertain">
-        <label for="source-kind">{{ t('software.sourceKind') }}</label
-        ><select id="source-kind" v-model="kind">
-          <option value="private">{{ t('software.private') }}</option>
-          <option value="winget">WinGet</option>
-          <option value="brew">Homebrew</option>
-        </select>
-        <template v-if="kind !== 'private'"
-          ><label for="source-location">{{ t('software.location') }}</label
+    <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="create">{{
+      t('policies.create')
+    }}</UiButton>
+    <details class="console-panel console-task" :open="uncertain || undefined">
+      <summary>{{ t('console.advanced') }}</summary>
+      <form @submit.prevent="load">
+        <fieldset :disabled="busy || uncertain">
+          <label for="source-id">{{ t('software.source') }}</label
+          ><input id="source-id" v-model="id" class="ui-input" required :readonly="!!current" />
+          <label for="source-revision">{{ t('software.sourceRevision') }}</label
           ><input
-            id="source-location"
-            v-model="location"
+            id="source-revision"
+            v-model="revision"
+            class="ui-input"
             required
-            :type="kind === 'winget' ? 'url' : 'text'"
-        /></template>
-        <label for="source-publishers">{{ t('software.publishers') }}</label
-        ><textarea id="source-publishers" v-model="publishers" />
-        <button type="submit" :disabled="!id || !revision">{{ t('software.register') }}</button>
-      </fieldset>
-    </form>
+            :readonly="!!current"
+          />
+          <UiButton type="submit">{{ t('policies.open') }}</UiButton>
+        </fieldset>
+      </form>
+    </details>
+    <section v-if="!current && creating" class="console-panel">
+      <h2>{{ t('console.create') }}</h2>
+      <form @submit.prevent="register">
+        <fieldset :disabled="busy || uncertain">
+          <label for="source-kind">{{ t('software.sourceKind') }}</label
+          ><select id="source-kind" v-model="kind" class="ui-input">
+            <option value="private">{{ t('software.private') }}</option>
+            <option value="winget">WinGet</option>
+            <option value="brew">Homebrew</option>
+          </select>
+          <template v-if="kind !== 'private'"
+            ><label for="source-location">{{ t('software.location') }}</label
+            ><input
+              id="source-location"
+              v-model="location"
+              class="ui-input"
+              required
+              :type="kind === 'winget' ? 'url' : 'text'"
+          /></template>
+          <label for="source-publishers">{{ t('software.publishers') }}</label
+          ><textarea id="source-publishers" v-model="publishers" class="ui-input" />
+          <UiButton type="submit" :disabled="!!(!id || !revision)">{{
+            t('software.register')
+          }}</UiButton>
+        </fieldset>
+      </form>
+    </section>
     <template v-if="current">
       <dl>
         <dt>{{ t('software.sourceKind') }}</dt>
@@ -194,23 +223,27 @@ onMounted(() => list())
       >
         <fieldset :disabled="busy || uncertain">
           <label for="source-evidence">{{ t('software.evidence') }}</label
-          ><input id="source-evidence" v-model="evidence" required maxlength="1024" /><button
-            type="submit"
-          >
+          ><input
+            id="source-evidence"
+            v-model="evidence"
+            class="ui-input"
+            required
+            maxlength="1024"
+          /><UiButton type="submit">
             {{
               current.admission.state === 'approved'
                 ? t('software.withdrawAdmission')
                 : t('software.approveAdmission')
             }}
-          </button>
+          </UiButton>
         </fieldset>
       </form>
     </template>
-    <button v-if="current || uncertain" :disabled="busy" @click="load">
+    <UiButton v-if="current || uncertain" :disabled="!!busy" type="submit" @click="load">
       {{ t('policies.verify') }}
-    </button>
-    <button v-if="uncertain && pending" :disabled="busy" @click="replay">
+    </UiButton>
+    <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="replay">
       {{ t('policies.replay') }}
-    </button>
-  </SoftwareFrame>
+    </UiButton>
+  </PageFrame>
 </template>

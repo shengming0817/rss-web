@@ -23,7 +23,7 @@ const reason = computed(() =>
 )
 </script>
 <template>
-  <section class="identity-card" aria-labelledby="error-title">
+  <section class="auth-page" aria-labelledby="error-title">
     <h1 id="error-title">{{ t(`identity.${reason}`) }}</h1>
     <p>{{ t('identity.restartHelp') }}</p>
     <RouterLink v-if="tenant" :to="{ name: 'login', params: { tenant } }">{{

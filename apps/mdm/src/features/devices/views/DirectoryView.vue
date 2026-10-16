@@ -1,11 +1,18 @@
 <script setup lang="ts">
+import {
+  UiButton,
+  UiTable,
+  UiPagination,
+  UiSelect,
+  UiCheckbox,
+  UiBadge,
+} from '@rss/core/components'
 import { ref, watch, computed } from 'vue'
-import { UiTable, UiPagination } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../useDeviceBinding'
-import DeviceFrame from '../components/DeviceFrame.vue'
+import PageFrame from '../../../components/PageFrame.vue'
 import { endpointStatuses } from '../clients/endpoint-model'
 const { t } = useI18n(),
   runtime = useMdm(),
@@ -60,93 +67,111 @@ function detail(item: Row) {
         params: { tenant: runtime.tenant, kind: item.reference.kind, view: item.reference.id },
       }
 }
+const statusOptions = computed(() => [
+  { value: '', label: t('devices.all') },
+  ...endpointStatuses.map((value) => ({ value, label: t(`devices.endpointState.${value}`) })),
+])
+const channelOptions = computed(() => [
+  { value: '', label: t('devices.all') },
+  { value: 'mdm', label: 'MDM' },
+  { value: 'agent', label: 'Agent' },
+])
+const sourceOptions = computed(() => [
+  { value: '', label: t('devices.all') },
+  ...['mdm.windows', 'mdm.apple', 'agent.builtin'].map((value) => ({
+    value,
+    label: t(`devices['${value}']`),
+  })),
+])
 </script>
 <template>
-  <DeviceFrame :title="t('devices.directory')" :busy="busy" :failure="failure">
-    <form @submit.prevent="load()">
-      <fieldset :disabled="busy">
-        <label
-          >{{ t('devices.status')
-          }}<select v-model="status">
-            <option value="">{{ t('devices.all') }}</option>
-            <option v-for="s in endpointStatuses" :key="s" :value="s">
-              {{ t(`devices.endpointState.${s}`) }}
-            </option>
-          </select></label
-        ><label
-          >{{ t('devices.channels')
-          }}<select v-model="channel">
-            <option value="">{{ t('devices.all') }}</option>
-            <option value="mdm">MDM</option>
-            <option value="agent">Agent</option>
-          </select></label
-        ><label
-          >{{ t('devices.source')
-          }}<select v-model="source">
-            <option value="">{{ t('devices.all') }}</option>
-            <option v-for="s in ['mdm.windows', 'mdm.apple', 'agent.builtin']" :key="s" :value="s">
-              {{ t(`devices['${s}']`) }}
-            </option>
-          </select></label
-        ><label><input v-model="descending" type="checkbox" />{{ t('devices.descending') }}</label
-        ><button>{{ t('devices.reload') }}</button>
-      </fieldset>
+  <PageFrame :title="t('devices.directory')" :busy="busy" :failure="failure">
+    <template #actions
+      ><RouterLink
+        class="ui-button ui-button--secondary"
+        :to="{ name: 'device-search', params: { tenant: runtime.tenant } }"
+        >{{ t('devices.search') }}</RouterLink
+      ><RouterLink
+        class="ui-button ui-button--primary"
+        :to="{ name: 'device-enroll', params: { tenant: runtime.tenant } }"
+        >{{ t('devices.enroll') }}</RouterLink
+      ></template
+    >
+    <form class="console-toolbar" @submit.prevent="load()">
+      <label
+        >{{ t('devices.status')
+        }}<UiSelect v-model="status" :options="statusOptions" :disabled="busy"
+      /></label>
+      <label
+        >{{ t('devices.channels')
+        }}<UiSelect v-model="channel" :options="channelOptions" :disabled="busy"
+      /></label>
+      <label
+        >{{ t('devices.source')
+        }}<UiSelect v-model="source" :options="sourceOptions" :disabled="busy"
+      /></label>
+      <UiCheckbox v-model="descending" :label="t('devices.descending')" :disabled="busy" />
+      <UiButton type="submit" :busy="busy">{{ t('devices.reload') }}</UiButton>
     </form>
     <p v-if="failure === 'cursorInvalidated'">{{ t('devices.restartDirectory') }}</p>
-    <div v-if="page" class="mdm-grid">
+    <div v-if="page" class="console-stat-grid" :aria-label="t('console.queryStatistics')">
       <article
         v-for="key in ['deviceViewCount', 'endpointCount'] as const"
         :key="key"
-        class="identity-card"
+        class="console-stat"
       >
         <h2>{{ t(`devices.${key}`) }}</h2>
         <strong>{{ page.statistics[key] }}</strong>
       </article>
     </div>
-    <UiTable
-      v-if="page || busy"
-      :label="t('devices.directory')"
-      :rows="page?.items ?? []"
-      :columns="columns"
-      :row-key="rowKey"
-      :busy="busy"
-      :busy-label="t('devices.loading')"
-      :empty-label="t('devices.empty')"
-    >
-      <template #cell-reference="{ row }"
-        ><RouterLink :to="detail(row)"
-          >{{
-            t(
-              row.reference.kind === 'association'
-                ? 'devices.unifiedView'
-                : 'devices.originalEndpoint',
-            )
-          }}
-          · {{ row.reference.id }}</RouterLink
-        ></template
+    <div class="console-results">
+      <UiTable
+        v-if="page || busy"
+        :label="t('devices.directory')"
+        :rows="page?.items ?? []"
+        :columns="columns"
+        :row-key="rowKey"
+        :busy="busy"
+        :busy-label="t('devices.loading')"
+        :empty-label="t('devices.empty')"
       >
-      <template #cell-status="{ row }">{{
-        row.association
-          ? t(`devices.associationState.${row.association.state}`)
-          : t(`devices.endpointState.${row.endpoints[0]?.status}`)
-      }}</template>
-      <template #cell-channels="{ row }">{{
-        row.endpoints.flatMap((e) => e.channels.map((c) => c.channel)).join(' + ')
-      }}</template>
-      <template #cell-endpoints="{ row }"
-        ><ul>
-          <li v-for="endpoint in row.endpoints" :key="endpoint.id">
-            <RouterLink
-              :to="{
-                name: 'device-detail',
-                params: { tenant: runtime.tenant, device: endpoint.id },
-              }"
-              >{{ endpoint.id }}</RouterLink
-            >
-          </li>
-        </ul></template
-      >
-    </UiTable>
+        <template #cell-reference="{ row }"
+          ><RouterLink :to="detail(row)"
+            >{{
+              t(
+                row.reference.kind === 'association'
+                  ? 'devices.unifiedView'
+                  : 'devices.originalEndpoint',
+              )
+            }}
+            · {{ row.reference.id }}</RouterLink
+          ></template
+        >
+        <template #cell-status="{ row }"
+          ><UiBadge>{{
+            row.association
+              ? t(`devices.associationState.${row.association.state}`)
+              : t(`devices.endpointState.${row.endpoints[0]?.status}`)
+          }}</UiBadge></template
+        >
+        <template #cell-channels="{ row }">{{
+          row.endpoints.flatMap((e) => e.channels.map((c) => c.channel)).join(' + ')
+        }}</template>
+        <template #cell-endpoints="{ row }"
+          ><ul>
+            <li v-for="endpoint in row.endpoints" :key="endpoint.id">
+              <RouterLink
+                :to="{
+                  name: 'device-detail',
+                  params: { tenant: runtime.tenant, device: endpoint.id },
+                }"
+                >{{ endpoint.id }}</RouterLink
+              >
+            </li>
+          </ul></template
+        >
+      </UiTable>
+    </div>
     <UiPagination
       v-if="page?.nextCursor"
       :state="{ kind: 'cursor', hasPrevious: false, hasNext: true }"
@@ -156,5 +181,5 @@ function detail(item: Row) {
       :busy="busy"
       @navigate="$event === 'next' && load(page?.nextCursor ?? undefined)"
     />
-  </DeviceFrame>
+  </PageFrame>
 </template>

@@ -36,9 +36,9 @@ const utc = (at: number) =>
         <dt>{{ t('software.rebootRequired') }}</dt>
         <dd>{{ run.result.rebootRequired ? t('software.yes') : t('software.no') }}</dd>
         <dt>{{ t('software.definitionDigest') }}</dt>
-        <dd class="device-wrap">{{ run.result.definitionDigest.join(',') }}</dd>
+        <dd class="console-wrap">{{ run.result.definitionDigest.join(',') }}</dd>
         <dt>{{ t('software.evidenceDigest') }}</dt>
-        <dd class="device-wrap">{{ run.result.evidenceDigest.join(',') }}</dd>
+        <dd class="console-wrap">{{ run.result.evidenceDigest.join(',') }}</dd>
       </template>
     </dl>
     <p v-if="!run.result">{{ t('software.noRunResult') }}</p>
