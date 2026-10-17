@@ -322,6 +322,22 @@ export function policyAction(value: unknown) {
       runLifetimeSeconds: lifetime(v['runLifetimeSeconds']),
     }
   }
+  if (kind === 'ensure_agent_installed') {
+    const v = closed(value, ['kind', 'packages', 'schedule', 'runLifetimeSeconds'])
+    const packages = Object.fromEntries(
+      Object.entries(record(v['packages'])).map(([target, release]) => [
+        enumeration(target, targets),
+        uuid(release),
+      ]),
+    )
+    if (!Object.keys(packages).length) throw new Error('Missing Agent release')
+    return {
+      kind,
+      packages,
+      schedule: nativeSchedule(v['schedule']),
+      runLifetimeSeconds: lifetime(v['runLifetimeSeconds']),
+    }
+  }
   const v = closed(value, [
     'kind',
     'resource',
@@ -336,7 +352,6 @@ export function policyAction(value: unknown) {
     schedule: nativeSchedule(v['schedule']),
     runLifetimeSeconds: lifetime(v['runLifetimeSeconds']),
   }
-  if (kind === 'ensure_agent_installed') return { kind, ...base }
   const r = closed(v['rollout'], ['stages']),
     stages = unique(
       array(r['stages'], (value) => {

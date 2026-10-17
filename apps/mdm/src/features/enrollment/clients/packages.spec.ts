@@ -7,6 +7,7 @@ const item = {
   channel: 'production',
   target: { platform: 'windows', architecture: 'x86_64' },
   version: '1.0.0',
+  format: 'nsis_exe',
   filename: 'rss-agent.exe',
   length: 42,
   installerSha256: Array(32).fill(0),
@@ -19,11 +20,25 @@ it('accepts published installer metadata and rejects tenant, file and wire misma
   for (const delta of [
     { tenantId: '22222222-2222-4222-8222-222222222222' },
     { filename: '../secret.exe' },
-    { filename: 'rss-agent.pkg' },
+    { format: 'macos_pkg', filename: 'rss-agent.pkg' },
     { target: { platform: 'windows', architecture: 'auto' } },
     { origin: 'https://agent.example.test/' },
     { length: 0 },
     { secret: 'unexpected' },
   ])
     expect(() => installer({ ...item, ...delta }, tenant)).toThrow()
+})
+it('distinguishes MSI and MSIX and rejects the retired metadata shape', () => {
+  for (const [format, suffix] of [
+    ['windows_msi', 'msi'],
+    ['windows_msix', 'msix'],
+  ] as const) {
+    expect(installer({ ...item, format, filename: `rss-agent.${suffix}` }, tenant).format).toBe(
+      format,
+    )
+    expect(() => installer({ ...item, format, filename: 'rss-agent.exe' }, tenant)).toThrow()
+  }
+  const old = { ...item } as Record<string, unknown>
+  delete old['format']
+  expect(() => installer(old, tenant)).toThrow()
 })
