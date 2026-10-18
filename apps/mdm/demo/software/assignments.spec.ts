@@ -3,7 +3,7 @@ import { expect, it } from 'vitest'
 import { createSoftwarePolicyDemo } from './assignments'
 import { createDeviceDemo } from '../devices/state'
 import { request, operation, softwareResource } from './fixtures'
-import { softwareRun } from '../../src/features/policies/clients/runs'
+import { policyRun } from '../../src/features/policies/clients/runs'
 import type { SoftwarePolicyDefinition } from '../../src/features/software/clients/assignment-model'
 function setup() {
   const facts = createDeviceDemo().facts(),
@@ -69,7 +69,7 @@ function setup() {
     )!
   const runs = () =>
     (owner.handle(request(`${path}/runs`), 'normal')!.body as { items: unknown[] }).items.map((v) =>
-      softwareRun(v, false),
+      policyRun(v, false),
     )
   return {
     owner,
@@ -139,7 +139,7 @@ it('only admits on Agent poll, retains independent delivery and verified result,
   f.owner.tick({ kind: 'check_in', device: 'device-01', at: at + 2 }, 'normal')
   expect(f.runs()[0]).toMatchObject({
     effect: 'verified',
-    result: { kind: 'software', detection: 'present' },
+    result: { kind: 'software', evidence: { steps: [{ after: { state: 'present' } }] } },
   })
   f.owner.tick({ kind: 'check_in', device: 'device-01', at: at + 1000 }, 'normal')
   expect(f.runs()).toHaveLength(1)
@@ -179,7 +179,9 @@ it('does not claim that zero exit proves effect and computes rollout from live m
     f.owner.tick({ kind: 'check_in', device: 'device-01', at: at + step }, 'unknown')
   expect(f.runs()[0]).toMatchObject({
     effect: 'unknown',
-    result: { installerExitCode: 0, detection: 'unknown' },
+    result: {
+      evidence: { steps: [{ process: { kind: 'exited', code: 0 }, after: { state: 'unknown' } }] },
+    },
   })
   const rollout = () => f.owner.handle(request(`${f.path}/software/rollout`), 'normal')!.body
   expect(rollout()).toMatchObject({
@@ -293,7 +295,7 @@ it('rejects uninstall without a declared command before preview or publication, 
   expect(f.runs()).toHaveLength(1)
   expect(f.runs()[0]).toMatchObject({
     effect: 'verified',
-    result: { intent: 'uninstall', detection: 'absent' },
+    result: { intent: 'uninstall', evidence: { steps: [{ after: { state: 'absent' } }] } },
   })
 })
 
@@ -387,7 +389,7 @@ it('preserves current script history evidence through mock list/detail while red
     trusted: false,
   })
   expect(f.runs()[0]!.result).not.toHaveProperty('output')
-  const detail = softwareRun(
+  const detail = policyRun(
     f.owner.handle(request(`${f.path}/runs/${row.value.taskId}`), 'normal')!.body,
     true,
   )

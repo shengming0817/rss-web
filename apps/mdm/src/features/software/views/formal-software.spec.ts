@@ -12,6 +12,7 @@ import UpdatesView from './UpdatesView.vue'
 import CatalogView from './CatalogView.vue'
 import VersionLifecycle from '../components/VersionLifecycle.vue'
 import SoftwareResourceSelect from '../components/SoftwareResourceSelect.vue'
+import ExecutionsView from '../../policies/views/ExecutionsView.vue'
 import ExecutionDetailView from '../../policies/views/ExecutionDetailView.vue'
 import { defaultSchedule } from '../../policies/clients/model'
 import { rings } from '../clients/publication'
@@ -404,5 +405,61 @@ it('opens an onboarding action run without sending a native command read', async
   expect(native).not.toHaveBeenCalled()
   expect(wrapper.text()).toContain('opened')
   expect(wrapper.text()).toContain('尚未验证')
+  wrapper.unmount()
+})
+
+for (const outcome of ['published', 'not_applied'])
+  it(`reconciles lost Publish by explicit exact replay after a terminal ${outcome} read`, async () => {
+    const read = vi.fn().mockResolvedValueOnce(candidate()).mockResolvedValue(candidate(outcome)),
+      change = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('lost'))
+        .mockResolvedValue(candidate(outcome))
+    const { wrapper } = await fixture(PublicationsView, {
+      software: { publication: { read, change } },
+    })
+    const inputs = wrapper.findAll('form')[0]!.findAll('input')
+    await inputs[0]!.setValue('binding')
+    await inputs[1]!.setValue('candidate')
+    await wrapper.findAll('form')[0]!.trigger('submit')
+    await flushPromises()
+    await button(wrapper, '发布').trigger('click')
+    await flushPromises()
+    const original = structuredClone(change.mock.calls[0])
+    await button(wrapper, '核对状态').trigger('click')
+    await flushPromises()
+    expect(change).toHaveBeenCalledTimes(1)
+    const confirmation = wrapper.findAll('section.console-panel').at(-1)!
+    await confirmation.get('input[type=checkbox]').setValue(true)
+    await confirmation.get('button').trigger('click')
+    await flushPromises()
+    expect(change.mock.calls[1]).toEqual(original)
+    expect(wrapper.findAll('section.console-panel').some((s) => s.text().includes('原操作'))).toBe(
+      false,
+    )
+    wrapper.unmount()
+  })
+it('invalidates dangerous confirmation and clears PIN when the action or target changes', async () => {
+  const create = vi.fn().mockResolvedValue({ operationId: id }),
+    directory = vi
+      .fn()
+      .mockResolvedValue({ items: [], statistics: { total: 0 }, asOf: 1, nextCursor: null })
+  const { wrapper } = await fixture(ExecutionsView, {
+    policies: { native: { create }, executions: { directory } },
+  })
+  await wrapper.get('#native-device').setValue('endpoint')
+  await wrapper.get('#native-kind').setValue('lock')
+  const control = wrapper.findAll('form')[1]!
+  const inputs = control.findAll('input')
+  await inputs[1]!.setValue(id)
+  await inputs[2]!.setValue(1)
+  await control.get('input[type=password]').setValue('123456')
+  await control.get('input[type=checkbox]').setValue(true)
+  await wrapper.get('#native-kind').setValue('wipe')
+  expect((control.get('input[type=checkbox]').element as HTMLInputElement).checked).toBe(false)
+  await control.get('input[type=checkbox]').setValue(true)
+  await wrapper.get('#native-device').setValue('other')
+  expect((control.get('input[type=checkbox]').element as HTMLInputElement).checked).toBe(false)
+  expect(create).not.toHaveBeenCalled()
   wrapper.unmount()
 })

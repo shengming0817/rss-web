@@ -43,6 +43,12 @@ function diagnostics(value: unknown, detail: boolean) {
   }
 }
 function result(value: unknown, detail: boolean) {
+  const materialText = (value: unknown) => {
+    const text = string(value)
+    if (!text || new TextEncoder().encode(text).byteLength > 1024 || /\p{Cc}/u.test(text))
+      throw new Error('Invalid observed text')
+    return text
+  }
   if ('entryOutcome' in record(value)) {
     const v = closed(value, ['entryOutcome'], detail ? [] : ['diagnostics'])
     if ('diagnostics' in v && v['diagnostics'] !== null)
@@ -95,33 +101,166 @@ function result(value: unknown, detail: boolean) {
       ...(detail ? { output: jsonValue(v['output'], 1024 * 1024) } : {}),
     }
   }
-  const v = closed(value, [
-    'intent',
-    'installerExitCode',
-    'detection',
-    'definitionDigest',
-    'observedVersion',
-    'evidenceDigest',
-    'rebootRequired',
-    'diagnostics',
-    'effect',
-  ])
+  if ('queries' in record(value)) {
+    const v = closed(
+      value,
+      [
+        'queries',
+        'planDigest',
+        'outputReference',
+        'trusted',
+        'receivedAt',
+        ...(detail ? ['native'] : []),
+      ],
+      detail ? [] : ['diagnostics'],
+    )
+    if (!detail && 'diagnostics' in v && v['diagnostics'] !== null)
+      throw new Error('Invalid collection diagnostics')
+    const reference = closed(v['outputReference'], ['bytes', 'sha256']),
+      sha256 = string(reference['sha256'])
+    if (!/^[0-9a-f]{64}$/.test(sha256)) throw new Error('Invalid collection output reference')
+    return {
+      kind: 'collection' as const,
+      queries: Object.fromEntries(
+        Object.entries(record(v['queries'])).map(([id, value]) => {
+          const q = closed(value, [
+            'queryDigest',
+            'collectedAt',
+            'status',
+            'enumerationComplete',
+            'rowCount',
+          ])
+          return [
+            identifier(id),
+            {
+              queryDigest: digest(q['queryDigest']),
+              collectedAt: integer(q['collectedAt']),
+              status: enumeration(q['status'], [
+                'complete',
+                'failed',
+                'partial',
+                'not_scanned',
+                'source_unavailable',
+                'user_absent',
+                'store_unavailable',
+                'unsupported',
+                'denied',
+                'timeout',
+                'truncated',
+                'missing',
+                'invalid',
+              ] as const),
+              enumerationComplete: boolean(q['enumerationComplete']),
+              rowCount: count(q['rowCount']),
+            },
+          ]
+        }),
+      ),
+      planDigest: digest(v['planDigest']),
+      outputReference: { bytes: count(reference['bytes']), sha256 },
+      trusted: boolean(v['trusted']),
+      receivedAt: integer(v['receivedAt']),
+      ...(detail ? { native: jsonValue(v['native'], 16 * 1024 * 1024) } : {}),
+    }
+  }
+  const v = closed(value, ['intent', 'definitionDigest', 'evidence', 'effect', 'effectObservedAt']),
+    intent = enumeration(v['intent'], ['install', 'uninstall', 'detect'] as const),
+    definitionDigest = digest(v['definitionDigest']),
+    evidence = closed(v['evidence'], ['intent', 'definitionDigest', 'steps'])
+  if (
+    evidence['intent'] !== intent ||
+    JSON.stringify(digest(evidence['definitionDigest'])) !== JSON.stringify(definitionDigest)
+  )
+    throw new Error('Wrong software evidence binding')
+  const steps = array(evidence['steps'], (value) => {
+    const step = closed(value, [
+        'index',
+        'stepDigest',
+        'target',
+        'package',
+        'identity',
+        'before',
+        'after',
+        'process',
+        'rebootRequired',
+        'diagnostics',
+      ]),
+      targetKind = enumeration(record(step['target'])['kind'], ['device', 'user'] as const),
+      target = closed(
+        step['target'],
+        targetKind === 'device' ? ['kind'] : ['kind', 'identity', 'sessionId'],
+      )
+    function observation(value: unknown) {
+      const state = enumeration(record(value)['state'], ['present', 'absent', 'unknown'] as const),
+        v = closed(
+          value,
+          state === 'present'
+            ? ['state', 'version', 'evidenceSha256', 'observedAt']
+            : state === 'absent'
+              ? ['state', 'evidenceSha256', 'observedAt']
+              : ['state', 'diagnostic'],
+        )
+      if (state === 'unknown') return { state, diagnostic: string(v['diagnostic']) }
+      return {
+        state,
+        evidenceSha256: digest(v['evidenceSha256']),
+        observedAt: integer(v['observedAt']),
+        ...(state === 'present' ? { version: materialText(v['version']) } : {}),
+      }
+    }
+    const pk = enumeration(record(step['process'])['kind'], [
+        'not_run',
+        'exited',
+        'failed',
+      ] as const),
+      process = closed(
+        step['process'],
+        pk === 'exited' ? ['kind', 'code'] : pk === 'failed' ? ['kind', 'failure'] : ['kind'],
+      )
+    return {
+      index: count(step['index']),
+      stepDigest: digest(step['stepDigest']),
+      target:
+        targetKind === 'device'
+          ? { kind: targetKind }
+          : {
+              kind: targetKind,
+              identity: identifier(target['identity']),
+              sessionId: uuid(target['sessionId']),
+            },
+      package: materialText(step['package']),
+      identity: jsonValue(step['identity'], 8192),
+      before: observation(step['before']),
+      after: observation(step['after']),
+      process:
+        pk === 'exited'
+          ? { kind: pk, code: integer(process['code']) }
+          : pk === 'failed'
+            ? {
+                kind: pk,
+                failure: enumeration(process['failure'], [
+                  'launch_failed',
+                  'timed_out',
+                  'cancelled',
+                  'non_zero_exit',
+                  'output_limit',
+                  'capture_failed',
+                ] as const),
+              }
+            : { kind: pk },
+      rebootRequired: boolean(step['rebootRequired']),
+      diagnostics: diagnostics(step['diagnostics'], detail),
+    }
+  })
+  if (!steps.length || steps.length > 32 || steps.some((s, i) => s.index !== i))
+    throw new Error('Invalid software step order')
   return {
     kind: 'software' as const,
-    intent: enumeration(v['intent'], ['install', 'uninstall', 'detect'] as const),
-    installerExitCode: nullable(v['installerExitCode'], integer),
-    detection: enumeration(v['detection'], ['present', 'absent', 'unknown'] as const),
-    definitionDigest: digest(v['definitionDigest']),
-    observedVersion: nullable(v['observedVersion'], (value) => {
-      const v = string(value)
-      if (!v || new TextEncoder().encode(v).byteLength > 1024)
-        throw new Error('Invalid observed version')
-      return v
-    }),
-    evidenceDigest: digest(v['evidenceDigest']),
-    rebootRequired: boolean(v['rebootRequired']),
-    diagnostics: diagnostics(v['diagnostics'], detail),
+    intent,
+    definitionDigest,
+    evidence: { intent, definitionDigest, steps },
     effect: enumeration(v['effect'], ['verified', 'unknown', 'waiting_reboot', 'failed'] as const),
+    effectObservedAt: integer(v['effectObservedAt']),
   }
 }
 export function runState(value: unknown) {
@@ -216,7 +355,7 @@ function scriptAuthorization(value: unknown) {
     confirmed,
   }
 }
-export function softwareRun(value: unknown, detail: boolean) {
+export function policyRun(value: unknown, detail: boolean) {
   const v = closed(
     value,
     [
@@ -269,7 +408,7 @@ export function softwareRun(value: unknown, detail: boolean) {
       : { occurrence: string(v['occurrence']) }),
   }
 }
-export type SoftwareRun = ReturnType<typeof softwareRun>
+export type PolicyRun = ReturnType<typeof policyRun>
 export interface RunCursor {
   availableAt: number
   taskId: string
@@ -286,7 +425,7 @@ export function createRunsClient(transport: HttpTransport) {
         decode(value) {
           const v = closed(value, ['items', 'nextCursor'])
           return {
-            items: array(v['items'], (v) => softwareRun(v, false)),
+            items: array(v['items'], (v) => policyRun(v, false)),
             nextCursor: nullable(v['nextCursor'], (value) => {
               const c = closed(value, ['availableAt', 'taskId'])
               return { availableAt: integer(c['availableAt']), taskId: uuid(c['taskId']) }
@@ -301,7 +440,7 @@ export function createRunsClient(transport: HttpTransport) {
         pathParams: { id, task },
         successStatus: 200,
         decode(value) {
-          const run = softwareRun(value, true)
+          const run = policyRun(value, true)
           if (!('policyId' in run) || run.policyId !== id || run.taskId !== task)
             throw new Error('Wrong software run')
           return run

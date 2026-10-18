@@ -23,7 +23,14 @@ export function demoPlugin(): Plugin {
       const publication = createPublicationDemo(automation.resources, software)
       const imports = createImportsDemo(automation.resources, software)
       const scenario = createScenario(
-        [onboarding.handle, publication.handle, imports.handle, automation.handle, devices.handle],
+        [
+          (request) => automation.authorization.guard(request, devices.batches()),
+          onboarding.handle,
+          publication.handle,
+          imports.handle,
+          automation.handle,
+          devices.handle,
+        ],
         () => {
           onboarding.reset()
           devices.reset()

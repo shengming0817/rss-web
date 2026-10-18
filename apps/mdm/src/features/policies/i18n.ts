@@ -1,4 +1,5 @@
 export const policiesZh = {
+  confirmReplay: '我已核对原目标、标识与完整正文，确认幂等重放原操作',
   nativeCollection: '原生 MDM 采集',
   agentCollection: '原生 Agent 采集',
   reauthorize: '重新授权',
@@ -427,6 +428,7 @@ export const policiesZh = {
   independent: '当前人工审批必须由其他账户批准。',
 }
 export const policiesEn: typeof policiesZh = {
+  confirmReplay: 'I checked the original target, ID and full body and confirm exact replay',
   nativeCollection: 'Native MDM collection',
   agentCollection: 'Native Agent collection',
   reauthorize: 'Reauthorize',

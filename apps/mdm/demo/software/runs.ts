@@ -3,7 +3,7 @@ import type { DemoDevice } from '../devices/fixtures'
 import type { DemoEvent } from '../policies/schedule'
 import type { Scenario } from '../scenario'
 import type { SoftwarePolicy } from '../../src/features/software/clients/assignment-model'
-import type { SoftwareRun } from '../../src/features/policies/clients/runs'
+import type { PolicyRun } from '../../src/features/policies/clients/runs'
 import { nativeDue } from './schedule'
 export function softwareProfiles(device: DemoDevice | undefined) {
   return (device?.agentBindings ?? []).filter(
@@ -25,9 +25,9 @@ export interface RunRecord {
   stageScope: string
   createdAt: number
   occurrence: string
-  value: SoftwareRun
+  value: PolicyRun
 }
-export function createSoftwareRuns(allowed: (run: RunRecord) => boolean) {
+export function createPolicyRuns(allowed: (run: RunRecord) => boolean) {
   const rows: RunRecord[] = []
   function userAction(r: RunRecord, now: number) {
     const s = r.value.state
@@ -61,6 +61,16 @@ export function createSoftwareRuns(allowed: (run: RunRecord) => boolean) {
         executedAt: value.result.diagnostics.executedAt,
         failure: value.result.diagnostics.failure,
       }
+    if (result && !detail && value.result?.kind === 'software')
+      result['evidence'] = {
+        ...value.result.evidence,
+        steps: value.result.evidence.steps.map((step) => {
+          const { stdout: _out, stderr: _err, ...diagnostics } = step.diagnostics
+          void _out
+          void _err
+          return { ...step, diagnostics }
+        }),
+      }
     return {
       ...(value.state.delivery.kind !== 'queued'
         ? { attemptId: value.state.delivery.attempt }
@@ -90,34 +100,51 @@ export function createSoftwareRuns(allowed: (run: RunRecord) => boolean) {
     effect: 'verified' | 'unknown' | 'waiting_reboot' | 'failed',
   ) {
     const uninstall = r.policy.definition.action.intent === 'explicit_uninstall'
+    const evidenceDigest = [
+      ...createHash('sha256').update(`synthetic:${r.value.taskId}:${now}`).digest(),
+    ]
+    const after =
+      effect === 'unknown'
+        ? { state: 'unknown' as const, diagnostic: 'Synthetic unknown observation' }
+        : uninstall === (effect !== 'failed')
+          ? { state: 'absent' as const, evidenceSha256: evidenceDigest, observedAt: now }
+          : {
+              state: 'present' as const,
+              version: r.packageVersion,
+              evidenceSha256: evidenceDigest,
+              observedAt: now,
+            }
+    const intent = uninstall ? ('uninstall' as const) : ('install' as const)
     r.value.result = {
       kind: 'software',
-      intent: uninstall ? 'uninstall' : 'install',
-      installerExitCode: effect === 'failed' ? 1603 : 0,
-      detection:
-        effect === 'unknown'
-          ? 'unknown'
-          : effect === 'failed'
-            ? uninstall
-              ? 'present'
-              : 'absent'
-            : uninstall
-              ? 'absent'
-              : 'present',
+      intent,
       definitionDigest: r.definitionDigest,
-      observedVersion: uninstall || effect === 'failed' ? null : r.packageVersion,
-      evidenceDigest: [
-        ...createHash('sha256').update(`synthetic:${r.value.taskId}:${now}`).digest(),
-      ],
-      rebootRequired: effect === 'waiting_reboot',
-      effect,
-      diagnostics: {
-        stdout: 'Synthetic Agent evidence; no installer executed.',
-        stderr: '',
-        durationMs: 1000,
-        executedAt: now,
-        failure: effect === 'failed' ? 'non_zero_exit' : null,
+      evidence: {
+        intent,
+        definitionDigest: r.definitionDigest,
+        steps: [
+          {
+            index: 0,
+            stepDigest: r.definitionDigest,
+            target: { kind: 'device' },
+            package: r.policy.definition.action.resource.id,
+            identity: { kind: 'controlled_detector', entry: 'detect' },
+            before: { state: 'unknown', diagnostic: 'Synthetic prior observation' },
+            after,
+            process: { kind: 'exited', code: effect === 'failed' ? 1603 : 0 },
+            rebootRequired: effect === 'waiting_reboot',
+            diagnostics: {
+              stdout: 'Synthetic Agent evidence; no installer executed.',
+              stderr: '',
+              durationMs: 1000,
+              executedAt: now,
+              failure: effect === 'failed' ? 'non_zero_exit' : null,
+            },
+          },
+        ],
       },
+      effect,
+      effectObservedAt: now * 1000000,
     }
     r.value.effect = effect
     r.value.state.execution = effect === 'verified' ? 'succeeded' : effect

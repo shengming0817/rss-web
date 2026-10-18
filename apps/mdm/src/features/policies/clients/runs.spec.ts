@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
-import { createRunsClient, softwareRun } from '../../policies/clients/runs'
+import { createRunsClient, policyRun } from './runs'
 const id = '11111111-1111-4111-8111-111111111111',
   task = '22222222-2222-4222-8222-222222222222'
 const digest = Array<number>(32).fill(1)
@@ -23,20 +23,33 @@ const run = {
   userAction: null,
   result: {
     intent: 'install',
-    installerExitCode: 0,
-    detection: 'present',
     definitionDigest: digest,
-    observedVersion: '1',
-    evidenceDigest: digest,
-    rebootRequired: true,
-    diagnostics: {
-      stdout: 'synthetic\noutput',
-      stderr: '',
-      durationMs: 100,
-      executedAt: 12,
-      failure: null,
-    },
     effect: 'waiting_reboot',
+    effectObservedAt: 12000000,
+    evidence: {
+      intent: 'install',
+      definitionDigest: digest,
+      steps: [
+        {
+          index: 0,
+          stepDigest: digest,
+          target: { kind: 'device' },
+          package: 'Example.App',
+          identity: { kind: 'controlled_detector', entry: 'detect' },
+          before: { state: 'unknown', diagnostic: 'not observed' },
+          after: { state: 'present', version: '1', evidenceSha256: digest, observedAt: 12 },
+          process: { kind: 'exited', code: 0 },
+          rebootRequired: true,
+          diagnostics: {
+            stdout: 'synthetic\noutput',
+            stderr: '',
+            durationMs: 100,
+            executedAt: 12,
+            failure: null,
+          },
+        },
+      ],
+    },
   },
 }
 it('preserves script history without pretending a pending result has a software kind', () => {
@@ -49,31 +62,61 @@ it('preserves script history without pretending a pending result has a software 
     quality: 'complete',
     schemaValid: true,
     output: { count: 1 },
-    diagnostics: run.result.diagnostics,
+    diagnostics: run.result.evidence.steps[0]!.diagnostics,
     trusted: true,
   }
-  expect(softwareRun({ ...run, effect: 'unverified', result }, true).result).toMatchObject({
+  expect(policyRun({ ...run, effect: 'unverified', result }, true).result).toMatchObject({
     kind: 'script',
     output: { count: 1 },
   })
-  expect(softwareRun({ ...run, effect: 'unverified', result: null }, true).result).toBeNull()
-  expect(() => softwareRun({ ...run, result: { ...result, effect: 'verified' } }, true)).toThrow()
+  expect(policyRun({ ...run, effect: 'unverified', result: null }, true).result).toBeNull()
+  expect(() => policyRun({ ...run, result: { ...result, effect: 'verified' } }, true)).toThrow()
 })
 it('enforces wire diagnostic limits and matching deadlines but accepts ecosystem version strings', () => {
   expect(
-    softwareRun(
-      { ...run, result: { ...run.result, observedVersion: 'release candidate '.repeat(30) } },
-      true,
-    ).result,
-  ).toMatchObject({ observedVersion: 'release candidate '.repeat(30) })
-  expect(() => softwareRun({ ...run, deadline: 101 }, true)).toThrow()
-  expect(() =>
-    softwareRun(
+    policyRun(
       {
         ...run,
         result: {
           ...run.result,
-          diagnostics: { ...run.result.diagnostics, stdout: 'a'.repeat(16385) },
+          evidence: {
+            ...run.result.evidence,
+            steps: [
+              {
+                ...run.result.evidence.steps[0]!,
+                after: {
+                  ...run.result.evidence.steps[0]!.after,
+                  version: 'release candidate '.repeat(30),
+                },
+              },
+            ],
+          },
+        },
+      },
+      true,
+    ).result,
+  ).toMatchObject({
+    evidence: { steps: [{ after: { version: 'release candidate '.repeat(30) } }] },
+  })
+  expect(() => policyRun({ ...run, deadline: 101 }, true)).toThrow()
+  expect(() =>
+    policyRun(
+      {
+        ...run,
+        result: {
+          ...run.result,
+          evidence: {
+            ...run.result.evidence,
+            steps: [
+              {
+                ...run.result.evidence.steps[0]!,
+                diagnostics: {
+                  ...run.result.evidence.steps[0]!.diagnostics,
+                  stdout: 'a'.repeat(16385),
+                },
+              },
+            ],
+          },
         },
       },
       true,
@@ -85,20 +128,19 @@ it('decodes software evidence without conflating a zero exit with verified effec
   const request = vi.fn(async (o: RequestOptions<unknown>) => o.decode(reply))
   const client = createRunsClient({ request } as unknown as HttpTransport)
   expect((await client.read(id, task)).result).toMatchObject({
-    installerExitCode: 0,
-    rebootRequired: true,
+    evidence: { steps: [{ process: { kind: 'exited', code: 0 }, rebootRequired: true }] },
     effect: 'waiting_reboot',
   })
   reply = { ...run, policyId: task }
   await expect(client.read(id, task)).rejects.toThrow('Wrong software run')
   expect(() =>
-    softwareRun({ ...run, state: { ...run.state, execution: 'compliant' } }, true),
+    policyRun({ ...run, state: { ...run.state, execution: 'compliant' } }, true),
   ).toThrow()
 })
 it('keeps summary diagnostics redacted and uses both fields of the native run cursor', async () => {
   const summary: Record<string, unknown> = { ...run }
   delete summary['policyId']
-  const diagnostics: Record<string, unknown> = { ...run.result.diagnostics }
+  const diagnostics: Record<string, unknown> = { ...run.result.evidence.steps[0]!.diagnostics }
   delete diagnostics['stdout']
   delete diagnostics['stderr']
   const request = vi.fn(async (o: RequestOptions<unknown>) =>
@@ -107,7 +149,13 @@ it('keeps summary diagnostics redacted and uses both fields of the native run cu
         {
           ...summary,
           occurrence: 'software:stage:one',
-          result: { ...run.result, diagnostics },
+          result: {
+            ...run.result,
+            evidence: {
+              ...run.result.evidence,
+              steps: [{ ...run.result.evidence.steps[0]!, diagnostics }],
+            },
+          },
         },
       ],
       nextCursor: { availableAt: 10, taskId: task },
@@ -118,7 +166,9 @@ it('keeps summary diagnostics redacted and uses both fields of the native run cu
     taskId: task,
   })
   expect(request.mock.calls[0]![0].query).toEqual({ afterAt: 20, afterId: task })
-  expect(result.items[0]!.result!.diagnostics).not.toHaveProperty('stdout')
+  const current = result.items[0]!.result!
+  if (current.kind !== 'software') throw new Error('Wrong result')
+  expect(current.evidence.steps[0]!.diagnostics).not.toHaveProperty('stdout')
 })
 
 it('decodes the current attempt and all authorization branches and rejects malformed facts', () => {
@@ -136,7 +186,7 @@ it('decodes the current attempt and all authorization branches and rejects malfo
     confirmed: true,
   }
   for (const authorization of [policy, { kind: 'remote_operation', operationId: task }, self])
-    expect(softwareRun({ ...run, attemptId: task, authorization }, true)).toMatchObject({
+    expect(policyRun({ ...run, attemptId: task, authorization }, true)).toMatchObject({
       attemptId: task,
       authorization,
     })
@@ -147,18 +197,18 @@ it('decodes the current attempt and all authorization branches and rejects malfo
     { ...self, riskLevel: 3 },
     { ...self, subject: { kind: 'user', user: { ...self.subject.user, token: 'secret' } } },
   ])
-    expect(() => softwareRun({ ...run, authorization }, true)).toThrow()
-  expect(() => softwareRun({ ...run, attemptId: id }, true)).toThrow('Inconsistent run attempt')
+    expect(() => policyRun({ ...run, authorization }, true)).toThrow()
+  expect(() => policyRun({ ...run, attemptId: id }, true)).toThrow('Inconsistent run attempt')
   expect(() =>
-    softwareRun(
+    policyRun(
       { ...run, attemptId: task, state: { ...run.state, delivery: { kind: 'queued' } } },
       true,
     ),
   ).toThrow()
   const remote: Record<string, unknown> = { ...run }
   delete remote['policyId']
-  expect(softwareRun({ ...remote, operationId: id }, true)).toMatchObject({ operationId: id })
-  expect(() => softwareRun({ ...run, attemptId: null }, true)).toThrow()
+  expect(policyRun({ ...remote, operationId: id }, true)).toMatchObject({ operationId: id })
+  expect(() => policyRun({ ...run, attemptId: null }, true)).toThrow()
 })
 
 it('consumes current script evidence, redacts summaries and rejects obsolete or malformed envelopes', async () => {
@@ -171,10 +221,10 @@ it('consumes current script evidence, redacts summaries and rejects obsolete or 
     budgetValid: true,
     output: { large: 'a'.repeat(70_000) },
     outputReference: null,
-    diagnostics: run.result.diagnostics,
+    diagnostics: run.result.evidence.steps[0]!.diagnostics,
     trusted: true,
   }
-  expect(softwareRun({ ...run, result }, true).result).toMatchObject({
+  expect(policyRun({ ...run, result }, true).result).toMatchObject({
     collectedAt: 12,
     receivedAt: 15,
     budgetValid: true,
@@ -202,10 +252,11 @@ it('consumes current script evidence, redacts summaries and rejects obsolete or 
     outputReference: null,
   })
   expect(summary).not.toHaveProperty('output')
+  if (summary.kind !== 'script') throw new Error('Wrong result')
   expect(summary.diagnostics).not.toHaveProperty('stdout')
   const reference = { bytes: 1_048_577, sha256: 'a'.repeat(64) }
   expect(
-    softwareRun(
+    policyRun(
       {
         ...run,
         result: { ...result, budgetValid: false, output: null, outputReference: reference },
@@ -221,10 +272,10 @@ it('consumes current script evidence, redacts summaries and rejects obsolete or 
     { ...result, extra: true },
     { ...result, output: 'a'.repeat(1_048_577) },
   ])
-    expect(() => softwareRun({ ...run, result: invalid }, true)).toThrow()
+    expect(() => policyRun({ ...run, result: invalid }, true)).toThrow()
   for (const key of ['collectedAt', 'receivedAt', 'budgetValid', 'outputReference']) {
     const invalid: Record<string, unknown> = { ...result }
     delete invalid[key]
-    expect(() => softwareRun({ ...run, result: invalid }, true)).toThrow()
+    expect(() => policyRun({ ...run, result: invalid }, true)).toThrow()
   }
 })

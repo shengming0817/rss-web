@@ -5,7 +5,7 @@ import { createDeviceDemo } from '../devices/state'
 import { request } from '../software/fixtures'
 it('creates current controls and rejects stale dangerous confirmation and post-dispatch reauthorization', () => {
   const devices = createDeviceDemo(),
-    demo = createNativeDemo(devices),
+    demo = createNativeDemo(devices, () => true),
     d = devices
       .facts()
       .find(

@@ -20,7 +20,7 @@ import {
 } from '../clients/assignment-model'
 import { intents, targets } from '../../policies/clients/model'
 import type { PolicyChange, PolicyRead } from '../../policies/clients/model'
-import type { RunCursor, SoftwareRun } from '../../policies/clients/runs'
+import type { RunCursor, PolicyRun } from '../../policies/clients/runs'
 import type { ResourceRead } from '../../policies/clients/resources'
 import SoftwareResourceSelect from '../components/SoftwareResourceSelect.vue'
 import CatalogLocator from '../../policies/components/CatalogLocator.vue'
@@ -28,7 +28,7 @@ import AssignmentFacts from '../../policies/components/AssignmentFacts.vue'
 import { objectKey } from '../../devices/clients/objects'
 import PageFrame from '../../../components/PageFrame.vue'
 import NativeScheduleEditor from '../components/NativeScheduleEditor.vue'
-import SoftwareRunFacts from '../components/SoftwareRunFacts.vue'
+import PolicyRunFacts from '../../policies/components/PolicyRunFacts.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -82,7 +82,7 @@ watch(
 const devices = ref<Awaited<ReturnType<typeof client.assignments>>>(),
   rollout = ref<Awaited<ReturnType<typeof runtime.software.rollout.read>>>()
 const history = ref<Awaited<ReturnType<typeof runtime.policies.runs.list>>>(),
-  detail = ref<SoftwareRun>()
+  detail = ref<PolicyRun>()
 let pending: { id: string; requester: string; body: Operation<PolicyChange> } | undefined
 function requester() {
   const s = runtime.session.state.value
@@ -731,7 +731,7 @@ watch(
         <h3>{{ t('software.runHistory') }}</h3>
         <p v-if="!history.items.length">{{ t('policies.empty') }}</p>
         <article v-for="r in history.items" :key="r.taskId" class="console-panel">
-          <SoftwareRunFacts :run="r" /><UiButton
+          <PolicyRunFacts :run="r" /><UiButton
             :disabled="!!busy"
             type="submit"
             @click="loadDetail(r.taskId)"
@@ -741,6 +741,7 @@ watch(
             :to="{
               name: 'policy-execution',
               params: { tenant: runtime.tenant, execution: r.taskId },
+              query: { policy: current.id },
             }"
             >{{ t('policies.executions') }}</RouterLink
           >
@@ -754,7 +755,7 @@ watch(
           {{ t('policies.next') }}
         </UiButton>
       </section>
-      <SoftwareRunFacts v-if="detail" :run="detail" />
+      <PolicyRunFacts v-if="detail" :run="detail" />
     </section>
   </PageFrame>
 </template>

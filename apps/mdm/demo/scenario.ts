@@ -366,7 +366,7 @@ export function createScenario(
       }
     }
     const policyPath =
-      /^\/api\/(?:v1\/(?:scopes|policies)(?:\/|$)|v1\/(?:resources)(?:\/|$)|v1\/devices\/[^/]+\/operations(?:\/|$)|v1\/mdm-candidate\/(?:policies|executions)(?:\/|$))/.test(
+      /^\/api\/(?:v1\/(?:scopes|policies|operations)(?:\/|$)|v1\/(?:resources)(?:\/|$)|v1\/devices\/[^/]+\/operations(?:\/|$)|v1\/mdm-candidate\/(?:policies|executions)(?:\/|$))/.test(
         path,
       )
     const softwarePath =

@@ -10,8 +10,8 @@ import type { ExecutionSummary } from '../clients/executions'
 import type { NativeOperation, Reauthorization } from '../clients/native'
 import PageFrame from '../../../components/PageFrame.vue'
 import ExecutionFacts from '../components/ExecutionFacts.vue'
-import SoftwareRunFacts from '../../software/components/SoftwareRunFacts.vue'
-import type { SoftwareRun } from '../clients/runs'
+import PolicyRunFacts from '../components/PolicyRunFacts.vue'
+import type { PolicyRun } from '../clients/runs'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -21,7 +21,14 @@ const confirmation = ref(false),
   generation = ref(1)
 const execution = ref<ExecutionSummary>(),
   native = ref<NativeOperation>(),
-  software = ref<SoftwareRun>()
+  software = ref<PolicyRun>()
+watch(
+  [registration, generation],
+  () => {
+    confirmation.value = false
+  },
+  { flush: 'sync' },
+)
 async function load() {
   const id = String(route.params['execution'])
   const policy = route.query['policy']
@@ -40,6 +47,7 @@ async function load() {
       () => runtime.policies.native.read(device, id),
       (v) => {
         native.value = v
+        confirmation.value = false
       },
     )
     return
@@ -229,8 +237,14 @@ watch(
     </section>
     <template v-if="software">
       <RouterLink
+        v-if="software.result"
         :to="{
-          name: 'software-deployments',
+          name:
+            software.result?.kind === 'enrollment'
+              ? 'software-bootstrap'
+              : software.result?.kind === 'software'
+                ? 'software-deployments'
+                : 'policy-policies',
           params: { tenant: runtime.tenant },
           query: {
             id:
@@ -241,9 +255,17 @@ watch(
                   : undefined,
           },
         }"
-        >{{ t('software.deployments') }}</RouterLink
+        >{{
+          t(
+            software.result?.kind === 'enrollment'
+              ? 'software.bootstrap'
+              : software.result?.kind === 'software'
+                ? 'software.deployments'
+                : 'policies.policies',
+          )
+        }}</RouterLink
       >
-      <SoftwareRunFacts :run="software" />
+      <PolicyRunFacts :run="software" />
     </template>
   </PageFrame>
 </template>

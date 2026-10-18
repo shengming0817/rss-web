@@ -55,6 +55,7 @@ it('requires the shared session and CSRF, reconciles a committed unknown write, 
     sourcePath,
     '/api/v1/software-sources/private/candidates/one',
     '/api/v1/policies',
+    '/api/v1/operations',
     '/api/v1/resources/app',
     '/api/v1/mdm-candidate/software/catalog',
   ])
@@ -98,4 +99,47 @@ it('keeps rejected publication writes definite through the shared HTTP error dec
     status: 404,
     code: 'software_source_not_found',
   })
+})
+
+it('applies current software and native permissions before dispatching any formal handler', async () => {
+  const { createAutomationDemo } = await import('../policies/state'),
+    { createDeviceDemo } = await import('../devices/state')
+  const devices = createDeviceDemo(),
+    automation = createAutomationDemo(devices)
+  const publication = createPublicationDemo(automation.resources, automation.lifecycle)
+  const scenario = createScenario([
+    (request) => automation.authorization.guard(request, devices.batches()),
+    publication.handle,
+    automation.handle,
+    devices.handle,
+  ])
+  const login = await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
+    login: 'reviewer',
+    password: 'demo',
+  })
+  const headers = {
+    'x-csrf-token': (login.body as { csrfToken: string }).csrfToken,
+    'x-identity-request': '1',
+  }
+  const op = (input: unknown) => ({ operationId: crypto.randomUUID(), expectedRevision: 0, input })
+  for (const [path, body] of [
+    [
+      sourcePath,
+      op({
+        action: 'register',
+        definition: { id: 'private', revision: '1', protocol: { kind: 'private' } },
+      }),
+    ],
+    ['/api/v1/software/imports', op({})],
+    [
+      '/api/v1/software-sources/demo-winget/candidates/app',
+      op({ action: 'publish', ring: 'test' }),
+    ],
+    [
+      '/api/v1/devices/device-05/operations',
+      { operationId: crypto.randomUUID(), deadline: 4102444800, action: { kind: 'restart' } },
+    ],
+  ] as const)
+    expect((await scenario.handle('POST', path, body, headers)).status).toBe(403)
+  expect((await scenario.handle('GET', '/api/v1/operations')).status).toBe(200)
 })

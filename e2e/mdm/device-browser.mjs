@@ -333,7 +333,7 @@ try {
   await settled(`/api/v1/groups/${group}/tasks/${membership.task}`)
   const groupResult = await api(`/api/v1/groups/${group}/results/${membership.task}/members`)
   assert.deepEqual(groupResult.page.items, [{ kind: 'endpoint', id: fixture.agent }])
-  await page.goto(path('groups'))
+  await page.goto(path('devices/groups'))
   await loaded()
   await page.getByRole('button', { name: /Browser endpoint group/ }).click()
   await loaded()
@@ -407,6 +407,8 @@ try {
   await loaded()
   assert.ok((await page.locator('main').textContent()).includes(assignment.target.registrationId))
   coverage.push('real-endpoint-group-scope-channel-and-canonical-assignments')
+  await page.goto(path(`device-views/association/${id}`))
+  await loaded()
   phase = 'authorization'
   await writeRule([{ operation: 'inventory_read', scope: { kind: 'all_devices' } }])
   await page.reload()

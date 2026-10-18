@@ -3,7 +3,7 @@ import { UiButton } from '@rss/core/components'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
-import { operation, useOperation } from '../../../services/useOperation'
+import { operation, useOperation, type Operation } from '../../../services/useOperation'
 import { rings, type Ring, type Publication, type PublicationChange } from '../clients/publication'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import PageFrame from '../../../components/PageFrame.vue'
@@ -16,11 +16,17 @@ const source = ref(''),
   resource = ref(''),
   version = ref('1'),
   current = ref<Publication>()
+const confirmedReplay = ref(false)
+let pending:
+  | { target: { source: string; id: string }; body: Operation<PublicationChange> }
+  | undefined
 let selected: { source: string; id: string } | undefined
 function create() {
   if (busy.value || uncertain.value) return
   current.value = undefined
   selected = undefined
+  pending = undefined
+  confirmedReplay.value = false
   id.value = ''
   resource.value = ''
 }
@@ -34,15 +40,30 @@ function read() {
     },
   )
 }
+function replay() {
+  if (busy.value || !confirmedReplay.value || !pending) return
+  const original = pending
+  confirmedReplay.value = false
+  void runWrite(
+    () => client.change(original.target.source, original.target.id, original.body),
+    (v) => {
+      current.value = v
+      pending = undefined
+    },
+  )
+}
 function change(input: PublicationChange, recovery = false) {
   if (busy.value || (uncertain.value && !recovery)) return
   const target = selected ?? { source: source.value, id: id.value }
   const body = operation(input, current.value?.revision ?? 0)
   selected = target
+  pending = { target, body }
+  confirmedReplay.value = false
   void runWrite(
     () => client.change(target.source, target.id, body),
     (v) => {
       current.value = v
+      pending = undefined
     },
   )
 }
@@ -96,6 +117,8 @@ watch(
   () => {
     current.value = undefined
     selected = undefined
+    pending = undefined
+    confirmedReplay.value = false
     source.value = ''
     id.value = ''
     resource.value = ''
@@ -168,5 +191,16 @@ watch(
         <pre>{{ JSON.stringify(current.document, null, 2) }}</pre>
       </details></template
     >
+    <section v-if="uncertain && pending" class="console-panel">
+      <p>{{ t('software.publicationUnknown') }}</p>
+      <label
+        ><input v-model="confirmedReplay" type="checkbox" :disabled="busy" />{{
+          t('policies.confirmReplay')
+        }}</label
+      >
+      <UiButton :disabled="busy || !confirmedReplay" @click="replay">{{
+        t('policies.replay')
+      }}</UiButton>
+    </section>
   </PageFrame>
 </template>

@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { createExecutionsClient } from './executions'
-import { softwareRun } from './runs'
+import { policyRun } from './runs'
 const id = '11111111-1111-4111-8111-111111111111'
 it('consumes the formal mixed operation directory without following server-provided URLs', async () => {
   const item = {
@@ -64,9 +64,63 @@ it('keeps an opened enrollment entry distinct from MDM enrollment or installatio
     result: { entryOutcome: 'opened', diagnostics: null },
     occurrence: 'once',
   }
-  expect(softwareRun(run, false)).toMatchObject({
+  expect(policyRun(run, false)).toMatchObject({
     effect: 'unverified',
     result: { kind: 'enrollment', entryOutcome: 'opened' },
   })
-  expect(() => softwareRun({ ...run, result: { entryOutcome: 'enrolled' } }, false)).toThrow()
+  expect(() => policyRun({ ...run, result: { entryOutcome: 'enrolled' } }, false)).toThrow()
+})
+
+it('separates redacted collection summaries from authorized native detail evidence', () => {
+  const state = {
+    delivery: { kind: 'queued' },
+    execution: 'succeeded',
+    cancellation: 'none',
+    deadline: 100,
+    startedAt: 1,
+  }
+  const projection = {
+    queries: {
+      updates: {
+        queryDigest: Array(32).fill(1),
+        collectedAt: 2,
+        status: 'complete',
+        enumerationComplete: true,
+        rowCount: 1,
+      },
+    },
+    planDigest: Array(32).fill(2),
+    outputReference: { bytes: 512, sha256: 'a'.repeat(64) },
+    trusted: true,
+    receivedAt: 3,
+  }
+  const common = {
+    taskId: id,
+    device: 'endpoint',
+    registrationId: id,
+    generation: 2,
+    availableAt: 1,
+    deadline: 100,
+    state,
+    effect: 'unverified',
+    userAction: null,
+  }
+  const summary = policyRun(
+    { ...common, occurrence: 'collection', result: { ...projection, diagnostics: null } },
+    false,
+  )
+  expect(summary.result).toMatchObject({
+    kind: 'collection',
+    queries: { updates: { rowCount: 1, enumerationComplete: true } },
+  })
+  expect(summary.result).not.toHaveProperty('native')
+  const native = { queries: { updates: { rows: [{ owner: 'private-user' }] } } }
+  const detail = policyRun({ ...common, policyId: id, result: { ...projection, native } }, true)
+  expect(detail.result).toMatchObject({ kind: 'collection', native })
+  expect(() =>
+    policyRun({ ...common, occurrence: 'collection', result: { ...projection, native } }, false),
+  ).toThrow()
+  expect(() =>
+    policyRun({ ...common, policyId: id, result: { ...projection, native, unknown: true } }, true),
+  ).toThrow()
 })

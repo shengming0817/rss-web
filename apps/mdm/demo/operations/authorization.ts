@@ -1,7 +1,15 @@
 import { randomUUID } from 'node:crypto'
 import { TENANT, type DemoRequest, type DomainHandler } from '../scenario'
 import { createReceipts, error, ok, operation } from '../http'
-import { array, closed, count, enumeration, identifier, uuid } from '../../src/services/decode'
+import {
+  array,
+  closed,
+  count,
+  enumeration,
+  identifier,
+  record as objectRecord,
+  uuid,
+} from '../../src/services/decode'
 import {
   rule,
   groupDefinition,
@@ -131,6 +139,43 @@ export function createAuthorizationDemo(
       /^\/api\/v1\/devices\/([^/]+)(?:\/(.*))?$/.exec(path) ??
       /^\/api\/v1\/mdm-candidate\/devices\/([^/]+)\/(assignment)$/.exec(path)
     const actor = request.actor.principalId
+    if (path === '/api/v1/operations') {
+      if (!effective(actor).some((g) => g.operation === 'operation_read'))
+        return error('permission_denied', 403)
+    }
+    if (/^\/api\/v1\/software(?:\/|$)/.test(path)) {
+      const input = request.method === 'POST' ? objectRecord(operation(request.body).input) : null
+      const action = input?.['action']
+      const permission: Permission =
+        request.method === 'GET'
+          ? 'software_read'
+          : action === 'disable' || action === 'withdraw'
+            ? 'software_withdraw'
+            : 'software_write'
+      if (
+        !can(actor, permission) ||
+        (path === '/api/v1/software/imports' && !can(actor, 'resource_write'))
+      )
+        return error('permission_denied', 403)
+    }
+    if (/^\/api\/v1\/software-sources\/[^/]+\/candidates\/[^/]+$/.test(path)) {
+      const action =
+        request.method === 'POST'
+          ? objectRecord(operation(request.body).input)['action']
+          : undefined
+      const permission: Permission =
+        request.method === 'GET'
+          ? 'release_read'
+          : action === 'publish'
+            ? 'release_publish'
+            : action === 'recover' || action === 'retry'
+              ? 'release_recover'
+              : action === 'withdraw'
+                ? 'release_withdraw'
+                : 'release_write'
+      if (!can(actor, permission) || (action === 'candidate' && !can(actor, 'resource_read')))
+        return error('permission_denied', 403)
+    }
     const batch =
       /^\/api\/v1\/mdm-candidate\/devices\/batch-previews(?:\/([^/]+)(?:\/(execute|cancel))?)?$/.exec(
         path,

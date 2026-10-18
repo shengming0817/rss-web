@@ -15,7 +15,7 @@ import {
   type SoftwarePolicyDefinition,
 } from '../../src/features/software/clients/assignment-model'
 import type { taskAdmission } from '../../src/features/policies/clients/model'
-import { createSoftwareRuns, softwareProfiles } from './runs'
+import { createPolicyRuns, softwareProfiles } from './runs'
 type Definition = SoftwarePolicyDefinition
 export function createSoftwarePolicyDemo(
   devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts' | 'objects'>,
@@ -85,7 +85,7 @@ export function createSoftwarePolicyDemo(
       (v) => root.includes(v) && !prior.has(v),
     )
   }
-  const runs = createSoftwareRuns((r) => {
+  const runs = createPolicyRuns((r) => {
     const p = policies.get(r.policy.id),
       device = devices.facts().find((d) => d.summary.id === r.value.device)
     return (

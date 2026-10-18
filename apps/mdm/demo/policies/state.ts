@@ -24,7 +24,9 @@ import { createAdminDemo } from '../operations/admin'
 export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo>) {
   const operations = createOperationsDemo(() => security.now())
   const scopes = createScopeDemo(devices),
-    native = createNativeDemo(devices)
+    native = createNativeDemo(devices, (actor, permission, device) =>
+      authorization.can(actor, permission, device),
+    )
   const security = createSecurityDemo(devices, operations, scopes)
   const authorization = createAuthorizationDemo(() => security.now(), operations.record)
   const admin = createAdminDemo(
@@ -184,6 +186,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         ]
           .filter(
             (i) =>
+              authorization.can(request.actor.principalId, 'operation_read', i.device) &&
               (!request.query.get('policy') || i.policy === request.query.get('policy')) &&
               (!request.query.get('device') || i.device === request.query.get('device')),
           )

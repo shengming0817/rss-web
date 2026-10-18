@@ -6,9 +6,13 @@ import {
   deviceControlAction,
   type NativeOperation,
 } from '../../src/features/policies/clients/native'
+import type { Permission } from '../../src/features/operations/clients/authorization'
 import type { ExecutionSummary } from '../../src/features/policies/clients/executions'
 import { createReceipts, error, ok } from '../http'
-export function createNativeDemo(devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts'>) {
+export function createNativeDemo(
+  devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts'>,
+  can: (actor: string, permission: Permission, device: string) => boolean,
+) {
   const operations = new Map<
       string,
       {
@@ -17,6 +21,7 @@ export function createNativeDemo(devices: Pick<ReturnType<typeof createDeviceDem
         registration: string
         generation: number
         dangerous: boolean
+        permission: Permission
         reads: number
       }
     >(),
@@ -38,6 +43,9 @@ export function createNativeDemo(devices: Pick<ReturnType<typeof createDeviceDem
           id = uuid(b['operationId']),
           a = deviceControlAction(b['action']),
           deadline = count(b['deadline'])
+        const permission = a.kind === 'wipe' ? 'device_wipe' : 'device_control'
+        if (!can(request.actor.principalId, permission, device))
+          return error('permission_denied', 403)
         return receipts.write(request, id, () => {
           if (operations.has(id) || deadline <= Math.floor(Date.now() / 1000))
             return error('operation_conflict')
@@ -79,6 +87,7 @@ export function createNativeDemo(devices: Pick<ReturnType<typeof createDeviceDem
             registration: reg.registrationId,
             generation: reg.generation,
             dangerous: a.kind !== 'restart',
+            permission,
             reads: 0,
           })
           return ok({ operationId: id, commandId: id, revision: 1, accepted: true }, 202)
@@ -87,6 +96,14 @@ export function createNativeDemo(devices: Pick<ReturnType<typeof createDeviceDem
       const id = uuid(m[2]),
         s = operations.get(id)
       if (!s || s.device !== device) return error('operation_not_found', 404)
+      const permission =
+        request.method === 'GET'
+          ? 'operation_read'
+          : m[3] === 'cancel'
+            ? 'operation_cancel'
+            : s.permission
+      if (!can(request.actor.principalId, permission, device))
+        return error('permission_denied', 403)
       if (request.method === 'GET' && !m[3]) {
         if (s.registration !== reg.registrationId || s.generation !== reg.generation)
           s.read.authorization = 'blocked'

@@ -1,4 +1,5 @@
 export const softwareZh = {
+  publicationUnknown: '结果未知。先核实当前事实，或明确确认后按原标识与完整正文幂等重放原操作。',
   admission_paused: '策略暂停',
   admission_outside_window: '不在计划有效期',
   admission_outside_scope: '不在总范围',
@@ -190,6 +191,8 @@ export const softwareZh = {
   sourceHint: '来源摘要从已启用的企业来源读取；版本生命周期独立维护。',
 }
 export const softwareEn: typeof softwareZh = {
+  publicationUnknown:
+    'Outcome unknown. Inspect current facts, or explicitly confirm replay of the exact original operation.',
   admission_paused: 'Policy paused',
   admission_outside_window: 'Outside policy lifetime',
   admission_outside_scope: 'Outside root scope',

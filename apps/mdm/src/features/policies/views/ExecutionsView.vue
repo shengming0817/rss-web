@@ -24,6 +24,20 @@ const device = ref(typeof route.query['device'] === 'string' ? route.query['devi
   pin = ref(''),
   deadline = ref(Math.floor(Date.now() / 1000) + 3600),
   accepted = ref<{ id: string; device: string }>()
+watch(
+  [device, action, registration, generation, deadline, pin],
+  () => {
+    confirmed.value = false
+  },
+  { flush: 'sync' },
+)
+watch(
+  [device, action],
+  () => {
+    pin.value = ''
+  },
+  { flush: 'sync' },
+)
 async function submit() {
   if (busy.value || uncertain.value) return
   const target = device.value,
