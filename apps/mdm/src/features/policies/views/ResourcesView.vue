@@ -39,7 +39,7 @@ const id = ref(''),
     platform: 'windows',
     architecture: 'x86_64',
   })
-const list = ref<Awaited<ReturnType<typeof runtime.policies.catalog.list>>>(),
+const list = ref<Awaited<ReturnType<typeof client.list>>>(),
   artifact = ref<Artifact>({ reference: 'content', length: 0, sha256: Array(32).fill(0) })
 
 const spec = ref<ScriptSpec>({
@@ -92,7 +92,7 @@ let pending: (() => Promise<void>) | undefined
 const hashText = (bytes: number[]) => bytes.map((n) => n.toString(16).padStart(2, '0')).join('')
 function load(cursor?: string) {
   void run(
-    () => runtime.policies.catalog.list('resources', cursor),
+    () => client.list(undefined, cursor),
     (v) => (list.value = v),
   )
 }
@@ -162,6 +162,10 @@ async function metadata(event: Event) {
 }
 function addVersion() {
   const resourceKind = current.value?.kind ?? kind.value
+  if (resourceKind === 'native_collection' || resourceKind === 'agent_collection') {
+    failure.value = 'unsupported'
+    return
+  }
   if (resourceKind === 'software') {
     if (!draftVariants.value.length) {
       failure.value = 'invalidRequest'
@@ -402,7 +406,7 @@ watch(
     <ul class="console-object-list">
       <li v-for="item in list?.items" :key="item.id">
         <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(item.id)">{{
-          item.label
+          item.id
         }}</UiButton>
       </li>
     </ul>

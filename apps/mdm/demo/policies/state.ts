@@ -2,7 +2,8 @@ import type { DomainHandler, Scenario, DemoObservation } from '../scenario'
 import type { createDeviceDemo } from '../devices/state'
 import { uuid } from '../../src/services/decode'
 import type { ExecutionSummary } from '../../src/features/policies/clients/executions'
-import { createPages, error } from '../http'
+import { targetFacts } from './targets'
+import { createPages, error, ok } from '../http'
 import { candidate } from './http'
 import { createScopeDemo } from './scopes'
 import { createResourceDemo } from './resources'
@@ -13,11 +14,9 @@ import { createPolicyStore } from './store'
 import { createConfigurationDemo } from './configurations'
 import { createWorkflowDemo } from './workflows'
 import type { DemoEvent } from './schedule'
-import { createAdmissionDemo } from '../software/admission'
+import { createLifecycleDemo } from '../software/lifecycle'
 import { createSoftwarePolicyDemo } from '../software/assignments'
 import { softwareExecution } from '../../src/features/software/clients/execution'
-import { createBootstrapDemo } from '../software/bootstrap'
-import { createUpdatesDemo } from '../software/updates'
 import { createSecurityDemo } from '../security/state'
 import { createOperationsDemo } from '../operations/state'
 import { createAuthorizationDemo } from '../operations/authorization'
@@ -42,20 +41,20 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
     (id, version): boolean =>
       policies.references(id, version) ||
       workflows.references(id, version) ||
-      software.references(id, version) ||
-      updates.references(id, version) ||
-      bootstrap.references(id, version),
+      software.references(id, version),
   )
-  const admission = createAdmissionDemo(resources),
+  policyStore.register('ensure_agent_installed', () => error('action_not_supported', 501))
+  policyStore.register('request_mdm_enrollment', (d) =>
+    scopes.resolve(d.scope) ? undefined : error('operation_conflict'),
+  )
+  const lifecycle = createLifecycleDemo(resources),
     software = createSoftwarePolicyDemo(
       devices,
       { resolve: scopes.freeze, snapshot: scopes.snapshot },
       resources,
-      admission,
+      lifecycle,
       policyStore,
     )
-  const bootstrap = createBootstrapDemo(devices, scopes, resources, admission)
-  const updates = createUpdatesDemo(devices, scopes, { resources, admission, software })
   const configurationPolicies = createConfigurationPolicies(devices, scopes, resources, policyStore)
   const configurations = createConfigurationDemo(
     devices,
@@ -92,8 +91,6 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
     )
     return [
       ...security.executions(),
-      ...bootstrap.executions(),
-      ...updates.executions(),
       ...policies.executions(),
       ...native.executions(),
       ...workflows.executions(),
@@ -111,6 +108,29 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       const denied = authorization.guard(request, devices.batches())
       if (denied) return denied
       security.settle()
+      const onboarding = /^\/api\/v1\/policies\/([^/]+)\/(assignments|runs)$/.exec(request.path)
+      if (onboarding && request.method === 'GET') {
+        const p = policyStore.get(onboarding[1]!)
+        if (p?.definition.action.kind === 'request_mdm_enrollment') {
+          if (onboarding[2] === 'runs') return ok({ items: [], nextCursor: null })
+          const snapshot = scopes.snapshot(p.definition.scope)
+          return ok({
+            items: (snapshot?.devices ?? [])
+              .filter((id) => id > (request.query.get('after') ?? ''))
+              .slice(0, 20)
+              .map((id) => ({
+                ...targetFacts(devices, id, 'agent'),
+                scopeResult: snapshot!.result,
+                qualification: scopes.freeze(p.definition.scope)?.members.includes(id)
+                  ? { state: 'eligible', entry: 1 }
+                  : { state: 'pending' },
+                taskAdmission: null,
+                operationIds: [],
+              })),
+            nextCursor: null,
+          })
+        }
+      }
       for (const owner of [
         authorization,
         admin,
@@ -124,10 +144,8 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         configurationPolicies,
         configurations,
         workflows,
-        admission,
+        lifecycle,
         software,
-        updates,
-        bootstrap,
       ]) {
         const reply = owner.handle(request, scenario)
         if (reply) {
@@ -147,23 +165,60 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
           return reply
         }
       }
-      const collection =
-        /^\/api\/v1\/mdm-candidate\/policies\/(scopes|resources|workflows|approvals)$/.exec(
-          request.path,
-        )
+      if (request.path === '/api/v1/operations' && request.method === 'GET') {
+        const all = [
+          ...native.directory(),
+          ...software.runs.rows().map((r) => ({
+            id: r.value.taskId,
+            kind: 'action_run' as const,
+            device: r.value.device,
+            registrationId: r.value.registrationId,
+            generation: r.value.generation,
+            origin: 'policy',
+            policy: r.policy.id,
+            deadline: r.value.deadline,
+            status: r.value.state.execution,
+            detailUrl: `/api/v1/policies/${r.policy.id}/runs/${r.value.taskId}`,
+            evidence: { state: r.value.state, effect: r.value.effect, result: null },
+          })),
+        ]
+          .filter(
+            (i) =>
+              (!request.query.get('policy') || i.policy === request.query.get('policy')) &&
+              (!request.query.get('device') || i.device === request.query.get('device')),
+          )
+          .sort((a, b) => a.id.localeCompare(b.id) || a.kind.localeCompare(b.kind))
+        const after = request.query.get('after'),
+          afterKind = request.query.get('afterKind'),
+          limit = Number(request.query.get('limit') ?? 20)
+        if (!!after !== !!afterKind || !Number.isInteger(limit) || limit < 1 || limit > 1000)
+          return error('malformed_request', 400)
+        const items = all.filter(
+            (i) => !after || i.id > after || (i.id === after && i.kind > afterKind!),
+          ),
+          selected = items.slice(0, limit),
+          last = selected.at(-1)
+        return ok({
+          items: selected,
+          nextCursor: items.length > limit && last ? { id: last.id, kind: last.kind } : null,
+          statistics: {
+            total: all.length,
+            commands: all.filter((i) => i.kind === 'command').length,
+            actionRuns: all.filter((i) => i.kind === 'action_run').length,
+            unknown: all.filter((i) => i.status === 'unknown').length,
+          },
+          asOf: security.now(),
+        })
+      }
+      const collection = /^\/api\/v1\/mdm-candidate\/policies\/(workflows|approvals)$/.exec(
+        request.path,
+      )
       const execution = /^\/api\/v1\/mdm-candidate\/executions(?:\/([^/]+))?$/.exec(request.path)
       if ((!collection && !execution) || request.method !== 'GET') return
       if (scenario === 'denied') return error('permission_denied', 403)
       if (collection) {
         const name = collection[1]
-        const items =
-          name === 'scopes'
-            ? scopes.list()
-            : name === 'resources'
-              ? resources.list()
-              : name === 'workflows'
-                ? workflows.list()
-                : workflows.approvals()
+        const items = name === 'workflows' ? workflows.list() : workflows.approvals()
         return candidate(
           pages.page<unknown>(request.path, scenario === 'empty' ? [] : items, request.query),
         )
@@ -195,10 +250,9 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
     resources,
     configurationPolicies,
     scopes,
-    admission,
+    lifecycle,
     software,
-    updates,
-    bootstrap,
+
     handle,
     observe(event: DemoObservation, scenario: Scenario) {
       operations.observe(event)
@@ -218,13 +272,11 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
     },
     tick(event: DemoEvent, scenario: Scenario = 'normal') {
       if (!security.tick(event, scenario)) return false
-      if (!event.kind.startsWith('software_') && !event.kind.startsWith('bootstrap_')) {
+      if (!event.kind.startsWith('software_')) {
         policies.reconcile(scenario, event)
         configurationPolicies.reconcile()
         workflows.tick(event)
       }
-      bootstrap.tick(event, scenario)
-      updates.tick(event, scenario)
       software.tick(event, scenario)
       admin.tick(scenario)
       return true
@@ -244,10 +296,8 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         configurations,
         workflows,
         pages,
-        admission,
+        lifecycle,
         software,
-        updates,
-        bootstrap,
       ])
         owner.reset()
     },

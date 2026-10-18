@@ -8,7 +8,7 @@ import { createAutomationDemo } from '../../../../demo/policies/state'
 import { createDeviceDemo } from '../../../../demo/devices/state'
 import { seedScriptPolicies } from '../../../../demo/policies/seed'
 import PoliciesView from './PoliciesView.vue'
-import type { PolicyRead } from '../clients/model'
+import { decodePolicy, type PolicyRead } from '../clients/model'
 async function fixture(unknown = false, configuration = false) {
   const automation = createAutomationDemo(createDeviceDemo()),
     seed = seedScriptPolicies(automation)
@@ -16,17 +16,19 @@ async function fixture(unknown = false, configuration = false) {
     principalId: '22222222-2222-4222-8222-222222222222',
     sessionId: crypto.randomUUID(),
   }
-  const original = automation.handle(
-    {
-      path: `/api/v1/policies/${seed.ids[1]}`,
-      method: 'GET',
-      body: undefined,
-      actor,
-      headers: {},
-      query: new URLSearchParams(),
-    },
-    'normal',
-  )!.body as PolicyRead
+  const original = decodePolicy(
+    automation.handle(
+      {
+        path: `/api/v1/policies/${seed.ids[1]}`,
+        method: 'GET',
+        body: undefined,
+        actor,
+        headers: {},
+        query: new URLSearchParams(),
+      },
+      'normal',
+    )!.body,
+  )
   const nativeResource = {
     id: 'native-camera',
     revision: 3,
@@ -74,7 +76,11 @@ async function fixture(unknown = false, configuration = false) {
       scopeResult: crypto.randomUUID(),
       items: [
         {
-          device: 'device-01',
+          object: { kind: 'endpoint', id: 'device-01' },
+          channel: 'mdm',
+          availability: 'ready',
+          reason: null,
+          target: null,
           eligibility: { state: 'eligible', entry: 1 },
           taskAdmission: null,
         },
@@ -84,11 +90,16 @@ async function fixture(unknown = false, configuration = false) {
     devices = vi.fn().mockResolvedValue({
       items: [
         {
-          device: 'device-01',
-          assignment: 'eligible',
+          object: { kind: 'endpoint', id: 'device-01' },
+          channel: 'mdm',
+          availability: 'ready',
+          target: null,
+          qualification: { state: 'eligible', entry: 1 },
+          sources: [],
+          scopeResult: crypto.randomUUID(),
           taskAdmission: null,
           operationIds: [crypto.randomUUID(), crypto.randomUUID()],
-          diagnoses: ['configuration_conflict', 'removing'],
+          reason: 'configuration_conflict',
         },
       ],
       nextCursor: null,
@@ -123,7 +134,7 @@ async function fixture(unknown = false, configuration = false) {
           session: { state: sessionState },
           tenant: sessionState.value.tenant,
           policies: {
-            policies: { read, list, change, preview, devices },
+            policies: { read, list, change, preview, assignments: devices },
             resources: {
               read: vi
                 .fn()
@@ -322,8 +333,7 @@ it('shows the current configuration preview and all progress operations and diag
   await flushPromises()
   expect(f.devices).toHaveBeenCalledTimes(1)
   const row = (await f.devices.mock.results[0]!.value).items[0]!
-  for (const fact of [...row.operationIds, ...row.diagnoses])
-    expect(f.wrapper.text()).toContain(fact)
+  for (const fact of [...row.operationIds, row.reason]) expect(f.wrapper.text()).toContain(fact)
   f.wrapper.unmount()
 })
 

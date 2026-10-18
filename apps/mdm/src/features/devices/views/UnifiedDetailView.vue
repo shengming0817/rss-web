@@ -6,7 +6,8 @@ import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../useDeviceBinding'
-import { reference, type DeviceView } from '../clients/device-views'
+import type { DeviceView } from '../clients/device-views'
+import { objectRef } from '../clients/objects'
 import type { EndpointDetail } from '../clients/endpoint-model'
 import type { Association } from '../clients/associations'
 import PageFrame from '../../../components/PageFrame.vue'
@@ -32,7 +33,7 @@ async function load() {
   clear()
   await run(
     async () => {
-      const value = await runtime.devices.views.detail(reference(refValue.value)),
+      const value = await runtime.devices.views.detail(objectRef(refValue.value)),
         details = await Promise.all(
           value.endpoints.map((e) => runtime.devices.directory.detail(e.id)),
         )

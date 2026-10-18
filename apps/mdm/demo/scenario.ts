@@ -164,9 +164,6 @@ export function createScenario(
             'software_start',
             'software_detect',
             'software_reboot',
-            'software_usage',
-            'bootstrap_continue',
-            'bootstrap_detect',
             'enrollment_bind',
             'agent_binding',
             'security_result',
@@ -216,12 +213,7 @@ export function createScenario(
             (typeof event.enrollment !== 'string' ||
               !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
                 event.enrollment,
-              ))) ||
-          (event.kind === 'software_usage' &&
-            (typeof event.resource !== 'string' ||
-              !event.resource ||
-              event.resource.length > 256 ||
-              typeof event.active !== 'boolean'))
+              )))
         )
           return { status: 400, body: { code: 'malformed_request' } }
         if (

@@ -4,100 +4,88 @@ import {
   closed,
   count,
   enumeration,
-  integer,
+  identifier,
   nullable,
   record,
   string,
   uuid,
 } from '../../../services/decode'
-export type NativeTask =
-  | { kind: 'profile_install'; enabled: boolean }
-  | { kind: 'profile_remove'; profile: string }
-  | { kind: 'state_verify'; field: 'model' | 'os_version'; expectedValue: string }
-export function decodeNativeTask(value: unknown): NativeTask {
-  const kind = enumeration(record(value)['kind'], [
-    'profile_install',
-    'profile_remove',
-    'state_verify',
-  ] as const)
-  if (kind === 'profile_install') {
-    const v = closed(value, ['kind', 'enabled'])
-    return { kind, enabled: boolean(v['enabled']) }
-  }
-  if (kind === 'profile_remove') {
-    const v = closed(value, ['kind', 'profile'])
-    return { kind, profile: uuid(v['profile']) }
-  }
-  if (kind === 'state_verify') {
-    const v = closed(value, ['kind', 'field', 'expectedValue'])
-    return {
-      kind,
-      field: enumeration(v['field'], ['model', 'os_version'] as const),
-      expectedValue: string(v['expectedValue']),
+import { jsonValue } from './resources'
+export type DeviceControlAction =
+  | { kind: 'restart' }
+  | {
+      kind: 'lock'
+      confirmed: true
+      expectedRegistrationId: string
+      expectedGeneration: number
+      pin: string
     }
+  | { kind: 'wipe'; confirmed: true; expectedRegistrationId: string; expectedGeneration: number }
+export function deviceControlAction(value: unknown): DeviceControlAction {
+  const kind = enumeration(record(value)['kind'], ['restart', 'lock', 'wipe'] as const)
+  if (kind === 'restart') {
+    closed(value, ['kind'])
+    return { kind }
   }
-  throw new Error('Unsupported native task')
+  const v = closed(value, [
+    'kind',
+    'confirmed',
+    'expectedRegistrationId',
+    'expectedGeneration',
+    ...(kind === 'lock' ? ['pin'] : []),
+  ])
+  const generation = count(v['expectedGeneration'])
+  if (v['confirmed'] !== true || generation < 1)
+    throw new Error('Explicit registration confirmation required')
+  const confirmation = {
+    confirmed: true as const,
+    expectedRegistrationId: uuid(v['expectedRegistrationId']),
+    expectedGeneration: generation,
+  }
+  if (kind === 'wipe') return { kind, ...confirmation }
+  const pin = string(v['pin'])
+  if (!/^[0-9]{6}$/.test(pin)) throw new Error('Invalid lock PIN')
+  return { kind, ...confirmation, pin }
 }
-
-function observation(value: unknown) {
-  const protocol = enumeration(record(value)['protocol'], ['mdm.apple', 'mdm.windows'] as const)
-  const base = ['protocol', 'result', 'effect', 'progress']
-  const v =
-    protocol === 'mdm.apple'
-      ? closed(value, [...base, 'observationScope'], ['nativeStatus', 'receivedAt'])
-      : closed(
-          value,
-          [...base, 'receiptAccepted', 'writeStatus'],
-          [
-            'attemptId',
-            'attempt',
-            'nativeStatus',
-            'value',
-            'quality',
-            'receivedAt',
-            'cleanup',
-            'observationScope',
-          ],
-        )
-  const common = {
-    protocol,
-    result: enumeration(v['result'], ['unknown', 'matched', 'mismatched'] as const),
-    effect: enumeration(v['effect'], ['unknown', 'verified_present'] as const),
-    progress: enumeration(v['progress'], ['succeeded', 'failed', 'unknown'] as const),
-  }
-  if (protocol === 'mdm.apple')
-    return {
-      ...common,
-      protocol,
-      observationScope: enumeration(v['observationScope'], ['profile_presence'] as const),
-      ...('nativeStatus' in v ? { nativeStatus: nullable(v['nativeStatus'], string) } : {}),
-      ...('receivedAt' in v ? { receivedAt: nullable(v['receivedAt'], count) } : {}),
-    }
+export function decodeNativeTask(value: unknown) {
+  const v = closed(value, ['platform', 'request'])
   return {
-    ...common,
+    platform: enumeration(v['platform'], ['windows', 'macos'] as const),
+    request: record(jsonValue(v['request'], 1024 * 1024)),
+  }
+}
+function observation(value: unknown) {
+  const raw = record(value),
+    protocol = enumeration(raw['protocol'], ['syncml', 'mdm.apple'] as const),
+    scope = enumeration(raw['observationScope'], [
+      'native_objects',
+      'native_command',
+      'profile_presence',
+      'declarations',
+    ] as const)
+  const base = ['protocol', 'observationScope', 'progress', 'effect']
+  const v =
+    protocol === 'syncml'
+      ? closed(value, [...base, 'receipts'], ['effectReason'])
+      : scope === 'declarations'
+        ? closed(
+            value,
+            [...base, 'synchronization', 'compliance'],
+            ['inputVersion', 'expected', 'nativeStatus', 'receivedAt'],
+          )
+        : closed(
+            value,
+            [...base, 'receipts'],
+            ['result', 'fields', 'error', 'nativeStatus', 'receivedAt'],
+          )
+  if ((protocol === 'syncml') !== (scope === 'native_objects'))
+    throw new Error('Wrong native protocol')
+  return {
+    ...record(jsonValue(v, 1024 * 1024)),
     protocol,
-    receiptAccepted: boolean(v['receiptAccepted']),
-    writeStatus: nullable(v['writeStatus'], integer),
-    ...('attemptId' in v ? { attemptId: uuid(v['attemptId']) } : {}),
-    ...('attempt' in v ? { attempt: count(v['attempt']) } : {}),
-    ...('nativeStatus' in v ? { nativeStatus: nullable(v['nativeStatus'], integer) } : {}),
-    ...('value' in v ? { value: nullable(v['value'], string) } : {}),
-    ...('quality' in v
-      ? {
-          quality: enumeration(v['quality'], [
-            'success',
-            'unsupported',
-            'failed',
-            'missing',
-            'pending',
-          ] as const),
-        }
-      : {}),
-    ...('receivedAt' in v ? { receivedAt: nullable(v['receivedAt'], count) } : {}),
-    ...('cleanup' in v ? { cleanup: enumeration(v['cleanup'], ['unsupported'] as const) } : {}),
-    ...('observationScope' in v
-      ? { observationScope: enumeration(v['observationScope'], ['device_firewall'] as const) }
-      : {}),
+    observationScope: scope,
+    progress: string(v['progress']),
+    effect: string(v['effect']),
   }
 }
 export function decodeNativeOperation(value: unknown, id: string) {
@@ -106,20 +94,30 @@ export function decodeNativeOperation(value: unknown, id: string) {
     'commandId',
     'revision',
     'task',
+    'target',
+    'inputVersion',
     'deadline',
+    'dispatchFailure',
     'authorization',
     'commandStatus',
+    'agentInstallation',
     'observation',
   ])
   if (uuid(v['operationId']) !== id || uuid(v['commandId']) !== id)
     throw new Error('Wrong operation')
+  const target = record(v['target']),
+    kind = enumeration(target['kind'], ['device', 'user'] as const)
+  closed(target, kind === 'device' ? ['kind'] : ['kind', 'userId'])
   return {
     operationId: id,
     commandId: id,
     revision: count(v['revision']),
     task: decodeNativeTask(v['task']),
+    target: kind === 'device' ? { kind } : { kind, userId: identifier(target['userId']) },
+    inputVersion: identifier(v['inputVersion']),
     deadline: count(v['deadline']),
-    authorization: enumeration(v['authorization'], ['approved', 'blocked'] as const),
+    dispatchFailure: nullable(v['dispatchFailure'], (v) => jsonValue(v, 16384)),
+    authorization: enumeration(v['authorization'], ['authorized', 'blocked'] as const),
     commandStatus: enumeration(v['commandStatus'], [
       'queued',
       'published',
@@ -130,6 +128,7 @@ export function decodeNativeOperation(value: unknown, id: string) {
       'superseded',
       'cancelled',
     ] as const),
+    agentInstallation: nullable(v['agentInstallation'], (v) => jsonValue(v, 65536)),
     observation: observation(v['observation']),
   }
 }
@@ -138,12 +137,15 @@ export interface NativeChange {
   requestId: string
   expectedRevision: number
 }
+export interface Reauthorization extends NativeChange {
+  confirmation?: { confirmed: true; expectedRegistrationId: string; expectedGeneration: number }
+}
 export function createNativeClient(transport: HttpTransport) {
   function change(
     device: string,
     operation: string,
-    action: 'approve' | 'cancel',
-    body: NativeChange,
+    action: 'reauthorize' | 'cancel',
+    body: NativeChange | Reauthorization,
   ) {
     return transport.request({
       method: 'POST',
@@ -159,12 +161,15 @@ export function createNativeClient(transport: HttpTransport) {
     })
   }
   return {
-    create: (device: string, body: { operationId: string; task: NativeTask; deadline: number }) =>
+    create: (
+      device: string,
+      body: { operationId: string; action: DeviceControlAction; deadline: number },
+    ) =>
       transport.request({
         method: 'POST',
         path: '/api/v1/devices/{device}/operations',
         pathParams: { device },
-        body,
+        body: { ...body, action: deviceControlAction(body.action) },
         successStatus: 202,
         decode(value) {
           const v = closed(value, ['operationId', 'commandId', 'revision', 'accepted'])
@@ -178,7 +183,7 @@ export function createNativeClient(transport: HttpTransport) {
             operationId: body.operationId,
             commandId: body.operationId,
             revision: count(v['revision']),
-            accepted: true as const,
+            accepted: boolean(v['accepted']),
           }
         },
       }),
@@ -190,8 +195,8 @@ export function createNativeClient(transport: HttpTransport) {
         successStatus: 200,
         decode: (v) => decodeNativeOperation(v, operation),
       }),
-    approve: (device: string, operation: string, body: NativeChange) =>
-      change(device, operation, 'approve', body),
+    reauthorize: (device: string, operation: string, body: Reauthorization) =>
+      change(device, operation, 'reauthorize', body),
     cancel: (device: string, operation: string, body: NativeChange) =>
       change(device, operation, 'cancel', body),
   }

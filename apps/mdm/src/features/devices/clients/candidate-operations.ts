@@ -11,8 +11,6 @@ import {
   unique,
   uuid,
 } from '../../../services/decode'
-import { cursor } from './asset-model'
-import { groupSummary } from './groups'
 export const lifecycleActions = [
   'ade',
   'windows_auto',
@@ -118,21 +116,6 @@ export function createCandidateOperations(transport: HttpTransport, tenant: stri
         body,
         successStatus: 200,
         decode: (v) => assignment(v, id, tenant, demo),
-      }),
-    groups: (next?: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/mdm-candidate/groups',
-        query: { limit: 20, cursor: next },
-        successStatus: 200,
-        decode: (value) => {
-          const v = envelope(value, tenant, demo, ['snapshot', 'items', 'nextCursor'])
-          return {
-            snapshot: uuid(v['snapshot']),
-            items: array(v['items'], groupSummary),
-            nextCursor: cursor(v['nextCursor']),
-          }
-        },
       }),
     preview: (body: Operation<{ action: LifecycleAction; devices: string[] }>) =>
       transport.request({

@@ -70,7 +70,7 @@ async function fixture(component: Component) {
           tenant: TENANT,
           demo: true,
           operations: clients,
-          software: createSoftwareClients(transport, TENANT, true),
+          software: createSoftwareClients(transport),
           policies: createPolicyClients(transport, TENANT, true),
         },
       },

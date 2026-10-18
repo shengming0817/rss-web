@@ -15,7 +15,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage --project '!root' && pnpm -F @rss/core test:coverage",
+    "test:coverage": "pnpm -r --no-bail --filter @rss/api --filter @rss/auth --filter @rss/mdm-app --filter @rss/core run test:coverage",
     "test:boundary": "vitest run --project root && node --test e2e/mdm/enrollment-callback.test.mjs e2e/mdm/device-run.test.mjs",
     "prepare": "husky",
     "test:mdm:joint": "vitest run --config e2e/mdm/vitest.config.ts",

@@ -1,5 +1,5 @@
 import type { HttpTransport } from '@rss/api/mdm'
-import { jsonValue } from '../../policies/clients/resources'
+import { jsonValue } from './resources'
 import {
   array,
   boolean,
@@ -43,6 +43,22 @@ function diagnostics(value: unknown, detail: boolean) {
   }
 }
 function result(value: unknown, detail: boolean) {
+  if ('entryOutcome' in record(value)) {
+    const v = closed(value, ['entryOutcome'], detail ? [] : ['diagnostics'])
+    if ('diagnostics' in v && v['diagnostics'] !== null)
+      throw new Error('Invalid enrollment diagnostics')
+    return {
+      kind: 'enrollment' as const,
+      entryOutcome: enumeration(v['entryOutcome'], [
+        'opened',
+        'user_required',
+        'third_party_conflict',
+        'unsupported',
+        'failed',
+        'unknown',
+      ] as const),
+    }
+  }
   // Native history spans immutable Policy versions, including prior script versions.
   if ('exitCode' in record(value)) {
     const v = closed(value, [

@@ -1,13 +1,13 @@
+import { createLifecycleDemo } from './lifecycle'
 import { expect, it } from 'vitest'
 import { decodeMdmError } from '@rss/api/mdm'
 import { createPublicationDemo } from './publication'
 import { createScenario, TENANT } from '../scenario'
 import { createResourceDemo } from '../policies/resources'
-import { createAdmissionDemo } from './admission'
 const sourcePath = '/api/v1/software/sources/private/revisions/1'
 it('requires the shared session and CSRF, reconciles a committed unknown write, and isolates linked software sources', async () => {
   const resources = createResourceDemo(() => false),
-    admission = createAdmissionDemo(resources)
+    admission = createLifecycleDemo(resources)
   const scenario = createScenario([admission.handle, resources.handle], () => {
     admission.reset()
     resources.reset()
@@ -17,7 +17,7 @@ it('requires the shared session and CSRF, reconciles a committed unknown write, 
     expectedRevision: 0,
     input: {
       action: 'register',
-      definition: { id: 'private', revision: '1', kind: 'private', location: null, publishers: [] },
+      definition: { id: 'private', revision: '1', protocol: { kind: 'private' } },
     },
   }
   expect((await scenario.handle('POST', sourcePath, body)).status).toBe(401)
@@ -34,7 +34,7 @@ it('requires the shared session and CSRF, reconciles a committed unknown write, 
   expect((await scenario.handle('POST', sourcePath, body, headers)).status).toBe(503)
   scenario.set('normal')
   expect((await scenario.handle('GET', sourcePath)).body).toMatchObject({
-    admission: { operation: body.operationId, revision: 1 },
+    lifecycle: { operation: body.operationId, revision: 1 },
   })
   expect((await scenario.handle('POST', sourcePath, body, headers)).status).toBe(200)
   expect(
@@ -81,7 +81,7 @@ it('requires the shared session and CSRF, reconciles a committed unknown write, 
 
 it('keeps rejected publication writes definite through the shared HTTP error decoder', async () => {
   const resources = createResourceDemo(() => false),
-    publication = createPublicationDemo(resources)
+    publication = createPublicationDemo(resources, createLifecycleDemo(resources))
   const scenario = createScenario([publication.handle])
   const login = await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',

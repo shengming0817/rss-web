@@ -34,13 +34,14 @@ it('consumes V1 cookie/CSRF, host policy, account and provider operations throug
       (await api.accounts()).accounts.find((a) => a.principalId === account.principalId)?.enabled,
     ).toBe(false)
     await api.setAccount(account, 'enabled', true)
-    task.meta['step'] = 'providers'
+    task.meta['step'] = 'providers-create'
     const settings = {
       issuer: 'https://idp.example.test',
       clientId: 'reference',
       redirectUri: `${config.canonicalOrigin}/api/v1/identity/oidc/callback`,
       scopes: ['openid'],
       claims: {
+        subject: { kind: 'oidc' as const },
         email: null,
         groups: null,
         departmentSnapshot: { claim: 'organization_snapshot', maxAgeSeconds: 120 },
@@ -48,10 +49,17 @@ it('consumes V1 cookie/CSRF, host policy, account and provider operations throug
       jit: false,
     }
     let provider = await api.createProvider(settings, 'private provider secret', null)
+    task.meta['step'] = 'providers-create-readback'
+    expect(provider.settings.claims.subject).toEqual(settings.claims.subject)
     expect(provider.settings.claims.departmentSnapshot).toEqual(settings.claims.departmentSnapshot)
+    task.meta['step'] = 'providers-update'
     provider = await api.updateProvider(provider, settings, 'private rotated secret', null)
+    task.meta['step'] = 'providers-update-readback'
+    expect(provider.settings.claims.subject).toEqual(settings.claims.subject)
     expect(provider.settings.claims.departmentSnapshot).toEqual(settings.claims.departmentSnapshot)
+    task.meta['step'] = 'providers-test'
     expect((await api.testProvider(provider)).passed).toBe(true)
+    task.meta['step'] = 'providers-enable'
     provider = await api.enableProvider(provider, true)
     task.meta['step'] = 'step-up'
     await session.loadSecurity()

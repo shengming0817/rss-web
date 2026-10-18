@@ -10,7 +10,12 @@ describe('closed Identity wire projections', () => {
     ]) {
       const value = {
         ...providerValue.settings,
-        claims: { email: 'email', groups: null, departmentSnapshot },
+        claims: {
+          subject: { kind: 'oidc' as const },
+          email: 'email',
+          groups: null,
+          departmentSnapshot,
+        },
       }
       expect(d.settings(value)).toEqual(value)
     }
@@ -32,7 +37,12 @@ describe('closed Identity wire projections', () => {
       expect(() =>
         d.settings({
           ...providerValue.settings,
-          claims: { email: 'email', groups: null, departmentSnapshot },
+          claims: {
+            subject: { kind: 'oidc' as const },
+            email: 'email',
+            groups: null,
+            departmentSnapshot,
+          },
         }),
       ).toThrow()
     }
@@ -54,6 +64,23 @@ describe('closed Identity wire projections', () => {
       }
       expect(() => d.settings({ ...providerValue.settings, claims })).toThrow()
     }
+  })
+  it('requires explicit subject interpretation and validates an Entra tenant without OIDC fallback', () => {
+    const settings = providerValue.settings
+    expect(
+      d.settings({
+        ...settings,
+        claims: { ...settings.claims, subject: { kind: 'entra', tenant: ID } },
+      }).claims.subject,
+    ).toEqual({ kind: 'entra', tenant: ID })
+    for (const subject of [
+      undefined,
+      { kind: 'oidc', tenant: ID },
+      { kind: 'entra', tenant: 'common' },
+      { kind: 'entra', tenant: '00000000-0000-0000-0000-000000000000' },
+      { kind: 'other' },
+    ])
+      expect(() => d.settings({ ...settings, claims: { ...settings.claims, subject } })).toThrow()
   })
   it('accepts only the embedded v2 identity without role fields', () => {
     const value = {

@@ -1,5 +1,5 @@
 import type { ExecutionSummary } from '../../policies/clients/executions'
-import type { SoftwareRun } from './runs'
+import type { SoftwareRun } from '../../policies/clients/runs'
 /** A presentation projection; the native run remains the sole execution evidence owner. */
 export function softwareExecution(
   policy: string,
@@ -30,7 +30,12 @@ export function softwareExecution(
           : run.effect,
     compliance: 'unknown',
     attempt: s.delivery.kind === 'queued' ? null : s.delivery.attempt!,
-    nativeCode: result?.kind === 'software' ? result.installerExitCode : (result?.exitCode ?? null),
+    nativeCode:
+      result?.kind === 'software'
+        ? result.installerExitCode
+        : result?.kind === 'script'
+          ? result.exitCode
+          : null,
     waitingReason:
       s.cancellation === 'requested'
         ? 'cancel_confirmation'

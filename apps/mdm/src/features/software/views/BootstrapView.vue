@@ -1,368 +1,295 @@
 <script setup lang="ts">
 import { UiButton } from '@rss/core/components'
-import { ref, toRaw, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import { useMdm } from '../../../context'
-import { operation, useOperation, type Operation } from '../../../services/useOperation'
-import {
-  bootstrapDefinition,
-  type BootstrapDefinition,
-  type BootstrapPolicy,
-  type BootstrapChange,
-} from '../clients/bootstrap'
-import SoftwareResourceSelect from '../components/SoftwareResourceSelect.vue'
+import { operation, useOperation } from '../../../services/useOperation'
+import { defaultSchedule, policyDefinition, type PolicyRead } from '../../policies/clients/model'
+import NativeScheduleEditor from '../components/NativeScheduleEditor.vue'
 import CatalogLocator from '../../policies/components/CatalogLocator.vue'
+import AssignmentFacts from '../../policies/components/AssignmentFacts.vue'
+import { objectKey } from '../../devices/clients/objects'
+import { deviceBinding } from '../../devices/useDeviceBinding'
 import PageFrame from '../../../components/PageFrame.vue'
-import BootstrapAttemptFacts from '../components/BootstrapAttemptFacts.vue'
-const editing = ref(false)
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
-  client = runtime.software.bootstrap
-const { run, runWrite, busy, uncertain, failure } = useOperation()
-const page = ref<Awaited<ReturnType<typeof client.list>>>(),
-  selected = ref<BootstrapPolicy>(),
-  invalid = ref(false)
-function fresh(): BootstrapDefinition {
-  return {
-    title: '',
-    scope: '',
-    platform: 'windows',
-    enabled: true,
-    action: {
-      kind: 'install_agent',
-      resource: { kind: 'software', id: '', version: '1', variants: {} },
-      admissionOperation: '',
-      userAction: 'required',
-    },
-  }
-}
-const draft = ref(fresh())
-let pending: { id: string; body: Operation<BootstrapChange> } | undefined
-function accept(v: BootstrapPolicy) {
+  client = runtime.policies.policies,
+  { run, runWrite, busy, failure, uncertain } = useOperation([], () => deviceBinding(runtime))
+const action = ref<'ensure_agent_installed' | 'request_mdm_enrollment'>('ensure_agent_installed'),
+  id = ref(''),
+  scope = ref(''),
+  organization = ref(''),
+  packages = ref<Record<string, string>>({}),
+  schedule = ref(defaultSchedule()),
+  lifetime = ref(1800),
+  enabled = ref(true),
+  editing = ref(false),
+  current = ref<PolicyRead>(),
+  page = ref<Awaited<ReturnType<typeof client.list>>>(),
+  assignments = ref<Awaited<ReturnType<typeof client.assignments>>>(),
+  records = ref<Awaited<ReturnType<typeof runtime.policies.executions.directory>>>(),
+  releases = ref<Awaited<ReturnType<typeof runtime.onboarding.packages.list>>>([])
+const targets = ['windows_x86_64', 'windows_aarch64', 'macos_x86_64', 'macos_aarch64'] as const
+function apply(p: PolicyRead) {
+  const a = p.definition.action
+  if (a.kind !== 'ensure_agent_installed' && a.kind !== 'request_mdm_enrollment')
+    throw new Error('Wrong onboarding action')
+  current.value = p
+  id.value = p.id
+  action.value = a.kind
+  scope.value = p.definition.scope
+  enabled.value = p.enabled
+  schedule.value = structuredClone(a.schedule)
+  lifetime.value = a.runLifetimeSeconds
+  packages.value = a.kind === 'ensure_agent_installed' ? { ...a.packages } : {}
+  organization.value = a.kind === 'request_mdm_enrollment' ? a.organization : ''
   editing.value = false
-  selected.value = v
-  draft.value = structuredClone(v.definition)
-  if (pending?.id === v.id && pending.body.operationId === v.operation) uncertain.value = false
-}
-function read(id = uncertain.value ? pending?.id : selected.value?.id) {
-  if (!id || (uncertain.value && pending?.id !== id)) return
-  void run(() => client.read(id), accept)
+  assignments.value = undefined
+  records.value = undefined
 }
 function list(cursor?: string) {
   void run(
-    () => client.list(cursor),
+    () => client.list(cursor, action.value),
     (v) => {
       page.value = v
     },
   )
 }
+function read(target = id.value) {
+  if (busy.value || uncertain.value) return
+  void run(() => client.read(target), apply)
+}
 function create() {
   if (busy.value || uncertain.value) return
+  current.value = undefined
+  id.value = crypto.randomUUID()
+  scope.value = ''
+  packages.value = {}
+  organization.value = ''
+  schedule.value = defaultSchedule()
+  enabled.value = true
+  assignments.value = undefined
   editing.value = true
-  selected.value = undefined
-  pending = undefined
-  draft.value = fresh()
 }
-function kind(event: Event) {
-  draft.value.action =
-    (event.target as HTMLSelectElement).value === 'install_agent'
-      ? fresh().action
-      : { kind: 'request_mdm', instructions: '' }
+function write(input: Parameters<typeof client.change>[1]['input']) {
+  if (busy.value || uncertain.value) return
+  const target = current.value?.id ?? id.value,
+    body = operation(input, current.value?.revision ?? 0)
+  void runWrite(() => client.change(target, body), apply)
 }
-function resetBinding() {
-  if (draft.value.action.kind === 'install_agent') {
-    draft.value.action.admissionOperation = ''
-    draft.value.action.resource.variants = {}
+function save() {
+  try {
+    const base = { schedule: schedule.value, runLifetimeSeconds: lifetime.value },
+      input =
+        action.value === 'ensure_agent_installed'
+          ? {
+              kind: action.value,
+              packages: Object.fromEntries(Object.entries(packages.value).filter(([, id]) => id)),
+              ...base,
+            }
+          : { kind: action.value, organization: organization.value, ...base }
+    write({
+      action: 'put',
+      enabled: enabled.value,
+      definition: policyDefinition({ scope: scope.value, action: input }),
+    })
+  } catch {
+    failure.value = 'invalidRequest'
   }
 }
-function bind() {
-  const a = draft.value.action
-  if (a.kind !== 'install_agent') return
-  const { id, version } = a.resource
+function progress(after?: string) {
+  if (current.value)
+    void run(
+      () => client.assignments(current.value!.id, after),
+      (v) => {
+        assignments.value = v
+      },
+    )
+}
+function executions(cursor?: { id: string; kind: 'command' | 'action_run' }) {
+  const policy = current.value?.id
+  if (!policy) return
   void run(
-    async () => {
-      const [r, approval] = await Promise.all([
-        runtime.policies.resources.read(id),
-        runtime.software.admission.version(id, version),
-      ])
-      const v = r.versions.find((v) => v.id === version)
-      if (
-        r.kind !== 'software' ||
-        v?.state !== 'active' ||
-        approval.admission?.state !== 'approved'
-      )
-        throw new Error('Unapproved Agent package')
-      const variants: Record<string, string> = {}
-      for (const variant of v.variants) {
-        const target = `${variant.platform}_${variant.architecture}`
-        if (variants[target]) throw new Error('Ambiguous Agent variant')
-        variants[target] = variant.key
-      }
-      return {
-        resource: { kind: 'software' as const, id, version, variants },
-        admissionOperation: approval.admission.operation,
-      }
-    },
+    () =>
+      runtime.policies.executions.directory({ policy, after: cursor?.id, afterKind: cursor?.kind }),
     (v) => {
-      if (draft.value.action.kind === 'install_agent') Object.assign(draft.value.action, v)
+      records.value = v
     },
   )
 }
-async function replay() {
-  if (pending) await runWrite(() => client.change(pending!.id, pending!.body), accept)
-}
-function change(input: BootstrapChange) {
-  if (busy.value || uncertain.value) return
-  invalid.value = false
-  try {
-    if (input.action === 'put')
-      input = {
-        action: 'put',
-        definition: bootstrapDefinition(structuredClone(toRaw(input.definition))),
-      }
-  } catch {
-    invalid.value = true
-    return
-  }
-  pending = {
-    id: selected.value?.id ?? crypto.randomUUID(),
-    body: operation(input, selected.value?.revision ?? 0),
-  }
-  void replay()
+function loadReleases() {
+  void run(
+    () => runtime.onboarding.packages.list(),
+    (v) => {
+      releases.value = v
+    },
+  )
 }
 watch(
   () => route.fullPath,
   () => {
-    selected.value = undefined
-    pending = undefined
-    draft.value = fresh()
-    invalid.value = false
+    current.value = undefined
     page.value = undefined
-    const id = route.query['id']
-    void run(
-      () => Promise.all([client.list(), typeof id === 'string' ? client.read(id) : undefined]),
-      ([items, value]) => {
-        page.value = items
-        if (value) accept(value)
-      },
-    )
+    assignments.value = undefined
+    records.value = undefined
+    editing.value = false
+    id.value = ''
+    scope.value = ''
+    packages.value = {}
+    organization.value = ''
+    const target = route.query['id']
+    if (typeof target === 'string') read(target)
+    else list()
   },
   { immediate: true },
 )
+watch(action, () => {
+  page.value = undefined
+  assignments.value = undefined
+  records.value = undefined
+})
+watch(
+  () => deviceBinding(runtime),
+  () => {
+    current.value = undefined
+    assignments.value = undefined
+    records.value = undefined
+    page.value = undefined
+    editing.value = false
+    id.value = ''
+    scope.value = ''
+    packages.value = {}
+    organization.value = ''
+  },
+  { flush: 'sync' },
+)
 </script>
 <template>
-  <PageFrame :title="t('software.bootstrap')" :busy="busy" :failure="failure">
-    <p>{{ t('software.bootstrapHint') }}</p>
-    <UiButton :disabled="!!busy" type="submit" @click="list()">{{ t('policies.reload') }}</UiButton
-    ><UiButton :disabled="!!(busy || uncertain)" type="submit" @click="create">
-      {{ t('software.newSourcePolicy') }}
-    </UiButton>
-    <p v-if="page && !page.items.length">{{ t('policies.empty') }}</p>
+  <PageFrame :title="t('software.bootstrap')" :busy="busy" :failure="failure"
+    ><p>{{ t('software.bootstrapPolicyHint') }}</p>
+    <label
+      >{{ t('policies.kind')
+      }}<select v-model="action" class="ui-input" :disabled="busy || uncertain || !!current">
+        <option value="ensure_agent_installed">{{ t('software.installAgent') }}</option>
+        <option value="request_mdm_enrollment">{{ t('software.requestMdm') }}</option>
+      </select></label
+    ><UiButton :disabled="busy || uncertain" @click="create">{{ t('policies.create') }}</UiButton
+    ><UiButton :disabled="busy" @click="list()">{{ t('policies.reload') }}</UiButton>
     <ul class="console-object-list">
       <li v-for="item in page?.items" :key="item.id">
-        <UiButton
-          data-action="open-source-policy"
-          :disabled="!!(busy || uncertain)"
-          type="submit"
-          @click="read(item.id)"
-        >
-          {{ item.definition.title }} ·
-          {{ t(`software.sourceAction_${item.definition.action.kind}`) }} · {{ item.id }}
-        </UiButton>
+        <UiButton :disabled="busy || uncertain" @click="read(item.id)">{{ item.id }}</UiButton>
       </li>
     </ul>
-    <UiButton
-      v-if="page?.nextCursor"
-      :disabled="!!busy"
-      type="submit"
-      @click="list(page.nextCursor)"
-    >
-      {{ t('policies.next') }}
-    </UiButton>
-    <div v-if="selected && !editing" class="console-toolbar">
-      <UiButton type="button" :disabled="busy || uncertain" @click="editing = true">{{
+    <UiButton v-if="page?.nextCursor" :disabled="busy" @click="list(page.nextCursor)">{{
+      t('devices.next')
+    }}</UiButton>
+    <section v-if="current" class="console-panel">
+      <h2 data-testid="onboarding-policy-locator">{{ current.id }} · {{ current.revision }}</h2>
+      <p>
+        {{ current.definition.scope }} ·
+        {{ t(current.enabled ? 'policies.state.active' : 'policies.state.paused') }}
+      </p>
+      <UiButton :disabled="busy || uncertain" @click="editing = true">{{
         t('console.edit')
-      }}</UiButton>
-    </div>
-    <form
-      v-show="editing"
-      class="console-panel"
-      @submit.prevent="change({ action: 'put', definition: draft })"
-    >
-      <div class="console-page-header">
-        <h2>{{ t(selected ? 'console.edit' : 'console.create') }}</h2>
-        <UiButton type="button" :disabled="busy || uncertain" @click="editing = false">{{
-          t('console.close')
-        }}</UiButton>
-      </div>
+      }}</UiButton
+      ><UiButton
+        :disabled="busy || uncertain"
+        @click="write({ action: current.enabled ? 'disable' : 'enable' })"
+        >{{ t(current.enabled ? 'software.disable' : 'software.enable') }}</UiButton
+      ><UiButton :disabled="busy" @click="progress()">{{ t('policies.refreshProgress') }}</UiButton>
+      <UiButton :disabled="busy" @click="executions()">{{ t('policies.executions') }}</UiButton>
+    </section>
+    <form v-if="editing" class="console-panel" @submit.prevent="save">
       <fieldset :disabled="busy || uncertain">
-        <legend>{{ t('software.sourcePolicy') }}</legend>
-        <label for="bootstrap-title">{{ t('software.displayTitle') }}</label
-        ><input id="bootstrap-title" v-model="draft.title" class="ui-input" required />
-        <label for="bootstrap-scope">{{ t('software.updateScope') }}</label
-        ><input
-          id="bootstrap-scope"
-          v-model="draft.scope"
-          class="ui-input"
-          required
-        /><CatalogLocator v-model="draft.scope" collection="scopes" :disabled="busy || uncertain" />
-        <label for="bootstrap-platform">{{ t('policies.platform') }}</label
-        ><select id="bootstrap-platform" v-model="draft.platform" class="ui-input">
-          <option value="windows">Windows</option>
-          <option value="macos">macOS</option>
-        </select>
-        <label for="bootstrap-kind">{{ t('software.sourceDirection') }}</label
-        ><select id="bootstrap-kind" class="ui-input" :value="draft.action.kind" @change="kind">
-          <option value="install_agent">{{ t('software.sourceAction_install_agent') }}</option>
-          <option value="request_mdm">{{ t('software.sourceAction_request_mdm') }}</option>
-        </select>
-        <template v-if="draft.action.kind === 'install_agent'">
-          <p>{{ t('software.agentPackageHint') }}</p>
-          <p v-if="runtime.demo">{{ t('software.demoAgentPackage') }}</p>
-          <SoftwareResourceSelect
-            v-model:resource="draft.action.resource.id"
-            v-model:version="draft.action.resource.version"
-            :disabled="busy || uncertain"
-            @change="resetBinding"
-          /><label for="bootstrap-resource">{{ t('software.patchResource') }}</label
-          ><input
-            id="bootstrap-resource"
-            v-model="draft.action.resource.id"
+        <label>{{ t('policies.scope') }}<input v-model="scope" class="ui-input" required /></label
+        ><CatalogLocator
+          v-model="scope"
+          collection="scopes"
+          :disabled="busy || uncertain"
+        /><template v-if="action === 'ensure_agent_installed'"
+          ><UiButton @click="loadReleases">{{ t('software.agentReleases') }}</UiButton
+          ><label v-for="target in targets" :key="target"
+            >{{ target
+            }}<select v-model="packages[target]" class="ui-input">
+              <option value="">{{ t('devices.select') }}</option>
+              <option
+                v-if="packages[target] && !releases.some((r) => r.releaseId === packages[target])"
+                :value="packages[target]"
+              >
+                {{ packages[target] }}
+              </option>
+              <option
+                v-for="release in releases.filter(
+                  (r) => `${r.target.platform}_${r.target.architecture}` === target,
+                )"
+                :key="release.releaseId"
+                :value="release.releaseId"
+              >
+                {{ release.version }} · {{ release.format }} · {{ release.channel }} ·
+                {{ release.releaseId }}
+              </option>
+            </select></label
+          >
+          <p>{{ t('software.releaseRequired') }}</p></template
+        ><label v-else
+          >{{ t('software.organization')
+          }}<input v-model="organization" class="ui-input" required /></label
+        ><NativeScheduleEditor v-model="schedule" :disabled="busy || uncertain" /><label
+          >{{ t('software.runLifetime')
+          }}<input
+            v-model.number="lifetime"
+            type="number"
+            min="60"
+            max="604800"
             class="ui-input"
-            required
-            @input="resetBinding"
-          />
-          <label for="bootstrap-version">{{ t('software.resourceVersion') }}</label
-          ><input
-            id="bootstrap-version"
-            v-model="draft.action.resource.version"
-            class="ui-input"
-            required
-            @input="resetBinding"
-          />
-          <UiButton type="button" @click="bind">{{ t('software.bindAgentPackage') }}</UiButton>
-          <p>{{ draft.action.admissionOperation || t('software.notAdmitted') }}</p>
-          <label for="bootstrap-user">{{ t('software.localAction') }}</label
-          ><select id="bootstrap-user" v-model="draft.action.userAction" class="ui-input">
-            <option value="required">{{ t('software.localConsent') }}</option>
-            <option value="silent">{{ t('software.silentAgentInstall') }}</option>
-          </select>
-        </template>
-        <template v-else
-          ><label for="bootstrap-instructions">{{ t('software.enrollmentInstructions') }}</label
-          ><textarea
-            id="bootstrap-instructions"
-            v-model="draft.action.instructions"
-            class="ui-input"
-            required
-            maxlength="4096"
-          />
-          <p>{{ t('software.instructionsHint') }}</p></template
-        >
-        <label><input v-model="draft.enabled" type="checkbox" />{{ t('policies.enabled') }}</label
+            required /></label
+        ><label><input v-model="enabled" type="checkbox" />{{ t('policies.enabled') }}</label
         ><UiButton type="submit">{{ t('policies.save') }}</UiButton>
       </fieldset>
     </form>
-    <p v-if="invalid" role="alert">{{ t('software.invalidSourcePolicy') }}</p>
-    <p v-if="uncertain" role="alert">{{ t('software.sourceUnknown') }}</p>
-    <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="replay">
-      {{ t('policies.replay') }}</UiButton
-    ><UiButton
-      v-if="pending || selected"
-      data-action="read-source-policy"
-      :disabled="!!busy"
-      type="submit"
-      @click="read()"
-    >
-      {{ t('policies.verify') }}
-    </UiButton>
-    <section v-if="selected" class="console-panel">
-      <h2>{{ selected.definition.title }} · {{ selected.id }}</h2>
-      <p>
-        {{ t('policies.revision') }} {{ selected.revision }} · {{ t('policies.scopes') }}
-        {{ selected.scopeRevision ?? '—' }}
-      </p>
-      <div class="console-inline-actions">
-        <UiButton
-          v-for="action in ['evaluate', 'dispatch', 'pause', 'resume'] as const"
-          :key="action"
-          :data-action="`source-${action}`"
-          :disabled="!!(busy || uncertain)"
-          type="submit"
-          @click="change({ action })"
-        >
-          {{ t(`software.sourceCommand_${action}`) }}
-        </UiButton>
-      </div>
-      <article v-for="row in selected.targets" :key="row.device" class="console-panel">
-        <h3>{{ row.device }} · {{ t(`software.bootstrapAdmission_${row.admission}`) }}</h3>
-        <dl>
-          <dt>{{ t('software.observedSource') }}</dt>
-          <dd>
-            {{ row.source?.source ?? '—' }} · {{ row.source?.registrationId ?? '—' }} /
-            {{ row.source?.generation ?? '—' }}
-          </dd>
-          <dt>{{ t('software.targetRegistration') }}</dt>
-          <dd>
-            {{ row.target?.source ?? '—' }} · {{ row.target?.registrationId ?? '—' }} /
-            {{ row.target?.generation ?? '—' }} · {{ row.target?.status ?? '—' }}
-          </dd>
-          <dt>{{ t('software.targetBinding') }}</dt>
-          <dd>{{ t(`software.binding_${row.binding}`) }}</dd>
-        </dl>
-        <p>{{ t('software.bootstrapFactsHint') }}</p>
-        <BootstrapAttemptFacts v-if="row.attempt" :attempt="row.attempt" />
-        <RouterLink
-          v-if="row.attempt"
-          :to="{
-            name: 'policy-execution',
-            params: { tenant: runtime.tenant, execution: row.attempt.id },
-          }"
-          >{{ t('policies.detail') }}</RouterLink
-        >
-        <RouterLink
-          :to="{
-            name: 'device-detail',
-            params: { tenant: runtime.tenant, device: row.device },
-            query: { tab: 'credentials' },
-          }"
-          >{{ t('software.viewRegistrations') }}</RouterLink
-        >
-        <RouterLink
-          :to="
-            selected.definition.action.kind === 'install_agent'
-              ? { name: 'agent-downloads' }
-              : {
-                  name: 'device-enroll',
-                  params: { tenant: runtime.tenant },
-                  query: {
-                    device: row.device,
-                    source:
-                      selected.definition.platform === 'windows' ? 'mdm.windows' : 'mdm.apple',
-                  },
-                }
-          "
-          >{{ t('software.openEnrollmentOwner') }}</RouterLink
-        >
-        <UiButton
-          v-if="row.attempt && ['failed', 'cancelled'].includes(row.attempt.phase)"
-          :disabled="!!(busy || uncertain)"
-          type="submit"
-          @click="change({ action: 'retry', device: row.device })"
-        >
-          {{ t('software.sourceCommand_retry') }}
-        </UiButton>
-        <UiButton
-          v-if="row.attempt?.phase === 'unknown'"
-          :disabled="!!(busy || uncertain)"
-          type="submit"
-          @click="change({ action: 'reconcile', device: row.device })"
-        >
-          {{ t('software.sourceCommand_reconcile') }}
-        </UiButton>
-      </article>
+    <section v-if="assignments" class="console-panel">
+      <ul>
+        <li v-for="item in assignments.items" :key="objectKey(item.object)">
+          <AssignmentFacts :item="item" />
+          <p>{{ item.qualification.state }}</p>
+          <ul>
+            <li v-for="operationId in item.operationIds" :key="operationId">
+              {{ operationId }}
+            </li>
+          </ul>
+        </li>
+      </ul>
+      <UiButton
+        v-if="assignments.nextCursor"
+        :disabled="busy"
+        @click="progress(assignments.nextCursor)"
+        >{{ t('devices.next') }}</UiButton
+      >
+    </section>
+    <section v-if="records" class="console-panel">
+      <p>{{ records.statistics.total }} · {{ records.asOf }}</p>
+      <ul>
+        <li v-for="record in records.items" :key="record.id">
+          <RouterLink
+            :to="{
+              name: 'policy-execution',
+              params: { tenant: runtime.tenant, execution: record.id },
+              query:
+                record.kind === 'command' ? { device: record.device } : { policy: record.policy },
+            }"
+            >{{ record.device }} · {{ record.id }} · {{ record.status }}</RouterLink
+          >
+          <p>{{ record.registrationId }} / {{ record.generation }}</p>
+        </li>
+      </ul>
+      <UiButton
+        v-if="records.nextCursor"
+        :disabled="busy"
+        @click="executions(records.nextCursor)"
+        >{{ t('devices.next') }}</UiButton
+      >
     </section>
   </PageFrame>
 </template>

@@ -3,7 +3,7 @@ import type { DemoDevice } from '../devices/fixtures'
 import type { DemoEvent } from '../policies/schedule'
 import type { Scenario } from '../scenario'
 import type { SoftwarePolicy } from '../../src/features/software/clients/assignment-model'
-import type { SoftwareRun } from '../../src/features/software/clients/runs'
+import type { SoftwareRun } from '../../src/features/policies/clients/runs'
 import { nativeDue } from './schedule'
 export function softwareProfiles(device: DemoDevice | undefined) {
   return (device?.agentBindings ?? []).filter(
@@ -49,7 +49,13 @@ export function createSoftwareRuns(allowed: (run: RunRecord) => boolean) {
           ),
         )
       : null
-    if (result && !detail && value.result)
+    if (
+      result &&
+      !detail &&
+      value.result &&
+      'diagnostics' in value.result &&
+      value.result.diagnostics
+    )
       result['diagnostics'] = {
         durationMs: value.result.diagnostics.durationMs,
         executedAt: value.result.diagnostics.executedAt,

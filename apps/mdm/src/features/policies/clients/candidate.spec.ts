@@ -27,20 +27,20 @@ function transport(initial: unknown) {
 it('binds candidate list envelopes to tenant and source and carries snapshot cursors', async () => {
   const response = envelope({
     snapshot,
-    items: [{ id, label: 'Pilot scope', revision: 1, status: 'ready' }],
+    items: [{ id, label: 'Workflow', revision: 1, status: 'active' }],
     nextCursor: 'opaque',
   })
   const t = transport(response)
   const client = createCatalogClient(t.http, tenant, true)
-  expect((await client.list('scopes')).nextCursor).toBe('opaque')
-  await client.list('scopes', 'opaque')
+  expect((await client.list('workflows')).nextCursor).toBe('opaque')
+  await client.list('workflows', 'opaque')
   expect(t.request.mock.calls[1]![0]).toMatchObject({
-    path: '/api/v1/mdm-candidate/policies/scopes',
+    path: '/api/v1/mdm-candidate/policies/workflows',
     query: { cursor: 'opaque' },
   })
-  await expect(createCatalogClient(t.http, tenant, false).list('scopes')).rejects.toThrow()
+  await expect(createCatalogClient(t.http, tenant, false).list('workflows')).rejects.toThrow()
   t.reply({ ...response, tenantId: id })
-  await expect(client.list('scopes')).rejects.toThrow()
+  await expect(client.list('workflows')).rejects.toThrow()
 })
 it('reads published configuration versions and server preflight facts without authoring execution channels', async () => {
   const configuration = {

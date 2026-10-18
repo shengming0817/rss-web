@@ -11,9 +11,6 @@ export interface DemoEvent {
     | 'software_start'
     | 'software_detect'
     | 'software_reboot'
-    | 'software_usage'
-    | 'bootstrap_continue'
-    | 'bootstrap_detect'
     | 'enrollment_bind'
     | 'agent_binding'
     | 'security_result'
@@ -32,7 +29,6 @@ export interface DemoEvent {
     | 'diagnostic_scanned'
   at: number
   device?: string
-  resource?: string
   active?: boolean
   task?: string
   enrollment?: string

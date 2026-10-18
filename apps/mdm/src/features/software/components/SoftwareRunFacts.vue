@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import type { SoftwareRun } from '../clients/runs'
+import type { SoftwareRun } from '../../policies/clients/runs'
 defineProps<{ run: SoftwareRun }>()
 const { t } = useI18n()
 const utc = (at: number) =>
@@ -41,6 +41,9 @@ const utc = (at: number) =>
         <dd class="console-wrap">{{ run.result.evidenceDigest.join(',') }}</dd>
       </template>
     </dl>
+    <p v-if="run.result?.kind === 'enrollment'">
+      {{ t('software.requestMdm') }} · {{ run.result.entryOutcome }}
+    </p>
     <p v-if="!run.result">{{ t('software.noRunResult') }}</p>
     <template v-if="run.result?.kind === 'script'">
       <p>{{ t('software.scriptHistory') }}</p>
@@ -62,7 +65,7 @@ const utc = (at: number) =>
       </p>
       <pre v-if="'output' in run.result">{{ JSON.stringify(run.result.output, null, 2) }}</pre>
     </template>
-    <details v-if="run.result && 'stdout' in run.result.diagnostics">
+    <details v-if="run.result && 'diagnostics' in run.result && 'stdout' in run.result.diagnostics">
       <summary>{{ t('software.diagnostics') }}</summary>
       <p>
         {{ utc(run.result.diagnostics.executedAt) }} · {{ run.result.diagnostics.durationMs }} ms ·

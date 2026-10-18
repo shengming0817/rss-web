@@ -300,6 +300,113 @@ try {
   assert.equal(invalidated.status(), 409)
   assert.equal((await invalidated.json()).code, 'device_view_cursor_invalidated')
   coverage.push('real-authority-bound-list-cursor-invalidation')
+  phase = 'group-scope-assignments'
+  const mutate = async (url, input, expectedRevision = 0) => {
+    const response = await request('post', origin + url, {
+      headers: await headers(),
+      data: { operationId: randomUUID(), expectedRevision, input },
+    })
+    assert.equal(response.status(), 200)
+    return response.json()
+  }
+  const settled = async (url) => {
+    for (let i = 0; i < 30; i++) {
+      const value = await api(url)
+      if (value.status === 'completed') return value
+      assert.equal(value.status, 'running')
+    }
+    assert.fail('bounded calculation deadline')
+  }
+  const group = randomUUID()
+  await mutate(`/api/v1/groups/${group}`, {
+    action: 'create',
+    name: 'Browser endpoint group',
+    description: '',
+    assetContext: 'endpoint',
+    criteria: null,
+  })
+  const membership = await mutate(
+    `/api/v1/groups/${group}`,
+    { action: 'members', add: [{ kind: 'endpoint', id: fixture.agent }], remove: [] },
+    1,
+  )
+  await settled(`/api/v1/groups/${group}/tasks/${membership.task}`)
+  const groupResult = await api(`/api/v1/groups/${group}/results/${membership.task}/members`)
+  assert.deepEqual(groupResult.page.items, [{ kind: 'endpoint', id: fixture.agent }])
+  await page.goto(path('groups'))
+  await loaded()
+  await page.getByRole('button', { name: /Browser endpoint group/ }).click()
+  await loaded()
+  assert.ok((await page.locator('main').textContent()).includes(group))
+  // Create the Scope through production Vue, consuming the formal Group directory.
+  await page.goto(path(`policies?group=${group}`))
+  await loaded()
+  const scopeWrite = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      /\/api\/v1\/scopes\/[^/]+$/.test(new URL(r.url()).pathname),
+  )
+  await page.getByRole('button', { name: '保存', exact: true }).click()
+  const scopeResponse = await scopeWrite
+  assert.equal(scopeResponse.status(), 200)
+  const scope = await scopeResponse.json()
+  await settled(`/api/v1/scopes/${scope.id}/tasks/${scope.task}`)
+  await page.getByRole('button', { name: '读取任务状态', exact: true }).click()
+  await loaded()
+  await page.locator('#scope-projection').selectOption('decisions')
+  const channelSelect = page
+    .locator('select')
+    .filter({ has: page.locator('option[value="agent"]') })
+  await channelSelect.selectOption('agent')
+  await page.getByRole('button', { name: '打开', exact: true }).last().click()
+  await loaded()
+  assert.ok((await page.locator('main').textContent()).includes(fixture.agent))
+  const decision = await api(
+    `/api/v1/scopes/${scope.id}/results/${scope.task}/decisions?channel=agent`,
+  )
+  assert.equal(decision.channel, 'agent')
+  assert.equal(decision.page.items[0].object.kind, 'endpoint')
+  assert.equal(decision.page.items[0].qualification.state, 'eligible')
+  assert.ok(decision.page.items[0].targets.some((s) => s.reference.id === group))
+  const policy = randomUUID()
+  await mutate(`/api/v1/policies/${policy}`, {
+    action: 'put',
+    enabled: false,
+    definition: {
+      scope: scope.id,
+      action: {
+        kind: 'request_mdm_enrollment',
+        organization: fixture.tenant,
+        runLifetimeSeconds: 300,
+        schedule: {
+          trigger: { kind: 'manual' },
+          misfire: { kind: 'coalesce_one' },
+          notBefore: 0,
+          until: null,
+          jitterSeconds: 0,
+          window: null,
+        },
+      },
+    },
+  })
+  const assignment = (await api(`/api/v1/policies/${policy}/assignments`)).items.find(
+    (a) => a.object.id === fixture.agent,
+  )
+  assert.ok(assignment)
+  assert.equal(assignment.channel, 'agent')
+  assert.equal(
+    assignment.target.registrationId,
+    association.members.find((m) => m.channel === 'agent').registrationId,
+  )
+  assert.equal(assignment.target.generation, 2)
+  assert.ok(assignment.sources.some((s) => s.object.kind === 'association' && s.object.id === id))
+  assert.ok(Array.isArray(assignment.operationIds))
+  await page.goto(path(`software/bootstrap?id=${policy}`))
+  await loaded()
+  await page.getByRole('button', { name: '刷新进度', exact: true }).click()
+  await loaded()
+  assert.ok((await page.locator('main').textContent()).includes(assignment.target.registrationId))
+  coverage.push('real-endpoint-group-scope-channel-and-canonical-assignments')
   phase = 'authorization'
   await writeRule([{ operation: 'inventory_read', scope: { kind: 'all_devices' } }])
   await page.reload()

@@ -28,7 +28,7 @@ export const operation = <T>(input: T, expectedRevision: number) => ({
   input,
 })
 /** Shared test setup through the actual Resource HTTP handler, never a UI fixture. */
-export function softwareResource(packageName = 'Example.App') {
+export function softwareResource(packageName = 'Example.App', nativeExport = false) {
   const resources = createResourceDemo(() => false)
   const bytes = new Uint8Array([1, 2, 3]).buffer
   const digest = [...createHash('sha256').update(new Uint8Array(bytes)).digest()]
@@ -41,7 +41,11 @@ export function softwareResource(packageName = 'Example.App') {
     exitCodes: { success: [0], reboot: [3010] },
   }
   const definition = {
-    source: { id: 'private', revision: '1', sha256: hash('source') },
+    source: {
+      id: 'private',
+      revision: '1',
+      sha256: hash({ id: 'private', revision: '1', protocol: { kind: 'private' } }),
+    },
     package: packageName,
     version: '1.0',
     artifacts: { installer: { reference: 'installer', origin: null, length: 3, sha256: digest } },
@@ -50,7 +54,16 @@ export function softwareResource(packageName = 'Example.App') {
     dependencies: [],
     provenance: { kind: 'private' },
     signatures: [],
-    export: { kind: 'disabled' },
+    export: nativeExport
+      ? {
+          kind: 'winget',
+          locale: 'en-US',
+          name: packageName,
+          publisher: 'Example',
+          description: 'Synthetic package',
+          license: 'MIT',
+        }
+      : { kind: 'disabled' },
     behavior: {
       kind: 'msi',
       installer: 'installer',

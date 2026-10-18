@@ -1,308 +1,110 @@
 <script setup lang="ts">
 import { UiButton } from '@rss/core/components'
-import { ref, toRaw, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
-import { operation, useOperation, type Operation } from '../../../services/useOperation'
-import {
-  catalogDefinition,
-  type CatalogChange,
-  type CatalogDefinition,
-  type CatalogEntry,
-} from '../clients/catalog'
+import { useOperation } from '../../../services/useOperation'
+import { deviceBinding } from '../../devices/useDeviceBinding'
 import PageFrame from '../../../components/PageFrame.vue'
-import VersionAdmission from '../components/VersionAdmission.vue'
-const { t } = useI18n(),
+import VersionLifecycle from '../components/VersionLifecycle.vue'
+const runtime = useMdm(),
   route = useRoute(),
-  runtime = useMdm(),
-  client = runtime.software.catalog
-const { run, runWrite, busy, uncertain, failure } = useOperation()
-const query = ref(''),
-  search = ref(''),
+  { t } = useI18n(),
+  client = runtime.policies.resources,
+  { run, busy, failure } = useOperation([], () => deviceBinding(runtime))
+const page = ref<Awaited<ReturnType<typeof client.list>>>(),
+  current = ref<Awaited<ReturnType<typeof client.read>>>(),
   id = ref(''),
-  page = ref<Awaited<ReturnType<typeof client.list>>>(),
-  current = ref<CatalogEntry>()
-const draft = ref<CatalogDefinition>(),
-  supersedes = ref('[]'),
-  selectedVersion = ref('')
-let pending: { id: string; body: Operation<CatalogChange> } | undefined
-function apply(value: CatalogEntry) {
-  current.value = value
-  id.value = value.resource.id
-  draft.value = structuredClone(value.metadata.definition)
-  supersedes.value = JSON.stringify(value.metadata.definition.supersedes, null, 2)
-  selectedVersion.value = value.resource.versions[0]?.id ?? ''
-}
-function list(cursor?: string) {
-  if (!cursor) search.value = query.value
+  version = ref('')
+function list(after?: string) {
   void run(
-    () => client.list(search.value, cursor),
+    () => client.list('software', after),
     (v) => {
       page.value = v
     },
   )
 }
 function open(value = id.value) {
-  if (uncertain.value && value !== pending?.id) return
   void run(
     () => client.read(value),
     (v) => {
-      apply(v)
-      if (pending && v.metadata.operation === pending.body.operationId) uncertain.value = false
+      if (v.kind !== 'software') throw new Error('Wrong resource')
+      current.value = v
+      id.value = v.id
+      version.value = v.versions[0]?.id ?? ''
     },
   )
-}
-function replay() {
-  const p = pending
-  if (!p) return
-  void runWrite(
-    () => client.change(p.id, p.body),
-    (v) => {
-      apply(v)
-      page.value = undefined
-    },
-  )
-}
-function save() {
-  if (!current.value || !draft.value || busy.value || uncertain.value) return
-  try {
-    const definition = catalogDefinition({
-      ...toRaw(draft.value),
-      supersedes: JSON.parse(supersedes.value),
-    })
-    pending = {
-      id: current.value.resource.id,
-      body: operation({ action: 'put', ...definition }, current.value.metadata.revision),
-    }
-    replay()
-  } catch {
-    failure.value = 'invalidRequest'
-  }
-}
-function resetLicense() {
-  if (!draft.value) return
-  draft.value.license.seats = null
-  draft.value.license.expiresAt = null
 }
 watch(
   () => route.fullPath,
   () => {
     current.value = undefined
-    draft.value = undefined
-    pending = undefined
     id.value = ''
-    selectedVersion.value = ''
-    supersedes.value = '[]'
-    page.value = undefined
-    query.value = search.value = ''
+    version.value = ''
     if (typeof route.query['resource'] === 'string') open(route.query['resource'])
     else list()
   },
   { immediate: true },
 )
+watch(
+  () => deviceBinding(runtime),
+  () => {
+    current.value = undefined
+    page.value = undefined
+    id.value = ''
+    version.value = ''
+  },
+  { flush: 'sync' },
+)
 </script>
 <template>
-  <PageFrame :title="t('software.catalog')" :busy="busy" :failure="failure">
-    <p>{{ t('software.catalogHint') }}</p>
-    <RouterLink
+  <PageFrame :title="t('software.catalog')" :busy="busy" :failure="failure"
+    ><RouterLink
       :to="{
         name: 'policy-resources',
         params: { tenant: runtime.tenant },
         query: { kind: 'software' },
       }"
       >{{ t('software.authorPackage') }}</RouterLink
-    >
-    <form @submit.prevent="list()">
-      <label for="software-search">{{ t('software.search') }}</label
-      ><input
-        id="software-search"
-        v-model="query"
-        class="ui-input"
-        :disabled="busy || uncertain"
-      /><UiButton :disabled="!!(busy || uncertain)" type="submit">
-        {{ t('policies.reload') }}
-      </UiButton>
-    </form>
-    <p v-if="page && !page.items.length">{{ t('policies.empty') }}</p>
+    ><UiButton :disabled="busy" @click="list()">{{ t('policies.reload') }}</UiButton>
+    <p v-if="page">{{ t('console.pageNotTotal') }}</p>
     <ul class="console-object-list">
-      <li v-for="item in page?.items" :key="item.resource.id">
-        <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(item.resource.id)">
-          {{ item.metadata.definition.title }} · {{ item.resource.id }}
-        </UiButton>
+      <li v-for="item in page?.items" :key="item.id">
+        <UiButton :disabled="busy" @click="open(item.id)"
+          >{{ item.id }} · {{ item.activeVersion ?? '—' }}</UiButton
+        >
       </li>
     </ul>
-    <UiButton
-      v-if="page?.nextCursor"
-      :disabled="!!(busy || uncertain)"
-      type="submit"
-      @click="list(page.nextCursor)"
-    >
-      {{ t('policies.next') }}
-    </UiButton>
-    <details class="console-panel console-task" :open="uncertain || undefined">
-      <summary>{{ t('console.advanced') }}</summary>
-      <form @submit.prevent="open()">
-        <label for="catalog-id">Resource ID</label
-        ><input
-          id="catalog-id"
-          v-model="id"
-          class="ui-input"
-          :disabled="busy || uncertain"
-          required
-        /><UiButton :disabled="!!(busy || uncertain)" type="submit">
-          {{ t('policies.open') }}
-        </UiButton>
-      </form>
-    </details>
-    <template v-if="current && draft">
-      <h2>{{ current.metadata.definition.title }}</h2>
-      <RouterLink
+    <UiButton v-if="page?.nextCursor" :disabled="busy" @click="list(page.nextCursor)">{{
+      t('devices.next')
+    }}</UiButton>
+    <form @submit.prevent="open()">
+      <label>{{ t('software.resource') }}<input v-model="id" class="ui-input" required /></label
+      ><UiButton type="submit" :disabled="busy">{{ t('policies.open') }}</UiButton>
+    </form>
+    <section v-if="current" class="console-panel">
+      <h2 data-testid="resource-locator">{{ current.id }} · {{ current.revision }}</h2>
+      <label
+        >{{ t('software.version')
+        }}<select v-model="version" class="ui-input">
+          <option v-for="v in current.versions" :key="v.id" :value="v.id">
+            {{ v.id }} · {{ t(`policies.state.${v.state}`) }}
+          </option>
+        </select></label
+      ><VersionLifecycle
+        v-if="version"
+        :key="`${current.id}/${version}`"
+        :resource="current.id"
+        :version="version"
+      /><RouterLink
         :to="{
           name: 'policy-resources',
           params: { tenant: runtime.tenant },
-          query: { resource: current.resource.id },
+          query: { resource: current.id },
         }"
         >{{ t('software.authorPackage') }}</RouterLink
       >
-      <details class="console-panel console-task" :open="uncertain || undefined">
-        <summary>{{ t('console.edit') }}</summary>
-        <form @submit.prevent="save">
-          <fieldset :disabled="busy || uncertain">
-            <label for="catalog-title">{{ t('software.catalogTitle') }}</label
-            ><input id="catalog-title" v-model="draft.title" class="ui-input" required />
-            <label for="catalog-category">{{ t('software.category') }}</label
-            ><input id="catalog-category" v-model="draft.category" class="ui-input" />
-            <label for="catalog-description">{{ t('software.description') }}</label
-            ><input id="catalog-description" v-model="draft.description" class="ui-input" />
-            <label for="catalog-license">{{ t('software.license') }}</label
-            ><select
-              id="catalog-license"
-              v-model="draft.license.kind"
-              class="ui-input"
-              @change="resetLicense"
-            >
-              <option v-for="kind in ['unknown', 'free', 'commercial']" :key="kind" :value="kind">
-                {{ t(`software.license_${kind}`) }}
-              </option>
-            </select>
-            <template v-if="draft.license.kind === 'commercial'">
-              <label for="catalog-seats">{{ t('software.licenseSeats') }}</label
-              ><input
-                id="catalog-seats"
-                class="ui-input"
-                :value="draft.license.seats"
-                type="number"
-                min="0"
-                @input="
-                  draft.license.seats =
-                    ($event.target as HTMLInputElement).value === ''
-                      ? null
-                      : Number(($event.target as HTMLInputElement).value)
-                "
-              />
-              <label for="catalog-expiry">{{ t('software.licenseExpiry') }}</label
-              ><input
-                id="catalog-expiry"
-                class="ui-input"
-                :value="draft.license.expiresAt"
-                type="number"
-                min="0"
-                @input="
-                  draft.license.expiresAt =
-                    ($event.target as HTMLInputElement).value === ''
-                      ? null
-                      : Number(($event.target as HTMLInputElement).value)
-                "
-              />
-            </template>
-            <label for="catalog-supersedes">{{ t('software.supersedes') }}</label
-            ><textarea id="catalog-supersedes" v-model="supersedes" class="ui-input" />
-            <p>{{ t('software.supersedenceHint') }}</p>
-            <UiButton type="submit">{{ t('policies.save') }}</UiButton>
-          </fieldset>
-        </form>
-      </details>
-      <h3>{{ t('software.usage') }}</h3>
-      <p>{{ t('software.usageHint') }}</p>
-      <dl>
-        <dt>{{ t('software.activeDevices') }}</dt>
-        <dd>{{ current.usage.activeDevices ?? t('software.unknown') }}</dd>
-        <dt>{{ t('software.sampleDevices') }}</dt>
-        <dd>{{ current.usage.sampledDevices }} / {{ current.usage.totalDevices }}</dd>
-        <dt>{{ t('software.unknown') }}</dt>
-        <dd>{{ current.usage.unknownDevices }}</dd>
-        <dt>{{ t('software.observation') }}</dt>
-        <dd>
-          {{ current.usage.asOf ?? '—' }} · {{ current.usage.windowDays }}
-          {{ t('software.days') }} · {{ t(`software.usage_${current.usage.source}`) }}
-        </dd>
-      </dl>
-      <label for="catalog-version">{{ t('software.resourceVersion') }}</label
-      ><select id="catalog-version" v-model="selectedVersion" class="ui-input">
-        <option v-for="v in current.resource.versions" :key="v.id" :value="v.id">
-          {{ v.id }} · {{ v.state }}
-        </option>
-      </select>
-      <template
-        v-for="v in current.resource.versions.filter((v) => v.id === selectedVersion)"
-        :key="v.id"
-      >
-        <div class="ui-table-scroll">
-          <table class="ui-table">
-            <thead>
-              <tr>
-                <th>{{ t('policies.platform') }}</th>
-                <th>{{ t('policies.architecture') }}</th>
-                <th>{{ t('policies.variant') }}</th>
-                <th>{{ t('software.package') }}</th>
-                <th>{{ t('software.dependencies') }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="variant in v.variants"
-                :key="`${variant.platform}/${variant.architecture}/${variant.key}`"
-              >
-                <td>{{ variant.platform }}</td>
-                <td>{{ variant.architecture }}</td>
-                <td>{{ variant.key }}</td>
-                <td>
-                  {{
-                    variant.declaration.kind === 'software'
-                      ? `${variant.declaration.definition.package} / ${variant.declaration.definition.version}`
-                      : '—'
-                  }}
-                </td>
-                <td>
-                  <ul v-if="variant.declaration.kind === 'software'">
-                    <li
-                      v-for="d in variant.declaration.definition.dependencies"
-                      :key="`${d.resource}/${d.version}`"
-                    >
-                      {{ d.resource }} / {{ d.version }}
-                    </li>
-                  </ul>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <VersionAdmission
-          v-if="v.state !== 'archived'"
-          :key="`${current.resource.id}/${v.id}`"
-          :resource="current.resource.id"
-          :version="v.id"
-        />
-      </template>
-    </template>
-    <div v-if="uncertain">
-      <UiButton :disabled="!!busy" type="submit" @click="open(pending?.id)">{{
-        t('software.reconcile')
-      }}</UiButton
-      ><UiButton :disabled="!!busy" type="submit" @click="replay">{{
-        t('policies.replay')
-      }}</UiButton>
-    </div>
-  </PageFrame>
+    </section></PageFrame
+  >
 </template>

@@ -2,35 +2,34 @@ import { createHash } from 'node:crypto'
 import type { DomainHandler } from '../scenario'
 import type { createResourceDemo } from '../policies/resources'
 import { createReceipts, error, ok, operation } from '../http'
-import { array, closed, enumeration, identifier, record } from '../../src/services/decode'
-import { sourceDefinition } from '../../src/features/software/clients/admission'
-import type { admission, SourceDefinition } from '../../src/features/software/clients/admission'
+import { closed, enumeration, identifier, record } from '../../src/services/decode'
+import { sourceDefinition } from '../../src/features/software/clients/lifecycle'
+import type { lifecycle, SourceDefinition } from '../../src/features/software/clients/lifecycle'
 import type { SoftwareDefinition } from '../../src/features/policies/clients/software-definition'
-type Admission = ReturnType<typeof admission>
+type Lifecycle = ReturnType<typeof lifecycle>
 const hash = (value: unknown) => [...createHash('sha256').update(JSON.stringify(value)).digest()]
 const key = (id: string, version: string) => JSON.stringify([id, version])
-export function createAdmissionDemo(resources: ReturnType<typeof createResourceDemo>) {
+export function createLifecycleDemo(resources: ReturnType<typeof createResourceDemo>) {
   const sources = new Map<
       string,
-      { source: SourceDefinition; snapshot: SoftwareDefinition['source']; admission: Admission }
+      { source: SourceDefinition; snapshot: SoftwareDefinition['source']; lifecycle: Lifecycle }
     >(),
-    versions = new Map<string, Admission>(),
+    versions = new Map<string, Lifecycle>(),
     receipts = createReceipts()
   function sourceAllowed(source: SoftwareDefinition['source']) {
     const saved = sources.get(key(source.id, source.revision))
     return (
-      saved?.admission.state === 'approved' &&
+      saved?.lifecycle.state === 'enabled' &&
       JSON.stringify(saved.snapshot.sha256) === JSON.stringify(source.sha256)
     )
   }
-  function isAdmitted(id: string, version: string, operation?: string): boolean {
+  function isEnabled(id: string, version: string): boolean {
     const saved = versions.get(key(id, version)),
       resource = resources.read(id)?.versions.find((v) => v.id === version)
     return (
       !!resource &&
       resource.state !== 'archived' &&
-      saved?.state === 'approved' &&
-      (!operation || saved.operation === operation) &&
+      saved?.state === 'enabled' &&
       resource.variants.every(
         (v) => v.declaration.kind === 'software' && sourceAllowed(v.declaration.definition.source),
       )
@@ -60,7 +59,7 @@ export function createAdmissionDemo(resources: ReturnType<typeof createResourceD
         if (
           !target ||
           JSON.stringify(target.digest) !== JSON.stringify(dependency.sha256) ||
-          !isAdmitted(dependency.resource, dependency.version) ||
+          !isEnabled(dependency.resource, dependency.version) ||
           !dependenciesAllowed(dependency.resource, dependency.version, visiting, seen)
         )
           return false
@@ -85,7 +84,7 @@ export function createAdmissionDemo(resources: ReturnType<typeof createResourceD
         coordinate = key(id, label),
         source = sources.get(coordinate),
         resource = resources.read(id)?.versions.find((v) => v.id === label),
-        previous = sourceRoute ? source?.admission : versions.get(coordinate)
+        previous = sourceRoute ? source?.lifecycle : versions.get(coordinate)
       if (request.method === 'GET') {
         if (sourceRoute)
           return source ? ok(structuredClone(source)) : error('software_source_not_found', 404)
@@ -94,7 +93,7 @@ export function createAdmissionDemo(resources: ReturnType<typeof createResourceD
               resource: id,
               version: label,
               resourceDigest: resource.digest,
-              admission: previous ?? null,
+              lifecycle: previous ?? null,
             })
           : error('resource_not_found', 404)
       }
@@ -105,59 +104,33 @@ export function createAdmissionDemo(resources: ReturnType<typeof createResourceD
         const action = enumeration(
           record(op.input)['action'],
           sourceRoute
-            ? (['register', 'approve', 'withdraw'] as const)
-            : (['approve', 'withdraw'] as const),
+            ? (['register', 'enable', 'disable'] as const)
+            : (['enable', 'withdraw'] as const),
         )
         const input = closed(
           op.input,
-          action === 'register' ? ['action', 'definition'] : ['action', 'evidence'],
+          action === 'register' ? ['action', 'definition'] : ['action'],
         )
-        let definition: SourceDefinition | undefined, digest: number[], evidence: string[]
+        let definition: SourceDefinition | undefined, digest: number[]
         if (action === 'register') {
           if (source) return error('operation_conflict')
           definition = sourceDefinition(input['definition'])
           if (definition.id !== id || definition.revision !== label)
             return error('malformed_request', 400)
-          if (
-            definition.kind === 'private'
-              ? definition.location !== null
-              : definition.location === null
-          )
-            return error('malformed_request', 400)
-          if (definition.kind === 'winget') {
-            const url = new URL(definition.location!)
-            if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash)
-              return error('malformed_request', 400)
-          }
-          if (
-            definition.kind === 'brew' &&
-            !/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(definition.location!)
-          )
-            return error('malformed_request', 400)
-          if (definition.publishers.length > 32) return error('malformed_request', 400)
           digest = hash(definition)
-          evidence = []
         } else {
-          evidence = array(input['evidence'], identifier)
-          if (!evidence.length || evidence.length > 32 || evidence.some((v) => v.length > 1024))
-            return error('malformed_request', 400)
           if (sourceRoute ? !source : !resource || resource.state === 'archived')
             return error('resource_not_found', 404)
-          if (
-            action === 'withdraw' ? previous?.state !== 'approved' : previous?.state === 'approved'
-          )
-            return error('operation_conflict')
-          if (!sourceRoute && action === 'approve' && !dependenciesAllowed(id, label))
+          if (!sourceRoute && action === 'enable' && !dependenciesAllowed(id, label))
             return error('operation_conflict')
           digest = sourceRoute ? source!.snapshot.sha256 : resource!.digest
         }
-        const next: Admission = {
+        const next: Lifecycle = {
           revision: op.expectedRevision + 1,
           state:
-            action === 'register' ? 'registered' : action === 'approve' ? 'approved' : 'withdrawn',
+            action === 'withdraw' ? 'withdrawn' : action === 'disable' ? 'disabled' : 'enabled',
           operation: op.operationId,
           actor: request.actor.principalId,
-          evidence,
           at: Math.floor(Date.now() / 1000),
           digest,
         }
@@ -165,13 +138,13 @@ export function createAdmissionDemo(resources: ReturnType<typeof createResourceD
           const result = {
             source: definition ?? source!.source,
             snapshot: { id, revision: label, sha256: digest },
-            admission: next,
+            lifecycle: next,
           }
           sources.set(coordinate, result)
           return ok(structuredClone(result))
         }
         versions.set(coordinate, next)
-        return ok({ resource: id, version: label, admission: next })
+        return ok({ resource: id, version: label, lifecycle: next })
       })
     } catch {
       return error('malformed_request', 400)
@@ -179,7 +152,42 @@ export function createAdmissionDemo(resources: ReturnType<typeof createResourceD
   }
   return {
     handle,
-    isAdmitted,
+    isEnabled,
+    binding(id: string, version: string) {
+      if (!isEnabled(id, version)) return null
+      const v = resources.read(id)!.versions.find((v) => v.id === version)!
+      return JSON.stringify([
+        versions.get(key(id, version))!.operation,
+        v.variants.map((v) =>
+          v.declaration.kind === 'software'
+            ? sources.get(
+                key(v.declaration.definition.source.id, v.declaration.definition.source.revision),
+              )?.lifecycle.operation
+            : null,
+        ),
+      ])
+    },
+    enableDraft(id: string, version: string, actor: string, operationId: string) {
+      const existing = versions.get(key(id, version))
+      if (
+        existing?.state === 'withdrawn' ||
+        (existing?.state === 'enabled' && !isEnabled(id, version))
+      )
+        return false
+      if (!existing) {
+        const v = resources.read(id)?.versions.find((v) => v.id === version)
+        if (!v || !dependenciesAllowed(id, version)) return false
+        versions.set(key(id, version), {
+          revision: 1,
+          state: 'enabled',
+          operation: operationId,
+          actor,
+          at: Math.floor(Date.now() / 1000),
+          digest: v.digest,
+        })
+      }
+      return true
+    },
     sourceAllowed,
     source: (id: string, revision: string) =>
       structuredClone(sources.get(key(id, revision)) ?? null),

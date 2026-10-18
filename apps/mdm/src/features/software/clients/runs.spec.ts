@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
-import { createRunsClient, softwareRun } from './runs'
+import { createRunsClient, softwareRun } from '../../policies/clients/runs'
 const id = '11111111-1111-4111-8111-111111111111',
   task = '22222222-2222-4222-8222-222222222222'
 const digest = Array<number>(32).fill(1)

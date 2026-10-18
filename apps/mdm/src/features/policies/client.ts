@@ -1,3 +1,4 @@
+import { createRunsClient } from './clients/runs'
 import type { HttpTransport } from '@rss/api/mdm'
 import { createScopesClient } from './clients/scopes'
 import { createResourcesClient } from './clients/resources'
@@ -9,6 +10,7 @@ import { createWorkflowsClient } from './clients/workflows'
 import { createExecutionsClient } from './clients/executions'
 export function createPolicyClients(transport: HttpTransport, tenant: string, demo: boolean) {
   return {
+    runs: createRunsClient(transport),
     scopes: createScopesClient(transport),
     resources: createResourcesClient(transport),
     policies: createPoliciesClient(transport),

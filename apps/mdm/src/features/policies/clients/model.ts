@@ -272,6 +272,7 @@ export function policyAction(value: unknown) {
   const kind = enumeration(record(value)['kind'], [
     'execution',
     'native_collection',
+    'agent_collection',
     'configuration',
     'software',
     'ensure_agent_installed',
@@ -285,7 +286,7 @@ export function policyAction(value: unknown) {
       exit: enumeration(v['exit'], ['retain', 'remove'] as const),
     }
   }
-  if (kind === 'execution' || kind === 'native_collection') {
+  if (kind === 'execution' || kind === 'native_collection' || kind === 'agent_collection') {
     const v = closed(value, [
       'kind',
       'resource',
@@ -304,7 +305,7 @@ export function policyAction(value: unknown) {
       ] as const),
       runLifetimeSeconds: lifetime(v['runLifetimeSeconds']),
     }
-    if (kind === 'native_collection') return { kind, ...base }
+    if (kind === 'native_collection' || kind === 'agent_collection') return { kind, ...base }
     const parameters = parameterSources(v['parameters'])
     if (
       Object.values(parameters).some((p) => p.kind === 'input') &&
@@ -341,14 +342,12 @@ export function policyAction(value: unknown) {
   const v = closed(value, [
     'kind',
     'resource',
-    'admissionOperation',
     'schedule',
     'runLifetimeSeconds',
     ...(kind === 'software' ? ['delivery', 'intent', 'rollout'] : []),
   ])
   const base = {
     resource: resourceBinding(v['resource']),
-    admissionOperation: uuid(v['admissionOperation']),
     schedule: nativeSchedule(v['schedule']),
     runLifetimeSeconds: lifetime(v['runLifetimeSeconds']),
   }
@@ -409,7 +408,7 @@ export type ExecutionDefinition = PolicyDefinition & {
   action: Extract<PolicyDefinition['action'], { kind: 'execution' }>
 }
 export function decodePolicy(value: unknown, id?: string) {
-  const v = closed(value, ['id', 'revision', 'version', 'versionId', 'enabled', 'definition']),
+  const v = closed(value, ['id', 'revision', 'version', 'versionId', 'state', 'definition']),
     actual = uuid(v['id'])
   if (id !== undefined && actual !== id) throw new Error('Wrong Policy')
   return {
@@ -417,7 +416,7 @@ export function decodePolicy(value: unknown, id?: string) {
     revision: count(v['revision']),
     version: count(v['version']),
     versionId: uuid(v['versionId']),
-    enabled: boolean(v['enabled']),
+    enabled: enumeration(v['state'], ['enabled', 'disabled', 'archived'] as const) === 'enabled',
     definition: policyDefinition(v['definition']),
   }
 }
@@ -438,7 +437,7 @@ export const taskStates = [
   'ambiguous_registration',
   'unsupported_capability',
   'missing_variant',
-  'approval_withdrawn',
+  'authorization_withdrawn',
   'permission_withdrawn',
   'channel_unknown',
   'already_satisfied',

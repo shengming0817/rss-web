@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
+import { ref } from 'vue'
 import { expect, it } from 'vitest'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
@@ -33,6 +34,7 @@ it('shows native receipt and cleanup diagnostics while withholding terminal acti
       provide: {
         [mdmKey as symbol]: {
           tenant: 'tenant',
+          session: { state: ref({ status: 'authenticated', session: { id: 'session' } }) },
           demo: true,
           policies: {
             executions: { read: async () => summary },
@@ -40,8 +42,8 @@ it('shows native receipt and cleanup diagnostics while withholding terminal acti
               read: async () => ({
                 operationId: 'operation',
                 revision: 1,
-                task: { kind: 'state_verify' },
-                authorization: 'approved',
+                task: { platform: 'windows', request: { kind: 'sync_ml' } },
+                authorization: 'authorized',
                 commandStatus: 'received',
                 observation: {
                   protocol: 'mdm.windows',
@@ -79,6 +81,7 @@ it('offers only formats compatible with the selected platform and makes an empty
       provide: {
         [mdmKey as symbol]: {
           tenant: 'tenant',
+          session: { state: ref({ status: 'authenticated', session: { id: 'session' } }) },
           demo: true,
           policies: { configurations: { list: async () => ({ items: [], nextCursor: null }) } },
         },

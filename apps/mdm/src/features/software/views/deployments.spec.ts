@@ -40,6 +40,14 @@ it('saves the exact approved binding and preserves unknown mutation fencing afte
           },
           demo: true,
           policies: {
+            policies: {
+              list: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
+              preview: vi
+                .fn()
+                .mockResolvedValue({ items: [], nextCursor: null, scopeResult: scope }),
+              change,
+              read,
+            },
             resources: {
               read: vi.fn().mockResolvedValue({
                 id: 'app',
@@ -111,18 +119,10 @@ it('saves the exact approved binding and preserves unknown mutation fencing afte
             },
           },
           software: {
-            assignments: {
-              list: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
-              preview: vi
-                .fn()
-                .mockResolvedValue({ items: [], nextCursor: null, scopeResult: scope }),
-              change,
-              read,
-            },
-            admission: {
+            lifecycle: {
               version: vi
                 .fn()
-                .mockResolvedValue({ admission: { state: 'approved', operation: admission } }),
+                .mockResolvedValue({ lifecycle: { state: 'enabled', operation: admission } }),
             },
           },
         },
@@ -179,7 +179,6 @@ it('saves the exact approved binding and preserves unknown mutation fencing afte
         action: {
           delivery: { kind: 'direct' },
           resource: { id: 'app', version: '1', variants: { windows_x86_64: 'main' } },
-          admissionOperation: admission,
         },
       },
     },

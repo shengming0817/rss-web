@@ -16,6 +16,11 @@ export function createPolicyStore() {
     PolicyDefinition['action']['kind'],
     (definition: PolicyDefinition) => Reply | undefined
   >()
+  const bindings = new Map<
+      PolicyDefinition['action']['kind'],
+      (definition: PolicyDefinition) => unknown
+    >(),
+    semantics = new Map<string, string>()
   function normalized(value: unknown, old?: PolicyRead) {
     const d = closed(value, ['scope', 'action'], ['selfService'])
     if ('selfService' in d) {
@@ -54,10 +59,12 @@ export function createPolicyStore() {
       definition.action.kind === 'software'
         ? { ...definition.action, rollout: undefined }
         : definition.action
-    return JSON.stringify(action, (_key, value: unknown) =>
-      value && typeof value === 'object' && !Array.isArray(value)
-        ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)))
-        : value,
+    return JSON.stringify(
+      { action, binding: bindings.get(definition.action.kind)?.(definition) ?? null },
+      (_key, value: unknown) =>
+        value && typeof value === 'object' && !Array.isArray(value)
+          ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)))
+          : value,
     )
   }
   function put(
@@ -65,8 +72,10 @@ export function createPolicyStore() {
     definition: PolicyDefinition,
     enabled: boolean,
     old?: PolicyRead,
+    replace = true,
   ): PolicyRead {
-    const same = old && semantic(old.definition) === semantic(definition)
+    const identity = semantic(definition)
+    const same = old && (!replace || semantics.get(id) === identity)
     const p = {
       id,
       definition: structuredClone(definition),
@@ -76,8 +85,14 @@ export function createPolicyStore() {
       versionId: same ? old.versionId : randomUUID(),
     }
     rows.set(id, p)
+    if (replace || !semantics.has(id)) semantics.set(id, identity)
     return p
   }
+  const wire = (p: PolicyRead) => {
+    const { enabled, ...v } = p
+    return { ...v, state: enabled ? 'enabled' : 'disabled' }
+  }
+  const cursors = new Map<string, { after: string; binding: string }>()
   const handle: DomainHandler = (request, scenario) => {
     if (request.path !== '/api/v1/policies' && !/^\/api\/v1\/policies\/[^/]+$/.test(request.path))
       return
@@ -85,11 +100,34 @@ export function createPolicyStore() {
     try {
       if (scenario === 'denied') return error('permission_denied', 403)
       if (request.path === '/api/v1/policies' && request.method === 'GET') {
-        const after = request.query.get('after'),
+        if (
+          [...request.query.keys()].some(
+            (k) =>
+              ![
+                'cursor',
+                'limit',
+                'descending',
+                'state',
+                'category',
+                'action',
+                'scope',
+                'resource',
+              ].includes(k),
+          )
+        )
+          return error('malformed_request', 400)
+        const cursor = request.query.get('cursor'),
+          binding = JSON.stringify([
+            request.actor,
+            [...request.query].filter(([k]) => k !== 'cursor' && k !== 'limit').sort(),
+          ]),
+          position = cursor ? cursors.get(cursor) : undefined,
+          after = position?.after,
           action = request.query.get('action'),
           limit = Number(request.query.get('limit') ?? 64),
           descending = request.query.get('descending') === 'true'
-        if (after) uuid(after)
+        if (cursor && (!position || position.binding !== binding))
+          return error('operation_conflict')
         if (!Number.isInteger(limit) || limit < 1 || limit > 1000) throw new Error('Invalid limit')
         if (action)
           enumeration(action, [
@@ -100,10 +138,11 @@ export function createPolicyStore() {
             'ensure_agent_installed',
             'request_mdm_enrollment',
           ] as const)
-        const enabled = request.query.get('enabled'),
+        const state = request.query.get('state'),
+          enabled = state === 'enabled' ? 'true' : state === 'disabled' ? 'false' : null,
           scope = request.query.get('scope'),
           resource = request.query.get('resource')
-        if (enabled !== null && !['true', 'false'].includes(enabled))
+        if (state !== null && !['enabled', 'disabled', 'archived'].includes(state))
           throw new Error('Invalid filter')
         if (scope) uuid(scope)
         const items = (scenario === 'empty' ? [] : [...rows.values()])
@@ -118,15 +157,13 @@ export function createPolicyStore() {
                   p.definition.action.resource.id === resource)),
           )
           .sort((a, b) => (a.id < b.id ? -1 : 1) * (descending ? -1 : 1))
-        return ok({
-          items: structuredClone(items.slice(0, limit)),
-          nextCursor: items.length > limit ? items[limit - 1]!.id : null,
-        })
+        const nextCursor = items.length > limit ? randomUUID() + ':page' : null
+        if (nextCursor) cursors.set(nextCursor, { after: items[limit - 1]!.id, binding })
+        return ok({ items: items.slice(0, limit).map(wire), nextCursor })
       }
       const id = uuid(request.path.split('/').at(-1)),
         old = rows.get(id)
-      if (request.method === 'GET')
-        return old ? ok(structuredClone(old)) : error('policy_not_found', 404)
+      if (request.method === 'GET') return old ? ok(wire(old)) : error('policy_not_found', 404)
       if (request.method !== 'POST') return
       if (managed.has(id)) return error('permission_denied', 403)
       const op = operation(request.body)
@@ -139,13 +176,13 @@ export function createPolicyStore() {
           const definition = normalized(input['definition'], old),
             failure = validate(definition)
           if (failure) return failure
-          return ok(structuredClone(put(id, definition, boolean(input['enabled']), old)))
+          return ok(wire(put(id, definition, boolean(input['enabled']), old)))
         }
         closed(input, ['action'])
         if (!old) return error('policy_not_found', 404)
         const failure = action === 'enable' ? validate(old.definition) : undefined
         if (failure) return failure
-        return ok(structuredClone(put(id, old.definition, action === 'enable', old)))
+        return ok(wire(put(id, old.definition, action === 'enable', old, false)))
       })
     } catch {
       return error('malformed_request', 400)
@@ -156,8 +193,10 @@ export function createPolicyStore() {
     register(
       kind: PolicyDefinition['action']['kind'],
       validator: (d: PolicyDefinition) => Reply | undefined,
+      binding?: (d: PolicyDefinition) => unknown,
     ) {
       validators.set(kind, validator)
+      if (binding) bindings.set(kind, binding)
     },
     get: (id: string) => rows.get(id),
     values: () => [...rows.values()],
@@ -174,8 +213,10 @@ export function createPolicyStore() {
     },
     reset() {
       rows.clear()
+      semantics.clear()
       managed.clear()
       receipts.reset()
+      cursors.clear()
     },
   }
 }

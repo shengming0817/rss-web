@@ -267,7 +267,13 @@ it('clears the software definition and artifact draft when opening another resou
           tenant: 'tenant',
           demo: true,
           policies: {
-            resources: { read },
+            resources: {
+              read,
+              list: vi.fn().mockResolvedValue({
+                items: [{ id: 'second', revision: 1, kind: 'software', activeVersion: null }],
+                nextCursor: null,
+              }),
+            },
             catalog: {
               list: async () => ({ items: [{ id: 'second', label: 'Second' }], nextCursor: null }),
             },
@@ -288,7 +294,7 @@ it('clears the software definition and artifact draft when opening another resou
   await flushPromises()
   await wrapper
     .findAll('button')
-    .find((b) => b.text() === 'Second')!
+    .find((b) => b.text() === 'second')!
     .trigger('click')
   await flushPromises()
   expect((wrapper.get('input[id$="-package"]').element as HTMLInputElement).value).toBe('')

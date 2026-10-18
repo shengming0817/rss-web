@@ -123,6 +123,27 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
     return { revision: next.revision }
   }
   const handle: DomainHandler = (request, scenario) => {
+    if (request.path === '/api/v1/collection-blueprints' && request.method === 'GET')
+      return ok({
+        categories: ['identity', 'hardware', 'software', 'security', 'management', 'updates'],
+        items: [],
+      })
+    if (request.path === '/api/v1/resources' && request.method === 'GET') {
+      const kind = request.query.get('kind'),
+        items = [...resources.values()]
+          .filter((r) => (!kind || r.kind === kind) && r.id > (request.query.get('after') ?? ''))
+          .sort((a, b) => a.id.localeCompare(b.id)),
+        limit = Number(request.query.get('limit') ?? 20)
+      return ok({
+        items: items.slice(0, limit).map((r) => ({
+          id: r.id,
+          kind: r.kind,
+          revision: r.revision,
+          activeVersion: r.versions.find((v) => v.state === 'active')?.id ?? null,
+        })),
+        nextCursor: items.length > limit ? items[limit - 1]!.id : null,
+      })
+    }
     const uploaded = uploads.handle(request, scenario)
     if (uploaded) return uploaded
     const match = /^\/api\/v1\/resources\/([^/]+)(\/content)?$/.exec(request.path)
@@ -261,6 +282,16 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
   return {
     handle,
     importVersion,
+    activatePublished(id: string, version: string) {
+      const resource = resources.get(id),
+        selected = resource?.versions.find((v) => v.id === version)
+      if (!resource || !selected || !['active', 'frozen'].includes(selected.state)) return false
+      if (selected.state !== 'active') {
+        selected.state = 'active'
+        resource.revision++
+      }
+      return true
+    },
     importReceipt: (operation: string) => imported.get(operation)?.revision ?? null,
     contentReady: (id: string, version: string) => {
       const v = resources.get(id)?.versions.find((v) => v.id === version)

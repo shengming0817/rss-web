@@ -4,15 +4,16 @@ import { UiButton } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
+import { deviceBinding } from '../../devices/useDeviceBinding'
 import type { Collection } from '../clients/catalog'
-const props = defineProps<{ collection: Collection; disabled?: boolean }>()
+const props = defineProps<{ collection: Collection | 'scopes' | 'resources'; disabled?: boolean }>()
 const value = defineModel<string>({ required: true })
 const { t } = useI18n(),
   runtime = useMdm()
-const { run, busy, failure } = useOperation([], () => runtime.session.state.value.session?.id)
-const page = ref<Awaited<ReturnType<typeof runtime.policies.catalog.list>>>()
+const { run, busy, failure } = useOperation([], () => deviceBinding(runtime))
+const page = ref<{ items: { id: string; label: string }[]; nextCursor: string | null }>()
 watch(
-  () => runtime.session.state.value.session?.id,
+  () => deviceBinding(runtime),
   () => {
     page.value = undefined
   },
@@ -20,7 +21,17 @@ watch(
 )
 function load(cursor?: string) {
   void run(
-    () => runtime.policies.catalog.list(props.collection, cursor),
+    async () => {
+      if (props.collection === 'scopes') {
+        const p = await runtime.policies.scopes.list(cursor)
+        return { ...p, items: p.items.map((i) => ({ id: i.id, label: i.id })) }
+      }
+      if (props.collection === 'resources') {
+        const p = await runtime.policies.resources.list(undefined, cursor)
+        return { ...p, items: p.items.map((i) => ({ id: i.id, label: i.id })) }
+      }
+      return runtime.policies.catalog.list('workflows', cursor)
+    },
     (result) => {
       page.value = result
     },

@@ -1,4 +1,9 @@
 export const devicesZh = {
+  assetContext: '资产范围',
+  objectKind_endpoint: '端点',
+  objectKind_association: '关联设备',
+  associatedDevice: '统一设备视图',
+
   submissionBasis: '本次提交的关系依据',
   confirmationCoordinates: '本次提交的双方注册坐标',
   retryAuthority: '重新读取关联权限',
@@ -289,6 +294,11 @@ export const devicesZh = {
   },
 }
 export const devicesEn: typeof devicesZh = {
+  assetContext: 'Asset context',
+  objectKind_endpoint: 'Endpoint',
+  objectKind_association: 'Associated device',
+  associatedDevice: 'Unified device views',
+
   submissionBasis: 'Association basis for this submission',
   confirmationCoordinates: 'Registration coordinates for this submission',
   retryAuthority: 'Read association permissions again',

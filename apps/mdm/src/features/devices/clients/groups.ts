@@ -16,17 +16,27 @@ import {
 } from '../../../services/decode'
 import { criteria, cursor, fieldKey, sourceIds, type Criteria } from './asset-model'
 
+import { objectRef, objectKey, deviceObject, type ObjectRef } from './objects'
+
 export type GroupChange =
-  | { action: 'create'; name: string; description: string; criteria: Criteria | null }
+  | {
+      action: 'create'
+      name: string
+      description: string
+      assetContext: 'endpoint' | 'associated_device'
+      criteria: Criteria | null
+    }
   | { action: 'edit'; name: string; description: string }
   | { action: 'rule'; criteria: Criteria }
-  | { action: 'members'; add: string[]; remove: string[] }
+  | { action: 'members'; add: ObjectRef[]; remove: ObjectRef[] }
   | { action: 'delete' | 'recompute' }
 export type GroupProjection = 'members' | 'changes' | 'decisions'
 export function groupSummary(value: unknown) {
   const v = closed(value, [
     'id',
     'kind',
+    'assetContext',
+    'calculationRevision',
     'name',
     'description',
     'revision',
@@ -35,9 +45,15 @@ export function groupSummary(value: unknown) {
     'ruleVersion',
     'deleted',
   ])
+  const kind = enumeration(v['kind'], ['static', 'dynamic'] as const),
+    assetContext = enumeration(v['assetContext'], ['endpoint', 'associated_device'] as const)
+  if (kind === 'static' && assetContext !== 'endpoint')
+    throw new Error('Static groups require endpoints')
   return {
     id: uuid(v['id']),
-    kind: enumeration(v['kind'], ['static', 'dynamic'] as const),
+    kind,
+    assetContext,
+    calculationRevision: count(v['calculationRevision']),
     name: identifier(v['name']),
     description: string(v['description']),
     revision: count(v['revision']),
@@ -59,9 +75,17 @@ export function decodeGroup(value: unknown, id: string) {
 }
 export type GroupRead = ReturnType<typeof decodeGroup>
 function decision(value: unknown) {
-  const v = closed(value, ['device', 'origin', 'decision', 'explanations', 'provenance'])
+  const v = closed(value, [
+    'object',
+    'sourceObjects',
+    'origin',
+    'decision',
+    'explanations',
+    'provenance',
+  ])
   return {
-    device: identifier(v['device']),
+    object: objectRef(v['object']),
+    sourceObjects: array(v['sourceObjects'], deviceObject),
     origin: enumeration(v['origin'], ['rule', 'manual'] as const),
     decision: enumeration(v['decision'], ['match', 'no_match', 'unknown'] as const),
     explanations: array(v['explanations'], (value) => {
@@ -93,14 +117,14 @@ function decision(value: unknown) {
 function pageItems(value: unknown) {
   const kind = enumeration(record(value)['kind'], ['members', 'changes', 'decisions'] as const)
   const v = closed(value, kind === 'changes' ? ['kind', 'added', 'removed'] : ['kind', 'items'])
-  if (kind === 'members') return { kind, items: unique(array(v['items'], identifier), (s) => s) }
+  if (kind === 'members') return { kind, items: unique(array(v['items'], objectRef), objectKey) }
   if (kind === 'changes')
     return {
       kind,
-      added: unique(array(v['added'], identifier), (s) => s),
-      removed: unique(array(v['removed'], identifier), (s) => s),
+      added: unique(array(v['added'], objectRef), objectKey),
+      removed: unique(array(v['removed'], objectRef), objectKey),
     }
-  return { kind, items: unique(array(v['items'], decision), (d) => d.device) }
+  return { kind, items: unique(array(v['items'], decision), (d) => objectKey(d.object)) }
 }
 export function decodeGroupPage(
   value: unknown,
@@ -144,6 +168,20 @@ export function createGroupsClient(transport: HttpTransport) {
     return { task, statusUrl: string(v['statusUrl']) }
   }
   return {
+    list: (after?: string) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/groups',
+        query: { after, limit: 20 },
+        successStatus: 200,
+        decode(value) {
+          const v = closed(value, ['items', 'nextCursor'])
+          return {
+            items: array(v['items'], groupSummary),
+            nextCursor: nullable(v['nextCursor'], uuid),
+          }
+        },
+      }),
     read: (id: string) =>
       transport.request({
         method: 'GET',

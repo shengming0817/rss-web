@@ -20,7 +20,7 @@ const definition = {
     runLifetimeSeconds: 3600,
   },
 }
-const policy = { id, revision: 1, version: 1, versionId: id, enabled: true, definition }
+const policy = { id, revision: 1, version: 1, versionId: id, state: 'enabled', definition }
 const metadata = {
   access: { kind: 'authenticated_user' },
   published: true,
@@ -34,7 +34,7 @@ const metadata = {
   riskLevel: 1,
 }
 it('accepts only the closed formal Policy and rejects the retired candidate DTO', () => {
-  expect(decodePolicy(policy, id)).toEqual(policy)
+  expect(decodePolicy(policy, id)).toMatchObject({ id, enabled: true, definition })
   for (const value of [
     { ...policy, computation: {} },
     { contract: 'policies-v1', policy },
@@ -84,7 +84,7 @@ it('uses formal V1 collection and operation/CAS without a candidate fallback or 
     expectedRevision: 0,
     input: { action: 'put' as const, definition, enabled: true },
   }
-  expect(await client.change(id, body)).toEqual(policy)
+  expect(await client.change(id, body)).toMatchObject({ id, enabled: true, definition })
   expect(request.mock.calls[0]?.[0]).toMatchObject({
     method: 'POST',
     path: '/api/v1/policies/{id}',
@@ -92,7 +92,9 @@ it('uses formal V1 collection and operation/CAS without a candidate fallback or 
     body,
   })
   response = { items: [policy], nextCursor: null }
-  expect((await client.list(undefined, 'execution')).items).toEqual([policy])
+  expect((await client.list(undefined, 'execution')).items).toMatchObject([
+    { id, enabled: true, definition },
+  ])
   expect(request.mock.calls.at(-1)?.[0]).toMatchObject({
     path: '/api/v1/policies',
     query: { action: 'execution', limit: 20 },

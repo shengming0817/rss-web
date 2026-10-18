@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { UiButton } from '@rss/core/components'
-import { onMounted, ref, toRaw } from 'vue'
+import { onMounted, ref, toRaw, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
 import type { Reference, ScopeRead, ScopeProjection, ScopeChange } from '../clients/scopes'
+import { objectKey, type Channel } from '../../devices/clients/objects'
+import ObjectLink from '../../devices/components/ObjectLink.vue'
 import PageFrame from '../../../components/PageFrame.vue'
 import ReferenceEditor from '../components/ReferenceEditor.vue'
 const { t } = useI18n(),
@@ -20,17 +22,18 @@ const id = ref(''),
   limitations = ref<Reference[]>([]),
   exclusions = ref<Reference[]>([]),
   unlimited = ref(true)
-const list = ref<Awaited<ReturnType<typeof runtime.policies.catalog.list>>>(),
+const list = ref<Awaited<ReturnType<typeof runtime.policies.scopes.list>>>(),
   devices = ref<{ id: string; name: string }[]>([]),
   groups = ref<{ id: string; name: string }[]>([])
 const task = ref<string>(),
   status = ref<Awaited<ReturnType<typeof client.status>>>(),
   result = ref<Awaited<ReturnType<typeof client.page>>>(),
-  projection = ref<ScopeProjection>('members')
+  projection = ref<ScopeProjection>('members'),
+  channel = ref<Channel>('mdm')
 let pending: (() => Promise<void>) | undefined
 function load(cursor?: string) {
   void run(
-    () => runtime.policies.catalog.list('scopes', cursor),
+    () => runtime.policies.scopes.list(cursor),
     (v) => (list.value = v),
   )
 }
@@ -107,17 +110,20 @@ function refresh() {
 function page(cursor?: string) {
   if (task.value)
     void run(
-      () => client.page(id.value, task.value!, projection.value, cursor),
+      () => client.page(id.value, task.value!, projection.value, channel.value, cursor),
       (v) => (result.value = v),
     )
 }
+watch([projection, channel], () => {
+  result.value = undefined
+})
 onMounted(async () => {
   await run(
     async () =>
       Promise.all([
-        runtime.policies.catalog.list('scopes'),
+        runtime.policies.scopes.list(),
         runtime.devices.directory.list(),
-        runtime.devices.candidate.groups(),
+        runtime.devices.groups.list(),
       ]),
     ([l, d, g]) => {
       list.value = l
@@ -149,7 +155,7 @@ onMounted(async () => {
     <ul class="console-object-list">
       <li v-for="item in list?.items" :key="item.id">
         <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(item.id)">{{
-          item.label
+          item.id
         }}</UiButton>
         ·
         {{ item.revision }}
@@ -252,7 +258,13 @@ onMounted(async () => {
       }}</UiButton
       ><template v-if="status?.status === 'completed'"
         ><p>{{ t('policies.frozen') }}</p>
-        <label for="scope-projection">{{ t('policies.detail') }}</label
+        <label
+          >{{ t('policies.channel')
+          }}<select v-model="channel" class="ui-input">
+            <option value="mdm">MDM</option>
+            <option value="agent">Agent</option>
+          </select></label
+        ><label for="scope-projection">{{ t('policies.detail') }}</label
         ><select id="scope-projection" v-model="projection" class="ui-input">
           <option value="members">{{ t('policies.members') }}</option>
           <option value="decisions">{{ t('policies.decisions') }}</option></select
@@ -260,12 +272,11 @@ onMounted(async () => {
           t('policies.open')
         }}</UiButton>
         <template v-if="result"
-          ><p>
-            {{ t('policies.targets') }} {{ result.totalObjects }} · {{ t('policies.members') }}
-            {{ result.totalMembers }}
-          </p>
+          ><p>{{ result.channel }}</p>
           <ul v-if="result.page.kind === 'members'">
-            <li v-for="device in result.page.items" :key="device">{{ device }}</li>
+            <li v-for="object in result.page.items" :key="objectKey(object)">
+              <ObjectLink :object="object" />
+            </li>
           </ul>
           <div v-else class="ui-table-scroll">
             <table class="ui-table">
@@ -278,43 +289,31 @@ onMounted(async () => {
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="item in result.page.items" :key="item.device">
-                  <td>{{ item.device }}</td>
-                  <td>{{ t(`policies.state.${item.identity}`) }}</td>
+                <tr v-for="item in result.page.items" :key="objectKey(item.object)">
+                  <td><ObjectLink :object="item.object" /></td>
+                  <td>{{ t(`policies.preview_${item.qualification.state}`) }}</td>
                   <td>
                     {{ item.reasons.map((reason) => t(`policies.state.${reason}`)).join(', ') }}
                   </td>
                   <td>
                     {{
-                      item.sources.map((index) => result!.sources[index]!.reference.id).join(', ')
+                      [
+                        ...(item.targets ?? []),
+                        ...(item.limitations ?? []),
+                        ...(item.exclusions ?? []),
+                      ]
+                        .map(
+                          (source) =>
+                            `${source.reference.kind}:${source.reference.id} / ${source.version}`,
+                        )
+                        .join(', ')
                     }}
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <div class="ui-table-scroll">
-            <table class="ui-table">
-              <thead>
-                <tr>
-                  <th>{{ t('policies.source') }}</th>
-                  <th>{{ t('policies.sourceVersion') }}</th>
-                  <th>{{ t('policies.revision') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="source in result.sources"
-                  :key="`${source.reference.kind}:${source.reference.id}`"
-                >
-                  <td>{{ t(`policies.${source.reference.kind}`) }} {{ source.reference.id }}</td>
-                  <td>{{ source.memberVersion }} · {{ source.memberSet ?? '—' }}</td>
-                  <td>{{ source.definitionVersion }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div></template
-        >
+        </template>
         <UiButton
           v-if="result?.nextCursor"
           :disabled="!!busy"

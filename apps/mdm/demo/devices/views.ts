@@ -7,12 +7,22 @@ import {
   type Endpoint,
 } from '../../src/features/devices/clients/endpoint-model'
 import { verificationText, type Association } from '../../src/features/devices/clients/associations'
-import type { ViewRef } from '../../src/features/devices/clients/device-views'
+import type { ObjectRef } from '../../src/features/devices/clients/objects'
 import type { Permission } from '../../src/features/operations/clients/authorization'
 import type { DomainHandler, DemoRequest } from '../scenario'
 import { createReceipts, error, ok } from '../http'
 import type { DemoDevice } from './fixtures'
 type Can = (actor: string, permission: Permission, device?: string) => boolean
+export function mergedFieldState<T extends { kind: string }>(
+  sources: { state: T; evidence: { source: string } }[],
+): T | { kind: 'conflict' } {
+  const manual = sources.filter((s) => s.evidence.source === 'manual'),
+    selected = manual.length ? manual : sources
+  return selected.length &&
+    selected.every((s) => JSON.stringify(s.state) === JSON.stringify(selected[0]!.state))
+    ? selected[0]!.state
+    : { kind: 'conflict' }
+}
 export function endpointProjection(d: DemoDevice): Endpoint {
   const registrations = d.registrations.filter(
     (r) => r.source === 'agent.builtin' || r.source === 'mdm.apple' || r.source === 'mdm.windows',
@@ -107,7 +117,8 @@ export function createDeviceViewsDemo(devices: () => Map<string, DemoDevice>, ca
   }
   function groups(request: DemoRequest) {
     const rows = new Map([...devices()].filter(([id]) => readable(request, id))),
-      result: { reference: ViewRef; association: Association | null; endpoints: Endpoint[] }[] = []
+      result: { reference: ObjectRef; association: Association | null; endpoints: Endpoint[] }[] =
+        []
     for (const raw of relations.values()) {
       const a = effective(raw)
       if (a.state === 'revoked' || !a.members.every((m) => rows.has(m.device))) continue
@@ -147,7 +158,7 @@ export function createDeviceViewsDemo(devices: () => Map<string, DemoDevice>, ca
     while (tokens.size > 256) tokens.delete(tokens.keys().next().value!)
     return id
   }
-  function view(request: DemoRequest, reference: ViewRef) {
+  function view(request: DemoRequest, reference: ObjectRef) {
     const g =
       reference.kind === 'endpoint'
         ? readable(request, reference.id) && devices().has(reference.id)
@@ -173,15 +184,9 @@ export function createDeviceViewsDemo(devices: () => Map<string, DemoDevice>, ca
           fact,
         })),
       )
-      const manual = sources.filter((s) => s.fact.evidence.source === 'manual'),
-        selected = manual.length ? manual : sources
-      const states = selected.map((s) => s.fact.state)
       fields[key] = {
         field: key,
-        state:
-          states.length && states.every((s) => JSON.stringify(s) === JSON.stringify(states[0]))
-            ? states[0]
-            : { kind: 'conflict' },
+        state: mergedFieldState(sources.map((s) => s.fact)),
         sources,
       }
     }
@@ -281,7 +286,7 @@ export function createDeviceViewsDemo(devices: () => Map<string, DemoDevice>, ca
         path,
       )
     if (vm && method === 'GET') {
-      const ref: ViewRef = { kind: vm[1] as ViewRef['kind'], id: decodeURIComponent(vm[2]!) },
+      const ref: ObjectRef = { kind: vm[1] as ObjectRef['kind'], id: decodeURIComponent(vm[2]!) },
         v = view(request, ref)
       if (!v) return error('inventory_not_found', 404)
       if (!vm[3]) return ok(v)
@@ -425,6 +430,44 @@ export function createDeviceViewsDemo(devices: () => Map<string, DemoDevice>, ca
   }
   return {
     handle,
+    objects() {
+      const linked = new Set<string>()
+      const objects = [...relations.values()]
+        .map(effective)
+        .filter((a) => a.state !== 'revoked')
+        .map((a) => {
+          a.members.forEach((m) => linked.add(m.device))
+          return {
+            object: { kind: 'association' as const, id: a.id },
+            associationVersion: a.version,
+            verified: a.state === 'confirmed',
+            members: a.members.map((m) => ({
+              device: m.device,
+              channel: m.channel,
+              registrationId: m.registrationId,
+              generation: m.generation,
+            })),
+          }
+        })
+      return [
+        ...objects,
+        ...[...devices().values()]
+          .filter((d) => !linked.has(d.summary.id))
+          .map((d) => ({
+            object: { kind: 'endpoint' as const, id: d.summary.id },
+            associationVersion: null,
+            verified: true,
+            members: d.registrations
+              .filter((r) => r.status === 'active')
+              .map((r) => ({
+                device: d.summary.id,
+                channel: r.source === 'agent.builtin' ? ('agent' as const) : ('mdm' as const),
+                registrationId: r.registrationId,
+                generation: r.generation,
+              })),
+          })),
+      ]
+    },
     reset() {
       relations.clear()
       receipts.reset()

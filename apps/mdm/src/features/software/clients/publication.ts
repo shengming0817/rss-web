@@ -7,7 +7,6 @@ import {
   digest,
   enumeration,
   identifier,
-  integer,
   nullable,
   record,
   string,
@@ -75,10 +74,10 @@ function brewPayload(value: unknown) {
     }),
   }
 }
-export function submission(value: unknown) {
+export function exportDocument(value: unknown) {
   const kind = enumeration(record(value)['kind'], ['Winget', 'Brew'] as const)
   const v = closed(value, kind === 'Winget' ? ['kind', 'manifest'] : ['kind', 'recipe'])
-  if (kind === 'Winget') return { kind, manifest: jsonValue(v['manifest'], 16_384) }
+  if (kind === 'Winget') return { kind, manifest: jsonValue(v['manifest'], 8 * 1024 * 1024) }
   const r = closed(v['recipe'], [
     'package',
     'version',
@@ -99,59 +98,46 @@ export function submission(value: unknown) {
     },
   }
 }
-export type Submission = ReturnType<typeof submission>
+export type ExportDocument = ReturnType<typeof exportDocument>
 export type PublicationChange =
   | {
       action: 'candidate'
       resource: string
       version: string
       expectedResourceRevision: number
-      submission: Submission
+      resourceDigest: number[]
     }
-  | { action: 'validate' | 'authorize' | 'withdraw'; ring: Ring }
-  | { action: 'approve'; ring: Ring; publisherSubject: string }
-  | { action: 'publish' | 'recover'; ring: Ring; publication: number[]; attempt: number }
+  | { action: 'publish' | 'withdraw'; ring: Ring }
+  | { action: 'recover'; ring: Ring; publication: number[]; attempt: number }
   | { action: 'retry'; ring: Ring; attempt: number }
 export function decodePublication(value: unknown, id: string) {
   const v = closed(
     value,
     ['id', 'revision', 'contentDigest', 'disposition', 'manifestDigest', 'sourceSnapshot', 'rings'],
-    ['submission'],
+    ['document'],
   )
   if (identifier(v['id']) !== id) throw new Error('Wrong publication')
   const states = unique(
     array(v['rings'], (value) => {
-      const r = closed(value, ['ring', 'state', 'publication', 'approval'])
+      const r = closed(value, ['ring', 'state', 'publication'])
       const result = {
         ring: enumeration(r['ring'], rings),
-        state: enumeration(r['state'], [
-          'candidate',
-          'validated',
-          'approved',
-          'publication',
-        ] as const),
+        state: enumeration(r['state'], ['candidate', 'publication'] as const),
         publication: nullable(r['publication'], (value) => {
           const p = closed(value, ['id', 'attempt', 'outcome'])
           return {
             id: digest(p['id']),
             attempt: count(p['attempt']),
-            outcome: enumeration(p['outcome'], ['published', 'not_applied', 'unknown'] as const),
-          }
-        }),
-        approval: nullable(r['approval'], (value) => {
-          const a = closed(value, ['approver', 'publisher', 'at', 'digest'])
-          return {
-            approver: identifier(a['approver']),
-            publisher: identifier(a['publisher']),
-            at: integer(a['at']),
-            digest: digest(a['digest']),
+            outcome: enumeration(p['outcome'], [
+              'published',
+              'not_applied',
+              'pending',
+              'unknown',
+            ] as const),
           }
         }),
       }
-      if (
-        (result.state === 'publication') !== (result.publication !== null) ||
-        ['approved', 'publication'].includes(result.state) !== (result.approval !== null)
-      )
+      if ((result.state === 'publication') !== (result.publication !== null))
         throw new Error('Invalid publication state')
       return result
     }),
@@ -165,8 +151,8 @@ export function decodePublication(value: unknown, id: string) {
     disposition: enumeration(v['disposition'], ['active', 'quarantined', 'deprecated'] as const),
     manifestDigest: digest(v['manifestDigest']),
     sourceSnapshot: digest(v['sourceSnapshot']),
-    rings: states,
-    ...('submission' in v ? { submission: submission(v['submission']) } : {}),
+    rings: states.sort((a, b) => rings.indexOf(a.ring) - rings.indexOf(b.ring)),
+    ...('document' in v ? { document: exportDocument(v['document']) } : {}),
   }
 }
 export type Publication = ReturnType<typeof decodePublication>
@@ -186,7 +172,7 @@ export function createPublicationClient(transport: HttpTransport) {
         path: '/api/v1/software-sources/{source}/candidates/{id}',
         pathParams: { source, id },
         body,
-        successStatus: 200,
+        successStatus: body.input.action === 'publish' ? 202 : 200,
         decode: (v) => decodePublication(v, id),
       }),
   }
