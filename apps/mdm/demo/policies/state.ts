@@ -319,6 +319,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         workflows,
         pages,
         lifecycle,
+        publication,
         software,
       ])
         owner.reset()

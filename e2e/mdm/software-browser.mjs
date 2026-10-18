@@ -8,11 +8,19 @@ let browser,
   backendRevision,
   phase = 'environment',
   result = 'failed'
-const coverage = [],
-  stop = () => browser?.close().catch(() => {})
-process.once('SIGINT', stop)
-process.once('SIGTERM', stop)
-const timer = setTimeout(stop, 350000)
+const coverage = []
+let closing,
+  interrupted = false
+const stop = () => (closing ??= Promise.resolve().then(() => browser?.close()))
+const interrupt = () => {
+  interrupted = true
+  void stop().catch(() => {
+    process.exitCode = 1
+  })
+}
+process.once('SIGINT', interrupt)
+process.once('SIGTERM', interrupt)
+const timer = setTimeout(interrupt, 350000)
 try {
   const f = JSON.parse(readFileSync(process.env.MDM_SOFTWARE_BROWSER_FIXTURE, 'utf8')),
     origin = new URL(f.origin).origin
@@ -355,7 +363,17 @@ try {
   process.exitCode = 1
 } finally {
   clearTimeout(timer)
-  await stop()
+  try {
+    await stop()
+  } catch {
+    result = 'failed'
+    process.exitCode = 1
+    console.error(JSON.stringify({ phase: 'browser-cleanup', result: 'failed' }))
+  }
+  if (interrupted) {
+    result = 'failed'
+    process.exitCode = 1
+  }
   console.log(
     JSON.stringify({
       phase: 'software-browser',

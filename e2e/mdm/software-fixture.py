@@ -66,6 +66,9 @@ try:
     config=json.loads(config_path.read_text())
     base=initialized['origin']+'/api/v1/software/native/sources/internal/'
     config['flow']['publication']['sources']=[dict(name='internal',credentials={},target=dict(Winget=dict(base=base,artifacts_base=base+'artifacts/')))]
+    content_directory=environment.root/'content'
+    content_directory.mkdir(mode=0o700)
+    config['content']=dict(storage=dict(kind='volume',directory=str(content_directory)),imports={},max_artifact_bytes=32*1024*1024,max_temporary_bytes=64*1024*1024,max_uploads=4,transfer_seconds=60,retention_seconds=3600,max_bundle_bytes=64*1024*1024,max_bundle_entries=100,max_expansion_ratio=100)
     private(config_path,config)
     phase = 'seed'
     rule_id, rule = seed()
