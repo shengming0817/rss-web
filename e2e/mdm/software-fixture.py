@@ -75,7 +75,7 @@ try:
     binary = Path(os.environ['CARGO_TARGET_DIR'])/'debug/rss-mdm'
     private(environment.root/'product.log','')
     log = (environment.root/'product.log').open('w')
-    processes.append(subprocess.Popen([str(binary),'serve','--config',initialized['configuration']],cwd=BACKEND,stdout=log,stderr=log))
+    processes.append(subprocess.Popen([str(binary),'serve','--config',initialized['configuration']],cwd=BACKEND,stdout=log,stderr=log,env={**os.environ,'RUST_MIN_STACK':str(8*1024*1024)}))
     processes.append(subprocess.Popen(['nginx','-c',initialized['gateway'],'-g','daemon off;'],cwd=BACKEND,stdout=log,stderr=log))
     phase = 'readiness'
     context=ssl.create_default_context(cafile=str(environment.root/'ca.crt'))
@@ -117,6 +117,10 @@ finally:
         try: child.wait(timeout=5)
         except subprocess.TimeoutExpired:
             child.kill();child.wait(timeout=5)
+    if result!='passed':
+        diagnostic=WEB/'artifacts/software-browser/product.log'
+        if (environment.root/'product.log').exists():
+            private(diagnostic,(environment.root/'product.log').read_text())
     # The parent starts a fresh leased reset after this execution runner closes.
     # Keep resource cleanup outside build_run's five-second cancellation window.
     print(json.dumps(dict(phase='software-fixture',result=result)),flush=True)

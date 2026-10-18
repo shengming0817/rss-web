@@ -18,6 +18,7 @@ const spec = {
 }
 const artifact = { reference: 'content-1', length: 12, sha256: digest }
 const resource = {
+  origin: null,
   id: 'script-library',
   revision: 2,
   kind: 'script',
@@ -41,6 +42,11 @@ const resource = {
 it('decodes current resource and ScriptSpec wire without private wrapper shapes', () => {
   expect(decodeResource(resource, resource.id)).toEqual(resource)
   expect(decodeScriptSpec(spec)).toEqual(spec)
+  const sourced = { ...resource, origin: { blueprint: 'inventory', version: '1', digest } }
+  expect(decodeResource(sourced, resource.id)).toEqual(sourced)
+  expect(() =>
+    decodeResource({ ...sourced, origin: { ...sourced.origin, digest: [0] } }, resource.id),
+  ).toThrow()
   for (const value of [
     { ...resource, id: 'other' },
     { ...resource, versions: [{ ...resource.versions[0], digest: [0] }] },

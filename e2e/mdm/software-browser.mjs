@@ -258,14 +258,25 @@ try {
   assert.equal(await page.locator('[data-field=stage-scope]').count(), 0)
   await click('下一步')
   const save = async () => {
-    await click('预览目标准入')
-    const response = page.waitForResponse(
-      (r) =>
-        r.request().method() === 'POST' &&
-        /\/api\/v1\/policies\/[0-9a-f-]{36}$/.test(new URL(r.url()).pathname),
+    const [previewResponse] = await Promise.all([
+      page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/policies/previews'),
+      click('预览目标准入'),
+    ])
+    assert.equal(previewResponse.status(), 200)
+    const submit = page.locator('[data-form=deployment] button[type=submit]')
+    assert.equal(
+      await submit.isEnabled(),
+      true,
+      `preview: ${(await page.locator('[role=alert]').allTextContents()).join('; ')}`,
     )
-    await page.locator('[data-form=deployment] button[type=submit]').click()
-    const r = await response
+    const [r] = await Promise.all([
+      page.waitForResponse(
+        (r) =>
+          r.request().method() === 'POST' &&
+          /\/api\/v1\/policies\/[0-9a-f-]{36}$/.test(new URL(r.url()).pathname),
+      ),
+      submit.click(),
+    ])
     assert.equal(r.status(), 200)
     const result = await r.json()
     await idle()
@@ -357,7 +368,11 @@ try {
       phase,
       result: 'failed',
       classification: error.name,
-      message: error instanceof assert.AssertionError ? error.message : 'browser operation failed',
+      message:
+        error instanceof assert.AssertionError ||
+        (error.name === 'TimeoutError' && phase !== 'login')
+          ? error.message
+          : 'browser operation failed',
     }),
   )
   process.exitCode = 1

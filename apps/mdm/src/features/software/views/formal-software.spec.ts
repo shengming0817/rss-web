@@ -1,5 +1,5 @@
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
-import { ref, type Component } from 'vue'
+import { defineComponent, h, ref, type Component } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { expect, it, vi } from 'vitest'
 import { mdmKey } from '../../../context'
@@ -269,9 +269,24 @@ it('selects a Resource header before reading real versions and clears the previo
       .mockResolvedValue({ items: [{ id: 'app', activeVersion: '1' }], nextCursor: null }),
     read = vi.fn().mockResolvedValue({ kind: 'software', versions: [{ id: '1', state: 'active' }] })
   const { wrapper } = await fixture(
-    SoftwareResourceSelect,
+    defineComponent({
+      setup() {
+        const resource = ref(''),
+          version = ref('')
+        return () =>
+          h(SoftwareResourceSelect, {
+            resource: resource.value,
+            version: version.value,
+            'onUpdate:resource': (v: string) => {
+              resource.value = v
+            },
+            'onUpdate:version': (v: string) => {
+              version.value = v
+            },
+          })
+      },
+    }),
     { policies: { resources: { list, read } } },
-    { resource: '', version: '' },
   )
   await button(wrapper, '企业软件目录').trigger('click')
   await flushPromises()
@@ -280,7 +295,9 @@ it('selects a Resource header before reading real versions and clears the previo
   await flushPromises()
   expect(read).toHaveBeenCalledWith('app')
   await wrapper.findAll('select')[1]!.setValue('1')
-  expect(wrapper.emitted('update:version')?.at(-1)).toEqual(['1'])
+  expect(wrapper.findComponent(SoftwareResourceSelect).emitted('update:version')?.at(-1)).toEqual([
+    '1',
+  ])
   wrapper.unmount()
 })
 it('reads nullable draft lifecycle and reconciles only the original operation before allowing more writes', async () => {

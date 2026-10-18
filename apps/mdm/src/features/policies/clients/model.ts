@@ -338,13 +338,17 @@ export function policyAction(value: unknown) {
       runLifetimeSeconds: lifetime(v['runLifetimeSeconds']),
     }
   }
-  const v = closed(value, [
-    'kind',
-    'resource',
-    'schedule',
-    'runLifetimeSeconds',
-    ...(kind === 'software' ? ['delivery', 'intent', 'rollout'] : []),
-  ])
+  const v = closed(
+    value,
+    [
+      'kind',
+      'resource',
+      'schedule',
+      'runLifetimeSeconds',
+      ...(kind === 'software' ? ['delivery', 'intent', 'rollout'] : []),
+    ],
+    ['channel'],
+  )
   const base = {
     resource: resourceBinding(v['resource']),
     schedule: nativeSchedule(v['schedule']),
@@ -376,6 +380,10 @@ export function policyAction(value: unknown) {
   return {
     kind,
     ...base,
+    channel:
+      v['channel'] === undefined
+        ? ('agent' as const)
+        : enumeration(v['channel'], ['agent', 'mdm'] as const),
     delivery: delivery(v['delivery']),
     intent: enumeration(v['intent'], intents),
     rollout: { stages },

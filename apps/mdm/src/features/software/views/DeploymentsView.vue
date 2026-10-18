@@ -52,6 +52,7 @@ function fresh(): SoftwarePolicyDefinition {
       resource: { kind: 'software', id: '', version: '1', variants: {} },
 
       kind: 'software',
+      channel: 'agent',
       intent: 'required_install',
       schedule: {
         trigger: { kind: 'check_in', minimumSeconds: 3600 },

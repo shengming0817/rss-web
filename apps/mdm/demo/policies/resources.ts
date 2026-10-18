@@ -81,6 +81,7 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
       {
         id,
         kind: 'software',
+        origin: resource?.origin ?? null,
         revision: input.expectedRevision + 1,
         versions: [
           ...(resource?.versions ?? []),
@@ -213,6 +214,7 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
           closed(input, ['action', 'kind'])
           if (state) return error('operation_conflict')
           next = {
+            origin: null,
             id,
             revision: 1,
             kind: enumeration(input['kind'], ['script', 'software', 'configuration'] as const),
