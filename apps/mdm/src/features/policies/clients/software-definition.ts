@@ -275,7 +275,7 @@ function deployment(value: unknown) {
       : ({ kind: targetKind, ...closed(t, ['kind']) } as { kind: 'active_interactive' })
   return { kind, target }
 }
-function behavior(value: unknown) {
+export function softwareBehavior(value: unknown) {
   const kind = enumeration(record(value)['kind'], softwareFormats)
   if (kind === 'msi' || kind === 'pkg' || kind === 'winget' || kind === 'brew') {
     return {
@@ -463,7 +463,7 @@ export function decodeSoftwareDefinition(value: unknown) {
     version: materialText(v['version']),
     provenance: provenance(v['provenance']),
     artifacts: dictionary(v['artifacts'], softwareArtifact, 64),
-    behavior: behavior(v['behavior']),
+    behavior: softwareBehavior(v['behavior']),
     signatures: array(v['signatures'], (x) => {
       const s = closed(x, ['artifact', 'mechanism', 'publisher'])
       return {
@@ -497,7 +497,7 @@ export function decodeSoftwareDefinition(value: unknown) {
   return result
 }
 export type SoftwareDefinition = ReturnType<typeof decodeSoftwareDefinition>
-export function softwareInstaller(s: { behavior: ReturnType<typeof behavior> }) {
+export function softwareInstaller(s: { behavior: ReturnType<typeof softwareBehavior> }) {
   const b = s.behavior
   if (b.kind === 'bundle') return b.archive
   if (b.kind === 'dmg') return b.image

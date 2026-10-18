@@ -19,18 +19,20 @@ import {
   type SoftwarePolicyDefinition,
 } from '../clients/assignment-model'
 import { intents, targets } from '../../policies/clients/model'
-import type { AssignmentChange } from '../clients/assignments'
-import type { RunCursor, SoftwareRun } from '../clients/runs'
+import type { PolicyChange, PolicyRead } from '../../policies/clients/model'
+import type { RunCursor, PolicyRun } from '../../policies/clients/runs'
 import type { ResourceRead } from '../../policies/clients/resources'
 import SoftwareResourceSelect from '../components/SoftwareResourceSelect.vue'
 import CatalogLocator from '../../policies/components/CatalogLocator.vue'
+import AssignmentFacts from '../../policies/components/AssignmentFacts.vue'
+import { objectKey } from '../../devices/clients/objects'
 import PageFrame from '../../../components/PageFrame.vue'
 import NativeScheduleEditor from '../components/NativeScheduleEditor.vue'
-import SoftwareRunFacts from '../components/SoftwareRunFacts.vue'
+import PolicyRunFacts from '../../policies/components/PolicyRunFacts.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
-  client = runtime.software.assignments
+  client = runtime.policies.policies
 const { run, runWrite, busy, failure, uncertain } = useOperation()
 const editing = ref(false),
   wizardStep = ref(0),
@@ -49,7 +51,6 @@ function fresh(): SoftwarePolicyDefinition {
 
       kind: 'software',
       intent: 'required_install',
-      admissionOperation: '',
       schedule: {
         trigger: { kind: 'check_in', minimumSeconds: 3600 },
         misfire: { kind: 'coalesce_one' },
@@ -78,11 +79,11 @@ watch(
   },
   { deep: true, flush: 'sync' },
 )
-const devices = ref<Awaited<ReturnType<typeof client.devices>>>(),
-  rollout = ref<Awaited<ReturnType<typeof client.rollout>>>()
-const history = ref<Awaited<ReturnType<typeof runtime.software.runs.list>>>(),
-  detail = ref<SoftwareRun>()
-let pending: { id: string; requester: string; body: Operation<AssignmentChange> } | undefined
+const devices = ref<Awaited<ReturnType<typeof client.assignments>>>(),
+  rollout = ref<Awaited<ReturnType<typeof runtime.software.rollout.read>>>()
+const history = ref<Awaited<ReturnType<typeof runtime.policies.runs.list>>>(),
+  detail = ref<PolicyRun>()
+let pending: { id: string; requester: string; body: Operation<PolicyChange> } | undefined
 function requester() {
   const s = runtime.session.state.value
   return s.status === 'authenticated' && s.tenant === runtime.tenant && s.identity && s.session
@@ -126,7 +127,8 @@ function clearEvidence() {
   history.value = undefined
   detail.value = undefined
 }
-function apply(p: SoftwarePolicy) {
+function apply(value: PolicyRead) {
+  const p = { ...value, definition: softwarePolicyDefinition(value.definition) }
   current.value = p
   id.value = p.id
   enabled.value = p.enabled
@@ -171,7 +173,7 @@ function cancelEdit() {
 }
 function list(after?: string) {
   void run(
-    () => client.list(after),
+    () => client.list(after, 'software'),
     (v) => {
       page.value = v
     },
@@ -187,16 +189,15 @@ function bindVersion() {
     async () => {
       const [r, a] = await Promise.all([
         runtime.policies.resources.read(target.id),
-        runtime.software.admission.version(target.id, target.version),
+        runtime.software.lifecycle.version(target.id, target.version),
       ])
       const v = r.versions.find((v) => v.id === target.version)
-      if (r.kind !== 'software' || v?.state !== 'active' || a.admission?.state !== 'approved')
-        throw new Error('Unapproved software version')
-      return { r, v, operation: a.admission.operation }
+      if (r.kind !== 'software' || v?.state !== 'active' || a.lifecycle?.state !== 'enabled')
+        throw new Error('Software version is not enabled')
+      return { r, v }
     },
-    ({ r, v, operation }) => {
+    ({ r, v }) => {
       resource.value = r
-      draft.value.action.admissionOperation = operation
       draft.value.action.resource.variants = Object.fromEntries(
         targets.flatMap((target) => {
           const matches = v.variants.filter((v) => `${v.platform}_${v.architecture}` === target)
@@ -208,7 +209,6 @@ function bindVersion() {
 }
 function resetBinding() {
   resource.value = undefined
-  draft.value.action.admissionOperation = ''
   draft.value.action.resource.variants = {}
 }
 function variants(target: string) {
@@ -237,7 +237,7 @@ function replay() {
     },
   )
 }
-function change(input: AssignmentChange) {
+function change(input: PolicyChange) {
   if (busy.value || uncertain.value) return
   const actor = requester()
   if (!actor) return
@@ -282,7 +282,7 @@ function loadDevices(after?: string) {
   if (current.value) {
     const id = current.value.id
     void run(
-      () => client.devices(id, after),
+      () => client.assignments(id, after),
       (v) => {
         devices.value = v
       },
@@ -293,7 +293,7 @@ function loadRollout() {
   if (current.value) {
     const id = current.value.id
     void run(
-      () => client.rollout(id),
+      () => runtime.software.rollout.read(id),
       (v) => {
         rollout.value = v
       },
@@ -304,7 +304,7 @@ function loadRuns(cursor?: RunCursor) {
   if (current.value) {
     const id = current.value.id
     void run(
-      () => runtime.software.runs.list(id, cursor),
+      () => runtime.policies.runs.list(id, cursor),
       (v) => {
         history.value = v
         detail.value = undefined
@@ -316,7 +316,7 @@ function loadDetail(task: string) {
   if (current.value) {
     const id = current.value.id
     void run(
-      () => runtime.software.runs.read(id, task),
+      () => runtime.policies.runs.read(id, task),
       (v) => {
         detail.value = v
       },
@@ -356,8 +356,9 @@ watch(
     <ul v-if="!editing" class="console-data-list">
       <li v-for="p in page?.items" :key="p.id">
         <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="read(p.id)">
-          {{ p.definition.action.resource.id }} / {{ p.definition.action.resource.version }} ·
-          {{ p.id }} ·
+          {{ p.definition.action.kind === 'software' ? p.definition.action.resource.id : p.id }} /
+          {{ p.definition.action.kind === 'software' ? p.definition.action.resource.version : '—' }}
+          · {{ p.id }} ·
           {{ p.enabled ? t('software.enabled') : t('software.paused') }}
         </UiButton>
       </li>
@@ -425,9 +426,7 @@ watch(
             <UiButton data-action="bind-version" type="button" @click="bindVersion">
               {{ t('software.bindVersion') }}
             </UiButton>
-            <p>
-              {{ t('software.admissionOperation') }}: {{ draft.action.admissionOperation || '—' }}
-            </p>
+            <p></p>
             <template v-if="resource">
               <template v-for="target in targets" :key="target"
                 ><label :for="`variant-${target}`">{{ target }}</label
@@ -612,8 +611,8 @@ watch(
       <p>{{ preview.scopeResult }}</p>
       <p v-if="!preview.items.length">{{ t('policies.empty') }}</p>
       <ul>
-        <li v-for="d in preview.items" :key="d.device">
-          {{ d.device }} · {{ t(`software.eligibility_${d.eligibility.state}`) }} ·
+        <li v-for="d in preview.items" :key="objectKey(d.object)">
+          <AssignmentFacts :item="d" /> {{ t(`software.eligibility_${d.eligibility.state}`) }} ·
           {{ d.taskAdmission ? t(`software.admission_${d.taskAdmission.state}`) : '—' }}
         </li>
       </ul>
@@ -673,16 +672,13 @@ watch(
         <h3>{{ t('software.deviceAdmission') }}</h3>
         <p v-if="!devices.items.length">{{ t('policies.empty') }}</p>
         <ul>
-          <li v-for="d in devices.items" :key="d.device">
-            {{ d.device }} · {{ t(`software.eligibility_${d.assignment}`) }} ·
+          <li v-for="d in devices.items" :key="objectKey(d.object)">
+            <AssignmentFacts :item="d" /> {{ t(`software.eligibility_${d.qualification.state}`) }} ·
             {{ d.taskAdmission ? t(`software.admission_${d.taskAdmission.state}`) : '—' }}
             <ul v-if="d.operationIds.length">
               <li v-for="op in d.operationIds" :key="op">
                 {{ t('policies.operation') }} · {{ op }}
               </li>
-            </ul>
-            <ul v-if="d.diagnoses.length">
-              <li v-for="diagnosis in d.diagnoses" :key="diagnosis">{{ diagnosis }}</li>
             </ul>
           </li>
         </ul>
@@ -735,7 +731,7 @@ watch(
         <h3>{{ t('software.runHistory') }}</h3>
         <p v-if="!history.items.length">{{ t('policies.empty') }}</p>
         <article v-for="r in history.items" :key="r.taskId" class="console-panel">
-          <SoftwareRunFacts :run="r" /><UiButton
+          <PolicyRunFacts :run="r" /><UiButton
             :disabled="!!busy"
             type="submit"
             @click="loadDetail(r.taskId)"
@@ -745,6 +741,7 @@ watch(
             :to="{
               name: 'policy-execution',
               params: { tenant: runtime.tenant, execution: r.taskId },
+              query: { policy: current.id },
             }"
             >{{ t('policies.executions') }}</RouterLink
           >
@@ -758,7 +755,7 @@ watch(
           {{ t('policies.next') }}
         </UiButton>
       </section>
-      <SoftwareRunFacts v-if="detail" :run="detail" />
+      <PolicyRunFacts v-if="detail" :run="detail" />
     </section>
   </PageFrame>
 </template>

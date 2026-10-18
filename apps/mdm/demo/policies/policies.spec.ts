@@ -4,7 +4,7 @@ import { createPolicyDemo } from './policies'
 import { createDeviceDemo } from '../devices/state'
 import { seedScriptPolicies } from './seed'
 import type { DemoRequest } from '../scenario'
-import type { PolicyRead } from '../../src/features/policies/clients/model'
+import { decodePolicy, type PolicyRead } from '../../src/features/policies/clients/model'
 function fixture() {
   const automation = createAutomationDemo(createDeviceDemo()),
     seed = seedScriptPolicies(automation)
@@ -22,7 +22,7 @@ function fixture() {
     )!
   }
   function read(id: string) {
-    return automation.handle(request(`/api/v1/policies/${id}`), 'normal')!.body as PolicyRead
+    return decodePolicy(automation.handle(request(`/api/v1/policies/${id}`), 'normal')!.body)
   }
   return { automation, seed, request, write, read }
 }
@@ -132,7 +132,7 @@ it('fences CAS and exact receipts, rejects fixed parameter drift and never lets 
   ).toBe(404)
   expect(f.read(id)).toMatchObject({ revision: 2, enabled: false })
 })
-it('uses UUID cursors and action filtering from the same authoritative collection', () => {
+it('uses opaque query-bound cursors and action filtering from the same authoritative collection', () => {
   const f = fixture(),
     first = f.automation.handle(
       f.request(
@@ -147,7 +147,7 @@ it('uses UUID cursors and action filtering from the same authoritative collectio
     f.request(
       '/api/v1/policies',
       undefined,
-      new URLSearchParams({ after: first.nextCursor, limit: '2' }),
+      new URLSearchParams({ cursor: first.nextCursor, action: 'execution', limit: '2' }),
     ),
     'normal',
   )!.body as { items: PolicyRead[]; nextCursor: null }

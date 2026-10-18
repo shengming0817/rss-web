@@ -28,7 +28,7 @@ const { t } = useI18n(),
   { run, runWrite, busy, failure, uncertain } = useOperation()
 const list = ref<Awaited<ReturnType<typeof client.list>>>(),
   fields = ref<FieldDefinition[]>([]),
-  groups = ref<Awaited<ReturnType<typeof runtime.devices.candidate.groups>>>(),
+  groups = ref<Awaited<ReturnType<typeof runtime.devices.groups.list>>>(),
   current = ref<ComplianceRule>(),
   historical = ref<ComplianceRule>(),
   id = ref(''),
@@ -159,11 +159,16 @@ function loadVersion() {
 }
 function groupPage(cursor?: string) {
   void run(
-    () => runtime.devices.candidate.groups(cursor),
-    (v) => (groups.value = v),
+    () => runtime.devices.groups.list(cursor),
+    (v) =>
+      (groups.value = {
+        ...v,
+        items: v.items.filter((group) => group.assetContext === 'endpoint'),
+      }),
   )
 }
 function addGroup(group: string) {
+  if (!groups.value?.items.some((g) => g.id === group && g.assetContext === 'endpoint')) return
   groupIds.value = [...new Set([...groupIds.value.split(/\s+/).filter(Boolean), group])].join('\n')
 }
 function routeRule() {

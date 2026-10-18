@@ -6,6 +6,8 @@ const task = '22222222-2222-4222-8222-222222222222'
 const group = {
   id,
   kind: 'dynamic',
+  assetContext: 'endpoint',
+  calculationRevision: 0,
   name: 'Managed',
   description: '',
   revision: 2,
@@ -25,7 +27,8 @@ it('preserves an empty published member set separately from the definition revis
 })
 it('decodes unknown explanations and snake-case provenance without claiming membership', () => {
   const decision = {
-    device: 'd1',
+    object: { kind: 'endpoint', id: 'd1' },
+    sourceObjects: [],
     origin: 'rule',
     decision: 'unknown',
     explanations: [{ path: [0], outcome: 'deleted' }],

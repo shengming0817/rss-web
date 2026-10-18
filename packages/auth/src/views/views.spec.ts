@@ -346,7 +346,11 @@ describe('Identity views use actual app session and decoder modules', () => {
       ...providerValue,
       settings: {
         ...providerValue.settings,
-        claims: { ...providerValue.settings.claims, departmentSnapshot },
+        claims: {
+          ...providerValue.settings.claims,
+          subject: { kind: 'entra', tenant: ID },
+          departmentSnapshot,
+        },
       },
     }
     const f = fixture()
@@ -365,7 +369,10 @@ describe('Identity views use actual app session and decoder modules', () => {
     await new DOMWrapper(document.body).get('[role=dialog] form').trigger('submit')
     await flushPromises()
     expect(f.request.mock.calls.findLast(([r]) => r.method === 'PUT')?.[0].body).toMatchObject({
-      settings: { clientId: 'updated', claims: { departmentSnapshot } },
+      settings: {
+        clientId: 'updated',
+        claims: { subject: { kind: 'entra', tenant: ID }, departmentSnapshot },
+      },
     })
     f.replies.push({
       passed: true,

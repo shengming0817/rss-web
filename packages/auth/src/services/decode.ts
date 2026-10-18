@@ -196,12 +196,24 @@ function departmentSnapshotClaim(value: unknown): DepartmentSnapshotClaim | null
     throw new Error('Invalid department snapshot configuration')
   return { claim, maxAgeSeconds }
 }
+export type SubjectMapping = { kind: 'oidc' } | { kind: 'entra'; tenant: string }
+function subjectMapping(value: unknown): SubjectMapping {
+  const raw = value as Record<string, unknown>
+  if (raw?.['kind'] === 'oidc') {
+    object(value, ['kind'])
+    return { kind: 'oidc' }
+  }
+  const v = object(value, ['kind', 'tenant'])
+  if (v['kind'] !== 'entra') throw new Error('Invalid subject mapping')
+  return { kind: 'entra', tenant: uuid(v['tenant']) }
+}
 export interface ProviderSettings {
   issuer: string
   clientId: string
   redirectUri: string
   scopes: string[]
   claims: {
+    subject: SubjectMapping
     email: string | null
     groups: string | null
     departmentSnapshot: DepartmentSnapshotClaim | null
@@ -218,8 +230,9 @@ export interface Provider {
 }
 export function settings(value: unknown): ProviderSettings {
   const v = object(value, ['issuer', 'clientId', 'redirectUri', 'scopes', 'claims', 'jit'])
-  const c = object(v['claims'], ['email', 'groups', 'departmentSnapshot'])
+  const c = object(v['claims'], ['subject', 'email', 'groups', 'departmentSnapshot'])
   const claims = {
+    subject: subjectMapping(c['subject']),
     email: c['email'] === null ? null : text(c['email'], 128),
     groups: c['groups'] === null ? null : text(c['groups'], 128),
     departmentSnapshot: departmentSnapshotClaim(c['departmentSnapshot']),

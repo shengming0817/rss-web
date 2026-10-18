@@ -1,3 +1,4 @@
+import { targetFacts } from './targets'
 import { randomUUID, createHash } from 'node:crypto'
 import {
   array,
@@ -18,7 +19,7 @@ import { error, ok } from '../http'
 import type { DomainHandler } from '../scenario'
 /** Synthetic native claims consume the one Policy store and verified Resource artifact. */
 export function createConfigurationPolicies(
-  devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts'>,
+  devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts' | 'objects'>,
   scopes: Pick<ReturnType<typeof createScopeDemo>, 'resolve' | 'snapshot'>,
   resources: Pick<ReturnType<typeof createResourceDemo>, 'read' | 'content'>,
   store: ReturnType<typeof createPolicyStore>,
@@ -271,7 +272,11 @@ export function createConfigurationPolicies(
         action: definition.action,
         scopeResult: snapshot.result,
         items: rows.slice(0, 64).map((device) => ({
-          device,
+          ...(() => {
+            const { sources: _sources, ...facts } = targetFacts(devices, device, 'mdm')
+            void _sources
+            return facts
+          })(),
           eligibility: scopes.resolve(definition.scope)?.members.includes(device)
             ? { state: 'eligible', entry: 1 }
             : { state: 'excluded' },
@@ -280,7 +285,7 @@ export function createConfigurationPolicies(
         nextCursor: rows.length > 64 ? rows[63] : null,
       })
     }
-    const match = /^\/api\/v1\/policies\/([^/]+)\/devices$/.exec(request.path),
+    const match = /^\/api\/v1\/policies\/([^/]+)\/assignments$/.exec(request.path),
       p = match && store.get(match[1]!)
     if (!p || p.definition.action.kind !== 'configuration' || request.method !== 'GET') return
     reconcile()
@@ -306,15 +311,16 @@ export function createConfigurationPolicies(
           .filter((v) => v.owners.some((c) => c.p.id === p.id && c.device === device))
           .map((v) => v.operationId)
         return {
-          device,
-          assignment: c
-            ? 'eligible'
+          ...targetFacts(devices, device, 'mdm'),
+          scopeResult: snapshot!.result,
+          qualification: c
+            ? { state: 'eligible' as const, entry: 1 }
             : scopes.resolve(p.definition.scope)?.members.includes(device)
-              ? 'pending'
-              : 'excluded',
+              ? { state: 'pending' as const }
+              : { state: 'excluded' as const },
           taskAdmission: null,
           operationIds,
-          diagnoses,
+          reason: diagnoses[0] ?? targetFacts(devices, device, 'mdm').reason,
         }
       }),
       nextCursor: rows.length > 64 ? rows[63] : null,

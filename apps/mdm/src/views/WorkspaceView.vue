@@ -16,7 +16,7 @@ type Part<T> = { status: 'ready'; value: T } | { status: 'denied' | 'unavailable
 const navigation = ref<Part<Workspace>>()
 const directory = ref<Part<Awaited<ReturnType<typeof runtime.devices.views.list>>>>()
 const approvals = ref<Part<Awaited<ReturnType<typeof runtime.policies.catalog.approvals>>>>()
-const deployments = ref<Part<Awaited<ReturnType<typeof runtime.software.assignments.list>>>>()
+const deployments = ref<Part<Awaited<ReturnType<typeof runtime.policies.policies.list>>>>()
 const activity = ref<Part<Awaited<ReturnType<typeof runtime.operations.audit.list>>>>()
 const readAt = ref('')
 async function part<T>(read: () => Promise<T>): Promise<Part<T>> {
@@ -50,7 +50,7 @@ async function load() {
         part(() => runtime.workspace.read()),
         part(() => runtime.devices.views.list({})),
         part(() => runtime.policies.catalog.approvals()),
-        part(() => runtime.software.assignments.list()),
+        part(() => runtime.policies.policies.list(undefined, 'software')),
         part(() => runtime.operations.audit.list()),
       ])
       return { nav, devices, requests, policies, events }
@@ -246,10 +246,23 @@ watch(
                 params: { tenant: runtime.tenant },
                 query: { id: policy.id },
               }"
-              ><strong>{{ t(`software.intent_${policy.definition.action.intent}`) }}</strong
+              ><strong>{{
+                policy.definition.action.kind === 'software'
+                  ? t(`software.intent_${policy.definition.action.intent}`)
+                  : '—'
+              }}</strong
               ><small
-                >{{ policy.definition.action.resource.id }} /
-                {{ policy.definition.action.resource.version }}</small
+                >{{
+                  policy.definition.action.kind === 'software'
+                    ? policy.definition.action.resource.id
+                    : policy.id
+                }}
+                /
+                {{
+                  policy.definition.action.kind === 'software'
+                    ? policy.definition.action.resource.version
+                    : '—'
+                }}</small
               ></RouterLink
             ><UiBadge>{{ t(policy.enabled ? 'software.enabled' : 'software.paused') }}</UiBadge
             ><RouterLink

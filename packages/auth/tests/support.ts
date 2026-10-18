@@ -36,7 +36,12 @@ export const settingsValue = {
   clientId: 'identity',
   redirectUri: 'https://identity.example.test/api/v1/identity/oidc/callback',
   scopes: ['openid'],
-  claims: { email: 'email', groups: null, departmentSnapshot: null },
+  claims: {
+    subject: { kind: 'oidc' as const },
+    email: 'email',
+    groups: null,
+    departmentSnapshot: null,
+  },
   jit: false,
 }
 export const providerValue = {

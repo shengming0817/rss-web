@@ -204,7 +204,7 @@ it('accepts bounded raw resource bytes while retaining the JSON request budget e
   })
   expect((await scenario.handle('POST', '/api/v1/resources/id', content, headers)).status).toBe(400)
   expect(
-    (await scenario.handle('POST', '/api/v1/resources/id', { data: 'a'.repeat(20_000) }, headers))
+    (await scenario.handle('POST', '/api/v1/groups/id', { data: 'a'.repeat(20_000) }, headers))
       .status,
   ).toBe(413)
   expect(

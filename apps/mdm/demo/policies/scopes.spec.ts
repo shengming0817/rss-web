@@ -11,7 +11,7 @@ function request(path: string, body?: unknown): DemoRequest {
     body,
     actor,
     headers: {},
-    query: new URLSearchParams(),
+    query: new URLSearchParams(path.includes('/results/') ? { channel: 'mdm' } : {}),
   }
 }
 it('distinguishes unlimited from empty limitations and keeps old Scope results frozen', () => {
@@ -52,7 +52,7 @@ it('distinguishes unlimited from empty limitations and keeps old Scope results f
   expect(scopes.freeze(id)?.members).toEqual([])
   expect(
     scopes.handle(request(`/api/v1/scopes/${id}/results/${task}/members`), 'normal')?.body,
-  ).toMatchObject({ current: false, page: { items: [device] } })
+  ).toMatchObject({ current: false, page: { items: [{ kind: 'endpoint', id: device }] } })
 })
 it('uses published group membership, never a running or preview membership set', () => {
   const devices = createDeviceDemo(),
@@ -64,7 +64,7 @@ it('uses published group membership, never a running or preview membership set',
     request(`/api/v1/groups/${group}`, {
       operationId: task,
       expectedRevision: 1,
-      input: { action: 'members', add: [device], remove: [] },
+      input: { action: 'members', add: [{ kind: 'endpoint', id: device }], remove: [] },
     }),
     'normal',
   )
@@ -96,8 +96,8 @@ it('uses published group membership, never a running or preview membership set',
     devices.handle(
       request(`/api/v1/groups/${group}`, {
         operationId: changed,
-        expectedRevision: 2,
-        input: { action: 'members', add: ['device-02'], remove: [] },
+        expectedRevision: 1,
+        input: { action: 'members', add: [{ kind: 'endpoint', id: 'device-02' }], remove: [] },
       }),
       'normal',
     )?.status,
@@ -107,5 +107,5 @@ it('uses published group membership, never a running or preview membership set',
   expect(scopes.freeze(id)).toBeNull()
   expect(
     scopes.handle(request(`/api/v1/scopes/${id}/results/${op}/members`), 'normal')?.body,
-  ).toMatchObject({ current: true, page: { items: [device] } })
+  ).toMatchObject({ current: true, page: { items: [{ kind: 'endpoint', id: device }] } })
 })

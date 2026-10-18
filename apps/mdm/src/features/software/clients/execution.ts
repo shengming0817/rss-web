@@ -1,10 +1,10 @@
 import type { ExecutionSummary } from '../../policies/clients/executions'
-import type { SoftwareRun } from './runs'
+import type { PolicyRun } from '../../policies/clients/runs'
 /** A presentation projection; the native run remains the sole execution evidence owner. */
 export function softwareExecution(
   policy: string,
   versionId: string,
-  run: SoftwareRun,
+  run: PolicyRun,
 ): ExecutionSummary {
   const s = run.state,
     result = run.result
@@ -20,9 +20,9 @@ export function softwareExecution(
       s.execution === 'not_started' && s.cancellation === 'confirmed' ? 'cancelled' : s.execution,
     effect:
       run.effect === 'verified' && result?.kind === 'software'
-        ? result.detection === 'present'
+        ? result.intent === 'install'
           ? 'verified_present'
-          : result.detection === 'absent'
+          : result.intent === 'uninstall'
             ? 'verified_absent'
             : 'unknown'
         : run.effect === 'verified'
@@ -30,7 +30,14 @@ export function softwareExecution(
           : run.effect,
     compliance: 'unknown',
     attempt: s.delivery.kind === 'queued' ? null : s.delivery.attempt!,
-    nativeCode: result?.kind === 'software' ? result.installerExitCode : (result?.exitCode ?? null),
+    nativeCode:
+      result?.kind === 'software'
+        ? result.evidence.steps.at(-1)?.process.kind === 'exited'
+          ? result.evidence.steps.at(-1)!.process.code!
+          : null
+        : result?.kind === 'script'
+          ? result.exitCode
+          : null,
     waitingReason:
       s.cancellation === 'requested'
         ? 'cancel_confirmation'

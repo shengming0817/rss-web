@@ -1,24 +1,27 @@
 <script setup lang="ts">
 import { UiButton, UiDialog } from '@rss/core/components'
-import { onMounted, ref, toRaw } from 'vue'
+import { onMounted, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
 import type { Criteria, FieldDefinition } from '../clients/assets'
 import type { GroupChange, GroupProjection, GroupRead } from '../clients/groups'
+import { objectKey } from '../clients/objects'
+import ObjectLink from '../components/ObjectLink.vue'
 import PageFrame from '../../../components/PageFrame.vue'
 import CriteriaEditor from '../components/CriteriaEditor.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.devices.groups,
   { run, runWrite, busy, failure, uncertain } = useOperation()
-const list = ref<Awaited<ReturnType<typeof runtime.devices.candidate.groups>>>(),
+const list = ref<Awaited<ReturnType<typeof runtime.devices.groups.list>>>(),
   fields = ref<FieldDefinition[]>([])
 const current = ref<GroupRead>(),
   id = ref(''),
   name = ref(''),
   description = ref(''),
   kind = ref<'static' | 'dynamic'>('static'),
+  assetContext = ref<'endpoint' | 'associated_device'>('endpoint'),
   criteria = ref<Criteria | null>(null),
   members = ref(''),
   remove = ref(false)
@@ -34,6 +37,7 @@ function cancelEdit() {
     name.value = current.value.group.name
     description.value = current.value.group.description
     kind.value = current.value.group.kind
+    assetContext.value = current.value.group.assetContext
     criteria.value = structuredClone(toRaw(current.value.criteria))
   } else {
     name.value = ''
@@ -55,7 +59,7 @@ function write<T>(request: () => Promise<T>, apply: (value: T) => void) {
 }
 function loadList(next?: string) {
   void run(
-    () => runtime.devices.candidate.groups(next),
+    () => runtime.devices.groups.list(next),
     (v) => (list.value = v),
   )
 }
@@ -70,6 +74,7 @@ function open(group = id.value) {
       name.value = v.group.name
       description.value = v.group.description
       kind.value = v.group.kind
+      assetContext.value = v.group.assetContext
       criteria.value = v.criteria
       task.value = undefined
       result.value = undefined
@@ -84,6 +89,7 @@ function create() {
   name.value = ''
   description.value = ''
   kind.value = 'static'
+  assetContext.value = 'endpoint'
   criteria.value = null
   task.value = undefined
   result.value = undefined
@@ -124,6 +130,7 @@ function save() {
       ? { action: 'edit', name: name.value, description: description.value }
       : {
           action: 'create',
+          assetContext: assetContext.value,
           name: name.value,
           description: description.value,
           criteria:
@@ -183,13 +190,20 @@ function changeMembers() {
     .split('\n')
     .map((v) => v.trim())
     .filter(Boolean)
+    .map((id) => ({ kind: 'endpoint' as const, id }))
   change({ action: 'members', add: remove.value ? [] : ids, remove: remove.value ? ids : [] })
 }
+watch(kind, (value) => {
+  if (!current.value && value === 'static') assetContext.value = 'endpoint'
+})
+watch(projection, () => {
+  result.value = undefined
+})
 onMounted(() => {
   create()
   void run(
     async () => ({
-      list: await runtime.devices.candidate.groups(),
+      list: await runtime.devices.groups.list(),
       fields: (await runtime.devices.assets.catalog()).fields,
     }),
     (v) => {
@@ -287,6 +301,16 @@ function openGroup(group: string) {
             <option value="static">{{ t('devices.static') }}</option>
             <option value="dynamic">{{ t('devices.dynamic') }}</option>
           </select></label
+        ><label
+          >{{ t('devices.assetContext')
+          }}<select
+            v-model="assetContext"
+            class="ui-input"
+            :disabled="!!current || kind === 'static'"
+          >
+            <option value="endpoint">{{ t('devices.objectKind_endpoint') }}</option>
+            <option value="associated_device">{{ t('devices.associatedDevice') }}</option>
+          </select></label
         ><CriteriaEditor v-if="kind === 'dynamic'" v-model="criteria" :fields="fields" /><UiButton
           type="submit"
         >
@@ -368,26 +392,30 @@ function openGroup(group: string) {
           {{ t('devices.currentResult') }}: {{ t(`devices.${result.current ? 'yes' : 'no'}`) }}
         </p>
         <ul v-if="result.page.kind === 'members'">
-          <li v-for="device in result.page.items" :key="device">
-            <RouterLink
-              :to="{ name: 'device-detail', params: { tenant: runtime.tenant, device } }"
-              >{{ device }}</RouterLink
-            >
+          <li v-for="object in result.page.items" :key="objectKey(object)">
+            <ObjectLink :object="object" />
           </li>
         </ul>
         <div v-else-if="result.page.kind === 'changes'">
-          <p>{{ t('devices.add') }}: {{ result.page.added.join(', ') || '—' }}</p>
-          <p>{{ t('devices.remove') }}: {{ result.page.removed.join(', ') || '—' }}</p>
+          <p>{{ t('devices.add') }}: {{ result.page.added.map(objectKey).join(', ') || '—' }}</p>
+          <p>
+            {{ t('devices.remove') }}: {{ result.page.removed.map(objectKey).join(', ') || '—' }}
+          </p>
         </div>
         <ul v-else>
-          <li v-for="decision in result.page.items" :key="decision.device">
-            <RouterLink
-              :to="{
-                name: 'device-detail',
-                params: { tenant: runtime.tenant, device: decision.device },
-              }"
-              >{{ decision.device }}</RouterLink
-            >
+          <li v-for="decision in result.page.items" :key="objectKey(decision.object)">
+            <ObjectLink :object="decision.object" />
+            <ul>
+              <li v-for="source in decision.sourceObjects" :key="objectKey(source.object)">
+                <ObjectLink :object="source.object" />
+                <ul>
+                  <li v-for="member in source.members" :key="member.registrationId">
+                    {{ member.device }} / {{ member.channel }} / {{ member.registrationId }} /
+                    {{ member.generation }}
+                  </li>
+                </ul>
+              </li>
+            </ul>
             · {{ t(`devices.${decision.decision}`) }} · {{ t(`devices.${decision.origin}Origin`) }}
             <ul>
               <li v-for="(explanation, index) in decision.explanations" :key="index">

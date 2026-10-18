@@ -161,7 +161,11 @@ it('publishes exact immutable native bindings, previews without admission, and s
       action: { kind: 'configuration', resource: binding, exit: 'retain' },
     }
   expect((await f.policies.preview(definition)).items).toContainEqual({
-    device: 'device-01',
+    object: { kind: 'endpoint', id: 'device-01' },
+    channel: 'mdm',
+    availability: 'ready',
+    reason: null,
+    target: expect.objectContaining({ device: 'device-01' }),
     eligibility: { state: 'eligible', entry: 1 },
     taskAdmission: null,
   })
@@ -171,11 +175,11 @@ it('publishes exact immutable native bindings, previews without admission, and s
   expect((await f.policies.list(undefined, 'configuration')).items.map((p) => p.id).sort()).toEqual(
     [a.id, b.id].sort(),
   )
-  const da = (await f.policies.devices(a.id)).items[0]!,
-    db = (await f.policies.devices(b.id)).items[0]!
+  const da = (await f.policies.assignments(a.id)).items[0]!,
+    db = (await f.policies.assignments(b.id)).items[0]!
   expect(da.operationIds).toHaveLength(1)
   expect(db.operationIds).toEqual(da.operationIds)
-  expect(da.diagnoses).toEqual([])
+  expect(da.reason).toBeNull()
   expect(f.automation.configurationPolicies.plans()).toHaveLength(1)
   expect(f.automation.configurationPolicies.plans()[0]!.effect).toBe('unknown')
 })
@@ -187,19 +191,19 @@ it('excludes disabled or other-scope claims and never self-conflicts when replac
     opposite = f.resource(true)
   const a = await f.put(scope, first),
     b = await f.put(offScope, opposite)
-  expect((await f.policies.devices(a.id)).items[0]!.diagnoses).toEqual([])
+  expect((await f.policies.assignments(a.id)).items[0]!.reason).toBeNull()
   expect(f.automation.configurationPolicies.assigned('device-01', a.id)).toEqual([])
   await f.put(scope, opposite, 'retain', a.id, a.revision)
-  expect((await f.policies.devices(a.id)).items[0]!.diagnoses).toEqual([])
+  expect((await f.policies.assignments(a.id)).items[0]!.reason).toBeNull()
   await f.put(scope, first, 'retain', b.id, b.revision)
-  expect((await f.policies.devices(a.id)).items[0]!.diagnoses).toContain('configuration_conflict')
-  expect((await f.policies.devices(b.id)).items[0]!.diagnoses).toContain('configuration_conflict')
+  expect((await f.policies.assignments(a.id)).items[0]!.reason).toBe('configuration_conflict')
+  expect((await f.policies.assignments(b.id)).items[0]!.reason).toBe('configuration_conflict')
   const bp = f.send(`/api/v1/policies/${b.id}`).body as PolicyRead
   await f.policies.change(b.id, {
     ...f.op({ action: 'disable' }, bp.revision),
     input: { action: 'disable' },
   })
-  expect((await f.policies.devices(a.id)).items[0]!.diagnoses).toEqual([])
+  expect((await f.policies.assignments(a.id)).items[0]!.reason).toBeNull()
 })
 it('feeds effective native claims into the existing configuration catalog preview', async () => {
   const f = fixture(),
@@ -284,7 +288,8 @@ it('retires claims on actual scope exit and rejects missing variants or remove c
   ).toBe(200)
   expect(f.automation.configurationPolicies.plans()[0]!.action).toBe('remove')
   expect(
-    (await f.policies.devices(a.id)).items.find((d) => d.device === 'device-01')!.assignment,
+    (await f.policies.assignments(a.id)).items.find((d) => d.object.id === 'device-01')!
+      .qualification.state,
   ).toBe('excluded')
   await expect(f.put(scope, { ...binding, variant: 'missing' })).rejects.toMatchObject({
     status: 404,

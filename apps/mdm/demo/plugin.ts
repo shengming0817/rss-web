@@ -6,7 +6,6 @@ import { createDeviceDemo } from './devices/state'
 import { createAutomationDemo } from './policies/state'
 import { seedScriptPolicies } from './policies/seed'
 import { createPublicationDemo } from './software/publication'
-import { createCatalogDemo } from './software/catalog'
 import { createImportsDemo } from './software/imports'
 export function demoPlugin(): Plugin {
   return {
@@ -20,17 +19,14 @@ export function demoPlugin(): Plugin {
       devices.bindAuthorization(automation.authorization.can)
       seedScriptPolicies(automation)
       const onboarding = createOnboardingDemo(automation.authorization.can)
-      const software = automation.admission
-      const publication = createPublicationDemo(automation.resources)
+      const software = automation.lifecycle
+      const publication = createPublicationDemo(automation.resources, software)
       const imports = createImportsDemo(automation.resources, software)
-      const catalog = createCatalogDemo(automation.resources, software, publication, () =>
-        devices.facts().map((d) => d.summary.id),
-      )
       const scenario = createScenario(
         [
+          (request) => automation.authorization.guard(request, devices.batches()),
           onboarding.handle,
           publication.handle,
-          catalog.handle,
           imports.handle,
           automation.handle,
           devices.handle,
@@ -40,7 +36,6 @@ export function demoPlugin(): Plugin {
           devices.reset()
           automation.reset()
           publication.reset()
-          catalog.reset()
           imports.reset()
           seedScriptPolicies(automation)
         },
@@ -48,7 +43,6 @@ export function demoPlugin(): Plugin {
           if (event.kind === 'clock') onboarding.tick()
           devices.tick(event)
           const accepted = automation.tick(event, scenario)
-          catalog.tick(event)
           return accepted
         },
         automation.observe,

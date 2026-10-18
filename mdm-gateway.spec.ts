@@ -36,6 +36,11 @@ it('routes registration resources through the tenant business gateway without ac
   expect(business).not.toBeNull()
   const path = new RegExp(business[1]!)
   for (const allowed of [
+    '/api/v1/device-views',
+    '/api/v1/device-views/association/11111111-1111-4111-8111-111111111111',
+    '/api/v1/device-associations',
+    '/api/v1/device-associations/11111111-1111-4111-8111-111111111111',
+    '/api/v1/operations',
     '/api/v1/registration-quotas/me',
     '/api/v1/registration-quotas/defaults',
     '/api/v1/agent-configurations/id',
@@ -43,6 +48,11 @@ it('routes registration resources through the tenant business gateway without ac
   ])
     expect(path.test(allowed)).toBe(true)
   for (const rejected of [
+    '/api/v1/collection-blueprints',
+    '/api/v1/collection-blueprints/unknown',
+    '/api/v1/collection-blueprints-extra',
+    '/api/v1/device-views-extra',
+    '/api/v1/device-associations-extra',
     '/api/v1/registration-quotas-extra',
     '/api/v1/self-enrollments-extra',
     '/api/v1/agent-grants-extra',
@@ -51,6 +61,9 @@ it('routes registration resources through the tenant business gateway without ac
     '/api/v1/unrelated',
   ])
     expect(path.test(rejected)).toBe(false)
+  const blueprints = config.match(/location = \/api\/v1\/collection-blueprints \{([^}]+)\}/)
+  expect(blueprints?.[1]).toContain('proxy_pass http://mdm:8080;')
+  expect(blueprints?.[1]).toContain('limit_req zone=mdm_api burst=20 nodelay;')
   expect(business[2]).toContain('limit_req zone=mdm_api burst=20 nodelay;')
   expect(business[2]).toContain('proxy_pass http://mdm:8080;')
   expect(config.indexOf(business[0])).toBeLessThan(config.indexOf('location /api/ { return 404; }'))
@@ -74,17 +87,49 @@ it('proxies only the published anonymous installer paths with TLS verification a
   expect(location[2]).not.toMatch(/proxy_set_header (Cookie|Authorization|X-CSRF|X-Identity)/i)
 })
 
-it('applies the ADE token budget at the first matching regex location', () => {
+it('forwards the current management route budgets without broadening adjacent paths', () => {
   const config = readFileSync(new URL('./deploy/mdm/gateway.conf.example', import.meta.url), 'utf8')
-  const locations = [...config.matchAll(/location ~ (?:"([^"\n]+)"|(\S+)) \{([^\n]+)/g)]
-  function budget(path: string) {
-    const match = locations.find((location) => new RegExp(location[1] ?? location[2]!).test(path))
-    return match?.[3]?.match(/client_max_body_size ([^;]+);/)?.[1] ?? '16k'
+  const locations = config
+    .split('    location ')
+    .slice(1)
+    .map((block) => {
+      const split = block.indexOf(' {'),
+        match = block.slice(0, split),
+        body = block.slice(split + 2)
+      return { match, budget: body.match(/client_max_body_size ([^;]+);/)?.[1] ?? '16k' }
+    })
+  const budget = (path: string) => {
+    const exact = locations.find((l) => l.match === `= ${path}`)
+    return (
+      exact?.budget ??
+      locations.find(
+        (l) =>
+          l.match.startsWith('~ ') && new RegExp(l.match.slice(2).replace(/^"|"$/g, '')).test(path),
+      )?.budget ??
+      '16k'
+    )
   }
-  expect(budget('/api/v1/apple/organizations/id/ade/operations')).toBe('256k')
-  expect(budget('/api/v1/apple/organizations/id/ade/configuration')).toBe('256k')
-  expect(budget('/api/v1/apple/organizations/id/ade/profiles')).toBe('16k')
-  expect(budget('/api/v1/apple/organizations/id/ade/operations/extra')).toBe('16k')
+  for (const path of ['/api/v1/policies/id', '/api/v1/policies/previews', '/api/v1/resources/id'])
+    expect(budget(path)).toBe('8m')
+  expect(budget('/api/v1/devices/id/operations')).toBe('16m')
+  for (const path of ['/api/v1/pki/rotations', '/api/v1/pki/crls']) expect(budget(path)).toBe('64m')
+  expect(budget('/api/v1/pki/signing/recover')).toBe('256k')
+  for (const path of [
+    '/api/v1/agent-packages',
+    '/api/v1/agent-packages/id/withdraw',
+    '/api/v1/software/imports',
+    '/api/v1/software/sources/source/revisions/1',
+    '/api/v1/software/resources/app/versions/1',
+  ])
+    expect(budget(path)).toBe('1m')
+  for (const path of [
+    '/api/v1/apple/organizations/id/ade/operations',
+    '/api/v1/groups/id',
+    '/api/v1/resources/id/uploads/id/complete',
+    '/api/v1/software/imports/extra',
+    '/api/v1/devices/id/operations/id/reauthorize',
+  ])
+    expect(budget(path)).toBe('16k')
 })
 it('keeps the TOU frame policy tied to the original request across SPA fallback', () => {
   const config = readFileSync(new URL('./deploy/mdm/gateway.conf.example', import.meta.url), 'utf8')

@@ -100,6 +100,7 @@ it('previews do not publish membership and stale tasks do not overwrite a newer 
     id,
     operation({
       action: 'create',
+      assetContext: 'endpoint' as const,
       name: 'All',
       description: '',
       criteria: { kind: 'and', children: [] },
@@ -156,4 +157,63 @@ it('rechecks frozen registration at execution and exposes partial blocks without
     'unsupported',
     null,
   ])
+})
+it('evaluates associated groups from both endpoint sources and withholds targets until the association is verified', async () => {
+  const { associations, directory, assets, groups, domain, enrollment } = await setup()
+  const { currentMember } = await import('../../src/features/devices/clients/endpoint-model')
+  const mdm = currentMember(await directory.detail('device-05'), 'mdm')!,
+    agent = currentMember(await directory.detail('device-01'), 'agent')!
+  const association = await associations.confirm({
+    operationId: crypto.randomUUID(),
+    associationId: null,
+    expectedVersion: 0,
+    mdm,
+    agent,
+    evidence: 'Verified same synthetic fixture',
+  })
+  for (const [device, text] of [
+    [mdm.device, 'first'],
+    [agent.device, 'second'],
+  ]) {
+    const inventory = await assets.inventory(device!)
+    await assets.assign(
+      device!,
+      'custom.asset_tag',
+      operation(
+        { action: 'set', value: { kind: 'string', value: text! } },
+        inventory.revisions['custom.asset_tag'] ?? 0,
+      ),
+    )
+  }
+  const id = crypto.randomUUID()
+  const created = await groups.change(
+    id,
+    operation({
+      action: 'create',
+      name: 'Associated',
+      description: '',
+      assetContext: 'associated_device',
+      criteria: {
+        kind: 'predicate',
+        field: 'custom.asset_tag',
+        op: 'eq',
+        value: { kind: 'string', value: 'first' },
+      },
+    }),
+  )
+  await groups.status(id, created.task!)
+  await groups.status(id, created.task!)
+  const decisions = await groups.page(id, created.task!, 'decisions')
+  if (decisions.page.kind !== 'decisions') throw new Error('Wrong projection')
+  expect(decisions.page.items.find((d) => d.object.id === association.id)).toMatchObject({
+    decision: 'unknown',
+    sourceObjects: [{ object: { kind: 'association', id: association.id }, members: [mdm, agent] }],
+  })
+  const { targetFacts } = await import('../policies/targets')
+  await enrollment.revoke(agent.device, agent.registrationId, crypto.randomUUID())
+  expect(targetFacts(domain, agent.device, 'agent')).toMatchObject({
+    availability: 'unavailable',
+    reason: 'association_unverified',
+    target: null,
+  })
 })

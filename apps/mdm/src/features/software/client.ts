@@ -1,21 +1,13 @@
 import type { HttpTransport } from '@rss/api/mdm'
-import { createAdmissionClient } from './clients/admission'
+import { createLifecycleClient } from './clients/lifecycle'
 import { createPublicationClient } from './clients/publication'
-import { createAssignmentsClient } from './clients/assignments'
-import { createRunsClient } from './clients/runs'
-import { createCatalogClient } from './clients/catalog'
 import { createImportsClient } from './clients/imports'
-import { createBootstrapClient } from './clients/bootstrap'
-import { createUpdatesClient } from './clients/updates'
-export function createSoftwareClients(transport: HttpTransport, tenant: string, demo: boolean) {
+import { createRolloutClient } from './clients/rollout'
+export function createSoftwareClients(transport: HttpTransport) {
   return {
-    admission: createAdmissionClient(transport),
+    lifecycle: createLifecycleClient(transport),
     publication: createPublicationClient(transport),
-    assignments: createAssignmentsClient(transport),
-    runs: createRunsClient(transport),
-    catalog: createCatalogClient(transport, tenant, demo),
-    imports: createImportsClient(transport, tenant, demo),
-    bootstrap: createBootstrapClient(transport, tenant, demo),
-    updates: createUpdatesClient(transport, tenant, demo),
+    imports: createImportsClient(transport),
+    rollout: createRolloutClient(transport),
   }
 }

@@ -10,6 +10,7 @@ import {
   array,
   closed,
   count,
+  nullable,
   digest,
   enumeration,
   identifier,
@@ -187,6 +188,11 @@ export type Declaration =
   | { kind: 'script'; artifact: Artifact; definition: ScriptSpec }
   | { kind: 'software'; definition: SoftwareDefinition }
   | {
+      kind: 'native_collection' | 'agent_collection'
+      artifact: Artifact
+      definition: Record<string, Json>
+    }
+  | {
       kind: 'configuration'
       artifact: Artifact
     }
@@ -199,6 +205,7 @@ export interface Variant {
 export type ResourceKind = Declaration['kind']
 export type ResourceChange =
   | { action: 'create'; kind: ResourceKind }
+  | { action: 'instantiate'; blueprint: string; version: string }
   | { action: 'version'; version: string; kind: ResourceKind; variants: Variant[] }
   | { action: 'activate' | 'deprecate' | 'archive'; version: string }
 function artifact(value: unknown): Artifact {
@@ -210,10 +217,16 @@ function artifact(value: unknown): Artifact {
   }
 }
 function declaration(value: unknown): Declaration {
-  const kind = enumeration(record(value)['kind'], ['script', 'software', 'configuration'] as const)
+  const kind = enumeration(record(value)['kind'], [
+    'script',
+    'software',
+    'configuration',
+    'native_collection',
+    'agent_collection',
+  ] as const)
   const v = closed(
     value,
-    kind === 'script'
+    kind === 'script' || kind === 'native_collection' || kind === 'agent_collection'
       ? ['kind', 'artifact', 'definition']
       : kind === 'software'
         ? ['kind', 'definition']
@@ -222,6 +235,19 @@ function declaration(value: unknown): Declaration {
   if (kind === 'software') return { kind, definition: decodeSoftwareDefinition(v['definition']) }
   const a = artifact(v['artifact'])
   if (kind === 'script') return { kind, artifact: a, definition: decodeScriptSpec(v['definition']) }
+  if (kind === 'native_collection' || kind === 'agent_collection') {
+    const definition = closed(
+      v['definition'],
+      kind === 'native_collection'
+        ? ['scope', 'applicability', 'adapter', 'mappings', 'timeoutSeconds', 'outputBytes']
+        : ['applicability', 'plan', 'mappings'],
+    )
+    return {
+      kind,
+      artifact: a,
+      definition: record(jsonValue(definition, 8 * 1024 * 1024)) as Record<string, Json>,
+    }
+  }
   return {
     kind,
     artifact: a,
@@ -242,7 +268,13 @@ function variant(value: unknown): Variant {
 export function decodeResource(value: unknown, id: string) {
   const v = closed(value, ['id', 'revision', 'kind', 'versions'])
   if (identifier(v['id']) !== id) throw new Error('Wrong resource')
-  const kind = enumeration(v['kind'], ['script', 'software', 'configuration'] as const)
+  const kind = enumeration(v['kind'], [
+    'script',
+    'software',
+    'configuration',
+    'native_collection',
+    'agent_collection',
+  ] as const)
   return {
     id,
     revision: count(v['revision']),
@@ -281,6 +313,63 @@ export interface UploadTarget {
 }
 export function createResourcesClient(transport: HttpTransport) {
   return {
+    blueprints: () =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/collection-blueprints',
+        successStatus: 200,
+        decode(value) {
+          const v = closed(value, ['categories', 'items'])
+          return {
+            categories: array(v['categories'], identifier),
+            items: array(v['items'], (value) => {
+              const b = closed(value, ['id', 'version', 'category', 'platform', 'definition']),
+                d = record(b['definition']),
+                kind = enumeration(d['kind'], [
+                  'native_collection',
+                  'agent_collection',
+                  'configuration',
+                ] as const)
+              closed(d, kind === 'configuration' ? ['kind', 'content'] : ['kind', 'template'])
+              return {
+                id: identifier(b['id']),
+                version: identifier(b['version']),
+                category: identifier(b['category']),
+                platform: enumeration(b['platform'], platforms),
+                definition: { kind, ...record(jsonValue(d, 8 * 1024 * 1024)) },
+              }
+            }),
+          }
+        },
+      }),
+    list: (kind?: ResourceKind, after?: string) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/resources',
+        query: { kind, after, limit: 20 },
+        successStatus: 200,
+        decode(value) {
+          const v = closed(value, ['items', 'nextCursor'])
+          return {
+            items: array(v['items'], (value) => {
+              const i = closed(value, ['id', 'revision', 'kind', 'activeVersion'])
+              return {
+                id: identifier(i['id']),
+                revision: count(i['revision']),
+                kind: enumeration(i['kind'], [
+                  'software',
+                  'script',
+                  'configuration',
+                  'native_collection',
+                  'agent_collection',
+                ] as const),
+                activeVersion: nullable(i['activeVersion'], identifier),
+              }
+            }),
+            nextCursor: nullable(v['nextCursor'], identifier),
+          }
+        },
+      }),
     read: (id: string) =>
       transport.request({
         method: 'GET',

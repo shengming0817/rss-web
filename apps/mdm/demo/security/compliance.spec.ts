@@ -230,6 +230,7 @@ it('supersedes an unready frozen group input, then preserves old evidence when i
   const devices = createDeviceDemo(),
     group = crypto.randomUUID()
   let members = {
+    objects: [],
     members: ['device-01'],
     memberSet: null as string | null,
     memberVersion: 0,
@@ -311,6 +312,7 @@ it('invalidates dynamic group inputs after fact changes even when the compliance
     groupPath = `/api/v1/groups/${group}`
   const groupWrite = operation({
     action: 'create',
+    assetContext: 'endpoint' as const,
     name: 'Office members',
     description: '',
     criteria: definition.criteria,

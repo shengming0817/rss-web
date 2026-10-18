@@ -1,29 +1,57 @@
 <script setup lang="ts">
 import { UiButton } from '@rss/core/components'
-import { onMounted, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
+import { deviceBinding } from '../../devices/useDeviceBinding'
 import type { ExecutionSummary } from '../clients/executions'
-import type { NativeOperation } from '../clients/native'
+import type { NativeOperation, Reauthorization } from '../clients/native'
 import PageFrame from '../../../components/PageFrame.vue'
 import ExecutionFacts from '../components/ExecutionFacts.vue'
-import SoftwareRunFacts from '../../software/components/SoftwareRunFacts.vue'
-import BootstrapAttemptFacts from '../../software/components/BootstrapAttemptFacts.vue'
-import type { BootstrapAttempt } from '../../software/clients/bootstrap'
-import type { SoftwareRun } from '../../software/clients/runs'
+import PolicyRunFacts from '../components/PolicyRunFacts.vue'
+import type { PolicyRun } from '../clients/runs'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
-  { run, runWrite, busy, failure, uncertain } = useOperation()
+  { run, runWrite, busy, failure, uncertain } = useOperation([], () => deviceBinding(runtime))
+const confirmation = ref(false),
+  registration = ref(''),
+  generation = ref(1)
 const execution = ref<ExecutionSummary>(),
   native = ref<NativeOperation>(),
-  software = ref<SoftwareRun>(),
-  bootstrap = ref<BootstrapAttempt>()
-let pending: (() => Promise<void>) | undefined
+  software = ref<PolicyRun>()
+watch(
+  [registration, generation],
+  () => {
+    confirmation.value = false
+  },
+  { flush: 'sync' },
+)
 async function load() {
   const id = String(route.params['execution'])
+  const policy = route.query['policy']
+  if (typeof policy === 'string') {
+    await run(
+      () => runtime.policies.runs.read(policy, id),
+      (v) => {
+        software.value = v
+      },
+    )
+    return
+  }
+  const device = route.query['device']
+  if (typeof device === 'string') {
+    await run(
+      () => runtime.policies.native.read(device, id),
+      (v) => {
+        native.value = v
+        confirmation.value = false
+      },
+    )
+    return
+  }
   await run(
     async () => {
       const summary = await runtime.policies.executions.read(id)
@@ -34,44 +62,58 @@ async function load() {
       const updated = n ? await runtime.policies.executions.read(id) : summary
       const s =
         summary.origin.kind === 'software'
-          ? await runtime.software.runs.read(summary.origin.policy, summary.origin.task)
+          ? await runtime.policies.runs.read(summary.origin.policy, summary.origin.task)
           : undefined
-      const b =
-        summary.origin.kind === 'bootstrap'
-          ? await runtime.software.bootstrap.attempt(summary.origin.policy, summary.id)
-          : undefined
-      return { b, summary: s ? await runtime.policies.executions.read(id) : updated, n, s }
+      return { summary: s ? await runtime.policies.executions.read(id) : updated, n, s }
     },
     (v) => {
       execution.value = v.summary
       native.value = v.n
       software.value = v.s
-      bootstrap.value = v.b
     },
   )
 }
-function change(action: 'approve' | 'cancel') {
-  if (busy.value || uncertain.value || !execution.value || !native.value) return
-  const device = execution.value.device,
+function change(action: 'reauthorize' | 'cancel') {
+  if (
+    busy.value ||
+    uncertain.value ||
+    !native.value ||
+    (!execution.value && typeof route.query['device'] !== 'string')
+  )
+    return
+  const device = execution.value?.device ?? String(route.query['device']),
     id = native.value.operationId,
-    body = { requestId: crypto.randomUUID(), expectedRevision: native.value.revision }
-  pending = async () => {
+    body: Reauthorization = {
+      requestId: crypto.randomUUID(),
+      expectedRevision: native.value.revision,
+      ...(action === 'reauthorize' && confirmation.value
+        ? {
+            confirmation: {
+              confirmed: true,
+              expectedRegistrationId: registration.value,
+              expectedGeneration: generation.value,
+            },
+          }
+        : {}),
+    }
+  const change = async () => {
     if (await runWrite(() => runtime.policies.native[action](device, id, body))) await load()
   }
-  void pending()
+  confirmation.value = false
+  void change()
 }
 watch(
-  () => route.params['execution'],
+  () => [route.fullPath, ...deviceBinding(runtime)],
   () => {
     execution.value = undefined
     native.value = undefined
     software.value = undefined
-    bootstrap.value = undefined
-    pending = undefined
+    confirmation.value = false
+    registration.value = ''
     void load()
   },
+  { immediate: true },
 )
-onMounted(() => load())
 </script>
 <template>
   <PageFrame :title="t('policies.detail')" :busy="busy" :failure="failure"
@@ -112,25 +154,6 @@ onMounted(() => load())
       }"
       >{{ t('security.actions') }}</RouterLink
     >
-    <RouterLink
-      v-if="execution?.origin.kind === 'update'"
-      :to="{
-        name: 'software-updates',
-        params: { tenant: runtime.tenant },
-        query: { id: execution.origin.ring },
-      }"
-      >{{ t('software.updates') }}</RouterLink
-    >
-    <template v-if="bootstrap && execution?.origin.kind === 'bootstrap'"
-      ><RouterLink
-        :to="{
-          name: 'software-bootstrap',
-          params: { tenant: runtime.tenant },
-          query: { id: execution.origin.policy },
-        }"
-        >{{ t('software.bootstrap') }}</RouterLink
-      ><BootstrapAttemptFacts :attempt="bootstrap"
-    /></template>
     <section
       v-if="execution?.origin.kind === 'policy' && execution.origin.output !== null"
       class="console-panel"
@@ -156,6 +179,10 @@ onMounted(() => load())
     </section>
     <section v-if="native" class="console-panel">
       <h2>{{ native.observation.protocol }}</h2>
+      <details v-if="native.agentInstallation">
+        <summary>{{ t('software.installAgent') }}</summary>
+        <pre>{{ JSON.stringify(native.agentInstallation, null, 2) }}</pre>
+      </details>
       <dl>
         <template v-for="(value, key) in native.observation" :key="key"
           ><dt>{{ t(`policies.observation.${key}`) }}</dt>
@@ -164,9 +191,25 @@ onMounted(() => load())
       </dl>
       <p>
         {{ t('policies.revision') }} {{ native.revision }} ·
-        {{ t(`policies.state.${native.task.kind}`) }} ·
+        {{ t(`policies.state.${native.task.platform}`) }} ·
         {{ t(`policies.state.${native.commandStatus}`) }}
       </p>
+      <fieldset :disabled="busy || uncertain">
+        <label
+          >{{ t('devices.registration')
+          }}<input v-model="registration" class="ui-input" required /></label
+        ><label
+          >{{ t('policies.generation')
+          }}<input
+            v-model.number="generation"
+            type="number"
+            min="1"
+            class="ui-input"
+            required /></label
+        ><label
+          ><input v-model="confirmation" type="checkbox" />{{ t('policies.confirmControl') }}</label
+        >
+      </fieldset>
       <UiButton
         v-if="
           native.authorization === 'blocked' &&
@@ -176,9 +219,9 @@ onMounted(() => load())
         "
         :disabled="!!(busy || uncertain)"
         type="submit"
-        @click="change('approve')"
+        @click="change('reauthorize')"
       >
-        {{ t('policies.reapprove') }}</UiButton
+        {{ t('policies.reauthorize') }}</UiButton
       ><UiButton
         v-if="
           ['queued', 'published', 'received'].includes(native.commandStatus) &&
@@ -191,19 +234,37 @@ onMounted(() => load())
         {{ t('policies.cancel') }}
       </UiButton>
     </section>
-    <template v-if="software && execution?.origin.kind === 'software'">
+    <template v-if="software">
       <RouterLink
+        v-if="software.result"
         :to="{
-          name: 'software-deployments',
+          name:
+            software.result?.kind === 'enrollment'
+              ? 'software-bootstrap'
+              : software.result?.kind === 'software'
+                ? 'software-deployments'
+                : 'policy-policies',
           params: { tenant: runtime.tenant },
-          query: { id: execution.origin.policy },
+          query: {
+            id:
+              typeof route.query['policy'] === 'string'
+                ? route.query['policy']
+                : execution?.origin.kind === 'software'
+                  ? execution.origin.policy
+                  : undefined,
+          },
         }"
-        >{{ t('software.deployments') }}</RouterLink
+        >{{
+          t(
+            software.result?.kind === 'enrollment'
+              ? 'software.bootstrap'
+              : software.result?.kind === 'software'
+                ? 'software.deployments'
+                : 'policies.policies',
+          )
+        }}</RouterLink
       >
-      <SoftwareRunFacts :run="software" />
+      <PolicyRunFacts :run="software" />
     </template>
-    <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending()">
-      {{ t('policies.replay') }}
-    </UiButton></PageFrame
-  >
+  </PageFrame>
 </template>

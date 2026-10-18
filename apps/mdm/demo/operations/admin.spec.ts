@@ -7,7 +7,11 @@ import { operation } from '../../src/services/useOperation'
 async function fixture() {
   let time = 100
   const operations = createOperationsDemo(() => time)
-  const auth = createAuthorizationDemo(() => time, operations.record)
+  const auth = createAuthorizationDemo(
+    () => time,
+    operations.record,
+    () => ({ definition: undefined, device: undefined }),
+  )
   const admin = createAdminDemo(
     () => time,
     operations,

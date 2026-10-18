@@ -38,53 +38,44 @@ it('preserves unlimited and explicitly empty Scope limitations as different inpu
     ),
   ).toThrow()
 })
-it('binds Scope result pages to scope/result/projection and preserves frozen published sources', () => {
+it('binds Scope pages to channel and preserves typed targets and source references', () => {
   const page = {
     result,
     scope: id,
     current: false,
-    totalObjects: 1,
-    totalMembers: 0,
-    sources: [
-      {
-        reference: { kind: 'group', id: group },
-        memberSet: result,
-        memberVersion: 4,
-        definitionVersion: 2,
-        authorityVersion: 3,
-      },
-    ],
+    channel: 'agent',
     page: {
       kind: 'decisions',
       items: [
-        { device: 'device-01', identity: 'active', reasons: ['explicit_exclusion'], sources: [0] },
+        {
+          object: { kind: 'endpoint', id: 'device-01' },
+          qualification: { state: 'excluded' },
+          reasons: ['explicit_exclusion'],
+          targets: [{ reference: { kind: 'group', id: group }, version: 4 }],
+          limitations: [],
+          exclusions: [],
+        },
       ],
     },
     nextCursor: 'opaque-tail',
   }
-  expect(decodeScopePage(page, id, result, 'decisions')).toEqual(page)
+  expect(decodeScopePage(page, id, result, 'decisions', 'agent')).toEqual(page)
   for (const bad of [
-    { ...page, scope: group },
+    { ...page, channel: 'mdm' },
     { ...page, result: group },
-    { ...page, page: { kind: 'members', items: [] } },
-    {
-      ...page,
-      page: {
-        kind: 'decisions',
-        items: [{ device: 'device-01', identity: 'active', reasons: ['invented'], sources: [0] }],
-      },
-    },
-  ]) {
-    expect(() => decodeScopePage(bad, id, result, 'decisions')).toThrow()
-  }
+    { ...page, page: { kind: 'members', items: ['device-01'] } },
+    { ...page, totalObjects: 1 },
+  ])
+    expect(() => decodeScopePage(bad, id, result, 'decisions', 'agent')).toThrow()
   expect(
     decodeScopePage(
-      { ...page, sources: [], page: { kind: 'members', items: [] }, nextCursor: null },
+      { ...page, page: { kind: 'members', items: [] }, nextCursor: null },
       id,
       result,
       'members',
-    ).nextCursor,
-  ).toBeNull()
+      'agent',
+    ).page.items,
+  ).toEqual([])
 })
 it('uses exact Scope paths and CAS bodies without manufacturing a list or preview endpoint', async () => {
   let reply: unknown = { id, revision: 2, task: result }
@@ -133,13 +124,11 @@ it('uses exact Scope paths and CAS bodies without manufacturing a list or previe
     result,
     scope: id,
     current: true,
-    totalObjects: 1,
-    totalMembers: 0,
-    sources: [],
+    channel: 'agent',
     page: { kind: 'members', items: [] },
     nextCursor: null,
   }
-  await client.page(id, result, 'members', 'opaque-tail')
+  await client.page(id, result, 'members', 'agent', 'opaque-tail')
   expect(request.mock.calls[3]![0]).toMatchObject({
     method: 'GET',
     path: '/api/v1/scopes/{id}/results/{result}/{projection}',

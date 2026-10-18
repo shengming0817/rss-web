@@ -3,7 +3,7 @@ import { expect, it } from 'vitest'
 import { createSoftwarePolicyDemo } from './assignments'
 import { createDeviceDemo } from '../devices/state'
 import { request, operation, softwareResource } from './fixtures'
-import { softwareRun } from '../../src/features/software/clients/runs'
+import { policyRun } from '../../src/features/policies/clients/runs'
 import type { SoftwarePolicyDefinition } from '../../src/features/software/clients/assignment-model'
 function setup() {
   const facts = createDeviceDemo().facts(),
@@ -13,15 +13,32 @@ function setup() {
   const scope = { id: randomUUID(), revision: 1, members: ['device-01', 'device-02'], sources: [] }
   const snapshot = { result: randomUUID(), devices: [...scope.members] }
   const scopes = new Map<string, typeof scope>([[scope.id, scope]])
-  let approved = true
+  let approved = true,
+    epoch = 1
   const owner = createSoftwarePolicyDemo(
-    { facts: () => facts },
+    {
+      facts: () => facts,
+      objects: () =>
+        facts.map((d) => ({
+          object: { kind: 'endpoint' as const, id: d.summary.id },
+          associationVersion: null,
+          verified: true,
+          members: d.registrations
+            .filter((r) => r.status === 'active')
+            .map((r) => ({
+              device: d.summary.id,
+              channel: r.source === 'agent.builtin' ? ('agent' as const) : ('mdm' as const),
+              registrationId: r.registrationId,
+              generation: r.generation,
+            })),
+        })),
+    },
     {
       resolve: (id) => structuredClone(scopes.get(id) ?? null),
       snapshot: () => structuredClone(snapshot),
     },
     { read: () => saved },
-    { isAdmitted: () => approved },
+    { isEnabled: () => approved, binding: () => (approved ? `enabled-${epoch}` : null) },
   )
   const definition: SoftwarePolicyDefinition = {
     scope: scope.id,
@@ -31,7 +48,6 @@ function setup() {
 
       kind: 'software',
       intent: 'required_install',
-      admissionOperation: randomUUID(),
       schedule: {
         trigger: { kind: 'check_in', minimumSeconds: 60 },
         misfire: { kind: 'coalesce_one' },
@@ -46,14 +62,14 @@ function setup() {
   }
   const id = randomUUID(),
     path = `/api/v1/policies/${id}`
-  const put = () =>
+  const put = (expectedRevision = 0) =>
     owner.handle(
-      request(path, operation({ action: 'put', enabled: true, definition }, 0)),
+      request(path, operation({ action: 'put', enabled: true, definition }, expectedRevision)),
       'normal',
     )!
   const runs = () =>
     (owner.handle(request(`${path}/runs`), 'normal')!.body as { items: unknown[] }).items.map((v) =>
-      softwareRun(v, false),
+      policyRun(v, false),
     )
   return {
     owner,
@@ -67,6 +83,10 @@ function setup() {
     scope,
     snapshot,
     scopes,
+    restore: () => {
+      approved = true
+      epoch++
+    },
     withdraw: () => {
       approved = false
     },
@@ -84,8 +104,11 @@ it('previews without creating work, fences scope results and requires explicit s
     )!
   expect(preview().body).toMatchObject({
     items: [
-      { device: 'device-01', taskAdmission: { state: 'eligible' } },
-      { device: 'device-02', taskAdmission: { state: 'missing_registration' } },
+      { object: { kind: 'endpoint', id: 'device-01' }, taskAdmission: { state: 'eligible' } },
+      {
+        object: { kind: 'endpoint', id: 'device-02' },
+        taskAdmission: { state: 'missing_registration' },
+      },
     ],
   })
   expect(f.runs()).toEqual([])
@@ -116,13 +139,13 @@ it('only admits on Agent poll, retains independent delivery and verified result,
   f.owner.tick({ kind: 'check_in', device: 'device-01', at: at + 2 }, 'normal')
   expect(f.runs()[0]).toMatchObject({
     effect: 'verified',
-    result: { kind: 'software', detection: 'present' },
+    result: { kind: 'software', evidence: { steps: [{ after: { state: 'present' } }] } },
   })
   f.owner.tick({ kind: 'check_in', device: 'device-01', at: at + 1000 }, 'normal')
   expect(f.runs()).toHaveLength(1)
   f.withdraw()
-  expect(f.owner.handle(request(`${f.path}/devices`), 'normal')?.body).toMatchObject({
-    items: [{ taskAdmission: { state: 'approval_withdrawn' } }, {}],
+  expect(f.owner.handle(request(`${f.path}/assignments`), 'normal')?.body).toMatchObject({
+    items: [{ taskAdmission: { state: 'authorization_withdrawn' } }, {}],
   })
 })
 it('AvailableInstall does not prequeue or start without a self-service invocation', () => {
@@ -156,7 +179,9 @@ it('does not claim that zero exit proves effect and computes rollout from live m
     f.owner.tick({ kind: 'check_in', device: 'device-01', at: at + step }, 'unknown')
   expect(f.runs()[0]).toMatchObject({
     effect: 'unknown',
-    result: { installerExitCode: 0, detection: 'unknown' },
+    result: {
+      evidence: { steps: [{ process: { kind: 'exited', code: 0 }, after: { state: 'unknown' } }] },
+    },
   })
   const rollout = () => f.owner.handle(request(`${f.path}/software/rollout`), 'normal')!.body
   expect(rollout()).toMatchObject({
@@ -270,7 +295,7 @@ it('rejects uninstall without a declared command before preview or publication, 
   expect(f.runs()).toHaveLength(1)
   expect(f.runs()[0]).toMatchObject({
     effect: 'verified',
-    result: { intent: 'uninstall', detection: 'absent' },
+    result: { intent: 'uninstall', evidence: { steps: [{ after: { state: 'absent' } }] } },
   })
 })
 
@@ -364,7 +389,7 @@ it('preserves current script history evidence through mock list/detail while red
     trusted: false,
   })
   expect(f.runs()[0]!.result).not.toHaveProperty('output')
-  const detail = softwareRun(
+  const detail = policyRun(
     f.owner.handle(request(`${f.path}/runs/${row.value.taskId}`), 'normal')!.body,
     true,
   )
@@ -372,4 +397,22 @@ it('preserves current script history evidence through mock list/detail while red
     output: { simulation: true },
     diagnostics: { stdout: 'Synthetic historical script evidence' },
   })
+})
+
+it('requires a new authored Policy version after lifecycle withdrawal and re-enable', () => {
+  const f = setup()
+  const original = f.put().body as { versionId: string }
+  f.withdraw()
+  const assignments = () => f.owner.handle(request(`${f.path}/assignments`), 'normal')!.body
+  expect(assignments()).toMatchObject({
+    items: [{ taskAdmission: { state: 'authorization_withdrawn' } }, {}],
+  })
+  f.restore()
+  expect(assignments()).toMatchObject({
+    items: [{ taskAdmission: { state: 'authorization_withdrawn' } }, {}],
+  })
+  const replaced = f.put(1)
+  expect(replaced.status).toBe(200)
+  expect((replaced.body as { versionId: string }).versionId).not.toBe(original.versionId)
+  expect(assignments()).toMatchObject({ items: [{ taskAdmission: { state: 'eligible' } }, {}] })
 })

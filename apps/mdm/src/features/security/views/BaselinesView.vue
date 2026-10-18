@@ -156,7 +156,19 @@ function rulePage(after?: string) {
 }
 function scopePage(cursor?: string) {
   void run(
-    () => runtime.policies.catalog.list('scopes', cursor),
+    async () => {
+      const page = await runtime.policies.scopes.list(cursor)
+      return {
+        ...page,
+        snapshot: '',
+        items: page.items.map((s) => ({
+          id: s.id,
+          label: s.id,
+          revision: s.revision,
+          status: 'active' as const,
+        })),
+      }
+    },
     (v) => (scopes.value = v),
   )
 }

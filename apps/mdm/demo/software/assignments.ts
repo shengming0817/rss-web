@@ -1,3 +1,4 @@
+import { targetFacts } from '../policies/targets'
 import { supportsSoftwareRemoval } from '../../src/features/policies/clients/software-definition'
 import { createHash } from 'node:crypto'
 import type { DomainHandler, Scenario } from '../scenario'
@@ -6,7 +7,7 @@ import { createPolicyStore } from '../policies/store'
 import type { createDeviceDemo } from '../devices/state'
 import type { createResourceDemo } from '../policies/resources'
 import type { createScopeDemo } from '../policies/scopes'
-import type { createAdmissionDemo } from './admission'
+import type { createLifecycleDemo } from './lifecycle'
 import type { DemoEvent } from '../policies/schedule'
 import { closed, identifier, uuid } from '../../src/services/decode'
 import {
@@ -14,13 +15,13 @@ import {
   type SoftwarePolicyDefinition,
 } from '../../src/features/software/clients/assignment-model'
 import type { taskAdmission } from '../../src/features/policies/clients/model'
-import { createSoftwareRuns, softwareProfiles } from './runs'
+import { createPolicyRuns, softwareProfiles } from './runs'
 type Definition = SoftwarePolicyDefinition
 export function createSoftwarePolicyDemo(
-  devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts'>,
+  devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts' | 'objects'>,
   scopes: Pick<ReturnType<typeof createScopeDemo>, 'resolve' | 'snapshot'>,
   resources: Pick<ReturnType<typeof createResourceDemo>, 'read'>,
-  admission: Pick<ReturnType<typeof createAdmissionDemo>, 'isAdmitted'>,
+  lifecycle: Pick<ReturnType<typeof createLifecycleDemo>, 'isEnabled' | 'binding'>,
   store = createPolicyStore(),
 ) {
   const policies = {
@@ -37,15 +38,12 @@ export function createSoftwarePolicyDemo(
         .map((p) => ({ ...p, definition: softwarePolicyDefinition(p.definition) }))
     },
   }
+  const frozenBindings = new Map<string, string | null>()
   let now = Math.floor(Date.now() / 1000)
   function admissionFailure(d: Definition) {
     const r = resources.read(d.action.resource.id),
       v = r?.versions.find((v) => v.id === d.action.resource.version)
-    if (
-      r?.kind !== 'software' ||
-      v?.state !== 'active' ||
-      !admission.isAdmitted(r.id, v.id, d.action.admissionOperation)
-    )
+    if (r?.kind !== 'software' || v?.state !== 'active' || !lifecycle.isEnabled(r.id, v.id))
       return error('operation_conflict')
     for (const [target, key] of Object.entries(d.action.resource.variants)) {
       const variant = v.variants.find(
@@ -60,15 +58,22 @@ export function createSoftwarePolicyDemo(
     }
     return undefined
   }
-  store.register('software', (raw) => {
-    const definition = softwarePolicyDefinition(raw),
-      failure = admissionFailure(definition)
-    if (failure) return failure
-    return !scopes.resolve(definition.scope) ||
-      definition.action.rollout.stages.some((s) => !scopes.resolve(s.scope))
-      ? error('operation_conflict')
-      : undefined
-  })
+  store.register(
+    'software',
+    (raw) => {
+      const definition = softwarePolicyDefinition(raw),
+        failure = admissionFailure(definition)
+      if (failure) return failure
+      return !scopes.resolve(definition.scope) ||
+        definition.action.rollout.stages.some((s) => !scopes.resolve(s.scope))
+        ? error('operation_conflict')
+        : undefined
+    },
+    (d) =>
+      d.action.kind === 'software'
+        ? lifecycle.binding(d.action.resource.id, d.action.resource.version)
+        : null,
+  )
   function members(d: Definition, index: number) {
     const root = scopes.resolve(d.scope)?.members ?? [],
       prior = new Set(
@@ -80,7 +85,7 @@ export function createSoftwarePolicyDemo(
       (v) => root.includes(v) && !prior.has(v),
     )
   }
-  const runs = createSoftwareRuns((r) => {
+  const runs = createPolicyRuns((r) => {
     const p = policies.get(r.policy.id),
       device = devices.facts().find((d) => d.summary.id === r.value.device)
     return (
@@ -165,7 +170,14 @@ export function createSoftwarePolicyDemo(
       return { state: 'unsupported_capability', stage }
     if (!d.action.resource.variants[`${p.platform}_${p.architecture}`])
       return { state: 'missing_variant', stage }
-    if (admissionFailure(d)) return { state: 'approval_withdrawn', stage }
+    if (
+      admissionFailure(d) ||
+      (version &&
+        frozenBindings.has(version) &&
+        frozenBindings.get(version) !==
+          lifecycle.binding(d.action.resource.id, d.action.resource.version))
+    )
+      return { state: 'authorization_withdrawn', stage }
     return { state: 'eligible', stage }
   }
   function page<T>(items: T[], after: string | null, key: (v: T) => string, size = 64) {
@@ -180,7 +192,18 @@ export function createSoftwarePolicyDemo(
   const handle: DomainHandler = (request, scenario) => {
     const authored = store.handle(request, scenario)
     if (authored) {
-      if (request.method !== 'GET' && authored.status < 300) runs.recover()
+      if (request.method !== 'GET' && authored.status < 300) {
+        for (const p of policies.values())
+          if (!frozenBindings.has(p.versionId))
+            frozenBindings.set(
+              p.versionId,
+              lifecycle.binding(
+                p.definition.action.resource.id,
+                p.definition.action.resource.version,
+              ),
+            )
+        runs.recover()
+      }
       return authored
     }
     if (!/^\/api\/v1\/policies(?:\/|$)/.test(request.path)) return
@@ -204,7 +227,11 @@ export function createSoftwarePolicyDemo(
           scopeResult: snapshot.result,
           nextCursor: result.nextCursor,
           items: result.items.map((device) => ({
-            device,
+            ...(() => {
+              const { sources: _sources, ...facts } = targetFacts(devices, device, 'agent')
+              void _sources
+              return facts
+            })(),
             eligibility:
               scopes.resolve(d.scope) === null
                 ? { state: 'pending' }
@@ -216,7 +243,7 @@ export function createSoftwarePolicyDemo(
         })
       }
       const match =
-        /^\/api\/v1\/policies\/([^/]+)(?:\/(devices|software\/rollout|runs|reruns)(?:\/([^/]+))?)?$/.exec(
+        /^\/api\/v1\/policies\/([^/]+)(?:\/(assignments|software\/rollout|runs|reruns)(?:\/([^/]+))?)?$/.exec(
           request.path,
         )
       if (!match) return
@@ -269,11 +296,13 @@ export function createSoftwarePolicyDemo(
             asOf: now,
             stages: p.definition.action.rollout.stages.map((s, i) => ({
               ...s,
+              ready: true,
+              asOf: now,
               open: p.enabled && open(p.definition, p.versionId, i),
               ...counts(p.definition, p.versionId, i),
             })),
           })
-        if (suffix === 'devices') {
+        if (suffix === 'assignments') {
           const snapshot = scopes.snapshot(p.definition.scope)
           const result = page(
             scenario === 'empty' ? [] : (snapshot?.devices ?? []),
@@ -285,16 +314,16 @@ export function createSoftwarePolicyDemo(
             items: result.items.map((device) => {
               const state = management(p.definition, p.enabled, p.versionId, device)
               return {
-                device,
-                assignment:
+                ...targetFacts(devices, device, 'agent'),
+                scopeResult: snapshot!.result,
+                qualification:
                   state.state === 'eligible'
-                    ? 'eligible'
+                    ? { state: 'eligible' as const, entry: 1 }
                     : state.state === 'outside_scope' && scopes.resolve(p.definition.scope) !== null
-                      ? 'excluded'
-                      : 'pending',
+                      ? { state: 'excluded' as const }
+                      : { state: 'pending' as const },
                 taskAdmission: state,
                 operationIds: [],
-                diagnoses: [],
               }
             }),
           })
@@ -325,7 +354,18 @@ export function createSoftwarePolicyDemo(
           p.definition.action.resource.id === id &&
           p.definition.action.resource.version === version,
       ),
-    reconcile: () => runs.recover(),
+    reconcile() {
+      for (const p of policies.values())
+        if (!frozenBindings.has(p.versionId))
+          frozenBindings.set(
+            p.versionId,
+            lifecycle.binding(
+              p.definition.action.resource.id,
+              p.definition.action.resource.version,
+            ),
+          )
+      runs.recover()
+    },
     tick(event: DemoEvent, scenario: Scenario) {
       if (event.at < now) return
       now = event.at
@@ -365,6 +405,7 @@ export function createSoftwarePolicyDemo(
     reset() {
       store.reset()
       runs.reset()
+      frozenBindings.clear()
       now = Math.floor(Date.now() / 1000)
     },
   }

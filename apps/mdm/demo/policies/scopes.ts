@@ -101,6 +101,23 @@ export function createScopeDemo(devices: Devices) {
       /^\/api\/v1\/scopes\/([^/]+)(?:\/(tasks|results)\/([^/]+)(?:\/(members|decisions))?)?$/.exec(
         request.path,
       )
+    if (request.path === '/api/v1/scopes' && request.method === 'GET') {
+      const items = [...scopes.values()]
+          .filter((s) => !deleted.has(s.id) && s.id > (request.query.get('after') ?? ''))
+          .sort((a, b) => a.id.localeCompare(b.id)),
+        limit = Number(request.query.get('limit') ?? 20)
+      return ok({
+        items: items.slice(0, limit).map((s) => ({
+          id: s.id,
+          revision: s.revision,
+          deleted: false,
+          calculationRevision: s.revision,
+          resolution: current.get(s.id) ?? null,
+          resolutionRevision: current.has(s.id) ? s.revision : null,
+        })),
+        nextCursor: items.length > limit ? items[limit - 1]!.id : null,
+      })
+    }
     if (!match) return
     try {
       const id = uuid(match[1]),
@@ -135,21 +152,46 @@ export function createScopeDemo(devices: Devices) {
           })
         }
         if (job.status !== 'completed') return error('operation_conflict')
-        const kind = enumeration(match[4], ['members', 'decisions'] as const)
-        const page = pages.page<unknown>(
-          request.path,
-          kind === 'members' ? job.frozen.members : job.decisions,
-          request.query,
-          task,
-        )
+        const kind = enumeration(match[4], ['members', 'decisions'] as const),
+          channel = enumeration(request.query.get('channel'), ['mdm', 'agent'] as const)
+        const eligible = (id: string) =>
+          job.frozen.members.includes(id) &&
+          devices
+            .facts()
+            .some(
+              (d) =>
+                d.summary.id === id &&
+                d.registrations.some(
+                  (r) =>
+                    r.status === 'active' &&
+                    (r.source === 'agent.builtin' ? 'agent' : 'mdm') === channel,
+                ),
+            )
+        const values =
+          kind === 'members'
+            ? job.frozen.members.filter(eligible).map((id) => ({ kind: 'endpoint', id }))
+            : job.decisions.map((d) => ({
+                object: { kind: 'endpoint', id: d.device },
+                qualification: eligible(d.device)
+                  ? { state: 'eligible', entry: 1 }
+                  : d.reasons.length
+                    ? { state: 'excluded' }
+                    : { state: 'pending' },
+                reasons: d.reasons,
+                targets: d.sources.map((index) => ({
+                  reference: job.frozen.sources[index]!.reference,
+                  version: job.frozen.sources[index]!.memberVersion,
+                })),
+                limitations: [],
+                exclusions: [],
+              }))
+        const page = pages.page<unknown>(request.path + ':' + channel, values, request.query, task)
         return ok({
           result: task,
           scope: id,
           current:
             current.get(id) === task && read?.revision === job.frozen.revision && !deleted.has(id),
-          totalObjects: job.decisions.length,
-          totalMembers: job.frozen.members.length,
-          sources: job.frozen.sources,
+          channel,
           page: { kind, items: page.items },
           nextCursor: page.nextCursor,
         })
@@ -220,8 +262,7 @@ export function createScopeDemo(devices: Devices) {
     snapshot(id: string) {
       const result = current.get(id),
         job = result ? jobs.get(result) : undefined
-      if (!result || !job || deleted.has(id) || scopes.get(id)?.revision !== job.frozen.revision)
-        return null
+      if (!result || !job || deleted.has(id)) return null
       return { result, devices: job.decisions.map((d) => d.device) }
     },
     list: () =>

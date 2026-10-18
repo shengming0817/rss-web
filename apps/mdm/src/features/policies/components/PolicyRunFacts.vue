@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import type { SoftwareRun } from '../clients/runs'
-defineProps<{ run: SoftwareRun }>()
+import type { PolicyRun } from '../clients/runs'
+defineProps<{ run: PolicyRun }>()
 const { t } = useI18n()
 const utc = (at: number) =>
   new Date(at * 1000).toISOString().replace('T', ' ').replace('.000Z', ' UTC')
@@ -27,20 +27,13 @@ const utc = (at: number) =>
       <dt>{{ t('policies.attempt') }}</dt>
       <dd>{{ run.state.delivery.kind === 'queued' ? '—' : run.state.delivery.attempt }}</dd>
       <template v-if="run.result?.kind === 'software'">
-        <dt>{{ t('software.installerExit') }}</dt>
-        <dd>{{ run.result.installerExitCode ?? '—' }}</dd>
-        <dt>{{ t('software.detection') }}</dt>
-        <dd>{{ t(`software.detection_${run.result.detection}`) }}</dd>
-        <dt>{{ t('software.observedVersion') }}</dt>
-        <dd>{{ run.result.observedVersion ?? '—' }}</dd>
-        <dt>{{ t('software.rebootRequired') }}</dt>
-        <dd>{{ run.result.rebootRequired ? t('software.yes') : t('software.no') }}</dd>
         <dt>{{ t('software.definitionDigest') }}</dt>
         <dd class="console-wrap">{{ run.result.definitionDigest.join(',') }}</dd>
-        <dt>{{ t('software.evidenceDigest') }}</dt>
-        <dd class="console-wrap">{{ run.result.evidenceDigest.join(',') }}</dd>
       </template>
     </dl>
+    <p v-if="run.result?.kind === 'enrollment'">
+      {{ t('software.requestMdm') }} · {{ run.result.entryOutcome }}
+    </p>
     <p v-if="!run.result">{{ t('software.noRunResult') }}</p>
     <template v-if="run.result?.kind === 'script'">
       <p>{{ t('software.scriptHistory') }}</p>
@@ -62,7 +55,50 @@ const utc = (at: number) =>
       </p>
       <pre v-if="'output' in run.result">{{ JSON.stringify(run.result.output, null, 2) }}</pre>
     </template>
-    <details v-if="run.result && 'stdout' in run.result.diagnostics">
+    <section v-if="run.result?.kind === 'software'">
+      <article v-for="step in run.result.evidence.steps" :key="step.index">
+        <h4>{{ step.index + 1 }} · {{ step.package }}</h4>
+        <pre>{{ JSON.stringify({ target: step.target, identity: step.identity }, null, 2) }}</pre>
+        <dl>
+          <dt>{{ t('software.detection') }}</dt>
+          <dd>{{ step.before.state }} → {{ step.after.state }}</dd>
+          <dt>{{ t('software.installerExit') }}</dt>
+          <dd>{{ step.process.kind === 'exited' ? step.process.code : step.process.kind }}</dd>
+          <dt>{{ t('software.rebootRequired') }}</dt>
+          <dd>{{ step.rebootRequired ? t('software.yes') : t('software.no') }}</dd>
+        </dl>
+        <pre>{{ JSON.stringify({ before: step.before, after: step.after }, null, 2) }}</pre>
+        <details v-if="'stdout' in step.diagnostics">
+          <summary>{{ t('software.diagnostics') }}</summary>
+          <p>
+            {{ utc(step.diagnostics.executedAt) }} · {{ step.diagnostics.durationMs }} ms ·
+            {{ step.diagnostics.failure ?? '—' }}
+          </p>
+          <pre>{{ step.diagnostics.stdout }}</pre>
+          <pre>{{ step.diagnostics.stderr }}</pre>
+        </details>
+      </article>
+    </section>
+    <section v-if="run.result?.kind === 'collection'">
+      <p>
+        {{ utc(run.result.receivedAt) }} ·
+        {{ run.result.trusted ? t('software.yes') : t('software.no') }}
+      </p>
+      <p>
+        {{ run.result.planDigest.join(',') }} · {{ run.result.outputReference.bytes }} bytes ·
+        {{ run.result.outputReference.sha256 }}
+      </p>
+      <ul>
+        <li v-for="(query, id) in run.result.queries" :key="id">
+          {{ id }} · {{ query.status }} · {{ query.rowCount }} · {{ query.enumerationComplete }}
+        </li>
+      </ul>
+      <details v-if="'native' in run.result">
+        <summary>{{ t('software.readEvidence') }}</summary>
+        <pre>{{ JSON.stringify(run.result.native, null, 2) }}</pre>
+      </details>
+    </section>
+    <details v-if="run.result?.kind === 'script' && 'stdout' in run.result.diagnostics">
       <summary>{{ t('software.diagnostics') }}</summary>
       <p>
         {{ utc(run.result.diagnostics.executedAt) }} · {{ run.result.diagnostics.durationMs }} ms ·

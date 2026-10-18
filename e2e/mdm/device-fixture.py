@@ -11,7 +11,8 @@ import ssl
 import subprocess
 import sys
 import time
-import urllib.request
+from urllib.parse import urlsplit
+import http.client
 import uuid
 
 WEB = Path(sys.argv[1]).resolve()
@@ -25,6 +26,7 @@ environment = Environment(BACKEND, group='device-browser')
 processes = []
 phase = 'environment'
 result = 'failed'
+readiness = None
 
 def stop(_signal=None, _frame=None):
     for child in reversed(processes):
@@ -42,7 +44,7 @@ def q(value):
 def seed():
     tenant = TENANTS[0]
     user = dict(instanceId=INSTANCE, tenantId=tenant, principalId=ADMIN)
-    rule = dict(subject=dict(kind='user', user=user), grants=[dict(operation=o, scope=dict(kind='all_devices')) for o in ['inventory_read','inventory_assign','device_association_write','credentials','enrollment']])
+    rule = dict(subject=dict(kind='user', user=user), grants=[dict(operation=o, scope=dict(kind='all_devices')) for o in ['inventory_read','inventory_assign','device_association_write','credentials','enrollment','operation_read']] + [dict(operation=o, scope=dict(kind='tenant')) for o in ['group_read','group_write','group_recompute','scope_read','scope_write','policy_read','policy_write','resource_read']])
     rule_id = str(uuid.uuid4())
     sql = [f"SET rss.tenant_id = '{tenant}'", f"INSERT INTO mdm_access.authorization_rules(tenant_id,instance,id,revision,document) VALUES('{tenant}','{INSTANCE}','{rule_id}',1,{q(json.dumps(rule))}::jsonb)"]
     for device, channel, source in [('fixture-mdm','mdm','mdm.windows'), ('fixture-agent','agent','agent.builtin')]:
@@ -90,11 +92,25 @@ try:
     context=ssl.create_default_context(cafile=str(environment.root/'ca.crt'))
     deadline=time.monotonic()+30
     while True:
+        for role, child in zip(('product', 'gateway'), processes):
+            if child.poll() is not None:
+                readiness = dict(classification=role+'-exit', exitCode=child.returncode)
+                raise RuntimeError('readiness')
         try:
-            with urllib.request.urlopen(initialized['origin']+'/readyz',context=context,timeout=2) as response:
-                if response.status==200: break
-        except (OSError,urllib.error.URLError): pass
-        if time.monotonic()>deadline or any(p.poll() is not None for p in processes): raise RuntimeError('readiness')
+            if environment.probe_product(initialized['origin'], urlsplit(initialized['origin']).port, context):
+                break
+            readiness = dict(classification='http-status')
+        except ssl.SSLCertVerificationError:
+            readiness = dict(classification='tls-verification')
+        except ssl.SSLError:
+            readiness = dict(classification='tls-handshake')
+        except http.client.HTTPException:
+            readiness = dict(classification='http-response')
+        except OSError:
+            readiness = dict(classification='transport')
+        if time.monotonic() >= deadline:
+            print(json.dumps(dict(phase='readiness', result='failed', classification='deadline', lastFailure=readiness)), flush=True)
+            raise RuntimeError('readiness')
         time.sleep(.2)
     fixture=private(environment.root/'browser.json',dict(origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,principal=ADMIN,login='admin',passwordFile=str(environment.root/'account-password'),mdm='fixture-mdm',agent='fixture-agent',ruleId=rule_id,rule=rule))
     phase='browser'
@@ -102,6 +118,8 @@ try:
     if browser.returncode: raise RuntimeError('browser')
     result='passed'
 except BaseException as error:
+    if phase == 'readiness' and readiness:
+        print(json.dumps(dict(phase=phase, result='failed', **readiness)), flush=True)
     print(json.dumps(dict(phase=phase,result='failed',classification=type(error).__name__)),flush=True)
 finally:
     stop()

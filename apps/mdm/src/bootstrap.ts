@@ -72,7 +72,7 @@ export function startMdm(
     workspace: createWorkspaceClient(business, demo),
     devices: createDeviceClients(business, tenant, demo),
     policies: createPolicyClients(business, tenant, demo),
-    software: createSoftwareClients(business, tenant, demo),
+    software: createSoftwareClients(business),
     security: createSecurityClients(business, tenant, demo),
     operations: createOperationsClients(business, tenant, demo),
     tenant,

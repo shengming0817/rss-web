@@ -1,139 +1,161 @@
-import { randomUUID } from 'node:crypto'
-import type { DomainHandler, Scenario } from '../scenario'
+import type { DomainHandler } from '../scenario'
 import type { createDeviceDemo } from '../devices/state'
 import { closed, count, uuid } from '../../src/services/decode'
 import {
   decodeNativeOperation,
-  type NativeTask,
-  decodeNativeTask,
+  deviceControlAction,
   type NativeOperation,
 } from '../../src/features/policies/clients/native'
+import type { Permission } from '../../src/features/operations/clients/authorization'
 import type { ExecutionSummary } from '../../src/features/policies/clients/executions'
 import { createReceipts, error, ok } from '../http'
-export function createNativeDemo(devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts'>) {
-  const operations = new Map<string, { device: string; read: NativeOperation; reads: number }>(),
-    receipts = createReceipts()
-  function validateAdmission(device: string, id: string, task: NativeTask, deadline: number) {
-    if (deadline <= Math.floor(Date.now() / 1000)) return error('malformed_request', 400)
-    const d = devices.facts().find((d) => d.summary.id === device)
-    if (!d) return error('management_device_not_found', 404)
-    if (
-      !d.summary.channels.includes('mdm') ||
-      !d.registrations.some(
-        (r) =>
-          r.status === 'active' &&
-          r.source === (d.summary.platform === 'windows' ? 'mdm.windows' : 'mdm.apple'),
-      ) ||
-      (d.summary.platform === 'windows' && task.kind.startsWith('profile_')) ||
-      (d.summary.platform === 'macos' && !task.kind.startsWith('profile_'))
-    )
-      return error('action_not_supported', 501)
-    if (operations.has(id)) return error('operation_conflict')
-    return null
-  }
-  function admit(
-    device: string,
-    id: string,
-    task: NativeTask,
-    deadline: number,
-    scenario: Scenario,
-  ) {
-    const rejected = validateAdmission(device, id, task, deadline)
-    if (rejected) return rejected
-    const d = devices.facts().find((d) => d.summary.id === device)!
-    const read = decodeNativeOperation(
+export function createNativeDemo(
+  devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts'>,
+  can: (actor: string, permission: Permission, device: string) => boolean,
+) {
+  const operations = new Map<
+      string,
       {
-        operationId: id,
-        commandId: id,
-        revision: 1,
-        task,
-        deadline,
-        authorization: scenario === 'denied' ? 'blocked' : 'approved',
-        commandStatus: 'queued',
-        observation:
-          d.summary.platform === 'macos'
-            ? {
-                protocol: 'mdm.apple',
-                result: 'unknown',
-                effect: 'unknown',
-                progress: 'unknown',
-                observationScope: 'profile_presence',
-              }
-            : {
-                protocol: 'mdm.windows',
-                result: 'unknown',
-                effect: 'unknown',
-                progress: 'unknown',
-                receiptAccepted: false,
-                writeStatus: null,
-              },
-      },
-      id,
-    )
-    operations.set(id, { device, read, reads: 0 })
-    return ok({ operationId: id, commandId: id, revision: 1, accepted: true }, 202)
-  }
+        device: string
+        read: NativeOperation
+        registration: string
+        generation: number
+        dangerous: boolean
+        permission: Permission
+        reads: number
+      }
+    >(),
+    receipts = createReceipts()
   const handle: DomainHandler = (request, scenario) => {
-    const match =
-      /^\/api\/v1\/devices\/([^/]+)\/operations(?:\/([^/]+)(?:\/(approve|cancel))?)?$/.exec(
+    const m =
+      /^\/api\/v1\/devices\/([^/]+)\/operations(?:\/([^/]+)(?:\/(reauthorize|cancel))?)?$/.exec(
         request.path,
       )
-    if (!match) return
+    if (!m) return
     try {
       if (scenario === 'denied') return error('permission_denied', 403)
-      const device = decodeURIComponent(match[1]!)
-      if (!match[2] && request.method === 'POST') {
-        const body = closed(request.body, ['operationId', 'task', 'deadline']),
-          id = uuid(body['operationId'])
-        return receipts.write(request, id, () =>
-          admit(device, id, decodeNativeTask(body['task']), count(body['deadline']), scenario),
-        )
+      const device = decodeURIComponent(m[1]!),
+        d = devices.facts().find((d) => d.summary.id === device),
+        reg = d?.registrations.find((r) => r.status === 'active' && r.source !== 'agent.builtin')
+      if (!d || !reg) return error('management_device_not_found', 404)
+      if (!m[2] && request.method === 'POST') {
+        const b = closed(request.body, ['operationId', 'action', 'deadline']),
+          id = uuid(b['operationId']),
+          a = deviceControlAction(b['action']),
+          deadline = count(b['deadline'])
+        const permission = a.kind === 'wipe' ? 'device_wipe' : 'device_control'
+        if (!can(request.actor.principalId, permission, device))
+          return error('permission_denied', 403)
+        return receipts.write(request, id, () => {
+          if (operations.has(id) || deadline <= Math.floor(Date.now() / 1000))
+            return error('operation_conflict')
+          if (a.kind === 'lock' && d.summary.platform === 'windows')
+            return error('action_not_supported', 501)
+          if (
+            a.kind !== 'restart' &&
+            (a.expectedRegistrationId !== reg.registrationId ||
+              a.expectedGeneration !== reg.generation)
+          )
+            return error('operation_conflict')
+          const read = decodeNativeOperation(
+            {
+              operationId: id,
+              commandId: id,
+              revision: 1,
+              task: { platform: d.summary.platform, request: { kind: 'command', action: a.kind } },
+              target: { kind: 'device' },
+              inputVersion: 'device-control-v1',
+              deadline,
+              dispatchFailure: null,
+              authorization: 'authorized',
+              commandStatus: 'queued',
+              agentInstallation: null,
+              observation: {
+                protocol: d.summary.platform === 'windows' ? 'syncml' : 'mdm.apple',
+                observationScope:
+                  d.summary.platform === 'windows' ? 'native_objects' : 'native_command',
+                receipts: [],
+                progress: 'unknown',
+                effect: 'unverified',
+              },
+            },
+            id,
+          )
+          operations.set(id, {
+            device,
+            read,
+            registration: reg.registrationId,
+            generation: reg.generation,
+            dangerous: a.kind !== 'restart',
+            permission,
+            reads: 0,
+          })
+          return ok({ operationId: id, commandId: id, revision: 1, accepted: true }, 202)
+        })
       }
-      const id = uuid(match[2]),
-        state = operations.get(id)
-      if (!state || state.device !== device) return error('operation_not_found', 404)
-      if (request.method === 'GET' && !match[3]) {
-        const r = state.read
-        if (r.authorization === 'approved' && ['queued', 'published'].includes(r.commandStatus)) {
-          r.commandStatus = state.reads++ === 0 ? 'published' : 'received'
-          if (r.commandStatus === 'received') {
-            const common = {
-              result: 'matched' as const,
-              effect: 'unknown' as const,
-              progress: scenario === 'partial' ? ('failed' as const) : ('succeeded' as const),
-              receivedAt: Math.floor(Date.now() / 1000),
-            }
-            r.observation =
-              r.observation.protocol === 'mdm.apple'
-                ? {
-                    ...common,
-                    protocol: 'mdm.apple',
-                    observationScope: 'profile_presence',
-                    nativeStatus: scenario === 'partial' ? 'Error' : 'Acknowledged',
-                  }
-                : {
-                    ...common,
-                    protocol: 'mdm.windows',
-                    receiptAccepted: true,
-                    writeStatus: scenario === 'partial' ? 500 : 200,
-                    attemptId: randomUUID(),
-                    attempt: 1,
-                    nativeStatus: scenario === 'partial' ? 500 : 200,
-                  }
-          }
+      const id = uuid(m[2]),
+        s = operations.get(id)
+      if (!s || s.device !== device) return error('operation_not_found', 404)
+      const permission =
+        request.method === 'GET'
+          ? 'operation_read'
+          : m[3] === 'cancel'
+            ? 'operation_cancel'
+            : s.permission
+      if (!can(request.actor.principalId, permission, device))
+        return error('permission_denied', 403)
+      if (request.method === 'GET' && !m[3]) {
+        if (s.registration !== reg.registrationId || s.generation !== reg.generation)
+          s.read.authorization = 'blocked'
+        if (
+          s.read.authorization === 'authorized' &&
+          ['queued', 'published'].includes(s.read.commandStatus)
+        ) {
+          s.read.commandStatus = s.reads++ === 0 ? 'published' : 'received'
+          if (s.read.commandStatus === 'received')
+            s.read.observation.progress = scenario === 'partial' ? 'failed' : 'succeeded'
         }
-        return ok(structuredClone(r))
+        return ok(structuredClone(s.read))
       }
-      if (request.method !== 'POST' || !match[3]) return
-      const body = closed(request.body, ['requestId', 'expectedRevision'])
-      return receipts.write(request, uuid(body['requestId']), () => {
-        if (count(body['expectedRevision']) !== state.read.revision)
+      if (request.method !== 'POST' || !m[3]) return
+      const b = closed(
+        request.body,
+        ['requestId', 'expectedRevision'],
+        m[3] === 'reauthorize' ? ['confirmation'] : [],
+      )
+      return receipts.write(request, uuid(b['requestId']), () => {
+        if (
+          count(b['expectedRevision']) !== s.read.revision ||
+          s.read.commandStatus === 'cancelled'
+        )
           return error('operation_conflict')
-        if (state.read.commandStatus === 'cancelled') return error('operation_conflict')
-        if (match[3] === 'cancel') state.read.commandStatus = 'cancelled'
-        else state.read.authorization = 'approved'
-        state.read.revision++
-        return ok({ operationId: id, revision: state.read.revision })
+        if (m[3] === 'cancel') s.read.commandStatus = 'cancelled'
+        else {
+          if (
+            s.registration !== reg.registrationId ||
+            s.generation !== reg.generation ||
+            ['applied', 'received', 'rejected', 'timed_out', 'superseded'].includes(
+              s.read.commandStatus,
+            )
+          )
+            return error('operation_conflict')
+          if (s.dangerous) {
+            const c = closed(b['confirmation'], [
+              'confirmed',
+              'expectedRegistrationId',
+              'expectedGeneration',
+            ])
+            if (
+              c['confirmed'] !== true ||
+              c['expectedRegistrationId'] !== s.registration ||
+              c['expectedGeneration'] !== s.generation
+            )
+              return error('operation_conflict')
+          }
+          s.read.authorization = 'authorized'
+        }
+        s.read.revision++
+        return ok({ operationId: id, revision: s.read.revision })
       })
     } catch {
       return error('malformed_request', 400)
@@ -141,37 +163,51 @@ export function createNativeDemo(devices: Pick<ReturnType<typeof createDeviceDem
   }
   return {
     handle,
-    admit,
-    validateAdmission,
+    directory() {
+      return [...operations.values()].map((s) => ({
+        id: s.read.operationId,
+        kind: 'command' as const,
+        device: s.device,
+        registrationId: s.registration,
+        generation: s.generation,
+        origin: 'direct',
+        policy: null,
+        deadline: s.read.deadline,
+        status: s.read.commandStatus,
+        detailUrl: `/api/v1/devices/${encodeURIComponent(s.device)}/operations/${s.read.operationId}`,
+        evidence: {
+          commandStatus: s.read.commandStatus,
+          observation: s.read.observation,
+          dispatchFailure: s.read.dispatchFailure,
+        },
+      }))
+    },
     executions(): ExecutionSummary[] {
-      return [...operations.values()].map(({ device, read: r, reads }) => ({
-        id: r.operationId,
+      return [...operations.values()].map((s) => ({
+        id: s.read.operationId,
         batch: null,
-        device,
-        origin: { kind: 'native', operation: r.operationId },
-        admission: r.authorization === 'approved' ? 'accepted' : 'blocked',
-        dispatch: reads
+        device: s.device,
+        origin: { kind: 'native', operation: s.read.operationId },
+        admission: s.read.authorization === 'authorized' ? 'accepted' : 'blocked',
+        dispatch: s.reads
           ? 'published'
-          : r.commandStatus === 'cancelled'
+          : s.read.commandStatus === 'cancelled'
             ? 'not_requested'
             : 'queued',
-        receipt: 'receivedAt' in r.observation ? 'received' : 'not_received',
+        receipt: s.read.commandStatus === 'received' ? 'received' : 'not_received',
         execution:
-          r.commandStatus === 'cancelled'
+          s.read.commandStatus === 'cancelled'
             ? 'cancelled'
-            : r.observation.progress === 'unknown'
-              ? 'not_started'
-              : r.observation.progress,
-        effect: r.observation.effect === 'verified_present' ? 'verified_present' : 'unverified',
+            : s.read.observation.progress === 'succeeded'
+              ? 'succeeded'
+              : s.read.observation.progress === 'failed'
+                ? 'failed'
+                : 'unknown',
+        effect: 'unverified',
         compliance: 'unknown',
-        attempt: 'attemptId' in r.observation ? (r.observation.attemptId ?? null) : null,
-        nativeCode: 'nativeStatus' in r.observation ? (r.observation.nativeStatus ?? null) : null,
-        waitingReason:
-          r.authorization === 'blocked'
-            ? 'authorization'
-            : r.commandStatus === 'cancelled'
-              ? null
-              : 'device_receipt',
+        attempt: null,
+        nativeCode: null,
+        waitingReason: s.read.authorization === 'blocked' ? 'authorization' : 'device_receipt',
       }))
     },
     reset() {

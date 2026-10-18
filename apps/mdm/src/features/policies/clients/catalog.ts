@@ -11,7 +11,7 @@ import {
   uuid,
 } from '../../../services/decode'
 import { candidate } from './candidate'
-export type Collection = 'scopes' | 'resources' | 'workflows'
+export type Collection = 'workflows'
 export function createCatalogClient(transport: HttpTransport, tenant: string, demo: boolean) {
   return {
     list: (collection: Collection, cursor?: string) =>
@@ -31,12 +31,7 @@ export function createCatalogClient(transport: HttpTransport, tenant: string, de
                   id: identifier(i['id']),
                   label: identifier(i['label']),
                   revision: count(i['revision']),
-                  status: enumeration(
-                    i['status'],
-                    collection === 'workflows'
-                      ? (['active', 'archived'] as const)
-                      : (['ready'] as const),
-                  ),
+                  status: enumeration(i['status'], ['active', 'archived'] as const),
                 }
               }),
               (i) => i.id,

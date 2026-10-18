@@ -33,8 +33,6 @@ export type ExecutionOrigin =
       cancellation: 'none' | 'requested' | 'confirmed'
       output: Json
     }
-  | { kind: 'update'; ring: string }
-  | { kind: 'bootstrap'; policy: string }
   | { kind: 'native'; operation: string }
   | { kind: 'software'; policy: string; versionId: string; task: string }
   | { kind: 'workflow'; workflow: string; run: string; step: string }
@@ -71,8 +69,6 @@ function origin(value: unknown): ExecutionOrigin {
   const kind = enumeration(record(value)['kind'], [
     'policy',
     'native',
-    'update',
-    'bootstrap',
     'software',
     'workflow',
     'device_batch',
@@ -92,14 +88,6 @@ function origin(value: unknown): ExecutionOrigin {
       cancellation: enumeration(v['cancellation'], ['none', 'requested', 'confirmed'] as const),
       output: jsonValue(v['output'], 65536),
     }
-  }
-  if (kind === 'bootstrap') {
-    const v = closed(value, ['kind', 'policy'])
-    return { kind, policy: uuid(v['policy']) }
-  }
-  if (kind === 'update') {
-    const v = closed(value, ['kind', 'ring'])
-    return { kind, ring: uuid(v['ring']) }
   }
   if (kind === 'native') {
     const v = closed(value, ['kind', 'operation'])
@@ -195,6 +183,77 @@ export function executionSummary(value: unknown) {
 export type ExecutionSummary = ReturnType<typeof executionSummary>
 export function createExecutionsClient(transport: HttpTransport, tenant: string, demo: boolean) {
   return {
+    directory: (
+      query: {
+        policy?: string | undefined
+        device?: string | undefined
+        after?: string | undefined
+        afterKind?: 'command' | 'action_run' | undefined
+      } = {},
+    ) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/operations',
+        query: { ...query, limit: 20 },
+        successStatus: 200,
+        decode(value) {
+          const v = closed(value, ['items', 'nextCursor', 'statistics', 'asOf'])
+          const stats = closed(v['statistics'], ['total', 'commands', 'actionRuns', 'unknown'])
+          return {
+            asOf: integer(v['asOf']),
+            statistics: {
+              total: count(stats['total']),
+              commands: count(stats['commands']),
+              actionRuns: count(stats['actionRuns']),
+              unknown: count(stats['unknown']),
+            },
+            items: array(v['items'], (value) => {
+              const i = closed(value, [
+                'id',
+                'kind',
+                'device',
+                'registrationId',
+                'generation',
+                'origin',
+                'policy',
+                'deadline',
+                'status',
+                'evidence',
+                'detailUrl',
+              ])
+              const kind = enumeration(i['kind'], ['command', 'action_run'] as const),
+                id = uuid(i['id']),
+                device = identifier(i['device']),
+                policy = nullable(i['policy'], uuid)
+              const expected =
+                kind === 'command'
+                  ? `/api/v1/devices/${encodeURIComponent(device)}/operations/${id}`
+                  : `/api/v1/policies/${policy}/runs/${id}`
+              if ((kind === 'action_run' && !policy) || i['detailUrl'] !== expected)
+                throw new Error('Wrong operation locator')
+              return {
+                id,
+                kind,
+                device,
+                policy,
+                registrationId: uuid(i['registrationId']),
+                generation: count(i['generation']),
+                origin: enumeration(i['origin'], ['direct', 'policy'] as const),
+                deadline: integer(i['deadline']),
+                status: identifier(i['status']),
+                evidence: jsonValue(i['evidence'], 1024 * 1024),
+              }
+            }),
+            nextCursor: nullable(v['nextCursor'], (value) => {
+              const c = closed(value, ['id', 'kind'])
+              return {
+                id: uuid(c['id']),
+                kind: enumeration(c['kind'], ['command', 'action_run'] as const),
+              }
+            }),
+          }
+        },
+      }),
     list: (cursor?: string, batch?: string) =>
       transport.request({
         method: 'GET',

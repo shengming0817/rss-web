@@ -1,24 +1,8 @@
-import { createPoliciesClient } from '../../policies/clients/policies'
 import type { HttpTransport } from '@rss/api/mdm'
-import type { Operation } from '../../../services/useOperation'
-import { array, boolean, closed, count, nullable, uuid } from '../../../services/decode'
-import { softwarePolicy, type SoftwarePolicyDefinition } from './assignment-model'
-export type AssignmentChange =
-  | { action: 'put'; enabled: boolean; definition: SoftwarePolicyDefinition }
-  | { action: 'enable' | 'disable' }
-export function createAssignmentsClient(transport: HttpTransport) {
-  const policies = createPoliciesClient(transport)
+import { array, boolean, closed, count, integer, nullable, uuid } from '../../../services/decode'
+export function createRolloutClient(transport: HttpTransport) {
   return {
-    list: async (after?: string) => {
-      const page = await policies.list(after, 'software')
-      return { ...page, items: page.items.map((p) => softwarePolicy(p)) }
-    },
-    read: async (id: string) => softwarePolicy(await policies.read(id), id),
-    change: async (id: string, body: Operation<AssignmentChange>) =>
-      softwarePolicy(await policies.change(id, body), id),
-    preview: policies.preview,
-    devices: policies.devices,
-    rollout: (id: string) =>
+    read: (id: string) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/policies/{id}/software/rollout',
@@ -34,6 +18,8 @@ export function createAssignmentsClient(transport: HttpTransport) {
             asOf: count(v['asOf']),
             stages: array(v['stages'], (value) => {
               const s = closed(value, [
+                'ready',
+                'asOf',
                 'scope',
                 'opensAt',
                 'minimumVerifiedPercent',
@@ -48,6 +34,8 @@ export function createAssignmentsClient(transport: HttpTransport) {
                 'unsupportedCapability',
               ])
               return {
+                ready: boolean(s['ready']),
+                asOf: nullable(s['asOf'], integer),
                 scope: uuid(s['scope']),
                 opensAt: count(s['opensAt']),
                 minimumVerifiedPercent: nullable(s['minimumVerifiedPercent'], count),

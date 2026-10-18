@@ -2,169 +2,131 @@ import type { HttpTransport } from '@rss/api/mdm'
 import type { Operation } from '../../../services/useOperation'
 import {
   array,
+  boolean,
   closed,
   count,
   digest,
   enumeration,
   identifier,
+  integer,
   nullable,
   record,
   string,
-  uuid,
 } from '../../../services/decode'
 import {
-  architectures,
-  platforms,
-  type Architecture,
-  type Platform,
-} from '../../policies/clients/resources'
-import { softwareSource } from '../../policies/clients/software-definition'
-import { candidate } from './candidate'
-export interface ImportQuery {
-  source: string
-  revision: string
-  package: string
-  version: string
-  platform: Platform
-  architecture: Architecture
-}
-export function importResolution(value: unknown) {
+  softwareSource,
+  softwareArtifact,
+  softwareBehavior,
+} from '../../policies/clients/software-definition'
+export function importRequest(value: unknown) {
   const v = closed(value, [
-    'id',
+    'asOfUnixSeconds',
     'source',
-    'ecosystem',
+    'resource',
+    'resourceVersion',
     'package',
-    'version',
+    'packageVersion',
     'platform',
     'architecture',
-    'definitionDigest',
-    'expiresAt',
+    'variant',
+    'selection',
+    'behavior',
+    'installerLength',
+    'additionalArtifacts',
+    'dependencies',
+    'signatures',
+    'reboot',
+    'downgrade',
+    'nativeExport',
   ])
-  return {
-    id: uuid(v['id']),
-    source: softwareSource(v['source']),
-    ecosystem: enumeration(v['ecosystem'], ['winget', 'brew'] as const),
-    package: identifier(v['package']),
-    version: identifier(v['version']),
-    platform: enumeration(v['platform'], platforms),
-    architecture: enumeration(v['architecture'], architectures),
-    definitionDigest: digest(v['definitionDigest']),
-    expiresAt: count(v['expiresAt']),
-  }
-}
-export function importJob(value: unknown, id: string) {
-  const v = closed(value, [
-    'id',
-    'revision',
-    'operation',
-    'resolution',
-    'resource',
-    'version',
-    'status',
-    'failure',
-    'resourceRevision',
-  ])
-  if (uuid(v['id']) !== id) throw new Error('Wrong import job')
-  const result = {
-    id,
-    revision: count(v['revision']),
-    operation: uuid(v['operation']),
-    resolution: importResolution(v['resolution']),
-    resource: identifier(v['resource']),
-    version: identifier(v['version']),
-    status: enumeration(v['status'], [
-      'pending',
-      'completed',
-      'failed',
-      'cancelled',
-      'unknown',
-    ] as const),
-    failure: nullable(v['failure'], (v) =>
-      enumeration(v, [
-        'source_withdrawn',
-        'resource_conflict',
-        'content_invalid',
-        'unsupported',
-      ] as const),
-    ),
-    resourceRevision: nullable(v['resourceRevision'], count),
-  }
-  if (
-    (result.status === 'completed') !== (result.resourceRevision !== null) ||
-    (result.status === 'failed') !== (result.failure !== null)
-  )
-    throw new Error('Invalid import outcome')
-  return result
-}
-export type ImportResolution = ReturnType<typeof importResolution>
-export type ImportJob = ReturnType<typeof importJob>
-export type ImportChange =
-  | {
-      action: 'start'
-      resolution: string
-      resource: string
-      version: string
-      expectedResourceRevision: number
+  const raw = record(v['selection']),
+    kind = enumeration(raw['kind'], ['winget', 'brew'] as const)
+  let selection
+  if (kind === 'winget') {
+    closed(raw, ['kind', 'installerType', 'scope', 'installerId', 'files'])
+    selection = {
+      kind,
+      installerType: identifier(raw['installerType']),
+      scope: identifier(raw['scope']),
+      installerId: nullable(raw['installerId'], string),
+      files: array(raw['files'], identifier),
     }
-  | { action: 'cancel' | 'reconcile' }
-export function createImportsClient(transport: HttpTransport, tenant: string, demo: boolean) {
-  const envelope = (value: unknown, keys: string[]) => candidate(value, tenant, demo, keys)
-  const read = (v: unknown, id: string) => importJob(envelope(v, ['job'])['job'], id)
+  } else {
+    closed(raw, ['kind', 'path', 'bottleTag', 'sourceLength'])
+    selection = {
+      kind,
+      path: identifier(raw['path']),
+      bottleTag: identifier(raw['bottleTag']),
+      sourceLength: nullable(raw['sourceLength'], count),
+    }
+  }
+  const length = count(v['installerLength'])
+  if (!length) throw new Error('Missing installer length')
   return {
-    resolve: (query: ImportQuery) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/mdm-candidate/software/import-resolutions',
-        query: { ...query },
-        successStatus: 200,
-        decode(value) {
-          const v = importResolution(envelope(value, ['resolution'])['resolution'])
-          if (
-            v.source.id !== query.source ||
-            v.source.revision !== query.revision ||
-            v.package !== query.package ||
-            v.version !== query.version ||
-            v.platform !== query.platform ||
-            v.architecture !== query.architecture
-          )
-            throw new Error('Wrong import resolution')
-          return v
-        },
-      }),
-    list: (cursor?: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/mdm-candidate/software/imports',
-        query: { cursor, limit: 20 },
-        successStatus: 200,
-        decode(value) {
-          const v = envelope(value, ['snapshot', 'items', 'nextCursor'])
-          return {
-            snapshot: uuid(v['snapshot']),
-            items: array(v['items'], (v) => importJob(v, uuid(record(v)['id']))),
-            nextCursor: nullable(v['nextCursor'], string),
-          }
-        },
-      }),
-    read: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/mdm-candidate/software/imports/{id}',
-        pathParams: { id },
-        successStatus: 200,
-        decode: (v) => read(v, id),
-      }),
-    change: (id: string, body: Operation<ImportChange>) =>
+    asOfUnixSeconds: integer(v['asOfUnixSeconds']),
+    source: softwareSource(v['source']),
+    resource: identifier(v['resource']),
+    resourceVersion: identifier(v['resourceVersion']),
+    package: identifier(v['package']),
+    packageVersion: identifier(v['packageVersion']),
+    platform: enumeration(v['platform'], ['windows', 'macos'] as const),
+    architecture: enumeration(v['architecture'], ['x86_64', 'aarch64'] as const),
+    variant: identifier(v['variant']),
+    selection,
+    behavior: softwareBehavior(v['behavior']),
+    installerLength: length,
+    additionalArtifacts: Object.fromEntries(
+      Object.entries(record(v['additionalArtifacts'])).map(([key, v]) => [
+        identifier(key),
+        softwareArtifact(v),
+      ]),
+    ),
+    dependencies: array(v['dependencies'], (value) => {
+      const d = closed(value, ['package', 'packageVersion', 'resource', 'version', 'sha256'])
+      return {
+        package: identifier(d['package']),
+        packageVersion: identifier(d['packageVersion']),
+        resource: identifier(d['resource']),
+        version: identifier(d['version']),
+        sha256: digest(d['sha256']),
+      }
+    }),
+    signatures: array(v['signatures'], (value) => {
+      const s = closed(value, ['artifact', 'mechanism', 'publisher'])
+      return {
+        artifact: identifier(s['artifact']),
+        mechanism: enumeration(s['mechanism'], [
+          'authenticode',
+          'apple_developer_id',
+          'msix',
+        ] as const),
+        publisher: string(s['publisher']),
+      }
+    }),
+    reboot: enumeration(v['reboot'], ['forbid', 'report'] as const),
+    downgrade: enumeration(v['downgrade'], ['deny', 'allow'] as const),
+    nativeExport: boolean(v['nativeExport']),
+  }
+}
+export type ImportRequest = ReturnType<typeof importRequest>
+export function createImportsClient(transport: HttpTransport) {
+  return {
+    import: (body: Operation<ImportRequest>) =>
       transport.request({
         method: 'POST',
-        path: '/api/v1/mdm-candidate/software/imports/{id}',
-        pathParams: { id },
-        body,
-        successStatus: body.input.action === 'start' ? 202 : 200,
+        path: '/api/v1/software/imports',
+        body: { ...body, input: importRequest(body.input) },
+        successStatus: 200,
         decode(value) {
-          const job = read(value, id)
-          if (job.operation !== body.operationId) throw new Error('Wrong import receipt')
-          return job
+          const v = closed(value, ['resource', 'version', 'resourceDigest', 'storageRevision'])
+          if (v['resource'] !== body.input.resource || v['version'] !== body.input.resourceVersion)
+            throw new Error('Wrong import result')
+          return {
+            resource: identifier(v['resource']),
+            version: identifier(v['version']),
+            resourceDigest: digest(v['resourceDigest']),
+            storageRevision: count(v['storageRevision']),
+          }
         },
       }),
   }

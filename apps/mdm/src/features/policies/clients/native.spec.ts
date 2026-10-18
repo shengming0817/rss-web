@@ -1,86 +1,81 @@
 import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
-import { createNativeClient, decodeNativeOperation } from './native'
+import { createNativeClient, decodeNativeOperation, deviceControlAction } from './native'
 const id = '11111111-1111-4111-8111-111111111111'
-const requestId = '22222222-2222-4222-8222-222222222222'
-const base = {
+const read = {
   operationId: id,
   commandId: id,
   revision: 1,
-  task: { kind: 'profile_install', enabled: true },
+  task: { platform: 'windows', request: { kind: 'sync_ml', request: {} } },
+  target: { kind: 'device' },
+  inputVersion: 'device-control-v1',
   deadline: 4102444800,
-  authorization: 'approved',
-  commandStatus: 'received',
+  dispatchFailure: null,
+  authorization: 'authorized',
+  commandStatus: 'queued',
+  agentInstallation: null,
+  observation: {
+    protocol: 'syncml',
+    observationScope: 'native_objects',
+    receipts: [],
+    progress: 'unknown',
+    effect: 'unverified',
+  },
 }
-it('retains Apple acknowledgement separately from effect without inventing receiptAccepted', () => {
-  const value = {
-    ...base,
-    observation: {
-      protocol: 'mdm.apple',
-      observationScope: 'profile_presence',
-      progress: 'succeeded',
-      result: 'unknown',
-      effect: 'unknown',
-    },
-  }
-  expect(decodeNativeOperation(value, id)).toEqual(value)
-  expect(() => decodeNativeOperation({ ...value, operationId: requestId }, id)).toThrow()
-})
-it('decodes Windows attempt, native status and observation quality without folding them into command status', () => {
-  const value = {
-    ...base,
-    task: { kind: 'state_verify', field: 'model', expectedValue: 'ThinkPad' },
-    observation: {
-      protocol: 'mdm.windows',
-      receiptAccepted: true,
-      progress: 'succeeded',
-      result: 'matched',
-      effect: 'verified_present',
-      writeStatus: 200,
-      attemptId: requestId,
-      attempt: 2,
-      nativeStatus: 200,
-      value: 'ThinkPad',
-      quality: 'success',
-      receivedAt: 1780000000,
-    },
-  }
-  expect(decodeNativeOperation(value, id)).toEqual(value)
-  expect(() =>
-    decodeNativeOperation(
-      { ...value, observation: { ...value.observation, quality: 'compliant' } },
-      id,
-    ),
-  ).toThrow()
-})
-it('uses native requestId and revision for approval/cancel, not script operation bodies', async () => {
-  let reply: unknown = { operationId: id, commandId: id, revision: 1, accepted: true }
-  const request = vi.fn(async (o: RequestOptions<unknown>) => o.decode(reply))
-  const client = createNativeClient({ request } as unknown as HttpTransport)
-  await client.create('device-01', {
-    operationId: id,
-    task: { kind: 'profile_install', enabled: true },
-    deadline: 4102444800,
+it('decodes current command facts without accepting retired authorization or task DTOs', () => {
+  expect(decodeNativeOperation(read, id)).toMatchObject({
+    authorization: 'authorized',
+    task: { platform: 'windows' },
   })
-  expect(request.mock.calls[0]![0]).toMatchObject({
-    method: 'POST',
-    path: '/api/v1/devices/{device}/operations',
-    pathParams: { device: 'device-01' },
+  for (const bad of [
+    { ...read, authorization: 'approved' },
+    { ...read, task: { kind: 'profile_install', enabled: true } },
+    { ...read, approval: {} },
+    { ...read, commandId: crypto.randomUUID() },
+  ])
+    expect(() => decodeNativeOperation(bad, id)).toThrow()
+})
+it('binds dangerous control to exact confirmation and rejects invalid PINs', () => {
+  expect(deviceControlAction({ kind: 'restart' })).toEqual({ kind: 'restart' })
+  const action = {
+    kind: 'lock',
+    confirmed: true,
+    expectedRegistrationId: id,
+    expectedGeneration: 1,
+    pin: '123456',
+  }
+  expect(deviceControlAction(action)).toEqual(action)
+  for (const bad of [
+    { ...action, confirmed: false },
+    { ...action, expectedGeneration: 0 },
+    { ...action, pin: '12' },
+    { kind: 'wipe' },
+  ])
+    expect(() => deviceControlAction(bad)).toThrow()
+})
+it('uses exact control and reauthorization routes with original CAS and never retries a lost response', async () => {
+  let response: unknown = { operationId: id, commandId: id, revision: 1, accepted: true }
+  const request = vi.fn(async (o: RequestOptions<unknown>) => o.decode(response)),
+    client = createNativeClient({ request } as unknown as HttpTransport)
+  await client.create('d', { operationId: id, deadline: 4102444800, action: { kind: 'restart' } })
+  expect(request.mock.calls[0]?.[0]).toMatchObject({
+    body: { action: { kind: 'restart' } },
     successStatus: 202,
   })
-  reply = { operationId: id, revision: 2 }
-  await client.approve('device-01', id, { requestId, expectedRevision: 1 })
-  expect(request.mock.calls[1]![0]).toMatchObject({
-    method: 'POST',
-    path: '/api/v1/devices/{device}/operations/{operation}/approve',
-    body: { requestId, expectedRevision: 1 },
-    successStatus: 200,
+  response = { operationId: id, revision: 2 }
+  const body = {
+    requestId: id,
+    expectedRevision: 1,
+    confirmation: { confirmed: true as const, expectedRegistrationId: id, expectedGeneration: 1 },
+  }
+  await client.reauthorize('d', id, body)
+  expect(request.mock.calls[1]?.[0]).toMatchObject({
+    path: '/api/v1/devices/{device}/operations/{operation}/reauthorize',
+    body,
   })
-  await client.cancel('device-01', id, { requestId, expectedRevision: 2 })
-  expect(request.mock.calls[2]![0]).toMatchObject({
-    method: 'POST',
-    path: '/api/v1/devices/{device}/operations/{operation}/cancel',
-    body: { requestId, expectedRevision: 2 },
-    successStatus: 200,
-  })
+  request.mockRejectedValueOnce(new Error('lost'))
+  await expect(client.cancel('d', id, { requestId: id, expectedRevision: 2 })).rejects.toThrow(
+    'lost',
+  )
+  expect(request).toHaveBeenCalledTimes(3)
 })

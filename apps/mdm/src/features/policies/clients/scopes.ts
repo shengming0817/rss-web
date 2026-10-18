@@ -12,6 +12,9 @@ import {
   unique,
   uuid,
 } from '../../../services/decode'
+import { channels, objectRef, objectKey, type Channel } from '../../devices/clients/objects'
+import { eligibility } from './model'
+
 export type Reference = { kind: 'device' | 'group'; id: string }
 export interface ScopeDefinition {
   targets: Reference[]
@@ -47,73 +50,101 @@ export function decodeScopePage(
   scope: string,
   result: string,
   projection: ScopeProjection,
+  channel: Channel,
 ) {
-  const v = closed(value, [
-    'result',
-    'scope',
-    'current',
-    'totalObjects',
-    'totalMembers',
-    'sources',
-    'page',
-    'nextCursor',
-  ])
+  const v = closed(value, ['result', 'scope', 'current', 'channel', 'page', 'nextCursor'])
   const p = closed(v['page'], ['kind', 'items'])
-  if (uuid(v['scope']) !== scope || uuid(v['result']) !== result || p['kind'] !== projection)
+  if (
+    uuid(v['scope']) !== scope ||
+    uuid(v['result']) !== result ||
+    p['kind'] !== projection ||
+    enumeration(v['channel'], channels) !== channel
+  )
     throw new Error('Wrong scope result')
-  const sources = array(v['sources'], (value) => {
-    const s = closed(value, [
-      'reference',
-      'memberSet',
-      'memberVersion',
-      'definitionVersion',
-      'authorityVersion',
-    ])
-    return {
-      reference: reference(s['reference']),
-      memberSet: nullable(s['memberSet'], uuid),
-      memberVersion: count(s['memberVersion']),
-      definitionVersion: count(s['definitionVersion']),
-      authorityVersion: count(s['authorityVersion']),
-    }
-  })
+  const sources = (value: unknown) =>
+    nullable(value, (v) =>
+      array(v, (value) => {
+        const s = closed(value, ['reference', 'version'])
+        return { reference: reference(s['reference']), version: count(s['version']) }
+      }),
+    )
   const page =
     projection === 'members'
-      ? { kind: 'members' as const, items: unique(array(p['items'], identifier), (v) => v) }
+      ? { kind: 'members' as const, items: unique(array(p['items'], objectRef), objectKey) }
       : {
           kind: 'decisions' as const,
           items: unique(
             array(p['items'], (value) => {
-              const d = closed(value, ['device', 'identity', 'reasons', 'sources'])
+              const d = closed(value, [
+                'object',
+                'qualification',
+                'reasons',
+                'targets',
+                'limitations',
+                'exclusions',
+              ])
               return {
-                device: identifier(d['device']),
-                identity: enumeration(d['identity'], ['active', 'inactive'] as const),
+                object: objectRef(d['object']),
+                qualification: eligibility(d['qualification']),
                 reasons: array(d['reasons'], (v) =>
-                  enumeration(v, ['missing_limitation_match', 'explicit_exclusion'] as const),
+                  enumeration(v, [
+                    'missing_limitation_match',
+                    'explicit_exclusion',
+                    'unknown_target',
+                    'unknown_limitation',
+                    'unknown_exclusion',
+                  ] as const),
                 ),
-                sources: array(d['sources'], (value) => {
-                  const index = count(value)
-                  if (index >= sources.length) throw new Error('Wrong source index')
-                  return index
-                }),
+                targets: sources(d['targets']),
+                limitations: sources(d['limitations']),
+                exclusions: sources(d['exclusions']),
               }
             }),
-            (d) => d.device,
+            (d) => objectKey(d.object),
           ),
         }
   return {
     result,
     scope,
     current: boolean(v['current']),
-    totalObjects: count(v['totalObjects']),
-    totalMembers: count(v['totalMembers']),
-    sources,
+    channel,
     page,
     nextCursor: nullable(v['nextCursor'], string),
   }
 }
 export function createScopesClient(transport: HttpTransport) {
   return {
+    list: (after?: string) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/scopes',
+        query: { after, limit: 20 },
+        successStatus: 200,
+        decode(value) {
+          const v = closed(value, ['items', 'nextCursor'])
+          return {
+            items: array(v['items'], (value) => {
+              const i = closed(value, [
+                'id',
+                'revision',
+                'deleted',
+                'calculationRevision',
+                'resolution',
+                'resolutionRevision',
+              ])
+              return {
+                id: uuid(i['id']),
+                revision: count(i['revision']),
+                deleted: boolean(i['deleted']),
+                calculationRevision: count(i['calculationRevision']),
+                resolution: nullable(i['resolution'], uuid),
+                resolutionRevision: nullable(i['resolutionRevision'], count),
+              }
+            }),
+            nextCursor: nullable(v['nextCursor'], uuid),
+          }
+        },
+      }),
     read: (id: string) =>
       transport.request({
         method: 'GET',
@@ -192,14 +223,20 @@ export function createScopesClient(transport: HttpTransport) {
           }
         },
       }),
-    page: (id: string, result: string, projection: ScopeProjection, cursor?: string) =>
+    page: (
+      id: string,
+      result: string,
+      projection: ScopeProjection,
+      channel: Channel,
+      cursor?: string,
+    ) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/scopes/{id}/results/{result}/{projection}',
         pathParams: { id, result, projection },
-        query: { limit: 20, cursor },
+        query: { limit: 20, cursor, channel },
         successStatus: 200,
-        decode: (v) => decodeScopePage(v, id, result, projection),
+        decode: (v) => decodeScopePage(v, id, result, projection, channel),
       }),
   }
 }

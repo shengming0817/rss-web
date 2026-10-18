@@ -3,12 +3,10 @@ import {
   array,
   closed,
   count,
-  enumeration,
   identifier,
   nullable,
   record,
   unique,
-  uuid,
 } from '../../../services/decode'
 import { association } from './associations'
 import { endpoint, type Endpoint } from './endpoint-model'
@@ -24,10 +22,7 @@ import {
   sourceFact,
   sourceIdentity,
 } from './asset-model'
-export interface ViewRef {
-  kind: 'endpoint' | 'association'
-  id: string
-}
+import { objectRef, objectKey, type ObjectRef } from './objects'
 export interface ViewQuery {
   cursor?: string | undefined
   status?: string | undefined
@@ -35,16 +30,8 @@ export interface ViewQuery {
   source?: string | undefined
   descending?: boolean
 }
-export function reference(value: unknown): ViewRef {
-  const v = closed(value, ['kind', 'id']),
-    kind = enumeration(v['kind'], ['endpoint', 'association'] as const)
-  return { kind, id: kind === 'association' ? uuid(v['id']) : identifier(v['id']) }
-}
-export function referenceKey(value: ViewRef) {
-  return `${value.kind}:${value.id}`
-}
-function matches(a: ViewRef, b: ViewRef) {
-  return referenceKey(a) === referenceKey(b)
+function matches(a: ObjectRef, b: ObjectRef) {
+  return objectKey(a) === objectKey(b)
 }
 function summary(value: unknown, detail = false) {
   const v = closed(
@@ -52,7 +39,7 @@ function summary(value: unknown, detail = false) {
       ['reference', 'association', 'endpoints'],
       detail ? ['fields', 'lists', 'inventorySources'] : [],
     ),
-    ref = reference(v['reference']),
+    ref = objectRef(v['reference']),
     a = nullable(v['association'], association),
     endpoints = unique(array(v['endpoints'], endpoint), (e) => e.id)
   if (
@@ -90,7 +77,7 @@ function fields(value: unknown, endpoints: Endpoint[]) {
     }),
   )
 }
-export function decodeView(value: unknown, expected: ViewRef) {
+export function decodeView(value: unknown, expected: ObjectRef) {
   const v = closed(value, [
       'reference',
       'association',
@@ -163,7 +150,7 @@ export function decodeViews(value: unknown) {
   return {
     items: unique(
       array(v['items'], (x) => summary(x)),
-      (s) => referenceKey(s.reference),
+      (s) => objectKey(s.reference),
     ),
     statistics: {
       endpointCount: count(s['endpointCount']),
@@ -182,7 +169,7 @@ export function createDeviceViewsClient(transport: HttpTransport) {
         successStatus: 200,
         decode: decodeViews,
       }),
-    detail: (ref: ViewRef) =>
+    detail: (ref: ObjectRef) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/device-views/{kind}/{id}',
@@ -191,7 +178,7 @@ export function createDeviceViewsClient(transport: HttpTransport) {
         decode: (v) => decodeView(v, ref),
       }),
     items: (
-      ref: ViewRef,
+      ref: ObjectRef,
       field: string,
       source: DeviceView['lists'][string]['sources'][number],
       token = source.cursor,
@@ -214,7 +201,7 @@ export function createDeviceViewsClient(transport: HttpTransport) {
             ]),
             e = evidence(v['source'])
           if (
-            !matches(reference(v['reference']), ref) ||
+            !matches(objectRef(v['reference']), ref) ||
             v['field'] !== field ||
             v['endpoint'] !== source.endpoint ||
             JSON.stringify(e) !== JSON.stringify(source.evidence)

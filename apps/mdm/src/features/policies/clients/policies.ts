@@ -1,14 +1,6 @@
 import type { HttpTransport } from '@rss/api/mdm'
 import type { Operation } from '../../../services/useOperation'
-import {
-  array,
-  closed,
-  nullable,
-  uuid,
-  identifier,
-  string,
-  enumeration,
-} from '../../../services/decode'
+import { array, closed, nullable, uuid, string, enumeration } from '../../../services/decode'
 import {
   decodePolicy,
   policyAction,
@@ -17,6 +9,23 @@ import {
   type PolicyChange,
   type PolicyDefinition,
 } from './model'
+import {
+  objectRef,
+  channels,
+  primaryRegistration,
+  deviceObject,
+} from '../../devices/clients/objects'
+
+function targetFacts(v: Record<string, unknown>) {
+  return {
+    object: objectRef(v['object']),
+    channel: enumeration(v['channel'], channels),
+    availability: enumeration(v['availability'], ['ready', 'unavailable'] as const),
+    reason: nullable(v['reason'], string),
+    target: nullable(v['target'], primaryRegistration),
+    taskAdmission: nullable(v['taskAdmission'], taskAdmission),
+  }
+}
 export function createPoliciesClient(transport: HttpTransport) {
   return {
     preview: (definition: PolicyDefinition, after?: string, scopeResult?: string) =>
@@ -44,21 +53,25 @@ export function createPoliciesClient(transport: HttpTransport) {
             action,
             scopeResult: result,
             items: array(v['items'], (value) => {
-              const d = closed(value, ['device', 'eligibility', 'taskAdmission'])
-              return {
-                device: identifier(d['device']),
-                eligibility: eligibility(d['eligibility']),
-                taskAdmission: nullable(d['taskAdmission'], taskAdmission),
-              }
+              const d = closed(value, [
+                'object',
+                'channel',
+                'availability',
+                'reason',
+                'target',
+                'eligibility',
+                'taskAdmission',
+              ])
+              return { ...targetFacts(d), eligibility: eligibility(d['eligibility']) }
             }),
             nextCursor: nullable(v['nextCursor'], string),
           }
         },
       }),
-    devices: (id: string, after?: string) =>
+    assignments: (id: string, after?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v1/policies/{id}/devices',
+        path: '/api/v1/policies/{id}/assignments',
         pathParams: { id },
         query: { after },
         successStatus: 200,
@@ -67,39 +80,40 @@ export function createPoliciesClient(transport: HttpTransport) {
           return {
             items: array(v['items'], (value) => {
               const d = closed(value, [
-                'device',
-                'assignment',
+                'object',
+                'channel',
+                'availability',
+                'reason',
+                'target',
+                'qualification',
+                'sources',
+                'scopeResult',
                 'taskAdmission',
                 'operationIds',
-                'diagnoses',
               ])
               return {
-                device: identifier(d['device']),
-                assignment: enumeration(d['assignment'], [
-                  'eligible',
-                  'excluded',
-                  'pending',
-                ] as const),
-                taskAdmission: nullable(d['taskAdmission'], taskAdmission),
+                ...targetFacts(d),
+                qualification: eligibility(d['qualification']),
+                sources: array(d['sources'], deviceObject),
+                scopeResult: uuid(d['scopeResult']),
                 operationIds: array(d['operationIds'], uuid),
-                diagnoses: array(d['diagnoses'], string),
               }
             }),
             nextCursor: nullable(v['nextCursor'], string),
           }
         },
       }),
-    list: (after?: string, action?: PolicyDefinition['action']['kind']) =>
+    list: (cursor?: string, action?: PolicyDefinition['action']['kind']) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/policies',
-        query: { after, action, limit: 20 },
+        query: { cursor, action, limit: 20 },
         successStatus: 200,
         decode(value) {
           const v = closed(value, ['items', 'nextCursor'])
           return {
             items: array(v['items'], (item) => decodePolicy(item)),
-            nextCursor: nullable(v['nextCursor'], uuid),
+            nextCursor: nullable(v['nextCursor'], string),
           }
         },
       }),

@@ -12,9 +12,11 @@ import {
 import { criteria } from '../../src/features/devices/clients/asset-model'
 import type { GroupRead } from '../../src/features/devices/clients/groups'
 import type { DemoDevice } from './fixtures'
-import { candidate } from './http'
 import { createPages, createReceipts, error, ok, operation } from '../http'
+import { mergedFieldState } from './views'
 import { evaluate, referencedFields } from './criteria'
+import { objectRef, objectKey, type deviceObject } from '../../src/features/devices/clients/objects'
+type DeviceObject = ReturnType<typeof deviceObject>
 type Decision = ReturnType<typeof evaluate> & {
   device: string
   origin: 'rule' | 'manual'
@@ -37,20 +39,24 @@ interface Job {
   ruleVersion: string | null
   inputs: string
 }
-export function createGroupDemo(devices: () => Map<string, DemoDevice>) {
+export function createGroupDemo(
+  devices: () => Map<string, DemoDevice>,
+  objects: () => DeviceObject[],
+) {
   const groups = new Map<string, GroupState>(),
     jobs = new Map<string, Job>()
   const pages = createPages(),
     receipts = createReceipts()
   function inputs(read: GroupRead) {
     const selected = read.criteria ? referencedFields(read.criteria) : []
-    return JSON.stringify(
-      [...devices().values()].map((d) => [
+    return JSON.stringify([
+      [read.group.assetContext === 'associated_device' ? objects() : null],
+      ...[...devices().values()].map((d) => [
         d.summary.id,
         d.registrations,
         selected.map((f) => d.inventory.fields[f] ?? null),
       ]),
-    )
+    ])
   }
   function reset() {
     groups.clear()
@@ -63,6 +69,8 @@ export function createGroupDemo(devices: () => Map<string, DemoDevice>) {
         group: {
           id,
           kind: 'static',
+          assetContext: 'endpoint',
+          calculationRevision: 0,
           name: 'Pilot devices',
           description: 'Synthetic pilot group',
           revision: 1,
@@ -80,32 +88,60 @@ export function createGroupDemo(devices: () => Map<string, DemoDevice>) {
   reset()
   function start(id: string, task: string, publish: boolean, next?: string[]) {
     const state = groups.get(id)!
-    const decisions: Decision[] = [...devices().values()]
-      .filter((d) => d.summary.inventoryAvailable)
-      .map((d) => {
-        const evaluation =
-          state.read.group.kind === 'dynamic'
-            ? evaluate(state.read.criteria, d.inventory)
-            : {
-                decision: (next ?? state.members).includes(d.summary.id)
-                  ? ('match' as const)
-                  : ('no_match' as const),
-                explanations: [],
-              }
-        return {
-          device: d.summary.id,
-          origin: state.read.group.kind === 'dynamic' ? 'rule' : 'manual',
-          ...evaluation,
-          provenance: Object.values(d.inventory.fields).flatMap((f) =>
-            f.sources.map((s) => ({
-              field: f.field,
-              source: s.evidence.source,
-              snapshot_id: s.evidence.snapshotId,
-              observed_at: s.evidence.observedAt,
-            })),
-          ),
-        }
-      })
+    const universe =
+      state.read.group.assetContext === 'endpoint'
+        ? [...devices().values()]
+            .filter((d) => d.summary.inventoryAvailable)
+            .map((d) => ({ key: d.summary.id, device: d }))
+        : objects()
+            .map((o) => ({
+              key: objectKey(o.object),
+              device: (() => {
+                const members = [...new Set(o.members.map((m) => m.device))].flatMap((id) => {
+                  const d = devices().get(id)
+                  return d ? [d] : []
+                })
+                const first = members[0]
+                if (!first) return undefined
+                const fields = Object.fromEntries(
+                  [...new Set(members.flatMap((d) => Object.keys(d.inventory.fields)))].map(
+                    (key) => {
+                      const entries = members.flatMap((d) =>
+                          d.inventory.fields[key] ? [d.inventory.fields[key]!] : [],
+                        ),
+                        sources = entries.flatMap((f) => f.sources)
+                      return [key, { ...entries[0]!, state: mergedFieldState(sources), sources }]
+                    },
+                  ),
+                )
+                return { ...first, inventory: { ...first.inventory, fields } }
+              })(),
+            }))
+            .filter((o): o is { key: string; device: DemoDevice } => !!o.device)
+    const decisions: Decision[] = universe.map(({ key, device: d }) => {
+      const evaluation =
+        state.read.group.kind === 'dynamic'
+          ? evaluate(state.read.criteria, d.inventory)
+          : {
+              decision: (next ?? state.members).includes(key)
+                ? ('match' as const)
+                : ('no_match' as const),
+              explanations: [],
+            }
+      return {
+        device: key,
+        origin: state.read.group.kind === 'dynamic' ? 'rule' : 'manual',
+        ...evaluation,
+        provenance: Object.values(d.inventory.fields).flatMap((f) =>
+          f.sources.map((s) => ({
+            field: f.field,
+            source: s.evidence.source,
+            snapshot_id: s.evidence.snapshotId,
+            observed_at: s.evidence.observedAt,
+          })),
+        ),
+      }
+    })
     const members = decisions.filter((d) => d.decision === 'match').map((d) => d.device)
     jobs.set(task, {
       group: id,
@@ -127,16 +163,20 @@ export function createGroupDemo(devices: () => Map<string, DemoDevice>) {
   }
   const handle: DomainHandler = (request, scenario) => {
     const { path, method, query } = request
-    if (path === '/api/v1/mdm-candidate/groups' && method === 'GET')
-      return candidate(
-        pages.page(
-          path,
+    if (path === '/api/v1/groups' && method === 'GET') {
+      const items = (
           scenario === 'empty'
             ? []
-            : [...groups.values()].filter((g) => !g.read.group.deleted).map((g) => g.read.group),
-          query,
-        ),
-      )
+            : [...groups.values()].filter((g) => !g.read.group.deleted).map((g) => g.read.group)
+        )
+          .filter((g) => g.id > (query.get('after') ?? ''))
+          .sort((a, b) => a.id.localeCompare(b.id)),
+        limit = Number(query.get('limit') ?? 20)
+      return ok({
+        items: items.slice(0, limit),
+        nextCursor: items.length > limit ? items[limit - 1]!.id : null,
+      })
+    }
     const match =
       /^\/api\/v1\/groups\/([^/]+)(?:\/(previews|tasks|results)(?:\/([^/]+))?(?:\/(members|changes|decisions))?)?$/.exec(
         path,
@@ -156,7 +196,7 @@ export function createGroupDemo(devices: () => Map<string, DemoDevice>) {
               ? 'completed'
               : 'superseded'
         if (job.status === 'completed' && job.publish) {
-          state.read.group.revision++
+          state.read.group.calculationRevision++
           if (job.added.length || job.removed.length) state.read.group.memberVersion++
           state.read.group.memberCount = job.members.length
           state.read.memberSet = task
@@ -189,11 +229,21 @@ export function createGroupDemo(devices: () => Map<string, DemoDevice>) {
         kind = match[4]
       if (!job || job.group !== id) return error('group_not_found', 404)
       if (job.status !== 'completed') return error('operation_conflict')
+      const toObject = (key: string) =>
+        state!.read.group.assetContext === 'endpoint'
+          ? { kind: 'endpoint' as const, id: key }
+          : objectRef({ kind: key.slice(0, key.indexOf(':')), id: key.slice(key.indexOf(':') + 1) })
       const items =
         kind === 'decisions'
-          ? job.decisions
+          ? job.decisions.map(({ device, ...d }) => ({
+              ...d,
+              object: toObject(device),
+              sourceObjects: objects().filter(
+                (o) => objectKey(o.object) === objectKey(toObject(device)),
+              ),
+            }))
           : kind === 'members'
-            ? job.members
+            ? job.members.map(toObject)
             : [
                 ...job.added.map((device) => ({ device, added: true })),
                 ...job.removed.map((device) => ({ device, added: false })),
@@ -204,8 +254,8 @@ export function createGroupDemo(devices: () => Map<string, DemoDevice>) {
         const changes = page.items as { device: string; added: boolean }[]
         projection = {
           kind,
-          added: changes.filter((v) => v.added).map((v) => v.device),
-          removed: changes.filter((v) => !v.added).map((v) => v.device),
+          added: changes.filter((v) => v.added).map((v) => toObject(v.device)),
+          removed: changes.filter((v) => !v.added).map((v) => toObject(v.device)),
         }
       }
       return ok({
@@ -240,12 +290,19 @@ export function createGroupDemo(devices: () => Map<string, DemoDevice>) {
         ] as const)
       if (action === 'create') {
         if (state || op.expectedRevision !== 0) return error('operation_conflict')
-        closed(input, ['action', 'name', 'description', 'criteria'])
+        closed(input, ['action', 'name', 'description', 'assetContext', 'criteria'])
         const rule = input['criteria'] === null ? null : criteria(input['criteria'])
+        const assetContext = enumeration(input['assetContext'], [
+          'endpoint',
+          'associated_device',
+        ] as const)
+        if (!rule && assetContext !== 'endpoint') return error('malformed_request', 400)
         const read: GroupRead = {
           group: {
             id,
             kind: rule ? 'dynamic' : 'static',
+            assetContext,
+            calculationRevision: 0,
             name: identifier(input['name']),
             description: string(input['description']),
             revision: 1,
@@ -271,8 +328,14 @@ export function createGroupDemo(devices: () => Map<string, DemoDevice>) {
       if (state.read.group.revision !== op.expectedRevision) return error('operation_conflict')
       if (action === 'members') {
         if (state.read.group.kind !== 'static') return error('operation_conflict')
-        const add = array(input['add'], identifier),
-          remove = array(input['remove'], identifier)
+        const add = array(input['add'], objectRef).map((o) => {
+            if (o.kind !== 'endpoint') throw new Error('Invalid static member')
+            return o.id
+          }),
+          remove = array(input['remove'], objectRef).map((o) => {
+            if (o.kind !== 'endpoint') throw new Error('Invalid static member')
+            return o.id
+          })
         if (add.some((id) => !devices().get(id)?.summary.inventoryAvailable))
           return error('inventory_not_found', 404)
         return start(id, op.operationId, true, [
@@ -307,7 +370,21 @@ export function createGroupDemo(devices: () => Map<string, DemoDevice>) {
       if (!state || state.read.group.deleted) return null
       const job = state.read.memberSet ? jobs.get(state.read.memberSet) : undefined
       return structuredClone({
-        members: state.members,
+        members:
+          state.read.group.assetContext === 'endpoint'
+            ? state.members
+            : [
+                ...new Set(
+                  objects()
+                    .filter((o) => state.members.includes(objectKey(o.object)))
+                    .flatMap((o) => o.members.map((m) => m.device)),
+                ),
+              ],
+        objects: objects().filter((o) =>
+          state.read.group.assetContext === 'endpoint'
+            ? o.object.kind === 'endpoint' && state.members.includes(o.object.id)
+            : state.members.includes(objectKey(o.object)),
+        ),
         memberSet: state.read.memberSet,
         memberVersion: state.read.group.memberVersion,
         definitionVersion: state.read.group.revision,

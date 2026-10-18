@@ -1,207 +1,174 @@
 import { createHash } from 'node:crypto'
 import type { DomainHandler } from '../scenario'
 import type { createResourceDemo } from '../policies/resources'
+import type { createLifecycleDemo } from './lifecycle'
 import { createReceipts, error, ok, operation } from '../http'
 import { closed, count, digest, enumeration, identifier, record } from '../../src/services/decode'
-import {
-  rings,
-  submission,
-  type Publication,
-} from '../../src/features/software/clients/publication'
-const hash = (value: unknown) => [...createHash('sha256').update(JSON.stringify(value)).digest()]
-const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
-const actorId = (subject: string) => JSON.stringify(['demo-mdm', subject])
-// Explicit synthetic publication bindings. Enterprise source admission is a separate owner.
+import { rings, type Publication } from '../../src/features/software/clients/publication'
+const hash = (v: unknown) => [...createHash('sha256').update(JSON.stringify(v)).digest()],
+  same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 export const publicationBindings = [
   { id: 'demo-winget', kind: 'Winget' as const },
   { id: 'demo-brew', kind: 'Brew' as const },
 ]
-const publishers = new Set(['22222222-2222-4222-8222-222222222222'])
-export function createPublicationDemo(resources: ReturnType<typeof createResourceDemo>) {
-  const candidates = new Map<string, Publication>(),
+export function createPublicationDemo(
+  resources: ReturnType<typeof createResourceDemo>,
+  lifecycle: ReturnType<typeof createLifecycleDemo>,
+) {
+  const rows = new Map<
+      string,
+      { value: Publication; resource: string; version: string; reads: number }
+    >(),
     receipts = createReceipts()
-  const intents = new Map<string, string>()
   const handle: DomainHandler = (request, scenario) => {
-    const match = /^\/api\/v1\/software-sources\/([^/]+)\/candidates\/([^/]+)$/.exec(request.path)
-    if (!match) return
+    const m = /^\/api\/v1\/software-sources\/([^/]+)\/candidates\/([^/]+)$/.exec(request.path)
+    if (!m) return
     if (scenario === 'denied') return error('permission_denied', 403)
     try {
-      const source = identifier(decodeURIComponent(match[1]!)),
-        id = identifier(decodeURIComponent(match[2]!))
-      const binding = publicationBindings.find((b) => b.id === source)
+      const source = identifier(decodeURIComponent(m[1]!)),
+        id = identifier(decodeURIComponent(m[2]!)),
+        binding = publicationBindings.find((b) => b.id === source),
+        key = JSON.stringify([source, id]),
+        old = rows.get(key)
       if (!binding) return error('software_source_not_found', 404)
-      const key = JSON.stringify([source, id]),
-        previous = candidates.get(key)
-      if (request.method === 'GET')
-        return previous ? ok(structuredClone(previous)) : error('software_candidate_not_found', 404)
+      if (binding.kind === 'Brew') return error('action_not_supported', 501)
+      if (request.method === 'GET') {
+        if (!old) return error('software_candidate_not_found', 404)
+        if (scenario === 'normal' && old.reads++ > 0)
+          for (const ring of old.value.rings)
+            if (ring.publication?.outcome === 'pending') ring.publication.outcome = 'published'
+        return ok(structuredClone(old.value))
+      }
       if (request.method !== 'POST') return
-      const op = operation(request.body)
-      const fingerprint = JSON.stringify([request.actor.principalId, request.path, request.body])
-      const priorIntent = intents.get(op.operationId)
-      if (priorIntent && priorIntent !== fingerprint) return error('operation_conflict')
-      return receipts.write(request, op.operationId, () => {
-        const action = enumeration(record(op.input)['action'], [
+      const op = operation(request.body),
+        action = enumeration(record(op.input)['action'], [
           'candidate',
-          'validate',
-          'approve',
-          'authorize',
           'publish',
           'recover',
           'retry',
           'withdraw',
-        ] as const)
-        const input = closed(
+        ] as const),
+        input = closed(
           op.input,
           action === 'candidate'
-            ? ['action', 'resource', 'version', 'expectedResourceRevision', 'submission']
-            : action === 'approve'
-              ? ['action', 'ring', 'publisherSubject']
-              : ['publish', 'recover'].includes(action)
-                ? ['action', 'ring', 'publication', 'attempt']
-                : action === 'retry'
-                  ? ['action', 'ring', 'attempt']
-                  : ['action', 'ring'],
+            ? ['action', 'resource', 'version', 'expectedResourceRevision', 'resourceDigest']
+            : action === 'recover'
+              ? ['action', 'ring', 'publication', 'attempt']
+              : action === 'retry'
+                ? ['action', 'ring', 'attempt']
+                : ['action', 'ring'],
         )
-        if (!priorIntent && op.expectedRevision !== (previous?.revision ?? 0))
-          return error('operation_conflict')
+      return receipts.write(request, op.operationId, () => {
+        if (op.expectedRevision !== (old?.value.revision ?? 0)) return error('operation_conflict')
         if (action === 'candidate') {
-          if (previous) return error('operation_conflict')
-          const resource = resources.read(identifier(input['resource']))
-          const version = resource?.versions.find((v) => v.id === identifier(input['version']))
-          const value = submission(input['submission'])
+          if (old) return error('operation_conflict')
+          const resource = resources.read(identifier(input['resource'])),
+            version = resource?.versions.find((v) => v.id === input['version'])
           if (
-            !resource ||
-            resource.kind !== 'software' ||
+            resource?.kind !== 'software' ||
             !version ||
-            !['frozen', 'active'].includes(version.state) ||
+            !['active', 'frozen'].includes(version.state) ||
             resource.revision !== count(input['expectedResourceRevision']) ||
+            !same(version.digest, digest(input['resourceDigest'])) ||
             !resources.contentReady(resource.id, version.id)
           )
             return error('operation_conflict')
-          if (value.kind !== binding.kind) return error('malformed_request', 400)
-          const definitions = version.variants.map((v) =>
-            v.declaration.kind === 'software' ? v.declaration.definition : null,
-          )
-          if (!definitions.length || definitions.some((d) => !d))
-            return error('malformed_request', 400)
-          const first = definitions[0]!
+          const d = version.variants[0]?.declaration
           if (
-            definitions.some(
-              (d) =>
-                d!.package !== first.package ||
-                d!.version !== first.version ||
-                !same(d!.source, first.source),
-            )
+            d?.kind !== 'software' ||
+            d.definition.export.kind === 'disabled' ||
+            (d.definition.export.kind === 'winget') !== (binding.kind === 'Winget')
           )
-            return error('malformed_request', 400)
-          const coordinate: Record<string, unknown> =
-            value.kind === 'Winget' ? record(value.manifest) : value.recipe
-          if (
-            (value.kind === 'Winget' ? coordinate['PackageIdentifier'] : coordinate['package']) !==
-              first.package ||
-            (value.kind === 'Winget' ? coordinate['PackageVersion'] : coordinate['version']) !==
-              first.version
-          )
-            return error('malformed_request', 400)
-          const next: Publication = {
+            return error('action_not_supported', 501)
+          const document: Publication['document'] =
+            binding.kind === 'Winget'
+              ? {
+                  kind: 'Winget',
+                  manifest: {
+                    PackageIdentifier: d.definition.package,
+                    Versions: [
+                      {
+                        PackageVersion: d.definition.version,
+                        DefaultLocale: {
+                          PackageName:
+                            d.definition.export.kind === 'winget'
+                              ? d.definition.export.name
+                              : d.definition.package,
+                        },
+                      },
+                    ],
+                  },
+                }
+              : undefined
+          const value: Publication = {
             id,
             revision: 0,
+            contentDigest: version.digest,
+            manifestDigest: hash(document),
+            sourceSnapshot: hash(source),
             disposition: 'active',
-            contentDigest: hash([version.digest, value]),
-            manifestDigest: hash(value),
-            sourceSnapshot: first.source.sha256,
-            submission: value,
-            rings: rings.map((ring) => ({
-              ring,
-              state: 'candidate',
-              publication: null,
-              approval: null,
-            })),
+            rings: rings.map((ring) => ({ ring, state: 'candidate', publication: null })),
+            ...(document ? { document } : {}),
           }
-          candidates.set(key, next)
-          return ok(structuredClone(next))
+          rows.set(key, { value, resource: resource.id, version: version.id, reads: 0 })
+          const { document: _document, ...summary } = value
+          void _document
+          return ok(summary)
         }
-        if (!previous) return error('software_candidate_not_found', 404)
-        const next = structuredClone(previous),
-          ring = enumeration(input['ring'], rings)
-        const index = rings.indexOf(ring),
-          state = next.rings[index]!
-        const actor = actorId(request.actor.principalId)
-        if (next.disposition !== 'active' && !['recover', 'withdraw'].includes(action))
-          return error('operation_conflict')
-        if (
-          ['validate', 'approve', 'authorize'].includes(action) &&
-          index > 0 &&
-          next.rings[index - 1]!.publication?.outcome !== 'published'
-        )
-          return error('operation_conflict')
-        if (action === 'validate') {
-          if (state.publication) return error('operation_conflict')
-          state.state = scenario === 'partial' ? 'candidate' : 'validated'
-          state.approval = null
-        } else if (action === 'approve') {
-          const subject = identifier(input['publisherSubject'])
-          if (!publishers.has(subject) || subject === request.actor.principalId)
-            return error('permission_denied', 403)
-          if (!['validated', 'approved'].includes(state.state)) return error('operation_conflict')
-          state.state = 'approved'
-          state.approval = {
-            approver: actor,
-            publisher: actorId(subject),
-            at: Math.floor(Date.now() / 1000),
-            digest: hash([op.operationId, next.contentDigest, ring, actor, subject]),
-          }
-        } else if (action === 'authorize') {
-          if (!state.approval) return error('operation_conflict')
-          if (state.approval.publisher !== actor) return error('permission_denied', 403)
-          if (state.publication?.outcome === 'not_applied') return error('operation_conflict')
-          state.state = 'publication'
-          state.publication ??= {
-            id: hash([key, ring, state.approval.digest]),
-            attempt: 1,
-            outcome: 'unknown',
-          }
+        if (!old) return error('software_candidate_not_found', 404)
+        const ring = enumeration(input['ring'], rings),
+          index = rings.indexOf(ring),
+          r = old.value.rings[index]!
+        if (action === 'publish') {
+          if (
+            r.publication ||
+            old.value.disposition !== 'active' ||
+            (index > 0 && old.value.rings[index - 1]?.publication?.outcome !== 'published')
+          )
+            return error('operation_conflict')
+          if (
+            !lifecycle.enableDraft(
+              old.resource,
+              old.version,
+              request.actor.principalId,
+              op.operationId,
+            )
+          )
+            return error('operation_conflict')
+          if (!resources.activatePublished(old.resource, old.version))
+            return error('operation_conflict')
+          r.state = 'publication'
+          r.publication = { id: hash([source, id, ring]), attempt: 1, outcome: 'pending' }
+        } else if (action === 'recover') {
+          if (
+            !r.publication ||
+            !same(r.publication.id, digest(input['publication'])) ||
+            r.publication.attempt !== count(input['attempt'])
+          )
+            return error('operation_conflict')
+          r.publication.outcome =
+            scenario === 'unknown'
+              ? 'unknown'
+              : scenario === 'partial'
+                ? 'not_applied'
+                : 'published'
         } else if (action === 'retry') {
           if (
-            state.publication?.outcome !== 'not_applied' ||
-            state.publication.attempt !== count(input['attempt'])
+            r.publication?.outcome !== 'not_applied' ||
+            r.publication.attempt !== count(input['attempt']) ||
+            !lifecycle.isEnabled(old.resource, old.version)
           )
             return error('operation_conflict')
-          if (state.approval?.publisher !== actor) return error('permission_denied', 403)
-          state.publication.attempt++
-          state.publication.outcome = 'unknown'
-        } else if (action === 'publish' || action === 'recover') {
-          if (
-            !state.publication ||
-            !same(state.publication.id, digest(input['publication'])) ||
-            state.publication.attempt !== count(input['attempt'])
-          )
-            return error('operation_conflict')
-          if (action === 'publish' && state.approval?.publisher !== actor)
-            return error('permission_denied', 403)
-          if (state.publication.outcome === 'unknown')
-            state.publication.outcome =
-              scenario === 'unknown'
-                ? 'unknown'
-                : scenario === 'partial'
-                  ? 'not_applied'
-                  : 'published'
-          intents.set(op.operationId, fingerprint)
+          r.publication.attempt++
+          r.publication.outcome = 'pending'
         } else {
-          if (next.disposition === 'quarantined') return error('operation_conflict')
-          next.disposition = 'deprecated'
-          // GET retains historical ring results; only this write acknowledges withdrawal.
-          intents.set(op.operationId, fingerprint)
+          if (r.publication?.outcome !== 'published') return error('operation_conflict')
+          old.value.disposition = 'deprecated'
         }
-        if (!same(previous, next)) next.revision++
-        candidates.set(key, next)
-        if (
-          ((action === 'publish' || action === 'recover') &&
-            state.publication?.outcome === 'unknown') ||
-          (action === 'withdraw' && ['unknown', 'partial'].includes(scenario))
-        )
-          return error('operation_unknown', 503)
-        return ok(structuredClone(next))
+        old.value.revision++
+        const { document: _document, ...summary } = old.value
+        void _document
+        return ok(structuredClone(summary), action === 'publish' ? 202 : 200)
       })
     } catch {
       return error('malformed_request', 400)
@@ -209,17 +176,9 @@ export function createPublicationDemo(resources: ReturnType<typeof createResourc
   }
   return {
     handle,
-    list: () =>
-      structuredClone(
-        [...candidates.entries()].map(([key, value]) => ({
-          source: (JSON.parse(key) as string[])[0]!,
-          ...value,
-        })),
-      ),
     reset() {
-      candidates.clear()
+      rows.clear()
       receipts.reset()
-      intents.clear()
     },
   }
 }

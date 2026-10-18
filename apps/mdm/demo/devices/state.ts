@@ -18,7 +18,10 @@ export function createDeviceDemo() {
   let devices = makeDevices()
   let observedAt = Math.floor(Date.now() / 1000)
   const assets = createAssetDemo(() => devices),
-    groups = createGroupDemo(() => devices),
+    groups = createGroupDemo(
+      () => devices,
+      () => views.objects(),
+    ),
     enrollments = createEnrollmentDemo(() => devices)
   const pages = createPages(),
     receipts = createReceipts(),
@@ -260,6 +263,7 @@ export function createDeviceDemo() {
     bindAuthorization: (value: typeof can) => {
       can = value
     },
+    objects: () => views.objects(),
     facts: () => structuredClone([...devices.values()]),
     publishedGroup: groups.published,
     batches: () => structuredClone([...batches.values()]),

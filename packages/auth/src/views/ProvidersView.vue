@@ -83,6 +83,7 @@ async function save() {
     redirectUri: `${session.config.canonicalOrigin}/api/v1/identity/oidc/callback`,
     scopes: scopes.value.split(/\s+/).filter(Boolean),
     claims: {
+      subject: current ? { ...current.settings.claims.subject } : { kind: 'oidc' },
       email: email.value || null,
       groups: groups.value || null,
       departmentSnapshot: current ? current.settings.claims.departmentSnapshot : null,

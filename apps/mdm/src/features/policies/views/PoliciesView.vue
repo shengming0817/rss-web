@@ -11,6 +11,7 @@ import {
   type PolicyRead,
   type ExecutionDefinition,
   type ConfigurationDefinition,
+  type PolicyDefinition,
   type PolicyChange,
 } from '../clients/model'
 import type { ResourceRead, ScriptSpec, Json } from '../clients/resources'
@@ -18,6 +19,8 @@ import NativeScheduleEditor from '../../software/components/NativeScheduleEditor
 import SelfServiceEditor from '../components/SelfServiceEditor.vue'
 import ResourceIdentity from '../components/ResourceIdentity.vue'
 import CatalogLocator from '../components/CatalogLocator.vue'
+import AssignmentFacts from '../components/AssignmentFacts.vue'
+import { objectKey } from '../../devices/clients/objects'
 import PageFrame from '../../../components/PageFrame.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
@@ -31,8 +34,16 @@ const list = ref<Awaited<ReturnType<typeof client.list>>>(),
 const editing = ref(false)
 const id = ref(typeof route.query['id'] === 'string' ? route.query['id'] : '')
 function fresh(
-  kind: 'execution' | 'configuration' = 'execution',
-): ExecutionDefinition | ConfigurationDefinition {
+  kind: 'execution' | 'configuration' | 'native_collection' | 'agent_collection' = 'execution',
+):
+  | ExecutionDefinition
+  | ConfigurationDefinition
+  | (PolicyDefinition & {
+      action: Extract<
+        PolicyDefinition['action'],
+        { kind: 'native_collection' | 'agent_collection' }
+      >
+    }) {
   if (kind === 'configuration')
     return {
       scope: '',
@@ -46,6 +57,23 @@ function fresh(
           variant: '',
         },
         exit: 'retain',
+      },
+    }
+  if (kind === 'native_collection' || kind === 'agent_collection')
+    return {
+      scope: '',
+      action: {
+        kind,
+        resource: {
+          id: '',
+          version: '1',
+          platform: 'windows',
+          architecture: 'x86_64',
+          variant: '',
+        },
+        schedule: defaultSchedule(),
+        frequency: 'once_per_version',
+        runLifetimeSeconds: 3600,
       },
     }
   return {
@@ -93,7 +121,9 @@ const variants = computed(() =>
         ?.variants.filter(
           (v) =>
             v.declaration.kind ===
-            (definition.value.action.kind === 'execution' ? 'script' : 'configuration'),
+            (definition.value.action.kind === 'execution'
+              ? 'script'
+              : definition.value.action.kind),
         ) ?? [])
     : [],
 )
@@ -112,7 +142,14 @@ const selectedVariant = computed(() => {
 })
 function actionKind(event: Event) {
   const kind = (event.target as HTMLSelectElement).value
-  if (current.value || (kind !== 'execution' && kind !== 'configuration')) return
+  if (
+    current.value ||
+    (kind !== 'execution' &&
+      kind !== 'configuration' &&
+      kind !== 'native_collection' &&
+      kind !== 'agent_collection')
+  )
+    return
   if (definition.value.selfService) {
     failure.value = 'removeBeforeSwitch'
     return
@@ -123,7 +160,7 @@ function actionKind(event: Event) {
   progress.value = undefined
 }
 const preview = ref<Awaited<ReturnType<typeof client.preview>>>(),
-  progress = ref<Awaited<ReturnType<typeof client.devices>>>()
+  progress = ref<Awaited<ReturnType<typeof client.assignments>>>()
 function check(after?: string, scopeResult?: string) {
   if (!ready.value || busy.value || uncertain.value) return
   try {
@@ -142,7 +179,7 @@ function loadProgress(after?: string) {
   const p = current.value
   if (p)
     void run(
-      () => client.devices(p.id, after),
+      () => client.assignments(p.id, after),
       (v) => {
         progress.value = v
       },
@@ -186,7 +223,12 @@ function numeric(schema: Record<string, Json>, name: string) {
 }
 function apply(p: PolicyRead) {
   editing.value = false
-  if (p.definition.action.kind !== 'execution' && p.definition.action.kind !== 'configuration')
+  if (
+    p.definition.action.kind !== 'execution' &&
+    p.definition.action.kind !== 'configuration' &&
+    p.definition.action.kind !== 'native_collection' &&
+    p.definition.action.kind !== 'agent_collection'
+  )
     throw new Error('Wrong policy action')
   ready.value = true
   current.value = p
@@ -194,7 +236,13 @@ function apply(p: PolicyRead) {
   enabled.value = p.enabled
   if (p.definition.action.kind === 'execution')
     definition.value = structuredClone({ ...p.definition, action: p.definition.action })
-  else definition.value = structuredClone({ ...p.definition, action: p.definition.action })
+  else if (p.definition.action.kind === 'configuration')
+    definition.value = structuredClone({ ...p.definition, action: p.definition.action })
+  else
+    definition.value = structuredClone({
+      ...p.definition,
+      action: p.definition.action,
+    }) as ReturnType<typeof fresh>
   resource.value = undefined
   preview.value = undefined
   progress.value = undefined
@@ -206,7 +254,9 @@ function load(after?: string) {
       list.value = {
         ...v,
         items: v.items.filter((p) =>
-          ['execution', 'configuration'].includes(p.definition.action.kind),
+          ['execution', 'configuration', 'native_collection', 'agent_collection'].includes(
+            p.definition.action.kind,
+          ),
         ),
       }
     },
@@ -268,7 +318,10 @@ function bind() {
   void run(
     () => runtime.policies.resources.read(target),
     (r) => {
-      if (r.kind !== (definition.value.action.kind === 'execution' ? 'script' : 'configuration'))
+      if (
+        r.kind !==
+        (definition.value.action.kind === 'execution' ? 'script' : definition.value.action.kind)
+      )
         throw new Error('Wrong resource kind')
       resource.value = r
     },
@@ -448,6 +501,8 @@ onMounted(async () => {
         >
           <option value="execution">{{ t('policies.scripts') }}</option>
           <option value="configuration">{{ t('policies.configurations') }}</option>
+          <option value="native_collection">{{ t('policies.nativeCollection') }}</option>
+          <option value="agent_collection">{{ t('policies.agentCollection') }}</option>
         </select>
         <label for="policy-id">{{ t('policies.id') }}</label
         ><input id="policy-id" v-model="id" class="ui-input" :readonly="!!current" required />
@@ -596,6 +651,23 @@ onMounted(async () => {
             <option value="remove">{{ t('policies.configurationRemove') }}</option>
           </select></template
         >
+        <template
+          v-if="
+            definition.action.kind === 'native_collection' ||
+            definition.action.kind === 'agent_collection'
+          "
+          ><NativeScheduleEditor
+            v-model="definition.action.schedule"
+            :disabled="busy || uncertain" /><label
+            >{{ t('software.runLifetime')
+            }}<input
+              v-model.number="definition.action.runLifetimeSeconds"
+              type="number"
+              min="60"
+              max="604800"
+              class="ui-input"
+              required /></label
+        ></template>
         <label v-if="definition.action.kind === 'configuration'"
           ><input v-model="enabled" type="checkbox" />{{ t('policies.active') }}</label
         >
@@ -632,8 +704,8 @@ onMounted(async () => {
       {{ t('policies.preview') }}
     </UiButton>
     <ul v-if="preview">
-      <li v-for="d in preview.items" :key="d.device">
-        {{ d.device }} · {{ t(`policies.preview_${d.eligibility.state}`) }}
+      <li v-for="d in preview.items" :key="objectKey(d.object)">
+        <AssignmentFacts :item="d" /> {{ t(`policies.preview_${d.eligibility.state}`) }}
       </li>
     </ul>
     <UiButton
@@ -653,11 +725,10 @@ onMounted(async () => {
       {{ t('policies.refreshProgress') }}
     </UiButton>
     <ul v-if="progress">
-      <li v-for="d in progress.items" :key="d.device">
-        {{ d.device }} · {{ t(`policies.preview_${d.assignment}`) }}
+      <li v-for="d in progress.items" :key="objectKey(d.object)">
+        <AssignmentFacts :item="d" /> {{ t(`policies.preview_${d.qualification.state}`) }}
         <ul>
           <li v-for="op in d.operationIds" :key="op">{{ t('policies.operation') }} · {{ op }}</li>
-          <li v-for="diagnosis in d.diagnoses" :key="diagnosis">{{ diagnosis }}</li>
         </ul>
       </li>
     </ul>

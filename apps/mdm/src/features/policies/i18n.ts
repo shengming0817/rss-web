@@ -1,4 +1,18 @@
 export const policiesZh = {
+  confirmReplay: '我已核对原目标、标识与完整正文，确认幂等重放原操作',
+  nativeCollection: '原生 MDM 采集',
+  agentCollection: '原生 Agent 采集',
+  reauthorize: '重新授权',
+  control_restart: '重启',
+  control_lock: '锁定',
+  control_wipe: '擦除',
+  generation: '注册代次',
+  confirmControl: '确认对指定注册代次执行此危险操作',
+
+  availability_ready: '通道可用',
+  availability_unavailable: '通道不可用',
+  channel: '执行通道',
+
   operation: '操作',
   actionKind: '策略类型',
   configurationRetain: '保留配置效果',
@@ -414,6 +428,20 @@ export const policiesZh = {
   independent: '当前人工审批必须由其他账户批准。',
 }
 export const policiesEn: typeof policiesZh = {
+  confirmReplay: 'I checked the original target, ID and full body and confirm exact replay',
+  nativeCollection: 'Native MDM collection',
+  agentCollection: 'Native Agent collection',
+  reauthorize: 'Reauthorize',
+  control_restart: 'Restart',
+  control_lock: 'Lock',
+  control_wipe: 'Wipe',
+  generation: 'Registration generation',
+  confirmControl: 'Confirm the dangerous action for the specified registration',
+
+  availability_ready: 'Channel available',
+  availability_unavailable: 'Channel unavailable',
+  channel: 'Action channel',
+
   operation: 'Operation',
   actionKind: 'Policy type',
   configurationRetain: 'Retain configuration effects',

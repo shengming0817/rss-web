@@ -395,7 +395,7 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
   await editor.findAll('select').at(-1)!.setValue('true')
   await click('编辑')
   await click('保存动态条件')
-  const group = (await devices.candidate.groups()).items.find((g) => g.name === 'Dynamic')!
+  const group = (await devices.groups.list()).items.find((g) => g.name === 'Dynamic')!
   expect((await devices.groups.read(group.id)).criteria).toMatchObject({
     value: { kind: 'boolean', value: true },
   })
@@ -476,7 +476,13 @@ it('keeps the current group target when opening another group fails', async () =
   await devices.groups.change(other, {
     operationId: crypto.randomUUID(),
     expectedRevision: 0,
-    input: { action: 'create', name: 'Other group', description: '', criteria: null },
+    input: {
+      action: 'create',
+      assetContext: 'endpoint',
+      name: 'Other group',
+      description: '',
+      criteria: null,
+    },
   })
   await click('重新读取')
   await wrapper
