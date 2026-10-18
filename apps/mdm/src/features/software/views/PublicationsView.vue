@@ -57,6 +57,7 @@ async function save() {
     failure.value = 'invalidRequest'
     return
   }
+  const binding = JSON.stringify(deviceBinding(runtime))
   const r = resource.value,
     v = version.value,
     selectedTarget = { id: selected.id, digest: [...selected.digest] }
@@ -82,7 +83,7 @@ async function save() {
       input = v
     },
   )
-  if (!loaded || !input) return
+  if (!loaded || !input || binding !== JSON.stringify(deviceBinding(runtime))) return
   const body = operation(input)
   pending = { id: body.operationId, body }
   confirmedReplay.value = false
