@@ -387,6 +387,7 @@ it('dispatches the formal operations directory with its exact filters and reject
   const instance = axios.create(),
     mock = new AxiosMockAdapter(instance)
   mock.onGet('/api/v1/operations').reply(200, { items: [] })
+  mock.onGet('/api/v1/collection-blueprints').reply(200, { items: [] })
   const spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance),
     transport = createMdmTransport()
   spy.mockRestore()
@@ -406,9 +407,25 @@ it('dispatches the formal operations directory with its exact filters and reject
   ).resolves.toEqual({ items: [] })
   expect(mock.history.get).toHaveLength(1)
   expect(mock.history.get[0]?.params).toEqual(query)
-  for (const path of ['/api/v1/operations/unknown', '/api/v1/operations-other'])
+  await expect(
+    transport.request({
+      method: 'GET',
+      path: '/api/v1/collection-blueprints',
+      successStatus: 200,
+      decode: (value) => value,
+    }),
+  ).resolves.toEqual({ items: [] })
+  for (const path of [
+    '/api/v1/operations/unknown',
+    '/api/v1/operations-other',
+    '/api/v1/collection-blueprints/unknown',
+    '/api/v1/collection-blueprints-other',
+  ])
     await expect(
       transport.request({ method: 'GET', path, successStatus: 200, decode: (value) => value }),
     ).rejects.toMatchObject({ cause: 'client' })
-  expect(mock.history.get).toHaveLength(1)
+  expect(mock.history.get.map((request) => request.url)).toEqual([
+    '/api/v1/operations',
+    '/api/v1/collection-blueprints',
+  ])
 })

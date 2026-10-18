@@ -1,7 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { ref } from 'vue'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
 import ExecutionDetailView from './ExecutionDetailView.vue'
@@ -98,4 +98,79 @@ it('offers only formats compatible with the selected platform and makes an empty
     ['apple_profile', 'apple_ddm'],
   )
   wrapper.unmount()
+})
+
+it('keeps reauthorization coordinates editable character by character and invalidates only the final confirmation', async () => {
+  const id = '11111111-1111-4111-8111-111111111111',
+    registration = '22222222-2222-4222-8222-222222222222'
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/:execution', component: ExecutionDetailView }],
+  })
+  await router.push({ path: `/${id}`, query: { device: 'device-01' } })
+  const read = vi.fn().mockResolvedValue({
+    operationId: id,
+    revision: 4,
+    task: { platform: 'windows', request: { kind: 'sync_ml', request: {} } },
+    authorization: 'blocked',
+    commandStatus: 'queued',
+    agentInstallation: null,
+    observation: {
+      protocol: 'syncml',
+      observationScope: 'native_objects',
+      progress: 'unknown',
+      effect: 'unverified',
+      receipts: [],
+    },
+  })
+  const reauthorize = vi.fn().mockResolvedValue({ operationId: id, revision: 5 })
+  const wrapper = mount(ExecutionDetailView, {
+    attachTo: document.body,
+    global: {
+      plugins: [router, mdmI18n()],
+      stubs: { RouterLink: true },
+      provide: {
+        [mdmKey as symbol]: {
+          tenant: 'tenant',
+          session: { state: ref({ status: 'authenticated', session: { id: 'session' } }) },
+          policies: { native: { read, reauthorize } },
+        },
+      },
+    },
+  })
+  try {
+    await flushPromises()
+    const input = wrapper.get<HTMLInputElement>('input:not([type])'),
+      confirmation = wrapper.get('input[type=checkbox]')
+    expect((confirmation.element as HTMLInputElement).checked).toBe(false)
+    input.element.focus()
+    for (let length = 1; length <= registration.length; length++) {
+      await input.setValue(registration.slice(0, length))
+      expect(document.activeElement).toBe(input.element)
+      expect(wrapper.get('input:not([type])').element).toBe(input.element)
+    }
+    await confirmation.setValue(true)
+    await wrapper.get('input[type=number]').setValue(2)
+    expect((confirmation.element as HTMLInputElement).checked).toBe(false)
+    expect(wrapper.get('input:not([type])').element).toBe(input.element)
+    expect(reauthorize).not.toHaveBeenCalled()
+    await confirmation.setValue(true)
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === '重新授权')!
+      .trigger('click')
+    await flushPromises()
+    expect(reauthorize).toHaveBeenCalledExactlyOnceWith('device-01', id, {
+      requestId: expect.any(String),
+      expectedRevision: 4,
+      confirmation: {
+        confirmed: true,
+        expectedRegistrationId: registration,
+        expectedGeneration: 2,
+      },
+    })
+    expect((confirmation.element as HTMLInputElement).checked).toBe(false)
+  } finally {
+    wrapper.unmount()
+  }
 })

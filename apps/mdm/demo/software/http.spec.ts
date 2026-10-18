@@ -143,3 +143,137 @@ it('applies current software and native permissions before dispatching any forma
     expect((await scenario.handle('POST', path, body, headers)).status).toBe(403)
   expect((await scenario.handle('GET', '/api/v1/operations')).status).toBe(200)
 })
+
+it('applies current Policy read, write, resource and device authority without mutating rejected drafts', async () => {
+  const { createAutomationDemo } = await import('../policies/state'),
+    { createDeviceDemo } = await import('../devices/state'),
+    { seedScriptPolicies } = await import('../policies/seed')
+  const automation = createAutomationDemo(createDeviceDemo()),
+    seed = seedScriptPolicies(automation),
+    policy = `/api/v1/policies/${seed.ids[0]}`
+  const scenario = createScenario([automation.handle])
+  const login = async (name: string) => {
+    const reply = await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
+      login: name,
+      password: 'demo',
+    })
+    return {
+      'x-csrf-token': (reply.body as { csrfToken: string }).csrfToken,
+      'x-identity-request': '1',
+    }
+  }
+  await login('demo')
+  const original = (await scenario.handle('GET', policy)).body as {
+    revision: number
+    definition: unknown
+  }
+  const reviewerHeaders = await login('reviewer'),
+    op = (input: unknown, expectedRevision = original.revision) => ({
+      operationId: crypto.randomUUID(),
+      expectedRevision,
+      input,
+    })
+  for (const path of [
+    '/api/v1/policies',
+    policy,
+    `${policy}/assignments`,
+    `${policy}/runs`,
+    `${policy}/software/rollout`,
+  ])
+    expect((await scenario.handle('GET', path)).status).toBe(403)
+  for (const input of [
+    { action: 'disable' },
+    { action: 'enable' },
+    { action: 'put', definition: original.definition, enabled: true },
+  ])
+    expect((await scenario.handle('POST', policy, op(input), reviewerHeaders)).status).toBe(403)
+  expect(
+    (
+      await scenario.handle(
+        'POST',
+        '/api/v1/policies/previews',
+        { definition: original.definition },
+        reviewerHeaders,
+      )
+    ).status,
+  ).toBe(403)
+  await login('demo')
+  expect((await scenario.handle('GET', policy)).body).toEqual(original)
+  let revision = 1
+  const grant = async (names: readonly string[]) => {
+    const adminHeaders = await login('demo')
+    const reply = await scenario.handle(
+      'PUT',
+      '/api/v1/authorization/rules/77777777-7777-4777-8777-777777777777',
+      {
+        operationId: crypto.randomUUID(),
+        expectedRevision: revision++,
+        value: {
+          subject: {
+            kind: 'user',
+            user: {
+              tenantId: TENANT,
+              instanceId: '44444444-4444-4444-8444-444444444444',
+              principalId: '33333333-3333-4333-8333-333333333333',
+            },
+          },
+          grants: names.map((operation) => ({
+            operation,
+            scope: {
+              kind: ['inventory_read', 'operation_read', 'script_execute'].includes(operation)
+                ? 'all_devices'
+                : 'tenant',
+            },
+          })),
+        },
+      },
+      adminHeaders,
+    )
+    expect(reply.status).toBe(200)
+    return login('reviewer')
+  }
+  const base = ['policy_read', 'policy_write', 'scope_read', 'inventory_read', 'script_execute']
+  let headers = await grant(base)
+  expect((await scenario.handle('GET', policy)).status).toBe(200)
+  expect((await scenario.handle('GET', `${policy}/runs`)).status).toBe(403)
+  expect(
+    (
+      await scenario.handle(
+        'POST',
+        policy,
+        op({ action: 'put', definition: original.definition, enabled: true }),
+        headers,
+      )
+    ).status,
+  ).toBe(403)
+  expect(
+    (
+      await scenario.handle(
+        'POST',
+        '/api/v1/policies/previews',
+        { definition: original.definition },
+        headers,
+      )
+    ).status,
+  ).toBe(403)
+  expect((await scenario.handle('POST', policy, op({ action: 'disable' }), headers)).status).toBe(
+    200,
+  )
+  headers = await grant([...base, 'resource_read', 'operation_read'])
+  expect((await scenario.handle('GET', `${policy}/runs`)).status).toBe(200)
+  expect(
+    (
+      await scenario.handle(
+        'POST',
+        policy,
+        op({ action: 'put', definition: original.definition, enabled: true }, 2),
+        headers,
+      )
+    ).status,
+  ).toBe(200)
+  expect((await scenario.handle('GET', policy)).body).toMatchObject({
+    revision: 3,
+    state: 'enabled',
+    definition: original.definition,
+  })
+})

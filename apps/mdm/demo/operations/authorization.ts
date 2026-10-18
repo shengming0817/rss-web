@@ -24,6 +24,7 @@ import {
   lifecycleActions,
   type Batch,
 } from '../../src/features/devices/clients/candidate-operations'
+import type { PolicyDefinition } from '../../src/features/policies/clients/model'
 import type { AuditEntry } from '../../src/features/operations/clients/model'
 export const INSTANCE = '44444444-4444-4444-8444-444444444444'
 export const ADMIN = '22222222-2222-4222-8222-222222222222'
@@ -33,6 +34,10 @@ const provider = '66666666-6666-4666-8666-666666666666'
 export function createAuthorizationDemo(
   now: () => number,
   record: (input: Omit<AuditEntry, 'id' | 'stream' | 'stage' | 'status'>) => unknown,
+  policyFacts: (
+    id: string,
+    task?: string,
+  ) => { definition: PolicyDefinition | undefined; device: string | undefined },
 ) {
   const rules = new Map<string, Revision<Rule>>(),
     groups = new Map<string, Revision<UserGroup>>(),
@@ -139,6 +144,74 @@ export function createAuthorizationDemo(
       /^\/api\/v1\/devices\/([^/]+)(?:\/(.*))?$/.exec(path) ??
       /^\/api\/v1\/mdm-candidate\/devices\/([^/]+)\/(assignment)$/.exec(path)
     const actor = request.actor.principalId
+    const allDevices = (permission: Permission) =>
+      effective(actor).some((g) => g.operation === permission && g.scope.kind === 'all_devices')
+    const policy = /^\/api\/v1\/policies(?:\/([^/]+)(?:\/(.*))?)?$/.exec(path)
+    if (policy) {
+      const id = policy[1],
+        suffix = policy[2],
+        preview = id === 'previews'
+      const detail = request.method === 'GET' && suffix?.startsWith('runs/')
+      const facts =
+        id && !preview ? policyFacts(id, detail ? suffix!.slice(5) : undefined) : undefined
+      if (detail) {
+        if (
+          facts?.device
+            ? !can(actor, 'operation_read', facts.device)
+            : !effective(actor).some((g) => g.operation === 'operation_read')
+        )
+          return error('permission_denied', 403)
+        if (
+          facts?.definition?.action.kind === 'agent_collection' &&
+          (!can(actor, 'inventory_read', facts.device) || !can(actor, 'inventory_sensitive_read'))
+        )
+          return error('permission_denied', 403)
+      } else if (!can(actor, request.method === 'GET' || preview ? 'policy_read' : 'policy_write'))
+        return error('permission_denied', 403)
+      if (request.method === 'GET' && suffix === 'assignments' && !allDevices('inventory_read'))
+        return error('permission_denied', 403)
+      if (
+        request.method === 'GET' &&
+        (suffix === 'runs' || suffix === 'software/rollout') &&
+        !allDevices('operation_read')
+      )
+        return error('permission_denied', 403)
+      function allowedDefinition(value: unknown, readResource: boolean) {
+        const definition = objectRecord(value),
+          action = objectRecord(definition['action'])
+        const permission: Permission =
+          action['kind'] === 'execution'
+            ? 'script_execute'
+            : action['kind'] === 'configuration'
+              ? 'configuration_write'
+              : action['kind'] === 'native_collection' || action['kind'] === 'agent_collection'
+                ? 'inventory_collect'
+                : action['kind'] === 'request_mdm_enrollment'
+                  ? 'enrollment'
+                  : 'software_deploy'
+        return (
+          can(actor, 'scope_read') &&
+          allDevices('inventory_read') &&
+          allDevices(permission) &&
+          (action['kind'] !== 'ensure_agent_installed' || allDevices('enrollment')) &&
+          (!readResource || !('resource' in action) || can(actor, 'resource_read'))
+        )
+      }
+      if (request.method === 'POST') {
+        if (preview) {
+          if (!allowedDefinition(objectRecord(request.body)['definition'], true))
+            return error('permission_denied', 403)
+        } else {
+          if (facts?.definition && !allowedDefinition(facts.definition, false))
+            return error('permission_denied', 403)
+          if (!suffix) {
+            const input = objectRecord(operation(request.body).input)
+            if (input['action'] === 'put' && !allowedDefinition(input['definition'], true))
+              return error('permission_denied', 403)
+          }
+        }
+      }
+    }
     if (path === '/api/v1/operations') {
       if (!effective(actor).some((g) => g.operation === 'operation_read'))
         return error('permission_denied', 403)

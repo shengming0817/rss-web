@@ -196,20 +196,19 @@ watch(
       </p>
       <fieldset :disabled="busy || uncertain">
         <label
+          >{{ t('devices.registration')
+          }}<input v-model="registration" class="ui-input" required /></label
+        ><label
+          >{{ t('policies.generation')
+          }}<input
+            v-model.number="generation"
+            type="number"
+            min="1"
+            class="ui-input"
+            required /></label
+        ><label
           ><input v-model="confirmation" type="checkbox" />{{ t('policies.confirmControl') }}</label
-        ><template v-if="confirmation"
-          ><label
-            >{{ t('devices.registration')
-            }}<input v-model="registration" class="ui-input" required /></label
-          ><label
-            >{{ t('policies.generation')
-            }}<input
-              v-model.number="generation"
-              type="number"
-              min="1"
-              class="ui-input"
-              required /></label
-        ></template>
+        >
       </fieldset>
       <UiButton
         v-if="

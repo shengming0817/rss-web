@@ -28,7 +28,19 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       authorization.can(actor, permission, device),
     )
   const security = createSecurityDemo(devices, operations, scopes)
-  const authorization = createAuthorizationDemo(() => security.now(), operations.record)
+  const authorization = createAuthorizationDemo(
+    () => security.now(),
+    operations.record,
+    (id, task) => {
+      const run = task
+        ? software.runs.rows().find((r) => r.policy.id === id && r.value.taskId === task)
+        : undefined
+      return {
+        definition: run?.policy.definition ?? policyStore.get(id)?.definition,
+        device: run?.value.device,
+      }
+    },
+  )
   const admin = createAdminDemo(
     () => security.now(),
     operations,

@@ -36,6 +36,11 @@ it('routes registration resources through the tenant business gateway without ac
   expect(business).not.toBeNull()
   const path = new RegExp(business[1]!)
   for (const allowed of [
+    '/api/v1/device-views',
+    '/api/v1/device-views/association/11111111-1111-4111-8111-111111111111',
+    '/api/v1/device-associations',
+    '/api/v1/device-associations/11111111-1111-4111-8111-111111111111',
+    '/api/v1/operations',
     '/api/v1/registration-quotas/me',
     '/api/v1/registration-quotas/defaults',
     '/api/v1/agent-configurations/id',
@@ -43,6 +48,11 @@ it('routes registration resources through the tenant business gateway without ac
   ])
     expect(path.test(allowed)).toBe(true)
   for (const rejected of [
+    '/api/v1/collection-blueprints',
+    '/api/v1/collection-blueprints/unknown',
+    '/api/v1/collection-blueprints-extra',
+    '/api/v1/device-views-extra',
+    '/api/v1/device-associations-extra',
     '/api/v1/registration-quotas-extra',
     '/api/v1/self-enrollments-extra',
     '/api/v1/agent-grants-extra',
@@ -51,6 +61,9 @@ it('routes registration resources through the tenant business gateway without ac
     '/api/v1/unrelated',
   ])
     expect(path.test(rejected)).toBe(false)
+  const blueprints = config.match(/location = \/api\/v1\/collection-blueprints \{([^}]+)\}/)
+  expect(blueprints?.[1]).toContain('proxy_pass http://mdm:8080;')
+  expect(blueprints?.[1]).toContain('limit_req zone=mdm_api burst=20 nodelay;')
   expect(business[2]).toContain('limit_req zone=mdm_api burst=20 nodelay;')
   expect(business[2]).toContain('proxy_pass http://mdm:8080;')
   expect(config.indexOf(business[0])).toBeLessThan(config.indexOf('location /api/ { return 404; }'))
