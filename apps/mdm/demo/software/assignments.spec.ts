@@ -39,6 +39,7 @@ function setup() {
     },
     { read: () => saved },
     { isEnabled: () => approved, binding: () => (approved ? `enabled-${epoch}` : null) },
+    { binding: () => null },
   )
   const definition: SoftwarePolicyDefinition = {
     scope: scope.id,

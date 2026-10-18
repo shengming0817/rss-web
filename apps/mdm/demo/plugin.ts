@@ -5,7 +5,6 @@ import { createScenario } from './scenario'
 import { createDeviceDemo } from './devices/state'
 import { createAutomationDemo } from './policies/state'
 import { seedScriptPolicies } from './policies/seed'
-import { createPublicationDemo } from './software/publication'
 import { createImportsDemo } from './software/imports'
 export function demoPlugin(): Plugin {
   return {
@@ -20,7 +19,7 @@ export function demoPlugin(): Plugin {
       seedScriptPolicies(automation)
       const onboarding = createOnboardingDemo(automation.authorization.can)
       const software = automation.lifecycle
-      const publication = createPublicationDemo(automation.resources, software)
+      const publication = automation.publication
       const imports = createImportsDemo(automation.resources, software)
       const scenario = createScenario(
         [
@@ -35,7 +34,6 @@ export function demoPlugin(): Plugin {
           onboarding.reset()
           devices.reset()
           automation.reset()
-          publication.reset()
           imports.reset()
           seedScriptPolicies(automation)
         },

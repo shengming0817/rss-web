@@ -15,6 +15,7 @@ import { createConfigurationDemo } from './configurations'
 import { createWorkflowDemo } from './workflows'
 import type { DemoEvent } from './schedule'
 import { createLifecycleDemo } from '../software/lifecycle'
+import { createPublicationDemo } from '../software/publication'
 import { createSoftwarePolicyDemo } from '../software/assignments'
 import { softwareExecution } from '../../src/features/software/clients/execution'
 import { createSecurityDemo } from '../security/state'
@@ -62,11 +63,15 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
     scopes.resolve(d.scope) ? undefined : error('operation_conflict'),
   )
   const lifecycle = createLifecycleDemo(resources),
+    publication = createPublicationDemo(resources, lifecycle, (actor) =>
+      authorization.can(actor, 'software_write'),
+    ),
     software = createSoftwarePolicyDemo(
       devices,
       { resolve: scopes.freeze, snapshot: scopes.snapshot },
       resources,
       lifecycle,
+      publication,
       policyStore,
     )
   const configurationPolicies = createConfigurationPolicies(devices, scopes, resources, policyStore)
@@ -159,6 +164,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         configurations,
         workflows,
         lifecycle,
+        publication,
         software,
       ]) {
         const reply = owner.handle(request, scenario)
@@ -266,6 +272,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
     configurationPolicies,
     scopes,
     lifecycle,
+    publication,
     software,
 
     handle,

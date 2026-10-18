@@ -63,7 +63,6 @@ export const tenantPermissions = [
   'software_write',
   'software_withdraw',
   'release_read',
-  'release_write',
   'release_publish',
   'release_withdraw',
   'release_recover',

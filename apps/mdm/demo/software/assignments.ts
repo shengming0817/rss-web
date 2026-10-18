@@ -7,6 +7,7 @@ import { createPolicyStore } from '../policies/store'
 import type { createDeviceDemo } from '../devices/state'
 import type { createResourceDemo } from '../policies/resources'
 import type { createScopeDemo } from '../policies/scopes'
+import type { createPublicationDemo } from './publication'
 import type { createLifecycleDemo } from './lifecycle'
 import type { DemoEvent } from '../policies/schedule'
 import { closed, identifier, uuid } from '../../src/services/decode'
@@ -22,6 +23,7 @@ export function createSoftwarePolicyDemo(
   scopes: Pick<ReturnType<typeof createScopeDemo>, 'resolve' | 'snapshot'>,
   resources: Pick<ReturnType<typeof createResourceDemo>, 'read'>,
   lifecycle: Pick<ReturnType<typeof createLifecycleDemo>, 'isEnabled' | 'binding'>,
+  publication: Pick<ReturnType<typeof createPublicationDemo>, 'binding'>,
   store = createPolicyStore(),
 ) {
   const policies = {
@@ -40,11 +42,22 @@ export function createSoftwarePolicyDemo(
   }
   const frozenBindings = new Map<string, string | null>()
   let now = Math.floor(Date.now() / 1000)
+  function binding(action: Definition['action']) {
+    const base = lifecycle.binding(action.resource.id, action.resource.version)
+    if (action.delivery.kind === 'direct') return base
+    const published = publication.binding(
+      action.delivery.target,
+      action.resource.id,
+      action.resource.version,
+    )
+    return base && published ? JSON.stringify([base, published]) : null
+  }
   function admissionFailure(d: Definition) {
     const r = resources.read(d.action.resource.id),
       v = r?.versions.find((v) => v.id === d.action.resource.version)
-    if (r?.kind !== 'software' || v?.state !== 'active' || !lifecycle.isEnabled(r.id, v.id))
+    if (r?.kind !== 'software' || !v || v.state === 'archived' || !lifecycle.isEnabled(r.id, v.id))
       return error('operation_conflict')
+    if (!binding(d.action)) return error('operation_conflict')
     for (const [target, key] of Object.entries(d.action.resource.variants)) {
       const variant = v.variants.find(
         (v) => `${v.platform}_${v.architecture}` === target && v.key === key,
@@ -69,10 +82,7 @@ export function createSoftwarePolicyDemo(
         ? error('operation_conflict')
         : undefined
     },
-    (d) =>
-      d.action.kind === 'software'
-        ? lifecycle.binding(d.action.resource.id, d.action.resource.version)
-        : null,
+    (d) => (d.action.kind === 'software' ? binding(d.action) : null),
   )
   function members(d: Definition, index: number) {
     const root = scopes.resolve(d.scope)?.members ?? [],
@@ -172,10 +182,7 @@ export function createSoftwarePolicyDemo(
       return { state: 'missing_variant', stage }
     if (
       admissionFailure(d) ||
-      (version &&
-        frozenBindings.has(version) &&
-        frozenBindings.get(version) !==
-          lifecycle.binding(d.action.resource.id, d.action.resource.version))
+      (version && frozenBindings.has(version) && frozenBindings.get(version) !== binding(d.action))
     )
       return { state: 'authorization_withdrawn', stage }
     return { state: 'eligible', stage }
@@ -195,13 +202,7 @@ export function createSoftwarePolicyDemo(
       if (request.method !== 'GET' && authored.status < 300) {
         for (const p of policies.values())
           if (!frozenBindings.has(p.versionId))
-            frozenBindings.set(
-              p.versionId,
-              lifecycle.binding(
-                p.definition.action.resource.id,
-                p.definition.action.resource.version,
-              ),
-            )
+            frozenBindings.set(p.versionId, binding(p.definition.action))
         runs.recover()
       }
       return authored
@@ -357,13 +358,7 @@ export function createSoftwarePolicyDemo(
     reconcile() {
       for (const p of policies.values())
         if (!frozenBindings.has(p.versionId))
-          frozenBindings.set(
-            p.versionId,
-            lifecycle.binding(
-              p.definition.action.resource.id,
-              p.definition.action.resource.version,
-            ),
-          )
+          frozenBindings.set(p.versionId, binding(p.definition.action))
       runs.recover()
     },
     tick(event: DemoEvent, scenario: Scenario) {

@@ -1,198 +1,260 @@
 <script setup lang="ts">
 import { UiButton } from '@rss/core/components'
-import { ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { operation, useOperation, type Operation } from '../../../services/useOperation'
-import { rings, type Ring, type Publication, type PublicationChange } from '../clients/publication'
+import type { Publication, PublicationChange, Publish } from '../clients/publication'
 import { deviceBinding } from '../../devices/useDeviceBinding'
+import SoftwareResourceSelect from '../components/SoftwareResourceSelect.vue'
 import PageFrame from '../../../components/PageFrame.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.software.publication,
   { run, runWrite, busy, failure, uncertain } = useOperation([], () => deviceBinding(runtime))
-const source = ref(''),
-  id = ref(''),
+const target = ref(''),
   resource = ref(''),
-  version = ref('1'),
-  current = ref<Publication>()
-const confirmedReplay = ref(false)
-let pending:
-  | { target: { source: string; id: string }; body: Operation<PublicationChange> }
-  | undefined
-let selected: { source: string; id: string } | undefined
+  version = ref(''),
+  current = ref<Publication>(),
+  page = ref<Awaited<ReturnType<typeof client.list>>>(),
+  targets = ref<Awaited<ReturnType<typeof client.targets>>>(),
+  confirmedReplay = ref(false)
+let pending: { id: string; body: Operation<PublicationChange> } | undefined
+function load(after?: string) {
+  void run(
+    () => client.list({ after }),
+    (v) => {
+      page.value = v
+    },
+  )
+}
+function loadTargets(after?: string) {
+  void run(
+    () => client.targets(after),
+    (v) => {
+      targets.value = v
+    },
+  )
+}
+function open(id: string) {
+  void run(
+    () => client.read(id),
+    (v) => {
+      current.value = v
+    },
+  )
+}
 function create() {
   if (busy.value || uncertain.value) return
   current.value = undefined
-  selected = undefined
   pending = undefined
   confirmedReplay.value = false
-  id.value = ''
-  resource.value = ''
 }
-function read() {
-  const target = uncertain.value && selected ? selected : { source: source.value, id: id.value }
-  void run(
-    () => client.read(target.source, target.id),
+async function save() {
+  if (busy.value || uncertain.value) return
+  const selected = targets.value?.items.find((v) => v.id === target.value)
+  if (!selected) {
+    failure.value = 'invalidRequest'
+    return
+  }
+  const r = resource.value,
+    v = version.value,
+    selectedTarget = { id: selected.id, digest: [...selected.digest] }
+  let input: Publish | undefined
+  const loaded = await run(
+    async () => {
+      const [header, version] = await Promise.all([
+        runtime.policies.resources.read(r),
+        runtime.software.lifecycle.version(r, v),
+      ])
+      if (header.kind !== 'software') throw new Error('Wrong resource')
+      return {
+        action: 'publish' as const,
+        resource: r,
+        version: v,
+        expectedResourceRevision: header.revision,
+        resourceDigest: version.resourceDigest,
+        target: selectedTarget.id,
+        targetDigest: selectedTarget.digest,
+      }
+    },
     (v) => {
-      selected = target
+      input = v
+    },
+  )
+  if (!loaded || !input) return
+  const body = operation(input)
+  pending = { id: body.operationId, body }
+  confirmedReplay.value = false
+  void runWrite(
+    () => client.publish(body),
+    (v) => {
       current.value = v
+      pending = undefined
+    },
+  )
+}
+function change(action: 'recover' | 'retry' | 'withdraw') {
+  if (busy.value || uncertain.value || !current.value) return
+  const id = current.value.id,
+    body = operation({ action }, current.value.revision)
+  pending = { id, body }
+  confirmedReplay.value = false
+  void runWrite(
+    () => client.change(id, body),
+    (v) => {
+      current.value = v
+      pending = undefined
+    },
+  )
+}
+function reconcile() {
+  if (!pending) {
+    if (current.value) open(current.value.id)
+    return
+  }
+  const original = pending
+  void run(
+    async () => {
+      const result = await client.list({ operationId: original.body.operationId })
+      const found = result.items.find((v) => v.id === original.id)
+      return found ? client.read(found.id) : undefined
+    },
+    (v) => {
+      if (v) current.value = v
     },
   )
 }
 function replay() {
   if (busy.value || !confirmedReplay.value || !pending) return
-  const original = pending
+  const original = pending,
+    input = original.body.input
   confirmedReplay.value = false
   void runWrite(
-    () => client.change(original.target.source, original.target.id, original.body),
+    () =>
+      input.action === 'publish'
+        ? client.publish({ ...original.body, input })
+        : client.change(original.id, { ...original.body, input }),
     (v) => {
       current.value = v
       pending = undefined
     },
   )
-}
-function change(input: PublicationChange, recovery = false) {
-  if (busy.value || (uncertain.value && !recovery)) return
-  const target = selected ?? { source: source.value, id: id.value }
-  const body = operation(input, current.value?.revision ?? 0)
-  selected = target
-  pending = { target, body }
-  confirmedReplay.value = false
-  void runWrite(
-    () => client.change(target.source, target.id, body),
-    (v) => {
-      current.value = v
-      pending = undefined
-    },
-  )
-}
-async function save() {
-  if (busy.value || uncertain.value) return
-  const target = { source: source.value, id: id.value },
-    r = resource.value,
-    v = version.value
-  let basis: { revision: number; digest: number[] } | undefined
-  const loaded = await run(
-    async () => {
-      const [resource, version] = await Promise.all([
-        runtime.policies.resources.read(r),
-        runtime.software.lifecycle.version(r, v),
-      ])
-      return { revision: resource.revision, digest: version.resourceDigest }
-    },
-    (value) => {
-      basis = value
-    },
-  )
-  if (loaded && basis) {
-    selected = target
-    change({
-      action: 'candidate',
-      resource: r,
-      version: v,
-      expectedResourceRevision: basis.revision,
-      resourceDigest: basis.digest,
-    })
-  }
-}
-function canPublish(index: number) {
-  return (
-    !!current.value &&
-    current.value.disposition === 'active' &&
-    !current.value.rings[index]?.publication &&
-    (index === 0 || current.value.rings[index - 1]?.publication?.outcome === 'published')
-  )
-}
-function recover(ring: Ring) {
-  const p = current.value?.rings.find((r) => r.ring === ring)?.publication
-  if (p) change({ action: 'recover', ring, publication: p.id, attempt: p.attempt }, true)
-}
-function retry(ring: Ring) {
-  const p = current.value?.rings.find((r) => r.ring === ring)?.publication
-  if (p?.outcome === 'not_applied') change({ action: 'retry', ring, attempt: p.attempt })
 }
 watch(
   () => deviceBinding(runtime),
   () => {
     current.value = undefined
-    selected = undefined
+    page.value = undefined
+    targets.value = undefined
     pending = undefined
     confirmedReplay.value = false
-    source.value = ''
-    id.value = ''
+    target.value = ''
     resource.value = ''
+    version.value = ''
   },
   { flush: 'sync' },
 )
+onMounted(() => load())
 </script>
 <template>
   <PageFrame :title="t('software.publications')" :busy="busy" :failure="failure">
-    <p>{{ t('software.discoveryUnavailable') }}</p>
-    <form @submit.prevent="read">
+    <p>{{ t('software.directPublicationHint') }}</p>
+    <UiButton :disabled="busy || uncertain" @click="create">{{
+      t('software.newPublication')
+    }}</UiButton>
+    <UiButton :disabled="busy || uncertain" @click="load()">{{
+      t('software.publicationRecords')
+    }}</UiButton>
+    <section v-if="page" class="console-panel">
+      <p v-if="!page.items.length">{{ t('policies.empty') }}</p>
+      <article v-for="item in page.items" :key="item.id">
+        <p>
+          {{ item.resource }} / {{ item.version }} · {{ item.target }} ·
+          {{ t(`software.publication_${item.outcome}`) }}
+        </p>
+        <p v-if="item.withdrawn">{{ t('software.lifecycle_withdrawn') }}</p>
+        <UiButton :disabled="busy || uncertain" @click="open(item.id)">{{
+          t('policies.open')
+        }}</UiButton>
+      </article>
+      <UiButton
+        v-if="page.nextCursor"
+        :disabled="busy || uncertain"
+        @click="load(page.nextCursor)"
+        >{{ t('devices.next') }}</UiButton
+      >
+    </section>
+    <form v-if="!current" data-testid="publication-create" @submit.prevent="save">
       <fieldset :disabled="busy || uncertain">
-        <label
-          >{{ t('software.binding') }}<input v-model="source" class="ui-input" required /></label
-        ><label>{{ t('policies.id') }}<input v-model="id" class="ui-input" required /></label
-        ><UiButton type="submit">{{ t('policies.open') }}</UiButton>
+        <legend>{{ t('software.newPublication') }}</legend>
+        <SoftwareResourceSelect
+          v-model:resource="resource"
+          v-model:version="version"
+          :disabled="busy || uncertain"
+        />
+        <UiButton type="button" @click="loadTargets()">{{ t('software.loadTargets') }}</UiButton>
+        <label for="publication-target">{{ t('software.binding') }}</label>
+        <select id="publication-target" v-model="target" class="ui-input" required>
+          <option value="">{{ t('devices.select') }}</option>
+          <option v-for="item in targets?.items" :key="item.id" :value="item.id">
+            {{ item.id }} · {{ item.protocol }}
+          </option>
+        </select>
+        <p v-if="targets && !targets.items.length">{{ t('software.noTargets') }}</p>
+        <UiButton
+          v-if="targets?.nextCursor"
+          type="button"
+          @click="loadTargets(targets.nextCursor)"
+          >{{ t('devices.next') }}</UiButton
+        >
+        <UiButton type="submit" :disabled="!resource || !version || !target">{{
+          t('software.publish')
+        }}</UiButton>
       </fieldset>
     </form>
-    <UiButton :disabled="busy || uncertain" @click="create">{{ t('policies.create') }}</UiButton>
-    <details class="console-panel">
-      <summary>{{ t('software.saveDraft') }}</summary>
-      <form @submit.prevent="save">
-        <fieldset :disabled="busy || uncertain || !!current">
-          <label
-            >{{ t('software.resource')
-            }}<input v-model="resource" class="ui-input" required /></label
-          ><label
-            >{{ t('software.version') }}<input v-model="version" class="ui-input" required /></label
-          ><UiButton type="submit">{{ t('software.saveDraft') }}</UiButton>
-        </fieldset>
-      </form>
-    </details>
-    <UiButton :disabled="busy" @click="read">{{ t('software.reconcile') }}</UiButton
-    ><template v-if="current"
-      ><p>{{ current.id }} · {{ current.revision }} · {{ current.disposition }}</p>
-      <p>{{ t('software.saveNotPublish') }}</p>
-      <section v-for="(ring, index) in rings" :key="ring" class="console-panel">
-        <h2>{{ t(`software.ring_${ring}`) }}</h2>
-        <p>{{ current.rings[index]?.publication?.outcome ?? t('software.draft') }}</p>
-        <p v-if="current.rings[index]?.publication">
-          {{ current.rings[index]?.publication?.id.join(' ') }} ·
-          {{ current.rings[index]?.publication?.attempt }}
-        </p>
-        <UiButton
-          :disabled="busy || uncertain || !canPublish(index)"
-          @click="change({ action: 'publish', ring })"
-          >{{ t('software.publish') }}</UiButton
-        >
-        <UiButton
-          v-if="['pending', 'unknown'].includes(current.rings[index]?.publication?.outcome ?? '')"
-          :disabled="busy"
-          @click="recover(ring)"
-          >{{ t('software.reconcile') }}</UiButton
-        >
-        <UiButton
-          v-if="current.rings[index]?.publication?.outcome === 'not_applied'"
-          :disabled="busy || uncertain"
-          @click="retry(ring)"
-          >{{ t('software.retry') }}</UiButton
-        >
-        <UiButton
-          v-if="current.rings[index]?.publication?.outcome === 'published'"
-          :disabled="busy || uncertain"
-          @click="change({ action: 'withdraw', ring })"
-          >{{ t('software.withdraw') }}</UiButton
-        >
-      </section>
+    <section v-if="current" class="console-panel" data-testid="publication-detail">
+      <h2>{{ current.resource }} / {{ current.version }}</h2>
+      <p>{{ current.target }} · {{ t(`software.publication_${current.outcome}`) }}</p>
+      <p>{{ current.id }} · {{ t('software.publicationAttempt') }} {{ current.attempt }}</p>
+      <p v-if="current.withdrawn">
+        {{ t('software.lifecycle_withdrawn') }} ·
+        {{ current.withdrawal ? t(`software.withdrawal_${current.withdrawal}`) : '' }}
+      </p>
+      <UiButton :disabled="busy" @click="reconcile">{{ t('software.reconcile') }}</UiButton>
+      <UiButton
+        v-if="
+          ['pending', 'unknown'].includes(current.outcome) ||
+          (current.withdrawal &&
+            current.withdrawal !== 'withdrawn' &&
+            current.withdrawal !== 'not_published')
+        "
+        :disabled="busy || uncertain"
+        @click="change('recover')"
+        >{{ t('software.recoverPublication') }}</UiButton
+      >
+      <UiButton
+        v-if="current.outcome === 'not_applied' && !current.withdrawn"
+        :disabled="busy || uncertain"
+        @click="change('retry')"
+        >{{ t('software.retry') }}</UiButton
+      >
+      <UiButton
+        v-if="!current.withdrawn"
+        :disabled="busy || uncertain"
+        @click="change('withdraw')"
+        >{{ t('software.withdraw') }}</UiButton
+      >
+      <p>{{ t('software.withdrawHint') }}</p>
       <details v-if="current.document">
         <summary>{{ t('software.document') }}</summary>
         <pre>{{ JSON.stringify(current.document, null, 2) }}</pre>
-      </details></template
-    >
-    <section v-if="uncertain && pending" class="console-panel">
+      </details>
+    </section>
+    <section v-if="uncertain && pending" class="console-panel" data-testid="publication-unknown">
       <p>{{ t('software.publicationUnknown') }}</p>
+      <p>{{ pending.body.operationId }}</p>
+      <UiButton :disabled="busy" @click="reconcile">{{ t('software.lookupOperation') }}</UiButton>
       <label
         ><input v-model="confirmedReplay" type="checkbox" :disabled="busy" />{{
           t('policies.confirmReplay')

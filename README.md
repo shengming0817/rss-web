@@ -56,3 +56,13 @@ fixture 由隔离宿主准备，包含 `origin`（https://localhost:端口）、
 注册旅程的生产 HTTPS 浏览器入口为 `MDM_ENROLLMENT_BROWSER_FIXTURE=/absolute/private-fixture.json pnpm test:mdm:enrollment-browser`；fixture、原生／PKI前提和逐项覆盖边界见 [MDM 接入说明](docs/architecture/20260926-2544-mdm-web.md#原生注册组织接入与-agent-安装交付2633)。
 
 设备视图与关联的真实 HTTPS Chromium 验证：`MDM_DEVICE_BACKEND=/absolute/rss-mdm pnpm test:mdm:device-browser`。入口构建当前 UI，使用后端隔离开发环境与构建租约，退出清理 PG、产品进程与 TLS 网关；详见 [设备关联接入与验收](docs/architecture/20260926-2544-mdm-web.md#正式设备视图与关联2713)。
+
+软件直接发布与设备分批部署使用后端固定 revision `5638705a408c5ac06d54bf166182e3822eb9c903`（rss-mdm PR #1330）。来源、目标与发布记录来自正式目录；Direct 无需发布目标，Native 选择确切版本的发布目标。部署默认全量，分批配置为可选。接口、更新与恢复行为见 [软件来源与发布](docs/architecture/20260926-2544-mdm-web.md#软件来源resource导入与发布)。
+
+正式软件发布、版本更新与分批部署的 HTTPS Chromium 验证：
+
+```bash
+MDM_SOFTWARE_BACKEND=/absolute/rss-mdm pnpm test:mdm:software-browser
+```
+
+后端使用上述固定 revision；入口构建当前 UI，并复用后端隔离环境与构建租约。覆盖真实来源/目标/发布目录、单目标发布、已提交响应丢失后的原操作查询与显式重放、默认全量、显式版本更新、Native 目标与多个 Scope、时间/成功率门槛配置、状态查询、暂停与撤回。退出独立清理 PG、产品进程和 TLS 网关；结果记录实际后端 revision。仅使用合成输入，不证明 Agent 真机安装或升级。

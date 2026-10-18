@@ -4,45 +4,70 @@ import type { createResourceDemo } from '../policies/resources'
 import type { createLifecycleDemo } from './lifecycle'
 import { createReceipts, error, ok, operation } from '../http'
 import { closed, count, digest, enumeration, identifier, record } from '../../src/services/decode'
-import { rings, type Publication } from '../../src/features/software/clients/publication'
+import type { Publication } from '../../src/features/software/clients/publication'
 const hash = (v: unknown) => [...createHash('sha256').update(JSON.stringify(v)).digest()],
   same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
-export const publicationBindings = [
-  { id: 'demo-winget', kind: 'Winget' as const },
-  { id: 'demo-brew', kind: 'Brew' as const },
-]
+export const publicationTargets = ['winget', 'brew'].map((protocol) => ({
+  id: `demo-${protocol}`,
+  protocol,
+  digest: hash(['target', protocol]),
+}))
 export function createPublicationDemo(
   resources: ReturnType<typeof createResourceDemo>,
   lifecycle: ReturnType<typeof createLifecycleDemo>,
+  canEnableDraft: (actor: string) => boolean,
 ) {
-  const rows = new Map<
-      string,
-      { value: Publication; resource: string; version: string; reads: number }
-    >(),
-    receipts = createReceipts()
+  const rows = new Map<string, { value: Publication; lifecycle: string | null }>(),
+    receipts = createReceipts(),
+    operations = new Map<string, string>(),
+    recoveries = new Map<string, { fingerprint: number[]; attempt: number }>()
+  const refresh = (row: { value: Publication; lifecycle: string | null }) => {
+    const state = lifecycle.versionState(row.value.resource, row.value.version)
+    if (state?.state === 'withdrawn' || (state && state.operation !== row.lifecycle)) {
+      row.value.withdrawn = true
+      row.value.withdrawal = 'withdrawn'
+    }
+    return structuredClone(row.value)
+  }
   const handle: DomainHandler = (request, scenario) => {
-    const m = /^\/api\/v1\/software-sources\/([^/]+)\/candidates\/([^/]+)$/.exec(request.path)
-    if (!m) return
+    const collection = request.path === '/api/v1/software/publications',
+      targets = request.path === '/api/v1/software/publication-targets',
+      m = /^\/api\/v1\/software\/publications\/([^/]+)$/.exec(request.path)
+    if (!collection && !targets && !m) return
     if (scenario === 'denied') return error('permission_denied', 403)
     try {
-      const source = identifier(decodeURIComponent(m[1]!)),
-        id = identifier(decodeURIComponent(m[2]!)),
-        binding = publicationBindings.find((b) => b.id === source),
-        key = JSON.stringify([source, id]),
-        old = rows.get(key)
-      if (!binding) return error('software_source_not_found', 404)
-      if (binding.kind === 'Brew') return error('action_not_supported', 501)
       if (request.method === 'GET') {
-        if (!old) return error('software_candidate_not_found', 404)
-        if (scenario === 'normal' && old.reads++ > 0)
-          for (const ring of old.value.rings)
-            if (ring.publication?.outcome === 'pending') ring.publication.outcome = 'published'
-        return ok(structuredClone(old.value))
+        if (m) {
+          const row = rows.get(identifier(decodeURIComponent(m[1]!)))
+          return row ? ok(refresh(row)) : error('software_publication_not_found', 404)
+        }
+        const limit = Number(request.query.get('limit') ?? 20),
+          after = request.query.get('after')
+        if (!Number.isInteger(limit) || limit < 1 || limit > 100)
+          return error('malformed_request', 400)
+        const op = request.query.get('operationId')
+        const values = targets
+          ? publicationTargets
+          : [...rows.values()]
+              .map(refresh)
+              .filter(
+                (v) =>
+                  ['target', 'resource', 'version'].every(
+                    (k) =>
+                      !request.query.has(k) ||
+                      v[k as 'target' | 'resource' | 'version'] === request.query.get(k),
+                  ) &&
+                  (!op || operations.get(op) === v.id),
+              )
+        const page = values
+            .filter((v) => !after || v.id > after)
+            .sort((a, b) => a.id.localeCompare(b.id)),
+          items = page.slice(0, limit)
+        return ok({ items, nextCursor: page.length > limit ? items.at(-1)!.id : null })
       }
-      if (request.method !== 'POST') return
+      if (request.method !== 'POST' || targets) return
       const op = operation(request.body),
         action = enumeration(record(op.input)['action'], [
-          'candidate',
           'publish',
           'recover',
           'retry',
@@ -50,125 +75,169 @@ export function createPublicationDemo(
         ] as const),
         input = closed(
           op.input,
-          action === 'candidate'
-            ? ['action', 'resource', 'version', 'expectedResourceRevision', 'resourceDigest']
-            : action === 'recover'
-              ? ['action', 'ring', 'publication', 'attempt']
-              : action === 'retry'
-                ? ['action', 'ring', 'attempt']
-                : ['action', 'ring'],
+          action === 'publish'
+            ? [
+                'action',
+                'resource',
+                'version',
+                'expectedResourceRevision',
+                'resourceDigest',
+                'target',
+                'targetDigest',
+              ]
+            : ['action'],
+        ),
+        id = collection ? op.operationId : identifier(decodeURIComponent(m![1]!))
+      if (collection !== (action === 'publish')) return error('malformed_request', 400)
+      if (action === 'recover') {
+        const row = rows.get(id)
+        if (!row) return error('software_publication_not_found', 404)
+        const fingerprint = hash([request.actor.principalId, request.path, request.body]),
+          accepted = recoveries.get(op.operationId)
+        if (
+          accepted
+            ? !same(accepted.fingerprint, fingerprint)
+            : row.value.revision !== op.expectedRevision
         )
-      return receipts.write(request, op.operationId, () => {
-        if (op.expectedRevision !== (old?.value.revision ?? 0)) return error('operation_conflict')
-        if (action === 'candidate') {
-          if (old) return error('operation_conflict')
-          const resource = resources.read(identifier(input['resource'])),
-            version = resource?.versions.find((v) => v.id === input['version'])
-          if (
-            resource?.kind !== 'software' ||
-            !version ||
-            !['active', 'frozen'].includes(version.state) ||
-            resource.revision !== count(input['expectedResourceRevision']) ||
-            !same(version.digest, digest(input['resourceDigest'])) ||
-            !resources.contentReady(resource.id, version.id)
-          )
-            return error('operation_conflict')
-          const d = version.variants[0]?.declaration
-          if (
-            d?.kind !== 'software' ||
-            d.definition.export.kind === 'disabled' ||
-            (d.definition.export.kind === 'winget') !== (binding.kind === 'Winget')
-          )
-            return error('action_not_supported', 501)
-          const document: Publication['document'] =
-            binding.kind === 'Winget'
-              ? {
-                  kind: 'Winget',
-                  manifest: {
-                    PackageIdentifier: d.definition.package,
-                    Versions: [
-                      {
-                        PackageVersion: d.definition.version,
-                        DefaultLocale: {
-                          PackageName:
-                            d.definition.export.kind === 'winget'
-                              ? d.definition.export.name
-                              : d.definition.package,
-                        },
-                      },
-                    ],
-                  },
-                }
-              : undefined
-          const value: Publication = {
-            id,
-            revision: 0,
-            contentDigest: version.digest,
-            manifestDigest: hash(document),
-            sourceSnapshot: hash(source),
-            disposition: 'active',
-            rings: rings.map((ring) => ({ ring, state: 'candidate', publication: null })),
-            ...(document ? { document } : {}),
-          }
-          rows.set(key, { value, resource: resource.id, version: version.id, reads: 0 })
-          const { document: _document, ...summary } = value
-          void _document
-          return ok(summary)
-        }
-        if (!old) return error('software_candidate_not_found', 404)
-        const ring = enumeration(input['ring'], rings),
-          index = rings.indexOf(ring),
-          r = old.value.rings[index]!
-        if (action === 'publish') {
-          if (
-            r.publication ||
-            old.value.disposition !== 'active' ||
-            (index > 0 && old.value.rings[index - 1]?.publication?.outcome !== 'published')
-          )
-            return error('operation_conflict')
-          if (
-            !lifecycle.enableDraft(
-              old.resource,
-              old.version,
-              request.actor.principalId,
-              op.operationId,
-            )
-          )
-            return error('operation_conflict')
-          if (!resources.activatePublished(old.resource, old.version))
-            return error('operation_conflict')
-          r.state = 'publication'
-          r.publication = { id: hash([source, id, ring]), attempt: 1, outcome: 'pending' }
-        } else if (action === 'recover') {
-          if (
-            !r.publication ||
-            !same(r.publication.id, digest(input['publication'])) ||
-            r.publication.attempt !== count(input['attempt'])
-          )
-            return error('operation_conflict')
-          r.publication.outcome =
+          return error('operation_conflict')
+        if (!accepted) recoveries.set(op.operationId, { fingerprint, attempt: row.value.attempt })
+        operations.set(op.operationId, id)
+        if (accepted && row.value.attempt > accepted.attempt) return ok(refresh(row))
+        refresh(row)
+        const before = JSON.stringify(row.value)
+        if (row.value.withdrawn)
+          row.value.withdrawal = scenario === 'unknown' ? 'unknown' : 'withdrawn'
+        else
+          row.value.outcome =
             scenario === 'unknown'
               ? 'unknown'
               : scenario === 'partial'
                 ? 'not_applied'
                 : 'published'
-        } else if (action === 'retry') {
+        if (before !== JSON.stringify(row.value)) row.value.revision++
+        return scenario === 'unknown'
+          ? error('operation_unknown', 503)
+          : ok(structuredClone(row.value))
+      }
+      return receipts.write(request, op.operationId, () => {
+        const old = rows.get(id)
+        if (op.expectedRevision !== (old?.value.revision ?? 0)) return error('operation_conflict')
+        if (action === 'publish') {
+          if (old) return error('operation_conflict')
+          const target = publicationTargets.find((v) => v.id === input['target'])
+          if (!target) return error('software_source_not_found', 404)
+          if (!same(target.digest, digest(input['targetDigest'])))
+            return error('operation_conflict')
+          const r = resources.read(identifier(input['resource'])),
+            v = r?.versions.find((v) => v.id === input['version'])
           if (
-            r.publication?.outcome !== 'not_applied' ||
-            r.publication.attempt !== count(input['attempt']) ||
-            !lifecycle.isEnabled(old.resource, old.version)
+            r?.kind !== 'software' ||
+            !v ||
+            !['active', 'frozen'].includes(v.state) ||
+            r.revision !== count(input['expectedResourceRevision']) ||
+            !same(v.digest, digest(input['resourceDigest'])) ||
+            !resources.contentReady(r.id, v.id)
           )
             return error('operation_conflict')
-          r.publication.attempt++
-          r.publication.outcome = 'pending'
+          const declaration = v.variants[0]?.declaration
+          if (
+            declaration?.kind !== 'software' ||
+            declaration.definition.export.kind !== target.protocol
+          )
+            return error('action_not_supported', 501)
+          if (!lifecycle.isEnabled(r.id, v.id) && !canEnableDraft(request.actor.principalId))
+            return error('permission_denied', 403)
+          const d = declaration.definition
+          let document: Publication['document']
+          if (d.export.kind === 'winget')
+            document = {
+              kind: 'Winget',
+              manifest: {
+                PackageIdentifier: d.package,
+                Versions: [
+                  { PackageVersion: d.version, DefaultLocale: { PackageName: d.export.name } },
+                ],
+              },
+            }
+          else if (d.export.kind === 'brew' && d.export.payload.kind === 'cask') {
+            const payload = d.export.payload
+            document = {
+              kind: 'Brew',
+              recipe: {
+                package: d.package,
+                version: d.version,
+                name: d.export.name,
+                description: d.export.description,
+                homepage: d.export.homepage,
+                payload: {
+                  kind: 'Cask',
+                  install: payload.receipts.length
+                    ? { kind: 'Pkg', path: payload.path, receipts: payload.receipts }
+                    : { kind: 'App', path: payload.path },
+                  artifacts: v.variants.flatMap((variant) => {
+                    if (variant.declaration.kind !== 'software') return []
+                    return Object.entries(variant.declaration.definition.artifacts).map(
+                      ([key, a]) => ({
+                        architecture: variant.architecture,
+                        artifact: {
+                          key,
+                          url: a.origin ?? `https://demo.invalid/artifacts/${a.reference}`,
+                          length: a.length,
+                          sha256: a.sha256,
+                        },
+                      }),
+                    )
+                  }),
+                },
+              },
+            }
+          } else return error('action_not_supported', 501)
+          if (!lifecycle.enableDraft(r.id, v.id, request.actor.principalId, op.operationId))
+            return error('operation_conflict')
+          const value: Publication = {
+            id,
+            revision: 0,
+            target: target.id,
+            resource: r.id,
+            version: v.id,
+            publication: hash([id, target.id, v.digest]),
+            contentDigest: v.digest,
+            manifestDigest: hash(document),
+            targetDigest: target.digest,
+            attempt: 1,
+            outcome: 'pending',
+            withdrawn: false,
+            withdrawal: null,
+            document,
+          }
+          rows.set(id, { value, lifecycle: lifecycle.versionState(r.id, v.id)?.operation ?? null })
+          operations.set(op.operationId, id)
+          return ok(structuredClone(value), 202)
+        }
+        if (!old) return error('software_publication_not_found', 404)
+        refresh(old)
+        if (action === 'retry') {
+          if (
+            old.value.outcome !== 'not_applied' ||
+            old.value.withdrawn ||
+            !lifecycle.isEnabled(old.value.resource, old.value.version)
+          )
+            return error('operation_conflict')
+          old.value.attempt++
+          old.value.outcome = 'pending'
         } else {
-          if (r.publication?.outcome !== 'published') return error('operation_conflict')
-          old.value.disposition = 'deprecated'
+          old.value.withdrawn = true
+          old.value.withdrawal =
+            old.value.outcome === 'unknown'
+              ? 'waiting_publication'
+              : old.value.outcome === 'published'
+                ? 'withdrawn'
+                : 'not_published'
+          if (old.value.outcome === 'pending') old.value.outcome = 'not_applied'
         }
         old.value.revision++
-        const { document: _document, ...summary } = old.value
-        void _document
-        return ok(structuredClone(summary), action === 'publish' ? 202 : 200)
+        operations.set(op.operationId, id)
+        return ok(structuredClone(old.value))
       })
     } catch {
       return error('malformed_request', 400)
@@ -176,9 +245,26 @@ export function createPublicationDemo(
   }
   return {
     handle,
+    binding(target: string, resource: string, version: string) {
+      const row = [...rows.values()].find((row) => {
+        const v = refresh(row)
+        return (
+          v.target === target &&
+          v.resource === resource &&
+          v.version === version &&
+          v.outcome === 'published' &&
+          !v.withdrawn
+        )
+      })
+      return row && lifecycle.isEnabled(resource, version)
+        ? JSON.stringify([row.value.publication, row.value.targetDigest])
+        : null
+    },
     reset() {
       rows.clear()
       receipts.reset()
+      operations.clear()
+      recoveries.clear()
     },
   }
 }

@@ -53,7 +53,7 @@ it('requires the shared session and CSRF, reconciles a committed unknown write, 
   ).toBe(204)
   for (const path of [
     sourcePath,
-    '/api/v1/software-sources/private/candidates/one',
+    '/api/v1/software/publications/one',
     '/api/v1/policies',
     '/api/v1/operations',
     '/api/v1/resources/app',
@@ -82,7 +82,7 @@ it('requires the shared session and CSRF, reconciles a committed unknown write, 
 
 it('keeps rejected publication writes definite through the shared HTTP error decoder', async () => {
   const resources = createResourceDemo(() => false),
-    publication = createPublicationDemo(resources, createLifecycleDemo(resources))
+    publication = createPublicationDemo(resources, createLifecycleDemo(resources), () => true)
   const scenario = createScenario([publication.handle])
   const login = await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
@@ -90,14 +90,14 @@ it('keeps rejected publication writes definite through the shared HTTP error dec
   })
   const reply = await scenario.handle(
     'POST',
-    '/api/v1/software-sources/missing/candidates/missing',
-    { operationId: crypto.randomUUID(), expectedRevision: 0, input: { action: 'validate' } },
+    '/api/v1/software/publications/missing',
+    { operationId: crypto.randomUUID(), expectedRevision: 0, input: { action: 'recover' } },
     { 'x-csrf-token': (login.body as { csrfToken: string }).csrfToken, 'x-identity-request': '1' },
   )
   expect(decodeMdmError(reply.status, reply.body)).toMatchObject({
     cause: 'wire',
     status: 404,
-    code: 'software_source_not_found',
+    code: 'software_publication_not_found',
   })
 })
 
@@ -106,7 +106,7 @@ it('applies current software and native permissions before dispatching any forma
     { createDeviceDemo } = await import('../devices/state')
   const devices = createDeviceDemo(),
     automation = createAutomationDemo(devices)
-  const publication = createPublicationDemo(automation.resources, automation.lifecycle)
+  const publication = automation.publication
   const scenario = createScenario([
     (request) => automation.authorization.guard(request, devices.batches()),
     publication.handle,
@@ -131,10 +131,7 @@ it('applies current software and native permissions before dispatching any forma
       }),
     ],
     ['/api/v1/software/imports', op({})],
-    [
-      '/api/v1/software-sources/demo-winget/candidates/app',
-      op({ action: 'publish', ring: 'test' }),
-    ],
+    ['/api/v1/software/publications', op({ action: 'publish' })],
     [
       '/api/v1/devices/device-05/operations',
       { operationId: crypto.randomUUID(), deadline: 4102444800, action: { kind: 'restart' } },

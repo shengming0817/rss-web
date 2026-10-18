@@ -261,11 +261,10 @@ function delivery(value: unknown) {
     closed(value, ['kind'])
     return { kind }
   }
-  const v = closed(value, ['kind', 'source', 'ring'])
+  const v = closed(value, ['kind', 'target'])
   return {
     kind,
-    source: coordinate(v['source']),
-    ring: enumeration(v['ring'], ['test', 'pilot', 'production'] as const),
+    target: coordinate(v['target']),
   }
 }
 export function policyAction(value: unknown) {

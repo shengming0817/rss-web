@@ -35,7 +35,7 @@ const statuses: Readonly<Record<string, number>> = {
   plan_preview_not_found: 404,
   resource_not_found: 404,
   software_source_not_found: 404,
-  software_candidate_not_found: 404,
+  software_publication_not_found: 404,
   group_rule_not_found: 404,
   operation_conflict: 409,
   device_view_cursor_invalidated: 409,
@@ -88,7 +88,7 @@ export function decodeMdmError(status: number, value: unknown): RssApiError {
   return identityWireFailure(status, v['code'])
 }
 const paths =
-  /^\/api\/v1\/(?:(?:authorization|devices|device-views|device-associations|software-sources|certificate-archive|asset-fields|device-queries|saved-queries|groups|scopes|policies|compliance-rules|resources|software|enrollments|registration-quotas)(?:\/|$)|operations$|collection-blueprints$|self-enrollments$|agent-(?:configurations|configuration-operations|enrollment-settings)(?:\/|$)|apple\/organizations(?:\/|$)|windows\/entra-policy$|windows\/entra\/terms\/context$|agent\/enroll\/packages(?:\/\{id\})?$|mdm-host\/config\.json$|mdm-candidate\/(?:workspace|devices|groups|policies|executions|software|security|support|authorization|audit|operations|integrations)(?:\/|$))/
+  /^\/api\/v1\/(?:(?:authorization|devices|device-views|device-associations|certificate-archive|asset-fields|device-queries|saved-queries|groups|scopes|policies|compliance-rules|resources|software|enrollments|registration-quotas)(?:\/|$)|operations$|collection-blueprints$|self-enrollments$|agent-(?:configurations|configuration-operations|enrollment-settings)(?:\/|$)|apple\/organizations(?:\/|$)|windows\/entra-policy$|windows\/entra\/terms\/context$|agent\/enroll\/packages(?:\/\{id\})?$|mdm-host\/config\.json$|mdm-candidate\/(?:workspace|devices|groups|policies|executions|software|security|support|authorization|audit|operations|integrations)(?:\/|$))/
 export function createMdmTransport(): HttpTransport {
   const instance = axios.create({ baseURL: '' })
   return {
