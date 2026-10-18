@@ -463,3 +463,229 @@ it('invalidates dangerous confirmation and clears PIN when the action or target 
   expect(create).not.toHaveBeenCalled()
   wrapper.unmount()
 })
+for (const protocol of [
+  { kind: 'winget_rest', location: 'https://packages.example.test/', identifier: 'enterprise' },
+  {
+    kind: 'winget_community',
+    repository: 'https://github.com/example/packages',
+    commit: 'a'.repeat(40),
+  },
+  {
+    kind: 'brew_tap',
+    repository: 'https://github.com/example/tap',
+    commit: 'b'.repeat(40),
+    tap: 'example/tap',
+  },
+])
+  it(`registers the exact ${protocol.kind} form without legacy publisher or approval fields`, async () => {
+    const changeSource = vi.fn(async (_id, _revision, body) => ({
+      ...source,
+      source: body.input.definition,
+      lifecycle: { ...life, operation: body.operationId },
+    }))
+    const { wrapper } = await fixture(SourcesView, { software: { lifecycle: { changeSource } } })
+    await wrapper.findAll('form')[0]!.findAll('input')[0]!.setValue('enterprise')
+    await wrapper.findAll('form')[0]!.findAll('input')[1]!.setValue('2')
+    await wrapper.get('select').setValue(protocol.kind)
+    const inputs = wrapper.findAll('form')[1]!.findAll('input')
+    if ('location' in protocol) {
+      await inputs[0]!.setValue(protocol.location)
+      await inputs[1]!.setValue(protocol.identifier)
+    } else {
+      await inputs[0]!.setValue(protocol.repository)
+      await inputs[1]!.setValue(protocol.commit)
+      if ('tap' in protocol) await inputs[2]!.setValue(protocol.tap)
+    }
+    await wrapper.findAll('form')[1]!.trigger('submit')
+    await flushPromises()
+    expect(changeSource.mock.calls[0]).toMatchObject([
+      'enterprise',
+      '2',
+      {
+        expectedRevision: 0,
+        input: { action: 'register', definition: { id: 'enterprise', revision: '2', protocol } },
+      },
+    ])
+    wrapper.unmount()
+  })
+it('submits a complete synchronous import with explicit target and auxiliary material choices', async () => {
+  const { definition } = softwareResource(),
+    imported = vi.fn().mockResolvedValue({
+      resource: 'imported',
+      version: '2',
+      resourceDigest: sha,
+      storageRevision: 5,
+    })
+  const { wrapper } = await fixture(ImportsView, {
+    software: {
+      lifecycle: {
+        source: vi.fn().mockResolvedValue({
+          ...source,
+          source: { ...source.source, revision: '2' },
+          snapshot: { ...source.snapshot, revision: '2' },
+        }),
+      },
+      imports: { import: imported },
+    },
+  })
+  const inputs = wrapper.findAll('input')
+  for (const [index, value] of [
+    [0, 'enterprise'],
+    [1, '2'],
+    [2, 'imported'],
+    [3, '2'],
+    [4, 4],
+    [5, 'Example.App'],
+    [6, '2.0'],
+    [7, 'arm'],
+    [8, 123],
+  ] as const)
+    await inputs[index]!.setValue(value)
+  await wrapper.findAll('select')[0]!.setValue('windows')
+  await wrapper.findAll('select')[1]!.setValue('aarch64')
+  const selection = {
+    kind: 'winget',
+    installerType: 'msi',
+    scope: 'machine',
+    installerId: 'installer-arm',
+    files: ['installer.yaml'],
+  }
+  const artifact = { reference: 'verify', origin: null, length: 3, sha256: sha },
+    dependency = {
+      package: 'Runtime',
+      packageVersion: '2',
+      resource: 'runtime',
+      version: '2',
+      sha256: sha,
+    },
+    signature = { artifact: 'installer', mechanism: 'authenticode', publisher: 'Example Publisher' }
+  const areas = wrapper.findAll('textarea')
+  for (const [index, value] of [
+    [0, selection],
+    [1, definition.behavior],
+    [2, { verify: artifact }],
+    [3, [dependency]],
+    [4, [signature]],
+  ] as const)
+    await areas[index]!.setValue(JSON.stringify(value))
+  await wrapper.findAll('select')[2]!.setValue('forbid')
+  await wrapper.findAll('input[type=checkbox]')[0]!.setValue(true)
+  await wrapper.findAll('input[type=checkbox]')[1]!.setValue(true)
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(imported.mock.calls[0]?.[0]).toMatchObject({
+    expectedRevision: 4,
+    input: {
+      resource: 'imported',
+      resourceVersion: '2',
+      package: 'Example.App',
+      packageVersion: '2.0',
+      architecture: 'aarch64',
+      variant: 'arm',
+      installerLength: 123,
+      selection,
+      additionalArtifacts: { verify: artifact },
+      dependencies: [dependency],
+      signatures: [signature],
+      reboot: 'forbid',
+      downgrade: 'allow',
+      nativeExport: true,
+    },
+  })
+  expect(wrapper.text()).toContain('imported / 2 · 5')
+  wrapper.unmount()
+})
+it('binds explicit Agent releases in the common Policy and reads canonical registration progress', async () => {
+  const targets = ['windows_x86_64', 'windows_aarch64', 'macos_x86_64', 'macos_aarch64']
+  const releases = targets.map((target, i) => ({
+    releaseId: `11111111-1111-4111-8111-${String(i + 1).padStart(12, '0')}`,
+    target: {
+      platform: target.split('_')[0],
+      architecture: target.startsWith('windows') ? target.slice(8) : target.slice(6),
+    },
+    version: '1',
+    channel: 'test',
+    format: target.startsWith('windows') ? 'exe' : 'pkg',
+  }))
+  let saved: { id: string; revision: number; enabled: boolean; definition: unknown } | undefined
+  const change = vi.fn(async (id, body) => {
+    saved = {
+      id,
+      revision: (saved?.revision ?? 0) + 1,
+      enabled: body.input.action === 'put' ? body.input.enabled : body.input.action === 'enable',
+      definition: body.input.definition ?? saved?.definition,
+    }
+    return saved
+  })
+  const assignments = vi.fn().mockResolvedValue({
+    items: [
+      {
+        object: { kind: 'endpoint', id: 'endpoint' },
+        channel: 'mdm',
+        availability: 'ready',
+        reason: null,
+        target: { device: 'endpoint', channel: 'mdm', registrationId: id, generation: 2 },
+        qualification: { state: 'eligible', entry: 1 },
+        operationIds: [],
+        sources: [],
+      },
+    ],
+    nextCursor: null,
+  })
+  const directory = vi
+    .fn()
+    .mockResolvedValue({ items: [], statistics: { total: 0 }, asOf: 1, nextCursor: null })
+  const { wrapper } = await fixture(BootstrapView, {
+    onboarding: { packages: { list: vi.fn().mockResolvedValue(releases) } },
+    policies: {
+      policies: {
+        list: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
+        change,
+        assignments,
+      },
+      executions: { directory },
+    },
+  })
+  await button(wrapper, '新建').trigger('click')
+  await flushPromises()
+  await wrapper.get('form input').setValue(id)
+  await button(wrapper, '读取 Agent 发行包').trigger('click')
+  await flushPromises()
+  const selectors = wrapper
+    .get('form')
+    .findAll('select')
+    .filter((s) => s.find('option[value=""]').exists())
+  for (let i = 0; i < 4; i++) await selectors[i]!.setValue(releases[i]!.releaseId)
+  const lifetime = wrapper.get('form input[max="604800"]')
+  await lifetime.setValue(3600)
+  await wrapper.get('form').findAll('input[type=checkbox]').at(-1)!.setValue(false)
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(change.mock.calls[0]?.[1]).toMatchObject({
+    input: {
+      enabled: false,
+      definition: {
+        action: {
+          kind: 'ensure_agent_installed',
+          packages: Object.fromEntries(
+            targets.map((target, i) => [target, releases[i]!.releaseId]),
+          ),
+          runLifetimeSeconds: 3600,
+        },
+      },
+    },
+  })
+  await button(wrapper, '启用').trigger('click')
+  await flushPromises()
+  expect(change.mock.calls[1]?.[1]).toMatchObject({
+    expectedRevision: 1,
+    input: { action: 'enable' },
+  })
+  await button(wrapper, '刷新进度（保留编辑）').trigger('click')
+  await flushPromises()
+  expect(wrapper.text()).toContain(`${id} / 2`)
+  await button(wrapper, '执行中心').trigger('click')
+  await flushPromises()
+  expect(directory.mock.calls[0]?.[0].policy).toBe(saved?.id)
+  wrapper.unmount()
+})

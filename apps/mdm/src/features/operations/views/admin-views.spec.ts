@@ -710,3 +710,102 @@ it('selects the delegation panel for audit deep links and returns to groups on q
     f.wrapper.unmount()
   }
 })
+it('saves explicit deployment references and pauses/resumes/cancels one maintenance command', async () => {
+  const f = await fixture(SettingsView)
+  const input = f.wrapper.get('[data-testid=configuration-name]')
+  const configuration = new DOMWrapper(input.element.closest('form')!)
+  await input.setValue('Configured product')
+  await configuration.findAll('input')[1]!.setValue('https://mdm.example.test')
+  await configuration.findAll('input')[2]!.setValue('cert-current')
+  await configuration.findAll('input')[3]!.setValue('apns-current')
+  await configuration.trigger('submit')
+  await flushPromises()
+  expect(await f.clients.admin.settings.read()).toMatchObject({
+    values: {
+      name: 'Configured product',
+      publicOrigin: 'https://mdm.example.test',
+      certificateRef: 'cert-current',
+      apnsRef: 'apns-current',
+    },
+  })
+  const click = async (text: string) => {
+    await f.wrapper
+      .findAll('button')
+      .find((b) => b.text() === text)!
+      .trigger('click')
+    await flushPromises()
+  }
+  await f.wrapper
+    .findAll('[role=tab]')
+    .find((b) => b.text().includes('维护'))!
+    .trigger('click')
+  await flushPromises()
+  const maintenance = new DOMWrapper(
+    f.wrapper.get('[data-testid=start-maintenance]').element.closest('form')!,
+  )
+  await maintenance.findAll('select')[0]!.setValue('agent_upgrade')
+  await maintenance.get('input').setValue('2.0')
+  await maintenance.findAll('select')[1]!.setValue('delta')
+  await maintenance.trigger('submit')
+  await flushPromises()
+  await click('暂停')
+  await click('恢复')
+  await click('取消尚未执行的请求')
+  await confirmDialog()
+  await flushPromises()
+  expect(f.wrapper.text()).toContain('cancelled')
+  expect(f.wrapper.text()).toContain('unknown')
+  f.wrapper.unmount()
+})
+it('authors an explicit department grant and adopts a concurrent revision before deleting it', async () => {
+  const f = await fixture(AuthorizationView)
+  const click = async (text: string) => {
+    await f.wrapper
+      .findAll('button')
+      .find((b) => b.text() === text)!
+      .trigger('click')
+    await flushPromises()
+  }
+  await click('新建授权规则')
+  const form = f.wrapper.get('form')
+  await form.findAll('select')[0]!.setValue('department')
+  await form.get('[data-testid=subject-id]').setValue('engineering')
+  const inputs = form.findAll('input')
+  await inputs[1]!.setValue('66666666-6666-4666-8666-666666666666')
+  await inputs[2]!.setValue('https://idp.example.test')
+  await inputs[3]!.setValue(1)
+  await form.findAll('select')[1]!.setValue('subtree')
+  await form.findAll('select')[2]!.setValue('inventory_read')
+  await form.findAll('select')[3]!.setValue('device')
+  await form.findAll('input').at(-1)!.setValue('device-01')
+  await click('添加授权')
+  await f.wrapper.get('[data-testid=save-rule]').trigger('click')
+  await flushPromises()
+  const saved = (await f.clients.authorization.rules()).items.find(
+    (r) => r.value?.subject.kind === 'department' && r.value.subject.id === 'engineering',
+  )!
+  expect(saved.value).toMatchObject({
+    subject: {
+      kind: 'department',
+      id: 'engineering',
+      matching: 'subtree',
+      source: { configurationVersion: 1 },
+    },
+    grants: [{ operation: 'inventory_read', scope: { kind: 'device', id: 'device-01' } }],
+  })
+  await f.clients.authorization.changeRule(saved.id, {
+    operationId: crypto.randomUUID(),
+    expectedRevision: 1,
+    value: {
+      ...saved.value!,
+      grants: [{ operation: 'inventory_read', scope: { kind: 'all_devices' } }],
+    },
+  })
+  await click('读取服务器版本并比较')
+  expect(f.wrapper.text()).toContain('all_devices')
+  await click('保留草稿，采用当前 revision')
+  await form.get('input[type=checkbox]').setValue(true)
+  await click('删除')
+  expect((await f.clients.authorization.findRule(saved.id))?.value).toBeNull()
+  f.wrapper.unmount()
+})

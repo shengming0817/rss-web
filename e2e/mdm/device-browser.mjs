@@ -132,6 +132,9 @@ try {
   await page.locator('#login-password').fill(readFileSync(fixture.passwordFile, 'utf8').trim())
   await page.locator('form').evaluate((f) => f.requestSubmit())
   await page.waitForURL(/workspace/)
+  phase = 'directory-http'
+  await api('/api/v1/devices?limit=20')
+  await api('/api/v1/device-views?limit=20')
   phase = 'directory'
   await page.goto(path('devices'))
   await loaded()
@@ -403,7 +406,7 @@ try {
   assert.ok(Array.isArray(assignment.operationIds))
   await page.goto(path(`software/bootstrap?id=${policy}`))
   await loaded()
-  await page.getByRole('button', { name: '刷新进度', exact: true }).click()
+  await page.getByRole('button', { name: '刷新进度（保留编辑）', exact: true }).click()
   await loaded()
   assert.ok((await page.locator('main').textContent()).includes(assignment.target.registrationId))
   coverage.push('real-endpoint-group-scope-channel-and-canonical-assignments')

@@ -374,3 +374,72 @@ it('discards a rejected revocation before reading and revoking a different confi
   expect((await runtime.onboarding.configurations.read(replacementId)).state).toBe('revoked')
   new Uint8Array(replacement.file.bytes).fill(0)
 })
+it('preserves explicit ADE profile choices and records sync and assignment as independent external operations', async () => {
+  const { wrapper, runtime, domain, click } = await setup(AppleAdeView),
+    id = crypto.randomUUID()
+  await wrapper.findAll('input')[0]!.setValue(id)
+  const config = wrapper.find('form')
+  await config.findAll('input')[0]!.setValue(crypto.randomUUID())
+  await config.findAll('input')[1]!.setValue('ORG-EXAMPLE')
+  await config.findAll('input[type=checkbox]')[0]!.setValue(true)
+  await config.findAll('input[type=checkbox]')[1]!.setValue(true)
+  await config.trigger('submit')
+  await flushPromises()
+  await click('重新读取')
+  const command = vi.spyOn(runtime.onboarding.apple, 'command'),
+    profileId = crypto.randomUUID()
+  const name = wrapper.get('input[maxlength="128"]'),
+    profile = new (await import('@vue/test-utils')).DOMWrapper(name.element.closest('form')!)
+  await profile.findAll('input')[0]!.setValue(profileId)
+  await name.setValue('Custom Setup')
+  await profile.findAll('input[type=checkbox]')[1]!.setValue(true)
+  await profile.findAll('input[type=checkbox]')[0]!.setValue(false)
+  await profile.get('input[value=AppleID]').setValue(true)
+  await profile.get('input[value=Privacy]').setValue(true)
+  await profile.trigger('submit')
+  await flushPromises()
+  expect(command.mock.calls[0]?.[2]).toEqual({
+    kind: 'profile',
+    id: profileId,
+    expectedRevision: 0,
+    configuration: {
+      name: 'Custom Setup',
+      mandatory: false,
+      removable: true,
+      skip: ['AppleID', 'Privacy'],
+    },
+  })
+  expect((await runtime.onboarding.apple.profiles(id))[0]?.remoteUuid).toBeNull()
+  domain.tick()
+  await click('查询原操作结果')
+  await click('重新读取')
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text().startsWith('Custom Setup ·'))!
+    .trigger('click')
+  await flushPromises()
+  const sync = wrapper
+    .findAll('form')
+    .find((f) => f.findAll('label').some((l) => l.text().includes('完整同步')))!
+  await sync.get('input[type=checkbox]').setValue(true)
+  await sync.trigger('submit')
+  await flushPromises()
+  expect(command.mock.calls.at(-1)?.[2]).toEqual({ kind: 'sync', full: true })
+  domain.tick()
+  await click('查询原操作结果')
+  await click('重新读取')
+  const assignment = wrapper.findAll('form').find((f) => f.find('textarea').exists())!
+  await assignment.get('textarea').setValue('SERIAL-ONE\nSERIAL-TWO')
+  await assignment.trigger('submit')
+  await flushPromises()
+  expect(command.mock.calls.at(-1)?.[2]).toEqual({
+    kind: 'assign',
+    profile: profileId,
+    revision: 1,
+    devices: ['SERIAL-ONE', 'SERIAL-TWO'],
+  })
+  domain.tick()
+  await click('查询原操作结果')
+  expect(wrapper.text()).toContain('不代表已注册')
+  expect(wrapper.text()).toContain('external_outcome_unknown')
+})

@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, DOMWrapper } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import { createRouter, createMemoryHistory } from 'vue-router'
@@ -316,3 +316,169 @@ it.each(['success', 'unknown'] as const)(
     wrapper.unmount()
   },
 )
+it('edits certificate metadata, explicit issuance inputs, recommendation, export and reminder settings', async () => {
+  const base = archiveEntry(tenant, 2)
+  const entry = {
+    ...base,
+    latest: {
+      ...base.latest,
+      facts: [
+        {
+          name: 'fixture.pem',
+          format: 'certificate',
+          containsPrivateKey: true,
+          publicKeys: ['a'.repeat(64)],
+          certificates: [
+            {
+              subject: 'CN=fixture',
+              issuer: 'CN=fixture CA',
+              sans: ['fixture.example'],
+              serial: '01',
+              fingerprint: 'a'.repeat(64),
+              algorithm: 'RSA/2048',
+              notBefore: 50,
+              notAfter: 200,
+              publicKey: 'a'.repeat(64),
+            },
+          ],
+        },
+      ],
+    },
+  }
+  const old = {
+    ...archiveEntry(tenant).latest,
+    metadata: { ...entry.latest.metadata, name: 'Previous certificate' },
+  }
+  const generate = vi.fn().mockResolvedValue({}),
+    saveMetadata = vi.fn().mockResolvedValue({}),
+    manage = vi.fn().mockResolvedValue({}),
+    saveSettings = vi.fn().mockResolvedValue({}),
+    exported = vi.fn().mockResolvedValue([{ name: 'synthetic.pem', data: 'c3ludGhldGlj' }])
+  const objectUrl = vi.fn().mockReturnValue('blob:synthetic-archive'),
+    revoke = vi.fn()
+  const OriginalURL = URL
+  vi.stubGlobal(
+    'URL',
+    class extends OriginalURL {
+      static override createObjectURL = objectUrl
+      static override revokeObjectURL = revoke
+    },
+  )
+  const { wrapper } = await setup({
+    state: vi.fn().mockResolvedValue({
+      initialized: true,
+      generation: 1,
+      unlockedUntil: Math.floor(Date.now() / 1000) + 900,
+    }),
+    list: vi.fn().mockResolvedValue({
+      tenantId: tenant,
+      items: [entry],
+      nextAfter: null,
+      asOf: 100,
+      reminderDays: 30,
+      alerts: { expired: 0, expiring: 1, notYetValid: 0 },
+    }),
+    history: vi.fn().mockResolvedValue([entry.latest, old]),
+    generate,
+    saveMetadata,
+    manage,
+    saveSettings,
+    export: exported,
+  })
+  const click = async (text: string) => {
+    const button =
+      wrapper.findAll('button').find((b) => b.text() === text) ??
+      new DOMWrapper(
+        [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+          (b) => b.textContent?.trim() === text,
+        )!,
+      )
+    await button.trigger('click')
+    await flushPromises()
+  }
+  try {
+    await click(tenant)
+    await wrapper.get('#archive-comparison').setValue(1)
+    expect(wrapper.text()).toContain('Previous certificate')
+    await wrapper.get('#archive-filter').setValue('all')
+    await wrapper.get('#archive-name').setValue('HTTPS service')
+    await wrapper.get('#archive-category').setValue('custom')
+    await wrapper.get('#archive-labels').setValue('edge, service')
+    await wrapper.get('#archive-usages').setValue('HTTPS\nInternal')
+    await wrapper.get('#archive-owner').setValue('Platform')
+    await wrapper.get('#archive-notes').setValue('Explicitly issued')
+    await wrapper.get('#archive-mode').setValue('generate')
+    await wrapper.get('#archive-profile').setValue('https')
+    await wrapper.get('#archive-algorithm').setValue('p256')
+    await wrapper.get('#archive-common-name').setValue('mdm.example.test')
+    await wrapper.get('#archive-organization').setValue('Example')
+    await wrapper.get('#archive-sans').setValue('mdm.example.test, endpoint.example.test')
+    await wrapper.get('#archive-days').setValue(90)
+    await wrapper.get('#archive-issuer').setValue(`${tenant}:2`)
+    await new DOMWrapper(wrapper.get('#archive-name').element.closest('form')!).trigger('submit')
+    await flushPromises()
+    expect(generate.mock.calls[0]?.[1]).toMatchObject({
+      entryId: tenant,
+      expectedRevision: 2,
+      profile: 'https',
+      algorithm: 'p256',
+      commonName: 'mdm.example.test',
+      organization: 'Example',
+      sans: ['mdm.example.test', 'endpoint.example.test'],
+      days: 90,
+      issuer: { entryId: tenant, version: 2 },
+      metadata: {
+        labels: ['edge', 'service'],
+        usages: ['HTTPS', 'Internal'],
+        owner: 'Platform',
+        notes: 'Explicitly issued',
+      },
+    })
+    await wrapper.get('#archive-target').setValue('')
+    await wrapper.get('#archive-profile').setValue('scep_template')
+    await wrapper.get('#archive-scep').setValue('https://scep.example.test/')
+    await new DOMWrapper(wrapper.get('#archive-name').element.closest('form')!).trigger('submit')
+    await flushPromises()
+    expect(generate.mock.calls[1]?.[1]).toMatchObject({
+      expectedRevision: 0,
+      profile: 'scep_template',
+      scepUrl: 'https://scep.example.test/',
+      issuer: null,
+    })
+    await click(tenant)
+    await wrapper.get('#archive-mode').setValue('metadata')
+    await new DOMWrapper(wrapper.get('#archive-name').element.closest('form')!).trigger('submit')
+    await flushPromises()
+    expect(saveMetadata).toHaveBeenCalledWith(
+      expect.any(String),
+      tenant,
+      2,
+      expect.objectContaining({ name: tenant }),
+    )
+    await click('标为推荐版本')
+    await click('确认')
+    expect(manage).toHaveBeenLastCalledWith(expect.any(String), tenant, 2, false, 2)
+    await click('授权导出本版本')
+    await click('确认')
+    expect(exported).toHaveBeenCalledWith(expect.any(String), { entryId: tenant, version: 2 })
+    expect(wrapper.find('a[download="synthetic.pem"]').exists()).toBe(true)
+    await click('清除导出材料')
+    expect(revoke).toHaveBeenCalledWith('blob:synthetic-archive')
+    await wrapper.get('#archive-reminder').setValue(14)
+    await wrapper.get('#archive-category-settings').setValue('custom\nhttps')
+    await new DOMWrapper(wrapper.get('#archive-reminder').element.closest('form')!).trigger(
+      'submit',
+    )
+    await flushPromises()
+    expect(saveSettings).toHaveBeenCalledWith(expect.any(String), 0, {
+      reminderDays: 14,
+      categories: ['custom', 'https'],
+    })
+    await click('标为退役')
+    await click('确认')
+    expect(manage).toHaveBeenLastCalledWith(expect.any(String), tenant, 2, true, null)
+  } finally {
+    wrapper.unmount()
+    vi.unstubAllGlobals()
+  }
+})

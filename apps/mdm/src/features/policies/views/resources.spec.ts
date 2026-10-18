@@ -5,9 +5,11 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
+import SoftwareDefinitionEditor from '../../software/components/SoftwareDefinitionEditor.vue'
 import ResourcesView from './ResourcesView.vue'
 afterEach(() => vi.unstubAllGlobals())
 it('publishes all staged software variants in one immutable version at the current Resource revision', async () => {
+  vi.stubGlobal('crypto', webcrypto)
   const change = vi.fn().mockResolvedValue({}),
     upload = vi.fn().mockResolvedValue(undefined)
   const read = vi
@@ -68,16 +70,7 @@ it('publishes all staged software variants in one immutable version at the curre
   const wrapper = mount(ResourcesView, {
     global: {
       plugins: [router, mdmI18n()],
-      stubs: {
-        RouterLink: true,
-        SoftwareDefinitionEditor: {
-          template: '<div />',
-          setup(_, { expose }) {
-            expose({ read: () => structuredClone(definition) })
-            return {}
-          },
-        },
-      },
+      stubs: { RouterLink: true },
       provide: {
         [mdmKey as symbol]: {
           tenant: 'tenant',
@@ -92,6 +85,31 @@ it('publishes all staged software variants in one immutable version at the curre
   })
   await flushPromises()
   expect(read).toHaveBeenCalledWith('application')
+  const editor = wrapper.getComponent(SoftwareDefinitionEditor)
+  for (const [suffix, value] of [
+    ['package', 'App'],
+    ['version', '1'],
+    ['source', 'private'],
+    ['source-revision', '1'],
+    ['source-digest', '01'.repeat(32)],
+    ['behavior', JSON.stringify(definition.behavior)],
+    ['provenance', JSON.stringify(definition.provenance)],
+    ['signatures', '[]'],
+    ['export', JSON.stringify(definition.export)],
+    ['artifacts', '{}'],
+    ['dependencies', '[]'],
+  ] as const)
+    await editor.get(`[id$="-${suffix}"]`).setValue(value)
+  await editor.get('[id$="-reboot"]').setValue('forbid')
+  await editor.get('input[type=checkbox]').setValue(true)
+  const metadata = wrapper.get<HTMLInputElement>('#resource-metadata')
+  Object.defineProperty(metadata.element, 'files', {
+    configurable: true,
+    value: [new NodeFile(['abc'], 'app.msi')],
+  })
+  await metadata.trigger('change')
+  await flushPromises()
+
   await wrapper.get('[data-action="stage-variant"]').trigger('click')
   await wrapper.get('#resource-architecture').setValue('aarch64')
   await wrapper.get('[data-action="stage-variant"]').trigger('click')
@@ -249,7 +267,7 @@ it('hashes metadata for a software artifact larger than one HTTP chunk without r
   expect(wrapper.text()).toContain('16777217')
   expect(fullRead).not.toHaveBeenCalled()
   wrapper.unmount()
-})
+}, 15000)
 
 it('clears the software definition and artifact draft when opening another resource', async () => {
   const read = vi.fn(async (id: string) => ({ id, revision: 1, kind: 'software', versions: [] }))

@@ -413,3 +413,42 @@ it('recovers a new draft by binding its confirmed locator and reading current co
   expect(f.wrapper.get('form > fieldset').attributes('disabled')).toBeUndefined()
   f.wrapper.unmount()
 })
+
+it('authors fixed parameter values and an explicit execution schedule before pausing the same Policy', async () => {
+  const f = await fixture()
+  await f.button('编辑').trigger('click')
+  await f.wrapper.get('#source-label').setValue('fixed')
+  await f.wrapper.get('#value-label').setValue('Bound diagnostic input')
+  await f.wrapper.get('#source-detail').setValue('input')
+  expect(f.wrapper.find('#value-detail').exists()).toBe(false)
+  await f.wrapper.get('#source-detail').setValue('fixed')
+  await f.wrapper.get('#value-detail').setValue(2)
+  await f.wrapper.get('#policy-frequency').setValue('every_trigger')
+  await f.wrapper.get('#policy-lifetime').setValue(5400)
+  await f.wrapper.get('[id$="-trigger"]').setValue('check_in')
+  await f.wrapper.get('[id$="-minimum"]').setValue(120)
+  await f.wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(f.change.mock.calls[0]?.[1]).toMatchObject({
+    input: {
+      action: 'put',
+      definition: {
+        action: {
+          parameters: {
+            label: { kind: 'fixed', value: 'Bound diagnostic input' },
+            detail: { kind: 'fixed', value: 2 },
+          },
+          frequency: 'every_trigger',
+          runLifetimeSeconds: 5400,
+          schedule: { trigger: { kind: 'check_in', minimumSeconds: 120 } },
+        },
+      },
+    },
+  })
+  await f.button('禁用整个 Policy').trigger('click')
+  await flushPromises()
+  expect(f.change.mock.calls.at(-1)?.[1]).toMatchObject({ input: { action: 'disable' } })
+  await f.button('重新载入配置（替换编辑）').trigger('click')
+  await flushPromises()
+  f.wrapper.unmount()
+})
