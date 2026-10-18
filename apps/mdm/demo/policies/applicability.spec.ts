@@ -8,6 +8,7 @@ it('requires the exact Agent variant and keeps native configuration conflicts in
     windows = devices.get('device-01')!,
     mac = devices.get('device-02')!
   const resource: ResourceRead = {
+    origin: null,
     id: 'package',
     revision: 1,
     kind: 'software',

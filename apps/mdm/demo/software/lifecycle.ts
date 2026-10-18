@@ -69,6 +69,40 @@ export function createLifecycleDemo(resources: ReturnType<typeof createResourceD
     return true
   }
   const handle: DomainHandler = (request, scenario) => {
+    if (request.path === '/api/v1/software/sources' && request.method === 'GET') {
+      if (scenario === 'denied') return error('permission_denied', 403)
+      try {
+        const limit = Number(request.query.get('limit') ?? 20),
+          after = request.query.get('after')
+        if (!Number.isInteger(limit) || limit < 1 || limit > 100)
+          return error('malformed_request', 400)
+        const cursor = after ? (JSON.parse(after) as [string, string]) : undefined
+        const values = [...sources.values()]
+          .sort(
+            (a, b) =>
+              a.source.id.localeCompare(b.source.id) ||
+              a.source.revision.localeCompare(b.source.revision),
+          )
+          .filter(
+            (v) =>
+              !cursor ||
+              v.source.id > cursor[0] ||
+              (v.source.id === cursor[0] && v.source.revision > cursor[1]),
+          )
+        const items = values.slice(0, limit),
+          last = items.at(-1)
+        return ok({
+          items: structuredClone(items),
+          nextCursor:
+            values.length > limit && last
+              ? JSON.stringify([last.source.id, last.source.revision])
+              : null,
+        })
+      } catch {
+        return error('malformed_request', 400)
+      }
+    }
+
     const sourceRoute = /^\/api\/v1\/software\/sources\/([^/]+)\/revisions\/([^/]+)$/.exec(
         request.path,
       ),
@@ -153,6 +187,8 @@ export function createLifecycleDemo(resources: ReturnType<typeof createResourceD
   return {
     handle,
     isEnabled,
+    versionState: (id: string, version: string) =>
+      structuredClone(versions.get(key(id, version)) ?? null),
     binding(id: string, version: string) {
       if (!isEnabled(id, version)) return null
       const v = resources.read(id)!.versions.find((v) => v.id === version)!

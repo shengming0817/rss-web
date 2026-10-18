@@ -1,6 +1,7 @@
 import type { HttpTransport } from '@rss/api/mdm'
 import type { Operation } from '../../../services/useOperation'
 import {
+  array,
   closed,
   count,
   digest,
@@ -106,6 +107,24 @@ function mutationReceipt<T extends { lifecycle: ReturnType<typeof lifecycle> }>(
 }
 export function createLifecycleClient(transport: HttpTransport) {
   return {
+    sources: (after?: string) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/software/sources',
+        query: { after, limit: 20 },
+        successStatus: 200,
+        decode(value) {
+          const v = closed(value, ['items', 'nextCursor'])
+          return {
+            items: array(v['items'], (value) => {
+              const item = record(value),
+                source = sourceDefinition(item['source'])
+              return sourceRead(value, source.id, source.revision)
+            }),
+            nextCursor: nullable(v['nextCursor'], string),
+          }
+        },
+      }),
     source: (id: string, revision: string) =>
       transport.request({
         method: 'GET',

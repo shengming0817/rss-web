@@ -1,64 +1,81 @@
 import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
-import { createPublicationClient, decodePublication, rings } from './publication'
+import { createPublicationClient, decodePublication } from './publication'
 const sha = Array<number>(32).fill(1),
-  id = 'candidate'
+  id = '11111111-1111-4111-8111-111111111111'
 const value = {
   id,
-  revision: 1,
+  revision: 0,
+  target: 'internal',
+  resource: 'app',
+  version: '1',
+  publication: sha,
   contentDigest: sha,
   manifestDigest: sha,
-  sourceSnapshot: sha,
-  disposition: 'active',
-  rings: rings.map((ring) => ({ ring, state: 'candidate', publication: null })),
+  targetDigest: sha,
+  attempt: 1,
+  outcome: 'pending',
+  withdrawn: false,
+  withdrawal: null,
 }
-it('reads draft and pending publication facts and rejects retired approval states and author documents', () => {
+it('decodes exact publication identity, independent target digest and withdrawal facts', () => {
   expect(decodePublication(value, id)).toEqual(value)
-  const pending = {
-    ...value,
-    rings: value.rings.map((r, i) =>
-      i
-        ? r
-        : { ...r, state: 'publication', publication: { id: sha, attempt: 1, outcome: 'pending' } },
+  expect(
+    decodePublication(
+      {
+        ...value,
+        withdrawn: true,
+        withdrawal: 'waiting_publication',
+        document: { kind: 'Winget', manifest: { PackageIdentifier: 'Example.App' } },
+      },
+      id,
     ),
-    document: { kind: 'Winget', manifest: { PackageIdentifier: 'Example.App' } },
-  }
-  expect(decodePublication(pending, id)).toMatchObject({
-    document: pending.document,
-    rings: [{ publication: { outcome: 'pending' } }, {}, {}],
-  })
+  ).toMatchObject({ withdrawal: 'waiting_publication' })
   for (const bad of [
-    { ...value, submission: {} },
-    { ...value, rings: [value.rings[0]] },
-    { ...value, rings: value.rings.map((r) => ({ ...r, approval: null })) },
-    { ...value, rings: value.rings.map((r) => ({ ...r, state: 'approved' })) },
+    { ...value, id: 'other' },
+    { ...value, targetDigest: [1] },
+    { ...value, attempt: 0 },
+    { ...value, outcome: 'unexpected' },
   ])
     expect(() => decodePublication(bad, id)).toThrow()
 })
-it('accepts Publish only as 202 and preserves exact Recover/Retry attempt coordinates', async () => {
+it('uses bounded directories and keeps writes explicit with server-owned attempt coordinates', async () => {
   const request = vi.fn(async (o: RequestOptions<unknown>) => o.decode(value)),
     client = createPublicationClient({ request } as unknown as HttpTransport)
-  const base = { operationId: '11111111-1111-4111-8111-111111111111', expectedRevision: 1 }
-  await client.change('source', id, { ...base, input: { action: 'publish', ring: 'test' } })
+  const body = {
+    operationId: id,
+    expectedRevision: 0,
+    input: {
+      action: 'publish' as const,
+      resource: 'app',
+      version: '1',
+      expectedResourceRevision: 2,
+      resourceDigest: sha,
+      target: 'internal',
+      targetDigest: sha,
+    },
+  }
+  await client.publish(body)
   expect(request.mock.calls[0]?.[0]).toMatchObject({
+    path: '/api/v1/software/publications',
     successStatus: 202,
-    body: { input: { action: 'publish', ring: 'test' } },
+    body,
   })
-  await client.change('source', id, {
-    ...base,
-    input: { action: 'recover', ring: 'test', publication: sha, attempt: 2 },
+  await client.change(id, {
+    operationId: crypto.randomUUID(),
+    expectedRevision: 0,
+    input: { action: 'recover' },
   })
   expect(request.mock.calls[1]?.[0]).toMatchObject({
     successStatus: 200,
-    body: { input: { action: 'recover', ring: 'test', publication: sha, attempt: 2 } },
+    body: { input: { action: 'recover' } },
   })
-  await client.change('source', id, {
-    ...base,
-    input: { action: 'retry', ring: 'test', attempt: 2 },
-  })
-  request.mockRejectedValueOnce(new Error('unknown result'))
-  await expect(
-    client.change('source', id, { ...base, input: { action: 'publish', ring: 'pilot' } }),
-  ).rejects.toThrow('unknown result')
-  expect(request).toHaveBeenCalledTimes(4)
+  request.mockRejectedValueOnce(new Error('lost'))
+  await expect(client.publish(body)).rejects.toThrow('lost')
+  expect(request).toHaveBeenCalledTimes(3)
+  request.mockImplementationOnce(async (o: RequestOptions<unknown>) =>
+    o.decode({ items: [value], nextCursor: null }),
+  )
+  await client.list({ operationId: id })
+  expect(request.mock.calls[3]?.[0]).toMatchObject({ query: { operationId: id, limit: 20 } })
 })

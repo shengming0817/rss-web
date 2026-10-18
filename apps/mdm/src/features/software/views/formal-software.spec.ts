@@ -1,5 +1,5 @@
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
-import { ref, type Component } from 'vue'
+import { defineComponent, h, ref, type Component } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { expect, it, vi } from 'vitest'
 import { mdmKey } from '../../../context'
@@ -15,7 +15,6 @@ import SoftwareResourceSelect from '../components/SoftwareResourceSelect.vue'
 import ExecutionsView from '../../policies/views/ExecutionsView.vue'
 import ExecutionDetailView from '../../policies/views/ExecutionDetailView.vue'
 import { defaultSchedule } from '../../policies/clients/model'
-import { rings } from '../clients/publication'
 import { softwareResource } from '../../../../demo/software/fixtures'
 const id = '11111111-1111-4111-8111-111111111111',
   sha = Array<number>(32).fill(1)
@@ -25,19 +24,21 @@ const source = {
   snapshot: { id: 'enterprise', revision: '1', sha256: sha },
   lifecycle: life,
 }
-function candidate(outcome?: string) {
+function publication(outcome = 'pending') {
   return {
-    id: 'candidate',
-    revision: outcome ? 1 : 0,
-    disposition: 'active',
+    id,
+    revision: 1,
+    target: 'internal',
+    resource: 'app',
+    version: '1',
+    publication: sha,
     contentDigest: sha,
     manifestDigest: sha,
-    sourceSnapshot: sha,
-    rings: rings.map((ring, i) => ({
-      ring,
-      state: i === 0 && outcome ? 'publication' : 'candidate',
-      publication: i === 0 && outcome ? { id: sha, attempt: 3, outcome } : null,
-    })),
+    targetDigest: sha,
+    attempt: 1,
+    outcome,
+    withdrawn: false,
+    withdrawal: null,
   }
 }
 async function fixture(component: Component, owners: object, props = {}, query = {}) {
@@ -80,7 +81,13 @@ it('registers a source directly and uses the displayed lifecycle CAS for disable
     },
   }))
   const { wrapper } = await fixture(SourcesView, {
-    software: { lifecycle: { source: vi.fn(async () => source), changeSource } },
+    software: {
+      lifecycle: {
+        sources: vi.fn(async () => ({ items: [source], nextCursor: null })),
+        source: vi.fn(async () => source),
+        changeSource,
+      },
+    },
   })
   await field(wrapper, '企业来源 ID').setValue('enterprise')
   await wrapper.findAll('form')[1]!.trigger('submit')
@@ -108,7 +115,13 @@ it('does not unlock an unknown source write from an unrelated read or replay it 
   const changeSource = vi.fn().mockRejectedValue(new Error('lost')),
     read = vi.fn().mockResolvedValue(source)
   const { wrapper, session } = await fixture(SourcesView, {
-    software: { lifecycle: { source: read, changeSource } },
+    software: {
+      lifecycle: {
+        sources: vi.fn(async () => ({ items: [], nextCursor: null })),
+        source: read,
+        changeSource,
+      },
+    },
   })
   await field(wrapper, '企业来源 ID').setValue('enterprise')
   await wrapper.findAll('form')[0]!.trigger('submit')
@@ -124,90 +137,86 @@ it('does not unlock an unknown source write from an unrelated read or replay it 
   expect(changeSource).toHaveBeenCalledTimes(1)
   wrapper.unmount()
 })
-it('authors a candidate from the exact Resource revision and digest, then keeps Publish pending until explicit recovery', async () => {
-  const read = vi.fn().mockResolvedValue(candidate('pending')),
-    change = vi.fn(async (_source, _id, body) =>
-      body.input.action === 'candidate'
-        ? candidate()
-        : candidate(body.input.action === 'recover' ? 'not_applied' : 'pending'),
-    )
-  const resources = { read: vi.fn().mockResolvedValue({ revision: 7 }) },
-    version = vi.fn().mockResolvedValue({ resourceDigest: sha })
+it('publishes the exact resource and target then recovers without client attempt coordinates', async () => {
+  const publish = vi.fn(async (_body: unknown) => publication()),
+    change = vi.fn(async (_id: string, _body: unknown) => publication('published'))
   const { wrapper } = await fixture(PublicationsView, {
-    policies: { resources },
-    software: { publication: { read, change }, lifecycle: { version } },
+    policies: { resources: { read: vi.fn(async () => ({ kind: 'software', revision: 7 })) } },
+    software: {
+      lifecycle: { version: vi.fn(async () => ({ resourceDigest: sha })) },
+      publication: {
+        publish,
+        change,
+        list: vi.fn(async () => ({ items: [], nextCursor: null })),
+        targets: vi.fn(async () => ({
+          items: [{ id: 'internal', digest: sha, protocol: 'winget' }],
+          nextCursor: null,
+        })),
+      },
+    },
   })
-  const locators = wrapper.findAll('form')[0]!.findAll('input')
-  await locators[0]!.setValue('binding')
-  await locators[1]!.setValue('candidate')
-  await field(wrapper, '软件资源').setValue('app')
-  await wrapper.findAll('form')[1]!.trigger('submit')
+  const picker = wrapper.findComponent(SoftwareResourceSelect)
+  picker.vm.$emit('update:resource', 'app')
+  picker.vm.$emit('update:version', '1')
+  await button(wrapper, '读取实际目标').trigger('click')
   await flushPromises()
-  expect(change.mock.calls[0]?.[2].input).toEqual({
-    action: 'candidate',
-    resource: 'app',
-    version: '1',
-    expectedResourceRevision: 7,
-    resourceDigest: sha,
+  await wrapper.get('#publication-target').setValue('internal')
+  await wrapper.get('[data-testid=publication-create]').trigger('submit')
+  await flushPromises()
+  expect(publish.mock.calls[0]?.[0]).toMatchObject({
+    expectedRevision: 0,
+    input: {
+      action: 'publish',
+      resource: 'app',
+      version: '1',
+      expectedResourceRevision: 7,
+      resourceDigest: sha,
+      target: 'internal',
+      targetDigest: sha,
+    },
   })
-  await button(wrapper, '发布').trigger('click')
+  await button(wrapper, '恢复发布操作').trigger('click')
   await flushPromises()
-  expect(wrapper.text()).toContain('pending')
-  expect(read).not.toHaveBeenCalled()
-  expect(button(wrapper, '重试')).toBeUndefined()
-  await wrapper
-    .findAll('section.console-panel')
-    .find((s) => s.text().includes('pending'))!
-    .findAll('button')
-    .find((b) => b.text() === '核对状态')!
-    .trigger('click')
-  await flushPromises()
-  expect(change.mock.calls[2]?.[2].input).toEqual({
-    action: 'recover',
-    ring: 'test',
-    publication: sha,
-    attempt: 3,
-  })
-  await button(wrapper, '重试').trigger('click')
-  await flushPromises()
-  expect(change.mock.calls[3]?.[2].input).toEqual({ action: 'retry', ring: 'test', attempt: 3 })
+  expect(change.mock.calls[0]).toMatchObject([
+    id,
+    { expectedRevision: 1, input: { action: 'recover' } },
+  ])
+  expect(wrapper.text()).toContain('已发布')
   wrapper.unmount()
 })
-it('reconciles a lost Publish with the current publication and attempt while retaining write fencing', async () => {
-  const read = vi.fn().mockResolvedValueOnce(candidate()).mockResolvedValue(candidate('unknown')),
-    change = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('lost'))
-      .mockResolvedValue(candidate('published'))
-  const { wrapper } = await fixture(PublicationsView, {
-    software: { publication: { read, change } },
+for (const outcome of ['published', 'not_applied'])
+  it(`keeps an unknown write locked through a terminal ${outcome} lookup and replays only its confirmed original body`, async () => {
+    const change = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('lost'))
+        .mockResolvedValue(publication(outcome)),
+      list = vi.fn(async () => ({ items: [publication()], nextCursor: null })),
+      read = vi.fn().mockResolvedValueOnce(publication()).mockResolvedValue(publication(outcome))
+    const { wrapper, session } = await fixture(PublicationsView, {
+      software: { publication: { change, list, read } },
+    })
+    await button(wrapper, '打开').trigger('click')
+    await flushPromises()
+    await button(wrapper, '恢复发布操作').trigger('click')
+    await flushPromises()
+    const original = structuredClone(change.mock.calls[0])
+    await button(wrapper, '查询原操作').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid=publication-unknown]').exists()).toBe(true)
+    expect(button(wrapper, '恢复发布操作')).toBeUndefined()
+    expect(button(wrapper, '撤回').attributes('disabled')).toBeDefined()
+    if (outcome === 'not_applied')
+      expect(button(wrapper, '重试').attributes('disabled')).toBeDefined()
+    expect(change).toHaveBeenCalledTimes(1)
+    await wrapper.get('[data-testid=publication-unknown] input[type=checkbox]').setValue(true)
+    await button(wrapper, '重放同一操作').trigger('click')
+    await flushPromises()
+    expect(change.mock.calls[1]).toEqual(original)
+    session.value = { ...session.value, session: { id: crypto.randomUUID() } }
+    await flushPromises()
+    expect(wrapper.find('[data-testid=publication-detail]').exists()).toBe(false)
+    wrapper.unmount()
   })
-  const inputs = wrapper.findAll('form')[0]!.findAll('input')
-  await inputs[0]!.setValue('binding')
-  await inputs[1]!.setValue('candidate')
-  await wrapper.findAll('form')[0]!.trigger('submit')
-  await flushPromises()
-  await button(wrapper, '发布').trigger('click')
-  await flushPromises()
-  await button(wrapper, '核对状态').trigger('click')
-  await flushPromises()
-  expect(button(wrapper, '发布').attributes('disabled')).toBeDefined()
-  const recover = wrapper
-    .findAll('section.console-panel')
-    .find((s) => s.text().includes('unknown'))!
-    .findAll('button')
-    .find((b) => b.text() === '核对状态')!
-  await recover.trigger('click')
-  await flushPromises()
-  expect(change.mock.calls[1]?.[2].input).toEqual({
-    action: 'recover',
-    ring: 'test',
-    publication: sha,
-    attempt: 3,
-  })
-  expect(change).toHaveBeenCalledTimes(2)
-  wrapper.unmount()
-})
 it('imports synchronously with a source snapshot, and a Resource read cannot settle a lost import', async () => {
   const imported = vi.fn().mockRejectedValue(new Error('lost')),
     { definition } = softwareResource()
@@ -264,9 +273,24 @@ it('selects a Resource header before reading real versions and clears the previo
       .mockResolvedValue({ items: [{ id: 'app', activeVersion: '1' }], nextCursor: null }),
     read = vi.fn().mockResolvedValue({ kind: 'software', versions: [{ id: '1', state: 'active' }] })
   const { wrapper } = await fixture(
-    SoftwareResourceSelect,
+    defineComponent({
+      setup() {
+        const resource = ref(''),
+          version = ref('')
+        return () =>
+          h(SoftwareResourceSelect, {
+            resource: resource.value,
+            version: version.value,
+            'onUpdate:resource': (v: string) => {
+              resource.value = v
+            },
+            'onUpdate:version': (v: string) => {
+              version.value = v
+            },
+          })
+      },
+    }),
     { policies: { resources: { list, read } } },
-    { resource: '', version: '' },
   )
   await button(wrapper, '企业软件目录').trigger('click')
   await flushPromises()
@@ -275,7 +299,9 @@ it('selects a Resource header before reading real versions and clears the previo
   await flushPromises()
   expect(read).toHaveBeenCalledWith('app')
   await wrapper.findAll('select')[1]!.setValue('1')
-  expect(wrapper.emitted('update:version')?.at(-1)).toEqual(['1'])
+  expect(wrapper.findComponent(SoftwareResourceSelect).emitted('update:version')?.at(-1)).toEqual([
+    '1',
+  ])
   wrapper.unmount()
 })
 it('reads nullable draft lifecycle and reconciles only the original operation before allowing more writes', async () => {
@@ -408,37 +434,6 @@ it('opens an onboarding action run without sending a native command read', async
   wrapper.unmount()
 })
 
-for (const outcome of ['published', 'not_applied'])
-  it(`reconciles lost Publish by explicit exact replay after a terminal ${outcome} read`, async () => {
-    const read = vi.fn().mockResolvedValueOnce(candidate()).mockResolvedValue(candidate(outcome)),
-      change = vi
-        .fn()
-        .mockRejectedValueOnce(new Error('lost'))
-        .mockResolvedValue(candidate(outcome))
-    const { wrapper } = await fixture(PublicationsView, {
-      software: { publication: { read, change } },
-    })
-    const inputs = wrapper.findAll('form')[0]!.findAll('input')
-    await inputs[0]!.setValue('binding')
-    await inputs[1]!.setValue('candidate')
-    await wrapper.findAll('form')[0]!.trigger('submit')
-    await flushPromises()
-    await button(wrapper, '发布').trigger('click')
-    await flushPromises()
-    const original = structuredClone(change.mock.calls[0])
-    await button(wrapper, '核对状态').trigger('click')
-    await flushPromises()
-    expect(change).toHaveBeenCalledTimes(1)
-    const confirmation = wrapper.findAll('section.console-panel').at(-1)!
-    await confirmation.get('input[type=checkbox]').setValue(true)
-    await confirmation.get('button').trigger('click')
-    await flushPromises()
-    expect(change.mock.calls[1]).toEqual(original)
-    expect(wrapper.findAll('section.console-panel').some((s) => s.text().includes('原操作'))).toBe(
-      false,
-    )
-    wrapper.unmount()
-  })
 it('invalidates dangerous confirmation and clears PIN when the action or target changes', async () => {
   const create = vi.fn().mockResolvedValue({ operationId: id }),
     directory = vi

@@ -55,3 +55,18 @@ export function createRolloutClient(transport: HttpTransport) {
       }),
   }
 }
+
+export type Rollout = Awaited<ReturnType<ReturnType<typeof createRolloutClient>['read']>>
+export function rolloutStageState(rollout: Rollout, index: number) {
+  const stage = rollout.stages[index]!
+  if (rollout.paused) return 'paused'
+  if (stage.open) return 'stageOpen'
+  if (rollout.asOf < stage.opensAt) return 'waitingTime'
+  const previous = rollout.stages[index - 1]
+  if (stage.minimumVerifiedPercent !== null && previous) {
+    if (!previous.ready || previous.totalTargets === 0) return 'waitingStatistics'
+    if (previous.verifiedSuccess * 100 < previous.totalTargets * stage.minimumVerifiedPercent)
+      return 'thresholdNotMet'
+  }
+  return 'stageClosed'
+}

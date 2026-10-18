@@ -28,6 +28,8 @@ import AssignmentFacts from '../../policies/components/AssignmentFacts.vue'
 import { objectKey } from '../../devices/clients/objects'
 import PageFrame from '../../../components/PageFrame.vue'
 import NativeScheduleEditor from '../components/NativeScheduleEditor.vue'
+import { rolloutStageState } from '../clients/rollout'
+import type { Publication } from '../clients/publication'
 import PolicyRunFacts from '../../policies/components/PolicyRunFacts.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
@@ -50,6 +52,7 @@ function fresh(): SoftwarePolicyDefinition {
       resource: { kind: 'software', id: '', version: '1', variants: {} },
 
       kind: 'software',
+      channel: 'agent',
       intent: 'required_install',
       schedule: {
         trigger: { kind: 'check_in', minimumSeconds: 3600 },
@@ -66,6 +69,55 @@ function fresh(): SoftwarePolicyDefinition {
 }
 const draft = ref(fresh()),
   resource = ref<ResourceRead>()
+const rolloutMode = ref<'full' | 'staged'>('full')
+const published = ref<Awaited<ReturnType<typeof runtime.software.publication.list>>>()
+const nativeChoices = computed(
+  () => published.value?.items.filter((v) => v.outcome === 'published' && !v.withdrawn) ?? [],
+)
+function loadPublications(after?: string) {
+  const r = draft.value.action.resource
+  void run(
+    () => runtime.software.publication.list({ resource: r.id, version: r.version, after }),
+    (v) => {
+      published.value = v
+    },
+  )
+}
+function delivery(event: Event) {
+  draft.value.action.delivery =
+    (event.target as HTMLSelectElement).value === 'native'
+      ? { kind: 'native', target: '' }
+      : { kind: 'direct' }
+  published.value = undefined
+}
+function choosePublication(value: Publication) {
+  draft.value.action.delivery = { kind: 'native', target: value.target }
+}
+function changeRolloutMode(event: Event) {
+  rolloutMode.value = (event.target as HTMLSelectElement).value as 'full' | 'staged'
+  draft.value.action.rollout.stages = [
+    {
+      scope: rolloutMode.value === 'full' ? draft.value.scope : '',
+      opensAt: draft.value.action.schedule?.notBefore ?? Math.floor(Date.now() / 1000),
+      minimumVerifiedPercent: null,
+    },
+  ]
+}
+watch(
+  () => [draft.value.scope, draft.value.action.schedule?.notBefore] as const,
+  ([scope, opensAt]) => {
+    if (rolloutMode.value === 'full')
+      draft.value.action.rollout.stages = [
+        {
+          scope,
+          opensAt: opensAt ?? draft.value.action.rollout.stages[0]!.opensAt,
+          minimumVerifiedPercent: null,
+        },
+      ]
+  },
+  { flush: 'sync' },
+)
+
 const page = ref<Awaited<ReturnType<typeof client.list>>>(),
   preview = ref<Awaited<ReturnType<typeof client.preview>>>()
 const previewBasis = ref('')
@@ -96,7 +148,9 @@ watch(
     pending = undefined
     current.value = undefined
     resource.value = undefined
+    rolloutMode.value = 'full'
     draft.value = fresh()
+    published.value = undefined
     page.value = undefined
     clearEvidence()
   },
@@ -132,7 +186,18 @@ function apply(value: PolicyRead) {
   current.value = p
   id.value = p.id
   enabled.value = p.enabled
+  const stages = p.definition.action.rollout.stages,
+    first = stages[0]!
+  rolloutMode.value =
+    stages.length === 1 &&
+    first.scope === p.definition.scope &&
+    first.minimumVerifiedPercent === null &&
+    (p.definition.action.schedule?.notBefore === undefined ||
+      first.opensAt === p.definition.action.schedule.notBefore)
+      ? 'full'
+      : 'staged'
   draft.value = structuredClone(p.definition)
+  published.value = undefined
   resource.value = undefined
   clearEvidence()
 }
@@ -140,7 +205,9 @@ function create() {
   if (busy.value || uncertain.value) return
   current.value = undefined
   id.value = ''
+  rolloutMode.value = 'full'
   draft.value = fresh()
+  published.value = undefined
   enabled.value = true
   resource.value = undefined
   pending = undefined
@@ -192,7 +259,7 @@ function bindVersion() {
         runtime.software.lifecycle.version(target.id, target.version),
       ])
       const v = r.versions.find((v) => v.id === target.version)
-      if (r.kind !== 'software' || v?.state !== 'active' || a.lifecycle?.state !== 'enabled')
+      if (r.kind !== 'software' || !v || v.state === 'archived' || a.lifecycle?.state !== 'enabled')
         throw new Error('Software version is not enabled')
       return { r, v }
     },
@@ -208,6 +275,8 @@ function bindVersion() {
   )
 }
 function resetBinding() {
+  published.value = undefined
+  if (draft.value.action.delivery.kind === 'native') draft.value.action.delivery.target = ''
   resource.value = undefined
   draft.value.action.resource.variants = {}
 }
@@ -326,7 +395,7 @@ function loadDetail(task: string) {
 function addStage() {
   const stages = draft.value.action.rollout.stages,
     last = stages.at(-1)!
-  stages.push({ scope: '', opensAt: last.opensAt + 86400, minimumVerifiedPercent: 90 })
+  stages.push({ scope: '', opensAt: last.opensAt + 86400, minimumVerifiedPercent: null })
 }
 const utc = (at: number) =>
   new Date(at * 1000).toISOString().replace('T', ' ').replace('.000Z', ' UTC')
@@ -451,6 +520,47 @@ watch(
               }}
             </p>
             <ResourceIdentity :binding="draft.action.resource" />
+            <label for="deployment-delivery">{{ t('software.delivery') }}</label>
+            <select
+              id="deployment-delivery"
+              class="ui-input"
+              :value="draft.action.delivery.kind"
+              @change="delivery"
+            >
+              <option value="direct">{{ t('software.deliveryDirect') }}</option>
+              <option value="native">{{ t('software.deliveryNative') }}</option>
+            </select>
+            <section v-if="draft.action.delivery.kind === 'native'" class="console-panel">
+              <p>{{ t('software.nativePublicationHint') }}</p>
+              <p v-if="draft.action.delivery.target">
+                {{ t('software.binding') }}: {{ draft.action.delivery.target }}
+              </p>
+              <UiButton
+                type="button"
+                :disabled="!draft.action.resource.id || !draft.action.resource.version"
+                @click="loadPublications()"
+                >{{ t('software.publishedVersions') }}</UiButton
+              >
+              <p v-if="published && !nativeChoices.length">
+                {{ t('software.noPublishedVersion') }}
+              </p>
+              <label v-for="item in nativeChoices" :key="item.id">
+                <input
+                  type="radio"
+                  name="native-publication"
+                  :value="item.target"
+                  :checked="draft.action.delivery.target === item.target"
+                  @change="choosePublication(item)"
+                />
+                {{ item.target }} · {{ item.resource }} / {{ item.version }}
+              </label>
+              <UiButton
+                v-if="published?.nextCursor"
+                type="button"
+                @click="loadPublications(published.nextCursor)"
+                >{{ t('devices.next') }}</UiButton
+              >
+            </section>
             <label for="deployment-intent">{{ t('software.intent') }}</label
             ><select
               id="deployment-intent"
@@ -512,7 +622,18 @@ watch(
               max="604800"
               required
             />
-            <fieldset>
+            <label for="deployment-rollout-mode">{{ t('software.deploymentMode') }}</label>
+            <select
+              id="deployment-rollout-mode"
+              class="ui-input"
+              :value="rolloutMode"
+              @change="changeRolloutMode"
+            >
+              <option value="full">{{ t('software.fullDeployment') }}</option>
+              <option value="staged">{{ t('software.stagedDeployment') }}</option>
+            </select>
+            <p v-if="rolloutMode === 'full'">{{ t('software.fullDeploymentHint') }}</p>
+            <fieldset v-else>
               <legend>{{ t('software.stages') }}</legend>
               <p>{{ t('software.stageHint') }}</p>
               <fieldset v-for="(stage, index) in draft.action.rollout.stages" :key="index">
@@ -577,7 +698,13 @@ watch(
               <dt>{{ t('software.intent') }}</dt>
               <dd>{{ t(`software.intent_${draft.action.intent}`) }}</dd>
               <dt>{{ t('software.stages') }}</dt>
-              <dd>{{ draft.action.rollout.stages.length }}</dd>
+              <dd>
+                {{
+                  rolloutMode === 'full'
+                    ? t('software.fullDeployment')
+                    : draft.action.rollout.stages.length
+                }}
+              </dd>
               <dt>{{ t('software.enabled') }}</dt>
               <dd>{{ enabled ? t('software.enabled') : t('software.paused') }}</dd>
             </dl>
@@ -696,9 +823,7 @@ watch(
         <p>{{ utc(rollout.asOf) }} · {{ t('software.rolloutHint') }}</p>
         <p>{{ t('software.policyVersion') }}: {{ rollout.versionId }}</p>
         <article v-for="(stage, index) in rollout.stages" :key="stage.scope" class="console-panel">
-          <h4>
-            {{ index + 1 }} · {{ stage.open ? t('software.stageOpen') : t('software.stageClosed') }}
-          </h4>
+          <h4>{{ index + 1 }} · {{ t(`software.${rolloutStageState(rollout, index)}`) }}</h4>
           <p>
             {{ stage.scope }} · {{ utc(stage.opensAt) }} ·
             {{ stage.minimumVerifiedPercent === null ? '—' : `${stage.minimumVerifiedPercent}%` }}

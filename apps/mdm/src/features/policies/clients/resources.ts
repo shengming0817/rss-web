@@ -266,7 +266,7 @@ function variant(value: unknown): Variant {
   return result
 }
 export function decodeResource(value: unknown, id: string) {
-  const v = closed(value, ['id', 'revision', 'kind', 'versions'])
+  const v = closed(value, ['origin', 'id', 'revision', 'kind', 'versions'])
   if (identifier(v['id']) !== id) throw new Error('Wrong resource')
   const kind = enumeration(v['kind'], [
     'script',
@@ -279,6 +279,14 @@ export function decodeResource(value: unknown, id: string) {
     id,
     revision: count(v['revision']),
     kind,
+    origin: nullable(v['origin'], (value) => {
+      const o = closed(value, ['blueprint', 'version', 'digest'])
+      return {
+        blueprint: identifier(o['blueprint']),
+        version: identifier(o['version']),
+        digest: digest(o['digest']),
+      }
+    }),
     versions: unique(
       array(v['versions'], (value) => {
         const version = closed(value, ['id', 'digest', 'state', 'variants'])

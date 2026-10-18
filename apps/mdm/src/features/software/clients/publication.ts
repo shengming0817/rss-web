@@ -2,6 +2,7 @@ import type { HttpTransport } from '@rss/api/mdm'
 import type { Operation } from '../../../services/useOperation'
 import {
   array,
+  boolean,
   closed,
   count,
   digest,
@@ -10,11 +11,8 @@ import {
   nullable,
   record,
   string,
-  unique,
 } from '../../../services/decode'
 import { jsonValue } from '../../policies/clients/resources'
-export const rings = ['test', 'pilot', 'production'] as const
-export type Ring = (typeof rings)[number]
 function publicArtifact(value: unknown) {
   const v = closed(value, ['key', 'url', 'length', 'sha256'])
   return {
@@ -99,80 +97,135 @@ export function exportDocument(value: unknown) {
   }
 }
 export type ExportDocument = ReturnType<typeof exportDocument>
-export type PublicationChange =
-  | {
-      action: 'candidate'
-      resource: string
-      version: string
-      expectedResourceRevision: number
-      resourceDigest: number[]
-    }
-  | { action: 'publish' | 'withdraw'; ring: Ring }
-  | { action: 'recover'; ring: Ring; publication: number[]; attempt: number }
-  | { action: 'retry'; ring: Ring; attempt: number }
-export function decodePublication(value: unknown, id: string) {
+export type Publish = {
+  action: 'publish'
+  resource: string
+  version: string
+  expectedResourceRevision: number
+  resourceDigest: number[]
+  target: string
+  targetDigest: number[]
+}
+export type PublicationChange = Publish | { action: 'recover' | 'retry' | 'withdraw' }
+export function decodePublication(value: unknown, expectedId?: string) {
   const v = closed(
     value,
-    ['id', 'revision', 'contentDigest', 'disposition', 'manifestDigest', 'sourceSnapshot', 'rings'],
+    [
+      'id',
+      'revision',
+      'target',
+      'resource',
+      'version',
+      'publication',
+      'contentDigest',
+      'manifestDigest',
+      'targetDigest',
+      'attempt',
+      'outcome',
+      'withdrawn',
+      'withdrawal',
+    ],
     ['document'],
   )
-  if (identifier(v['id']) !== id) throw new Error('Wrong publication')
-  const states = unique(
-    array(v['rings'], (value) => {
-      const r = closed(value, ['ring', 'state', 'publication'])
-      const result = {
-        ring: enumeration(r['ring'], rings),
-        state: enumeration(r['state'], ['candidate', 'publication'] as const),
-        publication: nullable(r['publication'], (value) => {
-          const p = closed(value, ['id', 'attempt', 'outcome'])
-          return {
-            id: digest(p['id']),
-            attempt: count(p['attempt']),
-            outcome: enumeration(p['outcome'], [
-              'published',
-              'not_applied',
-              'pending',
-              'unknown',
-            ] as const),
-          }
-        }),
-      }
-      if ((result.state === 'publication') !== (result.publication !== null))
-        throw new Error('Invalid publication state')
-      return result
-    }),
-    (r) => r.ring,
-  )
-  if (states.length !== rings.length) throw new Error('Incomplete publication rings')
+  const id = identifier(v['id'])
+  if (expectedId !== undefined && id !== expectedId) throw new Error('Wrong publication')
+  const attempt = count(v['attempt'])
+  if (attempt < 1) throw new Error('Invalid attempt')
   return {
     id,
     revision: count(v['revision']),
+    target: identifier(v['target']),
+    resource: identifier(v['resource']),
+    version: identifier(v['version']),
+    publication: digest(v['publication']),
     contentDigest: digest(v['contentDigest']),
-    disposition: enumeration(v['disposition'], ['active', 'quarantined', 'deprecated'] as const),
     manifestDigest: digest(v['manifestDigest']),
-    sourceSnapshot: digest(v['sourceSnapshot']),
-    rings: states.sort((a, b) => rings.indexOf(a.ring) - rings.indexOf(b.ring)),
+    targetDigest: digest(v['targetDigest']),
+    attempt,
+    outcome: enumeration(v['outcome'], ['pending', 'unknown', 'not_applied', 'published'] as const),
+    withdrawn: boolean(v['withdrawn']),
+    withdrawal: nullable(v['withdrawal'], (v) =>
+      enumeration(v, [
+        'withdrawn',
+        'not_published',
+        'waiting_publication',
+        'preflight_retryable',
+        'unknown',
+      ] as const),
+    ),
     ...('document' in v ? { document: exportDocument(v['document']) } : {}),
   }
 }
 export type Publication = ReturnType<typeof decodePublication>
+export function publicationTarget(value: unknown) {
+  const v = closed(value, ['id', 'digest', 'protocol'])
+  return {
+    id: identifier(v['id']),
+    digest: digest(v['digest']),
+    protocol: enumeration(v['protocol'], ['winget', 'brew'] as const),
+  }
+}
+export type PublicationTarget = ReturnType<typeof publicationTarget>
+export interface PublicationQuery {
+  after?: string | undefined
+  target?: string | undefined
+  resource?: string | undefined
+  version?: string | undefined
+  operationId?: string | undefined
+}
 export function createPublicationClient(transport: HttpTransport) {
   return {
-    read: (source: string, id: string) =>
+    targets: (after?: string) =>
       transport.request({
         method: 'GET',
-        path: '/api/v1/software-sources/{source}/candidates/{id}',
-        pathParams: { source, id },
+        path: '/api/v1/software/publication-targets',
+        query: { after, limit: 20 },
+        successStatus: 200,
+        decode(value) {
+          const v = closed(value, ['items', 'nextCursor'])
+          return {
+            items: array(v['items'], publicationTarget),
+            nextCursor: nullable(v['nextCursor'], string),
+          }
+        },
+      }),
+    list: (query: PublicationQuery = {}) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/software/publications',
+        query: { ...query, limit: 20 },
+        successStatus: 200,
+        decode(value) {
+          const v = closed(value, ['items', 'nextCursor'])
+          return {
+            items: array(v['items'], (v) => decodePublication(v)),
+            nextCursor: nullable(v['nextCursor'], string),
+          }
+        },
+      }),
+    read: (id: string) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/software/publications/{id}',
+        pathParams: { id },
         successStatus: 200,
         decode: (v) => decodePublication(v, id),
       }),
-    change: (source: string, id: string, body: Operation<PublicationChange>) =>
+    publish: (body: Operation<Publish>) =>
       transport.request({
         method: 'POST',
-        path: '/api/v1/software-sources/{source}/candidates/{id}',
-        pathParams: { source, id },
+        path: '/api/v1/software/publications',
         body,
-        successStatus: body.input.action === 'publish' ? 202 : 200,
+        successStatus: 202,
+        decode: (v) => decodePublication(v, body.operationId),
+      }),
+    change: (id: string, body: Operation<Exclude<PublicationChange, Publish>>) =>
+      transport.request({
+        method: 'POST',
+        path: '/api/v1/software/publications/{id}',
+        pathParams: { id },
+        body,
+        successStatus: 200,
         decode: (v) => decodePublication(v, id),
       }),
   }

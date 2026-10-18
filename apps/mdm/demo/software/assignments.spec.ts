@@ -39,10 +39,12 @@ function setup() {
     },
     { read: () => saved },
     { isEnabled: () => approved, binding: () => (approved ? `enabled-${epoch}` : null) },
+    { binding: () => null },
   )
   const definition: SoftwarePolicyDefinition = {
     scope: scope.id,
     action: {
+      channel: 'agent',
       delivery: { kind: 'direct' },
       resource: { kind: 'software', id: 'app', version: '1', variants: { windows_x86_64: 'main' } },
 

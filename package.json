@@ -34,7 +34,8 @@
     "test:mdm:enrollment-browser": "node e2e/mdm/enrollment-browser.mjs",
     "test:mdm:device-browser": "node e2e/mdm/device-run.mjs",
     "dev:ui": "pnpm -F @rss/ui-preview dev",
-    "build:ui-preview": "pnpm -F @rss/ui-preview build"
+    "build:ui-preview": "pnpm -F @rss/ui-preview build",
+    "test:mdm:software-browser": "node e2e/mdm/software-run.mjs"
   },
   "lint-staged": {
     "*.{ts,vue}": [

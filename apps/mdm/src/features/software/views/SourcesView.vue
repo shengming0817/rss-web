@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { UiButton } from '@rss/core/components'
-import { ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
@@ -21,6 +21,22 @@ const id = ref(''),
   identifier = ref(''),
   current = ref<Awaited<ReturnType<typeof client.source>>>()
 let pending: { id: string; revision: string; operationId: string } | undefined
+const page = ref<Awaited<ReturnType<typeof client.sources>>>()
+function list(after?: string) {
+  void run(
+    () => client.sources(after),
+    (v) => {
+      page.value = v
+    },
+  )
+}
+function choose(value: NonNullable<typeof page.value>['items'][number]) {
+  id.value = value.source.id
+  revision.value = value.source.revision
+  current.value = value
+}
+onMounted(() => list())
+
 function read() {
   const target = uncertain.value && pending ? pending : { id: id.value, revision: revision.value }
   void run(
@@ -82,6 +98,7 @@ watch(
   () => deviceBinding(runtime),
   () => {
     current.value = undefined
+    page.value = undefined
     pending = undefined
     id.value = ''
     revision.value = '1'
@@ -90,8 +107,28 @@ watch(
 )
 </script>
 <template>
-  <PageFrame :title="t('software.sources')" :busy="busy" :failure="failure"
-    ><p>{{ t('software.discoveryUnavailable') }}</p>
+  <PageFrame :title="t('software.sources')" :busy="busy" :failure="failure">
+    <UiButton :disabled="busy || uncertain" @click="list()">{{
+      t('software.sourceDirectory')
+    }}</UiButton>
+    <section v-if="page" class="console-panel">
+      <p v-if="!page.items.length">{{ t('policies.empty') }}</p>
+      <article v-for="item in page.items" :key="`${item.source.id}/${item.source.revision}`">
+        <p>
+          {{ item.source.id }} / {{ item.source.revision }} · {{ item.source.protocol.kind }} ·
+          {{ t(`software.lifecycle_${item.lifecycle.state}`) }}
+        </p>
+        <UiButton :disabled="busy || uncertain" @click="choose(item)">{{
+          t('policies.open')
+        }}</UiButton>
+      </article>
+      <UiButton
+        v-if="page.nextCursor"
+        :disabled="busy || uncertain"
+        @click="list(page.nextCursor)"
+        >{{ t('devices.next') }}</UiButton
+      >
+    </section>
     <form @submit.prevent="read">
       <fieldset :disabled="busy || uncertain">
         <label>{{ t('software.source') }}<input v-model="id" class="ui-input" required /></label

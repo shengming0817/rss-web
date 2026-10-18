@@ -216,7 +216,10 @@ export function createAuthorizationDemo(
       if (!effective(actor).some((g) => g.operation === 'operation_read'))
         return error('permission_denied', 403)
     }
-    if (/^\/api\/v1\/software(?:\/|$)/.test(path)) {
+    if (
+      /^\/api\/v1\/software(?:\/|$)/.test(path) &&
+      !/^\/api\/v1\/software\/(?:publications|publication-targets)(?:\/|$)/.test(path)
+    ) {
       const input = request.method === 'POST' ? objectRecord(operation(request.body).input) : null
       const action = input?.['action']
       const permission: Permission =
@@ -231,7 +234,7 @@ export function createAuthorizationDemo(
       )
         return error('permission_denied', 403)
     }
-    if (/^\/api\/v1\/software-sources\/[^/]+\/candidates\/[^/]+$/.test(path)) {
+    if (/^\/api\/v1\/software\/(?:publications|publication-targets)(?:\/|$)/.test(path)) {
       const action =
         request.method === 'POST'
           ? objectRecord(operation(request.body).input)['action']
@@ -241,13 +244,10 @@ export function createAuthorizationDemo(
           ? 'release_read'
           : action === 'publish'
             ? 'release_publish'
-            : action === 'recover' || action === 'retry'
-              ? 'release_recover'
-              : action === 'withdraw'
-                ? 'release_withdraw'
-                : 'release_write'
-      if (!can(actor, permission) || (action === 'candidate' && !can(actor, 'resource_read')))
-        return error('permission_denied', 403)
+            : action === 'withdraw'
+              ? 'release_withdraw'
+              : 'release_recover'
+      if (!can(actor, permission)) return error('permission_denied', 403)
     }
     const batch =
       /^\/api\/v1\/mdm-candidate\/devices\/batch-previews(?:\/([^/]+)(?:\/(execute|cancel))?)?$/.exec(

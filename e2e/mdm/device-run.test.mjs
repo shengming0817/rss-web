@@ -1,4 +1,4 @@
-// Process lifecycle regression only; real provider/UI acceptance uses device-run.mjs.
+// Process lifecycle regression for the device and software browser fixture owners.
 import { test } from 'node:test'
 import process from 'node:process'
 import assert from 'node:assert/strict'
@@ -15,10 +15,12 @@ async function waitFor(predicate) {
     await new Promise((done) => setTimeout(done, 20))
   }
 }
-async function exercise(failure) {
-  const backend = mkdtempSync(resolve(tmpdir(), 'mdm-device-lifecycle-'))
+async function exercise(failure, feature) {
+  const backendEnv = `MDM_${feature.toUpperCase()}_BACKEND`,
+    group = `${feature}-browser`
+  const backend = mkdtempSync(resolve(tmpdir(), `mdm-${feature}-lifecycle-`))
   const bin = resolve(backend, 'bin'),
-    recovery = resolve(backend, 'artifacts/dev-environment/device-browser')
+    recovery = resolve(backend, `artifacts/dev-environment/${group}`)
   mkdirSync(bin)
   mkdirSync(recovery, { recursive: true })
   writeFileSync(resolve(bin, 'pnpm'), '#!/bin/sh\nexit 0\n', { mode: 0o700 })
@@ -26,13 +28,13 @@ async function exercise(failure) {
     resolve(bin, 'python3'),
     `#!/usr/bin/env node
 const fs = require('node:fs'), path = require('node:path')
-const args = process.argv.slice(2), base = process.env.MDM_DEVICE_BACKEND
+const args = process.argv.slice(2), base = process.env['${backendEnv}']
 if (args.includes('reset')) {
-  if (!args.includes('hack/t2_environment.py') || args.at(-1) !== 'device-browser') process.exit(9)
+  if (!args.includes('hack/t2_environment.py') || args.at(-1) !== '${group}') process.exit(9)
   fs.writeFileSync(path.join(base, 'cleanup-start'), '')
   setTimeout(() => {
     if (process.env.CLEANUP_FAILURE === '1') process.exit(3)
-    fs.rmSync(path.join(base, 'artifacts/dev-environment/device-browser'), { recursive: true })
+    fs.rmSync(path.join(base, 'artifacts/dev-environment/${group}'), { recursive: true })
     fs.writeFileSync(path.join(base, 'cleanup-finished'), '')
     process.exit(0)
   }, process.env.CLEANUP_FAILURE === '1' ? 0 : 7000)
@@ -48,11 +50,11 @@ if (args.includes('reset')) {
   )
   const child = spawn(
     process.execPath,
-    [fileURLToPath(new URL('./device-run.mjs', import.meta.url))],
+    [fileURLToPath(new URL(`./${feature}-run.mjs`, import.meta.url))],
     {
       env: {
         ...process.env,
-        MDM_DEVICE_BACKEND: backend,
+        [backendEnv]: backend,
         PATH: `${bin}:${process.env.PATH}`,
         CLEANUP_FAILURE: failure ? '1' : '0',
       },
@@ -92,13 +94,15 @@ if (args.includes('reset')) {
     rmSync(backend, { recursive: true, force: true })
   }
 }
-test(
-  'waits for seven-second cleanup after forced execution cancellation and a second signal',
-  { timeout: 30000 },
-  () => exercise(false),
-)
-test(
-  'fails and reports the recovery directory when independent cleanup fails',
-  { timeout: 30000 },
-  () => exercise(true),
-)
+for (const feature of ['device', 'software']) {
+  test(
+    `${feature}: waits for independent cleanup after cancellation and a second signal`,
+    { timeout: 30000 },
+    () => exercise(false, feature),
+  )
+  test(
+    `${feature}: reports unconfirmed cleanup and the recovery directory`,
+    { timeout: 30000 },
+    () => exercise(true, feature),
+  )
+}

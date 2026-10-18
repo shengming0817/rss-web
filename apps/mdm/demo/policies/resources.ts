@@ -81,6 +81,7 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
       {
         id,
         kind: 'software',
+        origin: resource?.origin ?? null,
         revision: input.expectedRevision + 1,
         versions: [
           ...(resource?.versions ?? []),
@@ -213,6 +214,7 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
           closed(input, ['action', 'kind'])
           if (state) return error('operation_conflict')
           next = {
+            origin: null,
             id,
             revision: 1,
             kind: enumeration(input['kind'], ['script', 'software', 'configuration'] as const),
@@ -282,16 +284,6 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
   return {
     handle,
     importVersion,
-    activatePublished(id: string, version: string) {
-      const resource = resources.get(id),
-        selected = resource?.versions.find((v) => v.id === version)
-      if (!resource || !selected || !['active', 'frozen'].includes(selected.state)) return false
-      if (selected.state !== 'active') {
-        selected.state = 'active'
-        resource.revision++
-      }
-      return true
-    },
     importReceipt: (operation: string) => imported.get(operation)?.revision ?? null,
     contentReady: (id: string, version: string) => {
       const v = resources.get(id)?.versions.find((v) => v.id === version)

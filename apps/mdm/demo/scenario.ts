@@ -370,7 +370,7 @@ export function createScenario(
         path,
       )
     const softwarePath =
-      /^\/api\/(?:v1\/software(?:\/|$)|v1\/software-sources(?:\/|$)|v1\/policies(?:\/|$)|v1\/mdm-candidate\/software(?:\/|$))/.test(
+      /^\/api\/(?:v1\/software(?:\/|$)|v1\/policies(?:\/|$)|v1\/mdm-candidate\/software(?:\/|$))/.test(
         path,
       )
     const securityPath =

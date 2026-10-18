@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import { UiButton } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -33,10 +33,11 @@ function open() {
     },
   )
 }
-function choose() {
+async function choose() {
   version.value = ''
   selected.value = undefined
   emit('change')
+  await nextTick()
   open()
 }
 watch(

@@ -13,7 +13,6 @@ import { createAutomationDemo } from '../demo/policies/state'
 import { createDeviceDemo } from '../demo/devices/state'
 import { seedScriptPolicies } from '../demo/policies/seed'
 import { createOnboardingDemo } from '../demo/enrollment'
-import { createPublicationDemo } from '../demo/software/publication'
 import { createImportsDemo } from '../demo/software/imports'
 import { createPolicyClients } from './features/policies/client'
 import { operation } from './services/useOperation'
@@ -24,7 +23,7 @@ async function start() {
   devices.bindAuthorization(automation.authorization.can)
   const seed = seedScriptPolicies(automation),
     onboarding = createOnboardingDemo(automation.authorization.can),
-    publication = createPublicationDemo(automation.resources, automation.lifecycle),
+    publication = automation.publication,
     imports = createImportsDemo(automation.resources, automation.lifecycle)
   const server = createScenario(
     [

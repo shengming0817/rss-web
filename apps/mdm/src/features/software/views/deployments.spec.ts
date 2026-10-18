@@ -219,8 +219,10 @@ it.each([false, true])(
       .findAll('button')
       .find((b) => b.text() === '下一步')!
       .trigger('click')
-    await wrapper.get('[data-field="stage-scope"]').setValue(scope)
+    expect(wrapper.find('[data-field="stage-scope"]').exists()).toBe(false)
     if (success) {
+      await wrapper.get('#deployment-rollout-mode').setValue('staged')
+      await wrapper.get('[data-field="stage-scope"]').setValue(scope)
       await wrapper.get('#deployment-lifetime').setValue(7200)
       await wrapper.get('[id$="-not-before"]').setValue('2027-01-01T00:00:00')
       await wrapper.get('#stage-0-at').setValue('2027-01-01T00:00:00')
@@ -310,6 +312,12 @@ it.each([false, true])(
       wrapper.unmount()
       return
     }
+    expect(change.mock.calls[0]![1].input.definition).toMatchObject({
+      scope,
+      action: {
+        rollout: { stages: [{ scope, opensAt: expect.any(Number), minimumVerifiedPercent: null }] },
+      },
+    })
     await wrapper.get('[data-action="read-policy"]').trigger('click')
     await flushPromises()
     expect(wrapper.get('[data-form="deployment"] > fieldset').attributes('disabled')).toBeDefined()
