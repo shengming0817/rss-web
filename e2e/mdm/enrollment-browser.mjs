@@ -9,6 +9,7 @@ import process from 'node:process'
 import { assertNativeCallback } from './enrollment-callback.mjs'
 let browser,
   context,
+  employeeContext,
   phase = 'environment',
   result = 'failed',
   cleanup = 'passed',
@@ -64,6 +65,10 @@ try {
   }
   assert.ok(Array.isArray(packages))
   for (const item of packages) {
+    if (!['nsis_exe', 'macos_pkg'].includes(item.format)) {
+      gaps.push('supported-installer-format')
+      continue
+    }
     await page.getByLabel('平台', { exact: true }).selectOption(item.target.platform)
     await page.getByLabel('原生架构', { exact: true }).selectOption(item.target.architecture)
     await page.getByLabel('发布渠道', { exact: true }).selectOption(item.channel)
@@ -88,13 +93,14 @@ try {
     401,
   )
   coverage.push('anonymous-private-boundary')
-  async function login(account) {
+  async function login(account, target = page) {
     active()
-    await page.goto(`${origin}/tenants/${fixture.tenant}/login`)
-    await page.locator('#login-name').fill(account.login)
-    await page.locator('#login-password').fill(secret(account.passwordFile))
-    await page.locator('form').evaluate((f) => f.requestSubmit())
-    await page.waitForURL(/workspace/)
+    await target.context().clearCookies()
+    await target.goto(`${origin}/tenants/${fixture.tenant}/login`)
+    await target.locator('#login-name').fill(account.login)
+    await target.locator('#login-password').fill(secret(account.passwordFile))
+    await target.locator('form').evaluate((f) => f.requestSubmit())
+    await target.waitForURL(/workspace/)
   }
   if (fixture.reader) {
     active()
@@ -194,6 +200,122 @@ try {
       coverage.push('configuration-unknown-query-and-revoke')
     } else gaps.push('configuration-PKI-and-signer')
   } else gaps.push('administrator-organization-configuration')
+  if (fixture.admission) {
+    active()
+    phase = 'admission-two-sessions'
+    assert.ok(fixture.admin && fixture.reader && fixture.configurationReady)
+    employeeContext = await browser.newContext({ ignoreHTTPSErrors: true, locale: 'zh-CN' })
+    const employee = await employeeContext.newPage()
+    employee.setDefaultTimeout(10000)
+    await login(fixture.reader, employee)
+    await employee.goto(`${origin}/tenants/${fixture.tenant}/registration-quotas`)
+    await employee.getByRole('heading', { name: '注册通道与准入', exact: true }).waitFor()
+    assert.equal(await employee.getByRole('button', { name: '暂停新注册', exact: true }).count(), 0)
+    coverage.push('ordinary-user-readonly-channels')
+    const adminChannel = (name) =>
+      page.locator('article').filter({ has: page.getByRole('heading', { name, exact: true }) })
+    async function admission(action) {
+      const response = page.waitForResponse(
+        (r) =>
+          r.request().method() === 'PUT' &&
+          new URL(r.url()).pathname === '/api/v1/registration-channels/windows_mdm/admission',
+      )
+      await adminChannel('Windows MDM').getByRole('button', { name: action, exact: true }).click()
+      assert.equal((await response).status(), 200)
+      await adminChannel('Windows MDM')
+        .getByRole('button', {
+          name: action === '暂停新注册' ? '恢复新注册' : '暂停新注册',
+          exact: true,
+        })
+        .waitFor()
+    }
+    await page.goto(`${origin}/tenants/${fixture.tenant}/registration-quotas`)
+    await adminChannel('Windows MDM')
+      .getByRole('button', { name: '暂停新注册', exact: true })
+      .waitFor()
+    await employee.goto(`${origin}/tenants/${fixture.tenant}/my-enrollments`)
+    const create = employee.getByRole('button', { name: '授权注册', exact: true })
+    async function prepare() {
+      await employee.getByRole('button', { name: '生成一次性交付口令', exact: true }).click()
+      await employee.locator('form').first().locator('input[type=checkbox]').check()
+    }
+    await prepare()
+    await admission('暂停新注册')
+    // No route interception: the stale page must reach the actual server and be rejected.
+    const rejected = employee.waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/v1/self-enrollments',
+    )
+    await create.click()
+    const rejection = await rejected
+    assert.equal(rejection.status(), 409)
+    assert.equal((await rejection.json()).code, 'enrollment_paused')
+    await employee.getByText('此通道已暂停新注册，请刷新通道状态。', { exact: true }).waitFor()
+    await employee.waitForFunction(() =>
+      [...document.querySelectorAll('button')].some(
+        (b) => b.textContent.trim() === '授权注册' && b.disabled,
+      ),
+    )
+    coverage.push('stale-page-real-admission-rejection-and-refresh')
+    assert.ok(fixture.existingDevice)
+    const existing = await context.request.get(
+      `${origin}/api/v1/devices/${fixture.existingDevice}/registrations`,
+    )
+    assert.equal(existing.status(), 200)
+    assert.ok((await existing.json()).items.some((r) => r.status === 'active'))
+    coverage.push('established-device-management-reads-during-pause')
+    // The Agent channel remains available while Windows admission is paused.
+    const agent = await context.newPage()
+    agent.setDefaultTimeout(10000)
+    await agent.goto(`${origin}/tenants/${fixture.tenant}/agent-configurations`)
+    await agent.locator('summary').filter({ hasText: '生成完整 JSON' }).click()
+    const issued = agent.waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' &&
+        new URL(r.url()).pathname === '/api/v1/agent-configurations',
+    )
+    await agent.getByRole('button', { name: '生成完整 JSON', exact: true }).click()
+    assert.equal((await issued).status(), 200)
+    const delivery = agent.locator('a[download="rss-agent-enrollment.json"]')
+    await delivery.waitFor()
+    const downloaded = agent.waitForEvent('download')
+    await delivery.click()
+    const file = await downloaded
+    const filename = join(temp, 'configuration.json')
+    await file.saveAs(filename)
+    const json = JSON.parse(readFileSync(filename, 'utf8'))
+    assert.ok(json.configuration && json.secret && json.signature)
+    rmSync(filename)
+    coverage.push('other-channel-continues-and-complete-JSON-download')
+    await agent.goto(`${origin}/downloads/agent`)
+    await agent.close()
+    await admission('恢复新注册')
+    await employee.getByRole('button', { name: '刷新状态与额度', exact: true }).click()
+    await prepare()
+    const created = employee.waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/v1/self-enrollments',
+    )
+    await create.click()
+    const creation = await created
+    assert.equal(creation.status(), 200)
+    const receipt = await creation.json()
+    await employee
+      .getByRole('heading', { name: '系统原生注册步骤与当前事实', exact: true })
+      .waitFor()
+    await admission('暂停新注册')
+    // Existing authorization stays readable/cancellable; pausing does not rewrite its expiry.
+    const read = await employeeContext.request.get(
+      `${origin}/api/v1/enrollments/${receipt.enrollmentId}`,
+    )
+    assert.equal(read.status(), 200)
+    const current = await read.json()
+    assert.equal(current.expiresAt, receipt.expiresAt)
+    await employee.getByRole('button', { name: '取消', exact: true }).click()
+    await admission('恢复新注册')
+    coverage.push('resume-with-original-expiry-and-cancel-during-pause')
+    gaps.push('established-device-native-protocol-contact')
+  } else gaps.push('two-session-registration-admission')
   if (fixture.nativeStart) {
     active()
     phase = 'native-tou'
@@ -243,7 +365,7 @@ try {
   clearTimeout(deadline)
   process.removeListener('SIGINT', stop)
   process.removeListener('SIGTERM', stop)
-  for (const resource of [context, browser]) {
+  for (const resource of [employeeContext, context, browser]) {
     try {
       let timer
       try {
