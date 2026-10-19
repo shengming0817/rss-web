@@ -4,12 +4,17 @@ import { readFileSync, statSync, writeFileSync, existsSync } from 'node:fs'
 import assert from 'node:assert/strict'
 import process from 'node:process'
 let browser,
+  context,
   closing,
   phase = 'environment',
   result = 'failed',
   backendRevision
 const coverage = []
-const stop = () => (closing ??= Promise.resolve().then(() => browser?.close()))
+const stop = () =>
+  (closing ??= Promise.resolve().then(async () => {
+    await context?.unrouteAll({ behavior: 'ignoreErrors' })
+    await browser?.close()
+  }))
 const interrupt = () =>
   void stop().catch(() => {
     process.exitCode = 1
@@ -26,8 +31,8 @@ try {
   assert.equal(statSync(f.passwordFile).mode & 0o077, 0)
   const password = readFileSync(f.passwordFile, 'utf8').trim()
   browser = await chromium.launch()
-  const context = await browser.newContext({ ignoreHTTPSErrors: true, locale: 'zh-CN' }),
-    page = await context.newPage(),
+  context = await browser.newContext({ ignoreHTTPSErrors: true, locale: 'zh-CN' })
+  const page = await context.newPage(),
     pageErrors = []
   page.setDefaultTimeout(20000)
   page.on('pageerror', (error) => pageErrors.push(error.name))
@@ -36,7 +41,7 @@ try {
     const at = Math.max(Date.now(), next)
     next = at + 200
     if (at > Date.now()) await new Promise((r) => setTimeout(r, at - Date.now()))
-    await route.continue()
+    await route.continue().catch(() => {})
   })
   const login = async (base, tenant, name, secret) => {
     await page.goto(`${base}/tenants/${tenant}/login`)
@@ -93,23 +98,34 @@ try {
   let attempts = 0,
     receipt,
     operation
+  let finishWrite,
+    interceptionFailed = false
+  const observedWrite = new Promise((resolve) => (finishWrite = resolve))
   const discard = async (route) => {
-    if (route.request().method() !== 'POST') {
-      await route.continue()
-      return
-    }
-    attempts++
-    const id = route.request().headers()['idempotency-key']
-    if (operation) assert.equal(id, operation)
-    operation = id
-    if (attempts === 1) {
+    try {
+      if (route.request().method() !== 'POST') {
+        await route.continue()
+        return
+      }
+      attempts++
+      const id = route.request().headers()['idempotency-key']
+      if (operation) assert.equal(id, operation)
+      operation = id
+      if (attempts === 1) {
+        await route.abort('failed')
+        return
+      }
+      const response = await route.fetch({ timeout: 45000, maxRetries: 0 })
+      assert.equal(response.status(), 202)
+      receipt = await response.json()
       await route.abort('failed')
-      return
+      finishWrite()
+    } catch {
+      // Framework request errors can include credentials; report only the classification.
+      interceptionFailed = true
+      finishWrite()
+      await route.abort('failed').catch(() => {})
     }
-    const response = await route.fetch()
-    assert.equal(response.status(), 202)
-    receipt = await response.json()
-    await route.abort('failed')
   }
   await page.route('**/api/v1/tenant-administration/provisionings', discard)
   await form.getByRole('button', { name: '开通业务租户', exact: true }).click()
@@ -127,6 +143,8 @@ try {
   )
   await form.getByLabel('初始管理员密码', { exact: true }).fill(newPassword)
   await page.getByRole('button', { name: '按原输入显式重试', exact: true }).click()
+  await observedWrite
+  assert.equal(interceptionFailed, false)
   await page.waitForFunction(
     () => document.querySelector('input[autocomplete="new-password"]')?.value === '',
   )
