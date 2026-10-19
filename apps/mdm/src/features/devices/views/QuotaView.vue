@@ -113,7 +113,7 @@ watch(
     <template v-if="canRead">
       <p>{{ t('registration.note') }}</p>
       <p>{{ t('registration.zero') }}</p>
-      <fieldset :disabled="busy || uncertain || !canWrite">
+      <fieldset :disabled="busy || uncertain">
         <label
           >{{ t('registration.quotas')
           }}<select v-model="mode" class="ui-input" @change="load()">

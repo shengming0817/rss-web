@@ -46,9 +46,11 @@ function change(channel: RegistrationChannel, replay = false) {
           <p role="status">
             {{
               t(
-                state.commands.get(channel)?.state === 'conflict'
-                  ? 'registration.admissionConflict'
-                  : 'registration.admissionUnknown',
+                state.commands.get(channel)?.state === 'submitting'
+                  ? 'registration.admissionSubmitting'
+                  : state.commands.get(channel)?.state === 'conflict'
+                    ? 'registration.admissionConflict'
+                    : 'registration.admissionUnknown',
               )
             }}
           </p>

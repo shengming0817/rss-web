@@ -43,11 +43,12 @@ def command(binary, verb, value, path):
                    cwd=BACKEND, check=True, capture_output=True, timeout=45, pass_fds=lease_fds())
 
 def start(binary, initialized, log):
-    children = [subprocess.Popen([str(binary), 'serve', '--config', initialized['configuration']],
-                cwd=BACKEND, stdout=log, stderr=log, pass_fds=lease_fds()),
-                subprocess.Popen(['nginx', '-c', initialized['gateway'], '-g', 'daemon off;'],
-                cwd=BACKEND, stdout=log, stderr=log, pass_fds=lease_fds())]
-    processes.extend(children)
+    children = []
+    for args in ([str(binary), 'serve', '--config', initialized['configuration']],
+                 ['nginx', '-c', initialized['gateway'], '-g', 'daemon off;']):
+        child = subprocess.Popen(args, cwd=BACKEND, stdout=log, stderr=log, pass_fds=lease_fds())
+        processes.append(child)
+        children.append(child)
     context = ssl.create_default_context(cafile=str(environment.root / 'ca.crt'))
     until = time.monotonic() + 45
     while time.monotonic() < until:

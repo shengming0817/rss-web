@@ -64,14 +64,25 @@ try {
     packages = await catalog.json()
   }
   assert.ok(Array.isArray(packages))
+  let downloadedInstallers = 0
   for (const item of packages) {
-    if (!['nsis_exe', 'macos_pkg'].includes(item.format)) {
-      gaps.push('supported-installer-format')
-      continue
-    }
     await page.getByLabel('平台', { exact: true }).selectOption(item.target.platform)
     await page.getByLabel('原生架构', { exact: true }).selectOption(item.target.architecture)
     await page.getByLabel('发布渠道', { exact: true }).selectOption(item.channel)
+    if (!['nsis_exe', 'macos_pkg'].includes(item.format)) {
+      assert.equal(
+        await page
+          .locator(`a[href="/api/v1/agent/enroll/packages/${item.releaseId}/content"]`)
+          .count(),
+        0,
+      )
+      await page
+        .getByText('此入口不支持该安装器格式，请选择 NSIS EXE 或 PKG。', { exact: true })
+        .first()
+        .waitFor()
+      coverage.push('unsupported-installer-not-downloadable')
+      continue
+    }
     const link = page.locator(`a[href="/api/v1/agent/enroll/packages/${item.releaseId}/content"]`)
     const download = page.waitForEvent('download')
     await link.click()
@@ -84,10 +95,17 @@ try {
       createHash('sha256').update(readFileSync(path)).digest('hex'),
       item.installerSha256.map((n) => n.toString(16).padStart(2, '0')).join(''),
     )
+    downloadedInstallers++
   }
   if (fixture.agentListener !== 'disabled')
-    coverage.push(packages.length ? 'anonymous-real-installers' : 'anonymous-empty-catalog')
-  if (!packages.length) gaps.push('published-real-installers')
+    coverage.push(
+      downloadedInstallers
+        ? 'anonymous-real-installers'
+        : packages.length
+          ? 'anonymous-no-supported-installers'
+          : 'anonymous-empty-catalog',
+    )
+  if (!downloadedInstallers) gaps.push('published-real-installers')
   assert.equal(
     (await context.request.get(`${origin}/api/v1/agent-enrollment-settings`)).status(),
     401,
@@ -311,9 +329,24 @@ try {
     assert.equal(read.status(), 200)
     const current = await read.json()
     assert.equal(current.expiresAt, receipt.expiresAt)
+    const cancelled = employee.waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' &&
+        new URL(r.url()).pathname === `/api/v1/enrollments/${receipt.enrollmentId}/cancel`,
+    )
     await employee.getByRole('button', { name: '取消', exact: true }).click()
+    const cancellation = await cancelled
+    assert.equal(cancellation.status(), 200)
+    const cancellationReceipt = await cancellation.json()
+    assert.equal(cancellationReceipt.enrollmentId, receipt.enrollmentId)
+    assert.equal(cancellationReceipt.status, 'cancelled')
+    const confirmed = await employeeContext.request.get(
+      `${origin}/api/v1/enrollments/${receipt.enrollmentId}`,
+    )
+    assert.equal(confirmed.status(), 200)
+    assert.equal((await confirmed.json()).status, 'cancelled')
     await admission('恢复新注册')
-    coverage.push('resume-with-original-expiry-and-cancel-during-pause')
+    coverage.push('admission-restored-create-original-expiry-and-confirmed-cancel-during-pause')
     gaps.push('established-device-native-protocol-contact')
   } else gaps.push('two-session-registration-admission')
   if (fixture.nativeStart) {

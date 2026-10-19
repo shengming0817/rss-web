@@ -183,6 +183,7 @@ export function decodeAgentError(status: number, value: unknown): RssApiError {
       grant_revoked: 403,
       grant_expired: 403,
       registration_limit: 429,
+      enrollment_paused: 409,
       operation_conflict: 409,
       device_view_cursor_invalidated: 409,
       issuance_unknown: 503,

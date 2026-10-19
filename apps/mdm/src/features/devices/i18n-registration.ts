@@ -17,6 +17,7 @@ export const registrationZh = {
   resumeAdmission: '恢复新注册',
   admissionNote:
     '准入仅限制新注册和未完成首次激活；既有设备、查询、取消、撤销和公开包下载继续可用。',
+  admissionSubmitting: '正在提交准入变更…',
   admissionUnknown: '原操作结果未知；当前状态不代表原操作回执。读取后可显式重试原命令。',
   admissionConflict: '原修订已发生变化，请读取并确认当前依据后再发起新操作。',
   acceptCurrent: '已核对当前状态，使用新依据',
@@ -71,6 +72,7 @@ export const registrationEn: typeof registrationZh = {
   resumeAdmission: 'Resume new enrollment',
   admissionNote:
     'Admission restricts new enrollment and unfinished first activation only. Existing devices, queries, cancellation, revocation and public downloads remain available.',
+  admissionSubmitting: 'Submitting admission change…',
   admissionUnknown:
     'Original outcome unknown. Current state is not an operation receipt. Read before explicitly replaying the original command.',
   admissionConflict:

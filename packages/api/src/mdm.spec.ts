@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import axios from 'axios'
 import AxiosMockAdapter from 'axios-mock-adapter'
-import { createMdmTransport, decodeMdmError } from './mdm'
+import { createMdmTransport, decodeMdmError, decodeAgentError } from './mdm'
 describe('MDM HTTP boundary', () => {
   it('rejects Identity paths, unversioned paths and local tenant/authorization headers', async () => {
     const transport = createMdmTransport()
@@ -550,4 +550,18 @@ it('executes registration channel requests and preserves paused as a known busin
   expect(decodeMdmError(409, { code: 'enrollment_paused', extra: true }).cause).toBe('protocol')
   mock.restore()
   vi.restoreAllMocks()
+})
+
+it('decodes the current Agent pause envelope without classifying a rejected create as unknown', () => {
+  expect(decodeAgentError(409, { code: 'enrollment_paused', issuanceId: null })).toMatchObject({
+    cause: 'wire',
+    status: 409,
+    code: 'enrollment_paused',
+  })
+  expect(decodeAgentError(409, { code: 'enrollment_paused', issuanceId: 'bad' }).cause).toBe(
+    'protocol',
+  )
+  expect(decodeAgentError(429, { code: 'enrollment_paused', issuanceId: null }).cause).toBe(
+    'protocol',
+  )
 })

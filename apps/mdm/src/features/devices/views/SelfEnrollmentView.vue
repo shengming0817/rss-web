@@ -275,7 +275,9 @@ refresh()
     <UiButton
       v-if="native && ['pending', 'bound'].includes(native.status)"
       type="button"
-      :disabled="!!(busy || uncertain || !password || !handedOff)"
+      :disabled="
+        !!(busy || uncertain || !password || !handedOff || !channelState.canContinue(native))
+      "
       @click="submit('resume')"
     >
       {{ t('devices.resume') }}
