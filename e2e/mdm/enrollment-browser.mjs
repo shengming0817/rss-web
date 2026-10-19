@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import assert from 'node:assert/strict'
 import process from 'node:process'
+import { setTimeout as delay } from 'node:timers/promises'
 import { assertNativeCallback } from './enrollment-callback.mjs'
 let browser,
   context,
@@ -13,9 +14,11 @@ let browser,
   phase = 'environment',
   result = 'failed',
   cleanup = 'passed',
-  interrupted = false
+  interrupted = false,
+  failure
 const coverage = [],
-  gaps = []
+  gaps = [],
+  httpFailures = []
 const temp = mkdtempSync(join(tmpdir(), 'rss-enrollment-browser-'))
 async function stop() {
   interrupted = true
@@ -26,6 +29,21 @@ process.once('SIGTERM', stop)
 const deadline = setTimeout(stop, 180000)
 function active() {
   assert.equal(interrupted, false, 'Browser run cancelled')
+}
+// Full production bootstraps share the gateway's per-peer budget across contexts.
+function observe(target) {
+  target.on('response', (response) => {
+    if (response.status() >= 400 && httpFailures.length < 64)
+      httpFailures.push({
+        status: response.status(),
+        area: new URL(response.url()).pathname.split('/')[3] ?? 'page',
+      })
+  })
+}
+async function go(target, url) {
+  await delay(1500)
+  active()
+  await target.goto(url)
 }
 function secret(path) {
   const mode = statSync(path).mode & 0o777
@@ -42,13 +60,18 @@ try {
   const origin = parsed.origin
   browser = await chromium.launch({ timeout: 10000 })
   active()
-  context = await browser.newContext({ ignoreHTTPSErrors: true, locale: 'zh-CN' })
-  active()
-  const page = await context.newPage()
-  page.setDefaultTimeout(10000)
+  async function freshPage() {
+    await context?.close()
+    context = await browser.newContext({ ignoreHTTPSErrors: true, locale: 'zh-CN' })
+    const target = await context.newPage()
+    observe(target)
+    target.setDefaultTimeout(10000)
+    return target
+  }
+  let page = await freshPage()
   active()
   phase = 'anonymous-downloads'
-  await page.goto(`${origin}/downloads/agent`)
+  await go(page, `${origin}/downloads/agent`)
   await page.getByRole('heading', { name: '下载 Agent 安装器', exact: true }).waitFor()
   assert.equal(new URL(page.url()).pathname, '/downloads/agent')
   const catalog = await context.request.get(`${origin}/api/v1/agent/enroll/packages`)
@@ -111,10 +134,13 @@ try {
     401,
   )
   coverage.push('anonymous-private-boundary')
-  async function login(account, target = page) {
+  async function login(account, target) {
     active()
-    await target.context().clearCookies()
-    await target.goto(`${origin}/tenants/${fixture.tenant}/login`)
+    if (!target) {
+      page = await freshPage()
+      target = page
+    }
+    await go(target, `${origin}/tenants/${fixture.tenant}/login`)
     await target.locator('#login-name').fill(account.login)
     await target.locator('#login-password').fill(secret(account.passwordFile))
     await target.locator('form').evaluate((f) => f.requestSubmit())
@@ -125,7 +151,7 @@ try {
     phase = 'ordinary-user'
     await login(fixture.reader)
     assert.equal(await page.getByRole('link', { name: 'Agent 安装配置', exact: true }).count(), 0)
-    await page.goto(`${origin}/tenants/${fixture.tenant}/agent-configurations`)
+    await go(page, `${origin}/tenants/${fixture.tenant}/agent-configurations`)
     await page.getByText('请求被拒绝', { exact: false }).waitFor()
     assert.equal(await page.locator('form').count(), 0)
     coverage.push('ordinary-user-no-configuration-form')
@@ -141,7 +167,7 @@ try {
       const response = page.waitForResponse(
         (value) => value.request().method() === 'GET' && new URL(value.url()).pathname === api,
       )
-      await page.goto(`${origin}/tenants/${fixture.tenant}/operations/${route}`)
+      await go(page, `${origin}/tenants/${fixture.tenant}/operations/${route}`)
       const read = await response
       assert.equal(read.status(), 200)
       const facts = await read.json()
@@ -192,8 +218,23 @@ try {
     }
     if (fixture.configurationReady) {
       active()
+      phase = 'configuration-readiness'
+      const channelFacts = await context.request.get(`${origin}/api/v1/registration-channels`)
+      if (channelFacts.status() !== 200) {
+        const body = await channelFacts.json().catch(() => ({}))
+        failure = {
+          apiCode:
+            typeof body.code === 'string' && /^[a-z_]{1,64}$/.test(body.code)
+              ? body.code
+              : 'invalid',
+        }
+      }
+      assert.equal(channelFacts.status(), 200)
+      const agentFacts = (await channelFacts.json()).channels.find((c) => c.channel === 'agent')
+      assert.equal(agentFacts.availability, 'ready')
+      assert.equal(agentFacts.admission, 'allowed')
       phase = 'configuration-lost-response'
-      await page.goto(`${origin}/tenants/${fixture.tenant}/agent-configurations`)
+      await go(page, `${origin}/tenants/${fixture.tenant}/agent-configurations`)
       await page.locator('summary').filter({ hasText: '生成完整 JSON' }).click()
       await page.getByRole('button', { name: '生成完整 JSON', exact: true }).waitFor()
       let commits = 0
@@ -209,11 +250,36 @@ try {
       await page.getByRole('button', { name: '生成完整 JSON', exact: true }).click()
       await page.getByText('提交结果未知', { exact: false }).first().waitFor()
       await page.unroute('**/api/v1/agent-configurations')
+      const found = page.waitForResponse(
+        (r) =>
+          r.request().method() === 'GET' &&
+          new URL(r.url()).pathname.startsWith('/api/v1/agent-configuration-operations/'),
+      )
       await page.getByRole('button', { name: '查询原操作结果', exact: true }).click()
+      const metadataResponse = await found
+      assert.equal(metadataResponse.status(), 200)
+      const metadata = await metadataResponse.json()
       await page.getByText('后端剩余数量', { exact: true }).waitFor()
       assert.equal(commits, 1)
       assert.equal(await page.locator('a[download="rss-agent-enrollment.json"]').count(), 0)
+      phase = 'configuration-revoke'
+      const revocation = page.waitForResponse(
+        (r) =>
+          r.request().method() === 'POST' &&
+          new URL(r.url()).pathname ===
+            `/api/v1/agent-configurations/${metadata.configuration.configurationId}/revoke`,
+      )
+      const readAfter = page.waitForResponse(
+        (r) =>
+          r.request().method() === 'GET' &&
+          new URL(r.url()).pathname ===
+            `/api/v1/agent-configurations/${metadata.configuration.configurationId}`,
+      )
       await page.getByRole('button', { name: '确认撤销配置', exact: true }).click()
+      assert.equal((await revocation).status(), 204)
+      const reloaded = await readAfter
+      assert.equal(reloaded.status(), 200)
+      assert.equal((await reloaded.json()).state, 'revoked')
       await page.getByText('revoked', { exact: true }).waitFor()
       coverage.push('configuration-unknown-query-and-revoke')
     } else gaps.push('configuration-PKI-and-signer')
@@ -224,15 +290,18 @@ try {
     assert.ok(fixture.admin && fixture.reader && fixture.configurationReady)
     employeeContext = await browser.newContext({ ignoreHTTPSErrors: true, locale: 'zh-CN' })
     const employee = await employeeContext.newPage()
+    observe(employee)
     employee.setDefaultTimeout(10000)
     await login(fixture.reader, employee)
-    await employee.goto(`${origin}/tenants/${fixture.tenant}/registration-quotas`)
+    await go(employee, `${origin}/tenants/${fixture.tenant}/registration-quotas`)
     await employee.getByRole('heading', { name: '注册通道与准入', exact: true }).waitFor()
     assert.equal(await employee.getByRole('button', { name: '暂停新注册', exact: true }).count(), 0)
     coverage.push('ordinary-user-readonly-channels')
     const adminChannel = (name) =>
       page.locator('article').filter({ has: page.getByRole('heading', { name, exact: true }) })
     async function admission(action) {
+      await delay(1500)
+      active()
       const response = page.waitForResponse(
         (r) =>
           r.request().method() === 'PUT' &&
@@ -247,11 +316,11 @@ try {
         })
         .waitFor()
     }
-    await page.goto(`${origin}/tenants/${fixture.tenant}/registration-quotas`)
+    await go(page, `${origin}/tenants/${fixture.tenant}/registration-quotas`)
     await adminChannel('Windows MDM')
       .getByRole('button', { name: '暂停新注册', exact: true })
       .waitFor()
-    await employee.goto(`${origin}/tenants/${fixture.tenant}/my-enrollments`)
+    await go(employee, `${origin}/tenants/${fixture.tenant}/my-enrollments`)
     const create = employee.getByRole('button', { name: '授权注册', exact: true })
     async function prepare() {
       await employee.getByRole('button', { name: '生成一次性交付口令', exact: true }).click()
@@ -283,9 +352,8 @@ try {
     assert.ok((await existing.json()).items.some((r) => r.status === 'active'))
     coverage.push('established-device-management-reads-during-pause')
     // The Agent channel remains available while Windows admission is paused.
-    const agent = await context.newPage()
-    agent.setDefaultTimeout(10000)
-    await agent.goto(`${origin}/tenants/${fixture.tenant}/agent-configurations`)
+    const agent = page
+    await go(agent, `${origin}/tenants/${fixture.tenant}/agent-configurations`)
     await agent.locator('summary').filter({ hasText: '生成完整 JSON' }).click()
     const issued = agent.waitForResponse(
       (r) =>
@@ -305,8 +373,7 @@ try {
     assert.ok(json.configuration && json.secret && json.signature)
     rmSync(filename)
     coverage.push('other-channel-continues-and-complete-JSON-download')
-    await agent.goto(`${origin}/downloads/agent`)
-    await agent.close()
+    await go(page, `${origin}/tenants/${fixture.tenant}/registration-quotas`)
     await admission('恢复新注册')
     await employee.getByRole('button', { name: '刷新状态与额度', exact: true }).click()
     await prepare()
@@ -366,7 +433,7 @@ try {
       maxRedirects: 0,
     })
     assert.equal(start.status(), 302)
-    await page.goto(`${origin}/enrollment/windows/entra/terms`)
+    await go(page, `${origin}/enrollment/windows/entra/terms`)
     await page.locator('form[action="/api/v1/windows/entra/terms/finish"]').waitFor()
     assert.equal(await page.locator('pre img, pre script').count(), 0)
     assert.equal(await page.locator('button[value=false]').count(), flow.join ? 0 : 1)
@@ -392,7 +459,21 @@ try {
   gaps.push('native-OS-installation-and-Apple-Entra-interoperability')
   assert.equal(interrupted, false)
   result = 'passed'
-} catch {
+} catch (error) {
+  failure = {
+    ...failure,
+    kind: error.name,
+    location: error.stack?.match(/enrollment-browser\.mjs:([0-9]+):([0-9]+)/)?.slice(1),
+    operator: error.code === 'ERR_ASSERTION' ? error.operator : undefined,
+    actual:
+      typeof error.actual === 'number' || typeof error.actual === 'boolean'
+        ? error.actual
+        : undefined,
+    expected:
+      typeof error.expected === 'number' || typeof error.expected === 'boolean'
+        ? error.expected
+        : undefined,
+  }
   result = 'failed'
 } finally {
   clearTimeout(deadline)
@@ -420,6 +501,17 @@ try {
   } catch {
     cleanup = 'failed'
   }
-  console.log(JSON.stringify({ result, phase, cleanup, coverage, gaps, interrupted }))
+  console.log(
+    JSON.stringify({
+      result,
+      phase,
+      cleanup,
+      coverage,
+      gaps,
+      interrupted,
+      failure,
+      httpFailures: failure ? httpFailures : undefined,
+    }),
+  )
   if (result !== 'passed' || cleanup !== 'passed' || interrupted) process.exitCode = 1
 }

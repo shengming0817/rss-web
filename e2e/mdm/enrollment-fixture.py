@@ -1,8 +1,10 @@
 """Disposable real registration host; generated PKI proves HTTP seams, not OS enrollment."""
 import http.client
+from contextlib import ExitStack
 import http.cookiejar
 import json
 import os
+import re
 from pathlib import Path
 import signal
 import ssl
@@ -20,13 +22,13 @@ from t2_environment import Environment, private
 from candidate_fixture import INSTANCE, TENANTS, ADMIN
 from build_run import lease_fds
 from windows_fixtures import generate
-from pki_fixtures import offline_materials, offline
+from pki_fixtures import running as pki
 
 environment = Environment(BACKEND, group='enrollment-browser')
 processes = []
+providers = ExitStack()
 phase = 'environment'
 result = 'failed'
-READER = str(uuid.uuid4())
 
 def stop(_signal=None, _frame=None):
     for child in reversed(processes):
@@ -37,10 +39,6 @@ def stop(_signal=None, _frame=None):
 
 for signum in (signal.SIGINT, signal.SIGTERM):
     signal.signal(signum, stop)
-
-def command(binary, verb, value, path):
-    subprocess.run([str(binary), verb, '--config', str(private(path, value))],
-                   cwd=BACKEND, check=True, capture_output=True, timeout=45, pass_fds=lease_fds())
 
 def start(binary, initialized, log):
     children = []
@@ -53,6 +51,10 @@ def start(binary, initialized, log):
     until = time.monotonic() + 45
     while time.monotonic() < until:
         if any(child.poll() is not None for child in children):
+            log.flush()
+            text = Path(log.name).read_text()[-16384:]
+            errors = re.findall(r'(?m)^([a-z][a-z0-9_.-]{0,63}): configuration ([A-Za-z][A-Za-z0-9]{0,63}) rejected$', text)
+            print(json.dumps(dict(phase='host-start',result='failed',exitCodes=[child.poll() for child in children],configurationErrors=errors,diagnostics=re.findall(r'(?m)^([a-z][a-z0-9_.-]{0,63}): ([A-Za-z0-9_=:(), -]{1,128})$',text),jsonPositions=re.findall(r'configuration JSON rejected at line ([0-9]+), column ([0-9]+)',text),unsafeFiles=[Path(name).name for name in re.findall(r'configuration file unavailable or unsafe: \"([^\"]+)\"',text)],gatewayErrors=re.findall(r'nginx: \[emerg\] ([a-z]+)',text))),flush=True)
             raise RuntimeError('host-exit')
         try:
             if environment.probe_product(initialized['origin'], urlsplit(initialized['origin']).port, context):
@@ -74,12 +76,12 @@ def shutdown(children):
             child.wait(timeout=5)
             raise RuntimeError('forced-host-cleanup')
 
-def prepare_signer(origin):
+def prepare_signer(origin, reader_password):
     jar = http.cookiejar.CookieJar()
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}),
         urllib.request.HTTPCookieProcessor(jar),
         urllib.request.HTTPSHandler(context=ssl.create_default_context(cafile=str(environment.root/'ca.crt'))))
-    def post(path, body, csrf=None, operation=None):
+    def post(path, body, csrf=None, operation=None, expected=200):
         headers = {'Content-Type':'application/json', 'Origin':origin, 'X-Identity-Request':'1'}
         if csrf:
             headers['X-CSRF-Token'] = csrf
@@ -87,7 +89,7 @@ def prepare_signer(origin):
             headers['Idempotency-Key'] = operation
         request = urllib.request.Request(origin+path, data=json.dumps(body).encode(), headers=headers, method='POST')
         with opener.open(request, timeout=10) as response:
-            if response.status != 200:
+            if response.status != expected:
                 raise RuntimeError('signer-http')
             data = response.read(131073)
             if len(data) > 131072:
@@ -95,6 +97,7 @@ def prepare_signer(origin):
             return json.loads(data)
     login = post(f'/api/v1/identity/tenants/{TENANTS[0]}/login',
                  dict(login='admin',password=(environment.root/'account-password').read_text()))
+    post(f'/api/v1/identity/tenants/{TENANTS[0]}/accounts', dict(login='reader', password=reader_password.read_text()), login['csrfToken'], expected=201)
     return post('/api/v1/task-signing/trust', dict(action='prepare',expectedRevision=0,origin=origin),
                 login['csrfToken'], str(uuid.uuid4()))['revision']
 
@@ -107,14 +110,11 @@ try:
     config = json.loads(config_path.read_text())
     phase = 'actors'
     reader_password = private(environment.root/'reader-password', 'Enrollment-fixture-reader-only-2026!')
-    reader = json.loads((environment.root/'host/operator/initialize.json').read_text())
-    reader.update(principal_id=READER, login='reader', password_file=str(reader_password))
-    command(binary, 'initialize', reader, environment.root/'initialize-reader.json')
     # The ordinary user needs no administrative grants for channels/quotas/self-enrollment.
     admin = dict(instanceId=INSTANCE, tenantId=TENANTS[0], principalId=ADMIN)
     grants = [dict(operation=p,scope=dict(kind='tenant')) for p in
               ['registration_configuration_read','registration_configuration_write','agent_enrollment_read',
-               'agent_enrollment_write','authorization_read','authorization_write']]
+               'agent_enrollment_write','authorization_read','authorization_write','identity_accounts_manage']]
     grants += [dict(operation=p,scope=dict(kind='all_devices')) for p in ['inventory_read','inventory_assign','enrollment','credentials']]
     rule = json.dumps(dict(subject=dict(kind='user',user=admin),grants=grants)).replace("'", "''")
     environment.sql(f"SET rss.tenant_id='{TENANTS[0]}';INSERT INTO mdm_access.authorization_rules(tenant_id,instance,id,revision,document) VALUES('{TENANTS[0]}','{INSTANCE}','{uuid.uuid4()}',1,'{rule}'::jsonb)", 'mdm_dev')
@@ -131,7 +131,7 @@ try:
     with log_path.open('w') as log:
         phase = 'signer'
         initial = start(binary, initialized, log)
-        revision = prepare_signer(initialized['origin'])
+        revision = prepare_signer(initialized['origin'], reader_password)
         shutdown(initial)
         config['task_signing'] = dict(revision=revision)
         phase = 'native-inputs'
@@ -146,19 +146,12 @@ try:
         for key, port in [('enrollment',native_ports['backend']), ('management',native_ports['https'])]:
             windows[key].update(listen=f'127.0.0.1:{port}', origin=f'https://localhost:{port}')
         private(root/'windows.json', windows)
-        for purpose in ('windows','agent'):
-            materials = root/purpose
-            materials.mkdir(mode=0o700)
-            for name in ('server.crt','server.key'):
-                private(materials/name, (root/name).read_text())
-            offline_materials(materials, purpose)
-            offline(materials, root, {}, purpose)
+        provider_env = dict(os.environ)
+        providers.enter_context(pki(root, provider_env, case=str(WEB)+':enrollment-browser', windows=True))
+        providers.enter_context(pki(root, provider_env, case=str(WEB)+':enrollment-browser', agent=True,
+            agent_origin=f"https://localhost:{agent_ports['backend']}"))
         agent = json.loads((root/'agent-pki.json').read_text())
-        agent['endpoint'].update(listen=f"127.0.0.1:{agent_ports['backend']}", origin=f"https://localhost:{agent_ports['backend']}")
-        trust_path = Path(agent['trust_file'])
-        trust = json.loads(trust_path.read_text())
-        trust['origin'] = agent['endpoint']['origin']
-        private(trust_path, trust)
+        agent['endpoint']['listen'] = f"127.0.0.1:{agent_ports['backend']}"
         config.update(native_protocols=dict(windows=json.loads((root/'windows.json').read_text())),
                       agent_pki=agent, device_pki=json.loads((root/'device-pki.json').read_text()))
         private(config_path, config)
@@ -186,13 +179,18 @@ try:
             raise RuntimeError('browser')
     result = 'passed'
 except BaseException as error:
-    print(json.dumps(dict(phase=phase,result='failed',classification=type(error).__name__,
+    print(json.dumps(dict(phase=phase,result='failed',classification=type(error).__name__, reason=str(error) if isinstance(error, RuntimeError) and str(error) in ('host-exit','browser','forced-host-cleanup') else None,
                          recoveryDirectory=str(environment.root))),flush=True)
 finally:
     try:
         shutdown(processes)
     except BaseException:
         result = 'failed'
+    try:
+        providers.close()
+    except BaseException:
+        result = 'failed'
+        print(json.dumps(dict(phase='pki-cleanup',result='failed',recoveryDirectory=str(BACKEND/'artifacts/dev-environment'))),flush=True)
     print(json.dumps(dict(phase='fixture',result=result)),flush=True)
     if result != 'passed':
         sys.exit(1)
