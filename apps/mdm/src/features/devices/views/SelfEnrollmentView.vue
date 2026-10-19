@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { UiButton } from '@rss/core/components'
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
+import RegistrationStatus from '../../../components/RegistrationStatus.vue'
 import NativeFacts from '../../enrollment/components/NativeFacts.vue'
 import { generateEnrollmentPassword } from '../clients/enrollment'
 import PageFrame from '../../../components/PageFrame.vue'
@@ -18,6 +19,12 @@ const { run, runWrite, busy, uncertain, failure } = useOperation(
 )
 const usage = ref<Awaited<ReturnType<typeof client.me>>>(),
   channel = ref<'windows_mdm' | 'macos_mdm'>('windows_mdm')
+const channelState = runtime.registrationChannels
+const quotaAvailable = computed(() => {
+  const value = usage.value?.channels.find((c) => c.channel === channel.value)
+  return !!value && value.used < value.limit
+})
+const canCreate = computed(() => channelState.allowed(channel.value) && quotaAvailable.value)
 const profile = ref<'Full' | 'Device'>('Device')
 const password = ref(''),
   handedOff = ref(false),
@@ -33,7 +40,8 @@ type Command = {
 }
 const pending = ref<Command>()
 let nativeTargetVersion = 0
-function refresh() {
+function refresh(rejection?: string) {
+  void channelState.refresh()
   const knownNative = native.value,
     version = nativeTargetVersion
   void run(
@@ -45,6 +53,7 @@ function refresh() {
     }),
     (v) => {
       usage.value = v.usage
+      if (rejection) failure.value = rejection
       if (v.native && version === nativeTargetVersion)
         native.value = { ...knownNative, ...v.native }
     },
@@ -60,6 +69,12 @@ function generate() {
 }
 function submit(kind: Command['kind'], replay = false) {
   if (busy.value || (!replay && uncertain.value)) return
+  if (
+    !replay &&
+    ((kind === 'create' && !canCreate.value) ||
+      (kind === 'resume' && !channelState.canContinue(native.value)))
+  )
+    return
   const command = replay
     ? pending.value
     : {
@@ -107,6 +122,10 @@ function submit(kind: Command['kind'], replay = false) {
     },
   ).then((ok) => {
     if (ok) refresh()
+    else if (failure.value === 'enrollmentPaused' || failure.value === 'registrationLimit') {
+      void channelState.refresh()
+      refresh(failure.value)
+    }
   })
 }
 function status() {
@@ -147,6 +166,8 @@ refresh()
 </script>
 <template>
   <PageFrame :title="t('registration.self')" :busy="busy" :failure="failure">
+    <RegistrationStatus :channel="channel" />
+    <p v-if="usage && !quotaAvailable" role="status">{{ t('registration.quotaBlocked') }}</p>
     <p>{{ t('registration.note') }}</p>
     <UiButton type="button" :disabled="!!busy" @click="refresh()">
       {{ t('registration.refresh') }}
@@ -183,7 +204,7 @@ refresh()
                 v-for="c in usage?.channels.filter((c) => c.channel !== 'agent')"
                 :key="c.channel"
                 :value="c.channel"
-                :disabled="!c.canEnroll"
+                :disabled="!channelState.allowed(c.channel) || c.used >= c.limit"
               >
                 {{ t(`registration.${c.channel}`) }}
               </option>
@@ -212,16 +233,7 @@ refresh()
           <label
             ><input v-model="handedOff" type="checkbox" required />{{ t('devices.handoff') }}</label
           >
-          <UiButton
-            :disabled="
-              !!(
-                uncertain ||
-                !handedOff ||
-                !usage?.channels.find((c) => c.channel === channel)?.canEnroll
-              )
-            "
-            type="submit"
-          >
+          <UiButton :disabled="!!(uncertain || !handedOff || !canCreate)" type="submit">
             {{ t('devices.submitEnrollment') }}
           </UiButton>
           <UiButton

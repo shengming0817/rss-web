@@ -17,7 +17,10 @@ const operation = () => crypto.randomUUID()
 beforeEach(() => {
   actor = ADMIN
   paths = []
-  domain = createOnboardingDemo((principal) => principal === ADMIN)
+  domain = createOnboardingDemo(
+    (principal) => principal === ADMIN,
+    () => true,
+  )
   const transport = {
     async request<T>(o: RequestOptions<T> | NoContentRequest) {
       const path = o.path.replace(/\{([^}]+)\}/g, (_m, key: string) =>

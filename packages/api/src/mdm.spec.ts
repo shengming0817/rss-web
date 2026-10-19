@@ -518,3 +518,36 @@ it('decodes the explicit unready host data contract without accepting API 503 re
   ).rejects.toMatchObject({ cause: 'protocol' })
   vi.restoreAllMocks()
 })
+
+it('executes registration channel requests and preserves paused as a known business rejection', async () => {
+  const instance = axios.create(),
+    mock = new AxiosMockAdapter(instance)
+  vi.spyOn(axios, 'create').mockReturnValueOnce(instance)
+  const transport = createMdmTransport()
+  mock.onGet('/api/v1/registration-channels').reply(200, { channels: [] })
+  expect(
+    await transport.request({
+      method: 'GET',
+      path: '/api/v1/registration-channels',
+      successStatus: 200,
+      decode: (v) => v,
+    }),
+  ).toEqual({ channels: [] })
+  mock
+    .onPut('/api/v1/registration-channels/agent/admission')
+    .reply(409, { code: 'enrollment_paused' })
+  await expect(
+    transport.request({
+      method: 'PUT',
+      path: '/api/v1/registration-channels/{channel}/admission',
+      pathParams: { channel: 'agent' },
+      body: { expectedRevision: 0, admission: 'paused' },
+      successStatus: 200,
+      decode: (v) => v,
+    }),
+  ).rejects.toMatchObject({ cause: 'wire', code: 'enrollment_paused', status: 409 })
+  expect(decodeMdmError(429, { code: 'enrollment_paused' }).cause).toBe('protocol')
+  expect(decodeMdmError(409, { code: 'enrollment_paused', extra: true }).cause).toBe('protocol')
+  mock.restore()
+  vi.restoreAllMocks()
+})

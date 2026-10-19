@@ -4,12 +4,11 @@ import { ADMIN, INSTANCE } from '../operations/authorization'
 import { createReceipts, error, ok } from '../http'
 import { closed, count, enumeration, identifier, nullable, uuid } from '../../src/services/decode'
 import { user } from '../../src/features/operations/clients/authorization'
+import { configuration, type Limits } from '../../src/features/devices/clients/registration'
 import {
-  channels,
-  configuration,
-  type Channel,
-  type Limits,
-} from '../../src/features/devices/clients/registration'
+  registrationChannels as channels,
+  type RegistrationChannel as Channel,
+} from '../../src/services/registrationChannels'
 import type { Enrollment } from './enrollment'
 import type { DemoDevice } from './fixtures'
 interface Config {
@@ -24,6 +23,12 @@ export function createRegistrationDemo(
   const settings = new Map<string, Config>(),
     responsibilities = new Map<string, { revision: number; user: ReturnType<typeof user> | null }>()
   const receipts = createReceipts()
+  const admission = new Map(
+    channels.map((channel) => [
+      channel,
+      { channel, revision: 0, admission: 'allowed' as 'allowed' | 'paused' },
+    ]),
+  )
   const config = (target: string): Config =>
     settings.get(target) ?? {
       revision: 0,
@@ -72,16 +77,46 @@ export function createRegistrationDemo(
           reserved,
           used,
           overLimit: Math.max(0, used - limit),
-          canEnroll: used < limit,
         }
       }),
     }
   }
   function admit(actor: string, channel: Channel) {
-    return usage(actor).channels.find((c) => c.channel === channel)!.canEnroll
+    const value = usage(actor).channels.find((c) => c.channel === channel)!
+    return value.used < value.limit
   }
   const handle: DomainHandler = (request, scenario) => {
     const { path, method, actor } = request
+    if (path === '/api/v1/registration-channels' && method === 'GET')
+      return ok({
+        tenantId: TENANT,
+        instanceId: INSTANCE,
+        channels: [...admission.values()].map((v) => ({
+          ...v,
+          availability: 'ready',
+          reason: null,
+        })),
+      })
+    const channelPath =
+      /^\/api\/v1\/registration-channels\/(agent|windows_mdm|macos_mdm)\/admission$/.exec(path)
+    if (channelPath) {
+      if (actor.principalId !== ADMIN) return error('permission_denied', 403)
+      if (method !== 'PUT') return error('malformed_request', 400)
+      return receipts.write(request, uuid(request.headers['idempotency-key']), () => {
+        const input = closed(request.body, ['expectedRevision', 'admission']),
+          channel = channelPath[1] as Channel,
+          current = admission.get(channel)!
+        if (count(input['expectedRevision']) !== current.revision)
+          return error('operation_conflict')
+        const value = {
+          channel,
+          revision: current.revision + 1,
+          admission: enumeration(input['admission'], ['allowed', 'paused'] as const),
+        }
+        admission.set(channel, value)
+        return ok(value)
+      })
+    }
     const quota =
       /^\/api\/v1\/registration-quotas\/(me|defaults|users\/([^/]+)\/([^/]+)(\/usage)?)$/.exec(path)
     const responsibility = /^\/api\/v1\/devices\/([^/]+)\/registration-user$/.exec(path)
@@ -134,6 +169,8 @@ export function createRegistrationDemo(
     return receipts.write(request, op, () => {
       const raw = closed(request.body, ['source', 'password'], ['windowsProfile']),
         source = enumeration(raw['source'], ['mdm.windows', 'mdm.apple'] as const)
+      if (!allowed(source === 'mdm.windows' ? 'windows_mdm' : 'macos_mdm'))
+        return error('enrollment_paused', 409)
       if (!admit(actor.principalId, source === 'mdm.windows' ? 'windows_mdm' : 'macos_mdm'))
         return error('registration_limit', 429)
       const deviceId = `self:${INSTANCE}:${actor.principalId}:${op}`
@@ -149,10 +186,16 @@ export function createRegistrationDemo(
       return ok({ ...(reply.body as object), deviceId })
     })
   }
+  function allowed(channel: Channel) {
+    return admission.get(channel)!.admission === 'allowed'
+  }
   return {
     handle,
     admit,
+    allowed,
     reset() {
+      for (const channel of channels)
+        admission.set(channel, { channel, revision: 0, admission: 'allowed' })
       settings.clear()
       responsibilities.clear()
       receipts.reset()

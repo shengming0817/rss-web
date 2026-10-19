@@ -1,5 +1,9 @@
 import { shallowRef } from 'vue'
-import { runtimeKey } from '@rss/auth'
+import { runtimeKey, type IdentitySession } from '@rss/auth'
+import {
+  createRegistrationChannels,
+  createRegistrationChannelsClient,
+} from '../../../services/registrationChannels'
 import { afterEach, expect, it, vi } from 'vitest'
 import { flushPromises, mount, DOMWrapper, type VueWrapper } from '@vue/test-utils'
 import { createRouter, createMemoryHistory, RouterView } from 'vue-router'
@@ -87,7 +91,22 @@ async function setup(
   })
   await router.push({ name, params: { tenant: TENANT, ...params }, query })
   await router.isReady()
+  const session = {
+    state: shallowRef({
+      status: 'authenticated',
+      tenant: TENANT,
+      identity: { principalId: ADMIN },
+      session: { id: 'demo-session' },
+    }),
+  } as unknown as IdentitySession
+  const registrationChannels = createRegistrationChannels(
+    createRegistrationChannelsClient(transport, TENANT),
+    session,
+    operations.authorization,
+    TENANT,
+  )
   const i18n = mdmI18n()
+  i18n.global.locale.value = 'zh-CN'
   const wrapper = mount(RouterView, {
     attachTo: document.body,
     global: {
@@ -99,14 +118,8 @@ async function setup(
           operations,
           tenant: TENANT,
           demo: true,
-          session: {
-            state: shallowRef({
-              status: 'authenticated',
-              tenant: TENANT,
-              identity: { principalId: ADMIN },
-              session: { id: 'demo-session' },
-            }),
-          },
+          session,
+          registrationChannels,
         },
         [runtimeKey as symbol]: {
           api: {
@@ -126,6 +139,7 @@ async function setup(
       },
     },
   })
+  wrapper.vm.$.appContext.app.onUnmount(() => registrationChannels.dispose())
   wrappers.push(wrapper)
   await flushPromises()
   const button = (text: string) => {
@@ -158,6 +172,9 @@ async function setup(
     loseReply,
     operations,
     i18n,
+    registrationChannels,
+    transport,
+    session,
   }
 }
 async function confirmCredential() {
@@ -1005,3 +1022,64 @@ it.each(['zh-CN', 'en-US'] as const)(
     ).toEqual([locale === 'zh-CN' ? '全部' : 'All', 'Windows MDM', 'Apple MDM', 'Agent'])
   },
 )
+
+it('rejects a stale self-enrollment submit at the backend, refreshes admission and retains query/cancel', async () => {
+  const { wrapper, transport, registrationChannels, devices, click } =
+    await setup('self-enrollments')
+  const { createRegistrationChannelsClient } =
+    await import('../../../services/registrationChannels')
+  const server = createRegistrationChannelsClient(transport, TENANT)
+  const existing = await devices.registration.enroll(
+    crypto.randomUUID(),
+    'A'.repeat(43),
+    'mdm.windows',
+    'Device',
+  )
+  await server.change('windows_mdm', crypto.randomUUID(), 0, 'paused')
+  expect(registrationChannels.allowed('windows_mdm')).toBe(true)
+  await click('生成一次性交付口令')
+  await wrapper.find('form input[type=checkbox]').setValue(true)
+  const enroll = vi.spyOn(devices.registration, 'enroll')
+  await wrapper.find('form').trigger('submit')
+  await flushPromises()
+  expect(enroll).toHaveBeenCalledTimes(1)
+  expect(wrapper.text()).toContain('已暂停新注册')
+  expect(registrationChannels.allowed('windows_mdm')).toBe(false)
+  // Programmatic submits cannot bypass the refreshed gate.
+  await wrapper.find('form').trigger('submit')
+  expect(enroll).toHaveBeenCalledTimes(1)
+  expect(registrationChannels.allowed('macos_mdm')).toBe(true)
+  const query = wrapper.findAll('form')[1]!
+  await query.find('input').setValue(existing.enrollmentId)
+  await query.trigger('submit')
+  await flushPromises()
+  await click('取消')
+  expect((await devices.enrollment.status(existing.enrollmentId)).status).toBe('cancelled')
+  await server.change('windows_mdm', crypto.randomUUID(), 1, 'allowed')
+  await click('刷新状态与额度')
+  expect(registrationChannels.allowed('windows_mdm')).toBe(true)
+})
+
+it('keeps unknown admission intent across navigation and explicitly replays the original CAS command', async () => {
+  const { wrapper, router, loseReply, requests, registrationChannels } =
+    await setup('registration-quotas')
+  loseReply.path = '/api/v1/registration-channels/{channel}/admission'
+  await registrationChannels.change('windows_mdm', 'paused').catch(() => {})
+  const first = requests.filter(
+    (r) => r.method === 'PUT' && r.path.includes('registration-channels'),
+  )[0]!
+  expect(registrationChannels.commands.get('windows_mdm')?.state).toBe('unknown')
+  await router.push({ name: 'devices', params: { tenant: TENANT } })
+  await router.push({ name: 'registration-quotas', params: { tenant: TENANT } })
+  await flushPromises()
+  expect(wrapper.text()).toContain('原操作结果未知')
+  loseReply.path = ''
+  await registrationChannels.change('windows_mdm', 'allowed', true)
+  const writes = requests.filter(
+    (r) => r.method === 'PUT' && r.path.includes('registration-channels'),
+  )
+  expect(writes).toHaveLength(2)
+  expect(writes[1]!.body).toEqual(first.body)
+  expect(writes[1]!.headers).toEqual(first.headers)
+  expect(registrationChannels.status('windows_mdm')?.admission).toBe('paused')
+})

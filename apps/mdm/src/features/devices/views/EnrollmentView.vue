@@ -6,6 +6,8 @@ import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { enrollmentSources, generateEnrollmentPassword } from '../clients/enrollment'
 import { useOperation } from '../../../services/useOperation'
+import RegistrationStatus from '../../../components/RegistrationStatus.vue'
+import { nativeChannel } from '../../../services/registrationChannels'
 import NativeFacts from '../../enrollment/components/NativeFacts.vue'
 import PageFrame from '../../../components/PageFrame.vue'
 const { t } = useI18n(),
@@ -21,6 +23,7 @@ const device = ref(''),
   password = ref(''),
   handedOff = ref(false),
   id = ref('')
+const channelState = runtime.registrationChannels
 const windowsProfile = ref<'Full' | 'Device'>('Device')
 const nativeSources = enrollmentSources.filter((s) => s !== 'agent.builtin')
 const result = ref<Awaited<ReturnType<typeof client.status>>>(),
@@ -39,6 +42,12 @@ function submit(kind: Pending['kind'], replay = false) {
     busy.value ||
     (!replay && uncertain.value) ||
     (kind !== 'cancel' && (!handedOff.value || !password.value))
+  )
+    return
+  if (
+    !replay &&
+    ((kind === 'create' && !channelState.allowed(nativeChannel(source.value))) ||
+      (kind === 'resume' && !channelState.canContinue(result.value)))
   )
     return
   const command = replay
@@ -76,6 +85,7 @@ function submit(kind: Pending['kind'], replay = false) {
     },
   ).then((ok) => {
     if (ok) recover()
+    else if (failure.value === 'enrollmentPaused') void channelState.refresh()
   })
 }
 function recover() {
@@ -111,6 +121,7 @@ function generate() {
 </script>
 <template>
   <PageFrame :title="t('devices.enroll')" :busy="busy" :failure="failure">
+    <RegistrationStatus :channel="nativeChannel(source)" />
     <p>{{ t('devices.guide') }}</p>
     <p>{{ t('devices.enrollmentNote') }}</p>
     <p>{{ t('devices.handoffNote') }}</p>
@@ -154,13 +165,17 @@ function generate() {
               spellcheck="false" /></label
           ><label
             ><input v-model="handedOff" type="checkbox" required />{{ t('devices.handoff') }}</label
-          ><UiButton :disabled="!!(uncertain || !handedOff)" type="submit">{{
-            t('devices.submitEnrollment')
-          }}</UiButton>
+          ><UiButton
+            :disabled="!!(uncertain || !handedOff || !channelState.allowed(nativeChannel(source)))"
+            type="submit"
+            >{{ t('devices.submitEnrollment') }}</UiButton
+          >
           <UiButton
             v-if="id"
             type="button"
-            :disabled="!!(uncertain || !handedOff || !password)"
+            :disabled="
+              !!(uncertain || !handedOff || !password || !channelState.canContinue(result))
+            "
             @click="submit('resume')"
           >
             {{ t('devices.resume') }}

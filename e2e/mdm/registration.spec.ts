@@ -86,7 +86,6 @@ it('real server receipts preserve browser quota, self enrollment, inheritance an
     active: 0,
     reserved: 1,
     used: 1,
-    canEnroll: false,
   })
   await expect(
     user.enroll(crypto.randomUUID(), generateEnrollmentPassword(), 'mdm.windows', 'Device'),

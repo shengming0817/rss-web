@@ -10,6 +10,7 @@ import { usePermission } from '../usePermission'
 import { useAttachment } from '../useAttachment'
 import { platforms, architectures, releaseChannels } from '../clients/packages'
 import { configurationFilename } from '../clients/configurations'
+import RegistrationStatus from '../../../components/RegistrationStatus.vue'
 import PageFrame from '../../../components/PageFrame.vue'
 const runtime = useMdm(),
   client = runtime.onboarding.configurations,
@@ -19,7 +20,11 @@ const permission = usePermission('agent_enrollment_read', 'agent_enrollment_writ
 const { canRead, canWrite } = permission,
   { run, runWrite, busy, uncertain, failure } = useOperation(
     ['service_unavailable', 'issuance_unknown', 'activation_unknown'],
-    () => runtime.session.state.value.session?.id,
+    () => [
+      runtime.session.state.value.tenant ?? undefined,
+      runtime.session.state.value.identity?.principalId,
+      runtime.session.state.value.session?.id,
+    ],
   )
 const delivery = useAttachment(),
   { url, filename } = delivery
@@ -60,6 +65,7 @@ function refresh() {
 async function create() {
   if (
     !canWrite.value ||
+    !runtime.registrationChannels.allowed('agent') ||
     busy.value ||
     uncertain.value ||
     !settings.value ||
@@ -98,11 +104,13 @@ async function create() {
         return file
       },
       (result) => {
+        if (!canWrite.value || stamp !== delivery.stamp()) return
         configurationId.value = result.configuration.configurationId
         delivery.deliver(result.file, settings.value!.configurationFilename, stamp)
         pending.value = undefined
       },
     )
+    if (failure.value === 'enrollmentPaused') void runtime.registrationChannels.refresh()
   } finally {
     if (file) new Uint8Array(file.file.bytes).fill(0)
   }
@@ -223,6 +231,7 @@ watch(
   [
     () => route.fullPath,
     () => runtime.session.state.value.session?.id,
+    () => runtime.session.state.value.tenant,
     () => runtime.session.state.value.identity?.principalId,
   ],
   () => {
@@ -241,6 +250,7 @@ watch(
 </script>
 <template>
   <PageFrame :title="t('onboarding.configurations')" :busy="busy" :failure="failure">
+    <RegistrationStatus channel="agent" />
     <p v-if="!canRead">{{ t('devices.denied') }}</p>
     <template v-else>
       <p>{{ t('onboarding.configurationNote') }}</p>
@@ -300,7 +310,16 @@ watch(
                 ><input v-model="channels" type="checkbox" :value="c" />{{ c }}</label
               >
             </fieldset>
-            <UiButton :disabled="!!(!selectedTargets.length || !channels.length)" type="submit">
+            <UiButton
+              :disabled="
+                !!(
+                  !selectedTargets.length ||
+                  !channels.length ||
+                  !runtime.registrationChannels.allowed('agent')
+                )
+              "
+              type="submit"
+            >
               {{ t('onboarding.createFile') }}
             </UiButton>
           </fieldset>
