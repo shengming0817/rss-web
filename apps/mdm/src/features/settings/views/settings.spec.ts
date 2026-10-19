@@ -680,3 +680,72 @@ it('shows the current host identity when the readiness contract reports unavaila
   expect(f.wrapper.text()).toContain('9')
   expect(f.wrapper.text()).toContain(id)
 })
+
+it('revokes a WNS version while clearing unrelated credentials in the same form', async () => {
+  const f = await fixture(ProviderPanel, { kind: 'wns' }),
+    version = {
+      operationId: id,
+      revision: 1,
+      packageFamilyName: 'RSS',
+      qualifiedAt: 1,
+      attemptedAt: 1,
+      failureReason: null,
+      selected: true,
+      revoked: false,
+    }
+  f.setHandler((o) =>
+    o.method === 'GET'
+      ? { revision: 1, desiredRevision: 1, versions: [version] }
+      : {
+          kind: 'revocation',
+          receipt: { operationId: o.headers!['Idempotency-Key'], revision: 2, materialRevision: 1 },
+        },
+  )
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  await f.wrapper.get('input[type=password]').setValue('UNUSED WNS SECRET')
+  await f.wrapper.get('select').setValue('1')
+  await f.wrapper.findAll('form')[1]!.trigger('submit')
+  await flushPromises()
+  expect(f.calls.find((o) => o.method === 'POST')?.body).toEqual({
+    expectedRevision: 1,
+    materialRevision: 1,
+  })
+  expect((f.wrapper.get('input[type=password]').element as HTMLInputElement).value).toBe('')
+})
+it('activates an existing Webhook revision without retaining an unrelated imported secret', async () => {
+  const f = await fixture(WebhookPanel)
+  const material = {
+      operationId: id,
+      reference: 'events',
+      revision: 1,
+      configurationSha256: digest,
+      keyDigest: digest,
+      challenge: 'YWJj',
+      confirmed: true,
+      revoked: false,
+      endpoint: 'https://receiver.test/hook',
+      networkReference: 'approved',
+      attemptedAt: 1,
+      confirmedAt: 1,
+      failureReason: null,
+    },
+    head = { reference: 'events', revision: 1, activeRevision: null, retiringRevision: null }
+  f.setHandler((o) =>
+    o.method === 'GET'
+      ? { configurationSha256: digest, keys: { heads: [head], materials: [material] } }
+      : { operationId: o.headers!['Idempotency-Key'], ...head, revision: 2, activeRevision: 1 },
+  )
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  await f.wrapper.get('input[maxlength="128"]').setValue('events')
+  await f.wrapper.findAll('select')[0]!.setValue('import')
+  await f.wrapper.get('input[type=password]').setValue('UNUSED WEBHOOK SECRET')
+  await f.wrapper.findAll('select')[1]!.setValue('1')
+  await f.wrapper.findAll('form')[1]!.trigger('submit')
+  await flushPromises()
+  expect((f.wrapper.get('input[type=password]').element as HTMLInputElement).value).toBe('')
+  expect(f.calls.find((o) => o.method === 'POST')?.path).toBe(
+    '/api/v1/webhooks/materials/transitions',
+  )
+})

@@ -248,9 +248,9 @@ export function createScenario(
     }
     const loginMatch = /^\/api\/v1\/identity\/tenants\/([^/]+)\/login$/.exec(path)
     if (loginMatch && [TENANT, MANAGEMENT_TENANT].includes(loginMatch[1]!) && method === 'POST') {
-      sessionTenant = loginMatch[1]!
       if (!['demo', 'reviewer'].includes(String(data['login'])) || data['password'] !== 'demo')
         return { status: 401, body: { code: 'invalid_credential' } }
+      sessionTenant = loginMatch[1]!
       signedIn = true
       principalId = data['login'] === 'reviewer' ? REVIEWER : PRINCIPAL
       sessionId = crypto.randomUUID()
