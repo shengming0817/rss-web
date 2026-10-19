@@ -56,32 +56,36 @@ try {
     // The old build runner has closed before a fresh lease owns reset. Its 5-second
     // cancellation window cannot kill this separately bounded cleanup invocation.
     phase = 'cleanup'
-    try {
-      await run(
-        'python3',
-        [
-          'hack/build_run.py',
-          '--',
+    let failed = false
+    for (const group of ['settings-browser-target', 'settings-browser']) {
+      const action =
+        group === 'settings-browser-target'
+          ? [
+              '-c',
+              "import sys; sys.path.insert(0, 'hack'); from pathlib import Path; from t2_environment import Environment; Environment(Path.cwd(), group='settings-browser-target').host_ports(release=True)",
+            ]
+          : ['hack/t2_environment.py', 'reset', '--group', group]
+      try {
+        await run(
           'python3',
-          'hack/t2_environment.py',
-          'reset',
-          '--group',
-          'settings-browser',
-        ],
-        resolve(backend),
-        180000,
-      )
-      console.log(JSON.stringify({ phase, result: 'passed' }))
-    } catch (error) {
-      console.error(
-        JSON.stringify({
-          phase,
-          result: 'failed',
-          classification: error.message,
-          recoveryDirectory: resolve(backend, 'artifacts/dev-environment/settings-browser'),
-        }),
-      )
-      process.exitCode = 1
+          ['hack/build_run.py', '--', 'python3', ...action],
+          resolve(backend),
+          180000,
+        )
+      } catch (error) {
+        failed = true
+        console.error(
+          JSON.stringify({
+            phase,
+            result: 'failed',
+            group,
+            classification: error.message,
+            recoveryDirectory: resolve(backend, 'artifacts/dev-environment/' + group),
+          }),
+        )
+      }
     }
+    if (failed) process.exitCode = 1
+    else console.log(JSON.stringify({ phase, result: 'passed' }))
   }
 }

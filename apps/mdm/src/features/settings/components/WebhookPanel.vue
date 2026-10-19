@@ -146,7 +146,7 @@ useSettingsFacts(() => {
   />
   <label class="settings-form"
     >{{ t('settings.reference')
-    }}<input v-model="reference" required maxlength="128" :disabled="locked"
+    }}<input v-model="reference" required maxlength="128" :disabled="busy"
   /></label>
   <p>
     {{ t('settings.savedVersion') }} {{ revision }} · {{ t('settings.requestedVersion') }}

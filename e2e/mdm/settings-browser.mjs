@@ -193,6 +193,40 @@ try {
   await page.getByText('保存版本 1', { exact: false }).waitFor()
   assert.ok((await body().textContent()).includes('服务器生成密钥不证明设备已经信任'))
   coverage.push('real-server-task-key-generation-with-separate-device-observation')
+  let taskDone,
+    taskFailed = false,
+    taskOperation
+  const taskCommitted = new Promise((resolve) => (taskDone = resolve))
+  const discardTask = async (route) => {
+    try {
+      if (route.request().method() !== 'POST') {
+        await route.continue()
+        return
+      }
+      taskOperation = route.request().headers()['idempotency-key']
+      const response = await route.fetch({ timeout: 45000, maxRetries: 0 })
+      assert.equal(response.status(), 200)
+      assert.equal((await response.json()).revision, 2)
+      await route.abort('failed')
+      taskDone()
+    } catch {
+      taskFailed = true
+      taskDone()
+      await route.abort('failed').catch(() => {})
+    }
+  }
+  await page.route('**/api/v1/task-signing/trust', discardTask)
+  await page.getByRole('button', { name: '生成新版本', exact: true }).click()
+  await taskCommitted
+  assert.equal(taskFailed, false)
+  assert.ok(taskOperation)
+  await page.unroute('**/api/v1/task-signing/trust', discardTask)
+  await page.getByRole('button', { name: '查询原操作', exact: true }).click()
+  await page.getByText('保存版本 2', { exact: false }).waitFor()
+  await page.getByRole('button', { name: '生成新版本', exact: true }).click()
+  await page.getByText('保存版本 3', { exact: false }).waitFor()
+  coverage.push('task-query-recovery-refreshes-current-version-before-next-write')
+
   phase = 'presentation'
   await page.setViewportSize({ width: 390, height: 844 })
   assert.ok(

@@ -33,16 +33,14 @@ const trust = ref<TaskTrust>(),
   revision = ref(0),
   origin = ref(window.location.origin),
   keyId = ref('')
+function applyTrust(value: TaskTrust) {
+  trust.value = value
+  revision.value = value.revision
+  origin.value = value.origin
+}
 async function load() {
   trust.value = undefined
-  return run(
-    () => client.read(),
-    (v) => {
-      trust.value = v
-      revision.value = v.revision
-      origin.value = v.origin
-    },
-  )
+  return run(() => client.read(), applyTrust)
 }
 async function compare() {
   if (await load()) markCompared()
@@ -52,8 +50,11 @@ async function lookup() {
   if (id)
     await query(
       id,
-      () => client.operation(id),
-      (v) => (trust.value = v),
+      async () => {
+        await client.operation(id)
+        return client.read()
+      },
+      applyTrust,
     )
 }
 async function change(action: TaskChange['action'], replay = false) {
@@ -74,10 +75,7 @@ async function change(action: TaskChange['action'], replay = false) {
     expectedRevision,
     action === 'prepare' ? { origin: origin.value } : { keyId: keyId.value },
     (id) => client.change(id, input),
-    (v) => {
-      trust.value = v
-      revision.value = v.revision
-    },
+    applyTrust,
     replay,
   )
 }

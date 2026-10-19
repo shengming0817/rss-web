@@ -749,3 +749,95 @@ it('activates an existing Webhook revision without retaining an unrelated import
     '/api/v1/webhooks/materials/transitions',
   )
 })
+
+it('restores an unknown Webhook reference after remount and retries only exact public input', async () => {
+  const f = await fixture(WebhookPanel),
+    directory = { configurationSha256: digest, keys: { heads: [], materials: [] } }
+  f.setHandler((o) => {
+    if (o.method === 'POST') throw new Error('response lost')
+    if (o.path.includes('/operations/')) throw decodeMdmError(404, { code: 'operation_not_found' })
+    return directory
+  })
+  await f.wrapper.get('input[maxlength="128"]').setValue('events')
+  await f.wrapper.get('input[type=url]').setValue('https://receiver.test/hook')
+  await f.wrapper.findAll('input[maxlength="128"]')[1]!.setValue('approved')
+  await f.wrapper.get('form').trigger('submit')
+  await flushPromises()
+  const original = f.settings.operations.records.get('webhook')!.id
+  await f.remount()
+  const reference = f.wrapper.get('input[maxlength="128"]')
+  expect(reference.attributes('disabled')).toBeUndefined()
+  await button(f.wrapper, '查询原操作').trigger('click')
+  await flushPromises()
+  await reference.setValue('wrong')
+  await f.wrapper.get('input[type=url]').setValue('https://receiver.test/hook')
+  await f.wrapper.findAll('input[maxlength="128"]')[1]!.setValue('approved')
+  await button(f.wrapper, '按原输入显式重试').trigger('click')
+  await flushPromises()
+  expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(1)
+  await reference.setValue('events')
+  f.setHandler((o) =>
+    o.method === 'POST'
+      ? {
+          operationId: original,
+          reference: 'events',
+          revision: 1,
+          configurationSha256: digest,
+          keyDigest: digest,
+          challenge: 'YWJj',
+          confirmed: false,
+          revoked: false,
+          endpoint: 'https://receiver.test/hook',
+          networkReference: 'approved',
+          attemptedAt: null,
+          confirmedAt: null,
+          failureReason: null,
+        }
+      : directory,
+  )
+  await button(f.wrapper, '按原输入显式重试').trigger('click')
+  await flushPromises()
+  const writes = f.calls.filter((o) => o.method === 'POST')
+  expect(writes).toHaveLength(2)
+  expect(writes[1]?.headers?.['Idempotency-Key']).toBe(original)
+  expect(f.settings.operations.records.get('webhook')?.state).toBe('received')
+})
+it('refreshes current task trust after confirming a historical receipt before allowing another write', async () => {
+  const f = await fixture(TaskTrustPanel)
+  const trust = (revision: number) => ({
+    version: 1,
+    origin: 'https://mdm.test',
+    tenant,
+    revision,
+    keys: [{ id: 'key-a', public_key: 'A'.repeat(43), state: 'active' }],
+  })
+  let current = 1,
+    lose = true
+  f.setHandler((o) => {
+    if (o.method === 'POST') {
+      if (lose) {
+        current = 2
+        throw new Error('lost committed response')
+      }
+      expect((o.body as { expectedRevision: number }).expectedRevision).toBe(3)
+      current = 4
+      return trust(current)
+    }
+    return o.path.includes('/operations/') ? trust(2) : trust(current)
+  })
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  await f.wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(f.settings.operations.records.get('task')?.state).toBe('unknown')
+  current = 3
+  await button(f.wrapper, '查询原操作').trigger('click')
+  await flushPromises()
+  expect(f.settings.operations.records.get('task')?.state).toBe('received')
+  expect(f.wrapper.text()).toContain('保存版本 3')
+  lose = false
+  await f.wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(2)
+  expect(f.settings.operations.records.get('task')?.state).toBe('received')
+})
