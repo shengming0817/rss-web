@@ -1051,6 +1051,14 @@ it('rejects a stale self-enrollment submit at the backend, refreshes admission a
   await query.find('input').setValue(existing.enrollmentId)
   await query.trigger('submit')
   await flushPromises()
+  await click('生成一次性交付口令')
+  await wrapper.find('form input[type=checkbox]').setValue(true)
+  expect(
+    wrapper
+      .findAll('button')
+      .find((b) => b.text() === '更新口令并继续')!
+      .attributes('disabled'),
+  ).toBeDefined()
   await click('取消')
   expect((await devices.enrollment.status(existing.enrollmentId)).status).toBe('cancelled')
   await server.change('windows_mdm', crypto.randomUUID(), 1, 'allowed')
@@ -1080,4 +1088,29 @@ it('keeps unknown admission intent across navigation and explicitly replays the 
   expect(writes[1]!.body).toEqual(first.body)
   expect(writes[1]!.headers).toEqual(first.headers)
   expect(registrationChannels.status('windows_mdm')?.admission).toBe('paused')
+})
+
+it('allows a quota reader to select user queries while keeping edits and submission disabled', async () => {
+  const { wrapper, router, operations, devices } = await setup('devices')
+  const effective = operations.authorization.effective
+  vi.spyOn(operations.authorization, 'effective').mockImplementation(async () => {
+    const value = await effective()
+    return {
+      ...value,
+      grants: value.grants.filter((g) => g.operation !== 'registration_configuration_write'),
+    }
+  })
+  await router.push({ name: 'registration-quotas', params: { tenant: TENANT } })
+  await flushPromises()
+  const mode = wrapper.find('select')
+  expect((mode.element as HTMLSelectElement).disabled).toBe(false)
+  await mode.setValue('override')
+  await wrapper.findAll('select')[1]!.setValue('33333333-3333-4333-8333-333333333333')
+  await flushPromises()
+  expect(wrapper.find('tbody').exists()).toBe(true)
+  const edit = wrapper.get('form input[type=number]').element as HTMLInputElement
+  expect(edit.closest('fieldset')?.disabled).toBe(true)
+  const change = vi.spyOn(devices.registration, 'change')
+  await wrapper.get('form').trigger('submit')
+  expect(change).not.toHaveBeenCalled()
 })
