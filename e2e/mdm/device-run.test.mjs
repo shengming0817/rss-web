@@ -3,8 +3,8 @@ import { test } from 'node:test'
 import process from 'node:process'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
+import { tmpdir, homedir } from 'node:os'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -29,12 +29,15 @@ async function exercise(failure, feature) {
     `#!/usr/bin/env node
 const fs = require('node:fs'), path = require('node:path')
 const args = process.argv.slice(2), base = process.env['${backendEnv}']
-if (args.includes('reset')) {
-  if (!args.includes('hack/t2_environment.py') || args.at(-1) !== '${group}') process.exit(9)
+if (args.includes('reset') || ('${feature}' === 'settings' && args.includes('-c'))) {
+  const target = args.includes('-c')
+  if (target ? !args.at(-1).includes("group='settings-browser-target'") : !args.includes('hack/t2_environment.py') || args.at(-1) !== '${group}') process.exit(9)
+  fs.appendFileSync(path.join(base,'cleanup-groups'), (target ? '${group}-target' : '${group}')+'\\n')
   fs.writeFileSync(path.join(base, 'cleanup-start'), '')
   setTimeout(() => {
     if (process.env.CLEANUP_FAILURE === '1') process.exit(3)
-    fs.rmSync(path.join(base, 'artifacts/dev-environment/${group}'), { recursive: true })
+    if (target) fs.writeFileSync(path.join(base,'target-cleanup-finished'),'')
+    else fs.rmSync(path.join(base, 'artifacts/dev-environment/${group}'), { recursive: true })
     fs.writeFileSync(path.join(base, 'cleanup-finished'), '')
     process.exit(0)
   }, process.env.CLEANUP_FAILURE === '1' ? 0 : 7000)
@@ -78,12 +81,20 @@ if (args.includes('reset')) {
     }
     const code = await closed
     assert.equal(code, 1)
+    if (feature === 'settings')
+      assert.deepEqual(
+        readFileSync(resolve(backend, 'cleanup-groups'), 'utf8').trim().split('\n'),
+        [group + '-target', group],
+      )
     if (failure) {
+      if (feature === 'settings')
+        assert.ok(output.includes(JSON.stringify(resolve(homedir(), '.cache/rss-mdm-dev-ports'))))
       assert.ok(existsSync(recovery))
       assert.ok(output.includes(JSON.stringify(recovery)))
       assert.ok(output.includes('"phase":"cleanup","result":"failed"'))
     } else {
       assert.ok(existsSync(resolve(backend, 'cleanup-finished')))
+      if (feature === 'settings') assert.ok(existsSync(resolve(backend, 'target-cleanup-finished')))
       assert.equal(existsSync(recovery), false)
       assert.ok(output.includes('"classification":"interrupted"'))
       assert.ok(output.includes('"phase":"cleanup","result":"passed"'))
@@ -94,7 +105,7 @@ if (args.includes('reset')) {
     rmSync(backend, { recursive: true, force: true })
   }
 }
-for (const feature of ['device', 'software']) {
+for (const feature of ['device', 'software', 'settings']) {
   test(
     `${feature}: waits for independent cleanup after cancellation and a second signal`,
     { timeout: 30000 },

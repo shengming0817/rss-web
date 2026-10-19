@@ -8,7 +8,12 @@ import { UiButton, UiDialog, UiSearchInput, UiMessage, UiPopover } from '@rss/co
 import { useMdm } from './context'
 import { usePermission } from './features/enrollment/usePermission'
 import ConsoleNavigation from './components/ConsoleNavigation.vue'
-import { navigation, detailParents, type NavigationItem } from './components/navigation'
+import {
+  navigation,
+  platformNavigation,
+  detailParents,
+  type NavigationItem,
+} from './components/navigation'
 const { t, locale } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -38,23 +43,28 @@ const authLinks = computed(() =>
         : true,
   ),
 )
+const sections = computed(() => (runtime.realm === 'platform' ? platformNavigation : navigation))
 const destinations = computed<NavigationItem[]>(() => [
   { name: 'workspace', label: 'console.overview' },
-  ...navigation
+  ...sections.value
     .flatMap<NavigationItem>((section) => [...section.items])
     .filter((item) => item.name !== 'agent-configurations' || canManageAgent.value),
   ...authLinks.value,
-  { name: 'self-enrollments', label: 'registration.self' },
-  { name: 'agent-downloads', label: 'onboarding.downloads' },
+  ...(runtime.realm === 'tenant'
+    ? [
+        { name: 'self-enrollments', label: 'registration.self' },
+        { name: 'agent-downloads', label: 'onboarding.downloads' },
+      ]
+    : []),
 ])
 const parentName = computed(() => detailParents[String(route.name)] ?? String(route.name))
 const section = computed(() =>
-  navigation.find((group) => group.items.some((item) => item.name === parentName.value)),
+  sections.value.find((group) => group.items.some((item) => item.name === parentName.value)),
 )
 const title = computed(() =>
   t(
     [
-      ...navigation.flatMap<NavigationItem>((group) => [...group.items]),
+      ...sections.value.flatMap<NavigationItem>((group) => [...group.items]),
       ...authDestinations,
       ...destinations.value,
     ].find((item) => item.name === parentName.value)?.label ?? 'console.overview',

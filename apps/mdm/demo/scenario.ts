@@ -3,6 +3,7 @@ import { observationTarget } from './operations/observation'
 import type { OperationsReference } from '../src/features/operations/clients/model'
 import type { DemoEvent } from './policies/schedule'
 import { mdmJsonBodyLimit, MDM_CONTENT_BODY_LIMIT, isMdmContentRequest } from '@rss/api/mdm-limits'
+export const MANAGEMENT_TENANT = '99999999-9999-4999-8999-999999999999'
 export const TENANT = '11111111-1111-4111-8111-111111111111'
 const PRINCIPAL = '22222222-2222-4222-8222-222222222222'
 const REVIEWER = '33333333-3333-4333-8333-333333333333'
@@ -25,7 +26,7 @@ export interface Reply {
   headers?: Record<string, string>
 }
 export interface DemoRequest {
-  actor: { principalId: string; sessionId: string }
+  actor: { principalId: string; sessionId: string; tenantId?: string }
   method: string
   path: string
   body: unknown
@@ -33,7 +34,7 @@ export interface DemoRequest {
   headers: Record<string, string | string[] | undefined>
 }
 export interface DemoObservation {
-  actor: { principalId: string; sessionId: string }
+  actor: { principalId: string; sessionId: string; tenantId?: string }
   method: string
   path: string
   operation: string | null
@@ -52,6 +53,7 @@ export function createScenario(
   now: () => number = () => Math.floor(Date.now() / 1000),
 ) {
   let active: Scenario = 'normal'
+  let sessionTenant = TENANT
   let signedIn = false
   let principalId = PRINCIPAL
   let sessionId = crypto.randomUUID()
@@ -123,7 +125,7 @@ export function createScenario(
           : observationTarget(path, operation)
       observed(
         {
-          actor: { principalId, sessionId },
+          actor: { principalId, sessionId, tenantId: sessionTenant },
           method,
           path,
           operation,
@@ -244,10 +246,11 @@ export function createScenario(
       }
       return { status: 204 }
     }
-    const loginPath = `/api/v1/identity/tenants/${TENANT}/login`
-    if (path === loginPath && method === 'POST') {
+    const loginMatch = /^\/api\/v1\/identity\/tenants\/([^/]+)\/login$/.exec(path)
+    if (loginMatch && [TENANT, MANAGEMENT_TENANT].includes(loginMatch[1]!) && method === 'POST') {
       if (!['demo', 'reviewer'].includes(String(data['login'])) || data['password'] !== 'demo')
         return { status: 401, body: { code: 'invalid_credential' } }
+      sessionTenant = loginMatch[1]!
       signedIn = true
       principalId = data['login'] === 'reviewer' ? REVIEWER : PRINCIPAL
       sessionId = crypto.randomUUID()
@@ -266,7 +269,7 @@ export function createScenario(
             body,
             query: parsed.searchParams,
             headers: {},
-            actor: { principalId, sessionId },
+            actor: { principalId, sessionId, tenantId: sessionTenant },
           },
           active,
         )
@@ -286,19 +289,19 @@ export function createScenario(
       return {
         status: 200,
         body: {
-          tenantId: TENANT,
+          tenantId: sessionTenant,
           principalId,
           sessionId,
           navigation: { manageAccounts: false, manageProviders: false },
         },
       }
-    if (path === `/api/v1/identity/tenants/${TENANT}/session` && method === 'GET')
+    if (path === `/api/v1/identity/tenants/${sessionTenant}/session` && method === 'GET')
       return { status: 200, body: session() }
     if (method !== 'GET') {
       if (headers['x-csrf-token'] !== token || headers['x-identity-request'] !== '1')
         return { status: 403, body: { code: 'csrf_rejected' } }
       if (
-        path.startsWith(`/api/v1/identity/tenants/${TENANT}/session/`) &&
+        path.startsWith(`/api/v1/identity/tenants/${sessionTenant}/session/`) &&
         (path.endsWith('/logout') || path.endsWith('/logout-all'))
       ) {
         signedIn = false
@@ -306,14 +309,14 @@ export function createScenario(
         return { status: 204 }
       }
       if (
-        path.startsWith(`/api/v1/identity/tenants/${TENANT}/session/`) &&
+        path.startsWith(`/api/v1/identity/tenants/${sessionTenant}/session/`) &&
         (path.endsWith('/refresh') || path.endsWith('/reauthenticate'))
       ) {
         epoch++
         return { status: 200, body: session() }
       }
     }
-    if (path === `/api/v1/identity/tenants/${TENANT}/accounts` && method === 'GET')
+    if (path === `/api/v1/identity/tenants/${sessionTenant}/accounts` && method === 'GET')
       return principalId === PRINCIPAL
         ? {
             status: 200,
@@ -338,7 +341,7 @@ export function createScenario(
             },
           }
         : { status: 403, body: { code: 'permission_denied' } }
-    if (path === `/api/v1/identity/tenants/${TENANT}/sessions`)
+    if (path === `/api/v1/identity/tenants/${sessionTenant}/sessions`)
       return { status: 200, body: { sessions: [session().session], nextCursor: null } }
     const expected = epoch
     if (active === 'late') await new Promise((resolve) => setTimeout(resolve, 1500))
@@ -408,7 +411,7 @@ export function createScenario(
           body,
           query: parsed.searchParams,
           headers,
-          actor: { principalId, sessionId },
+          actor: { principalId, sessionId, tenantId: sessionTenant },
         },
         active,
       )

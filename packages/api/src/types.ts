@@ -13,11 +13,13 @@ interface RequestBase {
   timeoutMs?: number
 }
 
-export interface RequestOptions<T> extends RequestBase {
-  successStatus: 200 | 201 | 202
+export type RequestOptions<T> = RequestBase & {
   responseType?: 'arraybuffer'
   decode: Decoder<T>
-}
+} & (
+    | { successStatus: 200 | 201 | 202 | readonly [200 | 201 | 202, ...(200 | 201 | 202)[]] }
+    | { method: 'GET'; path: '/readyz'; successStatus: readonly [200, 503]; responseType?: never }
+  )
 
 export interface BinaryResponse {
   bytes: ArrayBuffer

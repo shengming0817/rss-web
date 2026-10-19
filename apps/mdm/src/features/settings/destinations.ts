@@ -1,0 +1,21 @@
+import type { RouteLocationRaw } from 'vue-router'
+export function settingsDestination(target: string, tenant: string): RouteLocationRaw {
+  if (target === 'provision' || target === 'registry' || target.startsWith('tenant:'))
+    target = 'tenants'
+  const routes: Record<string, string> = {
+    deployment: 'settings-deployment',
+    operations: 'settings-operations',
+    tenants: 'settings-tenants',
+    accounts: 'accounts',
+    providers: 'providers',
+    ade: 'operations-appleAde',
+    appleAccount: 'operations-appleAccount',
+    deviceMaterials: 'security-materials',
+    registration: 'registration-quotas',
+    organization: 'operations-organization',
+  }
+  const name = routes[target]
+  return name
+    ? { name, params: { tenant } }
+    : { name: 'settings-material', params: { tenant, material: target } }
+}

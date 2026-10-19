@@ -39,7 +39,7 @@ function hasUnsafeUrlCharacter(value: string): boolean {
 
 function resolvePath(path: string, params: Readonly<Record<string, string | number>> = {}): string {
   if (
-    !path.startsWith('/api/') ||
+    (!path.startsWith('/api/') && path !== '/readyz') ||
     path.startsWith('//') ||
     path.includes('://') ||
     hasUnsafeUrlCharacter(path) ||
@@ -108,7 +108,15 @@ export async function execute<T>(
   if (options.signal?.aborted === true) throw abortedError()
   try {
     const response = await instance.request(requestConfig(options, defaultTimeoutMs))
-    if (response.status >= 400) {
+    const readinessUnavailable =
+      options.method === 'GET' &&
+      options.path === '/readyz' &&
+      Array.isArray(options.successStatus) &&
+      options.successStatus.length === 2 &&
+      options.successStatus[0] === 200 &&
+      options.successStatus[1] === 503 &&
+      response.status === 503
+    if (response.status >= 400 && !readinessUnavailable) {
       let value: unknown = response.data
       if ('responseType' in options && options.responseType === 'arraybuffer') {
         if (!(value instanceof ArrayBuffer) || value.byteLength > 16_384)
@@ -121,7 +129,10 @@ export async function execute<T>(
       }
       throw decodeError(response.status, value)
     }
-    if (response.status !== options.successStatus) throw protocolError(response.status)
+    const accepted = Array.isArray(options.successStatus)
+      ? options.successStatus.includes(response.status)
+      : response.status === options.successStatus
+    if (!accepted) throw protocolError(response.status)
     if (options.successStatus === 204) return undefined
     try {
       if (options.responseType === 'arraybuffer') {

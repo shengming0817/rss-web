@@ -7,6 +7,7 @@ const props = defineProps<{ target: OperationsReference }>()
 const { t } = useI18n(),
   runtime = useMdm()
 const link = computed(() => {
+  if (['connector', 'settings', 'job'].includes(props.target.kind)) return null
   const target = props.target,
     params: { tenant: string; device?: string; execution?: string } = { tenant: runtime.tenant }
   const names = {
@@ -16,9 +17,9 @@ const link = computed(() => {
     user_group: 'operations-organization',
     delegation: 'operations-organization',
     report: 'operations-reports',
-    connector: 'operations-integrations',
-    settings: 'operations-settings',
-    job: 'operations-settings',
+    connector: 'settings-integrations',
+    settings: 'settings-overview',
+    job: 'settings-operations',
     device: 'device-detail',
     policy: 'policy-policies',
     workflow: 'policy-workflows',
@@ -46,8 +47,10 @@ const link = computed(() => {
 </script>
 <template>
   <span>
-    <RouterLink :to="link">{{ t(`operations.target.${target.kind}`) }} {{ target.id }}</RouterLink>
-    · {{ t('devices.revision') }} {{ target.revision ?? '—' }}
+    <RouterLink v-if="link" :to="link"
+      >{{ t(`operations.target.${target.kind}`) }} {{ target.id }}</RouterLink
+    ><span v-else>{{ t(`operations.target.${target.kind}`) }} {{ target.id }}</span> ·
+    {{ t('devices.revision') }} {{ target.revision ?? '—' }}
     <template v-if="target.device">
       ·
       <RouterLink

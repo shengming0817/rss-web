@@ -69,8 +69,7 @@ it('connects native permission changes, denied device access and sanitized audit
   for (const path of [
     '/api/v1/authorization',
     '/api/v1/mdm-candidate/authorization/delegations',
-    '/api/v1/mdm-candidate/operations/settings',
-    '/api/v1/mdm-candidate/integrations/connectors',
+    '/api/v1/mdm-candidate/operations/reports',
   ]) {
     await f.write('POST', '/api/v1/mdm-candidate/workspace/scenario', {
       scenario: 'normal',

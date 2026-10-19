@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createScenario, TENANT } from './scenario'
+import { createScenario, TENANT, MANAGEMENT_TENANT } from './scenario'
 async function control(scenario: ReturnType<typeof createScenario>, body: unknown) {
   const session = await scenario.handle('GET', `/api/v1/identity/tenants/${TENANT}/session`)
   return scenario.handle('POST', '/api/v1/mdm-candidate/workspace/scenario', body, {
@@ -115,15 +115,26 @@ it('derives distinct actors and session IDs from authenticated accounts, never r
     }
   }
   const author = await login('demo')
-  await scenario.handle('GET', '/api/v1/scopes/example', { principalId: 'forged' })
+  await scenario.handle('POST', `/api/v1/identity/tenants/${MANAGEMENT_TENANT}/login`, {
+    login: 'demo',
+    password: 'wrong',
+  })
+  await scenario.handle('GET', '/api/v1/scopes/example', {
+    principalId: 'forged',
+    tenantId: MANAGEMENT_TENANT,
+  })
   const reviewer = await login('reviewer')
   await scenario.handle('GET', '/api/v1/scopes/example')
   const renewed = await login('demo')
   expect(author.identity.principalId).not.toBe(reviewer.identity.principalId)
   expect(author.session.id).not.toBe(renewed.session.id)
   expect(seen).toEqual([
-    { principalId: author.identity.principalId, sessionId: author.session.id },
-    { principalId: reviewer.identity.principalId, sessionId: reviewer.session.id },
+    { principalId: author.identity.principalId, sessionId: author.session.id, tenantId: TENANT },
+    {
+      principalId: reviewer.identity.principalId,
+      sessionId: reviewer.session.id,
+      tenantId: TENANT,
+    },
   ])
 })
 it('never falls back to mock for published policy or native-operation paths', async () => {

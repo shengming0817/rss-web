@@ -74,11 +74,33 @@ export const navigation = [
       { name: 'operations-alertRules', label: 'operations.alertRules' },
       { name: 'operations-reports', label: 'operations.reports' },
       { name: 'operations-approvals', label: 'operations.approvals' },
-      { name: 'operations-integrations', label: 'operations.integrations' },
-      { name: 'operations-settings', label: 'operations.settings' },
+    ],
+  },
+  {
+    id: 'settings',
+    label: 'settings.title',
+    items: [
+      { name: 'settings-overview', label: 'settings.overview' },
+      { name: 'settings-access', label: 'settings.access' },
+      { name: 'settings-enrollment', label: 'settings.enrollment' },
+      { name: 'settings-integrations', label: 'settings.integrations' },
+      { name: 'settings-software', label: 'settings.software' },
+      { name: 'settings-deployment', label: 'settings.deployment' },
+      { name: 'settings-operations', label: 'settings.operations' },
     ],
   },
 ] as const
+export const platformNavigation = [
+  navigation[navigation.length - 1]!,
+  {
+    id: 'platform',
+    label: 'settings.platform',
+    items: [
+      { name: 'settings-tenants', label: 'settings.tenants' },
+      { name: 'operations-authorization', label: 'operations.authorization' },
+    ],
+  },
+]
 export const detailParents: Record<string, string> = {
   'device-detail': 'devices',
   'device-view-detail': 'devices',

@@ -35,7 +35,8 @@
     "test:mdm:device-browser": "node e2e/mdm/device-run.mjs",
     "dev:ui": "pnpm -F @rss/ui-preview dev",
     "build:ui-preview": "pnpm -F @rss/ui-preview build",
-    "test:mdm:software-browser": "node e2e/mdm/software-run.mjs"
+    "test:mdm:software-browser": "node e2e/mdm/software-run.mjs",
+    "test:mdm:settings-browser": "node e2e/mdm/settings-run.mjs"
   },
   "lint-staged": {
     "*.{ts,vue}": [

@@ -66,3 +66,6 @@ MDM_SOFTWARE_BACKEND=/absolute/rss-mdm pnpm test:mdm:software-browser
 ```
 
 后端使用上述固定 revision；入口构建当前 UI，并复用后端隔离环境与构建租约。覆盖真实来源/目标/发布目录、单目标发布、已提交响应丢失后的原操作查询与显式重放、默认全量、显式版本更新、Native 目标与多个 Scope、时间/成功率门槛配置、状态查询、暂停与撤回。退出独立清理 PG、产品进程和 TLS 网关；结果记录实际后端 revision。仅使用合成输入，不证明 Agent 真机安装或升级。
+
+
+统一设置与平台租户入口见 [MDM 接入说明](docs/architecture/20260926-2544-mdm-web.md#统一设置默认组织引导与平台租户2825)。当前宿主配置同时要求业务 tenant 与 managementTenant，须同步部署后端生成器和前端。正式 HTTPS 接缝验证使用 `MDM_SETTINGS_BACKEND=/absolute/rss-mdm pnpm test:mdm:settings-browser`；外部资格、宿主启用回执与真机效果分别保留验收边界。

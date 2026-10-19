@@ -67,7 +67,11 @@ async function start() {
   const runtime = startMdm(
     transport,
     { canonicalOrigin: window.location.origin, oidcEnabled: false },
-    TENANT,
+    {
+      canonicalOrigin: window.location.origin,
+      tenant: TENANT,
+      managementTenant: '99999999-9999-4999-8999-999999999999',
+    },
     true,
   )
   await runtime.router.isReady()
