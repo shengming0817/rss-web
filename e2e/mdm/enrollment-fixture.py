@@ -65,16 +65,27 @@ def start(binary, initialized, log):
     raise TimeoutError('host-readiness')
 
 def shutdown(children):
+    failed = False
     for child in reversed(children):
-        if child.poll() is None:
-            child.terminate()
+        try:
+            if child.poll() is None:
+                child.terminate()
+        except OSError:
+            failed = True
     for child in reversed(children):
         try:
             child.wait(timeout=10)
         except subprocess.TimeoutExpired:
-            child.kill()
-            child.wait(timeout=5)
-            raise RuntimeError('forced-host-cleanup')
+            failed = True
+            try:
+                child.kill()
+                child.wait(timeout=5)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        except OSError:
+            failed = True
+    if failed:
+        raise RuntimeError('forced-host-cleanup')
 
 def prepare_signer(origin, reader_password):
     jar = http.cookiejar.CookieJar()
