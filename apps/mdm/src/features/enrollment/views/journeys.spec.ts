@@ -5,10 +5,8 @@ import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
 import type { HttpTransport, RequestOptions, NoContentRequest } from '@rss/api/mdm'
 import { decodeMdmError } from '@rss/api/mdm'
 import { networkErrorForTest } from '@rss/api/testing'
-import {
-  createRegistrationChannels,
-  createRegistrationChannelsClient,
-} from '../../../services/registrationChannels'
+import { createRegistrationChannelsClient } from '../../../services/registrationChannels'
+import { createRegistrationChannels } from '../../../services/registrationChannelState'
 import { createDeviceDemo } from '../../../../demo/devices/state'
 import { generateEnrollmentPassword } from '../../devices/clients/enrollment'
 import { mdmKey, type MdmRuntime } from '../../../context'

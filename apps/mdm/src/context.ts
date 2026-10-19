@@ -1,4 +1,4 @@
-import type { createRegistrationChannels } from './services/registrationChannels'
+import type { createRegistrationChannels } from './services/registrationChannelState'
 import { inject, type InjectionKey } from 'vue'
 import type { IdentitySession } from '@rss/auth'
 import type { HttpTransport } from '@rss/api/mdm'

@@ -25,10 +25,8 @@ import { createSecurityClients } from './features/security/client'
 import { createOperationsClients } from './features/operations/client'
 import { createOnboardingClients } from './features/enrollment/client'
 import App from './App.vue'
-import {
-  createRegistrationChannels,
-  createRegistrationChannelsClient,
-} from './services/registrationChannels'
+import { createRegistrationChannelsClient } from './services/registrationChannels'
+import { createRegistrationChannels } from './services/registrationChannelState'
 import { settingsFeature } from './features/settings/routes'
 import { createSettingsClients } from './features/settings/client'
 import { operationsFeature } from './features/operations/routes'

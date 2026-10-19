@@ -5,10 +5,10 @@ import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { networkErrorForTest } from '@rss/api/testing'
 import {
   createRegistrationChannelsClient,
-  createRegistrationChannels,
   decodeChannels,
   registrationChannels,
 } from './registrationChannels'
+import { createRegistrationChannels } from './registrationChannelState'
 const tenant = '11111111-1111-4111-8111-111111111111',
   instance = '44444444-4444-4444-8444-444444444444',
   principal = '22222222-2222-4222-8222-222222222222'

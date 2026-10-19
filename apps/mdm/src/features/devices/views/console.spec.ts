@@ -1,9 +1,7 @@
 import { shallowRef } from 'vue'
 import { runtimeKey, type IdentitySession } from '@rss/auth'
-import {
-  createRegistrationChannels,
-  createRegistrationChannelsClient,
-} from '../../../services/registrationChannels'
+import { createRegistrationChannelsClient } from '../../../services/registrationChannels'
+import { createRegistrationChannels } from '../../../services/registrationChannelState'
 import { afterEach, expect, it, vi } from 'vitest'
 import { flushPromises, mount, DOMWrapper, type VueWrapper } from '@vue/test-utils'
 import { createRouter, createMemoryHistory, RouterView } from 'vue-router'
