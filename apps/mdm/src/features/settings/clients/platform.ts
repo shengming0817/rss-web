@@ -1,0 +1,271 @@
+import { operationReceipt, origin, positive, sha256 } from './value'
+import type { HttpTransport } from '@rss/api/mdm'
+import {
+  array,
+  boolean,
+  closed,
+  count,
+  enumeration,
+  nullable,
+  string,
+  unique,
+  uuid,
+} from '../../../services/decode'
+
+export function tenant(value: unknown) {
+  const v = closed(value, [
+    'tenantId',
+    'management',
+    'initialEpoch',
+    'currentEpoch',
+    'name',
+    'notes',
+    'revision',
+    'deletable',
+  ])
+  return {
+    tenantId: uuid(v['tenantId']),
+    management: boolean(v['management']),
+    initialEpoch: positive(v['initialEpoch']),
+    currentEpoch: positive(v['currentEpoch']),
+    name: nullable(v['name'], string),
+    notes: nullable(v['notes'], string),
+    revision: positive(v['revision']),
+    deletable: boolean(v['deletable']),
+  }
+}
+export type Tenant = ReturnType<typeof tenant>
+export function provisioning(value: unknown) {
+  const v = closed(value, [
+    'operationId',
+    'tenantId',
+    'administratorId',
+    'hostId',
+    'revision',
+    'phase',
+    'blocked',
+    'origin',
+    'application',
+  ])
+  return {
+    operationId: uuid(v['operationId']),
+    tenantId: uuid(v['tenantId']),
+    administratorId: nullable(v['administratorId'], uuid),
+    hostId: uuid(v['hostId']),
+    revision: positive(v['revision']),
+    phase: enumeration(v['phase'], [
+      'reserved',
+      'database_ready',
+      'accounts_ready',
+      'host_pending',
+      'enabled',
+    ] as const),
+    blocked: nullable(v['blocked'], (v) =>
+      enumeration(v, [
+        'capacity',
+        'database',
+        'authentication',
+        'authorization',
+        'host_unavailable',
+        'material_missing',
+        'material_expired',
+        'material_revoked',
+        'external_authorization',
+        'outcome_unknown',
+      ] as const),
+    ),
+    origin: nullable(v['origin'], origin),
+    application: nullable(v['application'], (value) => {
+      const a = closed(value, ['requestedRevision', 'materialDigest', 'operationId', 'observation'])
+      return {
+        requestedRevision: positive(a['requestedRevision']),
+        materialDigest: sha256(a['materialDigest']),
+        operationId: uuid(a['operationId']),
+        observation: nullable(a['observation'], (value) => {
+          const o = closed(value, [
+            'hostId',
+            'processGeneration',
+            'appliedRevision',
+            'materialDigest',
+            'observedAt',
+            'failure',
+          ])
+          return {
+            hostId: uuid(o['hostId']),
+            processGeneration: uuid(o['processGeneration']),
+            appliedRevision: positive(o['appliedRevision']),
+            materialDigest: sha256(o['materialDigest']),
+            observedAt: count(o['observedAt']),
+            failure: nullable(o['failure'], string),
+          }
+        }),
+      }
+    }),
+  }
+}
+export type Provisioning = ReturnType<typeof provisioning>
+export function provisionReceipt(value: unknown) {
+  const v = closed(value, ['operationId', 'action', 'result'])
+  if (v['action'] !== 'provision') throw new Error('Wrong provisioning receipt')
+  const result = provisioning(v['result']),
+    operationId = uuid(v['operationId'])
+  if (operationId !== result.operationId) throw new Error('Wrong operation binding')
+  return { operationId, action: 'provision' as const, result }
+}
+export interface ProvisionInput {
+  name: string
+  administratorLogin: string
+  administratorPassword: string
+}
+export function registryReceipt(value: unknown) {
+  const v = closed(value, ['operationId', 'action', 'result']),
+    operationId = uuid(v['operationId'])
+  const action = enumeration(v['action'], [
+    'create',
+    'update',
+    'delete',
+    'administrator_create',
+    'provision',
+  ] as const)
+  if (action === 'provision') return provisionReceipt(value)
+  if (action === 'administrator_create') {
+    const a = closed(v['result'], ['tenantId', 'principalId', 'login', 'ruleId', 'ruleRevision'])
+    return {
+      operationId,
+      action,
+      result: {
+        tenantId: uuid(a['tenantId']),
+        principalId: uuid(a['principalId']),
+        login: string(a['login']),
+        ruleId: uuid(a['ruleId']),
+        ruleRevision: positive(a['ruleRevision']),
+      },
+    }
+  }
+  return { operationId, action, result: tenant(v['result']) }
+}
+const base = '/api/v1/tenant-administration'
+export function createPlatformClient(transport: HttpTransport) {
+  return {
+    registryOperation(id: string) {
+      return transport.request({
+        method: 'GET',
+        path: base + '/operations/{id}',
+        pathParams: { id: uuid(id) },
+        successStatus: 200,
+        decode(value) {
+          const r = registryReceipt(value)
+          if (r.operationId !== id) throw new Error('Wrong operation')
+          return r
+        },
+      })
+    },
+    administrator(tenantId: string, id: string, body: { login: string; password: string }) {
+      return transport.request({
+        method: 'POST',
+        path: base + '/tenants/{id}/administrators',
+        pathParams: { id: uuid(tenantId) },
+        headers: { 'Idempotency-Key': uuid(id) },
+        body,
+        successStatus: 200,
+        decode(value) {
+          const r = registryReceipt(value)
+          if (
+            r.operationId !== id ||
+            r.action !== 'administrator_create' ||
+            r.result.tenantId !== tenantId
+          )
+            throw new Error('Wrong administrator receipt')
+          return r
+        },
+      })
+    },
+    remove(tenantId: string, id: string, expectedRevision: number) {
+      return transport.request({
+        method: 'DELETE',
+        path: base + '/tenants/{id}',
+        pathParams: { id: uuid(tenantId) },
+        headers: { 'Idempotency-Key': uuid(id) },
+        body: { expectedRevision },
+        successStatus: 200,
+        decode(value) {
+          const r = registryReceipt(value)
+          if (r.operationId !== id || r.action !== 'delete' || r.result.tenantId !== tenantId)
+            throw new Error('Wrong deletion receipt')
+          return r
+        },
+      })
+    },
+    async tenants() {
+      return transport.request({
+        method: 'GET',
+        path: base + '/tenants',
+        successStatus: 200,
+        decode(value) {
+          return unique(array(closed(value, ['items'])['items'], tenant), (v) => v.tenantId)
+        },
+      })
+    },
+    async provisionings(after?: string) {
+      return transport.request({
+        method: 'GET',
+        path: base + '/provisionings',
+        query: { after, limit: 100 },
+        successStatus: 200,
+        decode(value) {
+          const v = closed(value, ['items', 'nextAfter'])
+          return {
+            items: unique(array(v['items'], provisionReceipt), (v) => v.operationId),
+            nextAfter: nullable(v['nextAfter'], uuid),
+          }
+        },
+      })
+    },
+    operation(id: string) {
+      return transport.request({
+        method: 'GET',
+        path: base + '/provisionings/{id}',
+        pathParams: { id: uuid(id) },
+        successStatus: 200,
+        decode: operationReceipt(id, provisionReceipt),
+      })
+    },
+    provision(id: string, input: ProvisionInput) {
+      return transport.request({
+        method: 'POST',
+        path: base + '/provisionings',
+        headers: { 'Idempotency-Key': uuid(id) },
+        body: input,
+        successStatus: [200, 202],
+        decode(value) {
+          const receipt = provisionReceipt(value)
+          if (receipt.operationId !== id) throw new Error('Wrong operation')
+          return receipt
+        },
+      })
+    },
+    update(
+      id: string,
+      operationId: string,
+      expectedRevision: number,
+      input: { name: string | null; notes: string | null },
+    ) {
+      return transport.request({
+        method: 'PUT',
+        path: base + '/tenants/{id}',
+        pathParams: { id: uuid(id) },
+        headers: { 'Idempotency-Key': uuid(operationId) },
+        body: { expectedRevision, ...input },
+        successStatus: 200,
+        decode(value) {
+          const v = closed(value, ['operationId', 'action', 'result'])
+          if (v['operationId'] !== operationId || v['action'] !== 'update')
+            throw new Error('Wrong receipt')
+          const result = tenant(v['result'])
+          if (result.tenantId !== id) throw new Error('Wrong tenant')
+          return result
+        },
+      })
+    },
+  }
+}

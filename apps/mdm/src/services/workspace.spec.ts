@@ -38,7 +38,14 @@ it('rejects mock data in production and never calls a fallback', async () => {
 it('validates the static host identity and closed module data', () => {
   const tenant = '11111111-1111-4111-8111-111111111111'
   expect(
-    decodeMdmConfig({ tenant, canonicalOrigin: 'https://mdm.test' }, 'https://mdm.test').tenant,
+    decodeMdmConfig(
+      {
+        tenant,
+        managementTenant: '99999999-9999-4999-8999-999999999999',
+        canonicalOrigin: 'https://mdm.test',
+      },
+      'https://mdm.test',
+    ).tenant,
   ).toBe(tenant)
   for (const value of [
     null,
@@ -58,4 +65,21 @@ it('validates the static host identity and closed module data', () => {
     },
   ])
     expect(() => decodeWorkspace(value)).toThrow()
+})
+
+it('rejects the retired host shape, identical scopes and unexpected config keys', () => {
+  const tenant = '11111111-1111-4111-8111-111111111111',
+    origin = 'https://mdm.test'
+  for (const value of [
+    { tenant, canonicalOrigin: origin },
+    { tenant, managementTenant: tenant, canonicalOrigin: origin },
+    { tenant, managementTenant: 'invalid', canonicalOrigin: origin },
+    {
+      tenant,
+      managementTenant: '22222222-2222-4222-8222-222222222222',
+      canonicalOrigin: origin,
+      claim: 'token',
+    },
+  ])
+    expect(() => decodeMdmConfig(value, origin)).toThrow()
 })

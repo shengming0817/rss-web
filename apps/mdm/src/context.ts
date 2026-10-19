@@ -7,6 +7,8 @@ import type { createDeviceClients } from './features/devices/client'
 import type { createSoftwareClients } from './features/software/client'
 import type { createSecurityClients } from './features/security/client'
 import type { createOperationsClients } from './features/operations/client'
+import type { createSettingsClients } from './features/settings/client'
+import type { Realm } from './features/settings/clients/catalog'
 import type { createOnboardingClients } from './features/enrollment/client'
 export interface MdmRuntime {
   session: IdentitySession
@@ -18,6 +20,10 @@ export interface MdmRuntime {
   software: ReturnType<typeof createSoftwareClients>
   security: ReturnType<typeof createSecurityClients>
   operations: ReturnType<typeof createOperationsClients>
+  settings: ReturnType<typeof createSettingsClients>
+  realm: Realm
+  businessTenant: string
+  managementTenant: string
   tenant: string
   demo: boolean
 }

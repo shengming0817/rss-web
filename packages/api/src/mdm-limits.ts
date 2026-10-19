@@ -8,6 +8,12 @@ export const isMdmContentRequest = (method: string, path: string) =>
 /** Current management ingress budgets, shared with the HTTP demo. */
 export function mdmJsonBodyLimit(method: string, path: string) {
   if (method === 'POST') {
+    if (
+      /^\/api\/v1\/apple\/materials\/(?:apns|profile|managed_account)\/(?:keys|certificates)$/.test(
+        path,
+      )
+    )
+      return 256 * 1024
     if (/^\/api\/v1\/(?:policies\/[^/]+|resources\/[^/]+)$/.test(path)) return 8 * 1024 * 1024
     if (/^\/api\/v1\/devices\/[^/]+\/operations$/.test(path)) return 16 * 1024 * 1024
     if (/^\/api\/v1\/pki\/(?:rotations|crls)$/.test(path)) return 64 * 1024 * 1024

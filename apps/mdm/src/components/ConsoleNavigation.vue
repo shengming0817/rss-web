@@ -3,15 +3,17 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../context'
-import { navigation, detailParents } from './navigation'
+import { navigation, platformNavigation, detailParents } from './navigation'
 defineProps<{ collapsed?: boolean; canManageAgent: boolean }>()
 const emit = defineEmits<{ navigate: [] }>()
 const { t } = useI18n(),
   route = useRoute(),
   runtime = useMdm()
+const sections = computed(() => (runtime.realm === 'platform' ? platformNavigation : navigation))
 const active = computed(() => detailParents[String(route.name)] ?? String(route.name))
 const group = computed(
-  () => navigation.find((section) => section.items.some((item) => item.name === active.value))?.id,
+  () =>
+    sections.value.find((section) => section.items.some((item) => item.name === active.value))?.id,
 )
 </script>
 <template>
@@ -28,7 +30,7 @@ const group = computed(
       ><span class="console-nav-symbol" aria-hidden="true">◫</span
       ><span class="console-nav-label">{{ t('console.overview') }}</span></RouterLink
     >
-    <div v-for="section in navigation" :key="section.id" class="console-nav-section">
+    <div v-for="section in sections" :key="section.id" class="console-nav-section">
       <RouterLink
         class="console-nav-primary"
         :class="{ 'is-current': group === section.id }"
@@ -36,7 +38,7 @@ const group = computed(
         :to="{ name: section.items[0].name, params: { tenant: runtime.tenant } }"
         @click="emit('navigate')"
         ><span class="console-nav-symbol" aria-hidden="true">{{
-          { devices: '▱', policies: '◇', software: '▦', security: '⬡', operations: '⊞' }[section.id]
+          section.id === 'settings' ? '⚙' : '⊞'
         }}</span
         ><span class="console-nav-label">{{ t(section.label) }}</span></RouterLink
       >
@@ -51,7 +53,7 @@ const group = computed(
         >
       </div>
     </div>
-    <div v-if="!collapsed" class="console-nav-footer">
+    <div v-if="!collapsed && runtime.realm === 'tenant'" class="console-nav-footer">
       <RouterLink
         :to="{ name: 'operations-approvals', params: { tenant: runtime.tenant } }"
         @click="emit('navigate')"
@@ -66,5 +68,8 @@ const group = computed(
         >{{ t('registration.self') }}</RouterLink
       >
     </div>
+    <a :href="runtime.realm === 'platform' ? '/' : '/platform'">{{
+      t(runtime.realm === 'platform' ? 'settings.businessEntry' : 'settings.platform')
+    }}</a>
   </nav>
 </template>

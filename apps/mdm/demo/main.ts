@@ -8,7 +8,11 @@ document.body.prepend(controls)
 const runtime = startMdm(
   createIdentityTransport(),
   { canonicalOrigin: window.location.origin, oidcEnabled: false },
-  TENANT,
+  {
+    canonicalOrigin: window.location.origin,
+    tenant: TENANT,
+    managementTenant: '99999999-9999-4999-8999-999999999999',
+  },
   true,
 )
 

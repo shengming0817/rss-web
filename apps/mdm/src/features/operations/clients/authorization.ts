@@ -19,6 +19,7 @@ export const devicePermissions = [
   'inventory_assign',
   'enrollment',
   'credentials',
+  'device_unmanage',
   'device_wipe',
   'configuration_write',
   'windows_mi_execute',
@@ -33,6 +34,21 @@ export const devicePermissions = [
   'operation_cancel',
 ] as const
 export const tenantPermissions = [
+  'webhook_read',
+  'webhook_write',
+  'webhook_replay',
+  'tenant_create',
+  'tenant_read',
+  'tenant_update',
+  'tenant_delete',
+  'tenant_administrator_create',
+  'identity_accounts_manage',
+  'identity_providers_manage',
+  'storage_configuration_read',
+  'storage_configuration_write',
+  'registration_configuration_read',
+  'registration_configuration_write',
+  'audit_read',
   'runtime_diagnostics_read',
   'inventory_sensitive_read',
   'inventory_fields_write',
@@ -227,7 +243,13 @@ export function departments(value: unknown) {
     },
   }
 }
-export function createAuthorizationClient(transport: HttpTransport, tenant: string) {
+export function createAuthorizationClient(
+  transport: HttpTransport,
+  tenant: string,
+  realm: 'tenant' | 'platform' = 'tenant',
+) {
+  const prefix =
+    realm === 'platform' ? '/api/v1/tenant-administration/authorization' : '/api/v1/authorization'
   function list<T>(path: string, decode: (v: unknown) => T, after?: string) {
     return transport.request({
       method: 'GET',
@@ -252,7 +274,7 @@ export function createAuthorizationClient(transport: HttpTransport, tenant: stri
     count(body.expectedRevision)
     return transport.request({
       method: 'PUT',
-      path: `/api/v1/authorization/${kind}/{id}`,
+      path: `${prefix}/${kind}/{id}`,
       pathParams: { id },
       body,
       successStatus: 200,
@@ -276,7 +298,7 @@ export function createAuthorizationClient(transport: HttpTransport, tenant: stri
   async function memberPage(id: string, offset = 0, expectedRevision?: number) {
     return transport.request({
       method: 'GET',
-      path: '/api/v1/authorization/user-groups/{id}/members',
+      path: `${prefix}/user-groups/{id}/members`,
       pathParams: { id },
       query: { offset, expectedRevision },
       successStatus: 200,
@@ -320,7 +342,7 @@ export function createAuthorizationClient(transport: HttpTransport, tenant: stri
     effective: () =>
       transport.request({
         method: 'GET',
-        path: '/api/v1/authorization',
+        path: `${prefix}`,
         successStatus: 200,
         decode(value) {
           const v = closed(value, ['instanceId', 'tenantId', 'principalId', 'grants'])
@@ -362,14 +384,14 @@ export function createAuthorizationClient(transport: HttpTransport, tenant: stri
           }
         },
       }),
-    findRule: (id: string) => find('/api/v1/authorization/rules', (v) => rule(v, tenant), id),
-    findGroup: (id: string) => find('/api/v1/authorization/user-groups', summary, id),
-    rules: (after?: string) => list('/api/v1/authorization/rules', (v) => rule(v, tenant), after),
-    groups: (after?: string) => list('/api/v1/authorization/user-groups', summary, after),
+    findRule: (id: string) => find(`${prefix}/rules`, (v) => rule(v, tenant), id),
+    findGroup: (id: string) => find(`${prefix}/user-groups`, summary, id),
+    rules: (after?: string) => list(`${prefix}/rules`, (v) => rule(v, tenant), after),
+    groups: (after?: string) => list(`${prefix}/user-groups`, summary, after),
     departments: () =>
       transport.request({
         method: 'GET',
-        path: '/api/v1/authorization/departments',
+        path: `${prefix}/departments`,
         successStatus: 200,
         decode: departments,
       }),

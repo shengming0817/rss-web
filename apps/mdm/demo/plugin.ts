@@ -1,3 +1,4 @@
+import { createSettingsDemo } from './settings'
 import { createOnboardingDemo } from './enrollment'
 import type { Plugin } from 'vite'
 import { mdmJsonBodyLimit, MDM_CONTENT_BODY_LIMIT, isMdmContentRequest } from '@rss/api/mdm-limits'
@@ -13,6 +14,7 @@ export function demoPlugin(): Plugin {
       return html.replace('/src/main.ts', '/demo/main.ts')
     },
     configureServer(server) {
+      const settings = createSettingsDemo()
       const devices = createDeviceDemo()
       const automation = createAutomationDemo(devices)
       devices.bindAuthorization(automation.authorization.can)
@@ -24,6 +26,7 @@ export function demoPlugin(): Plugin {
       const scenario = createScenario(
         [
           (request) => automation.authorization.guard(request, devices.batches()),
+          settings.handle,
           onboarding.handle,
           publication.handle,
           imports.handle,
@@ -31,6 +34,7 @@ export function demoPlugin(): Plugin {
           devices.handle,
         ],
         () => {
+          settings.reset()
           onboarding.reset()
           devices.reset()
           automation.reset()

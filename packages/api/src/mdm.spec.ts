@@ -429,3 +429,46 @@ it('dispatches the formal operations directory with its exact filters and reject
     '/api/v1/collection-blueprints',
   ])
 })
+
+it('accepts only the explicit provisioning status set and treats readiness as a public GET', async () => {
+  const instance = axios.create(),
+    mock = new AxiosMockAdapter(instance)
+  vi.spyOn(axios, 'create').mockReturnValueOnce(instance)
+  const transport = createMdmTransport(),
+    path = '/api/v1/tenant-administration/provisionings'
+  for (const status of [200, 202]) {
+    mock.onPost(path).reply(status, { accepted: true })
+    await expect(
+      transport.request({
+        method: 'POST',
+        path,
+        body: {},
+        successStatus: [200, 202],
+        decode: (v) => v,
+      }),
+    ).resolves.toEqual({ accepted: true })
+  }
+  mock.onPost(path).reply(201, { accepted: true })
+  await expect(
+    transport.request({
+      method: 'POST',
+      path,
+      body: {},
+      successStatus: [200, 202],
+      decode: (v) => v,
+    }),
+  ).rejects.toMatchObject({ cause: 'protocol' })
+  mock.onGet('/readyz').reply(200, { ready: true, observation: null })
+  await expect(
+    transport.request({ method: 'GET', path: '/readyz', successStatus: 200, decode: (v) => v }),
+  ).resolves.toMatchObject({ ready: true })
+  for (const options of [
+    { method: 'POST' as const, body: {} },
+    { method: 'GET' as const, headers: { 'X-CSRF-Token': 'secret' } },
+  ])
+    await expect(
+      transport.request({ ...options, path: '/readyz', successStatus: 200, decode: (v) => v }),
+    ).rejects.toMatchObject({ cause: 'client' })
+  expect(mock.history.get).toHaveLength(1)
+  vi.restoreAllMocks()
+})

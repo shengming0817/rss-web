@@ -6,7 +6,7 @@ import AlertRulesView from './AlertRulesView.vue'
 import ApprovalsView from './ApprovalsView.vue'
 import AuditView from './AuditView.vue'
 import AlertsView from './AlertsView.vue'
-import { mount, flushPromises, DOMWrapper } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { decodeMdmError } from '@rss/api/mdm'
@@ -19,8 +19,6 @@ import { createDeviceDemo } from '../../../../demo/devices/state'
 import OrganizationView from './OrganizationView.vue'
 import AuthorizationView from './AuthorizationView.vue'
 import ReportsView from './ReportsView.vue'
-import IntegrationsView from './IntegrationsView.vue'
-import SettingsView from './SettingsView.vue'
 async function fixture(component: Component) {
   const devices = createDeviceDemo(),
     automation = createAutomationDemo(devices),
@@ -127,38 +125,6 @@ it('renders partial metrics and explicit report acceptance without fabricated co
   expect(f.wrapper.text()).toContain('accepted')
   f.wrapper.unmount()
 })
-it('keeps unknown connector writes locked until exact replay', async () => {
-  const f = await fixture(IntegrationsView)
-  await f.wrapper.get('[data-testid="connector-name"]').setValue('Service desk')
-  await f.wrapper
-    .get('[data-testid="connector-endpoint"]')
-    .setValue('https://itsm.example.test/events')
-  f.server.set('unknown')
-  await f.wrapper.get('[data-testid="save-connector"]').trigger('click')
-  await flushPromises()
-  expect(f.wrapper.get('[data-testid="save-connector"]').element.matches(':disabled')).toBe(true)
-  f.server.set('normal')
-  await f.wrapper.get('[data-testid="replay-write"]').trigger('click')
-  await flushPromises()
-  expect(f.wrapper.text()).toContain('Service desk')
-  f.wrapper.unmount()
-})
-it('separates saved and active configuration and maintenance effect facts', async () => {
-  const f = await fixture(SettingsView)
-  await f.wrapper.get('[data-testid="configuration-name"]').setValue('Updated')
-  await f.wrapper.get('[data-testid="save-configuration"]').trigger('click')
-  await flushPromises()
-  expect(f.wrapper.text()).toContain('saved')
-  await f.wrapper.get('[data-testid="activate-configuration"]').trigger('click')
-  await confirmDialog()
-  await flushPromises()
-  expect(f.wrapper.text()).toContain('restart_required')
-  await f.wrapper.get('[data-testid="start-maintenance"]').trigger('click')
-  await flushPromises()
-  expect(f.wrapper.text()).toContain('unknown')
-  f.wrapper.unmount()
-})
-
 it('saves and edits alert rules through the same HTTP owner', async () => {
   const f = await fixture(AlertRulesView)
   await f.wrapper.get('[data-testid="alert-rule-name"]').setValue('Queue monitor')
@@ -291,33 +257,7 @@ it('reconciles completed reports after unknown accepted receipts are replayed', 
   expect(f.wrapper.text()).toContain('completed')
   f.wrapper.unmount()
 })
-it('reconciles active configuration and completed maintenance after unknown replay', async () => {
-  const f = await fixture(SettingsView)
-  await f.wrapper.get('[data-testid="save-configuration"]').trigger('click')
-  await flushPromises()
-  f.server.set('unknown')
-  await f.wrapper.get('[data-testid="activate-configuration"]').trigger('click')
-  await confirmDialog()
-  await flushPromises()
-  f.automation.tick({ kind: 'clock', at: f.automation.now() + 100 }, 'normal')
-  f.server.set('normal')
-  await f.wrapper.get('[data-testid="replay-write"]').trigger('click')
-  await flushPromises()
-  expect(f.wrapper.text()).not.toContain('restart_required')
-  expect(f.wrapper.text()).toContain('active')
-  f.server.set('unknown')
-  await f.wrapper.get('[data-testid="start-maintenance"]').trigger('click')
-  await flushPromises()
-  f.automation.tick({ kind: 'clock', at: f.automation.now() + 100 }, 'normal')
-  f.server.set('normal')
-  await f.wrapper.get('[data-testid="replay-write"]').trigger('click')
-  await flushPromises()
-  expect(f.wrapper.text()).toContain('completed')
-  expect(f.wrapper.text()).toContain('unverified')
-  expect(f.wrapper.findAll('button').some((b) => b.text() === '暂停')).toBe(false)
-  f.wrapper.unmount()
-})
-it('opens group/report/job links and follows target query changes', async () => {
+it('opens group/report links and follows target query changes', async () => {
   const group = await fixture(OrganizationView),
     id = crypto.randomUUID(),
     other = crypto.randomUUID()
@@ -355,25 +295,8 @@ it('opens group/report/job links and follows target query changes', async () => 
   await flushPromises()
   expect(report.wrapper.text()).toContain(r.id)
   report.wrapper.unmount()
-  const settings = await fixture(SettingsView),
-    job = await settings.clients.admin.maintenance.start({
-      operationId: crypto.randomUUID(),
-      expectedRevision: 0,
-      input: { kind: 'backup', target: 'linked-backup', method: 'full' },
-    })
-  await settings.router.push({ path: '/', query: { id: job.id } })
-  await flushPromises()
-  expect(settings.wrapper.get('[role=tabpanel][data-state=active]').text()).toContain(
-    'linked-backup',
-  )
-  expect(
-    settings.wrapper
-      .findAll('h3')
-      .find((heading) => heading.text() === job.id)!
-      .isVisible(),
-  ).toBe(true)
-  settings.wrapper.unmount()
 })
+
 it('locates a native rule beyond page one and reports missing/tombstone targets', async () => {
   const f = await fixture(AuthorizationView),
     e = await f.clients.authorization.effective()
@@ -459,62 +382,6 @@ it('does not transfer a closed ticket to another alert when its closure read fai
   f.wrapper.unmount()
 })
 
-it('refreshes a connection test to its explicit terminal fact', async () => {
-  const f = await fixture(IntegrationsView)
-  await f.wrapper.get('[data-testid="connector-name"]').setValue('Probe')
-  await f.wrapper
-    .get('[data-testid="connector-endpoint"]')
-    .setValue('https://probe.example.test/events')
-  await f.wrapper.get('[data-testid="save-connector"]').trigger('click')
-  await flushPromises()
-  await f.wrapper
-    .findAll('button')
-    .find((b) => b.text() === '受理连接测试')!
-    .trigger('click')
-  await flushPromises()
-  expect(f.wrapper.text()).toContain('queued')
-  f.automation.tick({ kind: 'clock', at: f.automation.now() + 100 }, 'normal')
-  await f.wrapper.get('[data-testid="refresh-attempt"]').trigger('click')
-  await flushPromises()
-  expect(f.wrapper.text()).toContain('passed')
-  f.wrapper.unmount()
-})
-
-it('clears optional public references to null through the forms', async () => {
-  const f = await fixture(IntegrationsView)
-  await f.wrapper.get('[data-testid="connector-name"]').setValue('Desk')
-  await f.wrapper.get('[data-testid="connector-endpoint"]').setValue('https://desk.example.test')
-  const credential = f.wrapper
-    .findAll('label')
-    .find((v) => v.text() === '凭据引用')!
-    .get('input')
-  await credential.setValue('binding-1')
-  await f.wrapper.get('[data-testid="save-connector"]').trigger('click')
-  await flushPromises()
-  await credential.setValue('')
-  await f.wrapper.get('[data-testid="save-connector"]').trigger('click')
-  await flushPromises()
-  expect((await f.clients.admin.connectors.list()).items[0]!.definition.credentialRef).toBeNull()
-  f.wrapper.unmount()
-  const settings = await fixture(SettingsView)
-  await settings.wrapper
-    .findAll('label')
-    .find((v) => v.text() === '证书引用')!
-    .get('input')
-    .setValue('')
-  await settings.wrapper
-    .findAll('label')
-    .find((v) => v.text() === 'APNs 凭据引用')!
-    .get('input')
-    .setValue('')
-  await settings.wrapper.get('[data-testid="save-configuration"]').trigger('click')
-  await flushPromises()
-  expect((await settings.clients.admin.settings.read()).values).toMatchObject({
-    certificateRef: null,
-    apnsRef: null,
-  })
-  settings.wrapper.unmount()
-})
 it('shows the exact device scope in both draft grants and effective authority', async () => {
   const f = await fixture(AuthorizationView),
     effective = await f.clients.authorization.effective(),
@@ -551,137 +418,6 @@ it('shows the exact device scope in both draft grants and effective authority', 
   ).toHaveLength(2)
   f.wrapper.unmount()
 })
-it('switches connector targets and clears unknown receipts, drafts and failed targets', async () => {
-  const f = await fixture(IntegrationsView),
-    a = crypto.randomUUID(),
-    b = crypto.randomUUID()
-  for (const [id, name] of [
-    [a, 'Connector A'],
-    [b, 'Connector B'],
-  ])
-    await f.clients.admin.connectors.save(id!, {
-      operationId: crypto.randomUUID(),
-      expectedRevision: 0,
-      input: {
-        name: name!,
-        kind: 'itsm',
-        endpoint: 'https://desk.example.test',
-        credentialRef: null,
-        enabled: true,
-      },
-    })
-  await f.router.push({ path: '/', query: { id: a } })
-  await flushPromises()
-  expect((f.wrapper.get('[data-testid="connector-name"]').element as HTMLInputElement).value).toBe(
-    'Connector A',
-  )
-  f.server.set('unknown')
-  await f.wrapper.get('[data-testid="save-connector"]').trigger('click')
-  await flushPromises()
-  expect(f.wrapper.find('[data-testid="replay-write"]').exists()).toBe(true)
-  f.server.set('normal')
-  await f.router.push({ path: '/', query: { id: b } })
-  await flushPromises()
-  expect((f.wrapper.get('[data-testid="connector-name"]').element as HTMLInputElement).value).toBe(
-    'Connector B',
-  )
-  expect(f.wrapper.find('[data-testid="replay-write"]').exists()).toBe(false)
-  await f.router.push({ path: '/', query: { id: crypto.randomUUID() } })
-  await flushPromises()
-  expect((f.wrapper.get('[data-testid="connector-name"]').element as HTMLInputElement).value).toBe(
-    '',
-  )
-  expect(f.wrapper.get('[data-testid="save-connector"]').element.matches(':disabled')).toBe(true)
-  f.wrapper.unmount()
-})
-
-it('does not apply a connector read after its route target has changed', async () => {
-  const f = await fixture(IntegrationsView),
-    a = crypto.randomUUID(),
-    b = crypto.randomUUID()
-  for (const [id, name] of [
-    [a, 'Slow A'],
-    [b, 'Current B'],
-  ])
-    await f.clients.admin.connectors.save(id!, {
-      operationId: crypto.randomUUID(),
-      expectedRevision: 0,
-      input: {
-        name: name!,
-        kind: 'itsm',
-        endpoint: 'https://desk.example.test',
-        credentialRef: null,
-        enabled: true,
-      },
-    })
-  let release!: () => void
-  const delayed = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  f.inspect((o) => (o.method === 'GET' && o.path.endsWith(a) ? delayed : undefined))
-  await f.router.push({ path: '/', query: { id: a } })
-  await flushPromises()
-  await f.router.push({ path: '/', query: { id: b } })
-  await flushPromises()
-  expect((f.wrapper.get('[data-testid="connector-name"]').element as HTMLInputElement).value).toBe(
-    'Current B',
-  )
-  release()
-  await flushPromises()
-  expect((f.wrapper.get('[data-testid="connector-name"]').element as HTMLInputElement).value).toBe(
-    'Current B',
-  )
-  f.wrapper.unmount()
-})
-
-async function confirmDialog() {
-  await flushPromises()
-  await new DOMWrapper(document.body)
-    .get('[role=alertdialog]')
-    .findAll('button')
-    .find((b) => b.text() === '确认')!
-    .trigger('click')
-  await flushPromises()
-}
-
-it('keeps diagnostics reachable without clearing an unknown maintenance operation', async () => {
-  const f = await fixture(SettingsView)
-  const mutations: unknown[] = []
-  f.inspect((request) => {
-    if (request.method === 'POST' && request.path.includes('maintenance'))
-      mutations.push(structuredClone(request.body))
-  })
-  try {
-    const tab = (label: string) =>
-      f.wrapper.findAll('[role=tab]').find((button) => button.text() === label)!
-    await tab('维护与升级活动').trigger('mousedown', { button: 0, ctrlKey: false })
-    await f.wrapper.get('[role=tabpanel][data-state=active] summary').trigger('click')
-    f.server.set('unknown')
-    await f.wrapper.get('[data-testid=start-maintenance]').trigger('click')
-    await flushPromises()
-    expect(mutations).toHaveLength(1)
-    expect(tab('依赖与运行诊断').attributes('disabled')).toBeUndefined()
-    await tab('依赖与运行诊断').trigger('mousedown', { button: 0, ctrlKey: false })
-    await flushPromises()
-    const diagnostics = f.wrapper.get('[role=tabpanel][data-state=active]')
-    expect(diagnostics.text()).toContain('依赖与运行诊断')
-    await diagnostics.get('button').trigger('click')
-    await flushPromises()
-    expect(mutations).toHaveLength(1)
-    expect(f.wrapper.get('[data-testid=replay-write]').isVisible()).toBe(true)
-    await tab('维护与升级活动').trigger('mousedown', { button: 0, ctrlKey: false })
-    await flushPromises()
-    expect(f.wrapper.get('[data-testid=start-maintenance]').element.matches(':disabled')).toBe(true)
-    f.server.set('normal')
-    await f.wrapper.get('[data-testid=replay-write]').trigger('click')
-    await flushPromises()
-    expect(mutations).toHaveLength(2)
-    expect(mutations[1]).toEqual(mutations[0])
-  } finally {
-    f.wrapper.unmount()
-  }
-})
-
 it('selects the delegation panel for audit deep links and returns to groups on query change', async () => {
   const f = await fixture(OrganizationView)
   try {
@@ -709,53 +445,6 @@ it('selects the delegation panel for audit deep links and returns to groups on q
   } finally {
     f.wrapper.unmount()
   }
-})
-it('saves explicit deployment references and pauses/resumes/cancels one maintenance command', async () => {
-  const f = await fixture(SettingsView)
-  const input = f.wrapper.get('[data-testid=configuration-name]')
-  const configuration = new DOMWrapper(input.element.closest('form')!)
-  await input.setValue('Configured product')
-  await configuration.findAll('input')[1]!.setValue('https://mdm.example.test')
-  await configuration.findAll('input')[2]!.setValue('cert-current')
-  await configuration.findAll('input')[3]!.setValue('apns-current')
-  await configuration.trigger('submit')
-  await flushPromises()
-  expect(await f.clients.admin.settings.read()).toMatchObject({
-    values: {
-      name: 'Configured product',
-      publicOrigin: 'https://mdm.example.test',
-      certificateRef: 'cert-current',
-      apnsRef: 'apns-current',
-    },
-  })
-  const click = async (text: string) => {
-    await f.wrapper
-      .findAll('button')
-      .find((b) => b.text() === text)!
-      .trigger('click')
-    await flushPromises()
-  }
-  await f.wrapper
-    .findAll('[role=tab]')
-    .find((b) => b.text().includes('维护'))!
-    .trigger('click')
-  await flushPromises()
-  const maintenance = new DOMWrapper(
-    f.wrapper.get('[data-testid=start-maintenance]').element.closest('form')!,
-  )
-  await maintenance.findAll('select')[0]!.setValue('agent_upgrade')
-  await maintenance.get('input').setValue('2.0')
-  await maintenance.findAll('select')[1]!.setValue('delta')
-  await maintenance.trigger('submit')
-  await flushPromises()
-  await click('暂停')
-  await click('恢复')
-  await click('取消尚未执行的请求')
-  await confirmDialog()
-  await flushPromises()
-  expect(f.wrapper.text()).toContain('cancelled')
-  expect(f.wrapper.text()).toContain('unknown')
-  f.wrapper.unmount()
 })
 it('authors an explicit department grant and adopts a concurrent revision before deleting it', async () => {
   const f = await fixture(AuthorizationView)

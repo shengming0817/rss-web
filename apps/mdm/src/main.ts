@@ -12,7 +12,7 @@ async function start() {
     successStatus: 200,
     decode: (value) => decodeMdmConfig(value, window.location.origin),
   })
-  startMdm(transport, config, mdm.tenant, false)
+  startMdm(transport, config, mdm, false)
 }
 void start().catch(() => {
   const root = document.getElementById('app')

@@ -19,7 +19,9 @@ export function usePermission(read: Permission, write: Permission) {
     try {
       const value = await runtime.operations.authorization.effective()
       if (own === generation && value.principalId === state.identity?.principalId)
-        grants.value = value.grants.filter((g) => g.scope.kind === 'tenant').map((g) => g.operation)
+        grants.value = value.grants
+          .filter((g) => g.scope.kind === 'tenant' || g.scope.kind === 'all_devices')
+          .map((g) => g.operation)
     } catch {
       /* No authority is inferred from failed reads. */
     } finally {

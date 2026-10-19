@@ -14,7 +14,7 @@ interface RequestBase {
 }
 
 export interface RequestOptions<T> extends RequestBase {
-  successStatus: 200 | 201 | 202
+  successStatus: 200 | 201 | 202 | readonly [200 | 201 | 202, ...(200 | 201 | 202)[]]
   responseType?: 'arraybuffer'
   decode: Decoder<T>
 }

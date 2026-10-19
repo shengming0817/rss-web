@@ -1,3 +1,4 @@
+import { settingsZh, settingsEn } from './features/settings/i18n'
 import { consoleZh, consoleEn } from './components/messages'
 import { onboardingZh, onboardingEn } from './features/enrollment/i18n'
 import { registrationZh, registrationEn } from './features/devices/i18n-registration'
@@ -97,5 +98,7 @@ export function mdmI18n() {
   i18n.global.mergeLocaleMessage('en-US', { security: securityEn })
   i18n.global.mergeLocaleMessage('zh-CN', { operations: operationsZh })
   i18n.global.mergeLocaleMessage('en-US', { operations: operationsEn })
+  i18n.global.mergeLocaleMessage('zh-CN', { settings: settingsZh })
+  i18n.global.mergeLocaleMessage('en-US', { settings: settingsEn })
   return i18n
 }

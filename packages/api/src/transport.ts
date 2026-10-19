@@ -39,7 +39,7 @@ function hasUnsafeUrlCharacter(value: string): boolean {
 
 function resolvePath(path: string, params: Readonly<Record<string, string | number>> = {}): string {
   if (
-    !path.startsWith('/api/') ||
+    (!path.startsWith('/api/') && path !== '/readyz') ||
     path.startsWith('//') ||
     path.includes('://') ||
     hasUnsafeUrlCharacter(path) ||
@@ -121,7 +121,10 @@ export async function execute<T>(
       }
       throw decodeError(response.status, value)
     }
-    if (response.status !== options.successStatus) throw protocolError(response.status)
+    const accepted = Array.isArray(options.successStatus)
+      ? options.successStatus.includes(response.status)
+      : response.status === options.successStatus
+    if (!accepted) throw protocolError(response.status)
     if (options.successStatus === 204) return undefined
     try {
       if (options.responseType === 'arraybuffer') {

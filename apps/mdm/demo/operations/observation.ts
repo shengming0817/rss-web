@@ -9,12 +9,10 @@ export function observationTarget(
   const mappings: [RegExp, OperationsReference['kind']][] = [
     [/^\/api\/v1\/authorization\/rules\/([^/]+)/, 'authorization_rule'],
     [/^\/api\/v1\/authorization\/user-groups\/([^/]+)/, 'user_group'],
-    [/^\/api\/v1\/mdm-candidate\/integrations\/connectors\/([^/]+)/, 'connector'],
     [/^\/api\/(?:v1\/devices|v1\/mdm-candidate\/devices)\/([^/]+)/, 'device'],
     [/^\/api\/(?:v1\/policies|v1\/mdm-candidate\/policies\/assignments)\/([^/]+)/, 'policy'],
     [/^\/api\/v1\/mdm-candidate\/policies\/workflows\/([^/]+)/, 'workflow'],
     [/^\/api\/v1\/mdm-candidate\/operations\/reports\/([^/]+)/, 'report'],
-    [/^\/api\/v1\/mdm-candidate\/operations\/maintenance\/([^/]+)/, 'job'],
     [/^\/api\/v1\/mdm-candidate\/operations\/alert-rules\/([^/]+)/, 'alert_rule'],
   ]
   for (const [pattern, kind] of mappings) {
@@ -27,18 +25,7 @@ export function observationTarget(
         return null
       }
   }
-  if (/^\/api\/v1\/mdm-candidate\/operations\/settings(?:\/|$)/.test(path))
-    return { kind: 'settings', id: 'configuration', device: null, revision: null }
-  if (
-    operation &&
-    (path === '/api/v1/mdm-candidate/operations/reports' ||
-      path === '/api/v1/mdm-candidate/operations/maintenance')
-  )
-    return {
-      kind: path.endsWith('/reports') ? 'report' : 'job',
-      id: operation,
-      device: null,
-      revision: null,
-    }
+  if (operation && path === '/api/v1/mdm-candidate/operations/reports')
+    return { kind: 'report', id: operation, device: null, revision: null }
   return null
 }
