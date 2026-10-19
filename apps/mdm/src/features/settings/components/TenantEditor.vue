@@ -56,6 +56,8 @@ async function compare() {
     markCompared()
 }
 async function change(action: string, replay = false) {
+  const submittedPassword = password.value
+  password.value = ''
   const revision = replay ? pending.value!.expectedRevision : props.tenant.revision,
     target = props.tenant.tenantId
   if (action === 'update' && canUpdate.value) {
@@ -69,7 +71,7 @@ async function change(action: string, replay = false) {
       replay,
     )
   } else if (action === 'administrator' && canAdd.value) {
-    const input = { login: login.value, password: password.value }
+    const input = { login: login.value, password: submittedPassword }
     password.value = ''
     await submit(
       action,

@@ -33,6 +33,7 @@ export function useSettingsAction(target: () => string) {
     request: (id: string) => Promise<T>,
     apply: (v: T) => void,
     replay = false,
+    operationId?: string,
   ) {
     const key = target(),
       intent = JSON.stringify(publicInput),
@@ -49,7 +50,7 @@ export function useSettingsAction(target: () => string) {
       return false
     }
     return operation.runWrite(
-      () => store.submit(key, action, revision, intent, request, replay),
+      () => store.submit(key, action, revision, intent, request, replay, operationId),
       apply,
     )
   }

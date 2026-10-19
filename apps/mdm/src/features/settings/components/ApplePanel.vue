@@ -67,6 +67,10 @@ async function lookup() {
 }
 async function change(action: string, replay = false) {
   if (!canWrite.value) return
+  const importedKey = privateKey.value,
+    importedCertificate = certificate.value
+  privateKey.value = ''
+  certificate.value = ''
   const expectedRevision = replay ? pending.value!.expectedRevision : revision.value
   if (action === 'key') {
     const input = {
@@ -74,7 +78,7 @@ async function change(action: string, replay = false) {
       source:
         source.value === 'generate'
           ? { kind: 'generate' as const }
-          : { kind: 'import' as const, private_key_pem: privateKey.value },
+          : { kind: 'import' as const, private_key_pem: importedKey },
     }
     privateKey.value = ''
     await submit(
@@ -91,7 +95,7 @@ async function change(action: string, replay = false) {
     const input = {
       expectedRevision,
       keyRevision: keyRevision.value,
-      certificateChainPem: certificate.value,
+      certificateChainPem: importedCertificate,
     }
     certificate.value = ''
     await submit(
@@ -99,7 +103,7 @@ async function change(action: string, replay = false) {
       expectedRevision,
       {
         keyRevision: input.keyRevision,
-        certificateSha256: await inputDigest(input.certificateChainPem),
+        certificateSha256: inputDigest(input.certificateChainPem),
       },
       (id) => client.certificate(id, props.purpose, input),
       () => {

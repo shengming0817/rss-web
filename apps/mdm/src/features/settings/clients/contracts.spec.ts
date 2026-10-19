@@ -510,3 +510,10 @@ it('publishes only formal Agent package metadata and withdraws with the same ope
   await createManagedPackages(w.client, b).withdraw(a, c)
   expect(w.calls[0]).toMatchObject({ successStatus: 204, body: { operationId: a } })
 })
+
+it('computes file comparison identity synchronously without retaining the input', async () => {
+  const { inputDigest } = await import('./value')
+  const value = inputDigest('abc')
+  expect(typeof value).toBe('string')
+  expect(value).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
+})

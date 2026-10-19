@@ -1,3 +1,4 @@
+import { sha256 as hashInput } from '@noble/hashes/sha2.js'
 import { count, string } from '../../../services/decode'
 
 /** Public PEM/CSR may contain newlines; never use this decoder for private material output. */
@@ -43,7 +44,7 @@ export function operationReceipt<T extends { operationId: string }>(
 }
 
 /** Comparison identity only; raw imported files never enter shared operation metadata. */
-export async function inputDigest(value: string) {
-  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
-  return [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, '0')).join('')
+export function inputDigest(value: string) {
+  const bytes = hashInput(new TextEncoder().encode(value))
+  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('')
 }

@@ -472,3 +472,49 @@ it('accepts only the explicit provisioning status set and treats readiness as a 
   expect(mock.history.get).toHaveLength(1)
   vi.restoreAllMocks()
 })
+
+it('decodes the explicit unready host data contract without accepting API 503 responses as success', async () => {
+  const instance = axios.create(),
+    mock = new AxiosMockAdapter(instance)
+  vi.spyOn(axios, 'create').mockReturnValueOnce(instance)
+  const transport = createMdmTransport(),
+    observation = {
+      hostId: 'host',
+      operationId: 'original',
+      revision: 2,
+      materialDigest: 'digest',
+      processGeneration: 'generation',
+      tenantId: 'tenant',
+      instanceId: 'instance',
+    }
+  mock.onGet('/readyz').reply(503, { ready: false, observation })
+  await expect(
+    transport.request({
+      method: 'GET',
+      path: '/readyz',
+      successStatus: [200, 503],
+      decode: (v) => v,
+    }),
+  ).resolves.toEqual({ ready: false, observation })
+  mock.onGet('/api/v1/devices').reply(503, { code: 'service_unavailable' })
+  await expect(
+    transport.request({
+      method: 'GET',
+      path: '/api/v1/devices',
+      successStatus: 200,
+      decode: (v) => v,
+    }),
+  ).rejects.toMatchObject({ cause: 'wire', code: 'service_unavailable' })
+  mock.onGet('/readyz').reply(503, { code: 'service_unavailable' })
+  await expect(
+    transport.request({
+      method: 'GET',
+      path: '/readyz',
+      successStatus: [200, 503],
+      decode: () => {
+        throw new Error('Not a readiness body')
+      },
+    }),
+  ).rejects.toMatchObject({ cause: 'protocol' })
+  vi.restoreAllMocks()
+})

@@ -148,7 +148,7 @@ export function createSettingsCatalog(
       publicTransport.request({
         method: 'GET',
         path: '/readyz',
-        successStatus: 200,
+        successStatus: [200, 503],
         decode: decodeReadiness,
       }),
   }

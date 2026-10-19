@@ -542,3 +542,141 @@ it('requires reading the conflicting version and a separate explicit edit decisi
   await flushPromises()
   expect(f.settings.operations.records.has('storage')).toBe(false)
 })
+
+it('retains one PKI rotation identity and advances the revision through every phase', async () => {
+  const f = await fixture(PkiPanel)
+  let trust = {
+    version: 1,
+    origin: 'https://mdm.test',
+    tenant,
+    purpose: 'agent',
+    revision: 1,
+    issuers: [
+      {
+        digest,
+        mode: 'active',
+        certificate: 'YQ==',
+        root: 'YQ==',
+        crl: 'YQ==',
+        root_crl: 'YQ==',
+        provisioner: 'agent',
+        kid: 'kid-a',
+      },
+    ],
+  }
+  const candidate = {
+    ...trust,
+    revision: 2,
+    issuers: [...trust.issuers, { ...trust.issuers[0]!, digest: 'b'.repeat(64), mode: 'prepared' }],
+  }
+  let rotation = ''
+  f.setHandler((o) => {
+    if (o.method === 'GET') return trust
+    const input = o.body as {
+      id: string
+      expected_revision: number
+      candidate?: typeof trust
+      action?: string
+    }
+    if (!rotation) rotation = input.id
+    expect(input.id).toBe(rotation)
+    expect(input.expected_revision).toBe(trust.revision)
+    trust = input.candidate ?? { ...trust, revision: trust.revision + 1 }
+    return { operation: rotation, revision: trust.revision, state: input.action ?? 'distributing' }
+  })
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  const file = f.wrapper.get('input[type=file]')
+  Object.defineProperty(file.element, 'files', {
+    configurable: true,
+    value: [{ size: 1024, text: async () => JSON.stringify(candidate) }],
+  })
+  await file.trigger('change')
+  await flushPromises()
+  await button(f.wrapper, '导入材料').trigger('click')
+  await flushPromises()
+  for (const label of ['批准信任', '启用新版本', '退出旧版本']) {
+    await button(f.wrapper, label).trigger('click')
+    await flushPromises()
+  }
+  const writes = f.calls.filter((o) => o.method === 'POST')
+  expect(writes).toHaveLength(4)
+  expect(writes.map((o) => (o.body as { id: string }).id)).toEqual([
+    rotation,
+    rotation,
+    rotation,
+    rotation,
+  ])
+  expect(f.settings.operations.records.get('pki')?.id).toBe(rotation)
+})
+it('fences delayed public file reads before they can repopulate a new session', async () => {
+  const f = await fixture(PkiPanel)
+  let resolve!: (value: string) => void
+  const file = f.wrapper.get('input[type=file]')
+  Object.defineProperty(file.element, 'files', {
+    configurable: true,
+    value: [{ size: 10, text: () => new Promise<string>((r) => (resolve = r)) }],
+  })
+  await file.trigger('change')
+  f.state.value = { ...f.state.value, session: { id: principal } }
+  resolve('{}')
+  await flushPromises()
+  expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(0)
+  expect(button(f.wrapper, '导入材料').attributes('disabled')).toBeDefined()
+})
+it('clears an unused imported Apple key when submitting a different material action', async () => {
+  const f = await fixture(ApplePanel, { purpose: 'apns' })
+  await f.wrapper.get('select').setValue('import')
+  await f.wrapper.get('textarea').setValue('UNUSED PRIVATE KEY')
+  f.setHandler((o) =>
+    o.method === 'POST'
+      ? {
+          operationId: o.headers!['Idempotency-Key'],
+          revision: 1,
+          state: 'pending_application',
+          desiredRevision: 1,
+        }
+      : {
+          revision: 1,
+          desiredRevision: 1,
+          versions: [],
+          runtimeObservation: 'separate',
+          accountBindings: {},
+        },
+  )
+  await f.wrapper.findAll('form')[2]!.trigger('submit')
+  await flushPromises()
+  expect((f.wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('')
+})
+it('clears an unused administrator password when saving metadata', async () => {
+  const f = await fixture(TenantEditor, { tenant: row }, 'platform')
+  await f.wrapper.get('input[type=password]').setValue('UNUSED PASSWORD')
+  f.setHandler((o) => ({
+    operationId: o.headers!['Idempotency-Key'],
+    action: 'update',
+    result: row,
+  }))
+  await f.wrapper.findAll('form')[0]!.trigger('submit')
+  await flushPromises()
+  expect((f.wrapper.get('input[type=password]').element as HTMLInputElement).value).toBe('')
+})
+it('shows the current host identity when the readiness contract reports unavailable', async () => {
+  const f = await fixture(DeploymentPanel)
+  f.setHandler(() => ({
+    ready: false,
+    observation: {
+      hostId: id,
+      operationId: principal,
+      revision: 9,
+      materialDigest: digest,
+      processGeneration: id,
+      tenantId: tenant,
+      instanceId: id,
+    },
+  }))
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  expect(f.wrapper.text()).toContain('暂不可用')
+  expect(f.wrapper.text()).toContain('9')
+  expect(f.wrapper.text()).toContain(id)
+})

@@ -1,5 +1,6 @@
 import { reactive, watch } from 'vue'
 import type { IdentitySession } from '@rss/auth'
+import { uuid } from '../../services/decode'
 import { isRssApiError } from '@rss/api/mdm'
 
 export interface SettingsOperation {
@@ -38,6 +39,7 @@ export function createSettingsOperations(session: IdentitySession) {
       publicInput: string,
       request: (id: string) => Promise<T>,
       replay = false,
+      operationId?: string,
     ) {
       const previous = records.get(target)
       if (
@@ -56,7 +58,7 @@ export function createSettingsOperations(session: IdentitySession) {
           previous!.publicInput !== publicInput)
       )
         throw new Error('Restore the original input before explicit replay')
-      const id = replay ? previous!.id : crypto.randomUUID(),
+      const id = replay ? previous!.id : uuid(operationId ?? crypto.randomUUID()),
         current = generation
       const metadata = { id, target, action, expectedRevision, publicInput, queried: false }
       records.set(target, { ...metadata, state: 'submitting' })

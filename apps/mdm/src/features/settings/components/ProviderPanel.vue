@@ -170,6 +170,7 @@ async function save(replay = false) {
   }
 }
 async function revoke(replay = false) {
+  clear()
   if (!canWrite.value || !directory.value) return
   const input = {
     expectedRevision: replay ? pending.value!.expectedRevision : directory.value.revision,

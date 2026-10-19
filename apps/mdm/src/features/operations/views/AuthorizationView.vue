@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { UiButton } from '@rss/core/components'
-import { onMounted, ref, toRaw, watch } from 'vue'
+import { computed, onMounted, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { useMdm } from '../../../context'
@@ -8,6 +8,8 @@ import { useOperation } from '../../../services/useOperation'
 import {
   grant,
   permissions,
+  platformPermissions,
+  tenantAdministrationPermissions,
   devicePermissions,
   rule,
   type Rule,
@@ -26,6 +28,16 @@ const { t } = useI18n(),
   client = runtime.operations.authorization,
   route = useRoute(),
   { run, runWrite, busy, failure, uncertain } = useOperation()
+const allowedPermissions = computed(() =>
+  runtime.realm === 'platform'
+    ? [...platformPermissions]
+    : permissions.filter(
+        (p) => !(tenantAdministrationPermissions as readonly string[]).includes(p),
+      ),
+)
+const subjectKinds = computed(() =>
+  runtime.realm === 'platform' ? ['user'] : ['user', 'user_group', 'department', 'idp_group'],
+)
 const page = ref<Awaited<ReturnType<typeof client.rules>>>(),
   effective = ref<Awaited<ReturnType<typeof client.effective>>>(),
   id = ref<string>(crypto.randomUUID()),
@@ -36,8 +48,10 @@ const page = ref<Awaited<ReturnType<typeof client.rules>>>(),
   issuer = ref(''),
   configurationVersion = ref(1),
   matching = ref('exact'),
-  permission = ref<Grant['operation']>('inventory_read'),
-  scope = ref('all_devices'),
+  permission = ref<Grant['operation']>(
+    runtime.realm === 'platform' ? 'tenant_read' : 'inventory_read',
+  ),
+  scope = ref(runtime.realm === 'platform' ? 'tenant' : 'all_devices'),
   device = ref(''),
   grants = ref<Grant[]>([]),
   remote = ref<Rule | null>(),
@@ -79,6 +93,9 @@ function create() {
   id.value = crypto.randomUUID()
   revision.value = 0
   grants.value = []
+  kind.value = 'user'
+  permission.value = runtime.realm === 'platform' ? 'tenant_read' : 'inventory_read'
+  scope.value = runtime.realm === 'platform' ? 'tenant' : 'all_devices'
   subjectId.value = ''
   confirm.value = false
   deleted.value = false
@@ -276,10 +293,7 @@ onMounted(async () => {
           <label
             >{{ t('operations.subject')
             }}<select v-model="kind" class="ui-input">
-              <option
-                v-for="value in ['user', 'user_group', 'department', 'idp_group']"
-                :key="value"
-              >
+              <option v-for="value in subjectKinds" :key="value">
                 {{ value }}
               </option>
             </select></label
@@ -322,7 +336,7 @@ onMounted(async () => {
                   : 'tenant'
               "
             >
-              <option v-for="value in permissions" :key="value">{{ value }}</option>
+              <option v-for="value in allowedPermissions" :key="value">{{ value }}</option>
             </select></label
           >
           <label

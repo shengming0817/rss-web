@@ -59,6 +59,8 @@ async function change(
   replay = false,
 ) {
   if (!canWrite.value || !directory.value) return
+  const importedSecret = secret.value
+  secret.value = ''
   const expectedRevision = replay ? pending.value!.expectedRevision : revision.value
   if (action === 'prepare') {
     try {
@@ -78,7 +80,7 @@ async function change(
       source:
         source.value === 'generate'
           ? { kind: 'generate' }
-          : { kind: 'import', secret: secret.value },
+          : { kind: 'import', secret: importedSecret },
     }
     secret.value = ''
     await submit(

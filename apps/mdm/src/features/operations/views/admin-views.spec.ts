@@ -19,7 +19,7 @@ import { createDeviceDemo } from '../../../../demo/devices/state'
 import OrganizationView from './OrganizationView.vue'
 import AuthorizationView from './AuthorizationView.vue'
 import ReportsView from './ReportsView.vue'
-async function fixture(component: Component) {
+async function fixture(component: Component, realm: 'tenant' | 'platform' = 'tenant') {
   const devices = createDeviceDemo(),
     automation = createAutomationDemo(devices),
     server = createScenario(
@@ -66,6 +66,7 @@ async function fixture(component: Component) {
       provide: {
         [mdmKey as symbol]: {
           tenant: TENANT,
+          realm,
           demo: true,
           operations: clients,
           software: createSoftwareClients(transport),
@@ -496,5 +497,37 @@ it('authors an explicit department grant and adopts a concurrent revision before
   await form.get('input[type=checkbox]').setValue(true)
   await click('删除')
   expect((await f.clients.authorization.findRule(saved.id))?.value).toBeNull()
+  f.wrapper.unmount()
+})
+
+it('offers only locally authenticated platform subjects and admitted tenant permissions', async () => {
+  const f = await fixture(AuthorizationView, 'platform')
+  const selects = f.wrapper.findAll('select'),
+    subject = selects[0]!,
+    permission = selects[1]!,
+    scope = selects[2]!
+  expect(subject.findAll('option').map((o) => o.text())).toEqual(['user'])
+  expect(permission.findAll('option').map((o) => o.text())).toEqual([
+    'tenant_create',
+    'tenant_read',
+    'tenant_update',
+    'tenant_delete',
+    'tenant_administrator_create',
+    'authorization_read',
+    'authorization_write',
+    'identity_accounts_manage',
+  ])
+  expect((permission.element as HTMLSelectElement).value).toBe('tenant_read')
+  expect(scope.findAll('option').map((o) => o.text())).toEqual(['tenant'])
+  f.wrapper.unmount()
+})
+it('excludes installation tenant administration permissions from business authorization choices', async () => {
+  const f = await fixture(AuthorizationView)
+  expect(
+    f.wrapper
+      .findAll('select')[1]!
+      .findAll('option')
+      .some((o) => o.text() === 'tenant_create'),
+  ).toBe(false)
   f.wrapper.unmount()
 })

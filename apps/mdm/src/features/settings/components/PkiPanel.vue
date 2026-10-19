@@ -31,7 +31,8 @@ const purpose = ref<PkiPurpose>('agent'),
   publications = ref<Publication[]>(),
   attempt = ref(''),
   chain = ref(''),
-  receipt = ref('')
+  receipt = ref(''),
+  rotationId = ref('')
 async function load() {
   trust.value = undefined
   return run(
@@ -56,19 +57,22 @@ async function file(event: Event, kind: 'trust' | 'crl') {
     failure.value = 'requestTooLarge'
     return
   }
-  await run(async () => {
-    const value: unknown = JSON.parse(await selected.text())
-    if (kind === 'trust') candidate.value = pkiTrust(value, runtime.tenant, purpose.value)
-    else
-      publications.value = array(value, (v) => {
-        const p = closed(v, ['issuer', 'crl', 'root_crl'])
-        return {
-          issuer: string(p['issuer']),
-          crl: encoded(p['crl']),
-          root_crl: encoded(p['root_crl']),
-        }
-      })
-  })
+  const selectedPurpose = purpose.value
+  await run(
+    async () => JSON.parse(await selected.text()) as unknown,
+    (value) => {
+      if (kind === 'trust') candidate.value = pkiTrust(value, runtime.tenant, selectedPurpose)
+      else
+        publications.value = array(value, (v) => {
+          const p = closed(v, ['issuer', 'crl', 'root_crl'])
+          return {
+            issuer: string(p['issuer']),
+            crl: encoded(p['crl']),
+            root_crl: encoded(p['root_crl']),
+          }
+        })
+    },
+  )
 }
 async function change(action: 'prepare' | 'approve' | 'activate' | 'retire' | 'crl' | 'recover') {
   if (!canWrite.value) return
@@ -80,9 +84,9 @@ async function change(action: 'prepare' | 'approve' | 'activate' | 'retire' | 'c
     await submit(
       action,
       expected,
-      { purpose: selected, candidateSha256: await inputDigest(JSON.stringify(input)) },
+      { purpose: selected, candidateSha256: inputDigest(JSON.stringify(input)) },
       (id) => client.prepare(id, selected, expected, input),
-      (v) => (receipt.value = v.state),
+      applyRotation,
     )
   } else if (action === 'crl') {
     const input = publications.value
@@ -90,7 +94,7 @@ async function change(action: 'prepare' | 'approve' | 'activate' | 'retire' | 'c
     await submit(
       action,
       expected,
-      { purpose: selected, publicationsSha256: await inputDigest(JSON.stringify(input)) },
+      { purpose: selected, publicationsSha256: inputDigest(JSON.stringify(input)) },
       (id) => client.publish(id, selected, input),
       () => (receipt.value = t('settings.accepted')),
     )
@@ -109,20 +113,37 @@ async function change(action: 'prepare' | 'approve' | 'activate' | 'retire' | 'c
     await submit(
       action,
       expected,
-      { attempt: original, chainSha256: await inputDigest(JSON.stringify(input)) },
+      { attempt: original, chainSha256: inputDigest(JSON.stringify(input)) },
       (id) => client.recover(id, original, input),
       (v) => (receipt.value = v.fingerprint),
     )
-  } else
+  } else {
+    let original: string
+    try {
+      original = uuid(rotationId.value)
+    } catch {
+      failure.value = 'invalidRequest'
+      return
+    }
     await submit(
       action,
       expected,
-      { purpose: selected },
+      { purpose: selected, rotation: original },
       (id) => client.transition(id, selected, expected, action),
-      (v) => (receipt.value = v.state),
+      applyRotation,
+      false,
+      original,
     )
+  }
+}
+function applyRotation(value: { operation: string; revision: number; state: string }) {
+  rotationId.value = value.operation
+  revision.value = value.revision
+  receipt.value = value.state
+  queueMicrotask(() => void load())
 }
 function selectPurpose() {
+  rotationId.value = ''
   candidate.value = undefined
   publications.value = undefined
   void load()
@@ -133,6 +154,7 @@ useSettingsFacts(() => {
   candidate.value = undefined
   publications.value = undefined
   receipt.value = ''
+  rotationId.value = ''
 })
 </script>
 <template>
@@ -166,6 +188,14 @@ useSettingsFacts(() => {
       t('settings.publicCertificate')
     }}</UiButton>
   </article>
+  <label class="settings-form"
+    >{{ t('settings.rotationId')
+    }}<input
+      v-model="rotationId"
+      maxlength="36"
+      :disabled="locked"
+      :placeholder="t('settings.queryId')"
+  /></label>
   <form class="settings-form" @submit.prevent="change('prepare')">
     <fieldset :disabled="locked || !canWrite || !trust">
       <legend>{{ t('settings.import') }}</legend>

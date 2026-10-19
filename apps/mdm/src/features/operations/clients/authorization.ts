@@ -83,6 +83,23 @@ export const tenantPermissions = [
   'release_withdraw',
   'release_recover',
 ] as const
+export const platformPermissions = [
+  'tenant_create',
+  'tenant_read',
+  'tenant_update',
+  'tenant_delete',
+  'tenant_administrator_create',
+  'authorization_read',
+  'authorization_write',
+  'identity_accounts_manage',
+] as const
+export const tenantAdministrationPermissions = [
+  'tenant_create',
+  'tenant_read',
+  'tenant_update',
+  'tenant_delete',
+  'tenant_administrator_create',
+] as const
 export const permissions = [...devicePermissions, ...tenantPermissions] as const
 export type Permission = (typeof permissions)[number]
 export function user(value: unknown, tenant: string, instance?: string) {

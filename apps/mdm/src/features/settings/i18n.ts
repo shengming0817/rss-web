@@ -1,5 +1,6 @@
 export const settingsZh = {
   title: '设置',
+  rotationId: '原 PKI 轮换 ID（批准、启用和退出沿用）',
   prepareCaHint:
     '原始 CA 私钥、密码、provisioner JWK、SCEP decrypter 与 challenge/notify 凭据由实际 CA 和部署 owner 保管。prepare-ca 准备用途隔离材料，configure-host 装入确切 provider，网页只发布公开 trust 与签名 CRL。',
   recoverAccountHint:
@@ -220,6 +221,7 @@ export const settingsZh = {
 } as const
 export const settingsEn = {
   title: 'Settings',
+  rotationId: 'Original PKI rotation ID (retain for approval, activation and retirement)',
   prepareCaHint:
     'The CA and deployment owners retain CA keys, passwords, provisioner JWKs, SCEP decrypter and challenge/notify credentials. prepare-ca prepares purpose-isolated material; configure-host loads exact providers. The browser publishes only public trust and signed CRLs.',
   recoverAccountHint:
