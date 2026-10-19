@@ -3,6 +3,7 @@ import { executeBounded } from '../identity/process.mjs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import process from 'node:process'
+import { homedir } from 'node:os'
 import assert from 'node:assert/strict'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..'),
   backend = process.env.MDM_SETTINGS_BACKEND
@@ -80,7 +81,10 @@ try {
             result: 'failed',
             group,
             classification: error.message,
-            recoveryDirectory: resolve(backend, 'artifacts/dev-environment/' + group),
+            recoveryDirectory:
+              group === 'settings-browser-target'
+                ? resolve(homedir(), '.cache/rss-mdm-dev-ports')
+                : resolve(backend, 'artifacts/dev-environment/' + group),
           }),
         )
       }

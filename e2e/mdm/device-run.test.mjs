@@ -4,7 +4,7 @@ import process from 'node:process'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { tmpdir, homedir } from 'node:os'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -87,6 +87,8 @@ if (args.includes('reset') || ('${feature}' === 'settings' && args.includes('-c'
         [group + '-target', group],
       )
     if (failure) {
+      if (feature === 'settings')
+        assert.ok(output.includes(JSON.stringify(resolve(homedir(), '.cache/rss-mdm-dev-ports'))))
       assert.ok(existsSync(recovery))
       assert.ok(output.includes(JSON.stringify(recovery)))
       assert.ok(output.includes('"phase":"cleanup","result":"failed"'))
