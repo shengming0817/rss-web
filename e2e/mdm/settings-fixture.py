@@ -151,8 +151,10 @@ def compose_browser(candidate):
                     except subprocess.TimeoutExpired:child.kill();child.wait(timeout=5)
         finally:
             try:
-                try:providers.close()
-                finally:cleanup_compose()
+                try:owner.cleanup()
+                finally:
+                    try:providers.close()
+                    finally:cleanup_compose()
             finally:
                 for sig,handler in previous.items():signal.signal(sig,handler)
     print(json.dumps(dict(phase='settings-compose',result='passed',cleanup=True)),flush=True)
