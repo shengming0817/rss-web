@@ -60,7 +60,7 @@ def seed():
         sql += [f"INSERT INTO mdm_access.registrations(tenant_id,id,device,channel,generation,{column},state,purpose,epoch) VALUES('{tenant}','{registration}','{device}','{channel}',1,'{origin}','active','primary',gen_random_uuid())",
                 f"INSERT INTO mdm_access.credentials VALUES('{tenant}','{credential}','{registration}','{channel}',md5('{credential}')||md5('{registration}'),'active')"]
         for field, scalar in [('custom.asset_tag',dict(kind='string',value=device)), ('custom.browser_list',dict(kind='array',value=[dict(kind='integer',value=n) for n in range(25 if channel=='mdm' else 3)]))]:
-            fact=dict(state=dict(kind='known',value=scalar),lastKnown=None,evidence=dict(source='manual',dataset=None,registration=None,registrationGeneration=None,epoch=None,snapshotId=str(uuid.uuid4()),observedAt=1,receivedAt=2,actor=ADMIN))
+            fact=dict(state=dict(kind='known',value=scalar),lastKnown=None,evidence=dict(scope=dict(kind='device'),source='manual',dataset=None,registration=None,registrationGeneration=None,epoch=None,snapshotId=str(uuid.uuid4()),observedAt=1,receivedAt=2,actor=ADMIN))
             sql.append(f"INSERT INTO mdm.manual_assignments(tenant_id,device,field,revision,fact) VALUES('{tenant}','{device}','{field}',1,{q(json.dumps(fact))}::jsonb)")
     definition=dict(key='custom.browser_list',version=1,valueType=dict(kind='array',items=dict(kind='integer'),maxItems=1000),nullable=True,manual=True,sources=dict(manual=0),platforms=['windows','macos'],sensitivity='standard',unit=None,searchable=True,itemKey=None)
     # Private disposable fixture publication; no user operation or current-state assertion is forged.
