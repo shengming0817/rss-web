@@ -1,3 +1,4 @@
+import { calculationTask } from './calculation-task'
 import type { Operation } from '../../../services/useOperation'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
@@ -236,56 +237,7 @@ export function createGroupsClient(transport: HttpTransport) {
         path: '/api/v1/groups/{group}/tasks/{task}',
         pathParams: { group, task },
         successStatus: 200,
-        decode: (value) => {
-          const v = closed(value, [
-            'task',
-            'kind',
-            'target',
-            'status',
-            'processed',
-            'members',
-            'plan',
-            'failure',
-            'failureDetail',
-            'execution',
-            'policyRevision',
-          ])
-          if (
-            uuid(v['task']) !== task ||
-            v['kind'] !== 'group' ||
-            v['target'] !== group ||
-            v['plan'] !== null ||
-            v['execution'] !== null ||
-            v['policyRevision'] !== null
-          )
-            throw new Error('Wrong group task')
-          return {
-            task,
-            status: enumeration(v['status'], [
-              'pending',
-              'running',
-              'completed',
-              'failed',
-              'superseded',
-            ] as const),
-            processed: count(v['processed']),
-            members: count(v['members']),
-            failure: nullable(v['failure'], identifier),
-            failureDetail: nullable(v['failureDetail'], (value) => {
-              const detail = closed(value, ['reason', 'device', 'stage'])
-              return {
-                reason: enumeration(detail['reason'], [
-                  'capability_unknown',
-                  'platform_unsupported',
-                  'stale_plan',
-                  'owner_conflict',
-                ] as const),
-                device: nullable(detail['device'], identifier),
-                stage: enumeration(detail['stage'], ['preview', 'save', 'execute'] as const),
-              }
-            }),
-          }
-        },
+        decode: (value) => calculationTask(value, 'group', group, task),
       }),
     page: (group: string, result: string, kind: GroupProjection, next?: string) =>
       transport.request({

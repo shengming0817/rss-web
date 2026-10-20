@@ -144,11 +144,9 @@ export function createScopeDemo(devices: Devices) {
             status: job.status,
             processed: job.status === 'running' ? 0 : job.decisions.length,
             members: job.frozen.members.length,
-            plan: null,
             failure: job.status === 'failed' ? 'stale_plan' : null,
             failureDetail: null,
-            execution: null,
-            policyRevision: null,
+            replacementTask: null,
           })
         }
         if (job.status !== 'completed') return error('operation_conflict')

@@ -23,6 +23,8 @@ export const operators = [
   'ge',
   'contains',
   'not_contains',
+  'contains_any',
+  'contains_all',
   'is_null',
   'is_not_null',
 ] as const
@@ -243,11 +245,12 @@ function valueType(
   value: unknown,
   depth = 0,
 ): 'string' | 'integer' | 'number' | 'boolean' | 'time' | 'array' | 'object' {
-  if (depth > 5) throw new Error('Field type exceeds bounds')
+  if (depth > 6) throw new Error('Field type exceeds bounds')
   const v = record(value),
     kind = enumeration(v['kind'], [
       'string',
       'enum',
+      'record',
       'integer',
       'number',
       'boolean',
@@ -267,6 +270,14 @@ function valueType(
     closed(v, ['kind', 'items', 'maxItems'])
     count(v['maxItems'])
     valueType(v['items'], depth + 1)
+  } else if (kind === 'record') {
+    closed(v, ['kind', 'properties'])
+    Object.entries(record(v['properties'])).forEach(([k, x]) => {
+      identifier(k)
+      const property = closed(x, ['valueType', 'required'])
+      boolean(property['required'])
+      valueType(property['valueType'], depth + 1)
+    })
   } else if (kind === 'object') {
     closed(v, ['kind', 'properties'])
     Object.entries(record(v['properties'])).forEach(([k, x]) => {
@@ -274,7 +285,7 @@ function valueType(
       valueType(x, depth + 1)
     })
   } else closed(v, ['kind'])
-  return kind === 'enum' ? 'string' : kind
+  return kind === 'enum' ? 'string' : kind === 'record' ? 'object' : kind
 }
 export function editableField<T extends { kind: string }>(
   field: T,
@@ -296,7 +307,7 @@ export function criteria(value: unknown, depth = 0): Criteria {
     if (v['value'] != null || v['values'] != null) throw new Error('Unexpected operand')
     return { kind, field, op }
   }
-  if (op === 'in' || op === 'not_in') {
+  if (op === 'in' || op === 'not_in' || op === 'contains_any' || op === 'contains_all') {
     if (v['value'] != null) throw new Error('Unexpected operand')
     return { kind, field, op, values: array(v['values'], scalar) }
   }
@@ -350,6 +361,7 @@ export const sourceIds = [
   'mdm.apple',
   'agent.builtin',
   'agent.script',
+  'agent.native',
   'agent.osquery',
 ] as const
 export type ReadScalar =

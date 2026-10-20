@@ -101,7 +101,7 @@ it('rejects duplicate catalog keys and malformed manual fields', () => {
   }
   expect(
     decodeCatalog(
-      { tenantId: tenant, asset: { kind: 'fields', dictionary: 'assets-v2', fields: [field] } },
+      { tenantId: tenant, asset: { kind: 'fields', dictionary: 'assets-v3', fields: [field] } },
       tenant,
     ).fields,
   ).toEqual([
@@ -118,7 +118,7 @@ it('rejects duplicate catalog keys and malformed manual fields', () => {
     decodeCatalog(
       {
         tenantId: tenant,
-        asset: { kind: 'fields', dictionary: 'assets-v2', fields: [field, field] },
+        asset: { kind: 'fields', dictionary: 'assets-v3', fields: [field, field] },
       },
       tenant,
     ),
@@ -274,4 +274,49 @@ it('rejects unbound or mismatched namespaces in current and last-known device ev
       }),
     ).toThrow()
   }
+})
+
+it('consumes only the current dictionary and validates record property schemas', () => {
+  const field = {
+    key: 'device.hardware',
+    version: 1,
+    valueType: {
+      kind: 'record',
+      properties: {
+        serial: {
+          required: false,
+          valueType: { kind: 'string', maxLength: 128, allowEmpty: false },
+        },
+      },
+    },
+    platforms: ['windows'],
+    sensitivity: 'standard',
+    unit: null,
+    searchable: false,
+    itemKey: null,
+    nullable: false,
+    manual: false,
+    sources: { 'agent.native': 0 },
+    operations: [],
+  }
+  const decode = (dictionary: string, value: unknown) =>
+    decodeCatalog(
+      { tenantId: tenant, asset: { kind: 'fields', dictionary, fields: [value] } },
+      tenant,
+    )
+  expect(decode('assets-v3', field).fields[0]?.kind).toBe('object')
+  expect(
+    decode('assets-v3', {
+      ...field,
+      valueType: { kind: 'array', items: { kind: 'integer' }, maxItems: 128 },
+      operations: ['contains_any', 'contains_all'],
+    }).fields[0]?.operations,
+  ).toEqual(['contains_any', 'contains_all'])
+  expect(() => decode('assets-v2', field)).toThrow('Unknown asset dictionary')
+  expect(() =>
+    decode('assets-v3', {
+      ...field,
+      valueType: { kind: 'record', properties: { serial: { valueType: { kind: 'integer' } } } },
+    }),
+  ).toThrow()
 })

@@ -210,7 +210,6 @@ export function createGroupDemo(
         status: job.status,
         processed: job.status === 'running' ? 0 : job.decisions.length,
         members: job.members.length,
-        plan: null,
         failure:
           job.status === 'failed'
             ? 'stale_plan'
@@ -219,8 +218,7 @@ export function createGroupDemo(
               : null,
         failureDetail:
           job.status === 'failed' ? { reason: 'stale_plan', device: null, stage: 'execute' } : null,
-        execution: null,
-        policyRevision: null,
+        replacementTask: null,
       })
     }
     if (match[2] === 'results' && method === 'GET') {
