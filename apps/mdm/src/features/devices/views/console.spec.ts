@@ -72,7 +72,7 @@ async function setup(
       return o.decode(reply.body)
     },
   } as unknown as HttpTransport
-  const devices = createDeviceClients(transport, TENANT, true)
+  const devices = createDeviceClients(transport, TENANT)
   const operations = createOperationsClients(transport, TENANT, true)
   const router = createRouter({
     history: createMemoryHistory(),
@@ -826,7 +826,7 @@ it('refreshes native binding and resumes the same bound identity even when new e
   })
 })
 async function chooseAssociation(h: Awaited<ReturnType<typeof setup>>) {
-  await h.click('设备关联管理')
+  await h.click('管理')
   await h.click('查找另一通道候选')
   const panel = h.wrapper.find('[data-testid=association-panel]')
   await panel.find('input[type=radio]').setValue(true)
@@ -841,7 +841,7 @@ it('creates a unified route and revokes the relation without credential writes',
   await h.click('确认关联')
   await vi.waitFor(() => expect(h.router.currentRoute.value.name).toBe('device-view-detail'))
   await flushPromises()
-  await h.click('设备关联管理')
+  await h.click('管理')
   const panel = h.wrapper.find('[data-testid=association-panel]')
   await panel.findAll('textarea')[1]!.setValue('Separate instances')
   await panel.find('input[type=checkbox]').setValue(true)
@@ -863,7 +863,7 @@ it('locks an unknown association, survives navigation, and requires explicit exa
   await flushPromises()
   await h.router.push({ name: 'device-detail', params: { tenant: TENANT, device: 'device-01' } })
   await flushPromises()
-  await h.click('设备关联管理')
+  await h.click('管理')
   const panel = h.wrapper.find('[data-testid=association-panel]')
   expect(panel.text()).toContain('结果未知')
   expect(h.button('确认关联').attributes('disabled')).toBeDefined()
@@ -985,7 +985,7 @@ it.each(['confirm', 'revoke', 'inactive-revoke'])(
         current.members[0]!.registrationId,
         crypto.randomUUID(),
       )
-    await h.click('设备关联管理')
+    await h.click('管理')
     await h.click('读取当前关系与主注册')
     const panel = h.wrapper.find('[data-testid=association-panel]'),
       basis = panel.find('[data-testid=association-basis]')
@@ -1131,6 +1131,14 @@ it('retains directory cursor and display columns when opening and returning from
   await flushPromises()
   expect(f.router.currentRoute.value.query).toEqual(query)
   expect(f.wrapper.text()).toContain('device-21')
+  await f.wrapper.findAll('tbody a').at(-1)!.trigger('click')
+  await flushPromises()
+  await f.wrapper
+    .findAll('a')
+    .find((a) => a.text() === '设备目录')!
+    .trigger('click')
+  await flushPromises()
+  expect(f.router.currentRoute.value.query).toEqual(query)
   await f.click('上一页')
   expect(f.wrapper.text()).toContain('device-01')
 })

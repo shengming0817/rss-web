@@ -35,7 +35,6 @@ export type ExecutionOrigin =
     }
   | { kind: 'native'; operation: string }
   | { kind: 'software'; policy: string; versionId: string; task: string }
-  | { kind: 'device_batch'; batch: string }
   | { kind: 'security'; request: string }
 function basis(value: unknown) {
   const b = closed(value, [
@@ -69,7 +68,6 @@ function origin(value: unknown): ExecutionOrigin {
     'policy',
     'native',
     'software',
-    'device_batch',
     'security',
   ] as const)
   if (kind === 'security') {
@@ -100,8 +98,7 @@ function origin(value: unknown): ExecutionOrigin {
       task: uuid(v['task']),
     }
   }
-  const v = closed(value, ['kind', 'batch'])
-  return { kind, batch: uuid(v['batch']) }
+  throw new Error('Unknown execution origin')
 }
 export function executionSummary(value: unknown) {
   const v = closed(value, [

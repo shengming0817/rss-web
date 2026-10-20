@@ -142,7 +142,7 @@ export function startMdm(
     transport: business,
     onboarding: createOnboardingClients(business, publicTransport, tenant),
     workspace: createWorkspaceClient(business, demo),
-    devices: createDeviceClients(business, tenant, demo),
+    devices: createDeviceClients(business, tenant),
     policies: createPolicyClients(business, tenant, demo),
     software: createSoftwareClients(business),
     security: createSecurityClients(business, tenant, demo),

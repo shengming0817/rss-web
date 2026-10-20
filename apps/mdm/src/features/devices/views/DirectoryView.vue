@@ -237,6 +237,7 @@ const sourceOptions = computed(() => [
                 :to="{
                   name: 'device-detail',
                   params: { tenant: runtime.tenant, device: endpoint.id },
+                  query: { directory: JSON.stringify(route.query) },
                 }"
                 >{{ endpoint.id }}</RouterLink
               >

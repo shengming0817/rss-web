@@ -11,11 +11,30 @@ let browser,
   context,
   page,
   phase = 'environment',
-  result = 'failed'
+  result = 'failed',
+  closing,
+  cleanupFailed = false,
+  interrupted = false
 const coverage = [],
   responses = [],
   pageErrors = []
-const stop = () => browser?.close().catch(() => {})
+const close = () =>
+  (closing ??= Promise.resolve().then(async () => {
+    try {
+      await context?.close()
+    } catch {
+      cleanupFailed = true
+    }
+    try {
+      await browser?.close()
+    } catch {
+      cleanupFailed = true
+    }
+  }))
+const stop = () => {
+  interrupted = true
+  void close()
+}
 process.once('SIGINT', stop)
 process.once('SIGTERM', stop)
 const timer = setTimeout(stop, 170000)
@@ -507,8 +526,15 @@ try {
   )
 } finally {
   clearTimeout(timer)
-  await context?.close().catch(() => {})
-  await browser?.close().catch(() => {})
-  console.log(JSON.stringify({ phase: 'device-browser', result, coverage }))
+  await close()
+  if (cleanupFailed || interrupted) result = 'failed'
+  console.log(
+    JSON.stringify({
+      phase: 'device-browser',
+      result,
+      coverage,
+      browserCleanup: cleanupFailed ? 'failed' : 'passed',
+    }),
+  )
   if (result !== 'passed') process.exitCode = 1
 }

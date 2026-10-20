@@ -28,14 +28,6 @@ export const settingsZh = {
   apnsPortalStep: '在 Apple Push Certificates Portal 使用厂商签署材料申请证书。',
   apnsImportStep: '导入证书，核对密钥匹配、有效期及推送身份。',
   apnsApplyStep: '请求应用，再读取实际应用状态；保存不代表已生效。',
-  materialNames: {
-    packages: 'Agent 安装包',
-    task: '任务签名',
-    wns: 'Windows 推送（可选）',
-    pki: '设备 CA 与 SCEP',
-    apns: 'Apple 推送证书（APNs）',
-    profile: '注册描述文件签名',
-  },
 
   guideAuthority: '选择和完成状态由后端保存；设备实际效果由设备事实单独确认。',
   guideFinished: '首次配置已完成',
@@ -94,7 +86,12 @@ export const settingsZh = {
     '平台账户丢失时由已授权操作员核对原安装、tenant、principal 与原账户，沿原身份执行受控密码恢复；不能通过重建管理租户取得权限。',
   readComparison: '读取最新状态以比较',
   materialNames: {
-    pki: '设备 PKI',
+    packages: 'Agent 安装包',
+    task: '任务签名',
+    wns: 'Windows 推送（可选）',
+    apns: 'Apple 推送证书（APNs）',
+    profile: '注册描述文件签名',
+    pki: '设备 CA 与 SCEP',
     storage: 'S3 内容仓',
     smtp: 'SMTP 邮件',
     webhook: 'Webhook 签名',
@@ -339,14 +336,6 @@ export const settingsEn = {
   apnsImportStep: 'Import the certificate and check key matching, validity and push identity.',
   apnsApplyStep:
     'Request application and read the actual applied state. Saving alone does not activate it.',
-  materialNames: {
-    packages: 'Agent packages',
-    task: 'Task signing',
-    wns: 'Windows push (optional)',
-    pki: 'Device CA and SCEP',
-    apns: 'Apple push certificate (APNs)',
-    profile: 'Enrollment profile signing',
-  },
 
   guideAuthority:
     'The backend saves selection and completion. Actual device effects require separate device evidence.',
@@ -409,6 +398,11 @@ export const settingsEn = {
     'An authorized operator recovers a lost platform account against its original installation, tenant, principal and account. Recreating a management tenant never grants authority.',
   readComparison: 'Read current state to compare',
   materialNames: {
+    packages: 'Agent packages',
+    task: 'Task signing',
+    wns: 'Windows push (optional)',
+    apns: 'Apple push certificate (APNs)',
+    profile: 'Enrollment profile signing',
     pki: 'Device PKI',
     storage: 'S3 content storage',
     smtp: 'SMTP mail',
