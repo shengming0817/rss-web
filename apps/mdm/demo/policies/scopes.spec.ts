@@ -175,7 +175,7 @@ it('blocks current Scope consumers while a changed dynamic group is pending and 
       .every(
         (row) =>
           row.qualification.state === 'pending' &&
-          row.reason === 'source_pending' &&
+          row.reason === (row.target ? 'source_pending' : 'channel_unavailable') &&
           row.availability === 'unavailable',
       ),
   ).toBe(true)
