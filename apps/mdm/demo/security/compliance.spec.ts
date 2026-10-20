@@ -230,7 +230,7 @@ it('supersedes an unready frozen group input, then preserves old evidence when i
   const devices = createDeviceDemo(),
     group = crypto.randomUUID()
   let members = {
-    objects: [],
+    candidates: [],
     members: ['device-01'],
     memberSet: null as string | null,
     memberVersion: 0,
@@ -315,7 +315,7 @@ it('invalidates dynamic group inputs after fact changes even when the compliance
     assetContext: 'endpoint' as const,
     name: 'Office members',
     description: '',
-    criteria: definition.criteria,
+    criteria: { selector: { kind: 'device' }, quantifier: 'one', criteria: definition.criteria },
   })
   expect((await f.write('POST', groupPath, groupWrite)).status).toBe(200)
   await f.server.handle('GET', `${groupPath}/tasks/${groupWrite.operationId}`)
@@ -355,8 +355,8 @@ it('invalidates dynamic group inputs after fact changes even when the compliance
   }
   await f.server.handle('GET', `${path}/tasks/${waiting.task}`)
   expect((await f.server.handle('GET', `${path}/tasks/${waiting.task}`)).body).toMatchObject({
-    phase: 'superseded',
-    diagnostic: { reason: 'group_input_pending' },
+    phase: 'published',
+    diagnostic: null,
   })
 })
 

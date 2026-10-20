@@ -212,7 +212,7 @@ it('shows Resource bounds, starts numeric fixed values within bounds, and follow
   await flushPromises()
   expect(f.read).toHaveBeenLastCalledWith(next)
   expect((f.wrapper.get('#policy-id').element as HTMLInputElement).value).toBe(next)
-  const first = f.wrapper.findAll('li button')[0]!
+  const first = f.wrapper.findAll('tbody button')[0]!
   await first.trigger('click')
   await flushPromises()
   expect(f.router.currentRoute.value.query['id']).toBe(
@@ -333,7 +333,8 @@ it('shows the current configuration preview and all progress operations and diag
   await flushPromises()
   expect(f.devices).toHaveBeenCalledTimes(1)
   const row = (await f.devices.mock.results[0]!.value).items[0]!
-  for (const fact of [...row.operationIds, row.reason]) expect(f.wrapper.text()).toContain(fact)
+  for (const fact of row.operationIds) expect(f.wrapper.text()).toContain(fact)
+  expect(f.wrapper.text()).toContain('配置归属冲突')
   f.wrapper.unmount()
 })
 

@@ -45,7 +45,7 @@ def q(value):
 def seed_authority():
     tenant = TENANTS[0]
     user = dict(instanceId=INSTANCE, tenantId=tenant, principalId=ADMIN)
-    rule = dict(subject=dict(kind='user', user=user), grants=[dict(operation=o, scope=dict(kind='all_devices')) for o in ['inventory_read','inventory_assign','device_association_write','credentials','enrollment','operation_read']] + [dict(operation=o, scope=dict(kind='tenant')) for o in ['group_read','group_write','group_recompute','scope_read','scope_write','policy_read','policy_write','resource_read','registration_configuration_read','registration_configuration_write']])
+    rule = dict(subject=dict(kind='user', user=user), grants=[dict(operation=o, scope=dict(kind='all_devices')) for o in ['inventory_read','inventory_assign','device_association_write','credentials','enrollment','operation_read','script_execute']] + [dict(operation=o, scope=dict(kind='tenant')) for o in ['group_read','group_write','group_recompute','scope_read','scope_write','policy_read','policy_write','resource_read','resource_write','registration_configuration_read','registration_configuration_write']])
     rule_id = str(uuid.uuid4())
     sql = [f"SET rss.tenant_id = '{tenant}'", f"INSERT INTO mdm_access.authorization_rules(tenant_id,instance,id,revision,document) VALUES('{tenant}','{INSTANCE}','{rule_id}',1,{q(json.dumps(rule))}::jsonb)"]
     environment.sql(';'.join(sql)+';', 'mdm_dev')
@@ -54,7 +54,7 @@ def seed_authority():
 def seed():
     tenant = TENANTS[0]
     sql = [f"SET rss.tenant_id = '{tenant}'"]
-    for device, channel, source in [('fixture-mdm','mdm','mdm.windows'), ('fixture-agent','agent','agent.builtin')]:
+    for device, channel, source in [('fixture-mdm','mdm','mdm.windows'), ('fixture-agent','agent','agent.builtin'), ('fixture-alone','mdm','mdm.windows')]:
         registration, grant, request, credential = [str(uuid.uuid4()) for _ in range(4)]
         sql.append(f"INSERT INTO mdm_access.devices(tenant_id,id) VALUES('{tenant}','{device}')")
         if channel == 'mdm':
@@ -87,7 +87,7 @@ def start(binary, initialized, log):
     global readiness
     children = []
     for args in ([str(binary),'serve','--config',initialized['configuration']],['nginx','-c',initialized['gateway'],'-g','daemon off;']):
-        child = subprocess.Popen(args,cwd=BACKEND,stdout=log,stderr=log)
+        child = subprocess.Popen(args,cwd=BACKEND,stdout=log,stderr=log,env={**os.environ,'RUST_MIN_STACK':str(8*1024*1024)})
         processes.append(child)
         children.append(child)
     context=ssl.create_default_context(cafile=str(environment.root/'ca.crt'))
@@ -118,6 +118,12 @@ try:
     environment.reset()
     os.environ['MDM_WEB_ROOT'] = str(WEB/'apps/mdm/dist')
     initialized = environment.initialize()
+    config_path = Path(initialized['configuration'])
+    config = json.loads(config_path.read_text())
+    content_directory = environment.root/'content'
+    content_directory.mkdir(mode=0o700)
+    config['content'] = dict(storage=dict(kind='volume',directory=str(content_directory)),imports={},max_artifact_bytes=32*1024*1024,max_temporary_bytes=64*1024*1024,max_uploads=4,transfer_seconds=60,retention_seconds=3600,max_bundle_bytes=64*1024*1024,max_bundle_entries=100,max_expansion_ratio=100)
+    private(config_path, config)
     phase = 'authority'
     rule_id, rule = seed_authority()
     binary = Path(os.environ['CARGO_TARGET_DIR'])/'debug/rss-mdm'
@@ -157,15 +163,18 @@ try:
     seed()
     phase = 'readiness'
     start(binary, initialized, log)
-    fixture=private(environment.root/'browser.json',dict(origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,principal=ADMIN,login='admin',passwordFile=str(environment.root/'account-password'),mdm='fixture-mdm',agent='fixture-agent',ruleId=rule_id,rule=rule))
+    fixture=private(environment.root/'browser.json',dict(origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,principal=ADMIN,login='admin',passwordFile=str(environment.root/'account-password'),mdm='fixture-mdm',agent='fixture-agent',alone='fixture-alone',ruleId=rule_id,rule=rule))
     phase='browser'
-    browser=subprocess.run(['node',str(WEB/'e2e/mdm/device-browser.mjs')],cwd=WEB,env={**os.environ,'MDM_DEVICE_BROWSER_FIXTURE':str(fixture)},timeout=180,pass_fds=lease_fds())
+    browser=subprocess.run(['node',str(WEB/'e2e/mdm/device-browser.mjs')],cwd=WEB,env={**os.environ,'MDM_DEVICE_BROWSER_FIXTURE':str(fixture)},timeout=300,pass_fds=lease_fds())
     if browser.returncode: raise RuntimeError('browser')
     result='passed'
 except BaseException as error:
     if phase == 'readiness' and readiness:
         print(json.dumps(dict(phase=phase, result='failed', **readiness)), flush=True)
     print(json.dumps(dict(phase=phase,result='failed',classification=type(error).__name__)),flush=True)
+    product_log = environment.root/'product.log'
+    if product_log.exists() and 'stack overflow' in product_log.read_text():
+        print(json.dumps(dict(phase='product',result='failed',classification='stack-overflow')),flush=True)
 finally:
     stop()
     for child in reversed(processes):

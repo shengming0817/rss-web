@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, DOMWrapper } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { mdmKey } from '../../../context'
@@ -28,10 +28,11 @@ it('locks the original Scope after an unknown write and replays its exact frozen
           tenant: 'tenant',
           demo: true,
           policies: {
-            scopes: { change, read },
+            scopes: { change, read, list: async () => ({ items: [], nextCursor: null }) },
             catalog: { list: async () => ({ items: [], nextCursor: null }) },
           },
           devices: {
+            groups: { list: async () => ({ items: [], nextCursor: null }) },
             directory: {
               list: async () => ({ items: [], nextCursor: null }),
               groups: async () => ({ items: [], nextCursor: null }),
@@ -44,11 +45,16 @@ it('locks the original Scope after an unknown write and replays its exact frozen
   await flushPromises()
   const button = (text: string) => wrapper.findAll('button').find((b) => b.text() === text)!
   await button('新建').trigger('click')
-  await wrapper.get('form').trigger('submit')
+  const dialog = new DOMWrapper(document.body).get('[role=dialog]')
+  await dialog.get('form').trigger('submit')
   await flushPromises()
   expect(button('新建').attributes('disabled')).toBeDefined()
+  expect(dialog.get('[role=alert]').text()).toContain('提交结果未知')
   const body = change.mock.calls[0]![1]
-  await button('重放同一操作').trigger('click')
+  await dialog
+    .findAll('button')
+    .find((b) => b.text() === '重放同一操作')!
+    .trigger('click')
   await flushPromises()
   expect(change.mock.calls[1]![1]).toEqual(body)
   wrapper.unmount()

@@ -11,6 +11,7 @@ interface DeviceSummary {
   department: string | null
 }
 import type {
+  CollectionScope,
   FieldDefinition,
   Inventory,
   ResolvedField,
@@ -18,6 +19,7 @@ import type {
 } from '../../src/features/devices/clients/asset-model'
 import type { registration } from '../../src/features/devices/clients/enrollment'
 export interface DemoDevice {
+  scopedInventory?: (Omit<Inventory, 'collectionScope'> & { collectionScope: CollectionScope })[]
   securityBindings?: { registration: string; generation: number; capabilities: string[] }[]
   bootstrapBindings?: {
     registration: string
@@ -167,6 +169,15 @@ export function makeDevices(): Map<string, DemoDevice> {
         generation: 1,
         status: 'active' as const,
       }))
+      for (const field of Object.values(fields))
+        for (const fact of field.sources) {
+          if (fact.evidence.source === 'manual') continue
+          const registration = registrations.find((r) => r.source === fact.evidence.source)
+          if (registration) {
+            fact.evidence.registration = registration.registrationId
+            fact.evidence.registrationGeneration = registration.generation
+          }
+        }
       const summary: DeviceSummary = {
         id,
         name: `${platform === 'macos' ? 'Mac' : 'Windows'} ${index + 1}`,

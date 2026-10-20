@@ -277,16 +277,18 @@ it('retires claims on actual scope exit and rejects missing variants or remove c
     binding = f.resource(),
     a = await f.put(scope, binding, 'remove')
   const originalScope = f.send(`/api/v1/scopes/${scope}`).body as { revision: number }
-  expect(
-    f.send(
-      `/api/v1/scopes/${scope}`,
-      f.op(
-        { action: 'put', definition: { targets: [], limitations: null, exclusions: [] } },
-        originalScope.revision,
-      ),
-    ).status,
-  ).toBe(200)
+  const changed = f.send(
+    `/api/v1/scopes/${scope}`,
+    f.op(
+      { action: 'put', definition: { targets: [], limitations: null, exclusions: [] } },
+      originalScope.revision,
+    ),
+  )
+  expect(changed.status).toBe(200)
   expect(f.automation.configurationPolicies.plans()[0]!.action).toBe('remove')
+  const task = (changed.body as { task: string }).task
+  f.send(`/api/v1/scopes/${scope}/tasks/${task}`)
+  f.send(`/api/v1/scopes/${scope}/tasks/${task}`)
   expect(
     (await f.policies.assignments(a.id)).items.find((d) => d.object.id === 'device-01')!
       .qualification.state,

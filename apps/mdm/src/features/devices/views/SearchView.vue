@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { UiButton, UiDialog } from '@rss/core/components'
-import { onMounted, ref, toRaw } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
-import type { Criteria, FieldDefinition, Query, SavedQuery } from '../clients/assets'
+import type { FieldDefinition, Query, SavedQuery } from '../clients/assets'
 import { operation, useOperation } from '../../../services/useOperation'
 import PageFrame from '../../../components/PageFrame.vue'
-import CriteriaEditor from '../components/CriteriaEditor.vue'
+import ConditionEditor from '../components/ConditionEditor.vue'
+import { inventoryCondition, type InventoryCondition } from '../clients/asset-model'
 import BatchPanel from '../components/BatchPanel.vue'
 import AssetValue from '../components/AssetValue.vue'
 const { t } = useI18n(),
@@ -14,7 +15,7 @@ const { t } = useI18n(),
   client = runtime.devices.assets,
   { run, runWrite, busy, failure, uncertain } = useOperation()
 const fields = ref<FieldDefinition[]>([]),
-  criteria = ref<Criteria | null>(null),
+  criteria = ref<InventoryCondition | null>(null),
   select = ref<string[]>([]),
   sort = ref(''),
   descending = ref(false)
@@ -40,11 +41,16 @@ function write<T>(request: () => Promise<T>, apply: (value: T) => void) {
   pending = () => runWrite(request, apply)
   void pending()
 }
-function definition(): Query {
-  return {
-    criteria: structuredClone(toRaw(criteria.value)),
-    select: [...select.value],
-    sort: sort.value ? { field: sort.value, descending: descending.value } : null,
+function definition(): Query | null {
+  try {
+    return {
+      criteria: criteria.value ? inventoryCondition(criteria.value) : null,
+      select: [...select.value],
+      sort: sort.value ? { field: sort.value, descending: descending.value } : null,
+    }
+  } catch {
+    failure.value = 'invalidRequest'
+    return null
   }
 }
 function accepted(v: { task: string }) {
@@ -55,7 +61,9 @@ function accepted(v: { task: string }) {
   facets.value = undefined
 }
 function search() {
-  const body = operation(definition())
+  const query = definition()
+  if (!query) return
+  const body = operation(query)
   write(() => client.search(body), accepted)
 }
 function refresh() {
@@ -98,7 +106,7 @@ function load(item: SavedQuery) {
       current.value = v
       if (!v.definition) return
       name.value = v.definition.name
-      criteria.value = v.definition.query.criteria
+      criteria.value = structuredClone(v.definition.query.criteria)
       select.value = v.definition.query.select
       sort.value = v.definition.query.sort?.field ?? ''
       descending.value = v.definition.query.sort?.descending ?? false
@@ -107,11 +115,13 @@ function load(item: SavedQuery) {
 }
 function save(remove = false) {
   if (remove && !current.value) return
+  const query = remove ? null : definition()
+  if (!remove && !query) return
   const id = current.value?.id ?? crypto.randomUUID(),
     body = operation(
       remove
         ? { action: 'delete' as const }
-        : { action: 'put' as const, definition: { name: name.value, query: definition() } },
+        : { action: 'put' as const, definition: { name: name.value, query: query! } },
       current.value?.revision ?? 0,
     )
   write(
@@ -149,7 +159,7 @@ function newSaved() {
     <form class="console-panel" @submit.prevent="search">
       <h2>{{ t('devices.search') }}</h2>
       <fieldset :disabled="busy || uncertain">
-        <CriteriaEditor v-model="criteria" :fields="fields" />
+        <ConditionEditor v-model="criteria" :fields="fields" />
         <label
           >{{ t('devices.sort') }}
           <select v-model="sort" class="ui-input">
@@ -302,7 +312,7 @@ function newSaved() {
           {{ t(`devices.${current.definition.query.sort?.descending ? 'yes' : 'no'}`) }}
         </p>
         <fieldset disabled>
-          <CriteriaEditor :model-value="current.definition.query.criteria" :fields="fields" />
+          <ConditionEditor :model-value="current.definition.query.criteria" :fields="fields" />
         </fieldset>
       </section>
       <form @submit.prevent="save()">

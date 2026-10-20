@@ -10,7 +10,7 @@ import {
 import { catalog, fact, type DemoDevice } from './fixtures'
 import { asset } from './http'
 import { createPages, createReceipts, error, operation } from '../http'
-import { evaluate } from './criteria'
+import { evaluateCondition } from './criteria'
 interface Search {
   reads: number
   devices: Inventory[]
@@ -25,7 +25,13 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
     const all = empty
       ? []
       : [...devices().values()].filter((d) => d.summary.inventoryAvailable).map((d) => d.inventory)
-    const evaluations = all.map((device) => ({ device, ...evaluate(input.criteria, device) }))
+    const evaluations = all.map((device) => ({
+      device,
+      ...evaluateCondition(input.criteria, [
+        device,
+        ...(devices().get(device.device)?.scopedInventory ?? []),
+      ]),
+    }))
     const selected = evaluations
       .filter((v) => v.decision === 'match')
       .map((v) => structuredClone(v.device))

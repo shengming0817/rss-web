@@ -1,24 +1,26 @@
 // Production Vue + real MDM/Identity HTTPS/PG. Only a committed response is deliberately lost.
+import { Buffer } from 'node:buffer'
 import { chromium } from 'playwright'
 import { readFileSync, statSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { randomUUID } from 'node:crypto'
+import { randomUUID, createHash } from 'node:crypto'
 import assert from 'node:assert/strict'
 import process from 'node:process'
 let browser,
   context,
   page,
   phase = 'environment',
-  result = 'failed'
+  result = 'failed',
+  associatedDiagnostics
 const coverage = [],
   responses = [],
   pageErrors = []
 const stop = () => browser?.close().catch(() => {})
 process.once('SIGINT', stop)
 process.once('SIGTERM', stop)
-const timer = setTimeout(stop, 170000)
+const timer = setTimeout(stop, 290000)
 try {
   const fixture = JSON.parse(readFileSync(process.env.MDM_DEVICE_BROWSER_FIXTURE, 'utf8')),
     origin = new URL(fixture.origin).origin
@@ -427,8 +429,215 @@ try {
   await loaded()
   await page.getByRole('button', { name: '刷新进度（保留编辑）', exact: true }).click()
   await loaded()
-  assert.ok((await page.locator('main').textContent()).includes(assignment.target.registrationId))
+  await page.getByRole('button', { name: '来源与历史证据', exact: true }).first().click()
+  assert.ok(
+    (await page.getByRole('dialog').textContent()).includes(assignment.target.registrationId),
+  )
+  await page.keyboard.press('Escape')
   coverage.push('real-endpoint-group-scope-channel-and-canonical-assignments')
+  await page.goto(path(`device-views/association/${id}`))
+  await loaded()
+  phase = 'associated-group-scope-assignments'
+  // Associated evaluation requires collected evidence bound to original registrations.
+  advanceGeneration('seed-associated-inventory')
+  await page.goto(path('devices/groups'))
+  await loaded()
+  await page.getByRole('button', { name: '创建', exact: true }).click()
+  const editor = page.getByRole('dialog')
+  await editor.getByTestId('group-name').fill('Browser associated group')
+  await editor.getByTestId('group-kind').selectOption('dynamic')
+  await editor.getByTestId('group-context').selectOption('associated_device')
+  await editor
+    .locator('.condition-editor')
+    .getByRole('combobox', { name: '类型', exact: true })
+    .selectOption('predicate')
+  await editor.getByRole('combobox', { name: '字段', exact: true }).selectOption('device.model')
+  await editor.locator('.condition-editor input').last().fill('browser-associated-model')
+  const groupCreated = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      /\/api\/v1\/groups\/[^/]+$/.test(new URL(r.url()).pathname),
+  )
+  await editor.getByRole('button', { name: '保存', exact: true }).click()
+  const groupReceipt = await groupCreated
+  assert.equal(groupReceipt.status(), 200)
+  const associated = await groupReceipt.json()
+  assert.equal(associated.group.assetContext, 'associated_device')
+  await settled(`/api/v1/groups/${associated.group.id}/tasks/${associated.task}`)
+  const associatedRead = await api(`/api/v1/groups/${associated.group.id}`)
+  assert.deepEqual(associatedRead.criteria.selector, { kind: 'device' })
+  assert.equal(associatedRead.criteria.quantifier, 'one')
+  const associatedMembers = await api(
+    `/api/v1/groups/${associated.group.id}/results/${associated.task}/members`,
+  )
+  const associatedDecisions = await api(
+    `/api/v1/groups/${associated.group.id}/results/${associated.task}/decisions`,
+  )
+  associatedDiagnostics = {
+    conditionKind: associatedRead.criteria.criteria.kind,
+    field: associatedRead.criteria.criteria.field,
+    members: associatedMembers.page.items.map((o) => ({
+      kind: o.kind,
+      pair: o.id === id,
+      alone: o.id === fixture.alone,
+    })),
+    decisions: associatedDecisions.page.items
+      .filter((d) => d.object.id === id || d.object.id === fixture.alone)
+      .map((d) => ({
+        kind: d.object.kind,
+        pair: d.object.id === id,
+        alone: d.object.id === fixture.alone,
+        decision: d.decision,
+        verified: d.sourceObjects.map((s) => s.verified),
+      })),
+  }
+  assert.deepEqual(
+    new Set(associatedMembers.page.items.map((o) => `${o.kind}:${o.id}`)),
+    new Set([`association:${id}`, `endpoint:${fixture.alone}`]),
+  )
+  const pairDecision = associatedDecisions.page.items.find(
+    (d) => d.object.kind === 'association' && d.object.id === id,
+  )
+  assert.ok(
+    pairDecision.sourceObjects[0].members.some(
+      (m) => m.device === fixture.agent && m.generation === 2,
+    ),
+  )
+  await page.locator('[data-testid=server-definition] a').click()
+  const scopeSaved = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      /\/api\/v1\/scopes\/[^/]+$/.test(new URL(r.url()).pathname),
+  )
+  await page.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).click()
+  const scopeSavedResponse = await scopeSaved
+  assert.equal(scopeSavedResponse.status(), 200)
+  const associatedScope = await scopeSavedResponse.json()
+  await settled(`/api/v1/scopes/${associatedScope.id}/tasks/${associatedScope.task}`)
+  for (const channel of ['mdm', 'agent']) {
+    const values = await api(
+      `/api/v1/scopes/${associatedScope.id}/results/${associatedScope.task}/members?channel=${channel}`,
+    )
+    assert.ok(values.page.items.every((o) => o.kind === 'endpoint'))
+    assert.ok(values.page.items.some((o) => o.id === fixture[channel]))
+  }
+  const scriptResource = randomUUID(),
+    scriptPolicy = randomUUID(),
+    script = Buffer.from('Write-Output "Browser contract acceptance"'),
+    digest = [...createHash('sha256').update(script).digest()]
+  await mutate(`/api/v1/resources/${scriptResource}`, { action: 'create', kind: 'script' })
+  await mutate(
+    `/api/v1/resources/${scriptResource}`,
+    {
+      action: 'version',
+      kind: 'script',
+      version: '1',
+      variants: [
+        {
+          platform: 'windows',
+          architecture: 'x86_64',
+          key: 'default',
+          declaration: {
+            kind: 'script',
+            artifact: { reference: 'browser.ps1', length: script.length, sha256: digest },
+            definition: {
+              profile: 'power_shell7',
+              sql: null,
+              runAs: 'system',
+              encoding: 'utf8',
+              parameters: {
+                type: 'object',
+                properties: {},
+                required: [],
+                additionalProperties: false,
+              },
+              bindings: {},
+              output: { type: 'object' },
+              purpose: { kind: 'action' },
+              timeoutSeconds: 30,
+              outputBytes: 1024,
+              maxRows: 1,
+            },
+          },
+        },
+      ],
+    },
+    1,
+  )
+  const content = await request(
+    'post',
+    origin +
+      `/api/v1/resources/${scriptResource}/content?version=1&variant=default&platform=windows&architecture=x86_64&operation=${randomUUID()}`,
+    { headers: { ...(await headers()), 'Content-Type': 'application/octet-stream' }, data: script },
+  )
+  assert.equal(content.status(), 201)
+  await mutate(`/api/v1/resources/${scriptResource}`, { action: 'activate', version: '1' }, 2)
+  await mutate(`/api/v1/policies/${scriptPolicy}`, {
+    action: 'put',
+    enabled: true,
+    definition: {
+      scope: associatedScope.id,
+      action: {
+        kind: 'execution',
+        resource: {
+          id: scriptResource,
+          version: '1',
+          platform: 'windows',
+          architecture: 'x86_64',
+          variant: 'default',
+        },
+        parameters: {},
+        schedule: {
+          trigger: { kind: 'manual' },
+          misfire: { kind: 'coalesce_one' },
+          notBefore: 0,
+          until: null,
+          jitterSeconds: 0,
+          window: null,
+        },
+        frequency: 'once_per_version',
+        runLifetimeSeconds: 300,
+      },
+    },
+  })
+  const assignments = () => api(`/api/v1/policies/${scriptPolicy}/assignments`)
+  const before = await assignments(),
+    pair = before.items.find((a) => a.object.kind === 'association' && a.object.id === id),
+    missing = before.items.find((a) => a.object.id === fixture.alone)
+  assert.equal(pair.availability, 'ready')
+  assert.equal(pair.target.device, fixture.agent)
+  assert.equal(pair.sources[0].associationVersion, association.version)
+  assert.deepEqual(
+    new Set(pair.sources[0].members.map((m) => m.device)),
+    new Set([fixture.mdm, fixture.agent]),
+  )
+  assert.equal(missing.availability, 'unavailable')
+  assert.equal(missing.reason, 'channel_unavailable')
+  assert.equal(missing.target, null)
+  await page.goto(path(`policies/assignments?id=${scriptPolicy}`))
+  await loaded()
+  await page.getByRole('button', { name: '刷新进度（保留编辑）', exact: true }).click()
+  await loaded()
+  assert.ok((await page.locator('main').textContent()).includes(fixture.alone))
+  advanceGeneration('add-agent-to-alone')
+  const recoveryDeadline = Date.now() + 30000
+  let restored
+  while (Date.now() < recoveryDeadline) {
+    restored = (await assignments()).items.find((a) => a.object.id === fixture.alone)
+    if (restored?.availability === 'ready') break
+    await new Promise((r) => setTimeout(r, 250))
+  }
+  assert.equal(restored?.availability, 'ready')
+  assert.deepEqual(restored.object, { kind: 'endpoint', id: fixture.alone })
+  assert.equal(restored.target.channel, 'agent')
+  assert.equal(restored.target.generation, 1)
+  await page.getByRole('button', { name: '刷新进度（保留编辑）', exact: true }).click()
+  await loaded()
+  const restoredRow = page.locator('tr').filter({ hasText: fixture.alone })
+  await restoredRow.getByRole('button', { name: '来源与历史证据', exact: true }).click()
+  assert.ok((await page.getByRole('dialog').textContent()).includes(restored.target.registrationId))
+  await page.keyboard.press('Escape')
+  coverage.push('real-associated-dynamic-group-canonical-assignments-and-channel-recovery')
   await page.goto(path(`device-views/association/${id}`))
   await loaded()
   phase = 'authorization'
@@ -489,6 +698,22 @@ try {
           .locator('#login-name')
           .count()
           .catch(() => 0),
+        scopeResults: await page
+          .locator('.scope-results')
+          .count()
+          .catch(() => 0),
+        dialogs: await page
+          .getByRole('dialog')
+          .count()
+          .catch(() => 0),
+        taskButtons: await page
+          .getByRole('button', { name: '读取任务状态', exact: true })
+          .count()
+          .catch(() => 0),
+        taskButtonEnabled: await page
+          .getByRole('button', { name: '读取任务状态', exact: true })
+          .isEnabled()
+          .catch(() => false),
         failures: ['输入或响应无效', '请求被拒绝', '对象或操作不存在', '服务暂不可用'].filter(
           (text) => alerts.some((alert) => alert.includes(text)),
         ),
@@ -503,6 +728,7 @@ try {
       ui,
       responses,
       pageErrors,
+      associatedDiagnostics,
     }),
   )
 } finally {

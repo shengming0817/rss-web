@@ -1,4 +1,4 @@
-import { targetFacts } from '../policies/targets'
+import { objectKey } from '../../src/features/devices/clients/objects'
 import { supportsSoftwareRemoval } from '../../src/features/policies/clients/software-definition'
 import { createHash } from 'node:crypto'
 import type { DomainHandler, Scenario, DemoEvent } from '../scenario'
@@ -19,7 +19,11 @@ import { createPolicyRuns, softwareProfiles } from './runs'
 type Definition = SoftwarePolicyDefinition
 export function createSoftwarePolicyDemo(
   devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts' | 'objects'>,
-  scopes: Pick<ReturnType<typeof createScopeDemo>, 'resolve' | 'snapshot'>,
+  scopes: {
+    resolve: (id: string, channel?: 'agent' | 'mdm') => { members: string[] } | null
+    snapshot: (id: string) => { result: string } | null
+    assignments: ReturnType<typeof createScopeDemo>['assignments']
+  },
   resources: Pick<ReturnType<typeof createResourceDemo>, 'read'>,
   lifecycle: Pick<ReturnType<typeof createLifecycleDemo>, 'isEnabled' | 'binding'>,
   publication: Pick<ReturnType<typeof createPublicationDemo>, 'binding'>,
@@ -76,21 +80,21 @@ export function createSoftwarePolicyDemo(
       const definition = softwarePolicyDefinition(raw),
         failure = admissionFailure(definition)
       if (failure) return failure
-      return !scopes.resolve(definition.scope) ||
-        definition.action.rollout.stages.some((s) => !scopes.resolve(s.scope))
+      return !scopes.resolve(definition.scope, 'agent') ||
+        definition.action.rollout.stages.some((s) => !scopes.resolve(s.scope, 'agent'))
         ? error('operation_conflict')
         : undefined
     },
     (d) => (d.action.kind === 'software' ? binding(d.action) : null),
   )
   function members(d: Definition, index: number) {
-    const root = scopes.resolve(d.scope)?.members ?? [],
+    const root = scopes.resolve(d.scope, 'agent')?.members ?? [],
       prior = new Set(
         d.action.rollout.stages
           .slice(0, index)
-          .flatMap((s) => scopes.resolve(s.scope)?.members ?? []),
+          .flatMap((s) => scopes.resolve(s.scope, 'agent')?.members ?? []),
       )
-    return (scopes.resolve(d.action.rollout.stages[index]!.scope)?.members ?? []).filter(
+    return (scopes.resolve(d.action.rollout.stages[index]!.scope, 'agent')?.members ?? []).filter(
       (v) => root.includes(v) && !prior.has(v),
     )
   }
@@ -157,11 +161,11 @@ export function createSoftwarePolicyDemo(
     if (!enabled) return { state: 'paused' }
     if (now < d.action.schedule.notBefore || now >= (d.action.schedule.until ?? Infinity))
       return { state: 'outside_window' }
-    const root = scopes.resolve(d.scope)
+    const root = scopes.resolve(d.scope, 'agent')
     if (!root?.members.includes(device)) return { state: 'outside_scope' }
     let stage = -1
     for (const [index, s] of d.action.rollout.stages.entries()) {
-      const scope = scopes.resolve(s.scope)
+      const scope = scopes.resolve(s.scope, 'agent')
       if (!scope) return { state: 'scope_pending', stage: index }
       if (scope.members.includes(device)) {
         stage = index
@@ -218,27 +222,18 @@ export function createSoftwarePolicyDemo(
         if (!snapshot || ('scopeResult' in input && uuid(input['scopeResult']) !== snapshot.result))
           return error('operation_conflict')
         const result = page(
-          scenario === 'empty' ? [] : snapshot.devices,
+          scenario === 'empty' ? [] : scopes.assignments(d.scope, d.action.channel),
           'after' in input ? identifier(input['after']) : null,
-          (d) => d,
+          (row) => objectKey(row.object),
         )
         return ok({
           action: d.action,
           scopeResult: snapshot.result,
           nextCursor: result.nextCursor,
-          items: result.items.map((device) => ({
-            ...(() => {
-              const { sources: _sources, ...facts } = targetFacts(devices, device, 'agent')
-              void _sources
-              return facts
-            })(),
-            eligibility:
-              scopes.resolve(d.scope) === null
-                ? { state: 'pending' }
-                : scopes.resolve(d.scope)?.members.includes(device)
-                  ? { state: 'eligible', entry: 1 }
-                  : { state: 'excluded' },
-            taskAdmission: management(d, true, '', device),
+          items: result.items.map(({ sources: _sources, qualification, ...row }) => ({
+            ...row,
+            eligibility: qualification,
+            taskAdmission: row.target ? management(d, true, '', row.target.device) : null,
           })),
         })
       }
@@ -303,25 +298,22 @@ export function createSoftwarePolicyDemo(
             })),
           })
         if (suffix === 'assignments') {
-          const snapshot = scopes.snapshot(p.definition.scope)
           const result = page(
-            scenario === 'empty' ? [] : (snapshot?.devices ?? []),
+            scenario === 'empty'
+              ? []
+              : scopes.assignments(p.definition.scope, p.definition.action.channel),
             request.query.get('after'),
-            (d) => d,
+            (row) => objectKey(row.object),
           )
           return ok({
             ...result,
-            items: result.items.map((device) => {
-              const state = management(p.definition, p.enabled, p.versionId, device)
+            items: result.items.map((row) => {
+              const state = row.target
+                ? management(p.definition, p.enabled, p.versionId, row.target.device)
+                : null
               return {
-                ...targetFacts(devices, device, 'agent'),
-                scopeResult: snapshot!.result,
-                qualification:
-                  state.state === 'eligible'
-                    ? { state: 'eligible' as const, entry: 1 }
-                    : state.state === 'outside_scope' && scopes.resolve(p.definition.scope) !== null
-                      ? { state: 'excluded' as const }
-                      : { state: 'pending' as const },
+                ...row,
+                ...(!p.enabled ? { availability: 'unavailable', reason: 'policy_disabled' } : {}),
                 taskAdmission: state,
                 operationIds: [],
               }
@@ -340,7 +332,7 @@ export function createSoftwarePolicyDemo(
     runs,
     createManagedPolicy(input: SoftwarePolicyDefinition) {
       const definition = softwarePolicyDefinition(input)
-      if (admissionFailure(definition) || !scopes.resolve(definition.scope))
+      if (admissionFailure(definition) || !scopes.resolve(definition.scope, 'agent'))
         throw new Error('Request assignment unavailable')
       return store.createManaged(definition)
     },

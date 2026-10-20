@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { UiButton } from '@rss/core/components'
-import { computed } from 'vue'
+import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Criteria, FieldDefinition, Scalar } from '../clients/asset-model'
 import { editableField } from '../clients/asset-model'
@@ -11,7 +11,9 @@ const props = defineProps<{
   depth?: number
 }>()
 const emit = defineEmits<{ 'update:modelValue': [value: Criteria | null] }>()
-const { t } = useI18n()
+const { t } = useI18n(),
+  fieldQuery = ref(''),
+  fieldList = useId()
 const field = computed(() =>
   props.fields.find(
     (f) => props.modelValue?.kind === 'predicate' && f.key === props.modelValue.field,
@@ -74,13 +76,27 @@ function operand(index: number, value?: Scalar) {
       <option v-if="(depth ?? 0) < 8" value="or">{{ t('devices.or') }}</option>
     </select>
     <template v-if="modelValue?.kind === 'predicate'">
+      <label :for="fieldList" class="ui-sr-only">{{ t('devices.searchFields') }}</label
+      ><input
+        :id="fieldList"
+        v-model="fieldQuery"
+        class="ui-input"
+        type="search"
+        :placeholder="t('devices.searchFields')"
+      />
       <select
         class="ui-input"
         :aria-label="t('devices.field')"
         :value="modelValue.field"
         @change="predicate(($event.target as HTMLSelectElement).value)"
       >
-        <option v-for="f in fields.filter(editableField)" :key="f.key" :value="f.key">
+        <option
+          v-for="f in fields
+            .filter(editableField)
+            .filter((f) => f.key.toLowerCase().includes(fieldQuery.toLowerCase()))"
+          :key="f.key"
+          :value="f.key"
+        >
           {{ f.key }} ({{ f.kind }})
         </option>
       </select>

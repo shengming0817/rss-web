@@ -77,3 +77,101 @@ it('edits catalog-driven set predicates and nested AND/OR without flattening', a
   expect(wrapper.props('modelValue')).toBeNull()
   wrapper.unmount()
 })
+
+it('edits complete condition selectors without changing the predicate or retaining an invalid quantifier', async () => {
+  const { default: ConditionEditor } = await import('./ConditionEditor.vue')
+  const { deviceCondition } = await import('../clients/asset-model')
+  const model = deviceCondition({
+    kind: 'predicate',
+    field: 'custom.is_loaner',
+    op: 'eq',
+    value: { kind: 'boolean', value: false },
+  })
+  const wrapper = mount(ConditionEditor, {
+    props: {
+      modelValue: model,
+      fields: catalog,
+      'onUpdate:modelValue': (v) => wrapper.setProps({ modelValue: v }),
+    },
+    global: { plugins: [mdmI18n()] },
+  })
+  const select = () => wrapper.find('details select')
+  await select().setValue('all_authorized')
+  expect(wrapper.props('modelValue')).toMatchObject({
+    selector: { kind: 'all_authorized' },
+    quantifier: 'any',
+    criteria: model.criteria,
+  })
+  await wrapper.findAll('details select').at(-1)!.setValue('all')
+  expect(wrapper.props('modelValue')?.quantifier).toBe('all')
+  await select().setValue('local_user')
+  await wrapper.findAll('details select')[1]!.setValue('macos')
+  await wrapper.find('details input').setValue('501')
+  expect(wrapper.props('modelValue')?.selector).toEqual({
+    kind: 'local_user',
+    platform: 'macos',
+    identity: '501',
+  })
+  await select().setValue('exact')
+  expect(wrapper.props('modelValue')).toMatchObject({
+    selector: { kind: 'exact', scope: { kind: 'device' } },
+    quantifier: 'one',
+    criteria: model.criteria,
+  })
+  await select().setValue('unfiltered')
+  expect(wrapper.props('modelValue')).toBeNull()
+  wrapper.unmount()
+})
+it('builds structured exact namespaces and bound account coordinates without JSON input', async () => {
+  const { default: ScopeEditor } = await import('./ScopeEditor.vue')
+  const wrapper = mount(ScopeEditor, {
+    props: {
+      modelValue: { kind: 'device' as const },
+      'onUpdate:modelValue': (v) => wrapper.setProps({ modelValue: v }),
+    },
+    global: { plugins: [mdmI18n()] },
+  })
+  await wrapper.find('select').setValue('native_certificates')
+  await wrapper.findAll('select')[1]!.setValue('macos')
+  await wrapper.findAll('select')[2]!.setValue('login')
+  expect(wrapper.props('modelValue')).toMatchObject({
+    kind: 'native_certificates',
+    platform: 'macos',
+    store: 'login',
+    owner: { kind: 'macos' },
+  })
+  await wrapper.findAll('input[type=number]')[0]!.setValue('501')
+  await wrapper.find('input:not([type])').setValue('11111111-1111-4111-8111-111111111111')
+  expect(wrapper.props('modelValue')).toMatchObject({
+    owner: { kind: 'macos', uid: 501, generated_uid: '11111111-1111-4111-8111-111111111111' },
+  })
+  await wrapper.find('select').setValue('macos_brew')
+  await wrapper.find('input:not([type])').setValue('homebrew/core, corp/tools')
+  expect(wrapper.props('modelValue')).toMatchObject({
+    kind: 'macos_brew',
+    taps: ['homebrew/core', 'corp/tools'],
+  })
+  wrapper.unmount()
+})
+
+it('emits condition edits without mutating an already loaded server snapshot', async () => {
+  const { default: ConditionEditor } = await import('./ConditionEditor.vue')
+  const original = {
+    selector: { kind: 'local_user' as const, platform: 'windows' as const, identity: 'S-1-5-21' },
+    quantifier: 'any' as const,
+    criteria: { kind: 'and' as const, children: [] },
+  }
+  const before = structuredClone(original)
+  const wrapper = mount(ConditionEditor, {
+    props: { modelValue: original, fields: catalog },
+    global: { plugins: [mdmI18n()] },
+  })
+  await wrapper.find('details input').setValue('S-1-5-22')
+  expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toMatchObject({
+    selector: { identity: 'S-1-5-22' },
+  })
+  await wrapper.findAll('details select').at(-1)!.setValue('all')
+  expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toMatchObject({ quantifier: 'all' })
+  expect(original).toEqual(before)
+  wrapper.unmount()
+})
