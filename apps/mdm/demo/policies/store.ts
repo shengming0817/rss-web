@@ -79,6 +79,7 @@ export function createPolicyStore() {
     const p = {
       id,
       definition: structuredClone(definition),
+      state: enabled ? ('enabled' as const) : ('disabled' as const),
       enabled,
       revision: (old?.revision ?? 0) + 1,
       version: same ? old.version : (old?.version ?? 0) + 1,
@@ -88,10 +89,14 @@ export function createPolicyStore() {
     if (replace || !semantics.has(id)) semantics.set(id, identity)
     return p
   }
-  const wire = (p: PolicyRead) => {
-    const { enabled, ...v } = p
-    return { ...v, state: enabled ? 'enabled' : 'disabled' }
-  }
+  const wire = (p: PolicyRead) => ({
+    id: p.id,
+    revision: p.revision,
+    version: p.version,
+    versionId: p.versionId,
+    state: p.state,
+    definition: p.definition,
+  })
   const cursors = new Map<string, { after: string; binding: string }>()
   const handle: DomainHandler = (request, scenario) => {
     if (request.path !== '/api/v1/policies' && !/^\/api\/v1\/policies\/[^/]+$/.test(request.path))
@@ -139,7 +144,6 @@ export function createPolicyStore() {
             'request_mdm_enrollment',
           ] as const)
         const state = request.query.get('state'),
-          enabled = state === 'enabled' ? 'true' : state === 'disabled' ? 'false' : null,
           scope = request.query.get('scope'),
           resource = request.query.get('resource')
         if (state !== null && !['enabled', 'disabled', 'archived'].includes(state))
@@ -150,7 +154,7 @@ export function createPolicyStore() {
             (p) =>
               (!after || (descending ? p.id < after : p.id > after)) &&
               (!action || p.definition.action.kind === action) &&
-              (enabled === null || p.enabled === (enabled === 'true')) &&
+              (state === null ? p.state !== 'archived' : p.state === state) &&
               (!scope || p.definition.scope === scope) &&
               (!resource ||
                 ('resource' in p.definition.action &&
@@ -164,11 +168,25 @@ export function createPolicyStore() {
       const id = uuid(request.path.split('/').at(-1)),
         old = rows.get(id)
       if (request.method === 'GET') return old ? ok(wire(old)) : error('policy_not_found', 404)
-      if (request.method !== 'POST') return
+      if (request.method !== 'POST' && request.method !== 'DELETE') return
       if (managed.has(id)) return error('permission_denied', 403)
-      const op = operation(request.body)
+      const deleting = request.method === 'DELETE'
+      const op = deleting
+        ? (() => {
+            const body = closed(request.body, ['operationId', 'expectedRevision'])
+            return operation({ ...body, input: { action: 'archive' } })
+          })()
+        : operation(request.body)
       return receipts.write(request, op.operationId, () => {
-        if (op.expectedRevision !== (old?.revision ?? 0)) return error('operation_conflict')
+        if (op.expectedRevision !== (old?.revision ?? 0) || old?.state === 'archived')
+          return error('operation_conflict')
+        if (deleting) {
+          if (!old) return error('policy_not_found', 404)
+          if (old.state !== 'disabled') return error('operation_conflict')
+          const archived: PolicyRead = { ...old, revision: old.revision + 1, state: 'archived' }
+          rows.set(id, archived)
+          return ok(wire(archived))
+        }
         const input = record(op.input),
           action = enumeration(input['action'], ['put', 'enable', 'disable'] as const)
         if (action === 'put') {

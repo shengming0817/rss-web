@@ -21,13 +21,15 @@ import ResourceIdentity from '../components/ResourceIdentity.vue'
 import CatalogLocator from '../components/CatalogLocator.vue'
 import AssignmentFacts from '../components/AssignmentFacts.vue'
 import { objectKey } from '../../devices/clients/objects'
+import { deviceBinding } from '../../devices/useDeviceBinding'
 import PageFrame from '../../../components/PageFrame.vue'
+import PolicyDelete from '../components/PolicyDelete.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.policies.policies,
   route = useRoute(),
   router = useRouter()
-const { run, runWrite, busy, failure, uncertain } = useOperation()
+const { run, runWrite, busy, failure, uncertain } = useOperation([], () => deviceBinding(runtime))
 const list = ref<Awaited<ReturnType<typeof client.list>>>(),
   current = ref<PolicyRead>(),
   resource = ref<ResourceRead>()
@@ -230,7 +232,7 @@ function apply(p: PolicyRead) {
     p.definition.action.kind !== 'agent_collection'
   )
     throw new Error('Wrong policy action')
-  ready.value = true
+  ready.value = p.state !== 'archived'
   current.value = p
   id.value = p.id
   enabled.value = p.enabled
@@ -381,6 +383,8 @@ function change(input: PolicyChange) {
     busy.value ||
     uncertain.value ||
     !ready.value ||
+    current.value?.state === 'archived' ||
+    (input.action === 'archive' && current.value?.state !== 'disabled') ||
     (typeof route.query['id'] === 'string' && current.value?.id !== route.query['id'])
   )
     return
@@ -395,7 +399,9 @@ function change(input: PolicyChange) {
       if (requester() !== actor) throw new Error('Policy requester changed')
       apply(p)
       pending.value = undefined
-      list.value = undefined
+      if (p.state === 'archived' && list.value)
+        list.value.items = list.value.items.filter((item) => item.id !== p.id)
+      else list.value = undefined
       if (route.query['id'] !== p.id) void router.replace({ query: { ...route.query, id: p.id } })
     },
   )
@@ -413,8 +419,10 @@ async function recover() {
   ready.value = false
   const confirmed = await runWrite(
     () => client.change(original.id, structuredClone(toRaw(original.body))),
-    () => {
+    (p) => {
       if (requester() !== original.requester) throw new Error('Policy requester changed')
+      if (p.state === 'archived' && list.value)
+        list.value.items = list.value.items.filter((item) => item.id !== p.id)
       pending.value = undefined
     },
   )
@@ -462,7 +470,15 @@ onMounted(async () => {
       <li v-for="item in list?.items" :key="item.id">
         <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="select(item.id)">
           {{ item.definition.selfService?.displayName ?? item.id }} ·
-          {{ t(item.enabled ? 'policies.state.active' : 'policies.state.paused') }}
+          {{
+            t(
+              item.state === 'archived'
+                ? 'policies.state.archived'
+                : item.enabled
+                  ? 'policies.state.active'
+                  : 'policies.state.paused',
+            )
+          }}
         </UiButton>
       </li>
     </ul>
@@ -474,7 +490,8 @@ onMounted(async () => {
     >
       {{ t('policies.next') }}
     </UiButton>
-    <div v-if="current && !editing" class="console-toolbar">
+    <p v-if="current?.state === 'archived'" role="status">{{ t('policies.archivedHint') }}</p>
+    <div v-if="current && current.state !== 'archived' && !editing" class="console-toolbar">
       <UiButton type="button" :disabled="busy || uncertain" @click="editing = true">{{
         t('console.edit')
       }}</UiButton>
@@ -682,19 +699,34 @@ onMounted(async () => {
     <template v-if="current"
       ><p>
         {{ t('policies.revision') }} {{ current.revision }} · {{ t('policies.version') }}
-        {{ current.version }}
+        {{ current.version }} ·
+        {{
+          t(
+            current.state === 'archived'
+              ? 'policies.state.archived'
+              : current.enabled
+                ? 'policies.state.active'
+                : 'policies.state.paused',
+          )
+        }}
       </p>
       <UiButton :disabled="!!busy" type="submit" @click="open()">{{
         t('policies.reloadDefinition')
       }}</UiButton
       ><UiButton
-        :disabled="!!(busy || uncertain)"
+        v-if="current.state !== 'archived'"
+        :disabled="!!(busy || uncertain || !ready)"
         type="submit"
         @click="change({ action: current.enabled ? 'disable' : 'enable' })"
       >
         {{ t(current.enabled ? 'policies.selfService.disable' : 'policies.selfService.enable') }}
-      </UiButton></template
-    >
+      </UiButton>
+      <PolicyDelete
+        :policy="current"
+        :disabled="busy || uncertain || !ready"
+        @confirm="change({ action: 'archive' })"
+      />
+    </template>
     <UiButton
       v-if="definition.action.kind === 'configuration'"
       :disabled="!!(busy || uncertain || !ready || !selectedVariant)"

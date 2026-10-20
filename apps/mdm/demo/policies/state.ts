@@ -156,7 +156,11 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       ]) {
         const reply = owner.handle(request, scenario)
         if (reply) {
-          if (owner === policyStore && request.method === 'POST' && reply.status < 300) {
+          if (
+            owner === policyStore &&
+            ['POST', 'DELETE'].includes(request.method) &&
+            reply.status < 300
+          ) {
             software.reconcile()
             policies.reconcile(scenario)
             configurationPolicies.reconcile()

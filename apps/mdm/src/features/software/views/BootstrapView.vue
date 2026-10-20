@@ -1,17 +1,23 @@
 <script setup lang="ts">
 import { UiButton } from '@rss/core/components'
-import { ref, watch } from 'vue'
+import { onBeforeUnmount, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { useMdm } from '../../../context'
-import { operation, useOperation } from '../../../services/useOperation'
-import { defaultSchedule, policyDefinition, type PolicyRead } from '../../policies/clients/model'
+import { operation, useOperation, type Operation } from '../../../services/useOperation'
+import {
+  defaultSchedule,
+  policyDefinition,
+  type PolicyRead,
+  type PolicyChange,
+} from '../../policies/clients/model'
 import NativeScheduleEditor from '../components/NativeScheduleEditor.vue'
 import CatalogLocator from '../../policies/components/CatalogLocator.vue'
 import AssignmentFacts from '../../policies/components/AssignmentFacts.vue'
 import { objectKey } from '../../devices/clients/objects'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import PageFrame from '../../../components/PageFrame.vue'
+import PolicyDelete from '../../policies/components/PolicyDelete.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -31,6 +37,10 @@ const action = ref<'ensure_agent_installed' | 'request_mdm_enrollment'>('ensure_
   assignments = ref<Awaited<ReturnType<typeof client.assignments>>>(),
   records = ref<Awaited<ReturnType<typeof runtime.policies.executions.directory>>>(),
   releases = ref<Awaited<ReturnType<typeof runtime.onboarding.packages.list>>>([])
+let pending: { id: string; body: Operation<PolicyChange> } | undefined
+onBeforeUnmount(() => {
+  pending = undefined
+})
 const targets = ['windows_x86_64', 'windows_aarch64', 'macos_x86_64', 'macos_aarch64'] as const
 function apply(p: PolicyRead) {
   const a = p.definition.action
@@ -73,11 +83,33 @@ function create() {
   assignments.value = undefined
   editing.value = true
 }
-function write(input: Parameters<typeof client.change>[1]['input']) {
-  if (busy.value || uncertain.value) return
-  const target = current.value?.id ?? id.value,
-    body = operation(input, current.value?.revision ?? 0)
-  void runWrite(() => client.change(target, body), apply)
+function replay() {
+  const original = pending
+  if (!original || busy.value) return
+  void runWrite(
+    () => client.change(original.id, structuredClone(toRaw(original.body))),
+    (p) => {
+      pending = undefined
+      apply(p)
+      if (p.state === 'archived' && page.value)
+        page.value.items = page.value.items.filter((item) => item.id !== p.id)
+      else page.value = undefined
+    },
+  )
+}
+function write(input: PolicyChange) {
+  if (
+    busy.value ||
+    uncertain.value ||
+    current.value?.state === 'archived' ||
+    (input.action === 'archive' && current.value?.state !== 'disabled')
+  )
+    return
+  pending = {
+    id: current.value?.id ?? id.value,
+    body: operation(input, current.value?.revision ?? 0),
+  }
+  replay()
 }
 function save() {
   try {
@@ -130,6 +162,7 @@ function loadReleases() {
 watch(
   () => route.fullPath,
   () => {
+    pending = undefined
     current.value = undefined
     page.value = undefined
     assignments.value = undefined
@@ -153,6 +186,7 @@ watch(action, () => {
 watch(
   () => deviceBinding(runtime),
   () => {
+    pending = undefined
     current.value = undefined
     assignments.value = undefined
     records.value = undefined
@@ -189,19 +223,47 @@ watch(
       <h2 data-testid="onboarding-policy-locator">{{ current.id }} · {{ current.revision }}</h2>
       <p>
         {{ current.definition.scope }} ·
-        {{ t(current.enabled ? 'policies.state.active' : 'policies.state.paused') }}
+        {{
+          t(
+            current.state === 'archived'
+              ? 'policies.state.archived'
+              : current.enabled
+                ? 'policies.state.active'
+                : 'policies.state.paused',
+          )
+        }}
       </p>
-      <UiButton :disabled="busy || uncertain" @click="editing = true">{{
-        t('console.edit')
-      }}</UiButton
+      <p v-if="current.state === 'archived'" role="status">{{ t('policies.archivedHint') }}</p>
+      <UiButton
+        v-if="current.state !== 'archived'"
+        :disabled="busy || uncertain"
+        @click="editing = true"
+        >{{ t('console.edit') }}</UiButton
       ><UiButton
+        v-if="current.state !== 'archived'"
         :disabled="busy || uncertain"
         @click="write({ action: current.enabled ? 'disable' : 'enable' })"
         >{{ t(current.enabled ? 'software.disable' : 'software.enable') }}</UiButton
       ><UiButton :disabled="busy" @click="progress()">{{ t('policies.refreshProgress') }}</UiButton>
       <UiButton :disabled="busy" @click="executions()">{{ t('policies.executions') }}</UiButton>
     </section>
-    <form v-if="editing" class="console-panel" @submit.prevent="save">
+    <p v-if="uncertain && pending" role="alert">
+      {{ t('policies.selfService.unknown', { id: pending.body.operationId }) }}
+    </p>
+    <UiButton v-if="uncertain && pending" :disabled="busy" @click="replay">{{
+      t('policies.selfService.recover')
+    }}</UiButton>
+    <PolicyDelete
+      v-if="current"
+      :policy="current"
+      :disabled="busy || uncertain"
+      @confirm="write({ action: 'archive' })"
+    />
+    <form
+      v-if="editing && current?.state !== 'archived'"
+      class="console-panel"
+      @submit.prevent="save"
+    >
       <fieldset :disabled="busy || uncertain">
         <label>{{ t('policies.scope') }}<input v-model="scope" class="ui-input" required /></label
         ><CatalogLocator
