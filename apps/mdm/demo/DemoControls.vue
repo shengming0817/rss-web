@@ -204,7 +204,7 @@ function submitConfirmed() {
             {{
               locale === 'zh-CN'
                 ? '模拟自动化触发事件（先登录并启用策略或工作流）'
-                : 'Simulate automation events (sign in and enable a policy or workflow first)'
+                : 'Simulate automation events (sign in and enable a policy first)'
             }}
           </summary>
           <label for="demo-event-kind">{{ locale === 'zh-CN' ? '事件' : 'Event' }}</label>

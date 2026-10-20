@@ -1,7 +1,7 @@
 import { targetFacts } from '../policies/targets'
 import { supportsSoftwareRemoval } from '../../src/features/policies/clients/software-definition'
 import { createHash } from 'node:crypto'
-import type { DomainHandler, Scenario } from '../scenario'
+import type { DomainHandler, Scenario, DemoEvent } from '../scenario'
 import { error, ok } from '../http'
 import { createPolicyStore } from '../policies/store'
 import type { createDeviceDemo } from '../devices/state'
@@ -9,7 +9,6 @@ import type { createResourceDemo } from '../policies/resources'
 import type { createScopeDemo } from '../policies/scopes'
 import type { createPublicationDemo } from './publication'
 import type { createLifecycleDemo } from './lifecycle'
-import type { DemoEvent } from '../policies/schedule'
 import { closed, identifier, uuid } from '../../src/services/decode'
 import {
   softwarePolicyDefinition,

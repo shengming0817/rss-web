@@ -1,7 +1,6 @@
 import { createExperienceDemo } from './experience'
 import { randomUUID } from 'node:crypto'
-import type { DomainHandler, Scenario } from '../scenario'
-import type { DemoEvent } from '../policies/schedule'
+import type { DomainHandler, Scenario, DemoEvent } from '../scenario'
 import type { createDeviceDemo } from '../devices/state'
 import type { createOperationsDemo } from '../operations/state'
 import type { createSecurityRequests } from './requests'

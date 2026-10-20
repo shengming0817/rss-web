@@ -12,8 +12,6 @@ export const consoleZh = {
     delete: '删除对象',
     activate: '激活配置',
     cancel: '取消任务',
-    start: '启动工作流',
-    archive: '归档工作流',
   },
   chooseLoaded: '从授权目录选择',
   selectionNotAdmission: '选择内容后仍需读取并验证版本、变体与准入状态。',
@@ -71,7 +69,6 @@ export const consoleZh = {
   configure: '配置',
   newTask: '开始任务',
   list: '对象列表',
-  workflowHint: '先选择对象，再查看详情或开始操作。',
   scopeBound: '仅针对明确选择的对象；预览不代表设备已生效。',
 }
 export const consoleEn: typeof consoleZh = {
@@ -88,8 +85,6 @@ export const consoleEn: typeof consoleZh = {
     delete: 'Delete object',
     activate: 'Activate configuration',
     cancel: 'Cancel task',
-    start: 'Start workflow',
-    archive: 'Archive workflow',
   },
   chooseLoaded: 'Choose from authorized directory',
   selectionNotAdmission:
@@ -151,7 +146,6 @@ export const consoleEn: typeof consoleZh = {
   configure: 'Configure',
   newTask: 'Start a task',
   list: 'Objects',
-  workflowHint: 'Choose an object to inspect its details or start an action.',
   scopeBound:
     'Applies only to explicitly selected objects. A preview does not prove device effect.',
 }

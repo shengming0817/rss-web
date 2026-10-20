@@ -43,7 +43,7 @@ async function setup(
           session: { state },
           workspace: { read },
           devices: { views: { list: directory } },
-          policies: { catalog: { approvals: async () => ({ items: [] }) } },
+          policies: { policies: { list: async () => ({ items: [] }) } },
           software: { assignments: { list: async () => ({ items: [] }) } },
           operations: { audit: { list: async () => ({ items: [] }) } },
         },
@@ -62,7 +62,6 @@ describe('workspace authorized facts', () => {
     expect(wrapper.text()).toContain('业务模块尚未交付')
     expect(wrapper.text()).toContain('42')
     expect(wrapper.text()).toContain('50')
-    expect(wrapper.text()).toContain('仅展示当前返回页')
     expect(wrapper.text()).toContain('Mock')
     await wrapper.find('button').trigger('click')
     await flushPromises()

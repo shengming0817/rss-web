@@ -55,10 +55,6 @@ const group = computed(
     </div>
     <div v-if="!collapsed && runtime.realm === 'tenant'" class="console-nav-footer">
       <RouterLink
-        :to="{ name: 'operations-approvals', params: { tenant: runtime.tenant } }"
-        @click="emit('navigate')"
-        >{{ t('operations.approvals') }}</RouterLink
-      ><RouterLink
         :to="{ name: 'operations-audit', params: { tenant: runtime.tenant } }"
         @click="emit('navigate')"
         >{{ t('operations.audit') }}</RouterLink

@@ -25,9 +25,7 @@ export const navigation = [
       { name: 'policy-resources', label: 'policies.resources' },
       { name: 'policy-configurations', label: 'policies.configurations' },
       { name: 'policy-scripts', label: 'policies.scripts' },
-      { name: 'policy-workflows', label: 'policies.workflows' },
       { name: 'policy-executions', label: 'policies.executions' },
-      { name: 'policy-approvals', label: 'policies.approvals' },
     ],
   },
   {
@@ -73,7 +71,6 @@ export const navigation = [
       { name: 'operations-alerts', label: 'operations.alerts' },
       { name: 'operations-alertRules', label: 'operations.alertRules' },
       { name: 'operations-reports', label: 'operations.reports' },
-      { name: 'operations-approvals', label: 'operations.approvals' },
     ],
   },
   {

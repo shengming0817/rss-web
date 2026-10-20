@@ -1,9 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
-import { createCatalogClient } from './catalog'
 import { createConfigurationsClient } from './configurations'
 import { createExecutionsClient } from './executions'
-import { createWorkflowsClient, type WorkflowDefinition } from './workflows'
 const tenant = '11111111-1111-4111-8111-111111111111'
 const id = '22222222-2222-4222-8222-222222222222'
 const snapshot = '33333333-3333-4333-8333-333333333333'
@@ -24,24 +22,6 @@ function transport(initial: unknown) {
     },
   }
 }
-it('binds candidate list envelopes to tenant and source and carries snapshot cursors', async () => {
-  const response = envelope({
-    snapshot,
-    items: [{ id, label: 'Workflow', revision: 1, status: 'active' }],
-    nextCursor: 'opaque',
-  })
-  const t = transport(response)
-  const client = createCatalogClient(t.http, tenant, true)
-  expect((await client.list('workflows')).nextCursor).toBe('opaque')
-  await client.list('workflows', 'opaque')
-  expect(t.request.mock.calls[1]![0]).toMatchObject({
-    path: '/api/v1/mdm-candidate/policies/workflows',
-    query: { cursor: 'opaque' },
-  })
-  await expect(createCatalogClient(t.http, tenant, false).list('workflows')).rejects.toThrow()
-  t.reply({ ...response, tenantId: id })
-  await expect(client.list('workflows')).rejects.toThrow()
-})
 it('reads published configuration versions and server preflight facts without authoring execution channels', async () => {
   const configuration = {
     id,
@@ -111,62 +91,4 @@ it('keeps accepted/published/received/effect/compliance as independent execution
   await expect(client.read(id)).rejects.toThrow()
   t.reply(envelope({ execution: { ...execution, id: snapshot } }))
   await expect(client.read(id)).rejects.toThrow()
-})
-it('submits workflow CAS without accepting an approver supplied by a browser', async () => {
-  const definition: WorkflowDefinition = {
-    name: 'Collect and review',
-    scope: tenant,
-    schedule: {
-      trigger: { kind: 'manual' },
-      misfire: 'skip',
-      notBefore: 0,
-      until: 86400,
-      jitterSeconds: 0,
-      window: null,
-    },
-    steps: [
-      {
-        id: snapshot,
-        name: 'Review',
-        action: { kind: 'approval' },
-        condition: null,
-        onFailure: 'stop',
-      },
-    ],
-  }
-  const workflow = { id, revision: 1, version: 1, status: 'active', definition }
-  const t = transport(envelope({ workflow }))
-  const client = createWorkflowsClient(t.http, tenant, true)
-  const body = {
-    operationId: snapshot,
-    expectedRevision: 0,
-    input: { action: 'put' as const, definition },
-  }
-  expect(await client.change(id, body)).toEqual(workflow)
-  expect(t.request.mock.calls[0]![0]).toMatchObject({
-    method: 'POST',
-    path: '/api/v1/mdm-candidate/policies/workflows/{id}',
-    body,
-  })
-  t.reply(envelope({ workflow: { ...workflow, approver: 'browser-selected' } }))
-  await expect(client.read(id)).rejects.toThrow()
-})
-it('rejects retired catalog statuses and workflow approvals without a concrete run', async () => {
-  const t = transport(
-      envelope({
-        snapshot,
-        items: [{ id, label: 'Bad', revision: 1, status: 'pending_review' }],
-        nextCursor: null,
-      }),
-    ),
-    client = createCatalogClient(t.http, tenant, true)
-  await expect(client.list('workflows')).rejects.toThrow()
-  t.reply(
-    envelope({
-      snapshot,
-      items: [{ kind: 'workflow', id, run: null, revision: 1, author: tenant, label: 'Review' }],
-      nextCursor: null,
-    }),
-  )
-  await expect(client.approvals()).rejects.toThrow()
 })

@@ -187,57 +187,6 @@ it('creates a formal Scope, changes the result channel explicitly, and deletes o
     app.cleanup()
   }
 }, 20000)
-it('authors and cancels an explicitly approved workflow through its own existing owner', async () => {
-  const app = await start()
-  try {
-    await app.router.push({ name: 'policy-workflows', params: { tenant: TENANT } })
-    await flushPromises()
-    await press(app, 'policies.create')
-    await main().get('#workflow-name').setValue('Controlled review')
-    await main().get('#workflow-scope').setValue(app.seed.scope)
-    await press(app, 'policies.addStep')
-    await press(app, 'policies.addStep')
-    await press(app, 'policies.down')
-    await press(app, 'policies.up', true)
-    await main().get('form').trigger('submit')
-    await flushPromises()
-    const put = app.calls.findLast(
-      (c) => c.method === 'POST' && c.path.includes('/workflows/') && !c.path.includes('/runs'),
-    )!
-    expect(put.body).toMatchObject({
-      input: {
-        action: 'put',
-        definition: {
-          name: 'Controlled review',
-          scope: app.seed.scope,
-          steps: [{ action: { kind: 'approval' } }, { action: { kind: 'approval' } }],
-        },
-      },
-    })
-    await press(app, 'policies.startWorkflow')
-    await press(app, 'identity.confirm')
-    expect(main().text()).not.toContain(app.i18n.global.t('policies.pendingApprovalHint'))
-    await app.transport.request({
-      method: 'POST',
-      path: '/api/v1/mdm-candidate/workspace/scenario',
-      body: { event: { kind: 'clock', at: Math.floor(Date.now() / 1000) + 1 } },
-      successStatus: 204,
-    })
-    await press(app, 'policies.verify')
-    expect(main().text()).toContain(app.i18n.global.t('policies.pendingApprovalHint'))
-    await press(app, 'policies.cancel')
-    await press(app, 'policies.verify')
-    await press(app, 'policies.executions')
-    expect(app.calls.some((c) => c.path.endsWith('/cancel') && c.method === 'POST')).toBe(true)
-    await press(app, 'policies.archive')
-    await press(app, 'identity.confirm')
-    expect(app.calls.findLast((c) => c.method === 'POST')?.body).toMatchObject({
-      input: { action: 'archive' },
-    })
-  } finally {
-    app.cleanup()
-  }
-}, 20000)
 it('versions, compares and preflights a platform configuration without treating preview as an applied effect', async () => {
   const app = await start()
   try {

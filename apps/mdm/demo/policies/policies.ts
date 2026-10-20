@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import type { DomainHandler, Scenario } from '../scenario'
+import type { DomainHandler, Scenario, DemoEvent } from '../scenario'
 import type { createDeviceDemo } from '../devices/state'
 import type { createScopeDemo } from './scopes'
 import type { createResourceDemo } from './resources'
@@ -10,7 +10,6 @@ import { error } from '../http'
 import { resourceApplicability } from './applicability'
 import { validateParameterSources } from './script-validation'
 import { nativeDue } from '../software/schedule'
-import type { DemoEvent } from './schedule'
 /** Script execution state consumes the shared authored Policy store; publication never admits a run. */
 export function createPolicyDemo(
   devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts'>,

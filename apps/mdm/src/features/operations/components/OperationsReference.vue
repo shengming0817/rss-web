@@ -8,8 +8,9 @@ const { t } = useI18n(),
   runtime = useMdm()
 const link = computed(() => {
   if (['connector', 'settings', 'job'].includes(props.target.kind)) return null
-  const target = props.target,
-    params: { tenant: string; device?: string; execution?: string } = { tenant: runtime.tenant }
+  const target = props.target
+  if (target.kind === 'workflow') return null
+  const params: { tenant: string; device?: string; execution?: string } = { tenant: runtime.tenant }
   const names = {
     alert_rule: 'operations-alertRules',
     identity_principal: 'accounts',
@@ -22,7 +23,6 @@ const link = computed(() => {
     job: 'settings-operations',
     device: 'device-detail',
     policy: 'policy-policies',
-    workflow: 'policy-workflows',
     compliance_rule: 'security-rules',
     baseline: 'security-baselines',
     certificate: 'security-certificates',

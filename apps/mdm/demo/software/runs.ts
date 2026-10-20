@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import type { DemoDevice } from '../devices/fixtures'
-import type { DemoEvent } from '../policies/schedule'
-import type { Scenario } from '../scenario'
+import type { DemoEvent, Scenario } from '../scenario'
 import type { SoftwarePolicy } from '../../src/features/software/clients/assignment-model'
 import type { PolicyRun } from '../../src/features/policies/clients/runs'
 import { nativeDue } from './schedule'

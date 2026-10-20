@@ -21,7 +21,6 @@ type Preview = Awaited<ReturnType<ReturnType<typeof createConfigurationsClient>[
 export function createConfigurationDemo(
   devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts'>,
   scopes: Pick<ReturnType<typeof createScopeDemo>, 'freeze'>,
-  referenced: (id: string, version: number) => boolean,
   assigned: (device: string, replacedPolicy?: string) => ConfigurationEffects[],
 ) {
   const configurations = new Map<string, Configuration>(),
@@ -168,8 +167,7 @@ export function createConfigurationDemo(
             if (
               !version ||
               version.status === 'archived' ||
-              (action === 'publish' && version.status !== 'draft') ||
-              (action === 'archive' && referenced(id, version.version))
+              (action === 'publish' && version.status !== 'draft')
             )
               return error('operation_conflict')
             version.status = action === 'publish' ? 'published' : 'archived'
