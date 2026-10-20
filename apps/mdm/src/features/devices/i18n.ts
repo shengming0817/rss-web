@@ -87,6 +87,7 @@ export const devicesZh = {
   enrollmentPaused: '此通道已暂停新注册，请刷新通道状态。',
   registrationLimit: '已达到该渠道的注册额度。取消未完成注册或联系管理员调整额度。',
   limited: '请求受限，请稍后手动重试。',
+  firstUseNotReady: '所选必要条件尚未就绪，请重新读取进度。',
   invalidRequest: '请求无效，请检查输入。',
   unavailable: '服务暂不可用。未自动重试。',
   refreshDetail: '凭据已撤销。详情尚未刷新，请重新加载。',
@@ -398,6 +399,7 @@ export const devicesEn: typeof devicesZh = {
   registrationLimit:
     'This channel has reached its registration limit. Cancel a pending enrollment or ask an administrator to adjust the limit.',
   limited: 'Request limited; retry manually later.',
+  firstUseNotReady: 'Required setup facts are not ready. Reload progress.',
   invalidRequest: 'Invalid request; check the input.',
   unavailable: 'Service unavailable. No automatic retry.',
   refreshDetail: 'Credential revoked. Details are stale; reload to refresh.',

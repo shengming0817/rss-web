@@ -9,7 +9,7 @@ import { uuid } from '../services/decode'
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const { session, api, flows, landingRoute = 'sessions' } = useIdentity()
+const { session, api, flows, landingTarget, hostLogin: host } = useIdentity()
 const { busy, error, run, checkpoint } = useOperation()
 const tenant = ref('')
 const login = ref('')
@@ -18,7 +18,9 @@ const providers = ref<{ id: string; label: string }[]>([])
 async function continueFlow() {
   checkpoint()
   flows.clear()
-  await router.replace({ name: landingRoute, params: { tenant: tenant.value } })
+  await router.replace(
+    landingTarget?.(tenant.value) ?? { name: 'sessions', params: { tenant: tenant.value } },
+  )
 }
 async function submit() {
   const secret = password.value
@@ -50,6 +52,10 @@ onMounted(() => {
         return
       }
       tenant.value = pending.tenant
+      if (host && tenant.value !== host.tenant) {
+        await router.replace({ name: 'error' })
+        return
+      }
       await session.check(tenant.value)
       checkpoint()
       if (session.state.value.status !== 'authenticated') {
@@ -59,7 +65,7 @@ onMounted(() => {
       await continueFlow()
       return
     }
-    tenant.value = uuid(route.params['tenant'])
+    tenant.value = uuid(host?.tenant ?? route.params['tenant'])
     await session.check(tenant.value)
     checkpoint()
     if (session.config.oidcEnabled) {
@@ -71,10 +77,10 @@ onMounted(() => {
 </script>
 <template>
   <section class="auth-page auth-login" aria-labelledby="login-title">
-    <p class="auth-eyebrow">RSS Identity</p>
+    <p class="auth-eyebrow">{{ host?.brand ?? 'RSS Identity' }}</p>
     <h1 id="login-title">{{ t('identity.login') }}</h1>
-    <p>{{ t('identity.loginDescription') }}</p>
-    <p v-if="route.query['reason'] === 'expired'" role="status">{{ t('identity.expired') }}</p>
+    <p>{{ t(host?.descriptionKey ?? 'identity.loginDescription') }}</p>
+    <p v-if="session.invalidated.value" role="status">{{ t('identity.expired') }}</p>
     <p v-if="error" role="alert">{{ t(`identity.errors.${error}`) }}</p>
     <template
       v-if="session.state.value.status === 'authenticated' && session.state.value.tenant === tenant"
@@ -119,6 +125,8 @@ onMounted(() => {
         {{ t('identity.sso') }} · {{ p.label }}
       </UiButton>
     </div>
+    <p v-if="host" class="auth-muted">{{ host.origin }}</p>
+    <a v-if="host" :href="host.switchHref">{{ t(host.switchLabelKey) }}</a>
     <p class="auth-muted">{{ t('identity.recoveryHelp') }}</p>
   </section>
 </template>

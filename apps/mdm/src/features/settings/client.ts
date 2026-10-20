@@ -9,6 +9,7 @@ import { createTaskTrustClient } from './clients/trust'
 import { createPkiClient } from './clients/pki'
 import { createRuntimeDiagnostics } from './clients/runtime'
 import { createManagedPackages } from './clients/packages'
+import { createFirstUseClient } from './clients/firstUse'
 import { createSettingsOperations } from './operations'
 
 export function createSettingsClients(
@@ -19,6 +20,7 @@ export function createSettingsClients(
   realm: Realm,
 ) {
   return {
+    firstUse: createFirstUseClient(transport, tenant),
     runtime: createRuntimeDiagnostics(transport),
     packages: createManagedPackages(transport, tenant),
     catalog: createSettingsCatalog(transport, publicTransport, realm),

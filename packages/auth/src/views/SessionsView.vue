@@ -3,12 +3,12 @@ import { UiButton, UiTabs, UiDialog } from '@rss/core/components'
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { useIdentity } from '../context'
+import { useIdentity, loginTarget } from '../context'
 import { useOperation } from '../services/operation'
 import type { Session } from '../services/decode'
 const { t } = useI18n()
 const router = useRouter()
-const { session, api, flows } = useIdentity()
+const { session, api, flows, hostLogin: host } = useIdentity()
 const { busy, error, run, checkpoint } = useOperation()
 const rows = ref<Session[]>([])
 const next = ref<string | null>(null)
@@ -130,7 +130,7 @@ async function change() {
   await run(async () => {
     await api.ownPassword(old, value)
     flows.clear()
-    await router.replace({ name: 'login', params: { tenant: session.state.value.tenant } })
+    await router.replace(loginTarget(session.state.value.tenant, host))
   })
 }
 async function logout(all: boolean) {
@@ -139,7 +139,7 @@ async function logout(all: boolean) {
   await run(async () => {
     await session.logout(all)
     checkpoint()
-    await router.replace({ name: 'login', params: { tenant } })
+    await router.replace(loginTarget(tenant, host))
   })
 }
 async function reauthenticate() {
@@ -202,7 +202,7 @@ function submitConfirmed() {
           </UiButton>
           <RouterLink
             v-if="session.logoutOutcome.value === 'unconfirmed' && !owner"
-            :to="{ name: 'login', params: { tenant: session.state.value.tenant } }"
+            :to="loginTarget(session.state.value.tenant, host)"
           >
             {{ t('identity.login') }}
           </RouterLink>

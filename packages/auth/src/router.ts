@@ -1,10 +1,11 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import type { IdentitySession } from './services/session'
+import { loginTarget, type HostLogin } from './context'
 import { uuid } from './services/decode'
 export function identityRouter(
   session: IdentitySession,
   features: RouteRecordRaw[] = [],
-  hostTenant?: string,
+  host?: HostLogin,
 ) {
   const router = createRouter({
     history: createWebHistory(),
@@ -15,7 +16,7 @@ export function identityRouter(
       { path: '/auth/resume', name: 'resume', component: () => import('./views/LoginView.vue') },
       { path: '/auth/error', name: 'error', component: () => import('./views/ErrorView.vue') },
       {
-        path: '/tenants/:tenant/login',
+        path: host?.path ?? '/tenants/:tenant/login',
         name: 'login',
         component: () => import('./views/LoginView.vue'),
       },
@@ -42,13 +43,13 @@ export function identityRouter(
     ],
   })
   router.beforeEach(async (to) => {
-    if (hostTenant && to.params['tenant'] !== undefined && to.params['tenant'] !== hostTenant)
+    if (host && to.params['tenant'] !== undefined && to.params['tenant'] !== host.tenant)
       return { name: 'error' }
     if (to.meta['oidc'] && !session.config.oidcEnabled) return { name: 'error' }
     if (!to.meta['protected']) return true
     let tenant: string
     try {
-      tenant = uuid(to.params['tenant'])
+      tenant = uuid(to.params['tenant'] ?? host?.tenant)
     } catch {
       return { name: 'error' }
     }
@@ -63,11 +64,7 @@ export function identityRouter(
       }
     }
     if (session.state.value.status !== 'authenticated')
-      return {
-        name: 'login',
-        params: { tenant },
-        query: { reason: 'expired' },
-      }
+      return host ? { name: 'login', query: to.query } : loginTarget(tenant)
     return true
   })
   router.afterEach((to, from, failure) => {
