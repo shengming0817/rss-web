@@ -3,7 +3,7 @@ import { UiButton, UiDialog } from '@rss/core/components'
 import { ref, watch, type Ref } from 'vue'
 import type { HttpTransport } from '@rss/api/mdm'
 import { useI18n } from 'vue-i18n'
-import { scenarios, TENANT } from './scenario'
+import { scenarios } from './scenario'
 import { record, enumeration, count } from '../src/services/decode'
 import { moduleIds } from '../src/services/workspace'
 const props = defineProps<{ transport: HttpTransport; authenticated: Readonly<Ref<boolean>> }>()
@@ -125,7 +125,7 @@ async function apply(reset: boolean) {
       body: { reset, scenario: active.value, module: module.value, source: source.value },
       successStatus: 204,
     })
-    window.location.assign(reset ? `/tenants/${TENANT}/login` : window.location.pathname)
+    window.location.assign(reset ? '/login' : window.location.pathname)
   } catch {
     failed.value = true
   } finally {

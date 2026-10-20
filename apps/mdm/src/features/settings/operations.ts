@@ -70,7 +70,8 @@ export function createSettingsOperations(session: IdentitySession) {
         return result
       } catch (error) {
         if (generation === current && records.get(target)?.id === id) {
-          const conflict = isRssApiError(error) && error.status === 409
+          const conflict =
+            isRssApiError(error) && error.status === 409 && error.code !== 'first_use_not_ready'
           const unknown =
             !isRssApiError(error) ||
             ['network', 'timeout', 'aborted', 'protocol'].includes(error.cause) ||

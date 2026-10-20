@@ -20,7 +20,8 @@ import WebhookPanel from '../components/WebhookPanel.vue'
 import PkiPanel from '../components/PkiPanel.vue'
 import PackagesPanel from '../components/PackagesPanel.vue'
 import TenantEditor from '../components/TenantEditor.vue'
-import SettingsView from './SettingsView.vue'
+import FirstUseView from './FirstUseView.vue'
+import type { FirstUseIntent } from '../clients/firstUse'
 import TenantsView from './TenantsView.vue'
 import OperationsPanel from '../components/OperationsPanel.vue'
 import DeploymentPanel from '../components/DeploymentPanel.vue'
@@ -141,6 +142,7 @@ async function fixture(
     history: createMemoryHistory(),
     routes: [
       { path: '/', name, component },
+      { path: '/workspace', name: 'workspace', component: { template: '<p>Workspace</p>' } },
       { path: '/next', name: 'next', component: { template: '<p>Next</p>' } },
     ],
   })
@@ -163,7 +165,9 @@ async function fixture(
       return wrapper
     },
     async remount() {
+      const destination = router.currentRoute.value.fullPath
       wrapper.unmount()
+      await router.push(destination)
       wrappers.splice(wrappers.indexOf(wrapper), 1)
       wrapper = mount(component, options)
       wrappers.push(wrapper)
@@ -337,34 +341,6 @@ it('clears credentials on tab hiding and prevents changed intent from replaying 
   await flushPromises()
   expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(0)
   expect(f.settings.operations.records.get('smtp')?.state).toBe('unknown')
-})
-it('shows only selected native channels in the guide and keeps routine settings reachable', async () => {
-  const f = await fixture(SettingsView, {}, 'tenant', 'settings-guide')
-  f.setHandler(() => ({
-    items: ['apns-key', 'agent-package', 'wns'].map((id) => ({
-      id,
-      scope: 'tenant',
-      owner: 'owner',
-      custody: 'domain_service',
-      lifecycle: 'business_configuration',
-      status: 'unknown',
-      revision: null,
-      desiredRevision: null,
-      appliedRevision: null,
-      configuredCount: null,
-      reason: null,
-      actions: [],
-    })),
-    domains: [],
-  }))
-  await button(f.wrapper, '重新读取').trigger('click')
-  await flushPromises()
-  await button(f.wrapper, '下一步').trigger('click')
-  await flushPromises()
-  expect(f.wrapper.find('[data-setting="apns-key"]').exists()).toBe(false)
-  expect(f.wrapper.find('[data-setting="agent-package"]').exists()).toBe(true)
-  await f.wrapper.findAll('input[type=checkbox]')[2]!.setValue(true)
-  expect(f.wrapper.find('[data-setting="apns-key"]').exists()).toBe(true)
 })
 it('provisions with an immediately cleared password and displays capacity without creating a target session', async () => {
   const f = await fixture(TenantsView, {}, 'platform')
@@ -834,4 +810,95 @@ it('refreshes current task trust after confirming a historical receipt before al
   await flushPromises()
   expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(2)
   expect(f.settings.operations.records.get('task')?.state).toBe('received')
+})
+
+it('saves first-use choices, restores backend facts, and finishes only through a confirmed completion receipt', async () => {
+  const f = await fixture(FirstUseView, {}, 'tenant', 'settings-guide')
+  let intent: FirstUseIntent = { channels: [], capabilities: {}, completionRequested: false },
+    revision = 0,
+    ready = false
+  f.setHandler((o) => {
+    if (o.method === 'PUT') {
+      const body = o.body as { expectedRevision: number; intent: FirstUseIntent }
+      expect(body.expectedRevision).toBe(revision)
+      intent = body.intent
+      if (intent.completionRequested && !ready)
+        throw decodeMdmError(409, { code: 'first_use_not_ready' })
+      revision++
+      return { operationId: o.headers!['Idempotency-Key'], saved: { revision, intent } }
+    }
+    return {
+      tenantId: tenant,
+      saved: { revision, intent },
+      steps: intent.channels.map((channel) => ({
+        id: channel,
+        status: ready ? 'ready' : 'pending',
+        reason: ready ? null : 'registration_not_allowed',
+        evidence: [],
+      })),
+      canComplete: ready,
+      complete: ready && intent.completionRequested,
+    }
+  })
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  await f.wrapper.get('input[value=windows_mdm]').setValue(true)
+  await f.wrapper.get('[data-capability=smtp]').setValue('skip')
+  await f.wrapper.get('input[placeholder="跳过理由"]').setValue('Not needed')
+  await button(f.wrapper, '保存本次选择').trigger('click')
+  await flushPromises()
+  expect(intent.capabilities.smtp).toEqual({ kind: 'skip', reason: 'Not needed' })
+  expect(button(f.wrapper, '完成').attributes('disabled')).toBeDefined()
+  await f.remount()
+  expect((f.wrapper.get('input[value=windows_mdm]').element as HTMLInputElement).checked).toBe(true)
+  ready = true
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  await button(f.wrapper, '完成').trigger('click')
+  await flushPromises()
+  expect(intent.completionRequested).toBe(true)
+  expect(f.router.currentRoute.value.name).toBe('workspace')
+})
+it('queries the original first-use operation after a lost response and never replaces it after reload without its input', async () => {
+  const f = await fixture(FirstUseView, {}, 'tenant', 'settings-guide')
+  const intent: FirstUseIntent = {
+    channels: ['windows_mdm'],
+    capabilities: {},
+    completionRequested: false,
+  }
+  let committed = false,
+    operation = ''
+  f.setHandler((o) => {
+    if (o.method === 'PUT') {
+      operation = o.headers!['Idempotency-Key']!
+      throw decodeMdmError(503, { code: 'operation_unknown' })
+    }
+    if (o.path.endsWith('/operations/{id}')) {
+      if (!committed) throw decodeMdmError(404, { code: 'first_use_operation_not_found' })
+      return { operationId: operation, saved: { revision: 2, intent } }
+    }
+    return {
+      tenantId: tenant,
+      saved: { revision: 1, intent },
+      steps: [{ id: 'windows_mdm', status: 'pending', reason: null, evidence: [] }],
+      canComplete: false,
+      complete: false,
+    }
+  })
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  await button(f.wrapper, '保存本次选择').trigger('click')
+  await flushPromises()
+  expect(f.router.currentRoute.value.query['operation']).toBe(operation)
+  f.settings.operations.records.clear()
+  await f.remount()
+  expect(f.wrapper.text()).toContain('完整原请求未保留')
+  expect(button(f.wrapper, '保存本次选择').attributes('disabled')).toBeDefined()
+  expect(f.calls.filter((o) => o.method === 'PUT')).toHaveLength(1)
+  committed = true
+  await button(f.wrapper, '查询原操作').trigger('click')
+  await flushPromises()
+  expect(f.router.currentRoute.value.query['operation']).toBeUndefined()
+  expect(f.wrapper.text()).not.toContain('完整原请求未保留')
+  expect(f.calls.filter((o) => o.method === 'PUT')).toHaveLength(1)
 })

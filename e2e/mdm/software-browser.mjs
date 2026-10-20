@@ -80,7 +80,7 @@ try {
     await idle()
   }
   phase = 'login'
-  await page.goto(route('login'))
+  await page.goto(origin + '/login')
   await page.locator('#login-name').fill(f.login)
   await page.locator('#login-password').fill(readFileSync(f.passwordFile, 'utf8').trim())
   await page.locator('form').evaluate((form) => form.requestSubmit())

@@ -28,7 +28,7 @@ export const settingsFeature: MdmFeature = {
     {
       path: '/tenants/:tenant/settings/guide',
       name: 'settings-guide',
-      component: view,
+      component: () => import('./views/FirstUseView.vue'),
       meta: { protected: true },
     },
     {

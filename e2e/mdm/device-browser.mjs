@@ -127,7 +127,7 @@ try {
     assert.equal(control.status, 0)
   }
   phase = 'login'
-  await page.goto(path('login'))
+  await page.goto(origin + '/login')
   await page.locator('#login-name').fill(fixture.login)
   await page.locator('#login-password').fill(readFileSync(fixture.passwordFile, 'utf8').trim())
   await page.locator('form').evaluate((f) => f.requestSubmit())
