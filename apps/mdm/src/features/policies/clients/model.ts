@@ -423,14 +423,15 @@ export function decodePolicy(value: unknown, id?: string) {
     revision: count(v['revision']),
     version: count(v['version']),
     versionId: uuid(v['versionId']),
-    enabled: enumeration(v['state'], ['enabled', 'disabled', 'archived'] as const) === 'enabled',
+    state: enumeration(v['state'], ['enabled', 'disabled', 'archived'] as const),
+    enabled: v['state'] === 'enabled',
     definition: policyDefinition(v['definition']),
   }
 }
 export type PolicyRead = ReturnType<typeof decodePolicy>
 export type PolicyChange =
   | { action: 'put'; definition: PolicyDefinition; enabled: boolean }
-  | { action: 'enable' | 'disable' }
+  | { action: 'enable' | 'disable' | 'archive' }
 
 export const taskStates = [
   'paused',

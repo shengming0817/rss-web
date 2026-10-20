@@ -1,4 +1,9 @@
 export const policiesZh = {
+  deletePolicy: '删除策略',
+  disableBeforeDelete: '请先停用策略，再删除。',
+  deletePolicyHint:
+    '删除将永久归档策略，无法恢复、编辑或再次启用。历史与审计保留，已有操作继续按原生命周期处理。',
+  archivedHint: '策略已归档，仅供查看；无法编辑、启用、取消归档或再次删除。',
   confirmReplay: '我已核对原目标、标识与完整正文，确认幂等重放原操作',
   nativeCollection: '原生 MDM 采集',
   agentCollection: '原生 Agent 采集',
@@ -428,6 +433,12 @@ export const policiesZh = {
   independent: '当前人工审批必须由其他账户批准。',
 }
 export const policiesEn: typeof policiesZh = {
+  deletePolicy: 'Delete Policy',
+  disableBeforeDelete: 'Disable this Policy before deleting it.',
+  deletePolicyHint:
+    'Deletion permanently archives this Policy. It cannot be restored, edited or enabled again. History and audit records remain; existing operations follow their original lifecycle.',
+  archivedHint:
+    'This Policy is archived and read-only. It cannot be edited, enabled, restored or deleted again.',
   confirmReplay: 'I checked the original target, ID and full body and confirm exact replay',
   nativeCollection: 'Native MDM collection',
   agentCollection: 'Native Agent collection',

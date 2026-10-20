@@ -103,3 +103,26 @@ it('uses formal V1 collection and operation/CAS without a candidate fallback or 
   await expect(client.change(id, body)).rejects.toThrow('lost response')
   expect(request).toHaveBeenCalledTimes(3)
 })
+
+it.each(['enabled', 'disabled', 'archived'] as const)(
+  'preserves Policy state %s independently of the enabled presentation value',
+  (state) => {
+    expect(decodePolicy({ ...policy, state })).toMatchObject({
+      state,
+      enabled: state === 'enabled',
+    })
+  },
+)
+it('sends archive only through the existing DELETE body and never retries a lost response', async () => {
+  const request = vi.fn(async (o: RequestOptions<unknown>) =>
+    o.decode({ ...policy, state: 'archived', revision: 3 }),
+  )
+  const client = createPoliciesClient({ request } as unknown as HttpTransport)
+  const body = { operationId: id, expectedRevision: 2, input: { action: 'archive' as const } }
+  expect(await client.change(id, body)).toMatchObject({ state: 'archived', enabled: false })
+  expect(request.mock.calls[0]![0]).toMatchObject({ method: 'DELETE', pathParams: { id } })
+  expect(request.mock.calls[0]![0].body).toEqual({ operationId: id, expectedRevision: 2 })
+  request.mockRejectedValueOnce(new Error('response lost'))
+  await expect(client.change(id, body)).rejects.toThrow('response lost')
+  expect(request).toHaveBeenCalledTimes(2)
+})

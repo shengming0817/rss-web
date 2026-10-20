@@ -127,10 +127,13 @@ export function createPoliciesClient(transport: HttpTransport) {
       }),
     change: (id: string, body: Operation<PolicyChange>) =>
       transport.request({
-        method: 'POST',
+        method: body.input.action === 'archive' ? 'DELETE' : 'POST',
         path: '/api/v1/policies/{id}',
         pathParams: { id },
-        body,
+        body:
+          body.input.action === 'archive'
+            ? { operationId: body.operationId, expectedRevision: body.expectedRevision }
+            : body,
         successStatus: 200,
         decode: (v) => decodePolicy(v, id),
       }),

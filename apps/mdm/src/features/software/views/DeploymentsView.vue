@@ -27,6 +27,7 @@ import CatalogLocator from '../../policies/components/CatalogLocator.vue'
 import AssignmentFacts from '../../policies/components/AssignmentFacts.vue'
 import { objectKey } from '../../devices/clients/objects'
 import PageFrame from '../../../components/PageFrame.vue'
+import PolicyDelete from '../../policies/components/PolicyDelete.vue'
 import NativeScheduleEditor from '../components/NativeScheduleEditor.vue'
 import { rolloutStageState } from '../clients/rollout'
 import type { Publication } from '../clients/publication'
@@ -184,6 +185,7 @@ function clearEvidence() {
 function apply(value: PolicyRead) {
   const p = { ...value, definition: softwarePolicyDefinition(value.definition) }
   current.value = p
+  if (p.state === 'archived') editing.value = false
   id.value = p.id
   enabled.value = p.enabled
   const stages = p.definition.action.rollout.stages,
@@ -220,7 +222,7 @@ function beginCreate() {
   wizardStep.value = 0
 }
 function beginEdit() {
-  if (busy.value || uncertain.value) return
+  if (busy.value || uncertain.value || current.value?.state === 'archived') return
   editing.value = true
   wizardStep.value = 0
 }
@@ -302,12 +304,20 @@ function replay() {
       pending = undefined
       apply(v)
       editing.value = false
-      page.value = undefined
+      if (v.state === 'archived' && page.value)
+        page.value.items = page.value.items.filter((item) => item.id !== v.id)
+      else page.value = undefined
     },
   )
 }
 function change(input: PolicyChange) {
-  if (busy.value || uncertain.value) return
+  if (
+    busy.value ||
+    uncertain.value ||
+    current.value?.state === 'archived' ||
+    (input.action === 'archive' && current.value?.state !== 'disabled')
+  )
+    return
   const actor = requester()
   if (!actor) return
   pending = {
@@ -768,17 +778,35 @@ watch(
     <section v-if="current && !editing" class="console-panel">
       <div class="console-page-header">
         <h2>{{ t('software.deploymentState') }}</h2>
-        <UiButton :disabled="busy || uncertain" @click="beginEdit">{{
-          t('console.edit')
-        }}</UiButton>
+        <UiButton
+          v-if="current.state !== 'archived'"
+          :disabled="busy || uncertain"
+          @click="beginEdit"
+          >{{ t('console.edit') }}</UiButton
+        >
       </div>
-      <UiBadge>{{ current.enabled ? t('software.enabled') : t('software.paused') }}</UiBadge>
+      <UiBadge>{{
+        current.state === 'archived'
+          ? t('policies.state.archived')
+          : current.enabled
+            ? t('software.enabled')
+            : t('software.paused')
+      }}</UiBadge>
       <p>
         {{ t('policies.revision') }} {{ current.revision }} · {{ t('software.policyVersion') }}
-        {{ current.version }} · {{ current.enabled ? t('software.enabled') : t('software.paused') }}
+        {{ current.version }} ·
+        {{
+          current.state === 'archived'
+            ? t('policies.state.archived')
+            : current.enabled
+              ? t('software.enabled')
+              : t('software.paused')
+        }}
       </p>
-      <p>{{ t('software.pauseHint') }}</p>
+      <p v-if="current.state === 'archived'" role="status">{{ t('policies.archivedHint') }}</p>
+      <p v-else>{{ t('software.pauseHint') }}</p>
       <UiButton
+        v-if="current.state !== 'archived'"
         :disabled="!!(busy || uncertain)"
         data-action="toggle-policy"
         type="submit"
@@ -786,6 +814,11 @@ watch(
       >
         {{ current.enabled ? t('software.pause') : t('software.resume') }}
       </UiButton>
+      <PolicyDelete
+        :policy="current"
+        :disabled="busy || uncertain"
+        @confirm="change({ action: 'archive' })"
+      />
       <UiButton :disabled="!!busy" type="submit" @click="loadDevices()">{{
         t('software.deviceAdmission')
       }}</UiButton

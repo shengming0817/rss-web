@@ -357,3 +357,51 @@ it('gates every-trigger check-ins at 59/60 seconds and fences older events by ve
   check(66)
   expect(policies.executions()).toHaveLength(4)
 })
+
+it('archives only disabled Policies, replays the exact DELETE, and retains read-only history', () => {
+  const f = fixture(),
+    id = f.seed.ids[0]!,
+    old = f.read(id)
+  const deletion = {
+    ...f.request(`/api/v1/policies/${id}`, {
+      operationId: crypto.randomUUID(),
+      expectedRevision: old.revision,
+    }),
+    method: 'DELETE' as const,
+  }
+  const send = () => f.automation.handle(deletion, 'normal')!
+  expect(send().status).toBe(409)
+  expect(f.write(id, old.revision, { action: 'disable' }).status).toBe(200)
+  deletion.body = { operationId: crypto.randomUUID(), expectedRevision: old.revision + 1 }
+  const reply = send()
+  expect(reply.status).toBe(200)
+  expect(reply.body).toMatchObject({
+    state: 'archived',
+    revision: old.revision + 2,
+    versionId: old.versionId,
+  })
+  expect(send()).toEqual(reply)
+  expect(f.read(id)).toMatchObject({
+    state: 'archived',
+    enabled: false,
+    definition: old.definition,
+  })
+  const directory = (query: URLSearchParams) =>
+    f.automation.handle(f.request('/api/v1/policies', undefined, query), 'normal')!.body as {
+      items: { id: string }[]
+    }
+  expect(directory(new URLSearchParams()).items.some((p) => p.id === id)).toBe(false)
+  expect(directory(new URLSearchParams({ state: 'archived' })).items.map((p) => p.id)).toEqual([id])
+  expect(directory(new URLSearchParams({ state: 'disabled' })).items.some((p) => p.id === id)).toBe(
+    false,
+  )
+  for (const action of [
+    { action: 'enable' },
+    { action: 'disable' },
+    { action: 'put', enabled: false, definition: old.definition },
+  ])
+    expect(f.write(id, old.revision + 2, action).status).toBe(409)
+  deletion.body = { operationId: crypto.randomUUID(), expectedRevision: old.revision + 2 }
+  expect(send().status).toBe(409)
+  expect(f.automation.handle(deletion, 'denied')!.status).toBe(403)
+})
