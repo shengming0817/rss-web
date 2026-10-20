@@ -1,14 +1,6 @@
 import type { HttpTransport } from '@rss/api/mdm'
 import { array, uuid, unique } from '../../../services/decode'
 import { installer } from '../../enrollment/clients/packages'
-export interface PublishPackage {
-  resource: string
-  version: string
-  variant: string
-  target: { platform: 'windows' | 'macos'; architecture: 'x86_64' | 'aarch64' }
-  channel: 'test' | 'pilot' | 'production'
-  manifestArtifact: string
-}
 export function createManagedPackages(transport: HttpTransport, tenant: string) {
   return {
     read: () =>
@@ -21,14 +13,6 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
             array(v, (item) => installer(item, tenant)),
             (p) => p.releaseId,
           ),
-      }),
-    publish: (id: string, input: PublishPackage) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/agent-packages',
-        body: { operationId: uuid(id), ...input },
-        successStatus: 200,
-        decode: (v) => installer(v, tenant),
       }),
     withdraw: (id: string, release: string) =>
       transport.request({

@@ -1,30 +1,35 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiMessage } from '@rss/core/components'
+import { UiButton, UiMessage, UiDialog } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { usePermission } from '../../enrollment/usePermission'
 import { useSettingsFacts, useSettingsAction } from '../useSettingsAction'
-import type { PublishPackage } from '../clients/packages'
-import { platforms, architectures, releaseChannels } from '../../enrollment/clients/packages'
-import CatalogLocator from '../../policies/components/CatalogLocator.vue'
 import OperationNotice from './OperationNotice.vue'
 const runtime = useMdm(),
   { t } = useI18n(),
   client = runtime.settings.packages
-const { canRead, canWrite } = usePermission('agent_enrollment_read', 'release_publish'),
-  { canWrite: canWithdraw } = usePermission('agent_enrollment_read', 'software_withdraw')
+const { canRead, canWrite } = usePermission('agent_enrollment_read', 'software_withdraw')
 const { run, busy, failure, pending, locked, submit, resolveConflict, compared, markCompared } =
   useSettingsAction(() => 'packages')
 const packages = ref<Awaited<ReturnType<typeof client.read>>>([]),
-  resource = ref(''),
-  version = ref(''),
-  variant = ref(''),
-  manifestArtifact = ref(''),
-  platform = ref<'windows' | 'macos'>('windows'),
-  architecture = ref<'x86_64' | 'aarch64'>('x86_64'),
-  channel = ref<'test' | 'pilot' | 'production'>('test')
+  withdrawTarget = ref<string>()
+const targets = [
+  { platform: 'windows', architecture: 'x86_64', label: 'Windows x64' },
+  { platform: 'windows', architecture: 'aarch64', label: 'Windows ARM64' },
+  { platform: 'macos', architecture: 'x86_64', label: 'macOS Intel' },
+  { platform: 'macos', architecture: 'aarch64', label: 'macOS Apple Silicon' },
+] as const
+const slots = computed(() =>
+  targets.map((target) => ({
+    ...target,
+    packages: packages.value.filter(
+      (p) => p.target.platform === target.platform && p.target.architecture === target.architecture,
+    ),
+  })),
+)
 async function load() {
+  packages.value = []
   return run(
     () => client.read(),
     (v) => (packages.value = v),
@@ -33,107 +38,67 @@ async function load() {
 async function compare() {
   if (await load()) markCompared()
 }
-async function publish() {
-  if (!canWrite.value) return
-  const input: PublishPackage = {
-    resource: resource.value,
-    version: version.value,
-    variant: variant.value,
-    target: { platform: platform.value, architecture: architecture.value },
-    channel: channel.value,
-    manifestArtifact: manifestArtifact.value,
-  }
-  await submit(
-    'publish',
-    0,
-    {
-      resource: input.resource,
-      version: input.version,
-      variant: input.variant,
-      platform: input.target.platform,
-      architecture: input.target.architecture,
-      channel: input.channel,
-      manifestArtifact: input.manifestArtifact,
-    },
-    (id) => client.publish(id, input),
-    () => {
-      queueMicrotask(() => void load())
-    },
+async function withdraw() {
+  if (!canWrite.value || !withdrawTarget.value) return
+  const release = withdrawTarget.value
+  if (
+    await submit(
+      'withdraw',
+      0,
+      { release },
+      (id) => client.withdraw(id, release),
+      () => {
+        withdrawTarget.value = undefined
+      },
+    )
   )
-}
-async function withdraw(release: string) {
-  if (!canWithdraw.value) return
-  await submit(
-    'withdraw',
-    0,
-    { release },
-    (id) => client.withdraw(id, release),
-    () => {
-      queueMicrotask(() => void load())
-    },
-  )
+    await load()
 }
 onMounted(load)
 useSettingsFacts(() => {
   packages.value = []
+  withdrawTarget.value = undefined
 })
 </script>
 <template>
-  <UiMessage tone="info" :title="t('settings.packageHint')" />
+  <UiMessage tone="info" :title="t('settings.packageUploadBlocked')">{{
+    t('settings.packageUploadReason')
+  }}</UiMessage>
   <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
-  <UiButton :disabled="busy || !canRead" @click="load">{{ t('settings.reload') }}</UiButton
-  ><OperationNotice
+  <UiButton :disabled="busy || !canRead" @click="load">{{ t('settings.reload') }}</UiButton>
+  <OperationNotice
     :operation="pending"
     :busy="busy"
-    :can-write="canWrite || canWithdraw"
+    :can-write="canWrite"
     :query-supported="false"
     :compared="compared"
     @compare="compare"
     @edit="resolveConflict"
   />
-  <RouterLink :to="{ name: 'software-imports', params: { tenant: runtime.tenant } }">{{
-    t('software.imports')
-  }}</RouterLink>
-  <form class="settings-form" @submit.prevent="publish">
-    <fieldset :disabled="locked || !canWrite">
-      <legend>{{ t('settings.publishPackage') }}</legend>
-      <label
-        >{{ t('policies.resources') }}<input v-model="resource" required maxlength="128" /></label
-      ><CatalogLocator v-model="resource" collection="resources" :disabled="locked" /><label
-        >{{ t('settings.packageVersion')
-        }}<input v-model="version" required maxlength="128" /></label
-      ><label>{{ t('settings.variant') }}<input v-model="variant" required maxlength="128" /></label
-      ><label
-        >{{ t('settings.manifestArtifact')
-        }}<input v-model="manifestArtifact" required maxlength="128" /></label
-      ><label
-        >{{ t('settings.packagePlatform')
-        }}<select v-model="platform">
-          <option v-for="v in platforms" :key="v" :value="v">{{ v }}</option>
-        </select></label
-      ><label
-        >{{ t('settings.architecture')
-        }}<select v-model="architecture">
-          <option v-for="v in architectures" :key="v" :value="v">{{ v }}</option>
-        </select></label
-      ><label
-        >{{ t('settings.releaseChannel')
-        }}<select v-model="channel">
-          <option v-for="v in releaseChannels" :key="v" :value="v">{{ v }}</option>
-        </select></label
-      ><UiButton type="submit">{{ t('settings.publishPackage') }}</UiButton>
-    </fieldset>
-  </form>
-  <article v-for="p in packages" :key="p.releaseId" class="console-panel">
-    <h2>{{ p.filename }} · {{ p.version }}</h2>
-    <p>{{ p.target.platform }} / {{ p.target.architecture }} · {{ p.channel }}</p>
-    <p>
-      {{ t('settings.fingerprint') }}
-      <code>{{ p.installerSha256.map((b) => b.toString(16).padStart(2, '0')).join('') }}</code>
-    </p>
-    <p>{{ t('settings.origin') }} {{ p.origin }}</p>
-    <UiButton :disabled="locked || !canWithdraw" @click="withdraw(p.releaseId)">{{
-      t('settings.withdrawPackage')
-    }}</UiButton>
-  </article>
+  <section v-for="slot in slots" :key="slot.label" class="console-panel package-platform-row">
+    <h2>{{ slot.label }}</h2>
+    <p v-if="!slot.packages.length">{{ t('settings.noPackage') }}</p>
+    <article v-for="p in slot.packages" :key="p.releaseId" class="package-release">
+      <div>
+        <strong>{{ p.filename }}</strong>
+        <p>{{ p.version }} · {{ p.channel }} · {{ t('settings.packagePublished') }}</p>
+      </div>
+      <UiButton :disabled="locked || !canWrite" @click="withdrawTarget = p.releaseId">{{
+        t('settings.withdrawPackage')
+      }}</UiButton>
+    </article>
+  </section>
+  <UiDialog
+    :open="!!withdrawTarget"
+    :title="t('settings.withdrawPackage')"
+    :close-label="t('console.cancel')"
+    kind="alertdialog"
+    @update:open="!$event && (withdrawTarget = undefined)"
+    ><p>{{ t('settings.withdrawPackageHint') }}</p>
+    <template #footer
+      ><UiButton variant="danger" :disabled="locked || !canWrite" @click="withdraw">{{
+        t('devices.confirmAction')
+      }}</UiButton></template
+    ></UiDialog
+  >
 </template>

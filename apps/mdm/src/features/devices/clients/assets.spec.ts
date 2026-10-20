@@ -320,3 +320,44 @@ it('consumes only the current dictionary and validates record property schemas',
     }),
   ).toThrow()
 })
+
+it('reads a tenant-bound collection run without confusing reception and projection', async () => {
+  const { decodeCollectionRun } = await import('./assets')
+  const tenant = '11111111-1111-4111-8111-111111111111',
+    id = '22222222-2222-4222-8222-222222222222'
+  const response = {
+    tenantId: tenant,
+    asset: {
+      kind: 'collection_run',
+      run: {
+        id,
+        registration: id,
+        generation: 2,
+        source: 'mdm.apple',
+        epoch: id,
+        delivery: { receipt: null, projection: { kind: 'pending' } },
+        fingerprint: 'test',
+        coverage: { id: 'base', version: '1', definition: 'base', format: 'v1' },
+        complete: false,
+        dataset: 'base',
+        templateVersion: '1',
+        sequence: 1,
+        startedAt: 1,
+        finishedAt: null,
+        result: 'pending',
+        reason: null,
+        deliveryPending: true,
+        fields: [],
+      },
+    },
+  }
+  expect(decodeCollectionRun(response, tenant, id)).toMatchObject({
+    id,
+    finishedAt: null,
+    quality: { result: 'pending', deliveryPending: true, complete: false },
+  })
+  expect(() => decodeCollectionRun(response, id, id)).toThrow()
+  expect(() =>
+    decodeCollectionRun(response, tenant, '33333333-3333-4333-8333-333333333333'),
+  ).toThrow()
+})

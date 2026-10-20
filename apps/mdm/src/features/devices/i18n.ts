@@ -1,4 +1,31 @@
 export const devicesZh = {
+  management: '管理',
+  ownerUnavailable: '设备所有人暂不可编辑；使用人、所有人与注册责任人分别记录。',
+  layoutUnavailable: '扩展字段按目录显示；共享分组布局暂不可保存。',
+  editAssets: '编辑人工资产信息',
+  collectionPackages: '标准采集包与资源',
+  remoteManagement: '远程管理',
+  controlAuthority: '动作仍由服务端核对设备资格和当前授权；请求受理不代表设备完成。',
+  windowsLockUnsupported: 'Windows 当前不支持远程锁定。',
+  queryOriginal: '查询原操作',
+  operationResult: '操作进度',
+  controlConfirmation:
+    '确认对当前设备执行此操作。锁定和擦除绑定当前注册及代次；未知结果请先查询原操作。',
+  lockPin: '六位锁定 PIN',
+  confirmDeviceName: '输入设备名称确认擦除',
+  searchLoadedPage: '搜索当前已加载页',
+  displayColumns: '显示列',
+  projectionPending: '等待资产投影',
+  assetCategories: {
+    overview: '概况',
+    hardware: '硬件',
+    os: '操作系统',
+    storage: '存储',
+    network: '网络',
+    security: '安全',
+    extensions: '扩展字段',
+  },
+
   assetContext: '资产范围',
   objectKind_endpoint: '端点',
   objectKind_association: '关联设备',
@@ -296,6 +323,36 @@ export const devicesZh = {
   },
 }
 export const devicesEn: typeof devicesZh = {
+  management: 'Management',
+  ownerUnavailable:
+    'Device ownership editing is unavailable. Owner, user and enrollment responsibility are separate.',
+  layoutUnavailable:
+    'Extensions follow the field catalog. Shared presentation groups cannot be saved yet.',
+  editAssets: 'Edit manual asset fields',
+  collectionPackages: 'Standard collection packages and resources',
+  remoteManagement: 'Remote management',
+  controlAuthority:
+    'The server checks current device eligibility and authorization. Acceptance does not prove completion.',
+  windowsLockUnsupported: 'Remote lock is unsupported on Windows.',
+  queryOriginal: 'Query original operation',
+  operationResult: 'Operation progress',
+  controlConfirmation:
+    'Confirm the action for this device. Lock and wipe bind the current enrollment and generation. Query the original operation after an unknown result.',
+  lockPin: 'Six-digit lock PIN',
+  confirmDeviceName: 'Enter device name to confirm wipe',
+  searchLoadedPage: 'Search this loaded page',
+  displayColumns: 'Display columns',
+  projectionPending: 'Asset projection pending',
+  assetCategories: {
+    overview: 'Overview',
+    hardware: 'Hardware',
+    os: 'Operating system',
+    storage: 'Storage',
+    network: 'Network',
+    security: 'Security',
+    extensions: 'Extensions',
+  },
+
   assetContext: 'Asset context',
   objectKind_endpoint: 'Endpoint',
   objectKind_association: 'Associated device',

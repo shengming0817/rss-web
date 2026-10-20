@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch } from 'vue'
+import { nextTick, watch } from 'vue'
 import {
   DialogRoot,
   DialogPortal,
@@ -18,6 +18,7 @@ const props = withDefaults(
     closeLabel: string
     kind?: 'dialog' | 'alertdialog'
     placement?: 'center' | 'right'
+    keepMounted?: boolean
     dismissible?: boolean
   }>(),
   { kind: 'dialog', placement: 'center', dismissible: true },
@@ -30,6 +31,10 @@ watch(
   (value) => {
     if (value)
       opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    else if (props.keepMounted)
+      void nextTick(() => {
+        if (opener?.isConnected) opener.focus()
+      })
   },
   { immediate: true, flush: 'sync' },
 )
@@ -47,7 +52,10 @@ function escape(event: KeyboardEvent) {
 }
 </script>
 <template>
-  <DialogRoot :open="open" @update:open="emit('update:open', $event)"
+  <DialogRoot
+    :unmount-on-hide="!keepMounted"
+    :open="open"
+    @update:open="emit('update:open', $event)"
     ><DialogPortal
       ><DialogOverlay class="ui-dialog-overlay" /><DialogContent
         class="ui-dialog"

@@ -1,15 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import type { DomainHandler, DemoEvent } from '../scenario'
-import { array, closed, enumeration, identifier, nullable } from '../../src/services/decode'
-import {
-  lifecycleActions,
-  type Batch,
-} from '../../src/features/devices/clients/candidate-operations'
 import { makeDevices } from './fixtures'
 import { endpointProjection, endpointDetailProjection, createDeviceViewsDemo } from './views'
 import type { Permission } from '../../src/features/operations/clients/authorization'
-import { ok, createPages, createReceipts, error, operation } from '../http'
-import { candidate } from './http'
+import { ok, createPages, error } from '../http'
 import { createAssetDemo } from './assets'
 import { createGroupDemo } from './groups'
 import { createEnrollmentDemo } from './enrollment'
@@ -22,9 +16,7 @@ export function createDeviceDemo() {
       () => views.objects(),
     ),
     enrollments = createEnrollmentDemo(() => devices)
-  const pages = createPages(),
-    receipts = createReceipts(),
-    batches = new Map<string, Batch>()
+  const pages = createPages()
   let can = (actor: string, permission: Permission, device?: string) => {
     void actor
     void permission
@@ -103,140 +95,10 @@ export function createDeviceDemo() {
         coverage: { indexedThrough: 1, sourceThrough: 1, complete: true },
       })
     }
-    const batchPath =
-      /^\/api\/v1\/mdm-candidate\/devices\/batch-previews(?:\/([^/]+)(?:\/(execute|cancel))?)?$/.exec(
-        path,
-      )
-    if (batchPath) {
-      const id = batchPath[1],
-        existing = id ? batches.get(id) : undefined
-      if (method === 'GET')
-        return existing ? candidate(existing) : error('operation_not_found', 404)
-      if (method !== 'POST') return
-      const op = operation(request.body)
-      return receipts.write(request, op.operationId, () => {
-        if (!id) {
-          const input = closed(op.input, ['action', 'devices']),
-            action = enumeration(input['action'], lifecycleActions)
-          const targets = [...new Set(array(input['devices'], identifier))]
-          if (!targets.length || op.expectedRevision !== 0) return error('malformed_request', 400)
-          const batch: Batch = {
-            id: op.operationId,
-            revision: 1,
-            phase: 'preview',
-            action,
-            targets: targets.map((id, index) => {
-              const device = devices.get(id),
-                registration = device?.registrations.find((r) => r.status === 'active')
-              const onboarding = ['ade', 'windows_auto', 'onboard'].includes(action)
-              const blocked = !device
-                ? 'permission_denied'
-                : (action === 'ade' && device.summary.platform !== 'macos') ||
-                    (action === 'windows_auto' && device.summary.platform !== 'windows')
-                  ? 'unsupported'
-                  : !registration && !onboarding
-                    ? 'not_registered'
-                    : scenario === 'partial'
-                      ? (
-                          [
-                            'offline',
-                            'stale_generation',
-                            'permission_denied',
-                            'unsupported',
-                            null,
-                          ] as const
-                        )[index % 5]!
-                      : null
-              return {
-                device: id,
-                deviceRevision: device?.summary.revision ?? null,
-                registration: registration?.registrationId ?? null,
-                generation: registration?.generation ?? null,
-                blocked,
-                execution: null,
-                dispatch: 'not_requested',
-                receipt: 'none',
-                effect: 'unknown',
-                compliance: 'unknown',
-              }
-            }),
-          }
-          batches.set(batch.id, batch)
-          return candidate(batch)
-        }
-        if (!existing) return error('operation_not_found', 404)
-        if (existing.revision !== op.expectedRevision || existing.phase !== 'preview')
-          return error('operation_conflict')
-        if (batchPath[2] === 'cancel') {
-          closed(op.input, [])
-          existing.phase = 'cancelled'
-          existing.revision++
-          return candidate(existing)
-        }
-        if (batchPath[2] !== 'execute' || closed(op.input, ['confirmed'])['confirmed'] !== true)
-          return error('malformed_request', 400)
-        for (const target of existing.targets) {
-          const d = devices.get(target.device),
-            registration = d?.registrations.find((r) => r.registrationId === target.registration)
-          if (
-            !target.blocked &&
-            target.registration !== null &&
-            (!registration ||
-              registration.status !== 'active' ||
-              registration.generation !== target.generation)
-          )
-            target.blocked = 'stale_generation'
-          if (!target.blocked && (!d || d.summary.revision !== target.deviceRevision))
-            target.blocked = 'conflict'
-          target.dispatch = target.blocked ? 'blocked' : 'accepted'
-          if (!target.blocked) {
-            target.execution = randomUUID()
-            target.receipt = 'pending'
-            d?.history.push({
-              id: randomUUID(),
-              at: Math.floor(Date.now() / 1000),
-              event: 'action_accepted',
-              operation: op.operationId,
-            })
-          }
-        }
-        existing.phase = 'accepted'
-        existing.revision++
-        return candidate(existing, 202)
-      })
-    }
-    const match = /^\/api\/v1\/mdm-candidate\/devices\/([^/]+)\/assignment$/.exec(path)
-    if (!match) return
-    const id = decodeURIComponent(match[1]!),
-      d = devices.get(id)
-    if (!d) return error('management_device_not_found', 404)
-    const assignment = () => ({
-      id,
-      revision: d.summary.revision,
-      owner: d.summary.owner,
-      department: d.summary.department,
-    })
-    if (method === 'GET') return candidate(assignment())
-    if (method !== 'PUT') return
-    const op = operation(request.body)
-    return receipts.write(request, op.operationId, () => {
-      if (d.summary.revision !== op.expectedRevision) return error('operation_conflict')
-      const input = closed(op.input, ['owner', 'department'])
-      d.summary.owner = nullable(input['owner'], identifier)
-      d.summary.department = nullable(input['department'], identifier)
-      d.summary.revision++
-      d.history.push({
-        id: randomUUID(),
-        at: Math.floor(Date.now() / 1000),
-        event: 'assignment_changed',
-        operation: op.operationId,
-      })
-      return candidate(assignment())
-    })
   }
   const handle: DomainHandler = (request, scenario) => {
     if (
-      !/^\/api\/(?:v1\/(?:asset-fields|device-queries|devices|device-views|device-associations|saved-queries|groups)|v1\/(?:enrollments|devices|self-enrollments|registration-quotas|registration-channels)|v1\/mdm-candidate\/(?:devices|groups))(?:\/|$)/.test(
+      !/^\/api\/(?:v1\/(?:asset-fields|device-queries|devices|device-views|device-associations|saved-queries|groups)|v1\/(?:enrollments|devices|self-enrollments|registration-quotas|registration-channels))(?:\/|$)/.test(
         request.path,
       )
     )
@@ -266,7 +128,6 @@ export function createDeviceDemo() {
     objects: () => views.objects(),
     facts: () => structuredClone([...devices.values()]),
     publishedGroup: groups.published,
-    batches: () => structuredClone([...batches.values()]),
     tick(event: DemoEvent) {
       if (!['enrollment_bind', 'agent_binding'].includes(event.kind) || event.at < observedAt)
         return
@@ -324,8 +185,6 @@ export function createDeviceDemo() {
       groups.reset()
       enrollments.reset()
       pages.reset()
-      receipts.reset()
-      batches.clear()
       views.reset()
     },
   }

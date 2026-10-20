@@ -63,6 +63,13 @@ const provision = (operationId: string) => ({
   },
 })
 type Options = RequestOptions<unknown> | NoContentRequest
+async function guideStep(wrapper: VueWrapper, label: string) {
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text().includes(label))!
+    .trigger('click')
+  await flushPromises()
+}
 async function fixture(
   component: Component,
   props: object = {},
@@ -459,7 +466,10 @@ it('queries original operations through explicit domain clients and keeps PKI ou
 })
 it('keeps Agent package admission and signing evidence with the formal resource owner', async () => {
   const f = await fixture(PackagesPanel)
-  expect(f.wrapper.text()).toContain('实际构建方')
+  expect(f.wrapper.text()).toContain('新安装包上传与替换暂不可用')
+  expect(f.wrapper.find('form').exists()).toBe(false)
+  for (const name of ['Windows x64', 'Windows ARM64', 'macOS Intel', 'macOS Apple Silicon'])
+    expect(f.wrapper.text()).toContain(name)
   expect(f.wrapper.find('textarea').exists()).toBe(false)
 })
 it('edits tenant metadata with explicit CAS and clears an added administrator password', async () => {
@@ -818,6 +828,7 @@ it('saves first-use choices, restores backend facts, and finishes only through a
     revision = 0,
     ready = false
   f.setHandler((o) => {
+    if (o.path === '/api/v1/agent-packages') return []
     if (o.method === 'PUT') {
       const body = o.body as { expectedRevision: number; intent: FirstUseIntent }
       expect(body.expectedRevision).toBe(revision)
@@ -830,30 +841,39 @@ it('saves first-use choices, restores backend facts, and finishes only through a
     return {
       tenantId: tenant,
       saved: { revision, intent },
-      steps: intent.channels.map((channel) => ({
-        id: channel,
-        status: ready ? 'ready' : 'pending',
-        reason: ready ? null : 'registration_not_allowed',
-        evidence: [],
-      })),
+      steps: [
+        { id: 's3', status: ready ? 'ready' : 'pending', reason: null, evidence: [] },
+        ...intent.channels.map((channel) => ({
+          id: channel,
+          status: ready ? 'ready' : 'pending',
+          reason: ready ? null : 'registration_not_allowed',
+          evidence: [],
+        })),
+      ],
       canComplete: ready,
       complete: ready && intent.completionRequested,
     }
   })
   await button(f.wrapper, '重新读取').trigger('click')
   await flushPromises()
+  expect((f.wrapper.get('input[value=agent]').element as HTMLInputElement).checked).toBe(true)
+  await f.wrapper.get('input[value=agent]').setValue(false)
   await f.wrapper.get('input[value=windows_mdm]').setValue(true)
+  await guideStep(f.wrapper, '通知与其他集成')
   await f.wrapper.get('[data-capability=smtp]').setValue('skip')
   await f.wrapper.get('input[placeholder="跳过理由"]').setValue('Not needed')
   await button(f.wrapper, '保存本次选择').trigger('click')
   await flushPromises()
   expect(intent.capabilities.smtp).toEqual({ kind: 'skip', reason: 'Not needed' })
+  await guideStep(f.wrapper, '注册就绪检查')
   expect(button(f.wrapper, '完成').attributes('disabled')).toBeDefined()
   await f.remount()
+  await guideStep(f.wrapper, '选择管理通道')
   expect((f.wrapper.get('input[value=windows_mdm]').element as HTMLInputElement).checked).toBe(true)
   ready = true
   await button(f.wrapper, '重新读取').trigger('click')
   await flushPromises()
+  await guideStep(f.wrapper, '注册就绪检查')
   await button(f.wrapper, '完成').trigger('click')
   await flushPromises()
   expect(intent.completionRequested).toBe(true)
@@ -869,6 +889,7 @@ it('queries the original first-use operation after a lost response and never rep
   let committed = false,
     operation = ''
   f.setHandler((o) => {
+    if (o.path === '/api/v1/agent-packages') return []
     if (o.method === 'PUT') {
       operation = o.headers!['Idempotency-Key']!
       throw decodeMdmError(503, { code: 'operation_unknown' })
@@ -914,6 +935,7 @@ it('restores the exact in-memory first-use request across navigation before expl
   const ids: string[] = [],
     bodies: unknown[] = []
   f.setHandler((o) => {
+    if (o.path === '/api/v1/agent-packages') return []
     if (o.method === 'PUT') {
       ids.push(o.headers!['Idempotency-Key']!)
       bodies.push(o.body)
@@ -935,7 +957,9 @@ it('restores the exact in-memory first-use request across navigation before expl
   await button(f.wrapper, '保存本次选择').trigger('click')
   await flushPromises()
   await f.remount()
+  await guideStep(f.wrapper, '选择管理通道')
   expect((f.wrapper.get('input[value=windows_mdm]').element as HTMLInputElement).checked).toBe(true)
+  await guideStep(f.wrapper, '通知与其他集成')
   expect((f.wrapper.get('input[placeholder="跳过理由"]').element as HTMLInputElement).value).toBe(
     'Original reason',
   )

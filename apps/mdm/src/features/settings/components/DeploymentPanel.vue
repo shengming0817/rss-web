@@ -86,10 +86,9 @@ useSettingsFacts(() => {
       >{{ maintenanceCommand }} configure-host --config
       /var/lib/rss-mdm/private-host-change.json</code
     >
-    <p>{{ t('settings.prepareCaHint') }}</p>
+    <p>{{ t('settings.initializeCaHint') }}</p>
     <code
-      >{{ maintenanceCommand }} prepare-ca --config
-      /var/lib/rss-mdm/private-ca-preparation.json</code
+      >{{ maintenanceCommand }} initialize-ca --config /var/lib/rss-mdm/private-step-ca.json</code
     >
     <p>{{ t('settings.recoverAccountHint') }}</p>
     <code

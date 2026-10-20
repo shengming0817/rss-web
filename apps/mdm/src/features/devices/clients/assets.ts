@@ -7,6 +7,8 @@ import {
   count,
   enumeration,
   identifier,
+  integer,
+  record,
   nullable,
   string,
   unique,
@@ -20,6 +22,8 @@ import {
   inventory,
   savedQuery,
   summary,
+  qualityRun,
+  sourceIds,
   type ManualChange,
   type Query,
 } from './asset-model'
@@ -43,6 +47,62 @@ export function decodeAssetPage(value: unknown, tenant: string) {
     nextCursor: cursor(v['nextCursor']),
     snapshot: uuid(v['snapshot']),
     summary: summary(v['summary']),
+  }
+}
+export function decodeCollectionRun(value: unknown, tenant: string, id: string) {
+  const v = closed(assetEnvelope(value, tenant, 'collection_run', ['run'])['run'], [
+    'id',
+    'registration',
+    'generation',
+    'source',
+    'epoch',
+    'delivery',
+    'fingerprint',
+    'coverage',
+    'complete',
+    'dataset',
+    'templateVersion',
+    'sequence',
+    'startedAt',
+    'finishedAt',
+    'result',
+    'reason',
+    'deliveryPending',
+    'fields',
+  ])
+  if (uuid(v['id']) !== id || count(v['generation']) < 1) throw new Error('Wrong collection run')
+  const source = enumeration(v['source'], sourceIds)
+  const quality = qualityRun(
+    Object.fromEntries(
+      [
+        'dataset',
+        'templateVersion',
+        'fingerprint',
+        'coverage',
+        'complete',
+        'source',
+        'epoch',
+        'sequence',
+        'result',
+        'deliveryPending',
+        'fields',
+      ]
+        .map((k) => [k, v[k]])
+        .concat([
+          ['runId', id],
+          ['registration', v['registration']],
+          ['registrationGeneration', v['generation']],
+          ['channel', source === 'agent.builtin' ? 'agent' : 'mdm'],
+        ]),
+    ),
+  )
+  return {
+    id,
+    quality,
+    delivery: record(v['delivery']),
+    startedAt: integer(v['startedAt']),
+    finishedAt: nullable(v['finishedAt'], integer),
+    reason: nullable(v['reason'], identifier),
   }
 }
 export function createAssetsClient(transport: HttpTransport, tenant: string) {
@@ -77,6 +137,14 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
           if (result.device !== device) throw new Error('Wrong inventory device')
           return result
         },
+      }),
+    collectionRun: (device: string, id: string) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/devices/{device}/collections/{run}',
+        pathParams: { device, run: uuid(id) },
+        successStatus: 200,
+        decode: (v) => decodeCollectionRun(v, tenant, id),
       }),
     search: (body: Operation<Query>) =>
       transport.request({

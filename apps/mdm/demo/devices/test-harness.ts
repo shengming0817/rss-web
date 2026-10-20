@@ -2,7 +2,6 @@ import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { createScenario, TENANT } from '../scenario'
 import { createDeviceDemo } from './state'
 import { createAssetsClient } from '../../src/features/devices/clients/assets'
-import { createCandidateOperations } from '../../src/features/devices/clients/candidate-operations'
 import { createDirectoryClient } from '../../src/features/devices/clients/directory'
 import { createAssociationsClient } from '../../src/features/devices/clients/associations'
 import { createDeviceViewsClient } from '../../src/features/devices/clients/device-views'
@@ -52,7 +51,6 @@ export async function setup() {
     headers,
     assets: createAssetsClient(transport, TENANT),
     directory: createDirectoryClient(transport),
-    candidate: createCandidateOperations(transport, TENANT, true),
     groups: createGroupsClient(transport),
     enrollment: createEnrollmentClient(transport),
   }

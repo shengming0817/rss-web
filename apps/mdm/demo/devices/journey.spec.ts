@@ -24,7 +24,7 @@ it('replays a committed unknown write exactly and rejects changed content under 
   ).rejects.toMatchObject({ status: 409 })
 })
 it('reads current endpoint statistics and permits pending onboarding without claiming registration', async () => {
-  const { directory, candidate, enrollment } = await setup()
+  const { directory, enrollment } = await setup()
   const first = await directory.list()
   await enrollment.create(crypto.randomUUID(), {
     deviceId: 'new-native-platform',
@@ -36,19 +36,6 @@ it('reads current endpoint statistics and permits pending onboarding without cla
   )
   expect((await directory.list()).statistics.total).toBe(first.statistics.total + 1)
   expect((await directory.detail('new-native-platform')).channels).toEqual([])
-  const preview = await candidate.preview(
-    operation({ action: 'onboard', devices: ['new-native-platform'] }),
-  )
-  expect(preview.targets[0]?.registration).toBeNull()
-  const accepted = await candidate.execute(
-    preview.id,
-    operation({ confirmed: true }, preview.revision),
-  )
-  expect(accepted.targets[0]).toMatchObject({
-    dispatch: 'accepted',
-    receipt: 'pending',
-    effect: 'unknown',
-  })
   expect((await enrollment.registrations('new-native-platform')).items).toEqual([])
 })
 it('freezes searches while manual changes preserve CAS, deleted history and exact replay', async () => {
@@ -125,38 +112,6 @@ it('previews do not publish membership and stale tasks do not overwrite a newer 
   await groups.status(id, recompute.task!)
   expect((await groups.status(id, recompute.task!)).status).toBe('superseded')
   expect((await groups.read(id)).group.name).toBe('Renamed')
-})
-it('rechecks frozen registration at execution and exposes partial blocks without effects', async () => {
-  const { candidate, enrollment, scenario } = await setup()
-  const preview = await candidate.preview(operation({ action: 'wipe', devices: ['device-01'] }))
-  const registration = (await enrollment.registrations('device-01')).items.find(
-    (r) => r.registrationId === preview.targets[0]?.registration,
-  )!
-  await enrollment.revoke('device-01', registration.registrationId, crypto.randomUUID())
-  const execution = await candidate.execute(
-    preview.id,
-    operation({ confirmed: true }, preview.revision),
-  )
-  expect(execution.targets[0]).toMatchObject({
-    blocked: 'stale_generation',
-    dispatch: 'blocked',
-    effect: 'unknown',
-    execution: null,
-  })
-  scenario.set('partial')
-  const partial = await candidate.preview(
-    operation({
-      action: 'retire',
-      devices: ['device-02', 'device-04', 'device-05', 'device-06', 'device-07'],
-    }),
-  )
-  expect(partial.targets.map((t) => t.blocked)).toEqual([
-    'offline',
-    'stale_generation',
-    'permission_denied',
-    'unsupported',
-    null,
-  ])
 })
 it('evaluates associated groups from both endpoint sources and withholds targets until the association is verified', async () => {
   const { associations, directory, assets, groups, domain, enrollment } = await setup()

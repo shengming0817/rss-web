@@ -51,6 +51,9 @@ try {
     await page.waitForURL((url) => !url.pathname.endsWith('/login'))
   }
   const body = () => page.locator('body')
+  const step = async (label) => {
+    await page.getByRole('button').filter({ hasText: label }).click()
+  }
   if (f.compose) {
     const retired = []
     page.on('request', (request) => {
@@ -66,7 +69,9 @@ try {
     await page.locator('#login-password').fill(password)
     await page.locator('form').first().getByRole('button', { name: '登录', exact: true }).click()
     await page.waitForURL((url) => url.pathname.endsWith('/settings/guide'))
+    await page.locator('input[value="agent"]').uncheck()
     await page.locator('input[value="windows_mdm"]').check()
+    await step('通知与其他集成')
     await page.locator('[data-capability=smtp]').selectOption('skip')
     await page
       .getByPlaceholder('跳过理由', { exact: true })
@@ -106,8 +111,9 @@ try {
     await page.unroute('**/api/v1/settings/first-use', loseReceipt)
     await page.reload()
     await page.waitForURL((url) => !url.searchParams.has('operation'))
-    await page.locator('[data-first-use-step=windows_mdm]').waitFor()
+    await step('选择管理通道')
     assert.equal(await page.locator('input[value="windows_mdm"]').isChecked(), true)
+    await step('通知与其他集成')
     assert.equal(
       await page.getByPlaceholder('跳过理由', { exact: true }).inputValue(),
       'This installation does not need email',
@@ -128,33 +134,48 @@ try {
     await channel().getByRole('button', { name: '暂停新注册', exact: true }).click()
     await channel().getByRole('button', { name: '恢复新注册', exact: true }).waitFor()
     await page.goto(`${origin}/tenants/${f.tenant}/settings/guide`)
+    await step('注册就绪检查')
     await page.locator('[data-first-use-step=windows_mdm]').waitFor()
     assert.equal(await page.getByRole('button', { name: '完成', exact: true }).isDisabled(), true)
     await page.goto(`${origin}/tenants/${f.tenant}/registration-quotas`)
     await channel().getByRole('button', { name: '恢复新注册', exact: true }).click()
     await channel().getByRole('button', { name: '暂停新注册', exact: true }).waitFor()
     await page.goto(`${origin}/tenants/${f.tenant}/settings/guide`)
-    await page.getByRole('button', { name: '完成', exact: true }).click()
-    await page.waitForURL((url) => url.pathname.endsWith('/workspace'))
-    coverage.push(
-      'real-domain-admission-save-and-observation',
-      'required-fact-blocks-completion',
-      'backend-confirmed-completion',
-    )
-    phase = 'first-use-daily-reentry'
-    await page.goto(`${origin}/tenants/${f.tenant}/registration-quotas`)
-    await channel().getByRole('button', { name: '暂停新注册', exact: true }).click()
-    await channel().getByRole('button', { name: '恢复新注册', exact: true }).waitFor()
-    await page.goto(`${origin}/tenants/${f.tenant}/sessions`)
-    await page.getByRole('button', { name: '退出当前会话', exact: true }).click()
-    await page.waitForURL((url) => url.pathname === '/login')
-    await login(origin, f.tenant, f.login, password)
-    await page.waitForURL((url) => url.pathname.endsWith('/workspace'))
-    await page.goto(`${origin}/tenants/${f.tenant}/settings/guide`)
-    await page.getByText('首次配置已完成', { exact: true }).waitFor()
-    assert.equal(await page.locator('input[value="windows_mdm"]').isDisabled(), true)
-    assert.equal(await page.locator('[data-capability=smtp]').isDisabled(), true)
-    coverage.push('relogin-resumes-daily-work-despite-later-degradation')
+    await step('注册就绪检查')
+    const readiness = await page.request.get(origin + '/api/v1/settings/first-use')
+    assert.equal(readiness.status(), 200)
+    const facts = await readiness.json()
+    const storageReady = facts.steps.some((s) => s.id === 's3' && s.status === 'ready')
+    if (!storageReady) {
+      assert.equal(await page.getByRole('button', { name: '完成', exact: true }).isDisabled(), true)
+      await page
+        .getByText('S3 内容仓必须保存、通过资格检查并实际应用，才能完成首次配置。', { exact: true })
+        .waitFor()
+      coverage.push('real-domain-admission-save-and-observation', 's3-not-ready-blocks-completion')
+    } else {
+      await page.getByRole('button', { name: '完成', exact: true }).click()
+      await page.waitForURL((url) => url.pathname.endsWith('/workspace'))
+      coverage.push(
+        'real-domain-admission-save-and-observation',
+        'required-fact-blocks-completion',
+        'backend-confirmed-completion',
+      )
+      phase = 'first-use-daily-reentry'
+      await page.goto(`${origin}/tenants/${f.tenant}/registration-quotas`)
+      await channel().getByRole('button', { name: '暂停新注册', exact: true }).click()
+      await channel().getByRole('button', { name: '恢复新注册', exact: true }).waitFor()
+      await page.goto(`${origin}/tenants/${f.tenant}/sessions`)
+      await page.getByRole('button', { name: '退出当前会话', exact: true }).click()
+      await page.waitForURL((url) => url.pathname === '/login')
+      await login(origin, f.tenant, f.login, password)
+      await page.waitForURL((url) => url.pathname.endsWith('/workspace'))
+      await page.goto(`${origin}/tenants/${f.tenant}/settings/guide`)
+      await page.getByText('首次配置已完成', { exact: true }).waitFor()
+      assert.equal(await page.locator('input[value="windows_mdm"]').isDisabled(), true)
+      await step('通知与其他集成')
+      assert.equal(await page.locator('[data-capability=smtp]').isDisabled(), true)
+      coverage.push('relogin-resumes-daily-work-despite-later-degradation')
+    }
     phase = 'formal-platform-and-reader'
     await page.goto(`${origin}/tenants/${f.tenant}/settings`)
     await page.locator('[data-setting]').first().waitFor()

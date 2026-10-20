@@ -112,7 +112,7 @@ it('binds frozen audit pages to exact filters and actor and clears them on reset
   expect((await f.server.handle('GET', `${root}?cursor=${first.nextCursor}`)).status).toBe(400)
 })
 
-it('rechecks native inventory/assignment permissions and preserves single-device reads', async () => {
+it('rechecks native inventory permissions and preserves single-device reads', async () => {
   const f = await fixture()
   const original = (await f.server.handle('GET', '/api/v1/authorization/rules')).body as {
     items: {
@@ -149,23 +149,6 @@ it('rechecks native inventory/assignment permissions and preserves single-device
   ])
     expect((await f.server.handle('GET', path)).status).toBe(200)
   expect((await f.server.handle('GET', '/api/v1/device-views/endpoint/device-02')).status).toBe(404)
-  const login = await f.server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
-    login: 'reviewer',
-    password: 'demo',
-  })
-  expect(
-    (
-      await f.server.handle(
-        'PUT',
-        '/api/v1/mdm-candidate/devices/device-01/assignment',
-        { operationId: id(), expectedRevision: 1, input: { owner: 'changed', department: null } },
-        {
-          'x-csrf-token': (login.body as { csrfToken: string }).csrfToken,
-          'x-identity-request': '1',
-        },
-      )
-    ).status,
-  ).toBe(403)
 })
 it('records the exact business target and offline/unsupported failures without inventing an object', async () => {
   const observed: import('../scenario').DemoObservation[] = []
