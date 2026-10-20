@@ -87,3 +87,56 @@ it('keeps canonical associations in assignments, channel endpoints in Scope page
     .body as { page: { items: { kind: string }[] } }
   expect(page.page.items.every((o) => o.kind === 'endpoint')).toBe(true)
 })
+it('evaluates associated conditions only from evidence matching original registrations', async () => {
+  const f = await setup(),
+    mdm = currentMember(await f.directory.detail('device-05'), 'mdm')!,
+    agent = currentMember(await f.directory.detail('device-01'), 'agent')!
+  const association = await f.associations.confirm({
+    operationId: randomUUID(),
+    associationId: null,
+    expectedVersion: 0,
+    mdm,
+    agent,
+    evidence: 'Synthetic verified pair',
+  })
+  const group = randomUUID()
+  const create = await f.groups.change(group, {
+    operationId: randomUUID(),
+    expectedRevision: 0,
+    input: {
+      action: 'create',
+      name: 'Registered evidence',
+      description: '',
+      assetContext: 'associated_device',
+      criteria: deviceCondition({
+        kind: 'predicate',
+        field: 'device.model',
+        op: 'eq',
+        value: { kind: 'string', value: 'ThinkPad T14' },
+      }),
+    },
+  })
+  await f.groups.status(group, create.task!)
+  await f.groups.status(group, create.task!)
+  expect((await f.groups.page(group, create.task!, 'members')).page).toMatchObject({
+    items: expect.arrayContaining([{ kind: 'association', id: association.id }]),
+  })
+  const changed = await f.groups.change(group, {
+    operationId: randomUUID(),
+    expectedRevision: 1,
+    input: {
+      action: 'rule',
+      criteria: deviceCondition({
+        kind: 'predicate',
+        field: 'custom.is_loaner',
+        op: 'eq',
+        value: { kind: 'boolean', value: false },
+      }),
+    },
+  })
+  await f.groups.status(group, changed.task!)
+  await f.groups.status(group, changed.task!)
+  const page = await f.groups.page(group, changed.task!, 'decisions')
+  if (page.page.kind !== 'decisions') throw new Error('Wrong projection')
+  expect(page.page.items.find((d) => d.object.id === association.id)?.decision).toBe('unknown')
+})

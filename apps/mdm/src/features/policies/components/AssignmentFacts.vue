@@ -19,7 +19,7 @@ defineProps<{
     sources?: ReturnType<typeof deviceObject>[]
   }
 }>()
-const { t } = useI18n(),
+const { t, te } = useI18n(),
   evidenceOpen = ref(false)
 </script>
 <template>
@@ -31,7 +31,11 @@ const { t } = useI18n(),
       v-if="item.availability"
       :tone="item.availability === 'ready' ? 'success' : 'warning'"
       >{{ t(`policies.availability_${item.availability}`) }}</UiBadge
-    ><span v-if="item.reason">{{ t(`policies.assignmentReason.${item.reason}`, item.reason) }}</span
+    ><span v-if="item.reason">{{
+      te(`policies.assignmentReason.${item.reason}`)
+        ? t(`policies.assignmentReason.${item.reason}`)
+        : item.reason
+    }}</span
     ><UiButton variant="ghost" @click="evidenceOpen = true">{{ t('devices.evidence') }}</UiButton>
   </div>
   <UiDialog

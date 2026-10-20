@@ -168,7 +168,7 @@ it('blocks current Scope consumers while a changed dynamic group is pending and 
   )
   expect(devices.publishedGroup(group)?.ready).toBe(false)
   expect(scopes.freeze(id)).toBeNull()
-  expect(scopes.snapshot(id)).toBeNull()
+  expect(scopes.snapshot(id)?.result).toBe(task)
   expect(
     scopes
       .assignments(id, 'agent')
@@ -176,7 +176,7 @@ it('blocks current Scope consumers while a changed dynamic group is pending and 
         (row) =>
           row.qualification.state === 'pending' &&
           row.reason === 'source_pending' &&
-          row.target === null,
+          row.availability === 'unavailable',
       ),
   ).toBe(true)
   expect(scopes.handle(request(path), 'normal')?.body).toEqual(history)

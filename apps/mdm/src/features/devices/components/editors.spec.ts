@@ -141,12 +141,12 @@ it('builds structured exact namespaces and bound account coordinates without JSO
     owner: { kind: 'macos' },
   })
   await wrapper.findAll('input[type=number]')[0]!.setValue('501')
-  await wrapper.findAll('input[type=text]')[0]!.setValue('11111111-1111-4111-8111-111111111111')
+  await wrapper.find('input:not([type])').setValue('11111111-1111-4111-8111-111111111111')
   expect(wrapper.props('modelValue')).toMatchObject({
     owner: { kind: 'macos', uid: 501, generated_uid: '11111111-1111-4111-8111-111111111111' },
   })
   await wrapper.find('select').setValue('macos_brew')
-  await wrapper.findAll('input[type=text]').at(-1)!.setValue('homebrew/core, corp/tools')
+  await wrapper.find('input:not([type])').setValue('homebrew/core, corp/tools')
   expect(wrapper.props('modelValue')).toMatchObject({
     kind: 'macos_brew',
     taps: ['homebrew/core', 'corp/tools'],

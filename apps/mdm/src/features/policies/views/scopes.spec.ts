@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, DOMWrapper } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { mdmKey } from '../../../context'
@@ -28,10 +28,11 @@ it('locks the original Scope after an unknown write and replays its exact frozen
           tenant: 'tenant',
           demo: true,
           policies: {
-            scopes: { change, read },
+            scopes: { change, read, list: async () => ({ items: [], nextCursor: null }) },
             catalog: { list: async () => ({ items: [], nextCursor: null }) },
           },
           devices: {
+            groups: { list: async () => ({ items: [], nextCursor: null }) },
             directory: {
               list: async () => ({ items: [], nextCursor: null }),
               groups: async () => ({ items: [], nextCursor: null }),
@@ -44,7 +45,7 @@ it('locks the original Scope after an unknown write and replays its exact frozen
   await flushPromises()
   const button = (text: string) => wrapper.findAll('button').find((b) => b.text() === text)!
   await button('新建').trigger('click')
-  await wrapper.get('form').trigger('submit')
+  await new DOMWrapper(document.body).get('[role=dialog] form').trigger('submit')
   await flushPromises()
   expect(button('新建').attributes('disabled')).toBeDefined()
   const body = change.mock.calls[0]![1]

@@ -12,6 +12,7 @@ import {
 } from '../../src/features/policies/clients/scopes'
 import { createPages, createReceipts, error, ok, operation } from '../http'
 type Devices = Pick<ReturnType<typeof createDeviceDemo>, 'facts' | 'publishedGroup' | 'objects'>
+type AuthoredScope = Pick<ScopeRead, 'id' | 'revision' | 'definition'>
 interface Source {
   reference: Reference
   memberSet: string | null
@@ -39,13 +40,13 @@ interface Job {
 }
 export function createScopeDemo(devices: Devices) {
   const managedScopes = new Set<string>()
-  const scopes = new Map<string, ScopeRead>(),
+  const scopes = new Map<string, AuthoredScope>(),
     deleted = new Set<string>(),
     jobs = new Map<string, Job>(),
     current = new Map<string, string>()
   const receipts = createReceipts(),
     pages = createPages()
-  function resolve(read: ScopeRead): Job {
+  function resolve(read: AuthoredScope): Job {
     const sources: Source[] = [],
       membership: string[][] = []
     const facts = devices.facts()
@@ -255,7 +256,13 @@ export function createScopeDemo(devices: Devices) {
         })
       }
       if (request.method === 'GET')
-        return read && !deleted.has(id) ? ok(structuredClone(read)) : error('scope_not_found', 404)
+        return read && !deleted.has(id)
+          ? ok({
+              ...structuredClone(read),
+              resolution: current.get(id) ?? null,
+              resolutionRevision: jobs.get(current.get(id) ?? '')?.frozen.revision ?? 0,
+            })
+          : error('scope_not_found', 404)
       if (request.method !== 'POST' || match[2]) return
       if (managedScopes.has(id)) return error('permission_denied', 403)
       const op = operation(request.body)
@@ -292,7 +299,7 @@ export function createScopeDemo(devices: Devices) {
     forManagedDevices<T>(devices: string[], bind: (scope: string) => T): T {
       const id = randomUUID(),
         task = randomUUID()
-      const read: ScopeRead = {
+      const read: AuthoredScope = {
         id,
         revision: 1,
         definition: {
@@ -318,7 +325,7 @@ export function createScopeDemo(devices: Devices) {
       }
     },
     snapshot(id: string) {
-      if (!reconcile(id)) return null
+      reconcile(id)
       const result = current.get(id),
         job = result ? jobs.get(result) : undefined
       if (!result || !job || deleted.has(id)) return null
@@ -371,9 +378,7 @@ export function createScopeDemo(devices: Devices) {
           ...facts,
           scopeResult: result,
           qualification,
-          ...(!ready
-            ? { availability: 'unavailable' as const, reason: 'source_pending', target: null }
-            : {}),
+          ...(!ready ? { availability: 'unavailable' as const, reason: 'source_pending' } : {}),
           ...(qualification.state === 'excluded'
             ? { availability: 'unavailable' as const, reason: 'scope_excluded' }
             : {}),

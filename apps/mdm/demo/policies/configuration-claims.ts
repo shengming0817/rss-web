@@ -273,11 +273,13 @@ export function createConfigurationPolicies(
       return ok({
         action: definition.action,
         scopeResult: snapshot.result,
-        items: rows.slice(0, 64).map(({ sources: _sources, qualification, ...row }) => ({
-          ...row,
-          eligibility: qualification,
-          taskAdmission: null,
-        })),
+        items: rows
+          .slice(0, 64)
+          .map(({ sources: _sources, scopeResult: _scopeResult, qualification, ...row }) => ({
+            ...row,
+            eligibility: qualification,
+            taskAdmission: null,
+          })),
         nextCursor: rows.length > 64 ? objectKey(rows[63]!.object) : null,
       })
     }

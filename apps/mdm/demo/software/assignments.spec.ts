@@ -122,7 +122,9 @@ it('previews without creating work, fences scope results and requires explicit s
       { object: { kind: 'endpoint', id: 'device-01' }, taskAdmission: { state: 'eligible' } },
       {
         object: { kind: 'endpoint', id: 'device-02' },
-        taskAdmission: { state: 'missing_registration' },
+        availability: 'unavailable',
+        reason: 'channel_unavailable',
+        taskAdmission: null,
       },
     ],
   })

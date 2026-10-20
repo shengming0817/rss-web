@@ -5,8 +5,9 @@ import {
   deviceCondition,
   type InventoryCondition,
   type CollectionScope,
+  type FieldDefinition,
+  type Criteria,
 } from '../clients/asset-model'
-import type { FieldDefinition, Criteria } from '../clients/asset-model'
 import CriteriaEditor from './CriteriaEditor.vue'
 import ScopeEditor from './ScopeEditor.vue'
 defineProps<{ fields: FieldDefinition[] }>()
@@ -85,8 +86,8 @@ function predicate(value: Criteria | null) {
             >{{ t('devices.scopeField.platform')
             }}<select
               :value="model.selector.platform"
-              @change="localUser('platform', ($event.target as HTMLSelectElement).value)"
               class="ui-input"
+              @change="localUser('platform', ($event.target as HTMLSelectElement).value)"
             >
               <option value="windows">Windows</option>
               <option value="macos">macOS</option>
@@ -95,17 +96,17 @@ function predicate(value: Criteria | null) {
             >{{ model.selector.platform === 'windows' ? 'SID' : 'UID'
             }}<input
               :value="model.selector.identity"
-              @input="localUser('identity', ($event.target as HTMLInputElement).value)"
               class="ui-input"
-              required /></label
+              required
+              @input="localUser('identity', ($event.target as HTMLInputElement).value)" /></label
         ></template>
         <label
           >{{ t('devices.conditionQuantifier')
           }}<select
             :value="model.quantifier"
-            @change="quantifier(($event.target as HTMLSelectElement).value)"
             class="ui-input"
             :disabled="model.selector.kind === 'device' || model.selector.kind === 'exact'"
+            @change="quantifier(($event.target as HTMLSelectElement).value)"
           >
             <option
               v-if="model.selector.kind === 'device' || model.selector.kind === 'exact'"

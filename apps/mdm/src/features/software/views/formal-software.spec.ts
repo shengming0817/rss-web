@@ -1,4 +1,4 @@
-import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
+import { DOMWrapper, mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { defineComponent, h, ref, type Component } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { expect, it, vi } from 'vitest'
@@ -678,7 +678,10 @@ it('binds explicit Agent releases in the common Policy and reads canonical regis
   })
   await button(wrapper, '刷新进度（保留编辑）').trigger('click')
   await flushPromises()
-  expect(wrapper.text()).toContain(`${id} / 2`)
+  await button(wrapper, '来源与历史证据').trigger('click')
+  await flushPromises()
+  expect(new DOMWrapper(document.body).get('[role=dialog]').text()).toContain(id)
+  expect(new DOMWrapper(document.body).get('[role=dialog]').text()).toContain('2')
   await button(wrapper, '执行中心').trigger('click')
   await flushPromises()
   expect(directory.mock.calls[0]?.[0].policy).toBe(saved?.id)

@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { UiButton, UiDialog } from '@rss/core/components'
-import { onMounted, ref, toRaw } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import type { FieldDefinition, Query, SavedQuery } from '../clients/assets'
 import { operation, useOperation } from '../../../services/useOperation'
 import PageFrame from '../../../components/PageFrame.vue'
 import ConditionEditor from '../components/ConditionEditor.vue'
-import { type InventoryCondition } from '../clients/asset-model'
+import { inventoryCondition, type InventoryCondition } from '../clients/asset-model'
 import BatchPanel from '../components/BatchPanel.vue'
 import AssetValue from '../components/AssetValue.vue'
 const { t } = useI18n(),
@@ -41,11 +41,16 @@ function write<T>(request: () => Promise<T>, apply: (value: T) => void) {
   pending = () => runWrite(request, apply)
   void pending()
 }
-function definition(): Query {
-  return {
-    criteria: structuredClone(toRaw(criteria.value)),
-    select: [...select.value],
-    sort: sort.value ? { field: sort.value, descending: descending.value } : null,
+function definition(): Query | null {
+  try {
+    return {
+      criteria: criteria.value ? inventoryCondition(criteria.value) : null,
+      select: [...select.value],
+      sort: sort.value ? { field: sort.value, descending: descending.value } : null,
+    }
+  } catch {
+    failure.value = 'invalidRequest'
+    return null
   }
 }
 function accepted(v: { task: string }) {
@@ -56,7 +61,9 @@ function accepted(v: { task: string }) {
   facets.value = undefined
 }
 function search() {
-  const body = operation(definition())
+  const query = definition()
+  if (!query) return
+  const body = operation(query)
   write(() => client.search(body), accepted)
 }
 function refresh() {
@@ -108,11 +115,13 @@ function load(item: SavedQuery) {
 }
 function save(remove = false) {
   if (remove && !current.value) return
+  const query = remove ? null : definition()
+  if (!remove && !query) return
   const id = current.value?.id ?? crypto.randomUUID(),
     body = operation(
       remove
         ? { action: 'delete' as const }
-        : { action: 'put' as const, definition: { name: name.value, query: definition() } },
+        : { action: 'put' as const, definition: { name: name.value, query: query! } },
       current.value?.revision ?? 0,
     )
   write(

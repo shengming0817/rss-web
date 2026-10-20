@@ -1,4 +1,5 @@
 // Production Vue + real MDM/Identity HTTPS/PG. Only a committed response is deliberately lost.
+import { Buffer } from 'node:buffer'
 import { chromium } from 'playwright'
 import { readFileSync, statSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
@@ -11,7 +12,8 @@ let browser,
   context,
   page,
   phase = 'environment',
-  result = 'failed'
+  result = 'failed',
+  associatedDiagnostics
 const coverage = [],
   responses = [],
   pageErrors = []
@@ -436,23 +438,8 @@ try {
   await page.goto(path(`device-views/association/${id}`))
   await loaded()
   phase = 'associated-group-scope-assignments'
-  // Keep the original conflict/source/cursor assertions above; now prepare a shared exact match.
-  for (const device of [fixture.mdm, fixture.agent, fixture.alone]) {
-    const inventory = (await api(`/api/v1/devices/${device}/inventory`)).asset.device
-    const write = await request(
-      'put',
-      origin + `/api/v1/devices/${device}/manual-fields/custom.asset_tag`,
-      {
-        headers: await headers(),
-        data: {
-          operationId: randomUUID(),
-          expectedRevision: inventory.revisions['custom.asset_tag'] ?? 0,
-          input: { action: 'set', value: { kind: 'string', value: 'browser-associated-match' } },
-        },
-      },
-    )
-    assert.equal(write.status(), 200)
-  }
+  // Associated evaluation requires collected evidence bound to original registrations.
+  advanceGeneration('seed-associated-inventory')
   await page.goto(path('devices/groups'))
   await loaded()
   await page.getByRole('button', { name: '创建', exact: true }).click()
@@ -464,8 +451,8 @@ try {
     .locator('.condition-editor')
     .getByRole('combobox', { name: '类型', exact: true })
     .selectOption('predicate')
-  await editor.getByRole('combobox', { name: '字段', exact: true }).selectOption('custom.asset_tag')
-  await editor.locator('.condition-editor input').last().fill('browser-associated-match')
+  await editor.getByRole('combobox', { name: '字段', exact: true }).selectOption('device.model')
+  await editor.locator('.condition-editor input').last().fill('browser-associated-model')
   const groupCreated = page.waitForResponse(
     (r) =>
       r.request().method() === 'POST' &&
@@ -483,12 +470,30 @@ try {
   const associatedMembers = await api(
     `/api/v1/groups/${associated.group.id}/results/${associated.task}/members`,
   )
+  const associatedDecisions = await api(
+    `/api/v1/groups/${associated.group.id}/results/${associated.task}/decisions`,
+  )
+  associatedDiagnostics = {
+    conditionKind: associatedRead.criteria.criteria.kind,
+    field: associatedRead.criteria.criteria.field,
+    members: associatedMembers.page.items.map((o) => ({
+      kind: o.kind,
+      pair: o.id === id,
+      alone: o.id === fixture.alone,
+    })),
+    decisions: associatedDecisions.page.items
+      .filter((d) => d.object.id === id || d.object.id === fixture.alone)
+      .map((d) => ({
+        kind: d.object.kind,
+        pair: d.object.id === id,
+        alone: d.object.id === fixture.alone,
+        decision: d.decision,
+        verified: d.sourceObjects.map((s) => s.verified),
+      })),
+  }
   assert.deepEqual(
     new Set(associatedMembers.page.items.map((o) => `${o.kind}:${o.id}`)),
     new Set([`association:${id}`, `endpoint:${fixture.alone}`]),
-  )
-  const associatedDecisions = await api(
-    `/api/v1/groups/${associated.group.id}/results/${associated.task}/decisions`,
   )
   const pairDecision = associatedDecisions.page.items.find(
     (d) => d.object.kind === 'association' && d.object.id === id,
@@ -693,6 +698,22 @@ try {
           .locator('#login-name')
           .count()
           .catch(() => 0),
+        scopeResults: await page
+          .locator('.scope-results')
+          .count()
+          .catch(() => 0),
+        dialogs: await page
+          .getByRole('dialog')
+          .count()
+          .catch(() => 0),
+        taskButtons: await page
+          .getByRole('button', { name: '读取任务状态', exact: true })
+          .count()
+          .catch(() => 0),
+        taskButtonEnabled: await page
+          .getByRole('button', { name: '读取任务状态', exact: true })
+          .isEnabled()
+          .catch(() => false),
         failures: ['输入或响应无效', '请求被拒绝', '对象或操作不存在', '服务暂不可用'].filter(
           (text) => alerts.some((alert) => alert.includes(text)),
         ),
@@ -707,6 +728,7 @@ try {
       ui,
       responses,
       pageErrors,
+      associatedDiagnostics,
     }),
   )
 } finally {

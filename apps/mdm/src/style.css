@@ -998,3 +998,11 @@
     margin-left: 0;
   }
 }
+
+.group-form > fieldset,
+.scope-form > fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}

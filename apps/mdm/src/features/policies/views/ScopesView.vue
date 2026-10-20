@@ -52,7 +52,7 @@ function open(value = id.value) {
       () => client.read(value),
       (v) => {
         apply(v)
-        task.value = undefined
+        task.value = v.resolution ?? undefined
         status.value = undefined
         result.value = undefined
       },

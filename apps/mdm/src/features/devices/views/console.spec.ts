@@ -154,7 +154,10 @@ async function setup(
     await flushPromises()
   }
   if (name === 'device-search') {
-    await wrapper.get('details > summary').trigger('click')
+    await wrapper
+      .findAll('details > summary')
+      .find((s) => s.text() === '个人保存查询')!
+      .trigger('click')
     await flushPromises()
   }
   if (name === 'device-groups') await click('创建')
@@ -273,7 +276,9 @@ it('executes asynchronous searches, facets, and personal saved query create/read
   await click('读取任务状态')
   await click('载入')
   expect(wrapper.text()).toContain('device-01')
-  const facetSection = wrapper.findAll('section').find((s) => s.find('h2').text().includes('聚合'))
+  const facetSection = wrapper
+    .findAll('section')
+    .find((s) => s.find('h2').exists() && s.find('h2').text().includes('聚合'))
   expect(facetSection).toBeDefined()
   await facetSection!.find('button').trigger('click')
   await flushPromises()
@@ -402,7 +407,7 @@ it('compares a saved server definition without replacing the local draft', async
   const current = wrapper.find('[data-testid=server-definition]')
   expect(current.text()).toContain('Other operator')
   expect(current.text()).toContain('device.model')
-  expect(current.find('input').element.value).toBe('MacBook Pro')
+  expect((current.findAll('input').at(-1)!.element as HTMLInputElement).value).toBe('MacBook Pro')
 })
 it('saves dynamic rules and renders unknown decisions, explanations and provenance', async () => {
   const { wrapper, click, devices, scenario } = await setup('device-groups')
@@ -415,7 +420,12 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
   await form.trigger('submit')
   await flushPromises()
   await click('规则')
-  await click('编辑')
+  await wrapper
+    .findAll('button')
+    .filter((b) => b.isVisible() && b.text() === '编辑')
+    .at(-1)!
+    .trigger('click')
+  await flushPromises()
   form = new DOMWrapper(document.body).get('[role=dialog] form')
   await form.find('.condition-editor').findAll('select').at(-1)!.setValue('true')
   await form.trigger('submit')
@@ -463,7 +473,9 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
   await flushPromises()
   expect(wrapper.find('[data-testid=server-definition]').text()).toContain('Server changed name')
   expect(wrapper.find('[data-testid=server-definition]').text()).toContain('Server description')
-  expect(form.get('[data-testid=group-name]').element.value).toBe('Retained group draft')
+  expect((form.get('[data-testid=group-name]').element as HTMLInputElement).value).toBe(
+    'Retained group draft',
+  )
 })
 
 it('does not call a confirmed manual write unknown when its follow-up read fails', async () => {
@@ -1136,4 +1148,18 @@ it('allows a quota reader to select user queries while keeping edits and submiss
   const change = vi.spyOn(devices.registration, 'change')
   await wrapper.get('form').trigger('submit')
   expect(change).not.toHaveBeenCalled()
+})
+
+it('rejects an invalid condition locally without entering unknown-write recovery', async () => {
+  const { wrapper, requests } = await setup('device-groups')
+  const form = new DOMWrapper(document.body).get('[role=dialog] form')
+  await form.get('[data-testid=group-name]').setValue('Invalid identity')
+  await form.get('[data-testid=group-kind]').setValue('dynamic')
+  await form.get('.inventory-condition details select').setValue('local_user')
+  await form.get('.inventory-condition details input').setValue('invalid-sid')
+  await form.trigger('submit')
+  await flushPromises()
+  expect(requests.filter((r) => r.method === 'POST')).toHaveLength(0)
+  expect(wrapper.text()).toContain('请求无效，请检查输入。')
+  expect(wrapper.text()).not.toContain('明确重放原操作')
 })

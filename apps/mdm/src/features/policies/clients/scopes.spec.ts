@@ -4,16 +4,21 @@ import { createScopesClient, decodeScope, decodeScopePage } from './scopes'
 const id = '11111111-1111-4111-8111-111111111111'
 const result = '22222222-2222-4222-8222-222222222222'
 const group = '33333333-3333-4333-8333-333333333333'
+const resolution = { resolution: result, resolutionRevision: 1 }
 const definition = {
   targets: [{ kind: 'device' as const, id: 'device-01' }],
   limitations: null,
   exclusions: [{ kind: 'group' as const, id: group }],
 }
 it('preserves unlimited and explicitly empty Scope limitations as different inputs', () => {
-  expect(decodeScope({ id, revision: 1, definition }, id).definition.limitations).toBeNull()
   expect(
-    decodeScope({ id, revision: 2, definition: { ...definition, limitations: [] } }, id).definition
-      .limitations,
+    decodeScope({ ...resolution, id, revision: 1, definition }, id).definition.limitations,
+  ).toBeNull()
+  expect(
+    decodeScope(
+      { ...resolution, id, revision: 2, definition: { ...definition, limitations: [] } },
+      id,
+    ).definition.limitations,
   ).toEqual([])
   for (const bad of [
     undefined,
@@ -23,13 +28,17 @@ it('preserves unlimited and explicitly empty Scope limitations as different inpu
     [{ kind: 'group', id: 'not-a-uuid' }],
   ]) {
     expect(() =>
-      decodeScope({ id, revision: 1, definition: { ...definition, limitations: bad } }, id),
+      decodeScope(
+        { ...resolution, id, revision: 1, definition: { ...definition, limitations: bad } },
+        id,
+      ),
     ).toThrow()
   }
-  expect(() => decodeScope({ id: result, revision: 1, definition }, id)).toThrow()
+  expect(() => decodeScope({ ...resolution, id: result, revision: 1, definition }, id)).toThrow()
   expect(() =>
     decodeScope(
       {
+        ...resolution,
         id,
         revision: 1,
         definition: { ...definition, targets: [...definition.targets, ...definition.targets] },
@@ -94,7 +103,7 @@ it('uses exact Scope paths and CAS bodies without manufacturing a list or previe
     body,
     successStatus: 200,
   })
-  reply = { id, revision: 2, definition }
+  reply = { ...resolution, id, revision: 2, definition }
   await client.read(id)
   expect(request.mock.calls[1]![0]).toMatchObject({
     method: 'GET',
@@ -133,4 +142,18 @@ it('uses exact Scope paths and CAS bodies without manufacturing a list or previe
     pathParams: { id, result, projection: 'members' },
     query: { cursor: 'opaque-tail' },
   })
+})
+
+it('requires current Scope publication coordinates and rejects retired incomplete reads', () => {
+  expect(decodeScope({ ...resolution, id, revision: 1, definition }, id)).toMatchObject(resolution)
+  expect(
+    decodeScope({ resolution: null, resolutionRevision: 0, id, revision: 1, definition }, id)
+      .resolution,
+  ).toBeNull()
+  for (const invalid of [
+    { id, revision: 1, definition },
+    { ...resolution, id, revision: 1, definition, resolutionRevision: -1 },
+    { ...resolution, id, revision: 1, definition, resolution: 'wrong' },
+  ])
+    expect(() => decodeScope(invalid, id)).toThrow()
 })

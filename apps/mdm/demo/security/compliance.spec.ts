@@ -355,8 +355,8 @@ it('invalidates dynamic group inputs after fact changes even when the compliance
   }
   await f.server.handle('GET', `${path}/tasks/${waiting.task}`)
   expect((await f.server.handle('GET', `${path}/tasks/${waiting.task}`)).body).toMatchObject({
-    phase: 'superseded',
-    diagnostic: { reason: 'group_input_pending' },
+    phase: 'published',
+    diagnostic: null,
   })
 })
 

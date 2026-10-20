@@ -15,7 +15,7 @@ import type { GroupRead } from '../../src/features/devices/clients/groups'
 import type { DemoDevice } from './fixtures'
 import { createPages, createReceipts, error, ok, operation } from '../http'
 import { mergedFieldState } from './views'
-import { evaluate, evaluateCondition, referencedFields } from './criteria'
+import { type evaluate, evaluateCondition, referencedFields } from './criteria'
 import { objectRef, objectKey, type deviceObject } from '../../src/features/devices/clients/objects'
 type DeviceObject = ReturnType<typeof deviceObject>
 type Decision = ReturnType<typeof evaluate> & {
@@ -108,7 +108,28 @@ export function createGroupDemo(
               for (const inventory of [d.inventory, ...(d.scopedInventory ?? [])]) {
                 const key = JSON.stringify(inventory.collectionScope),
                   list = contexts.get(key) ?? []
-                list.push(inventory)
+                list.push({
+                  ...inventory,
+                  fields: Object.fromEntries(
+                    Object.entries(inventory.fields).map(([key, field]) => {
+                      const sources = field.sources.filter(
+                        (f) =>
+                          f.evidence.registration === member.registrationId &&
+                          f.evidence.registrationGeneration === member.generation,
+                      )
+                      return [
+                        key,
+                        {
+                          ...field,
+                          sources,
+                          state: sources.length
+                            ? mergedFieldState(sources)
+                            : { kind: 'missing' as const },
+                        },
+                      ]
+                    }),
+                  ),
+                })
                 contexts.set(key, list)
               }
             }
@@ -120,7 +141,16 @@ export function createGroupDemo(
                   [...new Set(values.flatMap((v) => Object.keys(v.fields)))].map((key) => {
                     const entries = values.flatMap((v) => (v.fields[key] ? [v.fields[key]!] : [])),
                       sources = entries.flatMap((f) => f.sources)
-                    return [key, { ...entries[0]!, state: mergedFieldState(sources), sources }]
+                    return [
+                      key,
+                      {
+                        ...entries[0]!,
+                        state: sources.length
+                          ? mergedFieldState(sources)
+                          : { kind: 'missing' as const },
+                        sources,
+                      },
+                    ]
                   }),
                 ),
               })),
@@ -412,7 +442,7 @@ export function createGroupDemo(
             ),
           ) ?? [],
         get members() {
-          return this.objects.flatMap((o) => o.members.map((m) => m.device))
+          return [...new Set(this.objects.flatMap((o) => o.members.map((m) => m.device)))]
         },
         memberSet: state.read.memberSet,
         memberVersion: state.read.group.memberVersion,

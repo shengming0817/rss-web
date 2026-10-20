@@ -1,9 +1,7 @@
+/** Synthetic server evaluation only. Browser components never calculate membership. */
 import type {
   CollectionScope,
   InventoryCondition,
-} from '../../src/features/devices/clients/asset-model'
-/** Synthetic server evaluation only. Browser components never calculate membership. */
-import type {
   Criteria,
   Inventory,
   ReadScalar,

@@ -11,7 +11,11 @@ import ObjectLink from '../components/ObjectLink.vue'
 import AssignmentFacts from '../../policies/components/AssignmentFacts.vue'
 import PageFrame from '../../../components/PageFrame.vue'
 import ConditionEditor from '../components/ConditionEditor.vue'
-import { deviceCondition, type InventoryCondition } from '../clients/asset-model'
+import {
+  deviceCondition,
+  inventoryCondition,
+  type InventoryCondition,
+} from '../clients/asset-model'
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.devices.groups,
@@ -145,20 +149,26 @@ function change(input: GroupChange) {
   void pending()
 }
 function save() {
-  change(
-    current.value
-      ? { action: 'edit', name: name.value, description: description.value }
-      : {
-          action: 'create',
-          assetContext: assetContext.value,
-          name: name.value,
-          description: description.value,
-          criteria:
-            kind.value === 'static'
-              ? null
-              : (structuredClone(toRaw(criteria.value)) ?? deviceCondition()),
-        },
-  )
+  try {
+    change(
+      current.value
+        ? { action: 'edit', name: name.value, description: description.value }
+        : {
+            action: 'create',
+            assetContext: assetContext.value,
+            name: name.value,
+            description: description.value,
+            criteria:
+              kind.value === 'static'
+                ? null
+                : criteria.value
+                  ? inventoryCondition(criteria.value)
+                  : deviceCondition(),
+          },
+    )
+  } catch {
+    failure.value = 'invalidRequest'
+  }
 }
 function preview() {
   if (!current.value) return
@@ -179,10 +189,14 @@ function saveRule(event: Event) {
       ? event.currentTarget
       : (event.currentTarget as HTMLElement).closest('form')
   if (!form?.reportValidity()) return
-  change({
-    action: 'rule',
-    criteria: structuredClone(toRaw(criteria.value)) ?? deviceCondition(),
-  })
+  try {
+    change({
+      action: 'rule',
+      criteria: criteria.value ? inventoryCondition(criteria.value) : deviceCondition(),
+    })
+  } catch {
+    failure.value = 'invalidRequest'
+  }
 }
 async function refresh() {
   if (!task.value) return
@@ -436,7 +450,12 @@ function openGroup(group: string) {
                   <details>
                     <summary>{{ t('devices.explanations') }}</summary>
                     <p v-for="(e, i) in row.explanations" :key="i">
-                      {{ e.path.join('.') }} · {{ e.outcome }}
+                      {{ e.path.join('.') }} ·
+                      {{
+                        ['match', 'no_match'].includes(e.outcome)
+                          ? t(`devices.${e.outcome}`)
+                          : t(`devices.state.${e.outcome}`)
+                      }}
                     </p>
                     <p v-for="(e, i) in row.provenance" :key="i">
                       {{ e.field }} · {{ e.source }} · {{ e.snapshot_id }} · {{ e.observed_at }}
@@ -451,7 +470,10 @@ function openGroup(group: string) {
               >
             </template>
             <p v-if="status?.failure" role="alert">
-              {{ t('devices.failed') }} · {{ status.failureDetail?.reason }}
+              {{ t('devices.failed') }} ·
+              {{
+                status.failureDetail ? t(`devices.${status.failureDetail.reason}`) : status.failure
+              }}
               <span v-if="status.failureDetail"
                 >{{ t('devices.stage') }}: {{ status.failureDetail.stage }} ·
                 {{ t('policies.device') }}: {{ status.failureDetail.device }}</span
@@ -486,8 +508,8 @@ function openGroup(group: string) {
           <label
             >{{ t('devices.name')
             }}<input
-              data-testid="group-name"
               v-model="name"
+              data-testid="group-name"
               :readonly="!!current && editKind === 'rule'"
               class="ui-input"
               required
@@ -502,8 +524,8 @@ function openGroup(group: string) {
           ><label
             >{{ t('devices.kind')
             }}<select
-              data-testid="group-kind"
               v-model="kind"
+              data-testid="group-kind"
               class="ui-input"
               :disabled="!!current"
             >
@@ -513,8 +535,8 @@ function openGroup(group: string) {
           ><label
             >{{ t('devices.assetContext')
             }}<select
-              data-testid="group-context"
               v-model="assetContext"
+              data-testid="group-context"
               class="ui-input"
               :disabled="!!current || kind === 'static'"
             >
