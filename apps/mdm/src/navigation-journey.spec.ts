@@ -22,7 +22,7 @@ async function start() {
     automation = createAutomationDemo(devices)
   devices.bindAuthorization(automation.authorization.can)
   const seed = seedScriptPolicies(automation),
-    onboarding = createOnboardingDemo(automation.authorization.can),
+    onboarding = createOnboardingDemo(automation.authorization.can, devices.registrationAllowed),
     publication = automation.publication,
     imports = createImportsDemo(automation.resources, automation.lifecycle)
   const server = createScenario(

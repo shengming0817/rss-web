@@ -19,7 +19,10 @@ export function demoPlugin(): Plugin {
       const automation = createAutomationDemo(devices)
       devices.bindAuthorization(automation.authorization.can)
       seedScriptPolicies(automation)
-      const onboarding = createOnboardingDemo(automation.authorization.can)
+      const onboarding = createOnboardingDemo(
+        automation.authorization.can,
+        devices.registrationAllowed,
+      )
       const software = automation.lifecycle
       const publication = automation.publication
       const imports = createImportsDemo(automation.resources, software)

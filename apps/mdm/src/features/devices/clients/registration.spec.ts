@@ -15,7 +15,6 @@ const snapshot = {
     reserved: 2,
     used: 3,
     overLimit: 0,
-    canEnroll: true,
   })),
 }
 it('rejects foreign users, missing channels and inconsistent usage instead of showing false availability', () => {

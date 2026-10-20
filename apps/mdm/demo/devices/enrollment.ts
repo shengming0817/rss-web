@@ -2,6 +2,7 @@ import { createRegistrationDemo } from './registration'
 import { randomUUID } from 'node:crypto'
 import type { DomainHandler } from '../scenario'
 import { closed, enumeration, identifier, string, uuid } from '../../src/services/decode'
+import { nativeChannel } from '../../src/services/registrationChannels'
 import { type EnrollmentSource } from '../../src/features/devices/clients/enrollment'
 import type { DemoDevice } from './fixtures'
 import type { DemoEvent } from '../policies/schedule'
@@ -150,6 +151,7 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
         const body = closed(request.body, ['deviceId', 'password', 'source'], ['windowsProfile'])
         const deviceId = identifier(body['deviceId']),
           source = enumeration(body['source'], ['mdm.windows', 'mdm.apple'] as const)
+        if (!registration.allowed(nativeChannel(source))) return error('enrollment_paused', 409)
         password(body['password'])
         const enrollmentId = randomUUID()
         let device = devices().get(deviceId)
@@ -203,6 +205,11 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
       if (!enrollment || (enrollment.selfService && enrollment.actor !== request.actor.principalId))
         return error('permission_denied', 403)
       if (action === 'resume') {
+        if (
+          (enrollment.status !== 'bound' || enrollment.source === 'mdm.windows') &&
+          !registration.allowed(nativeChannel(enrollment.source as 'mdm.windows' | 'mdm.apple'))
+        )
+          return error('enrollment_paused', 409)
         if (enrollment.status === 'cancelled') return error('operation_conflict')
         const body = closed(request.body, ['password'])
         password(body['password'])
@@ -227,6 +234,7 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
   }
   const registration = createRegistrationDemo(enrollments, devices, handle)
   return {
+    allowed: registration.allowed,
     handle,
     reset() {
       reset()

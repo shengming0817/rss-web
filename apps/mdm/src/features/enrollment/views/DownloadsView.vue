@@ -67,9 +67,15 @@ refresh()
         <summary>{{ t('console.advanced') }}</summary>
         <p>SHA-256: {{ p.installerSha256.map((n) => n.toString(16).padStart(2, '0')).join('') }}</p>
       </details>
-      <a :href="runtime.onboarding.packages.content(p.releaseId)" :download="p.filename">{{
-        t('onboarding.download')
-      }}</a>
+      <a
+        v-if="p.format === 'nsis_exe' || p.format === 'macos_pkg'"
+        :href="runtime.onboarding.packages.content(p.releaseId)"
+        :download="p.filename"
+        >{{ t('onboarding.download') }}</a
+      >
+      <p v-if="p.format !== 'nsis_exe' && p.format !== 'macos_pkg'">
+        {{ t('registration.installerUnsupported') }}
+      </p>
       <p>{{ t('onboarding.sameDirectory') }}</p>
     </article>
   </section>

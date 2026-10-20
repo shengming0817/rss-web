@@ -7,6 +7,7 @@ import { useOperation } from '../../../services/useOperation'
 import { usePermission } from '../usePermission'
 import { useAttachment } from '../useAttachment'
 import { setupPanes, type AdeCommand } from '../clients/apple'
+import RegistrationStatus from '../../../components/RegistrationStatus.vue'
 import PageFrame from '../../../components/PageFrame.vue'
 const id = ref('')
 const runtime = useMdm(),
@@ -239,6 +240,7 @@ onBeforeUnmount(() => {
 </script>
 <template>
   <PageFrame :title="t('onboarding.appleAde')" :busy="busy" :failure="failure">
+    <RegistrationStatus channel="macos_mdm" />
     <p>{{ t('onboarding.adeGuide') }}</p>
     <p v-if="!canRead">{{ t('devices.denied') }}</p>
     <template v-else>

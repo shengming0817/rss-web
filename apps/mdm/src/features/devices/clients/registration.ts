@@ -1,7 +1,6 @@
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
-  boolean,
   closed,
   count,
   enumeration,
@@ -13,9 +12,11 @@ import {
 } from '../../../services/decode'
 import { user, type User } from '../../operations/clients/authorization'
 import { decodeEnrollmentReceipt } from './enrollment'
-export const channels = ['agent', 'windows_mdm', 'macos_mdm'] as const
-export type Channel = (typeof channels)[number]
-export type Limits = Record<Channel, number | null>
+import {
+  registrationChannels,
+  type RegistrationChannel,
+} from '../../../services/registrationChannels'
+export type Limits = Record<RegistrationChannel, number | null>
 function limit(value: unknown) {
   const n = count(value)
   if (n > 4294967295) throw new Error('Invalid limit')
@@ -23,7 +24,7 @@ function limit(value: unknown) {
 }
 export function configuration(value: unknown) {
   const v = closed(value, ['revision', 'limits'])
-  const raw = closed(v['limits'], channels)
+  const raw = closed(v['limits'], registrationChannels)
   const limits: Limits = {
     agent: nullable(raw['agent'], limit),
     windows_mdm: nullable(raw['windows_mdm'], limit),
@@ -44,35 +45,25 @@ export function usage(value: unknown, tenant: string, expected?: User) {
     throw new Error('Wrong usage user')
   const items = unique(
     array(v['channels'], (raw) => {
-      const c = closed(raw, [
-        'channel',
-        'limit',
-        'active',
-        'reserved',
-        'used',
-        'overLimit',
-        'canEnroll',
-      ])
+      const c = closed(raw, ['channel', 'limit', 'active', 'reserved', 'used', 'overLimit'])
       const result = {
-        channel: enumeration(c['channel'], channels),
+        channel: enumeration(c['channel'], registrationChannels),
         limit: limit(c['limit']),
         active: count(c['active']),
         reserved: count(c['reserved']),
         used: count(c['used']),
         overLimit: count(c['overLimit']),
-        canEnroll: boolean(c['canEnroll']),
       }
       if (
         result.used !== result.active + result.reserved ||
-        result.overLimit !== Math.max(0, result.used - result.limit) ||
-        result.canEnroll !== result.used < result.limit
+        result.overLimit !== Math.max(0, result.used - result.limit)
       )
         throw new Error('Invalid usage accounting')
       return result
     }),
     (c) => c.channel,
   )
-  if (items.length !== channels.length) throw new Error('Missing channel usage')
+  if (items.length !== registrationChannels.length) throw new Error('Missing channel usage')
   return { ...identity, channels: items, asOf: integer(v['asOf']) }
 }
 export function createRegistrationClient(transport: HttpTransport, tenant: string) {
@@ -119,7 +110,7 @@ export function createRegistrationClient(transport: HttpTransport, tenant: strin
           const result = configuration(v)
           if (
             result.revision !== expectedRevision + 1 ||
-            channels.some((c) => result.limits[c] !== limits[c])
+            registrationChannels.some((c) => result.limits[c] !== limits[c])
           )
             throw new Error('Wrong quota receipt')
           return result
