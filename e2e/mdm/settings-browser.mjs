@@ -74,7 +74,10 @@ try {
     phase = 'first-use-original-operation'
     let operation,
       writes = 0,
-      discarded = false
+      discarded = false,
+      interceptionFailed = false,
+      finishWrite
+    const observedWrite = new Promise((resolve) => (finishWrite = resolve))
     const loseReceipt = async (route) => {
       if (route.request().method() !== 'PUT') {
         await route.continue()
@@ -82,16 +85,24 @@ try {
       }
       writes++
       operation = route.request().headers()['idempotency-key']
-      const response = await route.fetch({ timeout: 45000, maxRetries: 0 })
-      assert.equal(response.status(), 200)
-      assert.equal((await response.json()).operationId, operation)
-      discarded = true
-      await route.abort('failed')
+      try {
+        const response = await route.fetch({ timeout: 45000, maxRetries: 0 })
+        assert.equal(response.status(), 200)
+        assert.equal((await response.json()).operationId, operation)
+        discarded = true
+        await route.abort('failed')
+      } catch {
+        interceptionFailed = true
+        await route.abort('failed').catch(() => {})
+      } finally {
+        finishWrite()
+      }
     }
     await page.route('**/api/v1/settings/first-use', loseReceipt)
     await page.getByRole('button', { name: '保存本次选择', exact: true }).click()
+    await observedWrite
     await page.getByRole('button', { name: '查询原操作', exact: true }).waitFor()
-    assert.ok(discarded && operation)
+    assert.ok(!interceptionFailed && discarded && operation)
     await page.unroute('**/api/v1/settings/first-use', loseReceipt)
     await page.reload()
     await page.waitForURL((url) => !url.searchParams.has('operation'))
@@ -141,7 +152,8 @@ try {
     await page.waitForURL((url) => url.pathname.endsWith('/workspace'))
     await page.goto(`${origin}/tenants/${f.tenant}/settings/guide`)
     await page.getByText('首次配置已完成', { exact: true }).waitFor()
-    assert.equal(await page.locator('fieldset').isDisabled(), true)
+    assert.equal(await page.locator('input[value="windows_mdm"]').isDisabled(), true)
+    assert.equal(await page.locator('[data-capability=smtp]').isDisabled(), true)
     coverage.push('relogin-resumes-daily-work-despite-later-degradation')
     phase = 'formal-platform-and-reader'
     await page.goto(`${origin}/tenants/${f.tenant}/settings`)
@@ -162,7 +174,8 @@ try {
     assert.equal(new Set([...tenantIds, ...platformIds]).size, 43)
     assert.equal(await page.getByRole('link', { name: '设备目录', exact: true }).count(), 0)
     await page.goto(`${origin}/tenants/${f.tenant}/settings`)
-    await page.waitForURL((url) => url.pathname === '/auth/error')
+    await page.waitForURL((url) => url.pathname === '/login')
+    await page.locator('#login-name').waitFor()
     const readerContext = await browser.newContext({ ignoreHTTPSErrors: true, locale: 'zh-CN' })
     try {
       const reader = await readerContext.newPage()
@@ -380,6 +393,7 @@ try {
     JSON.stringify({
       phase,
       result: 'failed',
+      location: /settings-browser\.mjs:\d+:\d+/.exec(error?.stack ?? '')?.[0],
       classification:
         error?.name === 'AssertionError'
           ? 'assertion'

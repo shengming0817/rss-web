@@ -73,7 +73,7 @@ def compose_browser(candidate):
     manifest=verify_candidate(candidate)
     image=load_ui(candidate,manifest['ui'])
     if (WEB/'artifacts/settings-browser/compose.json').exists():raise RuntimeError('previous-compose-cleanup-required')
-    root=Path(tempfile.mkdtemp(prefix='mdm-first-use-compose-'))
+    root=Path(tempfile.mkdtemp(prefix='mdm-first-use-compose-')).resolve()
     with ExitStack() as providers:
         inputs=root/'inputs';inputs.mkdir(mode=0o700)
         tls(inputs)
@@ -130,7 +130,11 @@ def compose_browser(candidate):
                 "shutil.copyfile('/inputs/configure-browser.json','/var/lib/rss-mdm/configure-browser.json');pathlib.Path('/var/lib/rss-mdm/configure-browser.json').chmod(0o600);os.chown('/var/lib/rss-mdm/configure-browser.json',10001,10001)"
             owner.compose('run','--rm','--no-deps','--user','0:0','--entrypoint','python3','init','-c',importer)
             owner.product('configure-host','/var/lib/rss-mdm/configure-browser.json')
-            owner.compose('restart','server','gateway')
+            # The gateway shares the server's network namespace. Stop it before
+            # replacing that namespace, then attach it to the restarted server.
+            owner.compose('stop','gateway')
+            owner.compose('restart','server')
+            owner.compose('start','gateway')
             # Network attachments survive restart; the operator observes the actual new process.
             until(lambda:api.call('GET','/readyz')[0]==200)
             owner.product('configure-host','/var/lib/rss-mdm/configure-browser.json')
@@ -169,7 +173,9 @@ if '--cleanup-compose' in sys.argv:
 if os.environ.get('MDM_SETTINGS_CANDIDATE'):
     try:compose_browser(os.environ['MDM_SETTINGS_CANDIDATE'])
     except BaseException as error:
-        print(json.dumps(dict(phase='settings-compose',result='failed',classification=type(error).__name__)),flush=True)
+        import traceback
+        frames=[dict(file=Path(frame.filename).name,line=frame.lineno,function=frame.name) for frame in traceback.extract_tb(error.__traceback__)]
+        print(json.dumps(dict(phase='settings-compose',result='failed',classification=type(error).__name__,frames=frames)),flush=True)
         sys.exit(1)
     sys.exit(0)
 
