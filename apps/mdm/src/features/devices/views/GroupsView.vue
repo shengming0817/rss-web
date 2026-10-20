@@ -33,7 +33,18 @@ const task = ref<string>(),
   result = ref<Awaited<ReturnType<typeof client.page>>>()
 const detailTab = ref('overview'),
   editKind = ref<'metadata' | 'rule'>('metadata')
+function compare() {
+  void run(
+    () => client.read(id.value),
+    (v) => (current.value = v),
+  )
+}
 function beginEdit(mode: 'metadata' | 'rule') {
+  if (current.value) {
+    name.value = current.value.group.name
+    description.value = current.value.group.description
+    criteria.value = structuredClone(toRaw(current.value.criteria))
+  }
   editKind.value = mode
   editing.value = true
 }
@@ -83,7 +94,7 @@ function open(group = id.value) {
       description.value = v.group.description
       kind.value = v.group.kind
       assetContext.value = v.group.assetContext
-      criteria.value = v.criteria
+      criteria.value = structuredClone(v.criteria)
       task.value = v.memberSet ?? undefined
       result.value = undefined
       status.value = undefined
@@ -343,15 +354,7 @@ function openGroup(group: string) {
               <dd>{{ current.group.memberVersion }}</dd>
             </div>
           </dl>
-          <UiButton
-            :disabled="busy"
-            @click="
-              run(
-                () => client.read(id),
-                (v) => (current = v),
-              )
-            "
-            >{{ t('devices.compare') }}</UiButton
+          <UiButton :disabled="busy" @click="compare">{{ t('devices.compare') }}</UiButton
           ><UiButton :disabled="busy || uncertain" @click="deleting = true">{{
             t('devices.delete')
           }}</UiButton></template
@@ -449,6 +452,10 @@ function openGroup(group: string) {
             </template>
             <p v-if="status?.failure" role="alert">
               {{ t('devices.failed') }} · {{ status.failureDetail?.reason }}
+              <span v-if="status.failureDetail"
+                >{{ t('devices.stage') }}: {{ status.failureDetail.stage }} ·
+                {{ t('policies.device') }}: {{ status.failureDetail.device }}</span
+              >
             </p></template
           >
         </template>
@@ -487,7 +494,11 @@ function openGroup(group: string) {
               maxlength="256" /></label
           ><label
             >{{ t('devices.description')
-            }}<input v-model="description" class="ui-input" maxlength="4096" /></label
+            }}<input
+              v-model="description"
+              :readonly="!!current && editKind === 'rule'"
+              class="ui-input"
+              maxlength="4096" /></label
           ><label
             >{{ t('devices.kind')
             }}<select
@@ -516,7 +527,10 @@ function openGroup(group: string) {
             :fields="fields"
           />
           <div class="console-toolbar">
-            <UiButton type="submit">{{ t('devices.save') }}</UiButton
+            <UiButton v-if="current" type="button" @click="compare">{{
+              t('devices.compare')
+            }}</UiButton
+            ><UiButton type="submit">{{ t('devices.save') }}</UiButton
             ><UiButton type="button" @click="cancelEdit">{{ t('console.cancel') }}</UiButton>
           </div>
         </fieldset>

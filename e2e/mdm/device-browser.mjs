@@ -455,12 +455,15 @@ try {
   }
   await page.goto(path('devices/groups'))
   await loaded()
-  await page.getByRole('button', { name: '新建', exact: true }).click()
+  await page.getByRole('button', { name: '创建', exact: true }).click()
   const editor = page.getByRole('dialog')
   await editor.getByTestId('group-name').fill('Browser associated group')
   await editor.getByTestId('group-kind').selectOption('dynamic')
   await editor.getByTestId('group-context').selectOption('associated_device')
-  await editor.getByRole('combobox', { name: '类型', exact: true }).selectOption('predicate')
+  await editor
+    .locator('.condition-editor')
+    .getByRole('combobox', { name: '类型', exact: true })
+    .selectOption('predicate')
   await editor.getByRole('combobox', { name: '字段', exact: true }).selectOption('custom.asset_tag')
   await editor.locator('.condition-editor input').last().fill('browser-associated-match')
   const groupCreated = page.waitForResponse(

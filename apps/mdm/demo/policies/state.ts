@@ -118,7 +118,11 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       const onboarding = /^\/api\/v1\/policies\/([^/]+)\/(assignments|runs)$/.exec(request.path)
       if (onboarding && request.method === 'GET') {
         const p = policyStore.get(onboarding[1]!)
-        if (p && !['configuration', 'software'].includes(p.definition.action.kind)) {
+        if (
+          p &&
+          !['configuration', 'software'].includes(p.definition.action.kind) &&
+          (onboarding[2] === 'assignments' || p.definition.action.kind === 'request_mdm_enrollment')
+        ) {
           if (onboarding[2] === 'runs') return ok({ items: [], nextCursor: null })
           const channel =
             p.definition.action.kind === 'native_collection' ||

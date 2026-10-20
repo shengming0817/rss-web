@@ -298,19 +298,22 @@ it('executes asynchronous searches, facets, and personal saved query create/read
 })
 it('creates a group, edits its definition, previews and recomputes server membership', async () => {
   const { wrapper, click } = await setup('device-groups')
-  const form = wrapper.findAll('form')[1]!
-  await form.find('input').setValue('New group')
+  const form = new DOMWrapper(document.body).get('[role=dialog] form')
+  await form.get('[data-testid=group-name]').setValue('New group')
   await form.trigger('submit')
   await flushPromises()
   expect(wrapper.text()).toContain('成员版本')
   await wrapper.find('textarea').setValue('device-01\ndevice-02')
-  await wrapper.findAll('form')[2]!.trigger('submit')
+  await wrapper.get('.group-member-editor').trigger('submit')
   await flushPromises()
+  await click('成员')
   await click('读取任务状态')
   await click('读取任务状态')
   await click('载入')
   expect(wrapper.text()).toContain('device-01')
+  await click('概览')
   await click('重读服务器值并比较')
+  await click('成员')
   await click('预览已保存版本')
   await click('读取任务状态')
   await click('读取任务状态')
@@ -403,25 +406,28 @@ it('compares a saved server definition without replacing the local draft', async
 })
 it('saves dynamic rules and renders unknown decisions, explanations and provenance', async () => {
   const { wrapper, click, devices, scenario } = await setup('device-groups')
-  const form = wrapper.findAll('form')[1]!
-  await form.find('input').setValue('Dynamic')
-  await form.find('select').setValue('dynamic')
+  let form = new DOMWrapper(document.body).get('[role=dialog] form')
+  await form.get('[data-testid=group-name]').setValue('Dynamic')
+  await form.get('[data-testid=group-kind]').setValue('dynamic')
   const editor = form.find('.condition-editor')
   await editor.find('select').setValue('predicate')
   await editor.findAll('select')[1]!.setValue('custom.is_loaner')
   await form.trigger('submit')
   await flushPromises()
-  await editor.findAll('select').at(-1)!.setValue('true')
+  await click('规则')
   await click('编辑')
-  await click('保存动态条件')
+  form = new DOMWrapper(document.body).get('[role=dialog] form')
+  await form.find('.condition-editor').findAll('select').at(-1)!.setValue('true')
+  await form.trigger('submit')
+  await flushPromises()
   const group = (await devices.groups.list()).items.find((g) => g.name === 'Dynamic')!
   expect((await devices.groups.read(group.id)).criteria).toMatchObject({
-    value: { kind: 'boolean', value: true },
+    criteria: { value: { kind: 'boolean', value: true } },
   })
   await click('预览已保存版本')
+  await click('成员解释')
   await click('读取任务状态')
   await click('读取任务状态')
-  await wrapper.findAll('select').at(-1)!.setValue('decisions')
   await click('载入')
   expect(wrapper.text()).toContain('当前已发布成员集: 否')
   expect(wrapper.text()).toContain('未采集')
@@ -446,11 +452,18 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
     expectedRevision: authoritative.group.revision,
     input: { action: 'edit', name: 'Server changed name', description: 'Server description' },
   })
-  await form.find('input').setValue('Retained group draft')
-  await click('重读服务器值并比较')
+  await click('概览')
+  await click('编辑')
+  form = new DOMWrapper(document.body).get('[role=dialog] form')
+  await form.get('[data-testid=group-name]').setValue('Retained group draft')
+  await form
+    .findAll('button')
+    .find((b) => b.text() === '重读服务器值并比较')!
+    .trigger('click')
+  await flushPromises()
   expect(wrapper.find('[data-testid=server-definition]').text()).toContain('Server changed name')
   expect(wrapper.find('[data-testid=server-definition]').text()).toContain('Server description')
-  expect(form.find('input').element.value).toBe('Retained group draft')
+  expect(form.get('[data-testid=group-name]').element.value).toBe('Retained group draft')
 })
 
 it('does not call a confirmed manual write unknown when its follow-up read fails', async () => {
@@ -592,6 +605,12 @@ it('refreshes channels after revoking each credential and never shows ready with
 })
 it('reports oversized member changes as rejected without entering unknown recovery', async () => {
   const { wrapper } = await setup('device-groups')
+  await new DOMWrapper(document.body)
+    .get('[role=dialog]')
+    .findAll('button')
+    .find((b) => b.text() === '取消')!
+    .trigger('click')
+  await flushPromises()
   await wrapper
     .findAll('button')
     .find((b) => b.text().includes('Pilot devices'))!
@@ -601,7 +620,7 @@ it('reports oversized member changes as rejected without entering unknown recove
     .find('textarea')
     .setValue(Array.from({ length: 500 }, () => crypto.randomUUID()).join('\n'))
   await wrapper.find('form input[type=checkbox]').setValue(true)
-  await wrapper.findAll('form')[2]!.trigger('submit')
+  await wrapper.get('.group-member-editor').trigger('submit')
   await flushPromises()
   expect(wrapper.text()).toContain('请求超过 16 KiB')
   expect(wrapper.text()).not.toContain('明确重放原操作')

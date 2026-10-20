@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { expect, it } from 'vitest'
 import { createScopeDemo } from './scopes'
+import { deviceCondition } from '../../src/features/devices/clients/asset-model'
 import { createDeviceDemo } from '../devices/state'
 import type { DemoRequest } from '../scenario'
 const actor = { principalId: randomUUID(), sessionId: randomUUID() }
@@ -108,4 +109,79 @@ it('uses published group membership, never a running or preview membership set',
   expect(
     scopes.handle(request(`/api/v1/scopes/${id}/results/${op}/members`), 'normal')?.body,
   ).toMatchObject({ current: true, page: { items: [{ kind: 'endpoint', id: device }] } })
+})
+
+it('blocks current Scope consumers while a changed dynamic group is pending and preserves frozen pages', () => {
+  const devices = createDeviceDemo(),
+    scopes = createScopeDemo(devices)
+  const group = randomUUID(),
+    first = randomUUID(),
+    id = randomUUID(),
+    task = randomUUID()
+  const condition = (value: boolean) =>
+    deviceCondition({
+      kind: 'predicate',
+      field: 'custom.is_loaner',
+      op: 'eq',
+      value: { kind: 'boolean', value },
+    })
+  devices.handle(
+    request(`/api/v1/groups/${group}`, {
+      operationId: first,
+      expectedRevision: 0,
+      input: {
+        action: 'create',
+        name: 'Pending source',
+        description: '',
+        assetContext: 'endpoint',
+        criteria: condition(false),
+      },
+    }),
+    'normal',
+  )
+  devices.handle(request(`/api/v1/groups/${group}/tasks/${first}`), 'normal')
+  devices.handle(request(`/api/v1/groups/${group}/tasks/${first}`), 'normal')
+  expect(devices.publishedGroup(group)?.ready).toBe(true)
+  scopes.handle(
+    request(`/api/v1/scopes/${id}`, {
+      operationId: task,
+      expectedRevision: 0,
+      input: {
+        action: 'put',
+        definition: { targets: [{ kind: 'group', id: group }], limitations: null, exclusions: [] },
+      },
+    }),
+    'normal',
+  )
+  scopes.handle(request(`/api/v1/scopes/${id}/tasks/${task}`), 'normal')
+  scopes.handle(request(`/api/v1/scopes/${id}/tasks/${task}`), 'normal')
+  const path = `/api/v1/scopes/${id}/results/${task}/members`
+  const history = scopes.handle(request(path), 'normal')?.body
+  const changed = randomUUID()
+  devices.handle(
+    request(`/api/v1/groups/${group}`, {
+      operationId: changed,
+      expectedRevision: 1,
+      input: { action: 'rule', criteria: condition(true) },
+    }),
+    'normal',
+  )
+  expect(devices.publishedGroup(group)?.ready).toBe(false)
+  expect(scopes.freeze(id)).toBeNull()
+  expect(scopes.snapshot(id)).toBeNull()
+  expect(
+    scopes
+      .assignments(id, 'agent')
+      .every(
+        (row) =>
+          row.qualification.state === 'pending' &&
+          row.reason === 'source_pending' &&
+          row.target === null,
+      ),
+  ).toBe(true)
+  expect(scopes.handle(request(path), 'normal')?.body).toEqual(history)
+  devices.handle(request(`/api/v1/groups/${group}/tasks/${changed}`), 'normal')
+  devices.handle(request(`/api/v1/groups/${group}/tasks/${changed}`), 'normal')
+  expect(scopes.snapshot(id)).not.toBeNull()
+  expect(scopes.freeze(id)).not.toBeNull()
 })

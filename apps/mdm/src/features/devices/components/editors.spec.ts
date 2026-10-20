@@ -153,3 +153,25 @@ it('builds structured exact namespaces and bound account coordinates without JSO
   })
   wrapper.unmount()
 })
+
+it('emits condition edits without mutating an already loaded server snapshot', async () => {
+  const { default: ConditionEditor } = await import('./ConditionEditor.vue')
+  const original = {
+    selector: { kind: 'local_user' as const, platform: 'windows' as const, identity: 'S-1-5-21' },
+    quantifier: 'any' as const,
+    criteria: { kind: 'and' as const, children: [] },
+  }
+  const before = structuredClone(original)
+  const wrapper = mount(ConditionEditor, {
+    props: { modelValue: original, fields: catalog },
+    global: { plugins: [mdmI18n()] },
+  })
+  await wrapper.find('details input').setValue('S-1-5-22')
+  expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toMatchObject({
+    selector: { identity: 'S-1-5-22' },
+  })
+  await wrapper.findAll('details select').at(-1)!.setValue('all')
+  expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toMatchObject({ quantifier: 'all' })
+  expect(original).toEqual(before)
+  wrapper.unmount()
+})

@@ -99,7 +99,7 @@ function load(item: SavedQuery) {
       current.value = v
       if (!v.definition) return
       name.value = v.definition.name
-      criteria.value = v.definition.query.criteria
+      criteria.value = structuredClone(v.definition.query.criteria)
       select.value = v.definition.query.select
       sort.value = v.definition.query.sort?.field ?? ''
       descending.value = v.definition.query.sort?.descending ?? false

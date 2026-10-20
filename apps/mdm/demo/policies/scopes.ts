@@ -59,6 +59,7 @@ export function createScopeDemo(devices: Devices) {
             const group = reference.kind === 'group' ? devices.publishedGroup(reference.id) : null
             const device = facts.find((d) => d.summary.id === reference.id)
             if (reference.kind === 'group' ? !group : !device) throw new Error('Unknown reference')
+            if (group && !group.ready) throw new Error('Group source pending')
             index = sources.length
             sources.push({
               reference,
@@ -145,13 +146,19 @@ export function createScopeDemo(devices: Devices) {
     const read = scopes.get(id),
       old = current.get(id),
       job = old ? jobs.get(old) : undefined
-    if (!read || !job || deleted.has(id) || job.frozen.revision !== read.revision) return
-    const next = resolve(read)
-    if (JSON.stringify(next.frozen) === JSON.stringify(job.frozen)) return
+    if (!read || !job || deleted.has(id) || job.frozen.revision !== read.revision) return false
+    let next: Job
+    try {
+      next = resolve(read)
+    } catch {
+      return false
+    }
+    if (JSON.stringify(next.frozen) === JSON.stringify(job.frozen)) return true
     const task = randomUUID()
     next.status = 'completed'
     jobs.set(task, next)
     current.set(id, task)
+    return true
   }
   const handle: DomainHandler = (request, scenario) => {
     const match =
@@ -311,7 +318,7 @@ export function createScopeDemo(devices: Devices) {
       }
     },
     snapshot(id: string) {
-      reconcile(id)
+      if (!reconcile(id)) return null
       const result = current.get(id),
         job = result ? jobs.get(result) : undefined
       if (!result || !job || deleted.has(id)) return null
@@ -346,7 +353,7 @@ export function createScopeDemo(devices: Devices) {
       }
     },
     assignments(id: string, channel: Channel) {
-      reconcile(id)
+      const ready = reconcile(id)
       const read = scopes.get(id),
         result = current.get(id)
       if (!read || !result || deleted.has(id)) return []
@@ -354,15 +361,19 @@ export function createScopeDemo(devices: Devices) {
       return projected.objects.map((object) => {
         const facts = targetFacts(devices, object, channel),
           device = facts.target?.device
-        const qualification = device
-          ? projected.members.includes(device)
-            ? { state: 'eligible' as const, entry: 1 }
-            : { state: 'excluded' as const }
-          : { state: 'pending' as const }
+        const qualification =
+          ready && device
+            ? projected.members.includes(device)
+              ? { state: 'eligible' as const, entry: 1 }
+              : { state: 'excluded' as const }
+            : { state: 'pending' as const }
         return {
           ...facts,
           scopeResult: result,
           qualification,
+          ...(!ready
+            ? { availability: 'unavailable' as const, reason: 'source_pending', target: null }
+            : {}),
           ...(qualification.state === 'excluded'
             ? { availability: 'unavailable' as const, reason: 'scope_excluded' }
             : {}),

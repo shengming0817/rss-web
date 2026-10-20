@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { deviceCondition, type InventoryCondition } from '../clients/asset-model'
+import {
+  deviceCondition,
+  type InventoryCondition,
+  type CollectionScope,
+} from '../clients/asset-model'
 import type { FieldDefinition, Criteria } from '../clients/asset-model'
 import CriteriaEditor from './CriteriaEditor.vue'
 import ScopeEditor from './ScopeEditor.vue'
@@ -27,6 +31,20 @@ function select(kind: string) {
     quantifier: kind === 'device' || kind === 'exact' ? 'one' : 'any',
     criteria: model.value?.criteria ?? { kind: 'and', children: [] },
   }
+}
+function updateSelector(selector: InventoryCondition['selector']) {
+  if (model.value) model.value = { ...model.value, selector }
+}
+function exactScope(scope: CollectionScope) {
+  updateSelector({ kind: 'exact', scope })
+}
+function localUser(key: 'platform' | 'identity', value: string) {
+  if (model.value?.selector.kind === 'local_user')
+    updateSelector({ ...model.value.selector, [key]: value } as InventoryCondition['selector'])
+}
+function quantifier(value: string) {
+  if (model.value)
+    model.value = { ...model.value, quantifier: value as InventoryCondition['quantifier'] }
 }
 function predicate(value: Criteria | null) {
   model.value = {
@@ -57,22 +75,35 @@ function predicate(value: Criteria | null) {
         </select></label
       >
       <template v-if="model">
-        <ScopeEditor v-if="model.selector.kind === 'exact'" v-model="model.selector.scope" />
+        <ScopeEditor
+          v-if="model.selector.kind === 'exact'"
+          :model-value="model.selector.scope"
+          @update:model-value="exactScope"
+        />
         <template v-if="model.selector.kind === 'local_user'"
           ><label
             >{{ t('devices.scopeField.platform')
-            }}<select v-model="model.selector.platform" class="ui-input">
+            }}<select
+              :value="model.selector.platform"
+              @change="localUser('platform', ($event.target as HTMLSelectElement).value)"
+              class="ui-input"
+            >
               <option value="windows">Windows</option>
               <option value="macos">macOS</option>
             </select></label
           ><label
             >{{ model.selector.platform === 'windows' ? 'SID' : 'UID'
-            }}<input v-model="model.selector.identity" class="ui-input" required /></label
+            }}<input
+              :value="model.selector.identity"
+              @input="localUser('identity', ($event.target as HTMLInputElement).value)"
+              class="ui-input"
+              required /></label
         ></template>
         <label
           >{{ t('devices.conditionQuantifier')
           }}<select
-            v-model="model.quantifier"
+            :value="model.quantifier"
+            @change="quantifier(($event.target as HTMLSelectElement).value)"
             class="ui-input"
             :disabled="model.selector.kind === 'device' || model.selector.kind === 'exact'"
           >
