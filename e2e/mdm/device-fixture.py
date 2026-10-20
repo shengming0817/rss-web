@@ -45,7 +45,7 @@ def q(value):
 def seed_authority():
     tenant = TENANTS[0]
     user = dict(instanceId=INSTANCE, tenantId=tenant, principalId=ADMIN)
-    rule = dict(subject=dict(kind='user', user=user), grants=[dict(operation=o, scope=dict(kind='all_devices')) for o in ['inventory_read','inventory_assign','device_association_write','credentials','enrollment','operation_read']] + [dict(operation=o, scope=dict(kind='tenant')) for o in ['group_read','group_write','group_recompute','scope_read','scope_write','policy_read','policy_write','resource_read','registration_configuration_read','registration_configuration_write']])
+    rule = dict(subject=dict(kind='user', user=user), grants=[dict(operation=o, scope=dict(kind='all_devices')) for o in ['inventory_read','inventory_assign','device_association_write','credentials','enrollment','operation_read']] + [dict(operation=o, scope=dict(kind='tenant')) for o in ['group_read','group_write','group_recompute','scope_read','scope_write','policy_read','policy_write','resource_read','resource_write','registration_configuration_read','registration_configuration_write']])
     rule_id = str(uuid.uuid4())
     sql = [f"SET rss.tenant_id = '{tenant}'", f"INSERT INTO mdm_access.authorization_rules(tenant_id,instance,id,revision,document) VALUES('{tenant}','{INSTANCE}','{rule_id}',1,{q(json.dumps(rule))}::jsonb)"]
     environment.sql(';'.join(sql)+';', 'mdm_dev')
@@ -54,7 +54,7 @@ def seed_authority():
 def seed():
     tenant = TENANTS[0]
     sql = [f"SET rss.tenant_id = '{tenant}'"]
-    for device, channel, source in [('fixture-mdm','mdm','mdm.windows'), ('fixture-agent','agent','agent.builtin')]:
+    for device, channel, source in [('fixture-mdm','mdm','mdm.windows'), ('fixture-agent','agent','agent.builtin'), ('fixture-alone','mdm','mdm.windows')]:
         registration, grant, request, credential = [str(uuid.uuid4()) for _ in range(4)]
         sql.append(f"INSERT INTO mdm_access.devices(tenant_id,id) VALUES('{tenant}','{device}')")
         if channel == 'mdm':
@@ -157,9 +157,9 @@ try:
     seed()
     phase = 'readiness'
     start(binary, initialized, log)
-    fixture=private(environment.root/'browser.json',dict(origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,principal=ADMIN,login='admin',passwordFile=str(environment.root/'account-password'),mdm='fixture-mdm',agent='fixture-agent',ruleId=rule_id,rule=rule))
+    fixture=private(environment.root/'browser.json',dict(origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,principal=ADMIN,login='admin',passwordFile=str(environment.root/'account-password'),mdm='fixture-mdm',agent='fixture-agent',alone='fixture-alone',ruleId=rule_id,rule=rule))
     phase='browser'
-    browser=subprocess.run(['node',str(WEB/'e2e/mdm/device-browser.mjs')],cwd=WEB,env={**os.environ,'MDM_DEVICE_BROWSER_FIXTURE':str(fixture)},timeout=180,pass_fds=lease_fds())
+    browser=subprocess.run(['node',str(WEB/'e2e/mdm/device-browser.mjs')],cwd=WEB,env={**os.environ,'MDM_DEVICE_BROWSER_FIXTURE':str(fixture)},timeout=300,pass_fds=lease_fds())
     if browser.returncode: raise RuntimeError('browser')
     result='passed'
 except BaseException as error:

@@ -378,10 +378,14 @@ it('compares a saved server definition without replacing the local draft', async
         name: 'Other operator',
         query: {
           criteria: {
-            kind: 'predicate',
-            field: 'device.model',
-            op: 'eq',
-            value: { kind: 'string', value: 'MacBook Pro' },
+            selector: { kind: 'device' },
+            quantifier: 'one',
+            criteria: {
+              kind: 'predicate',
+              field: 'device.model',
+              op: 'eq',
+              value: { kind: 'string', value: 'MacBook Pro' },
+            },
           },
           select: ['device.model'],
           sort: { field: 'device.model', descending: true },

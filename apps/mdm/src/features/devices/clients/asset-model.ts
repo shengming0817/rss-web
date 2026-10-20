@@ -38,7 +38,7 @@ export type Criteria =
   | { kind: 'predicate'; field: string; op: Operator; value?: Scalar; values?: Scalar[] }
   | { kind: 'and' | 'or'; children: Criteria[] }
 export interface Query {
-  criteria: Criteria | null
+  criteria: InventoryCondition | null
   select: string[]
   sort: { field: string; descending: boolean } | null
 }
@@ -317,7 +317,7 @@ export function criteria(value: unknown, depth = 0): Criteria {
 export function query(value: unknown): Query {
   const v = closed(value, ['criteria', 'select', 'sort'])
   return {
-    criteria: nullable(v['criteria'], criteria),
+    criteria: nullable(v['criteria'], inventoryCondition),
     select: unique(array(v['select'], fieldKey), (s) => s),
     sort: nullable(v['sort'], (value) => {
       const s = closed(value, ['field', 'descending'])
@@ -489,4 +489,152 @@ export function listState(value: unknown) {
 }
 export function sourceIdentity(value: Evidence) {
   return JSON.stringify([value.source, value.dataset])
+}
+
+const platforms = ['windows', 'macos'] as const
+function account(value: unknown) {
+  const kind = enumeration(record(value)['kind'], platforms)
+  const v = closed(value, kind === 'windows' ? ['kind', 'sid'] : ['kind', 'uid', 'generated_uid'])
+  if (kind === 'windows') return { kind, sid: sid(v['sid']) }
+  return { kind, uid: uid(v['uid']), generated_uid: uuid(v['generated_uid']) }
+}
+function sid(value: unknown) {
+  const s = identifier(value)
+  if (s.length > 184 || !/^S-1-(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*)){1,}$/.test(s))
+    throw new Error('Invalid SID')
+  return s
+}
+function uid(value: unknown) {
+  const n = count(value)
+  if (!n || n > 4294967295) throw new Error('Invalid UID')
+  return n
+}
+export function collectionScope(value: unknown) {
+  const kind = enumeration(record(value)['kind'], [
+    'device',
+    'apple_user',
+    'native_certificates',
+    'native_accounts',
+    'native_application',
+    'native_user',
+    'macos_applications',
+    'macos_brew',
+  ] as const)
+  if (kind === 'device') {
+    closed(value, ['kind'])
+    return { kind }
+  }
+  if (kind === 'apple_user') {
+    const v = closed(value, ['kind', 'identity'])
+    return { kind, identity: uuid(v['identity']) }
+  }
+  if (kind === 'native_user') {
+    const v = closed(value, ['kind', 'owner'])
+    return { kind, owner: account(v['owner']) }
+  }
+  if (kind === 'macos_applications') {
+    const v = closed(value, ['kind', 'root', 'uid']),
+      root = enumeration(v['root'], ['local', 'system', 'user'] as const),
+      owner = nullable(v['uid'], uid)
+    if ((root === 'user') !== (owner !== null)) throw new Error('Invalid application owner')
+    return { kind, root, uid: owner }
+  }
+  if (kind === 'macos_brew') {
+    const v = closed(value, ['kind', 'uid', 'prefix', 'package', 'taps']),
+      prefix = identifier(v['prefix']),
+      taps = unique(array(v['taps'], identifier), (s) => s)
+    if (
+      prefix.length > 4096 ||
+      !prefix.startsWith('/') ||
+      prefix
+        .slice(1)
+        .split('/')
+        .some((p) => !p || p === '.' || p === '..') ||
+      taps.length > 64 ||
+      taps.some(
+        (t) =>
+          t.length > 255 ||
+          !/^[a-z0-9._-]+\/[a-z0-9._-]+$/.test(t) ||
+          t.split('/').some((p) => p === '.' || p === '..'),
+      )
+    )
+      throw new Error('Invalid Homebrew scope')
+    return {
+      kind,
+      uid: uid(v['uid']),
+      prefix,
+      package: enumeration(v['package'], ['formula', 'cask'] as const),
+      taps: [...taps].sort(),
+    }
+  }
+  const keys =
+    kind === 'native_accounts'
+      ? ['kind', 'platform', 'identities']
+      : ['kind', 'platform', 'owner', kind === 'native_application' ? 'identity' : 'store']
+  const v = closed(value, keys),
+    platform = enumeration(v['platform'], platforms)
+  if (kind === 'native_accounts') {
+    const identities = unique(array(v['identities'], platform === 'windows' ? sid : uuid), (s) => s)
+    if (identities.length > 256) throw new Error('Too many accounts')
+    return { kind, platform, identities: [...identities].sort() }
+  }
+  const owner = nullable(v['owner'], account)
+  if (owner && owner.kind !== platform) throw new Error('Wrong account platform')
+  if (kind === 'native_application') {
+    const identity = string(v['identity'])
+    if (!identity || identity.length > 4096 || /\p{Cc}/u.test(identity))
+      throw new Error('Invalid application identity')
+    return { kind, platform, identity, owner }
+  }
+  const store = enumeration(
+    v['store'],
+    platform === 'windows'
+      ? ['my', 'root', 'ca', 'trusted_publisher']
+      : ['system', 'system_roots', 'login'],
+  )
+  if (platform === 'macos' && (store === 'login') !== (owner !== null))
+    throw new Error('Invalid certificate owner')
+  return { kind, platform, store, owner }
+}
+export type CollectionScope = ReturnType<typeof collectionScope>
+export function scopeSelector(value: unknown) {
+  const kind = enumeration(record(value)['kind'], [
+    'device',
+    'exact',
+    'local_user',
+    'all_authorized',
+  ] as const)
+  if (kind === 'device' || kind === 'all_authorized') {
+    closed(value, ['kind'])
+    return { kind }
+  }
+  if (kind === 'exact') {
+    const v = closed(value, ['kind', 'scope'])
+    return { kind, scope: collectionScope(v['scope']) }
+  }
+  const v = closed(value, ['kind', 'platform', 'identity']),
+    platform = enumeration(v['platform'], platforms),
+    identity = identifier(v['identity'])
+  if (platform === 'windows') sid(identity)
+  else if (!/^[1-9]\d*$/.test(identity) || Number(identity) > 4294967295)
+    throw new Error('Invalid UID')
+  return { kind, platform, identity }
+}
+export interface InventoryCondition {
+  selector: ReturnType<typeof scopeSelector>
+  quantifier: 'one' | 'any' | 'all'
+  criteria: Criteria
+}
+export function inventoryCondition(value: unknown): InventoryCondition {
+  const v = closed(value, ['selector', 'quantifier', 'criteria']),
+    selector = scopeSelector(v['selector']),
+    quantifier = enumeration(v['quantifier'], ['one', 'any', 'all'] as const)
+  if ((selector.kind === 'device' || selector.kind === 'exact') !== (quantifier === 'one'))
+    throw new Error('Invalid condition quantifier')
+  return { selector, quantifier, criteria: criteria(v['criteria']) }
+}
+export function deviceCondition(
+  criteria: Criteria = { kind: 'and', children: [] },
+): InventoryCondition {
+  return { selector: { kind: 'device' }, quantifier: 'one', criteria }
 }

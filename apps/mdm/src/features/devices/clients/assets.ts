@@ -19,6 +19,7 @@ import {
   fieldKey,
   inventory,
   savedQuery,
+  query,
   summary,
   type ManualChange,
   type Query,
@@ -82,7 +83,7 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
       transport.request({
         method: 'POST',
         path: '/api/v1/device-queries',
-        body,
+        body: { ...body, input: query(body.input) },
         successStatus: 202,
         decode: (v) => accepted(v, body.operationId),
       }),

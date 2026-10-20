@@ -1,3 +1,5 @@
+import { endpointObject } from '../devices/objects'
+import { targetFacts } from '../policies/targets'
 import { randomUUID } from 'node:crypto'
 import { expect, it } from 'vitest'
 import { createSoftwarePolicyDemo } from './assignments'
@@ -36,6 +38,17 @@ function setup() {
     {
       resolve: (id) => structuredClone(scopes.get(id) ?? null),
       snapshot: () => structuredClone(snapshot),
+      assignments: (_id, channel) =>
+        snapshot.devices.map((id) => {
+          const d = facts.find((d) => d.summary.id === id)!
+          return {
+            ...targetFacts({ facts: () => facts, objects: () => [] }, endpointObject(d), channel),
+            scopeResult: snapshot.result,
+            qualification: scope.members.includes(id)
+              ? { state: 'eligible' as const, entry: 1 }
+              : { state: 'excluded' as const },
+          }
+        }),
     },
     { read: () => saved },
     { isEnabled: () => approved, binding: () => (approved ? `enabled-${epoch}` : null) },

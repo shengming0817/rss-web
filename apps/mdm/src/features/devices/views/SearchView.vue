@@ -3,10 +3,11 @@ import { UiButton, UiDialog } from '@rss/core/components'
 import { onMounted, ref, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
-import type { Criteria, FieldDefinition, Query, SavedQuery } from '../clients/assets'
+import type { FieldDefinition, Query, SavedQuery } from '../clients/assets'
 import { operation, useOperation } from '../../../services/useOperation'
 import PageFrame from '../../../components/PageFrame.vue'
-import CriteriaEditor from '../components/CriteriaEditor.vue'
+import ConditionEditor from '../components/ConditionEditor.vue'
+import { type InventoryCondition } from '../clients/asset-model'
 import BatchPanel from '../components/BatchPanel.vue'
 import AssetValue from '../components/AssetValue.vue'
 const { t } = useI18n(),
@@ -14,7 +15,7 @@ const { t } = useI18n(),
   client = runtime.devices.assets,
   { run, runWrite, busy, failure, uncertain } = useOperation()
 const fields = ref<FieldDefinition[]>([]),
-  criteria = ref<Criteria | null>(null),
+  criteria = ref<InventoryCondition | null>(null),
   select = ref<string[]>([]),
   sort = ref(''),
   descending = ref(false)
@@ -149,7 +150,7 @@ function newSaved() {
     <form class="console-panel" @submit.prevent="search">
       <h2>{{ t('devices.search') }}</h2>
       <fieldset :disabled="busy || uncertain">
-        <CriteriaEditor v-model="criteria" :fields="fields" />
+        <ConditionEditor v-model="criteria" :fields="fields" />
         <label
           >{{ t('devices.sort') }}
           <select v-model="sort" class="ui-input">
@@ -302,7 +303,7 @@ function newSaved() {
           {{ t(`devices.${current.definition.query.sort?.descending ? 'yes' : 'no'}`) }}
         </p>
         <fieldset disabled>
-          <CriteriaEditor :model-value="current.definition.query.criteria" :fields="fields" />
+          <ConditionEditor :model-value="current.definition.query.criteria" :fields="fields" />
         </fieldset>
       </section>
       <form @submit.prevent="save()">

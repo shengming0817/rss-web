@@ -1,31 +1,46 @@
 import type { createDeviceDemo } from '../devices/state'
-import type { Channel } from '../../src/features/devices/clients/objects'
+import { objectKey, type Channel } from '../../src/features/devices/clients/objects'
+import type { DeviceObject } from '../devices/objects'
 export function targetFacts(
   devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts' | 'objects'>,
-  id: string,
+  object: DeviceObject,
   channel: Channel,
 ) {
-  const endpoint = devices.facts().find((d) => d.summary.id === id)
-  const registration = endpoint?.registrations.find(
-    (r) => r.status === 'active' && (r.source === 'agent.builtin' ? 'agent' : 'mdm') === channel,
+  const facts = devices.facts(),
+    current =
+      object.object.kind === 'association'
+        ? devices.objects().find((o) => objectKey(o.object) === objectKey(object.object))
+        : undefined
+  const verified =
+    object.verified &&
+    (object.object.kind === 'endpoint' ||
+      (!!current?.verified && current.associationVersion === object.associationVersion))
+  const coordinates = object.members.every((m) =>
+    facts.some(
+      (d) =>
+        d.summary.id === m.device &&
+        d.registrations.some(
+          (r) =>
+            r.status === 'active' &&
+            r.registrationId === m.registrationId &&
+            r.generation === m.generation,
+        ),
+    ),
   )
-  const sources = devices.objects().filter((o) => o.members.some((m) => m.device === id))
-  const unverified = sources.some((o) => !o.verified)
   const target =
-    registration && !unverified
-      ? {
-          device: id,
-          channel,
-          registrationId: registration.registrationId,
-          generation: registration.generation,
-        }
-      : null
+    verified && coordinates ? (object.members.find((m) => m.channel === channel) ?? null) : null
   return {
-    object: { kind: 'endpoint' as const, id },
+    object: object.object,
     channel,
-    availability: target ? 'ready' : 'unavailable',
-    reason: target ? null : unverified ? 'association_unverified' : 'missing_registration',
+    availability: target ? ('ready' as const) : ('unavailable' as const),
+    reason: !verified
+      ? 'association_unverified'
+      : !coordinates
+        ? 'source_pending'
+        : !target
+          ? 'channel_unavailable'
+          : null,
     target,
-    sources,
+    sources: [object],
   }
 }

@@ -1,3 +1,4 @@
+import { endpointObject } from './objects'
 import { randomUUID } from 'node:crypto'
 import type { DomainHandler } from '../scenario'
 import {
@@ -9,12 +10,12 @@ import {
   string,
   uuid,
 } from '../../src/services/decode'
-import { criteria } from '../../src/features/devices/clients/asset-model'
+import { inventoryCondition } from '../../src/features/devices/clients/asset-model'
 import type { GroupRead } from '../../src/features/devices/clients/groups'
 import type { DemoDevice } from './fixtures'
 import { createPages, createReceipts, error, ok, operation } from '../http'
 import { mergedFieldState } from './views'
-import { evaluate, referencedFields } from './criteria'
+import { evaluate, evaluateCondition, referencedFields } from './criteria'
 import { objectRef, objectKey, type deviceObject } from '../../src/features/devices/clients/objects'
 type DeviceObject = ReturnType<typeof deviceObject>
 type Decision = ReturnType<typeof evaluate> & {
@@ -38,6 +39,8 @@ interface Job {
   decisions: Decision[]
   ruleVersion: string | null
   inputs: string
+  objects: DeviceObject[]
+  assetContext: GroupRead['group']['assetContext']
 }
 export function createGroupDemo(
   devices: () => Map<string, DemoDevice>,
@@ -48,12 +51,13 @@ export function createGroupDemo(
   const pages = createPages(),
     receipts = createReceipts()
   function inputs(read: GroupRead) {
-    const selected = read.criteria ? referencedFields(read.criteria) : []
+    const selected = read.criteria ? referencedFields(read.criteria.criteria) : []
     return JSON.stringify([
       [read.group.assetContext === 'associated_device' ? objects() : null],
       ...[...devices().values()].map((d) => [
         d.summary.id,
         d.registrations,
+        d.scopedInventory,
         selected.map((f) => d.inventory.fields[f] ?? null),
       ]),
     ])
@@ -92,36 +96,40 @@ export function createGroupDemo(
       state.read.group.assetContext === 'endpoint'
         ? [...devices().values()]
             .filter((d) => d.summary.inventoryAvailable)
-            .map((d) => ({ key: d.summary.id, device: d }))
-        : objects()
-            .map((o) => ({
-              key: objectKey(o.object),
-              device: (() => {
-                const members = [...new Set(o.members.map((m) => m.device))].flatMap((id) => {
-                  const d = devices().get(id)
-                  return d ? [d] : []
-                })
-                const first = members[0]
-                if (!first) return undefined
-                const fields = Object.fromEntries(
-                  [...new Set(members.flatMap((d) => Object.keys(d.inventory.fields)))].map(
-                    (key) => {
-                      const entries = members.flatMap((d) =>
-                          d.inventory.fields[key] ? [d.inventory.fields[key]!] : [],
-                        ),
-                        sources = entries.flatMap((f) => f.sources)
-                      return [key, { ...entries[0]!, state: mergedFieldState(sources), sources }]
-                    },
-                  ),
-                )
-                return { ...first, inventory: { ...first.inventory, fields } }
-              })(),
+            .map((d) => ({
+              key: d.summary.id,
+              contexts: [d.inventory, ...(d.scopedInventory ?? [])],
             }))
-            .filter((o): o is { key: string; device: DemoDevice } => !!o.device)
-    const decisions: Decision[] = universe.map(({ key, device: d }) => {
+        : objects().map((o) => {
+            const contexts = new Map<string, NonNullable<DemoDevice['scopedInventory']>[number][]>()
+            for (const member of o.members) {
+              const d = devices().get(member.device)
+              if (!d) continue
+              for (const inventory of [d.inventory, ...(d.scopedInventory ?? [])]) {
+                const key = JSON.stringify(inventory.collectionScope),
+                  list = contexts.get(key) ?? []
+                list.push(inventory)
+                contexts.set(key, list)
+              }
+            }
+            return {
+              key: objectKey(o.object),
+              contexts: [...contexts.values()].map((values) => ({
+                ...values[0]!,
+                fields: Object.fromEntries(
+                  [...new Set(values.flatMap((v) => Object.keys(v.fields)))].map((key) => {
+                    const entries = values.flatMap((v) => (v.fields[key] ? [v.fields[key]!] : [])),
+                      sources = entries.flatMap((f) => f.sources)
+                    return [key, { ...entries[0]!, state: mergedFieldState(sources), sources }]
+                  }),
+                ),
+              })),
+            }
+          })
+    const decisions: Decision[] = universe.map(({ key, contexts }) => {
       const evaluation =
         state.read.group.kind === 'dynamic'
-          ? evaluate(state.read.criteria, d.inventory)
+          ? evaluateCondition(state.read.criteria, contexts)
           : {
               decision: (next ?? state.members).includes(key)
                 ? ('match' as const)
@@ -132,14 +140,16 @@ export function createGroupDemo(
         device: key,
         origin: state.read.group.kind === 'dynamic' ? 'rule' : 'manual',
         ...evaluation,
-        provenance: Object.values(d.inventory.fields).flatMap((f) =>
-          f.sources.map((s) => ({
-            field: f.field,
-            source: s.evidence.source,
-            snapshot_id: s.evidence.snapshotId,
-            observed_at: s.evidence.observedAt,
-          })),
-        ),
+        provenance: contexts
+          .flatMap((c) => Object.values(c.fields))
+          .flatMap((f) =>
+            f.sources.map((s) => ({
+              field: f.field,
+              source: s.evidence.source,
+              snapshot_id: s.evidence.snapshotId,
+              observed_at: s.evidence.observedAt,
+            })),
+          ),
       }
     })
     const members = decisions.filter((d) => d.decision === 'match').map((d) => d.device)
@@ -155,6 +165,12 @@ export function createGroupDemo(
       decisions,
       ruleVersion: state.read.group.ruleVersion,
       inputs: inputs(state.read),
+      assetContext: state.read.group.assetContext,
+      objects: structuredClone(
+        state.read.group.assetContext === 'endpoint'
+          ? [...devices().values()].map(endpointObject)
+          : objects(),
+      ),
     })
     return ok(
       { task, kind: 'group', target: id, statusUrl: `/api/v1/groups/${id}/tasks/${task}` },
@@ -228,7 +244,7 @@ export function createGroupDemo(
       if (!job || job.group !== id) return error('group_not_found', 404)
       if (job.status !== 'completed') return error('operation_conflict')
       const toObject = (key: string) =>
-        state!.read.group.assetContext === 'endpoint'
+        job.assetContext === 'endpoint'
           ? { kind: 'endpoint' as const, id: key }
           : objectRef({ kind: key.slice(0, key.indexOf(':')), id: key.slice(key.indexOf(':') + 1) })
       const items =
@@ -236,7 +252,7 @@ export function createGroupDemo(
           ? job.decisions.map(({ device, ...d }) => ({
               ...d,
               object: toObject(device),
-              sourceObjects: objects().filter(
+              sourceObjects: job.objects.filter(
                 (o) => objectKey(o.object) === objectKey(toObject(device)),
               ),
             }))
@@ -289,7 +305,7 @@ export function createGroupDemo(
       if (action === 'create') {
         if (state || op.expectedRevision !== 0) return error('operation_conflict')
         closed(input, ['action', 'name', 'description', 'assetContext', 'criteria'])
-        const rule = input['criteria'] === null ? null : criteria(input['criteria'])
+        const rule = input['criteria'] === null ? null : inventoryCondition(input['criteria'])
         const assetContext = enumeration(input['assetContext'], [
           'endpoint',
           'associated_device',
@@ -343,7 +359,7 @@ export function createGroupDemo(
       if (action === 'recompute') return start(id, op.operationId, true)
       if (action === 'rule') {
         if (state.read.group.kind !== 'dynamic') return error('operation_conflict')
-        state.read.criteria = criteria(input['criteria'])
+        state.read.criteria = inventoryCondition(input['criteria'])
         state.read.group.ruleVersion = randomUUID()
       } else if (action === 'edit') {
         state.read.group.name = identifier(input['name'])
@@ -363,26 +379,41 @@ export function createGroupDemo(
   return {
     handle,
     reset,
+    refresh() {
+      for (const [id, state] of groups) {
+        if (
+          state.read.group.kind !== 'dynamic' ||
+          state.read.group.deleted ||
+          !state.read.memberSet
+        )
+          continue
+        const previous = jobs.get(state.read.memberSet)
+        if (!previous || previous.inputs === inputs(state.read)) continue
+        const task = randomUUID()
+        start(id, task, true)
+        const job = jobs.get(task)!
+        job.status = 'completed'
+        state.read.group.calculationRevision++
+        if (job.added.length || job.removed.length) state.read.group.memberVersion++
+        state.members = job.members
+        state.read.group.memberCount = job.members.length
+        state.read.memberSet = task
+      }
+    },
     published(id: string) {
       const state = groups.get(id)
       if (!state || state.read.group.deleted) return null
       const job = state.read.memberSet ? jobs.get(state.read.memberSet) : undefined
       return structuredClone({
-        members:
-          state.read.group.assetContext === 'endpoint'
-            ? state.members
-            : [
-                ...new Set(
-                  objects()
-                    .filter((o) => state.members.includes(objectKey(o.object)))
-                    .flatMap((o) => o.members.map((m) => m.device)),
-                ),
-              ],
-        objects: objects().filter((o) =>
-          state.read.group.assetContext === 'endpoint'
-            ? o.object.kind === 'endpoint' && state.members.includes(o.object.id)
-            : state.members.includes(objectKey(o.object)),
-        ),
+        objects:
+          job?.objects.filter((o) =>
+            state.members.includes(
+              state.read.group.assetContext === 'endpoint' ? o.object.id : objectKey(o.object),
+            ),
+          ) ?? [],
+        get members() {
+          return this.objects.flatMap((o) => o.members.map((m) => m.device))
+        },
         memberSet: state.read.memberSet,
         memberVersion: state.read.group.memberVersion,
         definitionVersion: state.read.group.revision,

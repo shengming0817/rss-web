@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { UiButton, UiBadge, UiDialog } from '@rss/core/components'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ObjectLink from '../../devices/components/ObjectLink.vue'
 import type {
@@ -10,35 +12,55 @@ import type {
 defineProps<{
   item: {
     object: ReturnType<typeof objectRef>
-    channel: Channel
+    channel: Channel | null
     availability: string
     reason: string | null
     target: ReturnType<typeof primaryRegistration> | null
     sources?: ReturnType<typeof deviceObject>[]
   }
 }>()
-const { t } = useI18n()
+const { t } = useI18n(),
+  evidenceOpen = ref(false)
 </script>
 <template>
-  <div>
-    <ObjectLink :object="item.object" /> · {{ item.channel }} ·
-    {{ t(`policies.availability_${item.availability}`)
-    }}<span v-if="item.reason"> · {{ item.reason }}</span>
+  <div class="assignment-summary">
+    <ObjectLink :object="item.object" /><span v-if="item.channel" class="ui-help">{{
+      item.channel === 'agent' ? 'Agent' : 'MDM'
+    }}</span
+    ><UiBadge
+      v-if="item.availability"
+      :tone="item.availability === 'ready' ? 'success' : 'warning'"
+      >{{ t(`policies.availability_${item.availability}`) }}</UiBadge
+    ><span v-if="item.reason">{{ t(`policies.assignmentReason.${item.reason}`, item.reason) }}</span
+    ><UiButton variant="ghost" @click="evidenceOpen = true">{{ t('devices.evidence') }}</UiButton>
+  </div>
+  <UiDialog
+    v-model:open="evidenceOpen"
+    placement="right"
+    :title="t('devices.evidence')"
+    :close-label="t('console.close')"
+  >
+    <ObjectLink :object="item.object" />
     <p v-if="item.target">
       {{ t('devices.registration') }}: {{ item.target.device }} / {{ item.target.registrationId }} /
       {{ item.target.generation }}
     </p>
-    <ul v-if="item.sources?.length">
-      <li v-for="source in item.sources" :key="`${source.object.kind}:${source.object.id}`">
-        <ObjectLink :object="source.object" /> · {{ source.associationVersion ?? '—' }} ·
+    <section
+      v-for="source in item.sources ?? []"
+      :key="`${source.object.kind}:${source.object.id}`"
+      class="console-panel"
+    >
+      <ObjectLink :object="source.object" />
+      <p>
+        {{ t('devices.revision') }} {{ source.associationVersion ?? '—' }} ·
         {{ t(source.verified ? 'devices.yes' : 'devices.no') }}
-        <ul>
-          <li v-for="member in source.members" :key="member.registrationId">
-            {{ member.device }} / {{ member.channel }} / {{ member.registrationId }} /
-            {{ member.generation }}
-          </li>
-        </ul>
-      </li>
-    </ul>
-  </div>
+      </p>
+      <dl v-for="member in source.members" :key="member.registrationId">
+        <dt>{{ member.channel === 'agent' ? 'Agent' : 'MDM' }}</dt>
+        <dd>{{ member.device }}</dd>
+        <dt>{{ t('devices.registration') }}</dt>
+        <dd class="coordinate">{{ member.registrationId }} / {{ member.generation }}</dd>
+      </dl>
+    </section>
+  </UiDialog>
 </template>

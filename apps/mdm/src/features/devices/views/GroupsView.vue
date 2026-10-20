@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { UiButton, UiDialog } from '@rss/core/components'
+import { UiButton, UiDialog, UiTable, UiTabs, UiBadge } from '@rss/core/components'
 import { onMounted, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
-import type { Criteria, FieldDefinition } from '../clients/assets'
+import type { FieldDefinition } from '../clients/assets'
 import type { GroupChange, GroupProjection, GroupRead } from '../clients/groups'
 import { objectKey } from '../clients/objects'
 import ObjectLink from '../components/ObjectLink.vue'
+import AssignmentFacts from '../../policies/components/AssignmentFacts.vue'
 import PageFrame from '../../../components/PageFrame.vue'
-import CriteriaEditor from '../components/CriteriaEditor.vue'
+import ConditionEditor from '../components/ConditionEditor.vue'
+import { deviceCondition, type InventoryCondition } from '../clients/asset-model'
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.devices.groups,
@@ -22,13 +24,19 @@ const current = ref<GroupRead>(),
   description = ref(''),
   kind = ref<'static' | 'dynamic'>('static'),
   assetContext = ref<'endpoint' | 'associated_device'>('endpoint'),
-  criteria = ref<Criteria | null>(null),
+  criteria = ref<InventoryCondition | null>(null),
   members = ref(''),
   remove = ref(false)
 const task = ref<string>(),
   status = ref<Awaited<ReturnType<typeof client.status>>>(),
   projection = ref<GroupProjection>('members'),
   result = ref<Awaited<ReturnType<typeof client.page>>>()
+const detailTab = ref('overview'),
+  editKind = ref<'metadata' | 'rule'>('metadata')
+function beginEdit(mode: 'metadata' | 'rule') {
+  editKind.value = mode
+  editing.value = true
+}
 const editing = ref(false),
   deleting = ref(false)
 function cancelEdit() {
@@ -76,9 +84,10 @@ function open(group = id.value) {
       kind.value = v.group.kind
       assetContext.value = v.group.assetContext
       criteria.value = v.criteria
-      task.value = undefined
+      task.value = v.memberSet ?? undefined
       result.value = undefined
       status.value = undefined
+      detailTab.value = 'overview'
     },
   )
 }
@@ -136,7 +145,7 @@ function save() {
           criteria:
             kind.value === 'static'
               ? null
-              : (structuredClone(toRaw(criteria.value)) ?? { kind: 'and', children: [] }),
+              : (structuredClone(toRaw(criteria.value)) ?? deviceCondition()),
         },
   )
 }
@@ -154,10 +163,14 @@ function preview() {
   )
 }
 function saveRule(event: Event) {
-  if (!(event.currentTarget as HTMLButtonElement).closest('form')?.reportValidity()) return
+  const form =
+    event.currentTarget instanceof HTMLFormElement
+      ? event.currentTarget
+      : (event.currentTarget as HTMLElement).closest('form')
+  if (!form?.reportValidity()) return
   change({
     action: 'rule',
-    criteria: structuredClone(toRaw(criteria.value)) ?? { kind: 'and', children: [] },
+    criteria: structuredClone(toRaw(criteria.value)) ?? deviceCondition(),
   })
 }
 async function refresh() {
@@ -195,6 +208,14 @@ function changeMembers() {
 }
 watch(kind, (value) => {
   if (!current.value && value === 'static') assetContext.value = 'endpoint'
+  if (value === 'dynamic' && !criteria.value) criteria.value = deviceCondition()
+})
+watch(detailTab, (value) => {
+  if (value !== 'overview' && value !== 'rule') {
+    projection.value = value as GroupProjection
+    result.value = undefined
+    if (task.value) page()
+  }
 })
 watch(projection, () => {
   result.value = undefined
@@ -217,30 +238,290 @@ function openGroup(group: string) {
 }
 </script>
 <template>
-  <PageFrame :title="t('devices.groups')" :busy="busy" :failure="failure">
-    <UiButton :disabled="!!busy" type="submit" @click="loadList()">{{
-      t('devices.reload')
-    }}</UiButton>
-    <div class="console-toolbar">
-      <UiButton type="button" :disabled="busy || uncertain" @click="beginCreate">{{
+  <PageFrame
+    :title="t('devices.groups')"
+    :description="t('devices.groupDescription')"
+    :busy="busy"
+    :failure="failure"
+  >
+    <template #actions
+      ><UiButton :disabled="busy" @click="loadList()">{{ t('devices.reload') }}</UiButton
+      ><UiButton :disabled="busy || uncertain" @click="beginCreate">{{
         t('devices.create')
-      }}</UiButton>
-    </div>
-    <ul class="console-object-list">
-      <li v-for="group in list?.items" :key="group.id">
-        <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="openGroup(group.id)">
-          {{ group.name }} · {{ t(`devices.${group.kind}`) }} · {{ group.memberCount }}
-        </UiButton>
-      </li>
-    </ul>
-    <UiButton
-      v-if="list?.nextCursor"
-      :disabled="!!busy"
-      type="submit"
-      @click="loadList(list.nextCursor)"
+      }}</UiButton></template
     >
-      {{ t('devices.next') }}
-    </UiButton>
+    <UiTable
+      :label="t('devices.groups')"
+      :rows="list?.items ?? []"
+      :columns="[
+        { key: 'name', label: t('devices.name') },
+        { key: 'kind', label: t('devices.kind') },
+        { key: 'assetContext', label: t('devices.assetContext') },
+        { key: 'memberCount', label: t('devices.memberCount') },
+      ]"
+      :row-key="(g) => g.id"
+      :busy="busy"
+      :busy-label="t('devices.loading')"
+      :empty-label="t('policies.empty')"
+    >
+      <template #cell-name="{ row }"
+        ><UiButton variant="ghost" :disabled="busy || uncertain" @click="openGroup(row.id)">{{
+          row.name
+        }}</UiButton></template
+      >
+      <template #cell-kind="{ row }"
+        ><UiBadge>{{ t(`devices.${row.kind}`) }}</UiBadge></template
+      >
+      <template #cell-assetContext="{ row }">{{
+        t(
+          row.assetContext === 'endpoint'
+            ? 'devices.objectKind_endpoint'
+            : 'devices.associatedDevice',
+        )
+      }}</template>
+    </UiTable>
+    <UiButton v-if="list?.nextCursor" :disabled="busy" @click="loadList(list.nextCursor)">{{
+      t('devices.next')
+    }}</UiButton>
+    <section v-if="current" class="group-detail console-panel" data-testid="server-definition">
+      <header class="console-page-header">
+        <div>
+          <h2>{{ current.group.name }}</h2>
+          <p>{{ current.group.description }}</p>
+        </div>
+        <UiBadge>{{ t(`devices.${current.group.kind}`) }}</UiBadge>
+      </header>
+      <div class="console-toolbar">
+        <UiButton :disabled="busy || uncertain" @click="beginEdit('metadata')">{{
+          t('console.edit')
+        }}</UiButton
+        ><RouterLink
+          :to="{
+            name: 'policy-scopes',
+            params: { tenant: runtime.tenant },
+            query: { group: current.group.id },
+          }"
+          >{{ t('policies.scopes') }}</RouterLink
+        ><UiButton :disabled="busy || uncertain" @click="preview">{{
+          t('devices.previewSaved')
+        }}</UiButton
+        ><UiButton :disabled="busy || uncertain" @click="change({ action: 'recompute' })">{{
+          t('devices.recompute')
+        }}</UiButton>
+      </div>
+      <UiTabs
+        v-model="detailTab"
+        :label="t('devices.groups')"
+        :items="[
+          { value: 'overview', label: t('devices.overview') },
+          { value: 'rule', label: t('devices.rule') },
+          { value: 'members', label: t('devices.members') },
+          { value: 'changes', label: t('devices.changes') },
+          { value: 'decisions', label: t('devices.decisions') },
+        ]"
+      >
+        <template #overview
+          ><dl class="group-summary">
+            <div>
+              <dt>{{ t('devices.assetContext') }}</dt>
+              <dd>
+                {{
+                  t(
+                    current.group.assetContext === 'endpoint'
+                      ? 'devices.objectKind_endpoint'
+                      : 'devices.associatedDevice',
+                  )
+                }}
+              </dd>
+            </div>
+            <div>
+              <dt>{{ t('devices.memberCount') }}</dt>
+              <dd>{{ current.group.memberCount }}</dd>
+            </div>
+            <div>
+              <dt>{{ t('devices.memberVersion') }}</dt>
+              <dd>{{ current.group.memberVersion }}</dd>
+            </div>
+          </dl>
+          <UiButton
+            :disabled="busy"
+            @click="
+              run(
+                () => client.read(id),
+                (v) => (current = v),
+              )
+            "
+            >{{ t('devices.compare') }}</UiButton
+          ><UiButton :disabled="busy || uncertain" @click="deleting = true">{{
+            t('devices.delete')
+          }}</UiButton></template
+        >
+        <template #rule
+          ><fieldset disabled>
+            <ConditionEditor :model-value="current.criteria" :fields="fields" />
+          </fieldset>
+          <UiButton :disabled="busy || uncertain" @click="beginEdit('rule')">{{
+            t('console.edit')
+          }}</UiButton></template
+        >
+        <template v-for="tab in ['members', 'changes', 'decisions']" :key="tab" #[tab]>
+          <p v-if="!task">{{ t('devices.noGroupResult') }}</p>
+          <template v-else
+            ><div class="console-toolbar">
+              <UiButton :disabled="busy" @click="refresh">{{ t('devices.refreshTask') }}</UiButton
+              ><UiButton :disabled="busy" @click="page()">{{ t('devices.load') }}</UiButton
+              ><UiBadge v-if="status">{{ t(`devices.${status.status}`) }}</UiBadge>
+            </div>
+            <template v-if="result"
+              ><p class="ui-help">
+                {{ t('devices.currentResult') }}:
+                {{ t(`devices.${result.current ? 'yes' : 'no'}`) }}
+              </p>
+              <UiTable
+                v-if="result.page.kind === 'members'"
+                :label="t('devices.members')"
+                :rows="result.page.items"
+                :columns="[{ key: 'object', label: t('policies.device') }]"
+                :row-key="objectKey"
+                :busy-label="t('devices.loading')"
+                :empty-label="t('policies.empty')"
+                ><template #cell-object="{ row }"><ObjectLink :object="row" /></template
+              ></UiTable>
+              <div v-else-if="result.page.kind === 'changes'" class="group-summary">
+                <section>
+                  <h3>{{ t('devices.add') }}</h3>
+                  <p v-for="object in result.page.added" :key="objectKey(object)">
+                    <ObjectLink :object="object" />
+                  </p>
+                </section>
+                <section>
+                  <h3>{{ t('devices.remove') }}</h3>
+                  <p v-for="object in result.page.removed" :key="objectKey(object)">
+                    <ObjectLink :object="object" />
+                  </p>
+                </section>
+              </div>
+              <UiTable
+                v-else
+                :label="t('devices.decisions')"
+                :rows="result.page.items"
+                :columns="[
+                  { key: 'object', label: t('policies.device') },
+                  { key: 'decision', label: t('devices.decisions') },
+                  { key: 'evidence', label: t('devices.evidence') },
+                ]"
+                :row-key="(d) => objectKey(d.object)"
+                :busy-label="t('devices.loading')"
+                :empty-label="t('policies.empty')"
+              >
+                <template #cell-object="{ row }"><ObjectLink :object="row.object" /></template
+                ><template #cell-decision="{ row }"
+                  ><UiBadge :tone="row.decision === 'unknown' ? 'warning' : 'neutral'">{{
+                    t(`devices.${row.decision}`)
+                  }}</UiBadge></template
+                ><template #cell-evidence="{ row }"
+                  ><AssignmentFacts
+                    :item="{
+                      object: row.object,
+                      channel: null,
+                      availability: '',
+                      reason: null,
+                      target: null,
+                      sources: row.sourceObjects,
+                    }"
+                  />
+                  <details>
+                    <summary>{{ t('devices.explanations') }}</summary>
+                    <p v-for="(e, i) in row.explanations" :key="i">
+                      {{ e.path.join('.') }} · {{ e.outcome }}
+                    </p>
+                    <p v-for="(e, i) in row.provenance" :key="i">
+                      {{ e.field }} · {{ e.source }} · {{ e.snapshot_id }} · {{ e.observed_at }}
+                    </p>
+                  </details></template
+                > </UiTable
+              ><UiButton
+                v-if="result.nextCursor"
+                :disabled="busy"
+                @click="page(result.nextCursor)"
+                >{{ t('devices.next') }}</UiButton
+              >
+            </template>
+            <p v-if="status?.failure" role="alert">
+              {{ t('devices.failed') }} · {{ status.failureDetail?.reason }}
+            </p></template
+          >
+        </template>
+      </UiTabs>
+      <form
+        v-if="current.group.kind === 'static'"
+        class="group-member-editor"
+        @submit.prevent="changeMembers"
+      >
+        <label
+          >{{ t('devices.memberIds')
+          }}<textarea v-model="members" class="ui-input" required /></label
+        ><label><input v-model="remove" type="checkbox" />{{ t('devices.remove') }}</label
+        ><UiButton :disabled="busy || uncertain" type="submit">{{ t('devices.save') }}</UiButton>
+      </form>
+    </section>
+    <UiDialog
+      v-model:open="editing"
+      placement="right"
+      :title="t(current ? 'console.edit' : 'console.create')"
+      :close-label="t('console.close')"
+    >
+      <form
+        class="group-form"
+        @submit.prevent="current && editKind === 'rule' ? saveRule($event) : save()"
+      >
+        <fieldset :disabled="busy || uncertain">
+          <label
+            >{{ t('devices.name')
+            }}<input
+              data-testid="group-name"
+              v-model="name"
+              :readonly="!!current && editKind === 'rule'"
+              class="ui-input"
+              required
+              maxlength="256" /></label
+          ><label
+            >{{ t('devices.description')
+            }}<input v-model="description" class="ui-input" maxlength="4096" /></label
+          ><label
+            >{{ t('devices.kind')
+            }}<select
+              data-testid="group-kind"
+              v-model="kind"
+              class="ui-input"
+              :disabled="!!current"
+            >
+              <option value="static">{{ t('devices.static') }}</option>
+              <option value="dynamic">{{ t('devices.dynamic') }}</option>
+            </select></label
+          ><label
+            >{{ t('devices.assetContext')
+            }}<select
+              data-testid="group-context"
+              v-model="assetContext"
+              class="ui-input"
+              :disabled="!!current || kind === 'static'"
+            >
+              <option value="endpoint">{{ t('devices.objectKind_endpoint') }}</option>
+              <option value="associated_device">{{ t('devices.associatedDevice') }}</option>
+            </select></label
+          ><ConditionEditor
+            v-if="kind === 'dynamic' && (!current || editKind === 'rule')"
+            v-model="criteria"
+            :fields="fields"
+          />
+          <div class="console-toolbar">
+            <UiButton type="submit">{{ t('devices.save') }}</UiButton
+            ><UiButton type="button" @click="cancelEdit">{{ t('console.cancel') }}</UiButton>
+          </div>
+        </fieldset>
+      </form>
+    </UiDialog>
     <details class="console-panel">
       <summary>{{ t('console.advanced') }}</summary>
       <form @submit.prevent="open()">
@@ -251,203 +532,10 @@ function openGroup(group: string) {
             class="ui-input"
             required
             :readonly="!!current || busy || uncertain" /></label
-        ><UiButton :disabled="!!(busy || uncertain)" type="submit">{{
-          t('devices.open')
-        }}</UiButton>
+        ><UiButton :disabled="busy || uncertain" type="submit">{{ t('devices.open') }}</UiButton>
       </form>
+      <p>{{ current?.group.id }} · {{ current?.group.revision }} · {{ task }}</p>
     </details>
-    <p v-if="current">
-      {{ t('devices.revision') }} {{ current.group.revision }} · {{ t('devices.memberVersion') }}
-      {{ current.group.memberVersion }} · {{ t('devices.memberCount') }}
-      {{ current.group.memberCount }}
-    </p>
-    <section v-if="current" class="console-panel" data-testid="server-definition">
-      <h2>{{ t('devices.current') }}</h2>
-      <RouterLink
-        :to="{
-          name: 'policy-scopes',
-          params: { tenant: runtime.tenant },
-          query: { group: current.group.id },
-        }"
-        >{{ t('policies.scopes') }}</RouterLink
-      >
-      <p>{{ current.group.name }} · {{ current.group.description }}</p>
-      <fieldset disabled>
-        <CriteriaEditor :model-value="current.criteria" :fields="fields" />
-      </fieldset>
-    </section>
-    <div v-if="current && !editing" class="console-toolbar">
-      <UiButton type="button" :disabled="busy || uncertain" @click="editing = true">{{
-        t('console.edit')
-      }}</UiButton>
-    </div>
-    <form v-show="editing" class="console-panel" @submit.prevent="save">
-      <div class="console-page-header">
-        <h2>{{ t(current ? 'console.edit' : 'console.create') }}</h2>
-        <UiButton type="button" :disabled="busy || uncertain" @click="cancelEdit">{{
-          t('console.cancel')
-        }}</UiButton>
-      </div>
-      <fieldset :disabled="busy || uncertain">
-        <label
-          >{{ t('devices.name')
-          }}<input v-model="name" class="ui-input" required maxlength="256" /></label
-        ><label
-          >{{ t('devices.description')
-          }}<input v-model="description" class="ui-input" maxlength="4096" /></label
-        ><label
-          >{{ t('devices.kind')
-          }}<select v-model="kind" class="ui-input" :disabled="!!current">
-            <option value="static">{{ t('devices.static') }}</option>
-            <option value="dynamic">{{ t('devices.dynamic') }}</option>
-          </select></label
-        ><label
-          >{{ t('devices.assetContext')
-          }}<select
-            v-model="assetContext"
-            class="ui-input"
-            :disabled="!!current || kind === 'static'"
-          >
-            <option value="endpoint">{{ t('devices.objectKind_endpoint') }}</option>
-            <option value="associated_device">{{ t('devices.associatedDevice') }}</option>
-          </select></label
-        ><CriteriaEditor v-if="kind === 'dynamic'" v-model="criteria" :fields="fields" /><UiButton
-          type="submit"
-        >
-          {{ t('devices.save') }}</UiButton
-        ><UiButton v-if="current && kind === 'dynamic'" type="button" @click="saveRule">
-          {{ t('devices.rule') }}
-        </UiButton>
-      </fieldset>
-    </form>
-    <section v-if="current" class="console-panel">
-      <UiButton
-        :disabled="!!busy"
-        type="submit"
-        @click="
-          run(
-            () => client.read(id),
-            (v) => (current = v),
-          )
-        "
-      >
-        {{ t('devices.compare') }}</UiButton
-      ><UiButton :disabled="!!(busy || uncertain)" type="submit" @click="deleting = true">
-        {{ t('devices.delete') }}
-      </UiButton>
-      <form v-if="current.group.kind === 'static'" @submit.prevent="changeMembers">
-        <label
-          >{{ t('devices.memberIds')
-          }}<textarea v-model="members" class="ui-input" required /></label
-        ><label><input v-model="remove" type="checkbox" />{{ t('devices.remove') }}</label
-        ><UiButton :disabled="!!(busy || uncertain)" type="submit">{{
-          t('devices.save')
-        }}</UiButton>
-      </form>
-      <p>{{ t('devices.previewNote') }}</p>
-      <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="preview">{{
-        t('devices.previewSaved')
-      }}</UiButton
-      ><UiButton
-        :disabled="!!(busy || uncertain)"
-        type="submit"
-        @click="change({ action: 'recompute' })"
-      >
-        {{ t('devices.recompute') }}
-      </UiButton>
-    </section>
-    <section v-if="task">
-      <h2>{{ t('devices.task') }} {{ task }}</h2>
-      <UiButton :disabled="!!busy" type="submit" @click="refresh">{{
-        t('devices.refreshTask')
-      }}</UiButton>
-      <p v-if="status">
-        {{ t(`devices.${status.status}`) }} · {{ t('devices.memberCount') }} {{ status.members }}
-      </p>
-      <p v-if="status?.failure" role="alert">{{ t('devices.failed') }}</p>
-      <dl v-if="status?.failureDetail">
-        <dt>{{ t('devices.blocked') }}</dt>
-        <dd>{{ t(`devices.${status.failureDetail.reason}`) }}</dd>
-        <dt>{{ t('devices.stage') }}</dt>
-        <dd>{{ t(`devices.${status.failureDetail.stage}`) }}</dd>
-        <dt>{{ t('devices.deviceId') }}</dt>
-        <dd>{{ status.failureDetail.device ?? '—' }}</dd>
-      </dl>
-      <template v-if="status?.status === 'completed' && !status.failure"
-        ><select
-          v-model="projection"
-          class="ui-input"
-          :aria-label="t('devices.kind')"
-          @change="result = undefined"
-        >
-          <option v-for="key in ['members', 'changes', 'decisions']" :key="key" :value="key">
-            {{ t(`devices.${key}`) }}
-          </option></select
-        ><UiButton :disabled="!!busy" type="submit" @click="page()">{{
-          t('devices.load')
-        }}</UiButton></template
-      >
-      <template v-if="result"
-        ><p>
-          {{ t('devices.currentResult') }}: {{ t(`devices.${result.current ? 'yes' : 'no'}`) }}
-        </p>
-        <ul v-if="result.page.kind === 'members'">
-          <li v-for="object in result.page.items" :key="objectKey(object)">
-            <ObjectLink :object="object" />
-          </li>
-        </ul>
-        <div v-else-if="result.page.kind === 'changes'">
-          <p>{{ t('devices.add') }}: {{ result.page.added.map(objectKey).join(', ') || '—' }}</p>
-          <p>
-            {{ t('devices.remove') }}: {{ result.page.removed.map(objectKey).join(', ') || '—' }}
-          </p>
-        </div>
-        <ul v-else>
-          <li v-for="decision in result.page.items" :key="objectKey(decision.object)">
-            <ObjectLink :object="decision.object" />
-            <ul>
-              <li v-for="source in decision.sourceObjects" :key="objectKey(source.object)">
-                <ObjectLink :object="source.object" />
-                <ul>
-                  <li v-for="member in source.members" :key="member.registrationId">
-                    {{ member.device }} / {{ member.channel }} / {{ member.registrationId }} /
-                    {{ member.generation }}
-                  </li>
-                </ul>
-              </li>
-            </ul>
-            · {{ t(`devices.${decision.decision}`) }} · {{ t(`devices.${decision.origin}Origin`) }}
-            <ul>
-              <li v-for="(explanation, index) in decision.explanations" :key="index">
-                {{ explanation.path.join('.') }}:
-                {{
-                  ['match', 'no_match'].includes(explanation.outcome)
-                    ? t(`devices.${explanation.outcome}`)
-                    : t(`devices.state.${explanation.outcome}`)
-                }}
-              </li>
-            </ul>
-            <details>
-              <summary>{{ t('devices.evidence') }}</summary>
-              <ul>
-                <li v-for="(evidence, index) in decision.provenance" :key="index">
-                  {{ evidence.field }} · {{ evidence.source }} · {{ evidence.snapshot_id }} ·
-                  {{ evidence.observed_at }}
-                </li>
-              </ul>
-            </details>
-          </li>
-        </ul>
-        <UiButton
-          v-if="result.nextCursor"
-          :disabled="!!busy"
-          type="submit"
-          @click="page(result.nextCursor)"
-        >
-          {{ t('devices.next') }}
-        </UiButton>
-      </template>
-    </section>
     <UiDialog
       :open="deleting"
       :title="t('devices.delete')"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import { UiButton, UiTable, UiBadge } from '@rss/core/components'
 import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -466,22 +466,34 @@ onMounted(async () => {
       t('policies.reload')
     }}</UiButton>
     <p v-if="list && !list.items.length">{{ t('policies.empty') }}</p>
-    <ul class="console-object-list">
-      <li v-for="item in list?.items" :key="item.id">
-        <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="select(item.id)">
-          {{ item.definition.selfService?.displayName ?? item.id }} ·
-          {{
-            t(
-              item.state === 'archived'
-                ? 'policies.state.archived'
-                : item.enabled
-                  ? 'policies.state.active'
-                  : 'policies.state.paused',
-            )
-          }}
-        </UiButton>
-      </li>
-    </ul>
+    <UiTable
+      :label="t('policies.policies')"
+      :rows="list?.items ?? []"
+      :columns="[
+        { key: 'policy', label: t('policies.policies') },
+        { key: 'state', label: t('console.summary') },
+        { key: 'action', label: t('policies.source') },
+      ]"
+      :row-key="(p) => p.id"
+      :busy-label="t('devices.loading')"
+      :empty-label="t('policies.empty')"
+      ><template #cell-policy="{ row }"
+        ><UiButton variant="ghost" :disabled="busy || uncertain" @click="select(row.id)">{{
+          row.definition.selfService?.displayName ??
+          `${t('policies.policies')} · ${row.id.slice(0, 8)}`
+        }}</UiButton></template
+      ><template #cell-state="{ row }"
+        ><UiBadge>{{
+          t(
+            row.state === 'archived'
+              ? 'policies.state.archived'
+              : row.enabled
+                ? 'policies.state.active'
+                : 'policies.state.paused',
+          )
+        }}</UiBadge></template
+      ><template #cell-action="{ row }">{{ row.definition.action.kind }}</template></UiTable
+    >
     <UiButton
       v-if="list?.nextCursor"
       :disabled="!!busy"
@@ -748,22 +760,33 @@ onMounted(async () => {
     >
       {{ t('policies.next') }}
     </UiButton>
-    <UiButton
-      v-if="current && definition.action.kind === 'configuration'"
-      :disabled="!!busy"
-      type="submit"
-      @click="loadProgress()"
-    >
+    <UiButton v-if="current" :disabled="!!busy" type="submit" @click="loadProgress()">
       {{ t('policies.refreshProgress') }}
     </UiButton>
-    <ul v-if="progress">
-      <li v-for="d in progress.items" :key="objectKey(d.object)">
-        <AssignmentFacts :item="d" /> {{ t(`policies.preview_${d.qualification.state}`) }}
-        <ul>
-          <li v-for="op in d.operationIds" :key="op">{{ t('policies.operation') }} · {{ op }}</li>
-        </ul>
-      </li>
-    </ul>
+    <UiTable
+      v-if="progress"
+      :label="t('policies.refreshProgress')"
+      :rows="progress.items"
+      :columns="[
+        { key: 'object', label: t('policies.device') },
+        { key: 'qualification', label: t('policies.identity') },
+        { key: 'operations', label: t('policies.operation') },
+      ]"
+      :row-key="(d) => objectKey(d.object)"
+      :busy-label="t('devices.loading')"
+      :empty-label="t('policies.empty')"
+      ><template #cell-object="{ row }"><AssignmentFacts :item="row" /></template
+      ><template #cell-qualification="{ row }">{{
+        t(`policies.preview_${row.qualification.state}`)
+      }}</template
+      ><template #cell-operations="{ row }"
+        ><details v-if="row.operationIds.length">
+          <summary>{{ row.operationIds.length }} {{ t('policies.operation') }}</summary>
+          <p v-for="op in row.operationIds" :key="op" class="coordinate">{{ op }}</p>
+        </details>
+        <span v-else>—</span></template
+      ></UiTable
+    >
     <UiButton
       v-if="progress?.nextCursor"
       :disabled="!!busy"

@@ -315,7 +315,7 @@ it('invalidates dynamic group inputs after fact changes even when the compliance
     assetContext: 'endpoint' as const,
     name: 'Office members',
     description: '',
-    criteria: definition.criteria,
+    criteria: { selector: { kind: 'device' }, quantifier: 'one', criteria: definition.criteria },
   })
   expect((await f.write('POST', groupPath, groupWrite)).status).toBe(200)
   await f.server.handle('GET', `${groupPath}/tasks/${groupWrite.operationId}`)

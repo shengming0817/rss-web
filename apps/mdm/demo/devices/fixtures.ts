@@ -1,3 +1,4 @@
+import type { CollectionScope } from '../../src/features/devices/clients/asset-model'
 import { randomUUID } from 'node:crypto'
 interface DeviceSummary {
   id: string
@@ -18,6 +19,7 @@ import type {
 } from '../../src/features/devices/clients/asset-model'
 import type { registration } from '../../src/features/devices/clients/enrollment'
 export interface DemoDevice {
+  scopedInventory?: (Omit<Inventory, 'collectionScope'> & { collectionScope: CollectionScope })[]
   securityBindings?: { registration: string; generation: number; capabilities: string[] }[]
   bootstrapBindings?: {
     registration: string

@@ -11,7 +11,19 @@ assert fixture['tenant']==TENANTS[0]
 e=Environment(Path.cwd(),group='device-browser')
 t=fixture['tenant']
 # Coordinates are fixed fixture input, never arbitrary browser request SQL.
-channel=sys.argv[2]
+action=sys.argv[2]
+if action == 'add-agent-to-alone':
+    assert fixture['alone']=='fixture-alone'
+    device='fixture-alone'
+    registration,credential,epoch,operation,grant=[str(uuid.uuid4()) for _ in range(5)]
+    e.sql(f"""BEGIN;
+SET LOCAL rss.tenant_id = '{t}';
+INSERT INTO mdm_access.agent_grants(tenant_id,id,operation_id,source,actor,instance,device,platform,secret_digest,request_digest,state,expires_at) VALUES('{t}','{grant}','{operation}','download','fixture','{fixture['instance']}','{device}','windows',repeat('0',64),repeat('0',64),'consumed',clock_timestamp()+interval '1 hour');
+INSERT INTO mdm_access.registrations(tenant_id,id,device,channel,generation,agent_grant_id,state,purpose,epoch) VALUES('{t}','{registration}','{device}','agent',1,'{grant}','active','primary','{epoch}');
+INSERT INTO mdm_access.credentials(tenant_id,id,registration,channel,locator,state) VALUES('{t}','{credential}','{registration}','agent',md5('{credential}')||md5('{registration}'),'active');
+COMMIT;""",'mdm_dev')
+    sys.exit(0)
+channel=action
 assert channel in {'mdm','agent'}
 device=fixture[channel]
 assert device==f'fixture-{channel}'

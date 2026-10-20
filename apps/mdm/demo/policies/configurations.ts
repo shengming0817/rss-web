@@ -5,7 +5,7 @@ import {
 } from './applicability'
 import type { DomainHandler } from '../scenario'
 import type { createDeviceDemo } from '../devices/state'
-import type { createScopeDemo } from './scopes'
+import type { Channel } from '../../src/features/devices/clients/objects'
 import {
   configuration,
   configurationFormats,
@@ -20,7 +20,12 @@ import { candidate } from './http'
 type Preview = Awaited<ReturnType<ReturnType<typeof createConfigurationsClient>['previewStatus']>>
 export function createConfigurationDemo(
   devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts'>,
-  scopes: Pick<ReturnType<typeof createScopeDemo>, 'freeze'>,
+  scopes: {
+    freeze: (
+      id: string,
+      channel?: Channel,
+    ) => { id: string; revision: number; members: string[] } | null
+  },
   assigned: (device: string, replacedPolicy?: string) => ConfigurationEffects[],
 ) {
   const configurations = new Map<string, Configuration>(),
@@ -71,7 +76,7 @@ export function createConfigurationDemo(
           if (preview.value.status === 'pending' && preview.reads++ > 0)
             preview.value.status =
               state.revision === preview.revision &&
-              scopes.freeze(preview.value.scope)?.revision === preview.value.scopeRevision
+              scopes.freeze(preview.value.scope, 'mdm')?.revision === preview.value.scopeRevision
                 ? 'completed'
                 : 'superseded'
           return candidate({ preview: structuredClone(preview.value) })

@@ -1,3 +1,4 @@
+import { inventoryCondition, type InventoryCondition } from './asset-model'
 import { calculationTask } from './calculation-task'
 import type { Operation } from '../../../services/useOperation'
 import type { HttpTransport } from '@rss/api/mdm'
@@ -15,7 +16,7 @@ import {
   unique,
   uuid,
 } from '../../../services/decode'
-import { criteria, cursor, fieldKey, sourceIds, type Criteria } from './asset-model'
+import { cursor, fieldKey, sourceIds } from './asset-model'
 
 import { objectRef, objectKey, deviceObject, type ObjectRef } from './objects'
 
@@ -25,10 +26,10 @@ export type GroupChange =
       name: string
       description: string
       assetContext: 'endpoint' | 'associated_device'
-      criteria: Criteria | null
+      criteria: InventoryCondition | null
     }
   | { action: 'edit'; name: string; description: string }
-  | { action: 'rule'; criteria: Criteria }
+  | { action: 'rule'; criteria: InventoryCondition }
   | { action: 'members'; add: ObjectRef[]; remove: ObjectRef[] }
   | { action: 'delete' | 'recompute' }
 export type GroupProjection = 'members' | 'changes' | 'decisions'
@@ -70,7 +71,7 @@ export function decodeGroup(value: unknown, id: string) {
   if (group.id !== id) throw new Error('Wrong group')
   return {
     group,
-    criteria: nullable(v['criteria'], criteria),
+    criteria: nullable(v['criteria'], inventoryCondition),
     memberSet: nullable(v['memberSet'], uuid),
   }
 }
@@ -192,6 +193,12 @@ export function createGroupsClient(transport: HttpTransport) {
         decode: (v) => decodeGroup(v, id),
       }),
     change: (id: string, body: Operation<GroupChange>) => {
+      if (
+        body.input.action === 'rule' ||
+        (body.input.action === 'create' && body.input.criteria !== null)
+      )
+        inventoryCondition(body.input.criteria)
+
       const options = {
         method: 'POST' as const,
         path: '/api/v1/groups/{id}',

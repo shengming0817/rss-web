@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import { UiButton, UiDialog, UiTable, UiBadge } from '@rss/core/components'
 import { onMounted, ref, toRaw, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -152,15 +152,7 @@ onMounted(async () => {
       t('policies.reload')
     }}</UiButton>
     <p v-if="list && !list.items.length">{{ t('policies.empty') }}</p>
-    <ul class="console-object-list">
-      <li v-for="item in list?.items" :key="item.id">
-        <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(item.id)">{{
-          item.id
-        }}</UiButton>
-        ·
-        {{ item.revision }}
-      </li>
-    </ul>
+    <UiTable :label="t('policies.scopes')" :rows="list?.items??[]" :columns="[{key:'scope',label:t('policies.scopes')},{key:'revision',label:t('policies.revision')},{key:'resolution',label:t('console.result')}]" :row-key="s=>s.id" :busy-label="t('devices.loading')" :empty-label="t('policies.empty')"><template #cell-scope="{row}"><UiButton variant="ghost" :disabled="busy||uncertain" @click="open(row.id)">{{ t('policies.scopes') }} · {{ row.id.slice(0,8) }}</UiButton></template><template #cell-resolution="{row}"><UiBadge>{{ t(row.resolution?'devices.completed':'devices.pending') }}</UiBadge></template></UiTable>
     <UiButton
       v-if="list?.nextCursor"
       :disabled="!!busy"
@@ -199,7 +191,7 @@ onMounted(async () => {
         t('console.edit')
       }}</UiButton>
     </div>
-    <form v-show="editing" class="console-panel" @submit.prevent="save">
+    <UiDialog v-model:open="editing" placement="right" :title="t(current?'console.edit':'console.create')" :close-label="t('console.close')"><form class="scope-form" @submit.prevent="save">
       <div class="console-page-header">
         <h2>{{ t(current ? 'console.edit' : 'console.create') }}</h2>
         <UiButton
@@ -250,7 +242,7 @@ onMounted(async () => {
     <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending()">
       {{ t('policies.replay') }}
     </UiButton>
-    <section v-if="task" class="console-panel">
+    <section v-if="task" class="console-panel scope-results">
       <h2>{{ t('console.result') }}</h2>
       <p>{{ task }} · {{ status ? t(`policies.state.${status.status}`) : '—' }}</p>
       <UiButton :disabled="!!busy" type="submit" @click="refresh">{{

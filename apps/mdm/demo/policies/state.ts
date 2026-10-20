@@ -2,7 +2,7 @@ import type { DomainHandler, Scenario, DemoObservation, DemoEvent } from '../sce
 import type { createDeviceDemo } from '../devices/state'
 import { uuid } from '../../src/services/decode'
 import type { ExecutionSummary } from '../../src/features/policies/clients/executions'
-import { targetFacts } from './targets'
+import { objectKey } from '../../src/features/devices/clients/objects'
 import { createPages, error, ok } from '../http'
 import { candidate } from './http'
 import { createScopeDemo } from './scopes'
@@ -63,7 +63,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
     ),
     software = createSoftwarePolicyDemo(
       devices,
-      { resolve: scopes.freeze, snapshot: scopes.snapshot },
+      { resolve: scopes.freeze, snapshot: scopes.snapshot, assignments: scopes.assignments },
       resources,
       lifecycle,
       publication,
@@ -118,23 +118,25 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       const onboarding = /^\/api\/v1\/policies\/([^/]+)\/(assignments|runs)$/.exec(request.path)
       if (onboarding && request.method === 'GET') {
         const p = policyStore.get(onboarding[1]!)
-        if (p?.definition.action.kind === 'request_mdm_enrollment') {
+        if (p && !['configuration', 'software'].includes(p.definition.action.kind)) {
           if (onboarding[2] === 'runs') return ok({ items: [], nextCursor: null })
-          const snapshot = scopes.snapshot(p.definition.scope)
+          const channel =
+            p.definition.action.kind === 'native_collection' ||
+            p.definition.action.kind === 'ensure_agent_installed'
+              ? 'mdm'
+              : 'agent'
+          const all = scopes
+            .assignments(p.definition.scope, channel)
+            .filter((row) => objectKey(row.object) > (request.query.get('after') ?? ''))
+            .sort((a, b) => objectKey(a.object).localeCompare(objectKey(b.object)))
           return ok({
-            items: (snapshot?.devices ?? [])
-              .filter((id) => id > (request.query.get('after') ?? ''))
-              .slice(0, 20)
-              .map((id) => ({
-                ...targetFacts(devices, id, 'agent'),
-                scopeResult: snapshot!.result,
-                qualification: scopes.freeze(p.definition.scope)?.members.includes(id)
-                  ? { state: 'eligible', entry: 1 }
-                  : { state: 'pending' },
-                taskAdmission: null,
-                operationIds: [],
-              })),
-            nextCursor: null,
+            items: all.slice(0, 64).map((row) => ({
+              ...row,
+              ...(!p.enabled ? { availability: 'unavailable', reason: 'policy_disabled' } : {}),
+              taskAdmission: null,
+              operationIds: [],
+            })),
+            nextCursor: all.length > 64 ? objectKey(all[63]!.object) : null,
           })
         }
       }
