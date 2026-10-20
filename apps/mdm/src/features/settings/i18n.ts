@@ -17,19 +17,19 @@ export const settingsZh = {
   hostReady: '当前宿主就绪',
   pendingAttempts: '未决恢复尝试',
   configureHostHint:
-    '部署操作员以原安装、宿主和 expected_revision 修改 OIDC、恢复接收证书、CA、通道与批准网络。保存不可变候选后受控重启，核对宿主、租户、原操作、版本、摘要及新的进程观察。',
+    '部署操作员以原安装、宿主和 expected_revision 修改 OIDC、恢复接收证书、CA、通道与批准网络。一次性命令导出配置后，由运维用 Compose 重建对应服务，再沿原操作核对实际加载版本。命令在原部署项目与环境中执行，私有输入先导入安装卷。',
   rotateHint:
     '原生、Windows、OIDC 凭据和恢复保护钥先向全部宿主分发读钥，再切写钥并重包。使用原操作继续；历史与备份引用的旧钥保持保管。Ledger HMAC 与安装身份不能重生。',
   publicHostHint:
     '从同一生成器导出当前 ui.json / mdm.json，包含业务和管理租户；随对应前端一起部署，禁止手工覆盖绑定。',
   webhookDeliveryHint:
-    '将确切 Webhook 版本交付至私有操作目录，接收方安装后由部署进程取得持钥证明；普通网页不导出秘密。',
+    '将确切 Webhook 版本交付至私有操作目录，接收方安装后由一次性维护命令取得持钥证明；普通网页不导出秘密。',
   backupHint:
     '冷备先停写并核验原宿主与 CA，联合保存数据库、对象确切版本、原材料、权限及全部仍引用的历史密钥；加密归档与独立 manifest 摘要分开保管。',
   restoreHint:
     '在同址空数据库恢复原身份、材料、CA 数据与角色权限，使用原平台和各业务账户实际认证，再核对宿主观察。中断沿原操作恢复，不重置账户或重新初始化 CA。',
   backupLimit:
-    '当前三用途共享同一 CA 容器的联合冷备被后端阻断；不省略用途绕过。异址自动灾备、设备恢复效果与 RPO/RTO 均未由此证明。',
+    '运维先停止对应写服务，维护命令校验原数据与材料。共享 CA 恢复须独立演练；异址自动灾备、设备恢复效果与 RPO/RTO 均未由此证明。',
   packageHint:
     '包签名与公证由实际构建方完成；从正式资源中选择已审核的安装器与清单，发布后仍需设备安装验收。',
   publishPackage: '发布正式 Agent 包',
@@ -238,19 +238,19 @@ export const settingsEn = {
   hostReady: 'Current host ready',
   pendingAttempts: 'Unresolved recovery attempts',
   configureHostHint:
-    'An operator uses the original installation, host and expected_revision to change OIDC, recovery recipient, CA, channels and approved networks. Persist the immutable candidate, restart under deployment control and verify host, tenant, original operation, revision, digest and fresh process observation.',
+    'An operator uses the original installation, host and expected_revision to change OIDC, recovery recipient, CA, channels and approved networks. The one-shot command exports configuration; operations recreates the services with Compose and verifies the loaded revision using the original operation. Use the original deployment project and environment, with private inputs imported into its volume.',
   rotateHint:
     'Distribute read keys to all hosts before selecting a new write key and rewrapping native, Windows, OIDC or recovery credentials. Continue the original operation and retain historical keys required by data or backups. Never regenerate Ledger HMAC or installation identities.',
   publicHostHint:
     'Export current ui.json / mdm.json from the single generator, including business and management tenants. Deploy with the matching frontend; do not overwrite bindings manually.',
   webhookDeliveryHint:
-    'Deliver the exact Webhook revision into a private operation directory. After the receiver installs it, the deployment process obtains possession proof. Ordinary pages never export secrets.',
+    'Deliver the exact Webhook revision into a private operation directory. After the receiver installs it, a one-shot maintenance command obtains possession proof. Ordinary pages never export secrets.',
   backupHint:
     'Stop writes and verify original hosts and CAs before jointly archiving databases, exact object versions, materials, permissions and all referenced historical keys. Keep the encrypted archive and independent manifest digest separately.',
   restoreHint:
     'Restore original identities, materials, CA data and role permissions into an empty database at the original location. Authenticate original platform and business accounts, then verify host observations. Resume the original operation without resetting accounts or initializing CAs.',
   backupLimit:
-    'The backend blocks joint backup when three purposes share one CA container; never omit a purpose to bypass it. This does not establish relocation recovery, device recovery effects or RPO/RTO.',
+    'Operations stops the relevant writers; maintenance validates original data and materials. Shared-CA recovery requires its own drill. This does not establish relocation recovery, device recovery effects or RPO/RTO.',
   packageHint:
     'The actual builder signs and notarizes installers. Select reviewed installer and manifest resources; publication still requires device installation acceptance.',
   publishPackage: 'Publish Agent package',

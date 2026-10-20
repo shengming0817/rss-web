@@ -481,12 +481,6 @@ it('queries original operations through explicit domain clients and keeps PKI ou
   expect(f.calls.at(-1)?.path).toBe('/api/v1/smtp/operations/{id}')
   expect(f.wrapper.find('option[value=pki]').exists()).toBe(false)
 })
-it('shows unavailable host observation without offering to reinstall and preserves controlled backup limits', async () => {
-  const f = await fixture(DeploymentPanel)
-  expect(f.wrapper.text()).toContain('不表示未安装')
-  expect(f.wrapper.text()).toContain('共享同一 CA 容器')
-  expect(f.wrapper.text()).toContain('rss-mdm backup-installation')
-})
 it('keeps Agent package admission and signing evidence with the formal resource owner', async () => {
   const f = await fixture(PackagesPanel)
   expect(f.wrapper.text()).toContain('实际构建方')

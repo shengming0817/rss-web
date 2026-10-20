@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n'
 import { UiButton } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { useSettingsFacts, useSettingsAction } from '../useSettingsAction'
+const maintenanceCommand =
+  'docker compose -p rss-mdm -f /absolute/candidate/deployment/production.compose.yaml run --rm --no-deps --user 10001:10001 --entrypoint /usr/local/bin/rss-mdm-installer init'
 const runtime = useMdm(),
   { t } = useI18n(),
   { run, busy, failure } = useSettingsAction(() => 'deployment-readiness')
@@ -80,25 +82,49 @@ useSettingsFacts(() => {
   <section class="console-panel">
     <h2>{{ t('settings.operatorOnly') }}</h2>
     <p>{{ t('settings.configureHostHint') }}</p>
-    <code>rss-mdm configure-host --config /absolute/private-host-change.json</code>
+    <code
+      >{{ maintenanceCommand }} configure-host --config
+      /var/lib/rss-mdm/private-host-change.json</code
+    >
     <p>{{ t('settings.prepareCaHint') }}</p>
-    <code>rss-mdm prepare-ca --config /absolute/private-ca-preparation.json</code>
+    <code
+      >{{ maintenanceCommand }} prepare-ca --config
+      /var/lib/rss-mdm/private-ca-preparation.json</code
+    >
     <p>{{ t('settings.recoverAccountHint') }}</p>
-    <code>rss-mdm recover-password --config /absolute/private-account-recovery.json</code>
+    <code
+      >{{ maintenanceCommand }} recover-password --config
+      /var/lib/rss-mdm/private-account-recovery.json</code
+    >
     <p>{{ t('settings.rotateHint') }}</p>
-    <code>rss-mdm rotate-protection --config /absolute/private-rotation.json</code>
+    <code
+      >{{ maintenanceCommand }} rotate-protection --config
+      /var/lib/rss-mdm/private-rotation.json</code
+    >
     <p>{{ t('settings.publicHostHint') }}</p>
-    <code>rss-mdm public-host-config --config /absolute/runtime.json</code>
+    <code
+      >{{ maintenanceCommand }} public-host-config --config
+      /var/lib/rss-mdm/private-runtime.json</code
+    >
     <p>{{ t('settings.webhookDeliveryHint') }}</p>
-    <code>rss-mdm export-webhook-key --config /absolute/private-webhook-delivery.json</code>
+    <code
+      >{{ maintenanceCommand }} export-webhook-key --config
+      /var/lib/rss-mdm/private-webhook-delivery.json</code
+    >
   </section>
   <section class="console-panel">
     <h2>{{ t('settings.backup') }}</h2>
     <p>{{ t('settings.noSecretExport') }}</p>
     <p>{{ t('settings.backupHint') }}</p>
-    <code>rss-mdm backup-installation --config /absolute/private-backup.json</code>
+    <code
+      >{{ maintenanceCommand }} backup-installation --config
+      /var/lib/rss-mdm/private-backup.json</code
+    >
     <p>{{ t('settings.restoreHint') }}</p>
-    <code>rss-mdm restore-installation --config /absolute/private-restore.json</code>
+    <code
+      >{{ maintenanceCommand }} restore-installation --config
+      /var/lib/rss-mdm/private-restore.json</code
+    >
     <p>{{ t('settings.backupLimit') }}</p>
   </section>
 </template>
