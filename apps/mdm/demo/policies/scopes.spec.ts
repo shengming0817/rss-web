@@ -185,3 +185,77 @@ it('blocks current Scope consumers while a changed dynamic group is pending and 
   expect(scopes.snapshot(id)).not.toBeNull()
   expect(scopes.freeze(id)).not.toBeNull()
 })
+
+it.each(['limitations', 'exclusions'] as const)(
+  'keeps unknown %s pending until a definite result dominates',
+  (role) => {
+    const devices = createDeviceDemo(),
+      scopes = createScopeDemo(devices),
+      group = randomUUID(),
+      op = randomUUID(),
+      id = randomUUID(),
+      task = randomUUID(),
+      device = 'device-01'
+    devices.handle(
+      request(`/api/v1/groups/${group}`, {
+        operationId: op,
+        expectedRevision: 0,
+        input: {
+          action: 'create',
+          assetContext: 'endpoint',
+          name: 'Unknown qualification',
+          description: '',
+          criteria: deviceCondition({
+            kind: 'predicate',
+            field: 'custom.purchase_date',
+            op: 'eq',
+            value: { kind: 'time', value: 0 },
+          }),
+        },
+      }),
+      'normal',
+    )
+    devices.handle(request(`/api/v1/groups/${group}/tasks/${op}`), 'normal')
+    devices.handle(request(`/api/v1/groups/${group}/tasks/${op}`), 'normal')
+    const ref = { kind: 'group', id: group },
+      known = { kind: 'device', id: device }
+    const put = (operationId: string, expectedRevision: number, definition: unknown) =>
+      scopes.handle(
+        request(`/api/v1/scopes/${id}`, {
+          operationId,
+          expectedRevision,
+          input: { action: 'put', definition },
+        }),
+        'normal',
+      )
+    const publish = (task: string) => {
+      scopes.handle(request(`/api/v1/scopes/${id}/tasks/${task}`), 'normal')
+      scopes.handle(request(`/api/v1/scopes/${id}/tasks/${task}`), 'normal')
+    }
+    const definition = {
+      targets: [known],
+      limitations: role === 'limitations' ? [ref] : null,
+      exclusions: role === 'exclusions' ? [ref] : [],
+    }
+    expect(put(task, 0, definition)?.status).toBe(200)
+    publish(task)
+    expect(scopes.assignments(id, 'agent').find((r) => r.object.id === device)).toMatchObject({
+      qualification: { state: 'pending' },
+      availability: 'unavailable',
+      reason: 'source_pending',
+    })
+    expect(scopes.freeze(id, 'agent')?.members).toEqual([])
+    const next = randomUUID()
+    expect(
+      put(next, 1, {
+        ...definition,
+        limitations: role === 'limitations' ? [ref, known] : [],
+        exclusions: role === 'exclusions' ? [ref] : [],
+      })?.status,
+    ).toBe(200)
+    publish(next)
+    expect(
+      scopes.assignments(id, 'agent').find((r) => r.object.id === device)?.qualification.state,
+    ).toBe(role === 'limitations' ? 'eligible' : 'excluded')
+  },
+)

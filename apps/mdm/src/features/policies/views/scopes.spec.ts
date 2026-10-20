@@ -45,11 +45,16 @@ it('locks the original Scope after an unknown write and replays its exact frozen
   await flushPromises()
   const button = (text: string) => wrapper.findAll('button').find((b) => b.text() === text)!
   await button('新建').trigger('click')
-  await new DOMWrapper(document.body).get('[role=dialog] form').trigger('submit')
+  const dialog = new DOMWrapper(document.body).get('[role=dialog]')
+  await dialog.get('form').trigger('submit')
   await flushPromises()
   expect(button('新建').attributes('disabled')).toBeDefined()
+  expect(dialog.get('[role=alert]').text()).toContain('提交结果未知')
   const body = change.mock.calls[0]![1]
-  await button('重放同一操作').trigger('click')
+  await dialog
+    .findAll('button')
+    .find((b) => b.text() === '重放同一操作')!
+    .trigger('click')
   await flushPromises()
   expect(change.mock.calls[1]![1]).toEqual(body)
   wrapper.unmount()

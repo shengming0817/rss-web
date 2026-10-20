@@ -216,7 +216,8 @@ onMounted(async () => {
       placement="right"
       :title="t(current ? 'console.edit' : 'console.create')"
       :close-label="t('console.close')"
-      ><form class="scope-form" @submit.prevent="save">
+      ><p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
+      <form class="scope-form" @submit.prevent="save">
         <div class="console-page-header">
           <h2>{{ t(current ? 'console.edit' : 'console.create') }}</h2>
           <UiButton
@@ -264,6 +265,9 @@ onMounted(async () => {
           </UiButton>
         </fieldset>
       </form>
+      <UiButton v-if="uncertain && pending" :disabled="busy" @click="pending()">{{
+        t('policies.replay')
+      }}</UiButton>
     </UiDialog>
     <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending()">
       {{ t('policies.replay') }}

@@ -308,6 +308,7 @@ it('creates a group, edits its definition, previews and recomputes server member
   await form.trigger('submit')
   await flushPromises()
   expect(wrapper.text()).toContain('成员版本')
+  expect(wrapper.findAll('[role=tab]').some((tab) => tab.text() === '规则')).toBe(false)
   await wrapper.find('textarea').setValue('device-01\ndevice-02')
   await wrapper.get('.group-member-editor').trigger('submit')
   await flushPromises()
@@ -1162,4 +1163,32 @@ it('rejects an invalid condition locally without entering unknown-write recovery
   expect(requests.filter((r) => r.method === 'POST')).toHaveLength(0)
   expect(wrapper.text()).toContain('请求无效，请检查输入。')
   expect(wrapper.text()).not.toContain('明确重放原操作')
+})
+
+it('keeps Group save errors and exact unknown-write recovery inside its dialog', async () => {
+  const { wrapper, requests, loseReply, scenario } = await setup('device-groups')
+  const dialog = new DOMWrapper(document.body).get('[role=dialog]')
+  await dialog.get('[data-testid=group-name]').setValue('Recover in current drawer')
+  scenario.set('denied')
+  await dialog.get('form').trigger('submit')
+  await flushPromises()
+  expect(dialog.get('[role=alert]').text()).toContain('权限')
+  scenario.set('normal')
+  loseReply.path = '/api/v1/groups/{id}'
+  await dialog.get('form').trigger('submit')
+  await flushPromises()
+  expect(dialog.get('[role=alert]').text()).toContain('提交结果未知')
+  const original = requests.filter((r) => r.method === 'POST').at(-1)!.body
+  expect(dialog.get('fieldset').attributes('disabled')).toBeDefined()
+  loseReply.path = ''
+  await dialog
+    .findAll('button')
+    .find((b) => b.text() === '明确重放原操作')!
+    .trigger('click')
+  await flushPromises()
+  const writes = requests.filter((r) => r.method === 'POST')
+  expect(writes).toHaveLength(3)
+  expect(writes[2]!.body).toEqual(original)
+  expect(new DOMWrapper(document.body).find('[role=dialog]').exists()).toBe(false)
+  expect(wrapper.text()).toContain('Recover in current drawer')
 })

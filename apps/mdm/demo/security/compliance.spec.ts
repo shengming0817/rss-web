@@ -230,7 +230,7 @@ it('supersedes an unready frozen group input, then preserves old evidence when i
   const devices = createDeviceDemo(),
     group = crypto.randomUUID()
   let members = {
-    objects: [],
+    candidates: [],
     members: ['device-01'],
     memberSet: null as string | null,
     memberVersion: 0,

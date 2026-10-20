@@ -139,4 +139,85 @@ it('evaluates associated conditions only from evidence matching original registr
   const page = await f.groups.page(group, changed.task!, 'decisions')
   if (page.page.kind !== 'decisions') throw new Error('Wrong projection')
   expect(page.page.items.find((d) => d.object.id === association.id)?.decision).toBe('unknown')
+  const scopes = createScopeDemo(f.domain),
+    id = randomUUID(),
+    task = randomUUID()
+  const request = (path: string, body?: unknown): DemoRequest => ({
+    path,
+    body,
+    method: body ? 'POST' : 'GET',
+    actor: { principalId: randomUUID(), sessionId: randomUUID() },
+    headers: {},
+    query: new URLSearchParams({ channel: 'agent' }),
+  })
+  expect(
+    scopes.handle(
+      request(`/api/v1/scopes/${id}`, {
+        operationId: task,
+        expectedRevision: 0,
+        input: {
+          action: 'put',
+          definition: {
+            targets: [{ kind: 'group', id: group }],
+            limitations: null,
+            exclusions: [],
+          },
+        },
+      }),
+      'normal',
+    )?.status,
+  ).toBe(200)
+  scopes.handle(request(`/api/v1/scopes/${id}/tasks/${task}`), 'normal')
+  scopes.handle(request(`/api/v1/scopes/${id}/tasks/${task}`), 'normal')
+  const pending = scopes.assignments(id, 'agent').find((row) => row.object.id === association.id)!
+  expect(pending).toMatchObject({
+    qualification: { state: 'pending' },
+    availability: 'unavailable',
+    reason: 'source_pending',
+    target: agent,
+    sources: [{ members: [mdm, agent] }],
+  })
+  expect(f.domain.publishedGroup(group)?.members).not.toContain(agent.device)
+  const frozenPath = `/api/v1/scopes/${id}/results/${task}/decisions`
+  const history = scopes.handle(request(frozenPath), 'normal')?.body as { page: unknown }
+  expect(history).toMatchObject({
+    page: {
+      items: expect.arrayContaining([
+        {
+          object: { kind: 'endpoint', id: agent.device },
+          qualification: { state: 'pending' },
+          reasons: [],
+          targets: expect.any(Array),
+          limitations: [],
+          exclusions: [],
+        },
+      ]),
+    },
+  })
+  const recovered = await f.groups.change(group, {
+    operationId: randomUUID(),
+    expectedRevision: 2,
+    input: {
+      action: 'rule',
+      criteria: deviceCondition({
+        kind: 'predicate',
+        field: 'device.model',
+        op: 'eq',
+        value: { kind: 'string', value: 'ThinkPad T14' },
+      }),
+    },
+  })
+  await f.groups.status(group, recovered.task!)
+  await f.groups.status(group, recovered.task!)
+  expect(
+    scopes.assignments(id, 'agent').find((row) => row.object.id === association.id),
+  ).toMatchObject({
+    availability: 'ready',
+    qualification: { state: 'eligible' },
+    reason: null,
+    target: agent,
+  })
+  expect((scopes.handle(request(frozenPath), 'normal')?.body as { page: unknown }).page).toEqual(
+    history.page,
+  )
 })

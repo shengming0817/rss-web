@@ -44,6 +44,7 @@ function compare() {
   )
 }
 function beginEdit(mode: 'metadata' | 'rule') {
+  if (mode === 'rule' && current.value?.group.kind !== 'dynamic') return
   if (current.value) {
     name.value = current.value.group.name
     description.value = current.value.group.description
@@ -184,6 +185,7 @@ function preview() {
   )
 }
 function saveRule(event: Event) {
+  if (current.value?.group.kind !== 'dynamic') return
   const form =
     event.currentTarget instanceof HTMLFormElement
       ? event.currentTarget
@@ -339,7 +341,9 @@ function openGroup(group: string) {
         :label="t('devices.groups')"
         :items="[
           { value: 'overview', label: t('devices.overview') },
-          { value: 'rule', label: t('devices.rule') },
+          ...(current.group.kind === 'dynamic'
+            ? [{ value: 'rule', label: t('devices.rule') }]
+            : []),
           { value: 'members', label: t('devices.members') },
           { value: 'changes', label: t('devices.changes') },
           { value: 'decisions', label: t('devices.decisions') },
@@ -500,6 +504,7 @@ function openGroup(group: string) {
       :title="t(current ? 'console.edit' : 'console.create')"
       :close-label="t('console.close')"
     >
+      <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
       <form
         class="group-form"
         @submit.prevent="current && editKind === 'rule' ? saveRule($event) : save()"
@@ -557,6 +562,9 @@ function openGroup(group: string) {
           </div>
         </fieldset>
       </form>
+      <UiButton v-if="uncertain && pending" :disabled="busy" @click="pending!()">{{
+        t('devices.replay')
+      }}</UiButton>
     </UiDialog>
     <details class="console-panel">
       <summary>{{ t('console.advanced') }}</summary>

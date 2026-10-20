@@ -19,7 +19,7 @@ interface Source {
   memberVersion: number
   definitionVersion: number
   authorityVersion: number
-  objects: DeviceObject[]
+  candidates: { input: DeviceObject; unknown: boolean }[]
 }
 interface FrozenScope {
   id: string
@@ -31,12 +31,6 @@ interface Job {
   frozen: FrozenScope
   reads: number
   status: 'running' | 'completed' | 'superseded' | 'failed'
-  decisions: {
-    device: string
-    identity: 'active' | 'inactive'
-    reasons: ('explicit_exclusion' | 'missing_limitation_match')[]
-    sources: number[]
-  }[]
 }
 export function createScopeDemo(devices: Devices) {
   const managedScopes = new Set<string>()
@@ -47,48 +41,30 @@ export function createScopeDemo(devices: Devices) {
   const receipts = createReceipts(),
     pages = createPages()
   function resolve(read: AuthoredScope): Job {
-    const sources: Source[] = [],
-      membership: string[][] = []
+    const sources: Source[] = []
     const facts = devices.facts()
-    function expand(refs: Reference[]) {
-      return new Set(
-        refs.flatMap((reference) => {
-          let index = sources.findIndex(
-            (s) => s.reference.kind === reference.kind && s.reference.id === reference.id,
-          )
-          if (index < 0) {
-            const group = reference.kind === 'group' ? devices.publishedGroup(reference.id) : null
-            const device = facts.find((d) => d.summary.id === reference.id)
-            if (reference.kind === 'group' ? !group : !device) throw new Error('Unknown reference')
-            if (group && !group.ready) throw new Error('Group source pending')
-            index = sources.length
-            sources.push({
-              reference,
-              memberSet: group?.memberSet ?? null,
-              memberVersion: group?.memberVersion ?? device!.summary.revision,
-              definitionVersion: group?.definitionVersion ?? device!.summary.revision,
-              authorityVersion: group?.authorityVersion ?? 1,
-              objects: group?.objects ?? [endpointObject(device!)],
-            })
-            membership.push(sources[index]!.objects.flatMap((o) => o.members.map((m) => m.device)))
-          }
-          return membership[index]!
-        }),
+    for (const reference of [
+      ...read.definition.targets,
+      ...(read.definition.limitations ?? []),
+      ...read.definition.exclusions,
+    ]) {
+      if (
+        sources.some((s) => s.reference.kind === reference.kind && s.reference.id === reference.id)
       )
+        continue
+      const group = reference.kind === 'group' ? devices.publishedGroup(reference.id) : null
+      const device = facts.find((d) => d.summary.id === reference.id)
+      if (reference.kind === 'group' ? !group : !device) throw new Error('Unknown reference')
+      if (group && !group.ready) throw new Error('Group source pending')
+      sources.push({
+        reference,
+        memberSet: group?.memberSet ?? null,
+        memberVersion: group?.memberVersion ?? device!.summary.revision,
+        definitionVersion: group?.definitionVersion ?? device!.summary.revision,
+        authorityVersion: group?.authorityVersion ?? 1,
+        candidates: group?.candidates ?? [{ input: endpointObject(device!), unknown: false }],
+      })
     }
-    const targets = expand(read.definition.targets),
-      limitations =
-        read.definition.limitations === null ? null : expand(read.definition.limitations),
-      exclusions = expand(read.definition.exclusions)
-    const decisions: Job['decisions'] = [...targets].map((device) => ({
-      device,
-      identity: facts.some((d) => d.summary.id === device) ? 'active' : 'inactive',
-      reasons: [
-        ...(limitations && !limitations.has(device) ? ['missing_limitation_match' as const] : []),
-        ...(exclusions.has(device) ? ['explicit_exclusion' as const] : []),
-      ],
-      sources: membership.flatMap((members, index) => (members.includes(device) ? [index] : [])),
-    }))
     return {
       frozen: {
         id: read.id,
@@ -98,26 +74,43 @@ export function createScopeDemo(devices: Devices) {
       },
       reads: 0,
       status: 'running',
-      decisions,
     }
   }
   function projection(frozen: FrozenScope, channel?: Channel) {
-    const ids = (refs: Reference[]) =>
+    const ids = (refs: Reference[], known = false) =>
       new Set(
         refs.flatMap((ref) =>
           frozen.sources
             .filter((s) => s.reference.kind === ref.kind && s.reference.id === ref.id)
             .flatMap((s) =>
-              s.objects.flatMap((o) =>
-                o.members.filter((m) => !channel || m.channel === channel).map((m) => m.device),
-              ),
+              s.candidates
+                .filter((c) => !known || !c.unknown)
+                .flatMap((c) =>
+                  c.input.members
+                    .filter((m) => !channel || m.channel === channel)
+                    .map((m) => m.device),
+                ),
             ),
         ),
       )
     const targets = ids(frozen.definition.targets),
+      knownTargets = ids(frozen.definition.targets, true),
       limitations =
         frozen.definition.limitations === null ? null : ids(frozen.definition.limitations),
-      exclusions = ids(frozen.definition.exclusions)
+      knownLimitations =
+        frozen.definition.limitations === null ? null : ids(frozen.definition.limitations, true),
+      exclusions = ids(frozen.definition.exclusions),
+      knownExclusions = ids(frozen.definition.exclusions, true)
+    const excludedByLimit = [...targets].filter((id) => limitations && !limitations.has(id)),
+      excludedExplicitly = [...targets].filter((id) => knownExclusions.has(id)),
+      excluded = new Set([...excludedByLimit, ...excludedExplicitly]),
+      pending = [...targets].filter(
+        (id) =>
+          !excluded.has(id) &&
+          (!knownTargets.has(id) ||
+            (knownLimitations && !knownLimitations.has(id)) ||
+            exclusions.has(id)),
+      )
     const objects = [
       ...new Map(
         frozen.sources
@@ -126,21 +119,18 @@ export function createScopeDemo(devices: Devices) {
               (r) => r.kind === s.reference.kind && r.id === s.reference.id,
             ),
           )
-          .flatMap((s) => s.objects)
+          .flatMap((s) => s.candidates.map((c) => c.input))
           .map((o) => [objectKey(o.object), o]),
       ).values(),
     ]
     return {
       ...frozen,
       objects,
-      get members() {
-        return [...targets].filter(
-          (id) => (!limitations || limitations.has(id)) && !exclusions.has(id),
-        )
-      },
+      members: [...targets].filter((id) => !excluded.has(id) && !pending.includes(id)),
       devices: [...targets],
-      excludedByLimit: [...targets].filter((id) => limitations && !limitations.has(id)),
-      excludedExplicitly: [...targets].filter((id) => exclusions.has(id)),
+      pending,
+      excludedByLimit,
+      excludedExplicitly,
     }
   }
   function reconcile(id: string) {
@@ -207,7 +197,7 @@ export function createScopeDemo(devices: Devices) {
             kind: 'scope',
             target: id,
             status: job.status,
-            processed: job.status === 'running' ? 0 : job.decisions.length,
+            processed: job.status === 'running' ? 0 : projection(job.frozen).devices.length,
             members: projection(job.frozen).members.length,
             failure: job.status === 'failed' ? 'stale_plan' : null,
             failureDetail: null,
@@ -236,8 +226,8 @@ export function createScopeDemo(devices: Devices) {
                 ],
                 targets: job.frozen.sources
                   .filter((s) =>
-                    s.objects.some((o) =>
-                      o.members.some((m) => m.device === id && m.channel === channel),
+                    s.candidates.some((c) =>
+                      c.input.members.some((m) => m.device === id && m.channel === channel),
                     ),
                   )
                   .map((s) => ({ reference: s.reference, version: s.memberVersion })),
@@ -370,18 +360,27 @@ export function createScopeDemo(devices: Devices) {
           device = facts.target?.device
         const qualification =
           ready && device
-            ? projected.members.includes(device)
-              ? { state: 'eligible' as const, entry: 1 }
-              : { state: 'excluded' as const }
+            ? projected.pending.includes(device)
+              ? { state: 'pending' as const }
+              : projected.members.includes(device)
+                ? { state: 'eligible' as const, entry: 1 }
+                : { state: 'excluded' as const }
             : { state: 'pending' as const }
         return {
           ...facts,
           scopeResult: result,
           qualification,
-          ...(!ready ? { availability: 'unavailable' as const, reason: 'source_pending' } : {}),
-          ...(qualification.state === 'excluded'
-            ? { availability: 'unavailable' as const, reason: 'scope_excluded' }
-            : {}),
+          availability:
+            facts.availability === 'ready' && qualification.state === 'eligible'
+              ? ('ready' as const)
+              : ('unavailable' as const),
+          reason:
+            facts.reason ??
+            (qualification.state === 'pending'
+              ? 'source_pending'
+              : qualification.state === 'excluded'
+                ? 'scope_excluded'
+                : null),
         }
       })
     },

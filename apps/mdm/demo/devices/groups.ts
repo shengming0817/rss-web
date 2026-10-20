@@ -434,15 +434,25 @@ export function createGroupDemo(
       const state = groups.get(id)
       if (!state || state.read.group.deleted) return null
       const job = state.read.memberSet ? jobs.get(state.read.memberSet) : undefined
+      const candidates =
+        job?.objects.flatMap((input) => {
+          const key =
+            state.read.group.assetContext === 'endpoint' ? input.object.id : objectKey(input.object)
+          const decision = job.decisions.find((d) => d.device === key)?.decision
+          return decision === 'match' || decision === 'unknown'
+            ? [{ input, unknown: decision === 'unknown' }]
+            : []
+        }) ?? []
       return structuredClone({
-        objects:
-          job?.objects.filter((o) =>
-            state.members.includes(
-              state.read.group.assetContext === 'endpoint' ? o.object.id : objectKey(o.object),
-            ),
-          ) ?? [],
+        candidates,
         get members() {
-          return [...new Set(this.objects.flatMap((o) => o.members.map((m) => m.device)))]
+          return [
+            ...new Set(
+              this.candidates
+                .filter((c) => !c.unknown)
+                .flatMap((c) => c.input.members.map((m) => m.device)),
+            ),
+          ]
         },
         memberSet: state.read.memberSet,
         memberVersion: state.read.group.memberVersion,
