@@ -83,6 +83,7 @@ export function fact(
   source: ResolvedField['sources'][number]['evidence']['source'] = 'manual',
 ): ResolvedField {
   const evidence = {
+    scope: { kind: 'device' as const },
     source,
     registration: null,
     registrationGeneration: null,
@@ -182,7 +183,15 @@ export function makeDevices(): Map<string, DemoDevice> {
         {
           summary,
           architecture: platform === 'windows' ? 'x86_64' : 'aarch64',
-          inventory: { device: id, channels, fields, lists: {}, quality: [], revisions },
+          inventory: {
+            collectionScope: { kind: 'device' },
+            device: id,
+            channels,
+            fields,
+            lists: {},
+            quality: [],
+            revisions,
+          },
           registrations,
           securityBindings: registrations.map((r) => ({
             registration: r.registrationId,

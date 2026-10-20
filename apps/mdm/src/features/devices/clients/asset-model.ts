@@ -67,8 +67,18 @@ export function resolvedField(value: unknown) {
     sources: unique(array(v['sources'], sourceFact), (s) => sourceIdentity(s.evidence)),
   }
 }
+/** The current device read endpoints select this exact asset namespace. */
+export function deviceCollectionScope(value: unknown) {
+  const v = closed(value, ['kind'])
+  return { kind: enumeration(v['kind'], ['device'] as const) }
+}
 export function qualityRun(value: unknown) {
   const v = closed(value, [
+    'dataset',
+    'templateVersion',
+    'fingerprint',
+    'coverage',
+    'complete',
     'source',
     'channel',
     'registration',
@@ -80,7 +90,18 @@ export function qualityRun(value: unknown) {
     'deliveryPending',
     'fields',
   ])
+  const coverage = closed(v['coverage'], ['id', 'version', 'definition', 'format'])
   return {
+    dataset: identifier(v['dataset']),
+    templateVersion: identifier(v['templateVersion']),
+    fingerprint: identifier(v['fingerprint']),
+    coverage: {
+      id: identifier(coverage['id']),
+      version: identifier(coverage['version']),
+      definition: identifier(coverage['definition']),
+      format: identifier(coverage['format']),
+    },
+    complete: boolean(v['complete']),
     source: enumeration(v['source'], sourceIds),
     channel: enumeration(v['channel'], ['agent', 'mdm'] as const),
     registration: uuid(v['registration']),
@@ -92,6 +113,8 @@ export function qualityRun(value: unknown) {
     deliveryPending: boolean(v['deliveryPending']),
     fields: array(v['fields'], (item) => {
       const f = closed(item, [
+        'scope',
+        'reason',
         'field',
         'quality',
         'status',
@@ -100,6 +123,8 @@ export function qualityRun(value: unknown) {
         'invalidItems',
       ])
       return {
+        scope: deviceCollectionScope(f['scope']),
+        reason: nullable(f['reason'], identifier),
         itemCount: count(f['itemCount']),
         invalidItems: count(f['invalidItems']),
         field: fieldKey(f['field']),
@@ -118,12 +143,21 @@ export function qualityRun(value: unknown) {
   }
 }
 export function inventory(value: unknown) {
-  const v = closed(value, ['device', 'channels', 'fields', 'lists', 'quality', 'revisions'])
+  const v = closed(value, [
+    'collectionScope',
+    'device',
+    'channels',
+    'fields',
+    'lists',
+    'quality',
+    'revisions',
+  ])
   const fields = record(v['fields'])
   const revisions = record(v['revisions'])
   if (Object.keys(fields).length > 1000 || Object.keys(revisions).length > 1000)
     throw new Error('Too many fields')
   return {
+    collectionScope: deviceCollectionScope(v['collectionScope']),
     device: identifier(v['device']),
     channels: unique(
       array(v['channels'], (s) => enumeration(s, ['agent', 'mdm'] as const)),
@@ -391,6 +425,7 @@ export function assetState(value: unknown): ReadState {
 }
 export function evidence(value: unknown) {
   const v = closed(value, [
+    'scope',
     'source',
     'dataset',
     'registration',
@@ -402,6 +437,7 @@ export function evidence(value: unknown) {
     'actor',
   ])
   return {
+    scope: deviceCollectionScope(v['scope']),
     source: enumeration(v['source'], sourceIds),
     dataset: nullable(v['dataset'], identifier),
     registration: nullable(v['registration'], identifier),

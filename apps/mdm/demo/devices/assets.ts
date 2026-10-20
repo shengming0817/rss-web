@@ -107,6 +107,7 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
           device.inventory.fields[field] = fact(field, value)
         } else {
           const evidence = {
+            scope: { kind: 'device' as const },
             source: 'manual' as const,
             registration: null,
             registrationGeneration: null,

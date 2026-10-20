@@ -9,7 +9,7 @@ import {
   unique,
 } from '../../../services/decode'
 import { association } from './associations'
-import { endpoint, type Endpoint } from './endpoint-model'
+import { viewEndpoint, type ViewEndpoint } from './endpoint-model'
 import {
   cursor,
   pageToken,
@@ -41,7 +41,7 @@ function summary(value: unknown, detail = false) {
     ),
     ref = objectRef(v['reference']),
     a = nullable(v['association'], association),
-    endpoints = unique(array(v['endpoints'], endpoint), (e) => e.id)
+    endpoints = unique(array(v['endpoints'], viewEndpoint), (e) => e.id)
   if (
     ref.kind === 'endpoint' &&
     (a !== null || endpoints.length !== 1 || endpoints[0]?.id !== ref.id)
@@ -58,7 +58,7 @@ function summary(value: unknown, detail = false) {
     throw new Error('Wrong association view')
   return { reference: ref, association: a, endpoints }
 }
-function fields(value: unknown, endpoints: Endpoint[]) {
+function fields(value: unknown, endpoints: ViewEndpoint[]) {
   return Object.fromEntries(
     Object.entries(record(value)).map(([key, x]) => {
       fieldKey(key)
