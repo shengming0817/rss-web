@@ -19,7 +19,6 @@ it('freezes configuration versions, computes differences, and previews candidate
   const configs = createConfigurationDemo(
     devices,
     { freeze: () => structuredClone(scope) },
-    () => false,
     () => [],
   )
   function request(path: string, body?: unknown, query = new URLSearchParams()): DemoRequest {

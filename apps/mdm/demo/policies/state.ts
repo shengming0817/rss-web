@@ -1,4 +1,4 @@
-import type { DomainHandler, Scenario, DemoObservation } from '../scenario'
+import type { DomainHandler, Scenario, DemoObservation, DemoEvent } from '../scenario'
 import type { createDeviceDemo } from '../devices/state'
 import { uuid } from '../../src/services/decode'
 import type { ExecutionSummary } from '../../src/features/policies/clients/executions'
@@ -12,8 +12,6 @@ import { createConfigurationPolicies } from './configuration-claims'
 import { createPolicyDemo } from './policies'
 import { createPolicyStore } from './store'
 import { createConfigurationDemo } from './configurations'
-import { createWorkflowDemo } from './workflows'
-import type { DemoEvent } from './schedule'
 import { createLifecycleDemo } from '../software/lifecycle'
 import { createPublicationDemo } from '../software/publication'
 import { createSoftwarePolicyDemo } from '../software/assignments'
@@ -53,10 +51,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
   )
   const policyStore = createPolicyStore()
   const resources = createResourceDemo(
-    (id, version): boolean =>
-      policies.references(id, version) ||
-      workflows.references(id, version) ||
-      software.references(id, version),
+    (id, version): boolean => policies.references(id, version) || software.references(id, version),
   )
   policyStore.register('ensure_agent_installed', () => error('action_not_supported', 501))
   policyStore.register('request_mdm_enrollment', (d) =>
@@ -75,15 +70,9 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       policyStore,
     )
   const configurationPolicies = createConfigurationPolicies(devices, scopes, resources, policyStore)
-  const configurations = createConfigurationDemo(
-    devices,
-    scopes,
-    (id, version): boolean => workflows.referencesConfiguration(id, version),
-    configurationPolicies.assigned,
-  )
+  const configurations = createConfigurationDemo(devices, scopes, configurationPolicies.assigned)
   const policies = createPolicyDemo(devices, scopes, resources, policyStore)
-  const workflows = createWorkflowDemo(devices, scopes, resources, configurations),
-    pages = createPages()
+  const pages = createPages()
   function executions(): ExecutionSummary[] {
     const batches: ExecutionSummary[] = devices.batches().flatMap((batch) =>
       batch.targets.flatMap((target) =>
@@ -112,7 +101,6 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       ...security.executions(),
       ...policies.executions(),
       ...native.executions(),
-      ...workflows.executions(),
       ...batches,
       ...software.runs.rows().map((r) =>
         softwareExecution(r.policy.id, r.policy.versionId, {
@@ -162,7 +150,6 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         policies,
         configurationPolicies,
         configurations,
-        workflows,
         lifecycle,
         publication,
         software,
@@ -231,19 +218,9 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
           asOf: security.now(),
         })
       }
-      const collection = /^\/api\/v1\/mdm-candidate\/policies\/(workflows|approvals)$/.exec(
-        request.path,
-      )
       const execution = /^\/api\/v1\/mdm-candidate\/executions(?:\/([^/]+))?$/.exec(request.path)
-      if ((!collection && !execution) || request.method !== 'GET') return
+      if (!execution || request.method !== 'GET') return
       if (scenario === 'denied') return error('permission_denied', 403)
-      if (collection) {
-        const name = collection[1]
-        const items = name === 'workflows' ? workflows.list() : workflows.approvals()
-        return candidate(
-          pages.page<unknown>(request.path, scenario === 'empty' ? [] : items, request.query),
-        )
-      }
       const items = executions()
       if (execution?.[1]) {
         const id = uuid(execution[1]),
@@ -297,7 +274,6 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       if (!event.kind.startsWith('software_')) {
         policies.reconcile(scenario, event)
         configurationPolicies.reconcile()
-        workflows.tick(event)
       }
       software.tick(event, scenario)
       admin.tick(scenario)
@@ -316,7 +292,6 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         policies,
         configurationPolicies,
         configurations,
-        workflows,
         pages,
         lifecycle,
         publication,

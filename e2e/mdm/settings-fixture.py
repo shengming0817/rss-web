@@ -22,6 +22,163 @@ from t2_environment import Environment,private
 from candidate_fixture import INSTANCE,TENANTS,ADMIN,installation
 from build_run import lease_fds
 
+def cleanup_compose():
+    import hashlib
+    import re
+    import shutil
+    import tempfile
+    from candidate_installation_driver import Installation
+    from pki_ca import Provider
+    locator=WEB/'artifacts/settings-browser/compose.json'
+    if not locator.exists():return
+    if locator.is_symlink() or locator.stat().st_mode & 0o077 or locator.stat().st_uid!=os.getuid():raise RuntimeError('unsafe-compose-cleanup-locator')
+    value=json.loads(locator.read_text())
+    root=Path(value['root'])
+    if value['backend']!=str(BACKEND) or root.is_symlink() or root.parent.resolve()!=Path(tempfile.gettempdir()).resolve() or not re.fullmatch(r'mdm-first-use-compose-[a-z0-9_]+',root.name) or not re.fullmatch(r'mdm-first-use-[0-9a-f]{12}',value['project']):raise RuntimeError('foreign-compose-cleanup-locator')
+    owner=Installation(root,root/'production.compose.yaml',value['project'])
+    failures=[]
+    for name,action in [('compose',owner.cleanup),('provider',lambda:Provider(root/'inputs/browser-materials/pki/windows',hashlib.sha256((str(WEB)+':first-use-compose:windows').encode()).hexdigest()[:20],owner_root=BACKEND).reset())]:
+        try:action()
+        except BaseException as error:
+            failures.append(name)
+            print(json.dumps(dict(phase='settings-compose-cleanup',result='failed',owner=name,classification=type(error).__name__,recoveryDirectory=str(root))),flush=True)
+    for kind,args in [('containers',['ps','--all','--quiet']),('networks',['network','ls','--quiet']),('volumes',['volume','ls','--quiet'])]:
+        try:
+            actual=subprocess.check_output(['docker',*args,'--filter','label=com.docker.compose.project='+value['project']],text=True,timeout=15)
+            if actual.strip():failures.append(kind)
+        except BaseException:failures.append(kind)
+    if failures:
+        print(json.dumps(dict(phase='settings-compose-cleanup',result='failed',project=value['project'],recoveryDirectory=str(root))),flush=True)
+        raise RuntimeError('compose-cleanup-unconfirmed')
+    # The fixture may still own an open provider context. Its generated inputs remain
+    # until that context has closed; the independent runner then removes this locator.
+    if '--cleanup-compose' in sys.argv:
+        shutil.rmtree(root)
+        locator.unlink()
+    print(json.dumps(dict(phase='settings-compose-cleanup',result='passed')),flush=True)
+
+def compose_browser(candidate):
+    """Existing browser entry over formal Compose seed and an actual configured test CA."""
+    import hashlib
+    import shutil
+    import socket
+    import tempfile
+    from contextlib import ExitStack
+    from candidate_runtime import verify_candidate,load_ui,image_identity
+    from candidate_installation import tls
+    from candidate_installation_driver import Installation,until,Browser
+    from windows_fixtures import generate
+    from pki_fixtures import running
+    candidate=Path(candidate).resolve()
+    manifest=verify_candidate(candidate)
+    image=load_ui(candidate,manifest['ui'])
+    if (WEB/'artifacts/settings-browser/compose.json').exists():raise RuntimeError('previous-compose-cleanup-required')
+    root=Path(tempfile.mkdtemp(prefix='mdm-first-use-compose-')).resolve()
+    with ExitStack() as providers:
+        inputs=root/'inputs';inputs.mkdir(mode=0o700)
+        tls(inputs)
+        with socket.socket() as listener:
+            listener.bind(('127.0.0.1',0));port=listener.getsockname()[1]
+        origin='https://localhost:'+str(port)
+        values=dict(MDM_POSTGRES_IMAGE=manifest['providers']['postgres'],MDM_SERVER_IMAGE=image_identity(manifest['image'])['id'],MDM_INSTALLER_IMAGE=image_identity(manifest['installer']['image'])['id'],MDM_WEB_IMAGE=image['id'],MDM_INPUT_DIRECTORY=str(inputs),MDM_PRODUCT_ORIGIN=origin,MDM_HTTPS_PORT=port)
+        private(root/'.env',''.join(k+'='+str(v)+'\n' for k,v in values.items()))
+        compose=root/'production.compose.yaml';shutil.copyfile(candidate/'deployment/production.compose.yaml',compose)
+        owner=Installation(root,compose,'mdm-first-use-'+uuid.uuid4().hex[:12])
+        private(WEB/'artifacts/settings-browser/compose.json',dict(root=str(root),project=owner.project,backend=str(BACKEND)))
+        child=None
+        def interrupt(_signal,_frame):
+            if child and child.poll() is None:child.terminate()
+            raise InterruptedError()
+        previous={sig:signal.signal(sig,interrupt) for sig in (signal.SIGINT,signal.SIGTERM)}
+        try:
+            owner.compose('up','-d')
+            api=Browser(origin,inputs/'ca.crt')
+            until(lambda:api.call('GET','/readyz')[0]==200)
+            seeded=json.loads(owner.read('/var/lib/rss-mdm/installation/installation.json'))['receipt']
+            owner.product('prepare-hosts')
+            owner.compose('run','--rm','init')
+            if seeded!=json.loads(owner.read('/var/lib/rss-mdm/installation/installation.json'))['receipt']:raise RuntimeError('seed-replay')
+            # The CA is real and disposable. Native protocol/device effects are not exercised.
+            material=inputs/'browser-materials';material.mkdir(mode=0o700)
+            for source,target in [('ca.crt','ca.crt'),('gateway.crt','server.crt'),('gateway.key','server.key')]:
+                private(material/target,(inputs/source).read_text())
+            private(material/'case.json',dict(tenant=seeded['tenantId']))
+            windows=generate(material,material/'server.crt',material/'server.key')
+            private(material/'windows.json',windows)
+            provider=providers.enter_context(running(material,dict(os.environ),case=str(WEB)+':first-use-compose',windows=True,owner_root=BACKEND))
+            server=owner.compose('ps','-q','server')
+            subprocess.run(['docker','network','connect',provider.owner.project+'_default',server],check=True,capture_output=True,timeout=20)
+            authorities=json.loads((material/'device-pki.json').read_text())
+            authorities[0]['origin']='https://'+provider.internal_host+':19443'
+            copies={}
+            def prepared(value):
+                if isinstance(value,dict):return {k:copy_file(v) if k.endswith('_file') and v is not None else prepared(v) for k,v in value.items()}
+                if isinstance(value,list):return [prepared(v) for v in value]
+                return value
+            def copy_file(value):
+                source=Path(value).resolve()
+                relative=source.relative_to(inputs)
+                name=hashlib.sha256(source.read_bytes()).hexdigest()[:16]+'-'+source.name
+                copies[str(relative)]='/var/lib/rss-mdm/browser-materials/'+name
+                return copies[str(relative)]
+            settings=dict(windows=prepared(json.loads((material/'windows.json').read_text())),apple=None,agent=dict(mode='disabled'),providers=prepared(authorities),apple_material_roots=[])
+            configuration=json.loads(owner.read('/var/lib/rss-mdm/installation-input.json'))
+            change=dict(installation=configuration,operation_id=str(uuid.uuid4()),host_id=seeded['hostId'],expected_revision=1,change=dict(kind='channels',settings=settings))
+            private(inputs/'configure-browser.json',change)
+            importer="import shutil,pathlib,os; pairs="+repr(copies)+"; "+\
+                "[(pathlib.Path(dst).parent.mkdir(parents=True,exist_ok=True,mode=0o700),os.chown(pathlib.Path(dst).parent,10001,10001),shutil.copyfile('/inputs/'+src,dst),pathlib.Path(dst).chmod(0o600),os.chown(dst,10001,10001)) for src,dst in pairs.items()]; "+\
+                "shutil.copyfile('/inputs/configure-browser.json','/var/lib/rss-mdm/configure-browser.json');pathlib.Path('/var/lib/rss-mdm/configure-browser.json').chmod(0o600);os.chown('/var/lib/rss-mdm/configure-browser.json',10001,10001)"
+            owner.compose('run','--rm','--no-deps','--user','0:0','--entrypoint','python3','init','-c',importer)
+            owner.product('configure-host','/var/lib/rss-mdm/configure-browser.json')
+            # The gateway shares the server's network namespace. Stop it before
+            # replacing that namespace, then attach it to the restarted server.
+            owner.compose('stop','gateway')
+            owner.compose('restart','server')
+            owner.compose('start','gateway')
+            # Network attachments survive restart; the operator observes the actual new process.
+            until(lambda:api.call('GET','/readyz')[0]==200)
+            owner.product('configure-host','/var/lib/rss-mdm/configure-browser.json')
+            owner.product('prepare-hosts')
+            api.login(seeded['tenantId'],'administrator',(inputs/'administrator-password').read_text().strip())
+            reader_password=private(root/'reader-password','First-use-browser-reader-2026!')
+            status,_=api.call('POST','/api/v1/identity/tenants/'+seeded['tenantId']+'/accounts',dict(login='reader',password=reader_password.read_text()))
+            if status!=201:raise RuntimeError('reader-account')
+            _,host=api.call('GET','/api/v1/mdm-host/config.json')
+            fixture=private(root/'browser.json',dict(compose=True,backendRevision=subprocess.check_output(['/usr/bin/git','rev-parse','HEAD'],cwd=BACKEND,text=True).strip(),origin=origin,tenant=seeded['tenantId'],managementTenant=host['managementTenant'],login='administrator',passwordFile=str(inputs/'administrator-password'),platformLogin='platform',platformPasswordFile=str(inputs/'platform-password'),reader=dict(login='reader',passwordFile=str(reader_password))))
+            child=subprocess.Popen(['node',str(WEB/'e2e/mdm/settings-browser.mjs')],cwd=WEB,env={**os.environ,'MDM_SETTINGS_BROWSER_FIXTURE':str(fixture)},pass_fds=lease_fds())
+            try:
+                if child.wait(timeout=480)!=0:raise RuntimeError('compose-browser')
+            finally:
+                if child.poll() is None:
+                    child.terminate()
+                    try:child.wait(timeout=10)
+                    except subprocess.TimeoutExpired:child.kill();child.wait(timeout=5)
+        finally:
+            try:
+                try:owner.cleanup()
+                finally:
+                    try:providers.close()
+                    finally:cleanup_compose()
+            finally:
+                for sig,handler in previous.items():signal.signal(sig,handler)
+    print(json.dumps(dict(phase='settings-compose',result='passed',cleanup=True)),flush=True)
+
+if '--cleanup-compose' in sys.argv:
+    try:cleanup_compose()
+    except BaseException as error:
+        print(json.dumps(dict(phase='settings-compose-cleanup',result='failed',classification=type(error).__name__,recoveryLocator=str(WEB/'artifacts/settings-browser/compose.json'))),flush=True)
+        sys.exit(1)
+    sys.exit(0)
+
+if os.environ.get('MDM_SETTINGS_CANDIDATE'):
+    try:compose_browser(os.environ['MDM_SETTINGS_CANDIDATE'])
+    except BaseException as error:
+        import traceback
+        frames=[dict(file=Path(frame.filename).name,line=frame.lineno,function=frame.name) for frame in traceback.extract_tb(error.__traceback__)]
+        print(json.dumps(dict(phase='settings-compose',result='failed',classification=type(error).__name__,frames=frames)),flush=True)
+        sys.exit(1)
+    sys.exit(0)
+
 environment=Environment(BACKEND,group='settings-browser')
 target_ports=Environment(BACKEND,group='settings-browser-target')
 processes=[]

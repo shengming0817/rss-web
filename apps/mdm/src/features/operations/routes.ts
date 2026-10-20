@@ -50,12 +50,6 @@ export const operationsFeature: MdmFeature = {
       meta: { protected: true },
     },
     {
-      path: '/tenants/:tenant/operations/approvals',
-      name: 'operations-approvals',
-      component: () => import('./views/ApprovalsView.vue'),
-      meta: { protected: true },
-    },
-    {
       path: '/tenants/:tenant/operations/alerts',
       name: 'operations-alerts',
       component: () => import('./views/AlertsView.vue'),

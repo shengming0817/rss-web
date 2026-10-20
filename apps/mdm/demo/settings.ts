@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 /** MOCK_SOURCE: explicit scenario-only settings; no provider or host success is invented. */
 import { entries } from '../src/features/settings/entries'
+import { channels } from '../src/features/settings/clients/firstUse'
 import { permissions, devicePermissions } from '../src/features/operations/clients/authorization'
 import { TENANT, MANAGEMENT_TENANT, type DomainHandler } from './scenario'
 import { INSTANCE } from './operations/authorization'
@@ -37,6 +38,26 @@ export function createSettingsDemo() {
   ]
   const handle: DomainHandler = (r, scenario) => {
     const platform = r.actor.tenantId === MANAGEMENT_TENANT
+    if (r.path === '/api/v1/settings/first-use') {
+      if (platform) return error('permission_denied', 403)
+      if (r.method !== 'GET') return error('action_not_supported', 501)
+      // The preset demo has synthetic completion history, never observed provider readiness.
+      return ok({
+        tenantId: TENANT,
+        saved: {
+          revision: 1,
+          intent: { channels: [...channels], capabilities: {}, completionRequested: true },
+        },
+        steps: channels.map((id) => ({
+          id,
+          status: 'unknown',
+          reason: 'synthetic_unobserved',
+          evidence: [],
+        })),
+        canComplete: false,
+        complete: false,
+      })
+    }
     if (r.path === '/api/v1/tenant-administration/authorization' && r.method === 'GET')
       return ok({
         instanceId: INSTANCE,

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { DomainHandler } from '../scenario'
+import type { DomainHandler, DemoEvent } from '../scenario'
 import { array, closed, enumeration, identifier, nullable } from '../../src/services/decode'
 import {
   lifecycleActions,
@@ -13,7 +13,6 @@ import { candidate } from './http'
 import { createAssetDemo } from './assets'
 import { createGroupDemo } from './groups'
 import { createEnrollmentDemo } from './enrollment'
-import type { DemoEvent } from '../policies/schedule'
 export function createDeviceDemo() {
   let devices = makeDevices()
   let observedAt = Math.floor(Date.now() / 1000)

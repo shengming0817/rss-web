@@ -80,11 +80,11 @@ try {
     await idle()
   }
   phase = 'login'
-  await page.goto(route('login'))
+  await page.goto(origin + '/login')
   await page.locator('#login-name').fill(f.login)
   await page.locator('#login-password').fill(readFileSync(f.passwordFile, 'utf8').trim())
   await page.locator('form').evaluate((form) => form.requestSubmit())
-  await page.waitForURL(/workspace/)
+  await page.waitForURL((url) => /\/(?:workspace|settings\/guide)$/.test(url.pathname))
   phase = 'seed-through-product-api'
   const source = await write('/api/v1/software/sources/browser-source/revisions/1', {
     action: 'register',

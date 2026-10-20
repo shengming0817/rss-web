@@ -13,7 +13,6 @@ const { t } = useI18n(),
         v-for="(step, index) in [
           { route: 'policy-resources', key: 'resources' },
           { route: 'policy-policies', key: 'policies' },
-          { route: 'policy-workflows', key: 'workflows' },
         ]"
         :key="step.route"
         class="console-panel"

@@ -10,6 +10,7 @@ import {
   identityRouter,
   runtimeKey,
   type HostConfig,
+  type HostLogin,
 } from '@rss/auth'
 import type { HttpTransport } from '@rss/api/identity'
 import { createMdmTransport } from '@rss/api/mdm'
@@ -39,7 +40,17 @@ export function startMdm(
 ) {
   const platform =
     window.location.pathname === '/platform' ||
+    window.location.pathname.startsWith('/platform/') ||
     window.location.pathname.startsWith(`/tenants/${host.managementTenant}/`)
+  const login: HostLogin = {
+    path: platform ? '/platform/login' : '/login',
+    tenant: platform ? host.managementTenant : host.tenant,
+    brand: 'RSS MDM',
+    descriptionKey: platform ? 'settings.loginPlatform' : 'settings.loginTenant',
+    origin: host.canonicalOrigin,
+    switchHref: platform ? '/login' : '/platform',
+    switchLabelKey: platform ? 'settings.businessLogin' : 'settings.platformLogin',
+  }
   const realm = platform ? 'platform' : 'tenant'
   const tenant = platform ? host.managementTenant : host.tenant
   const session = createSession(transport, platform ? { ...config, oidcEnabled: false } : config)
@@ -48,10 +59,16 @@ export function startMdm(
   const router = identityRouter(
     session,
     [
-      {
-        path: '/platform',
-        redirect: { name: 'settings-overview', params: { tenant: host.managementTenant } },
-      },
+      ...(platform
+        ? [
+            {
+              path: '/platform',
+              name: 'mdm-entry',
+              component: () => import('./views/EntryView.vue'),
+              meta: { protected: true },
+            },
+          ]
+        : []),
       ...(platform
         ? []
         : [
@@ -65,7 +82,12 @@ export function startMdm(
               name: 'agent-downloads',
               component: () => import('./features/enrollment/views/DownloadsView.vue'),
             },
-            { path: '/', redirect: { name: 'workspace', params: { tenant } } },
+            {
+              path: '/',
+              name: 'mdm-entry',
+              component: () => import('./views/EntryView.vue'),
+              meta: { protected: true },
+            },
             {
               path: '/tenants/:tenant/workspace',
               name: 'workspace',
@@ -87,9 +109,11 @@ export function startMdm(
           ]
         : []),
       settingsFeature.entry,
-      ...(settingsFeature.routes ?? []),
+      ...(settingsFeature.routes ?? []).filter(
+        (route) => !platform || route.name !== 'settings-guide',
+      ),
     ],
-    tenant,
+    login,
   )
   const settings = createSettingsClients(business, publicTransport, session, tenant, realm)
   const operations = createOperationsClients(business, tenant, demo, realm)
@@ -107,7 +131,8 @@ export function startMdm(
   })
   app.provide(runtimeKey, {
     session,
-    landingRoute: 'workspace',
+    hostLogin: login,
+    landingTarget: () => ({ name: 'mdm-entry', query: router.currentRoute.value.query }),
     api: createApi(session),
     flows: createFlows(window.sessionStorage),
   })

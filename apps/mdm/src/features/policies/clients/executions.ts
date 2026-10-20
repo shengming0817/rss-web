@@ -35,7 +35,6 @@ export type ExecutionOrigin =
     }
   | { kind: 'native'; operation: string }
   | { kind: 'software'; policy: string; versionId: string; task: string }
-  | { kind: 'workflow'; workflow: string; run: string; step: string }
   | { kind: 'device_batch'; batch: string }
   | { kind: 'security'; request: string }
 function basis(value: unknown) {
@@ -70,7 +69,6 @@ function origin(value: unknown): ExecutionOrigin {
     'policy',
     'native',
     'software',
-    'workflow',
     'device_batch',
     'security',
   ] as const)
@@ -102,12 +100,8 @@ function origin(value: unknown): ExecutionOrigin {
       task: uuid(v['task']),
     }
   }
-  if (kind === 'device_batch') {
-    const v = closed(value, ['kind', 'batch'])
-    return { kind, batch: uuid(v['batch']) }
-  }
-  const v = closed(value, ['kind', 'workflow', 'run', 'step'])
-  return { kind, workflow: uuid(v['workflow']), run: uuid(v['run']), step: uuid(v['step']) }
+  const v = closed(value, ['kind', 'batch'])
+  return { kind, batch: uuid(v['batch']) }
 }
 export function executionSummary(value: unknown) {
   const v = closed(value, [
@@ -165,7 +159,6 @@ export function executionSummary(value: unknown) {
           : string(v['nativeCode']),
     waitingReason: nullable(v['waitingReason'], (value) =>
       enumeration(value, [
-        'approval',
         'offline',
         'maintenance_window',
         'trigger',

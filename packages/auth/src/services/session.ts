@@ -32,6 +32,11 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
     navigation: 'idle',
   })
   // Presentation only: never retains identity, credentials or permission.
+  const invalidated = shallowRef(false)
+  function invalidate() {
+    if (state.value.status === 'authenticated') invalidated.value = true
+    clear()
+  }
   const logoutOutcome = shallowRef<'idle' | 'pending' | 'unconfirmed'>('idle')
   let csrf: string | undefined
   let generation = 0
@@ -84,7 +89,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
       if (generation !== expected || pageGeneration !== page) throw new Error('Stale response')
       return result
     } catch (error) {
-      if (generation === expected && isRssApiError(error) && error.status === 401) clear()
+      if (generation === expected && isRssApiError(error) && error.status === 401) invalidate()
       throw error
     } finally {
       businessRequests.delete(lease)
@@ -128,6 +133,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
   function accept(tenant: string, v: SessionResponse, expected: number) {
     if (generation !== expected) throw new Error('Stale session')
     logoutOutcome.value = 'idle'
+    invalidated.value = false
     generation++
     csrf = v.csrfToken
     state.value = {
@@ -147,7 +153,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
     if (!view) return
     const remaining = Math.min(view.idleExpiresAt, view.absoluteExpiresAt) * 1000 - Date.now()
     if (remaining <= 0) {
-      clear()
+      invalidate()
       return
     }
     expiry = setTimeout(armExpiry, Math.min(remaining, 2_147_483_647))
@@ -193,7 +199,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
     return result
   }
   function failure(error: unknown) {
-    if (isRssApiError(error) && error.status === 401) clear()
+    if (isRssApiError(error) && error.status === 401) invalidate()
     else if (
       !isRssApiError(error) ||
       error.status === 503 ||
@@ -203,6 +209,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
   }
   async function check(tenant: string) {
     tenant = uuid(tenant)
+    const knownSession = state.value.status === 'authenticated' && state.value.tenant === tenant
     clear()
     const expected = generation
     state.value = { ...state.value, status: 'checking', tenant }
@@ -222,7 +229,10 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
     } catch (error) {
       if (generation === expected) {
         failure(error)
-        if (isRssApiError(error) && error.status === 401) return
+        if (isRssApiError(error) && error.status === 401) {
+          if (knownSession) invalidated.value = true
+          return
+        }
       }
       throw error
     }
@@ -296,8 +306,11 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
         await loadContext()
       } catch (error) {
         if (generation === expected) {
-          clear()
-          failure(error)
+          if (isRssApiError(error) && error.status === 401) invalidate()
+          else {
+            clear()
+            failure(error)
+          }
         }
         throw error
       }
@@ -330,6 +343,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
       // Read only the current CSRF of the bound session, after any preceding same-session rotation.
       const saved = headers()
       logoutOutcome.value = 'pending'
+      invalidated.value = false
       clear()
       const expected = generation
       try {
@@ -436,6 +450,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
   return {
     state: readonly(state),
     logoutOutcome: readonly(logoutOutcome),
+    invalidated: readonly(invalidated),
     managementHint,
     providerHint,
     config: Object.freeze({ ...config }),

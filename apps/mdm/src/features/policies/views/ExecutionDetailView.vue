@@ -135,14 +135,6 @@ watch(
           query: { id: execution.origin.policy },
         }"
         >{{ t('policies.policies') }}</RouterLink
-      ><RouterLink
-        v-if="execution.origin.kind === 'workflow'"
-        :to="{
-          name: 'policy-workflows',
-          params: { tenant: runtime.tenant },
-          query: { id: execution.origin.workflow, run: execution.origin.run },
-        }"
-        >{{ t('policies.workflows') }}</RouterLink
       ></template
     >
     <RouterLink

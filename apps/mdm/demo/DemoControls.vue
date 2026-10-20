@@ -3,7 +3,7 @@ import { UiButton, UiDialog } from '@rss/core/components'
 import { ref, watch, type Ref } from 'vue'
 import type { HttpTransport } from '@rss/api/mdm'
 import { useI18n } from 'vue-i18n'
-import { scenarios, TENANT } from './scenario'
+import { scenarios } from './scenario'
 import { record, enumeration, count } from '../src/services/decode'
 import { moduleIds } from '../src/services/workspace'
 const props = defineProps<{ transport: HttpTransport; authenticated: Readonly<Ref<boolean>> }>()
@@ -125,7 +125,7 @@ async function apply(reset: boolean) {
       body: { reset, scenario: active.value, module: module.value, source: source.value },
       successStatus: 204,
     })
-    window.location.assign(reset ? `/tenants/${TENANT}/login` : window.location.pathname)
+    window.location.assign(reset ? '/login' : window.location.pathname)
   } catch {
     failed.value = true
   } finally {
@@ -204,7 +204,7 @@ function submitConfirmed() {
             {{
               locale === 'zh-CN'
                 ? '模拟自动化触发事件（先登录并启用策略或工作流）'
-                : 'Simulate automation events (sign in and enable a policy or workflow first)'
+                : 'Simulate automation events (sign in and enable a policy first)'
             }}
           </summary>
           <label for="demo-event-kind">{{ locale === 'zh-CN' ? '事件' : 'Event' }}</label>

@@ -1,9 +1,9 @@
 import { watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useIdentity } from './context'
+import { useIdentity, loginTarget } from './context'
 export function useSessionLifecycle() {
-  const { session } = useIdentity()
+  const { session, hostLogin: host } = useIdentity()
   const router = useRouter()
   const { locale } = useI18n()
   watch(
@@ -42,10 +42,9 @@ export function useSessionLifecycle() {
                   tenant: session.state.value.tenant,
                 },
               }
-            : {
-                name: 'login',
-                params: { tenant: session.state.value.tenant },
-              },
+            : host
+              ? { name: 'login', query: router.currentRoute.value.query }
+              : loginTarget(session.state.value.tenant),
         )
     },
   )

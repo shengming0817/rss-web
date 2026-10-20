@@ -1,11 +1,10 @@
 import { createRegistrationDemo } from './registration'
 import { randomUUID } from 'node:crypto'
-import type { DomainHandler } from '../scenario'
+import type { DomainHandler, DemoEvent } from '../scenario'
 import { closed, enumeration, identifier, string, uuid } from '../../src/services/decode'
 import { nativeChannel } from '../../src/services/registrationChannels'
 import { type EnrollmentSource } from '../../src/features/devices/clients/enrollment'
 import type { DemoDevice } from './fixtures'
-import type { DemoEvent } from '../policies/schedule'
 import { createReceipts, error, ok } from '../http'
 export interface Enrollment {
   actor?: string

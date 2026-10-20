@@ -15,7 +15,6 @@ const { run, busy, failure } = useOperation([], () => deviceBinding(runtime))
 type Part<T> = { status: 'ready'; value: T } | { status: 'denied' | 'unavailable' | 'unsupported' }
 const navigation = ref<Part<Workspace>>()
 const directory = ref<Part<Awaited<ReturnType<typeof runtime.devices.views.list>>>>()
-const approvals = ref<Part<Awaited<ReturnType<typeof runtime.policies.catalog.approvals>>>>()
 const deployments = ref<Part<Awaited<ReturnType<typeof runtime.policies.policies.list>>>>()
 const activity = ref<Part<Awaited<ReturnType<typeof runtime.operations.audit.list>>>>()
 const readAt = ref('')
@@ -36,7 +35,6 @@ async function part<T>(read: () => Promise<T>): Promise<Part<T>> {
 function clear() {
   navigation.value = undefined
   directory.value = undefined
-  approvals.value = undefined
   deployments.value = undefined
   activity.value = undefined
   readAt.value = ''
@@ -46,19 +44,17 @@ async function load() {
   clear()
   await run(
     async () => {
-      const [nav, devices, requests, policies, events] = await Promise.all([
+      const [nav, devices, policies, events] = await Promise.all([
         part(() => runtime.workspace.read()),
         part(() => runtime.devices.views.list({})),
-        part(() => runtime.policies.catalog.approvals()),
         part(() => runtime.policies.policies.list(undefined, 'software')),
         part(() => runtime.operations.audit.list()),
       ])
-      return { nav, devices, requests, policies, events }
+      return { nav, devices, policies, events }
     },
     (result) => {
       navigation.value = result.nav
       directory.value = result.devices
-      approvals.value = result.requests
       deployments.value = result.policies
       activity.value = result.events
       readAt.value = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
@@ -127,26 +123,6 @@ watch(
         >
       </article>
       <article class="console-stat">
-        <h2>{{ t('operations.workflowRequests') }}</h2>
-        <strong class="console-stat-word">{{
-          approvals?.status === 'ready'
-            ? t(approvals.value.items.length ? 'console.pendingRequests' : 'console.emptyPage')
-            : '—'
-        }}</strong>
-        <p>
-          {{
-            approvals?.status === 'ready'
-              ? t('console.pageNotTotal')
-              : approvals
-                ? t(`devices.${approvals.status}`)
-                : t('console.reading')
-          }}
-        </p>
-        <RouterLink :to="{ name: 'operations-approvals', params: { tenant: runtime.tenant } }"
-          >{{ t('operations.approvals') }} ↗</RouterLink
-        >
-      </article>
-      <article class="console-stat">
         <h2>{{ t('software.deployments') }}</h2>
         <strong class="console-stat-word">{{
           deployments?.status === 'ready'
@@ -164,37 +140,6 @@ watch(
       </article>
     </div>
     <div class="console-overview-columns">
-      <section class="console-panel">
-        <div class="console-page-header">
-          <h2>{{ t('console.attention') }}</h2>
-          <RouterLink :to="{ name: 'operations-approvals', params: { tenant: runtime.tenant } }">{{
-            t('console.browse')
-          }}</RouterLink>
-        </div>
-        <p v-if="approvals?.status !== 'ready'">
-          {{ approvals ? t(`devices.${approvals.status}`) : t('console.reading') }}
-        </p>
-        <template v-else
-          ><p v-if="!approvals.value.items.length">{{ t('console.emptyPage') }}</p>
-          <ul v-else class="console-activity-list">
-            <li v-for="item in approvals.value.items.slice(0, 5)" :key="item.run">
-              <span class="console-activity-dot" aria-hidden="true" />
-              <div>
-                <RouterLink
-                  :to="{
-                    name: 'policy-workflows',
-                    params: { tenant: runtime.tenant },
-                    query: { id: item.id, run: item.run },
-                  }"
-                  >{{ item.label }}</RouterLink
-                ><small>{{ t('policies.revision') }} {{ item.revision }}</small>
-              </div>
-              <UiBadge tone="warning">{{ t('console.pendingRequests') }}</UiBadge>
-            </li>
-          </ul>
-          <p class="console-reading-time">{{ t('console.pageNotTotal') }}</p></template
-        >
-      </section>
       <section class="console-panel">
         <div class="console-page-header">
           <h2>{{ t('operations.audit') }}</h2>

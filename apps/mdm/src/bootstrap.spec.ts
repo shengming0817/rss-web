@@ -1,12 +1,25 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { inject } from 'vue'
 import { runtimeKey } from '@rss/auth'
+import { decodeIdentityError } from '@rss/api/identity'
 import type { HttpTransport, RequestOptions } from '@rss/api/identity'
 import { mdmKey } from './context'
 import { startMdm } from './bootstrap'
 vi.mock('@rss/api/mdm', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@rss/api/mdm')>()),
-  createMdmTransport: () => ({ request: () => Promise.reject(new Error('Live unavailable')) }),
+  createMdmTransport: () => ({
+    request: (o: RequestOptions<unknown>) =>
+      o.path === '/api/v1/authorization'
+        ? Promise.resolve(
+            o.decode({
+              instanceId: '22222222-2222-4222-8222-222222222222',
+              tenantId: '11111111-1111-4111-8111-111111111111',
+              principalId: '22222222-2222-4222-8222-222222222222',
+              grants: [],
+            }),
+          )
+        : Promise.reject(new Error('Live unavailable')),
+  }),
 }))
 const tenant = '11111111-1111-4111-8111-111111111111'
 const id = '22222222-2222-4222-8222-222222222222'
@@ -55,7 +68,7 @@ it('provides the same session owner to auth, MDM and protected routes', async ()
     expect(inject(runtimeKey)?.session).toBe(runtime.session)
     expect(inject(mdmKey)?.session).toBe(runtime.session)
   })
-  expect(runtime.router.currentRoute.value.name).toBe('workspace')
+  await vi.waitFor(() => expect(runtime.router.currentRoute.value.name).toBe('workspace'))
   await vi.waitFor(() => expect(document.body.textContent).toContain('当前无法读取导航'))
   expect(runtime.session.state.value.status).toBe('authenticated')
   await runtime.router.push(`/tenants/33333333-3333-4333-8333-333333333333/workspace`)
@@ -99,9 +112,39 @@ it('composes platform routes with one independent local session and no business 
   expect(runtime.session.config.oidcEnabled).toBe(false)
   expect(runtime.router.hasRoute('devices')).toBe(false)
   expect(runtime.router.hasRoute('self-enrollments')).toBe(false)
-  expect(runtime.router.currentRoute.value.name).toBe('settings-overview')
+  await vi.waitFor(() => expect(runtime.router.currentRoute.value.name).toBe('settings-overview'))
   runtime.app.runWithContext(() => expect(inject(mdmKey)?.settings.operations).toBeDefined())
   await runtime.router.push(`/tenants/${tenant}/settings`)
   expect(runtime.router.currentRoute.value.name).toBe('error')
   window.history.replaceState(null, '', '/')
 })
+
+it.each(['/', '/login'])(
+  'opens %s as normal anonymous business sign-in without UUID or expired messaging',
+  async (path) => {
+    window.history.replaceState(null, '', path)
+    document.body.innerHTML = '<div id="app"></div>'
+    const request = vi.fn(async () => {
+      throw decodeIdentityError(401, { code: 'invalid_credential' })
+    })
+    const runtime = startMdm(
+      { request } as unknown as HttpTransport,
+      { canonicalOrigin: 'https://mdm.example.test', oidcEnabled: false },
+      {
+        canonicalOrigin: 'https://mdm.example.test',
+        tenant,
+        managementTenant: '99999999-9999-4999-8999-999999999999',
+      },
+      false,
+    )
+    running.push(runtime)
+    await runtime.router.isReady()
+    await vi.waitFor(() => expect(document.querySelector('#login-name')).not.toBeNull())
+    expect(runtime.router.currentRoute.value.path).toBe('/login')
+    expect(document.body.textContent).toContain('业务组织')
+    expect(document.body.textContent).not.toContain('会话已失效')
+    expect(document.body.textContent).not.toContain(tenant)
+    expect(runtime.router.resolve(`/tenants/${tenant}/login`).name).not.toBe('login')
+    expect(document.querySelector('a[href="/platform"]')).not.toBeNull()
+  },
+)

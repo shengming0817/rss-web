@@ -27,7 +27,7 @@ const zh = {
   password: '密码',
   sso: '组织 SSO',
   continue: '继续',
-  expired: '会话已过期或已撤销，请重新登录。',
+  expired: '会话已失效，请重新登录。',
   recoveryHelp: '忘记密码请联系本租户管理员。管理员无法登录时，请使用受控本机恢复流程。',
   sessions: '我的会话',
   session: '会话',

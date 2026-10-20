@@ -25,7 +25,10 @@ const list = ref<Awaited<ReturnType<typeof client.list>>>(),
   latest = ref<Read>(),
   page = ref<Awaited<ReturnType<typeof client.devices>>>(),
   rules = ref<Awaited<ReturnType<typeof runtime.security.compliance.list>>>(),
-  scopes = ref<Awaited<ReturnType<typeof runtime.policies.catalog.list>>>(),
+  scopes = ref<{
+    items: { id: string; label: string; revision: number }[]
+    nextCursor: string | null
+  }>(),
   id = ref(''),
   name = ref(''),
   enabled = ref(true),
@@ -160,7 +163,6 @@ function scopePage(cursor?: string) {
       const page = await runtime.policies.scopes.list(cursor)
       return {
         ...page,
-        snapshot: '',
         items: page.items.map((s) => ({
           id: s.id,
           label: s.id,

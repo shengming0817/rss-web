@@ -140,11 +140,11 @@ try {
       page = await freshPage()
       target = page
     }
-    await go(target, `${origin}/tenants/${fixture.tenant}/login`)
+    await go(target, `${origin}/login`)
     await target.locator('#login-name').fill(account.login)
     await target.locator('#login-password').fill(secret(account.passwordFile))
     await target.locator('form').evaluate((f) => f.requestSubmit())
-    await target.waitForURL(/workspace/)
+    await target.waitForURL((url) => /\/(?:workspace|settings\/guide)$/.test(url.pathname))
   }
   if (fixture.reader) {
     active()

@@ -2,11 +2,11 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useIdentity } from '../context'
+import { useIdentity, loginTarget } from '../context'
 import { uuid } from '../services/decode'
 const { t } = useI18n()
 const route = useRoute()
-const { session, flows } = useIdentity()
+const { session, flows, hostLogin: host } = useIdentity()
 const pending = flows.read()
 flows.clear()
 let queryTenant: string | null = null
@@ -26,8 +26,6 @@ const reason = computed(() =>
   <section class="auth-page" aria-labelledby="error-title">
     <h1 id="error-title">{{ t(`identity.${reason}`) }}</h1>
     <p>{{ t('identity.restartHelp') }}</p>
-    <RouterLink v-if="tenant" :to="{ name: 'login', params: { tenant } }">{{
-      t('identity.login')
-    }}</RouterLink>
+    <RouterLink v-if="tenant" :to="loginTarget(tenant, host)">{{ t('identity.login') }}</RouterLink>
   </section>
 </template>

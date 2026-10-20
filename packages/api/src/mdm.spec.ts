@@ -565,3 +565,43 @@ it('decodes the current Agent pause envelope without classifying a rejected crea
     'protocol',
   )
 })
+
+it('executes the published first-use read, CAS update and receipt paths through the existing HTTP boundary', async () => {
+  const instance = axios.create(),
+    mock = new AxiosMockAdapter(instance)
+  mock.onGet('/api/v1/settings/first-use').reply(200, { progress: true })
+  mock.onPut('/api/v1/settings/first-use').reply(409, { code: 'first_use_not_ready' })
+  mock
+    .onGet('/api/v1/settings/first-use/operations/original')
+    .reply(404, { code: 'first_use_operation_not_found' })
+  const spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance),
+    transport = createMdmTransport()
+  spy.mockRestore()
+  expect(
+    await transport.request({
+      method: 'GET',
+      path: '/api/v1/settings/first-use',
+      successStatus: 200,
+      decode: (v) => v,
+    }),
+  ).toEqual({ progress: true })
+  await expect(
+    transport.request({
+      method: 'PUT',
+      path: '/api/v1/settings/first-use',
+      body: {},
+      successStatus: 200,
+      decode: (v) => v,
+    }),
+  ).rejects.toMatchObject({ cause: 'wire', code: 'first_use_not_ready' })
+  await expect(
+    transport.request({
+      method: 'GET',
+      path: '/api/v1/settings/first-use/operations/{id}',
+      pathParams: { id: 'original' },
+      successStatus: 200,
+      decode: (v) => v,
+    }),
+  ).rejects.toMatchObject({ cause: 'wire', code: 'first_use_operation_not_found' })
+  mock.restore()
+})

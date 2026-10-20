@@ -16,7 +16,6 @@ export const operationsZh = {
   organization: '组织与成员',
   authorization: '授权规则',
   reports: '运营与报表',
-  approvals: '审批入口',
   organizationHint:
     'MDM 用户组管理显式主体成员，与 Identity 账户/IdP 管理和设备组分开。导航不授予权限。',
   identityAccounts: 'Identity 账户管理',
@@ -67,8 +66,6 @@ export const operationsZh = {
   history: '读取任务历史',
   diagnostics: '依赖与运行诊断',
   effect: '效果核实',
-  approvalHint: '这里只聚合可见待审批入口；决定与执行状态由原业务模块持有。受理不代表设备效果。',
-  workflowRequests: '工作流审批',
 
   navigation: '权限与运营导航',
   audit: '审计记录',
@@ -192,7 +189,6 @@ export const operationsEn: typeof operationsZh = {
   organization: 'Organization and members',
   authorization: 'Authorization rules',
   reports: 'Operations and reports',
-  approvals: 'Approvals',
   organizationHint:
     'MDM explicit principal groups are separate from Identity accounts/providers and device groups. Navigation grants no authority.',
   identityAccounts: 'Identity accounts',
@@ -246,10 +242,6 @@ export const operationsEn: typeof operationsZh = {
   history: 'Read job history',
   diagnostics: 'Dependency and runtime diagnostics',
   effect: 'Verified effect',
-  approvalHint:
-    'This page aggregates visible pending requests. Original business owners enforce decisions and execution. Acceptance does not prove device effect.',
-  workflowRequests: 'Workflow approvals',
-
   navigation: 'Authorization and operations navigation',
   audit: 'Audit records',
   alerts: 'Alerts',

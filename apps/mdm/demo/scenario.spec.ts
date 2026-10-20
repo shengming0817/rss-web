@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createScenario, TENANT, MANAGEMENT_TENANT } from './scenario'
+import { createSettingsDemo } from './settings'
+import { decodeFirstUse } from '../src/features/settings/clients/firstUse'
 async function control(scenario: ReturnType<typeof createScenario>, body: unknown) {
   const session = await scenario.handle('GET', `/api/v1/identity/tenants/${TENANT}/session`)
   return scenario.handle('POST', '/api/v1/mdm-candidate/workspace/scenario', body, {
@@ -8,6 +10,28 @@ async function control(scenario: ReturnType<typeof createScenario>, body: unknow
   })
 }
 describe('HTTP demo state', () => {
+  it('gives the preset installation completion history without inventing current readiness', async () => {
+    const settings = createSettingsDemo(),
+      scenario = createScenario([settings.handle])
+    expect((await scenario.handle('GET', '/api/v1/settings/first-use')).status).toBe(401)
+    await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
+      login: 'demo',
+      password: 'demo',
+    })
+    const response = await scenario.handle('GET', '/api/v1/settings/first-use')
+    expect(response.status).toBe(200)
+    const progress = decodeFirstUse(response.body, TENANT)
+    expect(progress.saved.intent.completionRequested).toBe(true)
+    expect(progress.steps).toHaveLength(3)
+    expect(progress.steps.every((step) => step.status === 'unknown')).toBe(true)
+    expect(progress.canComplete).toBe(false)
+    expect(progress.complete).toBe(false)
+    await scenario.handle('POST', `/api/v1/identity/tenants/${MANAGEMENT_TENANT}/login`, {
+      login: 'demo',
+      password: 'demo',
+    })
+    expect((await scenario.handle('GET', '/api/v1/settings/first-use')).status).toBe(403)
+  })
   it('requires login, rotates CSRF and resets deterministically', async () => {
     const scenario = createScenario()
     expect(

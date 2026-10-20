@@ -725,7 +725,9 @@ it.each([
 )
 
 it.each(['login', 'continue', 'resume'])('uses the app landing route after %s', async (mode) => {
-  const f = Object.assign(fixture(), { landingRoute: 'workspace' })
+  const f = Object.assign(fixture(), {
+    landingTarget: (tenant: string) => ({ name: 'workspace', params: { tenant } }),
+  })
   if (mode === 'resume') f.flows.save({ kind: 'sso', tenant: TENANT })
   f.replies.push(
     mode === 'login' ? decodeIdentityError(401, { code: 'invalid_credential' }) : sessionValue(),

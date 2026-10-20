@@ -27,6 +27,8 @@ const statuses: Readonly<Record<string, number>> = {
   permission_denied: 403,
   inventory_not_found: 404,
   operation_not_found: 404,
+  first_use_operation_not_found: 404,
+  first_use_not_ready: 409,
   task_not_found: 404,
   management_device_not_found: 404,
   group_not_found: 404,
@@ -96,7 +98,7 @@ export function createMdmTransport(): HttpTransport {
     async request(options: NoContentRequest | RequestOptions<unknown>) {
       const readiness = options.path === '/readyz'
       const settings =
-        /^\/api\/v1\/(?:settings\/catalog$|tenant-administration(?:\/|$)|apple\/materials(?:\/|$)|apple\/material-operations(?:\/|$)|storage\/connections(?:\/|$)|smtp(?:\/|$)|windows\/wns(?:\/|$)|task-signing(?:\/|$)|pki(?:\/|$)|webhooks(?:\/|$)|runtime\/diagnostics$|agent-packages(?:\/|$))/.test(
+        /^\/api\/v1\/(?:settings\/(?:catalog$|first-use(?:\/|$))|tenant-administration(?:\/|$)|apple\/materials(?:\/|$)|apple\/material-operations(?:\/|$)|storage\/connections(?:\/|$)|smtp(?:\/|$)|windows\/wns(?:\/|$)|task-signing(?:\/|$)|pki(?:\/|$)|webhooks(?:\/|$)|runtime\/diagnostics$|agent-packages(?:\/|$))/.test(
           options.path,
         )
       if (!paths.test(options.path) && !settings && !readiness) throw clientError()

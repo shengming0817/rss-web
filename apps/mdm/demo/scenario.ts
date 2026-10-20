@@ -1,7 +1,37 @@
+// Demo-only injected events. No timers or browser-owned scheduling authority.
+export interface DemoEvent {
+  kind:
+    | 'clock'
+    | 'registration'
+    | 'check_in'
+    | 'software_start'
+    | 'software_detect'
+    | 'software_reboot'
+    | 'enrollment_bind'
+    | 'agent_binding'
+    | 'security_result'
+    | 'security_detect'
+    | 'material_detect'
+    | 'certificate_issued'
+    | 'certificate_detect'
+    | 'remote_consent'
+    | 'remote_revoke'
+    | 'remote_ended'
+    | 'support_detect'
+    | 'elevation_used'
+    | 'elevation_ended'
+    | 'elevation_revoked'
+    | 'diagnostic_uploaded'
+    | 'diagnostic_scanned'
+  at: number
+  device?: string
+  active?: boolean
+  task?: string
+  enrollment?: string
+}
 /** MOCK_SOURCE: synthetic HTTP server, never part of a production entry. */
 import { observationTarget } from './operations/observation'
 import type { OperationsReference } from '../src/features/operations/clients/model'
-import type { DemoEvent } from './policies/schedule'
 import { mdmJsonBodyLimit, MDM_CONTENT_BODY_LIMIT, isMdmContentRequest } from '@rss/api/mdm-limits'
 export const MANAGEMENT_TENANT = '99999999-9999-4999-8999-999999999999'
 export const TENANT = '11111111-1111-4111-8111-111111111111'

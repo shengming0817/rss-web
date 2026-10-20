@@ -33,12 +33,6 @@ export const policyFeature: MdmFeature = {
       meta: { protected: true },
     },
     {
-      path: `${base}/workflows`,
-      name: 'policy-workflows',
-      component: () => import('./views/WorkflowsView.vue'),
-      meta: { protected: true },
-    },
-    {
       path: `${base}/executions`,
       name: 'policy-executions',
       component: () => import('./views/ExecutionsView.vue'),
@@ -48,12 +42,6 @@ export const policyFeature: MdmFeature = {
       path: `${base}/executions/:execution`,
       name: 'policy-execution',
       component: () => import('./views/ExecutionDetailView.vue'),
-      meta: { protected: true },
-    },
-    {
-      path: `${base}/approvals`,
-      name: 'policy-approvals',
-      component: () => import('./views/ApprovalsView.vue'),
       meta: { protected: true },
     },
   ],

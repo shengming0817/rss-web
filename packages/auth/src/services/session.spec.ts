@@ -310,3 +310,27 @@ it('does not rotate after an in-flight business 401 invalidates its session', as
   expect(f.session.state.value.status).toBe('anonymous')
   expect(f.request.mock.calls.filter(([o]) => o.path.endsWith('/refresh'))).toHaveLength(0)
 })
+
+it('distinguishes first anonymous checks, known session invalidation and explicit logout without persisting history', async () => {
+  const f = fixture(false)
+  f.replies.push(decodeIdentityError(401, { code: 'invalid_credential' }))
+  await f.session.check(TENANT)
+  expect(f.session.invalidated.value).toBe(false)
+  await f.login()
+  await expect(
+    f.session.business(async () => {
+      throw decodeIdentityError(401, { code: 'invalid_credential' })
+    }),
+  ).rejects.toBeDefined()
+  expect(f.session.invalidated.value).toBe(true)
+  await f.login()
+  expect(f.session.invalidated.value).toBe(false)
+  f.replies.push(decodeIdentityError(401, { code: 'invalid_credential' }))
+  await f.session.check(TENANT)
+  expect(f.session.invalidated.value).toBe(true)
+  await f.login()
+  f.replies.push(undefined)
+  await f.session.logout()
+  expect(f.session.invalidated.value).toBe(false)
+  expect(f.storage.size).toBe(0)
+})
