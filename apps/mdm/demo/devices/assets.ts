@@ -59,7 +59,7 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
     if (path === '/api/v1/asset-fields' && method === 'GET')
       return asset({
         kind: 'fields',
-        dictionary: 'assets-v2',
+        dictionary: 'assets-v3',
         fields: catalog.map((f) => ({
           key: f.key,
           version: 1,
@@ -107,6 +107,7 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
           device.inventory.fields[field] = fact(field, value)
         } else {
           const evidence = {
+            scope: { kind: 'device' as const },
             source: 'manual' as const,
             registration: null,
             registrationGeneration: null,

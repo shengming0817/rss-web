@@ -108,11 +108,9 @@ it('uses exact Scope paths and CAS bodies without manufacturing a list or previe
     status: 'completed',
     processed: 1,
     members: 0,
-    plan: null,
     failure: null,
     failureDetail: null,
-    execution: null,
-    policyRevision: null,
+    replacementTask: null,
   }
   await client.status(id, result)
   expect(request.mock.calls[2]![0]).toMatchObject({

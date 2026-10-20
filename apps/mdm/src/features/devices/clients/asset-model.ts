@@ -23,6 +23,8 @@ export const operators = [
   'ge',
   'contains',
   'not_contains',
+  'contains_any',
+  'contains_all',
   'is_null',
   'is_not_null',
 ] as const
@@ -67,8 +69,18 @@ export function resolvedField(value: unknown) {
     sources: unique(array(v['sources'], sourceFact), (s) => sourceIdentity(s.evidence)),
   }
 }
+/** The current device read endpoints select this exact asset namespace. */
+export function deviceCollectionScope(value: unknown) {
+  const v = closed(value, ['kind'])
+  return { kind: enumeration(v['kind'], ['device'] as const) }
+}
 export function qualityRun(value: unknown) {
   const v = closed(value, [
+    'dataset',
+    'templateVersion',
+    'fingerprint',
+    'coverage',
+    'complete',
     'source',
     'channel',
     'registration',
@@ -80,7 +92,18 @@ export function qualityRun(value: unknown) {
     'deliveryPending',
     'fields',
   ])
+  const coverage = closed(v['coverage'], ['id', 'version', 'definition', 'format'])
   return {
+    dataset: identifier(v['dataset']),
+    templateVersion: identifier(v['templateVersion']),
+    fingerprint: identifier(v['fingerprint']),
+    coverage: {
+      id: identifier(coverage['id']),
+      version: identifier(coverage['version']),
+      definition: identifier(coverage['definition']),
+      format: identifier(coverage['format']),
+    },
+    complete: boolean(v['complete']),
     source: enumeration(v['source'], sourceIds),
     channel: enumeration(v['channel'], ['agent', 'mdm'] as const),
     registration: uuid(v['registration']),
@@ -92,6 +115,8 @@ export function qualityRun(value: unknown) {
     deliveryPending: boolean(v['deliveryPending']),
     fields: array(v['fields'], (item) => {
       const f = closed(item, [
+        'scope',
+        'reason',
         'field',
         'quality',
         'status',
@@ -100,6 +125,8 @@ export function qualityRun(value: unknown) {
         'invalidItems',
       ])
       return {
+        scope: deviceCollectionScope(f['scope']),
+        reason: nullable(f['reason'], identifier),
         itemCount: count(f['itemCount']),
         invalidItems: count(f['invalidItems']),
         field: fieldKey(f['field']),
@@ -118,12 +145,21 @@ export function qualityRun(value: unknown) {
   }
 }
 export function inventory(value: unknown) {
-  const v = closed(value, ['device', 'channels', 'fields', 'lists', 'quality', 'revisions'])
+  const v = closed(value, [
+    'collectionScope',
+    'device',
+    'channels',
+    'fields',
+    'lists',
+    'quality',
+    'revisions',
+  ])
   const fields = record(v['fields'])
   const revisions = record(v['revisions'])
   if (Object.keys(fields).length > 1000 || Object.keys(revisions).length > 1000)
     throw new Error('Too many fields')
   return {
+    collectionScope: deviceCollectionScope(v['collectionScope']),
     device: identifier(v['device']),
     channels: unique(
       array(v['channels'], (s) => enumeration(s, ['agent', 'mdm'] as const)),
@@ -209,11 +245,12 @@ function valueType(
   value: unknown,
   depth = 0,
 ): 'string' | 'integer' | 'number' | 'boolean' | 'time' | 'array' | 'object' {
-  if (depth > 5) throw new Error('Field type exceeds bounds')
+  if (depth > 6) throw new Error('Field type exceeds bounds')
   const v = record(value),
     kind = enumeration(v['kind'], [
       'string',
       'enum',
+      'record',
       'integer',
       'number',
       'boolean',
@@ -233,6 +270,14 @@ function valueType(
     closed(v, ['kind', 'items', 'maxItems'])
     count(v['maxItems'])
     valueType(v['items'], depth + 1)
+  } else if (kind === 'record') {
+    closed(v, ['kind', 'properties'])
+    Object.entries(record(v['properties'])).forEach(([k, x]) => {
+      identifier(k)
+      const property = closed(x, ['valueType', 'required'])
+      boolean(property['required'])
+      valueType(property['valueType'], depth + 1)
+    })
   } else if (kind === 'object') {
     closed(v, ['kind', 'properties'])
     Object.entries(record(v['properties'])).forEach(([k, x]) => {
@@ -240,7 +285,7 @@ function valueType(
       valueType(x, depth + 1)
     })
   } else closed(v, ['kind'])
-  return kind === 'enum' ? 'string' : kind
+  return kind === 'enum' ? 'string' : kind === 'record' ? 'object' : kind
 }
 export function editableField<T extends { kind: string }>(
   field: T,
@@ -262,7 +307,7 @@ export function criteria(value: unknown, depth = 0): Criteria {
     if (v['value'] != null || v['values'] != null) throw new Error('Unexpected operand')
     return { kind, field, op }
   }
-  if (op === 'in' || op === 'not_in') {
+  if (op === 'in' || op === 'not_in' || op === 'contains_any' || op === 'contains_all') {
     if (v['value'] != null) throw new Error('Unexpected operand')
     return { kind, field, op, values: array(v['values'], scalar) }
   }
@@ -316,6 +361,7 @@ export const sourceIds = [
   'mdm.apple',
   'agent.builtin',
   'agent.script',
+  'agent.native',
   'agent.osquery',
 ] as const
 export type ReadScalar =
@@ -391,6 +437,7 @@ export function assetState(value: unknown): ReadState {
 }
 export function evidence(value: unknown) {
   const v = closed(value, [
+    'scope',
     'source',
     'dataset',
     'registration',
@@ -402,6 +449,7 @@ export function evidence(value: unknown) {
     'actor',
   ])
   return {
+    scope: deviceCollectionScope(v['scope']),
     source: enumeration(v['source'], sourceIds),
     dataset: nullable(v['dataset'], identifier),
     registration: nullable(v['registration'], identifier),

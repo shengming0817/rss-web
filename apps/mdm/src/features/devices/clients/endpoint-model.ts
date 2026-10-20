@@ -35,12 +35,19 @@ export function member(value: unknown) {
   }
 }
 export type Member = ReturnType<typeof member>
+const endpointKeys = ['id', 'status', 'primaryMdmRegistration', 'channels', 'enrollments']
 export function endpoint(value: unknown) {
-  const v = closed(
-    value,
-    ['id', 'status', 'primaryMdmRegistration', 'channels', 'enrollments'],
-    ['inventoryAvailable', 'capabilities'],
-  )
+  return endpointFields(closed(value, endpointKeys, ['inventoryAvailable', 'capabilities']))
+}
+export function viewEndpoint(value: unknown) {
+  const v = closed(value, [...endpointKeys, 'assetState'])
+  return {
+    ...endpointFields(v),
+    assetState: enumeration(v['assetState'], ['active', 'archived', 'deleted'] as const),
+  }
+}
+export type ViewEndpoint = ReturnType<typeof viewEndpoint>
+function endpointFields(v: Record<string, unknown>) {
   return {
     id: identifier(v['id']),
     status: enumeration(v['status'], endpointStatuses),
@@ -154,7 +161,7 @@ export function endpointDetail(value: unknown, id: string) {
     'inventoryAvailable',
     'capabilities',
   ])
-  const result = endpoint(v)
+  const result = endpointFields(v)
   if (result.id !== id) throw new Error('Wrong endpoint')
   return {
     ...result,

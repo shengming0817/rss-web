@@ -1,3 +1,4 @@
+import { calculationTask } from '../../devices/clients/calculation-task'
 import type { HttpTransport } from '@rss/api/mdm'
 import type { Operation } from '../../../services/useOperation'
 import {
@@ -172,56 +173,7 @@ export function createScopesClient(transport: HttpTransport) {
         path: '/api/v1/scopes/{id}/tasks/{task}',
         pathParams: { id, task },
         successStatus: 200,
-        decode(value) {
-          const v = closed(value, [
-            'task',
-            'kind',
-            'target',
-            'status',
-            'processed',
-            'members',
-            'plan',
-            'failure',
-            'failureDetail',
-            'execution',
-            'policyRevision',
-          ])
-          if (
-            uuid(v['task']) !== task ||
-            v['kind'] !== 'scope' ||
-            v['target'] !== id ||
-            v['plan'] !== null ||
-            v['execution'] !== null ||
-            v['policyRevision'] !== null
-          )
-            throw new Error('Wrong scope task')
-          return {
-            task,
-            status: enumeration(v['status'], [
-              'pending',
-              'running',
-              'completed',
-              'failed',
-              'superseded',
-            ] as const),
-            processed: count(v['processed']),
-            members: count(v['members']),
-            failure: nullable(v['failure'], identifier),
-            failureDetail: nullable(v['failureDetail'], (value) => {
-              const f = closed(value, ['reason', 'device', 'stage'])
-              return {
-                reason: enumeration(f['reason'], [
-                  'capability_unknown',
-                  'platform_unsupported',
-                  'stale_plan',
-                  'owner_conflict',
-                ] as const),
-                device: nullable(f['device'], identifier),
-                stage: enumeration(f['stage'], ['preview', 'save', 'execute'] as const),
-              }
-            }),
-          }
-        },
+        decode: (value) => calculationTask(value, 'scope', id, task),
       }),
     page: (
       id: string,

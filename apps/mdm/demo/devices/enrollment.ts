@@ -169,6 +169,7 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
               department: null,
             },
             inventory: {
+              collectionScope: { kind: 'device' },
               device: deviceId,
               channels: [],
               fields: {},

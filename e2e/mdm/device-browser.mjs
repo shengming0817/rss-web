@@ -51,19 +51,21 @@ try {
   })
   const request = async (method, url, options) => {
     await pace()
-    return context.request[method](url, options)
+    const response = await context.request[method](url, options)
+    if (response.status() >= 400) {
+      const error = await response.json().catch(() => ({}))
+      responses.push({
+        resource: new URL(url).pathname.split('/')[3],
+        status: response.status(),
+        code: /^[a-z_]{1,128}$/.test(error.code) ? error.code : undefined,
+      })
+      if (responses.length > 20) responses.shift()
+    }
+    return response
   }
   const path = (route) => `${origin}/tenants/${fixture.tenant}/${route}`
   const api = async (url) => {
     const response = await request('get', origin + url)
-    if (response.status() !== 200) {
-      const error = await response.json().catch(() => ({}))
-      responses.push({
-        resource: url.split('/')[3],
-        status: response.status(),
-        code: /^[a-z_]{1,128}$/.test(error.code) ? error.code : undefined,
-      })
-    }
     assert.equal(response.status(), 200)
     return response.json()
   }
@@ -208,6 +210,7 @@ try {
   const view = await api(`/api/v1/device-views/association/${id}`)
   assert.equal(view.fields['custom.asset_tag'].state.kind, 'conflict')
   assert.equal(view.fields['custom.asset_tag'].sources.length, 2)
+  await page.getByRole('button', { name: '通道', exact: true }).click()
   assert.equal(await page.locator('[data-endpoint]').count(), 2)
   const lists = page
     .locator('details')
@@ -229,6 +232,7 @@ try {
   )
   coverage.push('manual-conflict-two-endpoints-source-pagination')
   phase = 'cas'
+  await page.getByRole('tab', { name: '设备关联管理', exact: true }).click()
   await page.getByRole('button', { name: '读取当前关系与主注册', exact: true }).click()
   await panel().locator('[aria-busy=false]').count()
   await panel().getByLabel('核实说明与依据', { exact: true }).fill('UI verification')
@@ -269,6 +273,7 @@ try {
       .find((e) => e.id === fixture.agent)
       .channels.some((c) => c.generation === 2),
   )
+  await page.getByRole('tab', { name: '设备关联管理', exact: true }).click()
   await page.getByRole('button', { name: '读取当前关系与主注册', exact: true }).click()
   await panel().getByLabel('核实说明与依据', { exact: true }).fill('Verified current generation')
   await panel()
@@ -304,19 +309,19 @@ try {
   assert.equal((await invalidated.json()).code, 'device_view_cursor_invalidated')
   coverage.push('real-authority-bound-list-cursor-invalidation')
   phase = 'group-scope-assignments'
-  const mutate = async (url, input, expectedRevision = 0) => {
+  const mutate = async (url, input, expectedRevision = 0, expectedStatus = 200) => {
     const response = await request('post', origin + url, {
       headers: await headers(),
       data: { operationId: randomUUID(), expectedRevision, input },
     })
-    assert.equal(response.status(), 200)
+    assert.equal(response.status(), expectedStatus)
     return response.json()
   }
   const settled = async (url) => {
     for (let i = 0; i < 30; i++) {
       const value = await api(url)
       if (value.status === 'completed') return value
-      assert.equal(value.status, 'running')
+      assert.ok(['pending', 'running'].includes(value.status))
     }
     assert.fail('bounded calculation deadline')
   }
@@ -332,6 +337,7 @@ try {
     `/api/v1/groups/${group}`,
     { action: 'members', add: [{ kind: 'endpoint', id: fixture.agent }], remove: [] },
     1,
+    202,
   )
   await settled(`/api/v1/groups/${group}/tasks/${membership.task}`)
   const groupResult = await api(`/api/v1/groups/${group}/results/${membership.task}/members`)
@@ -340,9 +346,14 @@ try {
   await loaded()
   await page.getByRole('button', { name: /Browser endpoint group/ }).click()
   await loaded()
-  assert.ok((await page.locator('main').textContent()).includes(group))
-  // Create the Scope through production Vue, consuming the formal Group directory.
-  await page.goto(path(`policies?group=${group}`))
+  const scopeLink = page.locator('[data-testid=server-definition] a')
+  await scopeLink.waitFor()
+  assert.equal(
+    new URL(await scopeLink.getAttribute('href'), origin).searchParams.get('group'),
+    group,
+  )
+  // Follow the selected Group's production link into the Scope editor.
+  await scopeLink.click()
   await loaded()
   const scopeWrite = page.waitForResponse(
     (r) =>
@@ -402,7 +413,15 @@ try {
     association.members.find((m) => m.channel === 'agent').registrationId,
   )
   assert.equal(assignment.target.generation, 2)
-  assert.ok(assignment.sources.some((s) => s.object.kind === 'association' && s.object.id === id))
+  // Endpoint Groups retain endpoint provenance; association evidence belongs to associated-device Groups.
+  assert.deepEqual(assignment.object, { kind: 'endpoint', id: fixture.agent })
+  assert.deepEqual(
+    assignment.sources.map((s) => s.object),
+    [{ kind: 'endpoint', id: fixture.agent }],
+  )
+  assert.equal(assignment.sources[0].associationVersion, null)
+  assert.equal(assignment.sources[0].verified, true)
+  assert.deepEqual(assignment.sources[0].members, [assignment.target])
   assert.ok(Array.isArray(assignment.operationIds))
   await page.goto(path(`software/bootstrap?id=${policy}`))
   await loaded()

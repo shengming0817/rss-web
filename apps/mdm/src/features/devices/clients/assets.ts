@@ -1,5 +1,5 @@
 import type { Operation } from '../../../services/useOperation'
-/** Published rss-mdm v2 asset contract; candidate directory is a separate projection. */
+/** Current rss-mdm asset contract; candidate directory is a separate projection. */
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -29,9 +29,9 @@ export function decodeInventory(value: unknown, tenant: string) {
 }
 export function decodeCatalog(value: unknown, tenant: string) {
   const v = assetEnvelope(value, tenant, 'fields', ['dictionary', 'fields'])
-  if (v['dictionary'] !== 'assets-v2') throw new Error('Unknown asset dictionary')
+  if (v['dictionary'] !== 'assets-v3') throw new Error('Unknown asset dictionary')
   return {
-    dictionary: 'assets-v2',
+    dictionary: 'assets-v3',
     fields: unique(array(v['fields'], fieldDefinition), (f) => f.key),
   }
 }

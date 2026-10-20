@@ -78,6 +78,8 @@ it('uses 200 for definition changes and 202 for recompute and preview, preservin
 
 it('accepts safe failed-task details and rejects unknown diagnostic fields', async () => {
   let detail: unknown = { reason: 'stale_plan', device: 'device-01', stage: 'execute' }
+  let replacement: unknown = null
+  let extra: Record<string, unknown> = {}
   const client = createGroupsClient({
     request: async (o: RequestOptions<unknown>) =>
       o.decode({
@@ -87,14 +89,18 @@ it('accepts safe failed-task details and rejects unknown diagnostic fields', asy
         status: 'failed',
         processed: 0,
         members: 0,
-        plan: null,
         failure: 'stale_plan',
         failureDetail: detail,
-        execution: null,
-        policyRevision: null,
+        replacementTask: replacement,
+        ...extra,
       }),
   } as unknown as HttpTransport)
   expect((await client.status(id, task)).failureDetail).toEqual(detail)
+  replacement = id
+  expect((await client.status(id, task)).replacementTask).toBe(id)
+  extra = { plan: null }
+  await expect(client.status(id, task)).rejects.toThrow()
+  extra = {}
   detail = { reason: 'database_secret', device: null, stage: 'execute' }
   await expect(client.status(id, task)).rejects.toThrow()
 })

@@ -4,6 +4,7 @@ import { createAssetsClient, decodeInventory, decodeAssetPage, decodeCatalog } f
 const tenant = '11111111-1111-4111-8111-111111111111'
 const task = '22222222-2222-4222-8222-222222222222'
 const evidence = {
+  scope: { kind: 'device' },
   source: 'manual',
   registration: null,
   registrationGeneration: null,
@@ -29,6 +30,7 @@ const field = {
   ],
 }
 const device = {
+  collectionScope: { kind: 'device' },
   device: 'pending-device',
   channels: [],
   fields: { 'custom.is_loaner': field },
@@ -99,7 +101,7 @@ it('rejects duplicate catalog keys and malformed manual fields', () => {
   }
   expect(
     decodeCatalog(
-      { tenantId: tenant, asset: { kind: 'fields', dictionary: 'assets-v2', fields: [field] } },
+      { tenantId: tenant, asset: { kind: 'fields', dictionary: 'assets-v3', fields: [field] } },
       tenant,
     ).fields,
   ).toEqual([
@@ -116,7 +118,7 @@ it('rejects duplicate catalog keys and malformed manual fields', () => {
     decodeCatalog(
       {
         tenantId: tenant,
-        asset: { kind: 'fields', dictionary: 'assets-v2', fields: [field, field] },
+        asset: { kind: 'fields', dictionary: 'assets-v3', fields: [field, field] },
       },
       tenant,
     ),
@@ -158,8 +160,18 @@ it('uses exact async and CAS requests with one dispatch and no TTL', async () =>
 it('preserves formal quality field counts in a nonempty inventory response', () => {
   const quality = [
     {
-      source: 'manual',
-      channel: 'mdm',
+      dataset: 'hardware',
+      templateVersion: '1',
+      fingerprint: 'a'.repeat(64),
+      coverage: {
+        id: 'hardware',
+        version: '1',
+        definition: 'a'.repeat(64),
+        format: 'typed-fields-v4',
+      },
+      complete: false,
+      source: 'agent.builtin',
+      channel: 'agent',
       registration: task,
       registrationGeneration: 1,
       epoch: task,
@@ -169,6 +181,8 @@ it('preserves formal quality field counts in a nonempty inventory response', () 
       deliveryPending: false,
       fields: [
         {
+          scope: { kind: 'device' },
+          reason: 'invalid_value',
           field: 'custom.is_loaner',
           quality: 'invalid',
           status: null,
@@ -185,6 +199,23 @@ it('preserves formal quality field counts in a nonempty inventory response', () 
       tenant,
     ).quality,
   ).toEqual(quality)
+  const unboundQuality: Record<string, unknown> = { ...quality[0] }
+  delete unboundQuality['coverage']
+  for (const invalid of [
+    unboundQuality,
+    {
+      ...quality[0],
+      fields: [{ ...quality[0]!.fields[0], scope: { kind: 'apple_user', identity: task } }],
+    },
+    { ...quality[0], coverage: { ...quality[0]!.coverage, legacy: true } },
+  ]) {
+    expect(() =>
+      decodeInventory(
+        { tenantId: tenant, asset: { kind: 'detail', device: { ...device, quality: [invalid] } } },
+        tenant,
+      ),
+    ).toThrow()
+  }
   expect(() =>
     decodeInventory(
       {
@@ -199,5 +230,93 @@ it('preserves formal quality field counts in a nonempty inventory response', () 
       },
       tenant,
     ),
+  ).toThrow()
+})
+
+it('rejects unbound or mismatched namespaces in current and last-known device evidence', () => {
+  const decode = (value: unknown) =>
+    decodeInventory({ tenantId: tenant, asset: { kind: 'detail', device: value } }, tenant)
+  const unbound: Record<string, unknown> = { ...device }
+  delete unbound['collectionScope']
+  expect(() => decode(unbound)).toThrow()
+  expect(() =>
+    decode({ ...device, collectionScope: { kind: 'apple_user', identity: task } }),
+  ).toThrow()
+  const oldEvidence: Record<string, unknown> = { ...evidence }
+  delete oldEvidence['scope']
+  for (const invalid of [
+    oldEvidence,
+    { ...evidence, scope: { kind: 'device', identity: task } },
+    { ...evidence, scope: { kind: 'apple_user', identity: task } },
+  ]) {
+    expect(() =>
+      decode({
+        ...device,
+        fields: {
+          'custom.is_loaner': { ...field, sources: [{ ...field.sources[0], evidence: invalid }] },
+        },
+      }),
+    ).toThrow()
+    expect(() =>
+      decode({
+        ...device,
+        fields: {
+          'custom.is_loaner': {
+            ...field,
+            sources: [
+              {
+                ...field.sources[0],
+                lastKnown: { value: { kind: 'boolean', value: false }, evidence: invalid },
+              },
+            ],
+          },
+        },
+      }),
+    ).toThrow()
+  }
+})
+
+it('consumes only the current dictionary and validates record property schemas', () => {
+  const field = {
+    key: 'device.hardware',
+    version: 1,
+    valueType: {
+      kind: 'record',
+      properties: {
+        serial: {
+          required: false,
+          valueType: { kind: 'string', maxLength: 128, allowEmpty: false },
+        },
+      },
+    },
+    platforms: ['windows'],
+    sensitivity: 'standard',
+    unit: null,
+    searchable: false,
+    itemKey: null,
+    nullable: false,
+    manual: false,
+    sources: { 'agent.native': 0 },
+    operations: [],
+  }
+  const decode = (dictionary: string, value: unknown) =>
+    decodeCatalog(
+      { tenantId: tenant, asset: { kind: 'fields', dictionary, fields: [value] } },
+      tenant,
+    )
+  expect(decode('assets-v3', field).fields[0]?.kind).toBe('object')
+  expect(
+    decode('assets-v3', {
+      ...field,
+      valueType: { kind: 'array', items: { kind: 'integer' }, maxItems: 128 },
+      operations: ['contains_any', 'contains_all'],
+    }).fields[0]?.operations,
+  ).toEqual(['contains_any', 'contains_all'])
+  expect(() => decode('assets-v2', field)).toThrow('Unknown asset dictionary')
+  expect(() =>
+    decode('assets-v3', {
+      ...field,
+      valueType: { kind: 'record', properties: { serial: { valueType: { kind: 'integer' } } } },
+    }),
   ).toThrow()
 })

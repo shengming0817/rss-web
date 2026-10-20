@@ -5,6 +5,7 @@ import {
   member,
   currentMember,
   type Endpoint,
+  type ViewEndpoint,
 } from '../../src/features/devices/clients/endpoint-model'
 import { verificationText, type Association } from '../../src/features/devices/clients/associations'
 import type { ObjectRef } from '../../src/features/devices/clients/objects'
@@ -62,6 +63,9 @@ export function endpointProjection(d: DemoDevice): Endpoint {
     })),
   }
 }
+function viewEndpointProjection(d: DemoDevice): ViewEndpoint {
+  return { ...endpointProjection(d), assetState: 'active' }
+}
 export function endpointDetailProjection(d: DemoDevice) {
   const p = endpointProjection(d)
   return {
@@ -117,12 +121,15 @@ export function createDeviceViewsDemo(devices: () => Map<string, DemoDevice>, ca
   }
   function groups(request: DemoRequest) {
     const rows = new Map([...devices()].filter(([id]) => readable(request, id))),
-      result: { reference: ObjectRef; association: Association | null; endpoints: Endpoint[] }[] =
-        []
+      result: {
+        reference: ObjectRef
+        association: Association | null
+        endpoints: ViewEndpoint[]
+      }[] = []
     for (const raw of relations.values()) {
       const a = effective(raw)
       if (a.state === 'revoked' || !a.members.every((m) => rows.has(m.device))) continue
-      const endpoints = a.members.map((m) => endpointProjection(rows.get(m.device)!))
+      const endpoints = a.members.map((m) => viewEndpointProjection(rows.get(m.device)!))
       a.members.forEach((m) => rows.delete(m.device))
       result.push({ reference: { kind: 'association', id: a.id }, association: a, endpoints })
     }
@@ -130,7 +137,7 @@ export function createDeviceViewsDemo(devices: () => Map<string, DemoDevice>, ca
       result.push({
         reference: { kind: 'endpoint', id },
         association: null,
-        endpoints: [endpointProjection(d)],
+        endpoints: [viewEndpointProjection(d)],
       })
     return result.sort((a, b) =>
       `${a.reference.kind}:${a.reference.id}`.localeCompare(
@@ -165,7 +172,7 @@ export function createDeviceViewsDemo(devices: () => Map<string, DemoDevice>, ca
           ? {
               reference,
               association: null,
-              endpoints: [endpointProjection(devices().get(reference.id)!)],
+              endpoints: [viewEndpointProjection(devices().get(reference.id)!)],
             }
           : undefined
         : groups(request).find(
@@ -192,6 +199,7 @@ export function createDeviceViewsDemo(devices: () => Map<string, DemoDevice>, ca
     }
     for (const e of g.endpoints) {
       const ev = {
+        scope: { kind: 'device' },
         source: 'agent.builtin',
         dataset: 'device.software',
         registration: e.channels.find((c) => c.channel === 'agent')?.registrationId ?? null,
