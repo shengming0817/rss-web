@@ -1,4 +1,5 @@
 export const devicesZh = {
+  returnDirectory: '返回设备目录',
   management: '管理',
   ownerUnavailable: '设备所有人暂不可编辑；使用人、所有人与注册责任人分别记录。',
   layoutUnavailable: '扩展字段按目录显示；共享分组布局暂不可保存。',
@@ -323,6 +324,7 @@ export const devicesZh = {
   },
 }
 export const devicesEn: typeof devicesZh = {
+  returnDirectory: 'Back to device directory',
   management: 'Management',
   ownerUnavailable:
     'Device ownership editing is unavailable. Owner, user and enrollment responsibility are separate.',

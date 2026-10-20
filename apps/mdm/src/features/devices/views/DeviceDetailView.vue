@@ -166,7 +166,7 @@ watch([tab, target], () => {
     <template #actions
       ><RouterLink
         :to="{ name: 'devices', params: { tenant: runtime.tenant }, query: directoryQuery }"
-        >{{ t('devices.directory') }}</RouterLink
+        >{{ t('devices.returnDirectory') }}</RouterLink
       ><UiButton :disabled="busy" @click="load">{{ t('devices.reload') }}</UiButton></template
     >
     <template v-if="view">

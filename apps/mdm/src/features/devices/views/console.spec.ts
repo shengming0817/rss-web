@@ -1132,18 +1132,24 @@ it('retains directory cursor and display columns when opening and returning from
   const query = { ...f.router.currentRoute.value.query }
   await f.wrapper.find('tbody a').trigger('click')
   await flushPromises()
+  await vi.waitFor(() =>
+    expect(f.wrapper.findAll('a').some((a) => a.text() === '返回设备目录')).toBe(true),
+  )
   await f.wrapper
     .findAll('a')
-    .find((a) => a.text() === '设备目录')!
+    .find((a) => a.text() === '返回设备目录')!
     .trigger('click')
   await flushPromises()
   expect(f.router.currentRoute.value.query).toEqual(query)
   expect(f.wrapper.text()).toContain('device-21')
   await f.wrapper.findAll('tbody a').at(-1)!.trigger('click')
   await flushPromises()
+  await vi.waitFor(() =>
+    expect(f.wrapper.findAll('a').some((a) => a.text() === '返回设备目录')).toBe(true),
+  )
   await f.wrapper
     .findAll('a')
-    .find((a) => a.text() === '设备目录')!
+    .find((a) => a.text() === '返回设备目录')!
     .trigger('click')
   await flushPromises()
   expect(f.router.currentRoute.value.query).toEqual(query)
