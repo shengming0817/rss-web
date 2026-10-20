@@ -1,4 +1,4 @@
-// Process lifecycle regression for the device and software browser fixture owners.
+// Process lifecycle regression for the device, software and settings fixture owners.
 import { test } from 'node:test'
 import process from 'node:process'
 import assert from 'node:assert/strict'
@@ -29,14 +29,16 @@ async function exercise(failure, feature) {
     `#!/usr/bin/env node
 const fs = require('node:fs'), path = require('node:path')
 const args = process.argv.slice(2), base = process.env['${backendEnv}']
-if (args.includes('reset') || ('${feature}' === 'settings' && args.includes('-c'))) {
+const compose = '${feature}' === 'settings' && args.includes('--cleanup-compose')
+if (args.includes('reset') || compose || ('${feature}' === 'settings' && args.includes('-c'))) {
   const target = args.includes('-c')
-  if (target ? !args.at(-1).includes("group='settings-browser-target'") : !args.includes('hack/t2_environment.py') || args.at(-1) !== '${group}') process.exit(9)
-  fs.appendFileSync(path.join(base,'cleanup-groups'), (target ? '${group}-target' : '${group}')+'\\n')
+  if (compose ? args.at(-1) !== '--cleanup-compose' || !args.at(-3).endsWith('/settings-fixture.py') : target ? !args.at(-1).includes("group='settings-browser-target'") : !args.includes('hack/t2_environment.py') || args.at(-1) !== '${group}') process.exit(9)
+  fs.appendFileSync(path.join(base,'cleanup-groups'), (compose ? 'settings-compose' : target ? '${group}-target' : '${group}')+'\\n')
   fs.writeFileSync(path.join(base, 'cleanup-start'), '')
   setTimeout(() => {
     if (process.env.CLEANUP_FAILURE === '1') process.exit(3)
-    if (target) fs.writeFileSync(path.join(base,'target-cleanup-finished'),'')
+    if (compose) fs.writeFileSync(path.join(base,'compose-cleanup-finished'),'')
+    else if (target) fs.writeFileSync(path.join(base,'target-cleanup-finished'),'')
     else fs.rmSync(path.join(base, 'artifacts/dev-environment/${group}'), { recursive: true })
     fs.writeFileSync(path.join(base, 'cleanup-finished'), '')
     process.exit(0)
@@ -84,7 +86,7 @@ if (args.includes('reset') || ('${feature}' === 'settings' && args.includes('-c'
     if (feature === 'settings')
       assert.deepEqual(
         readFileSync(resolve(backend, 'cleanup-groups'), 'utf8').trim().split('\n'),
-        [group + '-target', group],
+        ['settings-compose', group + '-target', group],
       )
     if (failure) {
       if (feature === 'settings')
@@ -94,7 +96,10 @@ if (args.includes('reset') || ('${feature}' === 'settings' && args.includes('-c'
       assert.ok(output.includes('"phase":"cleanup","result":"failed"'))
     } else {
       assert.ok(existsSync(resolve(backend, 'cleanup-finished')))
-      if (feature === 'settings') assert.ok(existsSync(resolve(backend, 'target-cleanup-finished')))
+      if (feature === 'settings') {
+        assert.ok(existsSync(resolve(backend, 'compose-cleanup-finished')))
+        assert.ok(existsSync(resolve(backend, 'target-cleanup-finished')))
+      }
       assert.equal(existsSync(recovery), false)
       assert.ok(output.includes('"classification":"interrupted"'))
       assert.ok(output.includes('"phase":"cleanup","result":"passed"'))
@@ -108,7 +113,7 @@ if (args.includes('reset') || ('${feature}' === 'settings' && args.includes('-c'
 for (const feature of ['device', 'software', 'settings']) {
   test(
     `${feature}: waits for independent cleanup after cancellation and a second signal`,
-    { timeout: 30000 },
+    { timeout: feature === 'settings' ? 40000 : 30000 },
     () => exercise(false, feature),
   )
   test(
