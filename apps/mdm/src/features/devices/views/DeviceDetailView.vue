@@ -130,13 +130,14 @@ function invalidated(reason: 'cursorInvalidated' | 'denied' | 'notFound') {
   failure.value = reason
 }
 watch(
-  () => [
-    route.name,
-    route.params['device'],
-    route.params['kind'],
-    route.params['view'],
-    ...deviceBinding(runtime),
-  ],
+  () =>
+    JSON.stringify([
+      route.name,
+      route.params['device'],
+      route.params['kind'],
+      route.params['view'],
+      ...deviceBinding(runtime),
+    ]),
   () => {
     clear()
     target.value = ''
@@ -219,10 +220,16 @@ watch([tab, target], () => {
             @changed="load"
           />
           <AssociationPanel
-            v-if="view.association || selected"
-            :key="reference.id"
-            :association="view.association ?? undefined"
-            :endpoint="view.association ? undefined : selected"
+            v-if="view.association"
+            :key="view.association.id"
+            :association="view.association"
+            @changed="changed"
+            @denied="invalidated('denied')"
+          />
+          <AssociationPanel
+            v-else-if="selected"
+            :key="selected.id"
+            :endpoint="selected"
             @changed="changed"
             @denied="invalidated('denied')"
           />

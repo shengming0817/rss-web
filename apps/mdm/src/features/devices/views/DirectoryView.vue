@@ -34,7 +34,8 @@ const trail = computed(() => {
       ? [v]
       : []
 })
-function navigate(direction: 'previous' | 'next') {
+function navigate(direction: number | 'previous' | 'next') {
+  if (typeof direction === 'number') return
   const next =
     direction === 'next'
       ? [...trail.value, String(route.query['cursor'] ?? '')]

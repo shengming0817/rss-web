@@ -260,6 +260,10 @@ it('renders asset categories, edits manual fields and keeps ownership blocked', 
   expect(wrapper.text()).toContain('registration_bound')
   await click('管理')
   expect(wrapper.text()).toContain('撤销服务端凭据不会擦除设备')
+  wrapper
+    .findAll('details')
+    .find((d) => d.find('summary').text() === '注册凭据')!
+    .element.setAttribute('open', '')
   await click('撤销凭据')
   await confirmCredential()
   expect(wrapper.text()).not.toContain('擦除成功')
@@ -642,6 +646,10 @@ it('marks credential details stale after an acknowledged revoke with a failed re
   devices.directory.detail = async () => {
     throw decodeMdmError(503, { code: 'service_unavailable' })
   }
+  wrapper
+    .findAll('details')
+    .find((d) => d.find('summary').text() === '注册凭据')!
+    .element.setAttribute('open', '')
   await click('撤销凭据')
   await confirmCredential()
   expect(wrapper.text()).toContain('暂不可用')

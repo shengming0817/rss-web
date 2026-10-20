@@ -100,6 +100,10 @@ watch(
     }
   },
 )
+function selectStep(id: string) {
+  currentStep.value = id
+  void router.replace({ query: { ...route.query, step: id } })
+}
 function decide(capability: Capability, event: Event) {
   const kind = (event.target as HTMLSelectElement).value
   if (kind === 'configure') draft.value.capabilities[capability] = { kind }
@@ -278,10 +282,7 @@ useSettingsFacts(() => {
           v-for="(step, index) in steps"
           :key="step.id"
           :aria-current="currentStep === step.id ? 'step' : undefined"
-          @click="
-            currentStep = step.id
-            router.replace({ query: { ...route.query, step: step.id } })
-          "
+          @click="selectStep(step.id)"
           >{{ index + 1 }}. {{ t('settings.' + step.label) }}</UiButton
         >
       </nav>
