@@ -5,6 +5,7 @@ import { isRssApiError } from '@rss/api/mdm'
 export function useOperation(
   unknownCodes: readonly string[] = [],
   binding?: () => string | undefined | readonly (string | undefined)[],
+  routeIdentity?: () => string,
 ) {
   const busy = ref(false),
     uncertain = ref(false),
@@ -13,7 +14,7 @@ export function useOperation(
   let generation = 0,
     disposed = false
   watch(
-    [() => route.fullPath, () => JSON.stringify(binding?.())],
+    [() => routeIdentity?.() ?? route.fullPath, () => JSON.stringify(binding?.())],
     () => {
       generation++
       uncertain.value = false

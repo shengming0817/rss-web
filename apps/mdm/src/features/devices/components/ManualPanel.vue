@@ -15,10 +15,11 @@ const emit = defineEmits<{ updated: [value: Inventory] }>()
 const { t, locale } = useI18n(),
   runtime = useMdm(),
   client = runtime.devices.assets,
-  { busy, failure, uncertain, run, runWrite } = useOperation([], () => [
-    ...deviceBinding(runtime),
-    props.device,
-  ])
+  { busy, failure, uncertain, run, runWrite } = useOperation(
+    [],
+    () => deviceBinding(runtime),
+    () => props.device,
+  )
 const key = ref(''),
   action = ref<'set' | 'null' | 'delete'>('set'),
   value = ref<Scalar>({ kind: 'string', value: '' })
@@ -26,7 +27,7 @@ const manual = computed(() => props.fields.filter(editableField).filter((f) => f
   selected = computed(() => props.inventory.fields[key.value])
 let pending: (() => Promise<void>) | undefined
 watch(
-  () => deviceBinding(runtime),
+  () => JSON.stringify([...deviceBinding(runtime), props.device]),
   () => {
     key.value = ''
     pending = undefined

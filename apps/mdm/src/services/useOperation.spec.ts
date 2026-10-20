@@ -1,10 +1,60 @@
 import { expect, it, vi } from 'vitest'
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, ref } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { networkErrorForTest, timeoutErrorForTest } from '@rss/api/testing'
 import { decodeMdmError } from '@rss/api/mdm'
 import { useOperation } from './useOperation'
+it('preserves resource operations across query changes but fences new resources and sessions', async () => {
+  let state!: ReturnType<typeof useOperation>
+  const session = ref('session-1')
+  const component = defineComponent({
+    setup() {
+      state = useOperation(
+        [],
+        () => session.value,
+        () => String(router.currentRoute.value.params.id),
+      )
+      return () => h('div')
+    },
+  })
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/:id', component }],
+  })
+  await router.push('/device-1')
+  const wrapper = mount(component, { global: { plugins: [router] } })
+  let reject!: (error: Error) => void
+  const pending = state.runWrite(
+    () =>
+      new Promise((_, fail) => {
+        reject = fail
+      }),
+  )
+  await router.replace('/device-1?operation=native')
+  expect(state.busy.value).toBe(true)
+  reject(networkErrorForTest())
+  await pending
+  await router.replace('/device-1')
+  expect(state.uncertain.value).toBe(true)
+  await router.push('/device-2')
+  expect(state.uncertain.value).toBe(false)
+  const apply = vi.fn()
+  let resolve!: (value: string) => void
+  const old = state.runWrite(
+    () =>
+      new Promise<string>((done) => {
+        resolve = done
+      }),
+    apply,
+  )
+  session.value = 'session-2'
+  expect(state.busy.value).toBe(false)
+  resolve('previous session')
+  await old
+  expect(apply).not.toHaveBeenCalled()
+  wrapper.unmount()
+})
 it('ignores responses after route changes/unmount and keeps business error meanings distinct', async () => {
   let state!: ReturnType<typeof useOperation>
   const component = defineComponent({

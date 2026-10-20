@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { UiButton, UiDialog } from '@rss/core/components'
 import { useMdm } from '../../../context'
@@ -10,11 +10,25 @@ const props = defineProps<{ endpoint: EndpointDetail }>()
 const emit = defineEmits<{ changed: [] }>()
 const runtime = useMdm(),
   { t } = useI18n(),
-  { run, runWrite, busy, uncertain, failure } = useOperation([], () => deviceBinding(runtime))
+  { run, runWrite, busy, uncertain, failure } = useOperation(
+    [],
+    () => deviceBinding(runtime),
+    () => props.endpoint.id,
+  )
 const page = ref<Awaited<ReturnType<typeof runtime.devices.enrollment.registrations>>>(),
   target = ref<string>(),
   original = ref<{ id: string; registration: string }>(),
   compared = ref(false)
+watch(
+  () => JSON.stringify([...deviceBinding(runtime), props.endpoint.id]),
+  () => {
+    target.value = undefined
+    original.value = undefined
+    compared.value = false
+    page.value = undefined
+  },
+  { flush: 'sync' },
+)
 async function load(next?: string) {
   await run(
     () => runtime.devices.enrollment.registrations(props.endpoint.id, next),
@@ -69,6 +83,7 @@ onMounted(() => void load())
       :open="!!target"
       :title="t('devices.revoke')"
       :close-label="t('console.cancel')"
+      :dismissible="!busy && !uncertain"
       kind="alertdialog"
       @update:open="!$event && (target = undefined)"
       ><p>{{ t('devices.revokeNote') }}</p>
