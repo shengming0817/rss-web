@@ -56,24 +56,26 @@ export function useOperation(
                 ? 'requestTooLarge'
                 : e.status === 404
                   ? 'notFound'
-                  : e.code === 'registration_limit'
-                    ? 'registrationLimit'
-                    : e.status === 429
-                      ? 'limited'
-                      : e.status === 400
-                        ? 'invalidRequest'
-                        : e.status === 409
-                          ? e.code === 'device_view_cursor_invalidated'
-                            ? 'cursorInvalidated'
-                            : 'conflict'
-                          : e.code === 'operation_unknown' ||
-                              e.code === 'operation_rollback_unconfirmed'
-                            ? 'unknownWrite'
-                            : e.status === 403
-                              ? 'denied'
-                              : e.status === 501
-                                ? 'unsupported'
-                                : 'unavailable'
+                  : e.code === 'enrollment_paused'
+                    ? 'enrollmentPaused'
+                    : e.code === 'registration_limit'
+                      ? 'registrationLimit'
+                      : e.status === 429
+                        ? 'limited'
+                        : e.status === 400
+                          ? 'invalidRequest'
+                          : e.status === 409
+                            ? e.code === 'device_view_cursor_invalidated'
+                              ? 'cursorInvalidated'
+                              : 'conflict'
+                            : e.code === 'operation_unknown' ||
+                                e.code === 'operation_rollback_unconfirmed'
+                              ? 'unknownWrite'
+                              : e.status === 403
+                                ? 'denied'
+                                : e.status === 501
+                                  ? 'unsupported'
+                                  : 'unavailable'
               : 'invalidResponse'
       }
       return false

@@ -237,7 +237,7 @@ export function createDeviceDemo() {
   }
   const handle: DomainHandler = (request, scenario) => {
     if (
-      !/^\/api\/(?:v1\/(?:asset-fields|device-queries|devices|device-views|device-associations|saved-queries|groups)|v1\/(?:enrollments|devices|self-enrollments|registration-quotas)|v1\/mdm-candidate\/(?:devices|groups))(?:\/|$)/.test(
+      !/^\/api\/(?:v1\/(?:asset-fields|device-queries|devices|device-views|device-associations|saved-queries|groups)|v1\/(?:enrollments|devices|self-enrollments|registration-quotas|registration-channels)|v1\/mdm-candidate\/(?:devices|groups))(?:\/|$)/.test(
         request.path,
       )
     )
@@ -260,6 +260,7 @@ export function createDeviceDemo() {
   }
   return {
     handle,
+    registrationAllowed: enrollments.allowed,
     bindAuthorization: (value: typeof can) => {
       can = value
     },

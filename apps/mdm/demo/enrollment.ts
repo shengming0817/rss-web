@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { TENANT, type DomainHandler } from './scenario'
 import { createReceipts, error, ok } from './http'
 import { INSTANCE } from './operations/authorization'
+import type { RegistrationChannel } from '../src/services/registrationChannels'
 import type { Permission } from '../src/features/operations/clients/authorization'
 import { boolean, closed, count, uuid } from '../src/services/decode'
 import {
@@ -12,7 +13,10 @@ import {
 } from '../src/features/enrollment/clients/configurations'
 import { entraPolicy } from '../src/features/enrollment/clients/entra'
 import { setup } from '../src/features/enrollment/clients/apple'
-export function createOnboardingDemo(can: (actor: string, permission: Permission) => boolean) {
+export function createOnboardingDemo(
+  can: (actor: string, permission: Permission) => boolean,
+  registrationAllowed: (channel: RegistrationChannel) => boolean,
+) {
   const receipts = createReceipts(),
     configurations = new Map<
       string,
@@ -179,6 +183,7 @@ export function createOnboardingDemo(can: (actor: string, permission: Permission
             'channels',
           ]),
           operation = uuid(v['operationId'])
+        if (!registrationAllowed('agent')) return error('enrollment_paused', 409)
         if (configurationOperations.has(operation)) return error('operation_conflict')
         const value = configuration(
           {

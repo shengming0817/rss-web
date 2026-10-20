@@ -5,6 +5,9 @@ import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
 import type { HttpTransport, RequestOptions, NoContentRequest } from '@rss/api/mdm'
 import { decodeMdmError } from '@rss/api/mdm'
 import { networkErrorForTest } from '@rss/api/testing'
+import { createRegistrationChannelsClient } from '../../../services/registrationChannels'
+import { createRegistrationChannels } from '../../../services/registrationChannelState'
+import { createDeviceDemo } from '../../../../demo/devices/state'
 import { generateEnrollmentPassword } from '../../devices/clients/enrollment'
 import { mdmKey, type MdmRuntime } from '../../../context'
 import { mdmI18n } from '../../../i18n'
@@ -28,7 +31,8 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 async function setup(view: unknown, allow = true) {
-  const domain = createOnboardingDemo(() => allow),
+  const devices = createDeviceDemo()
+  const domain = createOnboardingDemo(() => allow, devices.registrationAllowed),
     calls: string[] = [],
     lost = { path: '' },
     state = shallowRef({
@@ -43,19 +47,17 @@ async function setup(view: unknown, allow = true) {
         encodeURIComponent(o.pathParams?.[key] ?? ''),
       )
       calls.push(`${o.method} ${path}`)
-      const reply = domain.handle(
-        {
-          method: o.method,
-          path,
-          body: o.body,
-          query: new URLSearchParams(),
-          headers: Object.fromEntries(
-            Object.entries(o.headers ?? {}).map(([k, v]) => [k.toLowerCase(), v]),
-          ),
-          actor: { principalId: ADMIN, sessionId: state.value.session.id },
-        },
-        'normal',
-      )!
+      const request = {
+        method: o.method,
+        path,
+        body: o.body,
+        query: new URLSearchParams(),
+        headers: Object.fromEntries(
+          Object.entries(o.headers ?? {}).map(([k, v]) => [k.toLowerCase(), v]),
+        ),
+        actor: { principalId: ADMIN, sessionId: state.value.session.id },
+      }
+      const reply = (domain.handle(request, 'normal') ?? devices.handle(request, 'normal'))!
       if (lost.path === o.path) {
         lost.path = ''
         throw networkErrorForTest()
@@ -87,8 +89,11 @@ async function setup(view: unknown, allow = true) {
       authorization: {
         effective: async () => ({
           principalId: ADMIN,
+          tenantId: TENANT,
+          instanceId: INSTANCE,
           grants: allow
             ? [
+                'registration_configuration_write',
                 'agent_enrollment_read',
                 'agent_enrollment_write',
                 'authorization_read',
@@ -99,6 +104,12 @@ async function setup(view: unknown, allow = true) {
       },
     },
   } as unknown as MdmRuntime
+  runtime.registrationChannels = createRegistrationChannels(
+    createRegistrationChannelsClient(transport, TENANT),
+    runtime.session,
+    runtime.operations.authorization,
+    TENANT,
+  )
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -119,6 +130,7 @@ async function setup(view: unknown, allow = true) {
     attachTo: document.body,
     global: { plugins: [router, mdmI18n()], provide: { [mdmKey as symbol]: runtime } },
   })
+  wrapper.vm.$.appContext.app.onUnmount(() => runtime.registrationChannels.dispose())
   wrappers.push(wrapper)
   await flushPromises()
   async function click(text: string) {
@@ -178,7 +190,7 @@ it('hides administrator configuration forms without authoritative permissions', 
   const { wrapper, calls } = await setup(ConfigurationsView, false)
   expect(wrapper.find('form').exists()).toBe(false)
   expect(wrapper.text()).toContain('请求被拒绝')
-  expect(calls).toEqual([])
+  expect(calls).toEqual(['GET /api/v1/registration-channels'])
 })
 it('delivers complete JSON explicitly and revokes the Blob URL when leaving the page', async () => {
   const { wrapper, router, create, revoke, state } = await setup(ConfigurationsView)
@@ -442,4 +454,17 @@ it('preserves explicit ADE profile choices and records sync and assignment as in
   await click('查询原操作结果')
   expect(wrapper.text()).toContain('不代表已注册')
   expect(wrapper.text()).toContain('external_outcome_unknown')
+})
+
+it('blocks paused configuration creates in the handler while preserving settings reads and queries', async () => {
+  const { wrapper, runtime, calls } = await setup(ConfigurationsView)
+  await runtime.registrationChannels.change('agent', 'paused')
+  await flushPromises()
+  const create = vi.spyOn(runtime.onboarding.configurations, 'create')
+  await wrapper.find('form').trigger('submit')
+  await flushPromises()
+  expect(create).not.toHaveBeenCalled()
+  expect(wrapper.text()).toContain('暂停新注册')
+  expect(calls.some((p) => p === 'GET /api/v1/agent-enrollment-settings')).toBe(true)
+  expect(await runtime.onboarding.configurations.operation(crypto.randomUUID())).toBeNull()
 })

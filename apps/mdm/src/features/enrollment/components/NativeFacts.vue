@@ -5,6 +5,8 @@ import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import type { decodeEnrollment } from '../../devices/clients/enrollment'
 import { useAttachment } from '../useAttachment'
+import RegistrationStatus from '../../../components/RegistrationStatus.vue'
+import { nativeChannel } from '../../../services/registrationChannels'
 import { useOperation } from '../../../services/useOperation'
 const props = defineProps<{ value: ReturnType<typeof decodeEnrollment> }>()
 const { t } = useI18n(),
@@ -14,6 +16,8 @@ const { t } = useI18n(),
   { run, busy, failure } = useOperation([], () => runtime.session.state.value.session?.id),
   password = ref('')
 async function profile() {
+  if (!runtime.registrationChannels.canContinue(props.value) || busy.value || !password.value)
+    return
   const secret = password.value
   password.value = ''
   delivery.clear()
@@ -27,6 +31,7 @@ async function profile() {
       },
       (file) => delivery.deliver(file, 'RSS-MDM.mobileconfig', stamp),
     )
+    if (failure.value === 'enrollmentPaused') void runtime.registrationChannels.refresh()
   } finally {
     if (file) new Uint8Array(file.bytes).fill(0)
   }
@@ -45,6 +50,7 @@ onBeforeUnmount(() => {
 </script>
 <template>
   <section :aria-busy="busy">
+    <RegistrationStatus :channel="nativeChannel(value.source)" />
     <h2>{{ t('onboarding.nativeSteps') }}</h2>
     <template v-if="value.instructions.platform === 'windows'">
       <p>{{ t('onboarding.windowsSteps') }}</p>
@@ -75,9 +81,11 @@ onBeforeUnmount(() => {
             autocomplete="off"
             required
             pattern="[A-Za-z0-9_\-]{43}" /></label
-        ><UiButton :disabled="!!(busy || !password)" type="submit">{{
-          t('onboarding.downloadProfile')
-        }}</UiButton>
+        ><UiButton
+          :disabled="!!(busy || !password || !runtime.registrationChannels.canContinue(value))"
+          type="submit"
+          >{{ t('onboarding.downloadProfile') }}</UiButton
+        >
       </form>
       <a v-if="url" :href="url" :download="filename">{{ t('onboarding.saveProfile') }}</a>
     </template>

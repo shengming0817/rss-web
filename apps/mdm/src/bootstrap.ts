@@ -25,6 +25,8 @@ import { createSecurityClients } from './features/security/client'
 import { createOperationsClients } from './features/operations/client'
 import { createOnboardingClients } from './features/enrollment/client'
 import App from './App.vue'
+import { createRegistrationChannelsClient } from './services/registrationChannels'
+import { createRegistrationChannels } from './services/registrationChannelState'
 import { settingsFeature } from './features/settings/routes'
 import { createSettingsClients } from './features/settings/client'
 import { operationsFeature } from './features/operations/routes'
@@ -90,8 +92,19 @@ export function startMdm(
     tenant,
   )
   const settings = createSettingsClients(business, publicTransport, session, tenant, realm)
+  const operations = createOperationsClients(business, tenant, demo, realm)
+  const registrationChannels = createRegistrationChannels(
+    createRegistrationChannelsClient(business, tenant),
+    session,
+    operations.authorization,
+    tenant,
+    realm === 'tenant',
+  )
   const app = createApp(App)
-  app.onUnmount(() => settings.operations.dispose())
+  app.onUnmount(() => {
+    settings.operations.dispose()
+    registrationChannels.dispose()
+  })
   app.provide(runtimeKey, {
     session,
     landingRoute: 'workspace',
@@ -100,6 +113,7 @@ export function startMdm(
   })
   app.provide(mdmKey, {
     session,
+    registrationChannels,
     transport: business,
     onboarding: createOnboardingClients(business, publicTransport, tenant),
     workspace: createWorkspaceClient(business, demo),
@@ -107,7 +121,7 @@ export function startMdm(
     policies: createPolicyClients(business, tenant, demo),
     software: createSoftwareClients(business),
     security: createSecurityClients(business, tenant, demo),
-    operations: createOperationsClients(business, tenant, demo, realm),
+    operations,
     settings,
     realm,
     businessTenant: host.tenant,

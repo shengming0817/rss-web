@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { usePermission } from '../usePermission'
 import { useOperation } from '../../../services/useOperation'
+import RegistrationStatus from '../../../components/RegistrationStatus.vue'
 import PageFrame from '../../../components/PageFrame.vue'
 const id = ref('')
 const runtime = useMdm(),
@@ -103,8 +104,11 @@ watch(
 </script>
 <template>
   <PageFrame :title="t('onboarding.appleAccount')" :busy="busy" :failure="failure">
+    <RegistrationStatus channel="macos_mdm" />
     <p>{{ t('onboarding.appleAccountGuide') }}</p>
-    <a :href="client.bridge">{{ t('onboarding.appleBridge') }}</a>
+    <a v-if="runtime.registrationChannels.allowed('macos_mdm')" :href="client.bridge">{{
+      t('onboarding.appleBridge')
+    }}</a>
     <p v-if="!canRead">{{ t('devices.denied') }}</p>
     <template v-else>
       <UiButton type="button" :disabled="!!busy" @click="refresh">{{
