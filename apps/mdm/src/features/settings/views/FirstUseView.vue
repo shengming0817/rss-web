@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { UiButton, UiMessage } from '@rss/core/components'
 import PageFrame from '../../../components/PageFrame.vue'
 import { useMdm } from '../../../context'
-import { uuid } from '../../../services/decode'
+import { closed, uuid } from '../../../services/decode'
 import { useSettingsAction, useSettingsFacts } from '../useSettingsAction'
 import {
   channels,
@@ -106,6 +106,11 @@ async function load() {
       writable.value = result.writable
       if (!pending.value || pending.value.state === 'received')
         draft.value = structuredClone(result.value.saved.intent)
+      else {
+        const original = closed(JSON.parse(pending.value.publicInput), ['intent'])
+        if (typeof original['intent'] !== 'string') throw new Error('Invalid original setup input')
+        draft.value = decodeIntent(JSON.parse(original['intent']))
+      }
     },
   )
 }

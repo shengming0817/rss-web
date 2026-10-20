@@ -22,6 +22,41 @@ from t2_environment import Environment,private
 from candidate_fixture import INSTANCE,TENANTS,ADMIN,installation
 from build_run import lease_fds
 
+def cleanup_compose():
+    import hashlib
+    import re
+    import shutil
+    import tempfile
+    from candidate_installation_driver import Installation
+    from pki_ca import Provider
+    locator=WEB/'artifacts/settings-browser/compose.json'
+    if not locator.exists():return
+    if locator.is_symlink() or locator.stat().st_mode & 0o077 or locator.stat().st_uid!=os.getuid():raise RuntimeError('unsafe-compose-cleanup-locator')
+    value=json.loads(locator.read_text())
+    root=Path(value['root'])
+    if value['backend']!=str(BACKEND) or root.is_symlink() or root.parent.resolve()!=Path(tempfile.gettempdir()).resolve() or not re.fullmatch(r'mdm-first-use-compose-[a-z0-9_]+',root.name) or not re.fullmatch(r'mdm-first-use-[0-9a-f]{12}',value['project']):raise RuntimeError('foreign-compose-cleanup-locator')
+    owner=Installation(root,root/'production.compose.yaml',value['project'])
+    failures=[]
+    for name,action in [('compose',owner.cleanup),('provider',lambda:Provider(root/'inputs/browser-materials/pki/windows',hashlib.sha256((str(WEB)+':first-use-compose:windows').encode()).hexdigest()[:20],owner_root=BACKEND).reset())]:
+        try:action()
+        except BaseException as error:
+            failures.append(name)
+            print(json.dumps(dict(phase='settings-compose-cleanup',result='failed',owner=name,classification=type(error).__name__,recoveryDirectory=str(root))),flush=True)
+    for kind,args in [('containers',['ps','--all','--quiet']),('networks',['network','ls','--quiet']),('volumes',['volume','ls','--quiet'])]:
+        try:
+            actual=subprocess.check_output(['docker',*args,'--filter','label=com.docker.compose.project='+value['project']],text=True,timeout=15)
+            if actual.strip():failures.append(kind)
+        except BaseException:failures.append(kind)
+    if failures:
+        print(json.dumps(dict(phase='settings-compose-cleanup',result='failed',project=value['project'],recoveryDirectory=str(root))),flush=True)
+        raise RuntimeError('compose-cleanup-unconfirmed')
+    # The fixture may still own an open provider context. Its generated inputs remain
+    # until that context has closed; the independent runner then removes this locator.
+    if '--cleanup-compose' in sys.argv:
+        shutil.rmtree(root)
+        locator.unlink()
+    print(json.dumps(dict(phase='settings-compose-cleanup',result='passed')),flush=True)
+
 def compose_browser(candidate):
     """Existing browser entry over formal Compose seed and an actual configured test CA."""
     import hashlib
@@ -37,8 +72,10 @@ def compose_browser(candidate):
     candidate=Path(candidate).resolve()
     manifest=verify_candidate(candidate)
     image=load_ui(candidate,manifest['ui'])
-    with tempfile.TemporaryDirectory(prefix='mdm-first-use-compose-') as temporary, ExitStack() as providers:
-        root=Path(temporary);inputs=root/'inputs';inputs.mkdir(mode=0o700)
+    if (WEB/'artifacts/settings-browser/compose.json').exists():raise RuntimeError('previous-compose-cleanup-required')
+    root=Path(tempfile.mkdtemp(prefix='mdm-first-use-compose-'))
+    with ExitStack() as providers:
+        inputs=root/'inputs';inputs.mkdir(mode=0o700)
         tls(inputs)
         with socket.socket() as listener:
             listener.bind(('127.0.0.1',0));port=listener.getsockname()[1]
@@ -47,6 +84,7 @@ def compose_browser(candidate):
         private(root/'.env',''.join(k+'='+str(v)+'\n' for k,v in values.items()))
         compose=root/'production.compose.yaml';shutil.copyfile(candidate/'deployment/production.compose.yaml',compose)
         owner=Installation(root,compose,'mdm-first-use-'+uuid.uuid4().hex[:12])
+        private(WEB/'artifacts/settings-browser/compose.json',dict(root=str(root),project=owner.project,backend=str(BACKEND)))
         child=None
         def interrupt(_signal,_frame):
             if child and child.poll() is None:child.terminate()
@@ -112,9 +150,19 @@ def compose_browser(candidate):
                     try:child.wait(timeout=10)
                     except subprocess.TimeoutExpired:child.kill();child.wait(timeout=5)
         finally:
-            owner.cleanup()
-            for sig,handler in previous.items():signal.signal(sig,handler)
+            try:
+                try:providers.close()
+                finally:cleanup_compose()
+            finally:
+                for sig,handler in previous.items():signal.signal(sig,handler)
     print(json.dumps(dict(phase='settings-compose',result='passed',cleanup=True)),flush=True)
+
+if '--cleanup-compose' in sys.argv:
+    try:cleanup_compose()
+    except BaseException as error:
+        print(json.dumps(dict(phase='settings-compose-cleanup',result='failed',classification=type(error).__name__,recoveryLocator=str(WEB/'artifacts/settings-browser/compose.json'))),flush=True)
+        sys.exit(1)
+    sys.exit(0)
 
 if os.environ.get('MDM_SETTINGS_CANDIDATE'):
     try:compose_browser(os.environ['MDM_SETTINGS_CANDIDATE'])

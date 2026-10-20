@@ -58,14 +58,16 @@ try {
     // cancellation window cannot kill this separately bounded cleanup invocation.
     phase = 'cleanup'
     let failed = false
-    for (const group of ['settings-browser-target', 'settings-browser']) {
+    for (const group of ['settings-compose', 'settings-browser-target', 'settings-browser']) {
       const action =
-        group === 'settings-browser-target'
-          ? [
-              '-c',
-              "import sys; sys.path.insert(0, 'hack'); from pathlib import Path; from t2_environment import Environment; Environment(Path.cwd(), group='settings-browser-target').host_ports(release=True)",
-            ]
-          : ['hack/t2_environment.py', 'reset', '--group', group]
+        group === 'settings-compose'
+          ? [resolve(root, 'e2e/mdm/settings-fixture.py'), root, '--cleanup-compose']
+          : group === 'settings-browser-target'
+            ? [
+                '-c',
+                "import sys; sys.path.insert(0, 'hack'); from pathlib import Path; from t2_environment import Environment; Environment(Path.cwd(), group='settings-browser-target').host_ports(release=True)",
+              ]
+            : ['hack/t2_environment.py', 'reset', '--group', group]
       try {
         await run(
           'python3',
@@ -82,9 +84,11 @@ try {
             group,
             classification: error.message,
             recoveryDirectory:
-              group === 'settings-browser-target'
-                ? resolve(homedir(), '.cache/rss-mdm-dev-ports')
-                : resolve(backend, 'artifacts/dev-environment/' + group),
+              group === 'settings-compose'
+                ? resolve(root, 'artifacts/settings-browser/compose.json')
+                : group === 'settings-browser-target'
+                  ? resolve(homedir(), '.cache/rss-mdm-dev-ports')
+                  : resolve(backend, 'artifacts/dev-environment/' + group),
           }),
         )
       }

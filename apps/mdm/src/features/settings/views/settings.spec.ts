@@ -902,3 +902,47 @@ it('queries the original first-use operation after a lost response and never rep
   expect(f.wrapper.text()).not.toContain('完整原请求未保留')
   expect(f.calls.filter((o) => o.method === 'PUT')).toHaveLength(1)
 })
+
+it('restores the exact in-memory first-use request across navigation before explicit original replay', async () => {
+  const f = await fixture(FirstUseView, {}, 'tenant', 'settings-guide')
+  const intent: FirstUseIntent = {
+    channels: ['windows_mdm'],
+    capabilities: { smtp: { kind: 'skip', reason: 'Original reason' } },
+    completionRequested: false,
+  }
+  let attempts = 0
+  const ids: string[] = [],
+    bodies: unknown[] = []
+  f.setHandler((o) => {
+    if (o.method === 'PUT') {
+      ids.push(o.headers!['Idempotency-Key']!)
+      bodies.push(o.body)
+      if (++attempts === 1) throw decodeMdmError(503, { code: 'operation_unknown' })
+      return { operationId: ids[0], saved: { revision: 2, intent } }
+    }
+    if (o.path.endsWith('/operations/{id}'))
+      throw decodeMdmError(404, { code: 'first_use_operation_not_found' })
+    return {
+      tenantId: tenant,
+      saved: { revision: 1, intent },
+      steps: [{ id: 'windows_mdm', status: 'pending', reason: null, evidence: [] }],
+      canComplete: false,
+      complete: false,
+    }
+  })
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  await button(f.wrapper, '保存本次选择').trigger('click')
+  await flushPromises()
+  await f.remount()
+  expect((f.wrapper.get('input[value=windows_mdm]').element as HTMLInputElement).checked).toBe(true)
+  expect((f.wrapper.get('input[placeholder="跳过理由"]').element as HTMLInputElement).value).toBe(
+    'Original reason',
+  )
+  await button(f.wrapper, '按原输入显式重试').trigger('click')
+  await flushPromises()
+  expect(ids).toHaveLength(2)
+  expect(ids[1]).toBe(ids[0])
+  expect(bodies[1]).toEqual(bodies[0])
+  expect(f.settings.operations.records.get('first-use')?.state).toBe('received')
+})

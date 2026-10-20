@@ -131,7 +131,7 @@ try {
   await page.locator('#login-name').fill(fixture.login)
   await page.locator('#login-password').fill(readFileSync(fixture.passwordFile, 'utf8').trim())
   await page.locator('form').evaluate((f) => f.requestSubmit())
-  await page.waitForURL(/workspace/)
+  await page.waitForURL((url) => /\/(?:workspace|settings\/guide)$/.test(url.pathname))
   phase = 'directory-http'
   await api('/api/v1/devices?limit=20')
   await api('/api/v1/device-views?limit=20')

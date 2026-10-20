@@ -156,7 +156,6 @@ export const policiesZh = {
   identity: '设备身份',
   sourceVersion: '成员版本',
   state: {
-    not_required: '无需人工审批',
     draft: '草稿',
     frozen: '已冻结',
     active: '有效',
@@ -164,8 +163,6 @@ export const policiesZh = {
     archived: '已归档',
     deprecated: '已弃用',
     pending: '等待中',
-    pending_review: '待审批',
-    approved: '已批准',
     running: '处理中',
     completed: '已完成',
     failed: '失败',
@@ -237,7 +234,6 @@ export const policiesZh = {
   deviceIds: '设备标识（逗号或空白分隔）',
   lifetime: '执行有效期（秒）',
   active: '调度有效',
-  approved: '已批准',
   schedule: '调度定义',
   scheduleHint: '由服务端处理触发与维护窗口；浏览器不调度任务。时间使用 Unix 秒。',
   trigger: '触发方式',
@@ -337,7 +333,6 @@ export const policiesZh = {
     unverified: '尚未验证',
     verified_present: '已验证存在',
     verified_absent: '已验证不存在',
-    approval: '等待审批',
     offline: '设备离线',
     maintenance_window: '等待维护窗口',
     trigger: '等待触发',
@@ -395,9 +390,6 @@ export const policiesZh = {
   detail: '详情',
   verify: '核实状态',
   cancel: '请求取消',
-  approve: '批准',
-  reapprove: '重新批准',
-  author: '提交人',
 }
 export const policiesEn: typeof policiesZh = {
   confirmReplay: 'I checked the original target, ID and full body and confirm exact replay',
@@ -570,7 +562,6 @@ export const policiesEn: typeof policiesZh = {
   identity: 'Device identity',
   sourceVersion: 'Member version',
   state: {
-    not_required: 'Human approval not required',
     draft: 'Draft',
     frozen: 'Frozen',
     active: 'Active',
@@ -578,8 +569,6 @@ export const policiesEn: typeof policiesZh = {
     archived: 'Archived',
     deprecated: 'Deprecated',
     pending: 'Pending',
-    pending_review: 'Pending review',
-    approved: 'Approved',
     running: 'Running',
     completed: 'Completed',
     failed: 'Failed',
@@ -651,7 +640,6 @@ export const policiesEn: typeof policiesZh = {
   deviceIds: 'Device IDs (comma or whitespace separated)',
   lifetime: 'Run lifetime (seconds)',
   active: 'Schedule active',
-  approved: 'Approved',
   schedule: 'Schedule definition',
   scheduleHint:
     'The server handles triggers and maintenance windows; the browser does not schedule tasks. Times are Unix seconds.',
@@ -753,7 +741,6 @@ export const policiesEn: typeof policiesZh = {
     unverified: 'Unverified',
     verified_present: 'Verified present',
     verified_absent: 'Verified absent',
-    approval: 'Approval',
     offline: 'Offline',
     maintenance_window: 'Maintenance window',
     trigger: 'Trigger',
@@ -812,7 +799,4 @@ export const policiesEn: typeof policiesZh = {
   detail: 'Details',
   verify: 'Verify state',
   cancel: 'Request cancellation',
-  approve: 'Approve',
-  reapprove: 'Reapprove',
-  author: 'Author',
 }

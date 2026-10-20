@@ -113,7 +113,7 @@ async function login(account = fixture) {
   await page.locator('#login-name').fill(account.login)
   await page.locator('#login-password').fill(readFileSync(account.passwordFile, 'utf8').trim())
   await page.locator('form').evaluate((f) => f.requestSubmit())
-  await page.waitForURL(/workspace/)
+  await page.waitForURL((url) => /\/(?:workspace|settings\/guide)$/.test(url.pathname))
 }
 try {
   fixture = JSON.parse(readFileSync(process.env.MDM_POLICY_BROWSER_FIXTURE, 'utf8'))
