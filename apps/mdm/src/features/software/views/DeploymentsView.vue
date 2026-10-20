@@ -26,6 +26,7 @@ import SoftwareResourceSelect from '../components/SoftwareResourceSelect.vue'
 import CatalogLocator from '../../policies/components/CatalogLocator.vue'
 import AssignmentFacts from '../../policies/components/AssignmentFacts.vue'
 import { objectKey } from '../../devices/clients/objects'
+import { deviceBinding } from '../../devices/useDeviceBinding'
 import PageFrame from '../../../components/PageFrame.vue'
 import PolicyDelete from '../../policies/components/PolicyDelete.vue'
 import NativeScheduleEditor from '../components/NativeScheduleEditor.vue'
@@ -36,7 +37,7 @@ const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
   client = runtime.policies.policies
-const { run, runWrite, busy, failure, uncertain } = useOperation()
+const { run, runWrite, busy, failure, uncertain } = useOperation([], () => deviceBinding(runtime))
 const editing = ref(false),
   wizardStep = ref(0),
   editorForm = ref<HTMLFormElement>()

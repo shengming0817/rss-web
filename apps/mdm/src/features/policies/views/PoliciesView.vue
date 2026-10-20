@@ -21,6 +21,7 @@ import ResourceIdentity from '../components/ResourceIdentity.vue'
 import CatalogLocator from '../components/CatalogLocator.vue'
 import AssignmentFacts from '../components/AssignmentFacts.vue'
 import { objectKey } from '../../devices/clients/objects'
+import { deviceBinding } from '../../devices/useDeviceBinding'
 import PageFrame from '../../../components/PageFrame.vue'
 import PolicyDelete from '../components/PolicyDelete.vue'
 const { t } = useI18n(),
@@ -28,7 +29,7 @@ const { t } = useI18n(),
   client = runtime.policies.policies,
   route = useRoute(),
   router = useRouter()
-const { run, runWrite, busy, failure, uncertain } = useOperation()
+const { run, runWrite, busy, failure, uncertain } = useOperation([], () => deviceBinding(runtime))
 const list = ref<Awaited<ReturnType<typeof client.list>>>(),
   current = ref<PolicyRead>(),
   resource = ref<ResourceRead>()
@@ -418,8 +419,10 @@ async function recover() {
   ready.value = false
   const confirmed = await runWrite(
     () => client.change(original.id, structuredClone(toRaw(original.body))),
-    () => {
+    (p) => {
       if (requester() !== original.requester) throw new Error('Policy requester changed')
+      if (p.state === 'archived' && list.value)
+        list.value.items = list.value.items.filter((item) => item.id !== p.id)
       pending.value = undefined
     },
   )

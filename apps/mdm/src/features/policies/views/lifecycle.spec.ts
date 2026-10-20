@@ -65,6 +65,7 @@ async function fixture(
   component: Component,
   action: unknown,
   state: PolicyRead['state'] = 'disabled',
+  initialRead?: Promise<PolicyRead>,
 ) {
   let policy = {
     id,
@@ -75,7 +76,7 @@ async function fixture(
     enabled: state === 'enabled',
     definition: { scope: id, action },
   } as PolicyRead
-  const read = vi.fn(async () => structuredClone(policy))
+  const read = vi.fn(async () => initialRead ?? structuredClone(policy))
   const change = vi.fn(async (_id: string, body: Operation<PolicyChange>) => {
     const state =
       body.input.action === 'archive'
@@ -143,7 +144,9 @@ for (const scenario of scenarios) {
     if (scenario.component === PoliciesView) {
       expect(f.wrapper.get('form > fieldset').attributes('disabled')).toBeDefined()
       await f.wrapper.get('form').trigger('submit')
-    } else expect(f.wrapper.find('form').exists()).toBe(false)
+    } else if (scenario.component === DeploymentsView)
+      expect(f.wrapper.get('form').isVisible()).toBe(false)
+    else expect(f.wrapper.find('form').exists()).toBe(false)
     expect(f.change).not.toHaveBeenCalled()
     f.wrapper.unmount()
   })
@@ -188,6 +191,48 @@ for (const scenario of scenarios) {
     await flushPromises()
     expect(f.change.mock.calls[1]).toEqual(original)
     expect(f.wrapper.text()).toContain('已归档')
+    expect(f.wrapper.findAll('li button').some((b) => b.text().includes(id))).toBe(false)
+    f.wrapper.unmount()
+  })
+  it(`${scenario.name}: discards a read issued by the previous identity`, async () => {
+    let complete!: (p: PolicyRead) => void
+    const response = new Promise<PolicyRead>((resolve) => {
+      complete = resolve
+    })
+    const f = await fixture(scenario.component, scenario.action, 'disabled', response)
+    f.session.value = { ...f.session.value, identity: { principalId: crypto.randomUUID() } }
+    await flushPromises()
+    complete({
+      id,
+      revision: 1,
+      version: 1,
+      versionId: id,
+      state: 'disabled',
+      enabled: false,
+      definition: { scope: id, action: scenario.action },
+    } as PolicyRead)
+    await flushPromises()
+    expect(f.wrapper.findComponent(PolicyDelete).exists()).toBe(false)
+    expect(f.button('新建').attributes('disabled')).toBeUndefined()
+    f.wrapper.unmount()
+  })
+  it(`${scenario.name}: ignores a late unknown deletion after the session changes`, async () => {
+    const f = await fixture(scenario.component, scenario.action)
+    let reject!: (error: Error) => void
+    f.change.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, fail) => {
+          reject = fail
+        }),
+    )
+    await f.confirmDelete()
+    f.session.value = { ...f.session.value, session: { id: crypto.randomUUID() } }
+    await flushPromises()
+    reject(new Error('response lost'))
+    await flushPromises()
+    expect(f.wrapper.findComponent(PolicyDelete).exists()).toBe(false)
+    expect(f.button('新建').attributes('disabled')).toBeUndefined()
+    expect(f.change).toHaveBeenCalledTimes(1)
     f.wrapper.unmount()
   })
 }
