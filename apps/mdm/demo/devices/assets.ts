@@ -8,8 +8,13 @@ import {
   type Query,
   type SavedQuery,
 } from '../../src/features/devices/clients/asset-model'
+import {
+  decodeFieldLayout,
+  type FieldDisplayGroup,
+} from '../../src/features/devices/clients/assets'
 import { catalog, fact, type DemoDevice } from './fixtures'
 import { asset } from './http'
+import { TENANT } from '../scenario'
 import { createPages, createReceipts, error, operation } from '../http'
 import { evaluateCondition } from './criteria'
 interface Search {
@@ -18,6 +23,7 @@ interface Search {
   summary: { matched: number; unknown: number; total: number }
 }
 export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
+  let layout = { revision: 0, editable: true, groups: [] as FieldDisplayGroup[] }
   const searches = new Map<string, Search>()
   const saved = new Map<string, SavedQuery>()
   const pages = createPages()
@@ -63,6 +69,22 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
   const selections = new Map<string, string[]>()
   const handle: DomainHandler = (request, scenario) => {
     const { method, path, query } = request
+    if (path === '/api/v1/asset-field-layout') {
+      if (method === 'GET') return asset({ kind: 'field_layout', ...layout })
+      if (method === 'PUT') {
+        const op = operation(request.body)
+        return receipts.write(request, op.operationId, () => {
+          if (op.expectedRevision !== layout.revision) return error('operation_conflict', 409)
+          const input = closed(op.input, ['groups'])
+          const next = decodeFieldLayout(
+            asset({ kind: 'field_layout', ...layout, groups: input['groups'] }).body,
+            TENANT,
+          )
+          layout = { ...next, revision: layout.revision + 1 }
+          return asset({ kind: 'field_layout_written', revision: layout.revision })
+        })
+      }
+    }
     if (path === '/api/v1/asset-fields' && method === 'GET')
       return asset({
         kind: 'fields',
@@ -281,6 +303,7 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
   return {
     handle,
     reset() {
+      layout = { revision: 0, editable: true, groups: [] }
       searches.clear()
       saved.clear()
       selections.clear()

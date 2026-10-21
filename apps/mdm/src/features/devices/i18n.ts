@@ -1,4 +1,18 @@
 export const devicesZh = {
+  manageFieldGroups: '管理扩展分组',
+  newFieldGroup: '新分组',
+  addFieldGroup: '新增分组',
+  removeFieldGroup: '移除',
+  fieldGroupName: '分组名称',
+  saveFieldGroups: '保存分组',
+  fieldGroupsNote: '组织内共享显示分组；字段来源和读取权限保持不变。',
+  fieldGroupEmpty: '请选择字段，或移除此空分组。',
+  fieldLayoutUnavailable: '分组暂时无法读取，以下仍展示可读资产。',
+  moveUp: '上移',
+  moveDown: '下移',
+  manualField: '可人工维护',
+  collectedField: '采集字段',
+
   trustedAssetsNote:
     '运行质量与保留资产分别显示。可信值的来源时间早于最新运行时，不代表本次采集成功。',
   directorySearch: '名称、序列号或人员 ID',
@@ -86,7 +100,7 @@ export const devicesZh = {
     storage: '存储',
     network: '网络',
     security: '安全',
-    extensions: '扩展字段',
+    extensions: '未分组扩展字段',
   },
   groupDescription: '以资产条件自动维护分组，再用于范围与策略分配。',
   overview: '概览',
@@ -444,6 +458,20 @@ export const devicesZh = {
   },
 }
 export const devicesEn: typeof devicesZh = {
+  manageFieldGroups: 'Manage field groups',
+  newFieldGroup: 'New group',
+  addFieldGroup: 'Add group',
+  removeFieldGroup: 'Remove',
+  fieldGroupName: 'Group name',
+  saveFieldGroups: 'Save groups',
+  fieldGroupsNote: 'Shared within this organization. Field sources and access remain unchanged.',
+  fieldGroupEmpty: 'Select fields or remove this empty group.',
+  fieldLayoutUnavailable: 'Field groups could not be loaded. Readable assets remain available.',
+  moveUp: 'Move up',
+  moveDown: 'Move down',
+  manualField: 'Manually maintained',
+  collectedField: 'Collected field',
+
   trustedAssetsNote:
     'Run quality and retained assets are separate. A trusted value observed before the latest run does not prove that run succeeded.',
   directorySearch: 'Name, serial number or person ID',
@@ -533,7 +561,7 @@ export const devicesEn: typeof devicesZh = {
     storage: 'Storage',
     network: 'Network',
     security: 'Security',
-    extensions: 'Extensions',
+    extensions: 'Ungrouped extensions',
   },
   groupDescription:
     'Keep groups current with asset rules, then use them in scopes and assignments.',

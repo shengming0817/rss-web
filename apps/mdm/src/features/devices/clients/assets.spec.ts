@@ -1,6 +1,12 @@
 import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
-import { createAssetsClient, decodeInventory, decodeAssetPage, decodeCatalog } from './assets'
+import {
+  createAssetsClient,
+  decodeInventory,
+  decodeAssetPage,
+  decodeCatalog,
+  decodeFieldLayout,
+} from './assets'
 const tenant = '11111111-1111-4111-8111-111111111111'
 const task = '22222222-2222-4222-8222-222222222222'
 const evidence = {
@@ -462,4 +468,20 @@ it('retains indeterminate reasons and scoped last-known evidence without promoti
     kind: 'boolean',
     value: false,
   })
+})
+
+it('reads shared layouts without dropping empty retired groups and fences tenant and duplicate fields', () => {
+  const value = {
+    tenantId: tenant,
+    asset: {
+      kind: 'field_layout',
+      revision: 2,
+      editable: false,
+      groups: [{ id: task, name: 'Operations', fields: [] }],
+    },
+  }
+  expect(decodeFieldLayout(value, tenant).groups[0]?.fields).toEqual([])
+  expect(() => decodeFieldLayout(value, task)).toThrow()
+  value.asset.groups[0]!.fields = ['custom.asset_tag', 'custom.asset_tag'] as never[]
+  expect(() => decodeFieldLayout(value, tenant)).toThrow()
 })

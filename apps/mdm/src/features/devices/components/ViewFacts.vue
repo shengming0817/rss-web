@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { UiBadge, UiDisclosure, UiButton } from '@rss/core/components'
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../useDeviceBinding'
 import { assetCategories, assetCategory, assetLabel } from '../assetPresentation'
@@ -12,25 +12,56 @@ import ChannelCard from './ChannelCard.vue'
 import AssetValue from './AssetValue.vue'
 import SourceList from './SourceList.vue'
 import CollectionQuality from './CollectionQuality.vue'
+import FieldLayoutEditor from './FieldLayoutEditor.vue'
+import type { FieldLayout } from '../clients/assets'
 const props = defineProps<{ view: DeviceView; endpoints: EndpointDetail[] }>()
 const emit = defineEmits<{ invalidated: [reason: 'cursorInvalidated' | 'denied' | 'notFound'] }>()
-const category = ref<(typeof assetCategories)[number]>('overview')
+const category = ref<string>('overview')
+const layout = ref<FieldLayout>()
+const layoutFailure = ref(false)
+const selectedGroup = computed(() => layout.value?.groups.find((g) => g.id === category.value))
+const title = computed(
+  () => selectedGroup.value?.name ?? t('devices.assetCategories.' + category.value),
+)
 const visibleFields = computed(() =>
-  Object.values(props.view.fields).filter((f) => assetCategory(f.field) === category.value),
+  Object.values(props.view.fields).filter((f) =>
+    selectedGroup.value
+      ? selectedGroup.value.fields.includes(f.field)
+      : assetCategory(f.field) === category.value &&
+        (category.value !== 'extensions' ||
+          !layout.value?.groups.some((g) => g.fields.includes(f.field))),
+  ),
 )
 const { t, locale } = useI18n(),
   runtime = useMdm()
 const { run, busy, failure } = useOperation([], () => deviceBinding(runtime))
 const collection = ref<{ device: string; id: string }>()
 const catalog = ref<Awaited<ReturnType<typeof runtime.devices.assets.catalog>>>()
-onMounted(
-  () =>
+watch(
+  () => JSON.stringify(deviceBinding(runtime)),
+  () => {
+    layout.value = undefined
+    catalog.value = undefined
+    layoutFailure.value = false
     void run(
-      () => runtime.devices.assets.catalog(),
-      (value) => {
-        catalog.value = value
+      async () => {
+        const fields = await runtime.devices.assets.catalog()
+        let groups: FieldLayout | undefined
+        try {
+          groups = await runtime.devices.assets.fieldLayout()
+        } catch {
+          /* Field values remain independently readable. */
+        }
+        return { fields, groups }
       },
-    ),
+      (value) => {
+        catalog.value = value.fields
+        layout.value = value.groups
+        layoutFailure.value = !value.groups
+      },
+    )
+  },
+  { immediate: true, flush: 'sync' },
 )
 function loadCollection(device: string, id: string) {
   collection.value = { device, id }
@@ -62,10 +93,27 @@ function metadata(field: string) {
       >
         {{ t('devices.assetCategories.' + value) }}
       </button>
+      <button
+        v-for="group in layout?.groups"
+        :key="group.id"
+        class="ui-button"
+        type="button"
+        :aria-pressed="category === group.id"
+        @click="category = group.id"
+      >
+        {{ group.name }}
+      </button>
+      <FieldLayoutEditor
+        v-if="layout && catalog"
+        :layout="layout"
+        :fields="catalog.fields"
+        @saved="layout = $event"
+      />
+      <p v-if="layoutFailure" role="alert">{{ t('devices.fieldLayoutUnavailable') }}</p>
     </nav>
     <div>
       <section class="console-panel">
-        <h2>{{ t('devices.assetCategories.' + category) }}</h2>
+        <h2>{{ title }}</h2>
         <p>{{ t('devices.noTtl') }}</p>
         <p>{{ t('devices.trustedAssetsNote') }}</p>
         <dl>
