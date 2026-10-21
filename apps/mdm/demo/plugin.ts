@@ -28,7 +28,7 @@ export function demoPlugin(): Plugin {
       const imports = createImportsDemo(automation.resources, software)
       const scenario = createScenario(
         [
-          (request) => automation.authorization.guard(request, devices.batches()),
+          (request) => automation.authorization.guard(request),
           settings.handle,
           onboarding.handle,
           publication.handle,

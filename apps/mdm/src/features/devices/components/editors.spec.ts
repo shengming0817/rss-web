@@ -21,7 +21,11 @@ it('keeps scalar types, false and zero and rejects unsafe integers', async () =>
   await wrapper.find('input').setValue('new')
   expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([{ kind: 'string', value: 'new' }])
   await wrapper.setProps({ modelValue: { kind: 'time', value: 0 } })
-  expect(wrapper.text()).toContain('Unix')
+  expect(wrapper.get('input').attributes('type')).toBe('datetime-local')
+  await wrapper.get('input').setValue('2026-10-20T12:00:00')
+  expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([
+    { kind: 'time', value: Date.parse('2026-10-20T12:00:00Z') / 1000 },
+  ])
   wrapper.unmount()
 })
 it('edits catalog-driven set predicates and nested AND/OR without flattening', async () => {

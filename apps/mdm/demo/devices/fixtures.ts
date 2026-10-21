@@ -7,8 +7,6 @@ interface DeviceSummary {
   inventoryAvailable: boolean
   revision: number
   channels: ('mdm' | 'agent')[]
-  owner: string | null
-  department: string | null
 }
 import type {
   CollectionScope,
@@ -186,8 +184,6 @@ export function makeDevices(): Map<string, DemoDevice> {
         inventoryAvailable: !pending,
         revision: 1,
         channels,
-        owner: pending ? null : `employee-${index + 1}`,
-        department: pending ? null : 'Engineering',
       }
       return [
         id,

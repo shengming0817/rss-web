@@ -11,7 +11,7 @@ export const deviceFeature: MdmFeature = {
     {
       path: '/tenants/:tenant/device-views/:kind/:view',
       name: 'device-view-detail',
-      component: () => import('./views/UnifiedDetailView.vue'),
+      component: () => import('./views/DeviceDetailView.vue'),
       meta: { protected: true },
     },
     {
@@ -59,7 +59,7 @@ export const deviceFeature: MdmFeature = {
     {
       path: `${base}/:device`,
       name: 'device-detail',
-      component: () => import('./views/DetailView.vue'),
+      component: () => import('./views/DeviceDetailView.vue'),
       meta: { protected: true },
     },
   ],

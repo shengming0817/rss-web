@@ -27,7 +27,7 @@ async function start() {
     imports = createImportsDemo(automation.resources, automation.lifecycle)
   const server = createScenario(
     [
-      (request) => automation.authorization.guard(request, devices.batches()),
+      (request) => automation.authorization.guard(request),
       onboarding.handle,
       publication.handle,
       imports.handle,

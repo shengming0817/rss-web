@@ -74,34 +74,10 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
   const policies = createPolicyDemo(devices, scopes, resources, policyStore)
   const pages = createPages()
   function executions(): ExecutionSummary[] {
-    const batches: ExecutionSummary[] = devices.batches().flatMap((batch) =>
-      batch.targets.flatMap((target) =>
-        target.execution
-          ? [
-              {
-                id: target.execution,
-                batch: batch.id,
-                device: target.device,
-                origin: { kind: 'device_batch' as const, batch: batch.id },
-                admission: 'accepted' as const,
-                dispatch: 'queued' as const,
-                receipt: 'not_received' as const,
-                execution: 'not_started' as const,
-                effect: 'unverified' as const,
-                compliance: 'unknown' as const,
-                attempt: null,
-                nativeCode: null,
-                waitingReason: 'device_receipt' as const,
-              },
-            ]
-          : [],
-      ),
-    )
     return [
       ...security.executions(),
       ...policies.executions(),
       ...native.executions(),
-      ...batches,
       ...software.runs.rows().map((r) =>
         softwareExecution(r.policy.id, r.policy.versionId, {
           ...r.value,
@@ -112,7 +88,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
   }
   const handle: DomainHandler = (request, scenario) => {
     try {
-      const denied = authorization.guard(request, devices.batches())
+      const denied = authorization.guard(request)
       if (denied) return denied
       security.settle()
       const onboarding = /^\/api\/v1\/policies\/([^/]+)\/(assignments|runs)$/.exec(request.path)

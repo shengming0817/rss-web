@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { UiButton } from '@rss/core/components'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
@@ -15,9 +15,17 @@ const emit = defineEmits<{ invalidated: [reason: 'cursorInvalidated' | 'denied' 
 const { t } = useI18n(),
   runtime = useMdm(),
   { run, busy, failure } = useOperation([], () => [...deviceBinding(runtime), props.source.cursor])
+const search = ref('')
+const visibleItems = computed(
+  () =>
+    page.value?.items.filter((item) =>
+      JSON.stringify(item).toLocaleLowerCase().includes(search.value.toLocaleLowerCase()),
+    ) ?? [],
+)
 const page = ref<Awaited<ReturnType<typeof runtime.devices.views.items>>>()
 async function load(next?: string) {
   page.value = undefined
+  search.value = ''
   await run(
     () => runtime.devices.views.items(props.view.reference, props.field, props.source, next),
     (v) => (page.value = v),
@@ -28,6 +36,7 @@ async function load(next?: string) {
     failure.value === 'notFound'
   ) {
     page.value = undefined
+    search.value = ''
     emit('invalidated', failure.value)
   }
 }
@@ -56,8 +65,11 @@ async function load(next?: string) {
     <UiButton v-if="source.state.kind === 'known'" :disabled="!!busy" type="submit" @click="load()">
       {{ t('devices.expandSource') }}
     </UiButton>
+    <label v-if="page"
+      >{{ t('devices.searchLoadedPage') }}<input v-model="search" class="ui-input" type="search"
+    /></label>
     <ol v-if="page">
-      <li v-for="(item, index) in page.items" :key="index">
+      <li v-for="(item, index) in visibleItems" :key="index">
         <pre>{{ JSON.stringify(item, null, 2) }}</pre>
       </li>
     </ol>

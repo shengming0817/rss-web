@@ -147,6 +147,20 @@ useSettingsFacts(() => {
 })
 </script>
 <template>
+  <section v-if="purpose === 'apns'" class="console-panel">
+    <h2>{{ t('settings.apnsJourney') }}</h2>
+    <ol>
+      <li>{{ t('settings.apnsCsrStep') }}</li>
+      <li>{{ t('settings.apnsVendorStep') }}</li>
+      <li>
+        <a href="https://identity.apple.com/pushcert/" target="_blank" rel="noopener noreferrer">{{
+          t('settings.apnsPortalStep')
+        }}</a>
+      </li>
+      <li>{{ t('settings.apnsImportStep') }}</li>
+      <li>{{ t('settings.apnsApplyStep') }}</li>
+    </ol>
+  </section>
   <UiMessage tone="info" :title="t('settings.csrHint')">{{
     t('settings.secretCleared')
   }}</UiMessage>

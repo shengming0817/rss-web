@@ -13,11 +13,30 @@ let browser,
   page,
   phase = 'environment',
   result = 'failed',
+  closing,
+  cleanupFailed = false,
+  interrupted = false,
   associatedDiagnostics
 const coverage = [],
   responses = [],
   pageErrors = []
-const stop = () => browser?.close().catch(() => {})
+const close = () =>
+  (closing ??= Promise.resolve().then(async () => {
+    try {
+      await context?.close()
+    } catch {
+      cleanupFailed = true
+    }
+    try {
+      await browser?.close()
+    } catch {
+      cleanupFailed = true
+    }
+  }))
+const stop = () => {
+  interrupted = true
+  void close()
+}
 process.once('SIGINT', stop)
 process.once('SIGTERM', stop)
 const timer = setTimeout(stop, 290000)
@@ -148,7 +167,7 @@ try {
   coverage.push('real-directory-counters-and-pagination')
   phase = 'unknown-create'
   await page.goto(path(`devices/${fixture.mdm}`))
-  await page.getByRole('tab', { name: '设备关联管理', exact: true }).click()
+  await page.getByRole('tab', { name: '管理', exact: true }).click()
   await panel().waitFor()
   const oldMdm = await api(`/api/v1/devices/${fixture.mdm}`)
   advanceGeneration('mdm')
@@ -194,7 +213,7 @@ try {
   await page.getByRole('link', { name: '设备目录', exact: true }).click()
   await loaded()
   await page.getByRole('link', { name: fixture.mdm, exact: true }).first().click()
-  await page.getByRole('tab', { name: '设备关联管理', exact: true }).click()
+  await page.getByRole('tab', { name: '管理', exact: true }).click()
   await panel().waitFor()
   await page.getByLabel('我确认使用相同操作标识、身份及完整原正文幂等重放', { exact: true }).check()
   await page.getByRole('button', { name: '幂等重放原关联操作', exact: true }).click()
@@ -234,7 +253,7 @@ try {
   )
   coverage.push('manual-conflict-two-endpoints-source-pagination')
   phase = 'cas'
-  await page.getByRole('tab', { name: '设备关联管理', exact: true }).click()
+  await page.getByRole('tab', { name: '管理', exact: true }).click()
   await page.getByRole('button', { name: '读取当前关系与主注册', exact: true }).click()
   await panel().locator('[aria-busy=false]').count()
   await panel().getByLabel('核实说明与依据', { exact: true }).fill('UI verification')
@@ -275,7 +294,7 @@ try {
       .find((e) => e.id === fixture.agent)
       .channels.some((c) => c.generation === 2),
   )
-  await page.getByRole('tab', { name: '设备关联管理', exact: true }).click()
+  await page.getByRole('tab', { name: '管理', exact: true }).click()
   await page.getByRole('button', { name: '读取当前关系与主注册', exact: true }).click()
   await panel().getByLabel('核实说明与依据', { exact: true }).fill('Verified current generation')
   await panel()
@@ -666,7 +685,7 @@ try {
   phase = 'revoke'
   await writeRule(fixture.rule.grants)
   await page.reload()
-  await page.getByRole('tab', { name: '设备关联管理', exact: true }).click()
+  await page.getByRole('tab', { name: '管理', exact: true }).click()
   await panel().waitFor()
   const registrations = await api(`/api/v1/devices/${fixture.agent}/registrations`)
   await panel()
@@ -733,8 +752,15 @@ try {
   )
 } finally {
   clearTimeout(timer)
-  await context?.close().catch(() => {})
-  await browser?.close().catch(() => {})
-  console.log(JSON.stringify({ phase: 'device-browser', result, coverage }))
+  await close()
+  if (cleanupFailed || interrupted) result = 'failed'
+  console.log(
+    JSON.stringify({
+      phase: 'device-browser',
+      result,
+      coverage,
+      browserCleanup: cleanupFailed ? 'failed' : 'passed',
+    }),
+  )
   if (result !== 'passed') process.exitCode = 1
 }

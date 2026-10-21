@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiInput, UiMessage } from '@rss/core/components'
+import { UiButton, UiInput, UiMessage, UiDialog } from '@rss/core/components'
 import PageFrame from '../../../components/PageFrame.vue'
 import { useMdm } from '../../../context'
 import { entries } from '../entries'
@@ -10,6 +10,7 @@ import { settingsSections } from '../routes'
 import { settingsDestination } from '../destinations'
 import { useSettingsFacts, useSettingsAction } from '../useSettingsAction'
 import type { SettingsCatalog } from '../clients/catalog'
+import MaterialPanel from '../components/MaterialPanel.vue'
 import DeploymentPanel from '../components/DeploymentPanel.vue'
 import OperationsPanel from '../components/OperationsPanel.vue'
 const runtime = useMdm(),
@@ -17,7 +18,20 @@ const runtime = useMdm(),
   { t, locale } = useI18n(),
   { run, busy, failure } = useSettingsAction(() => 'catalog')
 const catalog = ref<SettingsCatalog>(),
-  search = ref('')
+  search = ref(''),
+  material = ref('')
+const materials = [
+  'apns',
+  'profile',
+  'managed_account',
+  'storage',
+  'smtp',
+  'wns',
+  'task',
+  'webhook',
+  'pki',
+  'packages',
+]
 const section = computed(() => String(route.name).replace('settings-', ''))
 const selected = computed(
   () =>
@@ -113,15 +127,15 @@ useSettingsFacts(() => (catalog.value = undefined))
       >
         <div>
           <h2>{{ locale === 'zh-CN' ? entries[item.id].zh : entries[item.id].en }}</h2>
-          <p>
-            {{ t('settings.owner') }}: {{ item.owner }} · {{ t('settings.custody') }}:
-            {{ item.custody }}
-          </p>
-          <p>
-            {{ t('settings.savedVersion') }} {{ item.revision ?? '—' }} ·
-            {{ t('settings.requestedVersion') }} {{ item.desiredRevision ?? '—' }} ·
-            {{ t('settings.runtimeVersion') }} {{ item.appliedRevision ?? '—' }}
-          </p>
+
+          <details>
+            <summary>{{ t('devices.evidence') }}</summary>
+            <p>
+              {{ t('settings.savedVersion') }} {{ item.revision ?? '—' }} ·
+              {{ t('settings.requestedVersion') }} {{ item.desiredRevision ?? '—' }} ·
+              {{ t('settings.runtimeVersion') }} {{ item.appliedRevision ?? '—' }}
+            </p>
+          </details>
           <p v-if="item.status === 'unknown' || item.reason">
             {{
               t(
@@ -134,7 +148,12 @@ useSettingsFacts(() => (catalog.value = undefined))
         </div>
         <div class="settings-catalog-state">
           <span class="ui-badge">{{ t('settings.status.' + item.status) }}</span
+          ><UiButton
+            v-if="materials.includes(entries[item.id].target)"
+            @click="material = entries[item.id].target"
+            >{{ t('settings.open') }}</UiButton
           ><RouterLink
+            v-else
             class="ui-button"
             :to="settingsDestination(entries[item.id].target, runtime.tenant)"
             >{{
@@ -155,6 +174,14 @@ useSettingsFacts(() => (catalog.value = undefined))
         t('operations.authorization')
       }}</RouterLink>
     </div>
+    <UiDialog
+      :open="!!material"
+      :title="t('settings.title')"
+      :close-label="t('console.cancel')"
+      placement="right"
+      @update:open="!$event && (material = '')"
+      ><MaterialPanel v-if="material" :key="material" :material="material"
+    /></UiDialog>
     <DeploymentPanel v-if="section === 'deployment'" />
     <OperationsPanel v-if="section === 'operations'" />
   </PageFrame>

@@ -1,15 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { TENANT, type DemoRequest, type DomainHandler } from '../scenario'
 import { createReceipts, error, ok, operation } from '../http'
-import {
-  array,
-  closed,
-  count,
-  enumeration,
-  identifier,
-  record as objectRecord,
-  uuid,
-} from '../../src/services/decode'
+import { closed, count, record as objectRecord, uuid } from '../../src/services/decode'
 import {
   rule,
   groupDefinition,
@@ -20,10 +12,6 @@ import {
   type Permission,
   type Revision,
 } from '../../src/features/operations/clients/authorization'
-import {
-  lifecycleActions,
-  type Batch,
-} from '../../src/features/devices/clients/candidate-operations'
 import type { PolicyDefinition } from '../../src/features/policies/clients/model'
 import type { AuditEntry } from '../../src/features/operations/clients/model'
 export const INSTANCE = '44444444-4444-4444-8444-444444444444'
@@ -137,12 +125,10 @@ export function createAuthorizationDemo(
           : g.scope.kind === 'tenant'),
     )
   }
-  function guard(request: DemoRequest, batches: readonly Batch[]) {
+  function guard(request: DemoRequest) {
     const path = request.path
     if (path.startsWith('/api/v1/authorization')) return
-    const deviceMatch =
-      /^\/api\/v1\/devices\/([^/]+)(?:\/(.*))?$/.exec(path) ??
-      /^\/api\/v1\/mdm-candidate\/devices\/([^/]+)\/(assignment)$/.exec(path)
+    const deviceMatch = /^\/api\/v1\/devices\/([^/]+)(?:\/(.*))?$/.exec(path)
     const actor = request.actor.principalId
     const allDevices = (permission: Permission) =>
       effective(actor).some((g) => g.operation === permission && g.scope.kind === 'all_devices')
@@ -249,42 +235,6 @@ export function createAuthorizationDemo(
               : 'release_recover'
       if (!can(actor, permission)) return error('permission_denied', 403)
     }
-    const batch =
-      /^\/api\/v1\/mdm-candidate\/devices\/batch-previews(?:\/([^/]+)(?:\/(execute|cancel))?)?$/.exec(
-        path,
-      )
-    if (batch) {
-      const existing = batches.find((v) => v.id === batch[1])
-      if (batch[1] && !existing) return error('operation_not_found', 404)
-      const input =
-        !batch[1] && request.method === 'POST'
-          ? closed(operation(request.body).input, ['action', 'devices'])
-          : null
-      const action =
-        existing?.action ?? (input ? enumeration(input['action'], lifecycleActions) : null)
-      const targets =
-        existing?.targets.map((v) => v.device) ?? (input ? array(input['devices'], identifier) : [])
-      if (!action || !targets.length) return error('malformed_request', 400)
-      // Candidate-only lifecycle actions have an explicit demo management decision.
-      // Native wipe/assignment grants remain scoped to every target device.
-      const permission: Permission =
-        batch[2] === 'cancel'
-          ? 'operation_cancel'
-          : action === 'wipe'
-            ? 'device_wipe'
-            : action === 'reassign'
-              ? 'inventory_assign'
-              : 'authorization_write'
-      if (
-        targets.some(
-          (device) =>
-            !can(actor, 'inventory_read', device) ||
-            !can(actor, permission, permission === 'authorization_write' ? undefined : device),
-        )
-      )
-        return error('permission_denied', 403)
-      return
-    }
     const all = () =>
       effective(actor).some(
         (g) => g.operation === 'inventory_read' && g.scope.kind === 'all_devices',
@@ -294,13 +244,13 @@ export function createAuthorizationDemo(
         suffix = deviceMatch[2] ?? ''
       if (
         request.method === 'GET' &&
-        (!suffix || ['inventory', 'timeline', 'assignment'].includes(suffix)) &&
+        (!suffix || ['inventory', 'timeline'].includes(suffix)) &&
         !can(actor, 'inventory_read', device)
       )
         return error('permission_denied', 403)
       if (
         request.method === 'PUT' &&
-        (suffix === 'assignment' || suffix.startsWith('manual-fields/')) &&
+        suffix.startsWith('manual-fields/') &&
         !can(actor, 'inventory_assign', device)
       )
         return error('permission_denied', 403)

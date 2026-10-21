@@ -18,6 +18,7 @@ import {
 } from '../clients/firstUse'
 import { entries } from '../entries'
 import { settingsDestination } from '../destinations'
+import MaterialPanel from '../components/MaterialPanel.vue'
 import OperationNotice from '../components/OperationNotice.vue'
 const runtime = useMdm(),
   route = useRoute(),
@@ -42,6 +43,35 @@ const draft = ref<FirstUseIntent>({ channels: [], capabilities: {}, completionRe
 const originalOperation = ref<string>(),
   inputLost = ref(false),
   invalidLocator = ref(false)
+const currentStep = ref('channels')
+const packageReady = ref(false),
+  packageKnown = ref(false)
+const steps = computed(() => [
+  { id: 'channels', label: 'chooseChannels' },
+  { id: 'storage', label: 'storageStep' },
+  { id: 'trust', label: 'trustStep' },
+  ...draft.value.channels.map((id) => ({ id, label: 'firstUseNames.' + id })),
+  { id: 'options', label: 'optionsStep' },
+  { id: 'review', label: 'reviewStep' },
+])
+const s3Ready = computed(
+  () => progress.value?.steps.some((s) => s.id === 's3' && s.status === 'ready') === true,
+)
+const canFinish = computed(
+  () =>
+    !!progress.value?.canComplete &&
+    s3Ready.value &&
+    (!draft.value.channels.includes('agent') || packageReady.value) &&
+    !dirty.value &&
+    !blocked.value,
+)
+const channelMaterials = computed(() =>
+  currentStep.value === 'agent'
+    ? ['packages', 'task']
+    : currentStep.value === 'windows_mdm'
+      ? ['wns']
+      : ['pki', 'apns', 'profile'],
+)
 const finished = computed(() => progress.value?.saved.intent.completionRequested === true)
 const blocked = computed(
   () => locked.value || (!!originalOperation.value && !pending.value) || invalidLocator.value,
@@ -70,6 +100,10 @@ watch(
     }
   },
 )
+function selectStep(id: string) {
+  currentStep.value = id
+  void router.replace({ query: { ...route.query, step: id } })
+}
 function decide(capability: Capability, event: Event) {
   const kind = (event.target as HTMLSelectElement).value
   if (kind === 'configure') draft.value.capabilities[capability] = { kind }
@@ -87,6 +121,7 @@ function skipReason(capability: Capability) {
 async function load() {
   progress.value = undefined
   writable.value = false
+  packageReady.value = false
   await run(
     async () => {
       if (runtime.realm !== 'tenant') throw new Error('Business setup only')
@@ -96,6 +131,10 @@ async function load() {
       const value = await client.read()
       return {
         value,
+        packages:
+          value.saved.intent.channels.includes('agent') || value.saved.revision === 0
+            ? await runtime.settings.packages.read().catch(() => null)
+            : [],
         writable: authorization.grants.some(
           (g) => g.operation === 'registration_configuration_write' && g.scope.kind === 'tenant',
         ),
@@ -104,9 +143,18 @@ async function load() {
     (result) => {
       progress.value = result.value
       writable.value = result.writable
-      if (!pending.value || pending.value.state === 'received')
+      packageKnown.value = result.packages !== null
+      packageReady.value = result.packages?.some((p) => p.channel === 'production') ?? false
+      if (!pending.value || pending.value.state === 'received') {
         draft.value = structuredClone(result.value.saved.intent)
-      else {
+        if (!finished.value) {
+          if (result.value.saved.revision === 0 && !draft.value.channels.length)
+            draft.value.channels = ['agent']
+          draft.value.capabilities.s3 = { kind: 'configure' }
+          if (draft.value.channels.includes('agent'))
+            draft.value.capabilities.agent_package = { kind: 'configure' }
+        }
+      } else {
         const original = closed(JSON.parse(pending.value.publicInput), ['intent'])
         if (typeof original['intent'] !== 'string') throw new Error('Invalid original setup input')
         draft.value = decodeIntent(JSON.parse(original['intent']))
@@ -116,12 +164,12 @@ async function load() {
 }
 async function remember(id: string) {
   originalOperation.value = id
-  await router.replace({ query: { operation: id } })
+  await router.replace({ query: { ...route.query, operation: id } })
 }
 async function forget() {
   originalOperation.value = undefined
   inputLost.value = false
-  await router.replace({ query: {} })
+  await router.replace({ query: { ...route.query, operation: undefined } })
 }
 async function save(complete = false, replay = false) {
   if (
@@ -133,12 +181,17 @@ async function save(complete = false, replay = false) {
   )
     return
   if (!replay && blocked.value) return
+  if (!replay && complete && !canFinish.value) return
   let intent: FirstUseIntent
   try {
     intent = decodeIntent(structuredClone(toRaw(draft.value)))
   } catch {
     failure.value = 'invalidRequest'
     return
+  }
+  if (!replay && !finished.value) {
+    intent.capabilities.s3 = { kind: 'configure' }
+    if (intent.channels.includes('agent')) intent.capabilities.agent_package = { kind: 'configure' }
   }
   intent.completionRequested = complete
   const revision = replay ? pending.value!.expectedRevision : progress.value.saved.revision
@@ -198,6 +251,10 @@ onMounted(async () => {
     originalOperation.value = pending.value.id
   }
   await load()
+  currentStep.value =
+    typeof route.query['step'] === 'string' && steps.value.some((s) => s.id === route.query['step'])
+      ? route.query['step']
+      : 'channels'
   if (originalOperation.value) await lookup()
 })
 useSettingsFacts(() => {
@@ -209,98 +266,172 @@ useSettingsFacts(() => {
 <template>
   <PageFrame :title="t('settings.guide')" :busy="busy" :failure="failure">
     <template #actions
-      ><UiButton :busy="busy" @click="load">{{ t('settings.reload') }}</UiButton
+      ><UiButton :disabled="busy" @click="load">{{ t('settings.reload') }}</UiButton
       ><RouterLink :to="{ name: 'settings-overview', params: { tenant: runtime.tenant } }">{{
         t('settings.allEntries')
       }}</RouterLink></template
     >
-    <p>{{ t('settings.guideAuthority') }}</p>
     <UiMessage v-if="finished" tone="info" :title="t('settings.guideFinished')">{{
       t('settings.guideDaily')
     }}</UiMessage>
     <UiMessage v-if="progress && !writable" tone="warning" :title="t('settings.guideReadonly')" />
     <UiMessage v-if="invalidLocator" tone="warning" :title="t('settings.guideInvalidLocator')" />
-    <section v-if="progress" class="console-panel">
-      <h2>{{ t('settings.selectChannels') }}</h2>
-      <fieldset :disabled="!writable || finished || blocked || busy" class="settings-actions">
-        <legend>{{ t('settings.guideSelection') }}</legend>
-        <label v-for="channel in channels" :key="channel"
-          ><input v-model="draft.channels" type="checkbox" :value="channel" />{{
-            t('settings.firstUseNames.' + channel)
-          }}</label
+    <div v-if="progress" class="first-use-layout">
+      <nav class="first-use-steps" :aria-label="t('settings.guide')">
+        <UiButton
+          v-for="(step, index) in steps"
+          :key="step.id"
+          :aria-current="currentStep === step.id ? 'step' : undefined"
+          @click="selectStep(step.id)"
+          >{{ index + 1 }}. {{ t('settings.' + step.label) }}</UiButton
         >
-        <label v-for="capability in capabilities" :key="capability"
-          >{{ t('settings.firstUseNames.' + capability) }}
-          <select
-            :value="draft.capabilities[capability]?.kind ?? ''"
-            :data-capability="capability"
-            class="ui-input"
-            @change="decide(capability, $event)"
-          >
-            <option value="">{{ t('settings.guideNotSelected') }}</option>
-            <option
-              value="configure"
-              :disabled="
-                !!capabilityChannel[capability] &&
-                !draft.channels.includes(capabilityChannel[capability]!)
-              "
+      </nav>
+      <section class="console-panel">
+        <template v-if="currentStep === 'channels'"
+          ><h2>{{ t('settings.chooseChannels') }}</h2>
+          <fieldset :disabled="!writable || finished || blocked || busy">
+            <legend>{{ t('settings.guideSelection') }}</legend>
+            <label v-for="channel in channels" :key="channel"
+              ><input v-model="draft.channels" type="checkbox" :value="channel" />{{
+                t('settings.firstUseNames.' + channel)
+              }}</label
             >
-              {{ t('settings.guideConfigure') }}
-            </option>
-            <option value="skip">{{ t('settings.guideSkip') }}</option>
-          </select>
-          <input
-            v-if="draft.capabilities[capability]?.kind === 'skip'"
-            :value="skipReason(capability)"
-            class="ui-input"
-            :aria-label="
-              t('settings.guideSkipReason') + ' · ' + t('settings.firstUseNames.' + capability)
-            "
-            :placeholder="t('settings.guideSkipReason')"
-            @input="reason(capability, $event)"
-          />
-        </label>
-      </fieldset>
-      <UiButton
-        v-if="!finished && writable"
-        :disabled="blocked || busy || !draft.channels.length"
-        @click="save()"
-        >{{ t('settings.guideSave') }}</UiButton
-      >
-      <p v-if="dirty">{{ t('settings.guideUnsaved') }}</p>
-    </section>
-    <section v-if="progress" class="console-panel">
-      <h2>{{ t('settings.guideFacts') }}</h2>
-      <p v-if="!progress.steps.length">{{ t('settings.guideChooseFirst') }}</p>
-      <article v-for="step in progress.steps" :key="step.id" :data-first-use-step="step.id">
-        <h3>
-          {{ t('settings.firstUseNames.' + step.id) }} ·
-          {{ t('settings.firstUseStatus.' + step.status) }}
-        </h3>
-        <p v-if="step.reason">{{ t('settings.guideReason') }}: {{ step.reason }}</p>
-        <RouterLink
-          v-if="channels.includes(step.id as Channel)"
-          :to="{ name: 'registration-quotas', params: { tenant: runtime.tenant } }"
-          >{{ t('settings.guideChannelSettings') }}</RouterLink
+          </fieldset>
+          <UiButton
+            v-if="!finished && writable"
+            :disabled="blocked || busy || !draft.channels.length"
+            @click="save()"
+            >{{ t('settings.guideSave') }}</UiButton
+          ></template
         >
-        <RouterLink
-          v-if="step.id === 'agent_registration'"
-          :to="{ name: 'agent-configurations', params: { tenant: runtime.tenant } }"
-          >{{ t('settings.channelAgent') }}</RouterLink
+        <template v-else-if="currentStep === 'storage'"
+          ><h2>{{ t('settings.storageStep') }}</h2>
+          <p>{{ t('settings.storageRequired') }}</p>
+          <MaterialPanel material="storage"
+        /></template>
+        <template v-else-if="currentStep === 'trust'"
+          ><h2>{{ t('settings.trustStep') }}</h2>
+          <p>{{ t('settings.caOperationsBoundary') }}</p>
+          <MaterialPanel material="pki"
+        /></template>
+        <template v-else-if="channels.includes(currentStep as Channel)"
+          ><h2>{{ t('settings.firstUseNames.' + currentStep) }}</h2>
+          <p v-if="currentStep === 'windows_mdm'">{{ t('settings.windowsIdentityBoundary') }}</p>
+          <section v-for="(material, index) in channelMaterials" :key="material">
+            <h3>{{ index + 1 }}. {{ t('settings.materialNames.' + material) }}</h3>
+            <MaterialPanel :material="material" />
+          </section>
+          <nav class="console-inline-actions">
+            <RouterLink :to="{ name: 'device-enroll', params: { tenant: runtime.tenant } }">{{
+              t('settings.manualEnrollment')
+            }}</RouterLink
+            ><RouterLink
+              v-if="currentStep === 'agent'"
+              :to="{ name: 'agent-configurations', params: { tenant: runtime.tenant } }"
+              >{{ t('settings.channelAgent') }}</RouterLink
+            ><RouterLink
+              v-if="currentStep === 'macos_mdm'"
+              :to="settingsDestination('ade', runtime.tenant)"
+              >{{ t('settings.adeEnrollment') }}</RouterLink
+            ><RouterLink
+              v-if="currentStep === 'macos_mdm'"
+              :to="settingsDestination('appleAccount', runtime.tenant)"
+              >{{ t('settings.managedAppleEnrollment') }}</RouterLink
+            >
+          </nav>
+        </template>
+        <template v-else-if="currentStep === 'options'"
+          ><h2>{{ t('settings.optionsStep') }}</h2>
+          <fieldset :disabled="!writable || finished || blocked || busy">
+            <label
+              v-for="capability in capabilities.filter((c) =>
+                [
+                  'oidc',
+                  'smtp',
+                  'webhook',
+                  'recovery_credentials',
+                  'task_signing',
+                  'windows_push',
+                  'apple_ade',
+                  'apple_account',
+                ].includes(c),
+              )"
+              :key="capability"
+              >{{ t('settings.firstUseNames.' + capability)
+              }}<select
+                :value="draft.capabilities[capability]?.kind ?? ''"
+                :data-capability="capability"
+                class="ui-input"
+                @change="decide(capability, $event)"
+              >
+                <option value="">{{ t('settings.guideNotSelected') }}</option>
+                <option
+                  value="configure"
+                  :disabled="
+                    !!capabilityChannel[capability] &&
+                    !draft.channels.includes(capabilityChannel[capability]!)
+                  "
+                >
+                  {{ t('settings.guideConfigure') }}
+                </option>
+                <option value="skip">{{ t('settings.guideSkip') }}</option></select
+              ><input
+                v-if="draft.capabilities[capability]?.kind === 'skip'"
+                :value="skipReason(capability)"
+                :placeholder="t('settings.guideSkipReason')"
+                :aria-label="
+                  t('settings.guideSkipReason') + ' · ' + t('settings.firstUseNames.' + capability)
+                "
+                class="ui-input"
+                @input="reason(capability, $event)"
+            /></label>
+          </fieldset>
+          <UiButton v-if="!finished && writable" :disabled="blocked || busy" @click="save()">{{
+            t('settings.guideSave')
+          }}</UiButton></template
         >
-        <div v-for="item in step.evidence" :key="item.id" :data-setting="item.id">
-          <strong>{{ locale === 'zh-CN' ? entries[item.id].zh : entries[item.id].en }}</strong>
-          <p>
-            {{ t('settings.savedVersion') }} {{ item.revision ?? '—' }} ·
-            {{ t('settings.requestedVersion') }} {{ item.desiredRevision ?? '—' }} ·
-            {{ t('settings.runtimeVersion') }} {{ item.appliedRevision ?? '—' }}
+        <template v-else-if="currentStep === 'review'"
+          ><h2>{{ t('settings.reviewStep') }}</h2>
+          <p v-if="!s3Ready">{{ t('settings.storageRequired') }}</p>
+          <p v-if="draft.channels.includes('agent') && !packageKnown">
+            {{ t('settings.packageReadUnknown') }}
           </p>
-          <RouterLink :to="settingsDestination(entries[item.id].target, runtime.tenant)">{{
-            t('settings.open')
-          }}</RouterLink>
-        </div>
-      </article>
-    </section>
+          <p v-else-if="draft.channels.includes('agent') && !packageReady">
+            {{ t('settings.productionPackageRequired') }}
+          </p>
+          <article v-for="step in progress.steps" :key="step.id" :data-first-use-step="step.id">
+            <h3>
+              {{ t('settings.firstUseNames.' + step.id) }} ·
+              {{ t('settings.firstUseStatus.' + step.status) }}
+            </h3>
+            <p v-if="step.reason">{{ step.reason }}</p>
+            <div v-for="item in step.evidence" :key="item.id" :data-setting="item.id">
+              <strong>{{ locale === 'zh-CN' ? entries[item.id].zh : entries[item.id].en }}</strong>
+              <p>
+                {{ t('settings.savedVersion') }} {{ item.revision ?? '—' }} ·
+                {{ t('settings.requestedVersion') }} {{ item.desiredRevision ?? '—' }} ·
+                {{ t('settings.runtimeVersion') }} {{ item.appliedRevision ?? '—' }}
+              </p>
+              <RouterLink :to="settingsDestination(entries[item.id].target, runtime.tenant)">{{
+                t('settings.open')
+              }}</RouterLink>
+            </div>
+          </article>
+          <UiButton
+            v-if="!finished && writable"
+            :disabled="blocked || busy || !draft.channels.length"
+            @click="save()"
+            >{{ t('settings.guideSave') }}</UiButton
+          ><UiButton
+            v-if="!finished && writable"
+            :disabled="busy || !canFinish"
+            @click="save(true)"
+            >{{ t('settings.finish') }}</UiButton
+          >
+        </template>
+        <p v-if="dirty && !finished">{{ t('settings.guideUnsaved') }}</p>
+      </section>
+    </div>
     <OperationNotice
       :operation="pending"
       :busy="busy"
@@ -312,33 +443,11 @@ useSettingsFacts(() => {
       @retry="save(pending?.action === 'complete', true)"
     />
     <section v-if="originalOperation && !pending" class="console-panel">
-      <p>
-        {{ t('settings.operationId') }} <code>{{ originalOperation }}</code>
-      </p>
-      <p v-if="inputLost">{{ t('settings.guideInputLost') }}</p>
+      <p>{{ t('settings.guideInputLost') }}</p>
       <UiButton :busy="busy" @click="lookup">{{ t('settings.queryOperation') }}</UiButton>
     </section>
-    <UiButton
-      v-if="progress && !finished && writable"
-      :disabled="blocked || busy || dirty || !progress.canComplete"
-      @click="save(true)"
-      >{{ t('settings.finish') }}</UiButton
-    >
     <RouterLink v-if="finished" :to="{ name: 'workspace', params: { tenant: runtime.tenant } }">{{
       t('settings.guideWorkspace')
     }}</RouterLink>
   </PageFrame>
 </template>
-
-<style scoped>
-.first-use-selection {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
-  gap: 1rem;
-}
-.first-use-selection label {
-  display: grid;
-  gap: 0.5rem;
-  min-width: 0;
-}
-</style>

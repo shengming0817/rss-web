@@ -5,11 +5,10 @@ export function observationTarget(
   path: string,
   operation: string | null,
 ): OperationsReference | null {
-  if (/^\/api\/v1\/mdm-candidate\/devices\/batch-previews(?:\/|$)/.test(path)) return null
   const mappings: [RegExp, OperationsReference['kind']][] = [
     [/^\/api\/v1\/authorization\/rules\/([^/]+)/, 'authorization_rule'],
     [/^\/api\/v1\/authorization\/user-groups\/([^/]+)/, 'user_group'],
-    [/^\/api\/(?:v1\/devices|v1\/mdm-candidate\/devices)\/([^/]+)/, 'device'],
+    [/^\/api\/v1\/devices\/([^/]+)/, 'device'],
     [/^\/api\/(?:v1\/policies|v1\/mdm-candidate\/policies\/assignments)\/([^/]+)/, 'policy'],
     [/^\/api\/v1\/mdm-candidate\/operations\/reports\/([^/]+)/, 'report'],
     [/^\/api\/v1\/mdm-candidate\/operations\/alert-rules\/([^/]+)/, 'alert_rule'],

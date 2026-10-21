@@ -108,7 +108,7 @@ it('applies current software and native permissions before dispatching any forma
     automation = createAutomationDemo(devices)
   const publication = automation.publication
   const scenario = createScenario([
-    (request) => automation.authorization.guard(request, devices.batches()),
+    (request) => automation.authorization.guard(request),
     publication.handle,
     automation.handle,
     devices.handle,

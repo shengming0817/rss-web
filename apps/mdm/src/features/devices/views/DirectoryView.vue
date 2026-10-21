@@ -8,6 +8,7 @@ import {
   UiBadge,
 } from '@rss/core/components'
 import { ref, watch, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
@@ -16,12 +17,57 @@ import PageFrame from '../../../components/PageFrame.vue'
 import { endpointStatuses } from '../clients/endpoint-model'
 const { t } = useI18n(),
   runtime = useMdm(),
+  route = useRoute(),
+  router = useRouter(),
   { run, busy, failure } = useOperation([], () => deviceBinding(runtime))
 const page = ref<Awaited<ReturnType<typeof runtime.devices.views.list>>>(),
   status = ref(''),
   channel = ref(''),
   source = ref(''),
-  descending = ref(false)
+  descending = ref(false),
+  visibleColumns = ref(['reference', 'status', 'channels', 'endpoints'])
+const trail = computed(() => {
+  const v = route.query['trail']
+  return Array.isArray(v)
+    ? v.filter((x): x is string => typeof x === 'string')
+    : typeof v === 'string'
+      ? [v]
+      : []
+})
+function navigate(direction: number | 'previous' | 'next') {
+  if (typeof direction === 'number') return
+  const next =
+    direction === 'next'
+      ? [...trail.value, String(route.query['cursor'] ?? '')]
+      : trail.value.slice(0, -1)
+  void router.push({
+    query: {
+      ...route.query,
+      cursor: direction === 'next' ? page.value?.nextCursor : trail.value.at(-1) || undefined,
+      trail: next,
+    },
+  })
+}
+async function applyFilters() {
+  const same =
+    status.value === String(route.query['status'] ?? '') &&
+    channel.value === String(route.query['channel'] ?? '') &&
+    source.value === String(route.query['source'] ?? '') &&
+    descending.value === (route.query['descending'] === 'true')
+  const before = route.fullPath
+  await router.push({
+    query: {
+      ...(same ? route.query : {}),
+      status: status.value || undefined,
+      channel: channel.value || undefined,
+      source: source.value || undefined,
+      descending: descending.value ? 'true' : undefined,
+      columns: visibleColumns.value,
+    },
+  })
+  if (route.fullPath === before)
+    await load(typeof route.query['cursor'] === 'string' ? route.query['cursor'] : undefined)
+}
 async function load(cursor?: string) {
   page.value = undefined
   await run(
@@ -37,34 +83,48 @@ async function load(cursor?: string) {
   )
 }
 watch(
-  [status, channel, source, descending],
+  () => [route.fullPath, ...deviceBinding(runtime)],
   () => {
+    status.value = typeof route.query['status'] === 'string' ? route.query['status'] : ''
+    channel.value = typeof route.query['channel'] === 'string' ? route.query['channel'] : ''
+    source.value = typeof route.query['source'] === 'string' ? route.query['source'] : ''
+    descending.value = route.query['descending'] === 'true'
+    const cols = route.query['columns']
+    if (cols)
+      visibleColumns.value = [
+        ...new Set([
+          'reference',
+          ...(Array.isArray(cols) ? cols : [cols]).filter((x): x is string =>
+            ['status', 'channels', 'endpoints'].includes(String(x)),
+          ),
+        ]),
+      ]
     page.value = undefined
-  },
-  { flush: 'sync' },
-)
-watch(
-  () => deviceBinding(runtime),
-  () => {
-    page.value = undefined
-    void load()
+    void load(typeof route.query['cursor'] === 'string' ? route.query['cursor'] : undefined)
   },
   { immediate: true, flush: 'sync' },
 )
 type Row = NonNullable<typeof page.value>['items'][number]
-const columns = computed(() => [
-  { key: 'reference', label: t('devices.viewIdentity') },
-  { key: 'status', label: t('devices.status') },
-  { key: 'channels', label: t('devices.channels') },
-  { key: 'endpoints', label: t('devices.originalEndpoint') },
-])
+const columns = computed(() =>
+  [
+    { key: 'reference', label: t('devices.viewIdentity') },
+    { key: 'status', label: t('devices.status') },
+    { key: 'channels', label: t('devices.channels') },
+    { key: 'endpoints', label: t('devices.originalEndpoint') },
+  ].filter((c) => visibleColumns.value.includes(c.key)),
+)
 const rowKey = (item: Row) => `${item.reference.kind}:${item.reference.id}`
 function detail(item: Row) {
   return item.reference.kind === 'endpoint'
-    ? { name: 'device-detail', params: { tenant: runtime.tenant, device: item.reference.id } }
+    ? {
+        name: 'device-detail',
+        params: { tenant: runtime.tenant, device: item.reference.id },
+        query: { directory: JSON.stringify(route.query) },
+      }
     : {
         name: 'device-view-detail',
         params: { tenant: runtime.tenant, kind: item.reference.kind, view: item.reference.id },
+        query: { directory: JSON.stringify(route.query) },
       }
 }
 const statusOptions = computed(() => [
@@ -97,7 +157,7 @@ const sourceOptions = computed(() => [
         >{{ t('devices.enroll') }}</RouterLink
       ></template
     >
-    <form class="console-toolbar" @submit.prevent="load()">
+    <form class="console-toolbar" @submit.prevent="applyFilters">
       <label
         >{{ t('devices.status')
         }}<UiSelect v-model="status" :options="statusOptions" :disabled="busy"
@@ -113,7 +173,21 @@ const sourceOptions = computed(() => [
       <UiCheckbox v-model="descending" :label="t('devices.descending')" :disabled="busy" />
       <UiButton type="submit" :busy="busy">{{ t('devices.reload') }}</UiButton>
     </form>
-    <p v-if="failure === 'cursorInvalidated'">{{ t('devices.restartDirectory') }}</p>
+    <p v-if="failure === 'cursorInvalidated'">
+      {{ t('devices.restartDirectory')
+      }}<UiButton
+        @click="router.replace({ query: { ...route.query, cursor: undefined, trail: undefined } })"
+        >{{ t('devices.reload') }}</UiButton
+      >
+    </p>
+    <details class="console-panel">
+      <summary>{{ t('devices.displayColumns') }}</summary>
+      <label v-for="key in ['status', 'channels', 'endpoints']" :key="key"
+        ><input v-model="visibleColumns" type="checkbox" :value="key" />{{
+          t('devices.' + (key === 'endpoints' ? 'originalEndpoint' : key))
+        }}</label
+      ><UiButton @click="applyFilters">{{ t('devices.save') }}</UiButton>
+    </details>
     <div v-if="page" class="console-stat-grid" :aria-label="t('console.queryStatistics')">
       <article
         v-for="key in ['deviceViewCount', 'endpointCount'] as const"
@@ -164,6 +238,7 @@ const sourceOptions = computed(() => [
                 :to="{
                   name: 'device-detail',
                   params: { tenant: runtime.tenant, device: endpoint.id },
+                  query: { directory: JSON.stringify(route.query) },
                 }"
                 >{{ endpoint.id }}</RouterLink
               >
@@ -173,13 +248,13 @@ const sourceOptions = computed(() => [
       </UiTable>
     </div>
     <UiPagination
-      v-if="page?.nextCursor"
-      :state="{ kind: 'cursor', hasPrevious: false, hasNext: true }"
+      v-if="page && (page.nextCursor || trail.length)"
+      :state="{ kind: 'cursor', hasPrevious: trail.length > 0, hasNext: !!page?.nextCursor }"
       :label="t('devices.directory')"
       :previous-label="t('devices.previous')"
       :next-label="t('devices.next')"
       :busy="busy"
-      @navigate="$event === 'next' && load(page?.nextCursor ?? undefined)"
+      @navigate="navigate"
     />
   </PageFrame>
 </template>

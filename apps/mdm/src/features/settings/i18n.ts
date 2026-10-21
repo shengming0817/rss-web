@@ -1,4 +1,34 @@
 export const settingsZh = {
+  chooseChannels: '选择管理通道',
+  storageStep: '配置内容仓（S3）',
+  trustStep: '设备签发与信任',
+  optionsStep: '通知与其他集成',
+  reviewStep: '注册就绪检查',
+  storageRequired: 'S3 内容仓必须保存、通过资格检查并实际应用，才能完成首次配置。',
+  productionPackageRequired: 'Agent 通道至少需要一个合格的正式渠道安装包。',
+  packageReadUnknown: '尚未确认 Agent 包目录，请重新读取后再完成配置。',
+  caOperationsBoundary:
+    '设备 CA 已由运维统一初始化或接入。此处核对用途信任与轮换；材料已保存与当前宿主已加载分别显示。网站 HTTPS 由运维维护。',
+  windowsIdentityBoundary:
+    'Windows 使用专用设备签发用途与信任，沿用运维自动接线；网站 HTTPS 证书独立维护。',
+  manualEnrollment: '手动注册',
+  adeEnrollment: 'ADE 自动设备注册',
+  managedAppleEnrollment: 'Managed Apple Account',
+  packageUploadBlocked: '新安装包上传与替换暂不可用',
+  packageUploadReason:
+    '需要服务端将安装文件与可信版本、签名及发布材料关联；当前显示已发布的合格安装包。',
+  noPackage: '尚未发布此平台安装包',
+  packagePublished: '已发布',
+  withdrawPackageHint: '撤回后此发行包将不再用于新的安装交付。',
+  initializeCaHint:
+    '运维使用 initialize-ca 统一核对并准备真实签发者、用途、信任与回调；configure-host 自动接入通道。重建服务后核对原操作和当前进程观察，不重新创建既有 CA 或设备身份。',
+  apnsJourney: 'APNs 证书配置流程',
+  apnsCsrStep: '生成服务器保管的密钥并下载普通 CSR。',
+  apnsVendorStep: '由具备资格的厂商受控签署申请材料；普通 CSR 不能代替厂商签署文件。',
+  apnsPortalStep: '在 Apple Push Certificates Portal 使用厂商签署材料申请证书。',
+  apnsImportStep: '导入证书，核对密钥匹配、有效期及推送身份。',
+  apnsApplyStep: '请求应用，再读取实际应用状态；保存不代表已生效。',
+
   guideAuthority: '选择和完成状态由后端保存；设备实际效果由设备事实单独确认。',
   guideFinished: '首次配置已完成',
   guideDaily: '当前材料和通道状态变化请在日常设置中处理，不会重新强制首次配置。',
@@ -52,13 +82,16 @@ export const settingsZh = {
   entryHint: '正在核对当前身份与首次配置进度。',
   title: '设置',
   rotationId: '原 PKI 轮换 ID（批准、启用和退出沿用）',
-  prepareCaHint:
-    '原始 CA 私钥、密码、provisioner JWK、SCEP decrypter 与 challenge/notify 凭据由实际 CA 和部署 owner 保管。prepare-ca 准备用途隔离材料，configure-host 装入确切 provider，网页只发布公开 trust 与签名 CRL。',
   recoverAccountHint:
     '平台账户丢失时由已授权操作员核对原安装、tenant、principal 与原账户，沿原身份执行受控密码恢复；不能通过重建管理租户取得权限。',
   readComparison: '读取最新状态以比较',
   materialNames: {
-    pki: '设备 PKI',
+    packages: 'Agent 安装包',
+    task: '任务签名',
+    wns: 'Windows 推送（可选）',
+    apns: 'Apple 推送证书（APNs）',
+    profile: '注册描述文件签名',
+    pki: '设备 CA 与 SCEP',
     storage: 'S3 内容仓',
     smtp: 'SMTP 邮件',
     webhook: 'Webhook 签名',
@@ -271,6 +304,39 @@ export const settingsZh = {
   },
 } as const
 export const settingsEn = {
+  chooseChannels: 'Choose management channels',
+  storageStep: 'Content storage (S3)',
+  trustStep: 'Device issuance and trust',
+  optionsStep: 'Notifications and other integrations',
+  reviewStep: 'Enrollment readiness',
+  storageRequired:
+    'S3 storage must be saved, qualified and actually applied before completing first use.',
+  productionPackageRequired: 'Agent enrollment requires at least one qualified production package.',
+  packageReadUnknown: 'Agent package availability is unknown. Reload before completing setup.',
+  caOperationsBoundary:
+    'Operations initializes or connects the device CA. Review purpose trust and rotation here; saved material and current host loading remain separate. Operations manages website HTTPS.',
+  windowsIdentityBoundary:
+    'Windows uses dedicated device issuance and trust connected by operations. Website HTTPS is maintained independently.',
+  manualEnrollment: 'Manual enrollment',
+  adeEnrollment: 'ADE automated enrollment',
+  managedAppleEnrollment: 'Managed Apple Account',
+  packageUploadBlocked: 'New package upload and replacement are unavailable',
+  packageUploadReason:
+    'The server must associate installer bytes with trusted version, signature and release material. Existing qualified published packages are shown below.',
+  noPackage: 'No published package for this platform',
+  packagePublished: 'Published',
+  withdrawPackageHint: 'This release will no longer be available for new installation delivery.',
+  initializeCaHint:
+    'Operations uses initialize-ca to verify and prepare the actual issuer, purposes, trust and callbacks. configure-host connects channels automatically. Recreate services and verify the original operation and current process observation; preserve the existing CA and device identities.',
+  apnsJourney: 'APNs certificate setup',
+  apnsCsrStep: 'Generate a server-held key and download its ordinary CSR.',
+  apnsVendorStep:
+    'Obtain vendor-signed application material through a qualified controlled process. An ordinary CSR is not vendor-signed material.',
+  apnsPortalStep: 'Apply using the vendor-signed material in Apple Push Certificates Portal.',
+  apnsImportStep: 'Import the certificate and check key matching, validity and push identity.',
+  apnsApplyStep:
+    'Request application and read the actual applied state. Saving alone does not activate it.',
+
   guideAuthority:
     'The backend saves selection and completion. Actual device effects require separate device evidence.',
   guideFinished: 'Initial configuration completed',
@@ -328,12 +394,15 @@ export const settingsEn = {
   entryHint: 'Checking your identity and initial configuration progress.',
   title: 'Settings',
   rotationId: 'Original PKI rotation ID (retain for approval, activation and retirement)',
-  prepareCaHint:
-    'The CA and deployment owners retain CA keys, passwords, provisioner JWKs, SCEP decrypter and challenge/notify credentials. prepare-ca prepares purpose-isolated material; configure-host loads exact providers. The browser publishes only public trust and signed CRLs.',
   recoverAccountHint:
     'An authorized operator recovers a lost platform account against its original installation, tenant, principal and account. Recreating a management tenant never grants authority.',
   readComparison: 'Read current state to compare',
   materialNames: {
+    packages: 'Agent packages',
+    task: 'Task signing',
+    wns: 'Windows push (optional)',
+    apns: 'Apple push certificate (APNs)',
+    profile: 'Enrollment profile signing',
     pki: 'Device PKI',
     storage: 'S3 content storage',
     smtp: 'SMTP mail',

@@ -19,6 +19,7 @@ import { policyFeature } from '../../policies/routes'
 import { securityFeature } from '../../security/routes'
 import { operationsFeature } from '../../operations/routes'
 import { deviceFeature } from '../routes'
+import { createPolicyClients } from '../../policies/client'
 import { createDeviceClients } from '../client'
 const wrappers: VueWrapper[] = []
 afterEach(() => {
@@ -71,7 +72,7 @@ async function setup(
       return o.decode(reply.body)
     },
   } as unknown as HttpTransport
-  const devices = createDeviceClients(transport, TENANT, true)
+  const devices = createDeviceClients(transport, TENANT)
   const operations = createOperationsClients(transport, TENANT, true)
   const router = createRouter({
     history: createMemoryHistory(),
@@ -112,6 +113,7 @@ async function setup(
       provide: {
         [mdmKey as symbol]: {
           devices,
+          policies: createPolicyClients(transport, TENANT, true),
           transport,
           operations,
           tenant: TENANT,
@@ -141,7 +143,9 @@ async function setup(
   wrappers.push(wrapper)
   await flushPromises()
   const button = (text: string) => {
-    const result = wrapper.findAll('button').find((b) => b.isVisible() && b.text() === text)
+    const result = new DOMWrapper(document.body)
+      .findAll('button')
+      .find((b) => b.isVisible() && b.text() === text)
     if (!result) throw new Error(`Missing button: ${text}`)
     return result
   }
@@ -201,14 +205,14 @@ it('opens the existing registration owner from a software source-policy deep lin
   const { wrapper, requests, router } = await setup(
     'device-detail',
     { device: 'device-01' },
-    { tab: 'credentials' },
+    { tab: 'management' },
   )
   expect(requests.some((r) => r.path === '/api/v1/devices/{device}/registrations')).toBe(true)
   expect(wrapper.text()).toContain('agent.builtin')
   await router.push({
     name: 'device-detail',
     params: { tenant: TENANT, device: 'device-02' },
-    query: { tab: 'credentials' },
+    query: { tab: 'management' },
   })
   await flushPromises()
   expect(wrapper.text()).toContain('mdm.apple')
@@ -219,10 +223,11 @@ it('opens the existing registration owner from a software source-policy deep lin
   expect(registrations[0]!.text()).toContain('mdm.apple')
   expect(registrations[0]!.text()).not.toContain('agent.builtin')
 })
-it('renders detail tabs, edits manual null/delete with conflict drafts, and edits ownership', async () => {
+it('renders asset categories, edits manual fields and keeps ownership blocked', async () => {
   const { wrapper, click, scenario } = await setup('device-detail', { device: 'device-01' })
+  await click('硬件')
   expect(wrapper.text()).toContain('ThinkPad T14')
-  await click('Manual 字段')
+  await click('编辑人工资产信息')
   const manual = wrapper.findComponent({ name: 'ManualPanel' })
   await manual.find('select').setValue('custom.is_loaner')
   await manual.findAll('select')[1]!.setValue('delete')
@@ -238,8 +243,9 @@ it('renders detail tabs, edits manual null/delete with conflict drafts, and edit
   await manual.find('form').trigger('submit')
   await flushPromises()
   expect(manual.text()).toContain('显式空值')
-  await click('资产字段')
-  expect(wrapper.text()).toContain('device.model')
+  await new DOMWrapper(document.body).get('[role=dialog] button[aria-label=取消]').trigger('click')
+  await flushPromises()
+  expect(wrapper.text()).toContain('设备型号')
   const list = wrapper
     .findAll('details')
     .find((d) => d.find('summary').text().includes('device.software'))!
@@ -255,14 +261,12 @@ it('renders detail tabs, edits manual null/delete with conflict drafts, and edit
   expect(wrapper.text()).toContain('Enterprise Browser')
   await click('历史')
   expect(wrapper.text()).toContain('registration_bound')
-  await click('使用人与归属')
-  const assignment = wrapper.findAll('form').find((f) => f.isVisible())!
-  await assignment.find('input').setValue('new-owner')
-  await assignment.trigger('submit')
-  await flushPromises()
-  expect(wrapper.text()).toContain('new-owner')
-  await click('注册凭据')
+  await click('管理')
   expect(wrapper.text()).toContain('撤销服务端凭据不会擦除设备')
+  wrapper
+    .findAll('details')
+    .find((d) => d.find('summary').text() === '注册凭据')!
+    .element.setAttribute('open', '')
   await click('撤销凭据')
   await confirmCredential()
   expect(wrapper.text()).not.toContain('擦除成功')
@@ -481,7 +485,7 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
 
 it('does not call a confirmed manual write unknown when its follow-up read fails', async () => {
   const { wrapper, devices, click } = await setup('device-detail', { device: 'device-01' })
-  await click('Manual 字段')
+  await click('编辑人工资产信息')
   const manual = wrapper.findComponent({ name: 'ManualPanel' })
   await manual.find('select').setValue('custom.is_loaner')
   await manual.findAll('select')[1]!.setValue('delete')
@@ -580,7 +584,7 @@ it('keeps an uncertain manual operation across tabs and replays the same request
   const { wrapper, click, scenario, requests } = await setup('device-detail', {
     device: 'device-01',
   })
-  await click('Manual 字段')
+  await click('编辑人工资产信息')
   let manual = wrapper.findComponent({ name: 'ManualPanel' })
   await manual.find('select').setValue('custom.is_loaner')
   await manual.findAll('select')[1]!.setValue('delete')
@@ -589,8 +593,14 @@ it('keeps an uncertain manual operation across tabs and replays the same request
   await flushPromises()
   const original = requests.find((r) => r.method === 'PUT')!.body
   scenario.set('normal')
-  await click('资产字段')
-  await click('Manual 字段')
+  await new DOMWrapper(document.body).get('[role=dialog] button[aria-label=取消]').trigger('click')
+  await flushPromises()
+  await click('管理')
+  await click('重启')
+  await new DOMWrapper(document.body).get('[role=alertdialog] form').trigger('submit')
+  await flushPromises()
+  await click('资产信息')
+  await click('编辑人工资产信息')
   manual = wrapper.findComponent({ name: 'ManualPanel' })
   expect(manual.text()).toContain('明确重放原操作')
   await click('明确重放原操作')
@@ -601,7 +611,7 @@ it('keeps an uncertain manual operation across tabs and replays the same request
 })
 it('refreshes channels after revoking each credential and never shows ready with no active channel', async () => {
   const { wrapper, click, devices } = await setup('device-detail', { device: 'device-01' })
-  await click('注册凭据')
+  await click('管理')
   const rows = (await devices.enrollment.registrations('device-01')).items
   for (let index = 0; index < rows.length; index++) {
     await wrapper
@@ -643,7 +653,7 @@ it('retains an in-flight manual write when tabs change before its unknown result
   const { wrapper, click, devices, requests } = await setup('device-detail', {
     device: 'device-01',
   })
-  await click('Manual 字段')
+  await click('编辑人工资产信息')
   const manual = wrapper.findComponent({ name: 'ManualPanel' })
   await manual.find('select').setValue('custom.is_loaner')
   await manual.findAll('select')[1]!.setValue('delete')
@@ -658,24 +668,78 @@ it('retains an in-flight manual write when tabs change before its unknown result
     throw networkErrorForTest()
   }
   await manual.find('form').trigger('submit')
-  await click('资产字段')
+  await new DOMWrapper(document.body).get('[role=dialog] button[aria-label=取消]').trigger('click')
+  await flushPromises()
+  await click('管理')
+  await click('重启')
+  await new DOMWrapper(document.body).get('[role=alertdialog] form').trigger('submit')
+  await flushPromises()
+  expect(manual.get('fieldset').attributes('disabled')).toBeDefined()
   release()
   await flushPromises()
   devices.assets.assign = assign
-  await click('Manual 字段')
+  await click('资产信息')
+  await click('编辑人工资产信息')
   expect(manual.text()).toContain('明确重放原操作')
   await click('明确重放原操作')
   const writes = requests.filter((r) => r.method === 'PUT')
   expect(writes).toHaveLength(2)
   expect(writes[1]!.body).toEqual(writes[0]!.body)
 })
+it('retains pending revoke confirmation across query updates and dismissal attempts until exact replay', async () => {
+  const { wrapper, click, devices, router } = await setup('device-detail', { device: 'device-01' })
+  await click('管理')
+  wrapper
+    .findAll('details')
+    .find((d) => d.find('summary').text() === '注册凭据')!
+    .element.setAttribute('open', '')
+  await click('撤销凭据')
+  const dialog = new DOMWrapper(document.body).get('[role=alertdialog]')
+  const revoke = devices.enrollment.revoke
+  let release!: () => void
+  const gate = new Promise<void>((done) => {
+    release = done
+  })
+  const write = vi.spyOn(devices.enrollment, 'revoke').mockImplementation(async (...args) => {
+    await revoke(...args)
+    await gate
+    throw networkErrorForTest()
+  })
+  await confirmCredential()
+  const original = [...write.mock.calls[0]!]
+  expect(dialog.get('button[aria-label=取消]').attributes('disabled')).toBeDefined()
+  await dialog.trigger('keydown', { key: 'Escape' })
+  await router.replace({ query: { operation: crypto.randomUUID(), operationDevice: 'device-01' } })
+  await flushPromises()
+  expect(document.querySelector('[role=alertdialog]')).not.toBeNull()
+  expect(dialog.get('button[aria-label=取消]').attributes('disabled')).toBeDefined()
+  release()
+  await flushPromises()
+  expect(dialog.text()).toContain('结果未知')
+  await dialog.trigger('keydown', { key: 'Escape' })
+  await dialog.get('button[aria-label=取消]').trigger('click')
+  await flushPromises()
+  expect(document.querySelector('[role=alertdialog]')).not.toBeNull()
+  await router.replace({ query: {} })
+  await flushPromises()
+  expect(dialog.text()).toContain('结果未知')
+  write.mockImplementation(revoke)
+  await click('重读服务器值并比较')
+  await click('明确重放原操作')
+  expect(write.mock.calls).toEqual([original, original])
+  expect(document.querySelector('[role=alertdialog]')).toBeNull()
+})
 it('marks credential details stale after an acknowledged revoke with a failed refresh', async () => {
   const { wrapper, click, devices } = await setup('device-detail', { device: 'device-01' })
-  await click('注册凭据')
+  await click('管理')
   const read = devices.directory.detail
   devices.directory.detail = async () => {
     throw decodeMdmError(503, { code: 'service_unavailable' })
   }
+  wrapper
+    .findAll('details')
+    .find((d) => d.find('summary').text() === '注册凭据')!
+    .element.setAttribute('open', '')
   await click('撤销凭据')
   await confirmCredential()
   expect(wrapper.text()).toContain('暂不可用')
@@ -860,7 +924,7 @@ it('refreshes native binding and resumes the same bound identity even when new e
   })
 })
 async function chooseAssociation(h: Awaited<ReturnType<typeof setup>>) {
-  await h.click('设备关联管理')
+  await h.click('管理')
   await h.click('查找另一通道候选')
   const panel = h.wrapper.find('[data-testid=association-panel]')
   await panel.find('input[type=radio]').setValue(true)
@@ -875,7 +939,7 @@ it('creates a unified route and revokes the relation without credential writes',
   await h.click('确认关联')
   await vi.waitFor(() => expect(h.router.currentRoute.value.name).toBe('device-view-detail'))
   await flushPromises()
-  await h.click('设备关联管理')
+  await h.click('管理')
   const panel = h.wrapper.find('[data-testid=association-panel]')
   await panel.findAll('textarea')[1]!.setValue('Separate instances')
   await panel.find('input[type=checkbox]').setValue(true)
@@ -897,7 +961,7 @@ it('locks an unknown association, survives navigation, and requires explicit exa
   await flushPromises()
   await h.router.push({ name: 'device-detail', params: { tenant: TENANT, device: 'device-01' } })
   await flushPromises()
-  await h.click('设备关联管理')
+  await h.click('管理')
   const panel = h.wrapper.find('[data-testid=association-panel]')
   expect(panel.text()).toContain('结果未知')
   expect(h.button('确认关联').attributes('disabled')).toBeDefined()
@@ -1019,7 +1083,7 @@ it.each(['confirm', 'revoke', 'inactive-revoke'])(
         current.members[0]!.registrationId,
         crypto.randomUUID(),
       )
-    await h.click('设备关联管理')
+    await h.click('管理')
     await h.click('读取当前关系与主注册')
     const panel = h.wrapper.find('[data-testid=association-panel]'),
       basis = panel.find('[data-testid=association-basis]')
@@ -1149,6 +1213,82 @@ it('allows a quota reader to select user queries while keeping edits and submiss
   const change = vi.spyOn(devices.registration, 'change')
   await wrapper.get('form').trigger('submit')
   expect(change).not.toHaveBeenCalled()
+})
+
+it('retains directory cursor and display columns when opening and returning from a detail', async () => {
+  const f = await setup()
+  await f.click('下一页')
+  expect(f.wrapper.text()).toContain('device-21')
+  const query = { ...f.router.currentRoute.value.query }
+  await f.wrapper.find('tbody a').trigger('click')
+  await flushPromises()
+  await vi.waitFor(() =>
+    expect(f.wrapper.findAll('a').some((a) => a.text() === '返回设备目录')).toBe(true),
+  )
+  await f.wrapper
+    .findAll('a')
+    .find((a) => a.text() === '返回设备目录')!
+    .trigger('click')
+  await flushPromises()
+  expect(f.router.currentRoute.value.query).toEqual(query)
+  expect(f.wrapper.text()).toContain('device-21')
+  await f.wrapper.findAll('tbody a').at(-1)!.trigger('click')
+  await flushPromises()
+  await vi.waitFor(() =>
+    expect(f.wrapper.findAll('a').some((a) => a.text() === '返回设备目录')).toBe(true),
+  )
+  await f.wrapper
+    .findAll('a')
+    .find((a) => a.text() === '返回设备目录')!
+    .trigger('click')
+  await flushPromises()
+  expect(f.router.currentRoute.value.query).toEqual(query)
+  await f.click('上一页')
+  expect(f.wrapper.text()).toContain('device-01')
+})
+it('binds lock to the actual enrollment, clears its PIN, and queries an unknown operation across navigation', async () => {
+  const f = await setup('device-detail', { device: 'device-02' }, { tab: 'management' })
+  await f.click('锁定')
+  const dialog = new DOMWrapper(document.body).get('[role=alertdialog]')
+  await dialog.get('input[type=password]').setValue('123456')
+  f.loseReply.path = '/api/v1/devices/{device}/operations'
+  await dialog.get('form').trigger('submit')
+  await flushPromises()
+  expect((dialog.get('input[type=password]').element as HTMLInputElement).value).toBe('')
+  const op = f.router.currentRoute.value.query['operation']
+  expect(op).toBeTruthy()
+  expect(
+    f.requests.filter((r) => r.method === 'POST' && r.path.endsWith('/operations')),
+  ).toHaveLength(1)
+  await f.router.push({ name: 'devices', params: { tenant: TENANT } })
+  await flushPromises()
+  f.loseReply.path = ''
+  await f.router.push({
+    name: 'device-detail',
+    params: { tenant: TENANT, device: 'device-02' },
+    query: { operation: String(op), operationDevice: 'device-02' },
+  })
+  await flushPromises()
+  expect(f.router.currentRoute.value.query['operation']).toBeUndefined()
+  expect(f.wrapper.text()).toContain('unverified')
+  expect(
+    f.requests.filter((r) => r.method === 'POST' && r.path.endsWith('/operations')),
+  ).toHaveLength(1)
+})
+it('disables Windows lock and requires the displayed name before wipe', async () => {
+  const f = await setup('device-detail', { device: 'device-01' }, { tab: 'management' })
+  expect(f.button('锁定').attributes('disabled')).toBeDefined()
+  await f.click('擦除')
+  const dialog = new DOMWrapper(document.body).get('[role=alertdialog]')
+  const submit = dialog.get('button[type=submit]')
+  expect(submit.attributes('disabled')).toBeDefined()
+  await dialog.get('input').setValue('wrong')
+  expect(submit.attributes('disabled')).toBeDefined()
+  await dialog.get('input').setValue('device-01')
+  expect(submit.attributes('disabled')).toBeUndefined()
+  await dialog.get('form').trigger('submit')
+  await flushPromises()
+  expect(f.wrapper.text()).toContain('unverified')
 })
 
 it('rejects an invalid condition locally without entering unknown-write recovery', async () => {

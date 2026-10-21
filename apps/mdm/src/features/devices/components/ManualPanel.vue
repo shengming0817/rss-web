@@ -1,24 +1,40 @@
 <script setup lang="ts">
 import { UiButton } from '@rss/core/components'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import type { FieldDefinition, Inventory, ManualChange, Scalar } from '../clients/assets'
 import { operation, useOperation } from '../../../services/useOperation'
 import { editableField } from '../clients/asset-model'
+import { deviceBinding } from '../useDeviceBinding'
+import { assetLabel } from '../assetPresentation'
 import ScalarEditor from './ScalarEditor.vue'
 import AssetValue from './AssetValue.vue'
 const props = defineProps<{ device: string; inventory: Inventory; fields: FieldDefinition[] }>()
 const emit = defineEmits<{ updated: [value: Inventory] }>()
-const { t } = useI18n(),
-  client = useMdm().devices.assets,
-  { busy, failure, uncertain, run, runWrite } = useOperation()
+const { t, locale } = useI18n(),
+  runtime = useMdm(),
+  client = runtime.devices.assets,
+  { busy, failure, uncertain, run, runWrite } = useOperation(
+    [],
+    () => deviceBinding(runtime),
+    () => props.device,
+  )
 const key = ref(''),
   action = ref<'set' | 'null' | 'delete'>('set'),
   value = ref<Scalar>({ kind: 'string', value: '' })
 const manual = computed(() => props.fields.filter(editableField).filter((f) => f.manual)),
   selected = computed(() => props.inventory.fields[key.value])
 let pending: (() => Promise<void>) | undefined
+watch(
+  () => JSON.stringify([...deviceBinding(runtime), props.device]),
+  () => {
+    key.value = ''
+    pending = undefined
+    value.value = { kind: 'string', value: '' }
+  },
+  { flush: 'sync' },
+)
 function change() {
   const f = manual.value.find((f) => f.key === key.value)
   if (!f) return
@@ -58,7 +74,9 @@ function submit() {
           >{{ t('devices.field')
           }}<select v-model="key" class="ui-input" required @change="change">
             <option value="">—</option>
-            <option v-for="f in manual" :key="f.key" :value="f.key">{{ f.key }}</option>
+            <option v-for="f in manual" :key="f.key" :value="f.key">
+              {{ assetLabel(f.key, locale) }}
+            </option>
           </select></label
         >
         <template v-if="key"

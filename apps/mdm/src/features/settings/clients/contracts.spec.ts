@@ -480,7 +480,7 @@ it('reads explicit runtime facts and never turns missing counts into zero', asyn
   ).toBeNull()
   expect(() => runtimeSnapshot({ ...snapshot, secret: 'unsafe' })).toThrow()
 })
-it('publishes only formal Agent package metadata and withdraws with the same operation owner', async () => {
+it('reads formal Agent package metadata and withdraws with the same operation owner', async () => {
   const value = {
     releaseId: a,
     tenantId: b,
@@ -497,15 +497,6 @@ it('publishes only formal Agent package metadata and withdraws with the same ope
   }
   const f = transport([value])
   expect((await createManagedPackages(f.client, b).read()).length).toBe(1)
-  const p = transport(value)
-  await createManagedPackages(p.client, b).publish(a, {
-    resource: 'rss',
-    version: '1',
-    variant: 'windows',
-    target: { platform: 'windows', architecture: 'x86_64' },
-    channel: 'test',
-    manifestArtifact: 'candidate',
-  })
   const w = transport(undefined)
   await createManagedPackages(w.client, b).withdraw(a, c)
   expect(w.calls[0]).toMatchObject({ successStatus: 204, body: { operationId: a } })
