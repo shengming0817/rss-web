@@ -186,7 +186,7 @@ try:
     module = importlib.util.spec_from_file_location('device_agent', WEB/'e2e/mdm/device-agent.py')
     collector = importlib.util.module_from_spec(module)
     module.loader.exec_module(collector)
-    agent_fixture = collector.register(agent_origin, environment.root/'ca.crt', native/'pki'/'agent', operator, private)
+    agent_fixture = collector.register(agent_origin, environment.root/'ca.crt', native/'pki'/'agent', operator, private, TENANTS[0])
     fixture=private(environment.root/'browser.json',dict(collector=agent_fixture,origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,principal=ADMIN,login='admin',passwordFile=str(environment.root/'account-password'),mdm='fixture-mdm',agent='fixture-agent',alone='fixture-alone',ruleId=rule_id,rule=rule))
     phase='browser'
     browser=subprocess.run(['node',str(WEB/'e2e/mdm/device-browser.mjs')],cwd=WEB,env={**os.environ,'MDM_DEVICE_BROWSER_FIXTURE':str(fixture)},timeout=900,pass_fds=lease_fds())

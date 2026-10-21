@@ -3,6 +3,7 @@ import base64
 import hashlib
 import http.client
 import json
+import os
 from pathlib import Path
 import secrets
 import ssl
@@ -29,13 +30,14 @@ def call(origin, ca, path, body=None, cert=None, key=None, method='POST', header
                            {'Content-Type': 'application/json', **(headers or {})})
         response = connection.getresponse()
         data = json.loads(response.read())
-        check(response.status == 200, 'collector-http-' + str(response.status) + '-' + str(data.get('code', '')))
+        stage = body.get('event', {}).get('kind', 'claim') if path.endswith(('/claim', '/events')) else path.rsplit('/', 1)[-1]
+        check(response.status == 200, 'collector-http-' + stage + '-' + str(response.status) + '-' + str(data.get('code', '')))
         return data
     finally:
         connection.close()
 
 
-def register(origin, ca, native, operator, private):
+def register(origin, ca, native, operator, private, tenant):
     csr = base64.b64encode((native/'agent.der').read_bytes()).decode()
     secret = secrets.token_urlsafe(32)
     request = call(origin, ca, '/api/v1/agent/enroll/requests', dict(wireVersion=1, operationId=str(uuid.uuid4()), secret=secret, platform='macos', csr=csr))
@@ -52,6 +54,19 @@ def register(origin, ca, native, operator, private):
     activation = call(origin, ca, '/api/v1/agent/enroll/activate', dict(wireVersion=1, issuanceId=candidate['issuanceId'], operationId=str(uuid.uuid4())), cert, key)
     binding = activation['runtime']
     check('inventory.native.v1' in binding['capabilities'], 'collector-binding')
+    trust = call(origin, ca, '/api/v1/agent/runtime/task-trust', cert=cert, key=key, method='GET')
+    check(trust['version'] == 1 and trust['origin'] == operator.origin and trust['tenant'] == tenant, 'collector-trust-authority')
+    installed = private(native/'collector-trust.json', json.dumps(trust))
+    with installed.open('rb') as material:
+        os.fsync(material.fileno())
+    readback = json.loads(installed.read_text())
+    check(readback == trust, 'collector-trust-readback')
+    # Trust::installation_digest uses this struct order, not JSON object key sorting.
+    canonical = {key: readback[key] for key in ['version', 'origin', 'tenant', 'revision', 'keys']}
+    canonical['keys'] = [{key: item[key] for key in ['id', 'public_key', 'state']} for item in readback['keys']]
+    digest = hashlib.sha256(json.dumps(['rss-mdm/task-signing-trust/v1', canonical], separators=(',', ':')).encode()).hexdigest()
+    acknowledgement = dict(operation=str(uuid.uuid4()), version=1, registration=binding['registrationId'], generation=binding['generation'], revision=trust['revision'], digest=digest)
+    check(call(origin, ca, '/api/v1/agent/runtime/task-trust', acknowledgement, cert, key) == acknowledgement, 'collector-trust-acknowledgement')
     # The existing enterprise session and mTLS jointly bind a current user.
     session = dict(part.split('=', 1) for part in operator.cookie.split('; '))['__Host-identity-session']
     current = call(origin, ca, '/api/v1/agent/runtime/current-user', dict(operationId=str(uuid.uuid4()), expectedRevision=0), cert, key, method='PUT', headers={'x-rss-user-session': session})

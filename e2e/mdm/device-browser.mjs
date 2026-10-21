@@ -683,7 +683,9 @@ try {
       let classification = 'collector-process'
       try {
         classification = JSON.parse(result.stdout.toString()).classification ?? classification
-      } catch {}
+      } catch {
+        // Preserve the closed fallback classification; raw child output may contain secrets.
+      }
       console.log(JSON.stringify({ phase: 'collector-report', result: 'failed', classification }))
     }
     assert.equal(result.status, 0, 'controlled Agent report failed')
@@ -878,8 +880,11 @@ try {
     .filter({ hasText: '501' })
     .getAttribute('value')
   await scopedInventory.locator('select').nth(1).selectOption(namespace)
-  await scopedInventory.locator('details summary').click()
-  await scopedInventory.getByRole('button', { name: '展开此来源', exact: true }).click()
+  const softwareList = scopedInventory
+    .locator('details')
+    .filter({ has: page.locator('summary', { hasText: 'device.software.installations' }) })
+  await softwareList.locator('summary').click()
+  await softwareList.getByRole('button', { name: '展开此来源', exact: true }).click()
   await page.waitForFunction(
     () => document.querySelectorAll('[data-testid=scope-inventory] tbody tr').length === 20,
   )
@@ -927,6 +932,7 @@ try {
   await page.goto(path(`policies/assignments?id=${memory.policy}`))
   await loaded()
   await page.getByRole('button', { name: '编辑', exact: true }).click()
+  await page.getByRole('button', { name: '加载资源版本', exact: true }).click()
   await page.locator('[data-field=collection-period]').fill('120')
   await page
     .locator('[data-form=policy]')
@@ -1002,6 +1008,10 @@ try {
           .catch(() => 0),
         login: await page
           .locator('#login-name')
+          .count()
+          .catch(() => 0),
+        inventoryLists: await page
+          .locator('[data-testid=scope-inventory] details')
           .count()
           .catch(() => 0),
         scopeResults: await page
