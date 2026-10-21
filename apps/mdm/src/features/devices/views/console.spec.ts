@@ -1388,7 +1388,7 @@ it.each([
       dataset: 'memory',
       templateVersion: '1',
       fingerprint: 'frozen',
-      coverage: { id: 'memory', version: '1', definition: 'frozen', format: 'typed-fields-v4' },
+      coverage: { id: 'memory', version: '1', definition: 'frozen', format: 'typed-fields-v1' },
       complete: false,
       source: 'agent.native' as const,
       channel: 'agent' as const,

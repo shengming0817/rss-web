@@ -396,6 +396,7 @@ export function createResourcesClient(transport: HttpTransport) {
         body,
         successStatus: 200,
         decode(value) {
+          if (body.input.action === 'instantiate') return decodeResource(value, id)
           const v = closed(value, ['resource', 'request', 'storageRevision'])
           if (v['resource'] !== id || v['request'] !== body.operationId)
             throw new Error('Wrong resource receipt')

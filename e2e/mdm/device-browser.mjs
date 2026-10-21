@@ -707,7 +707,12 @@ try {
   async function configurePackage(blueprintId) {
     await page.goto(path('policies/resources'))
     await page.getByRole('button', { name: '选择标准包', exact: true }).click()
-    const select = page.getByLabel('标准包与精确版本', { exact: true })
+    const catalog = await api('/api/v1/collection-blueprints')
+    assert.ok(
+      catalog.items.some((item) => item.id === blueprintId),
+      'required standard package is absent',
+    )
+    const select = page.getByTestId('collection-blueprints').locator('select').nth(1)
     await select
       .locator('option')
       .filter({ hasText: blueprintId + ' / ' })

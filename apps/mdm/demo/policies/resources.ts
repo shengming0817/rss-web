@@ -325,7 +325,9 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
           next.revision++
         }
         resources.set(id, next)
-        return ok({ resource: id, request: op.operationId, storageRevision: next.revision })
+        return action === 'instantiate'
+          ? ok(structuredClone(next))
+          : ok({ resource: id, request: op.operationId, storageRevision: next.revision })
       })
     } catch {
       return error('malformed_request', 400)

@@ -175,7 +175,7 @@ it('preserves formal quality field counts in a nonempty inventory response', () 
         id: 'hardware',
         version: '1',
         definition: 'a'.repeat(64),
-        format: 'typed-fields-v4',
+        format: 'typed-fields-v1',
       },
       complete: false,
       source: 'agent.builtin',
