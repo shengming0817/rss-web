@@ -7,6 +7,7 @@ import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../useDeviceBinding'
 import type { CollectionScope } from '../clients/asset-model'
 const props = defineProps<{ device: string; id: string; scope?: CollectionScope }>()
+const emit = defineEmits<{ invalidated: [reason: 'denied' | 'notFound'] }>()
 const runtime = useMdm(),
   { t } = useI18n()
 const { run, busy, failure } = useOperation([], () => [
@@ -18,6 +19,12 @@ const { run, busy, failure } = useOperation([], () => [
 const result = ref<Awaited<ReturnType<typeof runtime.devices.assets.collectionRun>>>()
 const items = ref<Awaited<ReturnType<typeof runtime.devices.assets.collectionItems>>>()
 const field = ref('')
+function invalidate() {
+  if (failure.value !== 'denied' && failure.value !== 'notFound') return
+  result.value = undefined
+  items.value = undefined
+  emit('invalidated', failure.value)
+}
 async function load() {
   result.value = undefined
   items.value = undefined
@@ -27,6 +34,7 @@ async function load() {
       result.value = v
     },
   )
+  invalidate()
 }
 async function loadItems(key: string, offset = 0) {
   items.value = undefined
@@ -44,6 +52,7 @@ async function loadItems(key: string, offset = 0) {
       items.value = v
     },
   )
+  invalidate()
 }
 watch(
   () => JSON.stringify([props.device, props.id, props.scope, ...deviceBinding(runtime)]),

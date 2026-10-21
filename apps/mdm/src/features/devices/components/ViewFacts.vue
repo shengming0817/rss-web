@@ -128,6 +128,7 @@ function metadata(field: string) {
         :id="collection.id"
         :key="collection.device + collection.id"
         :device="collection.device"
+        @invalidated="emit('invalidated', $event)"
       />
       <section v-if="view.inventorySources.length">
         <h2>{{ t('devices.collectionQuality') }}</h2>

@@ -816,24 +816,41 @@ try {
     directory.asset.items.some((i) => i.scope.kind === 'macos_applications' && i.scope.uid === 501),
   )
   await page.goto(path(`devices/${collectorDevice}`))
-  const scoped = page.locator('[data-testid=scope-inventory]')
-  await scoped.locator('select').nth(1).locator('option').filter({ hasText: '501' }).waitFor()
-  const namespace = await scoped
+  const scopedInventory = page.locator('[data-testid=scope-inventory]')
+  await scopedInventory
+    .locator('select')
+    .nth(1)
+    .locator('option')
+    .filter({ hasText: '501' })
+    .waitFor()
+  const namespace = await scopedInventory
     .locator('select')
     .nth(1)
     .locator('option')
     .filter({ hasText: '501' })
     .getAttribute('value')
-  await scoped.locator('select').nth(1).selectOption(namespace)
-  await scoped.locator('details summary').click()
-  await scoped.getByRole('button', { name: '展开此来源', exact: true }).click()
-  assert.equal(await scoped.locator('tbody tr').count(), 20)
-  await scoped.getByRole('button', { name: '下一页', exact: true }).click()
-  assert.equal(await scoped.locator('tbody tr').count(), 20)
-  assert.ok((await scoped.locator('tbody').textContent()).includes('user'))
-  await scoped.getByRole('button', { name: '来源与历史证据', exact: true }).click()
-  await scoped.locator('[data-collection-run]').waitFor()
-  assert.ok((await scoped.locator('[data-collection-run]').textContent()).includes('已投影'))
+  await scopedInventory.locator('select').nth(1).selectOption(namespace)
+  await scopedInventory.locator('details summary').click()
+  await scopedInventory.getByRole('button', { name: '展开此来源', exact: true }).click()
+  await page.waitForFunction(
+    () => document.querySelectorAll('[data-testid=scope-inventory] tbody tr').length === 20,
+  )
+  const firstItem = await scopedInventory.locator('tbody tr').first().textContent()
+  await scopedInventory.getByRole('button', { name: '下一页', exact: true }).click()
+  await page.waitForFunction((previous) => {
+    const rows = document.querySelectorAll('[data-testid=scope-inventory] tbody tr')
+    return rows.length === 20 && rows[0].textContent !== previous
+  }, firstItem)
+  assert.ok((await scopedInventory.locator('tbody').textContent()).includes('user'))
+  await scopedInventory.getByRole('button', { name: '来源与历史证据', exact: true }).click()
+  await page.waitForFunction(() =>
+    document
+      .querySelector('[data-testid=scope-inventory] [data-collection-run]')
+      ?.textContent.includes('已投影'),
+  )
+  assert.ok(
+    (await scopedInventory.locator('[data-collection-run]').textContent()).includes('已投影'),
+  )
   coverage.push(
     'real-package-instantiation-activation-scope-interval-two-normal-periods-mtls-report-projection',
   )

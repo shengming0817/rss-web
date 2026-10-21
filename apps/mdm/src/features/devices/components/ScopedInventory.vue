@@ -38,6 +38,15 @@ function label(value: CollectionScope) {
       .join(' / ')
   )
 }
+function invalidateQuality(reason: 'denied' | 'notFound') {
+  inventory.value = undefined
+  page.value = undefined
+  scopes.value = []
+  selected.value = ''
+  next.value = null
+  runId.value = ''
+  emit('invalidated', reason)
+}
 function invalidate() {
   if (!['denied', 'notFound', 'conflict', 'cursorInvalidated'].includes(failure.value ?? '')) return
   inventory.value = undefined
@@ -185,6 +194,7 @@ watch(selected, () => {
         :key="runId + selected"
         :device="device"
         :scope="scope"
+        @invalidated="invalidateQuality"
       />
     </template>
   </section>

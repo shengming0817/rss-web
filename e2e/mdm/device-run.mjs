@@ -59,15 +59,7 @@ try {
     try {
       await run(
         'python3',
-        [
-          'hack/build_run.py',
-          '--',
-          'python3',
-          'hack/t2_environment.py',
-          'reset',
-          '--group',
-          'device-browser',
-        ],
+        ['hack/build_run.py', '--', 'python3', resolve(root, 'e2e/mdm/device-cleanup.py'), root],
         resolve(backend),
         180000,
       )

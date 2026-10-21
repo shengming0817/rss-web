@@ -1349,3 +1349,152 @@ it('keeps Group save errors and exact unknown-write recovery inside its dialog',
   expect(new DOMWrapper(document.body).find('[role=dialog]').exists()).toBe(false)
   expect(wrapper.text()).toContain('Recover in current drawer')
 })
+
+it.each([
+  [403, 'run'],
+  [404, 'run'],
+  [403, 'items'],
+  [404, 'items'],
+] as const)(
+  'distinguishes scoped last-known facts and clears detail after %s on %s',
+  async (status, request) => {
+    const h = await setup('devices')
+    const scope = { kind: 'macos_applications' as const, root: 'user' as const, uid: 501 }
+    const id = '22222222-2222-4222-8222-222222222222'
+    const evidence = {
+      scope,
+      source: 'agent.native' as const,
+      registration: id,
+      registrationGeneration: 1,
+      dataset: 'memory',
+      epoch: id,
+      snapshotId: id,
+      observedAt: 20,
+      receivedAt: 21,
+      actor: null,
+    }
+    const quality = {
+      dataset: 'memory',
+      templateVersion: '1',
+      fingerprint: 'frozen',
+      coverage: { id: 'memory', version: '1', definition: 'frozen', format: 'typed-fields-v4' },
+      complete: false,
+      source: 'agent.native' as const,
+      channel: 'agent' as const,
+      registration: id,
+      registrationGeneration: 1,
+      epoch: id,
+      runId: id,
+      sequence: 2,
+      result: 'partial' as const,
+      deliveryPending: false,
+      fields: [
+        {
+          scope,
+          field: 'device.memory.bytes',
+          quality: 'unknown' as const,
+          reason: 'incomplete',
+          status: null,
+          receivedAt: 21,
+          itemCount: 1,
+          invalidItems: 1,
+        },
+      ],
+    }
+    vi.spyOn(h.devices.assets, 'scopes').mockResolvedValue({
+      device: 'device-01',
+      items: [scope],
+      nextCursor: null,
+      watermark: 21,
+    })
+    vi.spyOn(h.devices.assets, 'inventory').mockResolvedValue({
+      device: 'device-01',
+      collectionScope: scope,
+      channels: ['agent'],
+      lists: {},
+      revisions: {},
+      quality: [quality],
+      fields: {
+        'device.memory.bytes': {
+          field: 'device.memory.bytes',
+          state: { kind: 'unknown', reason: 'incomplete' },
+          sources: [
+            {
+              state: { kind: 'unknown', reason: 'incomplete' },
+              evidence,
+              lastKnown: {
+                value: { kind: 'integer', value: 987654 },
+                evidence: { ...evidence, observedAt: 10 },
+              },
+            },
+          ],
+        },
+      },
+    })
+    const readRun = vi.spyOn(h.devices.assets, 'collectionRun').mockResolvedValue({
+      id,
+      quality,
+      startedAt: 20,
+      finishedAt: 21,
+      reason: 'incomplete',
+      delivery: { projection: 'pending', receipt: null },
+    })
+    const readItems = vi.spyOn(h.devices.assets, 'collectionItems').mockResolvedValue({
+      items: [{ index: 0, quality: 'unknown' }],
+      nextOffset: null,
+    })
+    await h.router.push({ name: 'device-detail', params: { tenant: TENANT, device: 'device-01' } })
+    await flushPromises()
+    const scoped = h.wrapper.get('[data-testid=scope-inventory]')
+    await scoped.findAll('select')[1]!.setValue(JSON.stringify(scope))
+    await flushPromises()
+    const value = scoped.get('.asset-value')
+    expect(value.get('strong').text()).toBe('未知')
+    expect(value.text()).toContain('采集不完整')
+    const historical = value.findAll('dt').find((dt) => dt.text().includes('最后已知值'))!
+    expect(historical.element.nextElementSibling?.textContent).toContain('987654')
+    expect(historical.element.nextElementSibling?.textContent).toContain('10')
+    const current = value.findAll('dt').find((dt) => dt.text() === '当前状态')!
+    expect(current.element.nextElementSibling?.textContent).not.toContain('987654')
+    await scoped
+      .findAll('button')
+      .find((b) => b.text() === '来源与历史证据')!
+      .trigger('click')
+    await flushPromises()
+    const run = scoped.get('[data-collection-run]')
+    expect(run.text()).toContain('部分结果')
+    expect(run.text()).toContain('等待资产投影')
+    if (request === 'items') {
+      await run
+        .findAll('button')
+        .find((b) => b.text() === '逐条质量')!
+        .trigger('click')
+      await flushPromises()
+      expect(run.find('ol li').exists()).toBe(true)
+      readItems.mockRejectedValueOnce(
+        decodeMdmError(status, {
+          code: status === 403 ? 'permission_denied' : 'inventory_not_found',
+        }),
+      )
+      await run
+        .findAll('button')
+        .find((b) => b.text() === '逐条质量')!
+        .trigger('click')
+    } else {
+      readRun.mockRejectedValueOnce(
+        decodeMdmError(status, {
+          code: status === 403 ? 'permission_denied' : 'inventory_not_found',
+        }),
+      )
+      await run
+        .findAll('button')
+        .find((b) => b.text() === '重新读取')!
+        .trigger('click')
+    }
+    await flushPromises()
+    expect(h.wrapper.find('[data-testid=scope-inventory]').exists()).toBe(false)
+    expect(h.wrapper.find('[data-collection-run]').exists()).toBe(false)
+    expect(h.wrapper.text()).not.toContain('987654')
+    expect(h.wrapper.text()).not.toContain('ThinkPad T14')
+  },
+)
