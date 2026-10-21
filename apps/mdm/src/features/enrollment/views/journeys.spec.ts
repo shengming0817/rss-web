@@ -144,8 +144,8 @@ async function setup(view: unknown, allow = true) {
 it('keeps downloads anonymous and never requests or creates enrollment authority', async () => {
   const { wrapper, calls } = await setup(DownloadsView, false)
   expect(wrapper.text()).toContain('无需登录')
-  expect(wrapper.text()).toContain('没有正式发布')
-  expect(wrapper.findAll('select')).toHaveLength(3)
+  expect(wrapper.text()).toContain('没有已发布')
+  expect(wrapper.findAll('select')).toHaveLength(2)
   expect(calls).toEqual(['GET /api/v1/agent/enroll/packages'])
   await wrapper.findAll('select')[0]!.setValue('macos')
   expect(calls).toHaveLength(1)

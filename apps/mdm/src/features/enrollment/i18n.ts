@@ -3,15 +3,14 @@ export const onboardingZh = {
   downloadNote:
     '无需登录。下载和安装不代表注册；安装器只消费管理员交付的 JSON 配置。请选择与目标设备一致的系统和原生架构。',
   architecture: '原生架构',
-  channel: '发布渠道',
-  noInstaller: '当前选择没有正式发布的安装器。',
+  noInstaller: '当前选择没有已发布的安装器。',
   fileSize: '文件大小（字节）',
   download: '下载',
   sameDirectory:
     '将管理员交付的 rss-agent-enrollment.json 放在安装器同一目录，再按安装器指引继续。不要将 JSON 发到网页或导入浏览器。',
   configurations: 'Agent 安装配置',
   configurationNote:
-    '管理员生成完整 JSON 文件并安全交付。配置仅授权指定系统、原生架构和渠道；最长365天，不限制已注册设备的证书期限。页面不会恢复丢失的秘密。',
+    '管理员生成完整 JSON 文件并安全交付。配置仅授权指定系统、原生架构；最长365天，不限制已注册设备的证书期限。页面不会恢复丢失的秘密。',
   refreshAccess: '重新读取当前权限',
   lifetime: '有效期（秒，留空使用组织默认值）',
   defaultLifetime: '组织默认配置有效期（秒）',
@@ -152,7 +151,6 @@ export const onboardingEn: typeof onboardingZh = {
   downloadNote:
     'No sign-in required. Downloading or installing does not prove enrollment. The installer consumes an administrator-delivered JSON configuration. Select the target OS and native architecture.',
   architecture: 'Native architecture',
-  channel: 'Release channel',
   noInstaller: 'No published installer matches this selection.',
   fileSize: 'Size (bytes)',
   download: 'Download',
@@ -160,7 +158,7 @@ export const onboardingEn: typeof onboardingZh = {
     'Place the administrator-delivered rss-agent-enrollment.json beside the installer and follow its instructions. Do not upload or import the JSON into this browser.',
   configurations: 'Agent installation configurations',
   configurationNote:
-    'Administrators deliver the complete JSON securely. Scope is restricted to the selected OS, native architecture and channels; lifetime is at most 365 days. Device certificate lifetime is independent. Lost secrets cannot be recovered here.',
+    'Administrators deliver the complete JSON securely. Scope is restricted to the selected OS, native architecture; lifetime is at most 365 days. Device certificate lifetime is independent. Lost secrets cannot be recovered here.',
   refreshAccess: 'Reload current permissions',
   lifetime: 'Lifetime (seconds; blank uses organization default)',
   defaultLifetime: 'Default configuration lifetime (seconds)',

@@ -144,7 +144,7 @@ async function load() {
       progress.value = result.value
       writable.value = result.writable
       packageKnown.value = result.packages !== null
-      packageReady.value = result.packages?.some((p) => p.channel === 'production') ?? false
+      packageReady.value = (result.packages?.length ?? 0) > 0
       if (!pending.value || pending.value.state === 'received') {
         draft.value = structuredClone(result.value.saved.intent)
         if (!finished.value) {
@@ -397,7 +397,7 @@ useSettingsFacts(() => {
             {{ t('settings.packageReadUnknown') }}
           </p>
           <p v-else-if="draft.channels.includes('agent') && !packageReady">
-            {{ t('settings.productionPackageRequired') }}
+            {{ t('settings.publishedPackageRequired') }}
           </p>
           <article v-for="step in progress.steps" :key="step.id" :data-first-use-step="step.id">
             <h3>

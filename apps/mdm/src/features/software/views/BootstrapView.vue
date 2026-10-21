@@ -289,7 +289,7 @@ watch(
                 :key="release.releaseId"
                 :value="release.releaseId"
               >
-                {{ release.version }} · {{ release.format }} · {{ release.channel }} ·
+                {{ release.version }} · {{ release.format }} ·
                 {{ release.releaseId }}
               </option>
             </select></label

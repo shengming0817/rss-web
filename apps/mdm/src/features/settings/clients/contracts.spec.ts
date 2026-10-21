@@ -484,7 +484,6 @@ it('reads formal Agent package metadata and withdraws with the same operation ow
   const value = {
     releaseId: a,
     tenantId: b,
-    channel: 'test',
     target: { platform: 'windows', architecture: 'x86_64' },
     version: '1',
     format: 'windows_msi',

@@ -81,7 +81,7 @@ useSettingsFacts(() => {
     <article v-for="p in slot.packages" :key="p.releaseId" class="package-release">
       <div>
         <strong>{{ p.filename }}</strong>
-        <p>{{ p.version }} · {{ p.channel }} · {{ t('settings.packagePublished') }}</p>
+        <p>{{ p.version }} · {{ t('settings.packagePublished') }}</p>
       </div>
       <UiButton :disabled="locked || !canWrite" @click="withdrawTarget = p.releaseId">{{
         t('settings.withdrawPackage')

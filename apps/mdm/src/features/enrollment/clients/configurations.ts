@@ -11,7 +11,7 @@ import {
   uuid,
 } from '../../../services/decode'
 import { user } from '../../operations/clients/authorization'
-import { base64url, httpsOrigin, platforms, releaseChannels, target } from './packages'
+import { base64url, httpsOrigin, platforms, target } from './packages'
 import { attachment } from './binary'
 export const configurationFilename = 'rss-agent-enrollment.json'
 export function quantity(value: unknown) {
@@ -33,23 +33,16 @@ export function configuration(value: unknown, tenant: string) {
     'tenantId',
     'origin',
     'targets',
-    'channels',
     'expiresAt',
     'quantity',
     'keyId',
   ])
-  const targets = unique(array(v['targets'], target), (v) => `${v.platform}/${v.architecture}`),
-    channels = unique(
-      array(v['channels'], (v) => enumeration(v, releaseChannels)),
-      (v) => v,
-    )
+  const targets = unique(array(v['targets'], target), (v) => `${v.platform}/${v.architecture}`)
   if (
     v['wireVersion'] !== 1 ||
     uuid(v['tenantId']) !== tenant ||
     !targets.length ||
     targets.length > 4 ||
-    !channels.length ||
-    channels.length > 3 ||
     integer(v['expiresAt']) <= 0 ||
     !/^[A-Za-z0-9_-]{1,128}$/.test(identifier(v['keyId']))
   )
@@ -60,7 +53,6 @@ export function configuration(value: unknown, tenant: string) {
     tenantId: tenant,
     origin: httpsOrigin(v['origin']),
     targets,
-    channels,
     expiresAt: integer(v['expiresAt']),
     quantity: quantity(v['quantity']),
     keyId: identifier(v['keyId']),
@@ -137,7 +129,6 @@ export interface ConfigurationInput {
   lifetimeSeconds: number | null
   quantity: ReturnType<typeof quantity>
   targets: ReturnType<typeof target>[]
-  channels: (typeof releaseChannels)[number][]
 }
 export function createConfigurationsClient(transport: HttpTransport, tenant: string) {
   return {
@@ -188,7 +179,6 @@ export function createConfigurationsClient(transport: HttpTransport, tenant: str
             if (
               raw['secret'] !== body.secret ||
               JSON.stringify(metadata.targets) !== JSON.stringify(body.targets) ||
-              JSON.stringify(metadata.channels) !== JSON.stringify(body.channels) ||
               JSON.stringify(metadata.quantity) !== JSON.stringify(body.quantity)
             )
               throw new Error('Wrong configuration receipt')

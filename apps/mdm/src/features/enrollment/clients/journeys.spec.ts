@@ -83,7 +83,6 @@ it('delivers the complete exact JSON, looks up only secret-free outcomes and rev
     lifetimeSeconds: null,
     quantity: { kind: 'finite', count: 3 },
     targets: [{ platform: 'macos', architecture: 'aarch64' }],
-    channels: ['production'],
   })
   expect(JSON.parse(new TextDecoder().decode(delivered.file.bytes)).secret).toBe(secret)
   const found = await client.configurations.operation(op)
@@ -115,7 +114,6 @@ it('keeps unlimited quantity null and rejects altered scope or secret-free pseud
     lifetimeSeconds: 30,
     quantity: { kind: 'unlimited' },
     targets: [{ platform: 'windows', architecture: 'x86_64' }],
-    channels: ['test'],
   })
   expect(
     (await client.configurations.read(file.configuration.configurationId)).remaining,
