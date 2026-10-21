@@ -54,11 +54,16 @@ export function useSettingsAction(target: () => string) {
       apply,
     )
   }
-  async function query<T>(id: string, request: () => Promise<T>, apply: (v: T) => void) {
+  async function query<T>(
+    id: string,
+    request: () => Promise<T>,
+    apply: (v: T) => void,
+    confirmed: (v: T) => boolean = () => true,
+  ) {
     const key = target()
     const ok = await operation.run(request, (value) => {
       apply(value)
-      store.confirm(key, id)
+      if (confirmed(value)) store.confirm(key, id)
     })
     if (ok || operation.failure.value === 'notFound') store.queried(key, id)
     return ok

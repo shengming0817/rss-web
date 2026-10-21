@@ -91,7 +91,7 @@ export function requestConfig(
     url: resolvePath(options.path, options.pathParams),
     timeout,
     validateStatus: () => true,
-    ...('responseType' in options ? { responseType: options.responseType } : {}),
+    ...(options.responseType === 'arraybuffer' ? { responseType: options.responseType } : {}),
     ...(options.query === undefined ? {} : { params: resolveQuery(options.query) }),
     headers,
     ...(options.body === undefined ? {} : { data: options.body }),
@@ -133,7 +133,7 @@ export async function execute<T>(
       ? options.successStatus.includes(response.status)
       : response.status === options.successStatus
     if (!accepted) throw protocolError(response.status)
-    if (options.successStatus === 204) return undefined
+    if (options.successStatus === 204 || options.responseType === 'empty') return undefined
     try {
       if (options.responseType === 'arraybuffer') {
         const data: unknown = response.data

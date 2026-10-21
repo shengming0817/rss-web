@@ -6,7 +6,6 @@ import {
   digest,
   enumeration,
   identifier,
-  record,
   string,
   unique,
   uuid,
@@ -49,9 +48,6 @@ export function installer(value: unknown, tenant: string) {
     'filename',
     'length',
     'installerSha256',
-    'candidateSha256',
-    'origin',
-    'signingKeys',
   ])
   const result = {
     releaseId: uuid(v['releaseId']),
@@ -62,27 +58,21 @@ export function installer(value: unknown, tenant: string) {
     filename: identifier(v['filename']),
     length: count(v['length']),
     installerSha256: digest(v['installerSha256']),
-    candidateSha256: digest(v['candidateSha256']),
-    origin: httpsOrigin(v['origin']),
-    signingKeys: Object.fromEntries(
-      Object.entries(record(v['signingKeys'])).map(([key, value]) => {
-        if (!/^[A-Za-z0-9_-]{1,128}$/.test(key)) throw new Error('Invalid key')
-        return [key, base64url(value, 32)]
-      }),
-    ),
   }
   if (
     result.tenantId !== tenant ||
     !result.length ||
-    !/^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$/.test(result.filename) ||
+    !result.filename ||
+    result.filename.length > 255 ||
+    /[\/\\\p{Cc}]/u.test(result.filename) ||
     (result.target.platform === 'macos') !== (result.format === 'macos_pkg') ||
-    !result.filename.endsWith(
-      { nsis_exe: '.exe', windows_msi: '.msi', windows_msix: '.msix', macos_pkg: '.pkg' }[
-        result.format
-      ],
-    ) ||
-    !Object.keys(result.signingKeys).length ||
-    Object.keys(result.signingKeys).length > 16
+    !result.filename
+      .toLowerCase()
+      .endsWith(
+        { nsis_exe: '.exe', windows_msi: '.msi', windows_msix: '.msix', macos_pkg: '.pkg' }[
+          result.format
+        ],
+      )
   )
     throw new Error('Invalid installer')
   return result

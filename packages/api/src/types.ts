@@ -27,10 +27,10 @@ export interface BinaryResponse {
   contentDisposition: string | null
 }
 
-export interface NoContentRequest extends RequestBase {
-  successStatus: 204
-  decode?: never
-}
+export type NoContentRequest = RequestBase & { decode?: never } & (
+    | { successStatus: 204; responseType?: never }
+    | { successStatus: 201; responseType: 'empty' }
+  )
 
 export interface HttpTransport {
   request(options: NoContentRequest): Promise<void>

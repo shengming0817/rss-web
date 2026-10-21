@@ -490,9 +490,7 @@ it('reads formal Agent package metadata and withdraws with the same operation ow
     filename: 'rss.msi',
     length: 100,
     installerSha256: Array(32).fill(1),
-    candidateSha256: Array(32).fill(2),
     origin: 'https://mdm.test',
-    signingKeys: { key: 'A'.repeat(43) },
   }
   const f = transport([value])
   expect((await createManagedPackages(f.client, b).read()).length).toBe(1)

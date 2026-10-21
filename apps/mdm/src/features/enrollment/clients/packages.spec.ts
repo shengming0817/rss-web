@@ -10,9 +10,6 @@ const item = {
   filename: 'rss-agent.exe',
   length: 42,
   installerSha256: Array(32).fill(0),
-  candidateSha256: Array(32).fill(0),
-  origin: 'https://agent.example.test',
-  signingKeys: { test: 'A'.repeat(43) },
 }
 it('accepts published installer metadata and rejects tenant, file and wire mismatches', () => {
   expect(installer(item, tenant).filename).toBe('rss-agent.exe')
@@ -40,4 +37,7 @@ it('distinguishes MSI and MSIX and rejects the retired metadata shape', () => {
   const old = { ...item } as Record<string, unknown>
   delete old['format']
   expect(() => installer(old, tenant)).toThrow()
+})
+it('rejects the previous package contract instead of decoding both formats', () => {
+  expect(() => installer({ ...item, candidateSha256: Array(32).fill(0), origin: 'https://old.example', signingKeys: {} }, tenant)).toThrow()
 })

@@ -45,6 +45,7 @@ export function usePermission(read: Permission, write: Permission) {
     grants.value = []
   })
   return {
+    allows: (permission: Permission) => grants.value.includes(permission),
     canRead: computed(() => grants.value.includes(read)),
     canWrite: computed(() => grants.value.includes(write)),
     loading,

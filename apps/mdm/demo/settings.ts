@@ -1,3 +1,4 @@
+import { createPackageDemo } from './packages'
 import { createHash } from 'node:crypto'
 /** MOCK_SOURCE: explicit scenario-only settings; no provider or host success is invented. */
 import { entries } from '../src/features/settings/entries'
@@ -23,6 +24,7 @@ const platformIds = [
   'host-config',
 ]
 export function createSettingsDemo() {
+  const packages = createPackageDemo()
   const operations = new Map<string, { input: string; receipt: unknown }>()
   const tenants = [
     {
@@ -37,6 +39,8 @@ export function createSettingsDemo() {
     },
   ]
   const handle: DomainHandler = (r, scenario) => {
+    const packageReply = packages.handle(r, scenario)
+    if (packageReply) return packageReply
     const platform = r.actor.tenantId === MANAGEMENT_TENANT
     if (r.path === '/api/v1/settings/first-use') {
       if (platform) return error('permission_denied', 403)
@@ -153,7 +157,6 @@ export function createSettingsDemo() {
         return ok({ revision: 0, desiredRevision: null, versions: [] })
       if (r.path === '/api/v1/smtp')
         return ok({ revision: 0, selectedRevision: null, versions: [] })
-      if (r.path === '/api/v1/agent-packages') return ok([])
       if (r.path === '/api/v1/webhooks/materials')
         return ok({ configurationSha256: '0'.repeat(64), keys: { heads: [], materials: [] } })
     }
@@ -169,6 +172,7 @@ export function createSettingsDemo() {
   return {
     handle,
     reset() {
+      packages.reset()
       operations.clear()
     },
   }

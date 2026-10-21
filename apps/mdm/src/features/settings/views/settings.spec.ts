@@ -464,9 +464,9 @@ it('queries original operations through explicit domain clients and keeps PKI ou
   expect(f.calls.at(-1)?.path).toBe('/api/v1/smtp/operations/{id}')
   expect(f.wrapper.find('option[value=pki]').exists()).toBe(false)
 })
-it('keeps Agent package admission and signing evidence with the formal resource owner', async () => {
+it('offers platform package tasks without technical publication forms', async () => {
   const f = await fixture(PackagesPanel)
-  expect(f.wrapper.text()).toContain('新安装包上传与替换暂不可用')
+  expect(f.wrapper.text()).toContain('添加安装包')
   expect(f.wrapper.find('form').exists()).toBe(false)
   for (const name of ['Windows x64', 'Windows ARM64', 'macOS Intel', 'macOS Apple Silicon'])
     expect(f.wrapper.text()).toContain(name)
