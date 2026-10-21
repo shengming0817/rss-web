@@ -599,7 +599,6 @@ it('binds explicit Agent releases in the common Policy and reads canonical regis
       architecture: target.startsWith('windows') ? target.slice(8) : target.slice(6),
     },
     version: '1',
-    channel: 'test',
     format: target.startsWith('windows') ? 'exe' : 'pkg',
   }))
   let saved: { id: string; revision: number; enabled: boolean; definition: unknown } | undefined

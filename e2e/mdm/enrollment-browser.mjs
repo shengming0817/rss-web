@@ -91,7 +91,6 @@ try {
   for (const item of packages) {
     await page.getByLabel('平台', { exact: true }).selectOption(item.target.platform)
     await page.getByLabel('原生架构', { exact: true }).selectOption(item.target.architecture)
-    await page.getByLabel('发布渠道', { exact: true }).selectOption(item.channel)
     if (!['nsis_exe', 'macos_pkg'].includes(item.format)) {
       assert.equal(
         await page

@@ -5,7 +5,7 @@ export const settingsZh = {
   optionsStep: '通知与其他集成',
   reviewStep: '注册就绪检查',
   storageRequired: 'S3 内容仓必须保存、通过资格检查并实际应用，才能完成首次配置。',
-  productionPackageRequired: 'Agent 通道至少需要一个合格的正式渠道安装包。',
+  publishedPackageRequired: 'Agent 接入至少需要一个已发布的安装包。',
   packageReadUnknown: '尚未确认 Agent 包目录，请重新读取后再完成配置。',
   caOperationsBoundary:
     '设备 CA 已由运维统一初始化或接入。此处核对用途信任与轮换；材料已保存与当前宿主已加载分别显示。网站 HTTPS 由运维维护。',
@@ -123,7 +123,6 @@ export const settingsZh = {
   manifestArtifact: '清单 Artifact 标识',
   packagePlatform: '操作系统',
   architecture: '处理器架构',
-  releaseChannel: '发布通道',
   addAdministrator: '添加独立管理员',
   recentAuthentication: '需要最近完成的平台认证；认证过期后请重新登录，再显式提交原操作。',
   deleteTenant: '删除未使用租户',
@@ -294,7 +293,7 @@ export const settingsZh = {
     pending: '等待处理',
     unavailable: '暂不可用',
     received: '已接收',
-    applied: '已安装',
+    applied: '已应用',
     failed: '失败',
     submitting: '提交中',
     conflict: '冲突',
@@ -311,7 +310,7 @@ export const settingsEn = {
   reviewStep: 'Enrollment readiness',
   storageRequired:
     'S3 storage must be saved, qualified and actually applied before completing first use.',
-  productionPackageRequired: 'Agent enrollment requires at least one qualified production package.',
+  publishedPackageRequired: 'Agent enrollment requires at least one published package.',
   packageReadUnknown: 'Agent package availability is unknown. Reload before completing setup.',
   caOperationsBoundary:
     'Operations initializes or connects the device CA. Review purpose trust and rotation here; saved material and current host loading remain separate. Operations manages website HTTPS.',
@@ -435,7 +434,6 @@ export const settingsEn = {
   manifestArtifact: 'Manifest artifact identifier',
   packagePlatform: 'Operating system',
   architecture: 'Architecture',
-  releaseChannel: 'Release channel',
   addAdministrator: 'Add independent administrator',
   recentAuthentication:
     'Recent platform authentication is required. Sign in again if expired, then explicitly submit the original operation.',
@@ -627,7 +625,7 @@ export const settingsEn = {
     pending: 'Pending',
     unavailable: 'Unavailable',
     received: 'Received',
-    applied: 'Installed',
+    applied: 'Applied',
     failed: 'Failed',
     submitting: 'Submitting',
     conflict: 'Conflict',

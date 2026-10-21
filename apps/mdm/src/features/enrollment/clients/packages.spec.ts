@@ -4,7 +4,6 @@ const tenant = '11111111-1111-4111-8111-111111111111'
 const item = {
   releaseId: tenant,
   tenantId: tenant,
-  channel: 'production',
   target: { platform: 'windows', architecture: 'x86_64' },
   version: '1.0.0',
   format: 'nsis_exe',

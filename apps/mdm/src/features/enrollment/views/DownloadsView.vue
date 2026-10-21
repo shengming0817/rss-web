@@ -4,20 +4,16 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
-import { architectures, platforms, releaseChannels } from '../clients/packages'
+import { architectures, platforms } from '../clients/packages'
 const runtime = useMdm(),
   { t } = useI18n(),
   { run, busy, failure } = useOperation()
 const platform = ref<(typeof platforms)[number]>('windows'),
-  architecture = ref<(typeof architectures)[number]>('x86_64'),
-  channel = ref<(typeof releaseChannels)[number]>('production')
+  architecture = ref<(typeof architectures)[number]>('x86_64')
 const packages = ref<Awaited<ReturnType<typeof runtime.onboarding.packages.list>>>([])
 const matching = computed(() =>
   packages.value.filter(
-    (p) =>
-      p.target.platform === platform.value &&
-      p.target.architecture === architecture.value &&
-      p.channel === channel.value,
+    (p) => p.target.platform === platform.value && p.target.architecture === architecture.value,
   ),
 )
 function refresh() {
@@ -47,12 +43,6 @@ refresh()
         >{{ t('onboarding.architecture')
         }}<select v-model="architecture" class="ui-input">
           <option v-for="a in architectures" :key="a" :value="a">{{ a }}</option>
-        </select></label
-      >
-      <label
-        >{{ t('onboarding.channel')
-        }}<select v-model="channel" class="ui-input">
-          <option v-for="c in releaseChannels" :key="c" :value="c">{{ c }}</option>
         </select></label
       >
       <UiButton type="button" :disabled="!!busy" @click="refresh">{{

@@ -8,7 +8,7 @@ import { useOperation } from '../../../services/useOperation'
 import { generateEnrollmentPassword } from '../../devices/clients/enrollment'
 import { usePermission } from '../usePermission'
 import { useAttachment } from '../useAttachment'
-import { platforms, architectures, releaseChannels } from '../clients/packages'
+import { platforms, architectures } from '../clients/packages'
 import { configurationFilename } from '../clients/configurations'
 import RegistrationStatus from '../../../components/RegistrationStatus.vue'
 import PageFrame from '../../../components/PageFrame.vue'
@@ -33,8 +33,7 @@ const settings = ref<Awaited<ReturnType<typeof client.settings>>>(),
 const lifetime = ref<number | null>(null),
   finite = ref(true),
   amount = ref(1),
-  selectedTargets = ref<string[]>([]),
-  channels = ref<(typeof releaseChannels)[number][]>(['production'])
+  selectedTargets = ref<string[]>([])
 const defaultSeconds = ref(86400),
   grantSeconds = ref(300),
   enabledPlatforms = ref<(typeof platforms)[number][]>([]),
@@ -70,7 +69,6 @@ async function create() {
     uncertain.value ||
     !settings.value ||
     !selectedTargets.value.length ||
-    !channels.value.length ||
     selectedTargets.value.some(
       (value) =>
         !settings.value!.values.platforms.some((platform) => value.startsWith(platform + '/')),
@@ -99,7 +97,6 @@ async function create() {
               architecture: architecture as (typeof architectures)[number],
             }
           }),
-          channels: [...channels.value],
         })
         return file
       },
@@ -304,19 +301,9 @@ watch(
                 ></template
               >
             </fieldset>
-            <fieldset>
-              <legend>{{ t('onboarding.channel') }}</legend>
-              <label v-for="c in releaseChannels" :key="c"
-                ><input v-model="channels" type="checkbox" :value="c" />{{ c }}</label
-              >
-            </fieldset>
             <UiButton
               :disabled="
-                !!(
-                  !selectedTargets.length ||
-                  !channels.length ||
-                  !runtime.registrationChannels.allowed('agent')
-                )
+                !!(!selectedTargets.length || !runtime.registrationChannels.allowed('agent'))
               "
               type="submit"
             >

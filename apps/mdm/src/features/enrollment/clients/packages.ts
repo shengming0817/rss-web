@@ -14,7 +14,6 @@ import {
 export const platforms = ['windows', 'macos'] as const
 export const architectures = ['x86_64', 'aarch64'] as const
 export const installerFormats = ['nsis_exe', 'windows_msi', 'windows_msix', 'macos_pkg'] as const
-export const releaseChannels = ['test', 'pilot', 'production'] as const
 export function target(value: unknown) {
   const v = closed(value, ['platform', 'architecture'])
   return {
@@ -44,7 +43,6 @@ export function installer(value: unknown, tenant: string) {
   const v = closed(value, [
     'releaseId',
     'tenantId',
-    'channel',
     'target',
     'version',
     'format',
@@ -58,7 +56,6 @@ export function installer(value: unknown, tenant: string) {
   const result = {
     releaseId: uuid(v['releaseId']),
     tenantId: uuid(v['tenantId']),
-    channel: enumeration(v['channel'], releaseChannels),
     target: target(v['target']),
     version: identifier(v['version']),
     format: enumeration(v['format'], installerFormats),

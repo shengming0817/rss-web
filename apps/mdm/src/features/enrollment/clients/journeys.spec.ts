@@ -83,7 +83,6 @@ it('delivers the complete exact JSON, looks up only secret-free outcomes and rev
     lifetimeSeconds: null,
     quantity: { kind: 'finite', count: 3 },
     targets: [{ platform: 'macos', architecture: 'aarch64' }],
-    channels: ['production'],
   })
   expect(JSON.parse(new TextDecoder().decode(delivered.file.bytes)).secret).toBe(secret)
   const found = await client.configurations.operation(op)

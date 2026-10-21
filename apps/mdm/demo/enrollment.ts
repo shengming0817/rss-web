@@ -174,14 +174,7 @@ export function createOnboardingDemo(
     }
     if (configurationPath) {
       if (!configurationPath[1] && method === 'POST') {
-        const v = closed(body, [
-            'operationId',
-            'secret',
-            'lifetimeSeconds',
-            'quantity',
-            'targets',
-            'channels',
-          ]),
+        const v = closed(body, ['operationId', 'secret', 'lifetimeSeconds', 'quantity', 'targets']),
           operation = uuid(v['operationId'])
         if (!registrationAllowed('agent')) return error('enrollment_paused', 409)
         if (configurationOperations.has(operation)) return error('operation_conflict')
@@ -192,7 +185,6 @@ export function createOnboardingDemo(
             tenantId: TENANT,
             origin: 'https://agent.example.test',
             targets: v['targets'],
-            channels: v['channels'],
             quantity: quantity(v['quantity']),
             keyId: 'demo',
             expiresAt:
