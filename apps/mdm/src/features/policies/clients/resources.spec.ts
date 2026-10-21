@@ -19,6 +19,7 @@ const spec = {
 const artifact = { reference: 'content-1', length: 12, sha256: digest }
 const resource = {
   origin: null,
+  presentation: {},
   id: 'script-library',
   revision: 2,
   kind: 'script',
@@ -235,4 +236,50 @@ it('decodes artifact-only native declarations and rejects retired Resource confi
       native.id,
     ),
   ).toThrow()
+})
+
+it('consumes the instantiated Resource read shape without treating it as a normal change receipt', async () => {
+  const sample = (await import('../../../../demo/policies/blueprints.json')).default.packages[0]!
+  const id = '22222222-2222-4222-8222-222222222222'
+  const value = {
+    id,
+    revision: 2,
+    kind: sample.kind,
+    presentation: sample.presentation,
+    origin: { blueprint: sample.id, version: sample.version, digest: sample.versionDigest },
+    versions: [
+      {
+        id: `builtin.${sample.id}.${sample.version}`,
+        digest: sample.versionDigest,
+        state: 'frozen',
+        variants: ['x86_64', 'aarch64'].map((architecture) => ({
+          platform: sample.platform,
+          architecture,
+          key: architecture,
+          declaration: {
+            kind: sample.kind,
+            artifact: {
+              reference: sample.reference,
+              length: new TextEncoder().encode(sample.content).length,
+              sha256: sample.sha256,
+            },
+            definition: JSON.parse(sample.content) as unknown,
+          },
+        })),
+      },
+    ],
+  }
+  let reply: unknown = value
+  const request = vi.fn(async (o: RequestOptions<unknown>) => o.decode(reply))
+  const client = createResourcesClient({ request } as unknown as HttpTransport)
+  const body = {
+    operationId,
+    expectedRevision: 0,
+    input: { action: 'instantiate' as const, blueprint: sample.id, version: sample.version },
+  }
+  expect(await client.change(id, body)).toEqual(value)
+  expect(request).toHaveBeenCalledTimes(1)
+  expect(request.mock.calls[0]![0].body).toEqual(body)
+  reply = { resource: id, request: operationId, storageRevision: 2 }
+  await expect(client.change(id, body)).rejects.toThrow()
 })

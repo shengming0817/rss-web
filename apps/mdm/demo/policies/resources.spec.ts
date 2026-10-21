@@ -90,3 +90,37 @@ it('verifies raw upload length and digest, permits exact bytes replay, and refus
   expect(change({ action: 'archive', version: '1' }).status).toBe(409)
   expect(resources.read(id)?.versions[0]?.state).toBe('active')
 })
+
+it('instantiates exact standard package versions across all six categories with immediately usable canonical content', () => {
+  const resources = createResourceDemo(() => false)
+  const catalog = resources.handle(request('/api/v1/collection-blueprints'), 'normal')!.body as {
+    categories: string[]
+    items: { id: string; version: string; presentation: { category: string } }[]
+  }
+  expect(new Set(catalog.items.map((b) => b.presentation.category))).toEqual(
+    new Set(catalog.categories),
+  )
+  for (const blueprint of catalog.items) {
+    const id = randomUUID(),
+      body = {
+        operationId: randomUUID(),
+        expectedRevision: 0,
+        input: { action: 'instantiate', blueprint: blueprint.id, version: blueprint.version },
+      }
+    expect(resources.handle(request(`/api/v1/resources/${id}`, body), 'normal')?.status).toBe(200)
+    const value = resources.read(id)!
+    expect(value.revision).toBe(2)
+    expect(value.origin?.blueprint).toBe(blueprint.id)
+    expect(value.versions[0]?.id).toBe(`builtin.${blueprint.id}.${blueprint.version}`)
+    expect(
+      resources.handle(
+        request(`/api/v1/resources/${id}`, {
+          operationId: randomUUID(),
+          expectedRevision: 2,
+          input: { action: 'activate', version: value.versions[0]!.id },
+        }),
+        'normal',
+      )?.status,
+    ).toBe(200)
+  }
+})

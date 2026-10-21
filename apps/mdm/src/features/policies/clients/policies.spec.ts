@@ -24,12 +24,14 @@ const policy = { id, revision: 1, version: 1, versionId: id, state: 'enabled', d
 const metadata = {
   access: { kind: 'authenticated_user' },
   published: true,
-  displayName: 'Diagnostics',
-  description: '',
-  prerequisites: '',
-  sideEffects: '',
-  category: 'Support',
-  keywords: [],
+  presentation: {
+    displayName: 'Diagnostics',
+    description: '',
+    prerequisites: '',
+    sideEffects: '',
+    category: 'Support',
+    keywords: [],
+  },
   allowAi: false,
   riskLevel: 1,
 }
@@ -46,13 +48,28 @@ it('accepts only the closed formal Policy and rejects the retired candidate DTO'
   expect(
     selfService({
       ...metadata,
-      description: 'Step one\nStep two',
-      prerequisites: 'One\nTwo',
-      sideEffects: 'First\nSecond',
+      presentation: {
+        ...metadata.presentation,
+        description: 'Step one\nStep two',
+        prerequisites: 'One\nTwo',
+        sideEffects: 'First\nSecond',
+      },
     }),
-  ).toMatchObject({ description: 'Step one\nStep two' })
-  expect(() => selfService({ ...metadata, description: 'bad\0value' })).toThrow()
+  ).toMatchObject({ presentation: { description: 'Step one\nStep two' } })
+  expect(() =>
+    selfService({
+      ...metadata,
+      presentation: { ...metadata.presentation, description: 'bad\0value' },
+    }),
+  ).toThrow()
   expect(selfService(metadata)).toMatchObject({ allowAi: false, riskLevel: 1 })
+  expect(
+    selfService({
+      ...metadata,
+      presentation: { ...metadata.presentation, vendorHelp: { text: 'support' } },
+    }).presentation,
+  ).toMatchObject({ vendorHelp: { text: 'support' } })
+  expect(() => selfService({ ...metadata, displayName: 'retired flat metadata' })).toThrow()
   for (const riskLevel of [0, 3, '2', null])
     expect(() => selfService({ ...metadata, riskLevel })).toThrow()
   expect(() =>
@@ -125,4 +142,31 @@ it('sends archive only through the existing DELETE body and never retries a lost
   request.mockRejectedValueOnce(new Error('response lost'))
   await expect(client.change(id, body)).rejects.toThrow('response lost')
   expect(request).toHaveBeenCalledTimes(2)
+})
+
+it('accepts only continuing fixed intervals for standard collection actions', async () => {
+  const { defaultCollectionSchedule } = await import('./model')
+  for (const kind of ['native_collection', 'agent_collection']) {
+    const action = {
+      kind,
+      resource: definition.action.resource,
+      schedule: defaultCollectionSchedule(),
+      frequency: 'every_trigger',
+      runLifetimeSeconds: 3600,
+    }
+    expect(policyDefinition({ scope: id, action }).action).toMatchObject({
+      schedule: { trigger: { kind: 'interval', seconds: 3600 } },
+      frequency: 'every_trigger',
+    })
+    for (const invalid of [
+      { ...action, frequency: 'once_per_version' },
+      { ...action, schedule: defaultSchedule() },
+      { ...action, schedule: { ...action.schedule, until: 100 } },
+      {
+        ...action,
+        schedule: { ...action.schedule, misfire: { kind: 'skip', maxLatenessSeconds: 60 } },
+      },
+    ])
+      expect(() => policyDefinition({ scope: id, action: invalid })).toThrow()
+  }
 })

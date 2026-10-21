@@ -8,8 +8,7 @@ const group = {
   kind: 'dynamic',
   assetContext: 'endpoint',
   calculationRevision: 0,
-  name: 'Managed',
-  description: '',
+  presentation: { name: 'Managed', description: '' },
   revision: 2,
   memberVersion: 1,
   memberCount: 0,
@@ -27,12 +26,41 @@ it('preserves an empty published member set separately from the definition revis
           criteria: { kind: 'and', children: [] },
         },
         memberSet: task,
+        freshness: 'current',
       },
       id,
     ).group.memberCount,
   ).toBe(0)
+  expect(
+    decodeGroup(
+      {
+        group: {
+          ...group,
+          presentation: { ...group.presentation, help: { text: 'operator note' } },
+        },
+        criteria: null,
+        memberSet: null,
+        freshness: 'pending',
+      },
+      id,
+    ).group.presentation,
+  ).toMatchObject({ help: { text: 'operator note' } })
   expect(() =>
-    decodeGroup({ group: { ...group, id: task }, criteria: null, memberSet: null }, id),
+    decodeGroup(
+      {
+        group: { ...group, name: 'retired' },
+        criteria: null,
+        memberSet: null,
+        freshness: 'pending',
+      },
+      id,
+    ),
+  ).toThrow()
+  expect(() =>
+    decodeGroup(
+      { group: { ...group, id: task }, criteria: null, memberSet: null, freshness: 'pending' },
+      id,
+    ),
   ).toThrow()
 })
 it('decodes unknown explanations and snake-case provenance without claiming membership', () => {
@@ -71,7 +99,7 @@ it('uses 200 for definition changes and 202 for recompute and preview, preservin
   await client.change(id, {
     operationId: task,
     expectedRevision: 2,
-    input: { action: 'edit', name: 'Managed', description: '' },
+    input: { action: 'edit', presentation: { name: 'Managed', description: '' } },
   })
   await client.change(id, {
     operationId: task,

@@ -3,6 +3,8 @@
 Consumes rss-mdm's worktree environment/build lease and never edits its source.
 """
 import json
+from contextlib import ExitStack
+import importlib.util
 import os
 import re
 from pathlib import Path
@@ -11,20 +13,24 @@ import ssl
 import subprocess
 import sys
 import time
+import tempfile
 from urllib.parse import urlsplit
 import http.client
 import uuid
 
 WEB = Path(sys.argv[1]).resolve()
 BACKEND = Path.cwd()
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(BACKEND / 'hack'))
 from t2_environment import Environment, private
 from candidate_fixture import INSTANCE, TENANTS, ADMIN
 from build_run import lease_fds
+from pki_fixtures import running as pki
 from candidate_installation_driver import Browser
 
 environment = Environment(BACKEND, group='device-browser')
 processes = []
+providers = ExitStack()
 phase = 'environment'
 result = 'failed'
 readiness = None
@@ -45,7 +51,7 @@ def q(value):
 def seed_authority():
     tenant = TENANTS[0]
     user = dict(instanceId=INSTANCE, tenantId=tenant, principalId=ADMIN)
-    rule = dict(subject=dict(kind='user', user=user), grants=[dict(operation=o, scope=dict(kind='all_devices')) for o in ['inventory_read','inventory_assign','device_association_write','credentials','enrollment','operation_read','script_execute']] + [dict(operation=o, scope=dict(kind='tenant')) for o in ['group_read','group_write','group_recompute','scope_read','scope_write','policy_read','policy_write','resource_read','resource_write','registration_configuration_read','registration_configuration_write']])
+    rule = dict(subject=dict(kind='user', user=user), grants=[dict(operation=o, scope=dict(kind='all_devices')) for o in ['inventory_read','inventory_collect','inventory_assign','device_association_write','credentials','enrollment','operation_read','script_execute']] + [dict(operation=o, scope=dict(kind='tenant')) for o in ['inventory_sensitive_read','agent_enrollment_read','agent_enrollment_write','group_read','group_write','group_recompute','scope_read','scope_write','policy_read','policy_write','resource_read','resource_write','registration_configuration_read','registration_configuration_write']])
     rule_id = str(uuid.uuid4())
     sql = [f"SET rss.tenant_id = '{tenant}'", f"INSERT INTO mdm_access.authorization_rules(tenant_id,instance,id,revision,document) VALUES('{tenant}','{INSTANCE}','{rule_id}',1,{q(json.dumps(rule))}::jsonb)"]
     environment.sql(';'.join(sql)+';', 'mdm_dev')
@@ -123,6 +129,18 @@ try:
     content_directory = environment.root/'content'
     content_directory.mkdir(mode=0o700)
     config['content'] = dict(storage=dict(kind='volume',directory=str(content_directory)),imports={},max_artifact_bytes=32*1024*1024,max_temporary_bytes=64*1024*1024,max_uploads=4,transfer_seconds=60,retention_seconds=3600,max_bundle_bytes=64*1024*1024,max_bundle_entries=100,max_expansion_ratio=100)
+    native = environment.root/'agent-native'
+    native.mkdir(mode=0o700)
+    for name in ('ca.crt', 'server.crt', 'server.key'):
+        private(native/name, (environment.root/name).read_text())
+    private(native/'case.json', dict(tenant=TENANTS[0]))
+    ports = Environment(BACKEND, group='device-agent').host_ports()
+    agent_origin = f"https://localhost:{ports['backend']}"
+    providers.enter_context(pki(native, dict(os.environ), case=str(WEB)+':device-browser', agent=True, agent_origin=agent_origin))
+    agent = json.loads((native/'agent-pki.json').read_text())
+    agent['endpoint']['listen'] = f"127.0.0.1:{ports['backend']}"
+    # Prepare task signing over the product session before enabling Agent runtime.
+    config['device_pki'] = json.loads((native/'device-pki.json').read_text())
     private(config_path, config)
     phase = 'authority'
     rule_id, rule = seed_authority()
@@ -156,6 +174,7 @@ try:
     config_path = Path(initialized['configuration'])
     config = json.loads(config_path.read_text())
     config['task_signing'] = dict(revision=trust['revision'])
+    config['agent_pki'] = agent
     # A deployment-owned entry for the disabled Policy's frozen input, not OS enrollment proof.
     config['enrollment_entries'] = dict(windows=initialized['origin'], macos=None)
     private(config_path, config)
@@ -163,9 +182,14 @@ try:
     seed()
     phase = 'readiness'
     start(binary, initialized, log)
-    fixture=private(environment.root/'browser.json',dict(origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,principal=ADMIN,login='admin',passwordFile=str(environment.root/'account-password'),mdm='fixture-mdm',agent='fixture-agent',alone='fixture-alone',ruleId=rule_id,rule=rule))
+    phase = 'collector-registration'
+    module = importlib.util.spec_from_file_location('device_agent', WEB/'e2e/mdm/device-agent.py')
+    collector = importlib.util.module_from_spec(module)
+    module.loader.exec_module(collector)
+    agent_fixture = collector.register(agent_origin, environment.root/'ca.crt', native/'pki'/'agent', operator, private, TENANTS[0])
+    fixture=private(environment.root/'browser.json',dict(collector=agent_fixture,origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,principal=ADMIN,login='admin',passwordFile=str(environment.root/'account-password'),mdm='fixture-mdm',agent='fixture-agent',alone='fixture-alone',ruleId=rule_id,rule=rule))
     phase='browser'
-    browser=subprocess.run(['node',str(WEB/'e2e/mdm/device-browser.mjs')],cwd=WEB,env={**os.environ,'MDM_DEVICE_BROWSER_FIXTURE':str(fixture)},timeout=300,pass_fds=lease_fds())
+    browser=subprocess.run(['node',str(WEB/'e2e/mdm/device-browser.mjs')],cwd=WEB,env={**os.environ,'MDM_DEVICE_BROWSER_FIXTURE':str(fixture)},timeout=900,pass_fds=lease_fds())
     if browser.returncode: raise RuntimeError('browser')
     result='passed'
 except BaseException as error:
@@ -173,6 +197,10 @@ except BaseException as error:
         print(json.dumps(dict(phase=phase, result='failed', **readiness)), flush=True)
     print(json.dumps(dict(phase=phase,result='failed',classification=type(error).__name__)),flush=True)
     product_log = environment.root/'product.log'
+    if product_log.exists():
+        diagnostic = Path(tempfile.mkdtemp(prefix='mdm-device-failure-'))
+        private(diagnostic/'product.log', product_log.read_text())
+        print(json.dumps(dict(phase='diagnostics', directory=str(diagnostic))), flush=True)
     if product_log.exists() and 'stack overflow' in product_log.read_text():
         print(json.dumps(dict(phase='product',result='failed',classification='stack-overflow')),flush=True)
 finally:
@@ -181,6 +209,10 @@ finally:
         try: child.wait(timeout=5)
         except subprocess.TimeoutExpired:
             child.kill();child.wait(timeout=5)
+    try: providers.close()
+    except Exception:
+        result='failed'
+        print(json.dumps(dict(phase='pki-cleanup',result='failed')),flush=True)
     # The parent starts a fresh leased reset after this execution runner closes.
     # Keep resource cleanup outside build_run's five-second cancellation window.
     print(json.dumps(dict(phase='device-fixture',result=result)),flush=True)

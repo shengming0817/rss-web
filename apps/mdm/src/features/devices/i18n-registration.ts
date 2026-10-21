@@ -26,7 +26,7 @@ export const registrationZh = {
 
   self: '注册我的设备',
   quotas: '注册额度',
-  user: '注册用户／设备责任人',
+  user: '用户',
   note: '每个渠道分别计算已注册设备和有效待完成注册。组织批量注册不占个人额度。',
   agent: 'Agent（Windows 与 macOS 共用）',
   windows_mdm: 'Windows MDM',
@@ -45,7 +45,7 @@ export const registrationZh = {
   empty: '未指定',
   more: '加载更多用户',
   responsibilityNote:
-    '仅适用于组织注册的设备，可以为空。修改责任人不改变设备凭据，也不占个人额度。',
+    '所有注册来源共用设备所有人关系，可以清空；修改所有人不改变凭据或个人注册额度。',
   selectUser: '选择用户后读取配置',
   nativeGrant: 'MDM 注册授权',
   handoff: '先保存注册密码并交给要注册的设备，然后提交。页面不会保存密码。',
@@ -83,7 +83,7 @@ export const registrationEn: typeof registrationZh = {
 
   self: 'Enroll my devices',
   quotas: 'Enrollment quotas',
-  user: 'Enrollment user / responsible person',
+  user: 'User',
   note: 'Each channel counts active registrations and live pending enrollments separately. Organization enrollment is exempt from personal quotas.',
   agent: 'Agent (Windows and macOS share)',
   windows_mdm: 'Windows MDM',
@@ -102,7 +102,7 @@ export const registrationEn: typeof registrationZh = {
   empty: 'Unassigned',
   more: 'Load more users',
   responsibilityNote:
-    'Organization devices only; this field may be empty. Changing responsibility preserves device credentials and remains exempt from personal quotas.',
+    'All registration sources share device ownership. It may be cleared; changing ownership preserves credentials and personal registration usage.',
   selectUser: 'Select a user to load configuration',
   nativeGrant: 'MDM enrollment authorization',
   handoff:

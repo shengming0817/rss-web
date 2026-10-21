@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { UiButton } from '@rss/core/components'
-import { onBeforeUnmount, ref, shallowRef, toRaw, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, shallowRef, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { useMdm } from '../../../context'
@@ -29,6 +29,31 @@ const { t } = useI18n(),
   client = runtime.policies.resources,
   { run, runWrite, busy, failure, uncertain } = useOperation()
 const creating = ref(false)
+const blueprints = ref<Awaited<ReturnType<typeof client.blueprints>>>(),
+  category = ref(''),
+  blueprint = ref('')
+const blueprintOptions = computed(
+  () =>
+    blueprints.value?.items.filter((b) => !category.value || b.category === category.value) ?? [],
+)
+function loadBlueprints() {
+  void run(
+    () => client.blueprints(),
+    (value) => {
+      blueprints.value = value
+    },
+  )
+}
+function instantiate() {
+  if (busy.value || uncertain.value) return
+  const selected = blueprintOptions.value.find(
+    (b) => JSON.stringify([b.id, b.version]) === blueprint.value,
+  )
+  if (!selected) return
+  current.value = undefined
+  id.value = crypto.randomUUID()
+  change({ action: 'instantiate', blueprint: selected.id, version: selected.version })
+}
 const id = ref(''),
   current = ref<ResourceRead>(),
   kind = ref<ResourceKind>('script'),
@@ -396,6 +421,46 @@ watch(
 </script>
 <template>
   <PageFrame :title="t('policies.resources')" :busy="busy" :failure="failure">
+    <section class="console-panel" data-testid="collection-blueprints">
+      <h2>{{ t('policies.standardPackages') }}</h2>
+      <p>{{ t('policies.standardPackagesNote') }}</p>
+      <UiButton :disabled="busy" @click="loadBlueprints">{{
+        t('policies.choosePackage')
+      }}</UiButton>
+      <template v-if="blueprints"
+        ><label
+          >{{ t('policies.packageCategory')
+          }}<select
+            v-model="category"
+            class="ui-input"
+            :disabled="busy || uncertain"
+            @change="blueprint = ''"
+          >
+            <option value="">{{ t('devices.all') }}</option>
+            <option v-for="c in blueprints.categories" :key="c" :value="c">
+              {{ t('policies.packageCategories.' + c) }}
+            </option>
+          </select></label
+        ><label
+          >{{ t('policies.packageVersion')
+          }}<select v-model="blueprint" class="ui-input" :disabled="busy || uncertain">
+            <option value="">{{ t('devices.select') }}</option>
+            <option
+              v-for="b in blueprintOptions"
+              :key="b.id + b.version"
+              :value="JSON.stringify([b.id, b.version])"
+            >
+              {{ b.id }} / {{ b.version }} · {{ b.platform }} · {{ b.definition.kind }}
+            </option>
+          </select></label
+        ><UiButton
+          :disabled="busy || uncertain || !blueprint"
+          data-action="instantiate-package"
+          @click="instantiate"
+          >{{ t('policies.instantiatePackage') }}</UiButton
+        ></template
+      >
+    </section>
     <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="create">{{
       t('policies.create')
     }}</UiButton
@@ -472,12 +537,30 @@ watch(
                 >
                   {{ t(`policies.${action}`) }}
                 </UiButton>
+                <RouterLink
+                  v-if="
+                    item.state === 'active' &&
+                    ['native_collection', 'agent_collection', 'configuration'].includes(
+                      current.kind,
+                    )
+                  "
+                  :to="{
+                    name: 'policy-policies',
+                    params: { tenant: runtime.tenant },
+                    query: { kind: current.kind, resource: current.id, version: item.id },
+                  }"
+                  >{{ t('policies.assignPackage') }}</RouterLink
+                >
               </td>
             </tr>
           </tbody>
         </table>
       </div>
-      <details class="console-panel console-task" :open="uncertain || undefined">
+      <details
+        v-if="kind !== 'native_collection' && kind !== 'agent_collection'"
+        class="console-panel console-task"
+        :open="uncertain || undefined"
+      >
         <summary>{{ t('policies.version') }}</summary>
         <form @submit.prevent="addVersion">
           <fieldset :disabled="busy || uncertain">
@@ -544,7 +627,10 @@ watch(
           </fieldset>
         </form>
       </details>
-      <section class="console-panel">
+      <section
+        v-if="kind !== 'native_collection' && kind !== 'agent_collection'"
+        class="console-panel"
+      >
         <h2>{{ t('policies.upload') }}</h2>
         <p>{{ t('software.uploadSessionHint') }}</p>
         <label for="resource-upload-id">{{ t('software.uploadSessionId') }}</label>

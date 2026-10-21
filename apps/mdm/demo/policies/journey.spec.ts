@@ -54,7 +54,10 @@ it('carries the shared formal Policy through the HTTP session, preserves existin
   expect(old.definition.selfService).toMatchObject({ allowAi: false, riskLevel: 1 })
   const edited = {
     ...old.definition,
-    selfService: { ...old.definition.selfService!, description: 'Edited purpose' },
+    selfService: {
+      ...old.definition.selfService!,
+      presentation: { ...old.definition.selfService!.presentation, description: 'Edited purpose' },
+    },
   }
   const saved = await policies.change(
     old.id,
@@ -63,7 +66,7 @@ it('carries the shared formal Policy through the HTTP session, preserves existin
   expect(saved.definition.selfService).toMatchObject({
     allowAi: false,
     riskLevel: 1,
-    description: 'Edited purpose',
+    presentation: { description: 'Edited purpose' },
   })
   expect(saved.versionId).toBe(old.versionId)
   await expect(

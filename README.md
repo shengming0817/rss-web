@@ -69,3 +69,5 @@ MDM_SOFTWARE_BACKEND=/absolute/rss-mdm pnpm test:mdm:software-browser
 
 
 业务登录使用 `/login`，平台管理使用 `/platform`；业务配置管理员首次登录按后台进度进入引导，完成后进入工作台。统一设置与平台租户入口见 [MDM 接入说明](docs/architecture/20260926-2544-mdm-web.md#统一设置默认组织引导与平台租户2825)。当前宿主配置同时要求业务 tenant 与 managementTenant，须同步部署后端生成器和前端。正式 HTTPS 接缝验证使用 `MDM_SETTINGS_BACKEND=/absolute/rss-mdm pnpm test:mdm:settings-browser`；外部资格、宿主启用回执与真机效果分别保留验收边界。
+
+标准采集包、固定周期、设备人员与资产范围的操作和真实 HTTPS 验证见 [设备资产与采集接入](docs/architecture/20260926-2544-mdm-web.md#标准采集包与资产质量2727)。页面刷新只读取已上报数据。

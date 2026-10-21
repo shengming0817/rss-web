@@ -289,7 +289,10 @@ onMounted(async () => {
             <UiButton type="button" @click="groupPage()">{{ t('security.chooseGroups') }}</UiButton>
             <ul>
               <li v-for="group in groups?.items" :key="group.id">
-                <UiButton type="button" @click="addGroup(group.id)">{{ group.name }}</UiButton> ·
+                <UiButton type="button" @click="addGroup(group.id)">{{
+                  group.presentation.name
+                }}</UiButton>
+                ·
                 {{ group.id }}
               </li>
             </ul>

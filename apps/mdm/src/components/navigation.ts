@@ -12,7 +12,6 @@ export const navigation = [
       { name: 'device-groups', label: 'devices.groups' },
       { name: 'device-enroll', label: 'devices.enroll' },
       { name: 'registration-quotas', label: 'registration.quotas' },
-      { name: 'registration-users', label: 'registration.user' },
       { name: 'agent-configurations', label: 'onboarding.configurations' },
     ],
   },

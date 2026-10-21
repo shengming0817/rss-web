@@ -1,5 +1,5 @@
 import type { Operation } from '../../../services/useOperation'
-/** Current rss-mdm asset contract; candidate directory is a separate projection. */
+/** Current rss-mdm asset contract. */
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -8,7 +8,6 @@ import {
   enumeration,
   identifier,
   integer,
-  record,
   nullable,
   string,
   unique,
@@ -25,6 +24,9 @@ import {
   summary,
   qualityRun,
   sourceIds,
+  collectionScope,
+  readScalar,
+  type CollectionScope,
   type ManualChange,
   type Query,
 } from './asset-model'
@@ -34,9 +36,9 @@ export function decodeInventory(value: unknown, tenant: string) {
 }
 export function decodeCatalog(value: unknown, tenant: string) {
   const v = assetEnvelope(value, tenant, 'fields', ['dictionary', 'fields'])
-  if (v['dictionary'] !== 'assets-v3') throw new Error('Unknown asset dictionary')
+  if (v['dictionary'] !== 'assets-v1') throw new Error('Unknown asset dictionary')
   return {
-    dictionary: 'assets-v3',
+    dictionary: 'assets-v1',
     fields: unique(array(v['fields'], fieldDefinition), (f) => f.key),
   }
 }
@@ -93,14 +95,30 @@ export function decodeCollectionRun(value: unknown, tenant: string, id: string) 
           ['runId', id],
           ['registration', v['registration']],
           ['registrationGeneration', v['generation']],
-          ['channel', source === 'agent.builtin' ? 'agent' : 'mdm'],
+          ['channel', source.startsWith('agent.') ? 'agent' : 'mdm'],
         ]),
     ),
   )
+  const delivery = closed(v['delivery'], ['receipt', 'projection'])
   return {
     id,
     quality,
-    delivery: record(v['delivery']),
+    delivery: {
+      projection: enumeration(delivery['projection'], [
+        'projected',
+        'pending',
+        'pending_receipt',
+        'not_applicable',
+      ] as const),
+      receipt: nullable(delivery['receipt'], (x) => {
+        const r = closed(x, ['batch_id', 'received_at', 'decision'])
+        return {
+          batchId: identifier(r['batch_id']),
+          receivedAt: count(r['received_at']),
+          decision: r['decision'],
+        }
+      }),
+    },
     startedAt: integer(v['startedAt']),
     finishedAt: nullable(v['finishedAt'], integer),
     reason: nullable(v['reason'], identifier),
@@ -127,25 +145,129 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
         successStatus: 200,
         decode: (v) => decodeCatalog(v, tenant),
       }),
-    inventory: (device: string) =>
+    inventory: (device: string, scope: CollectionScope = { kind: 'device' }) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/devices/{device}/inventory',
         pathParams: { device },
+        query: { scope: JSON.stringify(collectionScope(scope)) },
         successStatus: 200,
         decode: (v) => {
           const result = decodeInventory(v, tenant)
-          if (result.device !== device) throw new Error('Wrong inventory device')
+          if (
+            result.device !== device ||
+            JSON.stringify(result.collectionScope) !== JSON.stringify(collectionScope(scope))
+          )
+            throw new Error('Wrong inventory scope')
           return result
         },
       }),
-    collectionRun: (device: string, id: string) =>
+    collectionRun: (device: string, id: string, scope: CollectionScope = { kind: 'device' }) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/devices/{device}/collections/{run}',
         pathParams: { device, run: uuid(id) },
+        query: { scope: JSON.stringify(collectionScope(scope)) },
         successStatus: 200,
         decode: (v) => decodeCollectionRun(v, tenant, id),
+      }),
+    scopes: (device: string, next?: string) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/devices/{device}/inventory-scopes',
+        pathParams: { device },
+        query: { cursor: next, limit: 20 },
+        successStatus: 200,
+        decode: (value) => {
+          const v = assetEnvelope(value, tenant, 'inventory_scopes', [
+            'device',
+            'watermark',
+            'items',
+            'nextCursor',
+          ])
+          if (v['device'] !== device) throw new Error('Wrong scope directory device')
+          return {
+            device,
+            watermark: count(v['watermark']),
+            items: unique(
+              array(v['items'], (x) => {
+                const item = closed(x, ['scope'])
+                const scope = collectionScope(item['scope'])
+                if (scope.kind === 'device') throw new Error('Device scope is implicit')
+                return scope
+              }),
+              (x) => JSON.stringify(x),
+            ),
+            nextCursor: cursor(v['nextCursor']),
+          }
+        },
+      }),
+    listItems: (device: string, field: string, scope: CollectionScope, next: string) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/devices/{device}/inventory-lists/{field}',
+        pathParams: { device, field },
+        query: { scope: JSON.stringify(collectionScope(scope)), cursor: next, limit: 20 },
+        successStatus: 200,
+        decode: (value) => {
+          const v = assetEnvelope(value, tenant, 'list_items', [
+            'device',
+            'field',
+            'watermark',
+            'total',
+            'items',
+            'nextCursor',
+          ])
+          if (v['device'] !== device || v['field'] !== field) throw new Error('Wrong list page')
+          return {
+            items: array(v['items'], readScalar),
+            total: count(v['total']),
+            watermark: count(v['watermark']),
+            nextCursor: cursor(v['nextCursor']),
+          }
+        },
+      }),
+    collectionItems: (
+      device: string,
+      id: string,
+      field: string,
+      scope: CollectionScope,
+      offset = 0,
+    ) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/devices/{device}/collections/{run}/fields/{field}/items',
+        pathParams: { device, run: uuid(id), field },
+        query: { scope: JSON.stringify(collectionScope(scope)), offset, limit: 100 },
+        successStatus: 200,
+        decode: (value) => {
+          const v = assetEnvelope(value, tenant, 'collection_items', [
+            'run',
+            'field',
+            'items',
+            'nextOffset',
+          ])
+          if (v['run'] !== id || v['field'] !== field) throw new Error('Wrong item quality')
+          return {
+            items: array(v['items'], (x) => {
+              const item = closed(x, ['index', 'quality'])
+              return {
+                index: count(item['index']),
+                quality: enumeration(item['quality'], [
+                  'pending',
+                  'success',
+                  'unsupported',
+                  'failed',
+                  'invalid',
+                  'missing',
+                  'unknown',
+                  'deleted',
+                ] as const),
+              }
+            }),
+            nextOffset: nullable(v['nextOffset'], count),
+          }
+        },
       }),
     search: (body: Operation<Query>) =>
       transport.request({

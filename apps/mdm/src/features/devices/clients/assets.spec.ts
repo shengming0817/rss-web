@@ -87,6 +87,7 @@ it('accepts an empty tail page and keeps the server cursor opaque', () => {
 it('rejects duplicate catalog keys and malformed manual fields', () => {
   const field = {
     key: 'custom.is_loaner',
+    timeSeries: null,
     version: 1,
     valueType: { kind: 'boolean' },
     platforms: ['windows', 'macos'],
@@ -101,12 +102,19 @@ it('rejects duplicate catalog keys and malformed manual fields', () => {
   }
   expect(
     decodeCatalog(
-      { tenantId: tenant, asset: { kind: 'fields', dictionary: 'assets-v3', fields: [field] } },
+      { tenantId: tenant, asset: { kind: 'fields', dictionary: 'assets-v1', fields: [field] } },
       tenant,
     ).fields,
   ).toEqual([
     {
       key: field.key,
+      timeSeries: null,
+      version: field.version,
+      platforms: field.platforms,
+      sensitivity: field.sensitivity,
+      unit: field.unit,
+      itemKey: field.itemKey,
+      searchable: field.searchable,
       kind: 'boolean',
       manual: true,
       nullable: true,
@@ -118,7 +126,7 @@ it('rejects duplicate catalog keys and malformed manual fields', () => {
     decodeCatalog(
       {
         tenantId: tenant,
-        asset: { kind: 'fields', dictionary: 'assets-v3', fields: [field, field] },
+        asset: { kind: 'fields', dictionary: 'assets-v1', fields: [field, field] },
       },
       tenant,
     ),
@@ -167,7 +175,7 @@ it('preserves formal quality field counts in a nonempty inventory response', () 
         id: 'hardware',
         version: '1',
         definition: 'a'.repeat(64),
-        format: 'typed-fields-v4',
+        format: 'typed-fields-v1',
       },
       complete: false,
       source: 'agent.builtin',
@@ -279,6 +287,7 @@ it('rejects unbound or mismatched namespaces in current and last-known device ev
 it('consumes only the current dictionary and validates record property schemas', () => {
   const field = {
     key: 'device.hardware',
+    timeSeries: null,
     version: 1,
     valueType: {
       kind: 'record',
@@ -304,9 +313,32 @@ it('consumes only the current dictionary and validates record property schemas',
       { tenantId: tenant, asset: { kind: 'fields', dictionary, fields: [value] } },
       tenant,
     )
-  expect(decode('assets-v3', field).fields[0]?.kind).toBe('object')
+  expect(decode('assets-v1', field).fields[0]?.kind).toBe('object')
+
+  const timeSeries = {
+    kind: 'gauge',
+    valuePath: ['bytes'],
+    intervalStartPath: null,
+    dimensions: { power: { path: ['power'], values: [' AC '] } },
+    aggregations: ['mean'],
+    retention: { key: 'standard', revision: 1 },
+    maxResources: 1,
+  }
   expect(
-    decode('assets-v3', {
+    decode('assets-v1', {
+      ...field,
+      key: 'custom.device_metrics',
+      valueType: {
+        kind: 'object',
+        properties: { bytes: { kind: 'integer' }, power: { kind: 'enum', values: [' AC '] } },
+      },
+      unit: 'bytes',
+      timeSeries,
+    }).fields[0]?.timeSeries,
+  ).toEqual(timeSeries)
+
+  expect(
+    decode('assets-v1', {
       ...field,
       valueType: { kind: 'array', items: { kind: 'integer' }, maxItems: 128 },
       operations: ['contains_any', 'contains_all'],
@@ -314,7 +346,7 @@ it('consumes only the current dictionary and validates record property schemas',
   ).toEqual(['contains_any', 'contains_all'])
   expect(() => decode('assets-v2', field)).toThrow('Unknown asset dictionary')
   expect(() =>
-    decode('assets-v3', {
+    decode('assets-v1', {
       ...field,
       valueType: { kind: 'record', properties: { serial: { valueType: { kind: 'integer' } } } },
     }),
@@ -335,7 +367,7 @@ it('reads a tenant-bound collection run without confusing reception and projecti
         generation: 2,
         source: 'mdm.apple',
         epoch: id,
-        delivery: { receipt: null, projection: { kind: 'pending' } },
+        delivery: { receipt: null, projection: 'pending' },
         fingerprint: 'test',
         coverage: { id: 'base', version: '1', definition: 'base', format: 'v1' },
         complete: false,
@@ -356,8 +388,78 @@ it('reads a tenant-bound collection run without confusing reception and projecti
     finishedAt: null,
     quality: { result: 'pending', deliveryPending: true, complete: false },
   })
+  const agent = decodeCollectionRun(
+    {
+      ...response,
+      asset: {
+        ...response.asset,
+        run: { ...response.asset.run, source: 'agent.native', deliveryPending: false },
+      },
+    },
+    tenant,
+    id,
+  )
+  expect(agent.quality.channel).toBe('agent')
+  expect(agent.quality.deliveryPending).toBe(false)
+  expect(agent.delivery.projection).toBe('pending')
   expect(() => decodeCollectionRun(response, id, id)).toThrow()
   expect(() =>
     decodeCollectionRun(response, tenant, '33333333-3333-4333-8333-333333333333'),
   ).toThrow()
+})
+
+it('binds scoped reads and opaque scope-directory pagination to the requested endpoint', async () => {
+  const scope = { kind: 'macos_applications' as const, root: 'user' as const, uid: 501 }
+  const scoped = { ...device, collectionScope: scope, fields: {}, revisions: {} }
+  const request = vi.fn(async (o: RequestOptions<unknown>) =>
+    o.decode({
+      tenantId: tenant,
+      asset: o.path.endsWith('inventory-scopes')
+        ? {
+            kind: 'inventory_scopes',
+            device: device.device,
+            watermark: 12,
+            items: [{ scope }],
+            nextCursor: 'next-scope',
+          }
+        : { kind: 'detail', device: scoped },
+    }),
+  )
+  const client = createAssetsClient({ request } as unknown as HttpTransport, tenant)
+  expect((await client.scopes(device.device, 'old-scope')).items).toEqual([scope])
+  expect(request.mock.calls[0]?.[0].query).toEqual({ limit: 20, cursor: 'old-scope' })
+  expect((await client.inventory(device.device, scope)).collectionScope).toEqual(scope)
+  expect(request.mock.calls[1]?.[0].query).toEqual({ scope: JSON.stringify(scope) })
+  await expect(client.scopes('other-device')).rejects.toThrow()
+})
+it('retains indeterminate reasons and scoped last-known evidence without promoting it to current', () => {
+  const scope = { kind: 'macos_applications', root: 'user', uid: 501 }
+  const source = {
+    ...field.sources[0],
+    state: { kind: 'unknown', value: { reason: 'incomplete' } },
+    evidence: { ...evidence, scope },
+    lastKnown: {
+      value: { kind: 'boolean', value: false },
+      evidence: { ...evidence, scope, observedAt: 0 },
+    },
+  }
+  const value = decodeInventory(
+    {
+      tenantId: tenant,
+      asset: {
+        kind: 'detail',
+        device: {
+          ...device,
+          collectionScope: scope,
+          fields: { 'custom.is_loaner': { ...field, state: source.state, sources: [source] } },
+        },
+      },
+    },
+    tenant,
+  )
+  expect(value.fields['custom.is_loaner']?.state).toEqual({ kind: 'unknown', reason: 'incomplete' })
+  expect(value.fields['custom.is_loaner']?.sources[0]?.lastKnown?.value).toEqual({
+    kind: 'boolean',
+    value: false,
+  })
 })

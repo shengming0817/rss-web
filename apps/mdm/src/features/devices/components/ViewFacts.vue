@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { UiBadge, UiDisclosure, UiButton } from '@rss/core/components'
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../useDeviceBinding'
 import { assetCategories, assetCategory, assetLabel } from '../assetPresentation'
@@ -11,6 +11,7 @@ import type { EndpointDetail } from '../clients/endpoint-model'
 import ChannelCard from './ChannelCard.vue'
 import AssetValue from './AssetValue.vue'
 import SourceList from './SourceList.vue'
+import CollectionQuality from './CollectionQuality.vue'
 const props = defineProps<{ view: DeviceView; endpoints: EndpointDetail[] }>()
 const emit = defineEmits<{ invalidated: [reason: 'cursorInvalidated' | 'denied' | 'notFound'] }>()
 const category = ref<(typeof assetCategories)[number]>('overview')
@@ -20,13 +21,22 @@ const visibleFields = computed(() =>
 const { t, locale } = useI18n(),
   runtime = useMdm()
 const { run, busy, failure } = useOperation([], () => deviceBinding(runtime))
-const collection = ref<Awaited<ReturnType<typeof runtime.devices.assets.collectionRun>>>()
-async function loadCollection(device: string, id: string) {
-  collection.value = undefined
-  await run(
-    () => runtime.devices.assets.collectionRun(device, id),
-    (v) => (collection.value = v),
-  )
+const collection = ref<{ device: string; id: string }>()
+const catalog = ref<Awaited<ReturnType<typeof runtime.devices.assets.catalog>>>()
+onMounted(
+  () =>
+    void run(
+      () => runtime.devices.assets.catalog(),
+      (value) => {
+        catalog.value = value
+      },
+    ),
+)
+function loadCollection(device: string, id: string) {
+  collection.value = { device, id }
+}
+function metadata(field: string) {
+  return catalog.value?.fields.find((f) => f.key === field)
 }
 </script>
 <template>
@@ -57,10 +67,15 @@ async function loadCollection(device: string, id: string) {
       <section class="console-panel">
         <h2>{{ t('devices.assetCategories.' + category) }}</h2>
         <p>{{ t('devices.noTtl') }}</p>
+        <p>{{ t('devices.trustedAssetsNote') }}</p>
         <dl>
           <template v-for="field in visibleFields" :key="field.field"
             ><dt>{{ assetLabel(field.field, locale) }}</dt>
             <dd>
+              <p v-if="metadata(field.field)">
+                {{ metadata(field.field)?.kind }} · {{ metadata(field.field)?.unit ?? '—' }} ·
+                {{ metadata(field.field)?.sensitivity }}
+              </p>
               <UiBadge :tone="field.state.kind === 'conflict' ? 'warning' : 'neutral'">{{
                 t(`devices.state.${field.state.kind}`)
               }}</UiBadge
@@ -90,7 +105,7 @@ async function loadCollection(device: string, id: string) {
               </details></dd
           ></template>
         </dl>
-        <p v-if="!Object.keys(view.fields).length">{{ t('devices.noInventory') }}</p>
+        <p v-if="!visibleFields.length">{{ t('devices.noInventory') }}</p>
       </section>
       <section class="console-panel">
         <h2>{{ t('devices.sourceLists') }}</h2>
@@ -108,25 +123,13 @@ async function loadCollection(device: string, id: string) {
         </details>
       </section>
       <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
-      <article v-if="collection" class="console-panel">
-        <h3>{{ t('devices.collectionQuality') }}</h3>
-        <p>{{ collection.quality.result }} · {{ collection.reason ?? '—' }}</p>
-        <p>
-          {{ t('devices.observed') }}: {{ collection.startedAt }} ·
-          {{ collection.finishedAt ?? '—' }}
-        </p>
-        <p>
-          {{ t('devices.projectionPending') }}:
-          {{ t(collection.quality.deliveryPending ? 'devices.yes' : 'devices.no') }}
-        </p>
-        <ul>
-          <li v-for="field in collection.quality.fields" :key="field.field">
-            {{ assetLabel(field.field, locale) }} · {{ field.quality }} ·
-            {{ field.reason ?? '—' }} ·
-            {{ field.receivedAt ?? '—' }}
-          </li>
-        </ul>
-      </article>
+      <CollectionQuality
+        v-if="collection"
+        :id="collection.id"
+        :key="collection.device + collection.id"
+        :device="collection.device"
+        @invalidated="emit('invalidated', $event)"
+      />
       <section v-if="view.inventorySources.length">
         <h2>{{ t('devices.collectionQuality') }}</h2>
         <details v-for="source in view.inventorySources" :key="source.endpoint">
@@ -134,7 +137,7 @@ async function loadCollection(device: string, id: string) {
           <ul>
             <li v-for="quality in source.quality" :key="quality.runId">
               {{ quality.source }} / {{ quality.registration }} /
-              {{ quality.registrationGeneration }} · {{ quality.result
+              {{ quality.registrationGeneration }} · {{ t('devices.runResult.' + quality.result)
               }}<UiButton
                 :disabled="busy"
                 @click="loadCollection(source.endpoint, quality.runId)"
@@ -142,7 +145,8 @@ async function loadCollection(device: string, id: string) {
               >
               <ul>
                 <li v-for="field in quality.fields" :key="field.field">
-                  {{ field.field }} · {{ field.quality }} · {{ field.receivedAt ?? '—' }}
+                  {{ field.field }} · {{ t('devices.quality.' + field.quality) }} ·
+                  {{ field.receivedAt ?? '—' }}
                 </li>
               </ul>
             </li>

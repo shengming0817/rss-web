@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../useDeviceBinding'
+import AssetItems from './AssetItems.vue'
 import type { DeviceView } from '../clients/device-views'
 const props = defineProps<{
   view: DeviceView
@@ -68,11 +69,7 @@ async function load(next?: string) {
     <label v-if="page"
       >{{ t('devices.searchLoadedPage') }}<input v-model="search" class="ui-input" type="search"
     /></label>
-    <ol v-if="page">
-      <li v-for="(item, index) in visibleItems" :key="index">
-        <pre>{{ JSON.stringify(item, null, 2) }}</pre>
-      </li>
-    </ol>
+    <AssetItems v-if="page" :items="visibleItems" :complete-empty="page.total === 0" />
     <UiButton
       v-if="page?.nextCursor"
       :disabled="!!busy"

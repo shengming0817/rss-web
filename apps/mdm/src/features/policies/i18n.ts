@@ -1,4 +1,24 @@
 export const policiesZh = {
+  collectionPeriod: '采集周期（秒）',
+  collectionPeriodNote:
+    '默认每小时，启用后持续重复；离线恢复只处理最近到期周期。停用保留已采集资产，页面刷新只读取已上报结果。',
+  standardPackages: '标准采集包',
+  standardPackagesNote:
+    '选择精确版本实例化为资源，激活后使用既有范围与策略分配。包的适用性和采集字段由服务端定义。',
+  choosePackage: '选择标准包',
+  packageCategory: '采集类别',
+  packageVersion: '标准包与精确版本',
+  instantiatePackage: '实例化标准包',
+  assignPackage: '配置范围、周期与启停',
+  packageCategories: {
+    identity: '身份与系统',
+    hardware: '硬件',
+    software: '软件',
+    security: '安全',
+    management: '管理',
+    updates: '更新',
+  },
+
   assignmentReason: {
     association_unverified: '关联关系待核验',
     channel_unavailable: '缺少有效执行通道',
@@ -406,6 +426,26 @@ export const policiesZh = {
   cancel: '请求取消',
 }
 export const policiesEn: typeof policiesZh = {
+  collectionPeriod: 'Collection interval (seconds)',
+  collectionPeriodNote:
+    'Hourly by default; repeats while enabled. Offline recovery coalesces to the latest due period. Disabling preserves collected assets; refresh reads reported results.',
+  standardPackages: 'Standard collection packages',
+  standardPackagesNote:
+    'Instantiate an exact package version as a Resource, activate it, then assign through existing Scopes and Policies. The server defines applicability and fields.',
+  choosePackage: 'Choose a standard package',
+  packageCategory: 'Collection category',
+  packageVersion: 'Package and exact version',
+  instantiatePackage: 'Instantiate package',
+  assignPackage: 'Configure scope, interval and enablement',
+  packageCategories: {
+    identity: 'Identity and OS',
+    hardware: 'Hardware',
+    software: 'Software',
+    security: 'Security',
+    management: 'Management',
+    updates: 'Updates',
+  },
+
   assignmentReason: {
     association_unverified: 'Association needs verification',
     channel_unavailable: 'No active action channel',

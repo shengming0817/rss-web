@@ -69,11 +69,6 @@ export function resolvedField(value: unknown) {
     sources: unique(array(v['sources'], sourceFact), (s) => sourceIdentity(s.evidence)),
   }
 }
-/** The current device read endpoints select this exact asset namespace. */
-export function deviceCollectionScope(value: unknown) {
-  const v = closed(value, ['kind'])
-  return { kind: enumeration(v['kind'], ['device'] as const) }
-}
 export function qualityRun(value: unknown) {
   const v = closed(value, [
     'dataset',
@@ -125,7 +120,7 @@ export function qualityRun(value: unknown) {
         'invalidItems',
       ])
       return {
-        scope: deviceCollectionScope(f['scope']),
+        scope: collectionScope(f['scope']),
         reason: nullable(f['reason'], identifier),
         itemCount: count(f['itemCount']),
         invalidItems: count(f['invalidItems']),
@@ -137,6 +132,8 @@ export function qualityRun(value: unknown) {
           'failed',
           'invalid',
           'missing',
+          'unknown',
+          'deleted',
         ] as const),
         status: nullable(f['status'], count),
         receivedAt: nullable(f['receivedAt'], integer),
@@ -158,8 +155,8 @@ export function inventory(value: unknown) {
   const revisions = record(v['revisions'])
   if (Object.keys(fields).length > 1000 || Object.keys(revisions).length > 1000)
     throw new Error('Too many fields')
-  return {
-    collectionScope: deviceCollectionScope(v['collectionScope']),
+  const result = {
+    collectionScope: collectionScope(v['collectionScope']),
     device: identifier(v['device']),
     channels: unique(
       array(v['channels'], (s) => enumeration(s, ['agent', 'mdm'] as const)),
@@ -199,12 +196,26 @@ export function inventory(value: unknown) {
       Object.entries(revisions).map(([key, value]) => [fieldKey(key), count(value)]),
     ),
   }
+  const expected = JSON.stringify(result.collectionScope)
+  const same = (scope: CollectionScope) => {
+    if (JSON.stringify(scope) !== expected) throw new Error('Inventory namespace mismatch')
+  }
+  for (const field of Object.values(result.fields))
+    for (const source of field.sources) {
+      same(source.evidence.scope)
+      if (source.lastKnown) same(source.lastKnown.evidence.scope)
+    }
+  for (const list of Object.values(result.lists))
+    for (const source of list.sources) same(source.evidence.scope)
+  for (const quality of result.quality) for (const field of quality.fields) same(field.scope)
+  return result
 }
 export type Inventory = ReturnType<typeof inventory>
 export type ResolvedField = ReturnType<typeof resolvedField>
 export function fieldDefinition(value: unknown) {
   const v = closed(value, [
     'key',
+    'timeSeries',
     'version',
     'valueType',
     'nullable',
@@ -217,12 +228,6 @@ export function fieldDefinition(value: unknown) {
     'itemKey',
     'operations',
   ])
-  count(v['version'])
-  array(v['platforms'], (x) => enumeration(x, ['windows', 'macos'] as const))
-  enumeration(v['sensitivity'], ['standard', 'sensitive'] as const)
-  nullable(v['unit'], string)
-  nullable(v['itemKey'], identifier)
-  boolean(v['searchable'])
   const kind = valueType(v['valueType'])
   const sources = Object.entries(record(v['sources'])).map(([k, n]) => {
     enumeration(k, sourceIds)
@@ -231,6 +236,13 @@ export function fieldDefinition(value: unknown) {
   })
   return {
     key: fieldKey(v['key']),
+    timeSeries: nullable(v['timeSeries'], timeSeries),
+    version: count(v['version']),
+    platforms: array(v['platforms'], (x) => enumeration(x, ['windows', 'macos'] as const)),
+    sensitivity: enumeration(v['sensitivity'], ['standard', 'sensitive'] as const),
+    unit: nullable(v['unit'], string),
+    searchable: boolean(v['searchable']),
+    itemKey: nullable(v['itemKey'], identifier),
     kind,
     nullable: boolean(v['nullable']),
     manual: boolean(v['manual']),
@@ -239,6 +251,60 @@ export function fieldDefinition(value: unknown) {
       array(v['operations'], (x) => enumeration(x, operators)),
       (x) => x,
     ),
+  }
+}
+function vocabulary(value: unknown) {
+  const v = string(value)
+  if (!v || new TextEncoder().encode(v).byteLength > 256 || /\p{Cc}/u.test(v))
+    throw new Error('Invalid vocabulary')
+  return v
+}
+function timeSeries(value: unknown) {
+  const v = closed(value, [
+    'kind',
+    'valuePath',
+    'intervalStartPath',
+    'dimensions',
+    'aggregations',
+    'retention',
+    'maxResources',
+  ])
+  const path = (value: unknown) => array(value, identifier)
+  const retention = closed(v['retention'], ['key', 'revision'])
+  return {
+    kind: enumeration(v['kind'], [
+      'gauge',
+      'cumulative_counter',
+      'delta_counter',
+      'state',
+    ] as const),
+    valuePath: path(v['valuePath']),
+    intervalStartPath: nullable(v['intervalStartPath'], path),
+    dimensions: Object.fromEntries(
+      Object.entries(record(v['dimensions'])).map(([key, value]) => {
+        const dimension = closed(value, ['path', 'values'])
+        return [
+          identifier(key),
+          { path: path(dimension['path']), values: array(dimension['values'], vocabulary) },
+        ]
+      }),
+    ),
+    aggregations: array(v['aggregations'], (x) =>
+      enumeration(x, [
+        'min',
+        'max',
+        'sum',
+        'count',
+        'mean',
+        'increase',
+        'rate',
+        'timeline',
+        'transitions',
+        'coverage',
+      ] as const),
+    ),
+    retention: { key: identifier(retention['key']), revision: count(retention['revision']) },
+    maxResources: count(v['maxResources']),
   }
 }
 function valueType(
@@ -265,7 +331,7 @@ function valueType(
     boolean(v['allowEmpty'])
   } else if (kind === 'enum') {
     closed(v, ['kind', 'values'])
-    if (!array(v['values'], identifier).length) throw new Error('Empty enum')
+    if (!array(v['values'], vocabulary).length) throw new Error('Empty enum')
   } else if (kind === 'array') {
     closed(v, ['kind', 'items', 'maxItems'])
     count(v['maxItems'])
@@ -423,7 +489,21 @@ export function readScalar(value: unknown): ReadScalar {
 export type ReadState =
   | { kind: 'known'; value: ReadScalar }
   | { kind: 'null' | 'missing' | 'unsupported' | 'deleted' | 'conflict' }
+  | { kind: 'unknown'; reason: ReturnType<typeof unknownReason> }
+export function unknownReason(value: unknown) {
+  return enumeration(value, [
+    'unordered_conflict',
+    'incomplete',
+    'native_status',
+    'evidence_limit',
+  ] as const)
+}
 export function assetState(value: unknown): ReadState {
+  if (record(value)['kind'] === 'unknown') {
+    const v = closed(value, ['kind', 'value']),
+      reason = closed(v['value'], ['reason'])
+    return { kind: 'unknown', reason: unknownReason(reason['reason']) }
+  }
   const kind = enumeration(record(value)['kind'], [
       'known',
       'null',
@@ -449,7 +529,7 @@ export function evidence(value: unknown) {
     'actor',
   ])
   return {
-    scope: deviceCollectionScope(v['scope']),
+    scope: collectionScope(v['scope']),
     source: enumeration(v['source'], sourceIds),
     dataset: nullable(v['dataset'], identifier),
     registration: nullable(v['registration'], identifier),
@@ -474,6 +554,10 @@ export function sourceFact(value: unknown) {
   }
 }
 export function listState(value: unknown) {
+  if (record(value)['kind'] === 'unknown') {
+    const v = closed(value, ['kind', 'reason'])
+    return { kind: 'unknown' as const, reason: unknownReason(v['reason']) }
+  }
   const kind = enumeration(record(value)['kind'], [
       'known',
       'null',

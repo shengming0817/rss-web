@@ -9,7 +9,11 @@ const endpoint = {
   enrollments: [],
 }
 const reference = { kind: 'endpoint' as const, id: endpoint.id }
-const item = { reference, association: null, endpoints: [{ ...endpoint, assetState: 'active' }] }
+const item = {
+  reference,
+  association: null,
+  endpoints: [{ ...endpoint, assetState: 'active', platform: { state: 'unknown', values: [] } }],
+}
 const page = {
   items: [item],
   statistics: { endpointCount: 1, deviceViewCount: 1 },
@@ -17,7 +21,10 @@ const page = {
 }
 it('requires the current asset state on view endpoints while the device directory keeps its own shape', () => {
   for (const assetState of ['active', 'archived', 'deleted']) {
-    const value = { ...item, endpoints: [{ ...endpoint, assetState }] }
+    const value = {
+      ...item,
+      endpoints: [{ ...endpoint, assetState, platform: { state: 'unknown', values: [] } }],
+    }
     expect(decodeViews({ ...page, items: [value] }).items[0]?.endpoints[0]?.assetState).toBe(
       assetState,
     )

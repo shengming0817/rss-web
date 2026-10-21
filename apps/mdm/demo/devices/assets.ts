@@ -1,6 +1,7 @@
 import type { DomainHandler } from '../scenario'
 import { closed, enumeration, identifier, nullable, record, uuid } from '../../src/services/decode'
 import {
+  collectionScope,
   query as decodeQuery,
   scalar,
   type Inventory,
@@ -65,9 +66,10 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
     if (path === '/api/v1/asset-fields' && method === 'GET')
       return asset({
         kind: 'fields',
-        dictionary: 'assets-v3',
+        dictionary: 'assets-v1',
         fields: catalog.map((f) => ({
           key: f.key,
+          timeSeries: f.timeSeries,
           version: 1,
           valueType:
             f.kind === 'string'
@@ -84,11 +86,40 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
           operations: f.operations,
         })),
       })
+    const directory = /^\/api\/v1\/devices\/([^/]+)\/inventory-scopes$/.exec(path)
+    if (directory && method === 'GET') {
+      const device = devices().get(decodeURIComponent(directory[1]!))
+      if (!device) return error('inventory_not_found', 404)
+      const items = [
+        ...new Map(
+          (device.scopedInventory ?? [])
+            .filter((x) => x.collectionScope.kind !== 'device')
+            .map((x) => [JSON.stringify(x.collectionScope), { scope: x.collectionScope }]),
+        ).values(),
+      ]
+      const page = pages.page(path, items, query)
+      return asset({
+        kind: 'inventory_scopes',
+        device: device.summary.id,
+        watermark: 1,
+        items: page.items,
+        nextCursor: page.nextCursor,
+      })
+    }
     const detail = /^\/api\/v1\/devices\/([^/]+)\/inventory$/.exec(path)
     if (detail && method === 'GET') {
       const device = devices().get(decodeURIComponent(detail[1]!))
-      return device?.summary.inventoryAvailable
-        ? asset({ kind: 'detail', device: device.inventory })
+      const scope = collectionScope(
+        query.has('scope') ? JSON.parse(query.get('scope')!) : { kind: 'device' },
+      )
+      const value =
+        scope.kind === 'device'
+          ? device?.inventory
+          : device?.scopedInventory?.find(
+              (x) => JSON.stringify(collectionScope(x.collectionScope)) === JSON.stringify(scope),
+            )
+      return device?.summary.inventoryAvailable && value
+        ? asset({ kind: 'detail', device: value })
         : error('inventory_not_found', 404)
     }
     const manual = /^\/api\/v1\/devices\/([^/]+)\/manual-fields\/([^/]+)$/.exec(path)

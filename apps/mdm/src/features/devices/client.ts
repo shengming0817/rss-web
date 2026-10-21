@@ -11,7 +11,7 @@ export function createDeviceClients(transport: HttpTransport, tenant: string) {
     assets: createAssetsClient(transport, tenant),
     registration: createRegistrationClient(transport, tenant),
     directory: createDirectoryClient(transport),
-    views: createDeviceViewsClient(transport),
+    views: createDeviceViewsClient(transport, tenant),
     associations: createAssociationsClient(transport),
     enrollment: createEnrollmentClient(transport),
     groups: createGroupsClient(transport),

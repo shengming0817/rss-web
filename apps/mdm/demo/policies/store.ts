@@ -26,16 +26,7 @@ export function createPolicyStore() {
     if ('selfService' in d) {
       const c = closed(
         d['selfService'],
-        [
-          'access',
-          'published',
-          'displayName',
-          'description',
-          'prerequisites',
-          'sideEffects',
-          'category',
-          'keywords',
-        ],
+        ['access', 'published', 'presentation'],
         ['allowAi', 'riskLevel'],
       )
       return policyDefinition({

@@ -9,6 +9,7 @@ it('requires the exact Agent variant and keeps native configuration conflicts in
     mac = devices.get('device-02')!
   const resource: ResourceRead = {
     origin: null,
+    presentation: {},
     id: 'package',
     revision: 1,
     kind: 'software',

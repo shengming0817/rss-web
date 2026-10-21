@@ -39,8 +39,8 @@ function confirm() {
       @update:open="confirming = $event"
     >
       <p>
-        {{ policy.definition.selfService?.displayName ?? policy.id }} · {{ policy.id }} ·
-        {{ t('policies.revision') }} {{ policy.revision }}
+        {{ policy.definition.selfService?.presentation.displayName ?? policy.id }} ·
+        {{ policy.id }} · {{ t('policies.revision') }} {{ policy.revision }}
       </p>
       <p v-if="policy.definition.action.kind === 'configuration'">
         {{

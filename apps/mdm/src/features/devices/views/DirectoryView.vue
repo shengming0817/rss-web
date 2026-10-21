@@ -14,6 +14,7 @@ import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../useDeviceBinding'
 import PageFrame from '../../../components/PageFrame.vue'
+import { sourceIds } from '../clients/asset-model'
 import { endpointStatuses } from '../clients/endpoint-model'
 const { t } = useI18n(),
   runtime = useMdm(),
@@ -21,11 +22,24 @@ const { t } = useI18n(),
   router = useRouter(),
   { run, busy, failure } = useOperation([], () => deviceBinding(runtime))
 const page = ref<Awaited<ReturnType<typeof runtime.devices.views.list>>>(),
+  search = ref(''),
+  platform = ref(''),
+  assetState = ref(''),
+  limit = ref('20'),
   status = ref(''),
   channel = ref(''),
   source = ref(''),
   descending = ref(false),
-  visibleColumns = ref(['reference', 'status', 'channels', 'endpoints'])
+  visibleColumns = ref([
+    'reference',
+    'platform',
+    'serialNumber',
+    'registrationUser',
+    'currentUser',
+    'status',
+    'channels',
+    'endpoints',
+  ])
 const trail = computed(() => {
   const v = route.query['trail']
   return Array.isArray(v)
@@ -49,7 +63,15 @@ function navigate(direction: number | 'previous' | 'next') {
   })
 }
 async function applyFilters() {
+  if (new TextEncoder().encode(search.value.trim()).length > 256 || /\p{Cc}/u.test(search.value)) {
+    failure.value = 'invalidRequest'
+    return
+  }
   const same =
+    search.value.trim() === String(route.query['search'] ?? '') &&
+    platform.value === String(route.query['platform'] ?? '') &&
+    assetState.value === String(route.query['assetState'] ?? '') &&
+    limit.value === String(route.query['limit'] ?? '20') &&
     status.value === String(route.query['status'] ?? '') &&
     channel.value === String(route.query['channel'] ?? '') &&
     source.value === String(route.query['source'] ?? '') &&
@@ -58,6 +80,10 @@ async function applyFilters() {
   await router.push({
     query: {
       ...(same ? route.query : {}),
+      search: search.value.trim() || undefined,
+      platform: platform.value || undefined,
+      assetState: assetState.value || undefined,
+      limit: limit.value,
       status: status.value || undefined,
       channel: channel.value || undefined,
       source: source.value || undefined,
@@ -74,6 +100,10 @@ async function load(cursor?: string) {
     () =>
       runtime.devices.views.list({
         cursor,
+        search: search.value.trim() || undefined,
+        platform: platform.value || undefined,
+        assetState: assetState.value || undefined,
+        limit: Number(limit.value),
         status: status.value || undefined,
         channel: channel.value || undefined,
         source: source.value || undefined,
@@ -85,6 +115,13 @@ async function load(cursor?: string) {
 watch(
   () => [route.fullPath, ...deviceBinding(runtime)],
   () => {
+    search.value = typeof route.query['search'] === 'string' ? route.query['search'] : ''
+    platform.value = typeof route.query['platform'] === 'string' ? route.query['platform'] : ''
+    assetState.value =
+      typeof route.query['assetState'] === 'string' ? route.query['assetState'] : ''
+    limit.value = ['20', '50', '100'].includes(String(route.query['limit']))
+      ? String(route.query['limit'])
+      : '20'
     status.value = typeof route.query['status'] === 'string' ? route.query['status'] : ''
     channel.value = typeof route.query['channel'] === 'string' ? route.query['channel'] : ''
     source.value = typeof route.query['source'] === 'string' ? route.query['source'] : ''
@@ -95,7 +132,15 @@ watch(
         ...new Set([
           'reference',
           ...(Array.isArray(cols) ? cols : [cols]).filter((x): x is string =>
-            ['status', 'channels', 'endpoints'].includes(String(x)),
+            [
+              'platform',
+              'serialNumber',
+              'registrationUser',
+              'currentUser',
+              'status',
+              'channels',
+              'endpoints',
+            ].includes(String(x)),
           ),
         ]),
       ]
@@ -108,6 +153,10 @@ type Row = NonNullable<typeof page.value>['items'][number]
 const columns = computed(() =>
   [
     { key: 'reference', label: t('devices.viewIdentity') },
+    ...['platform', 'serialNumber', 'registrationUser', 'currentUser'].map((key) => ({
+      key,
+      label: t('devices.' + key),
+    })),
     { key: 'status', label: t('devices.status') },
     { key: 'channels', label: t('devices.channels') },
     { key: 'endpoints', label: t('devices.originalEndpoint') },
@@ -138,10 +187,12 @@ const channelOptions = computed(() => [
 ])
 const sourceOptions = computed(() => [
   { value: '', label: t('devices.all') },
-  ...['mdm.windows', 'mdm.apple', 'agent.builtin'].map((value) => ({
-    value,
-    label: t(`devices['${value}']`),
-  })),
+  ...sourceIds
+    .filter((x) => x !== 'manual')
+    .map((value) => ({
+      value,
+      label: t(`devices['${value}']`),
+    })),
 ])
 </script>
 <template>
@@ -158,6 +209,33 @@ const sourceOptions = computed(() => [
       ></template
     >
     <form class="console-toolbar" @submit.prevent="applyFilters">
+      <label
+        >{{ t('devices.directorySearch')
+        }}<input v-model="search" type="search" class="ui-input" maxlength="256" :disabled="busy"
+      /></label>
+      <label
+        >{{ t('devices.platform')
+        }}<select v-model="platform" class="ui-input" :disabled="busy">
+          <option value="">{{ t('devices.all') }}</option>
+          <option value="windows">Windows</option>
+          <option value="macos">macOS</option>
+        </select></label
+      >
+      <label
+        >{{ t('devices.assetStateLabel')
+        }}<select v-model="assetState" class="ui-input" :disabled="busy">
+          <option value="">{{ t('devices.all') }}</option>
+          <option v-for="value in ['active', 'archived', 'deleted']" :key="value" :value="value">
+            {{ t('devices.state.' + value) }}
+          </option>
+        </select></label
+      >
+      <label
+        >{{ t('devices.pageSize')
+        }}<select v-model="limit" class="ui-input" :disabled="busy">
+          <option v-for="n in ['20', '50', '100']" :key="n" :value="n">{{ n }}</option>
+        </select></label
+      >
       <label
         >{{ t('devices.status')
         }}<UiSelect v-model="status" :options="statusOptions" :disabled="busy"
@@ -182,7 +260,17 @@ const sourceOptions = computed(() => [
     </p>
     <details class="console-panel">
       <summary>{{ t('devices.displayColumns') }}</summary>
-      <label v-for="key in ['status', 'channels', 'endpoints']" :key="key"
+      <label
+        v-for="key in [
+          'platform',
+          'serialNumber',
+          'registrationUser',
+          'currentUser',
+          'status',
+          'channels',
+          'endpoints',
+        ]"
+        :key="key"
         ><input v-model="visibleColumns" type="checkbox" :value="key" />{{
           t('devices.' + (key === 'endpoints' ? 'originalEndpoint' : key))
         }}</label
@@ -218,8 +306,52 @@ const sourceOptions = computed(() => [
                   : 'devices.originalEndpoint',
               )
             }}
+            ·
+            {{
+              row.endpoints
+                .map((e) =>
+                  e.displayName?.state.kind === 'known' ? e.displayName.state.value.value : e.id,
+                )
+                .join(' / ')
+            }}
             · {{ row.reference.id }}</RouterLink
           ></template
+        >
+        <template #cell-platform="{ row }"
+          ><p v-for="e in row.endpoints" :key="e.id">
+            {{
+              e.platform.state === 'known'
+                ? e.platform.values[0]
+                : t('devices.state.' + (e.platform.state === 'unknown' ? 'missing' : 'conflict'))
+            }}
+          </p></template
+        >
+        <template #cell-serialNumber="{ row }"
+          ><p v-for="e in row.endpoints" :key="e.id">
+            {{
+              e.serialNumber?.state.kind === 'known'
+                ? e.serialNumber.state.value.value
+                : t('devices.notProvided')
+            }}
+          </p></template
+        >
+        <template #cell-registrationUser="{ row }"
+          ><p v-for="e in row.endpoints" :key="e.id">
+            {{
+              e.registrationUser === undefined
+                ? t('devices.notProvided')
+                : (e.registrationUser.user?.principalId ?? t('registration.empty'))
+            }}
+          </p></template
+        >
+        <template #cell-currentUser="{ row }"
+          ><p v-for="e in row.endpoints" :key="e.id">
+            {{
+              e.currentUser === undefined
+                ? t('devices.notProvided')
+                : t('devices.currentUserState.' + e.currentUser.state)
+            }}<span v-if="e.currentUser?.user"> · {{ e.currentUser.user.principalId }}</span>
+          </p></template
         >
         <template #cell-status="{ row }"
           ><UiBadge>{{

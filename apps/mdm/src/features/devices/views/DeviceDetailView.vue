@@ -13,6 +13,8 @@ import type { FieldDefinition, Inventory } from '../clients/assets'
 import type { Association } from '../clients/associations'
 import PageFrame from '../../../components/PageFrame.vue'
 import ViewFacts from '../components/ViewFacts.vue'
+import PersonnelPanel from '../components/PersonnelPanel.vue'
+import ScopedInventory from '../components/ScopedInventory.vue'
 import ManualPanel from '../components/ManualPanel.vue'
 import AssociationPanel from '../components/AssociationPanel.vue'
 import DeviceControlPanel from '../components/DeviceControlPanel.vue'
@@ -45,7 +47,19 @@ const directoryQuery = computed(() => {
     return Object.fromEntries(
       Object.entries(value).filter(
         ([k, v]) =>
-          ['status', 'channel', 'source', 'descending', 'cursor', 'columns', 'trail'].includes(k) &&
+          [
+            'search',
+            'platform',
+            'assetState',
+            'limit',
+            'status',
+            'channel',
+            'source',
+            'descending',
+            'cursor',
+            'columns',
+            'trail',
+          ].includes(k) &&
           (typeof v === 'string' || (Array.isArray(v) && v.every((x) => typeof x === 'string'))),
       ),
     )
@@ -54,7 +68,8 @@ const directoryQuery = computed(() => {
   }
 })
 const displayName = computed(() => {
-  const state = view.value?.fields['device.name']?.state
+  const state =
+    view.value?.endpoints[0]?.displayName?.state ?? view.value?.fields['device.name']?.state
   return state?.kind === 'known' && state.value.kind === 'string'
     ? state.value.value
     : reference.value.id
@@ -183,10 +198,16 @@ watch([tab, target], () => {
       >
         <template #inventory
           ><ViewFacts :view="view" :endpoints="endpoints" @invalidated="invalidated" />
+          <ScopedInventory :endpoints="view.endpoints" @invalidated="invalidated" />
+          <PersonnelPanel
+            v-for="endpoint in view.endpoints"
+            :key="endpoint.id"
+            :endpoint="endpoint"
+            @changed="load"
+            @invalidated="invalidated"
+          />
           <section class="console-panel">
             <h2>{{ t('devices.manual') }}</h2>
-            <p>{{ t('devices.ownerUnavailable') }}</p>
-            <p>{{ t('devices.layoutUnavailable') }}</p>
             <label v-if="endpoints.length > 1"
               >{{ t('devices.originalEndpoint')
               }}<select v-model="target" class="ui-input">

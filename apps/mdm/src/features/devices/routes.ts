@@ -33,12 +33,6 @@ export const deviceFeature: MdmFeature = {
       meta: { protected: true },
     },
     {
-      path: '/tenants/:tenant/registration-users',
-      name: 'registration-users',
-      component: () => import('./views/RegistrationUserView.vue'),
-      meta: { protected: true },
-    },
-    {
       path: `${base}/search`,
       name: 'device-search',
       component: () => import('./views/SearchView.vue'),

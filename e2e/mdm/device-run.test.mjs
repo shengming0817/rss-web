@@ -30,9 +30,10 @@ async function exercise(failure, feature) {
 const fs = require('node:fs'), path = require('node:path')
 const args = process.argv.slice(2), base = process.env['${backendEnv}']
 const compose = '${feature}' === 'settings' && args.includes('--cleanup-compose')
-if (args.includes('reset') || compose || ('${feature}' === 'settings' && args.includes('-c'))) {
+const device = '${feature}' === 'device' && args.some((arg) => arg.endsWith('/device-cleanup.py'))
+if (args.includes('reset') || device || compose || ('${feature}' === 'settings' && args.includes('-c'))) {
   const target = args.includes('-c')
-  if (compose ? args.at(-1) !== '--cleanup-compose' || !args.at(-3).endsWith('/settings-fixture.py') : target ? !args.at(-1).includes("group='settings-browser-target'") : !args.includes('hack/t2_environment.py') || args.at(-1) !== '${group}') process.exit(9)
+  if (device ? args.at(-2) !== new URL('./device-cleanup.py', 'file://' + process.env.WEB_ROOT + '/e2e/mdm/').pathname || args.at(-1) !== process.env.WEB_ROOT : compose ? args.at(-1) !== '--cleanup-compose' || !args.at(-3).endsWith('/settings-fixture.py') : target ? !args.at(-1).includes("group='settings-browser-target'") : !args.includes('hack/t2_environment.py') || args.at(-1) !== '${group}') process.exit(9)
   fs.appendFileSync(path.join(base,'cleanup-groups'), (compose ? 'settings-compose' : target ? '${group}-target' : '${group}')+'\\n')
   fs.writeFileSync(path.join(base, 'cleanup-start'), '')
   setTimeout(() => {
@@ -62,8 +63,10 @@ if (args.includes('reset') || compose || ('${feature}' === 'settings' && args.in
         [backendEnv]: backend,
         PATH: `${bin}:${process.env.PATH}`,
         CLEANUP_FAILURE: failure ? '1' : '0',
+        WEB_ROOT: resolve(fileURLToPath(new URL('../..', import.meta.url))),
       },
       stdio: ['ignore', 'pipe', 'pipe'],
+      detached: process.platform !== 'win32',
     },
   )
   let output = ''
@@ -105,7 +108,10 @@ if (args.includes('reset') || compose || ('${feature}' === 'settings' && args.in
       assert.ok(output.includes('"phase":"cleanup","result":"passed"'))
     }
   } finally {
-    if (child.exitCode === null) child.kill('SIGKILL')
+    if (child.exitCode === null) {
+      if (process.platform !== 'win32') process.kill(-child.pid, 'SIGKILL')
+      else child.kill('SIGKILL')
+    }
     await closed
     rmSync(backend, { recursive: true, force: true })
   }

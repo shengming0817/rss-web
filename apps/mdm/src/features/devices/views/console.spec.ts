@@ -435,7 +435,7 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
   await form.find('.condition-editor').findAll('select').at(-1)!.setValue('true')
   await form.trigger('submit')
   await flushPromises()
-  const group = (await devices.groups.list()).items.find((g) => g.name === 'Dynamic')!
+  const group = (await devices.groups.list()).items.find((g) => g.presentation.name === 'Dynamic')!
   expect((await devices.groups.read(group.id)).criteria).toMatchObject({
     criteria: { value: { kind: 'boolean', value: true } },
   })
@@ -465,7 +465,10 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
   await devices.groups.change(group.id, {
     operationId: crypto.randomUUID(),
     expectedRevision: authoritative.group.revision,
-    input: { action: 'edit', name: 'Server changed name', description: 'Server description' },
+    input: {
+      action: 'edit',
+      presentation: { name: 'Server changed name', description: 'Server description' },
+    },
   })
   await click('概览')
   await click('编辑')
@@ -528,8 +531,7 @@ it('keeps the current group target when opening another group fails', async () =
     input: {
       action: 'create',
       assetContext: 'endpoint',
-      name: 'Other group',
-      description: '',
+      presentation: { name: 'Other group', description: '' },
       criteria: null,
     },
   })
@@ -790,20 +792,37 @@ it('administrator quota editing preserves exact commands after a lost response',
   await flushPromises()
   expect(wrapper.find('tbody tr').findAll('td')[0]!.text()).toBe('0')
 })
-it('organization responsibility can be assigned and cleared without occupying personal quota', async () => {
-  const { wrapper, devices, click } = await setup('registration-users', {}, { device: 'device-01' })
-  await wrapper.find('select').setValue('33333333-3333-4333-8333-333333333333')
-  await wrapper.findAll('form')[1]!.trigger('submit')
+it('edits the canonical device owner in detail and locks an unknown write until explicit comparison and replay', async () => {
+  const f = await setup('device-detail', { device: 'device-01' })
+  const panel = () => f.wrapper.get('[data-personnel-device="device-01"]')
+  await panel().get('[data-action=edit-owner]').trigger('click')
   await flushPromises()
-  expect(wrapper.text()).toContain('已保存')
-  const assigned = await devices.registration.responsibility('device-01')
-  expect(assigned.user?.principalId).toBe('33333333-3333-4333-8333-333333333333')
-  await wrapper.find('select').setValue('')
-  await wrapper.findAll('form')[1]!.trigger('submit')
+  await panel().get('select').setValue('33333333-3333-4333-8333-333333333333')
+  f.loseReply.path = '/api/v1/devices/{device}/registration-user'
+  await panel().get('form').trigger('submit')
   await flushPromises()
-  expect((await devices.registration.responsibility('device-01')).user).toBeNull()
-  expect((await devices.registration.me()).channels.every((c) => c.used === 0)).toBe(true)
-  await click('重新读取')
+  expect(panel().get('fieldset').attributes('disabled')).toBeDefined()
+  const writes = () =>
+    f.requests.filter((r) => r.method === 'PUT' && r.path.endsWith('registration-user'))
+  expect(writes()).toHaveLength(1)
+  expect(panel().find('[data-action=replay-owner]').exists()).toBe(false)
+  f.loseReply.path = ''
+  await panel().get('[data-action=compare-owner]').trigger('click')
+  await flushPromises()
+  await panel().get('[data-action=replay-owner]').trigger('click')
+  await flushPromises()
+  expect(writes()).toHaveLength(2)
+  expect(writes()[1]?.body).toEqual(writes()[0]?.body)
+  expect(writes()[1]?.headers).toEqual(writes()[0]?.headers)
+  expect((await f.devices.registration.responsibility('device-01')).user?.principalId).toBe(
+    '33333333-3333-4333-8333-333333333333',
+  )
+  await panel().get('[data-action=edit-owner]').trigger('click')
+  await flushPromises()
+  await panel().get('select').setValue('')
+  await panel().get('form').trigger('submit')
+  await flushPromises()
+  expect((await f.devices.registration.responsibility('device-01')).user).toBeNull()
 })
 
 it('invalidates the displayed native registration when the query target changes and cancels only the newly read target', async () => {
@@ -1114,10 +1133,19 @@ it.each(['zh-CN', 'en-US'] as const)(
     await flushPromises()
     expect(
       h.wrapper
-        .findAll('select')[2]!
+        .findAll('select')
+        .find((select) => select.find('option[value="mdm.windows"]').exists())!
         .findAll('option')
         .map((o) => o.text()),
-    ).toEqual([locale === 'zh-CN' ? '全部' : 'All', 'Windows MDM', 'Apple MDM', 'Agent'])
+    ).toEqual([
+      locale === 'zh-CN' ? '全部' : 'All',
+      'Windows MDM',
+      'Apple MDM',
+      'Agent',
+      locale === 'zh-CN' ? 'Agent 脚本' : 'Agent script',
+      locale === 'zh-CN' ? 'Agent 原生采集' : 'Agent native collection',
+      'Agent osquery',
+    ])
   },
 )
 
@@ -1332,3 +1360,265 @@ it('keeps Group save errors and exact unknown-write recovery inside its dialog',
   expect(new DOMWrapper(document.body).find('[role=dialog]').exists()).toBe(false)
   expect(wrapper.text()).toContain('Recover in current drawer')
 })
+
+it.each([
+  [403, 'run'],
+  [404, 'run'],
+  [403, 'items'],
+  [404, 'items'],
+] as const)(
+  'distinguishes scoped last-known facts and clears detail after %s on %s',
+  async (status, request) => {
+    const h = await setup('devices')
+    const scope = { kind: 'macos_applications' as const, root: 'user' as const, uid: 501 }
+    const id = '22222222-2222-4222-8222-222222222222'
+    const evidence = {
+      scope,
+      source: 'agent.native' as const,
+      registration: id,
+      registrationGeneration: 1,
+      dataset: 'memory',
+      epoch: id,
+      snapshotId: id,
+      observedAt: 20,
+      receivedAt: 21,
+      actor: null,
+    }
+    const quality = {
+      dataset: 'memory',
+      templateVersion: '1',
+      fingerprint: 'frozen',
+      coverage: { id: 'memory', version: '1', definition: 'frozen', format: 'typed-fields-v1' },
+      complete: false,
+      source: 'agent.native' as const,
+      channel: 'agent' as const,
+      registration: id,
+      registrationGeneration: 1,
+      epoch: id,
+      runId: id,
+      sequence: 2,
+      result: 'partial' as const,
+      deliveryPending: false,
+      fields: [
+        {
+          scope,
+          field: 'device.memory.bytes',
+          quality: 'unknown' as const,
+          reason: 'incomplete',
+          status: null,
+          receivedAt: 21,
+          itemCount: 1,
+          invalidItems: 1,
+        },
+      ],
+    }
+    vi.spyOn(h.devices.assets, 'scopes').mockResolvedValue({
+      device: 'device-01',
+      items: [scope],
+      nextCursor: null,
+      watermark: 21,
+    })
+    vi.spyOn(h.devices.assets, 'inventory').mockResolvedValue({
+      device: 'device-01',
+      collectionScope: scope,
+      channels: ['agent'],
+      lists: {},
+      revisions: {},
+      quality: [quality],
+      fields: {
+        'device.memory.bytes': {
+          field: 'device.memory.bytes',
+          state: { kind: 'unknown', reason: 'incomplete' },
+          sources: [
+            {
+              state: { kind: 'unknown', reason: 'incomplete' },
+              evidence,
+              lastKnown: {
+                value: { kind: 'integer', value: 987654 },
+                evidence: { ...evidence, observedAt: 10 },
+              },
+            },
+          ],
+        },
+      },
+    })
+    const readRun = vi.spyOn(h.devices.assets, 'collectionRun').mockResolvedValue({
+      id,
+      quality,
+      startedAt: 20,
+      finishedAt: 21,
+      reason: 'incomplete',
+      delivery: { projection: 'pending', receipt: null },
+    })
+    const readItems = vi.spyOn(h.devices.assets, 'collectionItems').mockResolvedValue({
+      items: [{ index: 0, quality: 'unknown' }],
+      nextOffset: null,
+    })
+    await h.router.push({ name: 'device-detail', params: { tenant: TENANT, device: 'device-01' } })
+    await flushPromises()
+    const scoped = h.wrapper.get('[data-testid=scope-inventory]')
+    await scoped.findAll('select')[1]!.setValue(JSON.stringify(scope))
+    await flushPromises()
+    const value = scoped.get('.asset-value')
+    expect(value.get('strong').text()).toBe('结果不确定')
+    expect(value.text()).toContain('采集不完整')
+    const historical = value.findAll('dt').find((dt) => dt.text().includes('最后已知值'))!
+    expect(historical.element.nextElementSibling?.textContent).toContain('987654')
+    expect(historical.element.nextElementSibling?.textContent).toContain('10')
+    const current = value.findAll('dt').find((dt) => dt.text() === '当前状态')!
+    expect(current.element.nextElementSibling?.textContent).not.toContain('987654')
+    await scoped
+      .findAll('button')
+      .find((b) => b.text() === '来源与历史证据')!
+      .trigger('click')
+    await flushPromises()
+    const run = scoped.get('[data-collection-run]')
+    expect(run.text()).toContain('部分结果')
+    expect(run.text()).toContain('等待资产投影')
+    if (request === 'items') {
+      await run
+        .findAll('button')
+        .find((b) => b.text() === '逐条质量')!
+        .trigger('click')
+      await flushPromises()
+      expect(run.find('ol li').exists()).toBe(true)
+      readItems.mockRejectedValueOnce(
+        decodeMdmError(status, {
+          code: status === 403 ? 'permission_denied' : 'inventory_not_found',
+        }),
+      )
+      await run
+        .findAll('button')
+        .find((b) => b.text() === '逐条质量')!
+        .trigger('click')
+    } else {
+      readRun.mockRejectedValueOnce(
+        decodeMdmError(status, {
+          code: status === 403 ? 'permission_denied' : 'inventory_not_found',
+        }),
+      )
+      await run
+        .findAll('button')
+        .find((b) => b.text() === '重新读取')!
+        .trigger('click')
+    }
+    await flushPromises()
+    expect(h.wrapper.find('[data-testid=scope-inventory]').exists()).toBe(false)
+    expect(h.wrapper.find('[data-collection-run]').exists()).toBe(false)
+    expect(h.wrapper.text()).not.toContain('987654')
+    expect(h.wrapper.text()).not.toContain('ThinkPad T14')
+  },
+)
+
+it.each([
+  [403, 'inventory'],
+  [403, 'list'],
+  [404, 'inventory'],
+  [409, 'list'],
+] as const)(
+  'preserves scoped rejection and invalidates the parent after %s on %s',
+  async (status, request) => {
+    const h = await setup('devices')
+    const scope = { kind: 'macos_applications' as const, root: 'user' as const, uid: 501 }
+    const id = '22222222-2222-4222-8222-222222222222'
+    const evidence = {
+      scope,
+      source: 'agent.native' as const,
+      registration: id,
+      registrationGeneration: 1,
+      dataset: 'applications',
+      epoch: id,
+      snapshotId: id,
+      observedAt: 20,
+      receivedAt: 21,
+      actor: null,
+    }
+    const state = { kind: 'known' as const, count: 2, digest: 'frozen' }
+    vi.spyOn(h.devices.assets, 'scopes').mockResolvedValue({
+      device: 'device-01',
+      items: [scope],
+      nextCursor: null,
+      watermark: 21,
+    })
+    const inventory = vi.spyOn(h.devices.assets, 'inventory').mockResolvedValue({
+      device: 'device-01',
+      collectionScope: scope,
+      channels: ['agent'],
+      revisions: {},
+      quality: [],
+      fields: {
+        'device.memory.bytes': {
+          field: 'device.memory.bytes',
+          state: { kind: 'known', value: { kind: 'integer', value: 987654 } },
+          sources: [],
+        },
+      },
+      lists: {
+        'device.software.installations': {
+          state,
+          sources: [{ state, evidence, cursor: 'first' }],
+          itemKey: null,
+          cursor: 'first',
+        },
+      },
+    })
+    const items = vi.spyOn(h.devices.assets, 'listItems').mockResolvedValue({
+      items: [{ kind: 'string', value: 'scope-private-item' }],
+      total: 2,
+      watermark: 21,
+      nextCursor: 'next',
+    })
+    await h.router.push({ name: 'device-detail', params: { tenant: TENANT, device: 'device-01' } })
+    await flushPromises()
+    const scoped = h.wrapper.get('[data-testid=scope-inventory]')
+    await scoped.findAll('select')[1]!.setValue(JSON.stringify(scope))
+    await flushPromises()
+    await h.wrapper
+      .findAll('button')
+      .find((b) => b.text() === '硬件')!
+      .trigger('click')
+    expect(h.wrapper.text()).toContain('ThinkPad T14')
+    expect(scoped.text()).toContain('987654')
+    const rejection = decodeMdmError(status, {
+      code:
+        status === 403
+          ? 'permission_denied'
+          : status === 404
+            ? 'inventory_not_found'
+            : 'device_view_cursor_invalidated',
+    })
+    if (request === 'inventory') {
+      inventory.mockRejectedValueOnce(rejection)
+      await scoped
+        .findAll('button')
+        .find((b) => b.text() === '重新读取')!
+        .trigger('click')
+    } else {
+      await scoped
+        .findAll('button')
+        .find((b) => b.text() === '展开此来源')!
+        .trigger('click')
+      await flushPromises()
+      expect(scoped.text()).toContain('scope-private-item')
+      items.mockRejectedValueOnce(rejection)
+      await scoped
+        .findAll('button')
+        .find((b) => b.text() === '下一页')!
+        .trigger('click')
+    }
+    await flushPromises()
+    expect(h.wrapper.text()).not.toContain('987654')
+    expect(h.wrapper.text()).not.toContain('scope-private-item')
+    expect(h.wrapper.get('[role=alert]').text()).toContain(
+      status === 403 ? '请求被拒绝' : status === 404 ? '对象或操作不存在' : '旧分页失效',
+    )
+    if (status === 409) {
+      expect(h.wrapper.find('[data-testid=scope-inventory]').exists()).toBe(true)
+      expect(h.wrapper.text()).toContain('ThinkPad T14')
+      expect(scoped.findAll('select')[1]!.element.value).toBe('')
+    } else {
+      expect(h.wrapper.find('[data-testid=scope-inventory]').exists()).toBe(false)
+      expect(h.wrapper.text()).not.toContain('ThinkPad T14')
+    }
+  },
+)

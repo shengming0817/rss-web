@@ -23,8 +23,7 @@ it('keeps canonical associations in assignments, channel endpoints in Scope page
       expectedRevision: 0,
       input: {
         action: 'create',
-        name: 'Associated',
-        description: '',
+        presentation: { name: 'Associated', description: '' },
         assetContext: 'associated_device',
         criteria: deviceCondition(),
       },
@@ -105,8 +104,7 @@ it('evaluates associated conditions only from evidence matching original registr
     expectedRevision: 0,
     input: {
       action: 'create',
-      name: 'Registered evidence',
-      description: '',
+      presentation: { name: 'Registered evidence', description: '' },
       assetContext: 'associated_device',
       criteria: deviceCondition({
         kind: 'predicate',

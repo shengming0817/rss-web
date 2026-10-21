@@ -7,6 +7,7 @@ import { useMdm } from '../../../context'
 import { operation, useOperation, type Operation } from '../../../services/useOperation'
 import {
   defaultSchedule,
+  defaultCollectionSchedule,
   policyDefinition,
   type PolicyRead,
   type ExecutionDefinition,
@@ -15,6 +16,7 @@ import {
   type PolicyChange,
 } from '../clients/model'
 import type { ResourceRead, ScriptSpec, Json } from '../clients/resources'
+import CollectionPeriod from '../components/CollectionPeriod.vue'
 import NativeScheduleEditor from '../../software/components/NativeScheduleEditor.vue'
 import SelfServiceEditor from '../components/SelfServiceEditor.vue'
 import ResourceIdentity from '../components/ResourceIdentity.vue'
@@ -73,8 +75,8 @@ function fresh(
           architecture: 'x86_64',
           variant: '',
         },
-        schedule: defaultSchedule(),
-        frequency: 'once_per_version',
+        schedule: defaultCollectionSchedule(),
+        frequency: 'every_trigger',
         runLifetimeSeconds: 3600,
       },
     }
@@ -317,7 +319,7 @@ watch(
 )
 function bind() {
   const target = definition.value.action.resource.id
-  void run(
+  return run(
     () => runtime.policies.resources.read(target),
     (r) => {
       if (
@@ -453,7 +455,29 @@ function save(event: Event) {
 onMounted(async () => {
   await load()
   if (id.value && !current.value) await open()
-  else if (!id.value) resetDraft()
+  else if (!id.value) {
+    resetDraft()
+    const kind = route.query['kind']
+    if (
+      ['native_collection', 'agent_collection', 'configuration'].includes(String(kind)) &&
+      typeof route.query['resource'] === 'string' &&
+      typeof route.query['version'] === 'string'
+    ) {
+      definition.value = fresh(kind as 'native_collection' | 'agent_collection' | 'configuration')
+      definition.value.action.resource.id = route.query['resource']
+      definition.value.action.resource.version = route.query['version']
+      editing.value = true
+      await bind()
+      const variant = variants.value[0]
+      if (variant)
+        definition.value.action.resource = {
+          ...definition.value.action.resource,
+          platform: variant.platform,
+          architecture: variant.architecture,
+          variant: variant.key,
+        }
+    }
+  }
 })
 </script>
 <template>
@@ -479,7 +503,7 @@ onMounted(async () => {
       :empty-label="t('policies.empty')"
       ><template #cell-policy="{ row }"
         ><UiButton variant="ghost" :disabled="busy || uncertain" @click="select(row.id)">{{
-          row.definition.selfService?.displayName ??
+          row.definition.selfService?.presentation.displayName ??
           `${t('policies.policies')} · ${row.id.slice(0, 8)}`
         }}</UiButton></template
       ><template #cell-state="{ row }"
@@ -673,7 +697,7 @@ onMounted(async () => {
             {{ t('policies.selfService.removeConfiguration') }}
           </UiButton>
         </template>
-        <template v-else
+        <template v-else-if="definition.action.kind === 'configuration'"
           ><label for="policy-exit">{{ t('policies.exitBehavior') }}</label
           ><select id="policy-exit" v-model="definition.action.exit" class="ui-input">
             <option value="retain">{{ t('policies.configurationRetain') }}</option>
@@ -685,19 +709,9 @@ onMounted(async () => {
             definition.action.kind === 'native_collection' ||
             definition.action.kind === 'agent_collection'
           "
-          ><NativeScheduleEditor
-            v-model="definition.action.schedule"
-            :disabled="busy || uncertain" /><label
-            >{{ t('software.runLifetime')
-            }}<input
-              v-model.number="definition.action.runLifetimeSeconds"
-              type="number"
-              min="60"
-              max="604800"
-              class="ui-input"
-              required /></label
-        ></template>
-        <label v-if="definition.action.kind === 'configuration'"
+          ><CollectionPeriod v-model="definition.action.schedule" :disabled="busy || uncertain" />
+        </template>
+        <label v-if="definition.action.kind !== 'execution'"
           ><input v-model="enabled" type="checkbox" />{{ t('policies.active') }}</label
         >
         <UiButton type="submit" :disabled="!!(!id || !selectedVariant)">{{
