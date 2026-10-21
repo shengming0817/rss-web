@@ -1,0 +1,157 @@
+{
+  "categories": ["identity", "hardware", "software", "security", "management", "updates"],
+  "packages": [
+    {
+      "content": "{\"scope\":{\"kind\":\"device\"},\"applicability\":{\"minimumOsVersion\":null,\"minimumBuild\":10586,\"editions\":[],\"enrollments\":[\"primary\"],\"tools\":{},\"capabilities\":[]},\"adapter\":\"windows_read\",\"mappings\":{\"device.manufacturer\":{\"query\":{\"kind\":\"scalar\",\"uri\":\"./DevInfo/Man\"},\"mapping\":{\"pointer\":\"\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}}},\"device.name\":{\"query\":{\"kind\":\"scalar\",\"uri\":\"./DevDetail/Ext/Microsoft/DeviceName\"},\"mapping\":{\"pointer\":\"\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}}},\"device.os.name\":{\"query\":{\"kind\":\"scalar\",\"uri\":\"./DevDetail/Ext/Microsoft/OSPlatform\"},\"mapping\":{\"pointer\":\"\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}}},\"device.os.version\":{\"query\":{\"kind\":\"scalar\",\"uri\":\"./DevDetail/SwV\"},\"mapping\":{\"pointer\":\"\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}}}},\"timeoutSeconds\":300,\"outputBytes\":1048576}",
+      "id": "windows.identity",
+      "kind": "native_collection",
+      "platform": "windows",
+      "presentation": {
+        "category": "identity"
+      },
+      "reference": "collection.json",
+      "sha256": [
+        138, 214, 140, 240, 156, 119, 28, 64, 203, 75, 93, 57, 12, 9, 36, 27, 25, 248, 75, 0, 153,
+        243, 180, 130, 165, 160, 158, 178, 90, 91, 26, 202
+      ],
+      "version": "1",
+      "versionDigest": [
+        99, 99, 140, 88, 22, 109, 230, 136, 212, 191, 240, 80, 94, 92, 0, 115, 175, 223, 146, 57,
+        19, 39, 218, 237, 236, 35, 152, 147, 97, 6, 207, 163
+      ]
+    },
+    {
+      "content": "{\"scope\":{\"kind\":\"device\"},\"applicability\":{\"minimumOsVersion\":null,\"minimumBuild\":10586,\"editions\":[],\"enrollments\":[\"primary\"],\"tools\":{},\"capabilities\":[]},\"adapter\":\"windows_read\",\"mappings\":{\"device.firmware.version\":{\"query\":{\"kind\":\"scalar\",\"uri\":\"./DevDetail/FwV\"},\"mapping\":{\"pointer\":\"\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}}},\"device.hardware.windows.available_memory_bytes\":{\"query\":{\"kind\":\"scalar\",\"uri\":\"./DevDetail/Ext/Microsoft/TotalRAM\"},\"mapping\":{\"pointer\":\"\",\"conversion\":{\"kind\":\"scale\",\"numerator\":1048576,\"denominator\":1},\"columns\":{}}},\"device.hardware.windows.processor_architecture\":{\"query\":{\"kind\":\"scalar\",\"uri\":\"./DevDetail/Ext/Microsoft/ProcessorArchitecture\"},\"mapping\":{\"pointer\":\"\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}}},\"device.model\":{\"query\":{\"kind\":\"scalar\",\"uri\":\"./DevInfo/Mod\"},\"mapping\":{\"pointer\":\"\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}}}},\"timeoutSeconds\":300,\"outputBytes\":1048576}",
+      "id": "windows.hardware",
+      "kind": "native_collection",
+      "platform": "windows",
+      "presentation": {
+        "category": "hardware"
+      },
+      "reference": "collection.json",
+      "sha256": [
+        246, 194, 5, 228, 102, 230, 29, 87, 50, 166, 123, 6, 7, 201, 111, 66, 154, 9, 221, 75, 217,
+        182, 171, 126, 117, 18, 40, 160, 133, 152, 135, 142
+      ],
+      "version": "1",
+      "versionDigest": [
+        131, 228, 195, 122, 199, 28, 253, 62, 254, 56, 44, 12, 77, 108, 21, 206, 193, 219, 117, 223,
+        179, 190, 248, 109, 124, 208, 212, 129, 127, 72, 156, 177
+      ]
+    },
+    {
+      "content": "{\"scope\":{\"kind\":\"device\"},\"applicability\":{\"minimumOsVersion\":null,\"minimumBuild\":15063,\"editions\":[],\"enrollments\":[\"primary\"],\"tools\":{},\"capabilities\":[]},\"adapter\":\"windows_read\",\"mappings\":{\"device.security.windows.firewall.status\":{\"query\":{\"kind\":\"scalar\",\"uri\":\"./Vendor/MSFT/DeviceStatus/Firewall/Status\"},\"mapping\":{\"pointer\":\"\",\"conversion\":{\"kind\":\"enum\",\"values\":{\"0\":\"enabled\",\"1\":\"disabled\",\"2\":\"partial\",\"3\":\"temporarily_unmonitored\",\"4\":\"not_applicable\"}},\"columns\":{}}}},\"timeoutSeconds\":300,\"outputBytes\":1048576}",
+      "id": "windows.security.firewall",
+      "kind": "native_collection",
+      "platform": "windows",
+      "presentation": {
+        "category": "security"
+      },
+      "reference": "collection.json",
+      "sha256": [
+        229, 185, 158, 195, 238, 41, 145, 118, 114, 18, 206, 172, 82, 12, 229, 38, 83, 183, 166,
+        165, 165, 209, 196, 138, 82, 207, 34, 233, 120, 190, 203, 111
+      ],
+      "version": "1",
+      "versionDigest": [
+        101, 231, 119, 185, 196, 51, 152, 166, 175, 209, 174, 171, 235, 22, 157, 193, 55, 249, 115,
+        247, 243, 83, 228, 155, 160, 153, 136, 224, 170, 36, 41, 201
+      ]
+    },
+    {
+      "content": "{\"scope\":{\"kind\":\"device\"},\"applicability\":{\"minimumOsVersion\":null,\"minimumBuild\":14393,\"editions\":[],\"enrollments\":[\"primary\"],\"tools\":{},\"capabilities\":[]},\"adapter\":\"windows_read\",\"mappings\":{\"device.management.windows.enrollment_id\":{\"query\":{\"kind\":\"enrollment_id\"},\"mapping\":{\"pointer\":\"\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}}},\"device.management.windows.enrollment_type\":{\"query\":{\"kind\":\"enrollment_type\"},\"mapping\":{\"pointer\":\"\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}}}},\"timeoutSeconds\":300,\"outputBytes\":1048576}",
+      "id": "windows.management",
+      "kind": "native_collection",
+      "platform": "windows",
+      "presentation": {
+        "category": "management"
+      },
+      "reference": "collection.json",
+      "sha256": [
+        250, 192, 80, 120, 8, 245, 86, 148, 47, 111, 60, 213, 250, 199, 78, 140, 22, 122, 13, 90,
+        104, 69, 158, 97, 63, 250, 113, 143, 70, 52, 227, 119
+      ],
+      "version": "1",
+      "versionDigest": [
+        189, 65, 216, 30, 19, 163, 154, 216, 253, 206, 230, 229, 56, 142, 13, 176, 97, 253, 133,
+        242, 98, 191, 146, 11, 48, 241, 68, 27, 77, 197, 103, 152
+      ]
+    },
+    {
+      "content": "{\"scope\":{\"kind\":\"device\"},\"applicability\":{\"minimumOsVersion\":null,\"minimumBuild\":10240,\"editions\":[],\"enrollments\":[\"primary\"],\"tools\":{},\"capabilities\":[]},\"adapter\":\"windows_read\",\"mappings\":{\"device.updates.windows.last_scan\":{\"query\":{\"kind\":\"scalar\",\"uri\":\"./Vendor/MSFT/Update/LastSuccessfulScanTime\"},\"mapping\":{\"pointer\":\"\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}}}},\"timeoutSeconds\":300,\"outputBytes\":1048576}",
+      "id": "windows.updates.scan",
+      "kind": "native_collection",
+      "platform": "windows",
+      "presentation": {
+        "category": "updates"
+      },
+      "reference": "collection.json",
+      "sha256": [
+        238, 82, 148, 236, 148, 254, 15, 229, 143, 242, 200, 228, 60, 17, 91, 37, 30, 192, 15, 216,
+        28, 218, 128, 32, 16, 166, 127, 42, 110, 156, 53, 10
+      ],
+      "version": "1",
+      "versionDigest": [
+        207, 31, 142, 197, 102, 220, 216, 251, 135, 18, 60, 128, 131, 33, 12, 40, 128, 68, 211, 116,
+        0, 195, 3, 50, 59, 1, 3, 244, 231, 198, 180, 63
+      ]
+    },
+    {
+      "content": "{\"scope\":{\"kind\":\"device\"},\"applicability\":{\"minimumOsVersion\":null,\"minimumBuild\":10240,\"editions\":[],\"enrollments\":[\"primary\"],\"tools\":{},\"capabilities\":[]},\"adapter\":\"windows_read\",\"mappings\":{\"device.software.windows.win32\":{\"query\":{\"kind\":\"inventory\",\"inventory\":\"win32\"},\"mapping\":{\"pointer\":\"\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{\"discovery_source\":{\"pointer\":\"/Source\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}},\"id\":{\"pointer\":\"/id\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}},\"installation_scope\":{\"pointer\":\"/installation_scope\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}},\"name\":{\"pointer\":\"/Name\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}},\"origin\":{\"pointer\":\"/origin\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}},\"publisher\":{\"pointer\":\"/Publisher\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}},\"registry_key\":{\"pointer\":\"/RegKey\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}},\"version\":{\"pointer\":\"/Version\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}}}}}},\"timeoutSeconds\":300,\"outputBytes\":1048576}",
+      "id": "windows.software.win32",
+      "kind": "native_collection",
+      "platform": "windows",
+      "presentation": {
+        "category": "software"
+      },
+      "reference": "collection.json",
+      "sha256": [
+        26, 29, 5, 212, 121, 90, 75, 120, 129, 24, 141, 61, 66, 177, 188, 0, 83, 191, 40, 185, 69,
+        200, 26, 114, 80, 147, 211, 128, 142, 52, 65, 34
+      ],
+      "version": "1",
+      "versionDigest": [
+        117, 236, 195, 164, 56, 112, 138, 63, 114, 151, 16, 29, 146, 126, 108, 15, 102, 248, 65, 1,
+        162, 244, 77, 133, 68, 195, 253, 225, 244, 110, 106, 38
+      ]
+    },
+    {
+      "content": "{\"applicability\":{\"minimumOsVersion\":null,\"minimumBuild\":null,\"editions\":[],\"enrollments\":[],\"tools\":{},\"capabilities\":[]},\"plan\":{\"version\":1,\"scope\":{\"kind\":\"device\"},\"queries\":{\"memory\":{\"version\":1,\"definition\":{\"kind\":\"windows_wmi\",\"namespace\":\"root\\\\cimv2\",\"class\":\"Win32_ComputerSystem\",\"properties\":{\"TotalPhysicalMemory\":{\"cimType\":\"uint64\",\"array\":false}},\"filter\":null},\"cardinality\":\"exactly_one\",\"instanceKeys\":[],\"budget\":{\"timeoutSeconds\":300,\"outputBytes\":16777216,\"maxRows\":65535}}},\"budget\":{\"timeoutSeconds\":300,\"outputBytes\":16777216,\"maxRows\":65535}},\"mappings\":{\"device.memory.bytes\":{\"query\":\"memory\",\"mapping\":{\"pointer\":\"/TotalPhysicalMemory\",\"conversion\":{\"kind\":\"integer\"},\"columns\":{}},\"missing\":\"missing\"}}}",
+      "id": "windows.agent.memory",
+      "kind": "agent_collection",
+      "platform": "windows",
+      "presentation": {
+        "category": "hardware"
+      },
+      "reference": "agent-collection.json",
+      "sha256": [
+        107, 177, 95, 189, 162, 139, 107, 189, 240, 226, 35, 115, 13, 90, 229, 3, 234, 187, 16, 54,
+        66, 12, 94, 231, 117, 89, 115, 86, 131, 141, 176, 230
+      ],
+      "version": "1",
+      "versionDigest": [
+        131, 95, 43, 110, 179, 112, 124, 81, 177, 46, 185, 204, 131, 63, 27, 99, 17, 219, 180, 80,
+        28, 42, 228, 81, 16, 14, 107, 211, 206, 121, 174, 179
+      ]
+    },
+    {
+      "content": "{\"applicability\":{\"minimumOsVersion\":null,\"minimumBuild\":null,\"editions\":[],\"enrollments\":[],\"tools\":{},\"capabilities\":[]},\"plan\":{\"version\":1,\"scope\":{\"kind\":\"device\"},\"queries\":{\"software\":{\"version\":1,\"definition\":{\"kind\":\"windows_software\"},\"cardinality\":\"list\",\"instanceKeys\":[\"id\"],\"budget\":{\"timeoutSeconds\":300,\"outputBytes\":16777216,\"maxRows\":65535}}},\"budget\":{\"timeoutSeconds\":300,\"outputBytes\":16777216,\"maxRows\":65535}},\"mappings\":{\"device.software.installations\":{\"query\":\"software\",\"mapping\":{\"pointer\":\"\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{\"id\":{\"pointer\":\"/id\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}},\"installation_state\":{\"pointer\":\"/origin\",\"conversion\":{\"kind\":\"enum\",\"values\":{\"msix.provisioned\":\"provisioned\",\"msix.registered\":\"registered\",\"win32.uninstall.32\":\"installed\",\"win32.uninstall.64\":\"installed\"}},\"columns\":{}},\"location\":{\"pointer\":\"/location\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}},\"name\":{\"pointer\":\"/name\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}},\"native_id\":{\"pointer\":\"/native_id\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}},\"origin\":{\"pointer\":\"/origin\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}},\"owner\":{\"pointer\":\"/owner\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}},\"publisher\":{\"pointer\":\"/publisher\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}},\"scope\":{\"pointer\":\"/scope\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}},\"version\":{\"pointer\":\"/version\",\"conversion\":{\"kind\":\"identity\"},\"columns\":{}}}},\"missing\":\"missing\"}}}",
+      "id": "windows.agent.software",
+      "kind": "agent_collection",
+      "platform": "windows",
+      "presentation": {
+        "category": "software"
+      },
+      "reference": "agent-collection.json",
+      "sha256": [
+        173, 33, 43, 238, 224, 207, 194, 196, 176, 198, 226, 31, 11, 138, 198, 114, 125, 182, 153,
+        182, 239, 34, 208, 68, 113, 66, 141, 120, 202, 114, 154, 43
+      ],
+      "version": "1",
+      "versionDigest": [
+        133, 79, 207, 0, 204, 179, 81, 102, 188, 135, 248, 71, 97, 196, 232, 211, 160, 150, 186, 15,
+        226, 213, 128, 129, 58, 62, 125, 174, 253, 176, 35, 169
+      ]
+    }
+  ]
+}

@@ -48,6 +48,7 @@ export function endpointProjection(d: DemoDevice): Endpoint {
         : null,
     channels: latest.map((r) => ({
       channel: r.source === 'agent.builtin' ? 'agent' : 'mdm',
+      platform: d.summary.platform === 'unknown' ? null : d.summary.platform,
       registrationId: r.registrationId,
       generation: r.generation,
       status: r.status,
@@ -57,6 +58,7 @@ export function endpointProjection(d: DemoDevice): Endpoint {
     })),
     enrollments: d.enrollments.map((id) => ({
       enrollmentId: id,
+      platform: d.summary.platform === 'unknown' ? null : d.summary.platform,
       source: d.summary.platform === 'macos' ? 'mdm.apple' : 'mdm.windows',
       status: 'bound',
       expiresAt: 4102444800,
@@ -64,7 +66,18 @@ export function endpointProjection(d: DemoDevice): Endpoint {
   }
 }
 function viewEndpointProjection(d: DemoDevice): ViewEndpoint {
-  return { ...endpointProjection(d), assetState: 'active' }
+  return {
+    ...endpointProjection(d),
+    assetState: 'active',
+    platform: {
+      state: d.summary.platform === 'unknown' ? 'unknown' : 'known',
+      values: d.summary.platform === 'unknown' ? [] : [d.summary.platform],
+    },
+    displayName: d.inventory.fields['device.name'],
+    serialNumber: d.inventory.fields['device.serial_number'],
+    registrationUser: undefined,
+    currentUser: undefined,
+  }
 }
 export function endpointDetailProjection(d: DemoDevice) {
   const p = endpointProjection(d)
@@ -91,6 +104,19 @@ export function endpointDetailProjection(d: DemoDevice) {
   }
 }
 export function createDeviceViewsDemo(devices: () => Map<string, DemoDevice>, can: () => Can) {
+  function presentation(d: DemoDevice, request: DemoRequest): ViewEndpoint {
+    return {
+      ...viewEndpointProjection(d),
+      registrationUser: can()(request.actor.principalId, 'enrollment', d.summary.id)
+        ? (d.registrationUser ?? { revision: 0, user: null })
+        : undefined,
+      currentUser:
+        can()(request.actor.principalId, 'inventory_sensitive_read', d.summary.id) &&
+        d.registrations.some((r) => r.source === 'agent.builtin')
+          ? (d.currentUser ?? { revision: 0, state: 'unbound', user: null, confirmedAt: null })
+          : undefined,
+    }
+  }
   const relations = new Map<string, Association>(),
     receipts = createReceipts(),
     tokens = new Map<
@@ -129,7 +155,7 @@ export function createDeviceViewsDemo(devices: () => Map<string, DemoDevice>, ca
     for (const raw of relations.values()) {
       const a = effective(raw)
       if (a.state === 'revoked' || !a.members.every((m) => rows.has(m.device))) continue
-      const endpoints = a.members.map((m) => viewEndpointProjection(rows.get(m.device)!))
+      const endpoints = a.members.map((m) => presentation(rows.get(m.device)!, request))
       a.members.forEach((m) => rows.delete(m.device))
       result.push({ reference: { kind: 'association', id: a.id }, association: a, endpoints })
     }
@@ -137,7 +163,7 @@ export function createDeviceViewsDemo(devices: () => Map<string, DemoDevice>, ca
       result.push({
         reference: { kind: 'endpoint', id },
         association: null,
-        endpoints: [viewEndpointProjection(d)],
+        endpoints: [presentation(d, request)],
       })
     return result.sort((a, b) =>
       `${a.reference.kind}:${a.reference.id}`.localeCompare(
@@ -172,7 +198,7 @@ export function createDeviceViewsDemo(devices: () => Map<string, DemoDevice>, ca
           ? {
               reference,
               association: null,
-              endpoints: [viewEndpointProjection(devices().get(reference.id)!)],
+              endpoints: [presentation(devices().get(reference.id)!, request)],
             }
           : undefined
         : groups(request).find(
@@ -260,6 +286,20 @@ export function createDeviceViewsDemo(devices: () => Map<string, DemoDevice>, ca
       items = items.filter((g) =>
         g.endpoints.some(
           (e) =>
+            (!query.get('search') ||
+              [
+                e.displayName?.state.kind === 'known'
+                  ? String(e.displayName.state.value.value)
+                  : '',
+                e.serialNumber?.state.kind === 'known'
+                  ? String(e.serialNumber.state.value.value)
+                  : '',
+                e.registrationUser?.user?.principalId ?? '',
+                e.currentUser?.user?.principalId ?? '',
+              ].some((v) => v.toLowerCase().includes(query.get('search')!.toLowerCase()))) &&
+            (!query.get('platform') ||
+              e.platform.values.includes(query.get('platform') as 'windows' | 'macos')) &&
+            (!query.get('assetState') || e.assetState === query.get('assetState')) &&
             (!query.get('status') || e.status === query.get('status')) &&
             (!query.get('channel') || e.channels.some((c) => c.channel === query.get('channel'))) &&
             (!query.get('source') || e.channels.some((c) => c.source === query.get('source'))),
@@ -268,6 +308,9 @@ export function createDeviceViewsDemo(devices: () => Map<string, DemoDevice>, ca
       if (query.get('descending') === 'true') items.reverse()
       const b = binding(request, [
           path,
+          query.get('search'),
+          query.get('platform'),
+          query.get('assetState'),
           query.get('status'),
           query.get('channel'),
           query.get('source'),

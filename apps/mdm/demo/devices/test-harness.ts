@@ -44,7 +44,7 @@ export async function setup() {
   } as unknown as HttpTransport
   return {
     associations: createAssociationsClient(transport),
-    views: createDeviceViewsClient(transport),
+    views: createDeviceViewsClient(transport, TENANT),
     domain,
     transport,
     scenario,

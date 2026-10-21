@@ -16,7 +16,10 @@ import type {
   Scalar,
 } from '../../src/features/devices/clients/asset-model'
 import type { registration } from '../../src/features/devices/clients/enrollment'
+import type { ViewEndpoint } from '../../src/features/devices/clients/endpoint-model'
 export interface DemoDevice {
+  registrationUser?: ViewEndpoint['registrationUser']
+  currentUser?: ViewEndpoint['currentUser']
   scopedInventory?: (Omit<Inventory, 'collectionScope'> & { collectionScope: CollectionScope })[]
   securityBindings?: { registration: string; generation: number; capabilities: string[] }[]
   bootstrapBindings?: {
@@ -54,6 +57,12 @@ const definitions: [string, Scalar['kind'], boolean][] = [
 ]
 export const catalog: FieldDefinition[] = definitions.map(([key, kind, manual]) => ({
   key,
+  version: 1,
+  platforms: ['windows', 'macos'],
+  sensitivity: 'standard',
+  unit: null,
+  searchable: true,
+  itemKey: null,
   kind,
   nullable: manual,
   manual,

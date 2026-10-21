@@ -39,7 +39,7 @@ const stop = () => {
 }
 process.once('SIGINT', stop)
 process.once('SIGTERM', stop)
-const timer = setTimeout(stop, 290000)
+const timer = setTimeout(stop, 890000)
 try {
   const fixture = JSON.parse(readFileSync(process.env.MDM_DEVICE_BROWSER_FIXTURE, 'utf8')),
     origin = new URL(fixture.origin).origin
@@ -657,6 +657,187 @@ try {
   assert.ok((await page.getByRole('dialog').textContent()).includes(restored.target.registrationId))
   await page.keyboard.press('Escape')
   coverage.push('real-associated-dynamic-group-canonical-assignments-and-channel-recovery')
+  await page.goto(path(`device-views/association/${id}`))
+  await loaded()
+  phase = 'periodic-collection'
+  const collectorDevice = fixture.collector.runtime.deviceId
+  const controlCollection = (action, resource, cycle) => {
+    const fds = JSON.parse(process.env._MDM_BUILD_LEASE).fds
+    const stdio = Array(Math.max(...fds) + 1).fill('ignore')
+    stdio[1] = 'pipe'
+    stdio[2] = 'pipe'
+    fds.forEach((fd) => {
+      stdio[fd] = fd
+    })
+    const result = spawnSync(
+      'python3',
+      [
+        resolve(dirname(fileURLToPath(import.meta.url)), 'device-agent.py'),
+        process.env.MDM_DEVICE_BROWSER_FIXTURE,
+        action,
+        resource,
+        String(cycle),
+      ],
+      { cwd: process.env.MDM_DEVICE_BACKEND, stdio, timeout: 150000 },
+    )
+    assert.equal(result.status, 0, 'controlled Agent report failed')
+    return JSON.parse(result.stdout.toString())
+  }
+  // Scope publication and every package operation use the production UI.
+  await page.goto(path('policies?device=' + encodeURIComponent(collectorDevice)))
+  const scopeDialog = page.getByRole('dialog')
+  await scopeDialog.waitFor()
+  const collectorScope = await page.locator('#scope-id').inputValue()
+  await scopeDialog.getByRole('button', { name: '保存', exact: true }).click()
+  for (let i = 0; i < 40; i++) {
+    const value = await api(`/api/v1/scopes/${collectorScope}`)
+    if (value.resolution) {
+      const task = await api(`/api/v1/scopes/${collectorScope}/tasks/${value.resolution}`)
+      if (task.status === 'completed') break
+    }
+    assert.ok(i < 39, 'collector scope publication deadline')
+    await new Promise((r) => setTimeout(r, 250))
+  }
+  async function configurePackage(blueprintId) {
+    await page.goto(path('policies/resources'))
+    await page.getByRole('button', { name: '选择标准包', exact: true }).click()
+    const select = page.getByLabel('标准包与精确版本', { exact: true })
+    await select
+      .locator('option')
+      .filter({ hasText: blueprintId + ' / ' })
+      .first()
+      .waitFor()
+    const choice = await select
+      .locator('option')
+      .filter({ hasText: blueprintId + ' / ' })
+      .first()
+      .getAttribute('value')
+    await select.selectOption(choice)
+    const instantiated = page.waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' &&
+        /\/api\/v1\/resources\/[^/]+$/.test(new URL(r.url()).pathname),
+    )
+    await page.locator('[data-action=instantiate-package]').click()
+    const response = await instantiated
+    assert.equal(response.status(), 200)
+    const resource = new URL(response.url()).pathname.split('/').at(-1)
+    const activate = page.getByRole('button', { name: '激活', exact: true })
+    await activate.waitFor()
+    await activate.click()
+    const assign = page.getByRole('link', { name: '配置范围、周期与启停', exact: true })
+    await assign.waitFor()
+    await assign.click()
+    await page.locator('#policy-variant option').filter({ hasText: 'macos / aarch64' }).waitFor()
+    const variant = await page
+      .locator('#policy-variant option')
+      .filter({ hasText: 'macos / aarch64' })
+      .getAttribute('value')
+    await page.locator('#policy-variant').selectOption(variant)
+    await page.locator('#policy-scope').fill(collectorScope)
+    const period = page.locator('[data-field=collection-period]')
+    assert.equal(await period.inputValue(), '3600')
+    await period.fill('60')
+    assert.equal(await page.locator('#policy-frequency').count(), 0)
+    await page
+      .locator('[data-form=policy]')
+      .getByRole('checkbox', { name: '调度有效', exact: true })
+      .check()
+    const policy = await page.locator('#policy-id').inputValue()
+    const written = page.waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' &&
+        new URL(r.url()).pathname === `/api/v1/policies/${policy}`,
+    )
+    await page
+      .locator('[data-form=policy]')
+      .getByRole('button', { name: '保存', exact: true })
+      .click()
+    assert.equal((await written).status(), 200)
+    await loaded()
+    const value = await api(`/api/v1/policies/${policy}`)
+    assert.equal(value.definition.action.frequency, 'every_trigger')
+    assert.equal(value.definition.action.schedule.trigger.seconds, 60)
+    assert.equal(value.state, 'enabled')
+    return { resource, policy, version: value.versionId }
+  }
+  async function projected(run, scope = { kind: 'device' }) {
+    for (let i = 0; i < 60; i++) {
+      const value = await api(
+        `/api/v1/devices/${collectorDevice}/collections/${run.attempt}?scope=${encodeURIComponent(JSON.stringify(scope))}`,
+      )
+      if (value.asset.run.delivery.projection === 'projected') return value.asset.run
+      await new Promise((r) => setTimeout(r, 250))
+    }
+    assert.fail('collection projection deadline')
+  }
+  const memory = await configurePackage('macos.agent.memory')
+  const firstCycle = controlCollection('memory', memory.resource, 1)
+  await projected(firstCycle)
+  const secondCycle = controlCollection('memory', memory.resource, 2)
+  await projected(secondCycle)
+  assert.notEqual(firstCycle.task, secondCycle.task)
+  assert.equal((await api(`/api/v1/policies/${memory.policy}`)).versionId, memory.version)
+  const incompleteCycle = controlCollection('memory_partial', memory.resource, 3)
+  const incompleteRun = await api(
+    `/api/v1/devices/${collectorDevice}/collections/${incompleteCycle.attempt}`,
+  )
+  assert.ok(['partial', 'failed'].includes(incompleteRun.asset.run.result))
+  const retainedMemory = await api(`/api/v1/devices/${collectorDevice}/inventory`)
+  assert.equal(retainedMemory.asset.device.fields['device.memory.bytes'].state.value.value, 8194)
+  await page.goto(path(`devices/${collectorDevice}`))
+  await page.getByRole('button', { name: '硬件', exact: true }).click()
+  assert.ok((await page.locator('.asset-detail-layout').textContent()).includes('8194'))
+  const personnel = page.locator(`[data-personnel-device="${collectorDevice}"]`)
+  assert.ok((await personnel.textContent()).includes('有效企业会话'))
+  assert.equal(await personnel.locator('input').count(), 0)
+  await personnel.locator('[data-action=edit-owner]').click()
+  await personnel.locator('select').selectOption('')
+  await personnel.getByRole('button', { name: '保存', exact: true }).click()
+  await loaded()
+  assert.equal((await api(`/api/v1/devices/${collectorDevice}/registration-user`)).user, null)
+  assert.ok(
+    (await page.locator(`[data-personnel-device="${collectorDevice}"]`).textContent()).includes(
+      '有效企业会话',
+    ),
+  )
+  // Disable through the same Policy UI before starting the software package.
+  await page.goto(path(`policies/assignments?id=${memory.policy}`))
+  await loaded()
+  await page.getByRole('button', { name: '禁用整个 Policy', exact: true }).click()
+  await loaded()
+  assert.equal((await api(`/api/v1/policies/${memory.policy}`)).state, 'disabled')
+  const apps = await configurePackage('macos.agent.applications_user')
+  const applications = controlCollection('applications', apps.resource, 1)
+  const userScope = { kind: 'macos_applications', root: 'user', uid: 501 }
+  await projected(applications, userScope)
+  const directory = await api(`/api/v1/devices/${collectorDevice}/inventory-scopes?limit=1`)
+  assert.ok(
+    directory.asset.items.some((i) => i.scope.kind === 'macos_applications' && i.scope.uid === 501),
+  )
+  await page.goto(path(`devices/${collectorDevice}`))
+  const scoped = page.locator('[data-testid=scope-inventory]')
+  await scoped.locator('select').nth(1).locator('option').filter({ hasText: '501' }).waitFor()
+  const namespace = await scoped
+    .locator('select')
+    .nth(1)
+    .locator('option')
+    .filter({ hasText: '501' })
+    .getAttribute('value')
+  await scoped.locator('select').nth(1).selectOption(namespace)
+  await scoped.locator('details summary').click()
+  await scoped.getByRole('button', { name: '展开此来源', exact: true }).click()
+  assert.equal(await scoped.locator('tbody tr').count(), 20)
+  await scoped.getByRole('button', { name: '下一页', exact: true }).click()
+  assert.equal(await scoped.locator('tbody tr').count(), 20)
+  assert.ok((await scoped.locator('tbody').textContent()).includes('user'))
+  await scoped.getByRole('button', { name: '来源与历史证据', exact: true }).click()
+  await scoped.locator('[data-collection-run]').waitFor()
+  assert.ok((await scoped.locator('[data-collection-run]').textContent()).includes('已投影'))
+  coverage.push(
+    'real-package-instantiation-activation-scope-interval-two-normal-periods-mtls-report-projection',
+  )
+  coverage.push('real-owner-clear-current-user-readonly-and-user-scope-software-pagination')
   await page.goto(path(`device-views/association/${id}`))
   await loaded()
   phase = 'authorization'

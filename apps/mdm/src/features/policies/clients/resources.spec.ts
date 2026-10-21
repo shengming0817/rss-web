@@ -19,6 +19,7 @@ const spec = {
 const artifact = { reference: 'content-1', length: 12, sha256: digest }
 const resource = {
   origin: null,
+  presentation: {},
   id: 'script-library',
   revision: 2,
   kind: 'script',

@@ -1,3 +1,5 @@
+// Frozen blueprint sample exported from rss-mdm 70a764d9aba667df00884d84cd0da29c22737803.
+import blueprintSample from './blueprints.json'
 import { softwareInstaller } from '../../src/features/policies/clients/software-definition'
 import { createResourceUploads } from './uploads'
 import { createHash } from 'node:crypto'
@@ -82,6 +84,7 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
         id,
         kind: 'software',
         origin: resource?.origin ?? null,
+        presentation: resource?.presentation ?? {},
         revision: input.expectedRevision + 1,
         versions: [
           ...(resource?.versions ?? []),
@@ -127,7 +130,13 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
     if (request.path === '/api/v1/collection-blueprints' && request.method === 'GET')
       return ok({
         categories: ['identity', 'hardware', 'software', 'security', 'management', 'updates'],
-        items: [],
+        items: blueprintSample.packages.map((b) => ({
+          id: b.id,
+          version: b.version,
+          presentation: b.presentation,
+          platform: b.platform,
+          definition: { kind: b.kind, template: JSON.parse(b.content) as unknown },
+        })),
       })
     if (request.path === '/api/v1/resources' && request.method === 'GET') {
       const kind = request.query.get('kind'),
@@ -203,6 +212,7 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
         if (op.expectedRevision !== (state?.revision ?? 0)) return error('operation_conflict')
         const input = record(op.input),
           action = enumeration(input['action'], [
+            'instantiate',
             'create',
             'version',
             'activate',
@@ -210,10 +220,50 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
             'archive',
           ] as const)
         let next: ResourceRead
-        if (action === 'create') {
+        if (action === 'instantiate') {
+          closed(input, ['action', 'blueprint', 'version'])
+          if (state) return error('operation_conflict')
+          const b = blueprintSample.packages.find(
+            (b) => b.id === input['blueprint'] && b.version === input['version'],
+          )
+          if (!b) return error('resource_not_found', 404)
+          const bytes = new TextEncoder().encode(b.content),
+            label = `builtin.${b.id}.${b.version}`
+          const artifact = { reference: b.reference, length: bytes.length, sha256: b.sha256 }
+          next = decodeResource(
+            {
+              id,
+              presentation: b.presentation,
+              origin: { blueprint: b.id, version: b.version, digest: b.versionDigest },
+              revision: 2,
+              kind: b.kind,
+              versions: [
+                {
+                  id: label,
+                  digest: b.versionDigest,
+                  state: 'frozen',
+                  variants: ['x86_64', 'aarch64'].map((architecture) => ({
+                    platform: b.platform,
+                    architecture,
+                    key: architecture,
+                    declaration: {
+                      kind: b.kind,
+                      artifact,
+                      definition: JSON.parse(b.content) as unknown,
+                    },
+                  })),
+                },
+              ],
+            },
+            id,
+          )
+          for (const variant of next.versions[0]!.variants)
+            contents.set(contentKey(id, label, variant, b.reference), bytes.slice())
+        } else if (action === 'create') {
           closed(input, ['action', 'kind'])
           if (state) return error('operation_conflict')
           next = {
+            presentation: {},
             origin: null,
             id,
             revision: 1,

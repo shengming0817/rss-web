@@ -790,20 +790,37 @@ it('administrator quota editing preserves exact commands after a lost response',
   await flushPromises()
   expect(wrapper.find('tbody tr').findAll('td')[0]!.text()).toBe('0')
 })
-it('organization responsibility can be assigned and cleared without occupying personal quota', async () => {
-  const { wrapper, devices, click } = await setup('registration-users', {}, { device: 'device-01' })
-  await wrapper.find('select').setValue('33333333-3333-4333-8333-333333333333')
-  await wrapper.findAll('form')[1]!.trigger('submit')
+it('edits the canonical device owner in detail and locks an unknown write until explicit comparison and replay', async () => {
+  const f = await setup('device-detail', { device: 'device-01' })
+  const panel = () => f.wrapper.get('[data-personnel-device="device-01"]')
+  await panel().get('[data-action=edit-owner]').trigger('click')
   await flushPromises()
-  expect(wrapper.text()).toContain('已保存')
-  const assigned = await devices.registration.responsibility('device-01')
-  expect(assigned.user?.principalId).toBe('33333333-3333-4333-8333-333333333333')
-  await wrapper.find('select').setValue('')
-  await wrapper.findAll('form')[1]!.trigger('submit')
+  await panel().get('select').setValue('33333333-3333-4333-8333-333333333333')
+  f.loseReply.path = '/api/v1/devices/{device}/registration-user'
+  await panel().get('form').trigger('submit')
   await flushPromises()
-  expect((await devices.registration.responsibility('device-01')).user).toBeNull()
-  expect((await devices.registration.me()).channels.every((c) => c.used === 0)).toBe(true)
-  await click('重新读取')
+  expect(panel().get('fieldset').attributes('disabled')).toBeDefined()
+  const writes = () =>
+    f.requests.filter((r) => r.method === 'PUT' && r.path.endsWith('registration-user'))
+  expect(writes()).toHaveLength(1)
+  expect(panel().find('[data-action=replay-owner]').exists()).toBe(false)
+  f.loseReply.path = ''
+  await panel().get('[data-action=compare-owner]').trigger('click')
+  await flushPromises()
+  await panel().get('[data-action=replay-owner]').trigger('click')
+  await flushPromises()
+  expect(writes()).toHaveLength(2)
+  expect(writes()[1]?.body).toEqual(writes()[0]?.body)
+  expect(writes()[1]?.headers).toEqual(writes()[0]?.headers)
+  expect((await f.devices.registration.responsibility('device-01')).user?.principalId).toBe(
+    '33333333-3333-4333-8333-333333333333',
+  )
+  await panel().get('[data-action=edit-owner]').trigger('click')
+  await flushPromises()
+  await panel().get('select').setValue('')
+  await panel().get('form').trigger('submit')
+  await flushPromises()
+  expect((await f.devices.registration.responsibility('device-01')).user).toBeNull()
 })
 
 it('invalidates the displayed native registration when the query target changes and cancels only the newly read target', async () => {

@@ -20,8 +20,7 @@ export function createRegistrationDemo(
   devices: () => Map<string, DemoDevice>,
   create: DomainHandler,
 ) {
-  const settings = new Map<string, Config>(),
-    responsibilities = new Map<string, { revision: number; user: ReturnType<typeof user> | null }>()
+  const settings = new Map<string, Config>()
   const receipts = createReceipts()
   const admission = new Map(
     channels.map((channel) => [
@@ -144,13 +143,9 @@ export function createRegistrationDemo(
     if (responsibility) {
       if (actor.principalId !== ADMIN) return error('permission_denied', 403)
       const id = identifier(decodeURIComponent(responsibility[1]!))
-      if (
-        ![...enrollments.values()].some(
-          (e) => e.device === id && !e.selfService && e.status !== 'cancelled',
-        )
-      )
-        return error('resource_not_found', 404)
-      const current = responsibilities.get(id) ?? { revision: 0, user: null }
+      const device = devices().get(id)
+      if (!device) return error('resource_not_found', 404)
+      const current = device.registrationUser ?? { revision: 0, user: null }
       if (method === 'GET') return ok(current)
       if (method !== 'PUT') return error('malformed_request', 400)
       return receipts.write(request, uuid(request.headers['idempotency-key']), () => {
@@ -160,7 +155,7 @@ export function createRegistrationDemo(
           revision: current.revision + 1,
           user: nullable(body['user'], (v) => user(v, TENANT, INSTANCE)),
         }
-        responsibilities.set(id, value)
+        device.registrationUser = value
         return ok(value)
       })
     }
@@ -197,7 +192,7 @@ export function createRegistrationDemo(
       for (const channel of channels)
         admission.set(channel, { channel, revision: 0, admission: 'allowed' })
       settings.clear()
-      responsibilities.clear()
+      for (const d of devices().values()) d.registrationUser = undefined
       receipts.reset()
     },
   }

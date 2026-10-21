@@ -57,14 +57,6 @@ onMounted(() => void load())
     <summary>{{ t('devices.credentials') }}</summary>
     <p>{{ t('devices.revokeNote') }}</p>
     <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
-    <RouterLink
-      :to="{
-        name: 'registration-users',
-        params: { tenant: runtime.tenant },
-        query: { device: endpoint.id },
-      }"
-      >{{ t('registration.user') }}</RouterLink
-    >
     <ul>
       <li v-for="r in page?.items" :key="r.registrationId">
         {{ r.source }} · {{ r.status }} · {{ r.generation

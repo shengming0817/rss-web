@@ -53,6 +53,27 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
   const resources = createResourceDemo(
     (id, version): boolean => policies.references(id, version) || software.references(id, version),
   )
+  for (const kind of ['native_collection', 'agent_collection'] as const)
+    policyStore.register(kind, (d) => {
+      if (d.action.kind !== 'native_collection' && d.action.kind !== 'agent_collection')
+        return error('malformed_request', 400)
+      const binding = d.action.resource
+      const r = resources.read(binding.id),
+        version = r?.versions.find((v) => v.id === binding.version && v.state === 'active')
+      if (
+        r?.kind !== kind ||
+        !version?.variants.some(
+          (v) =>
+            v.key === binding.variant &&
+            v.platform === binding.platform &&
+            v.architecture === binding.architecture,
+        )
+      )
+        return error('resource_not_found', 404)
+      if (!scopes.resolve(d.scope, kind === 'native_collection' ? 'mdm' : 'agent'))
+        return error('scope_not_found', 404)
+      return undefined
+    })
   policyStore.register('ensure_agent_installed', () => error('action_not_supported', 501))
   policyStore.register('request_mdm_enrollment', (d) =>
     scopes.resolve(d.scope) ? undefined : error('operation_conflict'),

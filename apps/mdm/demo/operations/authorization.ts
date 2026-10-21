@@ -244,7 +244,10 @@ export function createAuthorizationDemo(
         suffix = deviceMatch[2] ?? ''
       if (
         request.method === 'GET' &&
-        (!suffix || ['inventory', 'timeline'].includes(suffix)) &&
+        (!suffix ||
+          ['inventory', 'inventory-scopes', 'timeline'].includes(suffix) ||
+          suffix.startsWith('inventory-lists/') ||
+          suffix.startsWith('collections/')) &&
         !can(actor, 'inventory_read', device)
       )
         return error('permission_denied', 403)

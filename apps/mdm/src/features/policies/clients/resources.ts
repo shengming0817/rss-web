@@ -266,7 +266,7 @@ function variant(value: unknown): Variant {
   return result
 }
 export function decodeResource(value: unknown, id: string) {
-  const v = closed(value, ['origin', 'id', 'revision', 'kind', 'versions'])
+  const v = closed(value, ['presentation', 'origin', 'id', 'revision', 'kind', 'versions'])
   if (identifier(v['id']) !== id) throw new Error('Wrong resource')
   const kind = enumeration(v['kind'], [
     'script',
@@ -277,6 +277,7 @@ export function decodeResource(value: unknown, id: string) {
   ] as const)
   return {
     id,
+    presentation: record(jsonValue(v['presentation'], 65536)),
     revision: count(v['revision']),
     kind,
     origin: nullable(v['origin'], (value) => {
@@ -331,7 +332,7 @@ export function createResourcesClient(transport: HttpTransport) {
           return {
             categories: array(v['categories'], identifier),
             items: array(v['items'], (value) => {
-              const b = closed(value, ['id', 'version', 'category', 'platform', 'definition']),
+              const b = closed(value, ['id', 'version', 'presentation', 'platform', 'definition']),
                 d = record(b['definition']),
                 kind = enumeration(d['kind'], [
                   'native_collection',
@@ -342,7 +343,8 @@ export function createResourcesClient(transport: HttpTransport) {
               return {
                 id: identifier(b['id']),
                 version: identifier(b['version']),
-                category: identifier(b['category']),
+                presentation: record(jsonValue(b['presentation'], 65536)),
+                category: identifier(record(b['presentation'])['category']),
                 platform: enumeration(b['platform'], platforms),
                 definition: { kind, ...record(jsonValue(d, 8 * 1024 * 1024)) },
               }

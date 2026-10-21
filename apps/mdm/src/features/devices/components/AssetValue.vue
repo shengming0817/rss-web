@@ -13,6 +13,9 @@ const display = (value: ReadScalar) =>
 <template>
   <div class="asset-value">
     <strong>{{ t(`devices.state.${field.state.kind}`) }}</strong>
+    <span v-if="field.state.kind === 'unknown'">
+      · {{ t('devices.unknownReason.' + field.state.reason) }}</span
+    >
     <span v-if="field.state.kind === 'known'"> · {{ display(field.state.value) }}</span>
     <details v-if="field.sources.length">
       <summary>{{ t('devices.evidence') }}</summary>
@@ -25,7 +28,9 @@ const display = (value: ReadScalar) =>
         <dt>{{ t('devices.current') }}</dt>
         <dd>
           {{ t(`devices.state.${source.state.kind}`)
-          }}<template v-if="source.state.kind === 'known'">
+          }}<span v-if="source.state.kind === 'unknown'">
+            · {{ t('devices.unknownReason.' + source.state.reason) }}</span
+          ><template v-if="source.state.kind === 'known'">
             · {{ display(source.state.value) }}</template
           >
         </dd>

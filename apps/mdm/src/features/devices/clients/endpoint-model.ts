@@ -1,3 +1,4 @@
+import { resolvedField } from './asset-model'
 import {
   array,
   boolean,
@@ -39,11 +40,62 @@ const endpointKeys = ['id', 'status', 'primaryMdmRegistration', 'channels', 'enr
 export function endpoint(value: unknown) {
   return endpointFields(closed(value, endpointKeys, ['inventoryAvailable', 'capabilities']))
 }
+function person(value: unknown) {
+  const v = closed(value, ['tenantId', 'instanceId', 'principalId'])
+  return {
+    tenantId: uuid(v['tenantId']),
+    instanceId: uuid(v['instanceId']),
+    principalId: uuid(v['principalId']),
+  }
+}
 export function viewEndpoint(value: unknown) {
-  const v = closed(value, [...endpointKeys, 'assetState'])
+  const v = closed(
+    value,
+    [...endpointKeys, 'assetState', 'platform'],
+    ['displayName', 'serialNumber', 'registrationUser', 'currentUser'],
+  )
+  const p = closed(v['platform'], ['state', 'values'])
+  const platform = {
+    state: enumeration(p['state'], ['known', 'unknown', 'conflict'] as const),
+    values: unique(
+      array(p['values'], (x) => enumeration(x, ['windows', 'macos'] as const)),
+      (x) => x,
+    ),
+  }
+  if (
+    (platform.state === 'known' && platform.values.length !== 1) ||
+    (platform.state === 'unknown' && platform.values.length !== 0) ||
+    (platform.state === 'conflict' && platform.values.length < 2)
+  )
+    throw new Error('Invalid platform summary')
+  const owner =
+    v['registrationUser'] === undefined
+      ? undefined
+      : closed(v['registrationUser'], ['revision', 'user'])
+  const current =
+    v['currentUser'] === undefined
+      ? undefined
+      : closed(v['currentUser'], ['revision', 'state', 'user', 'confirmedAt'])
+  const currentUser = current
+    ? {
+        revision: count(current['revision']),
+        state: enumeration(current['state'], ['unbound', 'active', 'invalidated'] as const),
+        user: nullable(current['user'], person),
+        confirmedAt: nullable(current['confirmedAt'], integer),
+      }
+    : undefined
+  if (currentUser && (currentUser.state === 'active') !== (currentUser.user !== null))
+    throw new Error('Invalid current user state')
   return {
     ...endpointFields(v),
     assetState: enumeration(v['assetState'], ['active', 'archived', 'deleted'] as const),
+    platform,
+    displayName: v['displayName'] === undefined ? undefined : resolvedField(v['displayName']),
+    serialNumber: v['serialNumber'] === undefined ? undefined : resolvedField(v['serialNumber']),
+    registrationUser: owner
+      ? { revision: count(owner['revision']), user: nullable(owner['user'], person) }
+      : undefined,
+    currentUser,
   }
 }
 export type ViewEndpoint = ReturnType<typeof viewEndpoint>
@@ -67,6 +119,7 @@ function endpointFields(v: Record<string, unknown>) {
           'generation',
           'status',
           'source',
+          'platform',
           'children',
           'userContext',
         ])
@@ -75,6 +128,7 @@ function endpointFields(v: Record<string, unknown>) {
           channel: enumeration(c['channel'], channels),
           generation: positive(c['generation']),
           status: enumeration(c['status'], ['active', 'revoked', 'superseded'] as const),
+          platform: nullable(c['platform'], (x) => enumeration(x, ['windows', 'macos'] as const)),
           source: enumeration(c['source'], ['mdm.windows', 'mdm.apple', 'agent.builtin'] as const),
           children: array(c['children'], (x) => {
             const s = closed(x, [
@@ -119,9 +173,10 @@ function endpointFields(v: Record<string, unknown>) {
       (c) => c.channel,
     ),
     enrollments: array(v['enrollments'], (x) => {
-      const e = closed(x, ['enrollmentId', 'source', 'status', 'expiresAt'])
+      const e = closed(x, ['enrollmentId', 'source', 'status', 'expiresAt', 'platform'])
       return {
         enrollmentId: uuid(e['enrollmentId']),
+        platform: nullable(e['platform'], (x) => enumeration(x, ['windows', 'macos'] as const)),
         source: enumeration(e['source'], ['mdm.windows', 'mdm.apple', 'agent.builtin'] as const),
         status: enumeration(e['status'], ['pending', 'bound', 'cancelled', 'expired'] as const),
         expiresAt: integer(e['expiresAt']),

@@ -41,7 +41,10 @@ export function evaluate(
   if (operands.some((s) => s.kind !== definition.kind)) throw new Error('Wrong operand type')
   const state = device.fields[node.field]?.state ?? { kind: 'missing' as const }
   if (state.kind !== 'known' && state.kind !== 'null')
-    return { decision: 'unknown', explanations: [{ path, outcome: state.kind }] }
+    return {
+      decision: 'unknown',
+      explanations: [{ path, outcome: state.kind === 'unknown' ? 'missing' : state.kind }],
+    }
   if (state.kind === 'null' && node.op !== 'is_null' && node.op !== 'is_not_null')
     return { decision: 'unknown', explanations: [{ path, outcome: 'null' }] }
   let matches = false

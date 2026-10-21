@@ -126,3 +126,30 @@ it('sends archive only through the existing DELETE body and never retries a lost
   await expect(client.change(id, body)).rejects.toThrow('response lost')
   expect(request).toHaveBeenCalledTimes(2)
 })
+
+it('accepts only continuing fixed intervals for standard collection actions', async () => {
+  const { defaultCollectionSchedule } = await import('./model')
+  for (const kind of ['native_collection', 'agent_collection']) {
+    const action = {
+      kind,
+      resource: definition.action.resource,
+      schedule: defaultCollectionSchedule(),
+      frequency: 'every_trigger',
+      runLifetimeSeconds: 3600,
+    }
+    expect(policyDefinition({ scope: id, action }).action).toMatchObject({
+      schedule: { trigger: { kind: 'interval', seconds: 3600 } },
+      frequency: 'every_trigger',
+    })
+    for (const invalid of [
+      { ...action, frequency: 'once_per_version' },
+      { ...action, schedule: defaultSchedule() },
+      { ...action, schedule: { ...action.schedule, until: 100 } },
+      {
+        ...action,
+        schedule: { ...action.schedule, misfire: { kind: 'skip', maxLatenessSeconds: 60 } },
+      },
+    ])
+      expect(() => policyDefinition({ scope: id, action: invalid })).toThrow()
+  }
+})

@@ -152,6 +152,9 @@ export function defaultSchedule(): Schedule {
     window: null,
   }
 }
+export function defaultCollectionSchedule(): Schedule {
+  return { ...defaultSchedule(), trigger: { kind: 'interval', anchor: 0, seconds: 3600 } }
+}
 export function exactResource(value: unknown) {
   const v = closed(value, ['id', 'version', 'platform', 'architecture', 'variant'])
   return {
@@ -304,7 +307,17 @@ export function policyAction(value: unknown) {
       ] as const),
       runLifetimeSeconds: lifetime(v['runLifetimeSeconds']),
     }
-    if (kind === 'native_collection' || kind === 'agent_collection') return { kind, ...base }
+    if (kind === 'native_collection' || kind === 'agent_collection') {
+      if (
+        base.schedule.trigger.kind !== 'interval' ||
+        base.frequency !== 'every_trigger' ||
+        base.schedule.misfire.kind !== 'coalesce_one' ||
+        base.schedule.until !== null ||
+        base.schedule.window !== null
+      )
+        throw new Error('Collection requires a recurring interval')
+      return { kind, ...base }
+    }
     const parameters = parameterSources(v['parameters'])
     if (
       Object.values(parameters).some((p) => p.kind === 'input') &&

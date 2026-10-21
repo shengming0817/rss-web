@@ -24,6 +24,10 @@ import {
 } from './asset-model'
 import { objectRef, objectKey, type ObjectRef } from './objects'
 export interface ViewQuery {
+  search?: string | undefined
+  platform?: string | undefined
+  assetState?: string | undefined
+  limit?: number | undefined
   cursor?: string | undefined
   status?: string | undefined
   channel?: string | undefined
@@ -69,7 +73,13 @@ function fields(value: unknown, endpoints: ViewEndpoint[]) {
           const s = closed(x, ['endpoint', 'fact']),
             id = identifier(s['endpoint'])
           if (!endpoints.some((e) => e.id === id)) throw new Error('Source outside view')
-          return { endpoint: id, fact: sourceFact(s['fact']) }
+          const fact = sourceFact(s['fact'])
+          if (
+            fact.evidence.scope.kind !== 'device' ||
+            (fact.lastKnown && fact.lastKnown.evidence.scope.kind !== 'device')
+          )
+            throw new Error('Wrong view namespace')
+          return { endpoint: id, fact }
         }),
         (s) => `${s.endpoint}:${sourceIdentity(s.fact.evidence)}`,
       )
@@ -159,7 +169,13 @@ export function decodeViews(value: unknown) {
     nextCursor: cursor(v['nextCursor']),
   }
 }
-export function createDeviceViewsClient(transport: HttpTransport) {
+export function createDeviceViewsClient(transport: HttpTransport, tenant: string) {
+  function bound<T extends { endpoints: ViewEndpoint[] }>(value: T): T {
+    for (const e of value.endpoints)
+      for (const u of [e.registrationUser?.user, e.currentUser?.user])
+        if (u && u.tenantId !== tenant) throw new Error('Wrong personnel tenant')
+    return value
+  }
   return {
     list: (query: ViewQuery = {}) =>
       transport.request({
@@ -167,7 +183,11 @@ export function createDeviceViewsClient(transport: HttpTransport) {
         path: '/api/v1/device-views',
         query: { limit: 20, ...query },
         successStatus: 200,
-        decode: decodeViews,
+        decode: (v) => {
+          const page = decodeViews(v)
+          page.items.forEach(bound)
+          return page
+        },
       }),
     detail: (ref: ObjectRef) =>
       transport.request({
@@ -175,7 +195,7 @@ export function createDeviceViewsClient(transport: HttpTransport) {
         path: '/api/v1/device-views/{kind}/{id}',
         pathParams: { ...ref },
         successStatus: 200,
-        decode: (v) => decodeView(v, ref),
+        decode: (v) => bound(decodeView(v, ref)),
       }),
     items: (
       ref: ObjectRef,
