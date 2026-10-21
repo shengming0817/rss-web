@@ -1509,3 +1509,116 @@ it.each([
     expect(h.wrapper.text()).not.toContain('ThinkPad T14')
   },
 )
+
+it.each([
+  [403, 'inventory'],
+  [403, 'list'],
+  [404, 'inventory'],
+  [409, 'list'],
+] as const)(
+  'preserves scoped rejection and invalidates the parent after %s on %s',
+  async (status, request) => {
+    const h = await setup('devices')
+    const scope = { kind: 'macos_applications' as const, root: 'user' as const, uid: 501 }
+    const id = '22222222-2222-4222-8222-222222222222'
+    const evidence = {
+      scope,
+      source: 'agent.native' as const,
+      registration: id,
+      registrationGeneration: 1,
+      dataset: 'applications',
+      epoch: id,
+      snapshotId: id,
+      observedAt: 20,
+      receivedAt: 21,
+      actor: null,
+    }
+    const state = { kind: 'known' as const, count: 2, digest: 'frozen' }
+    vi.spyOn(h.devices.assets, 'scopes').mockResolvedValue({
+      device: 'device-01',
+      items: [scope],
+      nextCursor: null,
+      watermark: 21,
+    })
+    const inventory = vi.spyOn(h.devices.assets, 'inventory').mockResolvedValue({
+      device: 'device-01',
+      collectionScope: scope,
+      channels: ['agent'],
+      revisions: {},
+      quality: [],
+      fields: {
+        'device.memory.bytes': {
+          field: 'device.memory.bytes',
+          state: { kind: 'known', value: { kind: 'integer', value: 987654 } },
+          sources: [],
+        },
+      },
+      lists: {
+        'device.software.installations': {
+          state,
+          sources: [{ state, evidence, cursor: 'first' }],
+          itemKey: null,
+          cursor: 'first',
+        },
+      },
+    })
+    const items = vi.spyOn(h.devices.assets, 'listItems').mockResolvedValue({
+      items: [{ kind: 'string', value: 'scope-private-item' }],
+      total: 2,
+      watermark: 21,
+      nextCursor: 'next',
+    })
+    await h.router.push({ name: 'device-detail', params: { tenant: TENANT, device: 'device-01' } })
+    await flushPromises()
+    const scoped = h.wrapper.get('[data-testid=scope-inventory]')
+    await scoped.findAll('select')[1]!.setValue(JSON.stringify(scope))
+    await flushPromises()
+    await h.wrapper
+      .findAll('button')
+      .find((b) => b.text() === '硬件')!
+      .trigger('click')
+    expect(h.wrapper.text()).toContain('ThinkPad T14')
+    expect(scoped.text()).toContain('987654')
+    const rejection = decodeMdmError(status, {
+      code:
+        status === 403
+          ? 'permission_denied'
+          : status === 404
+            ? 'inventory_not_found'
+            : 'device_view_cursor_invalidated',
+    })
+    if (request === 'inventory') {
+      inventory.mockRejectedValueOnce(rejection)
+      await scoped
+        .findAll('button')
+        .find((b) => b.text() === '重新读取')!
+        .trigger('click')
+    } else {
+      await scoped
+        .findAll('button')
+        .find((b) => b.text() === '展开此来源')!
+        .trigger('click')
+      await flushPromises()
+      expect(scoped.text()).toContain('scope-private-item')
+      items.mockRejectedValueOnce(rejection)
+      await scoped
+        .findAll('button')
+        .find((b) => b.text() === '下一页')!
+        .trigger('click')
+    }
+    await flushPromises()
+    expect(h.wrapper.text()).not.toContain('987654')
+    expect(h.wrapper.text()).not.toContain('scope-private-item')
+    expect(h.wrapper.get('[role=alert]').text()).toContain(
+      status === 403 ? '请求被拒绝' : status === 404 ? '对象或操作不存在' : '旧分页失效',
+    )
+    if (status === 409) {
+      expect(h.wrapper.find('[data-testid=scope-inventory]').exists()).toBe(true)
+      expect(h.wrapper.text()).toContain('ThinkPad T14')
+      expect(scoped.findAll('select')[1]!.element.value).toBe('')
+    } else {
+      expect(h.wrapper.find('[data-testid=scope-inventory]').exists()).toBe(false)
+      expect(h.wrapper.text()).not.toContain('ThinkPad T14')
+    }
+  },
+)

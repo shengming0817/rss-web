@@ -48,14 +48,16 @@ function invalidateQuality(reason: 'denied' | 'notFound') {
   emit('invalidated', reason)
 }
 function invalidate() {
-  if (!['denied', 'notFound', 'conflict', 'cursorInvalidated'].includes(failure.value ?? '')) return
+  const reason = failure.value
+  if (!['denied', 'notFound', 'conflict', 'cursorInvalidated'].includes(reason ?? '')) return
   inventory.value = undefined
   page.value = undefined
   scopes.value = []
   selected.value = ''
   next.value = null
   runId.value = ''
-  if (failure.value === 'denied') emit('invalidated', 'denied')
+  failure.value = reason
+  if (reason === 'denied' || reason === 'notFound') emit('invalidated', reason)
 }
 async function directory(more = false) {
   const cursor = more ? (next.value ?? undefined) : undefined
