@@ -1,4 +1,6 @@
 export const devicesZh = {
+  linkedPerson: '已关联组织人员',
+  loadedPeopleOnly: '筛选已加载账户；需要时继续加载更多人员。',
   system: '系统组',
   findGroup: '查找获授权群组',
   searchGroups: '搜索',
@@ -478,6 +480,8 @@ export const devicesZh = {
   },
 }
 export const devicesEn: typeof devicesZh = {
+  linkedPerson: 'Linked organization member',
+  loadedPeopleOnly: 'Filter loaded accounts. Load more people when needed.',
   system: 'System group',
   findGroup: 'Find authorized groups',
   searchGroups: 'Search',

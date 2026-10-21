@@ -310,12 +310,17 @@ const sourceOptions = computed(() => [
             {{
               row.endpoints
                 .map((e) =>
-                  e.displayName?.state.kind === 'known' ? e.displayName.state.value.value : e.id,
+                  e.displayName?.state.kind === 'known'
+                    ? e.displayName.state.value.value
+                    : t('devices.unnamedDevice'),
                 )
                 .join(' / ')
             }}
-            · {{ row.reference.id }}</RouterLink
-          ></template
+          </RouterLink>
+          <details>
+            <summary>{{ t('devices.evidence') }}</summary>
+            {{ row.reference.id }}
+          </details></template
         >
         <template #cell-platform="{ row }"
           ><p v-for="e in row.endpoints" :key="e.id">
@@ -340,7 +345,9 @@ const sourceOptions = computed(() => [
             {{
               e.registrationUser === undefined
                 ? t('devices.notProvided')
-                : (e.registrationUser.user?.principalId ?? t('registration.empty'))
+                : e.registrationUser.user
+                  ? t('devices.linkedPerson')
+                  : t('registration.empty')
             }}
           </p></template
         >
@@ -350,7 +357,7 @@ const sourceOptions = computed(() => [
               e.currentUser === undefined
                 ? t('devices.notProvided')
                 : t('devices.currentUserState.' + e.currentUser.state)
-            }}<span v-if="e.currentUser?.user"> · {{ e.currentUser.user.principalId }}</span>
+            }}<span v-if="e.currentUser?.user"> · {{ t('devices.linkedPerson') }}</span>
           </p></template
         >
         <template #cell-status="{ row }"
