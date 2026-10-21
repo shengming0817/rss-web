@@ -148,7 +148,7 @@ it('creates a formal Scope, changes the result channel explicitly, and deletes o
       query: { device: 'device-01' },
     })
     await flushPromises()
-    await main().get('form').trigger('submit')
+    await new DOMWrapper(document.body).get('[role=dialog] form').trigger('submit')
     await flushPromises()
     const write = app.calls.findLast(
       (c) => c.method === 'POST' && /^\/api\/v1\/scopes\/[^/]+$/.test(c.path),

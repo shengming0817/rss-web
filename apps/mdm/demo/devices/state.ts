@@ -113,7 +113,11 @@ export function createDeviceDemo() {
         directory,
       ]) {
         const reply = handler(request, scenario)
-        if (reply) return structuredClone(reply)
+        if (reply) {
+          if (['POST', 'PUT', 'DELETE'].includes(request.method) && reply.status < 300)
+            groups.refresh()
+          return structuredClone(reply)
+        }
       }
     } catch {
       return error('malformed_request', 400)
@@ -177,6 +181,7 @@ export function createDeviceDemo() {
         event: 'agent_binding_observed',
         operation: null,
       })
+      groups.refresh()
     },
     reset() {
       devices = makeDevices()

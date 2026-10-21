@@ -42,7 +42,7 @@ export function createPolicyDemo(
     if (raw.action.kind !== 'execution') return error('malformed_request', 400)
     const d = { ...raw, action: raw.action },
       selection = selected(d)
-    if (!scopes.resolve(d.scope)) return error('scope_not_found', 404)
+    if (!scopes.resolve(d.scope, 'agent')) return error('scope_not_found', 404)
     if (!selection) return error('resource_not_found', 404)
     validateParameterSources(selection.spec, d.action.parameters)
     return undefined
@@ -51,7 +51,7 @@ export function createPolicyDemo(
     const next = new Set<string>()
     for (const p of store.values()) {
       if (p.definition.action.kind !== 'execution') continue
-      for (const device of scopes.resolve(p.definition.scope)?.members ?? []) {
+      for (const device of scopes.resolve(p.definition.scope, 'agent')?.members ?? []) {
         const key = JSON.stringify([p.id, device])
         next.add(key)
         if (!members.has(key)) entries.set(key, (entries.get(key) ?? 0) + 1)
@@ -79,7 +79,7 @@ export function createPolicyDemo(
           d.action.resource.version,
           device,
         ) === 'applicable' &&
-        scopes.resolve(d.scope)?.members.includes(run.device) &&
+        scopes.resolve(d.scope, 'agent')?.members.includes(run.device) &&
         JSON.stringify(identity) === JSON.stringify(run.origin.basis.registrations)
       if (!valid && run.execution === 'not_started') {
         run.execution = 'cancelled'
@@ -113,7 +113,7 @@ export function createPolicyDemo(
         selection = selected(d)
       if (
         !selection ||
-        !scopes.resolve(d.scope)?.members.includes(event.device) ||
+        !scopes.resolve(d.scope, 'agent')?.members.includes(event.device) ||
         resourceApplicability(selection.resource, a.resource.version, device) !== 'applicable' ||
         device.summary.platform !== a.resource.platform ||
         device.architecture !== a.resource.architecture
@@ -174,7 +174,7 @@ export function createPolicyDemo(
               .update(JSON.stringify(a.parameters))
               .digest('hex'),
             scope: d.scope,
-            scopeRevision: scopes.resolve(d.scope)!.revision,
+            scopeRevision: scopes.resolve(d.scope, 'agent')!.revision,
             registrations,
             architecture: device.architecture ?? null,
           },

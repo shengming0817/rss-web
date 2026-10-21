@@ -218,9 +218,8 @@ it('counts actual scope entries rather than Scope configuration revisions and st
   const devices = createDeviceDemo(),
     automation = createAutomationDemo(devices),
     seed = seedScriptPolicies(automation)
-  const scope = automation.scopes.resolve(seed.scope)!,
+  const scope = { ...automation.scopes.resolve(seed.scope)!, members: ['device-01'] },
     id = crypto.randomUUID()
-  scope.members = ['device-01']
   const policies = createPolicyDemo(
     devices,
     { resolve: () => structuredClone(scope) },
@@ -289,9 +288,8 @@ it('gates every-trigger check-ins at 59/60 seconds and fences older events by ve
     automation = createAutomationDemo(source),
     seed = seedScriptPolicies(automation)
   const facts = source.facts(),
-    scope = automation.scopes.resolve(seed.scope)!,
+    scope = { ...automation.scopes.resolve(seed.scope)!, members: ['device-01'] },
     id = crypto.randomUUID()
-  scope.members = ['device-01']
   const policies = createPolicyDemo(
     { facts: () => structuredClone(facts) },
     { resolve: () => structuredClone(scope) },

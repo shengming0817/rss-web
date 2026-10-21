@@ -1,5 +1,7 @@
 /** Synthetic server evaluation only. Browser components never calculate membership. */
 import type {
+  CollectionScope,
+  InventoryCondition,
   Criteria,
   Inventory,
   ReadScalar,
@@ -82,4 +84,47 @@ export function evaluate(
   }
   const decision = matches ? 'match' : 'no_match'
   return { decision, explanations: [{ path, outcome: decision }] }
+}
+
+/** Quantified contexts never mix facts from different namespaces. */
+export function evaluateCondition(
+  condition: InventoryCondition | null,
+  contexts: (Omit<Inventory, 'collectionScope'> & { collectionScope: CollectionScope })[],
+  complete = true,
+): ReturnType<typeof evaluate> {
+  if (!condition) return { decision: 'match', explanations: [] }
+  const selected = contexts.filter((c) => {
+    const scope = c.collectionScope
+    if (condition.selector.kind === 'device') return scope.kind === 'device'
+    if (condition.selector.kind === 'exact')
+      return JSON.stringify(scope) === JSON.stringify(condition.selector.scope)
+    if (condition.selector.kind === 'all_authorized') return true
+    const owner = 'owner' in scope ? scope.owner : undefined
+    return condition.selector.platform === 'macos' && 'uid' in scope
+      ? String(scope.uid) === condition.selector.identity
+      : !!owner &&
+          owner.kind === condition.selector.platform &&
+          (owner.kind === 'windows' ? owner.sid : String(owner.uid)) === condition.selector.identity
+  })
+  const evaluated = selected.map((c) =>
+      evaluate(condition.criteria, { ...c, collectionScope: { kind: 'device' } }),
+    ),
+    values = evaluated.map((e) => e.decision)
+  const decision =
+    condition.quantifier === 'one'
+      ? selected.length === 1
+        ? values[0]!
+        : 'unknown'
+      : condition.quantifier === 'any'
+        ? values.includes('match')
+          ? 'match'
+          : !complete || !values.length || values.includes('unknown')
+            ? 'unknown'
+            : 'no_match'
+        : values.includes('no_match')
+          ? 'no_match'
+          : !complete || !values.length || values.includes('unknown')
+            ? 'unknown'
+            : 'match'
+  return { decision, explanations: evaluated.flatMap((e) => e.explanations) }
 }

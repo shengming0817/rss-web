@@ -1,3 +1,5 @@
+import { objectKey } from '../../src/features/devices/clients/objects'
+import { endpointObject } from '../devices/objects'
 import { targetFacts } from './targets'
 import { randomUUID, createHash } from 'node:crypto'
 import {
@@ -20,7 +22,7 @@ import type { DomainHandler } from '../scenario'
 /** Synthetic native claims consume the one Policy store and verified Resource artifact. */
 export function createConfigurationPolicies(
   devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts' | 'objects'>,
-  scopes: Pick<ReturnType<typeof createScopeDemo>, 'resolve' | 'snapshot'>,
+  scopes: Pick<ReturnType<typeof createScopeDemo>, 'resolve' | 'snapshot' | 'assignments'>,
   resources: Pick<ReturnType<typeof createResourceDemo>, 'read' | 'content'>,
   store: ReturnType<typeof createPolicyStore>,
 ) {
@@ -158,7 +160,7 @@ export function createConfigurationPolicies(
   }
   store.register('configuration', (d) => {
     if (d.action.kind !== 'configuration') return error('malformed_request', 400)
-    if (!scopes.resolve(d.scope)) return error('scope_not_found', 404)
+    if (!scopes.resolve(d.scope, 'mdm')) return error('scope_not_found', 404)
     return selected({ ...d, action: d.action }) ? undefined : error('resource_not_found', 404)
   })
   function claims(replacedPolicy?: string) {
@@ -168,7 +170,7 @@ export function createConfigurationPolicies(
       const d = { ...p.definition, action: p.definition.action },
         selection = selected(d)
       if (!selection) return []
-      return (scopes.resolve(d.scope)?.members ?? []).flatMap((device) => {
+      return (scopes.resolve(d.scope, 'mdm')?.members ?? []).flatMap((device) => {
         const fact = devices.facts().find((v) => v.summary.id === device)
         if (
           resourceApplicability(selection.resource, d.action.resource.version, fact) !==
@@ -265,24 +267,20 @@ export function createConfigurationPolicies(
       if (!snapshot) return error('scope_not_found', 404)
       if ('scopeResult' in input && input['scopeResult'] !== snapshot.result)
         return error('operation_conflict')
-      const rows = snapshot.devices.filter(
-        (device) => !('after' in input) || device > identifier(input['after']),
-      )
+      const rows = scopes
+        .assignments(definition.scope, 'mdm')
+        .filter((row) => !('after' in input) || objectKey(row.object) > identifier(input['after']))
       return ok({
         action: definition.action,
         scopeResult: snapshot.result,
-        items: rows.slice(0, 64).map((device) => ({
-          ...(() => {
-            const { sources: _sources, ...facts } = targetFacts(devices, device, 'mdm')
-            void _sources
-            return facts
-          })(),
-          eligibility: scopes.resolve(definition.scope)?.members.includes(device)
-            ? { state: 'eligible', entry: 1 }
-            : { state: 'excluded' },
-          taskAdmission: null,
-        })),
-        nextCursor: rows.length > 64 ? rows[63] : null,
+        items: rows
+          .slice(0, 64)
+          .map(({ sources: _sources, scopeResult: _scopeResult, qualification, ...row }) => ({
+            ...row,
+            eligibility: qualification,
+            taskAdmission: null,
+          })),
+        nextCursor: rows.length > 64 ? objectKey(rows[63]!.object) : null,
       })
     }
     const match = /^\/api\/v1\/policies\/([^/]+)\/assignments$/.exec(request.path),
@@ -290,40 +288,51 @@ export function createConfigurationPolicies(
     if (!p || p.definition.action.kind !== 'configuration' || request.method !== 'GET') return
     reconcile()
     const all = claims(),
-      snapshot = scopes.snapshot(p.definition.scope),
-      after = request.query.get('after'),
-      rows = [
-        ...new Set([
-          ...(snapshot?.devices ?? []),
-          ...[...publications.values()].flatMap((v) =>
-            v.owners.filter((c) => c.p.id === p.id).map((c) => c.device),
-          ),
-        ]),
-      ]
-        .filter((d) => after === null || d > after)
-        .sort()
+      snapshot = scopes.snapshot(p.definition.scope)
+    if (!snapshot) return error('scope_not_found', 404)
+    const candidates = scopes.assignments(p.definition.scope, 'mdm')
+    // Retained configuration effects still belong to their original endpoint.
+    for (const device of new Set(
+      [...publications.values()].flatMap((v) =>
+        v.owners.filter((c) => c.p.id === p.id).map((c) => c.device),
+      ),
+    )) {
+      if (candidates.some((row) => row.target?.device === device)) continue
+      const fact = devices.facts().find((d) => d.summary.id === device)
+      if (fact)
+        candidates.push({
+          ...targetFacts(devices, endpointObject(fact), 'mdm'),
+          scopeResult: snapshot.result,
+          qualification: { state: 'excluded' },
+        })
+    }
+    const after = request.query.get('after'),
+      rows = candidates
+        .filter((row) => after === null || objectKey(row.object) > after)
+        .sort((a, b) => objectKey(a.object).localeCompare(objectKey(b.object)))
     return ok({
-      items: rows.slice(0, 64).map((device) => {
-        const c = all.find((c) => c.p.id === p.id && c.device === device)
-        const diagnoses = c && conflicts(c, all).length ? ['configuration_conflict'] : []
-        if (c && publications.get(key(c))?.action === 'remove') diagnoses.push('removing')
+      items: rows.slice(0, 64).map((row) => {
+        const device = row.target?.device,
+          c = all.find((c) => c.p.id === p.id && c.device === device)
+        const reason =
+          c && conflicts(c, all).length
+            ? 'configuration_conflict'
+            : c && publications.get(key(c))?.action === 'remove'
+              ? 'removing'
+              : !p.enabled
+                ? 'policy_disabled'
+                : row.reason
         const operationIds = [...publications.values()]
           .filter((v) => v.owners.some((c) => c.p.id === p.id && c.device === device))
           .map((v) => v.operationId)
         return {
-          ...targetFacts(devices, device, 'mdm'),
-          scopeResult: snapshot!.result,
-          qualification: c
-            ? { state: 'eligible' as const, entry: 1 }
-            : scopes.resolve(p.definition.scope)?.members.includes(device)
-              ? { state: 'pending' as const }
-              : { state: 'excluded' as const },
+          ...row,
+          ...(reason ? { availability: 'unavailable' as const, reason } : {}),
           taskAdmission: null,
           operationIds,
-          reason: diagnoses[0] ?? targetFacts(devices, device, 'mdm').reason,
         }
       }),
-      nextCursor: rows.length > 64 ? rows[63] : null,
+      nextCursor: rows.length > 64 ? objectKey(rows[63]!.object) : null,
     })
   }
   return {

@@ -41,9 +41,15 @@ export function scopeDefinition(value: unknown): ScopeDefinition {
   }
 }
 export function decodeScope(value: unknown, id: string) {
-  const v = closed(value, ['id', 'revision', 'definition'])
+  const v = closed(value, ['id', 'revision', 'definition', 'resolution', 'resolutionRevision'])
   if (uuid(v['id']) !== id) throw new Error('Wrong scope')
-  return { id, revision: count(v['revision']), definition: scopeDefinition(v['definition']) }
+  return {
+    id,
+    revision: count(v['revision']),
+    definition: scopeDefinition(v['definition']),
+    resolution: nullable(v['resolution'], uuid),
+    resolutionRevision: count(v['resolutionRevision']),
+  }
 }
 export type ScopeRead = ReturnType<typeof decodeScope>
 export function decodeScopePage(

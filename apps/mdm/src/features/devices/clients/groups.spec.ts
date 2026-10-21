@@ -18,8 +18,18 @@ const group = {
 }
 it('preserves an empty published member set separately from the definition revision', () => {
   expect(
-    decodeGroup({ group, criteria: { kind: 'and', children: [] }, memberSet: task }, id).group
-      .memberCount,
+    decodeGroup(
+      {
+        group,
+        criteria: {
+          selector: { kind: 'device' },
+          quantifier: 'one',
+          criteria: { kind: 'and', children: [] },
+        },
+        memberSet: task,
+      },
+      id,
+    ).group.memberCount,
   ).toBe(0)
   expect(() =>
     decodeGroup({ group: { ...group, id: task }, criteria: null, memberSet: null }, id),

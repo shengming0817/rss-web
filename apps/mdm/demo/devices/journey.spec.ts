@@ -90,7 +90,11 @@ it('previews do not publish membership and stale tasks do not overwrite a newer 
       assetContext: 'endpoint' as const,
       name: 'All',
       description: '',
-      criteria: { kind: 'and', children: [] },
+      criteria: {
+        selector: { kind: 'device' },
+        quantifier: 'one',
+        criteria: { kind: 'and', children: [] },
+      },
     }),
   )
   const current = await groups.read(id)
@@ -149,10 +153,14 @@ it('evaluates associated groups from both endpoint sources and withholds targets
       description: '',
       assetContext: 'associated_device',
       criteria: {
-        kind: 'predicate',
-        field: 'custom.asset_tag',
-        op: 'eq',
-        value: { kind: 'string', value: 'first' },
+        selector: { kind: 'device' },
+        quantifier: 'one',
+        criteria: {
+          kind: 'predicate',
+          field: 'custom.asset_tag',
+          op: 'eq',
+          value: { kind: 'string', value: 'first' },
+        },
       },
     }),
   )
@@ -166,7 +174,9 @@ it('evaluates associated groups from both endpoint sources and withholds targets
   })
   const { targetFacts } = await import('../policies/targets')
   await enrollment.revoke(agent.device, agent.registrationId, crypto.randomUUID())
-  expect(targetFacts(domain, agent.device, 'agent')).toMatchObject({
+  expect(
+    targetFacts(domain, domain.objects().find((o) => o.object.id === association.id)!, 'agent'),
+  ).toMatchObject({
     availability: 'unavailable',
     reason: 'association_unverified',
     target: null,

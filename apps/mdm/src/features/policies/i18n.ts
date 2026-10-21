@@ -1,4 +1,13 @@
 export const policiesZh = {
+  assignmentReason: {
+    association_unverified: '关联关系待核验',
+    channel_unavailable: '缺少有效执行通道',
+    scope_excluded: '已被范围限制或排除',
+    source_pending: '来源结果待更新',
+    policy_disabled: '策略已停用',
+    configuration_conflict: '配置归属冲突',
+    removing: '正在移除配置',
+  },
   deletePolicy: '删除策略',
   disableBeforeDelete: '请先停用策略，再删除。',
   deletePolicyHint:
@@ -397,6 +406,15 @@ export const policiesZh = {
   cancel: '请求取消',
 }
 export const policiesEn: typeof policiesZh = {
+  assignmentReason: {
+    association_unverified: 'Association needs verification',
+    channel_unavailable: 'No active action channel',
+    scope_excluded: 'Excluded by Scope',
+    source_pending: 'Source result pending',
+    policy_disabled: 'Policy disabled',
+    configuration_conflict: 'Configuration ownership conflict',
+    removing: 'Removing configuration',
+  },
   deletePolicy: 'Delete Policy',
   disableBeforeDelete: 'Disable this Policy before deleting it.',
   deletePolicyHint:
