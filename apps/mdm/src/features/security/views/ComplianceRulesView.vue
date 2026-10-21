@@ -159,7 +159,7 @@ function loadVersion() {
 }
 function groupPage(cursor?: string) {
   void run(
-    () => runtime.devices.groups.list(cursor),
+    () => runtime.devices.groups.list({ after: cursor }),
     (v) =>
       (groups.value = {
         ...v,

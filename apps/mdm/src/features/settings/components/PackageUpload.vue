@@ -30,16 +30,30 @@ const saved = ref(false),
 let file: File | undefined,
   sha256: number[] = [],
   controller: AbortController | undefined
-const restored = pending.value && ['unknown', 'conflict'].includes(pending.value.state) ? JSON.parse(pending.value.publicInput) as Record<string, unknown> : undefined
-if (pending.value?.state === 'received') runtime.settings.operations.records.delete('package-upload')
-if (restored) { packageId.value = String(restored['packageId']); version.value = String(restored['version'] ?? ''); saved.value = pending.value?.action === 'publish'; stage.value = saved.value ? 'saved' : 'ready' }
-const selection = computed(() => restored ? target({ platform: restored['platform'], architecture: restored['architecture'] }) : ({
-  platform: props.target.platform,
-  architecture: props.target.architecture,
-}))
+const restored =
+  pending.value && ['unknown', 'conflict'].includes(pending.value.state)
+    ? (JSON.parse(pending.value.publicInput) as Record<string, unknown>)
+    : undefined
+if (pending.value?.state === 'received')
+  runtime.settings.operations.records.delete('package-upload')
+if (restored) {
+  packageId.value = String(restored['packageId'])
+  version.value = String(restored['version'] ?? '')
+  saved.value = pending.value?.action === 'publish'
+  stage.value = saved.value ? 'saved' : 'ready'
+}
+const selection = computed(() =>
+  restored
+    ? target({ platform: restored['platform'], architecture: restored['architecture'] })
+    : {
+        platform: props.target.platform,
+        architecture: props.target.architecture,
+      },
+)
 const uploading = computed(() => upload.busy.value)
 const ready = computed(
-  () => (inspected.value || saved.value) && version.value.trim() && !locked.value && !uploading.value,
+  () =>
+    (inspected.value || saved.value) && version.value.trim() && !locked.value && !uploading.value,
 )
 function clear() {
   controller?.abort()
@@ -51,7 +65,11 @@ function clear() {
   stage.value = 'choose'
 }
 useSettingsFacts(clear)
-onBeforeUnmount(() => { clear(); if (pending.value?.state === 'received') runtime.settings.operations.records.delete('package-upload') })
+onBeforeUnmount(() => {
+  clear()
+  if (pending.value?.state === 'received')
+    runtime.settings.operations.records.delete('package-upload')
+})
 async function choose(event: Event) {
   const input = event.target as HTMLInputElement
   const selected = input.files?.[0]
@@ -150,7 +168,12 @@ async function transfer() {
   )
 }
 async function publish(replay = false) {
-  if ((!inspected.value && !saved.value && !restored) || !props.canPublish || (!saved.value && !props.canUpload)) return
+  if (
+    (!inspected.value && !saved.value && !restored) ||
+    !props.canPublish ||
+    (!saved.value && !props.canUpload)
+  )
+    return
   const id = packageId.value
   if (!saved.value) {
     const ok = await submit(

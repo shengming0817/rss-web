@@ -10,16 +10,16 @@ import { objectKey } from '../clients/objects'
 import ObjectLink from '../components/ObjectLink.vue'
 import AssignmentFacts from '../../policies/components/AssignmentFacts.vue'
 import PageFrame from '../../../components/PageFrame.vue'
-import ConditionEditor from '../components/ConditionEditor.vue'
-import {
-  deviceCondition,
-  inventoryCondition,
-  type InventoryCondition,
-} from '../clients/asset-model'
+import GroupConditionEditor from '../components/GroupConditionEditor.vue'
+import GroupDependencies from '../components/GroupDependencies.vue'
+import EndpointPicker from '../components/EndpointPicker.vue'
+import { deviceBinding } from '../useDeviceBinding'
+import { groupCondition, type GroupCondition } from '../clients/groups'
+import { deviceCondition } from '../clients/asset-model'
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.devices.groups,
-  { run, runWrite, busy, failure, uncertain } = useOperation()
+  { run, runWrite, busy, failure, uncertain } = useOperation([], () => deviceBinding(runtime))
 const list = ref<Awaited<ReturnType<typeof runtime.devices.groups.list>>>(),
   fields = ref<FieldDefinition[]>([])
 const current = ref<GroupRead>(),
@@ -28,19 +28,24 @@ const current = ref<GroupRead>(),
   description = ref(''),
   kind = ref<'static' | 'dynamic'>('static'),
   assetContext = ref<'endpoint' | 'associated_device'>('endpoint'),
-  criteria = ref<InventoryCondition | null>(null),
-  members = ref(''),
+  criteria = ref<GroupCondition | null>(null),
+  members = ref<string[]>([]),
   remove = ref(false)
 const task = ref<string>(),
   status = ref<Awaited<ReturnType<typeof client.status>>>(),
   projection = ref<GroupProjection>('members'),
   result = ref<Awaited<ReturnType<typeof client.page>>>()
+const deletionBlocked = ref<boolean>(),
+  compared = ref(false)
 const detailTab = ref('overview'),
   editKind = ref<'metadata' | 'rule'>('metadata')
 function compare() {
   void run(
     () => client.read(id.value),
-    (v) => (current.value = v),
+    (v) => {
+      current.value = v
+      compared.value = true
+    },
   )
 }
 function beginEdit(mode: 'metadata' | 'rule') {
@@ -60,7 +65,7 @@ function cancelEdit() {
   if (current.value) {
     name.value = current.value.group.presentation.name
     description.value = current.value.group.presentation.description
-    kind.value = current.value.group.kind
+    kind.value = current.value.group.kind === 'system' ? 'static' : current.value.group.kind
     assetContext.value = current.value.group.assetContext
     criteria.value = structuredClone(toRaw(current.value.criteria))
   } else {
@@ -78,12 +83,13 @@ function beginCreate() {
 let pending: (() => Promise<boolean>) | undefined
 function write<T>(request: () => Promise<T>, apply: (value: T) => void) {
   if (busy.value || uncertain.value) return
+  compared.value = false
   pending = () => runWrite(request, apply)
   void pending()
 }
 function loadList(next?: string) {
   void run(
-    () => runtime.devices.groups.list(next),
+    () => runtime.devices.groups.list({ after: next }),
     (v) => (list.value = v),
   )
 }
@@ -97,7 +103,7 @@ function open(group = id.value) {
       editing.value = false
       name.value = v.group.presentation.name
       description.value = v.group.presentation.description
-      kind.value = v.group.kind
+      kind.value = v.group.kind === 'system' ? 'static' : v.group.kind
       assetContext.value = v.group.assetContext
       criteria.value = structuredClone(v.criteria)
       task.value = v.memberSet ?? undefined
@@ -121,6 +127,8 @@ function create() {
   status.value = undefined
 }
 function change(input: GroupChange) {
+  if (current.value?.group.kind === 'system') return
+  compared.value = false
   const group = current.value?.group.id ?? id.value,
     body = operation(input, current.value?.group.revision ?? 0)
   if (busy.value || uncertain.value) return
@@ -135,6 +143,7 @@ function change(input: GroupChange) {
         result.value = undefined
         list.value = undefined
         if (input.action === 'delete') current.value = undefined
+        else if (input.action === 'rule' || input.action === 'create') detailTab.value = 'members'
       },
     )
     if (acknowledged && input.action !== 'delete')
@@ -169,7 +178,7 @@ function save() {
               kind.value === 'static'
                 ? null
                 : criteria.value
-                  ? inventoryCondition(criteria.value)
+                  ? groupCondition(criteria.value)
                   : deviceCondition(),
           },
     )
@@ -200,7 +209,7 @@ function saveRule(event: Event) {
   try {
     change({
       action: 'rule',
-      criteria: criteria.value ? inventoryCondition(criteria.value) : deviceCondition(),
+      criteria: criteria.value ? groupCondition(criteria.value) : deviceCondition(),
     })
   } catch {
     failure.value = 'invalidRequest'
@@ -232,11 +241,7 @@ function page(next?: string) {
     )
 }
 function changeMembers() {
-  const ids = members.value
-    .split('\n')
-    .map((v) => v.trim())
-    .filter(Boolean)
-    .map((id) => ({ kind: 'endpoint' as const, id }))
+  const ids = members.value.map((id) => ({ kind: 'endpoint' as const, id }))
   change({ action: 'members', add: remove.value ? [] : ids, remove: remove.value ? ids : [] })
 }
 watch(kind, (value) => {
@@ -244,7 +249,7 @@ watch(kind, (value) => {
   if (value === 'dynamic' && !criteria.value) criteria.value = deviceCondition()
 })
 watch(detailTab, (value) => {
-  if (value !== 'overview' && value !== 'rule') {
+  if (['members', 'changes', 'decisions'].includes(value)) {
     projection.value = value as GroupProjection
     result.value = undefined
     if (task.value) page()
@@ -253,19 +258,34 @@ watch(detailTab, (value) => {
 watch(projection, () => {
   result.value = undefined
 })
-onMounted(() => {
-  create()
-  void run(
-    async () => ({
-      list: await runtime.devices.groups.list(),
-      fields: (await runtime.devices.assets.catalog()).fields,
-    }),
-    (v) => {
-      list.value = v.list
-      fields.value = v.fields
-    },
-  )
-})
+watch(
+  () => JSON.stringify(deviceBinding(runtime)),
+  () => {
+    current.value = undefined
+    list.value = undefined
+    result.value = undefined
+    fields.value = []
+    task.value = undefined
+    status.value = undefined
+    pending = undefined
+    compared.value = false
+    editing.value = false
+    deleting.value = false
+    members.value = []
+    create()
+    void run(
+      async () => ({
+        list: await runtime.devices.groups.list(),
+        fields: (await runtime.devices.assets.catalog()).fields,
+      }),
+      (value) => {
+        list.value = value.list
+        fields.value = value.fields
+      },
+    )
+  },
+  { immediate: true, flush: 'sync' },
+)
 function openGroup(group: string) {
   open(group)
 }
@@ -325,9 +345,10 @@ function openGroup(group: string) {
         <UiBadge>{{ t(`devices.${current.group.kind}`) }}</UiBadge>
       </header>
       <div class="console-toolbar">
-        <UiButton :disabled="busy || uncertain" @click="beginEdit('metadata')">{{
-          t('console.edit')
-        }}</UiButton
+        <UiButton
+          :disabled="busy || uncertain || current.group.kind === 'system'"
+          @click="beginEdit('metadata')"
+          >{{ t('console.edit') }}</UiButton
         ><RouterLink
           :to="{
             name: 'policy-scopes',
@@ -338,9 +359,11 @@ function openGroup(group: string) {
         ><UiButton :disabled="busy || uncertain" @click="preview">{{
           t('devices.previewSaved')
         }}</UiButton
-        ><UiButton :disabled="busy || uncertain" @click="change({ action: 'recompute' })">{{
-          t('devices.recompute')
-        }}</UiButton>
+        ><UiButton
+          :disabled="busy || uncertain || current.group.kind === 'system'"
+          @click="change({ action: 'recompute' })"
+          >{{ t('devices.recompute') }}</UiButton
+        >
       </div>
       <UiTabs
         v-model="detailTab"
@@ -353,6 +376,7 @@ function openGroup(group: string) {
           { value: 'members', label: t('devices.members') },
           { value: 'changes', label: t('devices.changes') },
           { value: 'decisions', label: t('devices.decisions') },
+          { value: 'dependencies', label: t('devices.dependencies') },
         ]"
       >
         <template #overview
@@ -379,13 +403,24 @@ function openGroup(group: string) {
             </div>
           </dl>
           <UiButton :disabled="busy" @click="compare">{{ t('devices.compare') }}</UiButton
-          ><UiButton :disabled="busy || uncertain" @click="deleting = true">{{
-            t('devices.delete')
-          }}</UiButton></template
+          ><UiButton
+            :disabled="busy || uncertain || current.group.kind === 'system'"
+            @click="
+              deletionBlocked = undefined
+              deleting = true
+            "
+            >{{ t('devices.delete') }}</UiButton
+          ></template
         >
+        <template #dependencies><GroupDependencies :group="current.group.id" /></template>
         <template #rule
           ><fieldset disabled>
-            <ConditionEditor :model-value="current.criteria" :fields="fields" />
+            <GroupConditionEditor
+              :model-value="current.criteria"
+              :fields="fields"
+              :asset-context="current.group.assetContext"
+              :group="current.group.id"
+            />
           </fieldset>
           <UiButton :disabled="busy || uncertain" @click="beginEdit('rule')">{{
             t('console.edit')
@@ -497,10 +532,8 @@ function openGroup(group: string) {
         class="group-member-editor"
         @submit.prevent="changeMembers"
       >
-        <label
-          >{{ t('devices.memberIds')
-          }}<textarea v-model="members" class="ui-input" required /></label
-        ><label><input v-model="remove" type="checkbox" />{{ t('devices.remove') }}</label
+        <EndpointPicker v-model="members" />
+        <label><input v-model="remove" type="checkbox" />{{ t('devices.remove') }}</label
         ><UiButton :disabled="busy || uncertain" type="submit">{{ t('devices.save') }}</UiButton>
       </form>
     </section>
@@ -554,21 +587,25 @@ function openGroup(group: string) {
               <option value="endpoint">{{ t('devices.objectKind_endpoint') }}</option>
               <option value="associated_device">{{ t('devices.associatedDevice') }}</option>
             </select></label
-          ><ConditionEditor
+          ><GroupConditionEditor
             v-if="kind === 'dynamic' && (!current || editKind === 'rule')"
             v-model="criteria"
             :fields="fields"
+            :asset-context="assetContext"
+            :group="current?.group.id"
           />
           <div class="console-toolbar">
             <UiButton v-if="current" type="button" @click="compare">{{
               t('devices.compare')
             }}</UiButton
-            ><UiButton type="submit">{{ t('devices.save') }}</UiButton
+            ><UiButton type="submit">{{
+              t(kind === 'dynamic' ? 'devices.saveAndViewMembers' : 'devices.save')
+            }}</UiButton
             ><UiButton type="button" @click="cancelEdit">{{ t('console.cancel') }}</UiButton>
           </div>
         </fieldset>
       </form>
-      <UiButton v-if="uncertain && pending" :disabled="busy" @click="pending!()">{{
+      <UiButton v-if="uncertain && pending" :disabled="busy || !compared" @click="pending!()">{{
         t('devices.replay')
       }}</UiButton>
     </UiDialog>
@@ -594,19 +631,33 @@ function openGroup(group: string) {
       :dismissible="!busy && !uncertain"
       @update:open="deleting = $event"
     >
-      <p>{{ current?.group.presentation.name }} · {{ current?.group.id }}</p>
+      <p>{{ current?.group.presentation.name }}</p>
       <p>{{ t('devices.memberCount') }}: {{ current?.group.memberCount }}</p>
+      <GroupDependencies
+        v-if="deleting && current"
+        :group="current.group.id"
+        @loaded="deletionBlocked = $event"
+      />
       <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
       <template #footer
-        ><UiButton :disabled="busy || uncertain" @click="change({ action: 'delete' })">{{
-          t('devices.delete')
-        }}</UiButton
-        ><UiButton v-if="uncertain && pending" :disabled="busy" @click="pending!()">{{
+        ><UiButton
+          :disabled="busy || uncertain || deletionBlocked !== false"
+          @click="change({ action: 'delete' })"
+          >{{ t('devices.delete') }}</UiButton
+        ><UiButton v-if="uncertain && pending" :disabled="busy || !compared" @click="pending!()">{{
           t('devices.replay')
         }}</UiButton></template
       >
     </UiDialog>
-    <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending!()">
+    <UiButton v-if="uncertain && pending" :disabled="busy" @click="compare">{{
+      t('devices.compare')
+    }}</UiButton>
+    <UiButton
+      v-if="uncertain && pending"
+      :disabled="busy || !compared"
+      type="button"
+      @click="pending!()"
+    >
       {{ t('devices.replay') }}
     </UiButton>
   </PageFrame>

@@ -704,18 +704,27 @@ export function scopeSelector(value: unknown) {
     throw new Error('Invalid UID')
   return { kind, platform, identity }
 }
-export interface InventoryCondition {
+export interface ConditionContext {
   selector: ReturnType<typeof scopeSelector>
   quantifier: 'one' | 'any' | 'all'
+}
+export interface InventoryCondition extends ConditionContext {
   criteria: Criteria
 }
-export function inventoryCondition(value: unknown): InventoryCondition {
-  const v = closed(value, ['selector', 'quantifier', 'criteria']),
+export function conditionContext(value: unknown): ConditionContext {
+  const v = closed(value, ['selector', 'quantifier']),
     selector = scopeSelector(v['selector']),
     quantifier = enumeration(v['quantifier'], ['one', 'any', 'all'] as const)
   if ((selector.kind === 'device' || selector.kind === 'exact') !== (quantifier === 'one'))
     throw new Error('Invalid condition quantifier')
-  return { selector, quantifier, criteria: criteria(v['criteria']) }
+  return { selector, quantifier }
+}
+export function inventoryCondition(value: unknown): InventoryCondition {
+  const v = closed(value, ['selector', 'quantifier', 'criteria'])
+  return {
+    ...conditionContext({ selector: v['selector'], quantifier: v['quantifier'] }),
+    criteria: criteria(v['criteria']),
+  }
 }
 export function deviceCondition(
   criteria: Criteria = { kind: 'and', children: [] },
