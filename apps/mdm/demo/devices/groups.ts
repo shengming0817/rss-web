@@ -77,6 +77,7 @@ export function createGroupDemo(
         },
         criteria: null,
         memberSet: null,
+        freshness: 'pending',
       },
       members: [],
     })
@@ -84,6 +85,7 @@ export function createGroupDemo(
   reset()
   function start(id: string, task: string, publish: boolean, next?: string[]) {
     const state = groups.get(id)!
+    if (publish) state.read.freshness = 'pending'
     const universe =
       state.read.group.assetContext === 'endpoint'
         ? [...devices().values()]
@@ -238,6 +240,7 @@ export function createGroupDemo(
           if (job.added.length || job.removed.length) state.read.group.memberVersion++
           state.read.group.memberCount = job.members.length
           state.read.memberSet = task
+          state.read.freshness = 'current'
           state.members = job.members
         }
       }
@@ -348,6 +351,7 @@ export function createGroupDemo(
           },
           criteria: rule,
           memberSet: null,
+          freshness: 'pending',
         }
         groups.set(id, { read, members: [] })
         if (rule) start(id, op.operationId, true)
@@ -419,6 +423,7 @@ export function createGroupDemo(
         state.members = job.members
         state.read.group.memberCount = job.members.length
         state.read.memberSet = task
+        state.read.freshness = 'current'
       }
     },
     published(id: string) {

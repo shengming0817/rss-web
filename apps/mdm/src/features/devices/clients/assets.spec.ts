@@ -317,9 +317,9 @@ it('consumes only the current dictionary and validates record property schemas',
 
   const timeSeries = {
     kind: 'gauge',
-    valuePath: [],
+    valuePath: ['bytes'],
     intervalStartPath: null,
-    dimensions: {},
+    dimensions: { power: { path: ['power'], values: [' AC '] } },
     aggregations: ['mean'],
     retention: { key: 'standard', revision: 1 },
     maxResources: 1,
@@ -327,8 +327,11 @@ it('consumes only the current dictionary and validates record property schemas',
   expect(
     decode('assets-v1', {
       ...field,
-      key: 'device.memory.bytes',
-      valueType: { kind: 'integer' },
+      key: 'custom.device_metrics',
+      valueType: {
+        kind: 'object',
+        properties: { bytes: { kind: 'integer' }, power: { kind: 'enum', values: [' AC '] } },
+      },
       unit: 'bytes',
       timeSeries,
     }).fields[0]?.timeSeries,

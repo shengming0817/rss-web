@@ -67,13 +67,14 @@ export function groupSummary(value: unknown) {
   }
 }
 export function decodeGroup(value: unknown, id: string) {
-  const v = closed(value, ['group', 'criteria', 'memberSet'])
+  const v = closed(value, ['group', 'criteria', 'memberSet', 'freshness'])
   const group = groupSummary(v['group'])
   if (group.id !== id) throw new Error('Wrong group')
   return {
     group,
     criteria: nullable(v['criteria'], inventoryCondition),
     memberSet: nullable(v['memberSet'], uuid),
+    freshness: enumeration(v['freshness'], ['current', 'pending'] as const),
   }
 }
 export type GroupRead = ReturnType<typeof decodeGroup>

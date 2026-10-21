@@ -253,6 +253,12 @@ export function fieldDefinition(value: unknown) {
     ),
   }
 }
+function vocabulary(value: unknown) {
+  const v = string(value)
+  if (!v || new TextEncoder().encode(v).byteLength > 256 || /\p{Cc}/u.test(v))
+    throw new Error('Invalid vocabulary')
+  return v
+}
 function timeSeries(value: unknown) {
   const v = closed(value, [
     'kind',
@@ -279,7 +285,7 @@ function timeSeries(value: unknown) {
         const dimension = closed(value, ['path', 'values'])
         return [
           identifier(key),
-          { path: path(dimension['path']), values: array(dimension['values'], identifier) },
+          { path: path(dimension['path']), values: array(dimension['values'], vocabulary) },
         ]
       }),
     ),
@@ -325,7 +331,7 @@ function valueType(
     boolean(v['allowEmpty'])
   } else if (kind === 'enum') {
     closed(v, ['kind', 'values'])
-    if (!array(v['values'], identifier).length) throw new Error('Empty enum')
+    if (!array(v['values'], vocabulary).length) throw new Error('Empty enum')
   } else if (kind === 'array') {
     closed(v, ['kind', 'items', 'maxItems'])
     count(v['maxItems'])

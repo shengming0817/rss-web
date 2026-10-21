@@ -313,8 +313,7 @@ it('invalidates dynamic group inputs after fact changes even when the compliance
   const groupWrite = operation({
     action: 'create',
     assetContext: 'endpoint' as const,
-    name: 'Office members',
-    description: '',
+    presentation: { name: 'Office members', description: '' },
     criteria: { selector: { kind: 'device' }, quantifier: 'one', criteria: definition.criteria },
   })
   expect((await f.write('POST', groupPath, groupWrite)).status).toBe(200)

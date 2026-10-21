@@ -26,6 +26,7 @@ it('preserves an empty published member set separately from the definition revis
           criteria: { kind: 'and', children: [] },
         },
         memberSet: task,
+        freshness: 'current',
       },
       id,
     ).group.memberCount,
@@ -39,15 +40,27 @@ it('preserves an empty published member set separately from the definition revis
         },
         criteria: null,
         memberSet: null,
+        freshness: 'pending',
       },
       id,
     ).group.presentation,
   ).toMatchObject({ help: { text: 'operator note' } })
   expect(() =>
-    decodeGroup({ group: { ...group, name: 'retired' }, criteria: null, memberSet: null }, id),
+    decodeGroup(
+      {
+        group: { ...group, name: 'retired' },
+        criteria: null,
+        memberSet: null,
+        freshness: 'pending',
+      },
+      id,
+    ),
   ).toThrow()
   expect(() =>
-    decodeGroup({ group: { ...group, id: task }, criteria: null, memberSet: null }, id),
+    decodeGroup(
+      { group: { ...group, id: task }, criteria: null, memberSet: null, freshness: 'pending' },
+      id,
+    ),
   ).toThrow()
 })
 it('decodes unknown explanations and snake-case provenance without claiming membership', () => {

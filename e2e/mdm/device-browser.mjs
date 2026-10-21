@@ -712,7 +712,7 @@ try {
       .locator('option')
       .filter({ hasText: blueprintId + ' / ' })
       .first()
-      .waitFor()
+      .waitFor({ state: 'attached' })
     const choice = await select
       .locator('option')
       .filter({ hasText: blueprintId + ' / ' })
@@ -734,7 +734,10 @@ try {
     const assign = page.getByRole('link', { name: '配置范围、周期与启停', exact: true })
     await assign.waitFor()
     await assign.click()
-    await page.locator('#policy-variant option').filter({ hasText: 'macos / aarch64' }).waitFor()
+    await page
+      .locator('#policy-variant option')
+      .filter({ hasText: 'macos / aarch64' })
+      .waitFor({ state: 'attached' })
     const variant = await page
       .locator('#policy-variant option')
       .filter({ hasText: 'macos / aarch64' })
@@ -765,6 +768,15 @@ try {
     assert.equal(value.definition.action.frequency, 'every_trigger')
     assert.equal(value.definition.action.schedule.trigger.seconds, 60)
     assert.equal(value.state, 'enabled')
+    console.log(
+      JSON.stringify({
+        phase: 'periodic-policy',
+        package: blueprintId,
+        policy,
+        version: value.versionId,
+        seconds: 60,
+      }),
+    )
     return { resource, policy, version: value.versionId }
   }
   async function projected(run, scope = { kind: 'device' }) {
@@ -780,8 +792,26 @@ try {
   const memory = await configurePackage('macos.agent.memory')
   const firstCycle = controlCollection('memory', memory.resource, 1)
   await projected(firstCycle)
+  console.log(
+    JSON.stringify({
+      phase: 'normal-collection-period',
+      cycle: 1,
+      policy: memory.policy,
+      version: memory.version,
+      run: firstCycle.attempt,
+    }),
+  )
   const secondCycle = controlCollection('memory', memory.resource, 2)
   await projected(secondCycle)
+  console.log(
+    JSON.stringify({
+      phase: 'normal-collection-period',
+      cycle: 2,
+      policy: memory.policy,
+      version: memory.version,
+      run: secondCycle.attempt,
+    }),
+  )
   assert.notEqual(firstCycle.task, secondCycle.task)
   assert.equal((await api(`/api/v1/policies/${memory.policy}`)).versionId, memory.version)
   const incompleteCycle = controlCollection('memory_partial', memory.resource, 3)
@@ -789,6 +819,13 @@ try {
     `/api/v1/devices/${collectorDevice}/collections/${incompleteCycle.attempt}`,
   )
   assert.ok(['partial', 'failed'].includes(incompleteRun.asset.run.result))
+  console.log(
+    JSON.stringify({
+      phase: 'partial-collection-period',
+      result: incompleteRun.asset.run.result,
+      run: incompleteCycle.attempt,
+    }),
+  )
   const retainedMemory = await api(`/api/v1/devices/${collectorDevice}/inventory`)
   assert.equal(retainedMemory.asset.device.fields['device.memory.bytes'].state.value.value, 8194)
   await page.goto(path(`devices/${collectorDevice}`))
@@ -828,7 +865,7 @@ try {
     .nth(1)
     .locator('option')
     .filter({ hasText: '501' })
-    .waitFor()
+    .waitFor({ state: 'attached' })
   const namespace = await scopedInventory
     .locator('select')
     .nth(1)
