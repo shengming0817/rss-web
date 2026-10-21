@@ -215,6 +215,7 @@ export type ResolvedField = ReturnType<typeof resolvedField>
 export function fieldDefinition(value: unknown) {
   const v = closed(value, [
     'key',
+    'timeSeries',
     'version',
     'valueType',
     'nullable',
@@ -235,6 +236,7 @@ export function fieldDefinition(value: unknown) {
   })
   return {
     key: fieldKey(v['key']),
+    timeSeries: nullable(v['timeSeries'], timeSeries),
     version: count(v['version']),
     platforms: array(v['platforms'], (x) => enumeration(x, ['windows', 'macos'] as const)),
     sensitivity: enumeration(v['sensitivity'], ['standard', 'sensitive'] as const),
@@ -249,6 +251,54 @@ export function fieldDefinition(value: unknown) {
       array(v['operations'], (x) => enumeration(x, operators)),
       (x) => x,
     ),
+  }
+}
+function timeSeries(value: unknown) {
+  const v = closed(value, [
+    'kind',
+    'valuePath',
+    'intervalStartPath',
+    'dimensions',
+    'aggregations',
+    'retention',
+    'maxResources',
+  ])
+  const path = (value: unknown) => array(value, identifier)
+  const retention = closed(v['retention'], ['key', 'revision'])
+  return {
+    kind: enumeration(v['kind'], [
+      'gauge',
+      'cumulative_counter',
+      'delta_counter',
+      'state',
+    ] as const),
+    valuePath: path(v['valuePath']),
+    intervalStartPath: nullable(v['intervalStartPath'], path),
+    dimensions: Object.fromEntries(
+      Object.entries(record(v['dimensions'])).map(([key, value]) => {
+        const dimension = closed(value, ['path', 'values'])
+        return [
+          identifier(key),
+          { path: path(dimension['path']), values: array(dimension['values'], identifier) },
+        ]
+      }),
+    ),
+    aggregations: array(v['aggregations'], (x) =>
+      enumeration(x, [
+        'min',
+        'max',
+        'sum',
+        'count',
+        'mean',
+        'increase',
+        'rate',
+        'timeline',
+        'transitions',
+        'coverage',
+      ] as const),
+    ),
+    retention: { key: identifier(retention['key']), revision: count(retention['revision']) },
+    maxResources: count(v['maxResources']),
   }
 }
 function valueType(

@@ -57,6 +57,7 @@ const definitions: [string, Scalar['kind'], boolean][] = [
 ]
 export const catalog: FieldDefinition[] = definitions.map(([key, kind, manual]) => ({
   key,
+  timeSeries: null,
   version: 1,
   platforms: ['windows', 'macos'],
   sensitivity: 'standard',

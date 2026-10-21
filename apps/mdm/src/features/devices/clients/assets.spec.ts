@@ -87,6 +87,7 @@ it('accepts an empty tail page and keeps the server cursor opaque', () => {
 it('rejects duplicate catalog keys and malformed manual fields', () => {
   const field = {
     key: 'custom.is_loaner',
+    timeSeries: null,
     version: 1,
     valueType: { kind: 'boolean' },
     platforms: ['windows', 'macos'],
@@ -101,12 +102,13 @@ it('rejects duplicate catalog keys and malformed manual fields', () => {
   }
   expect(
     decodeCatalog(
-      { tenantId: tenant, asset: { kind: 'fields', dictionary: 'assets-v3', fields: [field] } },
+      { tenantId: tenant, asset: { kind: 'fields', dictionary: 'assets-v1', fields: [field] } },
       tenant,
     ).fields,
   ).toEqual([
     {
       key: field.key,
+      timeSeries: null,
       version: field.version,
       platforms: field.platforms,
       sensitivity: field.sensitivity,
@@ -124,7 +126,7 @@ it('rejects duplicate catalog keys and malformed manual fields', () => {
     decodeCatalog(
       {
         tenantId: tenant,
-        asset: { kind: 'fields', dictionary: 'assets-v3', fields: [field, field] },
+        asset: { kind: 'fields', dictionary: 'assets-v1', fields: [field, field] },
       },
       tenant,
     ),
@@ -285,6 +287,7 @@ it('rejects unbound or mismatched namespaces in current and last-known device ev
 it('consumes only the current dictionary and validates record property schemas', () => {
   const field = {
     key: 'device.hardware',
+    timeSeries: null,
     version: 1,
     valueType: {
       kind: 'record',
@@ -310,9 +313,29 @@ it('consumes only the current dictionary and validates record property schemas',
       { tenantId: tenant, asset: { kind: 'fields', dictionary, fields: [value] } },
       tenant,
     )
-  expect(decode('assets-v3', field).fields[0]?.kind).toBe('object')
+  expect(decode('assets-v1', field).fields[0]?.kind).toBe('object')
+
+  const timeSeries = {
+    kind: 'gauge',
+    valuePath: [],
+    intervalStartPath: null,
+    dimensions: {},
+    aggregations: ['mean'],
+    retention: { key: 'standard', revision: 1 },
+    maxResources: 1,
+  }
   expect(
-    decode('assets-v3', {
+    decode('assets-v1', {
+      ...field,
+      key: 'device.memory.bytes',
+      valueType: { kind: 'integer' },
+      unit: 'bytes',
+      timeSeries,
+    }).fields[0]?.timeSeries,
+  ).toEqual(timeSeries)
+
+  expect(
+    decode('assets-v1', {
       ...field,
       valueType: { kind: 'array', items: { kind: 'integer' }, maxItems: 128 },
       operations: ['contains_any', 'contains_all'],
@@ -320,7 +343,7 @@ it('consumes only the current dictionary and validates record property schemas',
   ).toEqual(['contains_any', 'contains_all'])
   expect(() => decode('assets-v2', field)).toThrow('Unknown asset dictionary')
   expect(() =>
-    decode('assets-v3', {
+    decode('assets-v1', {
       ...field,
       valueType: { kind: 'record', properties: { serial: { valueType: { kind: 'integer' } } } },
     }),

@@ -36,9 +36,9 @@ export function decodeInventory(value: unknown, tenant: string) {
 }
 export function decodeCatalog(value: unknown, tenant: string) {
   const v = assetEnvelope(value, tenant, 'fields', ['dictionary', 'fields'])
-  if (v['dictionary'] !== 'assets-v3') throw new Error('Unknown asset dictionary')
+  if (v['dictionary'] !== 'assets-v1') throw new Error('Unknown asset dictionary')
   return {
-    dictionary: 'assets-v3',
+    dictionary: 'assets-v1',
     fields: unique(array(v['fields'], fieldDefinition), (f) => f.key),
   }
 }
