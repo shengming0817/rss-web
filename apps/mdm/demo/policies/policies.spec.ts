@@ -56,12 +56,14 @@ it('normalizes first-publication defaults, preserves existing values, and keeps 
     metadata = {
       access: { kind: 'authenticated_user' },
       published: true,
-      displayName: 'Support',
-      description: '',
-      prerequisites: '',
-      sideEffects: '',
-      category: 'Support',
-      keywords: [],
+      presentation: {
+        displayName: 'Support',
+        description: '',
+        prerequisites: '',
+        sideEffects: '',
+        category: 'Support',
+        keywords: [],
+      },
     }
   expect(
     f.write(id, 0, {

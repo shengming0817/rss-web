@@ -128,7 +128,7 @@ onMounted(async () => {
     ([l, d, g]) => {
       list.value = l
       devices.value = d.items.map((d) => ({ id: d.id, name: d.id }))
-      groups.value = g.items
+      groups.value = g.items.map((group) => ({ id: group.id, name: group.presentation.name }))
     },
   )
   const device = route.query['device'],

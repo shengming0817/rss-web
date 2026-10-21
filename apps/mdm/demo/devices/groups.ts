@@ -1,15 +1,8 @@
+import { groupPresentation } from '../../src/features/devices/clients/groups'
 import { endpointObject } from './objects'
 import { randomUUID } from 'node:crypto'
 import type { DomainHandler } from '../scenario'
-import {
-  array,
-  closed,
-  enumeration,
-  identifier,
-  record,
-  string,
-  uuid,
-} from '../../src/services/decode'
+import { array, closed, enumeration, record, uuid } from '../../src/services/decode'
 import { inventoryCondition } from '../../src/features/devices/clients/asset-model'
 import type { GroupRead } from '../../src/features/devices/clients/groups'
 import type { DemoDevice } from './fixtures'
@@ -75,8 +68,7 @@ export function createGroupDemo(
           kind: 'static',
           assetContext: 'endpoint',
           calculationRevision: 0,
-          name: 'Pilot devices',
-          description: 'Synthetic pilot group',
+          presentation: { name: 'Pilot devices', description: 'Synthetic pilot group' },
           revision: 1,
           memberVersion: 0,
           memberCount: 0,
@@ -334,7 +326,7 @@ export function createGroupDemo(
         ] as const)
       if (action === 'create') {
         if (state || op.expectedRevision !== 0) return error('operation_conflict')
-        closed(input, ['action', 'name', 'description', 'assetContext', 'criteria'])
+        closed(input, ['action', 'presentation', 'assetContext', 'criteria'])
         const rule = input['criteria'] === null ? null : inventoryCondition(input['criteria'])
         const assetContext = enumeration(input['assetContext'], [
           'endpoint',
@@ -347,8 +339,7 @@ export function createGroupDemo(
             kind: rule ? 'dynamic' : 'static',
             assetContext,
             calculationRevision: 0,
-            name: identifier(input['name']),
-            description: string(input['description']),
+            presentation: groupPresentation(input['presentation']),
             revision: 1,
             memberVersion: 0,
             memberCount: 0,
@@ -392,8 +383,8 @@ export function createGroupDemo(
         state.read.criteria = inventoryCondition(input['criteria'])
         state.read.group.ruleVersion = randomUUID()
       } else if (action === 'edit') {
-        state.read.group.name = identifier(input['name'])
-        state.read.group.description = string(input['description'])
+        closed(input, ['action', 'presentation'])
+        state.read.group.presentation = groupPresentation(input['presentation'])
       } else state.read.group.deleted = true
       state.read.group.revision++
       if (action === 'rule') start(id, op.operationId, true)

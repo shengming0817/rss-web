@@ -131,8 +131,7 @@ it('blocks current Scope consumers while a changed dynamic group is pending and 
       expectedRevision: 0,
       input: {
         action: 'create',
-        name: 'Pending source',
-        description: '',
+        presentation: { name: 'Pending source', description: '' },
         assetContext: 'endpoint',
         criteria: condition(false),
       },
@@ -203,8 +202,7 @@ it.each(['limitations', 'exclusions'] as const)(
         input: {
           action: 'create',
           assetContext: 'endpoint',
-          name: 'Unknown qualification',
-          description: '',
+          presentation: { name: 'Unknown qualification', description: '' },
           criteria: deviceCondition({
             kind: 'predicate',
             field: 'custom.purchase_date',

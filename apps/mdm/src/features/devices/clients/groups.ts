@@ -20,15 +20,18 @@ import { cursor, fieldKey, sourceIds } from './asset-model'
 
 import { objectRef, objectKey, deviceObject, type ObjectRef } from './objects'
 
+export function groupPresentation(value: unknown) {
+  const v = record(value)
+  return { ...v, name: identifier(v['name']), description: string(v['description']) }
+}
 export type GroupChange =
   | {
       action: 'create'
-      name: string
-      description: string
+      presentation: ReturnType<typeof groupPresentation>
       assetContext: 'endpoint' | 'associated_device'
       criteria: InventoryCondition | null
     }
-  | { action: 'edit'; name: string; description: string }
+  | { action: 'edit'; presentation: ReturnType<typeof groupPresentation> }
   | { action: 'rule'; criteria: InventoryCondition }
   | { action: 'members'; add: ObjectRef[]; remove: ObjectRef[] }
   | { action: 'delete' | 'recompute' }
@@ -39,8 +42,7 @@ export function groupSummary(value: unknown) {
     'kind',
     'assetContext',
     'calculationRevision',
-    'name',
-    'description',
+    'presentation',
     'revision',
     'memberVersion',
     'memberCount',
@@ -56,8 +58,7 @@ export function groupSummary(value: unknown) {
     kind,
     assetContext,
     calculationRevision: count(v['calculationRevision']),
-    name: identifier(v['name']),
-    description: string(v['description']),
+    presentation: groupPresentation(v['presentation']),
     revision: count(v['revision']),
     memberVersion: count(v['memberVersion']),
     memberCount: count(v['memberCount']),

@@ -177,7 +177,7 @@ try {
   assert.equal(currentRegistration.generation, 2)
   assert.notEqual(currentRegistration.registrationId, oldRegistration.registrationId)
   await page.getByRole('button', { name: '查找另一通道候选', exact: true }).click()
-  await panel().getByRole('radio').first().check()
+  await panel().locator(`input[type=radio][value="${fixture.agent}"]`).check()
   const coordinates = panel().locator('[data-testid=confirmation-coordinates]')
   await coordinates.getByText(currentRegistration.registrationId, { exact: false }).waitFor()
   assert.ok(
@@ -349,8 +349,7 @@ try {
   const group = randomUUID()
   await mutate(`/api/v1/groups/${group}`, {
     action: 'create',
-    name: 'Browser endpoint group',
-    description: '',
+    presentation: { name: 'Browser endpoint group', description: '' },
     assetContext: 'endpoint',
     criteria: null,
   })
@@ -680,6 +679,13 @@ try {
       ],
       { cwd: process.env.MDM_DEVICE_BACKEND, stdio, timeout: 150000 },
     )
+    if (result.status !== 0) {
+      let classification = 'collector-process'
+      try {
+        classification = JSON.parse(result.stdout.toString()).classification ?? classification
+      } catch {}
+      console.log(JSON.stringify({ phase: 'collector-report', result: 'failed', classification }))
+    }
     assert.equal(result.status, 0, 'controlled Agent report failed')
     return JSON.parse(result.stdout.toString())
   }
@@ -855,6 +861,47 @@ try {
     'real-package-instantiation-activation-scope-interval-two-normal-periods-mtls-report-projection',
   )
   coverage.push('real-owner-clear-current-user-readonly-and-user-scope-software-pagination')
+
+  await page.goto(path(`policies/assignments?id=${apps.policy}`))
+  await loaded()
+  await page.getByRole('button', { name: '禁用整个 Policy', exact: true }).click()
+  await loaded()
+  const localApps = await configurePackage('macos.agent.applications_local')
+  const localApplications = controlCollection('applications', localApps.resource, 1)
+  const localScope = { kind: 'macos_applications', root: 'local', uid: null }
+  await projected(localApplications, localScope)
+  const localInventory = await api(
+    `/api/v1/devices/${collectorDevice}/inventory?scope=${encodeURIComponent(JSON.stringify(localScope))}`,
+  )
+  assert.equal(
+    localInventory.asset.device.lists['device.software.installations'].state.kind,
+    'known',
+  )
+  await page.goto(path(`policies/assignments?id=${localApps.policy}`))
+  await loaded()
+  await page.getByRole('button', { name: '禁用整个 Policy', exact: true }).click()
+  await loaded()
+  // Adjust a disabled package, then restore it through the existing lifecycle owner.
+  await page.goto(path(`policies/assignments?id=${memory.policy}`))
+  await loaded()
+  await page.getByRole('button', { name: '编辑', exact: true }).click()
+  await page.locator('[data-field=collection-period]').fill('120')
+  await page
+    .locator('[data-form=policy]')
+    .getByRole('button', { name: '保存', exact: true })
+    .click()
+  await loaded()
+  const adjusted = await api(`/api/v1/policies/${memory.policy}`)
+  assert.equal(adjusted.definition.action.schedule.trigger.seconds, 120)
+  assert.equal(adjusted.state, 'disabled')
+  assert.notEqual(adjusted.versionId, memory.version)
+  await page.getByRole('button', { name: '启用整个 Policy', exact: true }).click()
+  await loaded()
+  assert.equal((await api(`/api/v1/policies/${memory.policy}`)).versionId, adjusted.versionId)
+  const restoredCollection = controlCollection('memory', memory.resource, 4)
+  await projected(restoredCollection)
+  coverage.push('real-device-user-installation-scopes-period-adjustment-disable-restore')
+
   await page.goto(path(`device-views/association/${id}`))
   await loaded()
   phase = 'authorization'

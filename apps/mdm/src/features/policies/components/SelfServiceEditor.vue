@@ -9,10 +9,10 @@ const model = defineModel<SelfService | undefined>()
 const id = useId(),
   { t } = useI18n()
 const keywords = computed({
-  get: () => model.value?.keywords.join('\n') ?? '',
+  get: () => model.value?.presentation.keywords.join('\n') ?? '',
   set: (v: string) => {
     if (model.value)
-      model.value.keywords = v
+      model.value.presentation.keywords = v
         .split('\n')
         .map((k) => k.trim())
         .filter(Boolean)
@@ -79,7 +79,7 @@ function publish(event: Event) {
       <label :for="`${id}-name`">{{ t('policies.selfService.name') }}</label
       ><input
         :id="`${id}-name`"
-        v-model="model.displayName"
+        v-model="model.presentation.displayName"
         class="ui-input"
         data-field="displayName"
         required
@@ -88,28 +88,28 @@ function publish(event: Event) {
       <label :for="`${id}-description`">{{ t('policies.selfService.description') }}</label
       ><textarea
         :id="`${id}-description`"
-        v-model="model.description"
+        v-model="model.presentation.description"
         class="ui-input"
         maxlength="4096"
       />
       <label :for="`${id}-prerequisites`">{{ t('policies.selfService.prerequisites') }}</label
       ><textarea
         :id="`${id}-prerequisites`"
-        v-model="model.prerequisites"
+        v-model="model.presentation.prerequisites"
         class="ui-input"
         maxlength="4096"
       />
       <label :for="`${id}-effects`">{{ t('policies.selfService.effects') }}</label
       ><textarea
         :id="`${id}-effects`"
-        v-model="model.sideEffects"
+        v-model="model.presentation.sideEffects"
         class="ui-input"
         maxlength="4096"
       />
       <label :for="`${id}-category`">{{ t('policies.selfService.category') }}</label
       ><input
         :id="`${id}-category`"
-        v-model="model.category"
+        v-model="model.presentation.category"
         class="ui-input"
         data-field="category"
         required

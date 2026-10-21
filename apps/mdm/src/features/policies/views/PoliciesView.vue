@@ -503,7 +503,7 @@ onMounted(async () => {
       :empty-label="t('policies.empty')"
       ><template #cell-policy="{ row }"
         ><UiButton variant="ghost" :disabled="busy || uncertain" @click="select(row.id)">{{
-          row.definition.selfService?.displayName ??
+          row.definition.selfService?.presentation.displayName ??
           `${t('policies.policies')} · ${row.id.slice(0, 8)}`
         }}</UiButton></template
       ><template #cell-state="{ row }"

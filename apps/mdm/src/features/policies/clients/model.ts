@@ -198,21 +198,11 @@ function text(value: unknown, limit: number, required = false) {
   return s
 }
 export function selfService(value: unknown) {
-  const v = closed(value, [
-    'access',
-    'published',
-    'displayName',
-    'description',
-    'prerequisites',
-    'sideEffects',
-    'category',
-    'keywords',
-    'allowAi',
-    'riskLevel',
-  ])
+  const v = closed(value, ['access', 'published', 'presentation', 'allowAi', 'riskLevel'])
+  const presentation = record(v['presentation'])
   const riskLevel = v['riskLevel']
   if (riskLevel !== 1 && riskLevel !== 2) throw new Error('Invalid risk level')
-  const keywords = array(v['keywords'], (v) => text(v, 128, true))
+  const keywords = array(presentation['keywords'], (v) => text(v, 128, true))
   if (
     keywords.length > 32 ||
     keywords.some((k) =>
@@ -228,12 +218,15 @@ export function selfService(value: unknown) {
   return {
     access,
     published,
-    displayName: text(v['displayName'], 256, true),
-    description: text(v['description'], 4096),
-    prerequisites: text(v['prerequisites'], 4096),
-    sideEffects: text(v['sideEffects'], 4096),
-    category: text(v['category'], 128, true),
-    keywords,
+    presentation: {
+      ...presentation,
+      displayName: text(presentation['displayName'], 256, true),
+      description: text(presentation['description'], 4096),
+      prerequisites: text(presentation['prerequisites'], 4096),
+      sideEffects: text(presentation['sideEffects'], 4096),
+      category: text(presentation['category'], 128, true),
+      keywords,
+    },
     allowAi: boolean(v['allowAi']),
     riskLevel: riskLevel as 1 | 2,
   }
@@ -243,12 +236,14 @@ export function initialSelfService(): SelfService {
   return {
     access: null,
     published: true,
-    displayName: '',
-    description: '',
-    prerequisites: '',
-    sideEffects: '',
-    category: '',
-    keywords: [],
+    presentation: {
+      displayName: '',
+      description: '',
+      prerequisites: '',
+      sideEffects: '',
+      category: '',
+      keywords: [],
+    },
     allowAi: true,
     riskLevel: 2,
   }

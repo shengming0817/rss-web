@@ -46,8 +46,8 @@ function compare() {
 function beginEdit(mode: 'metadata' | 'rule') {
   if (mode === 'rule' && current.value?.group.kind !== 'dynamic') return
   if (current.value) {
-    name.value = current.value.group.name
-    description.value = current.value.group.description
+    name.value = current.value.group.presentation.name
+    description.value = current.value.group.presentation.description
     criteria.value = structuredClone(toRaw(current.value.criteria))
   }
   editKind.value = mode
@@ -58,8 +58,8 @@ const editing = ref(false),
 function cancelEdit() {
   if (busy.value || uncertain.value) return
   if (current.value) {
-    name.value = current.value.group.name
-    description.value = current.value.group.description
+    name.value = current.value.group.presentation.name
+    description.value = current.value.group.presentation.description
     kind.value = current.value.group.kind
     assetContext.value = current.value.group.assetContext
     criteria.value = structuredClone(toRaw(current.value.criteria))
@@ -95,8 +95,8 @@ function open(group = id.value) {
       id.value = v.group.id
       current.value = v
       editing.value = false
-      name.value = v.group.name
-      description.value = v.group.description
+      name.value = v.group.presentation.name
+      description.value = v.group.presentation.description
       kind.value = v.group.kind
       assetContext.value = v.group.assetContext
       criteria.value = structuredClone(v.criteria)
@@ -153,12 +153,18 @@ function save() {
   try {
     change(
       current.value
-        ? { action: 'edit', name: name.value, description: description.value }
+        ? {
+            action: 'edit',
+            presentation: {
+              ...current.value.group.presentation,
+              name: name.value,
+              description: description.value,
+            },
+          }
         : {
             action: 'create',
             assetContext: assetContext.value,
-            name: name.value,
-            description: description.value,
+            presentation: { name: name.value, description: description.value },
             criteria:
               kind.value === 'static'
                 ? null
@@ -293,7 +299,7 @@ function openGroup(group: string) {
     >
       <template #cell-name="{ row }"
         ><UiButton variant="ghost" :disabled="busy || uncertain" @click="openGroup(row.id)">{{
-          row.name
+          row.presentation.name
         }}</UiButton></template
       >
       <template #cell-kind="{ row }"
@@ -313,8 +319,8 @@ function openGroup(group: string) {
     <section v-if="current" class="group-detail console-panel" data-testid="server-definition">
       <header class="console-page-header">
         <div>
-          <h2>{{ current.group.name }}</h2>
-          <p>{{ current.group.description }}</p>
+          <h2>{{ current.group.presentation.name }}</h2>
+          <p>{{ current.group.presentation.description }}</p>
         </div>
         <UiBadge>{{ t(`devices.${current.group.kind}`) }}</UiBadge>
       </header>
@@ -588,7 +594,7 @@ function openGroup(group: string) {
       :dismissible="!busy && !uncertain"
       @update:open="deleting = $event"
     >
-      <p>{{ current?.group.name }} · {{ current?.group.id }}</p>
+      <p>{{ current?.group.presentation.name }} · {{ current?.group.id }}</p>
       <p>{{ t('devices.memberCount') }}: {{ current?.group.memberCount }}</p>
       <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
       <template #footer

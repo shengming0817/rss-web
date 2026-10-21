@@ -68,12 +68,14 @@ it('edits explicit self-service access, descriptions and human/AI confirmation p
   expect(selfService(model)).toMatchObject({
     published: true,
     access: { kind: 'authenticated_user' },
-    displayName: 'Diagnostic request',
-    description: 'Investigate device health',
-    prerequisites: 'Logged in',
-    sideEffects: 'Collects diagnostic output',
-    category: 'Support',
-    keywords: ['health', 'diagnostics'],
+    presentation: {
+      displayName: 'Diagnostic request',
+      description: 'Investigate device health',
+      prerequisites: 'Logged in',
+      sideEffects: 'Collects diagnostic output',
+      category: 'Support',
+      keywords: ['health', 'diagnostics'],
+    },
     allowAi: false,
     riskLevel: 1,
   })

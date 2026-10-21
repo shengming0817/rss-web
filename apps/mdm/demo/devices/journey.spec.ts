@@ -88,8 +88,7 @@ it('previews do not publish membership and stale tasks do not overwrite a newer 
     operation({
       action: 'create',
       assetContext: 'endpoint' as const,
-      name: 'All',
-      description: '',
+      presentation: { name: 'All', description: '' },
       criteria: {
         selector: { kind: 'device' },
         quantifier: 'one',
@@ -111,11 +110,14 @@ it('previews do not publish membership and stale tasks do not overwrite a newer 
   expect(recompute.task).toBeTruthy()
   await groups.change(
     id,
-    operation({ action: 'edit', name: 'Renamed', description: '' }, current.group.revision),
+    operation(
+      { action: 'edit', presentation: { name: 'Renamed', description: '' } },
+      current.group.revision,
+    ),
   )
   await groups.status(id, recompute.task!)
   expect((await groups.status(id, recompute.task!)).status).toBe('superseded')
-  expect((await groups.read(id)).group.name).toBe('Renamed')
+  expect((await groups.read(id)).group.presentation.name).toBe('Renamed')
 })
 it('evaluates associated groups from both endpoint sources and withholds targets until the association is verified', async () => {
   const { associations, directory, assets, groups, domain, enrollment } = await setup()
@@ -149,8 +151,7 @@ it('evaluates associated groups from both endpoint sources and withholds targets
     id,
     operation({
       action: 'create',
-      name: 'Associated',
-      description: '',
+      presentation: { name: 'Associated', description: '' },
       assetContext: 'associated_device',
       criteria: {
         selector: { kind: 'device' },

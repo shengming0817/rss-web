@@ -45,8 +45,11 @@ it('preserves explicit device/user access and fixed selector coordinates without
 it('reads migrated null access only while withdrawn and requires an explicit choice to republish', () => {
   const migrated = {
     ...initialSelfService(),
-    displayName: 'Repair',
-    category: 'Support',
+    presentation: {
+      ...initialSelfService().presentation,
+      displayName: 'Repair',
+      category: 'Support',
+    },
     published: false,
   }
   expect(selfService(migrated).access).toBeNull()

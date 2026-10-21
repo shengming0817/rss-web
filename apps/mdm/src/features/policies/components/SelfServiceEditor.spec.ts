@@ -11,8 +11,11 @@ it('defaults only a first publication and preserves values across withdrawal and
   await wrapper.setProps({
     modelValue: {
       ...(first as SelfService),
-      displayName: 'Support',
-      category: 'Support',
+      presentation: {
+        ...(first as SelfService).presentation,
+        displayName: 'Support',
+        category: 'Support',
+      },
       allowAi: false,
       riskLevel: 1,
     },
@@ -28,12 +31,14 @@ it('keeps migrated access undecided until explicit selection and hides software 
   const value = {
     published: false,
     access: null,
-    displayName: 'App',
-    description: '',
-    prerequisites: '',
-    sideEffects: '',
-    category: 'Apps',
-    keywords: [],
+    presentation: {
+      displayName: 'App',
+      description: '',
+      prerequisites: '',
+      sideEffects: '',
+      category: 'Apps',
+      keywords: [],
+    },
     allowAi: false,
     riskLevel: 2,
   } as SelfService

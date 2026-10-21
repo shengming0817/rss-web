@@ -435,7 +435,7 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
   await form.find('.condition-editor').findAll('select').at(-1)!.setValue('true')
   await form.trigger('submit')
   await flushPromises()
-  const group = (await devices.groups.list()).items.find((g) => g.name === 'Dynamic')!
+  const group = (await devices.groups.list()).items.find((g) => g.presentation.name === 'Dynamic')!
   expect((await devices.groups.read(group.id)).criteria).toMatchObject({
     criteria: { value: { kind: 'boolean', value: true } },
   })
@@ -465,7 +465,10 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
   await devices.groups.change(group.id, {
     operationId: crypto.randomUUID(),
     expectedRevision: authoritative.group.revision,
-    input: { action: 'edit', name: 'Server changed name', description: 'Server description' },
+    input: {
+      action: 'edit',
+      presentation: { name: 'Server changed name', description: 'Server description' },
+    },
   })
   await click('概览')
   await click('编辑')
@@ -528,8 +531,7 @@ it('keeps the current group target when opening another group fails', async () =
     input: {
       action: 'create',
       assetContext: 'endpoint',
-      name: 'Other group',
-      description: '',
+      presentation: { name: 'Other group', description: '' },
       criteria: null,
     },
   })
@@ -1131,10 +1133,19 @@ it.each(['zh-CN', 'en-US'] as const)(
     await flushPromises()
     expect(
       h.wrapper
-        .findAll('select')[2]!
+        .findAll('select')
+        .find((select) => select.find('option[value="mdm.windows"]').exists())!
         .findAll('option')
         .map((o) => o.text()),
-    ).toEqual([locale === 'zh-CN' ? '全部' : 'All', 'Windows MDM', 'Apple MDM', 'Agent'])
+    ).toEqual([
+      locale === 'zh-CN' ? '全部' : 'All',
+      'Windows MDM',
+      'Apple MDM',
+      'Agent',
+      locale === 'zh-CN' ? 'Agent 脚本' : 'Agent script',
+      locale === 'zh-CN' ? 'Agent 原生采集' : 'Agent native collection',
+      'Agent osquery',
+    ])
   },
 )
 
@@ -1449,7 +1460,7 @@ it.each([
     await scoped.findAll('select')[1]!.setValue(JSON.stringify(scope))
     await flushPromises()
     const value = scoped.get('.asset-value')
-    expect(value.get('strong').text()).toBe('未知')
+    expect(value.get('strong').text()).toBe('结果不确定')
     expect(value.text()).toContain('采集不完整')
     const historical = value.findAll('dt').find((dt) => dt.text().includes('最后已知值'))!
     expect(historical.element.nextElementSibling?.textContent).toContain('987654')

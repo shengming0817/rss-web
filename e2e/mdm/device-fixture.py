@@ -13,12 +13,14 @@ import ssl
 import subprocess
 import sys
 import time
+import tempfile
 from urllib.parse import urlsplit
 import http.client
 import uuid
 
 WEB = Path(sys.argv[1]).resolve()
 BACKEND = Path.cwd()
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(BACKEND / 'hack'))
 from t2_environment import Environment, private
 from candidate_fixture import INSTANCE, TENANTS, ADMIN
@@ -137,7 +139,8 @@ try:
     providers.enter_context(pki(native, dict(os.environ), case=str(WEB)+':device-browser', agent=True, agent_origin=agent_origin))
     agent = json.loads((native/'agent-pki.json').read_text())
     agent['endpoint']['listen'] = f"127.0.0.1:{ports['backend']}"
-    config.update(agent_pki=agent, device_pki=json.loads((native/'device-pki.json').read_text()))
+    # Prepare task signing over the product session before enabling Agent runtime.
+    config['device_pki'] = json.loads((native/'device-pki.json').read_text())
     private(config_path, config)
     phase = 'authority'
     rule_id, rule = seed_authority()
@@ -171,6 +174,7 @@ try:
     config_path = Path(initialized['configuration'])
     config = json.loads(config_path.read_text())
     config['task_signing'] = dict(revision=trust['revision'])
+    config['agent_pki'] = agent
     # A deployment-owned entry for the disabled Policy's frozen input, not OS enrollment proof.
     config['enrollment_entries'] = dict(windows=initialized['origin'], macos=None)
     private(config_path, config)
@@ -193,6 +197,10 @@ except BaseException as error:
         print(json.dumps(dict(phase=phase, result='failed', **readiness)), flush=True)
     print(json.dumps(dict(phase=phase,result='failed',classification=type(error).__name__)),flush=True)
     product_log = environment.root/'product.log'
+    if product_log.exists():
+        diagnostic = Path(tempfile.mkdtemp(prefix='mdm-device-failure-'))
+        private(diagnostic/'product.log', product_log.read_text())
+        print(json.dumps(dict(phase='diagnostics', directory=str(diagnostic))), flush=True)
     if product_log.exists() and 'stack overflow' in product_log.read_text():
         print(json.dumps(dict(phase='product',result='failed',classification='stack-overflow')),flush=True)
 finally:
