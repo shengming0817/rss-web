@@ -16,7 +16,7 @@ export const settingsZh = {
   managedAppleEnrollment: 'Managed Apple Account',
   packageUploadBlocked: '新安装包上传与替换暂不可用',
   packageUploadReason:
-    '需要服务端将安装文件与可信版本、签名及发布材料关联；当前显示已发布的合格安装包。',
+    '需要服务端关联安装文件、版本、摘要和发布记录；签名与公证信息为可选项。当前显示已发布的安装包。',
   noPackage: '尚未发布此平台安装包',
   packagePublished: '已发布',
   withdrawPackageHint: '撤回后此发行包将不再用于新的安装交付。',
@@ -116,7 +116,7 @@ export const settingsZh = {
     '运维先停止对应写服务，维护命令校验原数据与材料。共享 CA 恢复须独立演练；异址自动灾备、设备恢复效果与 RPO/RTO 均未由此证明。',
   packageHint:
     '包签名与公证由实际构建方完成；从正式资源中选择已审核的安装器与清单，发布后仍需设备安装验收。',
-  publishPackage: '发布正式 Agent 包',
+  publishPackage: '发布 Agent 安装包',
   withdrawPackage: '撤回发布包',
   packageVersion: '资源版本',
   variant: '确切变体',
@@ -321,7 +321,7 @@ export const settingsEn = {
   managedAppleEnrollment: 'Managed Apple Account',
   packageUploadBlocked: 'New package upload and replacement are unavailable',
   packageUploadReason:
-    'The server must associate installer bytes with trusted version, signature and release material. Existing qualified published packages are shown below.',
+    'The server must associate installer bytes, version, digest and publication records. Signing and notarization metadata are optional. Published packages are shown below.',
   noPackage: 'No published package for this platform',
   packagePublished: 'Published',
   withdrawPackageHint: 'This release will no longer be available for new installation delivery.',

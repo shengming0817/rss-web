@@ -114,7 +114,6 @@ it('keeps unlimited quantity null and rejects altered scope or secret-free pseud
     lifetimeSeconds: 30,
     quantity: { kind: 'unlimited' },
     targets: [{ platform: 'windows', architecture: 'x86_64' }],
-    channels: ['test'],
   })
   expect(
     (await client.configurations.read(file.configuration.configurationId)).remaining,

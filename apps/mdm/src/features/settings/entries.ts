@@ -217,8 +217,8 @@ export const entries = {
   'agent-package': {
     section: 'enrollment',
     target: 'packages',
-    zh: '正式 Agent 包与签名资格',
-    en: 'Agent package and signing',
+    zh: 'Agent 安装包与发布',
+    en: 'Agent packages and publication',
   },
   'device-key': {
     section: 'enrollment',
