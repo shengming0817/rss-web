@@ -32,11 +32,11 @@ const { t } = useI18n(),
 const creating = ref(false)
 const presentationName = ref(''),
   presentationDescription = ref('')
-function readPresentation(value: ResourceRead) {
-  presentationName.value =
-    typeof value.presentation['name'] === 'string' ? value.presentation['name'] : ''
+function readPresentation(value?: ResourceRead) {
+  const presentation = value?.presentation ?? {}
+  presentationName.value = typeof presentation['name'] === 'string' ? presentation['name'] : ''
   presentationDescription.value =
-    typeof value.presentation['description'] === 'string' ? value.presentation['description'] : ''
+    typeof presentation['description'] === 'string' ? presentation['description'] : ''
 }
 function savePresentation() {
   if (!current.value) return
@@ -91,6 +91,7 @@ const id = ref(''),
     platform: 'windows',
     architecture: 'x86_64',
   })
+watch(current, readPresentation, { flush: 'sync' })
 const list = ref<Awaited<ReturnType<typeof client.list>>>(),
   artifact = ref<Artifact>({ reference: 'content', length: 0, sha256: Array(32).fill(0) })
 
@@ -155,7 +156,6 @@ function open(value = id.value) {
       (v) => {
         creating.value = false
         current.value = v
-        readPresentation(v)
         id.value = v.id
         kind.value = v.kind
         resetDraft()

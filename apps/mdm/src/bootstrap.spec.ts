@@ -7,6 +7,7 @@ import { mdmKey } from './context'
 import { createMdm } from './bootstrap'
 import { settingsDestination } from './features/settings/destinations'
 import { entries } from './features/settings/entries'
+import { navigationKey } from './components/navigation'
 const businessCalls = vi.hoisted(() => [] as string[])
 vi.mock('@rss/api/mdm', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@rss/api/mdm')>()),
@@ -67,6 +68,13 @@ it('provides the same session owner to auth, MDM and protected routes', async ()
       managementTenant: '99999999-9999-4999-8999-999999999999',
     },
   )
+  runtime.app.provide(navigationKey, [
+    {
+      id: 'policies',
+      label: 'mdm.policies',
+      items: [{ name: 'policy-policies', label: 'security.risks' }],
+    },
+  ])
   expect(settingsDestination(entries['device-key'].target, tenant)).toBeUndefined()
   for (const entry of Object.values(entries)) {
     const target = settingsDestination(entry.target, tenant)
@@ -122,6 +130,21 @@ it('provides the same session owner to auth, MDM and protected routes', async ()
     expect(Object.keys(mdm.operations)).toEqual(['authorization'])
     expect(mdm.policies).not.toHaveProperty('configurations')
   })
+
+  await runtime.router.push({ name: 'policy-policies', params: { tenant } })
+  await vi.waitFor(() =>
+    expect(
+      document.querySelector('.console-breadcrumb > span[aria-current=page]')?.textContent,
+    ).toBe(runtime.i18n.global.t('security.risks')),
+  )
+  document.querySelector<HTMLButtonElement>('.console-command-trigger')!.click()
+  await vi.waitFor(() =>
+    expect(
+      document.querySelector(
+        `.console-command-results a[href="/tenants/${tenant}/policies/assignments"]`,
+      )?.textContent,
+    ).toContain(runtime.i18n.global.t('security.risks')),
+  )
 
   await runtime.router.push(`/tenants/33333333-3333-4333-8333-333333333333/workspace`)
   expect(runtime.router.currentRoute.value.name).toBe('error')

@@ -9,7 +9,7 @@ import { useMdm } from './context'
 import { usePermission } from './features/enrollment/usePermission'
 import ConsoleNavigation from './components/ConsoleNavigation.vue'
 import {
-  navigation,
+  useNavigation,
   platformNavigation,
   detailParents,
   type NavigationItem,
@@ -17,7 +17,8 @@ import {
 const { t, locale } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
-  theme = useTheme()
+  theme = useTheme(),
+  navigation = useNavigation()
 useSessionLifecycle()
 const { canRead: canManageAgent } = usePermission('agent_enrollment_read', 'agent_enrollment_write')
 const collapsed = ref(false),

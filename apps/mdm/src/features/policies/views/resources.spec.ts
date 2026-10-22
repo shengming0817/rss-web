@@ -497,5 +497,34 @@ it('edits Resource presentation through the current client without dropping unkn
   expect(stored.presentation).toEqual({ ...presentation, name: 'Edited' })
   expect(stored.versions).toEqual(initial.versions)
   expect(stored.id).toBe('app')
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text() === '新建')!
+    .trigger('click')
+  await wrapper.get('#resource-id').setValue('second')
+  await wrapper.get('fieldset:has(#resource-id)').findAll('button').at(-1)!.trigger('click')
+  await flushPromises()
+  expect(wrapper.get<HTMLInputElement>('#resource-display-name').element.value).toBe('')
+  expect(wrapper.get<HTMLTextAreaElement>('#resource-description').element.value).toBe('')
+  await wrapper.get('[data-testid=resource-presentation]').trigger('submit')
+  await flushPromises()
+  expect((await client.read('second')).presentation).toEqual({ name: '', description: '' })
+  expect((await client.read('app')).presentation).toEqual(stored.presentation)
+  const blueprint = (await client.blueprints()).items[0]!
+  await wrapper.get('[data-testid=collection-blueprints] button').trigger('click')
+  await flushPromises()
+  await wrapper
+    .get('[data-testid=collection-blueprints]')
+    .findAll('select')
+    .at(-1)!
+    .setValue(JSON.stringify([blueprint.id, blueprint.version]))
+  await wrapper.get('[data-action=instantiate-package]').trigger('click')
+  await flushPromises()
+  expect(wrapper.get<HTMLInputElement>('#resource-display-name').element.value).toBe(
+    blueprint.presentation['name'] ?? '',
+  )
+  expect(wrapper.get<HTMLTextAreaElement>('#resource-description').element.value).toBe(
+    blueprint.presentation['description'] ?? '',
+  )
   wrapper.unmount()
 })
