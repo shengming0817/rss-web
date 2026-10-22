@@ -85,6 +85,151 @@ try {
   await page.locator('#login-password').fill(readFileSync(f.passwordFile, 'utf8').trim())
   await page.locator('form').evaluate((form) => form.requestSubmit())
   await page.waitForURL((url) => /\/(?:workspace|settings\/guide)$/.test(url.pathname))
+  phase = 'formal-source-import'
+  await write('/api/v1/software/sources/browser-rest/revisions/1', {
+    action: 'register',
+    definition: {
+      id: 'browser-rest',
+      revision: '1',
+      protocol: {
+        kind: 'winget_rest',
+        location: f.upstream + '/rest/',
+        identifier: 'browser-rest',
+      },
+    },
+  })
+  const importedResource = 'browser-import-' + randomUUID()
+  const invocationImport = {
+    runAs: 'system',
+    arguments: [],
+    environment: {},
+    timeoutSeconds: 60,
+    outputBytes: 4096,
+    exitCodes: { success: [0], reboot: [] },
+  }
+  const behaviorImport = {
+    kind: 'msi',
+    installer: 'installer',
+    scope: 'system',
+    install: invocationImport,
+    upgradeInvocation: invocationImport,
+    upgrade: 'in_place',
+    uninstall: null,
+    detect: {
+      kind: 'msi_product',
+      productCode: '{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}',
+      version: '1.2',
+    },
+  }
+  await page.goto(route('software/imports'))
+  await idle()
+  await page.locator('#import-source').selectOption('browser-rest/1')
+  await click('继续')
+  await page.getByLabel('软件资源', { exact: true }).fill(importedResource)
+  await page.getByLabel('包标识', { exact: true }).fill('Acme.App')
+  await page.getByLabel('来源包版本', { exact: true }).fill('1.2')
+  await page.getByLabel('安装产物字节数', { exact: true }).fill('3')
+  await click('继续')
+  await page
+    .getByLabel('原生安装行为（含运行身份与安装范围）', { exact: true })
+    .fill(JSON.stringify(behaviorImport))
+  const imports = [],
+    importStatuses = []
+  const loseImport = async (r) => {
+    if (r.request().method() !== 'POST') return r.continue()
+    imports.push(r.request().postDataJSON())
+    const response = await r.fetch()
+    importStatuses.push(response.status())
+    if (response.status() !== 200) return r.fulfill({ response })
+    if (imports.length === 1) await r.abort('failed')
+    else await r.fulfill({ response })
+  }
+  await page.route('**/api/v1/software/imports', loseImport)
+  await page.getByRole('button', { name: '导入', exact: true }).click()
+  const recovery = page.locator('section[role=status]')
+  await recovery.waitFor()
+  assert.deepEqual(importStatuses, [200])
+  await click('核实状态')
+  assert.equal(imports.length, 1)
+  await recovery.locator('input[type=checkbox]').check()
+  await click('重放同一操作')
+  assert.deepEqual(imports[0], imports[1])
+  await page.unroute('**/api/v1/software/imports', loseImport)
+  await page.getByRole('heading', { name: '来源导入已确认', exact: true }).waitFor()
+  coverage.push('real-rest-metadata-import-and-exact-original-replay-after-committed-response-loss')
+  phase = 'resource-upload-resume-receipt'
+  await page.goto(route(`policies/resources?resource=${importedResource}&version=1&tab=content`))
+  await idle()
+  let uploadIdentity,
+    patches = 0
+  const lostChunk = async (r) => {
+    if (r.request().method() !== 'PATCH') return r.continue()
+    uploadIdentity = new URL(r.request().url()).pathname.split('/').at(-1)
+    patches++
+    const response = await r.fetch()
+    assert.equal(response.status(), 200)
+    if (patches === 1) await r.abort('failed')
+    else await r.fulfill({ response })
+  }
+  await page.route('**/api/v1/resources/*/uploads/*?*', lostChunk)
+  await page.locator('#resource-upload').setInputFiles({
+    name: 'Acme.msi',
+    mimeType: 'application/octet-stream',
+    buffer: Buffer.from('abc'),
+  })
+  await click('上传内容')
+  await page.locator('[role=alert]').first().waitFor()
+  assert.equal(patches, 1)
+  await page.locator('[data-action=read-upload]').click()
+  await idle()
+  assert.equal(patches, 1)
+  await page.locator('[data-action=complete-upload]').click()
+  await idle()
+  await page.unroute('**/api/v1/resources/*/uploads/*?*', lostChunk)
+  const receipt = await api(
+    `/api/v1/resources/${importedResource}/content/operations/${uploadIdentity}`,
+  )
+  assert.equal(receipt.committed, true)
+  assert.equal(receipt.length, 3)
+  assert.deepEqual(receipt.sha256, [...createHash('sha256').update('abc').digest()])
+  coverage.push(
+    'production-resource-upload-lost-chunk-read-frontier-explicit-complete-and-content-receipt',
+  )
+  phase = 'version-admission-private-download'
+  await page.goto(route(`software/catalog?resource=${importedResource}&version=1`))
+  await idle()
+  await page.getByRole('heading', { name: '版本准入 · 1', exact: true }).waitFor()
+  await page.getByRole('button', { name: '启用', exact: true }).click()
+  await page.getByRole('button', { name: '撤回', exact: true }).waitFor({ state: 'visible' })
+  await poll(
+    () => api(`/api/v1/software/resources/${importedResource}/versions/1`),
+    (v) => v.lifecycle?.state === 'enabled',
+  )
+  const [file] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: '下载并核验私有安装包', exact: true }).click(),
+  ])
+  const downloaded = readFileSync(await file.path())
+  assert.equal(downloaded.toString(), 'abc')
+  const anonymous = await browser.newContext({ ignoreHTTPSErrors: true })
+  const protectedReply = await anonymous.request.get(
+    `${origin}/api/v1/software/resources/${importedResource}/versions/1/content?platform=windows&architecture=x86_64&variant=main`,
+  )
+  assert.equal(protectedReply.status(), 401)
+  await anonymous.close()
+  await page.getByRole('button', { name: '撤回', exact: true }).click()
+  await poll(
+    () => api(`/api/v1/software/resources/${importedResource}/versions/1`),
+    (v) => v.lifecycle?.state === 'withdrawn',
+  )
+  const revoked = await context.request.get(
+    `${origin}/api/v1/software/resources/${importedResource}/versions/1/content?platform=windows&architecture=x86_64&variant=main`,
+  )
+  assert.equal(revoked.status(), 403)
+  assert.deepEqual(await revoked.json(), { code: 'permission_denied' })
+  coverage.push(
+    'admission-private-download-byte-digest-anonymous-denial-and-withdrawal-revokes-new-read',
+  )
   phase = 'seed-through-product-api'
   const source = await write('/api/v1/software/sources/browser-source/revisions/1', {
     action: 'register',
@@ -111,6 +256,7 @@ try {
       package: 'Browser.App',
       version,
       provenance: { kind: 'private' },
+      material: { bundle_id: null, format: 'winget', installer: 'package' },
       artifacts: {
         package: { reference: 'installer', origin: null, length: bytes.length, sha256: digest },
       },
@@ -345,11 +491,7 @@ try {
   phase = 'withdrawal'
   await page.goto(route('software/publications'))
   await idle()
-  await page
-    .locator('article')
-    .filter({ hasText: `${resource} / v2` })
-    .getByRole('button', { name: '打开', exact: true })
-    .click()
+  await page.getByRole('button', { name: `${resource} / v2`, exact: true }).click()
   await page.locator('[data-testid=publication-detail]').waitFor()
   await click('撤回')
   const withdrawn = await api(`/api/v1/software/publications/${published[1].id}`),

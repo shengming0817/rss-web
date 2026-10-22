@@ -69,6 +69,26 @@ export function createLifecycleDemo(resources: ReturnType<typeof createResourceD
     return true
   }
   const handle: DomainHandler = (request, scenario) => {
+    const content = /^\/api\/v1\/software\/resources\/([^/]+)\/versions\/([^/]+)\/content$/.exec(
+      request.path,
+    )
+    if (content && request.method === 'GET') {
+      if (scenario === 'denied') return error('permission_denied', 403)
+      const id = decodeURIComponent(content[1]!),
+        version = decodeURIComponent(content[2]!)
+      if (!isEnabled(id, version)) return error('operation_conflict')
+      const bytes = resources.softwareContent(
+        id,
+        version,
+        request.query.get('platform') ?? '',
+        request.query.get('architecture') ?? '',
+        request.query.get('variant') ?? '',
+        request.query.get('artifact') ?? undefined,
+      )
+      return bytes
+        ? { status: 200, body: bytes, headers: { 'Content-Type': 'application/octet-stream' } }
+        : error('resource_not_found', 404)
+    }
     if (request.path === '/api/v1/software/sources' && request.method === 'GET') {
       if (scenario === 'denied') return error('permission_denied', 403)
       try {
@@ -127,6 +147,8 @@ export function createLifecycleDemo(resources: ReturnType<typeof createResourceD
               resource: id,
               version: label,
               resourceDigest: resource.digest,
+              resourceRevision: resources.read(id)!.revision,
+              presentation: resources.read(id)!.presentation,
               lifecycle: previous ?? null,
             })
           : error('resource_not_found', 404)

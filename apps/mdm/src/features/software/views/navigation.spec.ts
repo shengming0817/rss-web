@@ -37,7 +37,14 @@ for (const screen of [
     query: 'resource',
     test: 'resource-locator',
     owner: 'resources',
-    value: (id: string) => ({ id, kind: 'software', revision: 1, versions: [] }),
+    value: (id: string) => ({
+      id,
+      presentation: {},
+      origin: null,
+      kind: 'software',
+      revision: 1,
+      versions: [],
+    }),
   },
 ]) {
   it(`${screen.owner} discards late responses and clears stale data after a failed deep link`, async () => {

@@ -1,3 +1,4 @@
+import { decodeMdmError } from '@rss/api/mdm'
 import { DOMWrapper, mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { defineComponent, h, ref, type Component } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -64,11 +65,12 @@ async function fixture(component: Component, owners: object, props = {}, query =
   return { wrapper, session, router }
 }
 const button = (w: VueWrapper, name: string) => w.findAll('button').find((b) => b.text() === name)!
-const field = (w: VueWrapper, text: string) =>
-  w
-    .findAll('label')
-    .find((l) => l.text().startsWith(text))!
-    .find('input,textarea,select')
+const field = (w: VueWrapper, text: string) => {
+  const label = w.findAll('label').find((l) => l.text().startsWith(text))!
+  return label.attributes('for')
+    ? w.get(`#${label.attributes('for')}`)
+    : label.find('input,textarea,select')
+}
 it('registers a source directly and uses the displayed lifecycle CAS for disable and enable', async () => {
   const changeSource = vi.fn(async (_id, _revision, body) => ({
     ...source,
@@ -194,7 +196,7 @@ for (const outcome of ['published', 'not_applied'])
     const { wrapper, session } = await fixture(PublicationsView, {
       software: { publication: { change, list, read } },
     })
-    await button(wrapper, '打开').trigger('click')
+    await button(wrapper, 'app / 1').trigger('click')
     await flushPromises()
     await button(wrapper, '恢复发布操作').trigger('click')
     await flushPromises()
@@ -216,25 +218,37 @@ for (const outcome of ['published', 'not_applied'])
     expect(wrapper.find('[data-testid=publication-detail]').exists()).toBe(false)
     wrapper.unmount()
   })
-it('imports synchronously with a source snapshot, and a Resource read cannot settle a lost import', async () => {
+it('pins source and complete import operation across a lost response and explicit replay', async () => {
   const imported = vi.fn().mockRejectedValue(new Error('lost')),
     { definition } = softwareResource()
-  const { wrapper } = await fixture(ImportsView, {
+  const selected = {
+    ...source,
+    source: {
+      ...source.source,
+      protocol: { kind: 'winget_rest', location: 'https://source.test/', identifier: 'enterprise' },
+    },
+  }
+  const { wrapper, session } = await fixture(ImportsView, {
     software: {
-      lifecycle: { source: vi.fn().mockResolvedValue(source) },
+      lifecycle: {
+        sources: vi.fn(async () => ({ items: [selected], nextCursor: null })),
+        source: vi.fn().mockResolvedValue(selected),
+      },
       imports: { import: imported },
     },
     policies: { resources: { read: vi.fn().mockResolvedValue({ id: 'app', revision: 1 }) } },
   })
-  const inputs = wrapper.findAll('input')
-  await inputs[0]!.setValue('enterprise')
-  await inputs[2]!.setValue('app')
-  await inputs[5]!.setValue('Example.App')
-  await inputs[6]!.setValue('1.0')
-  await wrapper.findAll('textarea')[1]!.setValue(JSON.stringify(definition.behavior))
+  await field(wrapper, '企业来源 ID').setValue('enterprise/1')
+  await button(wrapper, '继续').trigger('click')
+  await field(wrapper, '软件资源').setValue('app')
+  await field(wrapper, '包标识').setValue('Example.App')
+  await field(wrapper, '来源包版本').setValue('1.0')
+  await field(wrapper, '原生安装行为').setValue(JSON.stringify(definition.behavior))
+  await button(wrapper, '继续').trigger('click')
   await wrapper.get('form').trigger('submit')
   await flushPromises()
-  expect(imported.mock.calls[0]?.[0]).toMatchObject({
+  const original = structuredClone(imported.mock.calls[0]?.[0])
+  expect(original).toMatchObject({
     expectedRevision: 0,
     input: { source: source.snapshot, resource: 'app', selection: { installerType: 'msi' } },
   })
@@ -242,11 +256,27 @@ it('imports synchronously with a source snapshot, and a Resource read cannot set
   await flushPromises()
   expect(button(wrapper, '导入').element.matches(':disabled')).toBe(true)
   expect(imported).toHaveBeenCalledTimes(1)
+  await wrapper.get('section[role=status] input[type=checkbox]').setValue(true)
+  await button(wrapper, '重放同一操作').trigger('click')
+  await flushPromises()
+  expect(imported.mock.calls[1]?.[0]).toEqual(original)
+  session.value = { ...session.value, session: { id: crypto.randomUUID() } }
+  await flushPromises()
+  expect(wrapper.find('section[role=status]').exists()).toBe(false)
+  expect(imported).toHaveBeenCalledTimes(2)
   wrapper.unmount()
 })
 it('uses Resource pages and reads versions only after selection without inventing directory metadata', async () => {
   const list = vi.fn().mockResolvedValue({
-      items: [{ id: 'app', revision: 2, kind: 'software', activeVersion: '1' }],
+      items: [
+        {
+          id: 'app',
+          presentation: { name: 'Example App' },
+          revision: 2,
+          kind: 'software',
+          activeVersion: '1',
+        },
+      ],
       nextCursor: 'app',
     }),
     read = vi.fn().mockResolvedValue({
@@ -262,9 +292,11 @@ it('uses Resource pages and reads versions only after selection without inventin
   })
   expect(list).toHaveBeenCalledWith('software', undefined)
   expect(read).not.toHaveBeenCalled()
-  await button(wrapper, 'app · 1').trigger('click')
+  await wrapper.get('tbody button').trigger('click')
   await flushPromises()
   expect(read).toHaveBeenCalledWith('app')
+  await button(wrapper, '← 企业软件目录').trigger('click')
+  await flushPromises()
   await button(wrapper, '下一页').trigger('click')
   await flushPromises()
   expect(list).toHaveBeenLastCalledWith('software', 'app')
@@ -274,9 +306,10 @@ it('uses Resource pages and reads versions only after selection without inventin
   wrapper.unmount()
 })
 it('selects a Resource header before reading real versions and clears the previous version', async () => {
-  const list = vi
-      .fn()
-      .mockResolvedValue({ items: [{ id: 'app', activeVersion: '1' }], nextCursor: null }),
+  const list = vi.fn().mockResolvedValue({
+      items: [{ id: 'app', presentation: {}, activeVersion: '1' }],
+      nextCursor: null,
+    }),
     read = vi.fn().mockResolvedValue({ kind: 'software', versions: [{ id: '1', state: 'active' }] })
   const { wrapper } = await fixture(
     defineComponent({
@@ -488,39 +521,50 @@ for (const protocol of [
   })
 it('submits a complete synchronous import with explicit target and auxiliary material choices', async () => {
   const { definition } = softwareResource(),
-    imported = vi.fn().mockResolvedValue({
-      resource: 'imported',
-      version: '2',
-      resourceDigest: sha,
-      storageRevision: 5,
-    })
+    imported = vi
+      .fn()
+      .mockRejectedValueOnce(decodeMdmError(501, { code: 'action_not_supported' }))
+      .mockResolvedValue({
+        resource: 'imported',
+        version: '2',
+        resourceDigest: sha,
+        storageRevision: 5,
+      })
+  const selected = {
+    ...source,
+    source: {
+      ...source.source,
+      revision: '2',
+      protocol: { kind: 'winget_rest', location: 'https://source.test/', identifier: 'enterprise' },
+    },
+    snapshot: { ...source.snapshot, revision: '2' },
+  }
   const { wrapper } = await fixture(ImportsView, {
     software: {
       lifecycle: {
-        source: vi.fn().mockResolvedValue({
-          ...source,
-          source: { ...source.source, revision: '2' },
-          snapshot: { ...source.snapshot, revision: '2' },
-        }),
+        sources: vi.fn(async () => ({ items: [selected], nextCursor: null })),
+        source: vi.fn().mockResolvedValue(selected),
       },
       imports: { import: imported },
     },
   })
-  const inputs = wrapper.findAll('input')
-  for (const [index, value] of [
-    [0, 'enterprise'],
-    [1, '2'],
-    [2, 'imported'],
-    [3, '2'],
-    [4, 4],
-    [5, 'Example.App'],
-    [6, '2.0'],
-    [7, 'arm'],
-    [8, 123],
+  await field(wrapper, '企业来源 ID').setValue('enterprise/2')
+  await button(wrapper, '继续').trigger('click')
+  for (const [label, value] of [
+    ['软件资源', 'imported'],
+    ['精确包版本', '2'],
+    ['版本', 4],
+    ['包标识', 'Example.App'],
+    ['来源包版本', '2.0'],
+    ['平台', 'windows'],
+    ['架构', 'aarch64'],
+    ['变体', 'arm'],
+    ['安装产物字节数', 123],
   ] as const)
-    await inputs[index]!.setValue(value)
-  await wrapper.findAll('select')[0]!.setValue('windows')
-  await wrapper.findAll('select')[1]!.setValue('aarch64')
+    await field(wrapper, label).setValue(value)
+  await field(wrapper, '安装器标识').setValue('installer-arm')
+  await field(wrapper, '清单文件').setValue('installer.yaml')
+  await button(wrapper, '继续').trigger('click')
   const selection = {
     kind: 'winget',
     installerType: 'msi',
@@ -537,16 +581,14 @@ it('submits a complete synchronous import with explicit target and auxiliary mat
       sha256: sha,
     },
     signature = { artifact: 'installer', mechanism: 'authenticode', publisher: 'Example Publisher' }
-  const areas = wrapper.findAll('textarea')
-  for (const [index, value] of [
-    [0, selection],
-    [1, definition.behavior],
-    [2, { verify: artifact }],
-    [3, [dependency]],
-    [4, [signature]],
+  for (const [label, value] of [
+    ['原生安装行为', definition.behavior],
+    ['辅助文件定义', { verify: artifact }],
+    ['固定依赖', [dependency]],
+    ['签名要求', [signature]],
   ] as const)
-    await areas[index]!.setValue(JSON.stringify(value))
-  await wrapper.findAll('select')[2]!.setValue('forbid')
+    await field(wrapper, label).setValue(JSON.stringify(value))
+  await field(wrapper, '重启策略').setValue('forbid')
   await wrapper.findAll('input[type=checkbox]')[0]!.setValue(true)
   await wrapper.findAll('input[type=checkbox]')[1]!.setValue(true)
   await wrapper.get('form').trigger('submit')
@@ -570,6 +612,10 @@ it('submits a complete synchronous import with explicit target and auxiliary mat
       nativeExport: true,
     },
   })
+  expect(wrapper.text()).toContain('内容后端未启用或此操作不可用')
+  expect(wrapper.find('section[role=status]').exists()).toBe(false)
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
   expect(wrapper.text()).toContain('imported / 2 · 5')
   wrapper.unmount()
 })
@@ -667,5 +713,51 @@ it('binds explicit Agent releases in the common Policy and reads canonical regis
   await button(wrapper, '执行中心').trigger('click')
   await flushPromises()
   expect(directory.mock.calls[0]?.[0].policy).toBe(saved?.id)
+  wrapper.unmount()
+})
+
+it('keeps the pinned Catalog version while admission is unknown and refuses mismatched private bytes', async () => {
+  const { resources } = softwareResource(),
+    read = vi.fn().mockResolvedValue(resources.read('app')),
+    content = vi.fn().mockResolvedValue(new Uint8Array([9, 9, 9]).buffer),
+    change = vi.fn().mockRejectedValue(new Error('lost'))
+  const { wrapper } = await fixture(
+    CatalogView,
+    {
+      policies: { resources: { read, list: vi.fn(async () => ({ items: [], nextCursor: null })) } },
+      software: {
+        content: { read: content },
+        lifecycle: {
+          version: vi.fn(async () => ({
+            resource: 'app',
+            version: '1',
+            resourceDigest: sha,
+            resourceRevision: 2,
+            presentation: {},
+            lifecycle: null,
+          })),
+          changeVersion: change,
+        },
+      },
+    },
+    {},
+    { resource: 'app', version: '1' },
+  )
+  await button(wrapper, '下载并核验私有安装包').trigger('click')
+  await flushPromises()
+  expect(content.mock.calls[0]).toEqual([
+    'app',
+    { version: '1', platform: 'windows', architecture: 'x86_64', variant: 'main' },
+  ])
+  expect(wrapper.text()).toContain('输入或响应无效，操作未确认。')
+  await button(wrapper, '启用').trigger('click')
+  await flushPromises()
+  expect(wrapper.get('select').attributes('disabled')).toBeDefined()
+  expect(button(wrapper, '← 企业软件目录').attributes('disabled')).toBeDefined()
+  const original = structuredClone(change.mock.calls[0])
+  await wrapper.get('section[role=status] input[type=checkbox]').setValue(true)
+  await button(wrapper, '重放同一操作').trigger('click')
+  await flushPromises()
+  expect(change.mock.calls[1]).toEqual(original)
   wrapper.unmount()
 })

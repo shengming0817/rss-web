@@ -360,6 +360,29 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
     handle,
     importVersion,
     importReceipt: (operation: string) => imported.get(operation)?.revision ?? null,
+    softwareContent: (
+      id: string,
+      version: string,
+      platform: string,
+      architecture: string,
+      key: string,
+      artifact?: string,
+    ) => {
+      const variant = resources
+        .get(id)
+        ?.versions.find((v) => v.id === version)
+        ?.variants.find(
+          (v) => v.platform === platform && v.architecture === architecture && v.key === key,
+        )
+      if (!variant || variant.declaration.kind !== 'software') return undefined
+      const d = variant.declaration.definition,
+        a = artifact
+          ? Object.values(d.artifacts).find((v) => v.reference === artifact)
+          : d.artifacts[d.material.installer]
+      return a
+        ? contents.get(contentKey(id, version, variant, a.reference))?.slice().buffer
+        : undefined
+    },
     contentReady: (id: string, version: string) => {
       const v = resources.get(id)?.versions.find((v) => v.id === version)
       return (

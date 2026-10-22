@@ -15,6 +15,9 @@ const props = defineProps<{ resource: string; version: string }>(),
     props.resource,
     props.version,
   ])
+const emit = defineEmits<{ locked: [value: boolean] }>()
+const confirmedReplay = ref(false)
+watch([busy, uncertain], () => emit('locked', busy.value || uncertain.value), { immediate: true })
 const current = ref<Awaited<ReturnType<typeof client.version>>>()
 let pending: Operation<VersionChange> | undefined
 function load() {
@@ -29,8 +32,21 @@ function load() {
     },
   )
 }
+function replay() {
+  if (!pending || busy.value || !confirmedReplay.value || !uncertain.value) return
+  const original = pending
+  void runWrite(
+    () => client.changeVersion(props.resource, props.version, original),
+    (v) => {
+      if (current.value) current.value.lifecycle = v.lifecycle
+      pending = undefined
+      confirmedReplay.value = false
+    },
+  )
+}
 function change(action: VersionChange['action']) {
   if (busy.value || uncertain.value || !current.value) return
+  confirmedReplay.value = false
   pending = operation({ action }, current.value.lifecycle?.revision ?? 0)
   const p = pending
   void runWrite(
@@ -53,7 +69,8 @@ watch(
 </script>
 <template>
   <section :aria-busy="busy">
-    <h3>{{ t('software.versionLifecycle') }} · {{ version }}</h3>
+    <h3>{{ t('software.ux.admission') }} · {{ version }}</h3>
+    <p v-if="failure === 'unsupported'" role="alert">{{ t('software.ux.contentPrerequisite') }}</p>
     <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
     <template v-if="current"
       ><p>
@@ -71,6 +88,17 @@ watch(
         @click="change('withdraw')"
         >{{ t('software.withdraw') }}</UiButton
       ></template
-    ><UiButton :disabled="busy" @click="load">{{ t('software.reconcile') }}</UiButton>
+    >
+    <section v-if="uncertain && pending" role="status">
+      <p>{{ t('software.publicationUnknown') }} · {{ pending.operationId }}</p>
+      <label
+        ><input v-model="confirmedReplay" type="checkbox" />{{
+          t('software.ux.confirmReplay')
+        }}</label
+      ><UiButton :disabled="busy || !confirmedReplay" @click="replay">{{
+        t('policies.replay')
+      }}</UiButton>
+    </section>
+    <UiButton :disabled="busy" @click="load">{{ t('software.reconcile') }}</UiButton>
   </section>
 </template>

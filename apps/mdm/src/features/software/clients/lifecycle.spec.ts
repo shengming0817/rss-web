@@ -57,10 +57,20 @@ it('accepts the current finite source protocols and refuses ambiguous or credent
   expect(() => lifecycle({ ...enabled, state: 'approved' })).toThrow()
 })
 it('keeps a draft lifecycle absent and binds mutations to their exact operation receipt', async () => {
-  let reply: unknown = { resource: 'app', version: '1', resourceDigest: sha, lifecycle: null }
+  let reply: unknown = {
+    resource: 'app',
+    version: '1',
+    resourceDigest: sha,
+    resourceRevision: 7,
+    presentation: { name: 'App', vendorExtension: { color: 'blue' } },
+    lifecycle: null,
+  }
   const request = vi.fn(async (o: RequestOptions<unknown>) => o.decode(reply)),
     client = createLifecycleClient({ request } as unknown as HttpTransport)
-  expect((await client.version('app', '1')).lifecycle).toBeNull()
+  const version = await client.version('app', '1')
+  expect(version.lifecycle).toBeNull()
+  expect(version.presentation['vendorExtension']).toEqual({ color: 'blue' })
+  expect(version.resourceRevision).toBe(7)
   const body = { operationId: id, expectedRevision: 0, input: { action: 'enable' as const } }
   reply = { resource: 'app', version: '1', lifecycle: enabled }
   expect((await client.changeVersion('app', '1', body)).lifecycle.state).toBe('enabled')
@@ -96,4 +106,13 @@ it('keeps a draft lifecycle absent and binds mutations to their exact operation 
     }),
   ).rejects.toThrow('lost response')
   expect(request).toHaveBeenCalledTimes(5)
+})
+
+it('rejects the retired version DTO without current presentation and Resource revision', async () => {
+  const request = vi.fn(async (o: RequestOptions<unknown>) =>
+    o.decode({ resource: 'app', version: '1', resourceDigest: sha, lifecycle: null }),
+  )
+  await expect(
+    createLifecycleClient({ request } as unknown as HttpTransport).version('app', '1'),
+  ).rejects.toThrow()
 })

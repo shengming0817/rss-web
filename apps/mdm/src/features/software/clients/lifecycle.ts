@@ -1,4 +1,5 @@
 import type { HttpTransport } from '@rss/api/mdm'
+import { jsonObject } from '../../../services/json'
 import type { Operation } from '../../../services/useOperation'
 import {
   array,
@@ -149,13 +150,22 @@ export function createLifecycleClient(transport: HttpTransport) {
         pathParams: { id, version },
         successStatus: 200,
         decode(value) {
-          const v = closed(value, ['resource', 'version', 'resourceDigest', 'lifecycle'])
+          const v = closed(value, [
+            'resource',
+            'version',
+            'resourceDigest',
+            'resourceRevision',
+            'presentation',
+            'lifecycle',
+          ])
           if (v['resource'] !== id || v['version'] !== version)
             throw new Error('Wrong software version')
           return {
             resource: id,
             version,
             resourceDigest: digest(v['resourceDigest']),
+            resourceRevision: count(v['resourceRevision']),
+            presentation: jsonObject(v['presentation'], 65536),
             lifecycle: nullable(v['lifecycle'], lifecycle),
           }
         },

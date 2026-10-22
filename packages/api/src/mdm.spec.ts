@@ -397,6 +397,40 @@ it('uses shared binary execution only for published attachment endpoints and dec
       transport.request({ method: 'GET', path, successStatus: 200, decode: (v) => v }),
     ).rejects.toMatchObject({ cause: 'client' })
 })
+it('permits authenticated binary software reads only at the exact version content route', async () => {
+  const instance = axios.create(),
+    mock = new AxiosMockAdapter(instance),
+    spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance),
+    transport = createMdmTransport()
+  spy.mockRestore()
+  const bytes = new Uint8Array([1, 2, 3]).buffer
+  mock
+    .onGet('/api/v1/software/resources/app/versions/1/content')
+    .reply(200, bytes, { 'content-type': 'application/octet-stream' })
+  const read = {
+    method: 'GET' as const,
+    path: '/api/v1/software/resources/{id}/versions/{version}/content',
+    pathParams: { id: 'app', version: '1' },
+    responseType: 'arraybuffer' as const,
+    successStatus: 200 as const,
+    decode: (v: unknown) => v,
+  }
+  await expect(transport.request(read)).resolves.toMatchObject({ bytes })
+  for (const change of [
+    { method: 'POST' as const },
+    { path: '/api/v1/software/resources/{id}/versions/{version}' },
+  ])
+    await expect(transport.request({ ...read, ...change })).rejects.toMatchObject({
+      cause: 'client',
+    })
+  mock
+    .onGet('/api/v1/software/resources/app/versions/1/content')
+    .reply(403, new TextEncoder().encode('{"code":"permission_denied"}').buffer)
+  await expect(transport.request(read)).rejects.toMatchObject({
+    cause: 'wire',
+    code: 'permission_denied',
+  })
+})
 it('dispatches formal device views and associations through the shared boundary without retries', async () => {
   const instance = axios.create(),
     mock = new AxiosMockAdapter(instance)
