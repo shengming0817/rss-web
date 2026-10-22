@@ -435,7 +435,7 @@ try {
   await settled(`/api/v1/scopes/${scope.id}/tasks/${scope.task}`)
   await page.getByRole('button', { name: '读取任务状态', exact: true }).click()
   await loaded()
-  await page.locator('#scope-projection').selectOption('decisions')
+  await page.getByRole('tab', { name: '判定说明', exact: true }).click()
   const channelSelect = page
     .locator('select')
     .filter({ has: page.locator('option[value="agent"]') })
@@ -476,6 +476,10 @@ try {
   await writeRule(fixture.rule.grants)
   await page.getByRole('button', { name: '新建', exact: true }).click()
   const planningScopeDialog = page.getByRole('dialog')
+  await planningScopeDialog
+    .locator('details')
+    .getByText('原始标识与技术信息', { exact: true })
+    .click()
   await planningScopeDialog.locator('#scope-id').fill(selectedScope)
   await planningScopeDialog.getByRole('button', { name: '打开', exact: true }).click()
   await loaded()
@@ -836,7 +840,8 @@ try {
   }
   async function configurePackage(blueprintId) {
     await page.goto(path('policies/resources'))
-    await page.getByRole('button', { name: '选择标准包', exact: true }).click()
+    await page.getByRole('button', { name: '新建', exact: true }).click()
+    await page.getByRole('dialog').getByRole('button', { name: '选择标准包', exact: true }).click()
     const catalog = await api('/api/v1/collection-blueprints')
     assert.ok(
       catalog.items.some((item) => item.id === blueprintId),

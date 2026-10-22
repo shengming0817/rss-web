@@ -361,7 +361,7 @@ it('clears the software definition and artifact draft when opening another resou
   await wrapper.get('#resource-variant').setValue('first-variant')
   await wrapper
     .findAll('button')
-    .find((b) => b.text() === '重新读取')!
+    .find((b) => b.text().includes('返回资源目录'))!
     .trigger('click')
   await flushPromises()
   await wrapper
@@ -546,6 +546,7 @@ it('edits Resource presentation through the current client without dropping unkn
     .findAll('button')
     .find((button) => button.text() === '新建')!
     .trigger('click')
+  await wrapper.get('#resource-kind').setValue('script')
   await wrapper.get('#resource-id').setValue('second')
   await wrapper.get('fieldset:has(#resource-id)').findAll('button').at(-1)!.trigger('click')
   await flushPromises()

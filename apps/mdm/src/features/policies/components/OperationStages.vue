@@ -1,10 +1,23 @@
 <script setup lang="ts">
 import { UiBadge } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
-defineProps<{ dispatch: string; receipt: string; effect: string }>()
+const props = defineProps<{
+  kind: 'command' | 'action_run'
+  dispatch: string
+  receipt: string
+  effect: string
+}>()
 const { t, te } = useI18n()
-function label(value: string) {
-  return te(`policies.fact.${value}`) ? t(`policies.fact.${value}`) : value
+function label(stage: 'dispatch' | 'receipt' | 'effect', value: string) {
+  const key =
+    props.kind === 'action_run' && stage === 'dispatch'
+      ? `software.run_${value}`
+      : props.kind === 'action_run' && stage === 'effect'
+        ? `software.effect_${value}`
+        : props.kind === 'command' && stage === 'dispatch'
+          ? `policies.state.${value}`
+          : `policies.fact.${value}`
+  return te(key) ? t(key) : value
 }
 </script>
 <template>
@@ -17,17 +30,17 @@ function label(value: string) {
     </div>
     <div>
       <dt><span>02</span>{{ t('policies.dispatch') }}</dt>
-      <dd>{{ label(dispatch) }}</dd>
+      <dd>{{ label('dispatch', dispatch) }}</dd>
     </div>
     <div>
       <dt><span>03</span>{{ t('policies.receipt') }}</dt>
-      <dd>{{ label(receipt) }}</dd>
+      <dd>{{ label('receipt', receipt) }}</dd>
     </div>
     <div>
       <dt><span>04</span>{{ t('policies.effect') }}</dt>
       <dd>
         <UiBadge :tone="['unknown', 'unverified'].includes(effect) ? 'warning' : 'neutral'">{{
-          label(effect)
+          label('effect', effect)
         }}</UiBadge>
       </dd>
     </div>

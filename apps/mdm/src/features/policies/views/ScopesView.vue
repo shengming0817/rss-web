@@ -47,6 +47,14 @@ const task = ref<string>(),
   projection = ref<ScopeProjection>('members'),
   channel = ref<Channel>('mdm')
 let pending: (() => Promise<void>) | undefined
+function closeScope() {
+  if (busy.value || uncertain.value) return
+  current.value = undefined
+  task.value = undefined
+  status.value = undefined
+  result.value = undefined
+  load()
+}
 function load(cursor?: string) {
   void run(
     () => runtime.policies.scopes.list({ after: cursor }),
@@ -222,16 +230,7 @@ watch(
         {{ t('policies.next') }}
       </UiButton>
     </template>
-    <UiButton
-      v-if="current"
-      variant="ghost"
-      :disabled="busy || uncertain"
-      @click="
-        current = undefined
-        task = undefined
-        result = undefined
-        load()
-      "
+    <UiButton v-if="current" variant="ghost" :disabled="busy || uncertain" @click="closeScope"
       >← {{ t('policies.ux.backScopes') }}</UiButton
     >
     <section v-if="current && !editing" class="console-panel task-scope-definition">
@@ -267,16 +266,6 @@ watch(
       :close-label="t('console.close')"
       ><p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
       <form class="scope-form" @submit.prevent="save">
-        <div class="console-page-header">
-          <h2>{{ t(current ? 'console.edit' : 'console.create') }}</h2>
-          <UiButton
-            type="button"
-            variant="ghost"
-            :disabled="busy || uncertain"
-            @click="editing = false"
-            >{{ t('console.close') }}</UiButton
-          >
-        </div>
         <fieldset :disabled="busy || uncertain">
           <details class="task-technical">
             <summary>{{ t('policies.ux.technical') }}</summary>

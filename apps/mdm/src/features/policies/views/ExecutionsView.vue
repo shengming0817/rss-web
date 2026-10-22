@@ -286,6 +286,7 @@ watch(
           <details class="operation-evidence">
             <summary>{{ t('devices.evidence') }}</summary>
             <OperationStages
+              :kind="item.kind"
               :dispatch="
                 item.evidence.kind === 'command'
                   ? item.evidence.commandStatus

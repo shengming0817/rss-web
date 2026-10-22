@@ -107,10 +107,16 @@ function write<T>(request: () => Promise<T>, apply: (value: T) => void) {
   void pending()
 }
 function loadList(next?: string) {
-  if (!next) applied = { name: query.value || undefined, kind: filter.value || undefined }
+  if (busy.value) return
+  const selection = next
+    ? applied
+    : { name: query.value || undefined, kind: filter.value || undefined }
   void run(
-    () => runtime.devices.groups.list({ ...applied, after: next }),
-    (v) => (list.value = v),
+    () => runtime.devices.groups.list({ ...selection, after: next }),
+    (v) => {
+      list.value = v
+      applied = selection
+    },
   )
 }
 function open(group = id.value) {
@@ -346,9 +352,10 @@ function openGroup(group: string) {
         <UiSearchInput
           v-model="query"
           :clear-label="t('console.clear')"
-          @search="loadList()"
           :label="t('policies.ux.searchGroups')"
           :placeholder="t('policies.ux.searchGroups')"
+          :disabled="busy"
+          @search="loadList()"
         />
         <select v-model="filter" class="ui-input" :aria-label="t('devices.kind')">
           <option value="">{{ t('policies.ux.allTypes') }}</option>

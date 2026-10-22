@@ -106,13 +106,13 @@ it('filters Resource kinds through the formal directory and opens software impor
   const dialog = new DOMWrapper(document.body).get('[role=dialog]')
   await dialog.get('#resource-kind').setValue('software')
   expect(dialog.get('a').attributes('href')).toBe('/imports/tenant')
-  expect(dialog.findAll('button').some((button) => button.text() === '保存版本')).toBe(false)
+  expect(dialog.findAll('button').some((button) => button.text() === '保存')).toBe(false)
   wrapper.unmount()
 })
 
 it('keeps accepted, queued, unknown device report and unverified effect as independent visible facts', () => {
   const wrapper = mount(OperationStages, {
-    props: { dispatch: 'queued', receipt: 'unknown', effect: 'unverified' },
+    props: { kind: 'command', dispatch: 'queued', receipt: 'unknown', effect: 'unverified' },
     global: { plugins: [mdmI18n()] },
   })
   const stages = wrapper.findAll('dl > div')
@@ -122,5 +122,87 @@ it('keeps accepted, queued, unknown device report and unverified effect as indep
   expect(stages[2]!.text()).toContain('未知')
   expect(stages[3]!.text()).toContain('尚未验证')
   expect(wrapper.text()).not.toContain('执行成功')
+  wrapper.unmount()
+})
+
+it.each([
+  {
+    kind: 'action_run',
+    dispatch: 'claimed',
+    receipt: 'succeeded',
+    effect: 'verified',
+    labels: ['投递已领取', '已验证'],
+  },
+  {
+    kind: 'command',
+    dispatch: 'timed_out',
+    receipt: 'unknown',
+    effect: 'unverified',
+    labels: ['已超时', '尚未验证'],
+  },
+] as const)('uses each formal status domain for $kind', ({ labels, ...props }) => {
+  const wrapper = mount(OperationStages, {
+    props: {
+      kind: props.kind,
+      dispatch: props.dispatch,
+      receipt: props.receipt,
+      effect: props.effect,
+    },
+    global: { plugins: [mdmI18n()] },
+  })
+  for (const label of labels) expect(wrapper.text()).toContain(label)
+  wrapper.unmount()
+})
+
+it('keeps Resource creation errors and exact original replay reachable inside the real modal drawer', async () => {
+  const change = vi.fn().mockRejectedValueOnce(new Error('lost reply')).mockResolvedValue({})
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/', component: ResourcesView }],
+  })
+  await router.push('/')
+  const wrapper = mount(ResourcesView, {
+    global: {
+      plugins: [router, mdmI18n()],
+      provide: {
+        [mdmKey as symbol]: {
+          tenant: 'tenant',
+          policies: {
+            resources: {
+              list: async () => ({ items: [] }),
+              change,
+              read: async (id: string) => ({
+                id,
+                kind: 'script',
+                revision: 1,
+                presentation: {},
+                versions: [],
+              }),
+            },
+          },
+        },
+      },
+    },
+  })
+  await flushPromises()
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text() === '新建')!
+    .trigger('click')
+  await flushPromises()
+  const dialog = new DOMWrapper(document.body).get('[role=dialog]')
+  await dialog
+    .findAll('button')
+    .find((button) => button.text() === '保存')!
+    .trigger('click')
+  await flushPromises()
+  expect(dialog.get('[role=alert]').text()).toContain('提交结果未知')
+  const original = structuredClone(change.mock.calls[0])
+  await dialog
+    .findAll('button')
+    .find((button) => button.text() === '重放同一操作')!
+    .trigger('click')
+  await flushPromises()
+  expect(change.mock.calls[1]).toEqual(original)
   wrapper.unmount()
 })

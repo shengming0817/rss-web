@@ -76,7 +76,10 @@ it('rejects missing or ambiguous formal detail coordinates without guessing or r
   const read = vi.fn()
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/:execution', component: ExecutionDetailView }],
+    routes: [
+      { path: '/:execution', component: ExecutionDetailView },
+      { path: '/operations/:tenant', name: 'policy-executions', component: ExecutionsView },
+    ],
   })
   await router.push('/11111111-1111-4111-8111-111111111111')
   const wrapper = mount(ExecutionDetailView, {
@@ -127,7 +130,10 @@ it('queries an unknown cancellation, displays the observed revision, and explici
     .mockResolvedValue({ operationId: id, revision: 2 })
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/:execution', component: ExecutionDetailView }],
+    routes: [
+      { path: '/:execution', component: ExecutionDetailView },
+      { path: '/operations/:tenant', name: 'policy-executions', component: ExecutionsView },
+    ],
   })
   await router.push(`/${id}?device=endpoint`)
   const wrapper = mount(ExecutionDetailView, {

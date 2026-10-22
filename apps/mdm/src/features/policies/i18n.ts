@@ -6,7 +6,7 @@ export const policiesZh = {
     executionsHint: '从同一次操作查看受理、下发、设备回报与效果核验。',
     scopeHint: '选择目标，再用限制与排除收窄部署范围。保存后读取逐设备判定。',
     loaded: '已加载 {count} 项',
-    pageOnly: '搜索与类型筛选仅作用于当前页；继续翻页可读取更多获授权记录。',
+    pageOnly: '名称搜索仅作用于当前页，类型筛选查询正式目录；继续翻页可读取更多获授权记录。',
     searchGroups: '搜索获授权群组名称',
     searchResources: '搜索当前页资源名称或标识',
     allTypes: '全部类型',
@@ -495,7 +495,7 @@ export const policiesEn: typeof policiesZh = {
       'Choose targets, then narrow deployment with limitations and exclusions. Read per-device decisions after saving.',
     loaded: '{count} items loaded',
     pageOnly:
-      'Search and type filters apply to this page. Continue paging to read more authorized records.',
+      'Name search applies to this page; type filters query the formal directory. Continue paging for more authorized records.',
     searchGroups: 'Search authorized group names',
     searchResources: 'Search resource names or identifiers on this page',
     allTypes: 'All types',

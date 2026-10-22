@@ -177,10 +177,14 @@ let transfer: AbortController | undefined
 let pending: (() => Promise<void>) | undefined
 const hashText = (bytes: number[]) => bytes.map((n) => n.toString(16).padStart(2, '0')).join('')
 function load(cursor?: string) {
-  if (!cursor) appliedKind = resourceFilter.value || undefined
+  if (busy.value) return
+  const selection = cursor ? appliedKind : resourceFilter.value || undefined
   void run(
-    () => client.list(appliedKind, cursor),
-    (v) => (list.value = v),
+    () => client.list(selection, cursor),
+    (v) => {
+      list.value = v
+      appliedKind = selection
+    },
   )
 }
 function open(value = id.value) {
@@ -599,6 +603,7 @@ watch(
       :close-label="t('console.close')"
       :dismissible="!busy && !uncertain"
     >
+      <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
       <section class="console-panel" data-testid="collection-blueprints">
         <h2>{{ t('policies.standardPackages') }}</h2>
         <p>{{ t('policies.standardPackagesNote') }}</p>
@@ -671,6 +676,11 @@ watch(
           }}</RouterLink></template
         >
       </fieldset>
+      <template #footer
+        ><UiButton v-if="uncertain && pending" :disabled="busy" @click="pending()">{{
+          t('policies.replay')
+        }}</UiButton></template
+      >
     </UiDialog>
     <template v-if="current">
       <UiButton variant="ghost" :disabled="busy || uncertain" @click="closeResource"

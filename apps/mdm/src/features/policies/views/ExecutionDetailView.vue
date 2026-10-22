@@ -161,6 +161,7 @@ watch(
     }}</UiButton>
     <section v-if="native" class="console-panel">
       <OperationStages
+        kind="command"
         :dispatch="native.commandStatus"
         :receipt="native.observation.progress"
         :effect="native.observation.effect"
@@ -254,6 +255,7 @@ watch(
         }}</RouterLink
       >
       <OperationStages
+        kind="action_run"
         :dispatch="software.state.delivery.kind"
         :receipt="software.state.execution"
         :effect="software.effect"
