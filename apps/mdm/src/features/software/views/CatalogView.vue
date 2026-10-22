@@ -111,6 +111,8 @@ watch(
   () => {
     current.value = undefined
     page.value = undefined
+    locked.value = false
+    downloaded.value = ''
     id.value = ''
     version.value = ''
   },
@@ -119,6 +121,13 @@ watch(
 </script>
 <template>
   <PageFrame :title="t('software.catalog')" :busy="busy" :failure="failure">
+    <p v-if="failure === 'unsupported'" role="alert">
+      {{ t('software.ux.contentPrerequisite') }}
+      <RouterLink
+        :to="{ name: 'settings-material', params: { tenant: runtime.tenant, material: 'storage' } }"
+        >{{ t('settings.integrations') }}</RouterLink
+      >
+    </p>
     <template #actions>
       <RouterLink :to="{ name: 'software-imports', params: { tenant: runtime.tenant } }">{{
         t('software.imports')

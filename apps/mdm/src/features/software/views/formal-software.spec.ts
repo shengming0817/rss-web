@@ -194,7 +194,7 @@ for (const outcome of ['published', 'not_applied'])
     const { wrapper, session } = await fixture(PublicationsView, {
       software: { publication: { change, list, read } },
     })
-    await button(wrapper, '打开').trigger('click')
+    await button(wrapper, 'app / 1').trigger('click')
     await flushPromises()
     await button(wrapper, '恢复发布操作').trigger('click')
     await flushPromises()
@@ -242,10 +242,7 @@ it('pins source and complete import operation across a lost response and explici
   await field(wrapper, '包标识').setValue('Example.App')
   await field(wrapper, '来源包版本').setValue('1.0')
   await field(wrapper, '原生安装行为').setValue(JSON.stringify(definition.behavior))
-  await wrapper
-    .findAll('button')
-    .filter((v) => v.text() === '继续')[1]!
-    .trigger('click')
+  await button(wrapper, '继续').trigger('click')
   await wrapper.get('form').trigger('submit')
   await flushPromises()
   const original = structuredClone(imported.mock.calls[0]?.[0])
@@ -307,12 +304,10 @@ it('uses Resource pages and reads versions only after selection without inventin
   wrapper.unmount()
 })
 it('selects a Resource header before reading real versions and clears the previous version', async () => {
-  const list = vi
-      .fn()
-      .mockResolvedValue({
-        items: [{ id: 'app', presentation: {}, activeVersion: '1' }],
-        nextCursor: null,
-      }),
+  const list = vi.fn().mockResolvedValue({
+      items: [{ id: 'app', presentation: {}, activeVersion: '1' }],
+      nextCursor: null,
+    }),
     read = vi.fn().mockResolvedValue({ kind: 'software', versions: [{ id: '1', state: 'active' }] })
   const { wrapper } = await fixture(
     defineComponent({
@@ -530,33 +525,41 @@ it('submits a complete synchronous import with explicit target and auxiliary mat
       resourceDigest: sha,
       storageRevision: 5,
     })
+  const selected = {
+    ...source,
+    source: {
+      ...source.source,
+      revision: '2',
+      protocol: { kind: 'winget_rest', location: 'https://source.test/', identifier: 'enterprise' },
+    },
+    snapshot: { ...source.snapshot, revision: '2' },
+  }
   const { wrapper } = await fixture(ImportsView, {
     software: {
       lifecycle: {
-        source: vi.fn().mockResolvedValue({
-          ...source,
-          source: { ...source.source, revision: '2' },
-          snapshot: { ...source.snapshot, revision: '2' },
-        }),
+        sources: vi.fn(async () => ({ items: [selected], nextCursor: null })),
+        source: vi.fn().mockResolvedValue(selected),
       },
       imports: { import: imported },
     },
   })
-  const inputs = wrapper.findAll('input')
-  for (const [index, value] of [
-    [0, 'enterprise'],
-    [1, '2'],
-    [2, 'imported'],
-    [3, '2'],
-    [4, 4],
-    [5, 'Example.App'],
-    [6, '2.0'],
-    [7, 'arm'],
-    [8, 123],
+  await field(wrapper, '企业来源 ID').setValue('enterprise/2')
+  await button(wrapper, '继续').trigger('click')
+  for (const [label, value] of [
+    ['软件资源', 'imported'],
+    ['精确包版本', '2'],
+    ['版本', 4],
+    ['包标识', 'Example.App'],
+    ['来源包版本', '2.0'],
+    ['平台', 'windows'],
+    ['架构', 'aarch64'],
+    ['变体', 'arm'],
+    ['安装产物字节数', 123],
   ] as const)
-    await inputs[index]!.setValue(value)
-  await wrapper.findAll('select')[0]!.setValue('windows')
-  await wrapper.findAll('select')[1]!.setValue('aarch64')
+    await field(wrapper, label).setValue(value)
+  await field(wrapper, '安装器标识').setValue('installer-arm')
+  await field(wrapper, '清单文件').setValue('installer.yaml')
+  await button(wrapper, '继续').trigger('click')
   const selection = {
     kind: 'winget',
     installerType: 'msi',
@@ -573,16 +576,14 @@ it('submits a complete synchronous import with explicit target and auxiliary mat
       sha256: sha,
     },
     signature = { artifact: 'installer', mechanism: 'authenticode', publisher: 'Example Publisher' }
-  const areas = wrapper.findAll('textarea')
-  for (const [index, value] of [
-    [0, selection],
-    [1, definition.behavior],
-    [2, { verify: artifact }],
-    [3, [dependency]],
-    [4, [signature]],
+  for (const [label, value] of [
+    ['原生安装行为', definition.behavior],
+    ['辅助文件定义', { verify: artifact }],
+    ['固定依赖', [dependency]],
+    ['签名要求', [signature]],
   ] as const)
-    await areas[index]!.setValue(JSON.stringify(value))
-  await wrapper.findAll('select')[2]!.setValue('forbid')
+    await field(wrapper, label).setValue(JSON.stringify(value))
+  await field(wrapper, '重启策略').setValue('forbid')
   await wrapper.findAll('input[type=checkbox]')[0]!.setValue(true)
   await wrapper.findAll('input[type=checkbox]')[1]!.setValue(true)
   await wrapper.get('form').trigger('submit')

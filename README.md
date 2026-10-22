@@ -59,7 +59,7 @@ fixture 由隔离宿主准备，包含 `origin`（https://localhost:端口）、
 
 设备视图与关联的真实 HTTPS Chromium 验证：`MDM_DEVICE_BACKEND=/absolute/rss-mdm pnpm test:mdm:device-browser`。入口构建当前 UI，使用后端隔离开发环境与构建租约，退出清理 PG、产品进程与 TLS 网关；详见 [设备关联接入与验收](docs/architecture/20260926-2544-mdm-web.md#正式设备视图与关联2713)。
 
-软件直接发布与设备分批部署使用后端固定 revision `5638705a408c5ac06d54bf166182e3822eb9c903`（rss-mdm PR #1330）。来源、目标与发布记录来自正式目录；Direct 无需发布目标，Native 选择确切版本的发布目标。部署默认全量，分批配置为可选。接口、更新与恢复行为见 [软件来源与发布](docs/architecture/20260926-2544-mdm-web.md#软件来源resource导入与发布)。
+软件直接发布与设备分批部署消费当前正式 HTTP V1 合同。来源、目标与发布记录来自正式目录；Direct 无需发布目标，Native 选择确切版本的发布目标。部署默认全量，分批配置为可选。接口、更新与恢复行为见 [软件来源与发布](docs/architecture/20260926-2544-mdm-web.md#软件来源resource导入与发布)。
 
 正式软件发布、版本更新与分批部署的 HTTPS Chromium 验证：
 
@@ -69,7 +69,7 @@ MDM_SOFTWARE_BACKEND=/absolute/rss-mdm pnpm test:mdm:software-browser
 
 软件验收复用设备 HTTPS/存储/PKI 夹具，使用独立 software-browser 环境。受控 TLS WinGet REST 仅提供合成来源元数据；正式生产页面完成导入原操作重放、Resource 上传进度恢复/完成回执、软件版本准入及私有下载撤回核验。输入与注册为合成夹具，不证明真实设备安装。运行记录实际后端 revision，退出要求清理确认。
 
-后端使用上述固定 revision；入口构建当前 UI，并复用后端隔离环境与构建租约。覆盖真实来源/目标/发布目录、单目标发布、已提交响应丢失后的原操作查询与显式重放、默认全量、显式版本更新、Native 目标与多个 Scope、时间/成功率门槛配置、状态查询、暂停与撤回。退出独立清理 PG、产品进程和 TLS 网关；结果记录实际后端 revision。仅使用合成输入，不证明 Agent 真机安装或升级。
+后端使用指定检出；入口构建当前 UI，并复用后端隔离环境与构建租约。覆盖真实来源/目标/发布目录、单目标发布、已提交响应丢失后的原操作查询与显式重放、默认全量、显式版本更新、Native 目标与多个 Scope、时间/成功率门槛配置、状态查询、暂停与撤回。退出独立清理 PG、产品进程和 TLS 网关；结果记录实际后端 revision。仅使用合成输入，不证明 Agent 真机安装或升级。
 
 
 业务登录使用 `/login`，平台管理使用 `/platform`；业务配置管理员首次登录按后台进度进入引导，完成后进入工作台。统一设置与平台租户入口见 [MDM 接入说明](docs/architecture/20260926-2544-mdm-web.md#统一设置默认组织引导与平台租户2825)。当前宿主配置同时要求业务 tenant 与 managementTenant，须同步部署后端生成器和前端。正式 HTTPS 接缝验证使用 `MDM_SETTINGS_BACKEND=/absolute/rss-mdm pnpm test:mdm:settings-browser`；外部资格、宿主启用回执与真机效果分别保留验收边界。

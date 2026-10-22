@@ -1,4 +1,7 @@
 export const softwareZh = {
+  platform: '平台',
+  architecture: '架构',
+  variant: '变体',
   ux: {
     journey: '软件导入与交付',
     source: '选择来源',
@@ -252,6 +255,9 @@ export const softwareZh = {
   sourceHint: '来源摘要从已启用的企业来源读取；版本生命周期独立维护。',
 }
 export const softwareEn: typeof softwareZh = {
+  platform: 'Platform',
+  architecture: 'Architecture',
+  variant: 'Variant',
   ux: {
     journey: 'Software import and delivery',
     source: 'Choose source',
