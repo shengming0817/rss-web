@@ -111,8 +111,10 @@ async function newField(p, key, source, pointer, sensitive = false) {
       r.request().method() === 'PUT' &&
       new URL(r.url()).pathname.startsWith('/api/v1/user-attribute-definitions/'),
   )
-  await p.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).click()
-  const r = await response
+  const [r] = await Promise.all([
+    response,
+    p.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).click(),
+  ])
   assert.equal(r.status(), 200)
   const saved = await r.json()
   await p.getByRole('dialog').getByRole('button', { name: '取消', exact: true }).click()
@@ -184,7 +186,34 @@ try {
   assert.equal(old.status, 200)
   assert.equal(old.value.profiles[0].status, 'unavailable')
   await localEditor(admin, principal)
-  await localSave(admin, 'LOCAL-2')
+  await admin
+    .locator('#local-extensions')
+    .fill(JSON.stringify({ employeeNumber: 'LOCAL-2', remote: false, allocation: 0 }))
+  let localWrites = 0
+  let discardedLocal
+  const localDiscarded = new Promise((resolve) => {
+    discardedLocal = resolve
+  })
+  const lostLocal = async (route) => {
+    if (route.request().method() !== 'PUT') return route.continue()
+    localWrites++
+    const committed = await route.fetch()
+    assert.equal(committed.status(), 200)
+    await route.abort('failed')
+    discardedLocal()
+  }
+  await admin.route('**/accounts/*/profile', lostLocal)
+  await admin.getByRole('dialog').getByRole('button', { name: '保存配置', exact: true }).click()
+  await admin.getByRole('dialog').getByRole('button', { name: '查询原操作', exact: true }).waitFor()
+  await localDiscarded
+  await admin.unroute('**/accounts/*/profile', lostLocal)
+  await admin.getByRole('dialog').getByRole('button', { name: '查询原操作', exact: true }).click()
+  await admin.locator('#local-extensions:enabled').waitFor()
+  assert.ok((await admin.locator('#local-extensions').inputValue()).includes('LOCAL-2'))
+  assert.equal(localWrites, 1)
+  assert.equal((await api(admin, base + '/session')).status, 200)
+  await admin.getByRole('dialog').getByRole('button', { name: '取消', exact: true }).click()
+  checks.push('local-profile-lost-response-receipt')
   assert.equal(
     (await api(member, '/api/v1/user-profiles/me')).value.fields.find(
       (v) => v.fieldId === localField.fieldId,
@@ -335,6 +364,7 @@ try {
     ).status,
     200,
   )
+  phase = 'authorization-read-other'
   await myProfile(member)
   await member.locator('#profile-principal').fill(aliceId)
   await member.getByRole('button', { name: '读取资料', exact: true }).click()
@@ -349,8 +379,14 @@ try {
     ).status,
     200,
   )
+  phase = 'authorization-revoked-reload'
+  const revokedResponse = member.waitForResponse((r) =>
+    new URL(r.url()).pathname.endsWith('/user-profiles/' + aliceId),
+  )
   await member.getByRole('button', { name: '重新读取', exact: true }).click()
-  await member.getByRole('heading', { name: /权限|拒绝/ }).waitFor()
+  const deniedResponse = await revokedResponse
+  assert.equal(deniedResponse.status(), 403)
+  await member.getByText('请求被拒绝，请核实资源权限。', { exact: true }).waitFor()
   assert.ok(!(await member.locator('body').innerText()).includes('OIDC-2'))
   checks.push('403-clears-profile-data')
   phase = 'preview-and-delete'
@@ -408,7 +444,14 @@ try {
   assert.deepEqual(errors, [])
   result = 'passed'
 } catch (error) {
-  console.error(JSON.stringify({ phase, result: 'failed', classification: error.name }))
+  console.error(
+    JSON.stringify({
+      phase,
+      result: 'failed',
+      classification: error.name,
+      location: error.stack?.split('\n').find((line) => line.includes('profiles-browser.mjs:')),
+    }),
+  )
   process.exitCode = 1
 } finally {
   clearTimeout(timer)

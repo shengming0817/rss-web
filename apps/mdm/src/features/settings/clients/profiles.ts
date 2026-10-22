@@ -1,5 +1,5 @@
 import type { HttpTransport } from '@rss/api/mdm'
-import { profileJson, type ProfileJson } from '@rss/auth'
+import { profileJson, type ProfileJson } from '@rss/auth/profile-json'
 import {
   closed,
   string,

@@ -47,6 +47,25 @@ export function createApi(owner: IdentitySession) {
       })
     })
   }
+  function profileCall<T>(
+    method: 'GET' | 'PUT',
+    principal: string,
+    decode: (value: unknown) => T,
+    body?: unknown,
+    operationId?: string,
+  ) {
+    return owner.business((headers) =>
+      owner.transport.request({
+        method,
+        path: `/api/v1/identity/tenants/{tenant}/accounts/${uuid(principal)}/profile${operationId ? `/operations/${uuid(operationId)}` : ''}`,
+        pathParams: { tenant: uuid(owner.state.value.tenant) },
+        headers: method === 'GET' ? {} : headers,
+        ...(body === undefined ? {} : { body }),
+        successStatus: 200,
+        decode,
+      }),
+    )
+  }
   async function selfWrite(work: () => Promise<Account>) {
     try {
       const v = await work()
@@ -112,17 +131,16 @@ export function createApi(owner: IdentitySession) {
         undefined,
         cursor === undefined ? undefined : { cursor: uuid(cursor) },
       ),
-    localProfile: (principal: string) =>
-      call('GET', `accounts/${uuid(principal)}/profile`, localProfile),
+    localProfile: (principal: string) => profileCall('GET', principal, localProfile),
     saveLocalProfile: (
       principal: string,
       operationId: string,
       expectedRevision: number,
       value: LocalProfile | null,
     ) =>
-      call(
+      profileCall(
         'PUT',
-        `accounts/${uuid(principal)}/profile`,
+        principal,
         (v) => {
           const receipt = profileReceipt(v, operationId)
           if (!receipt) throw new Error('Missing profile receipt')
@@ -131,9 +149,7 @@ export function createApi(owner: IdentitySession) {
         { operationId: uuid(operationId), expectedRevision, value },
       ),
     localProfileOperation: (principal: string, operationId: string) =>
-      call('GET', `accounts/${uuid(principal)}/profile/operations/${uuid(operationId)}`, (v) =>
-        profileReceipt(v, operationId),
-      ),
+      profileCall('GET', principal, (v) => profileReceipt(v, operationId), undefined, operationId),
     createAccount: (login: string, password: string) =>
       call('POST', 'accounts', account, { login, password }, 201),
     setAccount: (a: Account, field: 'enabled' | 'membership', enabled: boolean) => {

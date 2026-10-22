@@ -632,3 +632,32 @@ it('accepts an explicit empty 201 without weakening JSON decoding', async () => 
     }),
   ).rejects.toMatchObject({ cause: 'protocol' })
 })
+
+it('executes profile reads and definition writes through the product HTTP boundary', async () => {
+  const instance = axios.create()
+  const spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance)
+  const mock = new AxiosMockAdapter(instance)
+  mock.onGet('/api/v1/user-profiles/me').reply(200, { view: 'current' })
+  mock.onPut('/api/v1/user-attribute-definitions/field').reply(200, { operationId: 'operation' })
+  const transport = createMdmTransport()
+  expect(
+    await transport.request({
+      method: 'GET',
+      path: '/api/v1/user-profiles/me',
+      successStatus: 200,
+      decode: (v) => v,
+    }),
+  ).toEqual({ view: 'current' })
+  expect(
+    await transport.request({
+      method: 'PUT',
+      path: '/api/v1/user-attribute-definitions/{id}',
+      pathParams: { id: 'field' },
+      body: { value: null },
+      successStatus: 200,
+      decode: (v) => v,
+    }),
+  ).toEqual({ operationId: 'operation' })
+  mock.restore()
+  spy.mockRestore()
+})

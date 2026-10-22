@@ -69,7 +69,7 @@ function date(value: number | null) {
 <template>
   <section class="settings-stack">
     <UiButton :disabled="busy" @click="load">{{ t('profiles.reload') }}</UiButton>
-    <UiMessage v-if="failure" tone="warning" :title="t('devices.errors.' + failure)" />
+    <UiMessage v-if="failure" tone="warning" :title="t('devices.' + failure)" />
     <p v-if="preview">{{ t('profiles.previewHelp') }}</p>
     <p>{{ t('profiles.noRefresh') }}</p>
     <template v-if="value">

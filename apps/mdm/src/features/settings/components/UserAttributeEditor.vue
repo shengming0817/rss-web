@@ -147,7 +147,7 @@ async function compare() {
 </script>
 <template>
   <section class="settings-stack">
-    <UiMessage v-if="failure" tone="warning" :title="t('devices.errors.' + failure)" />
+    <UiMessage v-if="failure" tone="warning" :title="t('devices.' + failure)" />
     <OperationNotice
       :operation="pending"
       :busy="busy"

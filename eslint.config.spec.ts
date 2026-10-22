@@ -148,3 +148,19 @@ it('isolates the component preview from product and authentication clients', asy
   }
   expect(await ruleIds("fetch('/api/example')", file)).toContain('no-restricted-globals')
 })
+
+it('allows the stateless public profile JSON decoder without exposing auth internals', async () => {
+  const file = 'apps/mdm/src/features/settings/clients/profiles.ts'
+  expect(
+    await ruleIds(
+      "import { profileJson } from '@rss/auth/profile-json'; export const decode = profileJson",
+      file,
+    ),
+  ).not.toContain('no-restricted-imports')
+  expect(
+    await ruleIds(
+      "import { createSession } from '@rss/auth/session'; export const owner = createSession",
+      file,
+    ),
+  ).toContain('no-restricted-imports')
+})

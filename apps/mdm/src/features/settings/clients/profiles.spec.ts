@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { profileJson, profileObject } from '@rss/auth'
+import { profileJson, profileObject } from '@rss/auth/profile-json'
 import { profile, definition, definitionReceipt } from './profiles'
 const id = '11111111-1111-4111-8111-111111111111'
 const input = {

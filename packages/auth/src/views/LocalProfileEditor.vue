@@ -4,7 +4,8 @@ import { useI18n } from 'vue-i18n'
 import { UiButton } from '@rss/core/components'
 import { isRssApiError } from '@rss/api/identity'
 import { useIdentity } from '../context'
-import { profileObject, type LocalProfile } from '../services/profile'
+import type { LocalProfile } from '../services/profile'
+import { profileObject } from '../profile-json'
 const props = defineProps<{ principalId: string }>()
 const { api, session } = useIdentity(),
   { t } = useI18n()
