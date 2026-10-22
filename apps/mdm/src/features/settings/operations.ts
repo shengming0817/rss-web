@@ -75,7 +75,12 @@ export function createSettingsOperations(session: IdentitySession) {
           const unknown =
             !isRssApiError(error) ||
             ['network', 'timeout', 'aborted', 'protocol'].includes(error.cause) ||
-            ['operation_unknown', 'operation_rollback_unconfirmed'].includes(error.code)
+            [
+              'operation_unknown',
+              'operation_rollback_unconfirmed',
+              'issuance_unknown',
+              'activation_unknown',
+            ].includes(error.code)
           if (conflict || unknown)
             records.set(target, {
               ...metadata,

@@ -52,6 +52,7 @@ export const navigation = [
       { name: 'security-actions', label: 'security.actions' },
       { name: 'security-requests', label: 'security.requests' },
       { name: 'security-certificates', label: 'security.certificates' },
+      { name: 'security-recovery', label: 'security.pki.recover' },
       { name: 'security-device-trust', label: 'security.pki.title' },
       { name: 'security-certificate-archive', label: 'security.certificate-archive' },
       { name: 'security-materials', label: 'security.materials' },

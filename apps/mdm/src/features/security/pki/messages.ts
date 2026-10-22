@@ -139,6 +139,27 @@ export const pkiEn = {
 }
 
 export const recoveryZh = {
+  registration: 'Agent 登记恢复',
+  issuance: 'Agent 原签发恢复',
+  registrationId: '原 Agent 登记 ID',
+  issuanceId: '原签发尝试 ID',
+  administrativeOperation: '本次管理操作 ID（保持原 UUID）',
+  originalSigningOperation: '原设备签发操作 ID',
+  platform: '平台',
+  secret: '设备保护材料中的恢复秘密',
+  csr: '设备本地密钥签署的原 CSR（base64 DER）',
+  grantHint:
+    '只为原 Agent 登记授权继续恢复。使用设备准备的秘密和 CSR；不在浏览器生成机器密钥或秘密，不交付新的安装配置。原登记代次由服务端核对，授权回执不代表设备已重连或证书已激活。',
+  grant: '恢复授权 ID',
+  deadline: '原有效期限（UTC）',
+  candidateHint: '仅恢复出原证书候选，仍需设备通过实际候选 mTLS 激活。',
+  continue: '核验并继续原恢复',
+  pending: '等待',
+  available: '可继续恢复',
+  consumed: '已消费',
+  revoked: '已撤销',
+  expired: '已过期',
+
   hint: '管理员核对原登记或签发尝试，继续已有过程。不会自动重签、重新授权或推测设备已激活。',
   windows: 'Windows 原 CA 响应关联',
   noQueue:
@@ -149,6 +170,28 @@ export const recoveryZh = {
   fingerprint: '已关联证书指纹',
 }
 export const recoveryEn = {
+  registration: 'Agent registration recovery',
+  issuance: 'Original Agent issuance recovery',
+  registrationId: 'Original Agent registration ID',
+  issuanceId: 'Original issuance attempt ID',
+  administrativeOperation: 'Administrative operation ID (retain the original UUID)',
+  originalSigningOperation: 'Original device signing operation ID',
+  platform: 'Platform',
+  secret: 'Recovery secret from protected device material',
+  csr: 'Original CSR signed by the device key (base64 DER)',
+  grantHint:
+    'Authorize continuation for the original Agent registration only. Use the secret and CSR prepared by the device. This browser generates no machine keys or secrets and delivers no new installation configuration. The server checks the registration generation; a grant does not prove reconnection or activation.',
+  grant: 'Recovery grant ID',
+  deadline: 'Original deadline (UTC)',
+  candidateHint:
+    'Only the original certificate candidate is recovered. The device must still activate through real candidate mTLS.',
+  continue: 'Verify and continue original recovery',
+  pending: 'Pending',
+  available: 'Available for recovery',
+  consumed: 'Consumed',
+  revoked: 'Revoked',
+  expired: 'Expired',
+
   hint: 'Administrators verify an original registration or signing attempt to continue the existing process. No automatic signing, authorization or inferred activation.',
   windows: 'Attach original Windows CA response',
   noQueue:
