@@ -101,6 +101,7 @@ export function createMdmTransport(): HttpTransport {
         /^\/api\/v1\/(?:settings\/(?:catalog$|first-use(?:\/|$))|tenant-administration(?:\/|$)|apple\/materials(?:\/|$)|apple\/material-operations(?:\/|$)|storage\/connections(?:\/|$)|smtp(?:\/|$)|windows\/wns(?:\/|$)|task-signing(?:\/|$)|pki(?:\/|$)|webhooks(?:\/|$)|runtime\/diagnostics$|agent-packages(?:\/|$))/.test(
           options.path,
         )
+      const audit = options.method === 'GET' && options.path === '/api/v1/audit-events'
       const telemetry = [
         '/api/v1/telemetry/resources',
         '/api/v1/telemetry/history',
@@ -110,7 +111,8 @@ export function createMdmTransport(): HttpTransport {
         '/api/v1/asset-retention-policies',
         '/api/v1/asset-retention-policies/{key}/{revision}',
       ].includes(options.path)
-      if (!paths.test(options.path) && !settings && !readiness && !telemetry) throw clientError()
+      if (!paths.test(options.path) && !settings && !readiness && !telemetry && !audit)
+        throw clientError()
       const publicRead =
         options.path.startsWith('/api/v1/agent/enroll/packages') ||
         options.path === '/api/v1/windows/entra/terms/context' ||

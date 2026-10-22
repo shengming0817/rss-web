@@ -1,17 +1,8 @@
 import type { HttpTransport } from '@rss/api/mdm'
-import {
-  array,
-  boolean,
-  closed,
-  count,
-  identifier,
-  integer,
-  nullable,
-  unique,
-  uuid,
-} from '../../../services/decode'
+import { array, boolean, closed, count, integer, unique } from '../../../services/decode'
 import { endpoint, endpointDetail } from './endpoint-model'
 import { cursor } from './asset-model'
+import { timelinePage, auditQuery, type AuditQuery } from '../../operations/clients/audit'
 export function decodeDirectory(value: unknown) {
   const v = closed(value, ['items', 'statistics', 'asOf', 'nextCursor']),
     s = closed(v['statistics'], ['total', 'pending', 'active', 'revoked'])
@@ -40,72 +31,6 @@ export function decodeDirectory(value: unknown) {
     nextCursor: cursor(v['nextCursor']),
   }
 }
-function timeline(value: unknown) {
-  const v = closed(value, ['items', 'nextCursor', 'coverage']),
-    coverage = closed(v['coverage'], ['indexedThrough', 'sourceThrough', 'complete'])
-  const items = array(v['items'], (x) => {
-    const e = closed(x, [
-      'source',
-      'eventId',
-      'position',
-      'recordedAt',
-      'observedAt',
-      'actorKind',
-      'actor',
-      'action',
-      'target',
-      'deviceId',
-      'operationId',
-      'relatedOperationIds',
-      'requestId',
-      'registrationId',
-      'registrationRequestId',
-      'instanceId',
-      'auditOutcome',
-      'phase',
-      'executionState',
-      'effect',
-      'requestWriteOutcome',
-      'supported',
-    ])
-    return {
-      source: identifier(e['source']),
-      eventId: identifier(e['eventId']),
-      position: count(e['position']),
-      recordedAt: integer(e['recordedAt']),
-      observedAt: integer(e['observedAt']),
-      actorKind: identifier(e['actorKind']),
-      actor: identifier(e['actor']),
-      action: identifier(e['action']),
-      target: (() => {
-        const target = closed(e['target'], ['type', 'id'])
-        return { type: identifier(target['type']), id: identifier(target['id']) }
-      })(),
-      deviceId: nullable(e['deviceId'], identifier),
-      operationId: nullable(e['operationId'], uuid),
-      relatedOperationIds: array(e['relatedOperationIds'], uuid),
-      requestId: nullable(e['requestId'], uuid),
-      registrationId: nullable(e['registrationId'], uuid),
-      registrationRequestId: nullable(e['registrationRequestId'], uuid),
-      instanceId: nullable(e['instanceId'], uuid),
-      auditOutcome: identifier(e['auditOutcome']),
-      phase: identifier(e['phase']),
-      executionState: nullable(e['executionState'], identifier),
-      effect: identifier(e['effect']),
-      requestWriteOutcome: nullable(e['requestWriteOutcome'], identifier),
-      supported: boolean(e['supported']),
-    }
-  })
-  return {
-    items,
-    nextCursor: cursor(v['nextCursor']),
-    coverage: {
-      indexedThrough: nullable(coverage['indexedThrough'], count),
-      sourceThrough: nullable(coverage['sourceThrough'], count),
-      complete: boolean(coverage['complete']),
-    },
-  }
-}
 export function createDirectoryClient(transport: HttpTransport) {
   return {
     list: (after?: string) =>
@@ -124,14 +49,16 @@ export function createDirectoryClient(transport: HttpTransport) {
         successStatus: 200,
         decode: (v) => endpointDetail(v, id),
       }),
-    history: (id: string, next?: string) =>
-      transport.request({
+    history: (id: string, filter: Omit<AuditQuery, 'device'> = {}) => {
+      if ('device' in filter) throw new Error('Device timeline is path-bound')
+      return transport.request({
         method: 'GET',
         path: '/api/v1/devices/{id}/timeline',
         pathParams: { id },
-        query: { limit: 20, cursor: next },
+        query: { ...auditQuery(filter), limit: filter.limit ?? 20 },
         successStatus: 200,
-        decode: timeline,
-      }),
+        decode: timelinePage,
+      })
+    },
   }
 }
