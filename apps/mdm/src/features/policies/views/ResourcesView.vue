@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import { UiButton, UiTable, UiBadge, UiTabs, UiSearchInput, UiDialog } from '@rss/core/components'
 import { computed, onBeforeUnmount, ref, shallowRef, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -30,7 +30,38 @@ const { t } = useI18n(),
   router = useRouter(),
   client = runtime.policies.resources,
   { run, runWrite, busy, failure, uncertain } = useOperation()
-const creating = ref(false)
+const creating = ref(false),
+  resourceTab = ref('versions'),
+  query = ref(''),
+  resourceFilter = ref<'' | ResourceKind>('')
+const visibleResources = computed(() =>
+  (list.value?.items ?? []).filter((item) =>
+    `${item.presentation['name'] ?? ''} ${item.id}`
+      .toLocaleLowerCase()
+      .includes(query.value.toLocaleLowerCase()),
+  ),
+)
+let appliedKind: ResourceKind | undefined
+const kindLabel = (value: ResourceKind) =>
+  t(
+    value === 'script'
+      ? 'policies.scripts'
+      : value === 'software'
+        ? 'policies.software'
+        : value === 'configuration'
+          ? 'policies.configurations'
+          : value === 'telemetry_profile'
+            ? 'telemetry.profiles'
+            : value === 'native_collection'
+              ? 'policies.nativeCollection'
+              : 'policies.agentCollection',
+  )
+function closeResource() {
+  if (busy.value || uncertain.value) return
+  resetDraft()
+  current.value = undefined
+  load()
+}
 const presentationName = ref(''),
   presentationDescription = ref('')
 function readPresentation(value?: ResourceRead) {
@@ -146,8 +177,9 @@ let transfer: AbortController | undefined
 let pending: (() => Promise<void>) | undefined
 const hashText = (bytes: number[]) => bytes.map((n) => n.toString(16).padStart(2, '0')).join('')
 function load(cursor?: string) {
+  if (!cursor) appliedKind = resourceFilter.value || undefined
   void run(
-    () => client.list(undefined, cursor),
+    () => client.list(appliedKind, cursor),
     (v) => (list.value = v),
   )
 }
@@ -168,6 +200,7 @@ function open(value = id.value) {
         current.value = v
         id.value = v.id
         kind.value = v.kind
+        resourceTab.value = 'versions'
         resetDraft()
       },
     )
@@ -463,6 +496,8 @@ watch(
     current.value = undefined
     list.value = undefined
     id.value = ''
+    query.value = ''
+    resourceFilter.value = route.query['kind'] === 'software' ? 'software' : ''
     kind.value = route.query['kind'] === 'software' ? 'software' : 'script'
     if (typeof route.query['resource'] === 'string') open(route.query['resource'])
     else {
@@ -474,300 +509,409 @@ watch(
 )
 </script>
 <template>
-  <PageFrame :title="t('policies.resources')" :busy="busy" :failure="failure">
-    <section class="console-panel" data-testid="collection-blueprints">
-      <h2>{{ t('policies.standardPackages') }}</h2>
-      <p>{{ t('policies.standardPackagesNote') }}</p>
-      <UiButton :disabled="busy" @click="loadBlueprints">{{
-        t('policies.choosePackage')
-      }}</UiButton>
-      <template v-if="blueprints"
-        ><label
-          >{{ t('policies.packageCategory')
-          }}<select
-            v-model="category"
-            class="ui-input"
-            :disabled="busy || uncertain"
-            @change="blueprint = ''"
-          >
-            <option value="">{{ t('devices.all') }}</option>
-            <option v-for="c in blueprints.categories" :key="c" :value="c">
-              {{ t('policies.packageCategories.' + c) }}
-            </option>
-          </select></label
-        ><label
-          >{{ t('policies.packageVersion')
-          }}<select v-model="blueprint" class="ui-input" :disabled="busy || uncertain">
-            <option value="">{{ t('devices.select') }}</option>
-            <option
-              v-for="b in blueprintOptions"
-              :key="b.id + b.version"
-              :value="JSON.stringify([b.id, b.version])"
-            >
-              {{ b.id }} / {{ b.version }} · {{ b.platform }} · {{ b.definition.kind }}
-            </option>
-          </select></label
-        ><UiButton
-          :disabled="busy || uncertain || !blueprint"
-          data-action="instantiate-package"
-          @click="instantiate"
-          >{{ t('policies.instantiatePackage') }}</UiButton
-        ></template
-      >
-    </section>
-    <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="create">{{
-      t('policies.create')
-    }}</UiButton
-    ><UiButton :disabled="!!busy" type="submit" @click="load()">{{
-      t('policies.reload')
-    }}</UiButton>
-    <p v-if="list && !list.items.length">{{ t('policies.empty') }}</p>
-    <ul class="console-object-list">
-      <li v-for="item in list?.items" :key="item.id">
-        <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(item.id)">{{
-          item.id
-        }}</UiButton>
-      </li>
-    </ul>
-    <UiButton
-      v-if="list?.nextCursor"
-      :disabled="!!busy"
-      type="submit"
-      @click="load(list.nextCursor)"
+  <PageFrame
+    :title="t('policies.resources')"
+    :description="t('policies.ux.resourcesHint')"
+    :busy="busy"
+    :failure="failure"
+  >
+    <template #actions
+      ><UiButton :disabled="busy || uncertain" @click="create">{{ t('policies.create') }}</UiButton
+      ><UiButton :disabled="busy" @click="load()">{{ t('policies.reload') }}</UiButton></template
     >
-      {{ t('policies.next') }}
-    </UiButton>
-    <fieldset v-show="creating" class="console-panel" :disabled="busy || uncertain">
-      <label for="resource-id">{{ t('policies.id') }}</label
-      ><input
-        id="resource-id"
-        v-model="id"
-        class="ui-input"
-        :readonly="!!current"
-        required
-      /><UiButton type="submit" @click="open()"> {{ t('policies.open') }}</UiButton
-      ><label for="resource-kind">{{ t('policies.kind') }}</label
-      ><select id="resource-kind" v-model="kind" class="ui-input" :disabled="!!current">
-        <option value="script">{{ t('policies.scripts') }}</option>
-        <option value="software">{{ t('policies.software') }}</option>
-        <option value="configuration">{{ t('policies.configurations') }}</option></select
-      ><UiButton
-        v-if="!current"
-        :disabled="!!!id"
-        type="submit"
-        @click="change({ action: 'create', kind })"
-      >
-        {{ t('policies.save') }}
-      </UiButton>
-    </fieldset>
-    <template v-if="current">
-      <form data-testid="resource-presentation" @submit.prevent="savePresentation">
-        <fieldset :disabled="busy || uncertain">
-          <legend>{{ t('policies.resourcePresentation') }}</legend>
-          <label for="resource-display-name">{{ t('devices.name') }}</label
-          ><input id="resource-display-name" v-model="presentationName" class="ui-input" />
-          <label for="resource-description">{{ t('policies.selfService.description') }}</label
-          ><textarea id="resource-description" v-model="presentationDescription" class="ui-input" />
-          <UiButton type="submit">{{ t('devices.save') }}</UiButton>
-        </fieldset>
-      </form>
-      <p>{{ t('policies.revision') }} {{ current.revision }}</p>
-      <div class="ui-table-scroll">
-        <table class="ui-table">
-          <thead>
-            <tr>
-              <th>{{ t('policies.version') }}</th>
-              <th>{{ t('policies.status') }}</th>
-              <th>{{ t('policies.detail') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in current.versions" :key="item.id">
-              <td>{{ item.id }}</td>
-              <td>{{ t(`policies.state.${item.state}`) }}</td>
-              <td>
-                <UiButton
-                  v-for="action in (item.state === 'frozen'
-                    ? ['activate', 'archive']
-                    : item.state === 'active'
-                      ? ['deprecate', 'archive']
-                      : item.state === 'deprecated'
-                        ? ['activate', 'archive']
-                        : []) as ('activate' | 'deprecate' | 'archive')[]"
-                  :key="action"
-                  :disabled="!!(busy || uncertain)"
-                  type="submit"
-                  @click="change({ action, version: item.id })"
-                >
-                  {{ t(`policies.${action}`) }}
-                </UiButton>
-                <RouterLink
-                  v-if="
-                    item.state === 'active' &&
-                    ['native_collection', 'agent_collection', 'configuration'].includes(
-                      current.kind,
-                    )
-                  "
-                  :to="{
-                    name: 'policy-policies',
-                    params: { tenant: runtime.tenant },
-                    query: { kind: current.kind, resource: current.id, version: item.id },
-                  }"
-                  >{{ t('policies.assignPackage') }}</RouterLink
-                >
-              </td>
-            </tr>
-          </tbody>
-        </table>
+    <template v-if="!current">
+      <div class="task-directory-summary">
+        <strong>{{ t('policies.ux.loaded', { count: list?.items.length ?? 0 }) }}</strong
+        ><span>{{ t('policies.ux.resourcesHint') }}</span>
       </div>
-      <details
-        v-if="kind !== 'native_collection' && kind !== 'agent_collection'"
-        class="console-panel console-task"
-        :open="uncertain || undefined"
-      >
-        <summary>{{ t('policies.version') }}</summary>
-        <form @submit.prevent="addVersion">
-          <fieldset :disabled="busy || uncertain">
-            <label for="resource-version">{{ t('policies.version') }}</label
-            ><input id="resource-version" v-model="version" class="ui-input" required /><label
-              for="resource-platform"
-              >{{ t('policies.platform') }}</label
-            ><select id="resource-platform" v-model="target.platform" class="ui-input">
-              <option value="windows">Windows</option>
-              <option value="macos">macOS</option></select
-            ><label for="resource-architecture">{{ t('policies.architecture') }}</label
-            ><select id="resource-architecture" v-model="target.architecture" class="ui-input">
-              <option value="x86_64">x86_64</option>
-              <option value="aarch64">aarch64</option></select
-            ><label for="resource-variant">{{ t('policies.variant') }}</label
-            ><input
-              id="resource-variant"
-              v-model="target.variant"
-              class="ui-input"
-              required
-            /><label for="resource-metadata">{{ t('policies.metadata') }}</label
-            ><input id="resource-metadata" class="ui-input" type="file" @change="metadata" /><label
-              for="resource-reference"
-              >{{ t('policies.reference') }}</label
-            ><input
-              id="resource-reference"
-              v-model="artifact.reference"
-              class="ui-input"
-              required
-            />
-            <p>
-              {{ t('policies.length') }} {{ artifact.length }} · {{ t('policies.hash') }}
-              {{ hashText(artifact.sha256) }}
-            </p>
-            <ScriptDefinitionEditor
-              v-if="kind === 'script'"
-              v-model="spec"
-            /><SoftwareDefinitionEditor
-              v-else-if="kind === 'software'"
-              :key="editorEpoch"
-              ref="softwareEditor"
-            /><template v-if="kind === 'software'">
-              <UiButton type="button" data-action="stage-variant" @click="stageVariant">
-                {{ t('software.stageVariant') }}
-              </UiButton>
-              <p>{{ t('software.variantDraftHint') }}</p>
-              <ul>
-                <li
-                  v-for="(v, index) in draftVariants"
-                  :key="`${v.platform}/${v.architecture}/${v.key}`"
-                >
-                  {{ v.platform }} / {{ v.architecture }} / {{ v.key }}
-                  <UiButton type="button" @click="draftVariants.splice(index, 1)">
-                    {{ t('software.removeVariant') }}
-                  </UiButton>
-                </li>
-              </ul> </template
-            ><UiButton
-              type="submit"
-              :disabled="!!(kind === 'software' ? !draftVariants.length : !artifact.length)"
-            >
-              {{ t('policies.save') }}
-            </UiButton>
-          </fieldset>
-        </form>
-      </details>
-      <section
-        v-if="kind !== 'native_collection' && kind !== 'agent_collection'"
-        class="console-panel"
-      >
-        <h2>{{ t('policies.upload') }}</h2>
-        <p>{{ t('software.uploadSessionHint') }}</p>
-        <label for="resource-upload-id">{{ t('software.uploadSessionId') }}</label>
-        <input
-          id="resource-upload-id"
-          v-model="uploadId"
+      <div class="console-toolbar task-filterbar">
+        <UiSearchInput
+          v-model="query"
+          :clear-label="t('console.clear')"
+          :label="t('policies.ux.searchResources')"
+          :placeholder="t('policies.ux.searchResources')"
+        /><select
+          v-model="resourceFilter"
           class="ui-input"
-          :disabled="busy || !!uploadPending"
-        />
-        <UiButton
-          data-action="read-upload"
-          :disabled="!!(busy || !uploadId || (uncertain && !uploadPending))"
-          type="submit"
-          @click="readUpload"
-        >
-          {{ t('software.readUpload') }}
-        </UiButton>
-        <p>{{ t('policies.fileCleared') }}</p>
-        <template v-if="kind === 'software'"
-          ><label for="resource-artifact">{{ t('software.contentArtifact') }}</label
-          ><input
-            id="resource-artifact"
-            v-model="contentArtifact"
-            class="ui-input"
-            :disabled="busy || uncertain"
-        /></template>
-        <label for="resource-upload">{{ t('policies.content') }}</label
-        ><input
-          id="resource-upload"
-          ref="uploadInput"
-          class="ui-input"
-          type="file"
+          :aria-label="t('policies.kind')"
           :disabled="busy"
-          @change="select"
-        /><UiButton
-          :disabled="!!(busy || !file || (uncertain && !uploadPending))"
-          type="submit"
-          @click="upload"
+          @change="load()"
         >
-          {{ t('policies.upload') }}
-        </UiButton>
-        <p v-if="uploadPending">
-          {{ uploadPending.upload }} · {{ uploadPending.id }} / {{ uploadPending.target.version }} /
-          {{ uploadPending.target.variant }} · {{ uploadPending.length }} · {{ uploadPending.hash }}
-        </p>
-        <p v-if="uploadSession">
-          {{ t('software.uploadProgress') }} {{ uploadSession.offset }} /
-          {{ uploadSession.binding.length }}
-        </p>
-        <UiButton
-          v-if="
-            uploadPending &&
-            uploadSession?.id === uploadPending.upload &&
-            uploadSession.offset === uploadPending.length
-          "
-          data-action="complete-upload"
-          :disabled="!!busy"
-          type="submit"
-          @click="completeUpload"
+          <option value="">{{ t('policies.ux.allTypes') }}</option>
+          <option
+            v-for="value in [
+              'script',
+              'software',
+              'configuration',
+              'native_collection',
+              'agent_collection',
+              'telemetry_profile',
+            ] as const"
+            :key="value"
+            :value="value"
+          >
+            {{ kindLabel(value) }}
+          </option>
+        </select>
+      </div>
+      <p class="ui-help">{{ t('policies.ux.pageOnly') }}</p>
+      <UiTable
+        :label="t('policies.resources')"
+        :rows="visibleResources"
+        :row-key="(item) => item.id"
+        :busy="busy"
+        :busy-label="t('devices.loading')"
+        :empty-label="t('policies.empty')"
+        :columns="[
+          { key: 'name', label: t('devices.name') },
+          { key: 'kind', label: t('policies.kind') },
+          { key: 'activeVersion', label: t('policies.ux.activeVersion') },
+          { key: 'revision', label: t('policies.revision') },
+        ]"
+      >
+        <template #cell-name="{ row }"
+          ><UiButton variant="ghost" :disabled="busy || uncertain" @click="open(row.id)">{{
+            typeof row.presentation['name'] === 'string' && row.presentation['name']
+              ? row.presentation['name']
+              : row.id
+          }}</UiButton
+          ><small class="task-object-description">{{
+            typeof row.presentation['description'] === 'string'
+              ? row.presentation['description']
+              : ''
+          }}</small></template
         >
-          {{ t('software.completeUpload') }}
-        </UiButton>
-        <UiButton
-          v-if="uploadPending"
-          data-action="verify-upload"
-          :disabled="!!busy"
-          type="submit"
-          @click="verifyUpload"
+        <template #cell-kind="{ row }"
+          ><UiBadge>{{ kindLabel(row.kind) }}</UiBadge></template
         >
-          {{ t('software.verifyUpload') }}
+        <template #cell-activeVersion="{ row }">{{
+          row.activeVersion ?? t('policies.ux.noActiveVersion')
+        }}</template>
+      </UiTable>
+      <UiButton v-if="list?.nextCursor" :disabled="busy" @click="load(list.nextCursor)">{{
+        t('policies.next')
+      }}</UiButton>
+    </template>
+    <UiDialog
+      v-model:open="creating"
+      placement="right"
+      :title="t('policies.ux.selectType')"
+      :close-label="t('console.close')"
+      :dismissible="!busy && !uncertain"
+    >
+      <section class="console-panel" data-testid="collection-blueprints">
+        <h2>{{ t('policies.standardPackages') }}</h2>
+        <p>{{ t('policies.standardPackagesNote') }}</p>
+        <UiButton :disabled="busy" @click="loadBlueprints">{{
+          t('policies.choosePackage')
+        }}</UiButton>
+        <template v-if="blueprints"
+          ><label
+            >{{ t('policies.packageCategory')
+            }}<select
+              v-model="category"
+              class="ui-input"
+              :disabled="busy || uncertain"
+              @change="blueprint = ''"
+            >
+              <option value="">{{ t('devices.all') }}</option>
+              <option v-for="c in blueprints.categories" :key="c" :value="c">
+                {{ t('policies.packageCategories.' + c) }}
+              </option>
+            </select></label
+          ><label
+            >{{ t('policies.packageVersion')
+            }}<select v-model="blueprint" class="ui-input" :disabled="busy || uncertain">
+              <option value="">{{ t('devices.select') }}</option>
+              <option
+                v-for="b in blueprintOptions"
+                :key="b.id + b.version"
+                :value="JSON.stringify([b.id, b.version])"
+              >
+                {{ b.id }} / {{ b.version }} · {{ b.platform }} · {{ b.definition.kind }}
+              </option>
+            </select></label
+          ><UiButton
+            :disabled="busy || uncertain || !blueprint"
+            data-action="instantiate-package"
+            @click="instantiate"
+            >{{ t('policies.instantiatePackage') }}</UiButton
+          ></template
+        >
+      </section>
+      <fieldset v-show="creating" class="console-panel" :disabled="busy || uncertain">
+        <details class="task-technical">
+          <summary>{{ t('policies.ux.technical') }}</summary>
+          <label for="resource-id">{{ t('policies.id') }}</label
+          ><input
+            id="resource-id"
+            v-model="id"
+            class="ui-input"
+            :readonly="!!current"
+            required
+          /><UiButton type="button" @click="open()">{{ t('policies.open') }}</UiButton>
+        </details>
+        <label for="resource-kind">{{ t('policies.kind') }}</label
+        ><select id="resource-kind" v-model="kind" class="ui-input" :disabled="!!current">
+          <option value="script">{{ t('policies.scripts') }}</option>
+          <option value="software">{{ t('policies.software') }}</option>
+          <option value="configuration">{{ t('policies.configurations') }}</option></select
+        ><UiButton
+          v-if="!current && kind !== 'software'"
+          :disabled="!!!id"
+          type="submit"
+          @click="change({ action: 'create', kind })"
+        >
+          {{ t('policies.save') }}
         </UiButton>
-        <p v-if="uploadCommitted" role="status">{{ t('software.uploadCommitted') }}</p>
-      </section></template
+        <template v-if="kind === 'software'"
+          ><p>{{ t('policies.ux.softwareImport') }}</p>
+          <RouterLink :to="{ name: 'software-imports', params: { tenant: runtime.tenant } }">{{
+            t('policies.ux.importSoftware')
+          }}</RouterLink></template
+        >
+      </fieldset>
+    </UiDialog>
+    <template v-if="current">
+      <UiButton variant="ghost" :disabled="busy || uncertain" @click="closeResource"
+        >← {{ t('policies.ux.backResources') }}</UiButton
+      >
+      <header class="console-page-header task-detail-heading">
+        <div>
+          <h2>{{ presentationName || current.id }}</h2>
+          <p>{{ kindLabel(current.kind) }} · {{ t('policies.revision') }} {{ current.revision }}</p>
+        </div>
+        <UiBadge>{{ kindLabel(current.kind) }}</UiBadge>
+      </header>
+      <UiTabs
+        v-model="resourceTab"
+        :label="t('policies.resources')"
+        :keep-mounted="true"
+        :items="[
+          { value: 'versions', label: t('policies.ux.versions') },
+          { value: 'content', label: t('policies.ux.content') },
+          { value: 'metadata', label: t('policies.ux.metadata') },
+        ]"
+      >
+        <template #metadata>
+          <form data-testid="resource-presentation" @submit.prevent="savePresentation">
+            <fieldset :disabled="busy || uncertain">
+              <legend>{{ t('policies.resourcePresentation') }}</legend>
+              <label for="resource-display-name">{{ t('devices.name') }}</label
+              ><input id="resource-display-name" v-model="presentationName" class="ui-input" />
+              <label for="resource-description">{{ t('policies.selfService.description') }}</label
+              ><textarea
+                id="resource-description"
+                v-model="presentationDescription"
+                class="ui-input"
+              />
+              <UiButton type="submit">{{ t('devices.save') }}</UiButton>
+            </fieldset>
+          </form> </template
+        ><template #versions>
+          <div class="ui-table-scroll">
+            <table class="ui-table">
+              <thead>
+                <tr>
+                  <th>{{ t('policies.version') }}</th>
+                  <th>{{ t('policies.status') }}</th>
+                  <th>{{ t('policies.detail') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in current.versions" :key="item.id">
+                  <td>{{ item.id }}</td>
+                  <td>{{ t(`policies.state.${item.state}`) }}</td>
+                  <td>
+                    <UiButton
+                      v-for="action in (item.state === 'frozen'
+                        ? ['activate', 'archive']
+                        : item.state === 'active'
+                          ? ['deprecate', 'archive']
+                          : item.state === 'deprecated'
+                            ? ['activate', 'archive']
+                            : []) as ('activate' | 'deprecate' | 'archive')[]"
+                      :key="action"
+                      :disabled="!!(busy || uncertain)"
+                      type="submit"
+                      @click="change({ action, version: item.id })"
+                    >
+                      {{ t(`policies.${action}`) }}
+                    </UiButton>
+                    <RouterLink
+                      v-if="
+                        item.state === 'active' &&
+                        ['native_collection', 'agent_collection', 'configuration'].includes(
+                          current.kind,
+                        )
+                      "
+                      :to="{
+                        name: 'policy-policies',
+                        params: { tenant: runtime.tenant },
+                        query: { kind: current.kind, resource: current.id, version: item.id },
+                      }"
+                      >{{ t('policies.assignPackage') }}</RouterLink
+                    >
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div> </template
+        ><template #content>
+          <details
+            v-if="kind !== 'native_collection' && kind !== 'agent_collection'"
+            class="console-panel console-task"
+            :open="uncertain || undefined"
+          >
+            <summary>{{ t('policies.version') }}</summary>
+            <form @submit.prevent="addVersion">
+              <fieldset :disabled="busy || uncertain">
+                <label for="resource-version">{{ t('policies.version') }}</label
+                ><input id="resource-version" v-model="version" class="ui-input" required /><label
+                  for="resource-platform"
+                  >{{ t('policies.platform') }}</label
+                ><select id="resource-platform" v-model="target.platform" class="ui-input">
+                  <option value="windows">Windows</option>
+                  <option value="macos">macOS</option></select
+                ><label for="resource-architecture">{{ t('policies.architecture') }}</label
+                ><select id="resource-architecture" v-model="target.architecture" class="ui-input">
+                  <option value="x86_64">x86_64</option>
+                  <option value="aarch64">aarch64</option></select
+                ><label for="resource-variant">{{ t('policies.variant') }}</label
+                ><input
+                  id="resource-variant"
+                  v-model="target.variant"
+                  class="ui-input"
+                  required
+                /><label for="resource-metadata">{{ t('policies.metadata') }}</label
+                ><input
+                  id="resource-metadata"
+                  class="ui-input"
+                  type="file"
+                  @change="metadata"
+                /><label for="resource-reference">{{ t('policies.reference') }}</label
+                ><input
+                  id="resource-reference"
+                  v-model="artifact.reference"
+                  class="ui-input"
+                  required
+                />
+                <p>
+                  {{ t('policies.length') }} {{ artifact.length }} · {{ t('policies.hash') }}
+                  {{ hashText(artifact.sha256) }}
+                </p>
+                <ScriptDefinitionEditor
+                  v-if="kind === 'script'"
+                  v-model="spec"
+                /><SoftwareDefinitionEditor
+                  v-else-if="kind === 'software'"
+                  :key="editorEpoch"
+                  ref="softwareEditor"
+                /><template v-if="kind === 'software'">
+                  <UiButton type="button" data-action="stage-variant" @click="stageVariant">
+                    {{ t('software.stageVariant') }}
+                  </UiButton>
+                  <p>{{ t('software.variantDraftHint') }}</p>
+                  <ul>
+                    <li
+                      v-for="(v, index) in draftVariants"
+                      :key="`${v.platform}/${v.architecture}/${v.key}`"
+                    >
+                      {{ v.platform }} / {{ v.architecture }} / {{ v.key }}
+                      <UiButton type="button" @click="draftVariants.splice(index, 1)">
+                        {{ t('software.removeVariant') }}
+                      </UiButton>
+                    </li>
+                  </ul> </template
+                ><UiButton
+                  type="submit"
+                  :disabled="!!(kind === 'software' ? !draftVariants.length : !artifact.length)"
+                >
+                  {{ t('policies.save') }}
+                </UiButton>
+              </fieldset>
+            </form>
+          </details>
+          <section
+            v-if="kind !== 'native_collection' && kind !== 'agent_collection'"
+            class="console-panel"
+          >
+            <h2>{{ t('policies.upload') }}</h2>
+            <p>{{ t('software.uploadSessionHint') }}</p>
+            <label for="resource-upload-id">{{ t('software.uploadSessionId') }}</label>
+            <input
+              id="resource-upload-id"
+              v-model="uploadId"
+              class="ui-input"
+              :disabled="busy || !!uploadPending"
+            />
+            <UiButton
+              data-action="read-upload"
+              :disabled="!!(busy || !uploadId || (uncertain && !uploadPending))"
+              type="submit"
+              @click="readUpload"
+            >
+              {{ t('software.readUpload') }}
+            </UiButton>
+            <p>{{ t('policies.fileCleared') }}</p>
+            <template v-if="kind === 'software'"
+              ><label for="resource-artifact">{{ t('software.contentArtifact') }}</label
+              ><input
+                id="resource-artifact"
+                v-model="contentArtifact"
+                class="ui-input"
+                :disabled="busy || uncertain"
+            /></template>
+            <label for="resource-upload">{{ t('policies.content') }}</label
+            ><input
+              id="resource-upload"
+              ref="uploadInput"
+              class="ui-input"
+              type="file"
+              :disabled="busy"
+              @change="select"
+            /><UiButton
+              :disabled="!!(busy || !file || (uncertain && !uploadPending))"
+              type="submit"
+              @click="upload"
+            >
+              {{ t('policies.upload') }}
+            </UiButton>
+            <p v-if="uploadPending">
+              {{ uploadPending.upload }} · {{ uploadPending.id }} /
+              {{ uploadPending.target.version }} / {{ uploadPending.target.variant }} ·
+              {{ uploadPending.length }} · {{ uploadPending.hash }}
+            </p>
+            <p v-if="uploadSession">
+              {{ t('software.uploadProgress') }} {{ uploadSession.offset }} /
+              {{ uploadSession.binding.length }}
+            </p>
+            <UiButton
+              v-if="
+                uploadPending &&
+                uploadSession?.id === uploadPending.upload &&
+                uploadSession.offset === uploadPending.length
+              "
+              data-action="complete-upload"
+              :disabled="!!busy"
+              type="submit"
+              @click="completeUpload"
+            >
+              {{ t('software.completeUpload') }}
+            </UiButton>
+            <UiButton
+              v-if="uploadPending"
+              data-action="verify-upload"
+              :disabled="!!busy"
+              type="submit"
+              @click="verifyUpload"
+            >
+              {{ t('software.verifyUpload') }}
+            </UiButton>
+            <p v-if="uploadCommitted" role="status">{{ t('software.uploadCommitted') }}</p>
+          </section></template
+        ></UiTabs
+      ></template
     >
     <UiButton
       v-if="uncertain && pending && !uploadPending"

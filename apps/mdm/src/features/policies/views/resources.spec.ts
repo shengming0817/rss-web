@@ -76,7 +76,13 @@ it('publishes all staged software variants in one immutable version at the curre
   const wrapper = mount(ResourcesView, {
     global: {
       plugins: [router, mdmI18n()],
-      stubs: { RouterLink: true },
+      stubs: {
+        RouterLink: true,
+        UiDialog: {
+          props: ['open'],
+          template: '<section v-show="open" role="dialog"><slot /><slot name="footer" /></section>',
+        },
+      },
       provide: {
         [mdmKey as symbol]: {
           tenant: 'tenant',
@@ -178,7 +184,13 @@ it('resumes the same upload after a lost chunk response, rejects different bytes
   const wrapper = mount(ResourcesView, {
     global: {
       plugins: [router, mdmI18n()],
-      stubs: { RouterLink: true },
+      stubs: {
+        RouterLink: true,
+        UiDialog: {
+          props: ['open'],
+          template: '<section v-show="open" role="dialog"><slot /><slot name="footer" /></section>',
+        },
+      },
       provide: {
         [mdmKey as symbol]: {
           tenant: 'tenant',
@@ -248,7 +260,13 @@ it('hashes metadata for a software artifact larger than one HTTP chunk without r
   const wrapper = mount(ResourcesView, {
     global: {
       plugins: [router, mdmI18n()],
-      stubs: { RouterLink: true },
+      stubs: {
+        RouterLink: true,
+        UiDialog: {
+          props: ['open'],
+          template: '<section v-show="open" role="dialog"><slot /><slot name="footer" /></section>',
+        },
+      },
       provide: {
         [mdmKey as symbol]: {
           tenant: 'tenant',
@@ -301,7 +319,13 @@ it('clears the software definition and artifact draft when opening another resou
   const wrapper = mount(ResourcesView, {
     global: {
       plugins: [router, mdmI18n()],
-      stubs: { RouterLink: true },
+      stubs: {
+        RouterLink: true,
+        UiDialog: {
+          props: ['open'],
+          template: '<section v-show="open" role="dialog"><slot /><slot name="footer" /></section>',
+        },
+      },
       provide: {
         [mdmKey as symbol]: {
           tenant: 'tenant',
@@ -405,7 +429,14 @@ it.each([false, true])(
     const wrapper = mount(ResourcesView, {
       global: {
         plugins: [router, mdmI18n()],
-        stubs: { RouterLink: true },
+        stubs: {
+          RouterLink: true,
+          UiDialog: {
+            props: ['open'],
+            template:
+              '<section v-show="open" role="dialog"><slot /><slot name="footer" /></section>',
+          },
+        },
         provide: {
           [mdmKey as symbol]: {
             tenant: 'tenant',
@@ -493,7 +524,13 @@ it('edits Resource presentation through the current client without dropping unkn
   const wrapper = mount(ResourcesView, {
     global: {
       plugins: [router, mdmI18n()],
-      stubs: { RouterLink: true },
+      stubs: {
+        RouterLink: true,
+        UiDialog: {
+          props: ['open'],
+          template: '<section v-show="open" role="dialog"><slot /><slot name="footer" /></section>',
+        },
+      },
       provide: { [mdmKey as symbol]: { tenant: 'tenant', policies: { resources: client } } },
     },
   })
@@ -519,6 +556,10 @@ it('edits Resource presentation through the current client without dropping unkn
   expect((await client.read('second')).presentation).toEqual({ name: '', description: '' })
   expect((await client.read('app')).presentation).toEqual(stored.presentation)
   const blueprint = (await client.blueprints()).items[0]!
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text() === '新建')!
+    .trigger('click')
   await wrapper.get('[data-testid=collection-blueprints] button').trigger('click')
   await flushPromises()
   await wrapper

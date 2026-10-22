@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { flushPromises, mount } from '@vue/test-utils'
+import { DOMWrapper, flushPromises, mount } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { expect, it, vi } from 'vitest'
 import { mdmKey } from '../../../context'
@@ -190,14 +190,19 @@ it('removes the old control target when the device selection is cleared without 
   await flushPromises()
   await wrapper
     .findAll('button')
-    .find((b) => b.text() === '从授权目录选择')!
+    .find((b) => b.text() === '新建远程操作')!
     .trigger('click')
   await flushPromises()
-  const select = wrapper.findAll('select')[1]!
+  const select = new DOMWrapper(document.body).get('[role=dialog] select')
   await select.setValue('endpoint')
   await flushPromises()
   expect(wrapper.findComponent(DeviceControlPanel).exists()).toBe(true)
-  await select.setValue('')
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text() === '新建远程操作')!
+    .trigger('click')
+  await flushPromises()
+  await new DOMWrapper(document.body).get('[role=dialog] select').setValue('')
   await flushPromises()
   expect(wrapper.findComponent(DeviceControlPanel).exists()).toBe(false)
   expect(detail.mock.calls).toEqual([['endpoint']])

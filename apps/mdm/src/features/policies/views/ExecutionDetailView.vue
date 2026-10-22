@@ -10,6 +10,7 @@ import type { NativeOperation, Reauthorization } from '../clients/native'
 import PageFrame from '../../../components/PageFrame.vue'
 import NativeTaskFacts from '../components/NativeTaskFacts.vue'
 import PolicyRunFacts from '../components/PolicyRunFacts.vue'
+import OperationStages from '../components/OperationStages.vue'
 import { uuid } from '../../../services/decode'
 import type { PolicyRun } from '../clients/runs'
 const { t } = useI18n(),
@@ -124,9 +125,26 @@ watch(
 )
 </script>
 <template>
-  <PageFrame :title="t('policies.detail')" :busy="busy" :failure="failure"
-    ><UiButton :disabled="!!busy" type="submit" @click="load">{{ t('policies.verify') }}</UiButton>
-    <p>{{ route.params['execution'] }}</p>
+  <PageFrame
+    :title="t('policies.detail')"
+    :description="t('policies.ux.executionsHint')"
+    :busy="busy"
+    :failure="failure"
+  >
+    <template #actions
+      ><UiButton :disabled="!!busy" type="submit" @click="load">{{
+        t('policies.verify')
+      }}</UiButton></template
+    >
+    <RouterLink
+      :to="{
+        name: 'policy-executions',
+        params: { tenant: runtime.tenant },
+        query: { device: route.query['device'], policy: route.query['policy'] },
+      }"
+      >← {{ t('policies.executions') }}</RouterLink
+    >
+    <p class="coordinate">{{ route.params['execution'] }}</p>
     <p v-if="uncertain && pending">
       {{ t('policies.originalChange') }} {{ pending.body.requestId }} ·
       {{ pending.body.expectedRevision }}
@@ -142,6 +160,12 @@ watch(
       t('policies.replay')
     }}</UiButton>
     <section v-if="native" class="console-panel">
+      <OperationStages
+        :dispatch="native.commandStatus"
+        :receipt="native.observation.progress"
+        :effect="native.observation.effect"
+      />
+      <p class="ui-help">{{ t('policies.ux.stagesHint') }}</p>
       <h2>{{ native.observation.protocol }}</h2>
       <NativeTaskFacts :operation="native" :device="String(route.query['device'])" />
       <details v-if="native.dispatchFailure" open>
@@ -152,12 +176,15 @@ watch(
         <summary>{{ t('software.installAgent') }}</summary>
         <pre>{{ JSON.stringify(native.agentInstallation, null, 2) }}</pre>
       </details>
-      <dl>
-        <template v-for="(value, key) in native.observation" :key="key"
-          ><dt>{{ t(`policies.observation.${key}`) }}</dt>
-          <dd>{{ value === null ? '—' : value }}</dd></template
-        >
-      </dl>
+      <details class="task-technical">
+        <summary>{{ t('policies.ux.technical') }}</summary>
+        <dl>
+          <template v-for="(value, key) in native.observation" :key="key"
+            ><dt>{{ t(`policies.observation.${key}`) }}</dt>
+            <dd>{{ value === null ? '—' : value }}</dd></template
+          >
+        </dl>
+      </details>
       <p>
         {{ t('policies.revision') }} {{ native.revision }} ·
         {{ t(`policies.state.${native.task.platform}`) }} ·
@@ -226,6 +253,12 @@ watch(
           )
         }}</RouterLink
       >
+      <OperationStages
+        :dispatch="software.state.delivery.kind"
+        :receipt="software.state.execution"
+        :effect="software.effect"
+      />
+      <p class="ui-help">{{ t('policies.ux.stagesHint') }}</p>
       <PolicyRunFacts :run="software" />
     </template>
   </PageFrame>

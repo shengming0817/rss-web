@@ -1,4 +1,44 @@
 export const policiesZh = {
+  ux: {
+    planning: '配置与部署',
+    groupsHint: '将需要一起管理的设备组织起来。智能群组随资产变化更新，静态群组由你维护。',
+    resourcesHint: '软件、脚本与配置各自保留固定内容版本，由策略引用后部署。',
+    executionsHint: '从同一次操作查看受理、下发、设备回报与效果核验。',
+    scopeHint: '选择目标，再用限制与排除收窄部署范围。保存后读取逐设备判定。',
+    loaded: '已加载 {count} 项',
+    pageOnly: '搜索与类型筛选仅作用于当前页；继续翻页可读取更多获授权记录。',
+    searchGroups: '搜索获授权群组名称',
+    searchResources: '搜索当前页资源名称或标识',
+    allTypes: '全部类型',
+    backGroups: '返回群组目录',
+    backScopes: '返回范围目录',
+    backResources: '返回资源目录',
+    selectType: '选择资源类型',
+    softwareImport: '从软件导入流程准备可信的安装内容与固定版本。',
+    importSoftware: '前往软件导入',
+    scopeTargets: '加入范围的群组或具体设备。',
+    scopeLimitations: '只保留同时符合限制条件的目标；空限制会产生空范围。',
+    scopeExclusions: '从目标中排除的对象，优先于目标和限制。',
+    scopeSaved: '已保存的范围定义',
+    memberBoundary: '预览使用已保存版本。计算结果与当前定义分别保留。',
+    remote: '新建远程操作',
+    chooseDevice: '选择设备',
+    chooseDeviceHint: '先选择原始端点，再核对平台、有效通道与注册代次。',
+    total: '获授权操作',
+    commands: '设备命令',
+    runs: '策略运行',
+    unknown: '未知结果',
+    observedAt: '观察时间 · UTC',
+    accepted: '已受理',
+    stagesHint: '受理不代表设备执行成功；效果以独立核验事实为准。',
+    technical: '原始标识与技术信息',
+    content: '内容与上传',
+    versions: '内容版本',
+    metadata: '名称与说明',
+    activeVersion: '当前激活版本',
+    noActiveVersion: '尚无激活版本',
+  },
+
   resourcePresentation: '资源展示信息',
   collectionPeriod: '采集周期（秒）',
   collectionPeriodNote:
@@ -443,6 +483,56 @@ export const policiesZh = {
   cancel: '请求取消',
 }
 export const policiesEn: typeof policiesZh = {
+  ux: {
+    planning: 'Configuration & deployment',
+    groupsHint:
+      'Organize devices for management. Smart groups follow asset changes; static groups are maintained by you.',
+    resourcesHint:
+      'Keep fixed software, script and configuration content versions, then deploy through policies.',
+    executionsHint:
+      'Follow acceptance, dispatch, device reports and effect verification for the same operation.',
+    scopeHint:
+      'Choose targets, then narrow deployment with limitations and exclusions. Read per-device decisions after saving.',
+    loaded: '{count} items loaded',
+    pageOnly:
+      'Search and type filters apply to this page. Continue paging to read more authorized records.',
+    searchGroups: 'Search authorized group names',
+    searchResources: 'Search resource names or identifiers on this page',
+    allTypes: 'All types',
+    backGroups: 'Back to groups',
+    backScopes: 'Back to scopes',
+    backResources: 'Back to resources',
+    selectType: 'Choose a resource type',
+    softwareImport:
+      'Prepare trusted installer content and a fixed version through software import.',
+    importSoftware: 'Go to software import',
+    scopeTargets: 'Groups or individual devices to include.',
+    scopeLimitations:
+      'Keep targets that also meet limitations; an empty limitation produces an empty scope.',
+    scopeExclusions: 'Remove these objects with precedence over targets and limitations.',
+    scopeSaved: 'Saved scope definition',
+    memberBoundary:
+      'Preview uses the saved version. Calculation results and the current definition remain separate.',
+    remote: 'New remote operation',
+    chooseDevice: 'Choose device',
+    chooseDeviceHint:
+      'Choose an endpoint, then verify its platform, active channel and registration generation.',
+    total: 'Authorized operations',
+    commands: 'Device commands',
+    runs: 'Policy runs',
+    unknown: 'Unknown results',
+    observedAt: 'Observed at · UTC',
+    accepted: 'Accepted',
+    stagesHint:
+      'Acceptance does not prove device execution. Effects require independent verification.',
+    technical: 'Identifiers & technical details',
+    content: 'Content & upload',
+    versions: 'Content versions',
+    metadata: 'Name & description',
+    activeVersion: 'Active version',
+    noActiveVersion: 'No active version',
+  },
+
   resourcePresentation: 'Resource presentation',
   collectionPeriod: 'Collection interval (seconds)',
   collectionPeriodNote:

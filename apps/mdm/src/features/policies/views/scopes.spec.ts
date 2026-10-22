@@ -142,10 +142,10 @@ it.each([
     expect(wrapper.text()).toContain('preserved')
     await wrapper
       .findAll('button')
-      .find((b) => b.text() === '下一页')!
+      .find((b) => b.text().includes('返回范围目录'))!
       .trigger('click')
     await flushPromises()
-    expect(list.mock.calls[1]?.[0]).toEqual({ after: id })
+    expect(list.mock.calls[1]?.[0]).toEqual({ after: undefined })
     expect(wrapper.text()).toContain('当前没有结果')
     wrapper.unmount()
   },

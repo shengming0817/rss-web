@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiButton, UiDialog, UiTable, UiBadge } from '@rss/core/components'
+import { UiButton, UiDialog, UiTable, UiBadge, UiTabs } from '@rss/core/components'
 import { ref, toRaw, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -173,59 +173,87 @@ watch(
 )
 </script>
 <template>
-  <PageFrame :title="t('policies.scopes')" :busy="busy" :failure="failure">
-    <p>{{ t('policies.scopeHint') }}</p>
-    <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="create">{{
-      t('policies.create')
-    }}</UiButton
-    ><UiButton :disabled="!!busy" type="submit" @click="load()">{{
-      t('policies.reload')
-    }}</UiButton>
-    <p v-if="list && !list.items.length">{{ t('policies.empty') }}</p>
-    <UiTable
-      :label="t('policies.scopes')"
-      :rows="list?.items ?? []"
-      :columns="[
-        { key: 'scope', label: t('policies.scopes') },
-        { key: 'revision', label: t('policies.revision') },
-        { key: 'resolution', label: t('console.result') },
-      ]"
-      :row-key="(s) => s.id"
-      :busy-label="t('devices.loading')"
-      :empty-label="t('policies.empty')"
-      ><template #cell-scope="{ row }"
-        ><UiButton variant="ghost" :disabled="busy || uncertain" @click="open(row.id)"
-          >{{ t('policies.scopes') }} · {{ row.id.slice(0, 8) }}</UiButton
-        ></template
-      ><template #cell-resolution="{ row }"
-        ><UiBadge>{{
-          t(row.resolution ? 'policies.savedResult' : 'policies.awaitingResult')
-        }}</UiBadge></template
-      ></UiTable
+  <PageFrame
+    :title="t('policies.scopes')"
+    :description="t('policies.ux.scopeHint')"
+    :busy="busy"
+    :failure="failure"
+  >
+    <template #actions
+      ><UiButton :disabled="!!(busy || uncertain)" type="submit" @click="create">{{
+        t('policies.create')
+      }}</UiButton
+      ><UiButton :disabled="!!busy" type="submit" @click="load()">{{
+        t('policies.reload')
+      }}</UiButton></template
     >
+    <template v-if="!current">
+      <div class="task-directory-summary">
+        <strong>{{ t('policies.ux.loaded', { count: list?.items.length ?? 0 }) }}</strong
+        ><span>{{ t('policies.ux.memberBoundary') }}</span>
+      </div>
+      <UiTable
+        :label="t('policies.scopes')"
+        :rows="list?.items ?? []"
+        :columns="[
+          { key: 'scope', label: t('policies.scopes') },
+          { key: 'revision', label: t('policies.revision') },
+          { key: 'resolution', label: t('console.result') },
+        ]"
+        :row-key="(s) => s.id"
+        :busy-label="t('devices.loading')"
+        :empty-label="t('policies.empty')"
+        ><template #cell-scope="{ row }"
+          ><UiButton variant="ghost" :disabled="busy || uncertain" @click="open(row.id)"
+            >{{ t('policies.scopes') }} · {{ row.id.slice(0, 8) }}</UiButton
+          ></template
+        ><template #cell-resolution="{ row }"
+          ><UiBadge>{{
+            t(row.resolution ? 'policies.savedResult' : 'policies.awaitingResult')
+          }}</UiBadge></template
+        ></UiTable
+      >
+      <UiButton
+        v-if="list?.nextCursor"
+        :disabled="!!busy"
+        type="submit"
+        @click="load(list.nextCursor)"
+      >
+        {{ t('policies.next') }}
+      </UiButton>
+    </template>
     <UiButton
-      v-if="list?.nextCursor"
-      :disabled="!!busy"
-      type="submit"
-      @click="load(list.nextCursor)"
+      v-if="current"
+      variant="ghost"
+      :disabled="busy || uncertain"
+      @click="
+        current = undefined
+        task = undefined
+        result = undefined
+        load()
+      "
+      >← {{ t('policies.ux.backScopes') }}</UiButton
     >
-      {{ t('policies.next') }}
-    </UiButton>
-    <section v-if="current && !editing" class="console-panel">
-      <h2>{{ t('console.summary') }}</h2>
+    <section v-if="current && !editing" class="console-panel task-scope-definition">
+      <h2>{{ t('policies.ux.scopeSaved') }}</h2>
       <p>{{ current.id }} · {{ t('policies.revision') }} {{ current.revision }}</p>
-      <fieldset disabled>
-        <ReferenceEditor :model-value="current.definition.targets" :label="t('policies.targets')" />
-        <p v-if="current.definition.limitations === null">{{ t('policies.unlimited') }}</p>
-        <ReferenceEditor
-          v-else
-          :model-value="current.definition.limitations"
-          :label="t('policies.limitations')"
-        /><ReferenceEditor
-          :model-value="current.definition.exclusions"
-          :label="t('policies.exclusions')"
-        />
-      </fieldset>
+      <div class="task-scope-roles">
+        <section v-for="role in referenceRoles" :key="role" class="task-scope-role">
+          <h3>{{ t(`policies.${role}`) }}</h3>
+          <p>{{ t(`policies.ux.scope${role[0]!.toUpperCase() + role.slice(1)}`) }}</p>
+          <p v-if="current.definition[role] === null">{{ t('policies.unlimited') }}</p>
+          <ul v-else-if="current.definition[role]?.length" class="task-reference-list">
+            <li
+              v-for="reference in current.definition[role]"
+              :key="`${reference.kind}/${reference.id}`"
+            >
+              <UiBadge>{{ t(`policies.${reference.kind}`) }}</UiBadge
+              ><span class="coordinate">{{ reference.id }}</span>
+            </li>
+          </ul>
+          <p v-else>{{ t('policies.empty') }}</p>
+        </section>
+      </div>
     </section>
     <div v-if="current && !editing" class="console-toolbar">
       <UiButton type="button" :disabled="busy || uncertain" @click="editing = true">{{
@@ -250,27 +278,43 @@ watch(
           >
         </div>
         <fieldset :disabled="busy || uncertain">
-          <label for="scope-id">{{ t('policies.id') }}</label
-          ><input
-            id="scope-id"
-            v-model="id"
-            class="ui-input"
-            required
-            :readonly="!!current"
-          /><UiButton type="button" @click="open()">
-            {{ t('policies.open') }}
-          </UiButton>
-          <ReferenceEditor v-model="targets" :label="t('policies.targets')" />
-          <label><input v-model="unlimited" type="checkbox" />{{ t('policies.unlimited') }}</label>
-          <p>{{ t('policies.emptyLimit') }}</p>
-          <ReferenceEditor
-            v-if="!unlimited"
-            v-model="limitations"
-            :label="t('policies.limitations')"
-          />
-          <ReferenceEditor v-model="exclusions" :label="t('policies.exclusions')" /><UiButton
-            type="submit"
-            >{{ t('policies.save') }}</UiButton
+          <details class="task-technical">
+            <summary>{{ t('policies.ux.technical') }}</summary>
+            <label for="scope-id">{{ t('policies.id') }}</label
+            ><input
+              id="scope-id"
+              v-model="id"
+              class="ui-input"
+              required
+              :readonly="!!current"
+            /><UiButton type="button" @click="open()">
+              {{ t('policies.open') }}
+            </UiButton>
+          </details>
+          <section class="task-scope-role">
+            <h3>{{ t('policies.targets') }}</h3>
+            <p>{{ t('policies.ux.scopeTargets') }}</p>
+            <ReferenceEditor v-model="targets" :label="t('policies.targets')" />
+          </section>
+          <section class="task-scope-role">
+            <h3>{{ t('policies.limitations') }}</h3>
+            <p>{{ t('policies.ux.scopeLimitations') }}</p>
+            <label
+              ><input v-model="unlimited" type="checkbox" />{{ t('policies.unlimited') }}</label
+            >
+            <p>{{ t('policies.emptyLimit') }}</p>
+            <ReferenceEditor
+              v-if="!unlimited"
+              v-model="limitations"
+              :label="t('policies.limitations')"
+            />
+          </section>
+          <section class="task-scope-role">
+            <h3>{{ t('policies.exclusions') }}</h3>
+            <p>{{ t('policies.ux.scopeExclusions') }}</p>
+            <ReferenceEditor v-model="exclusions" :label="t('policies.exclusions')" />
+          </section>
+          <UiButton type="submit">{{ t('policies.save') }}</UiButton
           ><UiButton v-if="current" type="button" @click="change({ action: 'delete' })">
             {{ t('policies.remove') }}
           </UiButton>
@@ -328,11 +372,14 @@ watch(
             <option value="mdm">MDM</option>
             <option value="agent">Agent</option>
           </select></label
-        ><label for="scope-projection">{{ t('policies.detail') }}</label
-        ><select id="scope-projection" v-model="projection" class="ui-input">
-          <option value="members">{{ t('policies.members') }}</option>
-          <option value="decisions">{{ t('policies.decisions') }}</option></select
-        ><UiButton :disabled="!!busy" type="submit" @click="page()">{{
+        ><UiTabs
+          v-model="projection"
+          :label="t('policies.detail')"
+          :items="[
+            { value: 'members', label: t('policies.members') },
+            { value: 'decisions', label: t('policies.decisions') },
+          ]"
+        /><UiButton :disabled="!!busy" type="submit" @click="page()">{{
           t('policies.open')
         }}</UiButton>
         <template v-if="result"
