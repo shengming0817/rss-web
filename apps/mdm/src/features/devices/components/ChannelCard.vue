@@ -10,6 +10,13 @@ const props = defineProps<{
 }>()
 const { t } = useI18n(),
   runtime = useMdm()
+function communication(at: number | null) {
+  if (at === null) return t('devices.noCommunication')
+  const date = new Date(at * 1000)
+  return Number.isNaN(date.getTime())
+    ? String(at)
+    : date.toISOString().replace('T', ' ').replace('.000Z', ' UTC')
+}
 function received(registration: string, generation: number) {
   const times = Object.values(props.view.fields)
     .flatMap((f) => f.sources)
@@ -54,18 +61,26 @@ function capabilities(channel: string) {
       <dl>
         <dt>{{ t('devices.deviceId') }}</dt>
         <dd>{{ endpoint.id }}</dd>
-        <dt>{{ t('devices.registration') }}</dt>
+        <dt>
+          {{
+            t(
+              channel.status === 'active'
+                ? 'devices.currentRegistration'
+                : 'devices.previousRegistration',
+            )
+          }}
+        </dt>
         <dd>
-          {{ channel.registrationId }} / {{ channel.generation }} ·
+          {{ channel.registrationId }} ·
           {{ t(`devices.endpointState.${channel.status}`) }}
         </dd>
         <dt>{{ t('devices.source') }}</dt>
         <dd>{{ channel.source }}</dd>
         <dt>{{ t('devices.lastCommunication') }}</dt>
         <dd>
-          {{ t('devices.notProvided')
-          }}<span v-if="runtime.demo">
-            · {{ t('mdm.mock') }}: {{ t('devices.demoCommunication') }}</span
+          {{ communication(channel.lastCommunicationReceivedAt) }}
+          <span v-if="runtime.demo && channel.lastCommunicationReceivedAt !== null">
+            · {{ t('devices.syntheticCommunication') }}</span
           >
         </dd>
         <dt>{{ t('devices.received') }}</dt>
@@ -73,14 +88,13 @@ function capabilities(channel: string) {
       </dl>
       <ul>
         <li v-for="child in channel.children" :key="child.registrationId">
-          {{ child.purpose }} · {{ child.registrationId }} / {{ child.generation }} ·
+          {{ child.purpose }} · {{ child.registrationId }} ·
           {{ t(`devices.endpointState.${child.status}`) }} ·
           {{ t(child.ready ? 'devices.ready' : 'devices.unknown') }}
         </li>
       </ul>
       <p v-if="channel.userContext">
-        {{ t('devices.userContext') }} · {{ channel.userContext.id }} /
-        {{ channel.userContext.parentGeneration }} ·
+        {{ t('devices.userContext') }} · {{ channel.userContext.id }} ·
         {{ t(`devices.endpointState.${channel.userContext.registrationStatus}`) }}
       </p>
       <ul>

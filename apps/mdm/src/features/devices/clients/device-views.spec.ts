@@ -1,6 +1,46 @@
 import { expect, it } from 'vitest'
 import { decodeViews, decodeView } from './device-views'
 import { decodeDirectory } from './directory'
+import { endpoint as decodeEndpoint } from './endpoint-model'
+
+it('requires a nullable server communication receipt on each registration', () => {
+  const channel = {
+    registrationId: '11111111-1111-4111-8111-111111111111',
+    generation: 1,
+    channel: 'mdm',
+    source: 'mdm.windows',
+    platform: 'windows',
+    status: 'active',
+    children: [],
+    userContext: null,
+    lastCommunicationReceivedAt: 1780000090,
+  }
+  const current = {
+    id: 'device-one',
+    status: 'active',
+    primaryMdmRegistration: null,
+    channels: [channel],
+    enrollments: [],
+  }
+  for (const at of [null, 1780000090]) {
+    const result = decodeEndpoint({
+      ...current,
+      channels: [{ ...channel, lastCommunicationReceivedAt: at }],
+    })
+    expect(result.channels[0]?.lastCommunicationReceivedAt).toBe(at)
+    expect(result.channels[0]?.registrationId).toBe(channel.registrationId)
+  }
+  for (const invalid of [undefined, '1780000090', 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1])
+    expect(() =>
+      decodeEndpoint({
+        ...current,
+        channels: [{ ...channel, lastCommunicationReceivedAt: invalid }],
+      }),
+    ).toThrow()
+  const missing: Partial<typeof channel> = { ...channel }
+  delete missing.lastCommunicationReceivedAt
+  expect(() => decodeEndpoint({ ...current, channels: [missing] })).toThrow()
+})
 const endpoint = {
   id: 'device-one',
   status: 'registered',

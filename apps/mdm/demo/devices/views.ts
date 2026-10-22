@@ -53,6 +53,7 @@ export function endpointProjection(d: DemoDevice): Endpoint {
       generation: r.generation,
       status: r.status,
       source: r.source,
+      lastCommunicationReceivedAt: r.lastCommunicationReceivedAt,
       children: [],
       userContext: null,
     })),
