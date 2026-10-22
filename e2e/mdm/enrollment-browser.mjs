@@ -452,6 +452,7 @@ try {
       context,
       fixture,
       coverage,
+      gaps,
       temp,
       go,
       collectorLifecycle: {

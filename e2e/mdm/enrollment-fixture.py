@@ -192,11 +192,12 @@ try:
         module = importlib.util.spec_from_file_location('enrollment_device_agent',WEB/'e2e/mdm/device-agent.py')
         collector = importlib.util.module_from_spec(module); module.loader.exec_module(collector)
         agent_fixture = collector.register(agent['endpoint']['origin'],environment.root/'ca.crt',root/'pki/agent',operator,private,TENANTS[0])
+        recovery_candidate = collector.register(agent['endpoint']['origin'],environment.root/'ca.crt',root/'pki/agent',operator,private,TENANTS[0],activate=False)['originalCandidate']
         candidate_trust = json.loads(Path(json.loads((root/'agent-pki-next.json').read_text())['trust_file']).read_text())
         recovery_input = private(environment.root/'recovery-input.json',dict(wireVersion=1,operationId=str(uuid.uuid4()),secret=secrets.token_urlsafe(32),platform='macos',csr=base64.b64encode((root/'pki/agent/agent.der').read_bytes()).decode()))
         backend_revision = subprocess.run(['/usr/bin/git','rev-parse','HEAD'],cwd=BACKEND,check=True,capture_output=True,text=True).stdout.strip()
         print(json.dumps(dict(phase='backend-baseline',revision=backend_revision)),flush=True)
-        fixture = private(environment.root/'browser.json',dict(backendRevision=backend_revision,collector=agent_fixture,pki=dict(candidateTrust=candidate_trust,recoveryInputFile=str(recovery_input)),
+        fixture = private(environment.root/'browser.json',dict(backendRevision=backend_revision,collector=agent_fixture,pki=dict(candidateTrust=candidate_trust,recoveryCandidate=recovery_candidate,recoveryInputFile=str(recovery_input)),
 
             origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,
             admin=dict(login='admin',passwordFile=str(environment.root/'account-password')),

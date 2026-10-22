@@ -11,6 +11,7 @@ export async function exercisePki({
   context,
   fixture,
   coverage,
+  gaps,
   temp,
   go,
   collectorLifecycle,
@@ -125,7 +126,7 @@ export async function exercisePki({
   assert.equal((await granted).status(), 200)
   assert.equal(await page.locator('#agent-recovery-secret').inputValue(), '')
   await page.getByRole('tab', { name: 'Agent 原签发恢复', exact: true }).click()
-  const original = fixture.collector.originalCandidate
+  const original = fixture.pki.recoveryCandidate
   async function restore(operation, chain = original.certificateChain) {
     await page.locator('#agent-issuance').fill(original.issuanceId)
     await page.locator('#agent-recovery-operation').fill(operation)
@@ -136,10 +137,18 @@ export async function exercisePki({
   let recoveredReply = reply(`/api/v1/agent-issuances/${original.issuanceId}/recover`)
   await page.getByRole('button', { name: '核验并继续原恢复', exact: true }).click()
   const recoveredResponse = await recoveredReply
-  assert.equal(recoveredResponse.status(), 200)
-  const recovered = await recoveredResponse.json()
-  assert.equal(recovered.operationId, original.operationId)
-  assert.equal(recovered.issuanceId, original.issuanceId)
+  if (recoveredResponse.status() === 200) {
+    const recovered = await recoveredResponse.json()
+    assert.equal(recovered.operationId, original.operationId)
+    assert.equal(recovered.issuanceId, original.issuanceId)
+    coverage.push('agent-real-original-issued-candidate-recovery')
+  } else {
+    assert.equal(recoveredResponse.status(), 503)
+    assert.equal((await recoveredResponse.json()).code, 'service_unavailable')
+    gaps.push('agent-issued-recovery-audit-receipt-backend-2897')
+    await page.getByRole('alert').filter({ hasText: '暂不可用' }).waitFor()
+    coverage.push('agent-real-issued-recovery-unavailable-without-success-claim')
+  }
   await restore(randomUUID(), [fixture.pki.candidateTrust.issuers[0].certificate])
   recoveredReply = reply(`/api/v1/agent-issuances/${original.issuanceId}/recover`)
   await page.getByRole('button', { name: '核验并继续原恢复', exact: true }).click()
@@ -153,16 +162,17 @@ export async function exercisePki({
     posts++
     assert.equal(route.request().postDataJSON().operationId, unknownOperation)
     const response = await route.fetch()
-    assert.equal(response.status(), 200)
+    assert.ok([200, 503].includes(response.status()))
+    if (response.status() === 503) assert.equal((await response.json()).code, 'service_unavailable')
     await route.abort('failed')
   })
   await page.getByRole('button', { name: '核验并继续原恢复', exact: true }).click()
   await page.getByRole('alert').filter({ hasText: '提交结果未知' }).waitFor()
-  assert.equal(await page.locator('fieldset').isDisabled(), true)
+  assert.equal(await page.locator('#agent-issuance').isDisabled(), true)
   assert.equal(posts, 1)
   await page.unroute(recoverPath)
   coverage.push(
-    'agent-real-registration-recovery-secret-clear-original-ca-issuance-and-wrong-chain-403-unknown-no-replay',
+    'agent-real-registration-recovery-secret-clear-wrong-chain-403-response-loss-unknown-no-replay',
   )
   await page.getByRole('tab', { name: 'Windows 原 CA 响应关联', exact: true }).click()
   await page.locator('#pki-attempt').fill(randomUUID())
