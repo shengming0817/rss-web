@@ -47,6 +47,7 @@ export const navigation = [
     items: [
       { name: 'security-compliance', label: 'security.compliance' },
       { name: 'security-rules', label: 'security.rules' },
+      { name: 'security-device-trust', label: 'security.pki.title' },
       { name: 'security-certificate-archive', label: 'security.certificate-archive' },
     ],
   },

@@ -1,4 +1,6 @@
+import { pkiZh, pkiEn } from './pki/messages'
 export const securityZh = {
+  pki: pkiZh,
   'certificate-archive': '证书存档',
   archive: {
     hint: '安全保存证书与申请材料的全部版本。存档状态不代表证书已部署、受信或未撤销；其他服务仍通过原有配置使用证书。',
@@ -542,6 +544,7 @@ export const securityZh = {
   },
 }
 export const securityEn: typeof securityZh = {
+  pki: pkiEn,
   'certificate-archive': 'Certificate archive',
   archive: {
     hint: 'Keep certificate and request material history. Archive state does not prove deployment, trust or revocation status. Runtime services use their own certificate configuration.',
