@@ -1,5 +1,6 @@
 // Frozen blueprint sample exported from rss-mdm 70a764d9aba667df00884d84cd0da29c22737803.
 import blueprintSample from './blueprints.json'
+import { jsonObject } from '../../src/services/json'
 import { softwareInstaller } from '../../src/features/policies/clients/software-definition'
 import { createResourceUploads } from './uploads'
 import { createHash } from 'node:crypto'
@@ -221,6 +222,7 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
         const input = record(op.input),
           action = enumeration(input['action'], [
             'instantiate',
+            'present',
             'create',
             'version',
             'activate',
@@ -267,6 +269,14 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
           )
           for (const variant of next.versions[0]!.variants)
             contents.set(contentKey(id, label, variant, b.reference), bytes.slice())
+        } else if (action === 'present') {
+          if (!state) return error('resource_not_found', 404)
+          closed(input, ['action', 'presentation'])
+          next = {
+            ...structuredClone(state),
+            presentation: jsonObject(input['presentation'], 65536),
+            revision: state.revision + 1,
+          }
         } else if (action === 'create') {
           closed(input, ['action', 'kind'])
           if (state) return error('operation_conflict')

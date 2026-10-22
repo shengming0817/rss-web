@@ -7,7 +7,7 @@ import {
   securityRequest,
   type SecurityRequest,
   type SecurityRequestTarget,
-} from '../../src/features/security/clients/requests-model'
+} from '../features/security/clients/requests-model'
 import { createReceipts, error, operation } from '../http'
 import { candidate, createSecurityPages, queryKeys } from './http'
 /** Closed security approvals, first consumed by compliance exceptions. No generic workflow registry. */

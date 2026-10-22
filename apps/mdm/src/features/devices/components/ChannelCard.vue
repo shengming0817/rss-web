@@ -79,9 +79,6 @@ function capabilities(channel: string) {
         <dt>{{ t('devices.lastCommunication') }}</dt>
         <dd>
           {{ communication(channel.lastCommunicationReceivedAt) }}
-          <span v-if="runtime.demo && channel.lastCommunicationReceivedAt !== null">
-            · {{ t('devices.syntheticCommunication') }}</span
-          >
         </dd>
         <dt>{{ t('devices.received') }}</dt>
         <dd>{{ received(channel.registrationId, channel.generation) }}</dd>

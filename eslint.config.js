@@ -188,6 +188,7 @@ export default tseslint.config(
               type: 'problem',
               schema: [],
               messages: {
+                demo: 'Production MDM imports cannot depend on the explicit demo composition.',
                 escape:
                   'Identity relative imports must stay inside apps/identity; use approved public package exports.',
               },
@@ -204,8 +205,15 @@ export default tseslint.config(
                     : `${sep}apps${sep}identity${sep}`
                 const index = filename.lastIndexOf(marker)
                 const root = filename.slice(0, index) + marker
-                if (!resolve(dirname(filename), value).startsWith(root))
-                  context.report({ node, messageId: 'escape' })
+                const target = resolve(dirname(filename), value)
+                if (
+                  marker === `${sep}apps${sep}mdm${sep}` &&
+                  filename.startsWith(root + 'src' + sep) &&
+                  !filename.endsWith('.spec.ts') &&
+                  (target === root + 'demo' || target.startsWith(root + 'demo' + sep))
+                )
+                  context.report({ node, messageId: 'demo' })
+                if (!target.startsWith(root)) context.report({ node, messageId: 'escape' })
               }
               return {
                 ImportDeclaration: (node) => check(node.source),

@@ -16,7 +16,6 @@ type Part<T> = { status: 'ready'; value: T } | { status: 'denied' | 'unavailable
 const navigation = ref<Part<Workspace>>()
 const directory = ref<Part<Awaited<ReturnType<typeof runtime.devices.views.list>>>>()
 const deployments = ref<Part<Awaited<ReturnType<typeof runtime.policies.policies.list>>>>()
-const activity = ref<Part<Awaited<ReturnType<typeof runtime.operations.audit.list>>>>()
 const readAt = ref('')
 async function part<T>(read: () => Promise<T>): Promise<Part<T>> {
   try {
@@ -36,7 +35,6 @@ function clear() {
   navigation.value = undefined
   directory.value = undefined
   deployments.value = undefined
-  activity.value = undefined
   readAt.value = ''
 }
 async function load() {
@@ -44,19 +42,17 @@ async function load() {
   clear()
   await run(
     async () => {
-      const [nav, devices, policies, events] = await Promise.all([
+      const [nav, devices, policies] = await Promise.all([
         part(() => runtime.workspace.read()),
         part(() => runtime.devices.views.list({})),
         part(() => runtime.policies.policies.list(undefined, 'software')),
-        part(() => runtime.operations.audit.list()),
       ])
-      return { nav, devices, policies, events }
+      return { nav, devices, policies }
     },
     (result) => {
       navigation.value = result.nav
       directory.value = result.devices
       deployments.value = result.policies
-      activity.value = result.events
       readAt.value = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
     },
   )
@@ -79,8 +75,6 @@ function areaRoute(id: ModuleId) {
     params: { tenant: runtime.tenant },
   }
 }
-const at = (value: number) =>
-  new Date(value * 1000).toISOString().replace('T', ' ').replace('.000Z', ' UTC')
 watch(
   () => deviceBinding(runtime),
   () => {
@@ -138,38 +132,6 @@ watch(
           >{{ t('console.openSource') }} ↗</RouterLink
         >
       </article>
-    </div>
-    <div class="console-overview-columns">
-      <section class="console-panel">
-        <div class="console-page-header">
-          <h2>{{ t('operations.audit') }}</h2>
-          <RouterLink :to="{ name: 'operations-audit', params: { tenant: runtime.tenant } }">{{
-            t('console.browse')
-          }}</RouterLink>
-        </div>
-        <p v-if="activity?.status !== 'ready'">
-          {{ activity ? t(`devices.${activity.status}`) : t('console.reading') }}
-        </p>
-        <template v-else
-          ><p v-if="!activity.value.items.length">{{ t('console.emptyPage') }}</p>
-          <ul v-else class="console-activity-list">
-            <li v-for="entry in activity.value.items.slice(0, 5)" :key="entry.id">
-              <span class="console-activity-dot" aria-hidden="true" />
-              <div>
-                <RouterLink
-                  :to="{
-                    name: 'operations-audit',
-                    params: { tenant: runtime.tenant },
-                    query: { id: entry.id },
-                  }"
-                  >{{ t(`operations.actionName.${entry.action}`) }}</RouterLink
-                ><small>{{ at(entry.at) }}</small>
-              </div>
-              <UiBadge>{{ t(`operations.outcomes.${entry.outcome}`) }}</UiBadge>
-            </li>
-          </ul></template
-        >
-      </section>
     </div>
     <section class="console-panel">
       <div class="console-page-header">

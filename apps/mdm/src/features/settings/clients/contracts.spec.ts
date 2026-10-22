@@ -509,3 +509,30 @@ it('does not manufacture a package operation receipt from a null result', async 
   const client = createManagedPackages({ request } as unknown as HttpTransport, a)
   expect(await client.operation(b, 'publish', c)).toBeNull()
 })
+
+it('decodes current initialization and telemetry diagnostics without turning missing observations into success', () => {
+  const current = {
+    alive: true,
+    ready: false,
+    components: [
+      {
+        name: 'initialization',
+        readiness: 'not_ready',
+        health: 'degraded',
+        reasons: ['initialization_telemetry_backend'],
+        queues: [{ name: 'initialization_telemetry_pending', count: null, truncated: null }],
+      },
+      {
+        name: 'telemetry',
+        readiness: 'not_applicable',
+        health: 'unknown',
+        reasons: ['unobserved'],
+        dependencies: [{ name: 'telemetry_storage', state: 'unavailable' }],
+      },
+    ],
+  }
+  const decoded = runtimeSnapshot(current)
+  expect(decoded.ready).toBe(false)
+  expect(decoded.components[0]!.queues[0]!.count).toBeNull()
+  expect(decoded.components[1]!.health).toBe('unknown')
+})

@@ -1,3 +1,4 @@
+import { jsonValue, type Json } from '../../../services/json'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -13,7 +14,7 @@ import {
 } from '../../../services/decode'
 import { decodeNativeObservation } from './native'
 import { decodeRunEvidence } from './runs'
-import { jsonValue, type Json } from './resources'
+
 /** Facts still consumed by Security actions and explicit demo state, not an execution API envelope. */
 export type ExecutionOrigin =
   | {

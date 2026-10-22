@@ -580,18 +580,13 @@ it('retains one PKI rotation identity and advances the revision through every ph
   await flushPromises()
   await button(f.wrapper, '导入材料').trigger('click')
   await flushPromises()
-  for (const label of ['批准信任', '启用新版本', '退出旧版本']) {
+  for (const label of ['启用新版本', '退出旧版本']) {
     await button(f.wrapper, label).trigger('click')
     await flushPromises()
   }
   const writes = f.calls.filter((o) => o.method === 'POST')
-  expect(writes).toHaveLength(4)
-  expect(writes.map((o) => (o.body as { id: string }).id)).toEqual([
-    rotation,
-    rotation,
-    rotation,
-    rotation,
-  ])
+  expect(writes).toHaveLength(3)
+  expect(writes.map((o) => (o.body as { id: string }).id)).toEqual([rotation, rotation, rotation])
   expect(f.settings.operations.records.get('pki')?.id).toBe(rotation)
 })
 it('fences delayed public file reads before they can repopulate a new session', async () => {

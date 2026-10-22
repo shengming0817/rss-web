@@ -1,3 +1,4 @@
+import { jsonObject } from '../../../services/json'
 import {
   conditionContext,
   criteria as assetCriteria,
@@ -104,7 +105,7 @@ export function groupReferences(value: unknown) {
   }
 }
 export function groupPresentation(value: unknown) {
-  const v = record(value)
+  const v = jsonObject(value, 65_536)
   return { ...v, name: identifier(v['name']), description: string(v['description']) }
 }
 export type GroupChange =

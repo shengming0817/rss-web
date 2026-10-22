@@ -35,6 +35,7 @@ const spec = {
   version: '1',
   provenance: { kind: 'private' },
   artifacts: { installer: { reference: 'content', origin: null, length: 1, sha256: digest } },
+  material: { bundle_id: null, format: 'msi', installer: 'installer' },
   behavior: { kind: 'msi', ...native },
   signatures: [],
   reboot: 'report',
@@ -158,7 +159,11 @@ it.each([
 ])(
   'reads identity from each behavior without constructing an identity override',
   (behavior, runAs, scope) => {
-    const definition = decodeSoftwareDefinition({ ...spec, behavior })
+    const definition = decodeSoftwareDefinition({
+      ...spec,
+      material: { ...spec.material, format: behavior.kind },
+      behavior,
+    })
     expect(softwareIdentity(definition)).toMatchObject({ runAs, scope })
     expect(softwareInstaller(definition)).toBe('installer')
     expect(supportsSoftwareRemoval(definition)).toBe(
@@ -199,5 +204,16 @@ it('accepts canonical UTF-8 path, publisher and publication text budgets', () =>
   ).toThrow()
   expect(() =>
     decodeSoftwareDefinition({ ...long, export: { ...long.export, license: '中'.repeat(1366) } }),
+  ).toThrow()
+})
+
+it('accepts material without behavior while keeping execution identity and removal unavailable', () => {
+  const definition = decodeSoftwareDefinition({ ...spec, behavior: null })
+  expect(softwareInstaller(definition)).toBe('installer')
+  expect(softwareIdentity(definition)).toEqual({ runAs: null, scope: null, deployment: null })
+  expect(supportsSoftwareRemoval(definition)).toBe(false)
+  expect(() => validateSoftwareTarget(definition, 'windows', 'x86_64')).not.toThrow()
+  expect(() =>
+    decodeSoftwareDefinition({ ...spec, material: { ...spec.material, format: 'pkg' } }),
   ).toThrow()
 })

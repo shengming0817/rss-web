@@ -107,7 +107,7 @@ export function createPkiClient(transport: HttpTransport, tenant: string) {
       id: string,
       purpose: PkiPurpose,
       expectedRevision: number,
-      action: 'approve' | 'activate' | 'retire',
+      action: 'activate' | 'retire',
     ) =>
       transport.request({
         method: 'POST',

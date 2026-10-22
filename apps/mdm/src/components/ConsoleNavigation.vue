@@ -3,12 +3,13 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../context'
-import { navigation, platformNavigation, detailParents } from './navigation'
+import { useNavigation, platformNavigation, detailParents } from './navigation'
 defineProps<{ collapsed?: boolean; canManageAgent: boolean }>()
 const emit = defineEmits<{ navigate: [] }>()
 const { t } = useI18n(),
   route = useRoute(),
   runtime = useMdm()
+const navigation = useNavigation()
 const sections = computed(() => (runtime.realm === 'platform' ? platformNavigation : navigation))
 const active = computed(() => detailParents[String(route.name)] ?? String(route.name))
 const group = computed(
@@ -35,7 +36,7 @@ const group = computed(
         class="console-nav-primary"
         :class="{ 'is-current': group === section.id }"
         :title="t(section.label)"
-        :to="{ name: section.items[0].name, params: { tenant: runtime.tenant } }"
+        :to="{ name: section.items[0]!.name, params: { tenant: runtime.tenant } }"
         @click="emit('navigate')"
         ><span class="console-nav-symbol" aria-hidden="true">{{
           section.id === 'settings' ? '⚙' : '⊞'
@@ -55,10 +56,6 @@ const group = computed(
     </div>
     <div v-if="!collapsed && runtime.realm === 'tenant'" class="console-nav-footer">
       <RouterLink
-        :to="{ name: 'operations-audit', params: { tenant: runtime.tenant } }"
-        @click="emit('navigate')"
-        >{{ t('operations.audit') }}</RouterLink
-      ><RouterLink
         :to="{ name: 'self-enrollments', params: { tenant: runtime.tenant } }"
         @click="emit('navigate')"
         >{{ t('registration.self') }}</RouterLink

@@ -1,5 +1,6 @@
+import { jsonValue } from '../../../services/json'
 import type { HttpTransport } from '@rss/api/mdm'
-import { jsonValue } from './resources'
+
 import {
   array,
   boolean,

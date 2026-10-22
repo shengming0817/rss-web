@@ -7,14 +7,14 @@ vi.mock('@rss/api/mdm', async (original) => ({
   ...(await original<object>()),
   createMdmTransport: () => transportOwner.value,
 }))
-import { startMdm } from './bootstrap'
+import { createDemo } from '../demo/bootstrap'
 import { createScenario, TENANT } from '../demo/scenario'
 import { createAutomationDemo } from '../demo/policies/state'
 import { createDeviceDemo } from '../demo/devices/state'
 import { seedScriptPolicies } from '../demo/policies/seed'
 import { createOnboardingDemo } from '../demo/enrollment'
 import { createImportsDemo } from '../demo/software/imports'
-import { createPolicyClients } from './features/policies/client'
+import { createPolicyClients } from '../demo/features/policies/client'
 import { operation } from './services/useOperation'
 import { navigation } from './components/navigation'
 async function start() {
@@ -64,7 +64,7 @@ async function start() {
   transportOwner.value = transport
   document.body.innerHTML = '<div id="app"></div>'
   window.history.replaceState(null, '', '/')
-  const runtime = startMdm(
+  const runtime = createDemo(
     transport,
     { canonicalOrigin: window.location.origin, oidcEnabled: false },
     {
@@ -72,8 +72,8 @@ async function start() {
       tenant: TENANT,
       managementTenant: '99999999-9999-4999-8999-999999999999',
     },
-    true,
   )
+  runtime.mount()
   await runtime.router.isReady()
   await runtime.session.login(TENANT, 'demo', 'demo')
   const policies = createPolicyClients(runtime.transport, TENANT, true)

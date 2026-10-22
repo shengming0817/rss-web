@@ -1,4 +1,5 @@
 export const policiesZh = {
+  resourcePresentation: '资源展示信息',
   collectionPeriod: '采集周期（秒）',
   collectionPeriodNote:
     '默认每小时，启用后持续重复；离线恢复只处理最近到期周期。停用保留已采集资产，页面刷新只读取已上报结果。',
@@ -442,6 +443,7 @@ export const policiesZh = {
   cancel: '请求取消',
 }
 export const policiesEn: typeof policiesZh = {
+  resourcePresentation: 'Resource presentation',
   collectionPeriod: 'Collection interval (seconds)',
   collectionPeriodNote:
     'Hourly by default; repeats while enabled. Offline recovery coalesces to the latest due period. Disabling preserves collected assets; refresh reads reported results.',

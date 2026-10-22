@@ -31,7 +31,7 @@ export interface DemoEvent {
 }
 /** MOCK_SOURCE: synthetic HTTP server, never part of a production entry. */
 import { observationTarget } from './operations/observation'
-import type { OperationsReference } from '../src/features/operations/clients/model'
+import type { OperationsReference } from './features/operations/clients/model'
 import { mdmJsonBodyLimit, MDM_CONTENT_BODY_LIMIT, isMdmContentRequest } from '@rss/api/mdm-limits'
 export const MANAGEMENT_TENANT = '99999999-9999-4999-8999-999999999999'
 export const TENANT = '11111111-1111-4111-8111-111111111111'

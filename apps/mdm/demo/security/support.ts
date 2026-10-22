@@ -7,8 +7,8 @@ import type { createSecurityRequests } from './requests'
 import type {
   SecurityRequest,
   SecurityRequestTarget,
-} from '../../src/features/security/clients/requests-model'
-import type { SecuritySource } from '../../src/features/security/clients/source'
+} from '../features/security/clients/requests-model'
+import type { SecuritySource } from '../features/security/clients/source'
 import {
   isSupportTarget,
   supportContext,
@@ -16,7 +16,7 @@ import {
   type SupportContext,
   type SupportRecord,
   type SupportTarget,
-} from '../../src/features/security/clients/support-model'
+} from '../features/security/clients/support-model'
 import { identifier, uuid } from '../../src/services/decode'
 import { error } from '../http'
 import { candidate, queryKeys } from './http'

@@ -16,7 +16,7 @@ import type { HttpTransport } from '@rss/api/identity'
 import { createMdmTransport } from '@rss/api/mdm'
 import { bindSession } from './services/request'
 import { createWorkspaceClient } from './services/workspace'
-import { mdmKey } from './context'
+import { mdmKey, type MdmRuntime } from './context'
 import { mdmI18n } from './i18n'
 import { features } from './features'
 import { createDeviceClients } from './features/devices/client'
@@ -32,11 +32,10 @@ import { settingsFeature } from './features/settings/routes'
 import { createSettingsClients } from './features/settings/client'
 import { operationsFeature } from './features/operations/routes'
 import type { decodeMdmConfig } from './services/workspace'
-export function startMdm(
+export function createMdm(
   transport: HttpTransport,
   config: HostConfig,
   host: ReturnType<typeof decodeMdmConfig>,
-  demo: boolean,
 ) {
   const platform =
     window.location.pathname === '/platform' ||
@@ -116,7 +115,7 @@ export function startMdm(
     login,
   )
   const settings = createSettingsClients(business, publicTransport, session, tenant, realm)
-  const operations = createOperationsClients(business, tenant, demo, realm)
+  const operations = createOperationsClients(business, tenant, realm)
   const registrationChannels = createRegistrationChannels(
     createRegistrationChannelsClient(business, tenant),
     session,
@@ -136,25 +135,34 @@ export function startMdm(
     api: createApi(session),
     flows: createFlows(window.sessionStorage),
   })
-  app.provide(mdmKey, {
+  const mdm: MdmRuntime = {
     session,
     registrationChannels,
     transport: business,
     onboarding: createOnboardingClients(business, publicTransport, tenant),
-    workspace: createWorkspaceClient(business, demo),
+    workspace: createWorkspaceClient(business, false),
     devices: createDeviceClients(business, tenant),
-    policies: createPolicyClients(business, tenant, demo),
+    policies: createPolicyClients(business),
     software: createSoftwareClients(business),
-    security: createSecurityClients(business, tenant, demo),
+    security: createSecurityClients(business, tenant),
     operations,
     settings,
     realm,
     businessTenant: host.tenant,
     managementTenant: host.managementTenant,
     tenant,
-    demo,
-  })
+  }
+  app.provide(mdmKey, mdm)
   const i18n = mdmI18n()
-  app.use(createPinia()).use(i18n).use(router).mount('#app')
-  return { app, session, router, i18n, transport: business }
+  return {
+    app,
+    session,
+    router,
+    i18n,
+    mdm,
+    transport: business,
+    mount() {
+      app.use(createPinia()).use(i18n).use(router).mount('#app')
+    },
+  }
 }

@@ -1,11 +1,11 @@
 import { createApp, computed } from 'vue'
 import { createIdentityTransport } from '@rss/api/identity'
-import { startMdm } from '../src/bootstrap'
+import { createDemo } from './bootstrap'
 import { TENANT } from './scenario'
 import DemoControls from './DemoControls.vue'
 const controls = document.createElement('div')
 document.body.prepend(controls)
-const runtime = startMdm(
+const runtime = createDemo(
   createIdentityTransport(),
   { canonicalOrigin: window.location.origin, oidcEnabled: false },
   {
@@ -13,8 +13,8 @@ const runtime = startMdm(
     tenant: TENANT,
     managementTenant: '99999999-9999-4999-8999-999999999999',
   },
-  true,
 )
+runtime.mount()
 
 createApp(DemoControls, {
   transport: runtime.transport,

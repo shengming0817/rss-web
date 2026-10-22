@@ -13,7 +13,7 @@ import {
   type Revision,
 } from '../../src/features/operations/clients/authorization'
 import type { PolicyDefinition } from '../../src/features/policies/clients/model'
-import type { AuditEntry } from '../../src/features/operations/clients/model'
+import type { AuditEntry } from '../features/operations/clients/model'
 export const INSTANCE = '44444444-4444-4444-8444-444444444444'
 export const ADMIN = '22222222-2222-4222-8222-222222222222'
 export const ADMIN_RULE = '55555555-5555-4555-8555-555555555555'

@@ -85,9 +85,9 @@ async function setup(name = 'perf', query: Record<string, string> = {}) {
     session: { state: sessionState } as unknown as IdentitySession,
     transport,
     devices: createDeviceClients(transport, TENANT),
-    policies: createPolicyClients(transport, TENANT, true),
-    operations: createOperationsClients(transport, TENANT, true),
-  } as MdmRuntime
+    policies: createPolicyClients(transport),
+    operations: createOperationsClients(transport, TENANT),
+  } as unknown as MdmRuntime
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [

@@ -78,7 +78,10 @@ const rows = computed(() => {
     </UiButton>
     <p v-for="row in rows" :key="row.key">
       {{ row.key }} · {{ t('policies.selfService.identity') }}:
-      {{ t(`policies.selfService.identity_${row.runAs}`)
+      {{
+        row.runAs
+          ? t(`policies.selfService.identity_${row.runAs}`)
+          : t('policies.selfService.identityUnavailable')
       }}<template v-if="row.scope">
         · {{ t('policies.selfService.installScope') }}:
         {{ t(`policies.selfService.scope_${row.scope}`) }}</template

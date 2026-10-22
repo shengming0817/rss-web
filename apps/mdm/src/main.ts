@@ -2,7 +2,7 @@ import { createIdentityTransport } from '@rss/api/identity'
 import { createMdmTransport } from '@rss/api/mdm'
 import { loadConfig } from '@rss/auth'
 import { decodeMdmConfig } from './services/workspace'
-import { startMdm } from './bootstrap'
+import { createMdm } from './bootstrap'
 async function start() {
   const transport = createIdentityTransport()
   const config = await loadConfig(transport, window.location.origin)
@@ -12,7 +12,7 @@ async function start() {
     successStatus: 200,
     decode: (value) => decodeMdmConfig(value, window.location.origin),
   })
-  startMdm(transport, config, mdm, false)
+  createMdm(transport, config, mdm).mount()
 }
 void start().catch(() => {
   const root = document.getElementById('app')

@@ -1,3 +1,4 @@
+import { jsonValue, jsonObject } from '../../../services/json'
 import { selfServiceAccess } from './self-service-access'
 import {
   array,
@@ -140,7 +141,7 @@ export function nativeSchedule(value: unknown) {
   return schedule
 }
 
-import { architectures, platforms, jsonValue } from './resources'
+import { architectures, platforms } from './resources'
 export type Schedule = ReturnType<typeof nativeSchedule>
 export function defaultSchedule(): Schedule {
   return {
@@ -199,7 +200,7 @@ function text(value: unknown, limit: number, required = false) {
 }
 export function selfService(value: unknown) {
   const v = closed(value, ['access', 'published', 'presentation', 'allowAi', 'riskLevel'])
-  const presentation = record(v['presentation'])
+  const presentation = jsonObject(v['presentation'], 65_536)
   const riskLevel = v['riskLevel']
   if (riskLevel !== 1 && riskLevel !== 2) throw new Error('Invalid risk level')
   const keywords = array(presentation['keywords'], (v) => text(v, 128, true))

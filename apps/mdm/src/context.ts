@@ -27,7 +27,6 @@ export interface MdmRuntime {
   businessTenant: string
   managementTenant: string
   tenant: string
-  demo: boolean
 }
 export const mdmKey: InjectionKey<MdmRuntime> = Symbol('mdm')
 export function useMdm() {

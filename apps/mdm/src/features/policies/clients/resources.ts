@@ -1,6 +1,7 @@
 import { applicability, templateScope, valueMapping, type ValueMapping } from './collection-mapping'
 import { telemetryProfile, type TelemetryProfile } from './telemetry-profile'
 import { fieldKey } from '../../devices/clients/asset-model'
+import { jsonValue, jsonObject, type Json } from '../../../services/json'
 import { createUploadsClient } from './uploads'
 import {
   decodeSoftwareDefinition,
@@ -24,22 +25,6 @@ export const platforms = ['windows', 'macos'] as const
 export const architectures = ['x86_64', 'aarch64'] as const
 export type Platform = (typeof platforms)[number]
 export type Architecture = (typeof architectures)[number]
-export type Json = null | boolean | number | string | Json[] | { [key: string]: Json }
-/** Field-specific JSON budgets; diagnostic text may contain line breaks. */
-export function jsonValue(value: unknown, budget: number, depth = 0): Json {
-  if (depth > 16) throw new Error('JSON too deep')
-  let result: Json
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') result = value
-  else if (typeof value === 'number' && Number.isFinite(value)) result = value
-  else if (Array.isArray(value)) result = value.map((v) => jsonValue(v, budget, depth + 1))
-  else
-    result = Object.fromEntries(
-      Object.entries(record(value)).map(([key, v]) => [key, jsonValue(v, budget, depth + 1)]),
-    )
-  if (depth === 0 && new TextEncoder().encode(JSON.stringify(result)).byteLength > budget)
-    throw new Error('JSON too large')
-  return result
-}
 function bounded(value: unknown, min: number, max: number) {
   const n = count(value)
   if (n < min || n > max) throw new Error('Out of range')
@@ -214,6 +199,7 @@ export interface Variant {
 export type ResourceKind = Declaration['kind']
 export type ResourceChange =
   | { action: 'create'; kind: ResourceKind }
+  | { action: 'present'; presentation: Record<string, Json> }
   | { action: 'instantiate'; blueprint: string; version: string }
   | { action: 'version'; version: string; kind: ResourceKind; variants: Variant[] }
   | { action: 'activate' | 'deprecate' | 'archive'; version: string }
@@ -293,7 +279,7 @@ export function decodeResource(value: unknown, id: string) {
   ] as const)
   return {
     id,
-    presentation: record(jsonValue(v['presentation'], 65536)),
+    presentation: jsonObject(v['presentation'], 65536),
     revision: count(v['revision']),
     kind,
     origin: nullable(v['origin'], (value) => {
@@ -359,7 +345,7 @@ export function createResourcesClient(transport: HttpTransport) {
               return {
                 id: identifier(b['id']),
                 version: identifier(b['version']),
-                presentation: record(jsonValue(b['presentation'], 65536)),
+                presentation: jsonObject(b['presentation'], 65536),
                 category: identifier(record(b['presentation'])['category']),
                 platform: enumeration(b['platform'], platforms),
                 definition: { kind, ...record(jsonValue(d, 8 * 1024 * 1024)) },

@@ -26,33 +26,9 @@ export const operationsFeature: MdmFeature = {
       meta: { protected: true },
     },
     {
-      path: '/tenants/:tenant/operations/alert-rules',
-      name: 'operations-alertRules',
-      component: () => import('./views/AlertRulesView.vue'),
-      meta: { protected: true },
-    },
-    {
-      path: '/tenants/:tenant/operations/audit',
-      name: 'operations-audit',
-      component: () => import('./views/AuditView.vue'),
-      meta: { protected: true },
-    },
-    {
       path: '/tenants/:tenant/operations/authorization',
       name: 'operations-authorization',
       component: () => import('./views/AuthorizationView.vue'),
-      meta: { protected: true },
-    },
-    {
-      path: '/tenants/:tenant/operations/reports',
-      name: 'operations-reports',
-      component: () => import('./views/ReportsView.vue'),
-      meta: { protected: true },
-    },
-    {
-      path: '/tenants/:tenant/operations/alerts',
-      name: 'operations-alerts',
-      component: () => import('./views/AlertsView.vue'),
       meta: { protected: true },
     },
   ],

@@ -158,6 +158,7 @@ it('decodes complete SoftwareSpec and refuses the retired flat software contract
     provenance: { kind: 'private' },
     signatures: [],
     export: { kind: 'disabled' },
+    material: { bundle_id: null, format: 'msi', installer: 'installer' },
     behavior: {
       kind: 'msi',
       installer: 'installer',

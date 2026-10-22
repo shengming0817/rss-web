@@ -38,6 +38,7 @@ const behavior = ref(
     2,
   ),
 )
+const material = ref('{"bundle_id":null,"format":"msi","installer":"installer"}')
 const provenance = ref('{"kind":"private"}'),
   signatures = ref('[]'),
   exportDefinition = ref('{"kind":"disabled"}')
@@ -62,6 +63,7 @@ function read(artifact: Artifact) {
     package: packageId.value,
     version: version.value,
     artifacts: { ...JSON.parse(artifacts.value), installer: { ...artifact, origin: null } },
+    material: JSON.parse(material.value),
     behavior: JSON.parse(behavior.value),
     provenance: JSON.parse(provenance.value),
     signatures: JSON.parse(signatures.value),
@@ -139,6 +141,14 @@ defineExpose({ read })
     ><textarea
       :id="`${id}-dependencies`"
       v-model="dependencies"
+      class="ui-input"
+      required
+      @input="validateJson"
+    />
+    <label :for="`${id}-material`">{{ t('software.material') }}</label
+    ><textarea
+      :id="`${id}-material`"
+      v-model="material"
       class="ui-input"
       required
       @input="validateJson"

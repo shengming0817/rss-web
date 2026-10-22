@@ -51,6 +51,7 @@ function externalPackage(
     signatures: [],
     export: { kind: 'disabled' },
     artifacts: { package: file('package', payload), detect: file('detect', detector) },
+    material: { bundle_id: null, format: ecosystem, installer: 'package' },
     behavior: {
       kind: ecosystem,
       installer: 'package',
@@ -130,6 +131,9 @@ export function createImportsDemo(
         if (scenario === 'partial') return error('malformed_request', 400)
         const definition = decodeSoftwareDefinition({
           ...material.definition,
+          material: input.behavior
+            ? { ...material.definition.material, format: input.behavior.kind }
+            : material.definition.material,
           behavior: input.behavior,
           reboot: input.reboot,
           downgrade: input.downgrade,

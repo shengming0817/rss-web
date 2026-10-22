@@ -160,13 +160,13 @@ useSettingsFacts(() => (catalog.value = undefined))
             @click="material = entries[item.id].target"
             >{{ t('settings.open') }}</UiButton
           ><RouterLink
-            v-else
+            v-else-if="settingsDestination(entries[item.id].target, runtime.tenant)"
             class="ui-button"
-            :to="settingsDestination(entries[item.id].target, runtime.tenant)"
+            :to="settingsDestination(entries[item.id].target, runtime.tenant)!"
             >{{
               t(item.custody === 'deployment_operator' ? 'settings.operatorOnly' : 'settings.open')
             }}</RouterLink
-          >
+          ><span v-else>{{ t('settings.notSupported') }}</span>
         </div>
       </article>
       <p v-if="catalog && !selected.length && section !== 'operations'">
