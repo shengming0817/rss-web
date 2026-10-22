@@ -1,4 +1,5 @@
 // Production Vue + real MDM/Identity HTTPS/PG. Only a committed response is deliberately lost.
+import { acceptExperience } from './experience-browser.mjs'
 import { Buffer } from 'node:buffer'
 import { chromium } from 'playwright'
 import { readFileSync, statSync } from 'node:fs'
@@ -453,6 +454,19 @@ try {
   )
   await page.keyboard.press('Escape')
   coverage.push('real-endpoint-group-scope-channel-and-canonical-assignments')
+  phase = 'experience-completion'
+  await acceptExperience({
+    page,
+    context,
+    fixture,
+    origin,
+    api,
+    request,
+    path,
+    settled,
+    group,
+    coverage,
+  })
   await page.goto(path(`device-views/association/${id}`))
   await loaded()
   phase = 'associated-group-scope-assignments'
@@ -466,6 +480,10 @@ try {
   await editor.getByTestId('group-kind').selectOption('dynamic')
   await editor.getByTestId('group-context').selectOption('associated_device')
   await editor
+    .locator('.group-criteria > .console-toolbar select')
+    .first()
+    .selectOption('predicate')
+  await editor
     .locator('.condition-editor')
     .getByRole('combobox', { name: '类型', exact: true })
     .selectOption('predicate')
@@ -476,7 +494,7 @@ try {
       r.request().method() === 'POST' &&
       /\/api\/v1\/groups\/[^/]+$/.test(new URL(r.url()).pathname),
   )
-  await editor.getByRole('button', { name: '保存', exact: true }).click()
+  await editor.getByRole('button', { name: '保存并查看成员', exact: true }).click()
   const groupReceipt = await groupCreated
   assert.equal(groupReceipt.status(), 200)
   const associated = await groupReceipt.json()
@@ -842,8 +860,8 @@ try {
   assert.ok((await personnel.textContent()).includes('有效企业会话'))
   assert.equal(await personnel.locator('input').count(), 0)
   await personnel.locator('[data-action=edit-owner]').click()
-  await personnel.locator('select').selectOption('')
-  await personnel.getByRole('button', { name: '保存', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '未指定', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).click()
   await loaded()
   assert.equal((await api(`/api/v1/devices/${collectorDevice}/registration-user`)).user, null)
   assert.ok(

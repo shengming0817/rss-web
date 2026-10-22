@@ -51,7 +51,7 @@ def q(value):
 def seed_authority():
     tenant = TENANTS[0]
     user = dict(instanceId=INSTANCE, tenantId=tenant, principalId=ADMIN)
-    rule = dict(subject=dict(kind='user', user=user), grants=[dict(operation=o, scope=dict(kind='all_devices')) for o in ['inventory_read','inventory_collect','inventory_assign','device_association_write','credentials','enrollment','operation_read','script_execute']] + [dict(operation=o, scope=dict(kind='tenant')) for o in ['inventory_sensitive_read','agent_enrollment_read','agent_enrollment_write','group_read','group_write','group_recompute','scope_read','scope_write','policy_read','policy_write','resource_read','resource_write','registration_configuration_read','registration_configuration_write']])
+    rule = dict(subject=dict(kind='user', user=user), grants=[dict(operation=o, scope=dict(kind='all_devices')) for o in ['inventory_read','inventory_collect','inventory_assign','device_association_write','credentials','enrollment','operation_read','script_execute']] + [dict(operation=o, scope=dict(kind='tenant')) for o in ['inventory_sensitive_read','inventory_fields_write','software_read','software_write','release_publish','software_withdraw','agent_enrollment_read','agent_enrollment_write','group_read','group_write','group_recompute','scope_read','scope_write','policy_read','policy_write','resource_read','resource_write','registration_configuration_read','registration_configuration_write']])
     rule_id = str(uuid.uuid4())
     sql = [f"SET rss.tenant_id = '{tenant}'", f"INSERT INTO mdm_access.authorization_rules(tenant_id,instance,id,revision,document) VALUES('{tenant}','{INSTANCE}','{rule_id}',1,{q(json.dumps(rule))}::jsonb)"]
     environment.sql(';'.join(sql)+';', 'mdm_dev')
@@ -175,6 +175,16 @@ try:
     config = json.loads(config_path.read_text())
     config['task_signing'] = dict(revision=trust['revision'])
     config['agent_pki'] = agent
+    # Consume the production public-download gateway location, as enrollment acceptance does.
+    gateway = Path(initialized['gateway'])
+    text = gateway.read_text()
+    example = (WEB/'deploy/mdm/gateway.conf.example').read_text()
+    location = example[example.index('    location ~ "^/api/v1/agent/enroll/packages'):]
+    location = location[:location.index('\n    }')+6]
+    location = location.replace('agent.example.test:8447', f"localhost:{ports['backend']}").replace('https://agent:8447', f"https://127.0.0.1:{ports['backend']}").replace('/run/config/agent-ca.pem', str(environment.root/'ca.crt')).replace('proxy_ssl_name agent.example.test;', 'proxy_ssl_name localhost;')
+    text = text.replace('location ^~ /api/v1/agent/', 'location /api/v1/agent/')
+    text = text.replace('        location /api/v1/agent/', location+'\n        location /api/v1/agent/')
+    private(gateway, text)
     # A deployment-owned entry for the disabled Policy's frozen input, not OS enrollment proof.
     config['enrollment_entries'] = dict(windows=initialized['origin'], macos=None)
     private(config_path, config)

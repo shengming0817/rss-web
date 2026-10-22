@@ -505,3 +505,8 @@ it('computes file comparison identity synchronously without retaining the input'
   expect(typeof value).toBe('string')
   expect(value).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
 })
+it('does not manufacture a package operation receipt from a null result', async () => {
+  const request = async (o: RequestOptions<unknown>) => o.decode(null)
+  const client = createManagedPackages({ request } as unknown as HttpTransport, a)
+  expect(await client.operation(b, 'publish', c)).toBeNull()
+})

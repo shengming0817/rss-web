@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { shallowRef, type Component } from 'vue'
+import { defineComponent, shallowRef, type Component } from 'vue'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import type { IdentitySession } from '@rss/auth'
@@ -7,6 +7,7 @@ import type { HttpTransport, RequestOptions, NoContentRequest } from '@rss/api/m
 import { decodeMdmError } from '@rss/api/mdm'
 import { mdmKey, type MdmRuntime } from '../../../context'
 import { mdmI18n } from '../../../i18n'
+import { useSettingsAction } from '../useSettingsAction'
 import { createSettingsClients } from '../client'
 import {
   createAuthorizationClient,
@@ -969,4 +970,35 @@ it('restores the exact in-memory first-use request across navigation before expl
   expect(ids[1]).toBe(ids[0])
   expect(bodies[1]).toEqual(bodies[0])
   expect(f.settings.operations.records.get('first-use')?.state).toBe('received')
+})
+it('keeps an unknown operation locked when a successful query returns no receipt', async () => {
+  let action!: ReturnType<(typeof import('../useSettingsAction'))['useSettingsAction']>
+  const Harness = defineComponent({
+    setup() {
+      action = useSettingsAction(() => 'package-upload')
+      return () => null
+    },
+  })
+  const f = await fixture(Harness)
+  await action.submit(
+    'publish',
+    0,
+    { packageId: id },
+    async () => {
+      throw new Error('lost response')
+    },
+    () => {},
+  )
+  const original = f.settings.operations.records.get('package-upload')!
+  await action.query(
+    original.id,
+    async () => null,
+    () => {},
+    (value) => value !== null,
+  )
+  expect(f.settings.operations.records.get('package-upload')).toMatchObject({
+    id: original.id,
+    state: 'unknown',
+    queried: true,
+  })
 })

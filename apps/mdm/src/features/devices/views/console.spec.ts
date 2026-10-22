@@ -313,7 +313,7 @@ it('creates a group, edits its definition, previews and recomputes server member
   await flushPromises()
   expect(wrapper.text()).toContain('成员版本')
   expect(wrapper.findAll('[role=tab]').some((tab) => tab.text() === '规则')).toBe(false)
-  await wrapper.find('textarea').setValue('device-01\ndevice-02')
+  await wrapper.get('.endpoint-picker .field-choice input').setValue(true)
   await wrapper.get('.group-member-editor').trigger('submit')
   await flushPromises()
   await click('成员')
@@ -628,7 +628,7 @@ it('refreshes channels after revoking each credential and never shows ready with
   expect(detail.capabilities.every((c) => c.devicePrerequisite.state === 'blocked')).toBe(true)
   expect(wrapper.text()).not.toContain('mdm + agent')
 })
-it('reports oversized member changes as rejected without entering unknown recovery', async () => {
+it('selects static members from the authorized directory without identifier textareas', async () => {
   const { wrapper } = await setup('device-groups')
   await new DOMWrapper(document.body)
     .get('[role=dialog]')
@@ -641,14 +641,8 @@ it('reports oversized member changes as rejected without entering unknown recove
     .find((b) => b.text().includes('Pilot devices'))!
     .trigger('click')
   await flushPromises()
-  await wrapper
-    .find('textarea')
-    .setValue(Array.from({ length: 500 }, () => crypto.randomUUID()).join('\n'))
-  await wrapper.find('form input[type=checkbox]').setValue(true)
-  await wrapper.get('.group-member-editor').trigger('submit')
-  await flushPromises()
-  expect(wrapper.text()).toContain('请求超过 16 KiB')
-  expect(wrapper.text()).not.toContain('明确重放原操作')
+  expect(wrapper.find('.group-member-editor textarea').exists()).toBe(false)
+  expect(wrapper.findAll('.endpoint-picker .field-choice').length).toBeGreaterThan(0)
 })
 
 it('retains an in-flight manual write when tabs change before its unknown result', async () => {

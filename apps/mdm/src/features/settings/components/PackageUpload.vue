@@ -285,7 +285,7 @@ async function check() {
         >{{ t('devices.replay') }}</UiButton
       >
       <UiButton v-if="compared && pending.state === 'conflict'" @click="resolveConflict">{{
-        t('devices.edit')
+        t('console.edit')
       }}</UiButton>
     </template>
     <UiButton

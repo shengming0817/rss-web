@@ -188,7 +188,7 @@ async function save(replay = false) {
     <template #footer
       ><template v-if="uncertain || failure === 'conflict'"
         ><UiButton :disabled="busy" @click="compare">{{ t('devices.compare') }}</UiButton
-        ><UiButton v-if="compared && !uncertain" @click="reedit">{{ t('devices.edit') }}</UiButton
+        ><UiButton v-if="compared && !uncertain" @click="reedit">{{ t('console.edit') }}</UiButton
         ><UiButton v-if="compared && uncertain" :disabled="busy" @click="save(true)">{{
           t('devices.replay')
         }}</UiButton></template
