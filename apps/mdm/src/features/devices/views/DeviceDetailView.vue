@@ -62,7 +62,7 @@ function destination(section: string, history?: string) {
         : { kind: route.params['kind'], view: route.params['view'] }),
       ...(history ? { history } : {}),
     },
-    query: { ...route.query, endpoint: target.value || undefined },
+    query: { ...route.query, endpoint: target.value },
   }
 }
 const target = ref(''),

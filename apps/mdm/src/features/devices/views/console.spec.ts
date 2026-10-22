@@ -1099,6 +1099,18 @@ it('restores an associated operation target while an explicit empty selection ke
   })
   await h.click('重新读取')
   expect(panel().exists()).toBe(false)
+  for (const section of ['历史', '性能数据', '管理']) {
+    await h.click(section)
+    expect(h.wrapper.get('select').element.value).toBe('')
+    expect(panel().exists()).toBe(false)
+    expect(h.wrapper.findComponent({ name: 'DeviceActivity' }).exists()).toBe(false)
+    expect(h.wrapper.findComponent({ name: 'DevicePerformance' }).exists()).toBe(false)
+    expect(h.router.currentRoute.value.query).toMatchObject({
+      endpoint: '',
+      operation,
+      operationDevice: 'device-01',
+    })
+  }
 })
 it('locks an unknown association, survives navigation, and requires explicit exact POST replay', async () => {
   const h = await setup('device-detail', { device: 'device-01' })
