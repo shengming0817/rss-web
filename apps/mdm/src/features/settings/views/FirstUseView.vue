@@ -331,11 +331,11 @@ useSettingsFacts(() => {
               >{{ t('settings.channelAgent') }}</RouterLink
             ><RouterLink
               v-if="currentStep === 'macos_mdm'"
-              :to="settingsDestination('ade', runtime.tenant)"
+              :to="settingsDestination('ade', runtime.tenant)!"
               >{{ t('settings.adeEnrollment') }}</RouterLink
             ><RouterLink
               v-if="currentStep === 'macos_mdm'"
-              :to="settingsDestination('appleAccount', runtime.tenant)"
+              :to="settingsDestination('appleAccount', runtime.tenant)!"
               >{{ t('settings.managedAppleEnrollment') }}</RouterLink
             >
           </nav>
@@ -412,9 +412,11 @@ useSettingsFacts(() => {
                 {{ t('settings.requestedVersion') }} {{ item.desiredRevision ?? '—' }} ·
                 {{ t('settings.runtimeVersion') }} {{ item.appliedRevision ?? '—' }}
               </p>
-              <RouterLink :to="settingsDestination(entries[item.id].target, runtime.tenant)">{{
-                t('settings.open')
-              }}</RouterLink>
+              <RouterLink
+                v-if="settingsDestination(entries[item.id].target, runtime.tenant)"
+                :to="settingsDestination(entries[item.id].target, runtime.tenant)!"
+                >{{ t('settings.open') }}</RouterLink
+              ><span v-else>{{ t('settings.notSupported') }}</span>
             </div>
           </article>
           <UiButton

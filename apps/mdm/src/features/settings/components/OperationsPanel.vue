@@ -95,8 +95,10 @@ useSettingsFacts(() => {
       {{ t('settings.operationId') }} <code>{{ operation.id }}</code> ·
       {{ t('settings.status.' + operation.state) }}
     </p>
-    <RouterLink :to="settingsDestination(operation.target, runtime.tenant)">{{
-      t('settings.open')
-    }}</RouterLink>
+    <RouterLink
+      v-if="settingsDestination(operation.target, runtime.tenant)"
+      :to="settingsDestination(operation.target, runtime.tenant)!"
+      >{{ t('settings.open') }}</RouterLink
+    ><span v-else>{{ t('settings.notSupported') }}</span>
   </article>
 </template>

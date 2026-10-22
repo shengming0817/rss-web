@@ -5,6 +5,8 @@ import { decodeIdentityError } from '@rss/api/identity'
 import type { HttpTransport, RequestOptions } from '@rss/api/identity'
 import { mdmKey } from './context'
 import { createMdm } from './bootstrap'
+import { settingsDestination } from './features/settings/destinations'
+import { entries } from './features/settings/entries'
 const businessCalls = vi.hoisted(() => [] as string[])
 vi.mock('@rss/api/mdm', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@rss/api/mdm')>()),
@@ -65,6 +67,11 @@ it('provides the same session owner to auth, MDM and protected routes', async ()
       managementTenant: '99999999-9999-4999-8999-999999999999',
     },
   )
+  expect(settingsDestination(entries['device-key'].target, tenant)).toBeUndefined()
+  for (const entry of Object.values(entries)) {
+    const target = settingsDestination(entry.target, tenant)
+    if (target) expect(runtime.router.resolve(target).matched.length).toBeGreaterThan(0)
+  }
   runtime.mount()
   running.push(runtime)
   await runtime.router.isReady()
