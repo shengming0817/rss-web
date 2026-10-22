@@ -215,7 +215,7 @@ try:
     phase = 'readiness'
     start(binary, initialized, log, expected=503)
     phase = 'task-signing'
-    operator = Browser(initialized['origin'], environment.root/'ca.crt')
+    operator = Browser(initialized['origin'], environment.root/'ca.crt', urlsplit(initialized['origin']).port)
     operator.login(TENANTS[0], 'admin', (environment.root/'account-password').read_text())
     status, trust = operator.call('POST', '/api/v1/task-signing/trust', dict(action='prepare',expectedRevision=0,origin=initialized['origin']), str(uuid.uuid4()))
     if status != 200 or trust['revision'] != 1:
@@ -227,16 +227,6 @@ try:
     config = json.loads(config_path.read_text())
     config['task_signing'] = dict(revision=trust['revision'])
     config['agent_pki'] = agent
-    # Consume the production public-download gateway location, as enrollment acceptance does.
-    gateway = Path(initialized['gateway'])
-    text = gateway.read_text()
-    example = (WEB/'deploy/mdm/gateway.conf.example').read_text()
-    location = example[example.index('    location ~ "^/api/v1/agent/enroll/packages'):]
-    location = location[:location.index('\n    }')+6]
-    location = location.replace('agent.example.test:8447', f"localhost:{ports['backend']}").replace('https://agent:8447', f"https://127.0.0.1:{ports['backend']}").replace('/run/config/agent-ca.pem', str(environment.root/'ca.crt')).replace('proxy_ssl_name agent.example.test;', 'proxy_ssl_name localhost;')
-    text = text.replace('location ^~ /api/v1/agent/', 'location /api/v1/agent/')
-    text = text.replace('        location /api/v1/agent/', location+'\n        location /api/v1/agent/')
-    private(gateway, text)
     # A deployment-owned entry for the disabled Policy's frozen input, not OS enrollment proof.
     config['enrollment_entries'] = dict(windows=initialized['origin'], macos=None)
     private(config_path, config)

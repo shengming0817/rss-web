@@ -60,7 +60,7 @@ def storage(environment, binary, config, tenant):
 
 
 def signer(environment, origin, tenant, login, password):
-    operator = Browser(origin, environment.root/'ca.crt')
+    operator = Browser(origin, environment.root/'ca.crt', urlsplit(origin).port)
     operator.login(tenant, login, password)
     status, trust = operator.call('POST', '/api/v1/task-signing/trust',
         dict(action='prepare', expectedRevision=0, origin=origin), str(uuid.uuid4()))

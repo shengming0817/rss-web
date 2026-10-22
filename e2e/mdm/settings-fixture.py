@@ -102,7 +102,7 @@ def compose_browser(candidate):
         previous={sig:signal.signal(sig,interrupt) for sig in (signal.SIGINT,signal.SIGTERM)}
         try:
             owner.compose('up','-d')
-            api=Browser(origin,inputs/'ca.crt')
+            api=Browser(origin,inputs/'ca.crt',port)
             until(lambda:api.call('GET','/readyz')[0]==200)
             seeded=json.loads(owner.read('/var/lib/rss-mdm/installation/installation.json'))['receipt']
             owner.product('prepare-hosts')
