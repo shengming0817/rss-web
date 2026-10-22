@@ -738,3 +738,17 @@ it('executes profile reads and definition writes through the product HTTP bounda
   mock.restore()
   spy.mockRestore()
 })
+
+it('dispatches only the formal read-only audit collection through the shared executor', async () => {
+  const instance = axios.create(), mock = new AxiosMockAdapter(instance)
+  const spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance)
+  const transport = createMdmTransport()
+  spy.mockRestore()
+  mock.onGet('/api/v1/audit-events').reply(200, { items: [] })
+  await expect(transport.request({ method: 'GET', path: '/api/v1/audit-events', query: { actor: 'operator' }, successStatus: 200, decode: v => v })).resolves.toEqual({ items: [] })
+  for (const [method, path] of [['POST', '/api/v1/audit-events'], ['GET', '/api/v1/audit-events/event']] as const)
+    await expect(transport.request({ method, path, successStatus: 200, decode: v => v })).rejects.toMatchObject({ cause: 'client' })
+  expect(mock.history.get).toHaveLength(1)
+  expect(mock.history.post).toHaveLength(0)
+  mock.restore()
+})

@@ -106,9 +106,10 @@ it('binds frozen audit pages to exact filters and actor and clears them on reset
     password: 'demo',
   })
   expect((await f.server.handle('GET', `${root}?limit=1&cursor=${first.nextCursor}`)).status).toBe(
-    409,
+    403,
   )
   f.automation.reset()
+  await f.server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, { login: 'demo', password: 'demo' })
   expect((await f.server.handle('GET', `${root}?cursor=${first.nextCursor}`)).status).toBe(409)
 })
 
