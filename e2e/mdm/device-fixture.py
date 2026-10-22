@@ -31,7 +31,7 @@ from runtime_fixture import storage, readiness as readiness_status
 
 backend_revision = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD'], cwd=BACKEND, text=True).strip()
 print(json.dumps(dict(phase='backend-baseline', revision=backend_revision)), flush=True)
-environment = Environment(BACKEND, group='device-browser')
+environment = Environment(BACKEND, group='software-browser' if os.environ.get('MDM_DEVICE_BROWSER_MODULE') == 'software-browser.mjs' else 'device-browser')
 processes = []
 providers = ExitStack()
 phase = 'environment'
@@ -52,13 +52,15 @@ def q(value):
     return "'" + str(value).replace("'", "''") + "'"
 
 browser_module = os.environ.get('MDM_DEVICE_BROWSER_MODULE', 'device-browser.mjs')
-if browser_module not in {'device-browser.mjs', 'operations-browser.mjs', 'telemetry-browser.mjs'}:
+if browser_module not in {'device-browser.mjs', 'operations-browser.mjs', 'telemetry-browser.mjs', 'software-browser.mjs'}:
     raise RuntimeError('unsupported browser module')
 
 def seed_authority():
     tenant = TENANTS[0]
     user = dict(instanceId=INSTANCE, tenantId=tenant, principalId=ADMIN)
     rule = dict(subject=dict(kind='user', user=user), grants=[dict(operation=o, scope=dict(kind='all_devices')) for o in ['inventory_read','inventory_collect','inventory_assign','device_association_write','credentials','enrollment','operation_read','script_execute']] + [dict(operation=o, scope=dict(kind='tenant')) for o in ['inventory_sensitive_read','inventory_fields_write','software_read','software_write','release_publish','software_withdraw','agent_enrollment_read','agent_enrollment_write','group_read','group_write','group_recompute','scope_read','scope_write','policy_read','policy_write','resource_read','resource_write','registration_configuration_read','registration_configuration_write']])
+    if browser_module == 'software-browser.mjs':
+        rule['grants'] += [dict(operation=o, scope=dict(kind='tenant')) for o in ['release_read','release_recover','release_withdraw']] + [dict(operation='software_deploy', scope=dict(kind='all_devices'))]
     if browser_module == 'device-browser.mjs':
         rule['grants'].append(dict(operation='user_profiles_read', scope=dict(kind='tenant')))
     if browser_module == 'operations-browser.mjs':
@@ -159,6 +161,36 @@ try:
     config['device_pki'] = json.loads((native/'device-pki.json').read_text())
     binary = Path(os.environ['CARGO_TARGET_DIR'])/'debug/rss-mdm'
     storage(environment, binary, config, TENANTS[0])
+    if browser_module == 'software-browser.mjs':
+        config['flow']['publication']['sources'] = [dict(name='internal', credentials={}, target=dict(Winget=dict(base=initialized['origin']+'/api/v1/software/native/sources/internal/', artifacts_base=initialized['origin']+'/api/v1/software/native/sources/internal/artifacts/')))]
+        import socket, threading, hashlib
+        from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+        payload = b'abc'
+        class SourceHandler(BaseHTTPRequestHandler):
+            def log_message(self, *_args): pass
+            def do_GET(self):
+                if self.path == '/rest/information':
+                    data = dict(Data=dict(SourceIdentifier='browser-rest', ServerSupportedVersions=['1.0.0']))
+                elif self.path == '/rest/packageManifests/Acme.App?Version=1.2':
+                    data = json.loads((BACKEND/'crates/winget-source/tests/fixtures/msi.json').read_text())
+                    installer = data['Data']['Versions'][0]['Installers'][0]
+                    installer['InstallerUrl'] = upstream+'/artifact.msi'
+                    installer['InstallerSha256'] = hashlib.sha256(payload).hexdigest()
+                else:
+                    self.send_error(404); return
+                body = json.dumps(data).encode()
+                self.send_response(200); self.send_header('Content-Type','application/json'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body)
+        server = ThreadingHTTPServer(('0.0.0.0', 0), SourceHandler)
+        tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        tls.load_cert_chain(environment.root/'server.crt', environment.root/'server.key')
+        server.socket = tls.wrap_socket(server.socket, server_side=True)
+        upstream = f'https://localhost:{server.server_port}'
+        address = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        address.connect(('8.8.8.8', 53))
+        pinned = address.getsockname()[0]; address.close()
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        providers.callback(server.server_close); providers.callback(server.shutdown)
+        config['content']['imports'] = {'browser-rest':[dict(base=upstream+'/', addresses=[pinned], private_ca=list((environment.root/'ca.crt').read_bytes()))]}
     private(config_path, config)
     phase = 'authority'
     rule_id, rule = seed_authority()
@@ -223,9 +255,9 @@ try:
     collector = importlib.util.module_from_spec(module)
     module.loader.exec_module(collector)
     agent_fixture = collector.register(agent_origin, environment.root/'ca.crt', native/'pki'/'agent', operator, private, TENANTS[0], capabilities=['inventory.collect.v1','task.execute.v1','inventory.native.v1','telemetry.collect.v1'] if browser_module == 'telemetry-browser.mjs' else None)
-    fixture=private(environment.root/'browser.json',dict(collector=agent_fixture,origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,principal=ADMIN,login='admin',passwordFile=str(environment.root/'account-password'),mdm='fixture-mdm',agent='fixture-agent',alone='fixture-alone',ruleId=rule_id,rule=rule))
+    fixture=private(environment.root/'browser.json',dict(backendRevision=backend_revision, devices=['fixture-agent','fixture-alone'], target='internal', upstream=upstream if browser_module == 'software-browser.mjs' else None, collector=agent_fixture,origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,principal=ADMIN,login='admin',passwordFile=str(environment.root/'account-password'),mdm='fixture-mdm',agent='fixture-agent',alone='fixture-alone',ruleId=rule_id,rule=rule))
     phase='browser'
-    browser=subprocess.run(['node',str(WEB/'e2e/mdm'/browser_module)],cwd=WEB,env={**os.environ,'MDM_DEVICE_BROWSER_FIXTURE':str(fixture)},timeout=900,pass_fds=lease_fds())
+    browser=subprocess.run(['node',str(WEB/'e2e/mdm'/browser_module)],cwd=WEB,env={**os.environ,'MDM_DEVICE_BROWSER_FIXTURE':str(fixture), 'MDM_SOFTWARE_BROWSER_FIXTURE':str(fixture)},timeout=900,pass_fds=lease_fds())
     if browser.returncode: raise RuntimeError('browser')
     result='passed'
 except BaseException as error:

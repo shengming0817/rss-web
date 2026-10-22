@@ -8,6 +8,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..'),
   backend = process.env.MDM_SOFTWARE_BACKEND
 assert.ok(backend, 'MDM_SOFTWARE_BACKEND must point to an rss-mdm checkout')
 process.env.MDM_SOFTWARE_BACKEND = resolve(backend)
+process.env.MDM_DEVICE_BROWSER_MODULE = 'software-browser.mjs'
 let active,
   interrupted = false,
   backendStarted = false,
@@ -44,7 +45,7 @@ try {
   backendStarted = true
   await run(
     'python3',
-    ['hack/build_run.py', '--', 'python3', resolve(root, 'e2e/mdm/software-fixture.py'), root],
+    ['hack/build_run.py', '--', 'python3', resolve(root, 'e2e/mdm/device-fixture.py'), root],
     resolve(backend),
     3600000,
   )

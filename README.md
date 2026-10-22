@@ -67,6 +67,8 @@ fixture 由隔离宿主准备，包含 `origin`（https://localhost:端口）、
 MDM_SOFTWARE_BACKEND=/absolute/rss-mdm pnpm test:mdm:software-browser
 ```
 
+软件验收复用设备 HTTPS/存储/PKI 夹具，使用独立 software-browser 环境。受控 TLS WinGet REST 仅提供合成来源元数据；正式生产页面完成导入原操作重放、Resource 上传进度恢复/完成回执、软件版本准入及私有下载撤回核验。输入与注册为合成夹具，不证明真实设备安装。运行记录实际后端 revision，退出要求清理确认。
+
 后端使用上述固定 revision；入口构建当前 UI，并复用后端隔离环境与构建租约。覆盖真实来源/目标/发布目录、单目标发布、已提交响应丢失后的原操作查询与显式重放、默认全量、显式版本更新、Native 目标与多个 Scope、时间/成功率门槛配置、状态查询、暂停与撤回。退出独立清理 PG、产品进程和 TLS 网关；结果记录实际后端 revision。仅使用合成输入，不证明 Agent 真机安装或升级。
 
 
