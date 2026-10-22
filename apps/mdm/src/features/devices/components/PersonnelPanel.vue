@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { UiButton, UiDialog } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -8,6 +8,7 @@ import { deviceBinding } from '../useDeviceBinding'
 import type { ViewEndpoint } from '../clients/endpoint-model'
 import type { User } from '../../operations/clients/authorization'
 import TenantUserSelect from './TenantUserSelect.vue'
+import PersonDisplay from './PersonDisplay.vue'
 const props = defineProps<{ endpoint: ViewEndpoint }>()
 const emit = defineEmits<{ changed: []; invalidated: [reason: 'denied'] }>()
 const runtime = useMdm(),
@@ -21,7 +22,21 @@ const editing = ref(false),
   instance = ref(''),
   saved = ref(false),
   compared = ref(false)
-const owner = ref(props.endpoint.registrationUser)
+type Owner = Omit<NonNullable<ViewEndpoint['registrationUser']>, 'display'>
+const owner = ref<Owner | undefined>(props.endpoint.registrationUser)
+const ownerDisplay = computed(() => {
+  const projected = props.endpoint.registrationUser
+  const current = owner.value?.user
+  const shown = projected?.user
+  return !busy.value &&
+    !failure.value &&
+    owner.value?.revision === projected?.revision &&
+    current?.tenantId === shown?.tenantId &&
+    current?.instanceId === shown?.instanceId &&
+    current?.principalId === shown?.principalId
+    ? (projected?.display ?? null)
+    : null
+})
 const pending = ref<{ operation: string; revision: number; user: User | null }>()
 watch(
   () => JSON.stringify([props.endpoint, ...deviceBinding(runtime)]),
@@ -94,13 +109,9 @@ async function save(replay = false) {
     <dl>
       <dt>{{ t('devices.registrationUser') }}</dt>
       <dd>
-        {{
-          owner === undefined
-            ? t('devices.notProvided')
-            : owner.user
-              ? t('devices.linkedPerson')
-              : t('registration.empty')
-        }}
+        <template v-if="owner === undefined">{{ t('devices.notProvided') }}</template>
+        <PersonDisplay v-else-if="owner.user" :display="ownerDisplay" />
+        <template v-else>{{ t('registration.empty') }}</template>
       </dd>
       <dt>{{ t('devices.currentUser') }}</dt>
       <dd>
@@ -108,7 +119,10 @@ async function save(replay = false) {
           endpoint.currentUser === undefined
             ? t('devices.notProvided')
             : t('devices.currentUserState.' + endpoint.currentUser.state)
-        }}<span v-if="endpoint.currentUser?.user"> · {{ t('devices.linkedPerson') }}</span>
+        }}<PersonDisplay
+          v-if="endpoint.currentUser?.user"
+          :display="endpoint.currentUser.display"
+        />
       </dd>
       <template v-if="endpoint.currentUser?.confirmedAt != null"
         ><dt>{{ t('devices.userConfirmedAt') }}</dt>

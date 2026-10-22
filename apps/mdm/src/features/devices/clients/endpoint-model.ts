@@ -1,3 +1,4 @@
+import { source, sourceKey } from '../../settings/clients/profiles'
 import { resolvedField } from './asset-model'
 import {
   array,
@@ -8,6 +9,7 @@ import {
   identifier,
   integer,
   nullable,
+  string,
   unique,
   uuid,
 } from '../../../services/decode'
@@ -48,6 +50,35 @@ function person(value: unknown) {
     principalId: uuid(v['principalId']),
   }
 }
+export function personDisplay(value: unknown) {
+  const v = closed(value, ['login', 'profiles'])
+  return {
+    login: nullable(v['login'], personText),
+    profiles: unique(
+      array(v['profiles'], (value) => {
+        const p = closed(value, ['source', 'status', 'displayName', 'username'])
+        const status = enumeration(p['status'], [
+          'available',
+          'missing',
+          'expired',
+          'unavailable',
+        ] as const)
+        const displayName = nullable(p['displayName'], personText)
+        const username = nullable(p['username'], personText)
+        if (status !== 'available' && (displayName !== null || username !== null))
+          throw new Error('Unavailable personnel contains values')
+        return { source: source(p['source']), status, displayName, username }
+      }),
+      (p) => sourceKey(p.source),
+    ),
+  }
+}
+function personText(value: unknown) {
+  const text = string(value)
+  if (!text.trim()) throw new Error('Empty personnel value')
+  return text
+}
+export type PersonDisplay = ReturnType<typeof personDisplay>
 export function viewEndpoint(value: unknown) {
   const v = closed(
     value,
@@ -71,21 +102,27 @@ export function viewEndpoint(value: unknown) {
   const owner =
     v['registrationUser'] === undefined
       ? undefined
-      : closed(v['registrationUser'], ['revision', 'user'])
+      : closed(v['registrationUser'], ['revision', 'user', 'display'])
   const current =
     v['currentUser'] === undefined
       ? undefined
-      : closed(v['currentUser'], ['revision', 'state', 'user', 'confirmedAt'])
+      : closed(v['currentUser'], ['revision', 'state', 'user', 'confirmedAt', 'display'])
   const currentUser = current
     ? {
         revision: count(current['revision']),
         state: enumeration(current['state'], ['unbound', 'active', 'invalidated'] as const),
         user: nullable(current['user'], person),
         confirmedAt: nullable(current['confirmedAt'], integer),
+        display: nullable(current['display'], personDisplay),
       }
     : undefined
   if (currentUser && (currentUser.state === 'active') !== (currentUser.user !== null))
     throw new Error('Invalid current user state')
+  if (
+    (owner && owner['user'] === null && owner['display'] !== null) ||
+    (currentUser && currentUser.user === null && currentUser.display !== null)
+  )
+    throw new Error('Personnel display has no related user')
   return {
     ...endpointFields(v),
     assetState: enumeration(v['assetState'], ['active', 'archived', 'deleted'] as const),
@@ -93,7 +130,11 @@ export function viewEndpoint(value: unknown) {
     displayName: v['displayName'] === undefined ? undefined : resolvedField(v['displayName']),
     serialNumber: v['serialNumber'] === undefined ? undefined : resolvedField(v['serialNumber']),
     registrationUser: owner
-      ? { revision: count(owner['revision']), user: nullable(owner['user'], person) }
+      ? {
+          revision: count(owner['revision']),
+          user: nullable(owner['user'], person),
+          display: nullable(owner['display'], personDisplay),
+        }
       : undefined,
     currentUser,
   }

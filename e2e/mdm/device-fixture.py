@@ -59,6 +59,8 @@ def seed_authority():
     tenant = TENANTS[0]
     user = dict(instanceId=INSTANCE, tenantId=tenant, principalId=ADMIN)
     rule = dict(subject=dict(kind='user', user=user), grants=[dict(operation=o, scope=dict(kind='all_devices')) for o in ['inventory_read','inventory_collect','inventory_assign','device_association_write','credentials','enrollment','operation_read','script_execute']] + [dict(operation=o, scope=dict(kind='tenant')) for o in ['inventory_sensitive_read','inventory_fields_write','software_read','software_write','release_publish','software_withdraw','agent_enrollment_read','agent_enrollment_write','group_read','group_write','group_recompute','scope_read','scope_write','policy_read','policy_write','resource_read','resource_write','registration_configuration_read','registration_configuration_write']])
+    if browser_module == 'device-browser.mjs':
+        rule['grants'].append(dict(operation='user_profiles_read', scope=dict(kind='tenant')))
     if browser_module == 'operations-browser.mjs':
         # Explicit authority for disposable HTTP acceptance, never production account initialization.
         rule['grants'] += [dict(operation=o, scope=dict(kind='all_devices')) for o in ['device_control','device_wipe','operation_cancel']]
@@ -207,6 +209,15 @@ try:
     status, _ = operator.call('PUT', '/api/v1/authorization/rules/'+initial['id'], dict(operationId=str(uuid.uuid4()),expectedRevision=initial['revision'],value=value))
     if status != 200:
         raise RuntimeError('initializer-rule-scope')
+    if browser_module == 'device-browser.mjs':
+        # Real local profile writes precede the browser login that observes them.
+        profile_path = f'/api/v1/identity/tenants/{TENANTS[0]}/accounts/{ADMIN}/profile'
+        status, profile = operator.call('GET', profile_path)
+        if status != 200: raise RuntimeError('personnel-profile-read')
+        status, _ = operator.call('PUT', profile_path, dict(operationId=str(uuid.uuid4()),expectedRevision=profile['revision'],value=dict(displayName='Device Browser Person',username='person-source-alias',email=None,extensions={},maxAgeSeconds=14400)))
+        if status != 200: raise RuntimeError('personnel-profile-write')
+        status, _ = operator.call('PUT', '/api/v1/devices/fixture-mdm/registration-user', dict(expectedRevision=0,user=dict(tenantId=TENANTS[0],instanceId=INSTANCE,principalId=ADMIN)), operation=str(uuid.uuid4()))
+        if status != 200: raise RuntimeError('personnel-owner-write')
     phase = 'collector-registration'
     module = importlib.util.spec_from_file_location('device_agent', WEB/'e2e/mdm/device-agent.py')
     collector = importlib.util.module_from_spec(module)

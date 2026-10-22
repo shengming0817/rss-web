@@ -166,6 +166,42 @@ try {
   await loaded()
   assert.ok((await page.locator('tbody').textContent()).includes(fixture.mdm))
   coverage.push('real-directory-counters-and-pagination')
+  phase = 'personnel-display-search'
+  let directoryLookups = 0
+  const observePersonnel = (request) => {
+    const pathname = new URL(request.url()).pathname
+    if (/\/accounts$/.test(pathname) || /\/user-profiles\/(?!me$)/.test(pathname))
+      directoryLookups++
+  }
+  page.on('request', observePersonnel)
+  await page.goto(path('devices'))
+  await loaded()
+  for (const search of ['Device Browser Person', 'admin']) {
+    await page.locator('input[type=search]').fill(search)
+    await page.locator('form.console-toolbar').evaluate((form) => form.requestSubmit())
+    await page.waitForURL((url) => url.searchParams.get('search') === search)
+    await loaded()
+    assert.ok((await page.locator('tbody').textContent()).includes(fixture.mdm))
+    assert.ok((await page.locator('tbody').textContent()).includes('Device Browser Person'))
+  }
+  await page.goto(path(`devices/${fixture.mdm}`))
+  await loaded()
+  const ownerDisplay = page.locator(`[data-personnel-device="${fixture.mdm}"]`)
+  assert.ok((await ownerDisplay.textContent()).includes('Device Browser Person'))
+  assert.ok((await ownerDisplay.textContent()).includes('person-source-alias'))
+  assert.ok((await ownerDisplay.textContent()).includes('登录名: admin'))
+  await writeRule(fixture.rule.grants.filter((g) => g.operation !== 'inventory_sensitive_read'))
+  await page.reload()
+  await loaded()
+  assert.ok(!(await ownerDisplay.textContent()).includes('Device Browser Person'))
+  assert.ok((await ownerDisplay.textContent()).includes('未提供人员展示资料'))
+  await page.goto(path('devices') + '?search=Device%20Browser%20Person')
+  await loaded()
+  assert.equal(await page.locator('tbody .ui-table-empty').count(), 1)
+  await writeRule(fixture.rule.grants)
+  page.off('request', observePersonnel)
+  assert.equal(directoryLookups, 0)
+  coverage.push('real-personnel-name-login-full-directory-search-and-sensitive-revocation')
   phase = 'unknown-create'
   await page.goto(path(`devices/${fixture.mdm}`))
   await page.getByRole('tab', { name: '管理', exact: true }).click()

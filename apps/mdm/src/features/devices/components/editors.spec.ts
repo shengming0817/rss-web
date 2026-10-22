@@ -5,6 +5,7 @@ import { catalog } from '../../../../demo/devices/fixtures'
 import type { Criteria } from '../clients/asset-model'
 import CriteriaEditor from './CriteriaEditor.vue'
 import ScalarEditor from './ScalarEditor.vue'
+import PersonDisplay from './PersonDisplay.vue'
 it('keeps scalar types, false and zero and rejects unsafe integers', async () => {
   const wrapper = mount(ScalarEditor, {
     props: { modelValue: { kind: 'integer', value: 1 } },
@@ -200,5 +201,39 @@ it('switches an existing group combination without changing its children', async
   expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([
     { kind: 'or', children: modelValue.children },
   ])
+  wrapper.unmount()
+})
+
+it('keeps local login distinct from each source name and shows unavailable source states', async () => {
+  const i18n = mdmI18n()
+  i18n.global.locale.value = 'zh-CN'
+  const wrapper = mount(PersonDisplay, {
+    props: {
+      display: {
+        login: 'local-login',
+        profiles: [
+          {
+            source: { kind: 'identity_local' },
+            status: 'available',
+            displayName: 'Local Person',
+            username: 'different-alias',
+          },
+          {
+            source: { kind: 'idp', provider: '44444444-4444-4444-8444-444444444444' },
+            status: 'expired',
+            displayName: null,
+            username: null,
+          },
+        ],
+      },
+    },
+    global: { plugins: [i18n] },
+  })
+  expect(wrapper.text()).toContain('登录名: local-login')
+  expect(wrapper.text()).toContain('Local Person')
+  expect(wrapper.text()).toContain('来源用户名: different-alias')
+  expect(wrapper.text()).toContain('资料已过期')
+  await wrapper.setProps({ display: null })
+  expect(wrapper.text()).toBe('未提供人员展示资料')
   wrapper.unmount()
 })

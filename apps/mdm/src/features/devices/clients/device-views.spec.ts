@@ -147,3 +147,54 @@ it('retains scoped source evidence on view detail and rejects evidence outside t
     ),
   ).toThrow()
 })
+
+it('requires source-specific personnel and suppresses unavailable values without accepting old relations', () => {
+  const user = {
+    tenantId: '11111111-1111-4111-8111-111111111111',
+    instanceId: '22222222-2222-4222-8222-222222222222',
+    principalId: '33333333-3333-4333-8333-333333333333',
+  }
+  const profile = {
+    source: { kind: 'identity_local' },
+    status: 'available',
+    displayName: 'A Person',
+    username: 'source-alias',
+  }
+  const display = {
+    login: 'local-login',
+    profiles: [
+      profile,
+      {
+        source: { kind: 'idp', provider: '44444444-4444-4444-8444-444444444444' },
+        status: 'expired',
+        displayName: null,
+        username: null,
+      },
+    ],
+  }
+  const decode = (relation: unknown) =>
+    decodeViews({
+      ...page,
+      items: [{ ...item, endpoints: [{ ...item.endpoints[0], registrationUser: relation }] }],
+    }).items[0]!.endpoints[0]!.registrationUser
+  expect(decode({ revision: 1, user, display })?.display).toEqual(display)
+  expect(decode({ revision: 1, user, display: null })?.display).toBeNull()
+  for (const invalid of [
+    { revision: 1, user },
+    { revision: 1, user: null, display },
+    { revision: 1, user, display: { ...display, profiles: [profile, profile] } },
+    { revision: 1, user, display: { ...display, profiles: [{ ...profile, status: 'expired' }] } },
+    { revision: 1, user, display: { ...display, profiles: [{ ...profile, source: null }] } },
+  ])
+    expect(() => decode(invalid)).toThrow()
+  const decodeCurrent = (currentUser: unknown) =>
+    decodeViews({
+      ...page,
+      items: [{ ...item, endpoints: [{ ...item.endpoints[0], currentUser }] }],
+    })
+  expect(
+    decodeCurrent({ revision: 1, state: 'active', user, confirmedAt: 1, display }).items[0]!
+      .endpoints[0]!.currentUser?.display,
+  ).toEqual(display)
+  expect(() => decodeCurrent({ revision: 1, state: 'active', user, confirmedAt: 1 })).toThrow()
+})

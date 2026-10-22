@@ -16,6 +16,7 @@ import { deviceBinding } from '../useDeviceBinding'
 import PageFrame from '../../../components/PageFrame.vue'
 import { sourceIds } from '../clients/asset-model'
 import { endpointStatuses } from '../clients/endpoint-model'
+import PersonDisplay from '../components/PersonDisplay.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -342,13 +343,14 @@ const sourceOptions = computed(() => [
         >
         <template #cell-registrationUser="{ row }"
           ><p v-for="e in row.endpoints" :key="e.id">
-            {{
-              e.registrationUser === undefined
-                ? t('devices.notProvided')
-                : e.registrationUser.user
-                  ? t('devices.linkedPerson')
-                  : t('registration.empty')
-            }}
+            <template v-if="e.registrationUser === undefined">{{
+              t('devices.notProvided')
+            }}</template>
+            <PersonDisplay
+              v-else-if="e.registrationUser.user"
+              :display="e.registrationUser.display"
+            />
+            <template v-else>{{ t('registration.empty') }}</template>
           </p></template
         >
         <template #cell-currentUser="{ row }"
@@ -357,9 +359,8 @@ const sourceOptions = computed(() => [
               e.currentUser === undefined
                 ? t('devices.notProvided')
                 : t('devices.currentUserState.' + e.currentUser.state)
-            }}<span v-if="e.currentUser?.user"> · {{ t('devices.linkedPerson') }}</span>
-          </p></template
-        >
+            }}<PersonDisplay v-if="e.currentUser?.user" :display="e.currentUser.display" /></p
+        ></template>
         <template #cell-status="{ row }"
           ><UiBadge>{{
             row.association

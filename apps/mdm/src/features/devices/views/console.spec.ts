@@ -875,12 +875,17 @@ it('edits the canonical device owner in detail and locks an unknown write until 
   expect((await f.devices.registration.responsibility('device-01')).user?.principalId).toBe(
     '33333333-3333-4333-8333-333333333333',
   )
+  expect(panel().text()).toContain('Demo profile')
+  expect(panel().text()).toContain('reviewer')
   await panel().get('[data-action=edit-owner]').trigger('click')
   await flushPromises()
+  expect(panel().text()).toContain('Demo profile')
   f.wrapper.findComponent(TenantUserSelect).vm.$emit('update:modelValue', '')
   await new DOMWrapper(document.body).get('[role=dialog] form').trigger('submit')
   await flushPromises()
   expect((await f.devices.registration.responsibility('device-01')).user).toBeNull()
+  expect(panel().text()).not.toContain('Demo profile')
+  expect(f.requests.filter((r) => r.path.includes('user-profiles'))).toHaveLength(0)
 })
 
 it('invalidates the displayed native registration when the query target changes and cancels only the newly read target', async () => {
@@ -1802,4 +1807,25 @@ it('chooses an authorized referenced group in a popover without displaying ident
       },
     },
   })
+})
+
+it('searches the complete authorized device set by personnel through the view API', async () => {
+  const f = await setup('devices')
+  const me = await f.devices.registration.me()
+  await f.devices.registration.assign('device-02', crypto.randomUUID(), 0, {
+    tenantId: TENANT,
+    instanceId: me.instanceId,
+    principalId: ADMIN,
+  })
+  const result = await f.devices.views.list({ limit: 1, search: 'Demo profile' })
+  expect(result.items).toHaveLength(1)
+  expect(result.statistics.deviceViewCount).toBe(1)
+  expect(result.items[0]?.endpoints[0]?.id).toBe('device-02')
+  const login = await f.devices.views.list({ limit: 1, search: 'demo' })
+  expect(login.items[0]?.endpoints[0]?.registrationUser?.display?.login).toBe('demo')
+  const stale = await f.devices.views.list({ limit: 1 })
+  await f.devices.registration.assign('device-02', crypto.randomUUID(), 1, null)
+  await expect(f.devices.views.list({ limit: 1, cursor: stale.nextCursor! })).rejects.toMatchObject(
+    { code: 'device_view_cursor_invalidated' },
+  )
 })
