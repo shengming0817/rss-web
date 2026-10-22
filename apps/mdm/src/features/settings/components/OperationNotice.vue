@@ -11,7 +11,7 @@ withDefaults(
     querySupported?: boolean
     compared?: boolean
   }>(),
-  { querySupported: true },
+  { querySupported: true, compareSupported: true },
 )
 defineEmits<{ query: []; retry: []; compare: []; edit: [] }>()
 const { t } = useI18n()

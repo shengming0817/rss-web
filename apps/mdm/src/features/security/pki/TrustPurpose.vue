@@ -48,6 +48,18 @@ function closePreparation() {
   candidate.value = undefined
   preparationReviewed.value = false
 }
+function openPreparation() {
+  closePreparation()
+  preparing.value = true
+}
+function openRotation() {
+  rotation.value = rotation.value || intentRotation.value || ''
+  rotationOpen.value = true
+}
+function closeRotation() {
+  rotationOpen.value = false
+  confirmation.value = undefined
+}
 function reviewPreparation() {
   const current = trust.value,
     next = candidate.value
@@ -171,14 +183,9 @@ useSettingsFacts(() => {
     <header class="console-inline-actions">
       <h2>{{ t('security.pki.trust') }}</h2>
       <UiButton :disabled="busy || !canRead" @click="load">{{ t('devices.reload') }}</UiButton
-      ><UiButton
-        :disabled="locked || !canWrite || !trust"
-        @click="
-          closePreparation()
-          preparing = true
-        "
-        >{{ t('security.pki.prepare') }}</UiButton
-      >
+      ><UiButton :disabled="locked || !canWrite || !trust" @click="openPreparation">{{
+        t('security.pki.prepare')
+      }}</UiButton>
     </header>
     <p>{{ t('security.pki.publicHint') }}</p>
     <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
@@ -233,14 +240,7 @@ useSettingsFacts(() => {
     <h2>{{ t('security.pki.lifecycle') }}</h2>
     <p>{{ t('security.pki.noRotationRead') }}</p>
     <p>{{ t('security.pki.rotationHint') }}</p>
-    <UiButton
-      :disabled="busy"
-      @click="
-        rotation = rotation || intentRotation || ''
-        rotationOpen = true
-      "
-      >{{ t('security.pki.rotations') }}</UiButton
-    >
+    <UiButton :disabled="busy" @click="openRotation">{{ t('security.pki.rotations') }}</UiButton>
   </section>
   <CrlPublisher :purpose="purpose" />
   <template v-if="purpose === 'agent'"
@@ -318,10 +318,7 @@ useSettingsFacts(() => {
     :dismissible="!busy"
     :title="t('security.pki.rotations')"
     :close-label="t('security.pki.close')"
-    @update:open="
-      rotationOpen = false
-      confirmation = undefined
-    "
+    @update:open="closeRotation"
   >
     <p>{{ t('security.pki.stageHint') }}</p>
     <label for="pki-rotation">{{ t('security.pki.operation') }}</label

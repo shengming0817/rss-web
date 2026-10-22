@@ -444,7 +444,28 @@ try {
     assert.equal(finished, true)
     coverage.push('real-browser-native-tou-form')
   } else gaps.push('native-Entra-start-material')
-  if (fixture.pki) { phase = 'administrator-pki-and-recovery'; await login(fixture.admin); await exercisePki({page,context,fixture,coverage,temp,go,collectorLifecycle:{interrupted:()=>interrupted,onChild:(_child,terminate)=>{collectorTerminate=terminate;if(interrupted)terminate()},onRelease:()=>{collectorTerminate=undefined}}}) }
+  if (fixture.pki) {
+    phase = 'administrator-pki-and-recovery'
+    await login(fixture.admin)
+    await exercisePki({
+      page,
+      context,
+      fixture,
+      coverage,
+      temp,
+      go,
+      collectorLifecycle: {
+        interrupted: () => interrupted,
+        onChild: (_child, terminate) => {
+          collectorTerminate = terminate
+          if (interrupted) terminate()
+        },
+        onRelease: () => {
+          collectorTerminate = undefined
+        },
+      },
+    })
+  }
   gaps.push('native-OS-installation-and-Apple-Entra-interoperability')
   assert.equal(interrupted, false)
   result = 'passed'

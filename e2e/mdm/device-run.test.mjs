@@ -129,35 +129,66 @@ for (const feature of ['device', 'software', 'settings']) {
   )
 }
 
-test('PKI collector cancellation releases its waiting HTTP process before the browser owner continues', {timeout:10000}, async () => {
-  const {createServer}=await import('node:http')
-  const {runPkiCollector}=await import('./pki-browser.mjs')
-  const dir=mkdtempSync(resolve(tmpdir(),'mdm-pki-collector-cancel-'))
-  let interrupted=false,terminate,released=false,pending,timer
-  let observed
-  const received=new Promise(done=>{observed=done})
-  const server=createServer((_req,_res)=>{observed()})
-  await new Promise(done=>server.listen(0,'127.0.0.1',done))
-  const originalPath=process.env.PATH
-  writeFileSync(resolve(dir,'python3'),`#!/usr/bin/env node
+test(
+  'PKI collector cancellation releases its waiting HTTP process before the browser owner continues',
+  { timeout: 10000 },
+  async () => {
+    const { createServer } = await import('node:http')
+    const { runPkiCollector } = await import('./pki-browser.mjs')
+    const dir = mkdtempSync(resolve(tmpdir(), 'mdm-pki-collector-cancel-'))
+    let interrupted = false,
+      terminate,
+      released = false,
+      pending,
+      timer
+    let observed
+    const received = new Promise((done) => {
+      observed = done
+    })
+    const server = createServer(() => {
+      observed()
+    })
+    await new Promise((done) => server.listen(0, '127.0.0.1', done))
+    const originalPath = process.env.PATH
+    writeFileSync(
+      resolve(dir, 'python3'),
+      `#!/usr/bin/env node
 const fs=require('node:fs'),http=require('node:http')
-process.on('SIGTERM',()=>{fs.writeFileSync(${JSON.stringify(resolve(dir,'stopped'))},'');process.exit(0)})
+process.on('SIGTERM',()=>{fs.writeFileSync(${JSON.stringify(resolve(dir, 'stopped'))},'');process.exit(0)})
 http.get('http://127.0.0.1:${server.address().port}',()=>{})
-`,{mode:0o700})
-  try {
-    process.env.PATH=dir+':'+originalPath
-    pending=runPkiCollector(resolve(dir,'fixture.json'),{interrupted:()=>interrupted,onChild:(_child,stop)=>{terminate=stop},onRelease:()=>{released=true}})
-    pending.catch(()=>{})
-    await Promise.race([received,new Promise((_resolve,reject)=>{timer=setTimeout(()=>reject(new Error('collector HTTP deadline')),5000)})])
-    interrupted=true;terminate()
-    await assert.rejects(pending,/PKI collector cancelled/)
-    assert.equal(released,true)
-    assert.equal(existsSync(resolve(dir,'stopped')),true)
-  } finally {
-    clearTimeout(timer)
-    process.env.PATH=originalPath
-    terminate?.();await pending?.catch(()=>{})
-    await new Promise(done=>server.close(done))
-    rmSync(dir,{recursive:true,force:true})
-  }
-})
+`,
+      { mode: 0o700 },
+    )
+    try {
+      process.env.PATH = dir + ':' + originalPath
+      pending = runPkiCollector(resolve(dir, 'fixture.json'), {
+        interrupted: () => interrupted,
+        onChild: (_child, stop) => {
+          terminate = stop
+        },
+        onRelease: () => {
+          released = true
+        },
+      })
+      pending.catch(() => {})
+      await Promise.race([
+        received,
+        new Promise((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error('collector HTTP deadline')), 5000)
+        }),
+      ])
+      interrupted = true
+      terminate()
+      await assert.rejects(pending, /PKI collector cancelled/)
+      assert.equal(released, true)
+      assert.equal(existsSync(resolve(dir, 'stopped')), true)
+    } finally {
+      clearTimeout(timer)
+      process.env.PATH = originalPath
+      terminate?.()
+      await pending?.catch(() => {})
+      await new Promise((done) => server.close(done))
+      rmSync(dir, { recursive: true, force: true })
+    }
+  },
+)
