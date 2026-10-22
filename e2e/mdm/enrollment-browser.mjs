@@ -1,3 +1,4 @@
+import { exercisePki } from './pki-browser.mjs'
 // Current production UI against a disposable real HTTPS host. No response/credential/trace output.
 import { chromium } from 'playwright'
 import { readFileSync, mkdtempSync, rmSync, statSync } from 'node:fs'
@@ -26,7 +27,7 @@ async function stop() {
 }
 process.once('SIGINT', stop)
 process.once('SIGTERM', stop)
-const deadline = setTimeout(stop, 180000)
+const deadline = setTimeout(stop, 300000)
 function active() {
   assert.equal(interrupted, false, 'Browser run cancelled')
 }
@@ -441,6 +442,7 @@ try {
     assert.equal(finished, true)
     coverage.push('real-browser-native-tou-form')
   } else gaps.push('native-Entra-start-material')
+  if (fixture.pki) { phase = 'administrator-pki-and-recovery'; await login(fixture.admin); await exercisePki({page,context,fixture,coverage,temp,go}) }
   gaps.push('native-OS-installation-and-Apple-Entra-interoperability')
   assert.equal(interrupted, false)
   result = 'passed'

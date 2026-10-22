@@ -1,5 +1,8 @@
 """Disposable real registration host; generated PKI proves HTTP seams, not OS enrollment."""
 import http.client
+import importlib.util
+import base64
+import secrets
 from contextlib import ExitStack
 import http.cookiejar
 import json
@@ -24,6 +27,7 @@ from candidate_fixture import INSTANCE, TENANTS, ADMIN
 from build_run import lease_fds
 from runtime_fixture import storage, readiness
 from windows_fixtures import generate
+from candidate_installation_driver import Browser
 from pki_fixtures import running as pki
 
 environment = Environment(BACKEND, group='enrollment-browser')
@@ -165,6 +169,7 @@ try:
         providers.enter_context(pki(root, provider_env, case=str(WEB)+':enrollment-browser', windows=True))
         providers.enter_context(pki(root, provider_env, case=str(WEB)+':enrollment-browser', agent=True,
             agent_origin=f"https://localhost:{agent_ports['backend']}"))
+        providers.enter_context(pki(root, provider_env, case=str(WEB)+':enrollment-browser', agent=True, generation='next',agent_origin=f"https://localhost:{agent_ports['backend']}"))
         agent = json.loads((root/'agent-pki.json').read_text())
         agent['endpoint']['listen'] = f"127.0.0.1:{agent_ports['backend']}"
         config.update(native_protocols=dict(windows=json.loads((root/'windows.json').read_text())),
@@ -182,7 +187,17 @@ try:
         private(gateway, text)
         phase = 'browser'
         start(binary, initialized, log)
-        fixture = private(environment.root/'browser.json',dict(
+        operator = Browser(initialized['origin'],environment.root/'ca.crt')
+        operator.login(TENANTS[0],'admin',(environment.root/'account-password').read_text())
+        module = importlib.util.spec_from_file_location('enrollment_device_agent',WEB/'e2e/mdm/device-agent.py')
+        collector = importlib.util.module_from_spec(module); module.loader.exec_module(collector)
+        agent_fixture = collector.register(agent['endpoint']['origin'],environment.root/'ca.crt',root/'pki/agent',operator,private,TENANTS[0])
+        candidate_trust = json.loads(Path(json.loads((root/'agent-pki-next.json').read_text())['trust_file']).read_text())
+        recovery_input = private(environment.root/'recovery-input.json',dict(wireVersion=1,operationId=str(uuid.uuid4()),secret=secrets.token_urlsafe(32),platform='macos',csr=base64.b64encode((root/'pki/agent/agent.der').read_bytes()).decode()))
+        backend_revision = subprocess.run(['/usr/bin/git','rev-parse','HEAD'],cwd=BACKEND,check=True,capture_output=True,text=True).stdout.strip()
+        print(json.dumps(dict(phase='backend-baseline',revision=backend_revision)),flush=True)
+        fixture = private(environment.root/'browser.json',dict(backendRevision=backend_revision,collector=agent_fixture,pki=dict(candidateTrust=candidate_trust,recoveryInputFile=str(recovery_input)),
+
             origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,
             admin=dict(login='admin',passwordFile=str(environment.root/'account-password')),
             reader=dict(login='reader',passwordFile=str(reader_password)),
@@ -190,7 +205,7 @@ try:
         browser = subprocess.Popen(['node',str(WEB/'e2e/mdm/enrollment-browser.mjs')],cwd=WEB,
             env={**os.environ,'MDM_ENROLLMENT_BROWSER_FIXTURE':str(fixture)},pass_fds=lease_fds())
         processes.append(browser)
-        if browser.wait(timeout=240):
+        if browser.wait(timeout=360):
             raise RuntimeError('browser')
     result = 'passed'
 except BaseException as error:

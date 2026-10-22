@@ -98,7 +98,6 @@ export const settingsZh = {
   entryTitle: '进入管理控制台',
   entryHint: '正在核对当前身份与首次配置进度。',
   title: '设置',
-  rotationId: '原 PKI 轮换 ID（批准、启用和退出沿用）',
   recoverAccountHint:
     '平台账户丢失时由已授权操作员核对原安装、tenant、principal 与原账户，沿原身份执行受控密码恢复；不能通过重建管理租户取得权限。',
   readComparison: '读取最新状态以比较',
@@ -419,7 +418,6 @@ export const settingsEn = {
   entryTitle: 'Enter the management console',
   entryHint: 'Checking your identity and initial configuration progress.',
   title: 'Settings',
-  rotationId: 'Original PKI rotation ID (retain for approval, activation and retirement)',
   recoverAccountHint:
     'An authorized operator recovers a lost platform account against its original installation, tenant, principal and account. Recreating a management tenant never grants authority.',
   readComparison: 'Read current state to compare',

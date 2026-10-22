@@ -18,7 +18,7 @@ def check(value, reason):
         raise RuntimeError(reason)
 
 
-def call(origin, ca, path, body=None, cert=None, key=None, method='POST', headers=None):
+def call(origin, ca, path, body=None, cert=None, key=None, method='POST', headers=None, expected=200):
     url = urlsplit(origin)
     check(url.scheme == 'https' and url.hostname == 'localhost', 'collector-origin')
     context = ssl.create_default_context(cafile=str(ca))
@@ -29,9 +29,10 @@ def call(origin, ca, path, body=None, cert=None, key=None, method='POST', header
         connection.request(method, path, json.dumps(body) if body is not None else None,
                            {'Content-Type': 'application/json', **(headers or {})})
         response = connection.getresponse()
-        data = json.loads(response.read())
+        raw = response.read()
+        data = json.loads(raw) if raw else None
         stage = body.get('event', {}).get('kind', 'claim') if path.endswith(('/claim', '/events')) else path.rsplit('/', 1)[-1]
-        check(response.status == 200, 'collector-http-' + stage + '-' + str(response.status) + '-' + str(data.get('code', '')))
+        check(response.status == expected, 'collector-http-' + stage + '-' + str(response.status) + '-' + str((data or {}).get('code', '')))
         return data
     finally:
         connection.close()
@@ -71,7 +72,7 @@ def register(origin, ca, native, operator, private, tenant, capabilities=None):
     session = dict(part.split('=', 1) for part in operator.cookie.split('; '))['__Host-identity-session']
     current = call(origin, ca, '/api/v1/agent/runtime/current-user', dict(operationId=str(uuid.uuid4()), expectedRevision=0), cert, key, method='PUT', headers={'x-rss-user-session': session})
     check(current['state'] == 'active', 'collector-enterprise-session')
-    return dict(origin=origin, ca=str(ca), cert=str(cert), key=str(key), runtime=binding, executionContext=context, runs=[])
+    return dict(origin=origin, ca=str(ca), cert=str(cert), key=str(key), runtime=binding, executionContext=context, runs=[], originalCandidate=candidate)
 
 
 def query_digest(query):
@@ -136,8 +137,32 @@ def collect(fixture, action, resource, cycle):
     return record
 
 
+def acknowledge_pki(path):
+    file = Path(path)
+    check(file.stat().st_mode & 0o077 == 0, 'collector-private-fixture')
+    fixture = json.loads(file.read_text())
+    agent = fixture['collector']
+    trust = call(agent['origin'], agent['ca'], '/api/v1/agent/enroll/trust', cert=agent['cert'], key=agent['key'], method='GET')
+    check(trust['tenant'] == fixture['tenant'] and trust['purpose'] == 'agent', 'collector-pki-binding')
+    installed = Path(agent['cert']).parent / 'collector-pki-trust.json'
+    installed.write_text(json.dumps(trust)); installed.chmod(0o600)
+    with installed.open('rb') as material: os.fsync(material.fileno())
+    readback = json.loads(installed.read_text())
+    check(readback == trust, 'collector-pki-readback')
+    generations = [[i[k] for k in ['digest','mode','certificate','root','provisioner','kid']] for i in readback['issuers']]
+    digest = hashlib.sha256(json.dumps(['device-trust-install/v1',readback['version'],readback['origin'],readback['tenant'],readback['purpose'],readback['revision'],generations],separators=(',',':')).encode()).hexdigest()
+    ack = dict(operation=str(uuid.uuid4()),version=1,revision=trust['revision'],digest=digest)
+    call(agent['origin'],agent['ca'],'/api/v1/agent/enroll/trust/acknowledgements',ack,agent['cert'],agent['key'],expected=204)
+    observation = dict(operation=str(uuid.uuid4()),version=1,registration=agent['runtime']['registrationId'],generation=agent['runtime']['generation'],sequence=1,target_revision=trust['revision'],target_digest=digest,actual_revision=trust['revision'],actual_digest=digest,state='applied',reason=None,observed_at=int(time.time()))
+    check(call(agent['origin'],agent['ca'],'/api/v1/agent/enroll/trust/observations',observation,agent['cert'],agent['key']) == observation,'collector-pki-observation')
+    return dict(result='passed',revision=trust['revision'])
+
+
 if __name__ == '__main__':
     try:
+        if sys.argv[1] == 'pki-ack':
+            print(json.dumps(acknowledge_pki(sys.argv[2])))
+            sys.exit(0)
         path, action, resource, cycle = sys.argv[1:]
         file = Path(path)
         check(file.stat().st_mode & 0o077 == 0, 'collector-private-fixture')
