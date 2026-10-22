@@ -38,6 +38,7 @@ def cleanup_compose():
     root=Path(value['root'])
     if value['backend']!=str(BACKEND) or root.is_symlink() or root.parent.resolve()!=Path(tempfile.gettempdir()).resolve() or not re.fullmatch(r'mdm-first-use-compose-[a-z0-9_]+',root.name) or not re.fullmatch(r'mdm-first-use-[0-9a-f]{12}',value['project']):raise RuntimeError('foreign-compose-cleanup-locator')
     owner=Installation(root,root/'production.compose.yaml',value['project'])
+    owner.prefix+=['-f',str(root/'browser.compose.json')]
     failures=[]
     for name,action in [('compose',owner.cleanup),('provider',lambda:Provider(root/'inputs/browser-materials/pki/windows',hashlib.sha256((str(WEB)+':first-use-compose:windows').encode()).hexdigest()[:20],owner_root=BACKEND).reset())]:
         try:action()
@@ -66,7 +67,7 @@ def compose_browser(candidate):
     import socket
     import tempfile
     from contextlib import ExitStack
-    from candidate_runtime import verify_candidate,load_ui,image_identity
+    from candidate_runtime import verify_candidate,load_ui,image_identity,immutable_image
     from candidate_installation import tls
     from candidate_installation_driver import Installation,until,Browser
     from ingress_network import Ingress
@@ -75,17 +76,18 @@ def compose_browser(candidate):
     candidate=Path(candidate).resolve()
     manifest=verify_candidate(candidate)
     image=load_ui(candidate,manifest['ui'])
+    browser_image=image_identity(immutable_image(os.environ['MDM_SETTINGS_BROWSER_IMAGE']))['id']
     if (WEB/'artifacts/settings-browser/compose.json').exists():raise RuntimeError('previous-compose-cleanup-required')
     root=Path(tempfile.mkdtemp(prefix='mdm-first-use-compose-')).resolve()
     with ExitStack() as providers:
         inputs=root/'inputs';inputs.mkdir(mode=0o700)
         tls(inputs)
-        # This browser fixture uses a loopback origin and no device TLS connection.
-        (inputs/'leaf.ext').write_text('subjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\nbasicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=DNS:localhost,DNS:enroll.example.test,DNS:manage.example.test\n')
+        # Browser and gateway share an isolated network; device effects are not exercised.
+        (inputs/'leaf.ext').write_text('subjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\nbasicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=DNS:mdm.example.test,DNS:enroll.example.test,DNS:manage.example.test\n')
         subprocess.run(['openssl','x509','-req','-in',str(inputs/'gateway.csr'),'-CA',str(inputs/'ca.crt'),'-CAkey',str(inputs/'ca.key'),'-CAcreateserial','-days','2','-extfile',str(inputs/'leaf.ext'),'-out',str(inputs/'gateway.crt')],check=True,capture_output=True,timeout=30)
         with socket.socket() as listener:
             listener.bind(('127.0.0.1',0));port=listener.getsockname()[1]
-        origin='https://localhost:'+str(port)
+        origin='https://mdm.example.test'
         project='mdm-first-use-'+uuid.uuid4().hex[:12]
         ingress=Ingress(root,project,project)
         providers.callback(ingress.release)
@@ -94,6 +96,12 @@ def compose_browser(candidate):
         private(root/'.env',''.join(k+'='+str(v)+'\n' for k,v in values.items()))
         compose=root/'production.compose.yaml';shutil.copyfile(candidate/'deployment/production.compose.yaml',compose)
         owner=Installation(root,compose,project)
+        overlay=root/'browser.compose.json'
+        private(overlay,dict(services=dict(gateway=dict(networks=dict(default=dict(aliases=['mdm.example.test']))),
+            browser=dict(image=browser_image,profiles=['browser'],entrypoint=['node',str(WEB/'e2e/mdm/settings-browser.mjs')],
+                shm_size='1gb',volumes=[str(WEB)+':'+str(WEB)+':ro',str(root)+':'+str(root)+':ro'],
+                environment=dict(MDM_SETTINGS_BROWSER_FIXTURE=str(root/'browser.json'))))))
+        owner.prefix+=['-f',str(overlay)]
         private(WEB/'artifacts/settings-browser/compose.json',dict(root=str(root),project=owner.project,backend=str(BACKEND)))
         child=None
         def interrupt(_signal,_frame):
@@ -148,13 +156,15 @@ def compose_browser(candidate):
             until(lambda:api.call('GET','/readyz')[0]==200)
             owner.product('configure-host','/var/lib/rss-mdm/configure-browser.json')
             owner.product('prepare-hosts')
+            owner.script("from pathlib import Path;p=Path('/var/lib/rss-mdm/runtime/gateway/nginx.conf');s=p.read_text();p.write_text(s.replace('listen 8443;', 'listen 443; listen 8443;'))")
+            owner.compose('exec','-T','gateway','nginx','-s','reload','-c','/run/gateway/nginx.conf')
             api.login(seeded['tenantId'],'administrator',(inputs/'administrator-password').read_text().strip())
             reader_password=private(root/'reader-password','First-use-browser-reader-2026!')
             status,_=api.call('POST','/api/v1/identity/tenants/'+seeded['tenantId']+'/accounts',dict(login='reader',password=reader_password.read_text()))
             if status!=201:raise RuntimeError('reader-account')
             _,host=api.call('GET','/api/v1/mdm-host/config.json')
             fixture=private(root/'browser.json',dict(compose=True,backendRevision=subprocess.check_output(['/usr/bin/git','rev-parse','HEAD'],cwd=BACKEND,text=True).strip(),origin=origin,tenant=seeded['tenantId'],managementTenant=host['managementTenant'],login='administrator',passwordFile=str(inputs/'administrator-password'),platformLogin='platform',platformPasswordFile=str(inputs/'platform-password'),reader=dict(login='reader',passwordFile=str(reader_password))))
-            child=subprocess.Popen(['node',str(WEB/'e2e/mdm/settings-browser.mjs')],cwd=WEB,env={**os.environ,'MDM_SETTINGS_BROWSER_FIXTURE':str(fixture)},pass_fds=lease_fds())
+            child=subprocess.Popen([*owner.prefix,'run','--rm','--no-deps','browser'],cwd=WEB,pass_fds=lease_fds())
             try:
                 if child.wait(timeout=480)!=0:raise RuntimeError('compose-browser')
             finally:

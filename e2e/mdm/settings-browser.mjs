@@ -28,7 +28,7 @@ try {
     origin = new URL(f.origin).origin
   backendRevision = f.backendRevision
   assert.equal(new URL(origin).protocol, 'https:')
-  assert.equal(new URL(origin).hostname, 'localhost')
+  assert.equal(new URL(origin).hostname, f.compose ? 'mdm.example.test' : 'localhost')
   assert.equal(statSync(f.passwordFile).mode & 0o077, 0)
   const password = readFileSync(f.passwordFile, 'utf8').trim()
   browser = await chromium.launch()
