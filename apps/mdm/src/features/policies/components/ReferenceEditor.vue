@@ -58,22 +58,27 @@ function add() {
     <label :for="`${prefix}-kind`">{{ t('policies.source') }}</label
     ><select :id="`${prefix}-kind`" v-model="kind" class="ui-input">
       <option value="device">{{ t('policies.device') }}</option>
-      <option value="group">{{ t('policies.group') }}</option></select
-    ><label :for="`${prefix}-id`">{{ t('policies.id') }}</label
-    ><input
-      :id="`${prefix}-id`"
-      v-model="id"
-      class="ui-input"
-      :list="`${prefix}-options`"
-      maxlength="256"
-    /><datalist :id="`${prefix}-options`">
-      <option v-for="item in page?.items ?? []" :key="item.id" :value="item.id">
-        {{ item.name }}
-      </option></datalist
-    ><UiButton type="button" :disabled="!!!id" @click="add">{{ t('policies.add') }}</UiButton>
+      <option value="group">{{ t('policies.group') }}</option>
+    </select>
     <UiButton type="button" :disabled="busy" @click="load()">{{
       t('console.chooseLoaded')
     }}</UiButton>
+    <template v-if="page">
+      <label :for="`${prefix}-choice`">{{ t('devices.select') }}</label>
+      <select :id="`${prefix}-choice`" v-model="id" class="ui-input" :disabled="busy">
+        <option value="">{{ t('devices.select') }}</option>
+        <option v-if="id && !page.items.some((item) => item.id === id)" :value="id">
+          {{ id }}
+        </option>
+        <option v-for="item in page.items" :key="item.id" :value="item.id">{{ item.name }}</option>
+      </select>
+    </template>
+    <details class="task-technical">
+      <summary>{{ t('policies.ux.technical') }}</summary>
+      <label :for="`${prefix}-id`">{{ t('policies.id') }}</label
+      ><input :id="`${prefix}-id`" v-model="id" class="ui-input" maxlength="256" />
+    </details>
+    <UiButton type="button" :disabled="!id || busy" @click="add">{{ t('policies.add') }}</UiButton>
     <p v-if="page">{{ t('console.pageNotTotal') }}</p>
     <UiButton
       v-if="page?.nextCursor"
@@ -83,9 +88,10 @@ function add() {
       >{{ t('policies.next') }}</UiButton
     >
     <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
-    <ul>
+    <ul class="task-reference-list">
       <li v-for="(item, index) in model" :key="`${item.kind}:${item.id}`">
-        {{ t(`policies.${item.kind}`) }}: {{ item.id }}
+        <span>{{ page?.items.find((choice) => choice.id === item.id)?.name ?? item.id }}</span
+        ><small>{{ t(`policies.${item.kind}`) }}</small>
         <UiButton type="button" @click="model = model.filter((_, i) => i !== index)">
           {{ t('policies.remove') }}
         </UiButton>

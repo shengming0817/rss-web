@@ -166,7 +166,10 @@ it('creates a formal Scope, changes the result channel explicitly, and deletes o
     })
     await press(app, 'policies.refresh')
     await press(app, 'policies.refresh')
-    await main().get('#scope-projection').setValue('decisions')
+    await main()
+      .findAll('[role=tab]')
+      .find((tab) => tab.text() === '判定说明')!
+      .trigger('click')
     const channel = main()
       .findAll('select')
       .find((s) => s.find('option[value=agent]').exists())!

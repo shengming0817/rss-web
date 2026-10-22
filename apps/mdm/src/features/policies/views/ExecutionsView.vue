@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import { UiButton, UiTable, UiBadge, UiDialog } from '@rss/core/components'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -9,6 +9,7 @@ import PageFrame from '../../../components/PageFrame.vue'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import DeviceControlPanel from '../../devices/components/DeviceControlPanel.vue'
 import NativeTaskFacts from '../components/NativeTaskFacts.vue'
+import OperationStages from '../components/OperationStages.vue'
 import type { NativeOperation } from '../clients/native'
 import type { EndpointDetail } from '../../devices/clients/endpoint-model'
 const { t } = useI18n(),
@@ -39,7 +40,14 @@ const device = ref(''),
 const devices = ref<Awaited<ReturnType<typeof runtime.devices.directory.list>>>()
 const selected = ref<EndpointDetail>(),
   name = ref('')
-const selectedDevice = ref('')
+const selectedDevice = ref(''),
+  choosingDevice = ref(false)
+function beginRemote() {
+  choosingDevice.value = true
+  loadDevices()
+}
+const utc = (at: number) =>
+  new Date(at * 1000).toISOString().replace('T', ' ').replace('.000Z', ' UTC')
 const pinned = computed(() => typeof route.query['operation'] === 'string')
 function load(cursor?: { id: string; kind: 'command' | 'action_run' }) {
   if (busy.value) return
@@ -99,6 +107,7 @@ async function choose() {
     (value) => {
       selected.value = value.endpoint
       name.value = value.name
+      choosingDevice.value = false
     },
   )
 }
@@ -112,6 +121,7 @@ watch(
       ...deviceBinding(runtime),
     ]),
   () => {
+    choosingDevice.value = false
     records.value = undefined
     commandDetails.value = {}
     selected.value = undefined
@@ -138,7 +148,35 @@ watch(
 )
 </script>
 <template>
-  <PageFrame :title="t('policies.executions')" :busy="busy" :failure="failure">
+  <PageFrame
+    :title="t('policies.executions')"
+    :description="t('policies.ux.executionsHint')"
+    :busy="busy"
+    :failure="failure"
+  >
+    <template #actions
+      ><UiButton :disabled="picker.busy.value || pinned" @click="beginRemote">{{
+        t('policies.ux.remote')
+      }}</UiButton></template
+    >
+    <dl v-if="records" class="task-statistics">
+      <div>
+        <dt>{{ t('policies.ux.total') }}</dt>
+        <dd>{{ records.statistics.total }}</dd>
+      </div>
+      <div>
+        <dt>{{ t('policies.ux.commands') }}</dt>
+        <dd>{{ records.statistics.commands }}</dd>
+      </div>
+      <div>
+        <dt>{{ t('policies.ux.runs') }}</dt>
+        <dd>{{ records.statistics.actionRuns }}</dd>
+      </div>
+      <div>
+        <dt>{{ t('policies.ux.unknown') }}</dt>
+        <dd>{{ records.statistics.unknown }}</dd>
+      </div>
+    </dl>
     <form class="console-toolbar" @submit.prevent="load()">
       <label>{{ t('policies.device') }}<input v-model="device" class="ui-input" /></label>
       <label>{{ t('policies.policies') }}<input v-model="policy" class="ui-input" /></label>
@@ -157,7 +195,13 @@ watch(
       <UiButton :disabled="busy" type="submit">{{ t('policies.reload') }}</UiButton>
     </form>
     <p>{{ t('policies.statusFilterBoundary') }}</p>
-    <section class="console-panel">
+    <UiDialog
+      v-model:open="choosingDevice"
+      placement="right"
+      :title="t('policies.ux.chooseDevice')"
+      :description="t('policies.ux.chooseDeviceHint')"
+      :close-label="t('console.close')"
+    >
       <h2>{{ t('policies.nativeAction') }}</h2>
       <UiButton :disabled="picker.busy.value || pinned" @click="loadDevices()">{{
         t('console.chooseLoaded')
@@ -191,65 +235,93 @@ watch(
         ></template
       >
       <p v-if="picker.failure.value" role="alert">{{ t(`devices.${picker.failure.value}`) }}</p>
-      <DeviceControlPanel
-        v-if="selected"
-        :key="selected.id"
-        :endpoint="selected"
-        :device-name="name"
-      />
-    </section>
+    </UiDialog>
+    <DeviceControlPanel
+      v-if="selected"
+      :key="selected.id"
+      :endpoint="selected"
+      :device-name="name"
+    />
     <section v-if="records" class="console-panel">
-      <p>{{ t('policies.authorizedTotal') }} {{ records.statistics.total }} · {{ records.asOf }}</p>
-      <p v-if="!records.items.length">{{ t('policies.empty') }}</p>
-      <ul>
-        <li v-for="item in records.items" :key="`${item.kind}/${item.id}`">
-          <RouterLink
+      <p class="ui-help">{{ t('policies.ux.observedAt') }} · {{ utc(records.asOf) }}</p>
+      <UiTable
+        :label="t('policies.executions')"
+        :rows="records.items"
+        :row-key="(item) => `${item.kind}/${item.id}`"
+        :busy="busy"
+        :busy-label="t('devices.loading')"
+        :empty-label="t('policies.empty')"
+        :columns="[
+          { key: 'operation', label: t('policies.operation') },
+          { key: 'device', label: t('policies.device') },
+          { key: 'status', label: t('policies.execution') },
+          { key: 'evidence', label: t('devices.evidence') },
+        ]"
+      >
+        <template #cell-operation="{ row: item }"
+          ><RouterLink
             :to="{
               name: 'policy-execution',
               params: { tenant: runtime.tenant, execution: item.id },
               query: item.kind === 'command' ? { device: item.device } : { policy: item.policy },
             }"
-            >{{ item.device }} · {{ item.id }} · {{ item.status }}</RouterLink
-          >
-          <p>{{ item.registrationId }} / {{ item.generation }}</p>
-          <dl>
-            <dt>{{ t('policies.admission') }}</dt>
-            <dd>{{ t('policies.fact.accepted') }}</dd>
-            <dt>{{ t('policies.execution') }}</dt>
-            <dd>{{ item.status }}</dd>
-          </dl>
-          <dl v-if="item.evidence.kind === 'command'">
-            <dt>{{ t('policies.dispatch') }}</dt>
-            <dd>{{ item.evidence.commandStatus }}</dd>
-            <dt>{{ t('policies.receipt') }}</dt>
-            <dd>{{ item.evidence.observation.progress }}</dd>
-            <dt>{{ t('policies.effect') }}</dt>
-            <dd>{{ item.evidence.observation.effect }}</dd>
-          </dl>
-          <dl v-else>
-            <dt>{{ t('policies.dispatch') }}</dt>
-            <dd>{{ item.evidence.state.delivery.kind }}</dd>
-            <dt>{{ t('policies.execution') }}</dt>
-            <dd>{{ item.evidence.state.execution }}</dd>
-            <dt>{{ t('policies.effect') }}</dt>
-            <dd>{{ item.evidence.effect }}</dd>
-          </dl>
-          <p v-if="item.evidence.kind === 'command' && item.evidence.dispatchFailure" role="status">
-            {{ t('policies.dispatchFailure') }}
-          </p>
-          <template v-if="item.kind === 'command'">
-            <UiButton :disabled="busy" @click="inspect(item.device, item.id)">{{
-              t('policies.inspectAction')
-            }}</UiButton>
-            <NativeTaskFacts
-              v-if="commandDetails[item.id]"
-              :operation="commandDetails[item.id]!"
-              :device="item.device"
+            >{{ t(item.kind === 'command' ? 'policies.nativeAction' : 'policies.policies') }} ·
+            {{ item.id.slice(0, 8) }}</RouterLink
+          ><small class="task-object-description"
+            >{{ item.registrationId }} / {{ item.generation }}</small
+          ></template
+        >
+        <template #cell-device="{ row }"
+          ><RouterLink
+            :to="{ name: 'device-detail', params: { tenant: runtime.tenant, device: row.device } }"
+            >{{ row.device }}</RouterLink
+          ></template
+        >
+        <template #cell-status="{ row }"
+          ><UiBadge :tone="row.status === 'unknown' ? 'warning' : 'neutral'">{{
+            row.status
+          }}</UiBadge></template
+        >
+        <template #cell-evidence="{ row: item }">
+          <details class="operation-evidence">
+            <summary>{{ t('devices.evidence') }}</summary>
+            <OperationStages
+              :kind="item.kind"
+              :dispatch="
+                item.evidence.kind === 'command'
+                  ? item.evidence.commandStatus
+                  : item.evidence.state.delivery.kind
+              "
+              :receipt="
+                item.evidence.kind === 'command'
+                  ? item.evidence.observation.progress
+                  : item.evidence.state.execution
+              "
+              :effect="
+                item.evidence.kind === 'command'
+                  ? item.evidence.observation.effect
+                  : item.evidence.effect
+              "
             />
-          </template>
-          <p>{{ t('policies.readFormalEvidence') }}</p>
-        </li>
-      </ul>
+            <p
+              v-if="item.evidence.kind === 'command' && item.evidence.dispatchFailure"
+              role="status"
+            >
+              {{ t('policies.dispatchFailure') }}
+            </p>
+            <template v-if="item.kind === 'command'"
+              ><UiButton :disabled="busy" @click="inspect(item.device, item.id)">{{
+                t('policies.inspectAction')
+              }}</UiButton
+              ><NativeTaskFacts
+                v-if="commandDetails[item.id]"
+                :operation="commandDetails[item.id]!"
+                :device="item.device"
+            /></template>
+            <p class="ui-help">{{ t('policies.ux.stagesHint') }}</p>
+          </details>
+        </template>
+      </UiTable>
       <UiButton v-if="records.nextCursor" :disabled="busy" @click="load(records.nextCursor)">{{
         t('policies.next')
       }}</UiButton>

@@ -148,7 +148,7 @@ try {
     await route.abort('failed')
   })
   await dialog
-    .getByRole('button', { name: '我已核对目标、世代和风险，确认操作', exact: true })
+    .getByRole('button', { name: '我已核对目标、当前注册和风险，确认操作', exact: true })
     .click()
   await panel.getByRole('alert').filter({ hasText: '提交结果未知' }).waitFor()
   assert.equal(new URL(page.url()).searchParams.get('operation'), original.operationId)

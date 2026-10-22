@@ -578,7 +578,7 @@ it('replays the original search after a lost committed response, even after an i
   expect(wrapper.text()).toContain('读取任务状态')
 })
 
-it('keeps the current group target when opening another group fails', async () => {
+it('keeps the current group target when directory refresh fails', async () => {
   const { wrapper, click, scenario, devices } = await setup('device-groups')
   const other = crypto.randomUUID()
   await devices.groups.change(other, {
@@ -598,11 +598,8 @@ it('keeps the current group target when opening another group fails', async () =
     .trigger('click')
   await flushPromises()
   scenario.set('offline')
-  await wrapper
-    .findAll('button')
-    .find((b) => b.text().includes('Other group'))!
-    .trigger('click')
-  await flushPromises()
+  await click('重新读取')
+  expect(wrapper.get('[data-testid=server-definition]').text()).toContain('Pilot devices')
   scenario.set('normal')
   await click('删除')
   expect((await devices.groups.read(other)).group.deleted).toBe(false)

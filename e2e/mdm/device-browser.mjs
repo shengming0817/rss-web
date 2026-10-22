@@ -435,7 +435,7 @@ try {
   await settled(`/api/v1/scopes/${scope.id}/tasks/${scope.task}`)
   await page.getByRole('button', { name: '读取任务状态', exact: true }).click()
   await loaded()
-  await page.locator('#scope-projection').selectOption('decisions')
+  await page.getByRole('tab', { name: '判定说明', exact: true }).click()
   const channelSelect = page
     .locator('select')
     .filter({ has: page.locator('option[value="agent"]') })
@@ -476,6 +476,7 @@ try {
   await writeRule(fixture.rule.grants)
   await page.getByRole('button', { name: '新建', exact: true }).click()
   const planningScopeDialog = page.getByRole('dialog')
+  await planningScopeDialog.locator('details:has(#scope-id) > summary').click()
   await planningScopeDialog.locator('#scope-id').fill(selectedScope)
   await planningScopeDialog.getByRole('button', { name: '打开', exact: true }).click()
   await loaded()
@@ -766,14 +767,24 @@ try {
   await loaded()
   assert.ok((await page.locator('main').textContent()).includes(fixture.alone))
   advanceGeneration('add-agent-to-alone')
-  const recoveryDeadline = Date.now() + 30000
+  // Registration changes invalidate the shared asset snapshot. Allow bounded asynchronous
+  // group/Scope catch-up after the preceding publication journey; this is not a latency SLO.
+  const recoveryDeadline = Date.now() + 90000
   let restored
   while (Date.now() < recoveryDeadline) {
     restored = (await assignments()).items.find((a) => a.object.id === fixture.alone)
     if (restored?.availability === 'ready') break
-    await new Promise((r) => setTimeout(r, 250))
+    await new Promise((r) => setTimeout(r, 500))
   }
-  assert.equal(restored?.availability, 'ready')
+  assert.equal(
+    restored?.availability,
+    'ready',
+    JSON.stringify({
+      reason: restored?.reason ?? null,
+      targetPresent: !!restored?.target,
+      scopeResult: restored?.scopeResult ?? null,
+    }),
+  )
   assert.deepEqual(restored.object, { kind: 'endpoint', id: fixture.alone })
   assert.equal(restored.target.channel, 'agent')
   assert.equal(restored.target.generation, 1)
@@ -836,7 +847,8 @@ try {
   }
   async function configurePackage(blueprintId) {
     await page.goto(path('policies/resources'))
-    await page.getByRole('button', { name: '选择标准包', exact: true }).click()
+    await page.getByRole('button', { name: '新建', exact: true }).click()
+    await page.getByRole('dialog').getByRole('button', { name: '选择标准包', exact: true }).click()
     const catalog = await api('/api/v1/collection-blueprints')
     assert.ok(
       catalog.items.some((item) => item.id === blueprintId),
@@ -971,7 +983,15 @@ try {
   assert.equal(await personnel.locator('input').count(), 0)
   await personnel.locator('[data-action=edit-owner]').click()
   await page.getByRole('dialog').getByRole('button', { name: '未指定', exact: true }).click()
-  await page.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).click()
+  const ownerWritten = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PUT' &&
+      new URL(response.url()).pathname === `/api/v1/devices/${collectorDevice}/registration-user`,
+  )
+  const ownerDialog = page.getByRole('dialog')
+  await ownerDialog.getByRole('button', { name: '保存', exact: true }).click()
+  assert.equal((await ownerWritten).status(), 200)
+  await ownerDialog.waitFor({ state: 'hidden' })
   await loaded()
   assert.equal((await api(`/api/v1/devices/${collectorDevice}/registration-user`)).user, null)
   assert.ok(

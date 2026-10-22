@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiButton, UiDialog, UiTable, UiTabs, UiBadge } from '@rss/core/components'
+import { UiButton, UiDialog, UiTable, UiTabs, UiBadge, UiSearchInput } from '@rss/core/components'
 import { ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -7,6 +7,7 @@ import { operation, useOperation } from '../../../services/useOperation'
 import type { FieldDefinition } from '../clients/assets'
 import {
   type GroupChange,
+  type GroupQuery,
   type GroupProjection,
   type GroupRead,
   groupCondition,
@@ -27,6 +28,17 @@ const { t } = useI18n(),
   { run, runWrite, busy, failure, uncertain } = useOperation([], () => deviceBinding(runtime))
 const list = ref<Awaited<ReturnType<typeof runtime.devices.groups.list>>>(),
   fields = ref<FieldDefinition[]>([])
+const query = ref(''),
+  filter = ref<'' | GroupQuery['kind']>('')
+let applied: GroupQuery = {}
+function closeDetail() {
+  if (busy.value || uncertain.value) return
+  current.value = undefined
+  task.value = undefined
+  status.value = undefined
+  result.value = undefined
+  loadList()
+}
 const current = ref<GroupRead>(),
   id = ref(''),
   name = ref(''),
@@ -95,9 +107,16 @@ function write<T>(request: () => Promise<T>, apply: (value: T) => void) {
   void pending()
 }
 function loadList(next?: string) {
+  if (busy.value) return
+  const selection = next
+    ? applied
+    : { name: query.value || undefined, kind: filter.value || undefined }
   void run(
-    () => runtime.devices.groups.list({ after: next }),
-    (v) => (list.value = v),
+    () => runtime.devices.groups.list({ ...selection, after: next }),
+    (v) => {
+      list.value = v
+      applied = selection
+    },
   )
 }
 function open(group = id.value) {
@@ -276,6 +295,9 @@ watch(
   () => {
     current.value = undefined
     list.value = undefined
+    query.value = ''
+    filter.value = ''
+    applied = {}
     result.value = undefined
     fields.value = []
     task.value = undefined
@@ -311,7 +333,7 @@ function openGroup(group: string) {
 <template>
   <PageFrame
     :title="t('devices.groups')"
-    :description="t('devices.groupDescription')"
+    :description="t('policies.ux.groupsHint')"
     :busy="busy"
     :failure="failure"
   >
@@ -321,39 +343,68 @@ function openGroup(group: string) {
         t('devices.create')
       }}</UiButton></template
     >
-    <UiTable
-      :label="t('devices.groups')"
-      :rows="list?.items ?? []"
-      :columns="[
-        { key: 'name', label: t('devices.name') },
-        { key: 'kind', label: t('devices.kind') },
-        { key: 'assetContext', label: t('devices.assetContext') },
-        { key: 'memberCount', label: t('devices.memberCount') },
-      ]"
-      :row-key="(g) => g.id"
-      :busy="busy"
-      :busy-label="t('devices.loading')"
-      :empty-label="t('policies.empty')"
+    <template v-if="!current">
+      <div class="task-directory-summary">
+        <strong>{{ t('policies.ux.loaded', { count: list?.items.length ?? 0 }) }}</strong
+        ><span>{{ t('policies.ux.memberBoundary') }}</span>
+      </div>
+      <form class="console-toolbar task-filterbar" @submit.prevent="loadList()">
+        <UiSearchInput
+          v-model="query"
+          :clear-label="t('console.clear')"
+          :label="t('policies.ux.searchGroups')"
+          :placeholder="t('policies.ux.searchGroups')"
+          :disabled="busy"
+          @search="loadList()"
+        />
+        <select v-model="filter" class="ui-input" :aria-label="t('devices.kind')">
+          <option value="">{{ t('policies.ux.allTypes') }}</option>
+          <option v-for="value in ['dynamic', 'static', 'system']" :key="value" :value="value">
+            {{ t(`devices.${value}`) }}
+          </option>
+        </select>
+        <UiButton type="submit" :disabled="busy">{{ t('devices.searchGroups') }}</UiButton>
+      </form>
+      <UiTable
+        :label="t('devices.groups')"
+        :rows="list?.items ?? []"
+        :columns="[
+          { key: 'name', label: t('devices.name') },
+          { key: 'kind', label: t('devices.kind') },
+          { key: 'assetContext', label: t('devices.assetContext') },
+          { key: 'memberCount', label: t('devices.memberCount') },
+        ]"
+        :row-key="(g) => g.id"
+        :busy="busy"
+        :busy-label="t('devices.loading')"
+        :empty-label="t('policies.empty')"
+      >
+        <template #cell-name="{ row }"
+          ><UiButton variant="ghost" :disabled="busy || uncertain" @click="openGroup(row.id)">{{
+            row.presentation.name
+          }}</UiButton
+          ><small class="task-object-description">{{
+            row.presentation.description
+          }}</small></template
+        >
+        <template #cell-kind="{ row }"
+          ><UiBadge>{{ t(`devices.${row.kind}`) }}</UiBadge></template
+        >
+        <template #cell-assetContext="{ row }">{{
+          t(
+            row.assetContext === 'endpoint'
+              ? 'devices.objectKind_endpoint'
+              : 'devices.associatedDevice',
+          )
+        }}</template>
+      </UiTable>
+      <UiButton v-if="list?.nextCursor" :disabled="busy" @click="loadList(list.nextCursor)">{{
+        t('devices.next')
+      }}</UiButton>
+    </template>
+    <UiButton v-if="current" variant="ghost" :disabled="busy || uncertain" @click="closeDetail"
+      >← {{ t('policies.ux.backGroups') }}</UiButton
     >
-      <template #cell-name="{ row }"
-        ><UiButton variant="ghost" :disabled="busy || uncertain" @click="openGroup(row.id)">{{
-          row.presentation.name
-        }}</UiButton></template
-      >
-      <template #cell-kind="{ row }"
-        ><UiBadge>{{ t(`devices.${row.kind}`) }}</UiBadge></template
-      >
-      <template #cell-assetContext="{ row }">{{
-        t(
-          row.assetContext === 'endpoint'
-            ? 'devices.objectKind_endpoint'
-            : 'devices.associatedDevice',
-        )
-      }}</template>
-    </UiTable>
-    <UiButton v-if="list?.nextCursor" :disabled="busy" @click="loadList(list.nextCursor)">{{
-      t('devices.next')
-    }}</UiButton>
     <section v-if="current" class="group-detail console-panel" data-testid="server-definition">
       <header class="console-page-header">
         <div>
