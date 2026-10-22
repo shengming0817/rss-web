@@ -22,6 +22,7 @@ import SessionsView from './SessionsView.vue'
 import AccountsView from './AccountsView.vue'
 import ProvidersView from './ProvidersView.vue'
 import ErrorView from './ErrorView.vue'
+import LocalProfileEditor from './LocalProfileEditor.vue'
 async function view(
   component: Component,
   f: ReturnType<typeof fixture>,
@@ -763,6 +764,100 @@ it('does not revoke sessions until logout-all is confirmed', async () => {
   await flushPromises()
   expect(f.request.mock.calls.filter(([r]) => r.path.endsWith('/logout-all'))).toHaveLength(0)
   expect(f.session.state.value.status).toBe('authenticated')
+  wrapper.unmount()
+  f.session.clear()
+})
+
+it('recovers a lost local-profile write by receipt and clears values after permission withdrawal', async () => {
+  const f = fixture()
+  await f.login()
+  const local = {
+    displayName: 'Person',
+    username: null,
+    email: null,
+    extensions: { remote: false },
+    maxAgeSeconds: 14400,
+  }
+  f.replies.push({ revision: 1, value: local })
+  const component = {
+    components: { LocalProfileEditor },
+    template: `<LocalProfileEditor principal-id="${ID}" />`,
+  }
+  const { wrapper } = await view(component, f, 'accounts')
+  await wrapper.get('#local-display').setValue('Changed')
+  f.replies.push(new Error('response lost'))
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect((wrapper.get('#local-display').element as HTMLInputElement).value).toBe('')
+  expect(wrapper.get('#local-display').attributes('disabled')).toBeDefined()
+  const write = f.request.mock.calls.findLast(([o]) => o.method === 'PUT')![0]
+  const operation = (write.body as { operationId: string }).operationId
+  f.replies.push(
+    { operationId: operation, revision: 2 },
+    { revision: 2, value: { ...local, displayName: 'Changed' } },
+  )
+  await wrapper
+    .findAll('button')
+    .find((v) => v.text() === '查询原操作')!
+    .trigger('click')
+  await flushPromises()
+  expect((wrapper.get('#local-display').element as HTMLInputElement).value).toBe('Changed')
+  expect(f.request.mock.calls.filter(([o]) => o.method === 'PUT')).toHaveLength(1)
+  f.replies.push(decodeIdentityError(403, { code: 'insufficient_privilege' }))
+  await wrapper
+    .findAll('button')
+    .find((v) => v.text() === '重新读取')!
+    .trigger('click')
+  await flushPromises()
+  expect(wrapper.find('#local-display').exists()).toBe(false)
+  wrapper.unmount()
+  f.session.clear()
+})
+
+it('preserves empty local fields and explicitly recovers an uncommitted unknown operation', async () => {
+  const f = fixture()
+  await f.login()
+  const local = { displayName: '', username: null, email: '', extensions: {}, maxAgeSeconds: 14400 }
+  f.replies.push({ revision: 1, value: local })
+  const component = {
+    components: { LocalProfileEditor },
+    template: `<LocalProfileEditor principal-id="${ID}" />`,
+  }
+  const { wrapper } = await view(component, f, 'accounts')
+  await wrapper.get('#local-extensions').setValue('{"remote":false}')
+  f.replies.push(new Error('request lost'))
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
+  const writes = () => f.request.mock.calls.filter(([r]) => r.method === 'PUT')
+  expect((writes()[0]![0].body as { value: unknown }).value).toEqual({
+    ...local,
+    extensions: { remote: false },
+  })
+  f.replies.push(null)
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text() === '查询原操作')!
+    .trigger('click')
+  await flushPromises()
+  expect(wrapper.get('#local-display').attributes('disabled')).toBeDefined()
+  f.replies.push({ revision: 1, value: local })
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text() === '重新读取')!
+    .trigger('click')
+  await flushPromises()
+  expect(wrapper.get('#local-display').attributes('disabled')).toBeDefined()
+  expect(writes()).toHaveLength(1)
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text() === '已比较，重新编辑')!
+    .trigger('click')
+  await flushPromises()
+  expect(wrapper.get('#local-display').attributes('disabled')).toBeUndefined()
+  expect((wrapper.get('#local-display').element as HTMLInputElement).value).toBe('')
+  expect((wrapper.get('#local-display-missing').element as HTMLInputElement).checked).toBe(false)
+  expect((wrapper.get('#local-username-missing').element as HTMLInputElement).checked).toBe(true)
+  expect(writes()).toHaveLength(1)
   wrapper.unmount()
   f.session.clear()
 })

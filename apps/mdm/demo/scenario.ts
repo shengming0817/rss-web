@@ -111,7 +111,7 @@ export function createScenario(
     return {
       session: {
         id: sessionId,
-        authTime: 1,
+        issuedAt: 1,
         idleExpiresAt: 4102444800,
         absoluteExpiresAt: 4102444900,
       },

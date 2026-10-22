@@ -1,3 +1,4 @@
+import { createProfilesDemo } from './profiles'
 import { createPackageDemo } from './packages'
 import { createHash } from 'node:crypto'
 /** MOCK_SOURCE: explicit scenario-only settings; no provider or host success is invented. */
@@ -25,6 +26,7 @@ const platformIds = [
 ]
 export function createSettingsDemo() {
   const packages = createPackageDemo()
+  const profiles = createProfilesDemo()
   const operations = new Map<string, { input: string; receipt: unknown }>()
   const tenants = [
     {
@@ -39,6 +41,8 @@ export function createSettingsDemo() {
     },
   ]
   const handle: DomainHandler = (r, scenario) => {
+    const profileReply = profiles.handle(r, scenario)
+    if (profileReply) return profileReply
     const packageReply = packages.handle(r, scenario)
     if (packageReply) return packageReply
     const platform = r.actor.tenantId === MANAGEMENT_TENANT
@@ -173,6 +177,7 @@ export function createSettingsDemo() {
     handle,
     reset() {
       packages.reset()
+      profiles.reset()
       operations.clear()
     },
   }

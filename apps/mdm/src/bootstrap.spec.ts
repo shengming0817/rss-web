@@ -45,7 +45,7 @@ it('provides the same session owner to auth, MDM and protected routes', async ()
             navigation: { manageAccounts: false, manageProviders: false },
           }
         : {
-            session: { id, authTime: 1, idleExpiresAt: 4102444800, absoluteExpiresAt: 4102444900 },
+            session: { id, issuedAt: 1, idleExpiresAt: 4102444800, absoluteExpiresAt: 4102444900 },
             identity: { principalId: id, hasLocalPassword: true },
             csrfToken: 'a'.repeat(64),
           }
@@ -92,7 +92,7 @@ it('composes platform routes with one independent local session and no business 
           : {
               session: {
                 id,
-                authTime: 1,
+                issuedAt: 1,
                 idleExpiresAt: 4102444800,
                 absoluteExpiresAt: 4102444900,
               },

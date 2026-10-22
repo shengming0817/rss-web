@@ -1,5 +1,11 @@
 /** Presentation mapping of all accepted configuration requirements; server catalogs own visibility and state. */
 export const entries = {
+  'user-attributes': {
+    section: 'access',
+    target: 'user-attributes',
+    zh: '用户字段与资料',
+    en: 'User attributes and profiles',
+  },
   entry: {
     section: 'deployment',
     target: 'deployment',

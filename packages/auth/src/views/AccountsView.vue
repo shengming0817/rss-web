@@ -4,6 +4,7 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useIdentity } from '../context'
 import { useOperation } from '../services/operation'
+import LocalProfileEditor from './LocalProfileEditor.vue'
 import type { Account } from '../services/decode'
 const { t } = useI18n()
 const { api, session } = useIdentity()
@@ -23,6 +24,7 @@ onBeforeUnmount(() => {
   password.value = ''
   resetPassword.value = ''
 })
+const profileTarget = ref<Account | null>(null)
 const resetTarget = ref<Account | null>(null)
 const pending = ref<{
   account: Account
@@ -113,6 +115,9 @@ async function reset() {
                   {{ t(a.memberActive ? 'identity.memberActive' : 'identity.memberInactive') }}
                 </td>
                 <td class="auth-actions">
+                  <UiButton :disabled="!!busy" @click="profileTarget = a">{{
+                    t('identity.localProfile')
+                  }}</UiButton>
                   <UiButton
                     :disabled="!!busy"
                     type="submit"
@@ -181,6 +186,19 @@ async function reset() {
         </form>
       </UiDialog>
     </template>
+    <UiDialog
+      :open="profileTarget !== null"
+      :title="t('identity.localProfile')"
+      :close-label="t('identity.cancel')"
+      placement="right"
+      @update:open="!$event && (profileTarget = null)"
+    >
+      <LocalProfileEditor
+        v-if="profileTarget"
+        :key="profileTarget.principalId"
+        :principal-id="profileTarget.principalId"
+      />
+    </UiDialog>
     <UiDialog
       :open="pending !== null"
       :title="t('identity.confirmChange')"

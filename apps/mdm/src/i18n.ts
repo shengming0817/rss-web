@@ -1,3 +1,4 @@
+import { profilesZh, profilesEn } from './features/settings/profileMessages'
 import { settingsZh, settingsEn } from './features/settings/i18n'
 import { consoleZh, consoleEn } from './components/messages'
 import { onboardingZh, onboardingEn } from './features/enrollment/i18n'
@@ -80,6 +81,8 @@ const en: typeof zh = {
 }
 export function mdmI18n() {
   const i18n = identityI18n()
+  i18n.global.mergeLocaleMessage('zh-CN', { profiles: profilesZh })
+  i18n.global.mergeLocaleMessage('en-US', { profiles: profilesEn })
   i18n.global.mergeLocaleMessage('zh-CN', { console: consoleZh })
   i18n.global.mergeLocaleMessage('en-US', { console: consoleEn })
   i18n.global.mergeLocaleMessage('zh-CN', { onboarding: onboardingZh })

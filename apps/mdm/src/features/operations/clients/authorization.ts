@@ -36,6 +36,9 @@ export const devicePermissions = [
   'operation_cancel',
 ] as const
 export const tenantPermissions = [
+  'user_attribute_definitions_read',
+  'user_attribute_definitions_write',
+  'user_profiles_read',
   'webhook_read',
   'webhook_write',
   'webhook_replay',

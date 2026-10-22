@@ -143,8 +143,8 @@ function transport(value: unknown) {
     } as HttpTransport,
   }
 }
-it('keeps all 43 requirements, realm visibility and hostile locators closed', () => {
-  expect(entryIds).toHaveLength(43)
+it('keeps all 44 requirements, realm visibility and hostile locators closed', () => {
+  expect(entryIds).toHaveLength(44)
   const item = {
     id: 'wns',
     scope: 'tenant',

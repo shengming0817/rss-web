@@ -1,3 +1,4 @@
+import { createProfilesClient } from './clients/profiles'
 import type { HttpTransport } from '@rss/api/mdm'
 import type { IdentitySession } from '@rss/auth'
 import { createSettingsCatalog, type Realm } from './clients/catalog'
@@ -20,6 +21,7 @@ export function createSettingsClients(
   realm: Realm,
 ) {
   return {
+    profiles: createProfilesClient(transport),
     firstUse: createFirstUseClient(transport, tenant),
     runtime: createRuntimeDiagnostics(transport),
     packages: createManagedPackages(transport, tenant),

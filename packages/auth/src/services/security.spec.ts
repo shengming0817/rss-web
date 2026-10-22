@@ -79,15 +79,17 @@ describe('current session security', () => {
   })
   it('never invents MFA or accepts unordered, duplicate or unknown facts', () => {
     expect(
-      sessionSecurity({ ...securityValue(), authentication: { authTime: 1, acr: 'mfa', amr: [] } })
-        .authentication.amr,
+      sessionSecurity({
+        ...securityValue(),
+        authentication: { source: 'local_password', authTime: 1, acr: 'mfa', amr: [] },
+      }).authentication.amr,
     ).toEqual([])
     for (const authentication of [
-      { authTime: 0, acr: 'mfa', amr: [] },
-      { authTime: 1, acr: 'strong', amr: [] },
-      { authTime: 1, acr: 'mfa', amr: ['pwd', 'otp'] },
-      { authTime: 1, acr: 'mfa', amr: ['pwd', 'pwd'] },
-      { authTime: 1, acr: 'mfa', amr: ['browser-claimed'] },
+      { source: 'local_password', authTime: 0, acr: 'mfa', amr: [] },
+      { source: 'local_password', authTime: 1, acr: 'strong', amr: [] },
+      { source: 'local_password', authTime: 1, acr: 'mfa', amr: ['pwd', 'otp'] },
+      { source: 'local_password', authTime: 1, acr: 'mfa', amr: ['pwd', 'pwd'] },
+      { source: 'local_password', authTime: 1, acr: 'mfa', amr: ['browser-claimed'] },
     ])
       expect(() => sessionSecurity({ ...securityValue(), authentication })).toThrow()
   })
