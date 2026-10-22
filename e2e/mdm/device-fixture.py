@@ -27,7 +27,7 @@ from candidate_fixture import INSTANCE, TENANTS, ADMIN
 from build_run import lease_fds
 from pki_fixtures import running as pki
 from candidate_installation_driver import Browser
-from runtime_fixture import storage, readiness as readiness_status
+from runtime_fixture import storage, readiness as readiness_status, native_proxy
 
 backend_revision = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD'], cwd=BACKEND, text=True).strip()
 print(json.dumps(dict(phase='backend-baseline', revision=backend_revision)), flush=True)
@@ -154,7 +154,8 @@ try:
         private(native/name, (environment.root/name).read_text())
     private(native/'case.json', dict(tenant=TENANTS[0]))
     ports = Environment(BACKEND, group='device-agent').host_ports()
-    agent_origin = f"https://localhost:{ports['backend']}"
+    agent_origin = f"https://localhost:{ports['https']}"
+    native_proxy(Path(initialized['gateway']), ports['https'], ports['backend'])
     providers.enter_context(pki(native, dict(os.environ), case=str(WEB)+':device-browser', agent=True, agent_origin=agent_origin))
     agent = json.loads((native/'agent-pki.json').read_text())
     agent['endpoint']['listen'] = f"127.0.0.1:{ports['backend']}"

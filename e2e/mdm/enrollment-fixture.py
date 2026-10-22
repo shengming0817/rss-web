@@ -170,16 +170,6 @@ try:
         config.update(native_protocols=dict(windows=json.loads((root/'windows.json').read_text())),
                       agent_pki=agent, device_pki=json.loads((root/'device-pki.json').read_text()))
         private(config_path, config)
-        gateway = Path(initialized['gateway'])
-        text = gateway.read_text()
-        # Reuse the exact production public-download location and its header whitelist.
-        example = (WEB/'deploy/mdm/gateway.conf.example').read_text()
-        location = example[example.index('    location ~ "^/api/v1/agent/enroll/packages'):]
-        location = location[:location.index('\n    }')+6]
-        location = location.replace('agent.example.test:8447', f"localhost:{agent_ports['backend']}").replace('https://agent:8447', f"https://127.0.0.1:{agent_ports['backend']}").replace('/run/config/agent-ca.pem', str(environment.root/'ca.crt')).replace('proxy_ssl_name agent.example.test;', 'proxy_ssl_name localhost;')
-        text = text.replace('location ^~ /api/v1/agent/', 'location /api/v1/agent/')
-        text = text.replace('        location /api/v1/agent/', location+'\n        location /api/v1/agent/')
-        private(gateway, text)
         phase = 'browser'
         start(binary, initialized, log)
         fixture = private(environment.root/'browser.json',dict(

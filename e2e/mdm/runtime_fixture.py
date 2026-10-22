@@ -67,3 +67,11 @@ def signer(environment, origin, tenant, login, password):
     if status != 200 or trust['revision'] != 1:
         raise RuntimeError('baseline-task-signing')
     return trust['revision']
+
+
+def native_proxy(gateway, public_port, backend_port):
+    """A loopback test carrier uses the production PROXY-before-TLS transport."""
+    text = gateway.read_text()
+    block = f"server {{ listen 127.0.0.1:{public_port}; proxy_protocol on; proxy_pass 127.0.0.1:{backend_port}; proxy_connect_timeout 5s; proxy_timeout 60s; }}"
+    if text.count('stream {') != 1: raise RuntimeError('one stream owner required')
+    private(gateway, text.replace('stream {', 'stream {\n    '+block, 1))
