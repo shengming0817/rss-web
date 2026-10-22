@@ -256,7 +256,7 @@ try {
       package: 'Browser.App',
       version,
       provenance: { kind: 'private' },
-      material: { bundle_id: null, format: 'msi', installer: 'package' },
+      material: { bundle_id: null, format: 'winget', installer: 'package' },
       artifacts: {
         package: { reference: 'installer', origin: null, length: bytes.length, sha256: digest },
       },
