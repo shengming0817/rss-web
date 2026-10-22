@@ -11,7 +11,6 @@ export async function exercisePki({
   context,
   fixture,
   coverage,
-  gaps,
   temp,
   go,
   collectorLifecycle,
@@ -56,7 +55,6 @@ export async function exercisePki({
   coverage.push('pki-real-ca-public-material-prepare-and-missing-ack-409')
   const ack = await runPkiCollector(process.env.MDM_ENROLLMENT_BROWSER_FIXTURE, collectorLifecycle)
   assert.equal(ack.status, 0)
-  assert.equal(ack.timedOut, false)
   await rotation.getByRole('button', { name: '读取最新状态以比较', exact: true }).click()
   await rotation.getByRole('button', { name: '已比较，重新编辑', exact: true }).click()
   transitionReply = reply('/api/v1/pki/agent/rotations')
@@ -137,18 +135,11 @@ export async function exercisePki({
   let recoveredReply = reply(`/api/v1/agent-issuances/${original.issuanceId}/recover`)
   await page.getByRole('button', { name: '核验并继续原恢复', exact: true }).click()
   const recoveredResponse = await recoveredReply
-  if (recoveredResponse.status() === 200) {
-    const recovered = await recoveredResponse.json()
-    assert.equal(recovered.operationId, original.operationId)
-    assert.equal(recovered.issuanceId, original.issuanceId)
-    coverage.push('agent-real-original-issued-candidate-recovery')
-  } else {
-    assert.equal(recoveredResponse.status(), 503)
-    assert.equal((await recoveredResponse.json()).code, 'service_unavailable')
-    gaps.push('agent-issued-recovery-audit-receipt-backend-2897')
-    await page.getByRole('alert').filter({ hasText: '暂不可用' }).waitFor()
-    coverage.push('agent-real-issued-recovery-unavailable-without-success-claim')
-  }
+  assert.equal(recoveredResponse.status(), 200)
+  const recovered = await recoveredResponse.json()
+  assert.equal(recovered.operationId, original.operationId)
+  assert.equal(recovered.issuanceId, original.issuanceId)
+  coverage.push('agent-real-original-issued-candidate-recovery')
   await restore(randomUUID(), [fixture.pki.candidateTrust.issuers[0].certificate])
   recoveredReply = reply(`/api/v1/agent-issuances/${original.issuanceId}/recover`)
   await page.getByRole('button', { name: '核验并继续原恢复', exact: true }).click()
@@ -223,5 +214,74 @@ export async function runPkiCollector(fixtureFile, lifecycle = {}) {
     },
   )
   if (lifecycle.interrupted?.()) throw new Error('PKI collector cancelled')
+  if (result.timedOut || result.signal || result.status !== 0) throw new PkiCollectorError(result)
   return result
+}
+
+// Only closed classifications cross the browser report boundary; raw process output stays private.
+export class PkiCollectorError extends Error {
+  constructor(result) {
+    super('PKI collector failed')
+    this.name = 'PkiCollectorError'
+    this.collector = pkiCollectorFailure(result)
+  }
+}
+export function pkiCollectorFailure(result) {
+  const diagnostic = {
+    phase: 'pki-ack',
+    classification: result.timedOut ? 'timeout' : result.signal ? 'signal' : 'exit',
+    exitCode: Number.isInteger(result.status) ? result.status : null,
+    signal: ['SIGTERM', 'SIGKILL', 'SIGINT'].includes(result.signal) ? result.signal : null,
+  }
+  if (result.timedOut || result.signal) return diagnostic
+  try {
+    const line = result.stdout.trim().split('\n').at(-1)
+    if (!line || line.length > 1024) return diagnostic
+    const value = JSON.parse(line)
+    if (value.result !== 'failed') return diagnostic
+    if (
+      [
+        'collector-private-fixture',
+        'collector-origin',
+        'collector-pki-binding',
+        'collector-pki-readback',
+        'collector-pki-observation',
+        'TimeoutError',
+        'SSLError',
+        'OSError',
+        'JSONDecodeError',
+        'FileNotFoundError',
+      ].includes(value.classification)
+    )
+      diagnostic.classification = value.classification
+    const http = /^collector-http-(trust|acknowledgements|observations)-([1-5][0-9]{2})-(.*)$/.exec(
+      value.classification,
+    )
+    if (http) {
+      diagnostic.classification = 'http'
+      diagnostic.httpStage = http[1]
+      diagnostic.httpStatus = Number(http[2])
+      if (
+        [
+          'invalid_identity',
+          'credential_revoked',
+          'credential_retired',
+          'certificate_expired',
+          'malformed_request',
+          'service_unavailable',
+          'operation_conflict',
+          'registration_limit',
+          'issuance_unknown',
+          'activation_unknown',
+          'grant_revoked',
+          'grant_expired',
+          'permission_denied',
+        ].includes(http[3])
+      )
+        diagnostic.httpCode = http[3]
+    }
+  } catch {
+    /* Unrecognized output is never returned to the report. */
+  }
+  return diagnostic
 }

@@ -1,4 +1,4 @@
-import { exercisePki } from './pki-browser.mjs'
+import { exercisePki, PkiCollectorError } from './pki-browser.mjs'
 // Current production UI against a disposable real HTTPS host. No response/credential/trace output.
 import { chromium } from 'playwright'
 import { readFileSync, mkdtempSync, rmSync, statSync } from 'node:fs'
@@ -452,7 +452,6 @@ try {
       context,
       fixture,
       coverage,
-      gaps,
       temp,
       go,
       collectorLifecycle: {
@@ -474,6 +473,7 @@ try {
   failure = {
     ...failure,
     kind: error.name,
+    ...(error instanceof PkiCollectorError ? { collector: error.collector } : {}),
     location: error.stack?.match(/enrollment-browser\.mjs:([0-9]+):([0-9]+)/)?.slice(1),
     operator: error.code === 'ERR_ASSERTION' ? error.operator : undefined,
     actual:

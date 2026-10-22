@@ -192,3 +192,73 @@ http.get('http://127.0.0.1:${server.address().port}',()=>{})
     }
   },
 )
+
+test('PKI diagnostics preserve timeout, signal and closed HTTP classifications without raw output', async () => {
+  const { pkiCollectorFailure } = await import('./pki-browser.mjs')
+  assert.equal(
+    pkiCollectorFailure({ timedOut: true, status: null, signal: 'SIGTERM', stdout: 'private' })
+      .classification,
+    'timeout',
+  )
+  assert.equal(
+    pkiCollectorFailure({ status: null, signal: 'SIGKILL', stdout: 'private' }).classification,
+    'signal',
+  )
+  const http = pkiCollectorFailure({
+    status: 7,
+    stdout: JSON.stringify({
+      result: 'failed',
+      classification: 'collector-http-acknowledgements-403-permission_denied',
+      secret: 'private',
+    }),
+  })
+  assert.deepEqual(http, {
+    phase: 'pki-ack',
+    classification: 'http',
+    exitCode: 7,
+    signal: null,
+    httpStage: 'acknowledgements',
+    httpStatus: 403,
+    httpCode: 'permission_denied',
+  })
+  assert.equal(
+    JSON.stringify(
+      pkiCollectorFailure({
+        status: 1,
+        stdout: JSON.stringify({ result: 'failed', classification: 'private' }),
+      }),
+    ).includes('private'),
+    false,
+  )
+})
+test('PKI process failure reaches the report as a safe collector error after child release', async () => {
+  const { runPkiCollector, PkiCollectorError } = await import('./pki-browser.mjs')
+  const dir = mkdtempSync(resolve(tmpdir(), 'mdm-pki-failure-')),
+    originalPath = process.env.PATH
+  let released = false
+  writeFileSync(
+    resolve(dir, 'python3'),
+    `#!/usr/bin/env node
+console.log(JSON.stringify({result:'failed',classification:'collector-pki-readback',secret:'private'}));process.exit(7)`,
+    { mode: 0o700 },
+  )
+  try {
+    process.env.PATH = dir + ':' + originalPath
+    await assert.rejects(
+      runPkiCollector(resolve(dir, 'fixture.json'), {
+        onRelease: () => {
+          released = true
+        },
+      }),
+      (error) =>
+        error instanceof PkiCollectorError &&
+        error.collector.classification === 'collector-pki-readback' &&
+        error.collector.exitCode === 7 &&
+        !JSON.stringify(error).includes('private'),
+    )
+    assert.equal(released, true)
+  } finally {
+    process.env.PATH = originalPath
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
