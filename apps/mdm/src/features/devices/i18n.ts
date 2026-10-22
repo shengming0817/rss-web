@@ -1,4 +1,5 @@
 export const devicesZh = {
+  manageMembers: '管理成员',
   linkedPerson: '已关联组织人员',
   loadedPeopleOnly: '筛选已加载账户；需要时继续加载更多人员。',
   system: '系统组',
@@ -480,6 +481,7 @@ export const devicesZh = {
   },
 }
 export const devicesEn: typeof devicesZh = {
+  manageMembers: 'Manage members',
   linkedPerson: 'Linked organization member',
   loadedPeopleOnly: 'Filter loaded accounts. Load more people when needed.',
   system: 'System group',

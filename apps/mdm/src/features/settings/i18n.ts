@@ -129,14 +129,8 @@ export const settingsZh = {
     '在同址空数据库恢复原身份、材料、CA 数据与角色权限，使用原平台和各业务账户实际认证，再核对宿主观察。中断沿原操作恢复，不重置账户或重新初始化 CA。',
   backupLimit:
     '运维先停止对应写服务，维护命令校验原数据与材料。共享 CA 恢复须独立演练；异址自动灾备、设备恢复效果与 RPO/RTO 均未由此证明。',
-  packageHint:
-    '包签名与公证由实际构建方完成；从正式资源中选择已审核的安装器与清单，发布后仍需设备安装验收。',
-  publishPackage: '发布 Agent 安装包',
   withdrawPackage: '撤回发布包',
-  packageVersion: '资源版本',
-  variant: '确切变体',
-  packagePlatform: '操作系统',
-  architecture: '处理器架构',
+  packageVersion: '安装包版本',
   addAdministrator: '添加独立管理员',
   recentAuthentication: '需要最近完成的平台认证；认证过期后请重新登录，再显式提交原操作。',
   deleteTenant: '删除未使用租户',
@@ -454,14 +448,8 @@ export const settingsEn = {
     'Restore original identities, materials, CA data and role permissions into an empty database at the original location. Authenticate original platform and business accounts, then verify host observations. Resume the original operation without resetting accounts or initializing CAs.',
   backupLimit:
     'Operations stops the relevant writers; maintenance validates original data and materials. Shared-CA recovery requires its own drill. This does not establish relocation recovery, device recovery effects or RPO/RTO.',
-  packageHint:
-    'The actual builder signs and notarizes installers. Select reviewed installer and manifest resources; publication still requires device installation acceptance.',
-  publishPackage: 'Publish Agent package',
   withdrawPackage: 'Withdraw package',
-  packageVersion: 'Resource version',
-  variant: 'Exact variant',
-  packagePlatform: 'Operating system',
-  architecture: 'Architecture',
+  packageVersion: 'Installer version',
   addAdministrator: 'Add independent administrator',
   recentAuthentication:
     'Recent platform authentication is required. Sign in again if expired, then explicitly submit the original operation.',

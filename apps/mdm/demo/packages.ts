@@ -1,4 +1,5 @@
 /** Explicit synthetic installer HTTP scenario. It makes no operating-system installation claim. */
+import { INSTANCE } from './operations/authorization'
 import { createHash, randomUUID } from 'node:crypto'
 import { TENANT, type DomainHandler } from './scenario'
 import { createReceipts, error, ok } from './http'
@@ -59,7 +60,7 @@ export function createPackageDemo() {
         sha256,
         bytes: new Uint8Array(),
         complete: false,
-        actor: `${r.actor.instanceId}:${r.actor.principalId}`,
+        actor: `${INSTANCE}:${r.actor.principalId}`,
       }
       uploads.set(key, value)
       return ok({
@@ -75,7 +76,7 @@ export function createPackageDemo() {
     if (resource) {
       const key = resource[2]!,
         value = uploads.get(key)!
-      if (resource[1] !== key || value.actor !== `${r.actor.instanceId}:${r.actor.principalId}`)
+      if (resource[1] !== key || value.actor !== `${INSTANCE}:${r.actor.principalId}`)
         return error('permission_denied', 403)
       const status = () => ({
         id: key,

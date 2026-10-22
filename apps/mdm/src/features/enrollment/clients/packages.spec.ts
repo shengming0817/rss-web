@@ -39,5 +39,15 @@ it('distinguishes MSI and MSIX and rejects the retired metadata shape', () => {
   expect(() => installer(old, tenant)).toThrow()
 })
 it('rejects the previous package contract instead of decoding both formats', () => {
-  expect(() => installer({ ...item, candidateSha256: Array(32).fill(0), origin: 'https://old.example', signingKeys: {} }, tenant)).toThrow()
+  expect(() =>
+    installer(
+      {
+        ...item,
+        candidateSha256: Array(32).fill(0),
+        origin: 'https://old.example',
+        signingKeys: {},
+      },
+      tenant,
+    ),
+  ).toThrow()
 })

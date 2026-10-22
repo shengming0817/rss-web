@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { UiButton } from '@rss/core/components'
+import { computed, ref, watch } from 'vue'
+import { UiButton, UiPopover } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
@@ -9,7 +9,7 @@ import type { GroupRead } from '../clients/groups'
 const props = defineProps<{
   modelValue: string
   assetContext: 'endpoint' | 'associated_device'
-  referenceableFor?: string
+  referenceableFor?: string | undefined
   disabled?: boolean
 }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
@@ -20,9 +20,19 @@ const runtime = useMdm(),
     props.assetContext,
     props.referenceableFor,
   ])
+const open = ref(false)
 const rows = ref<GroupRead['group'][]>([]),
   search = ref(''),
   next = ref<string | null>(null)
+const label = computed(
+  () =>
+    rows.value.find((g) => g.id === props.modelValue)?.presentation.name ??
+    t(props.modelValue ? 'devices.referencedGroup' : 'devices.select'),
+)
+function select(value: string) {
+  emit('update:modelValue', value)
+  open.value = false
+}
 async function load(more = false) {
   await run(
     () =>
@@ -51,34 +61,34 @@ watch(
 </script>
 <template>
   <div class="group-picker">
-    <label
-      >{{ t('devices.findGroup')
-      }}<input
-        v-model="search"
-        class="ui-input"
-        type="search"
-        :disabled="disabled || busy"
-        @keydown.enter.prevent="load()" /></label
-    ><UiButton :disabled="disabled || busy" @click="load()">{{
-      t('devices.searchGroups')
-    }}</UiButton
-    ><select
-      class="ui-input"
-      :aria-label="t('devices.groups')"
-      :value="modelValue"
-      :disabled="disabled || busy"
-      @change="emit('update:modelValue', ($event.target as HTMLSelectElement).value)"
-    >
-      <option value="">{{ t('devices.select') }}</option>
-      <option v-if="modelValue && !rows.some((g) => g.id === modelValue)" :value="modelValue">
-        {{ t('devices.referencedGroup') }}
-      </option>
-      <option v-for="group in rows" :key="group.id" :value="group.id">
-        {{ group.presentation.name }}
-      </option></select
-    ><UiButton v-if="next" :disabled="disabled || busy" @click="load(true)">{{
-      t('devices.next')
-    }}</UiButton>
-    <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
+    <UiPopover v-model:open="open" :label="label" :close-label="t('console.close')">
+      <div class="group-picker-content">
+        <label
+          >{{ t('devices.findGroup')
+          }}<input
+            v-model="search"
+            class="ui-input"
+            type="search"
+            :disabled="disabled || busy"
+            @keydown.enter.prevent="load()" /></label
+        ><UiButton :disabled="disabled || busy" @click="load()">{{
+          t('devices.searchGroups')
+        }}</UiButton>
+        <UiButton
+          v-for="group in rows"
+          :key="group.id"
+          :disabled="disabled || busy"
+          :aria-pressed="modelValue === group.id"
+          variant="ghost"
+          @click="select(group.id)"
+          >{{ group.presentation.name }}</UiButton
+        >
+        <p v-if="!rows.length && !busy">{{ t('devices.empty') }}</p>
+        <UiButton v-if="next" :disabled="disabled || busy" @click="load(true)">{{
+          t('devices.next')
+        }}</UiButton>
+        <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
+      </div>
+    </UiPopover>
   </div>
 </template>

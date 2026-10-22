@@ -45,6 +45,7 @@ watch(
     <div class="console-toolbar">
       <select
         v-model="kind"
+        :disabled="busy"
         class="ui-input"
         :aria-label="t('devices.dependencyKind')"
         @change="load()"
@@ -59,6 +60,7 @@ watch(
         </option></select
       ><select
         v-model="relation"
+        :disabled="busy"
         class="ui-input"
         :aria-label="t('devices.dependencies')"
         @change="load()"

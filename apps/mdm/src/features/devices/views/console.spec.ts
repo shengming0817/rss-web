@@ -1,3 +1,4 @@
+import TenantUserSelect from '../components/TenantUserSelect.vue'
 import { shallowRef } from 'vue'
 import { runtimeKey, type IdentitySession } from '@rss/auth'
 import { createRegistrationChannelsClient } from '../../../services/registrationChannels'
@@ -311,10 +312,16 @@ it('creates a group, edits its definition, previews and recomputes server member
   await form.get('[data-testid=group-name]').setValue('New group')
   await form.trigger('submit')
   await flushPromises()
+  await click('概览')
   expect(wrapper.text()).toContain('成员版本')
   expect(wrapper.findAll('[role=tab]').some((tab) => tab.text() === '规则')).toBe(false)
-  await wrapper.get('.endpoint-picker .field-choice input').setValue(true)
-  await wrapper.get('.group-member-editor').trigger('submit')
+  await click('管理成员')
+  await new DOMWrapper(document.body)
+    .get('[role=dialog][data-state=open] .endpoint-picker .field-choice input')
+    .setValue(true)
+  await new DOMWrapper(document.body)
+    .get('[role=dialog][data-state=open] .group-member-editor')
+    .trigger('submit')
   await flushPromises()
   await click('成员')
   await click('读取任务状态')
@@ -419,11 +426,13 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
   let form = new DOMWrapper(document.body).get('[role=dialog] form')
   await form.get('[data-testid=group-name]').setValue('Dynamic')
   await form.get('[data-testid=group-kind]').setValue('dynamic')
+  await form.get('.group-criteria > .console-toolbar select').setValue('predicate')
   const editor = form.find('.condition-editor')
   await editor.find('select').setValue('predicate')
   await editor.findAll('select')[1]!.setValue('custom.is_loaner')
   await form.trigger('submit')
   await flushPromises()
+  expect(wrapper.findAll('[role=alert]').map((v) => v.text())).toEqual([])
   await click('规则')
   await wrapper
     .findAll('button')
@@ -629,7 +638,7 @@ it('refreshes channels after revoking each credential and never shows ready with
   expect(wrapper.text()).not.toContain('mdm + agent')
 })
 it('selects static members from the authorized directory without identifier textareas', async () => {
-  const { wrapper } = await setup('device-groups')
+  const { wrapper, click } = await setup('device-groups')
   await new DOMWrapper(document.body)
     .get('[role=dialog]')
     .findAll('button')
@@ -641,8 +650,11 @@ it('selects static members from the authorized directory without identifier text
     .find((b) => b.text().includes('Pilot devices'))!
     .trigger('click')
   await flushPromises()
-  expect(wrapper.find('.group-member-editor textarea').exists()).toBe(false)
-  expect(wrapper.findAll('.endpoint-picker .field-choice').length).toBeGreaterThan(0)
+  expect(wrapper.find('.group-member-editor').exists()).toBe(false)
+  await click('管理成员')
+  const picker = new DOMWrapper(document.body).get('[role=dialog][data-state=open]')
+  expect(picker.find('textarea').exists()).toBe(false)
+  expect(picker.findAll('.endpoint-picker .field-choice').length).toBeGreaterThan(0)
 })
 
 it('retains an in-flight manual write when tabs change before its unknown result', async () => {
@@ -778,7 +790,9 @@ it('administrator quota editing preserves exact commands after a lost response',
   expect(wrapper.text()).toContain('已保存')
   await wrapper.find('select').setValue('override')
   await flushPromises()
-  await wrapper.findAll('select')[1]!.setValue('33333333-3333-4333-8333-333333333333')
+  wrapper
+    .findComponent(TenantUserSelect)
+    .vm.$emit('update:modelValue', '33333333-3333-4333-8333-333333333333')
   await flushPromises()
   expect(wrapper.find('input[type=number]').exists()).toBe(true)
   await wrapper.find('input[type=number]').setValue('0')
@@ -791,11 +805,15 @@ it('edits the canonical device owner in detail and locks an unknown write until 
   const panel = () => f.wrapper.get('[data-personnel-device="device-01"]')
   await panel().get('[data-action=edit-owner]').trigger('click')
   await flushPromises()
-  await panel().get('select').setValue('33333333-3333-4333-8333-333333333333')
+  f.wrapper
+    .findComponent(TenantUserSelect)
+    .vm.$emit('update:modelValue', '33333333-3333-4333-8333-333333333333')
   f.loseReply.path = '/api/v1/devices/{device}/registration-user'
-  await panel().get('form').trigger('submit')
+  await new DOMWrapper(document.body).get('[role=dialog] form').trigger('submit')
   await flushPromises()
-  expect(panel().get('fieldset').attributes('disabled')).toBeDefined()
+  expect(
+    new DOMWrapper(document.body).get('[role=dialog] fieldset').attributes('disabled'),
+  ).toBeDefined()
   const writes = () =>
     f.requests.filter((r) => r.method === 'PUT' && r.path.endsWith('registration-user'))
   expect(writes()).toHaveLength(1)
@@ -813,8 +831,8 @@ it('edits the canonical device owner in detail and locks an unknown write until 
   )
   await panel().get('[data-action=edit-owner]').trigger('click')
   await flushPromises()
-  await panel().get('select').setValue('')
-  await panel().get('form').trigger('submit')
+  f.wrapper.findComponent(TenantUserSelect).vm.$emit('update:modelValue', '')
+  await new DOMWrapper(document.body).get('[role=dialog] form').trigger('submit')
   await flushPromises()
   expect((await f.devices.registration.responsibility('device-01')).user).toBeNull()
 })
@@ -1227,7 +1245,9 @@ it('allows a quota reader to select user queries while keeping edits and submiss
   const mode = wrapper.find('select')
   expect((mode.element as HTMLSelectElement).disabled).toBe(false)
   await mode.setValue('override')
-  await wrapper.findAll('select')[1]!.setValue('33333333-3333-4333-8333-333333333333')
+  wrapper
+    .findComponent(TenantUserSelect)
+    .vm.$emit('update:modelValue', '33333333-3333-4333-8333-333333333333')
   await flushPromises()
   expect(wrapper.find('tbody').exists()).toBe(true)
   const edit = wrapper.get('form input[type=number]').element as HTMLInputElement
@@ -1343,6 +1363,11 @@ it('keeps Group save errors and exact unknown-write recovery inside its dialog',
   const original = requests.filter((r) => r.method === 'POST').at(-1)!.body
   expect(dialog.get('fieldset').attributes('disabled')).toBeDefined()
   loseReply.path = ''
+  await dialog
+    .findAll('button')
+    .find((b) => b.text() === '重读服务器值并比较')!
+    .trigger('click')
+  await flushPromises()
   await dialog
     .findAll('button')
     .find((b) => b.text() === '明确重放原操作')!
@@ -1665,4 +1690,67 @@ it('compares a deleted group inside its unknown-result modal before replaying th
   await replay.trigger('click')
   await flushPromises()
   expect(new DOMWrapper(document.body).find('[role=alertdialog]').exists()).toBe(false)
+})
+it('edits shared groups in one drawer and recovers an unknown saved layout through comparison and exact replay', async () => {
+  const f = await setup('device-detail', { device: 'device-01' })
+  await f.click('管理扩展分组')
+  const dialog = () => new DOMWrapper(document.body).get('[role=dialog][data-state=open]')
+  await f.click('新增分组')
+  await dialog().get('input[maxlength="40"]').setValue('Shared operations')
+  const fields = dialog().findAll('.field-choice')
+  await fields
+    .find((row) => row.text().includes('资产编号'))!
+    .get('input')
+    .setValue(true)
+  await fields
+    .find((row) => row.text().includes('借用设备'))!
+    .get('input')
+    .setValue(true)
+  await dialog().findAll('ol').at(-1)!.findAll('button').at(-2)!.trigger('click')
+  f.loseReply.path = '/api/v1/asset-field-layout'
+  await f.click('保存分组')
+  expect(dialog().get('[role=alert]').text()).toContain('提交结果未知')
+  const original = f.requests.find(
+    (r) => r.method === 'PUT' && r.path === '/api/v1/asset-field-layout',
+  )!.body
+  f.loseReply.path = ''
+  await f.click('重读服务器值并比较')
+  await f.click('明确重放原操作')
+  const writes = f.requests.filter(
+    (r) => r.method === 'PUT' && r.path === '/api/v1/asset-field-layout',
+  )
+  expect(writes).toHaveLength(2)
+  expect(writes[1]!.body).toEqual(original)
+  expect((await f.devices.assets.fieldLayout()).groups[0]?.fields[0]).toBe('custom.is_loaner')
+  expect(new DOMWrapper(document.body).find('[role=dialog][data-state=open]').exists()).toBe(false)
+})
+it('chooses an authorized referenced group in a popover without displaying identifier fields', async () => {
+  const f = await setup('device-groups')
+  const dialog = new DOMWrapper(document.body).get('[role=dialog][data-state=open]')
+  await dialog.get('[data-testid=group-name]').setValue('Nested managed devices')
+  await dialog.get('[data-testid=group-kind]').setValue('dynamic')
+  await dialog.get('.group-criteria > .console-toolbar select').setValue('group')
+  await flushPromises()
+  await dialog.get('.group-picker > button').trigger('click')
+  await flushPromises()
+  await new DOMWrapper(document.body)
+    .get('.group-picker-content')
+    .findAll('button')
+    .find((b) => b.text() === 'Pilot devices')!
+    .trigger('click')
+  await flushPromises()
+  expect(dialog.get('.group-picker').text()).toContain('Pilot devices')
+  await dialog.get('form').trigger('submit')
+  await flushPromises()
+  expect(f.requests.filter((r) => r.method === 'POST').at(-1)?.body).toMatchObject({
+    input: {
+      criteria: {
+        criteria: {
+          kind: 'group',
+          groupId: '33333333-3333-4333-8333-333333333333',
+          op: 'member_of',
+        },
+      },
+    },
+  })
 })

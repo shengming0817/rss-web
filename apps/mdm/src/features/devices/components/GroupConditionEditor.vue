@@ -6,7 +6,7 @@ import GroupCriteriaEditor from './GroupCriteriaEditor.vue'
 defineProps<{
   fields: FieldDefinition[]
   assetContext: 'endpoint' | 'associated_device'
-  group?: string
+  group?: string | undefined
 }>()
 const model = defineModel<GroupCondition | null>({ required: true })
 function context(value: ConditionContext | null) {

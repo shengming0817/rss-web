@@ -64,7 +64,7 @@ export function installer(value: unknown, tenant: string) {
     !result.length ||
     !result.filename ||
     result.filename.length > 255 ||
-    /[\/\\\p{Cc}]/u.test(result.filename) ||
+    /[/\\\p{Cc}]/u.test(result.filename) ||
     (result.target.platform === 'macos') !== (result.format === 'macos_pkg') ||
     !result.filename
       .toLowerCase()

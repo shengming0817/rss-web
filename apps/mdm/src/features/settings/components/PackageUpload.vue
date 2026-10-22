@@ -6,9 +6,9 @@ import { useMdm } from '../../../context'
 import { useSettingsAction, useSettingsFacts } from '../useSettingsAction'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../../devices/useDeviceBinding'
-import { target } from '../../enrollment/clients/packages'
+import { target as decodeTarget } from '../../enrollment/clients/packages'
 const props = defineProps<{
-  target: ReturnType<typeof target>
+  target: ReturnType<typeof decodeTarget>
   canUpload: boolean
   canPublish: boolean
   canQuery: boolean
@@ -44,7 +44,7 @@ if (restored) {
 }
 const selection = computed(() =>
   restored
-    ? target({ platform: restored['platform'], architecture: restored['architecture'] })
+    ? decodeTarget({ platform: restored['platform'], architecture: restored['architecture'] })
     : {
         platform: props.target.platform,
         architecture: props.target.architecture,
@@ -70,10 +70,21 @@ onBeforeUnmount(() => {
   if (pending.value?.state === 'received')
     runtime.settings.operations.records.delete('package-upload')
 })
-async function choose(event: Event) {
-  const input = event.target as HTMLInputElement
-  const selected = input.files?.[0]
+function choose(event: Event) {
+  const input = event.target as HTMLInputElement,
+    selected = input.files?.[0]
   input.value = ''
+  void chooseFile(selected)
+}
+function drop(event: DragEvent) {
+  const files = event.dataTransfer?.files
+  if (files?.length !== 1) {
+    upload.failure.value = 'invalidRequest'
+    return
+  }
+  void chooseFile(files[0])
+}
+async function chooseFile(selected?: File) {
   if (!selected || !props.canUpload || file || pending.value?.state === 'unknown') return
   const extension = selected.name.split('.').at(-1)?.toLowerCase()
   if (
@@ -232,7 +243,11 @@ async function check() {
 <template>
   <section class="package-upload-task" :aria-busy="uploading || busy">
     <p>{{ t('settings.packageTaskNote') }}</p>
-    <label v-if="stage === 'choose' && !pending" class="package-dropzone"
+    <label
+      v-if="stage === 'choose' && !pending"
+      class="package-dropzone"
+      @dragover.prevent
+      @drop.prevent="drop"
       >{{ t('settings.chooseInstaller')
       }}<input
         type="file"
@@ -255,8 +270,8 @@ async function check() {
     >
     <template v-if="inspected || saved"
       ><p>
-        {{ inspected?.facts.format.toUpperCase() ?? '' }} · {{ target.platform }} ·
-        {{ target.architecture }}
+        {{ inspected?.facts.format.toUpperCase() ?? '' }} · {{ selection.platform }} ·
+        {{ selection.architecture }}
       </p>
       <label
         >{{ t('settings.packageVersion')

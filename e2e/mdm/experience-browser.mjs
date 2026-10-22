@@ -88,7 +88,8 @@ export async function acceptExperience({
   await dialog.getByTestId('group-name').fill('Browser nested group')
   await dialog.getByTestId('group-kind').selectOption('dynamic')
   await dialog.locator('.group-criteria > .console-toolbar select').first().selectOption('group')
-  await dialog.locator('.group-picker select').selectOption(group)
+  await dialog.locator('.group-picker > button').click()
+  await page.getByRole('button', { name: 'Browser endpoint group', exact: true }).click()
   const created = page.waitForResponse(
     (r) =>
       r.request().method() === 'POST' &&

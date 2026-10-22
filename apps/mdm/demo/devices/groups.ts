@@ -1,6 +1,7 @@
 import {
   groupPresentation,
   groupCondition,
+  type GroupRead,
   type GroupCriteria,
   type GroupCondition,
 } from '../../src/features/devices/clients/groups'
@@ -9,7 +10,6 @@ import { randomUUID } from 'node:crypto'
 import type { DomainHandler } from '../scenario'
 import { array, closed, enumeration, record, uuid } from '../../src/services/decode'
 import type { Inventory } from '../../src/features/devices/clients/asset-model'
-import type { GroupRead } from '../../src/features/devices/clients/groups'
 import type { DemoDevice } from './fixtures'
 import { createPages, createReceipts, error, ok, operation } from '../http'
 import { mergedFieldState } from './views'

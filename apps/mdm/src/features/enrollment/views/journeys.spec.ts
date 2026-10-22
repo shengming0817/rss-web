@@ -63,7 +63,7 @@ async function setup(view: unknown, allow = true) {
         throw networkErrorForTest()
       }
       if (reply.status !== o.successStatus) throw decodeMdmError(reply.status, reply.body)
-      if (o.successStatus === 204) return undefined
+      if (typeof o.decode !== 'function') return undefined
       const binary =
         o.responseType === 'arraybuffer'
           ? new ArrayBuffer((reply.body as ArrayBuffer).byteLength)

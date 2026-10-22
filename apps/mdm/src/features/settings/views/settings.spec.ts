@@ -38,6 +38,7 @@ afterEach(() => {
   dispose.splice(0).forEach((f) => f())
   document.body.innerHTML = ''
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 const row = {
   tenantId: tenant,
@@ -133,7 +134,7 @@ async function fixture(
         value = { configurationSha256: digest, keys: { heads: [], materials: [] } }
       else if (o.path === '/api/v1/agent-packages') value = []
       else throw decodeMdmError(503, { code: 'service_unavailable' })
-      return 'decode' in o ? o.decode(value) : undefined
+      return typeof o.decode === 'function' ? o.decode(value) : undefined
     },
   } as HttpTransport
   const settings = createSettingsClients(transport, transport, session, tenant, realm)
@@ -1067,3 +1068,128 @@ it.each(['save', 'publish'] as const)(
     }
   },
 )
+it('resumes the durable upload frontier and retries publication without saving a second software version', async () => {
+  const f = await fixture(PackageUpload, {
+    target: { platform: 'windows', architecture: 'x86_64' },
+    canUpload: true,
+    canPublish: true,
+    canQuery: true,
+  })
+  let uploadId = '',
+    offset = 0,
+    failAppend = true,
+    failPublish = true
+  const bytes = new Uint8Array(8).fill(7),
+    checksum = Array(32).fill(1)
+  vi.stubGlobal('crypto', {
+    randomUUID: () => id,
+    subtle: { digest: async () => new Uint8Array(checksum).buffer },
+  })
+  const status = () => ({
+    id: uploadId,
+    binding: {
+      purpose: { kind: 'software', binding: { resource: uploadId, filename: 'agent.exe' } },
+      reference: 'installer',
+      length: bytes.length,
+      sha256: checksum,
+      actor: 'fixture',
+    },
+    offset,
+    expires: 4102444800,
+    complete: false,
+  })
+  f.setHandler((o) => {
+    if (o.path === '/api/v1/agent-packages/uploads') {
+      uploadId = (o.body as { operationId: string }).operationId
+      return {
+        packageId: uploadId,
+        resource: uploadId,
+        upload: uploadId,
+        offset,
+        length: bytes.length,
+        complete: false,
+        href: `/api/v1/resources/${uploadId}/uploads/${uploadId}`,
+      }
+    }
+    if (o.path.endsWith('/complete')) return undefined
+    if (o.path.includes('/resources/') && o.method === 'GET') return status()
+    if (o.method === 'PATCH') {
+      if (failAppend) {
+        failAppend = false
+        offset = 4
+        throw new Error('lost upload response')
+      }
+      expect(o.query?.['offset']).toBe(4)
+      offset = bytes.length
+      return status()
+    }
+    if (o.path === '/api/v1/agent-packages/uploads/{id}')
+      return {
+        packageId: uploadId,
+        filename: 'agent.exe',
+        length: bytes.length,
+        sha256: checksum,
+        facts: { format: 'exe', version: null, architectures: ['x86_64'], bundleId: null },
+      }
+    if (o.path.endsWith('/save'))
+      return {
+        packageId: uploadId,
+        resource: uploadId,
+        version: 'v1',
+        variant: 'default',
+        productVersion: '1.2',
+        material: { format: 'exe', version: null, architectures: ['x86_64'], bundleId: null },
+        sha256: checksum,
+        length: bytes.length,
+        filename: 'agent.exe',
+        href: `/api/v1/software/resources/${uploadId}/versions/v1`,
+        storageRevision: 4,
+      }
+    if (failPublish) {
+      failPublish = false
+      throw decodeMdmError(403, { code: 'permission_denied' })
+    }
+    return {
+      releaseId: principal,
+      tenantId: tenant,
+      target: { platform: 'windows', architecture: 'x86_64' },
+      version: '1.2',
+      format: 'nsis_exe',
+      filename: 'agent.exe',
+      length: bytes.length,
+      installerSha256: checksum,
+    }
+  })
+  const file = new File([bytes], 'agent.exe')
+  Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes.buffer })
+  Object.defineProperty(file, 'slice', {
+    value: (start: number, end: number) => ({
+      arrayBuffer: async () => bytes.slice(start, end).buffer,
+    }),
+  })
+  Object.defineProperty(f.wrapper.get('input[type=file]').element, 'files', { value: [file] })
+  await f.wrapper.get('input[type=file]').trigger('change')
+  await flushPromises()
+  await f.wrapper
+    .findAll('button')
+    .find((b) => b.text() === '核对并继续上传')!
+    .trigger('click')
+  await flushPromises()
+  await f.wrapper.get('input.ui-input').setValue('1.2')
+  await f.wrapper
+    .findAll('button')
+    .find((b) => b.text() === '发布安装包')!
+    .trigger('click')
+  await flushPromises()
+  expect(f.wrapper.text()).toContain('已保存待发布')
+  await f.wrapper
+    .findAll('button')
+    .find((b) => b.text() === '发布已保存安装包')!
+    .trigger('click')
+  await flushPromises()
+  expect(f.wrapper.emitted('published')).toHaveLength(1)
+  expect(f.calls.filter((o) => o.path.endsWith('/save'))).toHaveLength(1)
+  expect(f.calls.filter((o) => o.path === '/api/v1/agent-packages')).toHaveLength(2)
+  expect(JSON.stringify([...f.settings.operations.records.values()])).not.toContain('agent.exe')
+  vi.unstubAllGlobals()
+})

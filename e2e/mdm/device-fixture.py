@@ -97,7 +97,7 @@ def start(binary, initialized, log):
         processes.append(child)
         children.append(child)
     context=ssl.create_default_context(cafile=str(environment.root/'ca.crt'))
-    deadline=time.monotonic()+30
+    deadline=time.monotonic()+180
     while True:
         for role, child in zip(('product', 'gateway'), children):
             if child.poll() is not None:

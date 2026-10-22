@@ -9,7 +9,7 @@ const props = defineProps<{
   modelValue: GroupCriteria
   fields: FieldDefinition[]
   assetContext: 'endpoint' | 'associated_device'
-  group?: string
+  group?: string | undefined
   depth?: number
 }>()
 const emit = defineEmits<{ 'update:modelValue': [value: GroupCriteria] }>()

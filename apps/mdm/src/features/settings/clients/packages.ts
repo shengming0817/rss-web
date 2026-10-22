@@ -13,7 +13,7 @@ import {
   enumeration,
   identifier,
 } from '../../../services/decode'
-import { installer, target } from '../../enrollment/clients/packages'
+import { installer, type target } from '../../enrollment/clients/packages'
 export function installerFacts(value: unknown) {
   const v = closed(value, ['format', 'version', 'architectures', 'bundleId'])
   return {
@@ -91,7 +91,7 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
         method: 'POST',
         path: '/api/v1/agent-packages/uploads',
         body: { operationId, filename, length, sha256 },
-        signal,
+        ...(signal ? { signal } : {}),
         successStatus: 200,
         decode: (value) => {
           const v = closed(value, [
@@ -121,7 +121,7 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
         method: 'GET',
         path: uploadPath,
         pathParams: { resource: uuid(id), upload: uuid(id) },
-        signal,
+        ...(signal ? { signal } : {}),
         successStatus: 200,
         decode: (v) => uploadStatus(v, id),
       }),
@@ -132,7 +132,7 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
         pathParams: { resource: uuid(id), upload: uuid(id) },
         query: { offset },
         body,
-        signal,
+        ...(signal ? { signal } : {}),
         successStatus: 200,
         decode: (v) => uploadStatus(v, id),
       }),
@@ -141,7 +141,7 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
         method: 'POST',
         path: uploadPath + '/complete',
         pathParams: { resource: uuid(id), upload: uuid(id) },
-        signal,
+        ...(signal ? { signal } : {}),
         successStatus: 201,
         responseType: 'empty',
       }),
@@ -150,7 +150,7 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
         method: 'GET',
         path: '/api/v1/agent-packages/uploads/{id}',
         pathParams: { id: uuid(id) },
-        signal,
+        ...(signal ? { signal } : {}),
         successStatus: 200,
         decode: (value) => {
           const v = closed(value, ['packageId', 'filename', 'length', 'sha256', 'facts'])

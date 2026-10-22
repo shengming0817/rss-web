@@ -5,7 +5,13 @@ import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
 import type { FieldDefinition } from '../clients/assets'
-import type { GroupChange, GroupProjection, GroupRead } from '../clients/groups'
+import {
+  type GroupChange,
+  type GroupProjection,
+  type GroupRead,
+  groupCondition,
+  type GroupCondition,
+} from '../clients/groups'
 import { objectKey } from '../clients/objects'
 import ObjectLink from '../components/ObjectLink.vue'
 import AssignmentFacts from '../../policies/components/AssignmentFacts.vue'
@@ -14,7 +20,6 @@ import GroupConditionEditor from '../components/GroupConditionEditor.vue'
 import GroupDependencies from '../components/GroupDependencies.vue'
 import EndpointPicker from '../components/EndpointPicker.vue'
 import { deviceBinding } from '../useDeviceBinding'
-import { groupCondition, type GroupCondition } from '../clients/groups'
 import { deviceCondition } from '../clients/asset-model'
 const { t } = useI18n(),
   runtime = useMdm(),
@@ -35,6 +40,7 @@ const task = ref<string>(),
   status = ref<Awaited<ReturnType<typeof client.status>>>(),
   projection = ref<GroupProjection>('members'),
   result = ref<Awaited<ReturnType<typeof client.page>>>()
+const membersEditing = ref(false)
 const deletionBlocked = ref<boolean>(),
   compared = ref(false)
 const detailTab = ref('overview'),
@@ -138,13 +144,13 @@ function change(input: GroupChange) {
       async () => client.change(group, body),
       (receipt) => {
         editing.value = false
+        membersEditing.value = false
         deleting.value = false
         task.value = receipt.task ?? undefined
         status.value = undefined
         result.value = undefined
         list.value = undefined
         if (input.action === 'delete') current.value = undefined
-        else if (input.action === 'rule' || input.action === 'create') detailTab.value = 'members'
       },
     )
     if (acknowledged && input.action !== 'delete')
@@ -153,6 +159,8 @@ function change(input: GroupChange) {
         (v) => {
           id.value = v.group.id
           current.value = v
+          if (input.action === 'rule' || (input.action === 'create' && input.criteria))
+            detailTab.value = 'members'
         },
       )
     return acknowledged
@@ -253,7 +261,11 @@ watch(detailTab, (value) => {
   if (['members', 'changes', 'decisions'].includes(value)) {
     projection.value = value as GroupProjection
     result.value = undefined
-    if (task.value) page()
+    if (
+      task.value &&
+      (status.value?.status === 'completed' || current.value?.memberSet === task.value)
+    )
+      page()
   }
 })
 watch(projection, () => {
@@ -271,6 +283,7 @@ watch(
     pending = undefined
     compared.value = false
     editing.value = false
+    membersEditing.value = false
     deleting.value = false
     members.value = []
     create()
@@ -287,6 +300,10 @@ watch(
   },
   { immediate: true, flush: 'sync' },
 )
+function beginDelete() {
+  deletionBlocked.value = undefined
+  deleting.value = true
+}
 function openGroup(group: string) {
   open(group)
 }
@@ -406,10 +423,7 @@ function openGroup(group: string) {
           <UiButton :disabled="busy" @click="compare">{{ t('devices.compare') }}</UiButton
           ><UiButton
             :disabled="busy || uncertain || current.group.kind === 'system'"
-            @click="
-              deletionBlocked = undefined
-              deleting = true
-            "
+            @click="beginDelete"
             >{{ t('devices.delete') }}</UiButton
           ></template
         >
@@ -528,15 +542,30 @@ function openGroup(group: string) {
           >
         </template>
       </UiTabs>
-      <form
+      <UiButton
         v-if="current.group.kind === 'static'"
-        class="group-member-editor"
-        @submit.prevent="changeMembers"
+        :disabled="busy || uncertain"
+        @click="membersEditing = true"
+        >{{ t('devices.manageMembers') }}</UiButton
       >
-        <EndpointPicker v-model="members" />
-        <label><input v-model="remove" type="checkbox" />{{ t('devices.remove') }}</label
-        ><UiButton :disabled="busy || uncertain" type="submit">{{ t('devices.save') }}</UiButton>
-      </form>
+      <UiDialog
+        v-model:open="membersEditing"
+        placement="right"
+        :title="t('devices.manageMembers')"
+        :close-label="t('console.cancel')"
+      >
+        <form class="group-member-editor" @submit.prevent="changeMembers">
+          <EndpointPicker v-model="members" />
+          <label><input v-model="remove" type="checkbox" />{{ t('devices.remove') }}</label
+          ><UiButton :disabled="busy || uncertain" type="submit">{{ t('devices.save') }}</UiButton>
+        </form>
+        <template v-if="uncertain && pending"
+          ><UiButton :disabled="busy" @click="compare">{{ t('devices.compare') }}</UiButton
+          ><UiButton :disabled="busy || !compared" @click="pending!()">{{
+            t('devices.replay')
+          }}</UiButton></template
+        >
+      </UiDialog>
     </section>
     <UiDialog
       v-model:open="editing"
@@ -558,37 +587,44 @@ function openGroup(group: string) {
               :readonly="!!current && editKind === 'rule'"
               class="ui-input"
               required
-              maxlength="256" /></label
-          ><label
-            >{{ t('devices.description')
-            }}<input
+              maxlength="256"
+          /></label>
+          <div class="group-choice-row">
+            <label
+              >{{ t('devices.kind')
+              }}<select
+                v-model="kind"
+                data-testid="group-kind"
+                class="ui-input"
+                :disabled="!!current"
+              >
+                <option value="static">{{ t('devices.static') }}</option>
+                <option value="dynamic">{{ t('devices.dynamic') }}</option>
+              </select></label
+            ><label
+              >{{ t('devices.assetContext')
+              }}<select
+                v-model="assetContext"
+                data-testid="group-context"
+                class="ui-input"
+                :disabled="!!current || kind === 'static'"
+              >
+                <option value="endpoint">{{ t('devices.objectKind_endpoint') }}</option>
+                <option value="associated_device">{{ t('devices.associatedDevice') }}</option>
+              </select></label
+            >
+          </div>
+          <details class="group-extra">
+            <summary>{{ t('devices.description') }}</summary>
+            <input
               v-model="description"
+              :aria-label="t('devices.description')"
               :readonly="!!current && editKind === 'rule'"
               class="ui-input"
-              maxlength="4096" /></label
-          ><label
-            >{{ t('devices.kind')
-            }}<select
-              v-model="kind"
-              data-testid="group-kind"
-              class="ui-input"
-              :disabled="!!current"
-            >
-              <option value="static">{{ t('devices.static') }}</option>
-              <option value="dynamic">{{ t('devices.dynamic') }}</option>
-            </select></label
-          ><label
-            >{{ t('devices.assetContext')
-            }}<select
-              v-model="assetContext"
-              data-testid="group-context"
-              class="ui-input"
-              :disabled="!!current || kind === 'static'"
-            >
-              <option value="endpoint">{{ t('devices.objectKind_endpoint') }}</option>
-              <option value="associated_device">{{ t('devices.associatedDevice') }}</option>
-            </select></label
-          ><GroupConditionEditor
+              maxlength="4096"
+            />
+          </details>
+          <GroupConditionEditor
             v-if="kind === 'dynamic' && (!current || editKind === 'rule')"
             v-model="criteria"
             :fields="fields"
@@ -606,6 +642,9 @@ function openGroup(group: string) {
           </div>
         </fieldset>
       </form>
+      <UiButton v-if="uncertain && pending" :disabled="busy" @click="compare">{{
+        t('devices.compare')
+      }}</UiButton>
       <UiButton v-if="uncertain && pending" :disabled="busy || !compared" @click="pending!()">{{
         t('devices.replay')
       }}</UiButton>

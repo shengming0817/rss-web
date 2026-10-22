@@ -59,11 +59,11 @@ export function groupCondition(value: unknown): GroupCondition {
   }
 }
 export interface GroupQuery {
-  after?: string
-  name?: string
-  kind?: 'static' | 'dynamic' | 'system'
-  assetContext?: 'endpoint' | 'associated_device'
-  referenceableFor?: string
+  after?: string | undefined
+  name?: string | undefined
+  kind?: 'static' | 'dynamic' | 'system' | undefined
+  assetContext?: 'endpoint' | 'associated_device' | undefined
+  referenceableFor?: string | undefined
 }
 export function groupReferences(value: unknown) {
   const v = closed(value, ['items', 'nextCursor', 'deletionBlocked'])
@@ -299,9 +299,9 @@ export function createGroupsClient(transport: HttpTransport) {
     references: (
       id: string,
       query: {
-        kind?: 'group' | 'scope' | 'policy' | 'compliance_rule'
-        relation?: 'direct' | 'indirect' | 'all'
-        cursor?: string
+        kind?: 'group' | 'scope' | 'policy' | 'compliance_rule' | undefined
+        relation?: 'direct' | 'indirect' | 'all' | undefined
+        cursor?: string | undefined
       } = {},
     ) =>
       transport.request({

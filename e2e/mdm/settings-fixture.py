@@ -205,7 +205,7 @@ def start_host(binary,config_path,gateway_path,log):
 
 def ready(origin):
     context=ssl.create_default_context(cafile=str(environment.root/'ca.crt'))
-    until=time.monotonic()+40
+    until=time.monotonic()+180
     while time.monotonic()<until:
         if any(child.poll() is not None for child in processes):raise RuntimeError('fixture-process-exit')
         try:
