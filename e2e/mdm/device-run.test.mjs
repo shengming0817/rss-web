@@ -133,7 +133,7 @@ test('PKI collector cancellation releases its waiting HTTP process before the br
   const {createServer}=await import('node:http')
   const {runPkiCollector}=await import('./pki-browser.mjs')
   const dir=mkdtempSync(resolve(tmpdir(),'mdm-pki-collector-cancel-'))
-  let interrupted=false,terminate,released=false,pending
+  let interrupted=false,terminate,released=false,pending,timer
   let observed
   const received=new Promise(done=>{observed=done})
   const server=createServer((_req,_res)=>{observed()})
@@ -147,12 +147,14 @@ http.get('http://127.0.0.1:${server.address().port}',()=>{})
   try {
     process.env.PATH=dir+':'+originalPath
     pending=runPkiCollector(resolve(dir,'fixture.json'),{interrupted:()=>interrupted,onChild:(_child,stop)=>{terminate=stop},onRelease:()=>{released=true}})
-    await received
+    pending.catch(()=>{})
+    await Promise.race([received,new Promise((_resolve,reject)=>{timer=setTimeout(()=>reject(new Error('collector HTTP deadline')),5000)})])
     interrupted=true;terminate()
     await assert.rejects(pending,/PKI collector cancelled/)
     assert.equal(released,true)
     assert.equal(existsSync(resolve(dir,'stopped')),true)
   } finally {
+    clearTimeout(timer)
     process.env.PATH=originalPath
     terminate?.();await pending?.catch(()=>{})
     await new Promise(done=>server.close(done))
