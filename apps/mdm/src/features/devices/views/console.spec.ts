@@ -45,7 +45,6 @@ it('shows channel communication separately and clears the MDM receipt after regi
         .replace('.000Z', ' UTC'),
     )
   }
-  expect(card().text()).toContain('合成通信数据')
   expect(card().text()).not.toContain('后端暂未提供')
   expect(card().text()).toContain('当前注册')
   const enrollment = await h.devices.enrollment.create(crypto.randomUUID(), {

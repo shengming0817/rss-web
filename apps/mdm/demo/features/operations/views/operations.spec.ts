@@ -1,9 +1,9 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { mdmKey } from '../../../context'
-import { mdmI18n } from '../../../i18n'
-import AlertsView from '../../../../demo/features/operations/views/AlertsView.vue'
+import { demoKey } from '../../../context'
+import { mdmI18n } from '../../../../src/i18n'
+import AlertsView from './AlertsView.vue'
 const id = '11111111-1111-4111-8111-111111111111',
   other = '22222222-2222-4222-8222-222222222222'
 const initial = {
@@ -50,9 +50,8 @@ it('keeps unknown acknowledgment locked across GET and reads current state after
       plugins: [router, mdmI18n()],
       stubs: { RouterLink: true },
       provide: {
-        [mdmKey as symbol]: {
+        [demoKey as symbol]: {
           tenant: id,
-          demo: true,
           operations: { alerts: { read, acknowledge, closure: async () => null } },
         },
       },
