@@ -1,4 +1,11 @@
 export const devicesZh = {
+  personLogin: '登录名',
+  personLocal: '本地资料',
+  personIdp: '身份源',
+  personUsername: '来源用户名',
+  personNameMissing: '未提供姓名',
+  personNotProvided: '未提供人员展示资料',
+  personStatus: { missing: '缺少资料', expired: '资料已过期', unavailable: '资料不可用' },
   manageMembers: '管理成员',
   linkedPerson: '已关联组织人员',
   loadedPeopleOnly: '筛选已加载账户；需要时继续加载更多人员。',
@@ -38,7 +45,7 @@ export const devicesZh = {
 
   trustedAssetsNote:
     '运行质量与保留资产分别显示。可信值的来源时间早于最新运行时，不代表本次采集成功。',
-  directorySearch: '名称、序列号或人员 ID',
+  directorySearch: '设备名称、序列号、人员姓名、login 或 ID',
   serialNumber: '序列号',
   registrationUser: '设备所有人',
   currentUser: '当前使用者',
@@ -481,6 +488,17 @@ export const devicesZh = {
   },
 }
 export const devicesEn: typeof devicesZh = {
+  personLogin: 'Login',
+  personLocal: 'Local profile',
+  personIdp: 'Identity provider',
+  personUsername: 'Source username',
+  personNameMissing: 'Name not provided',
+  personNotProvided: 'Personnel display not provided',
+  personStatus: {
+    missing: 'Profile missing',
+    expired: 'Profile expired',
+    unavailable: 'Profile unavailable',
+  },
   manageMembers: 'Manage members',
   linkedPerson: 'Linked organization member',
   loadedPeopleOnly: 'Filter loaded accounts. Load more people when needed.',
@@ -526,7 +544,7 @@ export const devicesEn: typeof devicesZh = {
 
   trustedAssetsNote:
     'Run quality and retained assets are separate. A trusted value observed before the latest run does not prove that run succeeded.',
-  directorySearch: 'Name, serial number or person ID',
+  directorySearch: 'Device name, serial, person name, login or ID',
   serialNumber: 'Serial number',
   registrationUser: 'Device owner',
   currentUser: 'Current user',

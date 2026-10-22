@@ -1,7 +1,8 @@
 /** MOCK_SOURCE: same wire as the product; synthetic facts never enter production bundles. */
 import { randomUUID } from 'node:crypto'
 import { array, closed, count, uuid } from '../../src/services/decode'
-import {
+import type {
+  PersonDisplay,
   member,
   currentMember,
   type Endpoint,
@@ -9,10 +10,12 @@ import {
 } from '../../src/features/devices/clients/endpoint-model'
 import { verificationText, type Association } from '../../src/features/devices/clients/associations'
 import type { ObjectRef } from '../../src/features/devices/clients/objects'
-import type { Permission } from '../../src/features/operations/clients/authorization'
+import type { Permission, User } from '../../src/features/operations/clients/authorization'
 import type { DomainHandler, DemoRequest } from '../scenario'
 import { createReceipts, error, ok } from '../http'
 import type { DemoDevice } from './fixtures'
+import { demoProfile } from '../profiles'
+import { ADMIN, REVIEWER } from '../operations/authorization'
 type Can = (actor: string, permission: Permission, device?: string) => boolean
 export function mergedFieldState<T extends { kind: string }>(
   sources: { state: T; evidence: { source: string } }[],
@@ -104,16 +107,45 @@ export function endpointDetailProjection(d: DemoDevice) {
   }
 }
 export function createDeviceViewsDemo(devices: () => Map<string, DemoDevice>, can: () => Can) {
+  function display(user: User | null, request: DemoRequest): PersonDisplay | null {
+    if (!user || !can()(request.actor.principalId, 'inventory_sensitive_read')) return null
+    const login =
+      user.principalId === ADMIN ? 'demo' : user.principalId === REVIEWER ? 'reviewer' : null
+    if (!login) return null
+    const profiles =
+      can()(request.actor.principalId, 'user_profiles_read') ||
+      user.principalId === request.actor.principalId
+        ? [
+            {
+              source: { kind: 'identity_local' as const },
+              status: 'available' as const,
+              displayName: demoProfile.displayName,
+              username: demoProfile.username,
+            },
+          ]
+        : []
+    return {
+      login: can()(request.actor.principalId, 'identity_accounts_manage') ? login : null,
+      profiles,
+    }
+  }
   function presentation(d: DemoDevice, request: DemoRequest): ViewEndpoint {
+    const owner = d.registrationUser ?? { revision: 0, user: null }
+    const current = d.currentUser ?? {
+      revision: 0,
+      state: 'unbound' as const,
+      user: null,
+      confirmedAt: null,
+    }
     return {
       ...viewEndpointProjection(d),
       registrationUser: can()(request.actor.principalId, 'enrollment', d.summary.id)
-        ? (d.registrationUser ?? { revision: 0, user: null })
+        ? { ...owner, display: display(owner.user, request) }
         : undefined,
       currentUser:
         can()(request.actor.principalId, 'inventory_sensitive_read', d.summary.id) &&
         d.registrations.some((r) => r.source === 'agent.builtin')
-          ? (d.currentUser ?? { revision: 0, state: 'unbound', user: null, confirmedAt: null })
+          ? { ...current, display: display(current.user, request) }
           : undefined,
     }
   }
@@ -177,7 +209,7 @@ export function createDeviceViewsDemo(devices: () => Map<string, DemoDevice>, ca
       epoch,
       [...devices()].map(([id, d]) => [id, d.registrations, d.inventory]),
       [...relations.values()],
-      [...devices().keys()].filter((id) => readable(request, id)),
+      groups(request),
       extra,
     ])
   }
@@ -296,6 +328,12 @@ export function createDeviceViewsDemo(devices: () => Map<string, DemoDevice>, ca
                   : '',
                 e.registrationUser?.user?.principalId ?? '',
                 e.currentUser?.user?.principalId ?? '',
+                ...[e.registrationUser?.display, e.currentUser?.display].flatMap((display) => [
+                  display?.login ?? '',
+                  ...(display?.profiles
+                    .filter((p) => p.status === 'available')
+                    .map((p) => p.displayName ?? '') ?? []),
+                ]),
               ].some((v) => v.toLowerCase().includes(query.get('search')!.toLowerCase()))) &&
             (!query.get('platform') ||
               e.platform.values.includes(query.get('platform') as 'windows' | 'macos')) &&

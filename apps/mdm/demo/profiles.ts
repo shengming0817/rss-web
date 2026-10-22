@@ -9,6 +9,13 @@ import {
   type ProfileSource,
 } from '../src/features/settings/clients/profiles'
 import { error, ok } from './http'
+export const demoProfile = {
+  displayName: 'Demo profile',
+  username: 'demo',
+  email: 'demo@example.test',
+  emailVerified: null,
+  extensions: { employeeNumber: 'DEMO-001', remote: false, allocation: 0 },
+}
 export function createProfilesDemo() {
   const definitions = new Map<string, Definition>(),
     operations = new Map<string, { input: string; receipt: unknown }>()
@@ -71,13 +78,7 @@ export function createProfilesDemo() {
       const own = person[1] === 'me' || person[1] === r.actor.principalId,
         preview = r.query.get('preview') === 'true'
       if ((!own || preview) && !admin) return error('permission_denied', 403)
-      const document = {
-        displayName: 'Demo profile',
-        username: 'demo',
-        email: 'demo@example.test',
-        emailVerified: null,
-        extensions: { employeeNumber: 'DEMO-001', remote: false, allocation: 0 },
-      }
+      const document = demoProfile
       const fields = [...definitions.values()].flatMap((d) => {
         const v = d.value
         if (
