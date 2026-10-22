@@ -321,7 +321,7 @@ it('freezes an immutable profile resource, uploads canonical bytes, previews act
   await scope.setValue('88888888-8888-4888-8888-888888888888')
   await h.click('下一步')
   await h.click('保存、上传并激活方案资源')
-  expect(dialog.text()).toContain('目标预检')
+  await vi.waitFor(() => expect(dialog.text()).toContain('目标预检'))
   expect(dialog.text()).toContain('device-01')
   expect(h.requests.some((r) => r.path.endsWith('/complete'))).toBe(true)
   await dialog.findAll('input[type=checkbox]').at(-1)!.setValue(true)
@@ -354,6 +354,7 @@ it('recovers a committed profile upload from its exact receipt without repeating
   await dialog.get('select[aria-label="目标范围"]').setValue('88888888-8888-4888-8888-888888888888')
   await h.click('下一步')
   await h.click('保存、上传并激活方案资源')
+  await vi.waitFor(() => expect(dialog.text()).toContain('上次提交结果尚未确认'))
   const resourceWrites = () =>
     h.requests
       .filter((r) => r.path === '/api/v1/resources/{id}' && r.method === 'POST')
@@ -378,7 +379,7 @@ it('recovers a committed profile upload from its exact receipt without repeating
   ])
   expect(dialog.text()).not.toContain('上次提交结果尚未确认')
   await h.click('保存、上传并激活方案资源')
-  expect(dialog.text()).toContain('目标预检')
+  await vi.waitFor(() => expect(dialog.text()).toContain('目标预检'))
   expect(begin).toHaveBeenCalledTimes(1)
   expect(finish).toHaveBeenCalledTimes(1)
   expect(resourceWrites().filter((input) => input['action'] === 'version')).toEqual([frozen])
