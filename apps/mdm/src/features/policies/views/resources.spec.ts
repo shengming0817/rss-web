@@ -12,9 +12,14 @@ it('publishes all staged software variants in one immutable version at the curre
   vi.stubGlobal('crypto', webcrypto)
   const change = vi.fn().mockResolvedValue({}),
     upload = vi.fn().mockResolvedValue(undefined)
-  const read = vi
-    .fn()
-    .mockResolvedValue({ id: 'application', revision: 1, kind: 'software', versions: [] })
+  const read = vi.fn().mockResolvedValue({
+    id: 'application',
+    presentation: {},
+    origin: null,
+    revision: 1,
+    kind: 'software',
+    versions: [],
+  })
   const definition = {
     source: { id: 'private', revision: '1', sha256: Array<number>(32).fill(1) },
     package: 'App',
@@ -33,6 +38,7 @@ it('publishes all staged software variants in one immutable version at the curre
     provenance: { kind: 'private' },
     signatures: [],
     export: { kind: 'disabled' },
+    material: { bundle_id: null, format: 'msi', installer: 'installer' },
     behavior: {
       kind: 'msi',
       installer: 'installer',
@@ -112,7 +118,7 @@ it('publishes all staged software variants in one immutable version at the curre
   await wrapper.get('[data-action="stage-variant"]').trigger('click')
   await wrapper.get('#resource-architecture').setValue('aarch64')
   await wrapper.get('[data-action="stage-variant"]').trigger('click')
-  await wrapper.get('form').trigger('submit')
+  await wrapper.get('form:has(#resource-version)').trigger('submit')
   await flushPromises()
   expect(change).toHaveBeenCalledTimes(1)
   expect(
@@ -179,9 +185,14 @@ it('resumes the same upload after a lost chunk response, rejects different bytes
           demo: true,
           policies: {
             resources: {
-              read: vi
-                .fn()
-                .mockResolvedValue({ id: 'app', revision: 1, kind: 'software', versions: [] }),
+              read: vi.fn().mockResolvedValue({
+                id: 'app',
+                presentation: {},
+                origin: null,
+                revision: 1,
+                kind: 'software',
+                versions: [],
+              }),
               uploads: { begin, append, complete, receipt },
             },
           },
@@ -244,7 +255,14 @@ it('hashes metadata for a software artifact larger than one HTTP chunk without r
           demo: true,
           policies: {
             resources: {
-              read: async () => ({ id: 'app', revision: 1, kind: 'software', versions: [] }),
+              read: async () => ({
+                id: 'app',
+                presentation: {},
+                origin: null,
+                revision: 1,
+                kind: 'software',
+                versions: [],
+              }),
             },
           },
         },
@@ -267,7 +285,14 @@ it('hashes metadata for a software artifact larger than one HTTP chunk without r
 }, 15000)
 
 it('clears the software definition and artifact draft when opening another resource', async () => {
-  const read = vi.fn(async (id: string) => ({ id, revision: 1, kind: 'software', versions: [] }))
+  const read = vi.fn(async (id: string) => ({
+    id,
+    presentation: {},
+    origin: null,
+    revision: 1,
+    kind: 'software',
+    versions: [],
+  }))
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [{ path: '/', component: ResourcesView }],
@@ -379,7 +404,14 @@ it.each([false, true])(
             demo: true,
             policies: {
               resources: {
-                read: async (id: string) => ({ id, revision: 1, kind: 'software', versions: [] }),
+                read: async (id: string) => ({
+                  id,
+                  presentation: {},
+                  origin: null,
+                  revision: 1,
+                  kind: 'software',
+                  versions: [],
+                }),
                 uploads: { begin, append, complete },
               },
             },
@@ -420,3 +452,50 @@ it.each([false, true])(
     wrapper.unmount()
   },
 )
+
+it('edits Resource presentation through the current client without dropping unknown keys or changing versions', async () => {
+  const { softwareResource, request: httpRequest } =
+    await import('../../../../demo/software/fixtures')
+  const { createResourcesClient } = await import('../clients/resources')
+  const { operation } = await import('../../../services/useOperation')
+  const { resources } = softwareResource()
+  const client = createResourcesClient({
+    request: async (options: import('@rss/api/mdm').RequestOptions<unknown>) => {
+      const path = options.path.replace(/\{([^}]+)\}/g, (_, key: string) =>
+        String(options.pathParams![key]!),
+      )
+      const reply = resources.handle(httpRequest(path, options.body), 'normal')!
+      if (reply.status !== options.successStatus) throw new Error('HTTP failure')
+      return options.decode(reply.body)
+    },
+  } as import('@rss/api/mdm').HttpTransport)
+  const initial = await client.read('app')
+  const presentation = {
+    name: 'Before',
+    description: 'Description',
+    vendor: { labels: ['one'] },
+    tenant: 'untrusted',
+  }
+  await client.change('app', operation({ action: 'present', presentation }, initial.revision))
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/', component: ResourcesView }],
+  })
+  await router.push('/?resource=app')
+  const wrapper = mount(ResourcesView, {
+    global: {
+      plugins: [router, mdmI18n()],
+      stubs: { RouterLink: true },
+      provide: { [mdmKey as symbol]: { tenant: 'tenant', policies: { resources: client } } },
+    },
+  })
+  await flushPromises()
+  await wrapper.get('#resource-display-name').setValue('Edited')
+  await wrapper.get('[data-testid=resource-presentation]').trigger('submit')
+  await flushPromises()
+  const stored = await client.read('app')
+  expect(stored.presentation).toEqual({ ...presentation, name: 'Edited' })
+  expect(stored.versions).toEqual(initial.versions)
+  expect(stored.id).toBe('app')
+  wrapper.unmount()
+})

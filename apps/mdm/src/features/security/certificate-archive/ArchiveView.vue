@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { UiButton, UiDialog } from '@rss/core/components'
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, toRaw, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { isRssApiError } from '@rss/api/mdm'
@@ -85,6 +85,7 @@ const vault = ref<Vault>(),
   issuerReference = ref(''),
   scepUrl = ref(''),
   downloads = ref<{ name: string; url: string }[]>([])
+const editorBase = shallowRef<Entry>()
 const alertCounts = ref({ expired: 0, expiring: 0, notYetValid: 0 })
 const meta = reactive({
   name: '',
@@ -159,6 +160,7 @@ watch(
     items.value = []
     history.value = []
     selected.value = undefined
+    editorBase.value = undefined
     pending.value = undefined
   },
   { flush: 'sync' },
@@ -267,7 +269,13 @@ function split(value: string) {
     .filter(Boolean)
 }
 function metadata(): Metadata {
+  const base =
+    (mode.value === 'metadata' && editorBase.value?.id === target.value
+      ? editorBase.value
+      : items.value.find((entry) => entry.id === target.value)
+    )?.latest.metadata ?? {}
   return {
+    ...structuredClone(toRaw(base)),
     name: meta.name,
     category: meta.category,
     labels: split(meta.labels),
@@ -289,7 +297,13 @@ function chosen() {
     failure.value = 'notFound'
     return
   }
-  return { entryId: entry.id, expectedRevision: entry.revision }
+  return {
+    entryId: entry.id,
+    expectedRevision:
+      mode.value === 'metadata' && editorBase.value?.id === entry.id
+        ? editorBase.value.revision
+        : entry.revision,
+  }
 }
 function selectFiles(event: Event) {
   files.value = Array.from((event.target as HTMLInputElement).files ?? []).map((file) => ({
@@ -378,6 +392,7 @@ async function open(entry: Entry) {
     () => client.history(entry.id),
     (versions) => {
       selected.value = entry
+      editorBase.value = structuredClone(toRaw(entry))
       history.value = versions
       comparison.value = undefined
       target.value = entry.id

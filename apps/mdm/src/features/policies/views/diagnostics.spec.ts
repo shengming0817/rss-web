@@ -5,7 +5,7 @@ import { expect, it, vi } from 'vitest'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
 import ExecutionDetailView from './ExecutionDetailView.vue'
-import ConfigurationsView from './ConfigurationsView.vue'
+import ConfigurationsView from '../../../../demo/features/policies/views/ConfigurationsView.vue'
 it('shows native receipt and cleanup diagnostics while withholding terminal actions', async () => {
   const router = createRouter({
     history: createMemoryHistory(),

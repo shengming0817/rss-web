@@ -8,7 +8,7 @@ import {
   alertStates,
   type AuditEntry,
   type Alert,
-} from '../../src/features/operations/clients/model'
+} from '../features/operations/clients/model'
 import { createPages, createReceipts, error, ok, operation } from '../http'
 const candidate = (body: object) =>
   ok({ contract: 'operations-v1', tenantId: TENANT, source: 'mock', ...body })

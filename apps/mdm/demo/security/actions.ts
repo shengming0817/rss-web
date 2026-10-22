@@ -6,13 +6,10 @@ import type { createRisksDemo } from './risks'
 import type { createMaterialsDemo } from './materials'
 import type { createCertificatesDemo } from './certificates'
 import type { createSupportDemo } from './support'
-import { isSupportTarget } from '../../src/features/security/clients/support-model'
-import type { MaterialKind } from '../../src/features/security/clients/materials-model'
+import { isSupportTarget } from '../features/security/clients/support-model'
+import type { MaterialKind } from '../features/security/clients/materials-model'
 import { closed, identifier, uuid } from '../../src/services/decode'
-import {
-  securityAction,
-  type SecurityAction,
-} from '../../src/features/security/clients/actions-model'
+import { securityAction, type SecurityAction } from '../features/security/clients/actions-model'
 import { createReceipts, error, operation } from '../http'
 import { candidate, createSecurityPages, queryKeys } from './http'
 import { remediationSource } from './source'

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { Json } from '../../../services/json'
 import { UiButton, UiTable, UiBadge } from '@rss/core/components'
 import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -15,7 +16,7 @@ import {
   type PolicyDefinition,
   type PolicyChange,
 } from '../clients/model'
-import type { ResourceRead, ScriptSpec, Json } from '../clients/resources'
+import type { ResourceRead, ScriptSpec } from '../clients/resources'
 import CollectionPeriod from '../components/CollectionPeriod.vue'
 import NativeScheduleEditor from '../../software/components/NativeScheduleEditor.vue'
 import SelfServiceEditor from '../components/SelfServiceEditor.vue'

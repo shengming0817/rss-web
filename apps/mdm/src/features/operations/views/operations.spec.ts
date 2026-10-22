@@ -3,7 +3,7 @@ import { expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
-import AlertsView from './AlertsView.vue'
+import AlertsView from '../../../../demo/features/operations/views/AlertsView.vue'
 const id = '11111111-1111-4111-8111-111111111111',
   other = '22222222-2222-4222-8222-222222222222'
 const initial = {

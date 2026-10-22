@@ -1,3 +1,4 @@
+import { inject, type InjectionKey } from 'vue'
 export interface NavigationItem {
   name: string
   label: string
@@ -22,7 +23,6 @@ export const navigation = [
       { name: 'policy-policies', label: 'policies.policies' },
       { name: 'policy-scopes', label: 'policies.scopes' },
       { name: 'policy-resources', label: 'policies.resources' },
-      { name: 'policy-configurations', label: 'policies.configurations' },
       { name: 'policy-scripts', label: 'policies.scripts' },
       { name: 'policy-executions', label: 'policies.executions' },
     ],
@@ -45,16 +45,8 @@ export const navigation = [
     label: 'security.compliance',
     items: [
       { name: 'security-compliance', label: 'security.compliance' },
-      { name: 'security-risks', label: 'security.risks' },
-      { name: 'security-baselines', label: 'security.baselines' },
       { name: 'security-rules', label: 'security.rules' },
-      { name: 'security-actions', label: 'security.actions' },
-      { name: 'security-requests', label: 'security.requests' },
-      { name: 'security-certificates', label: 'security.certificates' },
       { name: 'security-certificate-archive', label: 'security.certificate-archive' },
-      { name: 'security-materials', label: 'security.materials' },
-      { name: 'security-support', label: 'security.support' },
-      { name: 'security-experience', label: 'security.experience' },
     ],
   },
   {
@@ -66,10 +58,6 @@ export const navigation = [
       { name: 'operations-appleAccount', label: 'onboarding.appleAccount' },
       { name: 'operations-appleAde', label: 'onboarding.appleAde' },
       { name: 'operations-windowsEntra', label: 'onboarding.windowsEntra' },
-      { name: 'operations-audit', label: 'operations.audit' },
-      { name: 'operations-alerts', label: 'operations.alerts' },
-      { name: 'operations-alertRules', label: 'operations.alertRules' },
-      { name: 'operations-reports', label: 'operations.reports' },
     ],
   },
   {
@@ -102,3 +90,7 @@ export const detailParents: Record<string, string> = {
   'device-view-detail': 'devices',
   'policy-execution': 'policy-executions',
 }
+
+export type Navigation = readonly { id: string; label: string; items: readonly NavigationItem[] }[]
+export const navigationKey: InjectionKey<Navigation> = Symbol('mdm-navigation')
+export const useNavigation = () => inject(navigationKey, navigation)

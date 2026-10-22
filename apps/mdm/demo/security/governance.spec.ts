@@ -41,7 +41,7 @@ async function setup() {
   await server.handle('GET', `/api/v1/scopes/${scope}/tasks/${scoped.operationId}`)
   await server.handle('GET', `/api/v1/scopes/${scope}/tasks/${scoped.operationId}`)
   const ruleDefinition = {
-    name: 'Office floor',
+    presentation: { name: 'Office floor' },
     severity: 'high',
     enabled: true,
     platform: 'all',

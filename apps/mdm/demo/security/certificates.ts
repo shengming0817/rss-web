@@ -2,12 +2,9 @@ import { randomUUID } from 'node:crypto'
 import type { DomainHandler, Scenario, DemoEvent } from '../scenario'
 import type { createDeviceDemo } from '../devices/state'
 import type { createOperationsDemo } from '../operations/state'
-import type { SecurityRequestTarget } from '../../src/features/security/clients/requests-model'
-import type { SecuritySource } from '../../src/features/security/clients/source'
-import {
-  certificate,
-  type Certificate,
-} from '../../src/features/security/clients/certificates-model'
+import type { SecurityRequestTarget } from '../features/security/clients/requests-model'
+import type { SecuritySource } from '../features/security/clients/source'
+import { certificate, type Certificate } from '../features/security/clients/certificates-model'
 import { closed, identifier, uuid } from '../../src/services/decode'
 import { createReceipts, error, operation } from '../http'
 import { candidate, createSecurityPages, queryKeys } from './http'

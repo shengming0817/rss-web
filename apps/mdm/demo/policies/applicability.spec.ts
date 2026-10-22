@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import { makeDevices } from '../devices/fixtures'
 import { configurationApplicability, resourceApplicability } from './applicability'
-import type { Configuration } from '../../src/features/policies/clients/configurations'
+import type { Configuration } from '../features/policies/clients/configurations'
 import type { ResourceRead } from '../../src/features/policies/clients/resources'
 it('requires the exact Agent variant and keeps native configuration conflicts in the shared evaluator', () => {
   const devices = makeDevices(),
@@ -44,6 +44,7 @@ it('requires the exact Agent variant and keeps native configuration conflicts in
                 provenance: { kind: 'private' },
                 signatures: [],
                 export: { kind: 'disabled' },
+                material: { bundle_id: null, format: 'msi', installer: 'installer' },
                 behavior: {
                   kind: 'msi',
                   installer: 'installer',

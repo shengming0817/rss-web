@@ -2,7 +2,7 @@
 
 Read README.md and the current issue before changing this repository. Use /usr/bin/git.
 
-- apps/identity and apps/mdm are independent product compositions. @rss/auth owns shared cookie-session and authentication UI factories; each app creates exactly one session owner. Identity uses same-origin HTTP V1 and identity-host endpoints; MDM uses HTTP V1 domain clients and documented candidate APIs.
+- apps/identity and apps/mdm are independent product compositions. @rss/auth owns shared cookie-session and authentication UI factories; each app creates exactly one session owner. Identity uses same-origin HTTP V1 and identity-host endpoints; MDM production uses current HTTP V1 domain clients and the implemented workspace projection. Unpublished candidate pages/clients belong exclusively to the explicit demo composition.
 - @rss/api/identity owns HTTP execution and strict error decoding. Domain clients own endpoint DTO decoders. The per-app shared session controller alone owns cookie/CSRF transitions. Never add bearer fallback, old wire decoding, a second session/retry controller, or credential persistence.
 - @rss/core owns reusable presentation used by Identity: theme, locale, modal and styles. Keep package imports on declared exports, strict TypeScript, accessible UI and i18n.
 - Host config is strict and static; missing or malformed input prevents startup. Context hints are bound to tenant/principal/session and grant no authority. Backend transactions enforce management policy.
@@ -13,3 +13,5 @@ Read README.md and the current issue before changing this repository. Use /usr/b
 - Integration must redact secrets, bound child processes, handle interruption and fail when cleanup is unconfirmed. Actual browser/product acceptance remains separately owned.
 
 - MDM demo runs an explicit loopback HTTP scenario server. Production entries never import demo identity/state; real failures never fall back to mock. Features register routes and consume injected clients, not new session/transport owners. Track UI, mock, live integration and product acceptance separately.
+
+- Current MDM presentation/metadata objects preserve unknown keys on read, edit and write within the backend field budget; core identity/action/state remain strict. No old DTO decoding or implicit metadata merge. Production source cannot import demo modules; demo consumes the same session/transport owner.

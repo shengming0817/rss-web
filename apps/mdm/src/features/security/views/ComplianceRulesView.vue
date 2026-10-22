@@ -54,7 +54,7 @@ function apply(v: ComplianceRule) {
   editable.value = true
   current.value = v
   id.value = v.id
-  name.value = v.definition.name
+  name.value = v.definition.presentation.name
   enabled.value = v.definition.enabled
   severity.value = v.definition.severity
   platform.value = v.definition.platform
@@ -98,7 +98,10 @@ function save() {
   const rule = current.value?.id ?? id.value,
     body = operation(
       {
-        name: name.value,
+        presentation: {
+          ...structuredClone(toRaw(current.value?.definition.presentation ?? {})),
+          name: name.value,
+        },
         severity: severity.value,
         enabled: enabled.value,
         platform: platform.value,
@@ -210,7 +213,7 @@ onMounted(async () => {
     <ul class="console-object-list">
       <li v-for="rule in list?.items" :key="rule.id">
         <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(rule.id)">
-          {{ rule.definition.name }}
+          {{ rule.definition.presentation.name }}
         </UiButton>
         · {{ rule.revision }} · {{ t(`security.severity.${rule.definition.severity}`) }} ·
         {{ t(rule.definition.enabled ? 'security.enabled' : 'security.disabled') }}
@@ -338,7 +341,7 @@ onMounted(async () => {
       </section>
       <div v-if="historical" data-testid="rule-version">
         <p>
-          {{ historical.definition.name }} · {{ historical.revision }} ·
+          {{ historical.definition.presentation.name }} · {{ historical.revision }} ·
           {{ t(`security.severity.${historical.definition.severity}`) }} ·
           {{ t(`security.platforms.${historical.definition.platform}`) }} ·
           {{ t(historical.definition.enabled ? 'security.enabled' : 'security.disabled') }}

@@ -1,10 +1,8 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { UiMessage, UiSpinner } from '@rss/core/components'
-import { useMdm } from '../context'
 defineProps<{ title: string; description?: string; busy?: boolean; failure?: string | null }>()
-const { t } = useI18n(),
-  runtime = useMdm()
+const { t } = useI18n()
 </script>
 <template>
   <section class="console-page" :aria-busy="busy || undefined">
@@ -17,9 +15,6 @@ const { t } = useI18n(),
         <UiSpinner v-if="busy" :label="t('devices.loading')" /><slot name="actions" />
       </div>
     </header>
-    <UiMessage v-if="runtime.demo" tone="info" :title="t('mdm.mock')" class="console-demo-note">{{
-      t('devices.noEffect')
-    }}</UiMessage>
     <UiMessage
       v-if="failure"
       tone="danger"

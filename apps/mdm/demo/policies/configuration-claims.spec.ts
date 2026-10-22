@@ -5,7 +5,7 @@ import { createAutomationDemo } from './state'
 import { createDeviceDemo } from '../devices/state'
 import { createUploadsClient } from '../../src/features/policies/clients/uploads'
 import { createPoliciesClient } from '../../src/features/policies/clients/policies'
-import { createConfigurationsClient } from '../../src/features/policies/clients/configurations'
+import { createConfigurationsClient } from '../features/policies/clients/configurations'
 import type { ConfigurationDefinition, PolicyRead } from '../../src/features/policies/clients/model'
 import type { DemoRequest } from '../scenario'
 function fixture() {

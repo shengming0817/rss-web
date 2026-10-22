@@ -8,8 +8,8 @@ import {
   baselineDefinition,
   baselineDevice,
   type Baseline,
-} from '../../src/features/security/clients/governance-model'
-import type { SecurityRequestTarget } from '../../src/features/security/clients/requests-model'
+} from '../features/security/clients/governance-model'
+import type { SecurityRequestTarget } from '../features/security/clients/requests-model'
 import { createReceipts, error, operation } from '../http'
 import { candidate, createSecurityPages, queryKeys } from './http'
 type ScopeOwner = Pick<ReturnType<typeof createScopeDemo>, 'freeze'>

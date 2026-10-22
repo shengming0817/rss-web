@@ -77,7 +77,10 @@ function timeline(value: unknown) {
       actorKind: identifier(e['actorKind']),
       actor: identifier(e['actor']),
       action: identifier(e['action']),
-      target: nullable(e['target'], identifier),
+      target: (() => {
+        const target = closed(e['target'], ['type', 'id'])
+        return { type: identifier(target['type']), id: identifier(target['id']) }
+      })(),
       deviceId: nullable(e['deviceId'], identifier),
       operationId: nullable(e['operationId'], uuid),
       relatedOperationIds: array(e['relatedOperationIds'], uuid),

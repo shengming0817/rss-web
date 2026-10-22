@@ -1,10 +1,10 @@
 import type { DomainHandler } from '../scenario'
-import type { SecuritySource } from '../../src/features/security/clients/source'
+import type { SecuritySource } from '../features/security/clients/source'
 import {
   experience,
   experienceMetrics,
   type Experience,
-} from '../../src/features/security/clients/experience-model'
+} from '../features/security/clients/experience-model'
 import { identifier } from '../../src/services/decode'
 import { error } from '../http'
 import { candidate, queryKeys } from './http'

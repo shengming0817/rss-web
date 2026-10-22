@@ -72,7 +72,7 @@ export function createDeviceDemo() {
           actorKind: 'user',
           actor: request.actor.principalId,
           action: e.event,
-          target: id,
+          target: { type: 'device', id },
           deviceId: id,
           operationId: e.operation,
           relatedOperationIds: [],

@@ -1,11 +1,10 @@
+import { jsonValue, type Json } from '../../src/services/json'
 import { createHash } from 'node:crypto'
 import Ajv from 'ajv'
 import type { ExecutionDefinition } from '../../src/features/policies/clients/model'
 import { record } from '../../src/services/decode'
 import {
   decodeScriptSpec,
-  jsonValue,
-  type Json,
   type ScriptSpec,
   type Variant,
 } from '../../src/features/policies/clients/resources'

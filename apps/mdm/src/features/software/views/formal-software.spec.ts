@@ -249,7 +249,14 @@ it('uses Resource pages and reads versions only after selection without inventin
       items: [{ id: 'app', revision: 2, kind: 'software', activeVersion: '1' }],
       nextCursor: 'app',
     }),
-    read = vi.fn().mockResolvedValue({ id: 'app', revision: 2, kind: 'software', versions: [] })
+    read = vi.fn().mockResolvedValue({
+      id: 'app',
+      presentation: {},
+      origin: null,
+      revision: 2,
+      kind: 'software',
+      versions: [],
+    })
   const { wrapper, session } = await fixture(CatalogView, {
     policies: { resources: { list, read } },
   })

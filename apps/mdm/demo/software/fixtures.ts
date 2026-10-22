@@ -64,6 +64,7 @@ export function softwareResource(packageName = 'Example.App', nativeExport = fal
           license: 'MIT',
         }
       : { kind: 'disabled' },
+    material: { bundle_id: null, format: 'msi', installer: 'installer' },
     behavior: {
       kind: 'msi',
       installer: 'installer',

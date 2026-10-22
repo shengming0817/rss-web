@@ -443,6 +443,14 @@ function softwareExport(value: unknown) {
     payload,
   }
 }
+function softwareMaterial(value: unknown) {
+  const v = closed(value, ['bundle_id', 'format', 'installer'])
+  return {
+    bundle_id: nullable(v['bundle_id'], (value) => materialText(value, 255)),
+    format: enumeration(v['format'], softwareFormats),
+    installer: identifier(v['installer']),
+  }
+}
 export function decodeSoftwareDefinition(value: unknown) {
   const v = closed(value, [
     'source',
@@ -450,6 +458,7 @@ export function decodeSoftwareDefinition(value: unknown) {
     'version',
     'provenance',
     'artifacts',
+    'material',
     'behavior',
     'signatures',
     'reboot',
@@ -463,7 +472,8 @@ export function decodeSoftwareDefinition(value: unknown) {
     version: materialText(v['version']),
     provenance: provenance(v['provenance']),
     artifacts: dictionary(v['artifacts'], softwareArtifact, 64),
-    behavior: softwareBehavior(v['behavior']),
+    material: softwareMaterial(v['material']),
+    behavior: nullable(v['behavior'], softwareBehavior),
     signatures: array(v['signatures'], (x) => {
       const s = closed(x, ['artifact', 'mechanism', 'publisher'])
       return {
@@ -493,19 +503,28 @@ export function decodeSoftwareDefinition(value: unknown) {
   }
   if (!result.artifacts[softwareInstaller(result)] || result.dependencies.length > 32)
     throw new Error('Incomplete software definition')
+  if (
+    result.behavior &&
+    (result.behavior.kind !== result.material.format ||
+      behaviorInstaller(result.behavior) !== result.material.installer)
+  )
+    throw new Error('Material and behavior differ')
   unique(Object.values(result.artifacts), (a) => a.reference)
   return result
 }
 export type SoftwareDefinition = ReturnType<typeof decodeSoftwareDefinition>
-export function softwareInstaller(s: { behavior: ReturnType<typeof softwareBehavior> }) {
-  const b = s.behavior
+function behaviorInstaller(b: ReturnType<typeof softwareBehavior>) {
   if (b.kind === 'bundle') return b.archive
   if (b.kind === 'dmg') return b.image
   if (b.kind === 'msix') return b.container.installer
   return b.installer
 }
+export function softwareInstaller(s: { material: { installer: string } }) {
+  return s.material.installer
+}
 export function softwareIdentity(s: SoftwareDefinition) {
   const b = s.behavior
+  if (!b) return { runAs: null, scope: null, deployment: null }
   const invocation =
     b.kind === 'bundle'
       ? b.install.invocation
@@ -520,6 +539,7 @@ export function softwareIdentity(s: SoftwareDefinition) {
 }
 export function supportsSoftwareRemoval(s: SoftwareDefinition) {
   const b = s.behavior
+  if (!b) return false
   return b.kind === 'dmg'
     ? b.payload.uninstall !== null && b.payload.uninstall !== false
     : b.uninstall !== null && b.uninstall !== false
@@ -530,16 +550,18 @@ export function validateSoftwareTarget(
   architecture: 'x86_64' | 'aarch64',
 ) {
   const b = s.behavior
+  if (s.material.format === 'bundle' && b?.kind !== 'bundle')
+    throw new Error('Bundle behavior required')
   const expected =
-    b.kind === 'bundle'
+    b?.kind === 'bundle'
       ? b.manifest.platform
-      : ['msi', 'winget', 'exe', 'msix'].includes(b.kind)
+      : ['msi', 'winget', 'exe', 'msix'].includes(s.material.format)
         ? 'windows'
         : 'macos'
   if (
     expected !== platform ||
-    (b.kind === 'bundle' && b.manifest.architecture !== architecture) ||
-    (b.kind === 'msix' &&
+    (b?.kind === 'bundle' && b.manifest.architecture !== architecture) ||
+    (b?.kind === 'msix' &&
       b.identity.architecture !== 'neutral' &&
       b.identity.architecture !== architecture)
   )

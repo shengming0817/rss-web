@@ -8,7 +8,7 @@ import ComplianceView from './ComplianceView.vue'
 const id = '11111111-1111-4111-8111-111111111111',
   nextId = '22222222-2222-4222-8222-222222222222'
 const definition = {
-  name: 'Office baseline',
+  presentation: { name: 'Office baseline' },
   enabled: true,
   severity: 'medium',
   platform: 'all',
@@ -89,7 +89,7 @@ it('clears a selected rule on query changes and fences late rule reads, includin
   const value = (rule: string) => ({
     id: rule,
     revision: 1,
-    definition: { ...definition, name: rule },
+    definition: { ...definition, presentation: { ...definition.presentation, name: rule } },
   })
   const read = vi.fn(async (rule: string) => value(rule)),
     task = vi.fn(async () => ({
@@ -174,5 +174,27 @@ it('clears device evidence immediately on navigation and never applies the old d
   finish(value('device-02'))
   await flushPromises()
   expect(wrapper.get('[data-testid="current-compliance"] > h2').text()).toBe('device-03 · 未知')
+  wrapper.unmount()
+})
+
+it('keeps unedited presentation keys on a rule edit without merging them into core fields', async () => {
+  const presentation = { ...definition.presentation, vendor: { label: 'extra' }, enabled: false }
+  const rule = { id, revision: 4, definition: { ...definition, presentation } }
+  const put = vi.fn().mockResolvedValue({ id, revision: 5, task: nextId })
+  const { wrapper } = await setup(
+    ComplianceRulesView,
+    { list: async () => empty, read: async () => rule, put },
+    { rule: id },
+  )
+  await wrapper.get('[data-testid="rule-name"]').setValue('Edited')
+  await wrapper.get('[data-testid="edit-rule"]').trigger('submit')
+  await flushPromises()
+  expect(put).toHaveBeenCalledWith(
+    id,
+    expect.objectContaining({
+      expectedRevision: 4,
+      input: { ...definition, presentation: { ...presentation, name: 'Edited' } },
+    }),
+  )
   wrapper.unmount()
 })

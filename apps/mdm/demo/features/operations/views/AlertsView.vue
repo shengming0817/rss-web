@@ -1,0 +1,237 @@
+<script setup lang="ts">
+import { UiButton } from '@rss/core/components'
+import { onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
+import { useDemo } from '../../../context'
+import { operation, useOperation } from '../../../../src/services/useOperation'
+import { alertStates, type Alert } from '../clients/model'
+import type { AlertFilter } from '../clients/alerts'
+import PageFrame from '../../../../src/components/PageFrame.vue'
+import OperationsReference from '../components/OperationsReference.vue'
+const { t } = useI18n(),
+  runtime = useDemo(),
+  route = useRoute(),
+  client = runtime.operations.alerts,
+  { run, runWrite, busy, failure, uncertain } = useOperation()
+const page = ref<Awaited<ReturnType<typeof client.list>>>(),
+  closureKnown = ref(false),
+  closure = ref<Awaited<ReturnType<typeof client.closure>>>(),
+  note = ref(''),
+  selected = ref<Alert>(),
+  device = ref(''),
+  state = ref<Alert['state'] | ''>(''),
+  applied = ref<AlertFilter>()
+const at = (seconds: number) =>
+  seconds <= 253402300799 ? new Date(seconds * 1000).toISOString() : String(seconds)
+let pending: (() => Promise<boolean>) | undefined
+function load(cursor?: string) {
+  if (busy.value) return
+  const filter =
+    cursor && applied.value
+      ? { ...applied.value }
+      : {
+          ...(device.value ? { device: device.value } : {}),
+          ...(state.value ? { state: state.value } : {}),
+        }
+  if (!cursor) {
+    page.value = undefined
+    applied.value = undefined
+  }
+  void run(
+    () => client.list({ ...filter, ...(cursor ? { cursor } : {}) }),
+    (v) => {
+      page.value = v
+      applied.value = filter
+    },
+  )
+}
+async function open(id: string) {
+  if (busy.value || (uncertain.value && selected.value?.id !== id)) return
+  if (selected.value?.id !== id) {
+    closure.value = undefined
+    note.value = ''
+  }
+  closureKnown.value = false
+  if (!uncertain.value) selected.value = undefined
+  const loaded = await run(
+    () => client.read(id),
+    (v) => (selected.value = v),
+  )
+  if (!loaded) return
+  await run(
+    () => client.closure(id),
+    (v) => {
+      closure.value = v
+      closureKnown.value = true
+    },
+  )
+}
+function acknowledge() {
+  if (!selected.value || busy.value || uncertain.value) return
+  const id = selected.value.id,
+    body = operation({}, selected.value.revision)
+  pending = async () => {
+    const acknowledged = await runWrite(
+      () => client.acknowledge(id, body),
+      (v) => {
+        selected.value = v
+        page.value = undefined
+      },
+    )
+    if (acknowledged)
+      await run(
+        () => client.read(id),
+        (v) => (selected.value = v),
+      )
+    return acknowledged
+  }
+  void pending()
+}
+function close() {
+  if (!selected.value || busy.value || uncertain.value || !note.value) return
+  const id = selected.value.id,
+    body = operation({ note: note.value }, selected.value.revision)
+  pending = async () => {
+    const closed = await runWrite(
+      () => client.close(id, body),
+      (v) => (closure.value = v),
+    )
+    if (closed) await open(id)
+    return closed
+  }
+  void pending()
+}
+function routeChanged() {
+  page.value = undefined
+  selected.value = undefined
+  closure.value = undefined
+  closureKnown.value = false
+  note.value = ''
+  pending = undefined
+  applied.value = undefined
+  device.value = typeof route.query['device'] === 'string' ? route.query['device'] : ''
+  state.value = ''
+  if (typeof route.query['id'] === 'string') open(route.query['id'])
+  else load()
+}
+watch(() => route.fullPath, routeChanged, { flush: 'sync' })
+onMounted(routeChanged)
+</script>
+<template>
+  <PageFrame :title="t('operations.alerts')" :busy="busy" :failure="failure">
+    <p>{{ t('operations.alertHint') }}</p>
+    <section class="console-panel">
+      <h2>{{ t('console.activeFilters') }}</h2>
+      <form @submit.prevent="load()">
+        <fieldset :disabled="busy">
+          <label>{{ t('policies.device') }}<input v-model="device" class="ui-input" /></label
+          ><label
+            >{{ t('operations.alertState')
+            }}<select v-model="state" class="ui-input">
+              <option value="">{{ t('devices.all') }}</option>
+              <option v-for="value in alertStates" :key="value" :value="value">
+                {{ t(`operations.state.${value}`) }}
+              </option>
+            </select></label
+          ><UiButton type="submit">{{ t('devices.reload') }}</UiButton>
+        </fieldset>
+      </form>
+    </section>
+    <p v-if="applied">
+      {{ t('operations.applied') }} · {{ applied.device ?? t('devices.all') }} ·
+      {{ applied.state ? t(`operations.state.${applied.state}`) : t('devices.all') }}
+    </p>
+    <p v-if="page && !page.items.length">{{ t('operations.emptyAlerts') }}</p>
+    <ul class="console-object-list">
+      <li v-for="item in page?.items" :key="item.id">
+        <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(item.id)">
+          {{ t(`operations.code.${item.code}`) }} · {{ item.target.device ?? item.target.id }}
+        </UiButton>
+        · {{ t(`security.severity.${item.severity}`) }} ·
+        {{ t(`operations.state.${item.state}`) }} ·
+        {{ item.acknowledgment ? t('operations.acknowledged') : t('operations.unacknowledged') }}
+      </li>
+    </ul>
+    <UiButton
+      v-if="page?.nextCursor"
+      :disabled="!!busy"
+      type="submit"
+      @click="load(page.nextCursor)"
+    >
+      {{ t('devices.next') }}
+    </UiButton>
+    <section v-if="selected" class="console-panel" data-testid="alert-detail">
+      <h2>{{ t(`operations.code.${selected.code}`) }} · {{ selected.id }}</h2>
+      <UiButton
+        :disabled="!!busy"
+        data-testid="refresh-alert"
+        type="submit"
+        @click="open(selected.id)"
+      >
+        {{ t('policies.refresh') }}
+      </UiButton>
+      <dl>
+        <dt>{{ t('operations.alertState') }}</dt>
+        <dd data-testid="alert-state">{{ t(`operations.state.${selected.state}`) }}</dd>
+        <dt>{{ t('devices.revision') }}</dt>
+        <dd>{{ selected.revision }}</dd>
+        <dt>{{ t('security.severityLabel') }}</dt>
+        <dd>{{ t(`security.severity.${selected.severity}`) }}</dd>
+        <dt>{{ t('operations.object') }}</dt>
+        <dd><OperationsReference :target="selected.target" /></dd>
+        <dt>{{ t('operations.openedAt') }}</dt>
+        <dd>{{ at(selected.openedAt) }}</dd>
+        <dt>{{ t('operations.updatedAt') }}</dt>
+        <dd>{{ at(selected.updatedAt) }}</dd>
+        <dt>{{ t('operations.resolvedAt') }}</dt>
+        <dd>{{ selected.resolvedAt === null ? '—' : at(selected.resolvedAt) }}</dd>
+        <dt>{{ t('operations.evidence') }}</dt>
+        <dd>
+          {{ selected.evidence.id }} / {{ selected.evidence.version }} ·
+          {{ at(selected.evidence.at) }} ·
+          {{ t(`operations.evidenceState.${selected.evidence.state}`) }}
+        </dd>
+        <dt>{{ t('operations.acknowledgment') }}</dt>
+        <dd>
+          {{
+            selected.acknowledgment
+              ? `${selected.acknowledgment.actor} · ${at(selected.acknowledgment.at)}`
+              : t('operations.unacknowledged')
+          }}
+        </dd>
+      </dl>
+      <UiButton
+        v-if="selected.state === 'open' && !selected.acknowledgment"
+        :disabled="!!(busy || uncertain)"
+        data-testid="acknowledge-alert"
+        type="submit"
+        @click="acknowledge"
+      >
+        {{ t('operations.acknowledge') }}
+      </UiButton>
+      <p>{{ t('operations.closeHint') }}</p>
+      <p v-if="!closureKnown">{{ t('operations.closureUnknown') }}</p>
+      <p v-if="closureKnown && closure">
+        {{ t('operations.ticketClosed') }} · {{ closure.actor }} · {{ at(closure.at) }} ·
+        {{ closure.note }}
+      </p>
+      <section v-if="selected.state === 'open' && closureKnown && !closure" class="console-panel">
+        <h2>{{ t('console.review') }}</h2>
+        <form @submit.prevent="close()">
+          <fieldset :disabled="busy || uncertain">
+            <label
+              >{{ t('operations.closeReason')
+              }}<input v-model="note" class="ui-input" required /></label
+            ><UiButton data-testid="close-alert" type="submit">{{
+              t('operations.closeTicket')
+            }}</UiButton>
+          </fieldset>
+        </form>
+      </section>
+      <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending()">
+        {{ t('policies.replay') }}
+      </UiButton>
+    </section>
+  </PageFrame>
+</template>

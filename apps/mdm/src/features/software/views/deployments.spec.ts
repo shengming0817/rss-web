@@ -129,6 +129,7 @@ it.each([false, true])(
                                   sha256: Array(32).fill(1),
                                 },
                               },
+                              material: { bundle_id: null, format: 'msi', installer: 'installer' },
                               behavior: {
                                 kind: 'msi',
                                 installer: 'installer',

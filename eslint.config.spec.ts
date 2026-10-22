@@ -164,3 +164,23 @@ it('allows the stateless public profile JSON decoder without exposing auth inter
     ),
   ).toContain('no-restricted-imports')
 })
+
+it('blocks production MDM imports of demo modules for static and lazy dependencies', async () => {
+  for (const code of [
+    "import { demoKey } from '../demo/context'; export const x = demoKey",
+    "export const x = () => import('../demo/bootstrap')",
+  ]) {
+    expect(await ruleIds(code, 'apps/mdm/src/bootstrap.ts')).toContain(
+      'identity-boundary/contained',
+    )
+    expect(await ruleIds(code, 'apps/mdm/src/bootstrap.spec.ts')).not.toContain(
+      'identity-boundary/contained',
+    )
+  }
+  expect(
+    await ruleIds(
+      "import { createMdm } from '../src/bootstrap'; export const x = createMdm",
+      'apps/mdm/demo/bootstrap.ts',
+    ),
+  ).not.toContain('identity-boundary/contained')
+})

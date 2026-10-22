@@ -9,9 +9,9 @@ import {
   hasEscrow,
   type Material,
   type MaterialKind,
-} from '../../src/features/security/clients/materials-model'
-import type { SecurityRequestTarget } from '../../src/features/security/clients/requests-model'
-import type { SecuritySource } from '../../src/features/security/clients/source'
+} from '../features/security/clients/materials-model'
+import type { SecurityRequestTarget } from '../features/security/clients/requests-model'
+import type { SecuritySource } from '../features/security/clients/source'
 import { error } from '../http'
 import { candidate, createSecurityPages, queryKeys } from './http'
 import { hasSecuritySource } from './source'

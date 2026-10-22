@@ -300,7 +300,7 @@ it('rejects uninstall without a declared command before preview or publication, 
   expect(f.runs()).toEqual([])
   const declaration = f.saved.versions[0]!.variants[0]!.declaration
   if (declaration.kind !== 'software') throw new Error('software fixture required')
-  if (declaration.definition.behavior.kind !== 'msi') throw new Error('Expected MSI')
+  if (declaration.definition.behavior?.kind !== 'msi') throw new Error('Expected MSI')
   declaration.definition.behavior.uninstall = {
     installer: 'installer',
     invocation: structuredClone(declaration.definition.behavior.install),

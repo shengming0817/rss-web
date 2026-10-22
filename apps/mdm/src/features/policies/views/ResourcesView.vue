@@ -7,6 +7,7 @@ import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
 import { fileHash, FILE_CHUNK_BYTES } from '../services/file-hash'
 import type { UploadSession } from '../clients/uploads'
+import { jsonObject } from '../../../services/json'
 import { uuid } from '../../../services/decode'
 import { MDM_CONTENT_BODY_LIMIT } from '@rss/api/mdm-limits'
 import type {
@@ -29,6 +30,32 @@ const { t } = useI18n(),
   client = runtime.policies.resources,
   { run, runWrite, busy, failure, uncertain } = useOperation()
 const creating = ref(false)
+const presentationName = ref(''),
+  presentationDescription = ref('')
+function readPresentation(value: ResourceRead) {
+  presentationName.value =
+    typeof value.presentation['name'] === 'string' ? value.presentation['name'] : ''
+  presentationDescription.value =
+    typeof value.presentation['description'] === 'string' ? value.presentation['description'] : ''
+}
+function savePresentation() {
+  if (!current.value) return
+  try {
+    change({
+      action: 'present',
+      presentation: jsonObject(
+        {
+          ...structuredClone(toRaw(current.value.presentation)),
+          name: presentationName.value,
+          description: presentationDescription.value,
+        },
+        65536,
+      ),
+    })
+  } catch {
+    failure.value = 'invalidRequest'
+  }
+}
 const blueprints = ref<Awaited<ReturnType<typeof client.blueprints>>>(),
   category = ref(''),
   blueprint = ref('')
@@ -128,6 +155,7 @@ function open(value = id.value) {
       (v) => {
         creating.value = false
         current.value = v
+        readPresentation(v)
         id.value = v.id
         kind.value = v.kind
         resetDraft()
@@ -506,8 +534,18 @@ watch(
         {{ t('policies.save') }}
       </UiButton>
     </fieldset>
-    <template v-if="current"
-      ><p>{{ t('policies.revision') }} {{ current.revision }}</p>
+    <template v-if="current">
+      <form data-testid="resource-presentation" @submit.prevent="savePresentation">
+        <fieldset :disabled="busy || uncertain">
+          <legend>{{ t('policies.resourcePresentation') }}</legend>
+          <label for="resource-display-name">{{ t('devices.name') }}</label
+          ><input id="resource-display-name" v-model="presentationName" class="ui-input" />
+          <label for="resource-description">{{ t('policies.selfService.description') }}</label
+          ><textarea id="resource-description" v-model="presentationDescription" class="ui-input" />
+          <UiButton type="submit">{{ t('devices.save') }}</UiButton>
+        </fieldset>
+      </form>
+      <p>{{ t('policies.revision') }} {{ current.revision }}</p>
       <div class="ui-table-scroll">
         <table class="ui-table">
           <thead>
