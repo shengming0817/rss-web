@@ -77,7 +77,6 @@ it('publishes all staged software variants in one immutable version at the curre
           demo: true,
           policies: {
             resources: { read, change, upload },
-            catalog: { list: async () => ({ items: [], nextCursor: null }) },
           },
         },
       },
@@ -185,7 +184,6 @@ it('resumes the same upload after a lost chunk response, rejects different bytes
                 .mockResolvedValue({ id: 'app', revision: 1, kind: 'software', versions: [] }),
               uploads: { begin, append, complete, receipt },
             },
-            catalog: { list: async () => ({ items: [], nextCursor: null }) },
           },
         },
       },
@@ -248,7 +246,6 @@ it('hashes metadata for a software artifact larger than one HTTP chunk without r
             resources: {
               read: async () => ({ id: 'app', revision: 1, kind: 'software', versions: [] }),
             },
-            catalog: { list: async () => ({ items: [], nextCursor: null }) },
           },
         },
       },
@@ -385,7 +382,6 @@ it.each([false, true])(
                 read: async (id: string) => ({ id, revision: 1, kind: 'software', versions: [] }),
                 uploads: { begin, append, complete },
               },
-              catalog: { list: async () => ({ items: [], nextCursor: null }) },
             },
           },
         },

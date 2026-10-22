@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { UiButton, UiDialog, UiTable, UiBadge } from '@rss/core/components'
-import { onMounted, ref, toRaw, watch } from 'vue'
+import { ref, toRaw, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -9,12 +9,13 @@ import type { Reference, ScopeRead, ScopeProjection, ScopeChange } from '../clie
 import { objectKey, type Channel } from '../../devices/clients/objects'
 import ObjectLink from '../../devices/components/ObjectLink.vue'
 import PageFrame from '../../../components/PageFrame.vue'
+import { deviceBinding } from '../../devices/useDeviceBinding'
 import ReferenceEditor from '../components/ReferenceEditor.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.policies.scopes,
   route = useRoute(),
-  { run, runWrite, busy, failure, uncertain } = useOperation()
+  { run, runWrite, busy, failure, uncertain } = useOperation([], () => deviceBinding(runtime))
 const editing = ref(false)
 const id = ref(''),
   current = ref<ScopeRead>(),
@@ -22,9 +23,24 @@ const id = ref(''),
   limitations = ref<Reference[]>([]),
   exclusions = ref<Reference[]>([]),
   unlimited = ref(true)
-const list = ref<Awaited<ReturnType<typeof runtime.policies.scopes.list>>>(),
-  devices = ref<{ id: string; name: string }[]>([]),
-  groups = ref<{ id: string; name: string }[]>([])
+const list = ref<Awaited<ReturnType<typeof runtime.policies.scopes.list>>>()
+const compared = ref(false),
+  comparison = ref<ScopeRead | null>()
+const referenceRoles = ['targets', 'limitations', 'exclusions'] as const
+async function compare() {
+  const ok = await run(
+    () => client.read(id.value),
+    (value) => {
+      comparison.value = value
+      current.value = value
+    },
+  )
+  if (ok) compared.value = true
+  else if (uncertain.value && failure.value === 'notFound') {
+    comparison.value = null
+    compared.value = true
+  }
+}
 const task = ref<string>(),
   status = ref<Awaited<ReturnType<typeof client.status>>>(),
   result = ref<Awaited<ReturnType<typeof client.page>>>(),
@@ -33,7 +49,7 @@ const task = ref<string>(),
 let pending: (() => Promise<void>) | undefined
 function load(cursor?: string) {
   void run(
-    () => runtime.policies.scopes.list(cursor),
+    () => runtime.policies.scopes.list({ after: cursor }),
     (v) => (list.value = v),
   )
 }
@@ -41,10 +57,10 @@ function apply(value: ScopeRead) {
   editing.value = false
   current.value = value
   id.value = value.id
-  targets.value = value.definition.targets
-  limitations.value = value.definition.limitations ?? []
+  targets.value = structuredClone(value.definition.targets)
+  limitations.value = structuredClone(value.definition.limitations ?? [])
   unlimited.value = value.definition.limitations === null
-  exclusions.value = value.definition.exclusions
+  exclusions.value = structuredClone(value.definition.exclusions)
 }
 function open(value = id.value) {
   if (!busy.value && !uncertain.value)
@@ -75,6 +91,7 @@ function change(input: ScopeChange) {
   if (busy.value || uncertain.value) return
   const target = current.value?.id ?? id.value,
     body = operation(input, current.value?.revision ?? 0)
+  compared.value = false
   pending = async () => {
     const acknowledged = await runWrite(
       () => client.change(target, body),
@@ -117,30 +134,43 @@ function page(cursor?: string) {
 watch([projection, channel], () => {
   result.value = undefined
 })
-onMounted(async () => {
-  await run(
-    async () =>
-      Promise.all([
-        runtime.policies.scopes.list(),
-        runtime.devices.directory.list(),
-        runtime.devices.groups.list(),
-      ]),
-    ([l, d, g]) => {
-      list.value = l
-      devices.value = d.items.map((d) => ({ id: d.id, name: d.id }))
-      groups.value = g.items.map((group) => ({ id: group.id, name: group.presentation.name }))
-    },
-  )
-  const device = route.query['device'],
-    group = route.query['group']
-  if (typeof device === 'string' || typeof group === 'string') {
-    create()
-    targets.value =
-      typeof device === 'string'
-        ? [{ kind: 'device', id: device }]
-        : [{ kind: 'group', id: group as string }]
-  }
-})
+watch(
+  () => JSON.stringify([route.fullPath, ...deviceBinding(runtime)]),
+  async () => {
+    editing.value = false
+    current.value = undefined
+    list.value = undefined
+    id.value = ''
+    targets.value = []
+    limitations.value = []
+    exclusions.value = []
+    task.value = undefined
+    status.value = undefined
+    result.value = undefined
+    pending = undefined
+    compared.value = false
+    comparison.value = undefined
+    if (
+      !(await run(
+        () => client.list(),
+        (value) => {
+          list.value = value
+        },
+      ))
+    )
+      return
+    const device = route.query['device'],
+      group = route.query['group']
+    if (typeof device === 'string' || typeof group === 'string') {
+      create()
+      targets.value =
+        typeof device === 'string'
+          ? [{ kind: 'device', id: device }]
+          : [{ kind: 'group', id: group as string }]
+    }
+  },
+  { immediate: true, flush: 'sync' },
+)
 </script>
 <template>
   <PageFrame :title="t('policies.scopes')" :busy="busy" :failure="failure">
@@ -169,7 +199,7 @@ onMounted(async () => {
         ></template
       ><template #cell-resolution="{ row }"
         ><UiBadge>{{
-          t(row.resolution ? 'devices.completed' : 'devices.pending')
+          t(row.resolution ? 'policies.savedResult' : 'policies.awaitingResult')
         }}</UiBadge></template
       ></UiTable
     >
@@ -185,24 +215,15 @@ onMounted(async () => {
       <h2>{{ t('console.summary') }}</h2>
       <p>{{ current.id }} · {{ t('policies.revision') }} {{ current.revision }}</p>
       <fieldset disabled>
-        <ReferenceEditor
-          :model-value="current.definition.targets"
-          :label="t('policies.targets')"
-          :devices="devices"
-          :groups="groups"
-        />
+        <ReferenceEditor :model-value="current.definition.targets" :label="t('policies.targets')" />
         <p v-if="current.definition.limitations === null">{{ t('policies.unlimited') }}</p>
         <ReferenceEditor
           v-else
           :model-value="current.definition.limitations"
           :label="t('policies.limitations')"
-          :devices="devices"
-          :groups="groups"
         /><ReferenceEditor
           :model-value="current.definition.exclusions"
           :label="t('policies.exclusions')"
-          :devices="devices"
-          :groups="groups"
         />
       </fieldset>
     </section>
@@ -239,37 +260,58 @@ onMounted(async () => {
           /><UiButton type="button" @click="open()">
             {{ t('policies.open') }}
           </UiButton>
-          <ReferenceEditor
-            v-model="targets"
-            :label="t('policies.targets')"
-            :devices="devices"
-            :groups="groups"
-          />
+          <ReferenceEditor v-model="targets" :label="t('policies.targets')" />
           <label><input v-model="unlimited" type="checkbox" />{{ t('policies.unlimited') }}</label>
           <p>{{ t('policies.emptyLimit') }}</p>
           <ReferenceEditor
             v-if="!unlimited"
             v-model="limitations"
             :label="t('policies.limitations')"
-            :devices="devices"
-            :groups="groups"
           />
-          <ReferenceEditor
-            v-model="exclusions"
-            :label="t('policies.exclusions')"
-            :devices="devices"
-            :groups="groups"
-          /><UiButton type="submit">{{ t('policies.save') }}</UiButton
+          <ReferenceEditor v-model="exclusions" :label="t('policies.exclusions')" /><UiButton
+            type="submit"
+            >{{ t('policies.save') }}</UiButton
           ><UiButton v-if="current" type="button" @click="change({ action: 'delete' })">
             {{ t('policies.remove') }}
           </UiButton>
         </fieldset>
       </form>
-      <UiButton v-if="uncertain && pending" :disabled="busy" @click="pending()">{{
+      <section v-if="compared" data-testid="scope-comparison" class="console-panel">
+        <h3>{{ t('devices.compare') }}</h3>
+        <dl v-if="comparison">
+          <dt>{{ t('policies.revision') }}</dt>
+          <dd>{{ comparison.revision }}</dd>
+          <template v-for="role in referenceRoles" :key="role">
+            <dt>{{ t(`policies.${role}`) }}</dt>
+            <dd>
+              {{
+                comparison.definition[role] === null
+                  ? t('policies.unlimited')
+                  : comparison.definition[role]!.map(
+                      (r) => `${t(`policies.${r.kind}`)}: ${r.id}`,
+                    ).join(', ') || '—'
+              }}
+            </dd>
+          </template>
+        </dl>
+        <p v-else>{{ t('devices.notFound') }}</p>
+      </section>
+      <UiButton v-if="uncertain || failure === 'conflict'" :disabled="busy" @click="compare">{{
+        t('devices.compare')
+      }}</UiButton>
+      <UiButton v-if="uncertain && pending" :disabled="busy || !compared" @click="pending()">{{
         t('policies.replay')
       }}</UiButton>
     </UiDialog>
-    <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending()">
+    <UiButton v-if="uncertain || failure === 'conflict'" :disabled="busy" @click="compare">{{
+      t('devices.compare')
+    }}</UiButton>
+    <UiButton
+      v-if="uncertain && pending"
+      :disabled="busy || !compared"
+      type="button"
+      @click="pending()"
+    >
       {{ t('policies.replay') }}
     </UiButton>
     <section v-if="task" class="console-panel scope-results">
@@ -294,7 +336,10 @@ onMounted(async () => {
           t('policies.open')
         }}</UiButton>
         <template v-if="result"
-          ><p>{{ result.channel }}</p>
+          ><p>
+            {{ result.channel }} ·
+            {{ t(result.current ? 'policies.savedResult' : 'policies.historicalResult') }}
+          </p>
           <ul v-if="result.page.kind === 'members'">
             <li v-for="object in result.page.items" :key="objectKey(object)">
               <ObjectLink :object="object" />

@@ -142,6 +142,13 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
       const kind = request.query.get('kind'),
         items = [...resources.values()]
           .filter((r) => (!kind || r.kind === kind) && r.id > (request.query.get('after') ?? ''))
+          .filter((r) => {
+            const active = request.query.get('active')
+            return (
+              active === null ||
+              r.versions.some((v) => v.state === 'active') === (active === 'true')
+            )
+          })
           .sort((a, b) => a.id.localeCompare(b.id)),
         limit = Number(request.query.get('limit') ?? 20)
       return ok({

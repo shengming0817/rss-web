@@ -160,7 +160,7 @@ function rulePage(after?: string) {
 function scopePage(cursor?: string) {
   void run(
     async () => {
-      const page = await runtime.policies.scopes.list(cursor)
+      const page = await runtime.policies.scopes.list({ after: cursor })
       return {
         ...page,
         items: page.items.map((s) => ({

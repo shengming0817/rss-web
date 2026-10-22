@@ -340,10 +340,21 @@ try {
     return response.json()
   }
   const settled = async (url) => {
-    for (let i = 0; i < 30; i++) {
+    const deadline = Date.now() + 90000
+    while (Date.now() < deadline) {
       const value = await api(url)
       if (value.status === 'completed') return value
+      if (!['pending', 'running'].includes(value.status))
+        console.log(
+          JSON.stringify({
+            phase: 'calculation-status',
+            status: value.status,
+            failure: value.failure,
+            replacement: !!value.replacementTask,
+          }),
+        )
       assert.ok(['pending', 'running'].includes(value.status))
+      await new Promise((resolve) => setTimeout(resolve, 500))
     }
     assert.fail('bounded calculation deadline')
   }
@@ -403,6 +414,69 @@ try {
   assert.equal(decision.page.items[0].object.kind, 'endpoint')
   assert.equal(decision.page.items[0].qualification.state, 'eligible')
   assert.ok(decision.page.items[0].targets.some((s) => s.reference.id === group))
+  phase = 'formal-planning-directory'
+  const selectedScope = randomUUID()
+  for (const scopeId of [selectedScope, ...Array.from({ length: 20 }, () => randomUUID())])
+    await mutate(`/api/v1/scopes/${scopeId}`, {
+      action: 'put',
+      definition: { targets: [], limitations: null, exclusions: [] },
+    })
+  const firstScopes = await api('/api/v1/scopes?limit=1')
+  assert.equal(firstScopes.items.length, 1)
+  assert.ok(firstScopes.nextCursor)
+  const secondScopes = await api(`/api/v1/scopes?limit=1&after=${firstScopes.nextCursor}`)
+  assert.ok(secondScopes.items[0].id > firstScopes.items[0].id)
+  await page.goto(path('policies'))
+  await loaded()
+  await page.getByRole('button', { name: '下一页', exact: true }).click()
+  await loaded()
+  assert.ok(await page.locator('main').textContent())
+  // Selector denial must not suppress the independently authorized Scope directory.
+  await writeRule(fixture.rule.grants.filter((g) => g.operation !== 'group_read'))
+  await page.reload()
+  await loaded()
+  assert.ok((await page.locator('main').textContent()).includes('目标范围'))
+  assert.equal((await request('get', origin + '/api/v1/groups')).status(), 403)
+  await writeRule(fixture.rule.grants)
+  await page.getByRole('button', { name: '新建', exact: true }).click()
+  const planningScopeDialog = page.getByRole('dialog')
+  await planningScopeDialog.locator('#scope-id').fill(selectedScope)
+  await planningScopeDialog.getByRole('button', { name: '打开', exact: true }).click()
+  await loaded()
+  await page.getByRole('button', { name: '编辑', exact: true }).click()
+  const editDialog = page.getByRole('dialog')
+  let committedScope
+  await context.route(`**/api/v1/scopes/${selectedScope}`, async (route) => {
+    if (route.request().method() !== 'POST') return route.continue()
+    const response = await route.fetch()
+    assert.equal(response.status(), 200)
+    committedScope = route.request().postDataJSON()
+    await route.abort('failed')
+  })
+  await editDialog.getByRole('button', { name: '保存', exact: true }).click()
+  await editDialog.getByRole('alert').filter({ hasText: '提交结果未知' }).waitFor()
+  assert.equal(
+    await editDialog.getByRole('button', { name: '重放同一操作', exact: true }).isEnabled(),
+    false,
+  )
+  assert.equal((await api(`/api/v1/scopes/${selectedScope}`)).revision, 2)
+  await context.unroute(`**/api/v1/scopes/${selectedScope}`)
+  await editDialog.getByRole('button', { name: '重读服务器值并比较', exact: true }).click()
+  await loaded()
+  const replay = page.waitForRequest(
+    (r) => r.method() === 'POST' && new URL(r.url()).pathname === `/api/v1/scopes/${selectedScope}`,
+  )
+  await editDialog.getByRole('button', { name: '重放同一操作', exact: true }).click()
+  assert.deepEqual((await replay).postDataJSON(), committedScope)
+  await loaded()
+  assert.equal((await api(`/api/v1/scopes/${selectedScope}`)).revision, 2)
+  const conflict = await request('post', origin + `/api/v1/scopes/${selectedScope}`, {
+    headers: await headers(),
+    data: { ...committedScope, operationId: randomUUID() },
+  })
+  assert.equal(conflict.status(), 409)
+  coverage.push('formal-planning-pagination-selector-denial-cas-and-unknown-write-reconciliation')
+  phase = 'group-scope-assignments'
   const policy = randomUUID()
   await mutate(`/api/v1/policies/${policy}`, {
     action: 'put',

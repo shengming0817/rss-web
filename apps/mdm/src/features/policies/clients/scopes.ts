@@ -16,6 +16,10 @@ import {
 import { channels, objectRef, objectKey, type Channel } from '../../devices/clients/objects'
 import { eligibility } from './model'
 
+export interface ScopeQuery {
+  after?: string | undefined
+  ready?: boolean | undefined
+}
 export type Reference = { kind: 'device' | 'group'; id: string }
 export interface ScopeDefinition {
   targets: Reference[]
@@ -121,11 +125,11 @@ export function decodeScopePage(
 }
 export function createScopesClient(transport: HttpTransport) {
   return {
-    list: (after?: string) =>
+    list: (query: ScopeQuery = {}) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/scopes',
-        query: { after, limit: 20 },
+        query: { ...query, limit: 20 },
         successStatus: 200,
         decode(value) {
           const v = closed(value, ['items', 'nextCursor'])

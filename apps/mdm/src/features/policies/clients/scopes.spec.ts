@@ -157,3 +157,31 @@ it('requires current Scope publication coordinates and rejects retired incomplet
   ])
     expect(() => decodeScope(invalid, id)).toThrow()
 })
+
+it('filters selectable Scopes by server readiness and preserves list publication coordinates', async () => {
+  let value: unknown = {
+    items: [
+      {
+        id,
+        revision: 2,
+        deleted: false,
+        calculationRevision: 4,
+        resolution: result,
+        resolutionRevision: 3,
+      },
+    ],
+    nextCursor: id,
+  }
+  const request = vi.fn(async (o: RequestOptions<unknown>) => o.decode(value))
+  const client = createScopesClient({ request } as unknown as HttpTransport)
+  expect((await client.list({ after: group, ready: true })).items[0]).toMatchObject({
+    calculationRevision: 4,
+    resolutionRevision: 3,
+  })
+  expect(request.mock.calls[0]?.[0]).toMatchObject({
+    path: '/api/v1/scopes',
+    query: { after: group, ready: true, limit: 20 },
+  })
+  value = { items: [], nextCursor: 'resource-name' }
+  await expect(client.list()).rejects.toThrow()
+})

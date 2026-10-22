@@ -352,11 +352,11 @@ export function createResourcesClient(transport: HttpTransport) {
           }
         },
       }),
-    list: (kind?: ResourceKind, after?: string) =>
+    list: (kind?: ResourceKind, after?: string, active?: boolean) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/resources',
-        query: { kind, after, limit: 20 },
+        query: { kind, after, active, limit: 20 },
         successStatus: 200,
         decode(value) {
           const v = closed(value, ['items', 'nextCursor'])

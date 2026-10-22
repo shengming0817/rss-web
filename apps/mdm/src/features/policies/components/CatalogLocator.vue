@@ -22,12 +22,24 @@ function load(cursor?: string) {
   void run(
     async () => {
       if (props.collection === 'scopes') {
-        const p = await runtime.policies.scopes.list(cursor)
-        return { ...p, items: p.items.map((i) => ({ id: i.id, label: i.id })) }
+        const p = await runtime.policies.scopes.list({ after: cursor, ready: true })
+        return {
+          ...p,
+          items: p.items.map((i) => ({
+            id: i.id,
+            label: `${i.id} · ${t('policies.revision')} ${i.revision}`,
+          })),
+        }
       }
       {
-        const p = await runtime.policies.resources.list(undefined, cursor)
-        return { ...p, items: p.items.map((i) => ({ id: i.id, label: i.id })) }
+        const p = await runtime.policies.resources.list(undefined, cursor, true)
+        return {
+          ...p,
+          items: p.items.map((i) => ({
+            id: i.id,
+            label: `${i.id} · ${t('policies.version')} ${i.activeVersion ?? '—'}`,
+          })),
+        }
       }
     },
     (result) => {
