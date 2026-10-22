@@ -180,11 +180,20 @@ try:
                     self.send_error(404); return
                 body = json.dumps(data).encode()
                 self.send_response(200); self.send_header('Content-Type','application/json'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body)
-        pinned = socket.gethostbyname(socket.gethostname())
-        server = ThreadingHTTPServer((pinned, 0), SourceHandler)
         tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         tls.load_cert_chain(environment.root/'server.crt', environment.root/'server.key')
-        server.socket = tls.wrap_socket(server.socket, server_side=True)
+        class SourceServer(ThreadingHTTPServer):
+            daemon_threads = False
+            def get_request(self):
+                connection, address = super().get_request()
+                connection.settimeout(5)
+                try:
+                    return tls.wrap_socket(connection, server_side=True, do_handshake_on_connect=False), address
+                except Exception:
+                    connection.close()
+                    raise
+        pinned = socket.gethostbyname(socket.gethostname())
+        server = SourceServer((pinned, 0), SourceHandler)
         upstream = f'https://localhost:{server.server_port}'
         threading.Thread(target=server.serve_forever, daemon=True).start()
         providers.callback(server.server_close); providers.callback(server.shutdown)

@@ -179,6 +179,13 @@ watch(
 <template>
   <PageFrame :title="t('software.imports')" :busy="busy" :failure="failure"
     ><p>{{ t('software.importDirectHint') }}</p>
+    <p v-if="failure === 'unsupported'" role="alert">
+      {{ t('software.ux.contentPrerequisite') }}
+      <RouterLink
+        :to="{ name: 'settings-material', params: { tenant: runtime.tenant, material: 'storage' } }"
+        >{{ t('settings.integrations') }}</RouterLink
+      >
+    </p>
     <UiStepIndicator
       :steps="['source', 'coordinates', 'verify', 'deliver'].map((v) => t(`software.ux.${v}`))"
       :current="step"

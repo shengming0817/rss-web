@@ -1,3 +1,4 @@
+import { decodeMdmError } from '@rss/api/mdm'
 import { DOMWrapper, mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { defineComponent, h, ref, type Component } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -520,12 +521,15 @@ for (const protocol of [
   })
 it('submits a complete synchronous import with explicit target and auxiliary material choices', async () => {
   const { definition } = softwareResource(),
-    imported = vi.fn().mockResolvedValue({
-      resource: 'imported',
-      version: '2',
-      resourceDigest: sha,
-      storageRevision: 5,
-    })
+    imported = vi
+      .fn()
+      .mockRejectedValueOnce(decodeMdmError(501, { code: 'action_not_supported' }))
+      .mockResolvedValue({
+        resource: 'imported',
+        version: '2',
+        resourceDigest: sha,
+        storageRevision: 5,
+      })
   const selected = {
     ...source,
     source: {
@@ -608,6 +612,10 @@ it('submits a complete synchronous import with explicit target and auxiliary mat
       nativeExport: true,
     },
   })
+  expect(wrapper.text()).toContain('内容后端未启用或此操作不可用')
+  expect(wrapper.find('section[role=status]').exists()).toBe(false)
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
   expect(wrapper.text()).toContain('imported / 2 · 5')
   wrapper.unmount()
 })
