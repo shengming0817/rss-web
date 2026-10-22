@@ -138,6 +138,7 @@ it('clears rows and drawer on permission failure and explicitly restarts expired
     .trigger('click')
   await flushPromises()
   expect(f.wrapper.find('tbody').exists()).toBe(false)
+  expect(f.wrapper.find('[data-testid=channel-facts]').exists()).toBe(false)
   expect(f.body().find('[data-testid=audit-detail]').exists()).toBe(false)
   status = 403
   await f.wrapper.get('[data-testid=audit-filter]').trigger('submit')
@@ -170,6 +171,15 @@ it('renders diagnostic uncertainty and independent health, then clears the snaps
     if (denied) throw decodeMdmError(403, { code: 'permission_denied' })
     return {
       alive: true,
+      channels: [
+        {
+          name: 'apple',
+          state: 'degraded',
+          reasons: ['material_version_mismatch'],
+          listening: false,
+          loadedMaterials: { apns: 4 },
+        },
+      ],
       ready: true,
       components: [
         {
@@ -193,6 +203,8 @@ it('renders diagnostic uncertainty and independent health, then clears the snaps
     }
   })
   expect(f.wrapper.text()).toContain('未知')
+  expect(f.wrapper.get('[data-testid=channel-facts]').text()).toContain('所选与加载版本不一致')
+  expect(f.wrapper.get('[data-testid=channel-facts]').text()).toContain('apns · 4')
   expect(f.wrapper.findAll('tbody tr')).toHaveLength(1)
   await f.wrapper.findAll('tbody button')[0]!.trigger('click')
   await flushPromises()
@@ -204,6 +216,7 @@ it('renders diagnostic uncertainty and independent health, then clears the snaps
     .trigger('click')
   await flushPromises()
   expect(f.wrapper.find('tbody').exists()).toBe(false)
+  expect(f.wrapper.find('[data-testid=channel-facts]').exists()).toBe(false)
   expect(f.body().find('[data-testid=diagnostic-detail]').exists()).toBe(false)
   expect(
     f.request.mock.calls.every(

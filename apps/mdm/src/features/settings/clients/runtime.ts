@@ -10,6 +10,13 @@ import {
   unique,
 } from '../../../services/decode'
 const reasons = [
+  'material_not_selected',
+  'material_unreadable',
+  'material_invalid',
+  'trust_conflict',
+  'material_revoked',
+  'material_version_mismatch',
+  'listener_unavailable',
   'initialization_authorization',
   'initialization_content',
   'initialization_conflict',
@@ -43,10 +50,32 @@ function run(value: unknown) {
   }
 }
 export function runtimeSnapshot(value: unknown) {
-  const v = closed(value, ['alive', 'ready', 'components'])
+  const v = closed(value, ['alive', 'ready', 'components', 'channels'])
   return {
     alive: boolean(v['alive']),
     ready: boolean(v['ready']),
+    channels: unique(
+      array(v['channels'], (value) => {
+        const c = closed(value, ['name', 'state', 'reasons', 'listening', 'loadedMaterials'])
+        return {
+          name: enumeration(c['name'], [
+            'apple',
+            'windows',
+            'agent',
+            'windows_push',
+            'agent_bootstrap',
+            'signing',
+          ] as const),
+          state: enumeration(c['state'], ['disabled', 'waiting', 'ready', 'degraded'] as const),
+          reasons: array(c['reasons'], reason),
+          listening: boolean(c['listening']),
+          loadedMaterials: Object.fromEntries(
+            Object.entries(record(c['loadedMaterials'])).map(([key, value]) => [key, count(value)]),
+          ),
+        }
+      }),
+      (c) => c.name,
+    ),
     components: unique(
       array(v['components'], (value) => {
         const c = record(value)
@@ -75,7 +104,6 @@ export function runtimeSnapshot(value: unknown) {
             'telemetry',
             'inventory',
             'identity_audit',
-            'apple',
             'automation',
             'execution_recovery',
           ] as const),

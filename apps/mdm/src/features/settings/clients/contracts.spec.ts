@@ -437,6 +437,7 @@ it('checks task/PKI tenant bindings and current-generation installation observat
 it('reads explicit runtime facts and never turns missing counts into zero', async () => {
   const snapshot = {
     alive: true,
+    channels: [],
     ready: false,
     components: [
       {
@@ -474,6 +475,7 @@ it('reads explicit runtime facts and never turns missing counts into zero', asyn
   expect(
     runtimeSnapshot({
       alive: true,
+      channels: [],
       ready: true,
       components: [{ name: 'inventory', readiness: 'ready', health: 'healthy', reasons: [] }],
     }).components[0]?.runner,
@@ -513,6 +515,7 @@ it('does not manufacture a package operation receipt from a null result', async 
 it('decodes current initialization and telemetry diagnostics without turning missing observations into success', () => {
   const current = {
     alive: true,
+    channels: [],
     ready: false,
     components: [
       {
@@ -535,4 +538,26 @@ it('decodes current initialization and telemetry diagnostics without turning mis
   expect(decoded.ready).toBe(false)
   expect(decoded.components[0]!.queues[0]!.count).toBeNull()
   expect(decoded.components[1]!.health).toBe('unknown')
+})
+
+it('requires current channel observations and keeps loaded material distinct from readiness', () => {
+  const channel = {
+    name: 'apple',
+    state: 'degraded',
+    reasons: ['trust_conflict'],
+    listening: false,
+    loadedMaterials: { apns: 4 },
+  }
+  const value = { alive: true, ready: true, components: [], channels: [channel] }
+  expect(runtimeSnapshot(value)).toMatchObject({ ready: true, channels: [channel] })
+  expect(() => runtimeSnapshot({ alive: true, ready: true, components: [] })).toThrow()
+  expect(() => runtimeSnapshot({ ...value, channels: [channel, channel] })).toThrow()
+  for (const bad of [
+    { ...channel, state: 'configured' },
+    { ...channel, reasons: ['unknown_reason'] },
+    { ...channel, loadedMaterials: { apns: -1 } },
+    { ...channel, legacy: true },
+  ]) {
+    expect(() => runtimeSnapshot({ ...value, channels: [bad] })).toThrow()
+  }
 })

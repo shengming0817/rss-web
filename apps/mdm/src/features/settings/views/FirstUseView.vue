@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ChannelPanel from '../components/ChannelPanel.vue'
 import { computed, onMounted, ref, toRaw, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -451,5 +452,6 @@ useSettingsFacts(() => {
     <RouterLink v-if="finished" :to="{ name: 'workspace', params: { tenant: runtime.tenant } }">{{
       t('settings.guideWorkspace')
     }}</RouterLink>
+    <ChannelPanel v-if="runtime.realm === 'tenant'" />
   </PageFrame>
 </template>

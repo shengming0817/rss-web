@@ -29,7 +29,7 @@ function time(value: number | null | undefined) {
       >{{ t('settings.savedVersion') }} <strong>{{ revision }}</strong></span
     ><span
       >{{ t('settings.requestedVersion') }} <strong>{{ desiredRevision ?? '—' }}</strong></span
-    ><span>{{ t('settings.runtimeVersion') }} {{ t('settings.notObserved') }}</span>
+    >
   </div>
   <div class="settings-table-wrap">
     <table class="ui-table">

@@ -336,9 +336,21 @@ try {
   const diagnostics = await get('/api/v1/runtime/diagnostics')
   assert.ok(diagnostics.components.some((c) => c.name === 'inventory'))
   assert.ok(diagnostics.components.some((c) => c.name === 'execution_recovery'))
+  assert.deepEqual(diagnostics.channels.map((c) => c.name).sort(), [
+    'agent',
+    'agent_bootstrap',
+    'apple',
+    'signing',
+    'windows',
+    'windows_push',
+  ])
   await page.goto(at('operations/diagnostics'))
   await load()
   assert.equal(await page.locator('tbody tr').count(), diagnostics.components.length)
+  assert.equal(
+    await page.locator('[data-testid=channel-facts] article').count(),
+    diagnostics.channels.length,
+  )
   await page.locator('tbody button').first().click()
   await page.getByTestId('diagnostic-detail').waitFor()
   await changeRule(
