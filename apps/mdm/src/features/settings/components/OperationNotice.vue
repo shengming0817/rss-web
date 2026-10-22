@@ -7,6 +7,7 @@ withDefaults(
     operation?: SettingsOperation | undefined
     busy?: boolean
     canWrite?: boolean
+    compareSupported?: boolean
     querySupported?: boolean
     compared?: boolean
   }>(),
@@ -51,7 +52,7 @@ const { t } = useI18n()
         >{{ t('settings.retryOriginal') }}</UiButton
       >
       <UiButton
-        v-if="operation.state === 'conflict'"
+        v-if="operation.state === 'conflict' && compareSupported !== false"
         :disabled="!!busy || !canWrite"
         @click="$emit('compare')"
         >{{ t('settings.readComparison') }}</UiButton

@@ -139,6 +139,8 @@ export const pkiEn = {
 }
 
 export const recoveryZh = {
+  conflictHandoff:
+    '原恢复请求冲突，已保持锁定。当前合同没有恢复状态读取接口，请由受控运维核对原操作、登记和 CA 材料；此处不新建恢复或自动重签。',
   registration: 'Agent 登记恢复',
   issuance: 'Agent 原签发恢复',
   registrationId: '原 Agent 登记 ID',
@@ -170,6 +172,8 @@ export const recoveryZh = {
   fingerprint: '已关联证书指纹',
 }
 export const recoveryEn = {
+  conflictHandoff:
+    'The original recovery request conflicted and remains locked. No recovery status read API is available. Controlled operations must verify the original operation, registration and CA material. This page creates no replacement recovery or automatic signing.',
   registration: 'Agent registration recovery',
   issuance: 'Original Agent issuance recovery',
   registrationId: 'Original Agent registration ID',

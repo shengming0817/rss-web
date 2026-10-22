@@ -62,7 +62,11 @@ useSettingsFacts(clear)
       :busy="busy"
       :can-write="canWrite"
       :query-supported="false"
+      :compare-supported="false"
     />
+    <p v-if="pending?.state === 'conflict'" role="alert">
+      {{ t('security.recovery.conflictHandoff') }}
+    </p>
     <form class="settings-form" @submit.prevent="recover">
       <fieldset :disabled="locked || !canWrite">
         <label for="pki-attempt">{{ t('settings.signingAttempt') }}</label

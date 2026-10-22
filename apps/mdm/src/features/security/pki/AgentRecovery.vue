@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { UiButton } from '@rss/core/components'
 import { isRssApiError } from '@rss/api/mdm'
@@ -40,7 +40,12 @@ const locator = ref(''),
   returnedIssuance = ref<string>(),
   grant = ref<ReturnType<typeof grantReceipt>>(),
   candidate = ref<ReturnType<typeof issuanceCandidate>>()
+let generation = 0
+onBeforeUnmount(() => {
+  generation++
+})
 function clear() {
+  generation++
   locator.value = ''
   originalOperation.value = ''
   secret.value = ''
@@ -57,10 +62,12 @@ useSettingsSecrets(() => {
 })
 useSettingsFacts(clear)
 async function capture<T>(request: () => Promise<T>) {
+  const own = generation
   try {
     return await request()
   } catch (error) {
-    if (isRssApiError(error) && error.issuanceId) returnedIssuance.value = error.issuanceId
+    if (own === generation && isRssApiError(error) && error.issuanceId)
+      returnedIssuance.value = error.issuanceId
     throw error
   }
 }
@@ -152,7 +159,11 @@ async function recover() {
       :busy="busy"
       :can-write="canWrite"
       :query-supported="false"
+      :compare-supported="false"
     />
+    <p v-if="pending?.state === 'conflict'" role="alert">
+      {{ t('security.recovery.conflictHandoff') }}
+    </p>
     <form class="settings-form" @submit.prevent="recover">
       <fieldset :disabled="locked || !canWrite">
         <label :for="'agent-' + kind">{{

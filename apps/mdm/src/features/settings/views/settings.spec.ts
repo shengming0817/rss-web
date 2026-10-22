@@ -1656,3 +1656,44 @@ it('presents recovered Agent candidates with original signing identity while kee
     '/api/v1/agent-issuances/{issuance}/recover',
   ])
 })
+
+it('discards a late Agent recovery error locator after a session changes during the request', async () => {
+  const f = await fixture(AgentRecovery, { kind: 'registration' })
+  await f.wrapper.get('#agent-registration').setValue(tenant)
+  await f.wrapper.get('#agent-recovery-operation').setValue(id)
+  await f.wrapper.get('#agent-recovery-secret').setValue('A'.repeat(43))
+  await f.wrapper.get('#agent-recovery-csr').setValue('YQ==')
+  let reject!: (error: unknown) => void
+  f.setHandler(
+    () =>
+      new Promise((_resolve, fail) => {
+        reject = fail
+      }),
+  )
+  await button(f.wrapper, '核对并继续').trigger('click')
+  await flushPromises()
+  await button(f.wrapper, '核验并继续原恢复').trigger('click')
+  await flushPromises()
+  f.state.value = { ...f.state.value, session: { id: principal } }
+  reject(decodeAgentError(503, { code: 'issuance_unknown', issuanceId: principal }))
+  await flushPromises()
+  expect(f.wrapper.text()).not.toContain(principal)
+  expect(f.settings.operations.records.size).toBe(0)
+})
+it('offers controlled handoff for recovery conflicts without exposing a nonfunctional read action', async () => {
+  const f = await fixture(AgentRecovery, { kind: 'registration' })
+  await f.wrapper.get('#agent-registration').setValue(tenant)
+  await f.wrapper.get('#agent-recovery-operation').setValue(id)
+  await f.wrapper.get('#agent-recovery-secret').setValue('A'.repeat(43))
+  await f.wrapper.get('#agent-recovery-csr').setValue('YQ==')
+  f.setHandler(() => {
+    throw decodeAgentError(409, { code: 'operation_conflict', issuanceId: null })
+  })
+  await button(f.wrapper, '核对并继续').trigger('click')
+  await flushPromises()
+  await button(f.wrapper, '核验并继续原恢复').trigger('click')
+  await flushPromises()
+  expect(f.wrapper.text()).toContain('请由受控运维核对原操作')
+  expect(f.wrapper.findAll('button').some((b) => b.text() === '读取最新状态以比较')).toBe(false)
+  expect(f.wrapper.get('fieldset').attributes('disabled')).toBeDefined()
+})

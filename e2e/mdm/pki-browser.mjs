@@ -6,8 +6,8 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import process from 'node:process'
 import { executeBounded } from '../identity/process.mjs'
-export async function exercisePki({page,context,fixture,coverage,temp,go}) {
-  const origin=fixture.origin, root=dirname(fileURLToPath(import.meta.url)), at=p=>`${origin}/tenants/${fixture.tenant}/${p}`
+export async function exercisePki({page,context,fixture,coverage,temp,go,collectorLifecycle}) {
+  const origin=fixture.origin, at=p=>`${origin}/tenants/${fixture.tenant}/${p}`
   const get=async path=>{const response=await context.request.get(origin+path);assert.equal(response.status(),200);return response.json()}
   const reply=(path,method='POST')=>page.waitForResponse(r=>r.request().method()===method && new URL(r.url()).pathname===path)
   const trusted=await get('/api/v1/pki/agent/trust'), candidate={...trusted,revision:trusted.revision+1,issuers:[...trusted.issuers,{...fixture.pki.candidateTrust.issuers[0],mode:'prepared'}]}
@@ -29,7 +29,7 @@ export async function exercisePki({page,context,fixture,coverage,temp,go}) {
   await rotation.getByRole('alert').filter({hasText:'前提未满足或版本已变化'}).waitFor()
   assert.equal((await get('/api/v1/pki/agent/trust')).revision,prepared.revision)
   coverage.push('pki-real-ca-public-material-prepare-and-missing-ack-409')
-  const ack=await executeBounded('python3',[join(root,'device-agent.py'),'pki-ack',process.env.MDM_ENROLLMENT_BROWSER_FIXTURE],{cwd:join(root,'../..'),env:process.env,timeoutMs:30000,stdio:['ignore','pipe','pipe']})
+  const ack=await runPkiCollector(process.env.MDM_ENROLLMENT_BROWSER_FIXTURE,collectorLifecycle)
   assert.equal(ack.status,0);assert.equal(ack.timedOut,false)
   await rotation.getByRole('button',{name:'读取最新状态以比较',exact:true}).click()
   await rotation.getByRole('button',{name:'已比较，重新编辑',exact:true}).click()
@@ -119,4 +119,13 @@ export async function exercisePki({page,context,fixture,coverage,temp,go}) {
   await context.clearCookies()
   assert.equal((await context.request.get(origin+'/api/v1/pki/agent/trust')).status(),401)
   coverage.push('pki-and-agent-recovery-real-credentials-403-and-anonymous-401')
+}
+
+// The enrollment browser owns cancellation; this promise resolves only after process release.
+export async function runPkiCollector(fixtureFile,lifecycle={}) {
+  if(lifecycle.interrupted?.())throw new Error('PKI collector cancelled')
+  const root=dirname(fileURLToPath(import.meta.url))
+  const result=await executeBounded('python3',[join(root,'device-agent.py'),'pki-ack',fixtureFile],{cwd:join(root,'../..'),env:process.env,timeoutMs:30000,stdio:['ignore','pipe','pipe'],onChild:lifecycle.onChild,onRelease:lifecycle.onRelease})
+  if(lifecycle.interrupted?.())throw new Error('PKI collector cancelled')
+  return result
 }
