@@ -18,8 +18,8 @@ import type {
 import type { registration } from '../../src/features/devices/clients/enrollment'
 import type { ViewEndpoint } from '../../src/features/devices/clients/endpoint-model'
 export interface DemoDevice {
-  registrationUser?: Omit<NonNullable<ViewEndpoint['registrationUser']>, 'display'>
-  currentUser?: Omit<NonNullable<ViewEndpoint['currentUser']>, 'display'>
+  registrationUser?: Omit<NonNullable<ViewEndpoint['registrationUser']>, 'display'> | undefined
+  currentUser?: Omit<NonNullable<ViewEndpoint['currentUser']>, 'display'> | undefined
   scopedInventory?: (Omit<Inventory, 'collectionScope'> & { collectionScope: CollectionScope })[]
   securityBindings?: { registration: string; generation: number; capabilities: string[] }[]
   bootstrapBindings?: {

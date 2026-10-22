@@ -1,10 +1,10 @@
 /** MOCK_SOURCE: same wire as the product; synthetic facts never enter production bundles. */
 import { randomUUID } from 'node:crypto'
 import { array, closed, count, uuid } from '../../src/services/decode'
-import type {
-  PersonDisplay,
+import {
   member,
   currentMember,
+  type PersonDisplay,
   type Endpoint,
   type ViewEndpoint,
 } from '../../src/features/devices/clients/endpoint-model'
