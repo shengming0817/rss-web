@@ -28,6 +28,14 @@ it('shows channel communication separately and clears the MDM receipt after regi
   const before = await h.devices.directory.detail('device-01')
   expect(before.channels.map((c) => c.channel).sort()).toEqual(['agent', 'mdm'])
   const card = () => h.wrapper.find('[data-endpoint="device-01"]')
+  async function openChannels() {
+    const disclosure = h.wrapper
+      .findAllComponents({ name: 'UiDisclosure' })
+      .find((d) => d.props('label') === '通道')!
+    await disclosure.get('button').trigger('click')
+    await flushPromises()
+  }
+  await openChannels()
   for (const channel of before.channels) {
     expect(channel.lastCommunicationReceivedAt).not.toBeNull()
     expect(card().text()).toContain(
@@ -50,9 +58,10 @@ it('shows channel communication separately and clears the MDM receipt after regi
     kind: 'enrollment_bind',
     device: 'device-01',
     enrollment: enrollment.enrollmentId,
-    at: 1780000200,
+    at: Math.floor(Date.now() / 1000),
   })
   await h.click('重新读取')
+  await openChannels()
   const after = await h.devices.directory.detail('device-01')
   expect(after.channels.find((c) => c.channel === 'mdm')?.lastCommunicationReceivedAt).toBeNull()
   expect(card().text()).toContain('当前注册尚无有效通信记录')
@@ -224,7 +233,7 @@ async function confirmCredential() {
   const dialog = new DOMWrapper(document.body).get('[role=alertdialog]')
   await dialog
     .findAll('button')
-    .find((button) => button.text() === '我已核对目标、世代和风险，确认操作')!
+    .find((button) => button.text() === '我已核对目标、当前注册和风险，确认操作')!
     .trigger('click')
   await flushPromises()
 }
