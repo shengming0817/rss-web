@@ -8,6 +8,18 @@ export const operationsFeature: MdmFeature = {
   },
   routes: [
     {
+      path: '/tenants/:tenant/operations/audit',
+      name: 'operations-audit',
+      component: () => import('./views/AuditView.vue'),
+      meta: { protected: true },
+    },
+    {
+      path: '/tenants/:tenant/operations/diagnostics',
+      name: 'operations-diagnostics',
+      component: () => import('./views/DiagnosticsView.vue'),
+      meta: { protected: true },
+    },
+    {
       path: '/tenants/:tenant/operations/windows-entra',
       name: 'operations-windowsEntra',
       component: () => import('../enrollment/views/WindowsEntraView.vue'),
