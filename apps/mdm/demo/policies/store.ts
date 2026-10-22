@@ -129,6 +129,7 @@ export function createPolicyStore() {
           enumeration(action, [
             'execution',
             'native_collection',
+            'telemetry_profile',
             'configuration',
             'software',
             'ensure_agent_installed',

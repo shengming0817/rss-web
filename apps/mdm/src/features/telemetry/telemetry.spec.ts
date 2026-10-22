@@ -1,0 +1,586 @@
+import { afterEach, expect, it, vi } from 'vitest'
+import { mount, flushPromises, DOMWrapper, type VueWrapper } from '@vue/test-utils'
+import { shallowRef } from 'vue'
+import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
+import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
+import { decodeMdmError } from '@rss/api/mdm'
+import type { IdentitySession } from '@rss/auth'
+import { createScenario, TENANT } from '../../../demo/scenario'
+import { createDeviceDemo } from '../../../demo/devices/state'
+import { createAutomationDemo } from '../../../demo/policies/state'
+import { seedTelemetry, DEMO_PROFILE } from '../../../demo/telemetry-seed'
+import { ADMIN } from '../../../demo/operations/authorization'
+import { mdmKey, type MdmRuntime } from '../../context'
+import { mdmI18n } from '../../i18n'
+import { createDeviceClients } from '../devices/client'
+import { createPolicyClients } from '../policies/client'
+import { createOperationsClients } from '../operations/client'
+import { settingsFeature } from '../settings/routes'
+import { policyFeature } from '../policies/routes'
+import DevicePerformance from './components/DevicePerformance.vue'
+import DeviceCollections from './components/DeviceCollections.vue'
+import DeviceActivity from './components/DeviceActivity.vue'
+import { fieldDefinition, fieldInput } from '../devices/clients/assets'
+import { bucket, numeric, health, gaps } from './model'
+import {
+  defaultApplicability,
+  valueMapping,
+  identityMapping,
+  conversion,
+} from '../policies/clients/collection-mapping'
+import { decodeScriptSpec } from '../policies/clients/resources'
+import { profileBytes, telemetryProfile } from '../policies/clients/telemetry-profile'
+const wrappers: VueWrapper[] = []
+afterEach(() => {
+  wrappers.splice(0).forEach((w) => w.unmount())
+  document.body.innerHTML = ''
+  vi.restoreAllMocks()
+})
+async function setup(name = 'perf', query: Record<string, string> = {}) {
+  const domain = createDeviceDemo(),
+    automation = createAutomationDemo(domain)
+  domain.bindAuthorization(automation.authorization.can)
+  seedTelemetry(automation)
+  const scenario = createScenario([automation.handle, domain.handle], () => {
+    domain.reset()
+    automation.reset()
+    seedTelemetry(automation)
+  })
+  const login = await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
+    login: 'demo',
+    password: 'demo',
+  })
+  const headers = {
+      'x-csrf-token': (login.body as { csrfToken: string }).csrfToken,
+      'x-identity-request': '1',
+    },
+    requests: RequestOptions<unknown>[] = []
+  const transport = {
+    async request<T>(options: RequestOptions<T>) {
+      requests.push(options as RequestOptions<unknown>)
+      const path = options.path.replace(/\{([^}]+)\}/g, (_, k: string) =>
+          encodeURIComponent(options.pathParams?.[k] ?? ''),
+        ),
+        query = new URLSearchParams(
+          Object.entries(options.query ?? {})
+            .filter(([, v]) => v !== undefined)
+            .map(([k, v]) => [k, String(v)]),
+        )
+      const reply = await scenario.handle(options.method, path + '?' + query, options.body, headers)
+      if (reply.status !== options.successStatus) throw decodeMdmError(reply.status, reply.body)
+      return options.decode(reply.body)
+    },
+  } as HttpTransport
+  const runtime = {
+    tenant: TENANT,
+    realm: 'tenant',
+    demo: true,
+    session: {
+      state: shallowRef({
+        status: 'authenticated',
+        tenant: TENANT,
+        identity: { principalId: ADMIN },
+        session: { id: 'telemetry-test' },
+      }),
+    } as unknown as IdentitySession,
+    transport,
+    devices: createDeviceClients(transport, TENANT),
+    policies: createPolicyClients(transport, TENANT, true),
+    operations: createOperationsClients(transport, TENANT, true),
+  } as MdmRuntime
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      ...Object.entries({
+        perf: DevicePerformance,
+        health: DeviceCollections,
+        activity: DeviceActivity,
+      }).map(([name, component]) => ({
+        path: '/' + name,
+        name,
+        component,
+        props: { device: 'device-01' },
+      })),
+      settingsFeature.entry,
+      ...settingsFeature.routes!,
+      policyFeature.entry,
+      ...policyFeature.routes!,
+    ],
+  })
+  await router.push({
+    name,
+    params: name.startsWith('settings-') || name.startsWith('policy-') ? { tenant: TENANT } : {},
+    query,
+  })
+  await router.isReady()
+  const i18n = mdmI18n()
+  i18n.global.locale.value = 'zh-CN'
+  const wrapper = mount(RouterView, {
+    attachTo: document.body,
+    global: { plugins: [router, i18n], provide: { [mdmKey as symbol]: runtime } },
+  })
+  wrappers.push(wrapper)
+  await flushPromises()
+  const body = () => new DOMWrapper(document.body)
+  async function click(text: string) {
+    const button = body()
+      .findAll('button')
+      .find((b) => b.isVisible() && b.text() === text)
+    if (!button) throw new Error('Missing button ' + text)
+    await button.trigger('click')
+    await flushPromises()
+  }
+  return { runtime, wrapper, scenario, requests, router, click, body, automation }
+}
+it('consumes raw readings once for chart and table and clears them after device authorization is withdrawn', async () => {
+  const h = await setup()
+  expect(h.wrapper.find('svg').exists()).toBe(true)
+  expect(h.requests.filter((r) => r.path === '/api/v1/telemetry/history')).toHaveLength(1)
+  await h.click('数据明细')
+  expect(h.wrapper.findAll('tbody tr')).toHaveLength(60)
+  expect(h.wrapper.findAll('path.telemetry-line')).toHaveLength(2)
+  expect(h.wrapper.text()).toContain('缺失')
+  expect(h.wrapper.text()).toContain('失败')
+  await h.wrapper.get('input[type=range]').setValue(22)
+  expect(h.wrapper.get('figcaption').text()).toContain('—')
+  h.scenario.set('forbidden')
+  await h.click('重新读取')
+  expect(h.wrapper.find('svg').exists()).toBe(false)
+  expect(h.wrapper.findAll('tbody tr')).toHaveLength(0)
+})
+it('uses server resolution and rate statistics, while raw counters and states remain observations', async () => {
+  const h = await setup()
+  await h.wrapper
+    .findAll('.telemetry-metrics button')
+    .find((b) => b.text().includes('network_received'))!
+    .trigger('click')
+  await flushPromises()
+  const aggregate = h.requests.find((r) => r.path === '/api/v1/telemetry/aggregate')!
+    .body as Record<string, unknown>
+  expect(aggregate).toMatchObject({
+    operation: 'rate',
+    coverage: { coverage: 'observedOnly' },
+    source: 'agent.script',
+  })
+  expect(h.wrapper.text()).toContain('/s')
+  const mode = h.wrapper.findAll('select').find((s) => s.find('option[value=total]').exists())!
+  await mode.setValue('total')
+  await flushPromises()
+  expect(h.wrapper.text()).toContain('原始计数')
+  await h.wrapper
+    .findAll('.telemetry-metrics button')
+    .find((b) => b.text().includes('service_state'))!
+    .trigger('click')
+  await flushPromises()
+  expect(h.wrapper.find('svg').attributes('aria-label')).toContain('离散状态')
+  expect(h.wrapper.findAll('circle')).toHaveLength(50)
+  expect(h.wrapper.findAll('path.telemetry-line')).toHaveLength(0)
+})
+it('changes UTC horizons and granularity and preserves unavailable readings as blank buckets', async () => {
+  const h = await setup()
+  await h.wrapper.findAll('select')[0]!.setValue('7d')
+  await flushPromises()
+  const q = h.requests.filter((r) => r.path === '/api/v1/telemetry/aggregate').at(-1)!.body as {
+    query: { startMicros: number; endMicros: number }
+    resolutionMicros: number
+  }
+  expect(q.query.endMicros - q.query.startMicros).toBe(604800_000_000)
+  expect(q.resolutionMicros).toBe(3600_000_000)
+  await h.click('数据明细')
+  expect(
+    h.wrapper.findAll('tbody tr').some((r) => r.text().includes('Gaps') && r.text().includes('—')),
+  ).toBe(true)
+  await h.wrapper.findAll('select')[1]!.setValue('5m')
+  await flushPromises()
+  expect(
+    (
+      h.requests.filter((r) => r.path.endsWith('/aggregate')).at(-1)!.body as {
+        resolutionMicros: number
+      }
+    ).resolutionMicros,
+  ).toBe(300_000_000)
+})
+it('shows receipt-window health, explicit truncation and registration diagnostics independently of coverage', async () => {
+  const h = await setup('health')
+  expect(h.wrapper.text()).toContain('历史已投递')
+  expect(h.wrapper.text()).toContain('容量丢弃')
+  expect(h.wrapper.text()).toContain(DEMO_PROFILE)
+  h.scenario.set('partial')
+  await h.click('重新读取')
+  expect(h.wrapper.text()).toContain('返回结果已截断')
+  h.scenario.set('forbidden')
+  await h.click('重新读取')
+  expect(h.wrapper.text()).not.toContain('有效 48')
+})
+it('renders actual activity and allows local filtering without fabricating events', async () => {
+  const h = await setup('activity')
+  expect(h.requests.some((r) => r.path.endsWith('/timeline'))).toBe(true)
+  await h.wrapper.get('input[type=search]').setValue('nonexistent-action')
+  expect(h.wrapper.text()).toContain('暂无记录')
+})
+it('publishes retention revisions and canonical custom fields through the existing CAS contract', async () => {
+  const h = await setup('settings-metrics')
+  await h.click('保留策略')
+  let dialog = h.body().get('[role=dialog][data-state=open]')
+  await dialog.findAll('input')[0]!.setValue('custom.retention')
+  await h.click('保存新版本')
+  expect(
+    h.requests.filter((r) => r.path === '/api/v1/asset-retention-policies').at(-1)!.body,
+  ).toMatchObject({ expectedRevision: 0, input: { key: 'custom.retention', revision: 1 } })
+  await h.click('新建字段')
+  dialog = h.body().get('[role=dialog][data-state=open]')
+  await dialog.findAll('input')[0]!.setValue('custom.telemetry_new')
+  const labels = dialog.findAll('label'),
+    retention = labels.find((l) => l.text() === '保留策略标识')!
+  await retention.get('input').setValue('custom.retention')
+  await dialog.findAll('input[type=checkbox]').at(-1)!.setValue(true)
+  await h.click('保存新版本')
+  expect(
+    h.requests.filter((r) => r.path === '/api/v1/asset-fields/{field}').at(-1)!.body,
+  ).toMatchObject({
+    expectedRevision: 0,
+    input: {
+      definition: {
+        key: 'custom.telemetry_new',
+        valueType: { kind: 'number' },
+        sources: { 'agent.native': 0, 'agent.script': 1, 'agent.osquery': 2 },
+        timeSeries: { kind: 'gauge', retention: { key: 'custom.retention', revision: 1 } },
+      },
+    },
+  })
+})
+it('freezes unknown field writes, treats current state as comparison and replays exactly', async () => {
+  const h = await setup('settings-metrics')
+  await h.wrapper
+    .findAll('button')
+    .find((b) => b.text() === '配置')!
+    .trigger('click')
+  await flushPromises()
+  let dialog = h.body().get('[role=dialog][data-state=open]')
+  await dialog.findAll('input[type=checkbox]').at(-1)!.setValue(true)
+  h.scenario.set('unknown')
+  await h.click('保存新版本')
+  const first = h.requests.find((r) => r.path === '/api/v1/asset-fields/{field}')!.body
+  dialog = h.body().get('[role=dialog][data-state=open]')
+  expect(dialog.get('fieldset').attributes('disabled')).toBeDefined()
+  h.scenario.set('normal')
+  await h.click('查询对照')
+  expect(dialog.text()).toContain('上次提交结果尚未确认')
+  await h.click('重放同一请求')
+  expect(
+    h.requests.filter((r) => r.path === '/api/v1/asset-fields/{field}').map((r) => r.body),
+  ).toEqual([first, first])
+})
+it('keeps a bound field immutable and displays actual references before publishing a new retention binding', async () => {
+  const h = await setup('settings-metrics')
+  const row = h.wrapper
+    .findAll('tbody tr')
+    .find((r) => r.text().includes('custom.demo.cpu_busy_percent'))!
+  await row.get('button').trigger('click')
+  await flushPromises()
+  const dialog = h.body().get('[role=dialog][data-state=open]')
+  expect(dialog.text()).toContain('历史绑定不能移除')
+  expect(dialog.text()).toContain('采集方案')
+  expect(dialog.findAll('fieldset').some((f) => f.attributes('disabled') !== undefined)).toBe(true)
+})
+it('freezes an immutable profile resource, uploads canonical bytes, previews actual targets and publishes an exact Policy', async () => {
+  const h = await setup('policy-telemetry', { resource: DEMO_PROFILE })
+  const dialog = h.body().get('[role=dialog][data-state=open]')
+  expect(dialog.text()).toContain('custom.demo.cpu_busy_percent')
+  await h.click('下一步')
+  const scope = dialog
+    .findAll('select')
+    .find((s) => s.find('option[value="88888888-8888-4888-8888-888888888888"]').exists())!
+  await scope.setValue('88888888-8888-4888-8888-888888888888')
+  await h.click('下一步')
+  await h.click('保存、上传并激活方案资源')
+  expect(dialog.text()).toContain('目标预检')
+  expect(dialog.text()).toContain('device-01')
+  expect(h.requests.some((r) => r.path.endsWith('/complete'))).toBe(true)
+  await dialog.findAll('input[type=checkbox]').at(-1)!.setValue(true)
+  await h.click('确认发布策略变更')
+  const body = h.requests
+    .filter((r) => r.path === '/api/v1/policies/{id}' && r.method === 'POST')
+    .at(-1)!.body
+  expect(body).toMatchObject({
+    expectedRevision: 0,
+    input: {
+      enabled: true,
+      definition: {
+        action: { kind: 'telemetry_profile', resource: { id: DEMO_PROFILE, variant: 'default' } },
+      },
+    },
+  })
+})
+it('preserves nested field types and priority maps in writes, without derived presentation fields', () => {
+  const field = fieldDefinition({
+    key: 'custom.rows',
+    version: 3,
+    timeSeries: null,
+    valueType: {
+      kind: 'array',
+      maxItems: 12,
+      items: {
+        kind: 'record',
+        properties: {
+          status: { required: true, valueType: { kind: 'enum', values: ['running', 'stopped'] } },
+        },
+      },
+    },
+    nullable: true,
+    manual: false,
+    sources: { 'agent.script': 17, 'agent.osquery': 4 },
+    platforms: ['macos'],
+    sensitivity: 'sensitive',
+    unit: '1',
+    searchable: false,
+    itemKey: 'id',
+    operations: [],
+  })
+  expect(fieldInput(field)).toMatchObject({
+    valueType: {
+      items: { properties: { status: { valueType: { values: ['running', 'stopped'] } } } },
+    },
+    sources: { 'agent.script': 17, 'agent.osquery': 4 },
+  })
+  expect(fieldInput(field)).not.toHaveProperty('kind')
+  expect(fieldInput(field)).not.toHaveProperty('operations')
+})
+it('decodes current collection mappings and rejects retired string mappings and unbounded projections', () => {
+  const mapping = {
+    pointer: '/rows',
+    conversion: { kind: 'identity' },
+    columns: { value: { pointer: '/percent', conversion: { kind: 'number' }, columns: {} } },
+  }
+  expect(valueMapping(mapping)).toEqual(mapping)
+  expect(valueMapping(identityMapping('')).pointer).toBe('')
+  for (const value of [
+    '/old',
+    { ...mapping, pointer: '/bad~2' },
+    { ...mapping, conversion: { kind: 'number' } },
+    {
+      ...mapping,
+      columns: Object.fromEntries(
+        Array.from({ length: 65 }, (_, i) => ['x' + i, identityMapping('')]),
+      ),
+    },
+  ])
+    expect(() => valueMapping(value)).toThrow()
+  const spec = {
+    profile: 'osquery',
+    sql: 'SELECT version FROM osquery_info',
+    runAs: 'system',
+    encoding: 'utf8',
+    parameters: { type: 'object' },
+    bindings: {},
+    output: { type: 'array' },
+    purpose: {
+      kind: 'collection',
+      scope: { kind: 'device' },
+      applicability: defaultApplicability(),
+      mappings: { 'custom.osquery.version': identityMapping('/0/version') },
+    },
+    timeoutSeconds: 10,
+    outputBytes: 4096,
+    maxRows: 1,
+  }
+  expect(decodeScriptSpec(spec).purpose).toEqual(spec.purpose)
+  expect(() =>
+    decodeScriptSpec({
+      ...spec,
+      purpose: { kind: 'collection', mappings: { 'custom.osquery.version': '/0/version' } },
+    }),
+  ).toThrow()
+  expect(conversion({ kind: 'enum', values: { ok: true, fail: false } })).toMatchObject({
+    kind: 'enum',
+  })
+  expect(
+    conversion({ kind: 'array_member', member: 1, present: 'yes', absent: 'no' }),
+  ).toMatchObject({ kind: 'array_member' })
+  expect(conversion({ kind: 'scale', numerator: 1024, denominator: 1 })).toMatchObject({
+    kind: 'scale',
+  })
+  expect(conversion({ kind: 'bitmask', flags: { '1': 'one', '2': 'two' } })).toMatchObject({
+    kind: 'bitmask',
+  })
+  expect(() => conversion({ kind: 'bitmask', flags: { '3': 'bad' } })).toThrow()
+})
+it('normalizes server sufficient statistics and discrete aggregates without deriving samples', () => {
+  const b = (value: unknown) =>
+    bucket({
+      window: { start: 100, end: 200 },
+      value,
+      valid_samples: 1,
+      covered_micros: 50,
+      completeness: [],
+    }).value
+  expect(b('Missing')).toEqual({ kind: 'missing' })
+  expect(b({ Number: { type: 'f64', value: -2.5 } })).toEqual({ kind: 'number', value: -2.5 })
+  expect(b({ Sum: { I128: -5 } })).toEqual({ kind: 'number', value: -5 })
+  expect(b({ Count: 2 })).toEqual({ kind: 'number', value: 2 })
+  expect(b({ Mean: { sum: { U128: 12 }, count: 3 } })).toEqual({ kind: 'number', value: 4 })
+  expect(b({ Rate: { increase: { F64: 10 }, duration_micros: 2_000_000 } })).toEqual({
+    kind: 'number',
+    value: 5,
+  })
+  expect(
+    b({ StateSegments: [{ value: { Bool: true }, window: { start: 100, end: 150 } }] }),
+  ).toMatchObject({ kind: 'timeline', segments: [{ value: true }] })
+  expect(
+    b({ Transitions: [{ at: 100, from: { State: 'stopped' }, to: { State: 'running' } }] }),
+  ).toMatchObject({ kind: 'transitions' })
+  expect(b({ StateCoverage: [{ value: { State: 'running' }, micros: 50 }] })).toMatchObject({
+    kind: 'coverage',
+  })
+  expect(() => b({ Mean: { sum: { F64: 2 }, count: 0 } })).toThrow()
+  expect(() => numeric({ type: 'u64', value: Number.MAX_SAFE_INTEGER + 1 })).toThrow()
+  expect(() => b({ Unknown: 1 })).toThrow()
+})
+it('rejects malformed health and gap contracts rather than treating diagnostics as metric coverage', () => {
+  expect(() =>
+    health({
+      batches: [],
+      batchesTruncated: false,
+      retention: [],
+      retentionTruncated: false,
+      qualityOrder: ['failed', 'missing', 'valid'],
+      retired: false,
+    }),
+  ).toThrow()
+  expect(() =>
+    gaps({ reports: [], next: { receivedAt: 1, reportId: 'not-a-uuid' } }, 'device-01'),
+  ).toThrow()
+})
+it('serializes exact Resource artifact bytes with Rust struct and map ordering', () => {
+  const profile = telemetryProfile({
+    template: {
+      resource: 'template',
+      version: 'v1',
+      variant: 'default',
+      platform: 'macos',
+      architecture: 'aarch64',
+    },
+    parameters: { '10': 10, '2': 2, z: true, a: 'literal' },
+    fields: [{ key: 'custom.cpu', version: 1 }],
+    projection: 'both',
+    sampleMillis: 5000,
+    uploadMillis: 10000,
+    budget: { points: 4, bytes: 65536, resources: 1, executionMillis: 1000, outputBytes: 4096 },
+    boost: null,
+    backfillSeconds: 3600,
+  })
+  const text = new TextDecoder().decode(profileBytes(profile))
+  expect(text).toContain('"parameters":{"10":10,"2":2,"a":"literal","z":true}')
+  expect(Object.keys(JSON.parse(text) as object)).toEqual([
+    'template',
+    'parameters',
+    'fields',
+    'projection',
+    'sampleMillis',
+    'uploadMillis',
+    'budget',
+    'boost',
+    'backfillSeconds',
+  ])
+  expect(() => telemetryProfile({ ...profile, parameters: { bad: 0.5 } })).toThrow()
+  expect(() =>
+    telemetryProfile({ ...profile, budget: { ...profile.budget, points: 4097 } }),
+  ).toThrow()
+  const mapping = {
+    pointer: '',
+    conversion: { kind: 'identity' },
+    columns: Object.fromEntries(
+      Array.from({ length: 64 }, (_, i) => [
+        'x' + i,
+        { pointer: '', conversion: { kind: 'identity' }, columns: { value: identityMapping('') } },
+      ]),
+    ),
+  }
+  expect(() => valueMapping(mapping)).toThrow()
+})
+it('rejects cross-tenant samples, changed selections, unsafe counts and readings outside their declared metric', async () => {
+  const h = await setup(),
+    request = h.requests.find((r) => r.path === '/api/v1/telemetry/history')!
+  const q = request.body as { field: string; startMicros: number }
+  const sample = () => ({
+    id: 'sample',
+    sequence: 1,
+    observedAt: q.startMicros + 1000,
+    interval: null,
+    reading: { quality: 'valid', value: { type: 'number', value: { type: 'f64', value: -2.5 } } },
+    stream: {
+      scope: { tenant: TENANT, namespace: 'mdm.telemetry' },
+      source: '11111111-1111-4111-8111-111111111111:agent.script',
+      generation: '22222222-2222-4222-8222-222222222222',
+    },
+    series: {
+      definition: {
+        scope: { tenant: TENANT, namespace: 'mdm.telemetry' },
+        key: q.field,
+        version: 1,
+        unit: 'percent',
+        metric: { kind: 'gauge', number: 'f64' },
+        dimensions: {
+          allowed: [],
+          required: [],
+          maxCount: 0,
+          maxValueBytes: 256,
+          maxTotalBytes: 256,
+        },
+      },
+      subject: 'device-01',
+      resource: 'device',
+      dimensions: {},
+    },
+  })
+  const decode = (s: unknown, next: unknown = null) =>
+    request.decode({
+      rows: [{ sample: s, receivedAt: q.startMicros + 2000, liveSource: true }],
+      unavailable: [],
+      next,
+      retired: false,
+      mode: 'history',
+    })
+  expect(decode(sample())).toMatchObject({ rows: [{ sample: { reading: { value: -2.5 } } }] })
+  const tenant = sample()
+  tenant.stream.scope.tenant = '33333333-3333-4333-8333-333333333333'
+  expect(() => decode(tenant)).toThrow()
+  const selection = sample()
+  selection.series.subject = 'other-device'
+  expect(() => decode(selection)).toThrow()
+  const reading = sample()
+  reading.reading.value.value = { type: 'u64', value: Number.MAX_SAFE_INTEGER + 1 }
+  expect(() => decode(reading)).toThrow()
+  const metric = sample()
+  metric.series.definition.metric.number = 'i64'
+  expect(() => decode(metric)).toThrow()
+  expect(() => decode(sample(), 1)).toThrow()
+})
+it('binds every aggregate response to the selected resolution and intersecting ordered bucket windows', async () => {
+  const h = await setup()
+  await h.wrapper.findAll('select')[1]!.setValue('5m')
+  await flushPromises()
+  const request = h.requests.find((r) => r.path === '/api/v1/telemetry/aggregate')!,
+    query = request.body as { query: { startMicros: number }; resolutionMicros: number }
+  const start = query.query.startMicros,
+    b = {
+      window: { start, end: start + query.resolutionMicros },
+      value: 'Missing',
+      valid_samples: 0,
+      covered_micros: 0,
+      completeness: ['Gaps'],
+    }
+  const response = {
+    buckets: [b],
+    unavailable: [],
+    resolutionMicros: query.resolutionMicros,
+    refreshedThrough: null,
+    next: null,
+  }
+  expect(request.decode(response)).toMatchObject({ buckets: [{ value: { kind: 'missing' } }] })
+  expect(() => request.decode({ ...response, resolutionMicros: 1 })).toThrow()
+  expect(() => request.decode({ ...response, buckets: [b, b] })).toThrow()
+  expect(() =>
+    request.decode({ ...response, buckets: [{ ...b, window: { start: 0, end: 1 } }] }),
+  ).toThrow()
+})

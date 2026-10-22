@@ -52,7 +52,7 @@ def q(value):
     return "'" + str(value).replace("'", "''") + "'"
 
 browser_module = os.environ.get('MDM_DEVICE_BROWSER_MODULE', 'device-browser.mjs')
-if browser_module not in {'device-browser.mjs', 'operations-browser.mjs'}:
+if browser_module not in {'device-browser.mjs', 'operations-browser.mjs', 'telemetry-browser.mjs'}:
     raise RuntimeError('unsupported browser module')
 
 def seed_authority():
@@ -222,7 +222,7 @@ try:
     module = importlib.util.spec_from_file_location('device_agent', WEB/'e2e/mdm/device-agent.py')
     collector = importlib.util.module_from_spec(module)
     module.loader.exec_module(collector)
-    agent_fixture = collector.register(agent_origin, environment.root/'ca.crt', native/'pki'/'agent', operator, private, TENANTS[0])
+    agent_fixture = collector.register(agent_origin, environment.root/'ca.crt', native/'pki'/'agent', operator, private, TENANTS[0], capabilities=['inventory.collect.v1','inventory.native.v1','task.execute.v1','telemetry.collect.v1'] if browser_module == 'telemetry-browser.mjs' else None)
     fixture=private(environment.root/'browser.json',dict(collector=agent_fixture,origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,principal=ADMIN,login='admin',passwordFile=str(environment.root/'account-password'),mdm='fixture-mdm',agent='fixture-agent',alone='fixture-alone',ruleId=rule_id,rule=rule))
     phase='browser'
     browser=subprocess.run(['node',str(WEB/'e2e/mdm'/browser_module)],cwd=WEB,env={**os.environ,'MDM_DEVICE_BROWSER_FIXTURE':str(fixture)},timeout=900,pass_fds=lease_fds())

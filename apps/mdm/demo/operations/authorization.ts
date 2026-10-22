@@ -170,7 +170,9 @@ export function createAuthorizationDemo(
             ? 'script_execute'
             : action['kind'] === 'configuration'
               ? 'configuration_write'
-              : action['kind'] === 'native_collection' || action['kind'] === 'agent_collection'
+              : action['kind'] === 'native_collection' ||
+                  action['kind'] === 'agent_collection' ||
+                  action['kind'] === 'telemetry_profile'
                 ? 'inventory_collect'
                 : action['kind'] === 'request_mdm_enrollment'
                   ? 'enrollment'
@@ -239,13 +241,35 @@ export function createAuthorizationDemo(
       effective(actor).some(
         (g) => g.operation === 'inventory_read' && g.scope.kind === 'all_devices',
       )
+    if (
+      path.startsWith('/api/v1/asset-fields') ||
+      path.startsWith('/api/v1/asset-retention-policies')
+    ) {
+      if (path === '/api/v1/asset-fields' && request.method === 'GET') return
+      if (!can(actor, 'inventory_fields_write')) return error('permission_denied', 403)
+    }
+    if (path.startsWith('/api/v1/telemetry/')) {
+      const device = String(
+        objectRecord(request.body)['device'] ??
+          objectRecord(objectRecord(request.body)['query'] ?? {})['device'] ??
+          '',
+      )
+      if (!can(actor, 'inventory_read', device)) return error('permission_denied', 403)
+    }
+    if (
+      deviceMatch?.[2] === 'telemetry-configurations' &&
+      (!can(actor, 'policy_read') || !can(actor, 'resource_read'))
+    )
+      return error('permission_denied', 403)
     if (deviceMatch) {
       const device = decodeURIComponent(deviceMatch[1]!),
         suffix = deviceMatch[2] ?? ''
       if (
         request.method === 'GET' &&
         (!suffix ||
-          ['inventory', 'inventory-scopes', 'timeline'].includes(suffix) ||
+          ['inventory', 'inventory-scopes', 'timeline', 'telemetry-configurations'].includes(
+            suffix,
+          ) ||
           suffix.startsWith('inventory-lists/') ||
           suffix.startsWith('collections/')) &&
         !can(actor, 'inventory_read', device)

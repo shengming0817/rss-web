@@ -37,7 +37,7 @@ def call(origin, ca, path, body=None, cert=None, key=None, method='POST', header
         connection.close()
 
 
-def register(origin, ca, native, operator, private, tenant):
+def register(origin, ca, native, operator, private, tenant, capabilities=None):
     csr = base64.b64encode((native/'agent.der').read_bytes()).decode()
     secret = secrets.token_urlsafe(32)
     request = call(origin, ca, '/api/v1/agent/enroll/requests', dict(wireVersion=1, operationId=str(uuid.uuid4()), secret=secret, platform='macos', csr=csr))
@@ -47,7 +47,7 @@ def register(origin, ca, native, operator, private, tenant):
                    interactiveUser=dict(generatedUid='00000000-0000-0000-0000-000000000501', identity='501', sessionId=str(uuid.uuid4()), administrator=False),
                    sourceCredentials=[], msixSideload=False, msixUnsigned=False)
     candidate = call(origin, ca, '/api/v1/agent/enroll/certificates', dict(wireVersion=1, operationId=str(uuid.uuid4()), grantId=grant['grantId'], secret=secret, csr=csr,
-                     runtime=dict(capabilities=['inventory.collect.v1','inventory.native.v1'], platform='macos', architecture='aarch64', executionContext=context)))
+                     runtime=dict(capabilities=capabilities or ['inventory.collect.v1','inventory.native.v1'], platform='macos', architecture='aarch64', executionContext=context)))
     chain = ''.join(ssl.DER_cert_to_PEM_cert(base64.b64decode(c)) for c in candidate['certificateChain'])
     cert = private(native/'collector.pem', chain)
     key = native/'agent-csr-agent.key'

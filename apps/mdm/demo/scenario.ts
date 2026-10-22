@@ -383,7 +383,11 @@ export function createScenario(
       if (method !== 'GET' && active === 'conflict')
         return { status: 409, body: { code: 'operation_conflict' } }
     }
-    const unknownReply = method !== 'GET' && active === 'unknown'
+    const unknownReply =
+      method !== 'GET' &&
+      active === 'unknown' &&
+      !path.startsWith('/api/v1/telemetry/') &&
+      path !== '/api/v1/policies/previews'
     if (path === '/api/v1/mdm-candidate/workspace' && method === 'GET') {
       const failure = fault()
       if (failure) return failure

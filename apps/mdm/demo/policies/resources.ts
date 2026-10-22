@@ -274,7 +274,12 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
             origin: null,
             id,
             revision: 1,
-            kind: enumeration(input['kind'], ['script', 'software', 'configuration'] as const),
+            kind: enumeration(input['kind'], [
+              'script',
+              'software',
+              'configuration',
+              'telemetry_profile',
+            ] as const),
             versions: [],
           }
         } else {
