@@ -3,7 +3,7 @@ import type { DomainHandler, DemoEvent } from '../scenario'
 import { makeDevices } from './fixtures'
 import { endpointProjection, endpointDetailProjection, createDeviceViewsDemo } from './views'
 import type { Permission } from '../../src/features/operations/clients/authorization'
-import { ok, createPages, error } from '../http'
+import { ok, error } from '../http'
 import { createAssetDemo } from './assets'
 import { createGroupDemo } from './groups'
 import { createEnrollmentDemo } from './enrollment'
@@ -16,7 +16,6 @@ export function createDeviceDemo() {
       () => views.objects(),
     ),
     enrollments = createEnrollmentDemo(() => devices)
-  const pages = createPages()
   let can = (actor: string, permission: Permission, device?: string) => {
     void actor
     void permission
@@ -61,39 +60,7 @@ export function createDeviceDemo() {
       if (!d || !can(request.actor.principalId, 'inventory_read', id))
         return error('inventory_not_found', 404)
       if (!endpointPath[2]) return ok(endpointDetailProjection(d))
-      const page = pages.page(
-        path,
-        [...d.history].reverse().map((e) => ({
-          source: 'mdm.business',
-          eventId: e.id,
-          position: 1,
-          recordedAt: e.at,
-          observedAt: e.at,
-          actorKind: 'user',
-          actor: request.actor.principalId,
-          action: e.event,
-          target: { type: 'device', id },
-          deviceId: id,
-          operationId: e.operation,
-          relatedOperationIds: [],
-          requestId: null,
-          registrationId: null,
-          registrationRequestId: null,
-          instanceId: null,
-          auditOutcome: 'succeeded',
-          phase: 'business',
-          executionState: null,
-          effect: 'unverified',
-          requestWriteOutcome: null,
-          supported: true,
-        })),
-        query,
-      )
-      return ok({
-        items: page.items,
-        nextCursor: page.nextCursor,
-        coverage: { indexedThrough: 1, sourceThrough: 1, complete: true },
-      })
+      return
     }
   }
   const handle: DomainHandler = (request, scenario) => {
@@ -189,7 +156,6 @@ export function createDeviceDemo() {
       assets.reset()
       groups.reset()
       enrollments.reset()
-      pages.reset()
       views.reset()
     },
   }

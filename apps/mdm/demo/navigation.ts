@@ -69,6 +69,7 @@ export const navigation = [
       { name: 'operations-windowsEntra', label: 'onboarding.windowsEntra' },
       { name: 'operations-delegations', label: 'operations.delegations' },
       { name: 'operations-audit', label: 'operations.audit' },
+      { name: 'operations-diagnostics', label: 'operations.diagnostics' },
       { name: 'operations-alerts', label: 'operations.alerts' },
       { name: 'operations-alertRules', label: 'operations.alertRules' },
       { name: 'operations-reports', label: 'operations.reports' },

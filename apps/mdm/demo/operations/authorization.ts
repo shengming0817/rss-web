@@ -13,7 +13,7 @@ import {
   type Revision,
 } from '../../src/features/operations/clients/authorization'
 import type { PolicyDefinition } from '../../src/features/policies/clients/model'
-import type { AuditEntry } from '../features/operations/clients/model'
+import type { AuditInput } from './audit'
 export const INSTANCE = '44444444-4444-4444-8444-444444444444'
 export const ADMIN = '22222222-2222-4222-8222-222222222222'
 export const ADMIN_RULE = '55555555-5555-4555-8555-555555555555'
@@ -21,7 +21,7 @@ export const REVIEWER = '33333333-3333-4333-8333-333333333333'
 const provider = '66666666-6666-4666-8666-666666666666'
 export function createAuthorizationDemo(
   now: () => number,
-  record: (input: Omit<AuditEntry, 'id' | 'stream' | 'stage' | 'status'>) => unknown,
+  record: (input: AuditInput) => unknown,
   policyFacts: (
     id: string,
     task?: string,
@@ -127,6 +127,14 @@ export function createAuthorizationDemo(
   }
   function guard(request: DemoRequest) {
     const path = request.path
+    if (path === '/api/v1/audit-events' || /^\/api\/v1\/devices\/[^/]+\/timeline$/.test(path))
+      return can(request.actor.principalId, 'audit_read')
+        ? undefined
+        : error('permission_denied', 403)
+    if (path === '/api/v1/runtime/diagnostics')
+      return can(request.actor.principalId, 'runtime_diagnostics_read')
+        ? undefined
+        : error('permission_denied', 403)
     if (path.startsWith('/api/v1/authorization')) return
     const deviceMatch = /^\/api\/v1\/devices\/([^/]+)(?:\/(.*))?$/.exec(path)
     const actor = request.actor.principalId
@@ -267,9 +275,7 @@ export function createAuthorizationDemo(
       if (
         request.method === 'GET' &&
         (!suffix ||
-          ['inventory', 'inventory-scopes', 'timeline', 'telemetry-configurations'].includes(
-            suffix,
-          ) ||
+          ['inventory', 'inventory-scopes', 'telemetry-configurations'].includes(suffix) ||
           suffix.startsWith('inventory-lists/') ||
           suffix.startsWith('collections/')) &&
         !can(actor, 'inventory_read', device)

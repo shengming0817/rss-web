@@ -46,6 +46,78 @@ export function createSettingsDemo() {
     const packageReply = packages.handle(r, scenario)
     if (packageReply) return packageReply
     const platform = r.actor.tenantId === MANAGEMENT_TENANT
+    if (r.path === '/api/v1/runtime/diagnostics' && r.method === 'GET') {
+      if (platform || scenario === 'denied') return error('permission_denied', 403)
+      const partial = scenario === 'partial',
+        at = Math.floor(Date.now() / 1000)
+      return ok({
+        alive: true,
+        ready: !partial,
+        components: [
+          {
+            name: 'inventory',
+            readiness: 'ready',
+            health: 'unknown',
+            reasons: ['unobserved'],
+            task: 'running',
+            progress: {
+              state: 'unobserved',
+              confirmedPosition: null,
+              sourceHead: null,
+              lagging: null,
+              invocationAgeMs: null,
+              completedPassAgeMs: null,
+              sourceObservationAgeMs: null,
+              applied: null,
+            },
+            bridge: { successful: false, reason: 'unobserved', observedAt: null },
+          },
+          {
+            name: 'automation',
+            readiness: partial ? 'not_ready' : 'ready',
+            health: partial ? 'degraded' : 'healthy',
+            reasons: partial ? ['dependency_unavailable'] : [],
+            task: 'running',
+            dependencies: [
+              {
+                name: 'flow_storage',
+                state: partial ? 'unavailable' : 'available',
+                ...(partial ? { reason: 'deadline' } : {}),
+              },
+            ],
+            dispatch: { consumed: 4, watermark: 4 },
+          },
+          {
+            name: 'execution_recovery',
+            readiness: 'ready',
+            health: 'unknown',
+            reasons: ['unobserved'],
+            queues: [{ name: 'pending', count: null, truncated: null }],
+            runner: { scan: null, unresolvedAttempts: 0, truncated: false, latestFailure: null },
+          },
+          { name: 'apple', readiness: 'not_applicable', health: 'not_applicable', reasons: [] },
+          {
+            name: 'identity_audit',
+            readiness: 'ready',
+            health: 'healthy',
+            reasons: [],
+            bridge: { successful: true, observedAt: at },
+          },
+          ...(!partial
+            ? [
+                {
+                  name: 'telemetry',
+                  readiness: 'ready',
+                  health: 'healthy',
+                  reasons: [],
+                  task: 'running',
+                  queues: [{ name: 'delivery_pending', count: 0, truncated: false }],
+                },
+              ]
+            : []),
+        ],
+      })
+    }
     if (r.path === '/api/v1/settings/first-use') {
       if (platform) return error('permission_denied', 403)
       if (r.method !== 'GET') return error('action_not_supported', 501)

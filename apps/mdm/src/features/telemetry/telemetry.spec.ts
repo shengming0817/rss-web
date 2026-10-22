@@ -218,10 +218,12 @@ it('shows receipt-window health, explicit truncation and registration diagnostic
   await h.click('重新读取')
   expect(h.wrapper.text()).not.toContain('有效 48')
 })
-it('renders actual activity and allows local filtering without fabricating events', async () => {
+it('renders actual activity and queries action filters without fabricating events', async () => {
   const h = await setup('activity')
   expect(h.requests.some((r) => r.path.endsWith('/timeline'))).toBe(true)
-  await h.wrapper.get('input[type=search]').setValue('nonexistent-action')
+  await h.wrapper.get('#audit-action').setValue('nonexistent-action')
+  await h.wrapper.get('[data-testid=audit-filter]').trigger('submit')
+  await flushPromises()
   expect(h.wrapper.text()).toContain('暂无记录')
 })
 it('publishes retention revisions and canonical custom fields through the existing CAS contract', async () => {

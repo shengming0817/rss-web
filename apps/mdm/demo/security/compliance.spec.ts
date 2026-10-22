@@ -69,11 +69,11 @@ it('timestamps saved rules, recomputation and published evidence using the advan
     const audit = (
       await f.server.handle(
         'GET',
-        `/api/v1/mdm-candidate/operations/audit?action=${action}&from=${at}`,
+        `/api/v1/audit-events?action=${action}&from=${at}`,
       )
-    ).body as { items: { at: number }[] }
+    ).body as { items: { recordedAt: number }[] }
     expect(audit.items.length).toBeGreaterThan(0)
-    expect(audit.items.every((item) => item.at === at)).toBe(true)
+    expect(audit.items.every((item) => item.recordedAt === at)).toBe(true)
   }
 })
 

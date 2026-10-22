@@ -6,40 +6,6 @@ import {
   nullable,
   uuid,
 } from '../../../../src/services/decode'
-export const auditActions = [
-  'authorization_changed',
-  'user_group_changed',
-  'management_changed',
-  'job_accepted',
-  'job_observed',
-  'request_succeeded',
-  'request_failed',
-  'identity_session_created',
-  'compliance_saved',
-  'compliance_recomputed',
-  'compliance_evaluated',
-  'alert_closed',
-  'alert_opened',
-  'alert_resolved',
-  'alert_acknowledged',
-  'baseline_saved',
-  'request_created',
-  'request_approved',
-  'request_denied',
-  'request_revoked',
-  'request_expired',
-  'request_decision_denied',
-  'request_consumed',
-  'risk_assessed',
-  'security_dispatched',
-  'security_result',
-  'security_detected',
-  'certificate_requested',
-  'certificate_issued',
-  'certificate_observed',
-  'support_consent',
-  'support_observed',
-] as const
 export const alertStates = ['open', 'resolved'] as const
 export function candidate(value: unknown, tenant: string, demo: boolean, keys: string[]) {
   const v = closed(value, ['contract', 'tenantId', 'source', ...keys])
@@ -77,39 +43,6 @@ export function reference(value: unknown) {
   }
 }
 export type OperationsReference = ReturnType<typeof reference>
-export function auditEntry(value: unknown) {
-  const v = closed(value, [
-    'id',
-    'at',
-    'actor',
-    'action',
-    'target',
-    'operation',
-    'outcome',
-    'stream',
-    'stage',
-    'status',
-  ])
-  return {
-    id: uuid(v['id']),
-    at: count(v['at']),
-    stream: enumeration(v['stream'], ['mdm_business', 'identity_security'] as const),
-    stage: enumeration(v['stage'], ['request', 'business', 'delivery'] as const),
-    status: nullable(v['status'], count),
-    actor: nullable(v['actor'], uuid),
-    action: enumeration(v['action'], auditActions),
-    target: nullable(v['target'], reference),
-    operation: nullable(v['operation'], uuid),
-    outcome: enumeration(v['outcome'], [
-      'accepted',
-      'denied',
-      'failed',
-      'unknown',
-      'observed',
-    ] as const),
-  }
-}
-export type AuditEntry = ReturnType<typeof auditEntry>
 export function alert(value: unknown) {
   const v = closed(value, [
     'id',

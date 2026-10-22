@@ -18,7 +18,11 @@ import { createOperationsDemo } from '../operations/state'
 import { createAuthorizationDemo } from '../operations/authorization'
 import { createAdminDemo } from '../operations/admin'
 export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo>) {
-  const operations = createOperationsDemo(() => security.now())
+  const operations = createOperationsDemo(() => security.now(), {
+    can: (actor) => authorization.can(actor, 'audit_read'),
+    binding: (actor) => JSON.stringify(authorization.effective(actor)),
+    devices: () => devices.facts(),
+  })
   const scopes = createScopeDemo(devices),
     native = createNativeDemo(devices, (actor, permission, device) =>
       authorization.can(actor, permission, device),

@@ -32,7 +32,7 @@ async function fixture() {
 }
 it('connects native permission changes, denied device access and sanitized audit without replay duplication', async () => {
   const f = await fixture(),
-    root = '/api/v1/mdm-candidate/operations/audit'
+    root = '/api/v1/audit-events'
   expect((await f.server.handle('GET', '/api/v1/devices/device-01/inventory')).status).toBe(200)
   const original = (await f.server.handle('GET', '/api/v1/authorization/rules')).body as {
     items: {
@@ -56,15 +56,15 @@ it('connects native permission changes, denied device access and sanitized audit
   f.server.set('normal')
   expect((await f.write('PUT', `/api/v1/authorization/rules/${ADMIN_RULE}`, body)).status).toBe(200)
   expect((await f.server.handle('GET', '/api/v1/devices/device-01/inventory')).status).toBe(403)
-  const audit = (await f.server.handle('GET', `${root}?operation=${operationId}`)).body as {
-    items: { stage: string; outcome: string }[]
+  const audit = (await f.server.handle('GET', `${root}?operationId=${operationId}`)).body as {
+    items: { phase: string; auditOutcome: string }[]
   }
-  expect(audit.items.filter((v) => v.stage === 'business')).toHaveLength(1)
-  expect(audit.items.some((v) => v.stage === 'request' && v.outcome === 'unknown')).toBe(true)
+  expect(audit.items.filter((v) => v.phase === 'business')).toHaveLength(1)
+  expect(audit.items.some((v) => v.phase === 'request' && v.auditOutcome === 'unknown')).toBe(true)
   expect(JSON.stringify(audit)).not.toContain('grants')
-  const sessions = (await f.server.handle('GET', `${root}?stream=identity_security`)).body
+  const sessions = (await f.server.handle('GET', `${root}?action=identity_session_created`)).body
   expect(sessions).toMatchObject({
-    items: [{ stream: 'identity_security', stage: 'request', action: 'identity_session_created' }],
+    items: [{ source: 'identity.security', phase: 'request', action: 'identity_session_created' }],
   })
   for (const path of [
     '/api/v1/authorization',
@@ -81,7 +81,7 @@ it('connects native permission changes, denied device access and sanitized audit
 })
 it('binds frozen audit pages to exact filters and actor and clears them on reset', async () => {
   const f = await fixture(),
-    root = '/api/v1/mdm-candidate/operations/audit',
+    root = '/api/v1/audit-events',
     path = '/api/v1/mdm-candidate/operations/alert-rules'
   for (let i = 0; i < 3; i++)
     await f.write('POST', `${path}/${id()}`, {
@@ -90,26 +90,26 @@ it('binds frozen audit pages to exact filters and actor and clears them on reset
       input: { name: `Signal ${i}`, signal: 'agent_health', threshold: 1, enabled: true },
     })
   const first = (await f.server.handle('GET', `${root}?limit=1`)).body as {
-    snapshot: string
+    coverage: unknown
     nextCursor: string
   }
   expect(first.nextCursor).toBeTruthy()
   expect(
     (await f.server.handle('GET', `${root}?limit=1&cursor=${first.nextCursor}`)).body,
-  ).toMatchObject({ snapshot: first.snapshot })
+  ).toMatchObject({ coverage: first.coverage })
   expect(
-    (await f.server.handle('GET', `${root}?limit=1&stream=mdm_business&cursor=${first.nextCursor}`))
+    (await f.server.handle('GET', `${root}?limit=1&action=management_write&cursor=${first.nextCursor}`))
       .status,
-  ).toBe(400)
+  ).toBe(409)
   await f.server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'reviewer',
     password: 'demo',
   })
   expect((await f.server.handle('GET', `${root}?limit=1&cursor=${first.nextCursor}`)).status).toBe(
-    400,
+    409,
   )
   f.automation.reset()
-  expect((await f.server.handle('GET', `${root}?cursor=${first.nextCursor}`)).status).toBe(400)
+  expect((await f.server.handle('GET', `${root}?cursor=${first.nextCursor}`)).status).toBe(409)
 })
 
 it('rechecks native inventory permissions and preserves single-device reads', async () => {

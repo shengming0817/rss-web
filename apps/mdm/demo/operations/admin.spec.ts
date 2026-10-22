@@ -6,7 +6,11 @@ import { createScenario, TENANT, type Scenario } from '../scenario'
 import { operation } from '../../src/services/useOperation'
 async function fixture() {
   let time = 100
-  const operations = createOperationsDemo(() => time)
+  const operations = createOperationsDemo(() => time, {
+    can: (actor) => auth.can(actor, 'audit_read'),
+    binding: (actor) => JSON.stringify(auth.effective(actor)),
+    devices: () => [],
+  })
   const auth = createAuthorizationDemo(
     () => time,
     operations.record,
@@ -152,11 +156,11 @@ it('uses report references for completed report audit events', async () => {
     body = operation({ from: 0, until: 100 })
   await f.post('/api/v1/mdm-candidate/operations/reports', body)
   f.advance()
-  const page = (await f.server.handle('GET', '/api/v1/mdm-candidate/operations/audit')).body as {
-    items: { action: string; target: { kind: string; id: string } }[]
+  const page = (await f.server.handle('GET', '/api/v1/audit-events')).body as {
+    items: { action: string; target: { type: string; id: string } }[]
   }
   expect(page.items.find((v) => v.action === 'job_observed')?.target).toMatchObject({
-    kind: 'report',
+    type: 'report',
     id: body.operationId,
   })
 })

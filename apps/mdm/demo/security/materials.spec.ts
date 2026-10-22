@@ -101,7 +101,7 @@ it('binds one-time disclosure to the approved requester and fresh session withou
     `${root}/materials/device-01/bitlocker`,
     `${root}/requests`,
     `${root}/actions`,
-    '/api/v1/mdm-candidate/operations/audit',
+    '/api/v1/audit-events',
     '/api/v1/mdm-candidate/operations/alerts',
   ]) {
     const read = await f.server.handle('GET', path)
@@ -331,13 +331,13 @@ it('settles an expired queued rotation before a material-only read and publishes
   expect((await f.server.handle('GET', path)).body).toMatchObject({
     material: { actions: ['reveal', 'rotate'] },
   })
-  const audit = '/api/v1/mdm-candidate/operations/audit?device=device-01&action=security_result'
+  const audit = '/api/v1/audit-events?device=device-01&action=security_result'
   const entries = (await f.server.handle('GET', audit)).body
   expect(entries).toMatchObject({
-    items: [{ target: { id: dispatch.operationId }, outcome: 'failed' }],
+    items: [{ target: { id: dispatch.operationId }, auditOutcome: 'failed' }],
   })
   await f.server.handle('GET', path)
   expect((await f.server.handle('GET', audit)).body).toMatchObject({
-    items: [expect.objectContaining({ outcome: 'failed' })],
+    items: [expect.objectContaining({ auditOutcome: 'failed' })],
   })
 })
