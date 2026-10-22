@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { UiButton, UiDialog, UiTable, UiTabs, UiBadge } from '@rss/core/components'
-import { onMounted, ref, toRaw, watch } from 'vue'
+import { ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
@@ -39,14 +39,15 @@ const deletionBlocked = ref<boolean>(),
   compared = ref(false)
 const detailTab = ref('overview'),
   editKind = ref<'metadata' | 'rule'>('metadata')
-function compare() {
-  void run(
+async function compare() {
+  const ok = await run(
     () => client.read(id.value),
     (v) => {
       current.value = v
       compared.value = true
     },
   )
+  if (!ok && uncertain.value && failure.value === 'notFound') compared.value = true
 }
 function beginEdit(mode: 'metadata' | 'rule') {
   if (mode === 'rule' && current.value?.group.kind !== 'dynamic') return
@@ -639,8 +640,11 @@ function openGroup(group: string) {
         @loaded="deletionBlocked = $event"
       />
       <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
-      <template #footer
-        ><UiButton
+      <template #footer>
+        <UiButton v-if="uncertain" :disabled="busy" @click="compare">{{
+          t('devices.compare')
+        }}</UiButton>
+        <UiButton
           :disabled="busy || uncertain || deletionBlocked !== false"
           @click="change({ action: 'delete' })"
           >{{ t('devices.delete') }}</UiButton

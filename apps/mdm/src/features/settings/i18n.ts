@@ -4,7 +4,6 @@ export const settingsZh = {
   chooseInstaller: '选择安装文件',
   uploadProgress: '上传进度',
   resumeUpload: '核对并继续上传',
-  packageVersion: '安装包版本',
   publishSavedPackage: '发布已保存安装包',
   publishInstaller: '发布安装包',
   packageUnknown: '正在核对原操作。尚无回执时仍保留待确认状态。',
@@ -318,6 +317,24 @@ export const settingsZh = {
   },
 } as const
 export const settingsEn = {
+  packageTaskNote:
+    'Choose an installer, review its version and target, then publish. Signing and notarization are optional. Publication does not confirm installation.',
+  chooseInstaller: 'Choose installer',
+  uploadProgress: 'Upload progress',
+  resumeUpload: 'Check and resume upload',
+  publishSavedPackage: 'Publish saved installer',
+  publishInstaller: 'Publish installer',
+  packageUnknown: 'Check the original operation. An absent receipt leaves the outcome unknown.',
+  addInstaller: 'Add installer',
+  packageStage: {
+    choose: 'Choose a file',
+    uploading: 'Uploading',
+    checking: 'Inspecting',
+    ready: 'Ready to publish',
+    saved: 'Saved, awaiting publication',
+    published: 'Published',
+  },
+
   chooseChannels: 'Choose management channels',
   storageStep: 'Content storage (S3)',
   trustStep: 'Device issuance and trust',

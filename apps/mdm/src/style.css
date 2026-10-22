@@ -1103,7 +1103,7 @@
 }
 .field-choice {
   padding-block: 0.65rem;
-  border-bottom: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--color-border);
 }
 .field-choice small {
   display: block;
@@ -1118,7 +1118,7 @@
   align-items: flex-start;
   gap: 0.5rem;
   padding: 0.8rem;
-  border-left: 2px solid var(--ui-border);
+  border-left: 2px solid var(--color-border);
 }
 .group-condition-row > .group-criteria {
   min-width: 0;
@@ -1131,11 +1131,11 @@
 }
 .group-dependencies li {
   padding-block: 0.8rem;
-  border-bottom: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--color-border);
 }
 .package-upload-task {
   padding: 1.4rem;
-  border: 1px solid var(--ui-border);
+  border: 1px solid var(--color-border);
   border-radius: 0.7rem;
 }
 .package-dropzone {

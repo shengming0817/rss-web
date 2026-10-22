@@ -17,7 +17,13 @@ const { t } = useI18n()
 function select(kind: string) {
   if (kind === 'group') emit('update:modelValue', { kind, groupId: '', op: 'member_of' })
   else if (kind === 'and' || kind === 'or')
-    emit('update:modelValue', { kind, children: [props.modelValue] })
+    emit('update:modelValue', {
+      kind,
+      children:
+        props.modelValue.kind === 'and' || props.modelValue.kind === 'or'
+          ? props.modelValue.children
+          : [props.modelValue],
+    })
   else {
     const field = props.fields.find((f) =>
       ['string', 'boolean', 'integer', 'time'].includes(f.kind),

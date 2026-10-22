@@ -23,15 +23,18 @@ const selectedGroup = computed(() => layout.value?.groups.find((g) => g.id === c
 const title = computed(
   () => selectedGroup.value?.name ?? t('devices.assetCategories.' + category.value),
 )
-const visibleFields = computed(() =>
-  Object.values(props.view.fields).filter((f) =>
-    selectedGroup.value
-      ? selectedGroup.value.fields.includes(f.field)
-      : assetCategory(f.field) === category.value &&
-        (category.value !== 'extensions' ||
-          !layout.value?.groups.some((g) => g.fields.includes(f.field))),
-  ),
-)
+const visibleFields = computed(() => {
+  if (selectedGroup.value)
+    return selectedGroup.value.fields.flatMap((key) =>
+      props.view.fields[key] ? [props.view.fields[key]!] : [],
+    )
+  return Object.values(props.view.fields).filter(
+    (f) =>
+      assetCategory(f.field) === category.value &&
+      (category.value !== 'extensions' ||
+        !layout.value?.groups.some((g) => g.fields.includes(f.field))),
+  )
+})
 const { t, locale } = useI18n(),
   runtime = useMdm()
 const { run, busy, failure } = useOperation([], () => deviceBinding(runtime))

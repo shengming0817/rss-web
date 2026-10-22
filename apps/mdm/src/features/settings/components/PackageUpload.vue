@@ -253,7 +253,7 @@ async function check() {
       @click="resume"
       >{{ t('settings.resumeUpload') }}</UiButton
     >
-    <template v-if="inspected"
+    <template v-if="inspected || saved"
       ><p>
         {{ inspected?.facts.format.toUpperCase() ?? '' }} · {{ target.platform }} ·
         {{ target.architecture }}
@@ -280,7 +280,7 @@ async function check() {
       }}</UiButton>
       <UiButton
         v-if="compared && pending.state === 'unknown'"
-        :disabled="busy || !inspected"
+        :disabled="busy || !packageId"
         @click="publish(true)"
         >{{ t('devices.replay') }}</UiButton
       >

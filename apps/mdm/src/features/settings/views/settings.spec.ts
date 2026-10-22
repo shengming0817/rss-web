@@ -20,6 +20,7 @@ import TaskTrustPanel from '../components/TaskTrustPanel.vue'
 import WebhookPanel from '../components/WebhookPanel.vue'
 import PkiPanel from '../components/PkiPanel.vue'
 import PackagesPanel from '../components/PackagesPanel.vue'
+import PackageUpload from '../components/PackageUpload.vue'
 import TenantEditor from '../components/TenantEditor.vue'
 import FirstUseView from './FirstUseView.vue'
 import type { FirstUseIntent } from '../clients/firstUse'
@@ -1002,3 +1003,67 @@ it('keeps an unknown operation locked when a successful query returns no receipt
     queried: true,
   })
 })
+it.each(['save', 'publish'] as const)(
+  'restores an unknown %s task after remount and retains its original operation',
+  async (action) => {
+    const f = await fixture(PackageUpload, {
+      target: { platform: 'windows', architecture: 'x86_64' },
+      canUpload: true,
+      canPublish: true,
+      canQuery: true,
+    })
+    const input = { packageId: id, version: '1.0', platform: 'windows', architecture: 'x86_64' }
+    await expect(
+      f.settings.operations.submit('package-upload', action, 0, JSON.stringify(input), async () => {
+        throw new Error('response lost')
+      }),
+    ).rejects.toThrow()
+    const original = f.settings.operations.records.get('package-upload')!.id
+    await f.remount()
+    const receipt = {
+      packageId: id,
+      resource: id,
+      version: 'v1',
+      variant: 'default',
+      productVersion: '1.0',
+      material: { format: 'exe', version: null, architectures: ['x86_64'], bundleId: null },
+      sha256: Array(32).fill(1),
+      length: 10,
+      filename: 'agent.exe',
+      href: `/api/v1/software/resources/${id}/versions/v1`,
+      storageRevision: 4,
+    }
+    const published = {
+      releaseId: principal,
+      tenantId: tenant,
+      target: { platform: 'windows', architecture: 'x86_64' },
+      version: '1.0',
+      format: 'nsis_exe',
+      filename: 'agent.exe',
+      length: 10,
+      installerSha256: Array(32).fill(1),
+    }
+    f.setHandler((o) => (o.method === 'GET' ? (action === 'save' ? receipt : null) : published))
+    await f.wrapper
+      .findAll('button')
+      .find((b) => b.text() === '查询原操作')!
+      .trigger('click')
+    await flushPromises()
+    if (action === 'save') {
+      const button = f.wrapper.findAll('button').find((b) => b.text() === '发布已保存安装包')!
+      expect(button.attributes('disabled')).toBeUndefined()
+      await button.trigger('click')
+      await flushPromises()
+      expect(f.calls.filter((o) => o.method === 'POST').at(-1)?.path).toBe('/api/v1/agent-packages')
+    } else {
+      const replay = f.wrapper.findAll('button').find((b) => b.text() === '明确重放原操作')!
+      expect(replay.attributes('disabled')).toBeUndefined()
+      await replay.trigger('click')
+      await flushPromises()
+      expect(f.calls.filter((o) => o.method === 'POST').at(-1)?.body).toMatchObject({
+        operationId: original,
+        packageId: id,
+      })
+    }
+  },
+)
