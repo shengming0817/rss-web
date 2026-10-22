@@ -124,7 +124,8 @@ it('rejects duplicate catalog keys and malformed manual fields', () => {
       kind: 'boolean',
       manual: true,
       nullable: true,
-      sources: ['manual'],
+      sources: { manual: 0 },
+      valueType: { kind: 'boolean' },
       operations: field.operations,
     },
   ])

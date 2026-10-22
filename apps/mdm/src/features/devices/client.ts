@@ -1,3 +1,4 @@
+import { createTelemetryClient } from '../telemetry/client'
 import type { HttpTransport } from '@rss/api/mdm'
 import { createAssetsClient } from './clients/assets'
 import { createDeviceViewsClient } from './clients/device-views'
@@ -9,6 +10,7 @@ import { createGroupsClient } from './clients/groups'
 export function createDeviceClients(transport: HttpTransport, tenant: string) {
   return {
     assets: createAssetsClient(transport, tenant),
+    telemetry: createTelemetryClient(transport, tenant),
     registration: createRegistrationClient(transport, tenant),
     directory: createDirectoryClient(transport),
     views: createDeviceViewsClient(transport, tenant),

@@ -1,3 +1,4 @@
+import { defaultApplicability, identityMapping } from './collection-mapping'
 import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { createResourcesClient, decodeResource, decodeScriptSpec } from './resources'
@@ -66,7 +67,12 @@ it('preserves finite collection bindings and rejects invented collection field i
     ...spec,
     profile: 'osquery',
     sql: 'SELECT version FROM osquery_info',
-    purpose: { kind: 'collection', mappings: { 'custom.osquery.version': '/0/version' } },
+    purpose: {
+      kind: 'collection',
+      scope: { kind: 'device' },
+      applicability: defaultApplicability(),
+      mappings: { 'custom.osquery.version': identityMapping('/0/version') },
+    },
   }
   expect(decodeScriptSpec(value).purpose).toEqual(value.purpose)
   expect(() =>

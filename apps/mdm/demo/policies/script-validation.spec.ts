@@ -1,3 +1,7 @@
+import {
+  defaultApplicability,
+  identityMapping,
+} from '../../src/features/policies/clients/collection-mapping'
 import { createHash } from 'node:crypto'
 import { expect, it } from 'vitest'
 import { validateScriptVariant, validateScriptParameters } from './script-validation'
@@ -70,7 +74,12 @@ it('binds current osquery metadata to the exact canonical SQL artifact', () => {
         parameters: { type: 'object', properties: {}, required: [], additionalProperties: false },
         bindings: {},
         output: { type: 'array' },
-        purpose: { kind: 'collection', mappings: { 'custom.osquery.version': '/0/version' } },
+        purpose: {
+          kind: 'collection',
+          scope: { kind: 'device' },
+          applicability: defaultApplicability(),
+          mappings: { 'custom.osquery.version': identityMapping('/0/version') },
+        },
         timeoutSeconds: 30,
         outputBytes: 1024,
         maxRows: 1,

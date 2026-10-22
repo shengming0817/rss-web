@@ -270,11 +270,16 @@ export function policyAction(value: unknown) {
     'execution',
     'native_collection',
     'agent_collection',
+    'telemetry_profile',
     'configuration',
     'software',
     'ensure_agent_installed',
     'request_mdm_enrollment',
   ] as const)
+  if (kind === 'telemetry_profile') {
+    const v = closed(value, ['kind', 'resource'])
+    return { kind, resource: exactResource(v['resource']) }
+  }
   if (kind === 'configuration') {
     const v = closed(value, ['kind', 'resource', 'exit'])
     return {
