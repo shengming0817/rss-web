@@ -129,7 +129,9 @@ export function createMdmTransport(): HttpTransport {
           (options.method === 'POST' && options.path === '/api/v1/agent-configurations') ||
           (options.method === 'POST' && options.path === '/api/v1/enrollments/{id}/profile') ||
           (options.method === 'GET' &&
-            options.path === '/api/v1/apple/organizations/{id}/ade/public-key')
+            options.path === '/api/v1/apple/organizations/{id}/ade/public-key') ||
+          (options.method === 'GET' &&
+            options.path === '/api/v1/software/resources/{id}/versions/{version}/content')
         )
       )
         throw clientError()
