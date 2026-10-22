@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { UiButton, UiDialog } from '@rss/core/components'
 import { useMdm } from '../../../context'
@@ -7,6 +7,7 @@ import { usePermission } from '../../enrollment/usePermission'
 import { useSettingsFacts, useSettingsAction } from '../useSettingsAction'
 import PackageUpload from './PackageUpload.vue'
 import OperationNotice from './OperationNotice.vue'
+import { uuid } from '../../../services/decode'
 const runtime = useMdm(),
   { t } = useI18n(),
   client = runtime.settings.packages
@@ -40,6 +41,28 @@ const slots = computed(() =>
     ),
   })),
 )
+const pendingRelease = computed(() =>
+  pending.value
+    ? uuid((JSON.parse(pending.value.publicInput) as Record<string, unknown>)['release'])
+    : undefined,
+)
+watch(
+  () => runtime.settings.operations.records.get('package-upload'),
+  (task) => {
+    if (!task) return
+    if (task.action === 'publish' && task.state === 'received') {
+      if (!uploadTarget.value) runtime.settings.operations.records.delete('package-upload')
+      return
+    }
+    if (!uploadTarget.value) {
+      const input = JSON.parse(task.publicInput) as Record<string, unknown>
+      uploadTarget.value = targets.find(
+        (t) => t.platform === input['platform'] && t.architecture === input['architecture'],
+      )
+    }
+  },
+  { immediate: true, flush: 'sync' },
+)
 async function load() {
   packages.value = []
   return run(
@@ -49,10 +72,11 @@ async function load() {
 }
 async function compare() {
   const old = pending.value
-  if (old && withdrawTarget.value)
+  const release = pendingRelease.value
+  if (old && release)
     await query(
       old.id,
-      () => client.operation(old.id, 'withdraw', withdrawTarget.value!),
+      () => client.operation(old.id, 'withdraw', release),
       (value) => {
         if (value) withdrawTarget.value = undefined
       },
@@ -61,8 +85,8 @@ async function compare() {
   if (await load()) markCompared()
 }
 async function withdraw(replay = false) {
-  if (!canWrite.value || !withdrawTarget.value) return
-  const release = withdrawTarget.value
+  const release = replay ? pendingRelease.value : withdrawTarget.value
+  if (!canWrite.value || !release) return
   if (
     await submit(
       'withdraw',
@@ -88,6 +112,7 @@ useSettingsFacts(() => {
   <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
   <UiButton :disabled="busy || !canRead" @click="load">{{ t('settings.reload') }}</UiButton>
   <OperationNotice
+    v-if="!withdrawTarget"
     :operation="pending"
     :busy="busy"
     :can-write="canWrite"
@@ -134,9 +159,19 @@ useSettingsFacts(() => {
     kind="alertdialog"
     @update:open="!$event && (withdrawTarget = undefined)"
     ><p>{{ t('settings.withdrawPackageHint') }}</p>
+    <OperationNotice
+      :operation="pending"
+      :busy="busy"
+      :can-write="canWrite"
+      :compared="compared"
+      @compare="compare"
+      @query="compare"
+      @retry="withdraw(true)"
+      @edit="resolveConflict"
+    />
     <template #footer
-      ><UiButton variant="danger" :disabled="locked || !canWrite" @click="withdraw">{{
-        t('devices.confirmAction')
+      ><UiButton variant="danger" :disabled="locked || !canWrite" @click="withdraw()">{{
+        t('settings.confirmWithdrawal')
       }}</UiButton></template
     ></UiDialog
   >

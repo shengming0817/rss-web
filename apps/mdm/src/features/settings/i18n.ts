@@ -13,6 +13,8 @@ export const settingsZh = {
     uploading: '上传中',
     checking: '识别中',
     ready: '待发布',
+    saving: '正在保存安装包',
+    publishing: '正在发布安装包',
     saved: '已保存待发布',
     published: '已发布',
   },
@@ -130,6 +132,7 @@ export const settingsZh = {
   backupLimit:
     '运维先停止对应写服务，维护命令校验原数据与材料。共享 CA 恢复须独立演练；异址自动灾备、设备恢复效果与 RPO/RTO 均未由此证明。',
   withdrawPackage: '撤回发布包',
+  confirmWithdrawal: '确认撤回',
   packageVersion: '安装包版本',
   addAdministrator: '添加独立管理员',
   recentAuthentication: '需要最近完成的平台认证；认证过期后请重新登录，再显式提交原操作。',
@@ -325,6 +328,8 @@ export const settingsEn = {
     uploading: 'Uploading',
     checking: 'Inspecting',
     ready: 'Ready to publish',
+    saving: 'Saving installer',
+    publishing: 'Publishing installer',
     saved: 'Saved, awaiting publication',
     published: 'Published',
   },
@@ -449,6 +454,7 @@ export const settingsEn = {
   backupLimit:
     'Operations stops the relevant writers; maintenance validates original data and materials. Shared-CA recovery requires its own drill. This does not establish relocation recovery, device recovery effects or RPO/RTO.',
   withdrawPackage: 'Withdraw package',
+  confirmWithdrawal: 'Confirm withdrawal',
   packageVersion: 'Installer version',
   addAdministrator: 'Add independent administrator',
   recentAuthentication:

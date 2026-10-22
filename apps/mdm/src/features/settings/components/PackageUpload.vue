@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { UiButton, UiProgress } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -30,25 +30,44 @@ const saved = ref(false),
 let file: File | undefined,
   sha256: number[] = [],
   controller: AbortController | undefined
-const restored =
-  pending.value && ['unknown', 'conflict'].includes(pending.value.state)
-    ? (JSON.parse(pending.value.publicInput) as Record<string, unknown>)
-    : undefined
-if (pending.value?.state === 'received')
-  runtime.settings.operations.records.delete('package-upload')
-if (restored) {
-  packageId.value = String(restored['packageId'])
-  version.value = String(restored['version'] ?? '')
-  saved.value = pending.value?.action === 'publish'
-  stage.value = saved.value ? 'saved' : 'ready'
-}
+const restored = computed(() =>
+  pending.value ? (JSON.parse(pending.value.publicInput) as Record<string, unknown>) : undefined,
+)
 const selection = computed(() =>
-  restored
-    ? decodeTarget({ platform: restored['platform'], architecture: restored['architecture'] })
-    : {
-        platform: props.target.platform,
-        architecture: props.target.architecture,
-      },
+  restored.value
+    ? decodeTarget({
+        platform: restored.value['platform'],
+        architecture: restored.value['architecture'],
+      })
+    : { platform: props.target.platform, architecture: props.target.architecture },
+)
+// ref: Vue core v3.5.35 packages/runtime-core/src/apiWatch.ts (synchronous owner transitions).
+watch(
+  () => pending.value,
+  (task) => {
+    if (!task) return
+    if (task.action === 'publish' && task.state === 'received') {
+      stage.value = 'published'
+      file = undefined
+      inspected.value = undefined
+      runtime.settings.operations.records.delete('package-upload')
+      emit('published')
+      return
+    }
+    const input = restored.value!
+    packageId.value = String(input['packageId'])
+    version.value = String(input['version'] ?? '')
+    saved.value = task.action === 'publish' || task.state === 'received'
+    stage.value = saved.value ? 'saved' : 'ready'
+  },
+  { immediate: true, flush: 'sync' },
+)
+const displayStage = computed(() =>
+  pending.value?.state === 'submitting'
+    ? pending.value.action === 'save'
+      ? 'saving'
+      : 'publishing'
+    : stage.value,
 )
 const uploading = computed(() => upload.busy.value)
 const ready = computed(
@@ -67,8 +86,6 @@ function clear() {
 useSettingsFacts(clear)
 onBeforeUnmount(() => {
   clear()
-  if (pending.value?.state === 'received')
-    runtime.settings.operations.records.delete('package-upload')
 })
 function choose(event: Event) {
   const input = event.target as HTMLInputElement,
@@ -180,7 +197,7 @@ async function transfer() {
 }
 async function publish(replay = false) {
   if (
-    (!inspected.value && !saved.value && !restored) ||
+    (!inspected.value && !saved.value && !restored.value) ||
     !props.canPublish ||
     (!saved.value && !props.canUpload)
   )
@@ -209,7 +226,6 @@ async function publish(replay = false) {
       () => {
         stage.value = 'published'
         file = undefined
-        emit('published')
       },
       replay && pending.value?.action === 'publish',
     )
@@ -232,7 +248,6 @@ async function check() {
         stage.value = 'published'
         file = undefined
         inspected.value = undefined
-        emit('published')
       }
     },
     (result) => result !== null,
@@ -255,8 +270,9 @@ async function check() {
         :disabled="!canUpload"
         @change="choose"
     /></label>
-    <p v-if="filename">
-      <strong>{{ filename }}</strong> · {{ t('settings.packageStage.' + stage) }}
+    <p v-if="filename || restored">
+      <strong v-if="filename">{{ filename }}</strong>
+      {{ t('settings.packageStage.' + displayStage) }}
     </p>
     <UiProgress v-if="uploading" :label="t('settings.uploadProgress')" :value="progress" />
     <p v-if="upload.failure.value || failure" role="alert">
@@ -268,7 +284,7 @@ async function check() {
       @click="resume"
       >{{ t('settings.resumeUpload') }}</UiButton
     >
-    <template v-if="inspected || saved"
+    <template v-if="inspected || saved || restored"
       ><p>
         {{ inspected?.facts.format.toUpperCase() ?? '' }} · {{ selection.platform }} ·
         {{ selection.architecture }}
@@ -303,10 +319,8 @@ async function check() {
         t('console.edit')
       }}</UiButton>
     </template>
-    <UiButton
-      :disabled="busy || uploading || pending?.state === 'unknown' || pending?.state === 'conflict'"
-      @click="emit('close')"
-      >{{ t('console.cancel') }}</UiButton
-    >
+    <UiButton :disabled="locked || uploading" @click="emit('close')">{{
+      t('console.cancel')
+    }}</UiButton>
   </section>
 </template>

@@ -1193,3 +1193,158 @@ it('resumes the durable upload frontier and retries publication without saving a
   expect(JSON.stringify([...f.settings.operations.records.values()])).not.toContain('agent.exe')
   vi.unstubAllGlobals()
 })
+
+const releaseForRecovery = {
+  releaseId: principal,
+  tenantId: tenant,
+  target: { platform: 'windows', architecture: 'x86_64' },
+  version: '1.0',
+  format: 'windows_exe',
+  filename: 'agent.exe',
+  length: 10,
+  installerSha256: Array(32).fill(1),
+}
+const savedForRecovery = {
+  packageId: id,
+  resource: id,
+  version: 'v1',
+  variant: 'default',
+  productVersion: '1.0',
+  material: { format: 'exe', version: null, architectures: ['x86_64'], bundleId: null },
+  sha256: Array(32).fill(1),
+  length: 10,
+  filename: 'agent.exe',
+  href: `/api/v1/software/resources/${id}/versions/v1`,
+  storageRevision: 4,
+}
+function dialogButton(label: string) {
+  const found = [...document.querySelectorAll<HTMLButtonElement>('[role=alertdialog] button')].find(
+    (b) => b.textContent?.trim() === label,
+  )
+  expect(found).toBeDefined()
+  return found!
+}
+it('confirms an ordinary withdrawal without treating its click event as a replay', async () => {
+  const f = await fixture(PackagesPanel)
+  let withdrawn = false
+  f.setHandler((o) => {
+    if (o.method === 'POST') {
+      withdrawn = true
+      return undefined
+    }
+    return withdrawn ? [] : [releaseForRecovery]
+  })
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  await button(f.wrapper, '撤回发布包').trigger('click')
+  await flushPromises()
+  dialogButton('确认撤回').click()
+  await flushPromises()
+  expect(f.calls.filter((o) => o.method === 'POST')).toMatchObject([
+    { path: '/api/v1/agent-packages/{id}/withdraw', pathParams: { id: principal } },
+  ])
+  expect(f.wrapper.text()).not.toContain('agent.exe')
+})
+it.each([false, true])(
+  'retains an unknown withdrawal after closing and remount=%s, then explicitly replays the original',
+  async (remount) => {
+    const f = await fixture(PackagesPanel)
+    let attempts = 0
+    f.setHandler((o) => {
+      if (o.method === 'POST') {
+        if (++attempts === 1) throw new Error('lost receipt')
+        return undefined
+      }
+      return o.path.includes('/operations/') ? null : attempts > 1 ? [] : [releaseForRecovery]
+    })
+    await button(f.wrapper, '重新读取').trigger('click')
+    await flushPromises()
+    await button(f.wrapper, '撤回发布包').trigger('click')
+    await flushPromises()
+    dialogButton('确认撤回').click()
+    await flushPromises()
+    const original = f.settings.operations.records.get('packages')!.id
+    dialogButton('查询原操作').click()
+    await flushPromises()
+    expect(f.settings.operations.records.get('packages')?.state).toBe('unknown')
+    document
+      .querySelector<HTMLButtonElement>('[role=alertdialog] button[aria-label="取消"]')!
+      .click()
+    await flushPromises()
+    if (remount) await f.remount()
+    await button(f.wrapper, '查询原操作').trigger('click')
+    await flushPromises()
+    expect(attempts).toBe(1)
+    expect(f.settings.operations.records.get('packages')).toMatchObject({
+      id: original,
+      state: 'unknown',
+      queried: true,
+    })
+    await button(f.wrapper, '按原输入显式重试').trigger('click')
+    await flushPromises()
+    expect(attempts).toBe(2)
+    expect(f.calls.filter((o) => o.method === 'POST').map((o) => o.body)).toEqual([
+      { operationId: original },
+      { operationId: original },
+    ])
+  },
+)
+it.each(['received-before-return', 'received-after-return', 'unknown-after-return'] as const)(
+  'recovers a navigating save task that becomes %s without uploading or saving a new version',
+  async (outcome) => {
+    const f = await fixture(PackagesPanel)
+    let settle!: () => void
+    const input = { packageId: id, version: '1.0', platform: 'windows', architecture: 'x86_64' }
+    const saving = f.settings.operations
+      .submit(
+        'package-upload',
+        'save',
+        0,
+        JSON.stringify(input),
+        () =>
+          new Promise((resolve, reject) => {
+            settle = () =>
+              outcome === 'unknown-after-return'
+                ? reject(new Error('lost receipt'))
+                : resolve(savedForRecovery)
+          }),
+      )
+      .catch(() => undefined)
+    const original = f.settings.operations.records.get('package-upload')!.id
+    if (outcome === 'received-before-return') {
+      settle()
+      await saving
+    }
+    await f.remount()
+    if (outcome !== 'received-before-return') {
+      expect(f.wrapper.text()).toContain('正在保存安装包')
+      settle()
+      await saving
+      await flushPromises()
+    }
+    f.setHandler((o) => {
+      if (o.method === 'GET') return o.path.includes('/operations/') ? null : []
+      return o.path.endsWith('/save') ? savedForRecovery : releaseForRecovery
+    })
+    expect(f.wrapper.find('input[type=file]').exists()).toBe(false)
+    if (outcome === 'unknown-after-return') {
+      await button(f.wrapper, '查询原操作').trigger('click')
+      await flushPromises()
+      expect(f.settings.operations.records.get('package-upload')?.state).toBe('unknown')
+      await button(f.wrapper, '明确重放原操作').trigger('click')
+    } else {
+      expect(f.wrapper.text()).toContain('已保存待发布')
+      await button(f.wrapper, '发布已保存安装包').trigger('click')
+    }
+    await flushPromises()
+    const writes = f.calls.filter((o) => o.method === 'POST')
+    expect(writes.map((o) => o.path)).toEqual(
+      outcome === 'unknown-after-return'
+        ? ['/api/v1/agent-packages/save', '/api/v1/agent-packages']
+        : ['/api/v1/agent-packages'],
+    )
+    if (outcome === 'unknown-after-return')
+      expect(writes[0]!.body).toMatchObject({ operationId: original, packageId: id })
+    expect(f.settings.operations.records.has('package-upload')).toBe(false)
+  },
+)

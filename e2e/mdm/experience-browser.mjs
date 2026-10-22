@@ -108,6 +108,55 @@ export async function acceptExperience({
   await page.getByRole('tab', { name: '依赖影响', exact: true }).click()
   await page.locator('.group-dependencies').waitFor()
   coverage.push('real-nested-group-save-members-and-authoritative-references')
+  // A never-edited static group's null memberSet is a real empty set, not a missing result.
+  await page.getByRole('button', { name: '创建', exact: true }).click()
+  dialog = page.getByRole('dialog')
+  await dialog.getByTestId('group-name').fill('Browser initial empty group')
+  const emptyCreated = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      /\/api\/v1\/groups\/[^/]+$/.test(new URL(r.url()).pathname),
+  )
+  await dialog.getByRole('button', { name: '保存', exact: true }).click()
+  const empty = await (await emptyCreated).json()
+  assert.equal((await api(`/api/v1/groups/${empty.group.id}`)).memberSet, null)
+  await dialog.waitFor({ state: 'hidden' })
+  await page.getByRole('button', { name: '创建', exact: true }).click()
+  dialog = page.getByRole('dialog')
+  await dialog.getByTestId('group-name').fill('Browser nested empty source')
+  await dialog.getByTestId('group-kind').selectOption('dynamic')
+  await dialog.locator('.group-criteria > .console-toolbar select').first().selectOption('group')
+  await dialog.locator('.group-picker > button').click()
+  await page.getByRole('button', { name: 'Browser initial empty group', exact: true }).click()
+  const emptyNestedCreated = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      /\/api\/v1\/groups\/[^/]+$/.test(new URL(r.url()).pathname),
+  )
+  await dialog.getByRole('button', { name: '保存并查看成员', exact: true }).click()
+  const emptyNested = await (await emptyNestedCreated).json()
+  await settled(`/api/v1/groups/${emptyNested.group.id}/tasks/${emptyNested.task}`)
+  const emptyMembers = await api(
+    `/api/v1/groups/${emptyNested.group.id}/results/${emptyNested.task}/members`,
+  )
+  assert.equal(emptyMembers.sources[0].coordinates.memberSet, null)
+  assert.deepEqual(emptyMembers.page.items, [])
+  await page.getByRole('button', { name: '读取任务状态', exact: true }).click()
+  await page.waitForFunction(
+    () => document.querySelector('section.console-page')?.getAttribute('aria-busy') !== 'true',
+  )
+  const emptyPage = page.waitForResponse(
+    (r) =>
+      new URL(r.url()).pathname ===
+      `/api/v1/groups/${emptyNested.group.id}/results/${emptyNested.task}/members`,
+  )
+  await page.getByRole('button', { name: '载入', exact: true }).click()
+  assert.equal((await emptyPage).status(), 200)
+  await page.waitForFunction(
+    () => document.querySelector('section.console-page')?.getAttribute('aria-busy') !== 'true',
+  )
+  assert.equal(await page.getByRole('alert').count(), 0)
+  coverage.push('real-initial-empty-static-source-null-member-set')
   await page.goto(path('settings/enrollment'))
   await page
     .locator('[data-setting=agent-package]')
@@ -118,6 +167,7 @@ export async function acceptExperience({
     ['Windows ARM64', 'windows', 'aarch64', 'browser-arm.exe', exe(true), '8.1.1'],
     ['macOS Intel', 'macos', 'x86_64', 'browser-intel.pkg', pkg('8.1.2'), '8.1.2'],
     ['macOS Apple Silicon', 'macos', 'aarch64', 'browser-silicon.pkg', pkg('8.1.3'), '8.1.3'],
+    ['Windows x64', 'windows', 'x86_64', 'browser-replacement.exe', exe(false), '8.2.0'],
   ]
   const releases = []
   for (const [label, platform, architecture, name, buffer, version] of cases) {
@@ -142,7 +192,11 @@ export async function acceptExperience({
     const publication = await published
     assert.equal(publication.status(), 200)
     const release = await publication.json()
-    await row.getByText(release.filename, { exact: true }).waitFor()
+    await row
+      .locator('.package-release')
+      .filter({ hasText: release.version })
+      .getByText(release.filename, { exact: true })
+      .waitFor()
     assert.ok(
       (await api('/api/v1/agent-packages')).some((item) => item.releaseId === release.releaseId),
     )
@@ -162,10 +216,17 @@ export async function acceptExperience({
     )
     await task.getByRole('button', { name: '取消', exact: true }).click()
   }
-  assert.equal(releases.length, 4)
+  assert.equal(releases.length, 5)
   const catalog = await context.request.get(`${origin}/api/v1/agent/enroll/packages`)
   assert.equal(catalog.status(), 200)
-  assert.ok((await catalog.json()).length >= 4)
+  const publishedPackages = await catalog.json()
+  assert.ok(publishedPackages.length >= 5)
+  assert.equal(
+    publishedPackages.filter(
+      (p) => p.target.platform === 'windows' && p.target.architecture === 'x86_64',
+    ).length,
+    2,
+  )
   coverage.push('real-four-target-unsigned-upload-publish-and-byte-identical-download')
   const anonymous = await context.browser().newContext({ ignoreHTTPSErrors: true, locale: 'zh-CN' })
   try {
@@ -197,5 +258,48 @@ export async function acceptExperience({
   } finally {
     await anonymous.close()
   }
+  const old = releases[0]
+  const withdrawPath = `/api/v1/agent-packages/${old.releaseId}/withdraw`
+  let discarded = false,
+    interceptionFailed = false,
+    finishWithdrawal
+  const observedWithdrawal = new Promise((resolve) => {
+    finishWithdrawal = resolve
+  })
+  await page.route(origin + withdrawPath, async (route) => {
+    try {
+      const response = await route.fetch()
+      assert.equal(response.status(), 204)
+      discarded = true
+      await route.abort('failed')
+    } catch {
+      interceptionFailed = true
+      await route.abort('failed').catch(() => {})
+    } finally {
+      finishWithdrawal()
+    }
+  })
+  await page
+    .locator('.package-release')
+    .filter({ hasText: old.version })
+    .getByRole('button', { name: '撤回发布包', exact: true })
+    .click()
+  const withdrawal = page.getByRole('alertdialog')
+  const sentWithdrawal = page.waitForRequest(
+    (r) => new URL(r.url()).pathname === withdrawPath && r.method() === 'POST',
+  )
+  await withdrawal.getByRole('button', { name: '确认撤回', exact: true }).click()
+  await sentWithdrawal
+  await observedWithdrawal
+  assert.equal(interceptionFailed, false)
+  assert.equal(discarded, true)
+  await page.unroute(origin + withdrawPath)
+  await withdrawal.getByRole('button', { name: '查询原操作', exact: true }).click()
+  await withdrawal.waitFor({ state: 'hidden' })
+  const remaining = await api('/api/v1/agent-packages')
+  assert.ok(!remaining.some((p) => p.releaseId === old.releaseId))
+  assert.ok(remaining.some((p) => p.releaseId === releases.at(-1).releaseId))
+  assert.equal(remaining.length, 4)
+  coverage.push('real-replacement-coexistence-and-unknown-withdrawal-recovery')
   await page.keyboard.press('Escape')
 }
