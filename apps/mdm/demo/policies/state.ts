@@ -1,3 +1,4 @@
+import { createTelemetryDemo } from '../telemetry'
 import type { DomainHandler, Scenario, DemoObservation, DemoEvent } from '../scenario'
 import type { createDeviceDemo } from '../devices/state'
 import { objectKey } from '../../src/features/devices/clients/objects'
@@ -89,6 +90,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
   const configurationPolicies = createConfigurationPolicies(devices, scopes, resources, policyStore)
   const configurations = createConfigurationDemo(devices, scopes, configurationPolicies.assigned)
   const policies = createPolicyDemo(devices, scopes, resources, policyStore)
+  const telemetry = createTelemetryDemo(devices, resources, policyStore, scopes)
   const handle: DomainHandler = (request, scenario) => {
     try {
       const denied = authorization.guard(request)
@@ -131,6 +133,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         scopes,
         resources,
         native,
+        telemetry,
         policyStore,
         policies,
         configurationPolicies,
@@ -229,6 +232,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
   }
   return {
     authorization,
+    telemetry,
     now: security.now,
     operations,
     security,
@@ -275,6 +279,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         scopes,
         resources,
         native,
+        telemetry,
         policyStore,
         policies,
         configurationPolicies,

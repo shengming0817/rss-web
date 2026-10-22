@@ -10,6 +10,7 @@ import {
   identifier,
   integer,
   nullable,
+  record,
   string,
   unique,
   uuid,
@@ -19,6 +20,7 @@ import {
   cursor,
   fieldDefinition,
   fieldKey,
+  type fieldInput,
   inventory,
   savedQuery,
   query,
@@ -27,6 +29,7 @@ import {
   sourceIds,
   collectionScope,
   readScalar,
+  retentionKey,
   type CollectionScope,
   type ManualChange,
   type Query,
@@ -189,6 +192,73 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
         path: '/api/v1/asset-fields',
         successStatus: 200,
         decode: (v) => decodeCatalog(v, tenant),
+      }),
+    writeField: (
+      field: string,
+      body: Operation<{ action: 'put'; definition: ReturnType<typeof fieldInput> }>,
+    ) =>
+      transport.request({
+        method: 'PUT',
+        path: '/api/v1/asset-fields/{field}',
+        pathParams: { field },
+        body,
+        successStatus: 200,
+        decode(value) {
+          const v = assetEnvelope(value, tenant, 'field', ['field', 'version', 'definition'])
+          if (v['field'] !== field || v['version'] !== body.expectedRevision + 1)
+            throw new Error('Wrong field receipt')
+          if (v['definition'] !== null)
+            fieldDefinition({ ...record(v['definition']), operations: [] })
+          return { version: count(v['version']) }
+        },
+      }),
+    fieldReferences: (field: string) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/asset-fields/{field}/references',
+        pathParams: { field },
+        successStatus: 200,
+        decode(value) {
+          const v = assetEnvelope(value, tenant, 'field_references', ['field', 'impact'])
+          if (v['field'] !== field) throw new Error('Wrong reference field')
+          const i = closed(v['impact'], [
+            'groups',
+            'templates',
+            'telemetryProfiles',
+            'archivedResourceVersions',
+            'compliance',
+            'savedQueries',
+          ])
+          return Object.fromEntries(Object.entries(i).map(([k, v]) => [k, count(v)]))
+        },
+      }),
+    retention: (key: string, revision: number) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/asset-retention-policies/{key}/{revision}',
+        pathParams: { key, revision: String(revision) },
+        successStatus: 200,
+        decode(value) {
+          const v = assetEnvelope(value, tenant, 'retention_policy', ['policy'])
+          const p = nullable(v['policy'], retentionPolicy)
+          if (p && (p.key !== key || p.revision !== revision))
+            throw new Error('Wrong retention version')
+          return p
+        },
+      }),
+    writeRetention: (body: Operation<ReturnType<typeof retentionPolicy>>) =>
+      transport.request({
+        method: 'POST',
+        path: '/api/v1/asset-retention-policies',
+        body,
+        successStatus: 200,
+        decode(value) {
+          const v = assetEnvelope(value, tenant, 'retention_policy', ['policy']),
+            p = retentionPolicy(v['policy'])
+          if (p.key !== body.input.key || p.revision !== body.expectedRevision + 1)
+            throw new Error('Wrong retention receipt')
+          return p
+        },
       }),
     inventory: (device: string, scope: CollectionScope = { kind: 'device' }) =>
       transport.request({
@@ -445,4 +515,26 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
         decode: (v) => accepted(v, body.operationId),
       }),
   }
+}
+
+export function retentionPolicy(value: unknown) {
+  const p = closed(value, ['key', 'revision', 'rawSeconds', 'summarySeconds', 'restoreSeconds'])
+  const result = {
+    key: retentionKey(p['key']),
+    revision: count(p['revision']),
+    rawSeconds: count(p['rawSeconds']),
+    summarySeconds: count(p['summarySeconds']),
+    restoreSeconds: count(p['restoreSeconds']),
+  }
+  if (
+    !result.revision ||
+    !result.rawSeconds ||
+    result.rawSeconds > 0xffffffff ||
+    result.summarySeconds > 0xffffffff ||
+    result.restoreSeconds > 0xffffffff ||
+    result.summarySeconds < result.rawSeconds ||
+    result.restoreSeconds > result.rawSeconds
+  )
+    throw new Error('Invalid retention policy')
+  return result
 }

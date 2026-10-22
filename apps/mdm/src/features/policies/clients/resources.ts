@@ -1,3 +1,6 @@
+import { applicability, templateScope, valueMapping, type ValueMapping } from './collection-mapping'
+import { telemetryProfile, type TelemetryProfile } from './telemetry-profile'
+import { fieldKey } from '../../devices/clients/asset-model'
 import { jsonValue, jsonObject, type Json } from '../../../services/json'
 import { createUploadsClient } from './uploads'
 import {
@@ -68,11 +71,6 @@ function schema(value: unknown): Record<string, Json> {
 export type Binding =
   | { kind: 'named' | 'environment'; name: string }
   | { kind: 'positional'; index: number }
-export const collectionFields = [
-  'custom.corporate_agent.version',
-  'custom.corporate_agent.healthy',
-  'custom.osquery.version',
-] as const
 export interface ScriptSpec {
   profile: 'power_shell7' | 'posix_sh' | 'bash' | 'osquery'
   sql: string | null
@@ -83,7 +81,12 @@ export interface ScriptSpec {
   output: Record<string, Json>
   purpose:
     | { kind: 'action' }
-    | { kind: 'collection'; mappings: Partial<Record<(typeof collectionFields)[number], string>> }
+    | {
+        kind: 'collection'
+        scope: ReturnType<typeof templateScope>
+        applicability: ReturnType<typeof applicability>
+        mappings: Record<string, ValueMapping>
+      }
   timeoutSeconds: number
   outputBytes: number
   maxRows: number
@@ -119,16 +122,21 @@ export function decodeScriptSpec(value: unknown): ScriptSpec {
     }),
   ) as Record<string, Binding>
   const kind = enumeration(record(v['purpose'])['kind'], ['action', 'collection'] as const)
-  const p = closed(v['purpose'], kind === 'action' ? ['kind'] : ['kind', 'mappings'])
+  const p = closed(
+    v['purpose'],
+    kind === 'action' ? ['kind'] : ['kind', 'scope', 'applicability', 'mappings'],
+  )
   const purpose: ScriptSpec['purpose'] =
     kind === 'action'
       ? { kind }
       : {
           kind,
+          scope: templateScope(p['scope']),
+          applicability: applicability(p['applicability']),
           mappings: Object.fromEntries(
             Object.entries(record(p['mappings'])).map(([key, value]) => [
-              enumeration(key, collectionFields),
-              identifier(value),
+              fieldKey(key),
+              valueMapping(value),
             ]),
           ),
         }
@@ -172,6 +180,7 @@ export interface Artifact {
 export type Declaration =
   | { kind: 'script'; artifact: Artifact; definition: ScriptSpec }
   | { kind: 'software'; definition: SoftwareDefinition }
+  | { kind: 'telemetry_profile'; artifact: Artifact; definition: TelemetryProfile }
   | {
       kind: 'native_collection' | 'agent_collection'
       artifact: Artifact
@@ -209,10 +218,14 @@ function declaration(value: unknown): Declaration {
     'configuration',
     'native_collection',
     'agent_collection',
+    'telemetry_profile',
   ] as const)
   const v = closed(
     value,
-    kind === 'script' || kind === 'native_collection' || kind === 'agent_collection'
+    kind === 'script' ||
+      kind === 'native_collection' ||
+      kind === 'agent_collection' ||
+      kind === 'telemetry_profile'
       ? ['kind', 'artifact', 'definition']
       : kind === 'software'
         ? ['kind', 'definition']
@@ -221,6 +234,8 @@ function declaration(value: unknown): Declaration {
   if (kind === 'software') return { kind, definition: decodeSoftwareDefinition(v['definition']) }
   const a = artifact(v['artifact'])
   if (kind === 'script') return { kind, artifact: a, definition: decodeScriptSpec(v['definition']) }
+  if (kind === 'telemetry_profile')
+    return { kind, artifact: a, definition: telemetryProfile(v['definition']) }
   if (kind === 'native_collection' || kind === 'agent_collection') {
     const definition = closed(
       v['definition'],
@@ -260,6 +275,7 @@ export function decodeResource(value: unknown, id: string) {
     'configuration',
     'native_collection',
     'agent_collection',
+    'telemetry_profile',
   ] as const)
   return {
     id,
@@ -348,7 +364,7 @@ export function createResourcesClient(transport: HttpTransport) {
           const v = closed(value, ['items', 'nextCursor'])
           return {
             items: array(v['items'], (value) => {
-              const i = closed(value, ['id', 'revision', 'kind', 'activeVersion'])
+              const i = closed(value, ['id', 'revision', 'kind', 'activeVersion', 'presentation'])
               return {
                 id: identifier(i['id']),
                 revision: count(i['revision']),
@@ -358,8 +374,10 @@ export function createResourcesClient(transport: HttpTransport) {
                   'configuration',
                   'native_collection',
                   'agent_collection',
+                  'telemetry_profile',
                 ] as const),
                 activeVersion: nullable(i['activeVersion'], identifier),
+                presentation: record(jsonValue(i['presentation'], 65536)),
               }
             }),
             nextCursor: nullable(v['nextCursor'], identifier),

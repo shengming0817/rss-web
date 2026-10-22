@@ -310,7 +310,15 @@ it('clears the software definition and artifact draft when opening another resou
             resources: {
               read,
               list: vi.fn().mockResolvedValue({
-                items: [{ id: 'second', revision: 1, kind: 'software', activeVersion: null }],
+                items: [
+                  {
+                    id: 'second',
+                    revision: 1,
+                    kind: 'software',
+                    activeVersion: null,
+                    presentation: {},
+                  },
+                ],
                 nextCursor: null,
               }),
             },

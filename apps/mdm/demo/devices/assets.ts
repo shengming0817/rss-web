@@ -2,6 +2,8 @@ import type { DomainHandler } from '../scenario'
 import { closed, enumeration, identifier, nullable, record, uuid } from '../../src/services/decode'
 import {
   collectionScope,
+  fieldDefinition,
+  fieldInput,
   query as decodeQuery,
   scalar,
   type Inventory,
@@ -9,6 +11,7 @@ import {
   type SavedQuery,
 } from '../../src/features/devices/clients/asset-model'
 import {
+  retentionPolicy,
   decodeFieldLayout,
   type FieldDisplayGroup,
 } from '../../src/features/devices/clients/assets'
@@ -23,6 +26,19 @@ interface Search {
   summary: { matched: number; unknown: number; total: number }
 }
 export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
+  const originalCatalog = structuredClone(catalog),
+    retentions = new Map<string, ReturnType<typeof retentionPolicy>>([
+      [
+        'demo_standard/1',
+        {
+          key: 'demo_standard',
+          revision: 1,
+          rawSeconds: 604800,
+          summarySeconds: 2592000,
+          restoreSeconds: 86400,
+        },
+      ],
+    ])
   let layout = { revision: 0, editable: true, groups: [] as FieldDisplayGroup[] }
   const searches = new Map<string, Search>()
   const saved = new Map<string, SavedQuery>()
@@ -89,25 +105,69 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
       return asset({
         kind: 'fields',
         dictionary: 'assets-v1',
-        fields: catalog.map((f) => ({
-          key: f.key,
-          timeSeries: f.timeSeries,
-          version: 1,
-          valueType:
-            f.kind === 'string'
-              ? { kind: 'string', maxLength: 256, allowEmpty: false }
-              : { kind: f.kind },
-          nullable: f.nullable,
-          manual: f.manual,
-          sources: Object.fromEntries(f.sources.map((s) => [s, 0])),
-          platforms: ['windows', 'macos'],
-          sensitivity: 'standard',
-          unit: null,
-          searchable: true,
-          itemKey: null,
-          operations: f.operations,
-        })),
+        fields: catalog.map((f) => ({ ...fieldInput(f), operations: f.operations })),
       })
+    const fieldPath = /^\/api\/v1\/asset-fields\/([^/]+)(?:\/(references))?$/.exec(path)
+    if (fieldPath) {
+      const key = decodeURIComponent(fieldPath[1]!),
+        old = catalog.find((f) => f.key === key)
+      if (method === 'GET' && fieldPath[2])
+        return asset({
+          kind: 'field_references',
+          field: key,
+          impact: {
+            groups: 0,
+            templates: 0,
+            telemetryProfiles: old?.timeSeries ? 1 : 0,
+            archivedResourceVersions: 0,
+            compliance: 0,
+            savedQueries: 0,
+          },
+        })
+      if (method === 'PUT') {
+        const op = operation(request.body)
+        return receipts.write(request, op.operationId, () => {
+          const input = closed(op.input, ['action', 'definition'])
+          if (input['action'] !== 'put' || op.expectedRevision !== (old?.version ?? 0))
+            return error('operation_conflict')
+          const next = fieldDefinition({
+            ...record(input['definition']),
+            operations: old?.operations ?? [],
+          })
+          if (next.key !== key || next.version !== op.expectedRevision + 1)
+            return error('malformed_request', 400)
+          if (old?.timeSeries && !next.timeSeries) return error('operation_conflict')
+          if (old) catalog.splice(catalog.indexOf(old), 1, next)
+          else catalog.push(next)
+          return asset({
+            kind: 'field',
+            field: key,
+            version: next.version,
+            definition: fieldInput(next),
+          })
+        })
+      }
+    }
+    const retentionPath = /^\/api\/v1\/asset-retention-policies(?:\/([^/]+)\/(\d+))?$/.exec(path)
+    if (retentionPath) {
+      if (method === 'GET')
+        return asset({
+          kind: 'retention_policy',
+          policy:
+            retentions.get(decodeURIComponent(retentionPath[1]!) + '/' + retentionPath[2]) ?? null,
+        })
+      if (method === 'POST') {
+        const op = operation(request.body)
+        return receipts.write(request, op.operationId, () => {
+          const p = retentionPolicy(op.input),
+            key = p.key + '/' + p.revision
+          if (p.revision !== op.expectedRevision + 1 || retentions.has(key))
+            return error('operation_conflict')
+          retentions.set(key, p)
+          return asset({ kind: 'retention_policy', policy: p })
+        })
+      }
+    }
     const directory = /^\/api\/v1\/devices\/([^/]+)\/inventory-scopes$/.exec(path)
     if (directory && method === 'GET') {
       const device = devices().get(decodeURIComponent(directory[1]!))
@@ -303,6 +363,15 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
   return {
     handle,
     reset() {
+      catalog.splice(0, catalog.length, ...structuredClone(originalCatalog))
+      retentions.clear()
+      retentions.set('demo_standard/1', {
+        key: 'demo_standard',
+        revision: 1,
+        rawSeconds: 604800,
+        summarySeconds: 2592000,
+        restoreSeconds: 86400,
+      })
       layout = { revision: 0, editable: true, groups: [] }
       searches.clear()
       saved.clear()

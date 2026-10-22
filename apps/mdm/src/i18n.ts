@@ -1,3 +1,4 @@
+import { telemetryZh, telemetryEn } from './features/telemetry/i18n'
 import { profilesZh, profilesEn } from './features/settings/profileMessages'
 import { settingsZh, settingsEn } from './features/settings/i18n'
 import { consoleZh, consoleEn } from './components/messages'
@@ -103,5 +104,7 @@ export function mdmI18n() {
   i18n.global.mergeLocaleMessage('en-US', { operations: operationsEn })
   i18n.global.mergeLocaleMessage('zh-CN', { settings: settingsZh })
   i18n.global.mergeLocaleMessage('en-US', { settings: settingsEn })
+  i18n.global.mergeLocaleMessage('zh-CN', { telemetry: telemetryZh })
+  i18n.global.mergeLocaleMessage('en-US', { telemetry: telemetryEn })
   return i18n
 }

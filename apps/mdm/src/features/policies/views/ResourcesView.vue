@@ -2,7 +2,7 @@
 import { UiButton } from '@rss/core/components'
 import { computed, onBeforeUnmount, ref, shallowRef, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
 import { fileHash, FILE_CHUNK_BYTES } from '../services/file-hash'
@@ -27,6 +27,7 @@ import ScriptDefinitionEditor from '../components/ScriptDefinitionEditor.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
+  router = useRouter(),
   client = runtime.policies.resources,
   { run, runWrite, busy, failure, uncertain } = useOperation()
 const creating = ref(false)
@@ -108,6 +109,7 @@ const spec = ref<ScriptSpec>({
   outputBytes: 16384,
   maxRows: 1,
 })
+const scriptEditor = ref<InstanceType<typeof ScriptDefinitionEditor>>()
 const softwareEditor = ref<InstanceType<typeof SoftwareDefinitionEditor>>(),
   contentArtifact = ref('')
 const draftVariants = ref<Variant[]>([]),
@@ -154,6 +156,14 @@ function open(value = id.value) {
     void run(
       () => client.read(value),
       (v) => {
+        if (v.kind === 'telemetry_profile') {
+          void router.push({
+            name: 'policy-telemetry',
+            params: { tenant: runtime.tenant },
+            query: { resource: v.id },
+          })
+          return
+        }
         creating.value = false
         current.value = v
         id.value = v.id
@@ -181,6 +191,14 @@ function change(input: ResourceChange) {
       await run(
         () => client.read(resource),
         (v) => {
+          if (v.kind === 'telemetry_profile') {
+            void router.push({
+              name: 'policy-telemetry',
+              params: { tenant: runtime.tenant },
+              query: { resource: v.id },
+            })
+            return
+          }
           creating.value = false
           current.value = v
           id.value = v.id
@@ -215,8 +233,16 @@ async function metadata(event: Event) {
 }
 function addVersion() {
   const resourceKind = current.value?.kind ?? kind.value
-  if (resourceKind === 'native_collection' || resourceKind === 'agent_collection') {
+  if (
+    resourceKind === 'native_collection' ||
+    resourceKind === 'agent_collection' ||
+    resourceKind === 'telemetry_profile'
+  ) {
     failure.value = 'unsupported'
+    return
+  }
+  if (resourceKind === 'script' && scriptEditor.value && !scriptEditor.value.valid()) {
+    failure.value = 'invalidRequest'
     return
   }
   if (resourceKind === 'software') {

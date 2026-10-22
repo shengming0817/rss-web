@@ -1,6 +1,14 @@
 import type { HttpTransport } from '@rss/api/mdm'
 import type { Operation } from '../../../services/useOperation'
-import { array, closed, nullable, uuid, string, enumeration } from '../../../services/decode'
+import {
+  array,
+  closed,
+  nullable,
+  uuid,
+  string,
+  enumeration,
+  boolean,
+} from '../../../services/decode'
 import {
   decodePolicy,
   policyAction,
@@ -16,15 +24,17 @@ import {
   deviceObject,
 } from '../../devices/clients/objects'
 
-function targetFacts(v: Record<string, unknown>) {
+function baseTargetFacts(v: Record<string, unknown>) {
   return {
     object: objectRef(v['object']),
     channel: enumeration(v['channel'], channels),
     availability: enumeration(v['availability'], ['ready', 'unavailable'] as const),
     reason: nullable(v['reason'], string),
     target: nullable(v['target'], primaryRegistration),
-    taskAdmission: nullable(v['taskAdmission'], taskAdmission),
   }
+}
+function targetFacts(v: Record<string, unknown>) {
+  return { ...baseTargetFacts(v), taskAdmission: nullable(v['taskAdmission'], taskAdmission) }
 }
 export function createPoliciesClient(transport: HttpTransport) {
   return {
@@ -60,9 +70,22 @@ export function createPoliciesClient(transport: HttpTransport) {
                 'reason',
                 'target',
                 'eligibility',
-                'taskAdmission',
+                ...(action.kind === 'telemetry_profile'
+                  ? ['collectionSupported']
+                  : ['taskAdmission']),
               ])
-              return { ...targetFacts(d), eligibility: eligibility(d['eligibility']) }
+              return action.kind === 'telemetry_profile'
+                ? {
+                    ...baseTargetFacts(d),
+                    taskAdmission: null,
+                    collectionSupported: nullable(d['collectionSupported'], boolean),
+                    eligibility: eligibility(d['eligibility']),
+                  }
+                : {
+                    ...targetFacts(d),
+
+                    eligibility: eligibility(d['eligibility']),
+                  }
             }),
             nextCursor: nullable(v['nextCursor'], string),
           }
@@ -103,11 +126,11 @@ export function createPoliciesClient(transport: HttpTransport) {
           }
         },
       }),
-    list: (cursor?: string, action?: PolicyDefinition['action']['kind']) =>
+    list: (cursor?: string, action?: PolicyDefinition['action']['kind'], resource?: string) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/policies',
-        query: { cursor, action, limit: 20 },
+        query: { cursor, action, resource, limit: 20 },
         successStatus: 200,
         decode(value) {
           const v = closed(value, ['items', 'nextCursor'])

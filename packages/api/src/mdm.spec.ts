@@ -3,6 +3,49 @@ import axios from 'axios'
 import AxiosMockAdapter from 'axios-mock-adapter'
 import { createMdmTransport, decodeMdmError, decodeAgentError } from './mdm'
 describe('MDM HTTP boundary', () => {
+  it('dispatches formal telemetry queries and retention policy paths through the shared executor', async () => {
+    const instance = axios.create(),
+      mock = new AxiosMockAdapter(instance)
+    const spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance)
+    const transport = createMdmTransport()
+    spy.mockRestore()
+    mock.onAny().reply(200, { accepted: true })
+    for (const endpoint of ['resources', 'history', 'aggregate', 'health', 'gaps/query'])
+      await expect(
+        transport.request({
+          method: 'POST',
+          path: '/api/v1/telemetry/' + endpoint,
+          body: { device: 'device' },
+          successStatus: 200,
+          decode: (value) => value,
+        }),
+      ).resolves.toEqual({ accepted: true })
+    await transport.request({
+      method: 'POST',
+      path: '/api/v1/asset-retention-policies',
+      body: { operationId: 'operation' },
+      successStatus: 200,
+      decode: (value) => value,
+    })
+    await transport.request({
+      method: 'GET',
+      path: '/api/v1/asset-retention-policies/{key}/{revision}',
+      pathParams: { key: 'standard', revision: '1' },
+      successStatus: 200,
+      decode: (value) => value,
+    })
+    expect(mock.history.post).toHaveLength(6)
+    expect(mock.history.get[0]?.url).toBe('/api/v1/asset-retention-policies/standard/1')
+    for (const path of [
+      '/api/v1/telemetry/unknown',
+      '/api/v1/telemetry/history/admin',
+      '/api/v1/agent/runtime/telemetry/batches',
+    ])
+      await expect(
+        transport.request({ method: 'POST', path, successStatus: 200, decode: (value) => value }),
+      ).rejects.toMatchObject({ cause: 'client' })
+    mock.restore()
+  })
   it('rejects Identity paths, unversioned paths and local tenant/authorization headers', async () => {
     const transport = createMdmTransport()
     for (const path of [

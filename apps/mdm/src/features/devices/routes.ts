@@ -8,6 +8,23 @@ export const deviceFeature: MdmFeature = {
     meta: { protected: true },
   },
   routes: [
+    ...[
+      { path: `${base}/:device`, name: 'device' },
+      { path: '/tenants/:tenant/device-views/:kind/:view', name: 'device-view' },
+    ].flatMap(({ path, name }) => [
+      {
+        path: `${path}/management`,
+        name: `${name}-management`,
+        component: () => import('./views/DeviceDetailView.vue'),
+        meta: { protected: true },
+      },
+      {
+        path: `${path}/history/:history(activity|performance|collection)`,
+        name: `${name}-history`,
+        component: () => import('./views/DeviceDetailView.vue'),
+        meta: { protected: true },
+      },
+    ]),
     {
       path: '/tenants/:tenant/device-views/:kind/:view',
       name: 'device-view-detail',

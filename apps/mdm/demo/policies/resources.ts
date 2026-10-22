@@ -158,6 +158,7 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
           kind: r.kind,
           revision: r.revision,
           activeVersion: r.versions.find((v) => v.state === 'active')?.id ?? null,
+          presentation: r.presentation,
         })),
         nextCursor: items.length > limit ? items[limit - 1]!.id : null,
       })
@@ -284,7 +285,12 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
             origin: null,
             id,
             revision: 1,
-            kind: enumeration(input['kind'], ['script', 'software', 'configuration'] as const),
+            kind: enumeration(input['kind'], [
+              'script',
+              'software',
+              'configuration',
+              'telemetry_profile',
+            ] as const),
             versions: [],
           }
         } else {

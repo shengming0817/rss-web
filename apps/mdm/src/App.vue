@@ -145,7 +145,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', shortcut))
             ><span aria-hidden="true">/</span
             ><RouterLink
               v-if="section && title !== t(section.label)"
-              :to="destination(section.items[0].name)"
+              :to="destination(section.items[0]!.name)"
               >{{ t(section.label) }}</RouterLink
             ><span v-if="section && title !== t(section.label)" aria-hidden="true">/</span
             ><span aria-current="page">{{ title }}</span>

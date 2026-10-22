@@ -1,7 +1,24 @@
+import { defaultApplicability, identityMapping } from './collection-mapping'
 import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { createResourcesClient, decodeResource, decodeScriptSpec } from './resources'
 const operationId = '11111111-1111-4111-8111-111111111111'
+it('consumes the complete formal resource directory header', async () => {
+  const item = {
+    id: 'profile',
+    revision: 3,
+    kind: 'telemetry_profile',
+    activeVersion: 'v1',
+    presentation: { name: 'Collection', vendor: { labels: ['retained'] } },
+  }
+  let response: unknown = { items: [item], nextCursor: null }
+  const client = createResourcesClient({
+    request: async (options: RequestOptions<unknown>) => options.decode(response),
+  } as HttpTransport)
+  expect((await client.list('telemetry_profile')).items).toEqual([item])
+  response = { items: [{ ...item, presentation: null }], nextCursor: null }
+  await expect(client.list()).rejects.toThrow()
+})
 const digest = Array.from({ length: 32 }, () => 0)
 const spec = {
   profile: 'power_shell7',
@@ -66,7 +83,12 @@ it('preserves finite collection bindings and rejects invented collection field i
     ...spec,
     profile: 'osquery',
     sql: 'SELECT version FROM osquery_info',
-    purpose: { kind: 'collection', mappings: { 'custom.osquery.version': '/0/version' } },
+    purpose: {
+      kind: 'collection',
+      scope: { kind: 'device' },
+      applicability: defaultApplicability(),
+      mappings: { 'custom.osquery.version': identityMapping('/0/version') },
+    },
   }
   expect(decodeScriptSpec(value).purpose).toEqual(value.purpose)
   expect(() =>

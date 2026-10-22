@@ -6,7 +6,22 @@ import {
   decodeAssetPage,
   decodeCatalog,
   decodeFieldLayout,
+  retentionPolicy,
 } from './assets'
+it('enforces formal retention keys and unsigned duration bounds', () => {
+  const policy = {
+    key: 'custom_retention',
+    revision: 1,
+    rawSeconds: 60,
+    summarySeconds: 120,
+    restoreSeconds: 30,
+  }
+  expect(retentionPolicy(policy)).toEqual(policy)
+  for (const key of ['custom.retention', ' Custom', 'A', 'a'.repeat(65)])
+    expect(() => retentionPolicy({ ...policy, key })).toThrow()
+  for (const period of ['rawSeconds', 'summarySeconds', 'restoreSeconds'])
+    expect(() => retentionPolicy({ ...policy, [period]: 0x100000000 })).toThrow()
+})
 const tenant = '11111111-1111-4111-8111-111111111111'
 const task = '22222222-2222-4222-8222-222222222222'
 const evidence = {
@@ -124,7 +139,8 @@ it('rejects duplicate catalog keys and malformed manual fields', () => {
       kind: 'boolean',
       manual: true,
       nullable: true,
-      sources: ['manual'],
+      sources: { manual: 0 },
+      valueType: { kind: 'boolean' },
       operations: field.operations,
     },
   ])
@@ -342,6 +358,23 @@ it('consumes only the current dictionary and validates record property schemas',
       timeSeries,
     }).fields[0]?.timeSeries,
   ).toEqual(timeSeries)
+  for (const [kind, allowed, forbidden] of [
+    ['cumulative_counter', ['increase', 'rate'], ['count']],
+    ['delta_counter', ['sum', 'rate'], ['increase']],
+  ]) {
+    const counter = {
+      ...field,
+      valueType: { kind: 'integer' },
+      timeSeries: { ...timeSeries, kind, valuePath: [], dimensions: {}, aggregations: allowed },
+    }
+    expect(decode('assets-v1', counter).fields[0]?.timeSeries?.aggregations).toEqual(allowed)
+    expect(() =>
+      decode('assets-v1', {
+        ...counter,
+        timeSeries: { ...counter.timeSeries, aggregations: forbidden },
+      }),
+    ).toThrow('Invalid time series binding')
+  }
 
   expect(
     decode('assets-v1', {

@@ -75,8 +75,11 @@ export function validateScriptVariant(variant: Variant) {
   }
   if (positions.sort((a, b) => a - b).some((n, index) => n !== index)) invalid()
   if (spec.purpose.kind === 'collection') {
-    const pointers = Object.values(spec.purpose.mappings)
-    if (!pointers.length || pointers.some((p) => !p.startsWith('/') || /~(?![01])/.test(p)))
+    const pointers = Object.values(spec.purpose.mappings).map((m) => m.pointer)
+    if (
+      !pointers.length ||
+      pointers.some((p) => (p !== '' && !p.startsWith('/')) || /~(?![01])/.test(p))
+    )
       invalid()
   }
   if (

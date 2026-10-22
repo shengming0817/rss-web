@@ -101,7 +101,16 @@ export function createMdmTransport(): HttpTransport {
         /^\/api\/v1\/(?:settings\/(?:catalog$|first-use(?:\/|$))|tenant-administration(?:\/|$)|apple\/materials(?:\/|$)|apple\/material-operations(?:\/|$)|storage\/connections(?:\/|$)|smtp(?:\/|$)|windows\/wns(?:\/|$)|task-signing(?:\/|$)|pki(?:\/|$)|webhooks(?:\/|$)|runtime\/diagnostics$|agent-packages(?:\/|$))/.test(
           options.path,
         )
-      if (!paths.test(options.path) && !settings && !readiness) throw clientError()
+      const telemetry = [
+        '/api/v1/telemetry/resources',
+        '/api/v1/telemetry/history',
+        '/api/v1/telemetry/aggregate',
+        '/api/v1/telemetry/health',
+        '/api/v1/telemetry/gaps/query',
+        '/api/v1/asset-retention-policies',
+        '/api/v1/asset-retention-policies/{key}/{revision}',
+      ].includes(options.path)
+      if (!paths.test(options.path) && !settings && !readiness && !telemetry) throw clientError()
       const publicRead =
         options.path.startsWith('/api/v1/agent/enroll/packages') ||
         options.path === '/api/v1/windows/entra/terms/context' ||

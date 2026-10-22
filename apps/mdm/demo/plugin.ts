@@ -1,3 +1,4 @@
+import { seedTelemetry } from './telemetry-seed'
 import { createSettingsDemo } from './settings'
 import { createOnboardingDemo } from './enrollment'
 import type { Plugin } from 'vite'
@@ -19,6 +20,7 @@ export function demoPlugin(): Plugin {
       const automation = createAutomationDemo(devices)
       devices.bindAuthorization(automation.authorization.can)
       seedScriptPolicies(automation)
+      seedTelemetry(automation)
       const onboarding = createOnboardingDemo(
         automation.authorization.can,
         devices.registrationAllowed,
@@ -43,6 +45,7 @@ export function demoPlugin(): Plugin {
           automation.reset()
           imports.reset()
           seedScriptPolicies(automation)
+          seedTelemetry(automation)
         },
         (event, scenario) => {
           if (event.kind === 'clock') onboarding.tick()

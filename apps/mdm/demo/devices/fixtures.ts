@@ -8,6 +8,7 @@ interface DeviceSummary {
   revision: number
   channels: ('mdm' | 'agent')[]
 }
+import { fieldDefinition } from '../../src/features/devices/clients/asset-model'
 import type {
   CollectionScope,
   FieldDefinition,
@@ -67,15 +68,16 @@ export const catalog: FieldDefinition[] = definitions.map(([key, kind, manual]) 
   searchable: true,
   itemKey: null,
   kind,
+  valueType: kind === 'string' ? { kind, maxLength: 256, allowEmpty: false } : { kind },
   nullable: manual,
   manual,
   sources: manual
-    ? ['manual']
+    ? { manual: 0 }
     : key === 'custom.osquery.version'
-      ? ['agent.osquery']
+      ? { 'agent.osquery': 0 }
       : key.startsWith('custom.')
-        ? ['agent.script']
-        : ['mdm.windows', 'mdm.apple', 'agent.builtin'],
+        ? { 'agent.script': 0 }
+        : { 'mdm.windows': 0, 'mdm.apple': 1, 'agent.builtin': 2 },
   operations: [
     'eq',
     'ne',
@@ -89,6 +91,45 @@ export const catalog: FieldDefinition[] = definitions.map(([key, kind, manual]) 
     ...(manual ? (['is_null', 'is_not_null'] as const) : []),
   ],
 }))
+for (const [key, kind, unit] of [
+  ['custom.demo.cpu_busy_percent', 'gauge', 'percent'],
+  ['custom.demo.memory_available_bytes', 'gauge', 'byte'],
+  ['custom.demo.filesystem_free_bytes', 'gauge', 'byte'],
+  ['custom.demo.network_received', 'cumulative_counter', 'byte'],
+  ['custom.demo.service_state', 'state', 'state'],
+] as const) {
+  catalog.push(
+    fieldDefinition({
+      key,
+      version: 1,
+      valueType:
+        kind === 'state' ? { kind: 'enum', values: ['running', 'stopped'] } : { kind: 'number' },
+      nullable: true,
+      manual: false,
+      sources: { 'agent.script': 0 },
+      platforms: ['windows', 'macos'],
+      sensitivity: 'standard',
+      unit,
+      searchable: false,
+      itemKey: null,
+      operations: [],
+      timeSeries: {
+        kind,
+        valuePath: [],
+        intervalStartPath: null,
+        dimensions: {},
+        aggregations:
+          kind === 'state'
+            ? ['timeline', 'transitions', 'coverage']
+            : kind === 'gauge'
+              ? ['min', 'max', 'mean', 'count']
+              : ['increase', 'rate'],
+        retention: { key: 'demo_standard', revision: 1 },
+        maxResources: 1,
+      },
+    }),
+  )
+}
 export function fact(
   field: string,
   value: Scalar,

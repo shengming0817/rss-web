@@ -23,6 +23,7 @@ export const navigation = [
       { name: 'policy-policies', label: 'policies.policies' },
       { name: 'policy-scopes', label: 'policies.scopes' },
       { name: 'policy-resources', label: 'policies.resources' },
+      { name: 'policy-telemetry', label: 'telemetry.profiles' },
       { name: 'policy-scripts', label: 'policies.scripts' },
       { name: 'policy-executions', label: 'policies.executions' },
     ],
@@ -65,6 +66,7 @@ export const navigation = [
     label: 'settings.title',
     items: [
       { name: 'settings-overview', label: 'settings.overview' },
+      { name: 'settings-metrics', label: 'telemetry.metricsSettings' },
       { name: 'settings-access', label: 'settings.access' },
       { name: 'settings-enrollment', label: 'settings.enrollment' },
       { name: 'settings-integrations', label: 'settings.integrations' },
@@ -75,7 +77,10 @@ export const navigation = [
   },
 ] as const
 export const platformNavigation = [
-  navigation[navigation.length - 1]!,
+  {
+    ...navigation[navigation.length - 1]!,
+    items: navigation[navigation.length - 1]!.items.filter((x) => x.name !== 'settings-metrics'),
+  },
   {
     id: 'platform',
     label: 'settings.platform',
@@ -87,6 +92,10 @@ export const platformNavigation = [
 ]
 export const detailParents: Record<string, string> = {
   'device-detail': 'devices',
+  'device-management': 'devices',
+  'device-history': 'devices',
+  'device-view-management': 'devices',
+  'device-view-history': 'devices',
   'device-view-detail': 'devices',
   'policy-execution': 'policy-executions',
 }

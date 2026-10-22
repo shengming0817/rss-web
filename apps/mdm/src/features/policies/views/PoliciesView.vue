@@ -227,6 +227,14 @@ function numeric(schema: Record<string, Json>, name: string) {
   return typeof schema[name] === 'number' ? schema[name] : undefined
 }
 function apply(p: PolicyRead) {
+  if (p.definition.action.kind === 'telemetry_profile') {
+    void router.push({
+      name: 'policy-telemetry',
+      params: { tenant: runtime.tenant },
+      query: { resource: p.definition.action.resource.id, policy: p.id },
+    })
+    return
+  }
   editing.value = false
   if (
     p.definition.action.kind !== 'execution' &&

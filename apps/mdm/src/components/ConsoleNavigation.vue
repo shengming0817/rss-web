@@ -36,7 +36,7 @@ const group = computed(
         class="console-nav-primary"
         :class="{ 'is-current': group === section.id }"
         :title="t(section.label)"
-        :to="{ name: section.items[0].name, params: { tenant: runtime.tenant } }"
+        :to="{ name: section.items[0]!.name, params: { tenant: runtime.tenant } }"
         @click="emit('navigate')"
         ><span class="console-nav-symbol" aria-hidden="true">{{
           section.id === 'settings' ? '⚙' : '⊞'
