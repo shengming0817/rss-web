@@ -476,10 +476,7 @@ try {
   await writeRule(fixture.rule.grants)
   await page.getByRole('button', { name: '新建', exact: true }).click()
   const planningScopeDialog = page.getByRole('dialog')
-  await planningScopeDialog
-    .locator('details')
-    .getByText('原始标识与技术信息', { exact: true })
-    .click()
+  await planningScopeDialog.locator('details:has(#scope-id) > summary').click()
   await planningScopeDialog.locator('#scope-id').fill(selectedScope)
   await planningScopeDialog.getByRole('button', { name: '打开', exact: true }).click()
   await loaded()
