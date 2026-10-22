@@ -8,7 +8,6 @@ import ProviderPanel from './ProviderPanel.vue'
 import TaskTrustPanel from './TaskTrustPanel.vue'
 import WebhookPanel from './WebhookPanel.vue'
 import PackagesPanel from './PackagesPanel.vue'
-import PkiPanel from './PkiPanel.vue'
 
 const props = defineProps<{ material: string }>()
 const runtime = useMdm(),
@@ -29,8 +28,11 @@ const provider = computed(() =>
     ><ApplePanel v-if="apple" :purpose="apple" /><ProviderPanel
       v-else-if="provider"
       :kind="provider" /><TaskTrustPanel v-else-if="material === 'task'" /><WebhookPanel
-      v-else-if="material === 'webhook'" /><PkiPanel v-else-if="material === 'pki'" /><PackagesPanel
-      v-else-if="material === 'packages'" /><UiMessage
+      v-else-if="material === 'webhook'" /><RouterLink
+      v-else-if="material === 'pki'"
+      :to="{ name: 'security-device-trust', params: { tenant: runtime.tenant } }"
+      >{{ t('security.pki.title') }}</RouterLink
+    ><PackagesPanel v-else-if="material === 'packages'" /><UiMessage
       v-else
       tone="warning"
       :title="t('settings.notSupported')" /></template

@@ -61,7 +61,7 @@ export const pkiZh = {
   publish: '发布 CRL',
   crlFile: '公共 CRL JSON',
   crlHint:
-    '一次提交当前用途的完整公共撤销材料；没有 expected_revision 参数。HTTP 204 表示此发布请求完成，不等于设备已接收。',
+    '一次提交当前用途所选签发者的公共撤销材料；没有 expected_revision 参数。HTTP 204 表示此发布请求完成，不等于设备已接收。',
   issuedHint: '原签发恢复只关联已有 CA 响应，不自动重签，也不证明证书已在设备激活。',
   observation: '单设备 Agent 信任观察',
   observationHint: '来自当前授权设备的正式观察；不是租户 ACK 总数或轮换完成证明。',
@@ -130,10 +130,31 @@ export const pkiEn = {
   publish: 'Publish CRLs',
   crlFile: 'Public CRL JSON',
   crlHint:
-    'Submit the complete public revocation set for this purpose. There is no expected_revision parameter. HTTP 204 completes this publication request; it does not prove delivery to devices.',
+    'Submit the selected issuers’ public revocation material for this purpose. There is no expected_revision parameter. HTTP 204 completes this publication request; it does not prove delivery to devices.',
   issuedHint:
     'Recovery attaches the original CA response, never signs again, and does not prove activation on a device.',
   observation: 'Single-device Agent trust observation',
   observationHint:
     'A formal observation for the authorized device, not a tenant ACK count or proof of rotation completion.',
+}
+
+export const recoveryZh = {
+  hint: '管理员核对原登记或签发尝试，继续已有过程。不会自动重签、重新授权或推测设备已激活。',
+  windows: 'Windows 原 CA 响应关联',
+  noQueue:
+    '当前没有恢复事项目录或原操作状态读取接口。使用受控运维提供的原 ID 与材料，不猜测设备、代次或签发结果。',
+  publicChain: '原 CA 公共证书链（PEM 或 JSON 数组）',
+  confirm: '确认关联此原尝试',
+  attach: '核验并关联原结果',
+  fingerprint: '已关联证书指纹',
+}
+export const recoveryEn = {
+  hint: 'Administrators verify an original registration or signing attempt to continue the existing process. No automatic signing, authorization or inferred activation.',
+  windows: 'Attach original Windows CA response',
+  noQueue:
+    'There is no recovery queue or original-operation status read API. Use original IDs and material from controlled operations; device, generation and signing outcomes are not guessed.',
+  publicChain: 'Original CA public chain (PEM or JSON array)',
+  confirm: 'Confirm attachment to this original attempt',
+  attach: 'Verify and attach original result',
+  fingerprint: 'Attached certificate fingerprint',
 }

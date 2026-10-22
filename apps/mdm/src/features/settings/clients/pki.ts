@@ -76,6 +76,21 @@ export interface Publication {
   crl: string
   root_crl: string
 }
+export function pkiPublications(value: unknown): Publication[] {
+  const items = unique(
+    array(value, (value) => {
+      const v = closed(value, ['issuer', 'crl', 'root_crl'])
+      return {
+        issuer: sha256(v['issuer']),
+        crl: encoded(v['crl']),
+        root_crl: encoded(v['root_crl']),
+      }
+    }),
+    (v) => v.issuer,
+  )
+  if (!items.length || items.length > 16) throw new Error('Invalid publication set')
+  return items
+}
 export function createPkiClient(transport: HttpTransport, tenant: string) {
   return {
     read: (purpose: PkiPurpose) =>
@@ -133,11 +148,7 @@ export function createPkiClient(transport: HttpTransport, tenant: string) {
         body: {
           operation: uuid(id),
           purpose,
-          publications: publications.map((p) => ({
-            issuer: sha256(p.issuer),
-            crl: encoded(p.crl),
-            root_crl: encoded(p.root_crl),
-          })),
+          publications: pkiPublications(publications),
         },
         successStatus: 204,
       }),

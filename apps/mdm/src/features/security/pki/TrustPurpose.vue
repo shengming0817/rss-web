@@ -15,6 +15,8 @@ import { downloadPublic } from '../../settings/download'
 import { auditTime } from '../../operations/format'
 import { inputDigest } from '../../settings/clients/value'
 import { uuid } from '../../../services/decode'
+import CrlPublisher from './CrlPublisher.vue'
+import ObservationPanel from '../../settings/components/ObservationPanel.vue'
 import OperationNotice from '../../settings/components/OperationNotice.vue'
 const props = defineProps<{ purpose: PkiPurpose }>()
 const runtime = useMdm(),
@@ -240,6 +242,11 @@ useSettingsFacts(() => {
       >{{ t('security.pki.rotations') }}</UiButton
     >
   </section>
+  <CrlPublisher :purpose="purpose" />
+  <template v-if="purpose === 'agent'"
+    ><p>{{ t('security.pki.observationHint') }}</p>
+    <ObservationPanel kind="pki"
+  /></template>
   <UiDialog
     :open="!!selected"
     placement="right"
