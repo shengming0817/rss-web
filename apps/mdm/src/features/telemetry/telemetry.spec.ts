@@ -17,6 +17,7 @@ import { createDeviceClients } from '../devices/client'
 import { createPolicyClients } from '../policies/client'
 import { createOperationsClients } from '../operations/client'
 import { settingsFeature } from '../settings/routes'
+import { operationsFeature } from '../operations/routes'
 import { policyFeature } from '../policies/routes'
 import DevicePerformance from './components/DevicePerformance.vue'
 import DeviceCollections from './components/DeviceCollections.vue'
@@ -103,6 +104,8 @@ async function setup(name = 'perf', query: Record<string, string> = {}) {
       })),
       settingsFeature.entry,
       ...settingsFeature.routes!,
+      operationsFeature.entry,
+      ...operationsFeature.routes!,
       policyFeature.entry,
       ...policyFeature.routes!,
     ],

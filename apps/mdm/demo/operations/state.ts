@@ -1,7 +1,7 @@
 import { createAuditDemo, type AuditAuthority } from './audit'
 import { randomUUID } from 'node:crypto'
 import { TENANT, type DomainHandler } from '../scenario'
-import { closed, count, enumeration, identifier, uuid } from '../../src/services/decode'
+import { closed, enumeration, identifier, uuid } from '../../src/services/decode'
 import { alert, alertStates, type Alert } from '../features/operations/clients/model'
 import { createPages, createReceipts, error, ok, operation } from '../http'
 const candidate = (body: object) =>

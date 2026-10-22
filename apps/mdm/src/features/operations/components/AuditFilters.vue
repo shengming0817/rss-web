@@ -2,10 +2,10 @@
 import { UiButton, UiUtcDateTimeInput } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
 import type { AuditDraft } from './audit-filter'
-const draft = defineModel<AuditDraft>({ required: true }),
-  { t } = useI18n()
 defineProps<{ busy: boolean; deviceTimeline?: boolean }>()
 defineEmits<{ submit: [] }>()
+const draft = defineModel<AuditDraft>({ required: true }),
+  { t } = useI18n()
 </script>
 <template>
   <form class="audit-query" data-testid="audit-filter" @submit.prevent="$emit('submit')">
@@ -68,17 +68,17 @@ defineEmits<{ submit: [] }>()
         ><UiUtcDateTimeInput
           id="audit-from"
           :model-value="draft.from"
-          @update:model-value="draft.from = $event ?? Number.NaN"
           required
           :invalid-label="t('policies.invalidDate')"
+          @update:model-value="draft.from = $event ?? Number.NaN"
         />
         <label for="audit-until">{{ t('security.until') }}</label
         ><UiUtcDateTimeInput
           id="audit-until"
           :model-value="draft.until"
-          @update:model-value="draft.until = $event ?? Number.NaN"
           required
           :invalid-label="t('policies.invalidDate')"
+          @update:model-value="draft.until = $event ?? Number.NaN"
         />
       </template>
       <UiButton type="submit">{{ t('operations.auditUi.query') }}</UiButton>

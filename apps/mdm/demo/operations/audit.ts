@@ -181,9 +181,11 @@ export function createAuditDemo(now: () => number, authority: AuditAuthority) {
       record({
         at: event.at ?? now(),
         actor: event.actor.principalId,
-        action:
-          command ? `command_${command[2]}` :
-          event.stream === 'identity_security' ? 'identity_session_created' : 'management_write',
+        action: command
+          ? `command_${command[2]}`
+          : event.stream === 'identity_security'
+            ? 'identity_session_created'
+            : 'management_write',
         target: event.target,
         operation: event.operation,
         outcome: event.outcome,

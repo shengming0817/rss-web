@@ -283,26 +283,56 @@ try {
   assert.ok(cancelFact.relatedOperationIds.includes(original.operationId))
   assert.equal(cancelFact.supported, true)
   assert.equal('body' in cancelFact, false)
-  const timeline = await get(`/api/v1/devices/${fixture.mdm}/timeline?action=command_cancel&operationId=${original.operationId}`)
-  assert.ok(timeline.items.some((f) => f.eventId === cancelFact.eventId && f.source === cancelFact.source))
+  const timeline = await get(
+    `/api/v1/devices/${fixture.mdm}/timeline?action=command_cancel&operationId=${original.operationId}`,
+  )
+  assert.ok(
+    timeline.items.some((f) => f.eventId === cancelFact.eventId && f.source === cancelFact.source),
+  )
   const auditPage = await get('/api/v1/audit-events?limit=1')
   assert.ok(auditPage.nextCursor)
-  const nextAudit = await get(`/api/v1/audit-events?limit=1&cursor=${encodeURIComponent(auditPage.nextCursor)}`)
+  const nextAudit = await get(
+    `/api/v1/audit-events?limit=1&cursor=${encodeURIComponent(auditPage.nextCursor)}`,
+  )
   assert.notDeepEqual(nextAudit.items[0], auditPage.items[0])
-  assert.equal((await request('get', `/api/v1/devices/${fixture.mdm}/timeline?cursor=${encodeURIComponent(auditPage.nextCursor)}`)).status(), 409)
-  assert.equal((await request('get', `/api/v1/audit-events?action=command_cancel&cursor=${encodeURIComponent(auditPage.nextCursor)}`)).status(), 409)
-  await page.goto(at(`operations/audit?device=${fixture.mdm}&operationId=${original.operationId}&action=command_cancel`))
+  assert.equal(
+    (
+      await request(
+        'get',
+        `/api/v1/devices/${fixture.mdm}/timeline?cursor=${encodeURIComponent(auditPage.nextCursor)}`,
+      )
+    ).status(),
+    409,
+  )
+  assert.equal(
+    (
+      await request(
+        'get',
+        `/api/v1/audit-events?action=command_cancel&cursor=${encodeURIComponent(auditPage.nextCursor)}`,
+      )
+    ).status(),
+    409,
+  )
+  await page.goto(
+    at(
+      `operations/audit?device=${fixture.mdm}&operationId=${original.operationId}&action=command_cancel`,
+    ),
+  )
   await load()
   await page.locator('tbody button').first().click()
   const auditDetail = page.getByTestId('audit-detail')
   await auditDetail.waitFor()
   const nativeLink = auditDetail.locator(`a[href*="/policies/executions/${original.operationId}"]`)
   assert.equal(await nativeLink.count(), 1)
-  assert.ok((await nativeLink.getAttribute('href')).includes(`device=${encodeURIComponent(fixture.mdm)}`))
+  assert.ok(
+    (await nativeLink.getAttribute('href')).includes(`device=${encodeURIComponent(fixture.mdm)}`),
+  )
   await auditDetail.getByRole('link', { name: '查看设备时间线', exact: true }).click()
   await page.locator('.telemetry-activity').waitFor()
   assert.equal(new URL(page.url()).searchParams.get('operationId'), cancellation.requestId)
-  coverage.push('real-safe-audit-associated-device-timeline-filter-pagination-bound-cursor-and-native-link')
+  coverage.push(
+    'real-safe-audit-associated-device-timeline-filter-pagination-bound-cursor-and-native-link',
+  )
   const diagnostics = await get('/api/v1/runtime/diagnostics')
   assert.ok(diagnostics.components.some((c) => c.name === 'inventory'))
   assert.ok(diagnostics.components.some((c) => c.name === 'execution_recovery'))
@@ -311,7 +341,11 @@ try {
   assert.equal(await page.locator('tbody tr').count(), diagnostics.components.length)
   await page.locator('tbody button').first().click()
   await page.getByTestId('diagnostic-detail').waitFor()
-  await changeRule(fixture.rule.grants.filter((g) => !['audit_read','runtime_diagnostics_read'].includes(g.operation)))
+  await changeRule(
+    fixture.rule.grants.filter(
+      (g) => !['audit_read', 'runtime_diagnostics_read'].includes(g.operation),
+    ),
+  )
   assert.equal((await request('get', '/api/v1/runtime/diagnostics')).status(), 403)
   assert.equal((await request('get', '/api/v1/audit-events')).status(), 403)
   assert.equal((await request('get', `/api/v1/devices/${fixture.mdm}/timeline`)).status(), 403)
@@ -321,10 +355,17 @@ try {
   await load()
   assert.equal(await page.locator('tbody').count(), 0)
   assert.equal(await page.getByTestId('diagnostic-detail').count(), 0)
-  coverage.push('real-runtime-components-and-independent-audit-diagnostic-permission-403-clear-stale-snapshot')
+  coverage.push(
+    'real-runtime-components-and-independent-audit-diagnostic-permission-403-clear-stale-snapshot',
+  )
   const anonymous = await browser.newContext({ ignoreHTTPSErrors: true })
   try {
-    for (const path of ['/api/v1/operations','/api/v1/audit-events','/api/v1/runtime/diagnostics']) assert.equal((await anonymous.request.get(origin + path)).status(), 401)
+    for (const path of [
+      '/api/v1/operations',
+      '/api/v1/audit-events',
+      '/api/v1/runtime/diagnostics',
+    ])
+      assert.equal((await anonymous.request.get(origin + path)).status(), 401)
   } finally {
     await anonymous.close()
   }

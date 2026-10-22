@@ -98,8 +98,12 @@ it('binds frozen audit pages to exact filters and actor and clears them on reset
     (await f.server.handle('GET', `${root}?limit=1&cursor=${first.nextCursor}`)).body,
   ).toMatchObject({ coverage: first.coverage })
   expect(
-    (await f.server.handle('GET', `${root}?limit=1&action=management_write&cursor=${first.nextCursor}`))
-      .status,
+    (
+      await f.server.handle(
+        'GET',
+        `${root}?limit=1&action=management_write&cursor=${first.nextCursor}`,
+      )
+    ).status,
   ).toBe(409)
   await f.server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'reviewer',
@@ -109,7 +113,10 @@ it('binds frozen audit pages to exact filters and actor and clears them on reset
     403,
   )
   f.automation.reset()
-  await f.server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, { login: 'demo', password: 'demo' })
+  await f.server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
+    login: 'demo',
+    password: 'demo',
+  })
   expect((await f.server.handle('GET', `${root}?cursor=${first.nextCursor}`)).status).toBe(409)
 })
 

@@ -66,12 +66,8 @@ it('timestamps saved rules, recomputation and published evidence using the advan
   expect(history.items).toHaveLength(2)
   expect(history.items.every((item) => item.evaluatedAt === at)).toBe(true)
   for (const action of ['compliance_saved', 'compliance_recomputed', 'compliance_evaluated']) {
-    const audit = (
-      await f.server.handle(
-        'GET',
-        `/api/v1/audit-events?action=${action}&from=${at}`,
-      )
-    ).body as { items: { recordedAt: number }[] }
+    const audit = (await f.server.handle('GET', `/api/v1/audit-events?action=${action}&from=${at}`))
+      .body as { items: { recordedAt: number }[] }
     expect(audit.items.length).toBeGreaterThan(0)
     expect(audit.items.every((item) => item.recordedAt === at)).toBe(true)
   }

@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import type { AuditFact } from '../clients/audit'
 import { auditTime } from '../format'
-const props = defineProps<{ fact: AuditFact; device?: string }>(),
+const props = defineProps<{ fact: AuditFact; device?: string | undefined }>(),
   runtime = useMdm(),
   { t } = useI18n()
 const device = computed(
