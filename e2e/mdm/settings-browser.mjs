@@ -70,6 +70,21 @@ try {
     await page.locator('#login-password').fill(password)
     await page.locator('form').first().getByRole('button', { name: '登录', exact: true }).click()
     await page.waitForURL((url) => url.pathname.endsWith('/settings/guide'))
+    await page.getByRole('button', { name: '读取实际通道状态', exact: true }).click()
+    await page.locator('[data-testid=channel-facts] article').first().waitFor()
+    const channelResponse = await page.request.get(origin + '/api/v1/runtime/diagnostics')
+    assert.equal(channelResponse.status(), 200)
+    const observed = await channelResponse.json()
+    assert.equal(
+      await page.locator('[data-testid=channel-facts] article').count(),
+      observed.channels.length,
+    )
+    assert.ok(
+      observed.channels.some((c) => c.name === 'windows' && c.state === 'ready' && c.listening),
+    )
+    assert.ok(observed.channels.some((c) => c.name === 'apple' && c.state === 'disabled'))
+    coverage.push('first-use-actual-channel-observation-independent-of-core-and-selection')
+
     await page.locator('input[value="agent"]').uncheck()
     await page.locator('input[value="windows_mdm"]').check()
     await step('通知与其他集成')
