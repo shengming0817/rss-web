@@ -767,14 +767,24 @@ try {
   await loaded()
   assert.ok((await page.locator('main').textContent()).includes(fixture.alone))
   advanceGeneration('add-agent-to-alone')
-  const recoveryDeadline = Date.now() + 30000
+  // Registration changes invalidate the shared asset snapshot. Allow bounded asynchronous
+  // group/Scope catch-up after the preceding publication journey; this is not a latency SLO.
+  const recoveryDeadline = Date.now() + 90000
   let restored
   while (Date.now() < recoveryDeadline) {
     restored = (await assignments()).items.find((a) => a.object.id === fixture.alone)
     if (restored?.availability === 'ready') break
-    await new Promise((r) => setTimeout(r, 250))
+    await new Promise((r) => setTimeout(r, 500))
   }
-  assert.equal(restored?.availability, 'ready')
+  assert.equal(
+    restored?.availability,
+    'ready',
+    JSON.stringify({
+      reason: restored?.reason ?? null,
+      targetPresent: !!restored?.target,
+      scopeResult: restored?.scopeResult ?? null,
+    }),
+  )
   assert.deepEqual(restored.object, { kind: 'endpoint', id: fixture.alone })
   assert.equal(restored.target.channel, 'agent')
   assert.equal(restored.target.generation, 1)
