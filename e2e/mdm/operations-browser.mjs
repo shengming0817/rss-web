@@ -299,7 +299,7 @@ try {
   const nativeLink = auditDetail.locator(`a[href*="/policies/executions/${original.operationId}"]`)
   assert.equal(await nativeLink.count(), 1)
   assert.ok((await nativeLink.getAttribute('href')).includes(`device=${encodeURIComponent(fixture.mdm)}`))
-  await auditDetail.getByRole('link', { name: '设备时间线', exact: true }).click()
+  await auditDetail.getByRole('link', { name: '查看设备时间线', exact: true }).click()
   await page.locator('.telemetry-activity').waitFor()
   assert.equal(new URL(page.url()).searchParams.get('operationId'), cancellation.requestId)
   coverage.push('real-safe-audit-associated-device-timeline-filter-pagination-bound-cursor-and-native-link')
