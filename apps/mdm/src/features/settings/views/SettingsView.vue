@@ -95,6 +95,13 @@ useSettingsFacts(() => (catalog.value = undefined))
         >{{ t('settings.tenants') }}</RouterLink
       >
     </nav>
+    <article v-if="section === 'overview' && runtime.realm === 'tenant'" class="console-panel">
+      <h2>{{ t('telemetry.dataCollection') }}</h2>
+      <p>{{ t('telemetry.metricsHint') }}</p>
+      <RouterLink :to="{ name: 'settings-metrics', params: { tenant: runtime.tenant } }">{{
+        t('telemetry.metricsSettings')
+      }}</RouterLink>
+    </article>
     <div v-if="section === 'overview'" class="settings-overview-grid">
       <article class="console-panel">
         <h2>{{ t('settings.currentTenant') }}</h2>

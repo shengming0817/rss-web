@@ -191,7 +191,7 @@ async function setup(
   await flushPromises()
   const button = (text: string) => {
     const result = new DOMWrapper(document.body)
-      .findAll('button')
+      .findAll('button,a')
       .find((b) => b.isVisible() && b.text() === text)
     if (!result) throw new Error(`Missing button: ${text}`)
     return result
@@ -250,16 +250,15 @@ it('renders server view counters, endpoint references, pagination and empty stat
 })
 it('opens the existing registration owner from a software source-policy deep link', async () => {
   const { wrapper, requests, router } = await setup(
-    'device-detail',
+    'device-management',
     { device: 'device-01' },
-    { tab: 'management' },
+    {},
   )
   expect(requests.some((r) => r.path === '/api/v1/devices/{device}/registrations')).toBe(true)
   expect(wrapper.text()).toContain('agent.builtin')
   await router.push({
-    name: 'device-detail',
+    name: 'device-management',
     params: { tenant: TENANT, device: 'device-02' },
-    query: { tab: 'management' },
   })
   await flushPromises()
   expect(wrapper.text()).toContain('mdm.apple')
@@ -1091,10 +1090,13 @@ it('shows authorization read failure and retries without treating it as read-onl
   const h = await setup('device-detail', { device: 'device-01' })
   const effective = vi
     .spyOn(h.operations.authorization, 'effective')
-    .mockRejectedValueOnce(decodeMdmError(503, { code: 'service_unavailable' }))
+    .mockRejectedValue(decodeMdmError(503, { code: 'service_unavailable' }))
   await h.router.push({ name: 'devices', params: { tenant: TENANT } })
   await flushPromises()
-  await h.router.push({ name: 'device-detail', params: { tenant: TENANT, device: 'device-01' } })
+  await h.router.push({
+    name: 'device-management',
+    params: { tenant: TENANT, device: 'device-01' },
+  })
   await flushPromises()
   const authority = h.wrapper.find('[data-testid=association-authority]')
   expect(authority.find('[role=alert]').exists()).toBe(true)
@@ -1340,7 +1342,7 @@ it('retains directory cursor and display columns when opening and returning from
   expect(f.wrapper.text()).toContain('device-01')
 })
 it('binds lock to the actual enrollment, clears its PIN, and queries an unknown operation across navigation', async () => {
-  const f = await setup('device-detail', { device: 'device-02' }, { tab: 'management' })
+  const f = await setup('device-management', { device: 'device-02' })
   await f.click('锁定')
   const dialog = new DOMWrapper(document.body).get('[role=alertdialog]')
   await dialog.get('input[type=password]').setValue('123456')
@@ -1358,7 +1360,7 @@ it('binds lock to the actual enrollment, clears its PIN, and queries an unknown 
   await flushPromises()
   f.loseReply.path = ''
   await f.router.push({
-    name: 'device-detail',
+    name: 'device-management',
     params: { tenant: TENANT, device: 'device-02' },
     query: { operation: String(op), operationDevice: 'device-02' },
   })
@@ -1370,7 +1372,7 @@ it('binds lock to the actual enrollment, clears its PIN, and queries an unknown 
   ).toHaveLength(1)
 })
 it('disables Windows lock and requires the displayed name before wipe', async () => {
-  const f = await setup('device-detail', { device: 'device-01' }, { tab: 'management' })
+  const f = await setup('device-management', { device: 'device-01' })
   expect(f.button('锁定').attributes('disabled')).toBeDefined()
   await f.click('擦除')
   const dialog = new DOMWrapper(document.body).get('[role=alertdialog]')
