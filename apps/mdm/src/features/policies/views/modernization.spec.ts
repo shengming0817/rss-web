@@ -48,6 +48,20 @@ it('queries authorized groups by name and type and keeps the applied query when 
     kind: 'dynamic',
     after: undefined,
   })
+  list.mockRejectedValueOnce(new Error('directory unavailable'))
+  await filter.get('select').setValue('static')
+  await filter.trigger('submit')
+  await flushPromises()
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text() === '下一页')!
+    .trigger('click')
+  await flushPromises()
+  expect(list.mock.calls.at(-1)?.[0]).toEqual({
+    name: 'unsaved draft',
+    kind: 'dynamic',
+    after: 'next',
+  })
   wrapper.unmount()
 })
 
@@ -92,6 +106,15 @@ it('filters Resource kinds through the formal directory and opens software impor
   await wrapper.get('.task-filterbar select').setValue('configuration')
   await flushPromises()
   expect(list.mock.calls.at(-1)).toEqual(['configuration', undefined])
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text() === '下一页')!
+    .trigger('click')
+  await flushPromises()
+  expect(list.mock.calls.at(-1)).toEqual(['configuration', 'next'])
+  list.mockRejectedValueOnce(new Error('directory unavailable'))
+  await wrapper.get('.task-filterbar select').setValue('script')
+  await flushPromises()
   await wrapper
     .findAll('button')
     .find((button) => button.text() === '下一页')!
