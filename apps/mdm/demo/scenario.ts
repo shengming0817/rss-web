@@ -12,8 +12,6 @@ export interface DemoEvent {
     | 'security_result'
     | 'security_detect'
     | 'material_detect'
-    | 'certificate_issued'
-    | 'certificate_detect'
     | 'remote_consent'
     | 'remote_revoke'
     | 'remote_ended'
@@ -201,8 +199,6 @@ export function createScenario(
             'security_result',
             'security_detect',
             'material_detect',
-            'certificate_issued',
-            'certificate_detect',
             'remote_consent',
             'remote_revoke',
             'remote_ended',
@@ -223,8 +219,6 @@ export function createScenario(
             'security_result',
             'security_detect',
             'material_detect',
-            'certificate_issued',
-            'certificate_detect',
             'remote_consent',
             'remote_revoke',
             'remote_ended',

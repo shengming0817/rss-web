@@ -65,18 +65,6 @@ const at = (seconds: number) =>
       · {{ t('security.assessment') }} {{ request.target.assessment }} /
       {{ request.target.assessmentVersion }}
     </dd>
-    <dd v-else-if="request.target.kind === 'certificate_deploy'">
-      <RouterLink
-        :to="{
-          name: 'security-certificates',
-          params: { tenant: runtime.tenant },
-          query: { id: request.target.certificate, device: request.target.device },
-        }"
-        >{{ t('security.certificates') }} {{ request.target.certificate }} /
-        {{ request.target.certificateRevision }} · {{ request.target.device }}</RouterLink
-      >
-      · {{ request.target.fingerprint }}
-    </dd>
     <dd v-else-if="isSupportTarget(request.target)">
       <SupportTargetFacts :target="request.target" /><RouterLink
         :to="{

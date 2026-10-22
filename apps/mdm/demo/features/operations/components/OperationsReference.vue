@@ -24,7 +24,6 @@ const link = computed(() => {
     policy: 'policy-policies',
     compliance_rule: 'security-rules',
     baseline: 'security-baselines',
-    certificate: 'security-certificates',
     risk: 'security-risks',
     security_action: 'security-actions',
     security_request: 'security-requests',
