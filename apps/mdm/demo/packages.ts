@@ -172,7 +172,7 @@ export function createPackageDemo() {
           if (!value) return error('resource_not_found', 404)
           const format = (
             {
-              exe: 'nsis_exe',
+              exe: 'windows_exe',
               msi: 'windows_msi',
               msix: 'windows_msix',
               pkg: 'macos_pkg',

@@ -150,6 +150,37 @@ it('keeps downloads anonymous and never requests or creates enrollment authority
   await wrapper.findAll('select')[0]!.setValue('macos')
   expect(calls).toHaveLength(1)
 })
+it('downloads all current published formats without requesting enrollment authority', async () => {
+  const { wrapper, runtime, calls } = await setup(DownloadsView, false)
+  const packages = (['windows_exe', 'windows_msi', 'windows_msix', 'macos_pkg'] as const).map(
+    (format, i) => ({
+      releaseId: `11111111-1111-4111-8111-11111111111${i}`,
+      tenantId: TENANT,
+      target: {
+        platform: format === 'macos_pkg' ? ('macos' as const) : ('windows' as const),
+        architecture: 'x86_64' as const,
+      },
+      version: '1.0.0',
+      format,
+      filename: `agent.${['exe', 'msi', 'msix', 'pkg'][i]}`,
+      length: 42,
+      installerSha256: Array<number>(32).fill(0),
+    }),
+  )
+  vi.spyOn(runtime.onboarding.packages, 'list').mockResolvedValue(packages)
+  await wrapper.find('button').trigger('click')
+  await flushPromises()
+  expect(wrapper.findAll('a[download]').map((link) => link.attributes('download'))).toEqual([
+    'agent.exe',
+    'agent.msi',
+    'agent.msix',
+  ])
+  await wrapper.findAll('select')[0]!.setValue('macos')
+  expect(wrapper.findAll('a[download]').map((link) => link.attributes('download'))).toEqual([
+    'agent.pkg',
+  ])
+  expect(calls).toEqual(['GET /api/v1/agent/enroll/packages'])
+})
 it('shows plaintext TOU with a native form, a join-specific decision and no RSS identity requests', async () => {
   const { wrapper, runtime, calls } = await setup(TermsView, false)
   const form = wrapper.find('form')

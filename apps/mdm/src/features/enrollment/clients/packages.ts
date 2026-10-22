@@ -12,7 +12,7 @@ import {
 } from '../../../services/decode'
 export const platforms = ['windows', 'macos'] as const
 export const architectures = ['x86_64', 'aarch64'] as const
-export const installerFormats = ['nsis_exe', 'windows_msi', 'windows_msix', 'macos_pkg'] as const
+export const installerFormats = ['windows_exe', 'windows_msi', 'windows_msix', 'macos_pkg'] as const
 export function target(value: unknown) {
   const v = closed(value, ['platform', 'architecture'])
   return {
@@ -69,7 +69,7 @@ export function installer(value: unknown, tenant: string) {
     !result.filename
       .toLowerCase()
       .endsWith(
-        { nsis_exe: '.exe', windows_msi: '.msi', windows_msix: '.msix', macos_pkg: '.pkg' }[
+        { windows_exe: '.exe', windows_msi: '.msi', windows_msix: '.msix', macos_pkg: '.pkg' }[
           result.format
         ],
       )

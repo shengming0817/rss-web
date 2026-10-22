@@ -133,9 +133,19 @@ export async function acceptExperience({
     await versionInput.waitFor()
     if (!(await versionInput.getAttribute('readonly')) && (await versionInput.isEditable()))
       await versionInput.fill(version)
+    const published = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === '/api/v1/agent-packages',
+    )
     await task.getByRole('button', { name: '发布安装包', exact: true }).click()
-    await row.getByText(name, { exact: true }).waitFor()
-    const release = (await api('/api/v1/agent-packages')).find((item) => item.filename === name)
+    const publication = await published
+    assert.equal(publication.status(), 200)
+    const release = await publication.json()
+    await row.getByText(release.filename, { exact: true }).waitFor()
+    assert.ok(
+      (await api('/api/v1/agent-packages')).some((item) => item.releaseId === release.releaseId),
+    )
     assert.ok(release)
     assert.deepEqual(release.target, { platform, architecture })
     releases.push(release)
@@ -157,5 +167,35 @@ export async function acceptExperience({
   assert.equal(catalog.status(), 200)
   assert.ok((await catalog.json()).length >= 4)
   coverage.push('real-four-target-unsigned-upload-publish-and-byte-identical-download')
+  const anonymous = await context.browser().newContext({ ignoreHTTPSErrors: true, locale: 'zh-CN' })
+  try {
+    const downloads = await anonymous.newPage()
+    await downloads.goto(`${origin}/downloads/agent`)
+    for (const release of releases) {
+      await downloads.getByLabel('平台', { exact: true }).selectOption(release.target.platform)
+      await downloads
+        .getByLabel('原生架构', { exact: true })
+        .selectOption(release.target.architecture)
+      const started = downloads.waitForEvent('download')
+      await downloads
+        .locator(`a[href="/api/v1/agent/enroll/packages/${release.releaseId}/content"]`)
+        .click()
+      const file = await started
+      assert.equal(file.suggestedFilename(), release.filename)
+      const stream = await file.createReadStream()
+      assert.ok(stream)
+      const hash = createHash('sha256')
+      for await (const chunk of stream) hash.update(chunk)
+      assert.equal(hash.digest('hex'), Buffer.from(release.installerSha256).toString('hex'))
+      assert.equal(await file.failure(), null)
+    }
+    assert.equal(
+      (await anonymous.request.get(`${origin}/api/v1/agent-enrollment-settings`)).status(),
+      401,
+    )
+    coverage.push('real-anonymous-browser-four-target-downloads')
+  } finally {
+    await anonymous.close()
+  }
   await page.keyboard.press('Escape')
 }

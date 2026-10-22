@@ -6,7 +6,7 @@ const item = {
   tenantId: tenant,
   target: { platform: 'windows', architecture: 'x86_64' },
   version: '1.0.0',
-  format: 'nsis_exe',
+  format: 'windows_exe',
   filename: 'rss-agent.exe',
   length: 42,
   installerSha256: Array(32).fill(0),
@@ -20,6 +20,7 @@ it('accepts published installer metadata and rejects tenant, file and wire misma
     { target: { platform: 'windows', architecture: 'auto' } },
     { origin: 'https://agent.example.test/' },
     { length: 0 },
+    { format: 'nsis_exe' },
     { secret: 'unexpected' },
   ])
     expect(() => installer({ ...item, ...delta }, tenant)).toThrow()
