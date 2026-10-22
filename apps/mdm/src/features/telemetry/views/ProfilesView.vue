@@ -51,6 +51,12 @@ const projection = ref<'current' | 'history' | 'both'>('both'),
   upload = ref(300),
   boostSample = ref(0),
   boostUntil = ref('')
+const originalBoost = shallowRef<TelemetryProfile['boost']>(null),
+  originalBoostDisplay = ref('')
+function localDatetime(seconds: number) {
+  const date = new Date(seconds * 1000)
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 19)
+}
 const budget = ref({
     points: 256,
     bytes: 1048576,
@@ -194,6 +200,8 @@ async function edit(resource?: string) {
   upload.value = 300
   boostSample.value = 0
   boostUntil.value = ''
+  originalBoost.value = null
+  originalBoostDisplay.value = ''
   parameters.value = '{}'
   open.value = true
   await run(
@@ -203,14 +211,37 @@ async function edit(resource?: string) {
   await sources()
   await scopes()
   if (resource) {
+    const requestedPolicy = route.query['policy']
+    if (typeof requestedPolicy === 'string') {
+      policyId.value = requestedPolicy
+      await selectPolicy()
+      if (policy.value) scope.value = policy.value.definition.scope
+    }
     await run(
       () => rc.read(resource),
       (v) => {
         revision.value = v.revision
-        const active = v.versions.find((v) => v.state === 'active') ?? v.versions[0],
-          d = active?.variants[0]?.declaration
+        const action = policy.value?.definition.action,
+          binding = action?.kind === 'telemetry_profile' ? action.resource : undefined
+        const active =
+            v.versions.find((v) => (binding ? v.id === binding.version : v.state === 'active')) ??
+            v.versions[0],
+          d = (
+            binding
+              ? active?.variants.find(
+                  (v) =>
+                    v.key === binding.variant &&
+                    v.platform === binding.platform &&
+                    v.architecture === binding.architecture,
+                )
+              : active?.variants[0]
+          )?.declaration
         if (d?.kind === 'telemetry_profile') {
           const p = d.definition
+          originalBoost.value = p.boost
+          originalBoostDisplay.value = p.boost ? localDatetime(p.boost.expiresAt) : ''
+          boostSample.value = p.boost ? p.boost.sampleMillis / 1000 : 0
+          boostUntil.value = originalBoostDisplay.value
           templateId.value = p.template.resource
           projection.value = p.projection
           sample.value = p.sampleMillis / 1000
@@ -250,7 +281,6 @@ async function selectPolicy() {
       )
         throw new Error('Wrong profile Policy')
       policy.value = v
-      scope.value = v.definition.scope
     },
   )
 }
@@ -277,7 +307,11 @@ function profile() {
     uploadMillis: upload.value * 1000,
     budget: budget.value,
     boost: boostSample.value
-      ? { sampleMillis: boostSample.value * 1000, expiresAt: Date.parse(boostUntil.value) / 1000 }
+      ? originalBoost.value &&
+        boostSample.value * 1000 === originalBoost.value.sampleMillis &&
+        boostUntil.value === originalBoostDisplay.value
+        ? originalBoost.value
+        : { sampleMillis: boostSample.value * 1000, expiresAt: Date.parse(boostUntil.value) / 1000 }
       : null,
     backfillSeconds: backfill.value,
   })
@@ -303,21 +337,28 @@ async function prepare() {
   if (busy.value || pending.value || !canWrite.value) return
   try {
     if (!frozen.value) {
-      const p = profile(),
-        bytes = profileBytes(p),
-        sha256 = [
-          ...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes.buffer as ArrayBuffer)),
-        ]
-      frozen.value = {
-        profile: p,
-        bytes,
-        sha256,
-        created: revision.value > 0,
-        versioned: false,
-        uploaded: false,
-        activated: false,
-      }
+      const prepared = await run(
+        async () => {
+          const p = profile(),
+            bytes = profileBytes(p),
+            sha256 = [
+              ...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes.buffer as ArrayBuffer)),
+            ]
+          return {
+            profile: p,
+            bytes,
+            sha256,
+            created: revision.value > 0,
+            versioned: false,
+            uploaded: false,
+            activated: false,
+          }
+        },
+        (value) => (frozen.value = value),
+      )
+      if (!prepared || !frozen.value) return
     }
+
     const f = frozen.value
     if (!f.created) {
       pending.value = {
@@ -432,6 +473,7 @@ async function execute(): Promise<boolean> {
       },
       () => (f.uploaded = true),
     )
+  if (pending.value !== p) return false
   if (ok) {
     pending.value = undefined
     comparison.value = undefined
@@ -739,7 +781,7 @@ watch(
               }}<input v-model.number="boostSample" class="ui-input" type="number" min="0" /></label
             ><label
               >{{ t('telemetry.boostUntil')
-              }}<input v-model="boostUntil" type="datetime-local" class="ui-input"
+              }}<input v-model="boostUntil" type="datetime-local" step="1" class="ui-input"
             /></label>
           </details>
         </fieldset>

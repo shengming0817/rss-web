@@ -164,6 +164,7 @@ async function execute() {
     p.kind === 'field'
       ? await runWrite(() => client.writeField(p.field, p.body))
       : await runWrite(() => client.writeRetention(p.body))
+  if (pending.value !== p) return
   if (ok) {
     pending.value = undefined
     open.value = false

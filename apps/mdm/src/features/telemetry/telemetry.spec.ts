@@ -71,18 +71,17 @@ async function setup(name = 'perf', query: Record<string, string> = {}) {
       return options.decode(reply.body)
     },
   } as HttpTransport
+  const sessionState = shallowRef({
+    status: 'authenticated' as const,
+    tenant: TENANT,
+    identity: { principalId: ADMIN },
+    session: { id: 'telemetry-test' },
+  })
   const runtime = {
     tenant: TENANT,
     realm: 'tenant',
     demo: true,
-    session: {
-      state: shallowRef({
-        status: 'authenticated',
-        tenant: TENANT,
-        identity: { principalId: ADMIN },
-        session: { id: 'telemetry-test' },
-      }),
-    } as unknown as IdentitySession,
+    session: { state: sessionState } as unknown as IdentitySession,
     transport,
     devices: createDeviceClients(transport, TENANT),
     policies: createPolicyClients(transport, TENANT, true),
@@ -130,7 +129,7 @@ async function setup(name = 'perf', query: Record<string, string> = {}) {
     await button.trigger('click')
     await flushPromises()
   }
-  return { runtime, wrapper, scenario, requests, router, click, body, automation }
+  return { runtime, wrapper, scenario, requests, router, click, body, automation, sessionState }
 }
 it('consumes raw readings once for chart and table and clears them after device authorization is withdrawn', async () => {
   const h = await setup()
@@ -583,4 +582,181 @@ it('binds every aggregate response to the selected resolution and intersecting o
   expect(() =>
     request.decode({ ...response, buckets: [{ ...b, window: { start: 0, end: 1 } }] }),
   ).toThrow()
+})
+it.each(['resources', 'history', 'discovery', 'aggregate'] as const)(
+  'clears all values and locators when %s continuation loses permission',
+  async (kind) => {
+    const h = await setup(),
+      client = h.runtime.devices.telemetry,
+      denied = decodeMdmError(403, { code: 'permission_denied' })
+    if (kind === 'resources') {
+      const resource = vi.spyOn(client, 'resources').mockResolvedValueOnce({
+        resources: ['private-volume'],
+        nextAfter: 'resource-page',
+        retired: false,
+      })
+      await h.wrapper
+        .findAll('.telemetry-metrics button')
+        .find((b) => b.text().includes('memory_available_bytes'))!
+        .trigger('click')
+      await flushPromises()
+      expect(h.wrapper.get('.telemetry-series').text()).toContain('private-volume')
+      resource.mockRejectedValueOnce(denied)
+    } else if (kind === 'aggregate') {
+      const original = client.aggregate,
+        aggregate = vi
+          .spyOn(client, 'aggregate')
+          .mockImplementationOnce(async (q) => ({ ...(await original(q)), next: 'aggregate-page' }))
+      await h.wrapper.findAll('select')[1]!.setValue('5m')
+      await flushPromises()
+      aggregate.mockRejectedValueOnce(denied)
+    } else {
+      const original = client.history,
+        history = vi
+          .spyOn(client, 'history')
+          .mockImplementationOnce(async (q) => ({ ...(await original(q)), next: 'history-page' }))
+      if (kind === 'discovery') {
+        await h.wrapper.findAll('select')[1]!.setValue('5m')
+        await flushPromises()
+      } else await h.click('重新读取')
+      history.mockRejectedValueOnce(denied)
+    }
+    expect(h.wrapper.find('svg').exists()).toBe(true)
+    await h.click('数据明细')
+    const previous = h.requests.filter((r) => r.path === '/api/v1/telemetry/history').at(-1)!
+      .body as {
+      device: string
+      field: string
+      startMicros: number
+      endMicros: number
+      resource: string
+    }
+    await h.click(kind === 'discovery' ? '继续发现来源与生命周期' : '下一页')
+    if (kind === 'resources')
+      expect(client.resources).toHaveBeenLastCalledWith(
+        'device-01',
+        previous.field,
+        'resource-page',
+      )
+    else if (kind === 'aggregate')
+      expect(client.aggregate).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          query: expect.objectContaining({ ...previous, after: 'aggregate-page' }),
+        }),
+      )
+    else
+      expect(client.history).toHaveBeenLastCalledWith(
+        expect.objectContaining({ ...previous, after: 'history-page' }),
+      )
+    expect(h.wrapper.find('svg').exists()).toBe(false)
+    expect(h.wrapper.findAll('tbody tr')).toHaveLength(0)
+    expect(h.wrapper.findAll('.telemetry-series select option')).toHaveLength(0)
+    expect(h.wrapper.findAll('button').some((b) => b.text() === '下一页')).toBe(false)
+  },
+)
+it('discards health and diagnostics after a saved diagnostic continuation is rejected', async () => {
+  const h = await setup('health'),
+    client = h.runtime.devices.telemetry,
+    original = client.gaps,
+    cursor = { receivedAt: Date.now() * 1000 - 1000, reportId: crypto.randomUUID() }
+  const gaps = vi
+    .spyOn(client, 'gaps')
+    .mockImplementationOnce(async (...args) => ({ ...(await original(...args)), next: cursor }))
+  await h.click('重新读取')
+  expect(h.wrapper.text()).toContain('有效 48')
+  gaps.mockRejectedValueOnce(decodeMdmError(403, { code: 'permission_denied' }))
+  await h.click('下一页')
+  expect(gaps.mock.calls.at(-1)?.[3]).toEqual(cursor)
+  expect(h.wrapper.text()).not.toContain('有效 48')
+  expect(h.wrapper.text()).not.toContain('容量丢弃')
+  expect(h.wrapper.findAll('.telemetry-log')).toHaveLength(0)
+})
+it('preserves the original boost expiration and the newly chosen scope when updating an existing Policy', async () => {
+  const h = await setup('policy-telemetry'),
+    rc = h.runtime.policies.resources,
+    read = rc.read,
+    expiresAt = Math.floor(Date.now() / 1000) + 3617,
+    newScope = crypto.randomUUID()
+  vi.spyOn(rc, 'read').mockImplementation(async (id) => {
+    const resource = await read(id)
+    if (id === DEMO_PROFILE)
+      for (const version of resource.versions)
+        for (const variant of version.variants)
+          if (variant.declaration.kind === 'telemetry_profile')
+            variant.declaration.definition.boost = { sampleMillis: 30000, expiresAt }
+    return resource
+  })
+  const body = {
+      operationId: crypto.randomUUID(),
+      expectedRevision: 0,
+      input: {
+        action: 'put' as const,
+        definition: {
+          targets: [{ kind: 'device' as const, id: 'device-02' }],
+          limitations: null,
+          exclusions: [],
+        },
+      },
+    },
+    task = await h.runtime.policies.scopes.change(newScope, body)
+  for (let i = 0; i < 3; i++) await h.runtime.policies.scopes.status(newScope, task.task!)
+  await h.click('配置')
+  await h.click('下一步')
+  let dialog = h.body().get('[role=dialog][data-state=open]')
+  const scope = dialog
+    .findAll('select')
+    .find((s) => s.find(`option[value="${newScope}"]`).exists())!
+  await scope.setValue(newScope)
+  await h.click('下一步')
+  dialog = h.body().get('[role=dialog][data-state=open]')
+  await dialog
+    .findAll('select')
+    .find((s) => s.find('option[value="99999999-9999-4999-8999-999999999999"]').exists())!
+    .setValue('99999999-9999-4999-8999-999999999999')
+  await flushPromises()
+  await h.click('保存、上传并激活方案资源')
+  const version = h.requests
+    .filter(
+      (r) =>
+        r.path === '/api/v1/resources/{id}' &&
+        r.method === 'POST' &&
+        (r.body as { input: { action: string } }).input.action === 'version',
+    )
+    .at(-1)!.body
+  expect(version).toMatchObject({
+    input: {
+      variants: [{ declaration: { definition: { boost: { sampleMillis: 30000, expiresAt } } } }],
+    },
+  })
+  expect(
+    h.requests.filter((r) => r.path === '/api/v1/policies/previews').at(-1)!.body,
+  ).toMatchObject({ definition: { scope: newScope } })
+  await dialog.findAll('input[type=checkbox]').at(-1)!.setValue(true)
+  await h.click('确认发布策略变更')
+  expect(
+    h.requests.filter((r) => r.path === '/api/v1/policies/{id}' && r.method === 'POST').at(-1)!
+      .body,
+  ).toMatchObject({ expectedRevision: 1, input: { definition: { scope: newScope } } })
+})
+it('does not publish a profile prepared under a session that changes during artifact hashing', async () => {
+  const h = await setup('policy-telemetry', { resource: DEMO_PROFILE })
+  await h.click('下一步')
+  const dialog = h.body().get('[role=dialog][data-state=open]')
+  await dialog
+    .findAll('select')
+    .find((s) => s.find('option[value="88888888-8888-4888-8888-888888888888"]').exists())!
+    .setValue('88888888-8888-4888-8888-888888888888')
+  await h.click('下一步')
+  let release!: (value: ArrayBuffer) => void
+  const digest = new Promise<ArrayBuffer>((resolve) => (release = resolve))
+  vi.spyOn(crypto.subtle, 'digest').mockReturnValueOnce(digest)
+  await h.click('保存、上传并激活方案资源')
+  h.sessionState.value = { ...h.sessionState.value, session: { id: 'changed-session' } }
+  await flushPromises()
+  release(new ArrayBuffer(32))
+  await flushPromises()
+  expect(
+    h.requests.filter((r) => r.path === '/api/v1/resources/{id}' && r.method === 'POST'),
+  ).toHaveLength(0)
+  expect(h.body().text()).not.toContain('核对采集变更')
 })

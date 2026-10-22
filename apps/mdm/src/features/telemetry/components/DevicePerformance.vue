@@ -123,6 +123,15 @@ function clearData() {
   retired.value = false
   discoveryNext.value = null
 }
+function clearSelection() {
+  clearData()
+  resources.value = []
+  resource.value = ''
+  resourceNext.value = null
+}
+function reload() {
+  return resource.value ? load() : loadResources()
+}
 async function catalog() {
   fields.value = []
   clearData()
@@ -145,7 +154,7 @@ async function loadResources(after: string | null = null) {
   }
   if (!field.value || !selectedField.value?.timeSeries) return
   const old = after ? resources.value : []
-  await run(
+  const ok = await run(
     () => runtime.devices.telemetry.resources(props.device, field.value, after),
     (v) => {
       resources.value = [...old, ...v.resources]
@@ -154,9 +163,14 @@ async function loadResources(after: string | null = null) {
       if (!after) resource.value = v.resources[0] ?? ''
     },
   )
+  if (!ok && failure.value) clearSelection()
 }
 async function load(after: string | null = null) {
   if (!resource.value) return
+  if (after && step.value) {
+    await aggregate(after, buckets.value)
+    return
+  }
   const oldRows = after ? rows.value : [],
     oldBuckets = after ? buckets.value : [],
     oldUnavailable = after ? unavailable.value : []
@@ -176,7 +190,7 @@ async function load(after: string | null = null) {
     },
   )
   if (!ok) {
-    clearData()
+    if (failure.value) clearSelection()
     return
   }
   if (!choices.value.some(([key]) => key === series.value))
@@ -193,7 +207,7 @@ async function discover() {
       discoveryNext.value = v.next
     },
   )
-  if (!ok) clearData()
+  if (!ok && failure.value) clearSelection()
 }
 async function aggregate(after: string | null = null, previous: Bucket[] = []) {
   const row = basis.value
@@ -223,7 +237,7 @@ async function aggregate(after: string | null = null, previous: Bucket[] = []) {
       refreshed.value = v.refreshedThrough
     },
   )
-  if (!ok) clearData()
+  if (!ok && failure.value) clearSelection()
 }
 async function chooseSeries(event: Event) {
   series.value = (event.target as HTMLSelectElement).value
@@ -298,7 +312,7 @@ watch([resource, range, resolution, counterMode, aggregateOperation], () => void
         <h2>{{ t('telemetry.performance') }}</h2>
         <p>{{ t('telemetry.performanceHint') }}</p>
       </div>
-      <UiButton :disabled="busy || !resource" @click="load()">{{ t('devices.reload') }}</UiButton>
+      <UiButton :disabled="busy || !field" @click="reload">{{ t('devices.reload') }}</UiButton>
     </header>
     <UiMessage v-if="failure" tone="danger" :title="t('devices.' + failure)" />
     <div class="telemetry-toolbar">

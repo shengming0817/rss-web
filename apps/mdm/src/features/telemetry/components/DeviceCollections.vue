@@ -65,7 +65,7 @@ async function more() {
     () => runtime.devices.telemetry.gaps(props.device, from.value, until.value, previous.next),
     (v) => (gaps.value = { ...v, reports: [...previous.reports, ...v.reports] }),
   )
-  if (!ok) health.value = undefined
+  if (!ok && failure.value) health.value = undefined
 }
 watch(
   () => JSON.stringify([props.device, ...deviceBinding(runtime)]),

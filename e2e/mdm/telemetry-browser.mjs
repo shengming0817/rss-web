@@ -361,6 +361,20 @@ try {
   await page.goto(path(`devices/${device}/history/performance`))
   await page.getByRole('button', { name: /custom.browser.counter/ }).click()
   await page.locator('.telemetry-chart svg').waitFor()
+  const counterQuery = { ...query, field: 'custom.browser.counter', maxPoints: 2 },
+    counterPage = await api('POST', '/api/v1/telemetry/history', counterQuery)
+  assert.ok(counterPage.next, 'counter continuation')
+  const gaugeQuery = { ...query, maxPoints: 2 },
+    gaugePage = await api('POST', '/api/v1/telemetry/history', gaugeQuery)
+  assert.ok(gaugePage.next, 'gauge continuation')
+  const deniedContinuation = async (body) => {
+    await pace()
+    const response = await context.request.post(origin + '/api/v1/telemetry/history', {
+      headers: { Origin: origin, 'X-Identity-Request': '1', 'X-CSRF-Token': csrf },
+      data: body,
+    })
+    assert.equal(response.status(), 403)
+  }
   const before = await api('GET', '/api/v1/authorization/rules/' + fixture.ruleId)
   const grants = before.value.grants.filter((g) => g.operation !== 'inventory_sensitive_read')
   await api('PUT', '/api/v1/authorization/rules/' + fixture.ruleId, {
@@ -368,6 +382,7 @@ try {
     expectedRevision: before.revision,
     value: { ...before.value, grants },
   })
+  await deniedContinuation({ ...counterQuery, after: counterPage.next })
   await page.getByRole('button', { name: '重新读取', exact: true }).last().click()
   await page.getByRole('alert').waitFor()
   assert.equal(await page.locator('.telemetry-chart').count(), 0)
@@ -380,6 +395,7 @@ try {
       grants: scoped.value.grants.filter((g) => g.operation !== 'inventory_read'),
     },
   })
+  await deniedContinuation({ ...gaugeQuery, after: gaugePage.next })
   await page.reload()
   await page.getByRole('alert').waitFor()
   assert.equal(await page.locator('.telemetry-chart').count(), 0)
