@@ -3,13 +3,9 @@ import type { DomainHandler } from '../scenario'
 import type { createDeviceDemo } from '../devices/state'
 import type { createOperationsDemo } from '../operations/state'
 import { closed, identifier, uuid } from '../../src/services/decode'
-import {
-  risk,
-  riskAssessment,
-  type RiskAssessment,
-} from '../../src/features/security/clients/risks-model'
-import type { SecuritySource } from '../../src/features/security/clients/source'
-import type { SecurityRequestTarget } from '../../src/features/security/clients/requests-model'
+import { risk, riskAssessment, type RiskAssessment } from '../features/security/clients/risks-model'
+import type { SecuritySource } from '../features/security/clients/source'
+import type { SecurityRequestTarget } from '../features/security/clients/requests-model'
 import { createReceipts, error, operation } from '../http'
 import { candidate, createSecurityPages, queryKeys } from './http'
 import { hasSecuritySource } from './source'

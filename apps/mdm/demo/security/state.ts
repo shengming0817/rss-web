@@ -9,7 +9,7 @@ import { createRisksDemo } from './risks'
 import { createSecurityActions } from './actions'
 import { createMaterialsDemo } from './materials'
 import { createSupportDemo } from './support'
-import { isSupportTarget } from '../../src/features/security/clients/support-model'
+import { isSupportTarget } from '../features/security/clients/support-model'
 import { createCertificatesDemo } from './certificates'
 export function createSecurityDemo(
   devices: ReturnType<typeof createDeviceDemo>,

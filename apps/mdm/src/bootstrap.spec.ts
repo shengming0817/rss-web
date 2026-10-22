@@ -4,12 +4,17 @@ import { runtimeKey } from '@rss/auth'
 import { decodeIdentityError } from '@rss/api/identity'
 import type { HttpTransport, RequestOptions } from '@rss/api/identity'
 import { mdmKey } from './context'
-import { startMdm } from './bootstrap'
+import { createMdm } from './bootstrap'
+import { settingsDestination } from './features/settings/destinations'
+import { entries } from './features/settings/entries'
+import { navigationKey } from './components/navigation'
+const businessCalls = vi.hoisted(() => [] as string[])
 vi.mock('@rss/api/mdm', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@rss/api/mdm')>()),
   createMdmTransport: () => ({
-    request: (o: RequestOptions<unknown>) =>
-      o.path === '/api/v1/authorization'
+    request: (o: RequestOptions<unknown>) => {
+      businessCalls.push(o.path)
+      return o.path === '/api/v1/authorization'
         ? Promise.resolve(
             o.decode({
               instanceId: '22222222-2222-4222-8222-222222222222',
@@ -18,12 +23,13 @@ vi.mock('@rss/api/mdm', async (importOriginal) => ({
               grants: [],
             }),
           )
-        : Promise.reject(new Error('Live unavailable')),
+        : Promise.reject(new Error('Live unavailable'))
+    },
   }),
 }))
 const tenant = '11111111-1111-4111-8111-111111111111'
 const id = '22222222-2222-4222-8222-222222222222'
-const running: ReturnType<typeof startMdm>[] = []
+const running: ReturnType<typeof createMdm>[] = []
 afterEach(() => {
   for (const runtime of running) {
     runtime.session.clear()
@@ -31,6 +37,7 @@ afterEach(() => {
     runtime.router.options.history.destroy()
   }
   running.length = 0
+  businessCalls.length = 0
   document.body.innerHTML = ''
 })
 it('provides the same session owner to auth, MDM and protected routes', async () => {
@@ -52,7 +59,7 @@ it('provides the same session owner to auth, MDM and protected routes', async ()
       return options.decode(value)
     },
   } as HttpTransport
-  const runtime = startMdm(
+  const runtime = createMdm(
     transport,
     { canonicalOrigin: 'https://mdm.example.test', oidcEnabled: false },
     {
@@ -60,8 +67,20 @@ it('provides the same session owner to auth, MDM and protected routes', async ()
       tenant,
       managementTenant: '99999999-9999-4999-8999-999999999999',
     },
-    false,
   )
+  runtime.app.provide(navigationKey, [
+    {
+      id: 'policies',
+      label: 'mdm.policies',
+      items: [{ name: 'policy-policies', label: 'security.risks' }],
+    },
+  ])
+  expect(settingsDestination(entries['device-key'].target, tenant)).toBeUndefined()
+  for (const entry of Object.values(entries)) {
+    const target = settingsDestination(entry.target, tenant)
+    if (target) expect(runtime.router.resolve(target).matched.length).toBeGreaterThan(0)
+  }
+  runtime.mount()
   running.push(runtime)
   await runtime.router.isReady()
   runtime.app.runWithContext(() => {
@@ -71,6 +90,62 @@ it('provides the same session owner to auth, MDM and protected routes', async ()
   await vi.waitFor(() => expect(runtime.router.currentRoute.value.name).toBe('workspace'))
   await vi.waitFor(() => expect(document.body.textContent).toContain('当前无法读取导航'))
   expect(runtime.session.state.value.status).toBe('authenticated')
+  for (const path of [
+    'security/requests',
+    'security/materials',
+    'security/support',
+    'security/risks',
+    'security/baselines',
+    'security/certificates',
+    'security/experience',
+    'security/actions',
+    'policies/configurations',
+    'operations/audit',
+    'operations/reports',
+    'operations/alerts',
+    'operations/alert-rules',
+  ]) {
+    await runtime.router.push(`/tenants/${tenant}/${path}`)
+    expect(runtime.router.currentRoute.value.matched.at(-1)?.path).toBe('/:pathMatch(.*)*')
+  }
+  expect(
+    businessCalls.some((path) =>
+      /mdm-candidate\/(security|operations|authorization|policies)/.test(path),
+    ),
+  ).toBe(false)
+  for (const name of [
+    'security-compliance',
+    'security-certificate-archive',
+    'security-rules',
+    'policy-policies',
+    'policy-executions',
+    'software-catalog',
+    'operations-authorization',
+    'settings-overview',
+  ])
+    expect(runtime.router.hasRoute(name)).toBe(true)
+  runtime.app.runWithContext(() => {
+    const mdm = inject(mdmKey)!
+    expect(Object.keys(mdm.security).sort()).toEqual(['certificateArchive', 'compliance'])
+    expect(Object.keys(mdm.operations)).toEqual(['authorization'])
+    expect(mdm.policies).not.toHaveProperty('configurations')
+  })
+
+  await runtime.router.push({ name: 'policy-policies', params: { tenant } })
+  await vi.waitFor(() =>
+    expect(
+      document.querySelector('.console-breadcrumb > span[aria-current=page]')?.textContent,
+    ).toBe(runtime.i18n.global.t('security.risks')),
+  )
+  document.querySelector<HTMLButtonElement>('.console-command-trigger')!.click()
+  await vi.waitFor(() =>
+    expect(
+      document.querySelector(
+        `.console-command-results a[href="/tenants/${tenant}/policies/assignments"]`,
+      )?.textContent,
+    ).toContain(runtime.i18n.global.t('security.risks')),
+  )
+
   await runtime.router.push(`/tenants/33333333-3333-4333-8333-333333333333/workspace`)
   expect(runtime.router.currentRoute.value.name).toBe('error')
 })
@@ -101,12 +176,12 @@ it('composes platform routes with one independent local session and no business 
             },
       ),
   } as HttpTransport
-  const runtime = startMdm(
+  const runtime = createMdm(
     transport,
     { canonicalOrigin: 'https://mdm.example.test', oidcEnabled: true },
     { canonicalOrigin: 'https://mdm.example.test', tenant, managementTenant },
-    false,
   )
+  runtime.mount()
   running.push(runtime)
   await runtime.router.isReady()
   expect(runtime.session.config.oidcEnabled).toBe(false)
@@ -127,7 +202,7 @@ it.each(['/', '/login'])(
     const request = vi.fn(async () => {
       throw decodeIdentityError(401, { code: 'invalid_credential' })
     })
-    const runtime = startMdm(
+    const runtime = createMdm(
       { request } as unknown as HttpTransport,
       { canonicalOrigin: 'https://mdm.example.test', oidcEnabled: false },
       {
@@ -135,8 +210,8 @@ it.each(['/', '/login'])(
         tenant,
         managementTenant: '99999999-9999-4999-8999-999999999999',
       },
-      false,
     )
+    runtime.mount()
     running.push(runtime)
     await runtime.router.isReady()
     await vi.waitFor(() => expect(document.querySelector('#login-name')).not.toBeNull())

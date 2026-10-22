@@ -4,9 +4,9 @@ import { createScenario, TENANT } from '../scenario'
 import { createDeviceDemo } from '../devices/state'
 import { createAutomationDemo } from '../policies/state'
 import type { DemoEvent } from '../scenario'
-import { createSecurityClients } from '../../src/features/security/client'
-import { createOperationsClients } from '../../src/features/operations/client'
-import { createPolicyClients } from '../../src/features/policies/client'
+import { createSecurityClients } from '../features/security/client'
+import { createOperationsClients } from '../features/operations/client'
+import { createPolicyClients } from '../features/policies/client'
 import { operation } from '../../src/services/useOperation'
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
@@ -85,7 +85,7 @@ it('keeps native compliance and exceptions distinct while risk remediation uses 
     created = await s.compliance.put(
       rule,
       operation({
-        name: 'Floor boundary',
+        presentation: { name: 'Floor boundary' },
         severity: 'high',
         enabled: true,
         platform: 'all',

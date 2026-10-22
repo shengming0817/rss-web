@@ -12,7 +12,7 @@ import {
   settings,
   type Configuration,
   type createConfigurationsClient,
-} from '../../src/features/policies/clients/configurations'
+} from '../features/policies/clients/configurations'
 import { platforms } from '../../src/features/policies/clients/resources'
 import { closed, count, enumeration, identifier, record, uuid } from '../../src/services/decode'
 import { createPages, createReceipts, error, operation } from '../http'

@@ -1,5 +1,6 @@
 import type { RouteLocationRaw } from 'vue-router'
-export function settingsDestination(target: string, tenant: string): RouteLocationRaw {
+export function settingsDestination(target: string, tenant: string): RouteLocationRaw | undefined {
+  if (target === 'deviceMaterials') return undefined
   if (target === 'provision' || target === 'registry' || target.startsWith('tenant:'))
     target = 'tenants'
   const routes: Record<string, string> = {
@@ -11,7 +12,6 @@ export function settingsDestination(target: string, tenant: string): RouteLocati
     providers: 'providers',
     ade: 'operations-appleAde',
     appleAccount: 'operations-appleAccount',
-    deviceMaterials: 'security-materials',
     registration: 'registration-quotas',
     organization: 'operations-organization',
   }

@@ -31,7 +31,7 @@ async function fixture(devices = createDeviceDemo()) {
   }
 }
 const definition = {
-  name: 'Synthetic asset placement baseline',
+  presentation: { name: 'Synthetic asset placement baseline' },
   severity: 'medium',
   enabled: true,
   platform: 'all',
@@ -191,7 +191,12 @@ it('replays exact unknown native operations and requires nonempty Criteria witho
   expect(recovered.status).toBe(200)
   expect((await f.write('PUT', path, write)).body).toEqual(recovered.body)
   expect(
-    (await f.write('PUT', path, { ...write, input: { ...definition, name: 'Changed' } })).status,
+    (
+      await f.write('PUT', path, {
+        ...write,
+        input: { ...definition, presentation: { ...definition.presentation, name: 'Changed' } },
+      })
+    ).status,
   ).toBe(409)
   expect((await f.write('POST', `${path}/recompute`, operation({}, 0))).status).toBe(409)
   expect((await f.write('POST', `${path}/recompute`, operation({}, 1))).status).toBe(200)

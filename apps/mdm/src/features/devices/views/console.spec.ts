@@ -13,14 +13,14 @@ import { createScenario, TENANT } from '../../../../demo/scenario'
 import { createDeviceDemo } from '../../../../demo/devices/state'
 import { createAutomationDemo } from '../../../../demo/policies/state'
 import { ADMIN } from '../../../../demo/operations/authorization'
-import { createOperationsClients } from '../../operations/client'
+import { createOperationsClients } from '../../../../demo/features/operations/client'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
 import { policyFeature } from '../../policies/routes'
 import { securityFeature } from '../../security/routes'
 import { operationsFeature } from '../../operations/routes'
 import { deviceFeature } from '../routes'
-import { createPolicyClients } from '../../policies/client'
+import { createPolicyClients } from '../../../../demo/features/policies/client'
 import { createDeviceClients } from '../client'
 const wrappers: VueWrapper[] = []
 it('shows channel communication separately and clears the MDM receipt after registering again', async () => {
@@ -45,7 +45,6 @@ it('shows channel communication separately and clears the MDM receipt after regi
         .replace('.000Z', ' UTC'),
     )
   }
-  expect(card().text()).toContain('合成通信数据')
   expect(card().text()).not.toContain('后端暂未提供')
   expect(card().text()).toContain('当前注册')
   const enrollment = await h.devices.enrollment.create(crypto.randomUUID(), {

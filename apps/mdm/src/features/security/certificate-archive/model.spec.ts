@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { certificate, exported, page, vault, validity } from './model'
+import { certificate, metadata, exported, page, vault, validity } from './model'
 const id = '11111111-1111-4111-8111-111111111111',
   other = '22222222-2222-4222-8222-222222222222',
   hash = 'ab'.repeat(32)
@@ -56,4 +56,25 @@ it('rejects foreign pages, fabricated unlock state and mismatched export version
       { entryId: id, version: 1 },
     ),
   ).toThrow()
+})
+
+it('preserves bounded certificate metadata while checking owner and usages independently', () => {
+  const value = {
+    name: 'Name',
+    category: 'custom',
+    labels: [],
+    usages: [],
+    owner: '',
+    notes: '',
+    vendor: { help: ['中文', false] },
+    tenant: 'untrusted',
+  }
+  expect(metadata(value)).toEqual(value)
+  for (const invalid of [
+    { ...value, name: '' },
+    { ...value, owner: 'x'.repeat(257) },
+    { ...value, usages: Array(33).fill('sign') },
+    { ...value, vendor: 'x'.repeat(16384) },
+  ])
+    expect(() => metadata(invalid)).toThrow()
 })

@@ -10,6 +10,10 @@ import {
   unique,
 } from '../../../services/decode'
 const reasons = [
+  'initialization_authorization',
+  'initialization_content',
+  'initialization_conflict',
+  'initialization_telemetry_backend',
   'initializing',
   'stopping',
   'worker_not_running',
@@ -67,6 +71,8 @@ export function runtimeSnapshot(value: unknown) {
           throw new Error('Invalid runtime component')
         return {
           name: enumeration(c['name'], [
+            'initialization',
+            'telemetry',
             'inventory',
             'identity_audit',
             'apple',
@@ -101,6 +107,7 @@ export function runtimeSnapshot(value: unknown) {
                     throw new Error('Invalid runtime dependency')
                   return {
                     name: enumeration(d['name'], [
+                      'telemetry_storage',
                       'inventory_delivery',
                       'observation_journal',
                       'flow_storage',
@@ -116,6 +123,11 @@ export function runtimeSnapshot(value: unknown) {
                   const q = closed(value, ['name', 'count', 'truncated'])
                   return {
                     name: enumeration(q['name'], [
+                      'initialization_assets_pending',
+                      'initialization_telemetry_pending',
+                      'delivery_unknown',
+                      'delivery_blocked',
+                      'maintenance_pending',
                       'delivery_pending',
                       'pending',
                       'running',

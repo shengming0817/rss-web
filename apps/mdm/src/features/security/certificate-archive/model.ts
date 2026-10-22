@@ -1,3 +1,4 @@
+import { jsonObject } from '../../../services/json'
 import {
   array,
   boolean,
@@ -16,6 +17,7 @@ export const profiles = ['ca', 'https', 'csr', 'apns_csr', 'scep_template'] as c
 export type Profile = (typeof profiles)[number]
 export type Algorithm = 'rsa2048' | 'rsa3072' | 'p256'
 export interface Metadata {
+  [key: string]: unknown
   name: string
   category: string
   labels: string[]
@@ -63,16 +65,33 @@ function fingerprint(value: unknown) {
   return v
 }
 export function metadata(value: unknown): Metadata {
-  const v = closed(value, ['name', 'category', 'labels', 'usages', 'owner', 'notes'])
+  const v = jsonObject(value, 16_384)
+  function text(value: unknown, max: number, required = false): string {
+    if (
+      typeof value !== 'string' ||
+      value.includes('\0') ||
+      new TextEncoder().encode(value).byteLength > max ||
+      (required && !value.trim())
+    )
+      throw new Error('Invalid metadata text')
+    return value
+  }
+  function list(value: unknown, max: number) {
+    const items = array(value, (item) => text(item, max, true))
+    if (items.length > 32) throw new Error('Too many metadata items')
+    return items
+  }
   return {
-    name: string(v['name']),
-    category: string(v['category']),
-    labels: array(v['labels'], string),
-    usages: array(v['usages'], string),
-    owner: string(v['owner']),
-    notes: text(v['notes']),
+    ...v,
+    name: text(v['name'], 256, true),
+    category: text(v['category'], 128, true),
+    labels: list(v['labels'], 128),
+    usages: list(v['usages'], 512),
+    owner: text(v['owner'], 256),
+    notes: text(v['notes'], 4096),
   }
 }
+
 export function certificate(value: unknown) {
   const v = closed(value, [
     'subject',

@@ -29,7 +29,6 @@ const { t } = useI18n(),
   { run, runWrite, busy, failure, uncertain } = useOperation()
 const page = ref<Awaited<ReturnType<typeof client.groups>>>(),
   department = ref<Awaited<ReturnType<typeof client.departments>>>(),
-  delegations = ref<Awaited<ReturnType<typeof runtime.operations.admin.delegations>>>(),
   effective = ref<Awaited<ReturnType<typeof client.effective>>>()
 const fresh = (): UserGroup => ({ name: '', enabled: true, members: [] })
 const draft = ref(fresh()),
@@ -168,29 +167,11 @@ function adopt() {
   failure.value = null
 }
 async function routeTarget() {
-  section.value = route.query['kind'] === 'delegation' ? 'delegations' : 'groups'
-  if (typeof route.query['id'] === 'string') {
-    if (route.query['kind'] === 'delegation') {
-      await run(
-        async () => {
-          let cursor: string | undefined
-          const seen = new Set<string>()
-          do {
-            const p = await runtime.operations.admin.delegations(cursor)
-            if (p.items.some((v) => v.id === route.query['id'])) return p
-            cursor = p.nextCursor ?? undefined
-            if (cursor) {
-              if (seen.has(cursor)) throw new Error('Repeated cursor')
-              seen.add(cursor)
-            }
-          } while (cursor)
-          throw new Error('Delegation absent')
-        },
-        (v) => (delegations.value = v),
-      )
-    } else await open(route.query['id'])
-  }
+  section.value = 'groups'
+  if (route.query['kind'] !== 'delegation' && typeof route.query['id'] === 'string')
+    await open(route.query['id'])
 }
+
 watch(
   () => route.fullPath,
   () => {
@@ -229,7 +210,6 @@ onMounted(async () => {
       :items="[
         { value: 'groups', label: t('operations.groupEditor') },
         { value: 'departments', label: t('operations.departments') },
-        { value: 'delegations', label: t('operations.delegations') },
       ]"
       keep-mounted
       ><template #groups>
@@ -357,41 +337,8 @@ onMounted(async () => {
           {{ department.source?.issuer }} · {{ utc(department.observedAt!) }} —
           {{ utc(department.expiresAt!) }} ·
           {{ department.snapshotId }}
-        </p> </template
-      ><template #delegations>
-        <h2>{{ t('operations.delegations') }}</h2>
-        <p>{{ t('operations.delegationHint') }}</p>
-        <UiButton
-          :disabled="!!busy"
-          type="submit"
-          @click="
-            run(
-              () => runtime.operations.admin.delegations(),
-              (v) => (delegations = v),
-            )
-          "
-        >
-          {{ t('devices.reload') }}
-        </UiButton>
-        <ul>
-          <li v-for="item in delegations?.items" :key="item.id">
-            {{ item.principal }} · {{ item.department }} / {{ item.matching }} · {{ item.state }}
-          </li>
-        </ul>
-        <UiButton
-          v-if="delegations?.nextCursor"
-          :disabled="!!busy"
-          type="submit"
-          @click="
-            run(
-              () => runtime.operations.admin.delegations(delegations!.nextCursor!),
-              (v) => (delegations = v),
-            )
-          "
-        >
-          {{ t('devices.next') }}
-        </UiButton>
-      </template></UiTabs
+        </p></template
+      ></UiTabs
     >
     <UiDialog
       :open="!!confirmingAction"

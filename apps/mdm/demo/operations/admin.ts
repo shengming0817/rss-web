@@ -7,7 +7,7 @@ import {
   type AlertRule,
   type Metrics,
   type Report,
-} from '../../src/features/operations/clients/admin-model'
+} from '../features/operations/clients/admin-model'
 import type { createOperationsDemo } from './state'
 const reply = (body: object, status = 200) =>
   ok({ contract: 'operations-v1', tenantId: TENANT, source: 'mock', ...body }, status)

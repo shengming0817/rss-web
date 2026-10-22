@@ -74,7 +74,7 @@ async function file(event: Event, kind: 'trust' | 'crl') {
     },
   )
 }
-async function change(action: 'prepare' | 'approve' | 'activate' | 'retire' | 'crl' | 'recover') {
+async function change(action: 'prepare' | 'activate' | 'retire' | 'crl' | 'recover') {
   if (!canWrite.value) return
   const expected = revision.value,
     selected = purpose.value
@@ -209,8 +209,7 @@ useSettingsFacts(() => {
       </p>
       <UiButton type="submit" :disabled="!candidate">{{ t('settings.import') }}</UiButton>
       <div class="settings-actions">
-        <UiButton @click="change('approve')">{{ t('settings.approve') }}</UiButton
-        ><UiButton @click="change('activate')">{{ t('settings.activate') }}</UiButton
+        <UiButton @click="change('activate')">{{ t('settings.activate') }}</UiButton
         ><UiButton @click="change('retire')">{{ t('settings.retire') }}</UiButton>
       </div>
     </fieldset>

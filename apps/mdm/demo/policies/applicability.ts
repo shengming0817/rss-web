@@ -1,5 +1,5 @@
 import type { DemoDevice } from '../devices/fixtures'
-import type { Configuration, Setting } from '../../src/features/policies/clients/configurations'
+import type { Configuration, Setting } from '../features/policies/clients/configurations'
 import type { ResourceRead } from '../../src/features/policies/clients/resources'
 export type Applicability =
   | 'applicable'

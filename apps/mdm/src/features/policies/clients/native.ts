@@ -1,3 +1,4 @@
+import { jsonValue } from '../../../services/json'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -11,7 +12,7 @@ import {
   string,
   uuid,
 } from '../../../services/decode'
-import { jsonValue } from './resources'
+
 export type DeviceControlAction =
   | { kind: 'restart' }
   | {

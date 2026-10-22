@@ -116,7 +116,6 @@ export const operationsZh = {
     job: '运营任务',
     device: '设备',
     policy: '策略',
-    workflow: '工作流',
 
     compliance_rule: '合规规则',
     baseline: '合规基线',
@@ -296,7 +295,6 @@ export const operationsEn: typeof operationsZh = {
     job: 'Operations job',
     device: 'Device',
     policy: 'Policy',
-    workflow: 'Workflow',
 
     compliance_rule: 'Compliance rule',
     baseline: 'Compliance baseline',

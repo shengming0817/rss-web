@@ -4,7 +4,7 @@ import { createScenario, TENANT } from '../scenario'
 import { createDeviceDemo } from '../devices/state'
 import { createAutomationDemo } from './state'
 import { seedScriptPolicies } from './seed'
-import { createPolicyClients } from '../../src/features/policies/client'
+import { createPolicyClients } from '../features/policies/client'
 const operation = <T>(input: T, expectedRevision = 0) => ({
   operationId: crypto.randomUUID(),
   expectedRevision,

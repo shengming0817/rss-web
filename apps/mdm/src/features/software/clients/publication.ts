@@ -1,3 +1,4 @@
+import { jsonValue } from '../../../services/json'
 import type { HttpTransport } from '@rss/api/mdm'
 import type { Operation } from '../../../services/useOperation'
 import {
@@ -12,7 +13,7 @@ import {
   record,
   string,
 } from '../../../services/decode'
-import { jsonValue } from '../../policies/clients/resources'
+
 function publicArtifact(value: unknown) {
   const v = closed(value, ['key', 'url', 'length', 'sha256'])
   return {

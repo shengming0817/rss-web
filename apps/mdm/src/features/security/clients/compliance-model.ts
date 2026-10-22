@@ -1,3 +1,4 @@
+import { jsonObject } from '../../../services/json'
 import {
   array,
   boolean,
@@ -33,14 +34,15 @@ export function boundedText(value: unknown, maximum = 256) {
   return v
 }
 export function complianceDefinition(value: unknown) {
-  const v = closed(value, ['name', 'severity', 'enabled', 'platform', 'target', 'criteria'])
+  const v = closed(value, ['presentation', 'severity', 'enabled', 'platform', 'target', 'criteria'])
   const target = closed(v['target'], ['kind'], ['ids'])
   const kind = enumeration(target['kind'], ['all', 'groups'] as const)
   const ids = kind === 'groups' ? unique(array(target['ids'], uuid), (v) => v) : []
   if (kind === 'all' ? 'ids' in target : !ids.length || ids.length > 16)
     throw new Error('Invalid compliance target')
+  const presentation = jsonObject(v['presentation'], 65_536)
   return {
-    name: boundedText(v['name'], 128),
+    presentation: { ...presentation, name: boundedText(presentation['name'], 128) },
     severity: enumeration(v['severity'], severities),
     enabled: boolean(v['enabled']),
     platform: enumeration(v['platform'], platforms),

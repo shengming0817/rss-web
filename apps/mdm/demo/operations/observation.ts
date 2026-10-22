@@ -1,5 +1,5 @@
 import { identifier, uuid } from '../../src/services/decode'
-import type { OperationsReference } from '../../src/features/operations/clients/model'
+import type { OperationsReference } from '../features/operations/clients/model'
 /** Explicit published/candidate resource locators. Unrecognized requests have no invented target. */
 export function observationTarget(
   path: string,

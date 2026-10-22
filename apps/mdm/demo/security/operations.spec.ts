@@ -23,7 +23,7 @@ it('records native security changes once and keeps alert acknowledgement indepen
     path = `/api/v1/compliance-rules/${id}`
   expect((await server.handle('GET', `${root}/audit`)).status).toBe(200)
   const definition = {
-    name: 'Private administrator draft',
+    presentation: { name: 'Private administrator draft' },
     severity: 'high',
     enabled: true,
     platform: 'all',
@@ -49,7 +49,7 @@ it('records native security changes once and keeps alert acknowledgement indepen
     target: { kind: 'compliance_rule', id, revision: 1 },
     outcome: 'accepted',
   })
-  expect(JSON.stringify(audit)).not.toContain(definition.name)
+  expect(JSON.stringify(audit)).not.toContain(definition.presentation.name)
   expect((await server.handle('GET', `${root}/audit/${audit.items[0]!.id}`)).body).toMatchObject({
     entry: audit.items[0],
   })
@@ -124,7 +124,7 @@ it('records native security changes once and keeps alert acknowledgement indepen
     (await server.handle('GET', `${root}/audit?device=device-02&cursor=${rows.nextCursor}`)).status,
   ).toBe(400)
   const all = (await server.handle('GET', `${root}/audit`)).body
-  expect(JSON.stringify(all)).not.toContain(definition.name)
+  expect(JSON.stringify(all)).not.toContain(definition.presentation.name)
   await server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'reviewer',
     password: 'demo',

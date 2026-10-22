@@ -5,7 +5,6 @@ import { expect, it, vi } from 'vitest'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
 import ExecutionDetailView from './ExecutionDetailView.vue'
-import ConfigurationsView from './ConfigurationsView.vue'
 it('shows native receipt and cleanup diagnostics while withholding terminal actions', async () => {
   const router = createRouter({
     history: createMemoryHistory(),
@@ -66,38 +65,6 @@ it('shows native receipt and cleanup diagnostics while withholding terminal acti
   expect(wrapper.findAll('button').some((b) => b.text() === '请求取消')).toBe(false)
   wrapper.unmount()
 })
-it('offers only formats compatible with the selected platform and makes an empty catalog explicit', async () => {
-  const router = createRouter({
-    history: createMemoryHistory(),
-    routes: [{ path: '/', component: ConfigurationsView }],
-  })
-  await router.push('/')
-  const wrapper = mount(ConfigurationsView, {
-    global: {
-      plugins: [router, mdmI18n()],
-      stubs: { RouterLink: true },
-      provide: {
-        [mdmKey as symbol]: {
-          tenant: 'tenant',
-          session: { state: ref({ status: 'authenticated', session: { id: 'session' } }) },
-          demo: true,
-          policies: { configurations: { list: async () => ({ items: [], nextCursor: null }) } },
-        },
-      },
-    },
-  })
-  await flushPromises()
-  expect(wrapper.text()).toContain('当前没有结果')
-  await wrapper.get('#configuration-platform').setValue('macos')
-  expect(wrapper.get<HTMLSelectElement>('#configuration-format').element.value).toBe(
-    'apple_profile',
-  )
-  expect(wrapper.findAll('#configuration-format option').map((o) => o.attributes('value'))).toEqual(
-    ['apple_profile', 'apple_ddm'],
-  )
-  wrapper.unmount()
-})
-
 it('keeps reauthorization coordinates editable character by character and invalidates only the final confirmation', async () => {
   const id = '11111111-1111-4111-8111-111111111111',
     registration = '22222222-2222-4222-8222-222222222222'

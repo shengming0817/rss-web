@@ -30,7 +30,6 @@ refresh()
   <section :aria-busy="busy" class="console-public-page">
     <h1>{{ t('onboarding.downloads') }}</h1>
     <p>{{ t('onboarding.downloadNote') }}</p>
-    <p v-if="runtime.demo" class="mdm-source">{{ t('mdm.mock') }}</p>
     <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
     <div class="console-toolbar">
       <label

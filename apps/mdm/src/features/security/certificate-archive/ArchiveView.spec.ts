@@ -482,3 +482,53 @@ it('edits certificate metadata, explicit issuance inputs, recommendation, export
     vi.unstubAllGlobals()
   }
 })
+
+it('preserves unedited metadata keys and the loaded revision when saving', async () => {
+  const original = archiveEntry(tenant, 2)
+  const entry = {
+    ...original,
+    latest: {
+      ...original.latest,
+      metadata: {
+        ...original.latest.metadata,
+        vendor: { help: ['中文', false] },
+        tenant: 'untrusted',
+      },
+    },
+  }
+  const saveMetadata = vi.fn().mockResolvedValue({})
+  const { wrapper } = await setup({
+    state: vi.fn().mockResolvedValue({
+      initialized: true,
+      generation: 1,
+      unlockedUntil: Math.floor(Date.now() / 1000) + 900,
+    }),
+    list: vi.fn().mockResolvedValue({
+      tenantId: tenant,
+      items: [entry],
+      nextAfter: null,
+      asOf: 100,
+      reminderDays: 30,
+      alerts: { expired: 0, expiring: 0, notYetValid: 0 },
+    }),
+    history: vi.fn().mockResolvedValue([entry.latest]),
+    saveMetadata,
+  })
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text() === entry.latest.metadata.name)!
+    .trigger('click')
+  await flushPromises()
+  await wrapper.get('#archive-name').setValue('Edited')
+  await wrapper.get('#archive-mode').setValue('metadata')
+  wrapper
+    .get('#archive-name')
+    .element.closest('form')!
+    .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+  await flushPromises()
+  expect(saveMetadata).toHaveBeenCalledWith(expect.any(String), tenant, 2, {
+    ...entry.latest.metadata,
+    name: 'Edited',
+  })
+  wrapper.unmount()
+})
