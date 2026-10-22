@@ -153,8 +153,7 @@ export async function exercisePki({
     posts++
     assert.equal(route.request().postDataJSON().operationId, unknownOperation)
     const response = await route.fetch()
-    assert.ok([200, 503].includes(response.status()))
-    if (response.status() === 503) assert.equal((await response.json()).code, 'service_unavailable')
+    assert.equal(response.status(), 200)
     await route.abort('failed')
   })
   await page.getByRole('button', { name: '核验并继续原恢复', exact: true }).click()
