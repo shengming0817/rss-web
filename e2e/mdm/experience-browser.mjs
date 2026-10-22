@@ -170,12 +170,12 @@ export async function acceptExperience({
   const anonymous = await context.browser().newContext({ ignoreHTTPSErrors: true, locale: 'zh-CN' })
   try {
     const downloads = await anonymous.newPage()
+    downloads.setDefaultTimeout(10000)
     await downloads.goto(`${origin}/downloads/agent`)
+    await downloads.getByRole('heading', { name: '下载 Agent 安装器', exact: true }).waitFor()
     for (const release of releases) {
-      await downloads.getByLabel('平台', { exact: true }).selectOption(release.target.platform)
-      await downloads
-        .getByLabel('原生架构', { exact: true })
-        .selectOption(release.target.architecture)
+      await downloads.getByLabel('平台').selectOption(release.target.platform)
+      await downloads.getByLabel('原生架构').selectOption(release.target.architecture)
       const started = downloads.waitForEvent('download')
       await downloads
         .locator(`a[href="/api/v1/agent/enroll/packages/${release.releaseId}/content"]`)
