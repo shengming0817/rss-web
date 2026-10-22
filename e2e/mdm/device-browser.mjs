@@ -1012,7 +1012,7 @@ try {
   coverage.push('real-revoke-retains-credentials')
   result = 'passed'
 } catch (error) {
-  const line = error.stack?.match(/device-browser\.mjs:(\d+)/)?.[1]
+  const line = error.stack?.match(/(?:device|experience)-browser\.mjs:(\d+)/)?.[1]
   const alerts =
     (await page
       ?.getByRole('alert')

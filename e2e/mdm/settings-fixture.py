@@ -21,6 +21,7 @@ sys.path.insert(0,str(BACKEND/'hack'))
 from t2_environment import Environment,private
 from candidate_fixture import INSTANCE,TENANTS,ADMIN,installation
 from build_run import lease_fds
+from runtime_fixture import storage, signer, readiness
 
 def cleanup_compose():
     import hashlib
@@ -203,13 +204,21 @@ def start_host(binary,config_path,gateway_path,log):
     processes.append(subprocess.Popen([str(binary),'serve','--config',str(config_path)],cwd=BACKEND,stdout=log,stderr=log,env={**os.environ,'RUST_MIN_STACK':str(8*1024*1024)}))
     processes.append(subprocess.Popen(['nginx','-c',str(gateway_path),'-g','daemon off;'],cwd=BACKEND,stdout=log,stderr=log))
 
-def ready(origin):
-    context=ssl.create_default_context(cafile=str(environment.root/'ca.crt'))
+    return processes[-2:]
+
+def stop_host(children):
+    for child in reversed(children):
+        if child.poll() is None:child.terminate()
+    for child in reversed(children):child.wait(timeout=10)
+
+def ready(origin, children, expected=200):
     until=time.monotonic()+180
     while time.monotonic()<until:
-        if any(child.poll() is not None for child in processes):raise RuntimeError('fixture-process-exit')
+        if any(child.poll() is not None for child in children):raise RuntimeError('fixture-process-exit')
         try:
-            if environment.probe_product(origin,urlsplit(origin).port,context):return
+            if readiness(environment, origin)==expected:
+                print(json.dumps(dict(phase='readiness',status=expected)),flush=True)
+                return
         except (OSError,ssl.SSLError):pass
         time.sleep(.2)
     raise TimeoutError('fixture-readiness')
@@ -221,6 +230,7 @@ try:
     binary=Path(os.environ['CARGO_TARGET_DIR'])/'debug/rss-mdm'
     config_path=Path(initialized['configuration'])
     config=json.loads(config_path.read_text())
+    storage(environment, binary, config, TENANTS[0])
     management=environment.sql('SELECT management_tenant_id FROM public.mdm_installation','mdm_dev').strip()
     operator=environment.root/'host/operator'
     initialize=json.loads((operator/'initialize.json').read_text())
@@ -244,8 +254,12 @@ try:
     environment.sql(f"SET rss.tenant_id='{TENANTS[0]}';INSERT INTO mdm_access.authorization_rules(tenant_id,instance,id,revision,document) VALUES('{TENANTS[0]}','{INSTANCE}','{uuid.uuid4()}',1,'{text}'::jsonb)",'mdm_dev')
     log_path=private(environment.root/'product.log','')
     with log_path.open('w') as log:
-        start_host(binary,config_path,initialized['gateway'],log)
-        ready(initialized['origin'])
+        initial=start_host(binary,config_path,initialized['gateway'],log)
+        ready(initialized['origin'],initial,expected=503)
+        config['task_signing']=dict(revision=signer(environment,initialized['origin'],TENANTS[0],'admin',(environment.root/'account-password').read_text()))
+        stop_host(initial)
+        private(config_path,config)
+        ready(initialized['origin'],start_host(binary,config_path,initialized['gateway'],log))
         revision=subprocess.run(['/usr/bin/git','rev-parse','HEAD'],cwd=BACKEND,capture_output=True,text=True,check=True).stdout.strip()
         request=environment.root/'target-request.json'
         response=environment.root/'target-ready.json'
@@ -268,6 +282,8 @@ try:
                 origin='https://localhost:'+str(ports['https'])
                 target=copy.deepcopy(config);target['identity']['tenant_id']=tenant;target['identity']['oidc']=None
                 target['product_origin']=origin;target['listen']='127.0.0.1:'+str(ports['backend'])
+                target['task_signing']=None
+                storage(environment,binary,target,tenant)
                 path=private(environment.root/'target-runtime.json',target)
                 public=command(binary,'public-host-config',target)
                 gateway_dir=environment.root/'target-gateway';gateway_dir.mkdir(mode=0o700)
@@ -275,7 +291,11 @@ try:
                 original=Path(initialized['gateway']);gateway=original.read_text().replace(str(original.parent),str(gateway_dir)).replace('listen '+str(urlsplit(initialized['origin']).port)+' ssl;', 'listen '+str(ports['https'])+' ssl;').replace(config['listen'],target['listen'])
                 for name in ('server.crt','server.key'):private(gateway_dir/name,(original.parent/name).read_text())
                 gateway_path=private(gateway_dir/'nginx.conf',gateway)
-                start_host(binary,path,gateway_path,log);ready(origin)
+                initial=start_host(binary,path,gateway_path,log);ready(origin,initial,expected=503)
+                target['task_signing']=dict(revision=signer(environment,origin,tenant,value['login'],value['password']))
+                stop_host(initial)
+                private(path,target)
+                ready(origin,start_host(binary,path,gateway_path,log))
                 private(response,dict(origin=origin,tenant=tenant))
                 phase='browser'
             time.sleep(.1)

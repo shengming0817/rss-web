@@ -27,6 +27,7 @@ from candidate_fixture import INSTANCE, TENANTS, ADMIN
 from build_run import lease_fds
 from pki_fixtures import running as pki
 from candidate_installation_driver import Browser
+from runtime_fixture import storage, readiness as readiness_status
 
 environment = Environment(BACKEND, group='device-browser')
 processes = []
@@ -89,14 +90,13 @@ def seed():
         print(json.dumps(dict(phase='seed', classification='tenantBinding' if 'asset tenant mismatch' in message else 'schema', identifiers=matches)), flush=True)
         raise
 
-def start(binary, initialized, log):
+def start(binary, initialized, log, expected=200):
     global readiness
     children = []
     for args in ([str(binary),'serve','--config',initialized['configuration']],['nginx','-c',initialized['gateway'],'-g','daemon off;']):
         child = subprocess.Popen(args,cwd=BACKEND,stdout=log,stderr=log,env={**os.environ,'RUST_MIN_STACK':str(8*1024*1024)})
         processes.append(child)
         children.append(child)
-    context=ssl.create_default_context(cafile=str(environment.root/'ca.crt'))
     deadline=time.monotonic()+180
     while True:
         for role, child in zip(('product', 'gateway'), children):
@@ -104,7 +104,8 @@ def start(binary, initialized, log):
                 readiness = dict(classification=role+'-exit', exitCode=child.returncode)
                 raise RuntimeError('readiness')
         try:
-            if environment.probe_product(initialized['origin'], urlsplit(initialized['origin']).port, context):
+            if readiness_status(environment, initialized['origin']) == expected:
+                print(json.dumps(dict(phase='readiness',status=expected)),flush=True)
                 break
             readiness = dict(classification='http-status')
         except ssl.SSLCertVerificationError:
@@ -141,30 +142,18 @@ try:
     agent['endpoint']['listen'] = f"127.0.0.1:{ports['backend']}"
     # Prepare task signing over the product session before enabling Agent runtime.
     config['device_pki'] = json.loads((native/'device-pki.json').read_text())
+    binary = Path(os.environ['CARGO_TARGET_DIR'])/'debug/rss-mdm'
+    storage(environment, binary, config, TENANTS[0])
     private(config_path, config)
     phase = 'authority'
     rule_id, rule = seed_authority()
-    binary = Path(os.environ['CARGO_TARGET_DIR'])/'debug/rss-mdm'
     private(environment.root/'product.log','')
     log = (environment.root/'product.log').open('w')
     phase = 'readiness'
-    start(binary, initialized, log)
+    start(binary, initialized, log, expected=503)
     phase = 'task-signing'
     operator = Browser(initialized['origin'], environment.root/'ca.crt')
     operator.login(TENANTS[0], 'admin', (environment.root/'account-password').read_text())
-    # Keep the real initializer's rule administration, while the one fixture rule owns business grants.
-    status, rules = operator.call('GET', '/api/v1/authorization/rules')
-    if status != 200:
-        raise RuntimeError('initializer-rule-read')
-    initializers = [r for r in rules['items'] if r['id'] != rule_id and r.get('value') and r['value']['subject'] == rule['subject']]
-    if len(initializers) != 1:
-        raise RuntimeError('initializer-rule-identity')
-    initial = initializers[0]
-    value = dict(initial['value'])
-    value['grants'] = [g for g in value['grants'] if g['operation'] in {'authorization_read', 'authorization_write', 'identity_accounts_manage'}]
-    status, _ = operator.call('PUT', '/api/v1/authorization/rules/'+initial['id'], dict(operationId=str(uuid.uuid4()),expectedRevision=initial['revision'],value=value))
-    if status != 200:
-        raise RuntimeError('initializer-rule-scope')
     status, trust = operator.call('POST', '/api/v1/task-signing/trust', dict(action='prepare',expectedRevision=0,origin=initialized['origin']), str(uuid.uuid4()))
     if status != 200 or trust['revision'] != 1:
         raise RuntimeError('task-signing')
@@ -192,6 +181,19 @@ try:
     seed()
     phase = 'readiness'
     start(binary, initialized, log)
+    # Keep the real initializer's rule administration, while the one fixture rule owns business grants.
+    status, rules = operator.call('GET', '/api/v1/authorization/rules')
+    if status != 200:
+        raise RuntimeError('initializer-rule-read')
+    initializers = [r for r in rules['items'] if r['id'] != rule_id and r.get('value') and r['value']['subject'] == rule['subject']]
+    if len(initializers) != 1:
+        raise RuntimeError('initializer-rule-identity')
+    initial = initializers[0]
+    value = dict(initial['value'])
+    value['grants'] = [g for g in value['grants'] if g['operation'] in {'authorization_read', 'authorization_write', 'identity_accounts_manage'}]
+    status, _ = operator.call('PUT', '/api/v1/authorization/rules/'+initial['id'], dict(operationId=str(uuid.uuid4()),expectedRevision=initial['revision'],value=value))
+    if status != 200:
+        raise RuntimeError('initializer-rule-scope')
     phase = 'collector-registration'
     module = importlib.util.spec_from_file_location('device_agent', WEB/'e2e/mdm/device-agent.py')
     collector = importlib.util.module_from_spec(module)

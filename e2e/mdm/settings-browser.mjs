@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import process from 'node:process'
 let browser,
   context,
+  page,
   closing,
   phase = 'environment',
   result = 'failed',
@@ -32,8 +33,8 @@ try {
   const password = readFileSync(f.passwordFile, 'utf8').trim()
   browser = await chromium.launch()
   context = await browser.newContext({ ignoreHTTPSErrors: true, locale: 'zh-CN' })
-  const page = await context.newPage(),
-    pageErrors = []
+  page = await context.newPage()
+  const pageErrors = []
   page.setDefaultTimeout(20000)
   page.on('pageerror', (error) => pageErrors.push(error.name))
   let next = 0
@@ -335,9 +336,18 @@ try {
       'independent-administrator-and-host-pending',
     )
     phase = 'target-host'
-    writeFileSync(f.targetRequest, JSON.stringify({ tenant: receipt.result.tenantId, operation }), {
-      mode: 0o600,
-    })
+    writeFileSync(
+      f.targetRequest,
+      JSON.stringify({
+        tenant: receipt.result.tenantId,
+        operation,
+        login: 'browser-admin',
+        password: newPassword,
+      }),
+      {
+        mode: 0o600,
+      },
+    )
     const until = Date.now() + 60000
     while (!existsSync(f.targetReady)) {
       assert.ok(Date.now() < until, 'target-host deadline')
@@ -363,7 +373,7 @@ try {
     phase = 'task-material'
     await page.goto(`${target.origin}/tenants/${target.tenant}/settings/materials/task`)
     await page.getByRole('button', { name: '生成新版本', exact: true }).click()
-    await page.getByText('保存版本 1', { exact: false }).waitFor()
+    await page.getByText('保存版本 2', { exact: false }).waitFor()
     assert.ok((await body().textContent()).includes('服务器生成密钥不证明设备已经信任'))
     coverage.push('real-server-task-key-generation-with-separate-device-observation')
     let taskDone,
@@ -379,7 +389,7 @@ try {
         taskOperation = route.request().headers()['idempotency-key']
         const response = await route.fetch({ timeout: 45000, maxRetries: 0 })
         assert.equal(response.status(), 200)
-        assert.equal((await response.json()).revision, 2)
+        assert.equal((await response.json()).revision, 3)
         await route.abort('failed')
         taskDone()
       } catch {
@@ -395,9 +405,9 @@ try {
     assert.ok(taskOperation)
     await page.unroute('**/api/v1/task-signing/trust', discardTask)
     await page.getByRole('button', { name: '查询原操作', exact: true }).click()
-    await page.getByText('保存版本 2', { exact: false }).waitFor()
-    await page.getByRole('button', { name: '生成新版本', exact: true }).click()
     await page.getByText('保存版本 3', { exact: false }).waitFor()
+    await page.getByRole('button', { name: '生成新版本', exact: true }).click()
+    await page.getByText('保存版本 4', { exact: false }).waitFor()
     coverage.push('task-query-recovery-refreshes-current-version-before-next-write')
 
     phase = 'presentation'
