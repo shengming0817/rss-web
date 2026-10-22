@@ -80,6 +80,10 @@ const zh = {
   localProfileHelp: '本地修改在下一次登录时采集；不代表重新认证，邮箱验证状态保持未知。',
   profilePending: '写入结果未确定，请查询原操作；冲突时重新读取。',
   profileReceipt: '查询原操作',
+  profileNotProvided: '未提供此字段（取消选择后可保存空字符串）',
+  profileResume: '已比较，重新编辑',
+  profileComparedHelp:
+    '已读取当前资料。确认后可基于当前版本重新编辑；原操作若随后提交，新写入会产生版本冲突。',
   profileDisplayName: '显示名称',
   profileEmail: '邮箱',
   profileExtensions: '扩展属性（JSON 对象）',
@@ -215,6 +219,10 @@ const en = {
   profilePending:
     'The write outcome is unresolved. Look up the original operation; reload after a conflict.',
   profileReceipt: 'Look up operation',
+  profileNotProvided: 'Field not provided (uncheck to save an empty string)',
+  profileResume: 'Compared; edit again',
+  profileComparedHelp:
+    'Current profile loaded. Confirm to edit against this revision; if the original operation commits later, the new write will conflict.',
   profileDisplayName: 'Display name',
   profileEmail: 'Email',
   profileExtensions: 'Extensions (JSON object)',

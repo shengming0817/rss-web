@@ -813,3 +813,51 @@ it('recovers a lost local-profile write by receipt and clears values after permi
   wrapper.unmount()
   f.session.clear()
 })
+
+it('preserves empty local fields and explicitly recovers an uncommitted unknown operation', async () => {
+  const f = fixture()
+  await f.login()
+  const local = { displayName: '', username: null, email: '', extensions: {}, maxAgeSeconds: 14400 }
+  f.replies.push({ revision: 1, value: local })
+  const component = {
+    components: { LocalProfileEditor },
+    template: `<LocalProfileEditor principal-id="${ID}" />`,
+  }
+  const { wrapper } = await view(component, f, 'accounts')
+  await wrapper.get('#local-extensions').setValue('{"remote":false}')
+  f.replies.push(new Error('request lost'))
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
+  const writes = () => f.request.mock.calls.filter(([r]) => r.method === 'PUT')
+  expect((writes()[0]![0].body as { value: unknown }).value).toEqual({
+    ...local,
+    extensions: { remote: false },
+  })
+  f.replies.push(null)
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text() === '查询原操作')!
+    .trigger('click')
+  await flushPromises()
+  expect(wrapper.get('#local-display').attributes('disabled')).toBeDefined()
+  f.replies.push({ revision: 1, value: local })
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text() === '重新读取')!
+    .trigger('click')
+  await flushPromises()
+  expect(wrapper.get('#local-display').attributes('disabled')).toBeDefined()
+  expect(writes()).toHaveLength(1)
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text() === '已比较，重新编辑')!
+    .trigger('click')
+  await flushPromises()
+  expect(wrapper.get('#local-display').attributes('disabled')).toBeUndefined()
+  expect((wrapper.get('#local-display').element as HTMLInputElement).value).toBe('')
+  expect((wrapper.get('#local-display-missing').element as HTMLInputElement).checked).toBe(false)
+  expect((wrapper.get('#local-username-missing').element as HTMLInputElement).checked).toBe(true)
+  expect(writes()).toHaveLength(1)
+  wrapper.unmount()
+  f.session.clear()
+})

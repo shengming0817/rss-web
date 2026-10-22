@@ -100,6 +100,7 @@ try:
             if browser.returncode:raise RuntimeError('browser-failed')
             result='passed'
 except BaseException as error:
+    result='failed'
     print(json.dumps(dict(phase=phase,result='failed',classification=type(error).__name__)),flush=True)
 finally:
     stop()

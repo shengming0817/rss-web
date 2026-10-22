@@ -14,12 +14,18 @@ const revision = ref<number>(),
   email = ref(''),
   extensions = ref('{}'),
   age = ref(14400)
+const displayMissing = ref(true),
+  usernameMissing = ref(true),
+  emailMissing = ref(true)
+const compared = ref(false)
 const busy = ref(false),
   error = ref(''),
   pending = ref<{ id: string; state: 'unknown' | 'conflict' }>()
 let generation = 0
 function clear() {
   generation++
+  compared.value = false
+  displayMissing.value = usernameMissing.value = emailMissing.value = true
   revision.value = undefined
   displayName.value = ''
   username.value = ''
@@ -41,12 +47,15 @@ async function load() {
     const v = await api.localProfile(props.principalId)
     if (own !== generation) return
     revision.value = v.revision
+    displayMissing.value = v.value?.displayName == null
+    usernameMissing.value = v.value?.username == null
+    emailMissing.value = v.value?.email == null
     displayName.value = v.value?.displayName ?? ''
     username.value = v.value?.username ?? ''
     email.value = v.value?.email ?? ''
     extensions.value = JSON.stringify(v.value?.extensions ?? {}, null, 2)
     age.value = v.value?.maxAgeSeconds ?? 14400
-    if (pending.value?.state === 'conflict') pending.value = undefined
+    if (pending.value) compared.value = true
   } catch (e) {
     if (own === generation) denied(e)
   } finally {
@@ -60,9 +69,9 @@ async function save(remove = false) {
     value = remove
       ? null
       : {
-          displayName: displayName.value || null,
-          username: username.value || null,
-          email: email.value || null,
+          displayName: displayMissing.value ? null : displayName.value,
+          username: usernameMissing.value ? null : username.value,
+          email: emailMissing.value ? null : email.value,
           extensions: profileObject(JSON.parse(extensions.value)),
           maxAgeSeconds: age.value,
         }
@@ -73,6 +82,7 @@ async function save(remove = false) {
   const own = generation,
     id = crypto.randomUUID(),
     expected = revision.value
+  compared.value = false
   pending.value = { id, state: 'unknown' }
   busy.value = true
   error.value = ''
@@ -96,6 +106,13 @@ async function save(remove = false) {
     busy.value = false
   }
   if (own === generation && !pending.value) await load()
+}
+function resumeEditing() {
+  if (!busy.value && compared.value) {
+    pending.value = undefined
+    compared.value = false
+    error.value = ''
+  }
 }
 async function receipt() {
   const p = pending.value
@@ -137,6 +154,10 @@ onBeforeUnmount(clear)
     <UiButton v-if="pending" :disabled="busy" @click="receipt">{{
       t('identity.profileReceipt')
     }}</UiButton>
+    <p v-if="pending && compared">{{ t('identity.profileComparedHelp') }}</p>
+    <UiButton v-if="pending && compared" :disabled="busy" @click="resumeEditing">{{
+      t('identity.profileResume')
+    }}</UiButton>
     <form v-if="revision !== undefined" class="auth-form" @submit.prevent="save()">
       <label for="local-display">{{ t('identity.profileDisplayName') }}</label
       ><input
@@ -145,7 +166,16 @@ onBeforeUnmount(clear)
         class="ui-input"
         :disabled="busy || !!pending"
         maxlength="2048"
+        @input="displayMissing = false"
       />
+      <label
+        ><input
+          id="local-display-missing"
+          v-model="displayMissing"
+          type="checkbox"
+          :disabled="busy || !!pending"
+        />{{ t('identity.profileNotProvided') }}</label
+      >
       <label for="local-username">{{ t('identity.username') }}</label
       ><input
         id="local-username"
@@ -153,7 +183,16 @@ onBeforeUnmount(clear)
         class="ui-input"
         :disabled="busy || !!pending"
         maxlength="2048"
+        @input="usernameMissing = false"
       />
+      <label
+        ><input
+          id="local-username-missing"
+          v-model="usernameMissing"
+          type="checkbox"
+          :disabled="busy || !!pending"
+        />{{ t('identity.profileNotProvided') }}</label
+      >
       <label for="local-email">{{ t('identity.profileEmail') }}</label
       ><input
         id="local-email"
@@ -162,7 +201,16 @@ onBeforeUnmount(clear)
         :disabled="busy || !!pending"
         type="email"
         maxlength="2048"
+        @input="emailMissing = false"
       />
+      <label
+        ><input
+          id="local-email-missing"
+          v-model="emailMissing"
+          type="checkbox"
+          :disabled="busy || !!pending"
+        />{{ t('identity.profileNotProvided') }}</label
+      >
       <label for="local-extensions">{{ t('identity.profileExtensions') }}</label
       ><textarea
         id="local-extensions"

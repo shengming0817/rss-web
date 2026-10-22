@@ -276,7 +276,7 @@ try {
   await admin.locator('#client-id').fill('identity-test')
   await admin.locator('#client-secret').fill('fixture-secret')
   await admin.locator('#ca-pem').fill(readFileSync(f.caFile, 'utf8'))
-  await admin.locator('#profile-claim').fill('profile_attributes')
+  await admin.locator('#profile-claim').fill('attributes')
   await admin.locator('#groups-claim').fill('')
   await admin.locator('#jit').check()
   const created = admin.waitForResponse(
