@@ -8,7 +8,7 @@ import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import { type AuditPage, type AuditFact, type AuditQuery } from '../clients/audit'
 import { auditDraft, auditFilter } from '../components/audit-filter'
-import { auditTime } from '../format'
+import { auditTime, auditOutcome } from '../format'
 import PageFrame from '../../../components/PageFrame.vue'
 import AuditFilters from '../components/AuditFilters.vue'
 import AuditCoverage from '../components/AuditCoverage.vue'
@@ -84,6 +84,7 @@ watch(
           }}</UiButton></template
         >
         <template #cell-target="{ row }">{{ row.target.type }} / {{ row.target.id }}</template>
+        <template #cell-auditOutcome="{ row }">{{ auditOutcome(row.auditOutcome, t) }}</template>
       </UiTable>
       <UiButton v-if="page.nextCursor" :disabled="busy" @click="load(page.nextCursor)">{{
         t('devices.next')

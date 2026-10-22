@@ -92,6 +92,8 @@ async function fixture(
 it('keeps pagination bound to applied filters and opens only the returned safe row with verified command links', async () => {
   const f = await fixture(AuditView, () => page)
   expect(f.wrapper.text()).toContain('2025-10-09')
+  expect(f.wrapper.get('tbody').text()).toContain('成功')
+  expect(f.wrapper.get('tbody').text()).not.toContain('succeeded')
   await f.wrapper.get('#audit-actor').setValue('draft-actor')
   await f.wrapper
     .findAll('button')
@@ -103,6 +105,8 @@ it('keeps pagination bound to applied filters and opens only the returned safe r
   await flushPromises()
   const detail = f.body().get('[data-testid=audit-detail]')
   expect(detail.text()).toContain('unverified')
+  expect(detail.text()).toContain('成功')
+  expect(detail.text()).not.toContain('succeeded')
   expect(detail.findAll('a').map((a) => a.attributes('href'))).toContain(
     `/executions/${command}?device=device-01`,
   )
@@ -206,4 +210,15 @@ it('renders diagnostic uncertainty and independent health, then clears the snaps
       ([r]) => r.method === 'GET' && r.path === '/api/v1/runtime/diagnostics',
     ),
   ).toBe(true)
+})
+
+it('retains unfamiliar safe audit outcome metadata without inventing a translated state', async () => {
+  const f = await fixture(AuditView, () => ({
+    ...page,
+    items: [{ ...fact, auditOutcome: 'provider_pending' }],
+  }))
+  expect(f.wrapper.get('tbody').text()).toContain('provider_pending')
+  await f.wrapper.findAll('tbody button')[0]!.trigger('click')
+  await flushPromises()
+  expect(f.body().get('[data-testid=audit-detail]').text()).toContain('provider_pending')
 })

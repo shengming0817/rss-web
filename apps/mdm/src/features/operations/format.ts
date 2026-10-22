@@ -5,3 +5,10 @@ export function auditTime(seconds: number) {
     ? String(seconds)
     : date.toISOString().replace('T', ' ').replace('.000Z', ' UTC')
 }
+
+/** Known audit results have product labels; unfamiliar safe metadata retains its source value. */
+export function auditOutcome(value: string, translate: (key: string) => string) {
+  return ['succeeded', 'denied', 'failed', 'unknown'].includes(value)
+    ? translate(`operations.auditUi.${value}`)
+    : value
+}

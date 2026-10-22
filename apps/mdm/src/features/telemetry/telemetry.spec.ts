@@ -224,6 +224,8 @@ it('shows receipt-window health, explicit truncation and registration diagnostic
 it('renders actual activity and queries action filters without fabricating events', async () => {
   const h = await setup('activity')
   expect(h.requests.some((r) => r.path.endsWith('/timeline'))).toBe(true)
+  expect(h.wrapper.get('.telemetry-activity').text()).toContain('成功')
+  expect(h.wrapper.get('.telemetry-activity').text()).not.toContain('succeeded')
   await h.wrapper.get('#audit-action').setValue('nonexistent-action')
   await h.wrapper.get('[data-testid=audit-filter]').trigger('submit')
   await flushPromises()

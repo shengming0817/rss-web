@@ -8,7 +8,7 @@ import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import { type AuditPage, type AuditFact, type AuditQuery } from '../../operations/clients/audit'
 import { auditDraft, auditFilter } from '../../operations/components/audit-filter'
-import { auditTime } from '../../operations/format'
+import { auditTime, auditOutcome } from '../../operations/format'
 import AuditFilters from '../../operations/components/AuditFilters.vue'
 import AuditCoverage from '../../operations/components/AuditCoverage.vue'
 import AuditFacts from '../../operations/components/AuditFacts.vue'
@@ -75,7 +75,9 @@ watch(
           <time>{{ auditTime(event.recordedAt) }}</time>
           <div>
             <strong>{{ event.action }}</strong>
-            <p>{{ event.auditOutcome }} · {{ event.phase }} · {{ event.effect }}</p>
+            <p>
+              {{ auditOutcome(event.auditOutcome, t) }} · {{ event.phase }} · {{ event.effect }}
+            </p>
             <UiButton variant="ghost" @click="selected = event">{{
               t('operations.auditDetail')
             }}</UiButton>

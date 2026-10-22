@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import type { AuditFact } from '../clients/audit'
-import { auditTime } from '../format'
+import { auditTime, auditOutcome } from '../format'
 const props = defineProps<{ fact: AuditFact; device?: string | undefined }>(),
   runtime = useMdm(),
   { t } = useI18n()
@@ -35,7 +35,7 @@ const commands = computed(() =>
       <dt>{{ t('operations.object') }}</dt>
       <dd>{{ fact.target.type }} / {{ fact.target.id }}</dd>
       <dt>{{ t('operations.outcome') }}</dt>
-      <dd>{{ fact.auditOutcome }}</dd>
+      <dd>{{ auditOutcome(fact.auditOutcome, t) }}</dd>
       <dt>{{ t('telemetry.phase') }}</dt>
       <dd>{{ fact.phase }}</dd>
       <dt>{{ t('operations.auditUi.writeOutcome') }}</dt>
