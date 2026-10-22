@@ -833,6 +833,7 @@ it('edits the canonical device owner in detail and locks an unknown write until 
   expect(panel().text()).toContain('reviewer')
   await panel().get('[data-action=edit-owner]').trigger('click')
   await flushPromises()
+  expect(panel().text()).toContain('Demo profile')
   f.wrapper.findComponent(TenantUserSelect).vm.$emit('update:modelValue', '')
   await new DOMWrapper(document.body).get('[role=dialog] form').trigger('submit')
   await flushPromises()

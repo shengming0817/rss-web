@@ -26,10 +26,14 @@ type Owner = Omit<NonNullable<ViewEndpoint['registrationUser']>, 'display'>
 const owner = ref<Owner | undefined>(props.endpoint.registrationUser)
 const ownerDisplay = computed(() => {
   const projected = props.endpoint.registrationUser
+  const current = owner.value?.user
+  const shown = projected?.user
   return !busy.value &&
     !failure.value &&
     owner.value?.revision === projected?.revision &&
-    JSON.stringify(owner.value?.user) === JSON.stringify(projected?.user)
+    current?.tenantId === shown?.tenantId &&
+    current?.instanceId === shown?.instanceId &&
+    current?.principalId === shown?.principalId
     ? (projected?.display ?? null)
     : null
 })
