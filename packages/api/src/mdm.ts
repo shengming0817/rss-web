@@ -3,7 +3,7 @@ import axios from 'axios'
 import { isMdmContentRequest, MDM_CONTENT_BODY_LIMIT, mdmJsonBodyLimit } from './mdm-limits'
 import { decodeIdentityError } from './identity'
 import { execute } from './transport'
-import { clientError, identityWireFailure, protocolError } from './wire-error'
+import { clientError, identityWireFailure, agentWireFailure, protocolError } from './wire-error'
 import type { HttpTransport, NoContentRequest, RequestOptions, RssApiError } from './types'
 export type {
   BinaryResponse,
@@ -101,6 +101,11 @@ export function createMdmTransport(): HttpTransport {
         /^\/api\/v1\/(?:settings\/(?:catalog$|first-use(?:\/|$))|tenant-administration(?:\/|$)|apple\/materials(?:\/|$)|apple\/material-operations(?:\/|$)|storage\/connections(?:\/|$)|smtp(?:\/|$)|windows\/wns(?:\/|$)|task-signing(?:\/|$)|pki(?:\/|$)|webhooks(?:\/|$)|runtime\/diagnostics$|agent-packages(?:\/|$))/.test(
           options.path,
         )
+      const agentRecovery =
+        options.method === 'POST' &&
+        /^\/api\/v1\/(?:agent-registrations\/\{registration\}\/recovery|agent-issuances\/\{issuance\}\/recover)$/.test(
+          options.path,
+        )
       const audit = options.method === 'GET' && options.path === '/api/v1/audit-events'
       const telemetry = [
         '/api/v1/telemetry/resources',
@@ -111,7 +116,14 @@ export function createMdmTransport(): HttpTransport {
         '/api/v1/asset-retention-policies',
         '/api/v1/asset-retention-policies/{key}/{revision}',
       ].includes(options.path)
-      if (!paths.test(options.path) && !settings && !readiness && !telemetry && !audit)
+      if (
+        !paths.test(options.path) &&
+        !settings &&
+        !readiness &&
+        !telemetry &&
+        !audit &&
+        !agentRecovery
+      )
         throw clientError()
       const publicRead =
         options.path.startsWith('/api/v1/agent/enroll/packages') ||
@@ -216,7 +228,11 @@ export function decodeAgentError(status: number, value: unknown): RssApiError {
         (typeof v['issuanceId'] === 'string' &&
           /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(v['issuanceId'])))
     )
-      return identityWireFailure(status, v['code'])
+      return agentWireFailure(
+        status,
+        v['code'],
+        typeof v['issuanceId'] === 'string' ? v['issuanceId'] : undefined,
+      )
   }
   return decodeMdmError(status, value)
 }
