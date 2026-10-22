@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
-import { ref } from 'vue'
+import { UiButton, UiCombobox } from '@rss/core/components'
+import { ref, computed, watch } from 'vue'
 import { useIdentity } from '@rss/auth'
 import { useI18n } from 'vue-i18n'
+import { useMdm } from '../../../context'
+import { deviceBinding } from '../useDeviceBinding'
 import { useOperation } from '../../../services/useOperation'
-defineProps<{ modelValue: string; disabled?: boolean }>()
+const props = defineProps<{ modelValue: string; disabled?: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 const { t } = useI18n(),
   { api } = useIdentity(),
-  { run, busy, failure } = useOperation()
+  runtime = useMdm(),
+  { run, busy, failure } = useOperation([], () => deviceBinding(runtime))
 const accounts = ref<Awaited<ReturnType<typeof api.accounts>>['accounts']>([])
 const cursor = ref<string | null>(null)
 function load(more = false) {
@@ -20,39 +23,47 @@ function load(more = false) {
     },
   )
 }
-load()
+const options = computed(() => [
+  ...(props.modelValue && !accounts.value.some((a) => a.principalId === props.modelValue)
+    ? [{ value: props.modelValue, label: t('devices.linkedPerson') }]
+    : []),
+  ...accounts.value.map((a) => ({
+    value: a.principalId,
+    label: a.login ?? t('devices.linkedPerson'),
+    disabled: !a.enabled || !a.memberActive,
+  })),
+])
+watch(
+  () => JSON.stringify(deviceBinding(runtime)),
+  () => {
+    accounts.value = []
+    cursor.value = null
+    load()
+  },
+  { immediate: true, flush: 'sync' },
+)
 </script>
 <template>
-  <label
-    >{{ t('registration.user') }}
-    <select
-      class="ui-input"
-      :value="modelValue"
-      :disabled="disabled || busy"
-      @change="emit('update:modelValue', ($event.target as HTMLSelectElement).value)"
-    >
-      <option value="">{{ t('registration.empty') }}</option>
-      <option
-        v-if="modelValue && !accounts.some((a) => a.principalId === modelValue)"
-        :value="modelValue"
-      >
-        {{ modelValue }}
-      </option>
-      <option
-        v-for="a in accounts"
-        :key="a.principalId"
-        :value="a.principalId"
-        :disabled="!a.enabled || !a.memberActive"
-      >
-        {{ a.login ?? a.principalId }}
-      </option>
-    </select>
-  </label>
-  <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
-  <UiButton type="button" :disabled="!!(disabled || busy)" @click="load()">
-    {{ t('devices.reload') }}
-  </UiButton>
-  <UiButton v-if="cursor" type="button" :disabled="!!(disabled || busy)" @click="load(true)">
-    {{ t('registration.more') }}
-  </UiButton>
+  <UiCombobox
+    :model-value="modelValue"
+    :label="t('registration.user')"
+    :options="options"
+    :empty-label="t('devices.empty')"
+    :invalid-label="t('devices.invalidRequest')"
+    :disabled="disabled || busy"
+    @update:model-value="emit('update:modelValue', $event)"
+  />
+  <p class="ui-help">{{ t('devices.loadedPeopleOnly') }}</p>
+  <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
+  <div class="console-toolbar">
+    <UiButton type="button" :disabled="disabled || busy" @click="emit('update:modelValue', '')">{{
+      t('registration.empty')
+    }}</UiButton
+    ><UiButton type="button" :disabled="disabled || busy" @click="load()">{{
+      t('devices.reload')
+    }}</UiButton
+    ><UiButton v-if="cursor" type="button" :disabled="disabled || busy" @click="load(true)">{{
+      t('registration.more')
+    }}</UiButton>
+  </div>
 </template>

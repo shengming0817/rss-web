@@ -1,10 +1,15 @@
-import { groupPresentation } from '../../src/features/devices/clients/groups'
+import {
+  groupPresentation,
+  groupCondition,
+  type GroupRead,
+  type GroupCriteria,
+  type GroupCondition,
+} from '../../src/features/devices/clients/groups'
 import { endpointObject } from './objects'
 import { randomUUID } from 'node:crypto'
 import type { DomainHandler } from '../scenario'
 import { array, closed, enumeration, record, uuid } from '../../src/services/decode'
-import { inventoryCondition } from '../../src/features/devices/clients/asset-model'
-import type { GroupRead } from '../../src/features/devices/clients/groups'
+import type { Inventory } from '../../src/features/devices/clients/asset-model'
 import type { DemoDevice } from './fixtures'
 import { createPages, createReceipts, error, ok, operation } from '../http'
 import { mergedFieldState } from './views'
@@ -43,9 +48,83 @@ export function createGroupDemo(
     jobs = new Map<string, Job>()
   const pages = createPages(),
     receipts = createReceipts()
+  function fields(node: GroupCriteria): string[] {
+    return node.kind === 'group'
+      ? []
+      : node.kind === 'predicate'
+        ? referencedFields(node)
+        : node.children.flatMap(fields)
+  }
+  function references(node?: GroupCriteria): string[] {
+    return !node
+      ? []
+      : node.kind === 'group'
+        ? [node.groupId]
+        : node.kind === 'predicate'
+          ? []
+          : node.children.flatMap(references)
+  }
+  function valid(rule: GroupCondition | null, id: string, context: string): boolean {
+    function visit(source: string, path: string[]): boolean {
+      const group = groups.get(source)
+      return (
+        !!group &&
+        !group.read.group.deleted &&
+        group.read.group.assetContext === context &&
+        !path.includes(source) &&
+        path.length < 16 &&
+        references(group.read.criteria?.criteria).every((next) => visit(next, [...path, source]))
+      )
+    }
+    return references(rule?.criteria).every((source) => visit(source, [id]))
+  }
+  function evaluateGroup(
+    condition: GroupCondition | null,
+    contexts: Inventory[],
+    key: string,
+  ): ReturnType<typeof evaluate> {
+    if (!condition) return { decision: 'match', explanations: [] }
+    function evaluateNode(node: GroupCriteria): ReturnType<typeof evaluate> {
+      if (node.kind === 'predicate')
+        return evaluateCondition({ ...condition!, criteria: node }, contexts)
+      if (node.kind === 'group') {
+        const source = groups.get(node.groupId)
+        if (!source || source.read.group.deleted || source.read.freshness !== 'current')
+          return { decision: 'unknown', explanations: [] }
+        const member = source.members.includes(key)
+        return {
+          decision: (node.op === 'member_of' ? member : !member) ? 'match' : 'no_match',
+          explanations: [],
+        }
+      }
+      const children = node.children.map(evaluateNode),
+        values = children.map((c) => c.decision),
+        decisive = node.kind === 'and' ? 'no_match' : 'match'
+      return {
+        decision: values.includes(decisive)
+          ? decisive
+          : values.includes('unknown')
+            ? 'unknown'
+            : node.kind === 'and'
+              ? 'match'
+              : 'no_match',
+        explanations: children.flatMap((c) => c.explanations),
+      }
+    }
+    return evaluateNode(condition.criteria)
+  }
   function inputs(read: GroupRead) {
-    const selected = read.criteria ? referencedFields(read.criteria.criteria) : []
+    const selected = read.criteria ? fields(read.criteria.criteria) : []
     return JSON.stringify([
+      references(read.criteria?.criteria).map((id) => {
+        const source = groups.get(id)
+        return [
+          id,
+          source?.read.group.revision,
+          source?.read.group.memberVersion,
+          source?.read.freshness,
+        ]
+      }),
       [read.group.assetContext === 'associated_device' ? objects() : null],
       ...[...devices().values()].map((d) => [
         d.summary.id,
@@ -66,6 +145,7 @@ export function createGroupDemo(
         group: {
           id,
           kind: 'static',
+          systemSelector: null,
           assetContext: 'endpoint',
           calculationRevision: 0,
           presentation: { name: 'Pilot devices', description: 'Synthetic pilot group' },
@@ -153,7 +233,7 @@ export function createGroupDemo(
     const decisions: Decision[] = universe.map(({ key, contexts }) => {
       const evaluation =
         state.read.group.kind === 'dynamic'
-          ? evaluateCondition(state.read.criteria, contexts)
+          ? evaluateGroup(state.read.criteria, contexts, key)
           : {
               decision: (next ?? state.members).includes(key)
                 ? ('match' as const)
@@ -209,12 +289,57 @@ export function createGroupDemo(
             ? []
             : [...groups.values()].filter((g) => !g.read.group.deleted).map((g) => g.read.group)
         )
+          .filter(
+            (g) =>
+              (!query.get('name') ||
+                g.presentation.name.toLowerCase().includes(query.get('name')!.toLowerCase())) &&
+              (!query.get('assetContext') || g.assetContext === query.get('assetContext')) &&
+              (!query.get('kind') || g.kind === query.get('kind')) &&
+              (!query.get('referenceableFor') ||
+                (g.id !== query.get('referenceableFor') &&
+                  !references(groups.get(g.id)?.read.criteria?.criteria).includes(
+                    query.get('referenceableFor')!,
+                  ))),
+          )
           .filter((g) => g.id > (query.get('after') ?? ''))
           .sort((a, b) => a.id.localeCompare(b.id)),
         limit = Number(query.get('limit') ?? 20)
       return ok({
         items: items.slice(0, limit),
         nextCursor: items.length > limit ? items[limit - 1]!.id : null,
+      })
+    }
+    const referenceMatch = /^\/api\/v1\/groups\/([^/]+)\/references$/.exec(path)
+    if (referenceMatch && method === 'GET') {
+      const root = referenceMatch[1]!
+      if (!groups.has(root)) return error('group_not_found', 404)
+      const items = [...groups.values()]
+        .filter(
+          (g) => !g.read.group.deleted && references(g.read.criteria?.criteria).includes(root),
+        )
+        .map((g) => ({
+          source: { kind: 'group', id: g.read.group.id },
+          revision: g.read.group.revision,
+          relation: 'direct',
+          roles: ['member_of'],
+          via: [
+            { kind: 'group', id: root },
+            { kind: 'group', id: g.read.group.id },
+          ],
+          lifecycleState: 'active',
+          freshness: g.read.freshness,
+          effective: g.read.freshness === 'current',
+          blocksDeletion: true,
+        }))
+      const selected =
+        query.get('relation') === 'indirect' || (query.get('kind') && query.get('kind') !== 'group')
+          ? []
+          : items
+      const page = pages.page(path + query.get('relation') + query.get('kind'), selected, query)
+      return ok({
+        items: page.items,
+        nextCursor: page.nextCursor,
+        deletionBlocked: items.length > 0,
       })
     }
     const match =
@@ -301,6 +426,19 @@ export function createGroupDemo(
         result,
         group: id,
         current: state?.read.memberSet === result,
+        sources: references(state?.read.criteria?.criteria).map((group) => {
+          const source = groups.get(group)!.read
+          return {
+            group,
+            coordinates: {
+              definitionVersion: source.group.revision,
+              memberVersion: source.group.memberVersion,
+              authorityVersion: 0,
+              memberSet: source.memberSet,
+              assetContext: source.group.assetContext,
+            },
+          }
+        }),
         totalObjects: job.decisions.length,
         totalMembers: job.members.length,
         page: projection,
@@ -330,16 +468,18 @@ export function createGroupDemo(
       if (action === 'create') {
         if (state || op.expectedRevision !== 0) return error('operation_conflict')
         closed(input, ['action', 'presentation', 'assetContext', 'criteria'])
-        const rule = input['criteria'] === null ? null : inventoryCondition(input['criteria'])
+        const rule = input['criteria'] === null ? null : groupCondition(input['criteria'])
         const assetContext = enumeration(input['assetContext'], [
           'endpoint',
           'associated_device',
         ] as const)
+        if (!valid(rule, id, assetContext)) return error('operation_conflict')
         if (!rule && assetContext !== 'endpoint') return error('malformed_request', 400)
         const read: GroupRead = {
           group: {
             id,
             kind: rule ? 'dynamic' : 'static',
+            systemSelector: null,
             assetContext,
             calculationRevision: 0,
             presentation: groupPresentation(input['presentation']),
@@ -382,9 +522,18 @@ export function createGroupDemo(
         ])
       }
       if (action === 'recompute') return start(id, op.operationId, true)
+      if (
+        action === 'delete' &&
+        [...groups.values()].some(
+          (g) => !g.read.group.deleted && references(g.read.criteria?.criteria).includes(id),
+        )
+      )
+        return error('operation_conflict')
       if (action === 'rule') {
         if (state.read.group.kind !== 'dynamic') return error('operation_conflict')
-        state.read.criteria = inventoryCondition(input['criteria'])
+        const condition = groupCondition(input['criteria'])
+        if (!valid(condition, id, state.read.group.assetContext)) return error('operation_conflict')
+        state.read.criteria = condition
         state.read.group.ruleVersion = randomUUID()
       } else if (action === 'edit') {
         closed(input, ['action', 'presentation'])

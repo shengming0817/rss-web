@@ -77,7 +77,7 @@ export function fixture(oidcEnabled = true) {
       current = result as ReturnType<typeof sessionValue>
       currentTenant = String(options.pathParams?.['tenant'] ?? TENANT)
     }
-    return options.decode(result)
+    return typeof options.decode === 'function' ? options.decode(result) : undefined
   })
   const transport = { request } as HttpTransport
   const session = createSession(transport, {

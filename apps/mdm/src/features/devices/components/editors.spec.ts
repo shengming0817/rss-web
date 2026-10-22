@@ -179,3 +179,26 @@ it('emits condition edits without mutating an already loaded server snapshot', a
   expect(original).toEqual(before)
   wrapper.unmount()
 })
+it('switches an existing group combination without changing its children', async () => {
+  const { default: GroupCriteriaEditor } = await import('./GroupCriteriaEditor.vue')
+  const modelValue = {
+    kind: 'and' as const,
+    children: [
+      {
+        kind: 'predicate' as const,
+        field: 'custom.is_loaner',
+        op: 'eq' as const,
+        value: { kind: 'boolean' as const, value: false },
+      },
+    ],
+  }
+  const wrapper = mount(GroupCriteriaEditor, {
+    props: { modelValue, fields: catalog, assetContext: 'endpoint' },
+    global: { plugins: [mdmI18n()] },
+  })
+  await wrapper.find('select').setValue('or')
+  expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([
+    { kind: 'or', children: modelValue.children },
+  ])
+  wrapper.unmount()
+})

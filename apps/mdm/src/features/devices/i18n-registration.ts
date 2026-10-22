@@ -22,7 +22,6 @@ export const registrationZh = {
   admissionConflict: '原修订已发生变化，请读取并确认当前依据后再发起新操作。',
   acceptCurrent: '已核对当前状态，使用新依据',
   quotaBlocked: '个人注册额度不足。',
-  installerUnsupported: '此入口不支持该安装器格式，请选择 NSIS EXE 或 PKG。',
 
   self: '注册我的设备',
   quotas: '注册额度',
@@ -79,7 +78,6 @@ export const registrationEn: typeof registrationZh = {
     'The original revision changed. Read and confirm the current basis before a new operation.',
   acceptCurrent: 'Accept the current basis',
   quotaBlocked: 'Personal enrollment quota exhausted.',
-  installerUnsupported: 'This entry supports NSIS EXE or PKG installers only.',
 
   self: 'Enroll my devices',
   quotas: 'Enrollment quotas',

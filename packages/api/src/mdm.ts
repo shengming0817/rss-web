@@ -91,7 +91,7 @@ export function decodeMdmError(status: number, value: unknown): RssApiError {
   return identityWireFailure(status, v['code'])
 }
 const paths =
-  /^\/api\/v1\/(?:(?:authorization|devices|device-views|device-associations|certificate-archive|asset-fields|device-queries|saved-queries|groups|scopes|policies|compliance-rules|resources|software|enrollments|registration-quotas|registration-channels)(?:\/|$)|operations$|collection-blueprints$|self-enrollments$|agent-(?:configurations|configuration-operations|enrollment-settings)(?:\/|$)|apple\/organizations(?:\/|$)|windows\/entra-policy$|windows\/entra\/terms\/context$|agent\/enroll\/packages(?:\/\{id\})?$|mdm-host\/config\.json$|mdm-candidate\/(?:workspace|devices|groups|policies|executions|software|security|support|authorization|audit)(?:\/|$)|mdm-candidate\/operations\/(?:metrics|reports|alert-rules|audit|alerts)(?:\/|$))/
+  /^\/api\/v1\/(?:(?:authorization|devices|device-views|device-associations|certificate-archive|asset-fields|asset-field-layout|device-queries|saved-queries|groups|scopes|policies|compliance-rules|resources|software|enrollments|registration-quotas|registration-channels)(?:\/|$)|operations$|collection-blueprints$|self-enrollments$|agent-(?:configurations|configuration-operations|enrollment-settings)(?:\/|$)|apple\/organizations(?:\/|$)|windows\/entra-policy$|windows\/entra\/terms\/context$|agent\/enroll\/packages(?:\/\{id\})?$|mdm-host\/config\.json$|mdm-candidate\/(?:workspace|devices|groups|policies|executions|software|security|support|authorization|audit)(?:\/|$)|mdm-candidate\/operations\/(?:metrics|reports|alert-rules|audit|alerts)(?:\/|$))/
 export function createMdmTransport(): HttpTransport {
   const instance = axios.create({ baseURL: '' })
   return {
@@ -115,7 +115,7 @@ export function createMdmTransport(): HttpTransport {
       )
         throw clientError()
       if (
-        'responseType' in options &&
+        options.responseType === 'arraybuffer' &&
         !(
           (options.method === 'POST' && options.path === '/api/v1/agent-configurations') ||
           (options.method === 'POST' && options.path === '/api/v1/enrollments/{id}/profile') ||

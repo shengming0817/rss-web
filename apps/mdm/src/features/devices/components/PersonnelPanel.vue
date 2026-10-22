@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { UiButton } from '@rss/core/components'
+import { UiButton, UiDialog } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
@@ -85,7 +85,11 @@ async function save(replay = false) {
 </script>
 <template>
   <section class="console-panel" :data-personnel-device="endpoint.id" :aria-busy="busy">
-    <h2>{{ t('devices.personnel') }} · {{ endpoint.id }}</h2>
+    <h2>{{ t('devices.personnel') }}</h2>
+    <details>
+      <summary>{{ t('devices.originalEndpoint') }}</summary>
+      {{ endpoint.id }}
+    </details>
     <p>{{ t('devices.personnelNote') }}</p>
     <dl>
       <dt>{{ t('devices.registrationUser') }}</dt>
@@ -93,7 +97,9 @@ async function save(replay = false) {
         {{
           owner === undefined
             ? t('devices.notProvided')
-            : (owner.user?.principalId ?? t('registration.empty'))
+            : owner.user
+              ? t('devices.linkedPerson')
+              : t('registration.empty')
         }}
       </dd>
       <dt>{{ t('devices.currentUser') }}</dt>
@@ -102,9 +108,7 @@ async function save(replay = false) {
           endpoint.currentUser === undefined
             ? t('devices.notProvided')
             : t('devices.currentUserState.' + endpoint.currentUser.state)
-        }}<span v-if="endpoint.currentUser?.user">
-          · {{ endpoint.currentUser.user.principalId }}</span
-        >
+        }}<span v-if="endpoint.currentUser?.user"> · {{ t('devices.linkedPerson') }}</span>
       </dd>
       <template v-if="endpoint.currentUser?.confirmedAt != null"
         ><dt>{{ t('devices.userConfirmedAt') }}</dt>
@@ -119,14 +123,27 @@ async function save(replay = false) {
       @click="read"
       >{{ t('devices.editOwner') }}</UiButton
     >
-    <form v-if="editing" @submit.prevent="save()">
-      <fieldset :disabled="busy || uncertain">
-        <TenantUserSelect v-model="principal" :disabled="busy || uncertain" /><UiButton
-          type="submit"
-          >{{ t('registration.save') }}</UiButton
-        >
-      </fieldset>
-    </form>
+    <details v-if="owner?.user || endpoint.currentUser?.user">
+      <summary>{{ t('devices.evidence') }}</summary>
+      <p>{{ owner?.user?.principalId }}</p>
+      <p>{{ endpoint.currentUser?.user?.principalId }}</p>
+    </details>
+    <UiDialog
+      :open="editing"
+      :title="t('devices.editOwner')"
+      :close-label="t('console.cancel')"
+      placement="right"
+      @update:open="editing = $event"
+    >
+      <form @submit.prevent="save()">
+        <fieldset :disabled="busy || uncertain">
+          <TenantUserSelect v-model="principal" :disabled="busy || uncertain" /><UiButton
+            type="submit"
+            >{{ t('registration.save') }}</UiButton
+          >
+        </fieldset>
+      </form>
+    </UiDialog>
     <UiButton
       v-if="failure === 'conflict' || uncertain"
       :disabled="busy"

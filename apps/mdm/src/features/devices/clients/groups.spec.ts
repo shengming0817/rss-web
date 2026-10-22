@@ -1,11 +1,18 @@
 import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
-import { createGroupsClient, decodeGroup, decodeGroupPage } from './groups'
+import {
+  createGroupsClient,
+  decodeGroup,
+  decodeGroupPage,
+  groupCondition,
+  groupReferences,
+} from './groups'
 const id = '11111111-1111-4111-8111-111111111111'
 const task = '22222222-2222-4222-8222-222222222222'
 const group = {
   id,
   kind: 'dynamic',
+  systemSelector: null,
   assetContext: 'endpoint',
   calculationRevision: 0,
   presentation: { name: 'Managed', description: '' },
@@ -78,6 +85,7 @@ it('decodes unknown explanations and snake-case provenance without claiming memb
     group: id,
     result: task,
     current: false,
+    sources: [],
     totalObjects: 1,
     totalMembers: 0,
     page: { kind: 'decisions', items: [decision] },
@@ -87,6 +95,51 @@ it('decodes unknown explanations and snake-case provenance without claiming memb
   expect(() => decodeGroupPage(response, id, task, 'members')).toThrow()
   expect(() => decodeGroupPage({ ...response, result: id }, id, task, 'decisions')).toThrow()
 })
+it.each([null, id])(
+  'preserves a frozen source member set %s, including the initial empty set',
+  (memberSet) => {
+    const source = {
+      group: '33333333-3333-4333-8333-333333333333',
+      coordinates: {
+        definitionVersion: 1,
+        memberVersion: 0,
+        authorityVersion: 1,
+        memberSet,
+        assetContext: 'endpoint',
+      },
+    }
+    for (const kind of ['members', 'changes', 'decisions'] as const) {
+      const page = kind === 'changes' ? { kind, added: [], removed: [] } : { kind, items: [] }
+      const result = decodeGroupPage(
+        {
+          group: id,
+          result: task,
+          current: true,
+          sources: [source],
+          totalObjects: 0,
+          totalMembers: 0,
+          page,
+          nextCursor: null,
+        },
+        id,
+        task,
+        kind,
+      )
+      expect(result.sources).toEqual([source])
+      expect(() =>
+        decodeGroupPage(
+          {
+            ...result,
+            sources: [{ ...source, coordinates: { ...source.coordinates, memberSet: 'invalid' } }],
+          },
+          id,
+          task,
+          kind,
+        ),
+      ).toThrow()
+    }
+  },
+)
 it('uses 200 for definition changes and 202 for recompute and preview, preserving CAS', async () => {
   const request = vi.fn(async (o: RequestOptions<unknown>) =>
     o.decode(
@@ -141,4 +194,16 @@ it('accepts safe failed-task details and rejects unknown diagnostic fields', asy
   extra = {}
   detail = { reason: 'database_secret', device: null, stage: 'execute' }
   await expect(client.status(id, task)).rejects.toThrow()
+})
+
+it('keeps group membership rules separate from asset conditions and preserves hidden deletion blockers', () => {
+  const value = {
+    selector: { kind: 'device' },
+    quantifier: 'one',
+    criteria: { kind: 'and', children: [{ kind: 'group', groupId: id, op: 'not_member_of' }] },
+  }
+  expect(groupCondition(value).criteria).toEqual(value.criteria)
+  expect(
+    groupReferences({ items: [], nextCursor: null, deletionBlocked: true }).deletionBlocked,
+  ).toBe(true)
 })

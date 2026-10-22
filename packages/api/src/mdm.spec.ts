@@ -605,3 +605,30 @@ it('executes the published first-use read, CAS update and receipt paths through 
   ).rejects.toMatchObject({ cause: 'wire', code: 'first_use_operation_not_found' })
   mock.restore()
 })
+it('accepts an explicit empty 201 without weakening JSON decoding', async () => {
+  const instance = axios.create(),
+    mock = new AxiosMockAdapter(instance)
+  const spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance)
+  const transport = createMdmTransport()
+  spy.mockRestore()
+  mock.onPost('/api/v1/resources/p/uploads/u/complete').reply(201)
+  await expect(
+    transport.request({
+      method: 'POST',
+      path: '/api/v1/resources/p/uploads/u/complete',
+      successStatus: 201,
+      responseType: 'empty',
+    }),
+  ).resolves.toBeUndefined()
+  await expect(
+    transport.request({
+      method: 'POST',
+      path: '/api/v1/resources/p/uploads/u/complete',
+      successStatus: 201,
+      decode: (value) => {
+        if (!value) throw new Error('missing JSON')
+        return value
+      },
+    }),
+  ).rejects.toMatchObject({ cause: 'protocol' })
+})

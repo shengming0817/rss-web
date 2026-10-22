@@ -99,6 +99,15 @@ it('uses current native configuration permissions and service-owned device versu
       rule({ subject, grants: [{ operation, scope: { kind: 'all_devices' } }] }, tenant),
     ).toThrow()
   }
+  for (const operation of ['telemetry_delete', 'telemetry_maintain']) {
+    expect(
+      rule({ subject, grants: [{ operation, scope: { kind: 'all_devices' } }] }, tenant).grants[0]!
+        .operation,
+    ).toBe(operation)
+    expect(() =>
+      rule({ subject, grants: [{ operation, scope: { kind: 'tenant' } }] }, tenant),
+    ).toThrow()
+  }
   for (const operation of ['firewall_write', 'state_verify'])
     expect(() =>
       rule({ subject, grants: [{ operation, scope: { kind: 'all_devices' } }] }, tenant),

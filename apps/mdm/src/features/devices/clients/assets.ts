@@ -3,6 +3,7 @@ import type { Operation } from '../../../services/useOperation'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
+  boolean,
   closed,
   count,
   enumeration,
@@ -40,6 +41,32 @@ export function decodeCatalog(value: unknown, tenant: string) {
   return {
     dictionary: 'assets-v1',
     fields: unique(array(v['fields'], fieldDefinition), (f) => f.key),
+  }
+}
+export interface FieldDisplayGroup {
+  id: string
+  name: string
+  fields: string[]
+}
+export interface FieldLayout {
+  revision: number
+  editable: boolean
+  groups: FieldDisplayGroup[]
+}
+export function decodeFieldLayout(value: unknown, tenant: string): FieldLayout {
+  const v = assetEnvelope(value, tenant, 'field_layout', ['revision', 'editable', 'groups'])
+  return {
+    revision: count(v['revision']),
+    editable: boolean(v['editable']),
+    groups: unique(
+      array(v['groups'], (value) => {
+        const g = closed(value, ['id', 'name', 'fields'])
+        const fields = unique(array(g['fields'], fieldKey), (x) => x)
+        if (fields.some((x) => !x.startsWith('custom.'))) throw new Error('Invalid display field')
+        return { id: uuid(g['id']), name: identifier(g['name']), fields }
+      }),
+      (g) => g.id,
+    ),
   }
 }
 export function decodeAssetPage(value: unknown, tenant: string) {
@@ -138,6 +165,24 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
     return result
   }
   return {
+    fieldLayout: () =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/asset-field-layout',
+        successStatus: 200,
+        decode: (v) => decodeFieldLayout(v, tenant),
+      }),
+    saveFieldLayout: (body: Operation<{ groups: FieldDisplayGroup[] }>) =>
+      transport.request({
+        method: 'PUT',
+        path: '/api/v1/asset-field-layout',
+        body,
+        successStatus: 200,
+        decode: (value) => {
+          const v = assetEnvelope(value, tenant, 'field_layout_written', ['revision'])
+          return { revision: count(v['revision']) }
+        },
+      }),
     catalog: () =>
       transport.request({
         method: 'GET',

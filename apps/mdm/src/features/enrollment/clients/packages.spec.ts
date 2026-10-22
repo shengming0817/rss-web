@@ -6,13 +6,10 @@ const item = {
   tenantId: tenant,
   target: { platform: 'windows', architecture: 'x86_64' },
   version: '1.0.0',
-  format: 'nsis_exe',
+  format: 'windows_exe',
   filename: 'rss-agent.exe',
   length: 42,
   installerSha256: Array(32).fill(0),
-  candidateSha256: Array(32).fill(0),
-  origin: 'https://agent.example.test',
-  signingKeys: { test: 'A'.repeat(43) },
 }
 it('accepts published installer metadata and rejects tenant, file and wire mismatches', () => {
   expect(installer(item, tenant).filename).toBe('rss-agent.exe')
@@ -23,6 +20,7 @@ it('accepts published installer metadata and rejects tenant, file and wire misma
     { target: { platform: 'windows', architecture: 'auto' } },
     { origin: 'https://agent.example.test/' },
     { length: 0 },
+    { format: 'nsis_exe' },
     { secret: 'unexpected' },
   ])
     expect(() => installer({ ...item, ...delta }, tenant)).toThrow()
@@ -40,4 +38,17 @@ it('distinguishes MSI and MSIX and rejects the retired metadata shape', () => {
   const old = { ...item } as Record<string, unknown>
   delete old['format']
   expect(() => installer(old, tenant)).toThrow()
+})
+it('rejects the previous package contract instead of decoding both formats', () => {
+  expect(() =>
+    installer(
+      {
+        ...item,
+        candidateSha256: Array(32).fill(0),
+        origin: 'https://old.example',
+        signingKeys: {},
+      },
+      tenant,
+    ),
+  ).toThrow()
 })

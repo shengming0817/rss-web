@@ -17,6 +17,8 @@ export const devicePermissions = [
   'compliance_read',
   'inventory_collect',
   'inventory_assign',
+  'telemetry_delete',
+  'telemetry_maintain',
   'enrollment',
   'credentials',
   'device_unmanage',

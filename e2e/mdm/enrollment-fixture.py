@@ -17,10 +17,12 @@ import uuid
 
 WEB = Path(sys.argv[1]).resolve()
 BACKEND = Path.cwd()
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(BACKEND / 'hack'))
 from t2_environment import Environment, private
 from candidate_fixture import INSTANCE, TENANTS, ADMIN
 from build_run import lease_fds
+from runtime_fixture import storage, readiness
 from windows_fixtures import generate
 from pki_fixtures import running as pki
 
@@ -40,15 +42,14 @@ def stop(_signal=None, _frame=None):
 for signum in (signal.SIGINT, signal.SIGTERM):
     signal.signal(signum, stop)
 
-def start(binary, initialized, log):
+def start(binary, initialized, log, expected=200):
     children = []
     for args in ([str(binary), 'serve', '--config', initialized['configuration']],
                  ['nginx', '-c', initialized['gateway'], '-g', 'daemon off;']):
         child = subprocess.Popen(args, cwd=BACKEND, stdout=log, stderr=log, pass_fds=lease_fds())
         processes.append(child)
         children.append(child)
-    context = ssl.create_default_context(cafile=str(environment.root / 'ca.crt'))
-    until = time.monotonic() + 45
+    until = time.monotonic() + 180
     while time.monotonic() < until:
         if any(child.poll() is not None for child in children):
             log.flush()
@@ -57,7 +58,8 @@ def start(binary, initialized, log):
             print(json.dumps(dict(phase='host-start',result='failed',exitCodes=[child.poll() for child in children],configurationErrors=errors,diagnostics=re.findall(r'(?m)^([a-z][a-z0-9_.-]{0,63}): ([A-Za-z0-9_=:(), -]{1,128})$',text),jsonPositions=re.findall(r'configuration JSON rejected at line ([0-9]+), column ([0-9]+)',text),unsafeFiles=[Path(name).name for name in re.findall(r'configuration file unavailable or unsafe: \"([^\"]+)\"',text)],gatewayErrors=re.findall(r'nginx: \[emerg\] ([a-z]+)',text))),flush=True)
             raise RuntimeError('host-exit')
         try:
-            if environment.probe_product(initialized['origin'], urlsplit(initialized['origin']).port, context):
+            if readiness(environment, initialized['origin']) == expected:
+                print(json.dumps(dict(phase='readiness',status=expected)),flush=True)
                 return children
         except (OSError, ssl.SSLError, http.client.HTTPException):
             pass
@@ -119,6 +121,8 @@ try:
     binary = Path(os.environ['CARGO_TARGET_DIR'])/'debug/rss-mdm'
     config_path = Path(initialized['configuration'])
     config = json.loads(config_path.read_text())
+    storage(environment, binary, config, TENANTS[0])
+    private(config_path, config)
     phase = 'actors'
     reader_password = private(environment.root/'reader-password', 'Enrollment-fixture-reader-only-2026!')
     # The ordinary user needs no administrative grants for channels/quotas/self-enrollment.
@@ -141,7 +145,7 @@ try:
     log_path = private(environment.root/'product.log', '')
     with log_path.open('w') as log:
         phase = 'signer'
-        initial = start(binary, initialized, log)
+        initial = start(binary, initialized, log, expected=503)
         revision = prepare_signer(initialized['origin'], reader_password)
         shutdown(initial)
         config['task_signing'] = dict(revision=revision)

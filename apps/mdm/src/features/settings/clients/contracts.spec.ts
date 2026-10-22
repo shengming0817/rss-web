@@ -138,7 +138,7 @@ function transport(value: unknown) {
     client: {
       async request(o: RequestOptions<unknown> | NoContentRequest) {
         calls.push(o)
-        return 'decode' in o ? o.decode(value) : undefined
+        return typeof o.decode === 'function' ? o.decode(value) : undefined
       },
     } as HttpTransport,
   }
@@ -490,9 +490,6 @@ it('reads formal Agent package metadata and withdraws with the same operation ow
     filename: 'rss.msi',
     length: 100,
     installerSha256: Array(32).fill(1),
-    candidateSha256: Array(32).fill(2),
-    origin: 'https://mdm.test',
-    signingKeys: { key: 'A'.repeat(43) },
   }
   const f = transport([value])
   expect((await createManagedPackages(f.client, b).read()).length).toBe(1)
@@ -506,4 +503,9 @@ it('computes file comparison identity synchronously without retaining the input'
   const value = inputDigest('abc')
   expect(typeof value).toBe('string')
   expect(value).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
+})
+it('does not manufacture a package operation receipt from a null result', async () => {
+  const request = async (o: RequestOptions<unknown>) => o.decode(null)
+  const client = createManagedPackages({ request } as unknown as HttpTransport, a)
+  expect(await client.operation(b, 'publish', c)).toBeNull()
 })

@@ -27,6 +27,7 @@ from candidate_fixture import INSTANCE, TENANTS, ADMIN
 from build_run import lease_fds
 from pki_fixtures import running as pki
 from candidate_installation_driver import Browser
+from runtime_fixture import storage, readiness as readiness_status
 
 environment = Environment(BACKEND, group='device-browser')
 processes = []
@@ -51,7 +52,7 @@ def q(value):
 def seed_authority():
     tenant = TENANTS[0]
     user = dict(instanceId=INSTANCE, tenantId=tenant, principalId=ADMIN)
-    rule = dict(subject=dict(kind='user', user=user), grants=[dict(operation=o, scope=dict(kind='all_devices')) for o in ['inventory_read','inventory_collect','inventory_assign','device_association_write','credentials','enrollment','operation_read','script_execute']] + [dict(operation=o, scope=dict(kind='tenant')) for o in ['inventory_sensitive_read','agent_enrollment_read','agent_enrollment_write','group_read','group_write','group_recompute','scope_read','scope_write','policy_read','policy_write','resource_read','resource_write','registration_configuration_read','registration_configuration_write']])
+    rule = dict(subject=dict(kind='user', user=user), grants=[dict(operation=o, scope=dict(kind='all_devices')) for o in ['inventory_read','inventory_collect','inventory_assign','device_association_write','credentials','enrollment','operation_read','script_execute']] + [dict(operation=o, scope=dict(kind='tenant')) for o in ['inventory_sensitive_read','inventory_fields_write','software_read','software_write','release_publish','software_withdraw','agent_enrollment_read','agent_enrollment_write','group_read','group_write','group_recompute','scope_read','scope_write','policy_read','policy_write','resource_read','resource_write','registration_configuration_read','registration_configuration_write']])
     rule_id = str(uuid.uuid4())
     sql = [f"SET rss.tenant_id = '{tenant}'", f"INSERT INTO mdm_access.authorization_rules(tenant_id,instance,id,revision,document) VALUES('{tenant}','{INSTANCE}','{rule_id}',1,{q(json.dumps(rule))}::jsonb)"]
     environment.sql(';'.join(sql)+';', 'mdm_dev')
@@ -89,22 +90,22 @@ def seed():
         print(json.dumps(dict(phase='seed', classification='tenantBinding' if 'asset tenant mismatch' in message else 'schema', identifiers=matches)), flush=True)
         raise
 
-def start(binary, initialized, log):
+def start(binary, initialized, log, expected=200):
     global readiness
     children = []
     for args in ([str(binary),'serve','--config',initialized['configuration']],['nginx','-c',initialized['gateway'],'-g','daemon off;']):
         child = subprocess.Popen(args,cwd=BACKEND,stdout=log,stderr=log,env={**os.environ,'RUST_MIN_STACK':str(8*1024*1024)})
         processes.append(child)
         children.append(child)
-    context=ssl.create_default_context(cafile=str(environment.root/'ca.crt'))
-    deadline=time.monotonic()+30
+    deadline=time.monotonic()+180
     while True:
         for role, child in zip(('product', 'gateway'), children):
             if child.poll() is not None:
                 readiness = dict(classification=role+'-exit', exitCode=child.returncode)
                 raise RuntimeError('readiness')
         try:
-            if environment.probe_product(initialized['origin'], urlsplit(initialized['origin']).port, context):
+            if readiness_status(environment, initialized['origin']) == expected:
+                print(json.dumps(dict(phase='readiness',status=expected)),flush=True)
                 break
             readiness = dict(classification='http-status')
         except ssl.SSLCertVerificationError:
@@ -141,17 +142,45 @@ try:
     agent['endpoint']['listen'] = f"127.0.0.1:{ports['backend']}"
     # Prepare task signing over the product session before enabling Agent runtime.
     config['device_pki'] = json.loads((native/'device-pki.json').read_text())
+    binary = Path(os.environ['CARGO_TARGET_DIR'])/'debug/rss-mdm'
+    storage(environment, binary, config, TENANTS[0])
     private(config_path, config)
     phase = 'authority'
     rule_id, rule = seed_authority()
-    binary = Path(os.environ['CARGO_TARGET_DIR'])/'debug/rss-mdm'
     private(environment.root/'product.log','')
     log = (environment.root/'product.log').open('w')
     phase = 'readiness'
-    start(binary, initialized, log)
+    start(binary, initialized, log, expected=503)
     phase = 'task-signing'
     operator = Browser(initialized['origin'], environment.root/'ca.crt')
     operator.login(TENANTS[0], 'admin', (environment.root/'account-password').read_text())
+    status, trust = operator.call('POST', '/api/v1/task-signing/trust', dict(action='prepare',expectedRevision=0,origin=initialized['origin']), str(uuid.uuid4()))
+    if status != 200 or trust['revision'] != 1:
+        raise RuntimeError('task-signing')
+    stop()
+    for child in reversed(processes):
+        child.wait(timeout=10)
+    config_path = Path(initialized['configuration'])
+    config = json.loads(config_path.read_text())
+    config['task_signing'] = dict(revision=trust['revision'])
+    config['agent_pki'] = agent
+    # Consume the production public-download gateway location, as enrollment acceptance does.
+    gateway = Path(initialized['gateway'])
+    text = gateway.read_text()
+    example = (WEB/'deploy/mdm/gateway.conf.example').read_text()
+    location = example[example.index('    location ~ "^/api/v1/agent/enroll/packages'):]
+    location = location[:location.index('\n    }')+6]
+    location = location.replace('agent.example.test:8447', f"localhost:{ports['backend']}").replace('https://agent:8447', f"https://127.0.0.1:{ports['backend']}").replace('/run/config/agent-ca.pem', str(environment.root/'ca.crt')).replace('proxy_ssl_name agent.example.test;', 'proxy_ssl_name localhost;')
+    text = text.replace('location ^~ /api/v1/agent/', 'location /api/v1/agent/')
+    text = text.replace('        location /api/v1/agent/', location+'\n        location /api/v1/agent/')
+    private(gateway, text)
+    # A deployment-owned entry for the disabled Policy's frozen input, not OS enrollment proof.
+    config['enrollment_entries'] = dict(windows=initialized['origin'], macos=None)
+    private(config_path, config)
+    phase = 'seed'
+    seed()
+    phase = 'readiness'
+    start(binary, initialized, log)
     # Keep the real initializer's rule administration, while the one fixture rule owns business grants.
     status, rules = operator.call('GET', '/api/v1/authorization/rules')
     if status != 200:
@@ -165,23 +194,6 @@ try:
     status, _ = operator.call('PUT', '/api/v1/authorization/rules/'+initial['id'], dict(operationId=str(uuid.uuid4()),expectedRevision=initial['revision'],value=value))
     if status != 200:
         raise RuntimeError('initializer-rule-scope')
-    status, trust = operator.call('POST', '/api/v1/task-signing/trust', dict(action='prepare',expectedRevision=0,origin=initialized['origin']), str(uuid.uuid4()))
-    if status != 200 or trust['revision'] != 1:
-        raise RuntimeError('task-signing')
-    stop()
-    for child in reversed(processes):
-        child.wait(timeout=10)
-    config_path = Path(initialized['configuration'])
-    config = json.loads(config_path.read_text())
-    config['task_signing'] = dict(revision=trust['revision'])
-    config['agent_pki'] = agent
-    # A deployment-owned entry for the disabled Policy's frozen input, not OS enrollment proof.
-    config['enrollment_entries'] = dict(windows=initialized['origin'], macos=None)
-    private(config_path, config)
-    phase = 'seed'
-    seed()
-    phase = 'readiness'
-    start(binary, initialized, log)
     phase = 'collector-registration'
     module = importlib.util.spec_from_file_location('device_agent', WEB/'e2e/mdm/device-agent.py')
     collector = importlib.util.module_from_spec(module)

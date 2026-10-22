@@ -1086,3 +1086,137 @@
   margin: 0;
   min-width: 0;
 }
+
+/* Task surfaces share the existing theme and dialog owners. */
+.field-group-list {
+  padding-left: 0;
+  list-style: none;
+}
+.field-group-list li,
+.package-platform-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-block: 0.6rem;
+}
+.field-choice {
+  padding-block: 0.65rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.field-choice small {
+  display: block;
+  opacity: 0.7;
+}
+.field-layout-editor fieldset {
+  border: 0;
+  padding: 1rem 0;
+}
+.group-condition-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.8rem;
+  border-left: 2px solid var(--color-border);
+}
+.group-condition-row > .group-criteria {
+  min-width: 0;
+  flex: 1;
+}
+.group-picker,
+.package-upload-task {
+  display: grid;
+  gap: 0.8rem;
+}
+.group-dependencies li {
+  padding-block: 0.8rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.package-upload-task {
+  padding: 1.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.7rem;
+}
+.package-dropzone {
+  display: grid;
+  place-items: center;
+  gap: 0.8rem;
+  padding: 2rem;
+  border: 1px dashed currentColor;
+  border-radius: 0.5rem;
+}
+@media (max-width: 640px) {
+  .group-condition-row {
+    display: block;
+    padding: 0.5rem;
+  }
+  .package-platform-heading {
+    align-items: flex-start;
+  }
+}
+
+.group-choice-row,
+.group-membership-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: end;
+}
+.group-picker > button {
+  width: 100%;
+  justify-content: space-between;
+}
+.group-picker-content {
+  display: grid;
+  gap: 8px;
+  min-width: min(280px, calc(100vw - 64px));
+  max-width: calc(100vw - 64px);
+  max-height: 55dvh;
+  overflow-y: auto;
+}
+.group-extra summary {
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.group-extra[open] input {
+  margin-top: 8px;
+}
+.ui-dialog--right:has(.field-layout-editor) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ui-dialog--right:has(.field-layout-editor) .ui-dialog-body {
+  min-height: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+.ui-dialog--right:has(.field-layout-editor) .ui-dialog-footer {
+  flex-shrink: 0;
+}
+@media (max-width: 420px) {
+  .group-choice-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.group-criteria {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+.group-criteria > .console-toolbar,
+.group-criteria > .condition-editor,
+.group-criteria > .group-condition-row,
+.group-criteria > button {
+  grid-column: 1 / -1;
+}
+.group-picker {
+  min-width: 0;
+}
+.ui-dialog-body .group-member-editor {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}

@@ -91,20 +91,6 @@ try {
   for (const item of packages) {
     await page.getByLabel('平台').selectOption(item.target.platform)
     await page.getByLabel('原生架构').selectOption(item.target.architecture)
-    if (!['nsis_exe', 'macos_pkg'].includes(item.format)) {
-      assert.equal(
-        await page
-          .locator(`a[href="/api/v1/agent/enroll/packages/${item.releaseId}/content"]`)
-          .count(),
-        0,
-      )
-      await page
-        .getByText('此入口不支持该安装器格式，请选择 NSIS EXE 或 PKG。', { exact: true })
-        .first()
-        .waitFor()
-      coverage.push('unsupported-installer-not-downloadable')
-      continue
-    }
     const link = page.locator(`a[href="/api/v1/agent/enroll/packages/${item.releaseId}/content"]`)
     const download = page.waitForEvent('download')
     await link.click()

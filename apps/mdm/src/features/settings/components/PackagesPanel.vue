@@ -1,19 +1,32 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiMessage, UiDialog } from '@rss/core/components'
+import { UiButton, UiDialog } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { usePermission } from '../../enrollment/usePermission'
 import { useSettingsFacts, useSettingsAction } from '../useSettingsAction'
+import PackageUpload from './PackageUpload.vue'
 import OperationNotice from './OperationNotice.vue'
+import { uuid } from '../../../services/decode'
 const runtime = useMdm(),
   { t } = useI18n(),
   client = runtime.settings.packages
-const { canRead, canWrite } = usePermission('agent_enrollment_read', 'software_withdraw')
-const { run, busy, failure, pending, locked, submit, resolveConflict, compared, markCompared } =
-  useSettingsAction(() => 'packages')
+const { canRead, canWrite, allows } = usePermission('agent_enrollment_read', 'software_withdraw')
+const {
+  run,
+  busy,
+  failure,
+  pending,
+  locked,
+  submit,
+  resolveConflict,
+  compared,
+  markCompared,
+  query,
+} = useSettingsAction(() => 'packages')
 const packages = ref<Awaited<ReturnType<typeof client.read>>>([]),
-  withdrawTarget = ref<string>()
+  withdrawTarget = ref<string>(),
+  uploadTarget = ref<(typeof targets)[number]>()
 const targets = [
   { platform: 'windows', architecture: 'x86_64', label: 'Windows x64' },
   { platform: 'windows', architecture: 'aarch64', label: 'Windows ARM64' },
@@ -28,6 +41,28 @@ const slots = computed(() =>
     ),
   })),
 )
+const pendingRelease = computed(() =>
+  pending.value
+    ? uuid((JSON.parse(pending.value.publicInput) as Record<string, unknown>)['release'])
+    : undefined,
+)
+watch(
+  () => runtime.settings.operations.records.get('package-upload'),
+  (task) => {
+    if (!task) return
+    if (task.action === 'publish' && task.state === 'received') {
+      if (!uploadTarget.value) runtime.settings.operations.records.delete('package-upload')
+      return
+    }
+    if (!uploadTarget.value) {
+      const input = JSON.parse(task.publicInput) as Record<string, unknown>
+      uploadTarget.value = targets.find(
+        (t) => t.platform === input['platform'] && t.architecture === input['architecture'],
+      )
+    }
+  },
+  { immediate: true, flush: 'sync' },
+)
 async function load() {
   packages.value = []
   return run(
@@ -36,11 +71,22 @@ async function load() {
   )
 }
 async function compare() {
+  const old = pending.value
+  const release = pendingRelease.value
+  if (old && release)
+    await query(
+      old.id,
+      () => client.operation(old.id, 'withdraw', release),
+      (value) => {
+        if (value) withdrawTarget.value = undefined
+      },
+      (value) => value !== null,
+    )
   if (await load()) markCompared()
 }
-async function withdraw() {
-  if (!canWrite.value || !withdrawTarget.value) return
-  const release = withdrawTarget.value
+async function withdraw(replay = false) {
+  const release = replay ? pendingRelease.value : withdrawTarget.value
+  if (!canWrite.value || !release) return
   if (
     await submit(
       'withdraw',
@@ -50,6 +96,7 @@ async function withdraw() {
       () => {
         withdrawTarget.value = undefined
       },
+      replay,
     )
   )
     await load()
@@ -58,25 +105,33 @@ onMounted(load)
 useSettingsFacts(() => {
   packages.value = []
   withdrawTarget.value = undefined
+  uploadTarget.value = undefined
 })
 </script>
 <template>
-  <UiMessage tone="info" :title="t('settings.packageUploadBlocked')">{{
-    t('settings.packageUploadReason')
-  }}</UiMessage>
   <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
   <UiButton :disabled="busy || !canRead" @click="load">{{ t('settings.reload') }}</UiButton>
   <OperationNotice
+    v-if="!withdrawTarget"
     :operation="pending"
     :busy="busy"
     :can-write="canWrite"
-    :query-supported="false"
+    :query-supported="true"
     :compared="compared"
     @compare="compare"
+    @query="compare"
+    @retry="withdraw(true)"
     @edit="resolveConflict"
   />
   <section v-for="slot in slots" :key="slot.label" class="console-panel package-platform-row">
-    <h2>{{ slot.label }}</h2>
+    <header class="package-platform-heading">
+      <h2>{{ slot.label }}</h2>
+      <UiButton
+        :disabled="!!uploadTarget || !allows('software_write') || !allows('resource_write')"
+        @click="uploadTarget = slot"
+        >{{ t('settings.addInstaller') }}</UiButton
+      >
+    </header>
     <p v-if="!slot.packages.length">{{ t('settings.noPackage') }}</p>
     <article v-for="p in slot.packages" :key="p.releaseId" class="package-release">
       <div>
@@ -88,6 +143,15 @@ useSettingsFacts(() => {
       }}</UiButton>
     </article>
   </section>
+  <PackageUpload
+    v-if="uploadTarget"
+    :target="uploadTarget"
+    :can-upload="allows('software_write') && allows('resource_write')"
+    :can-publish="allows('release_publish')"
+    :can-query="allows('software_read')"
+    @published="load"
+    @close="uploadTarget = undefined"
+  />
   <UiDialog
     :open="!!withdrawTarget"
     :title="t('settings.withdrawPackage')"
@@ -95,9 +159,19 @@ useSettingsFacts(() => {
     kind="alertdialog"
     @update:open="!$event && (withdrawTarget = undefined)"
     ><p>{{ t('settings.withdrawPackageHint') }}</p>
+    <OperationNotice
+      :operation="pending"
+      :busy="busy"
+      :can-write="canWrite"
+      :compared="compared"
+      @compare="compare"
+      @query="compare"
+      @retry="withdraw(true)"
+      @edit="resolveConflict"
+    />
     <template #footer
-      ><UiButton variant="danger" :disabled="locked || !canWrite" @click="withdraw">{{
-        t('devices.confirmAction')
+      ><UiButton variant="danger" :disabled="locked || !canWrite" @click="withdraw()">{{
+        t('settings.confirmWithdrawal')
       }}</UiButton></template
     ></UiDialog
   >
