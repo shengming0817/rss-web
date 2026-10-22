@@ -110,7 +110,9 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
         return ok({
           items: items
             .slice(0, 100)
-            .map(({ userContextId, ...r }) => (userContextId ? { ...r, userContextId } : r)),
+            .map(({ userContextId, lastCommunicationReceivedAt: _communication, ...r }) =>
+              userContextId ? { ...r, userContextId } : r,
+            ),
           nextCursor: items.length > 100 ? items[99]!.registrationId : null,
         })
       }
@@ -266,6 +268,7 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
         userContextId: null,
         source: e.source,
         generation,
+        lastCommunicationReceivedAt: null,
         status: 'active',
       })
       e.status = 'bound'

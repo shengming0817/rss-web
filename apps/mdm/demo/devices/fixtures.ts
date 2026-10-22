@@ -39,7 +39,9 @@ export interface DemoDevice {
   architecture?: 'x86_64' | 'aarch64'
   summary: DeviceSummary
   inventory: Inventory
-  registrations: ReturnType<typeof registration>[]
+  registrations: (ReturnType<typeof registration> & {
+    lastCommunicationReceivedAt: number | null
+  })[]
   enrollments: string[]
   nativeWindows?: { osVersion: string; edition: number }
   history: { id: string; at: number; event: string; operation: string | null }[]
@@ -175,6 +177,7 @@ export function makeDevices(): Map<string, DemoDevice> {
               ? ('mdm.apple' as const)
               : ('mdm.windows' as const),
         generation: 1,
+        lastCommunicationReceivedAt: channel === 'mdm' ? 1780000090 : 1780000100,
         status: 'active' as const,
       }))
       for (const field of Object.values(fields))

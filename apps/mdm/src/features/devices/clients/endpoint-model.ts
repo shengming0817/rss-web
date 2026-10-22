@@ -120,6 +120,7 @@ function endpointFields(v: Record<string, unknown>) {
           'status',
           'source',
           'platform',
+          'lastCommunicationReceivedAt',
           'children',
           'userContext',
         ])
@@ -130,6 +131,7 @@ function endpointFields(v: Record<string, unknown>) {
           status: enumeration(c['status'], ['active', 'revoked', 'superseded'] as const),
           platform: nullable(c['platform'], (x) => enumeration(x, ['windows', 'macos'] as const)),
           source: enumeration(c['source'], ['mdm.windows', 'mdm.apple', 'agent.builtin'] as const),
+          lastCommunicationReceivedAt: nullable(c['lastCommunicationReceivedAt'], integer),
           children: array(c['children'], (x) => {
             const s = closed(x, [
               'registrationId',
