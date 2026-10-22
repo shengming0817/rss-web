@@ -4,6 +4,7 @@ import { shallowRef } from 'vue'
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { decodeMdmError } from '@rss/api/mdm'
+import { networkErrorForTest } from '@rss/api/testing'
 import type { IdentitySession } from '@rss/auth'
 import { createScenario, TENANT } from '../../../demo/scenario'
 import { createDeviceDemo } from '../../../demo/devices/state'
@@ -334,6 +335,68 @@ it('freezes an immutable profile resource, uploads canonical bytes, previews act
       enabled: true,
       definition: {
         action: { kind: 'telemetry_profile', resource: { id: DEMO_PROFILE, variant: 'default' } },
+      },
+    },
+  })
+})
+it('recovers a committed profile upload from its exact receipt without repeating the frozen version or upload', async () => {
+  const h = await setup('policy-telemetry', { resource: DEMO_PROFILE })
+  const dialog = h.body().get('[role=dialog][data-state=open]'),
+    uploads = h.runtime.policies.resources.uploads,
+    complete = uploads.complete,
+    receipt = uploads.receipt,
+    begin = vi.spyOn(uploads, 'begin'),
+    finish = vi.spyOn(uploads, 'complete').mockImplementationOnce(async (...args) => {
+      await complete(...args)
+      throw networkErrorForTest()
+    })
+  await h.click('下一步')
+  await dialog.get('select[aria-label="目标范围"]').setValue('88888888-8888-4888-8888-888888888888')
+  await h.click('下一步')
+  await h.click('保存、上传并激活方案资源')
+  const resourceWrites = () =>
+    h.requests
+      .filter((r) => r.path === '/api/v1/resources/{id}' && r.method === 'POST')
+      .map((r) => (r.body as { input: Record<string, unknown> }).input)
+  const frozen = resourceWrites().find((input) => input['action'] === 'version')!
+  expect(dialog.text()).toContain('上次提交结果尚未确认')
+  expect(resourceWrites().some((input) => input['action'] === 'activate')).toBe(false)
+  const read = vi.spyOn(uploads, 'receipt').mockImplementationOnce(async (...args) => {
+    const confirmed = await receipt(...args)
+    return { ...confirmed, sha256: confirmed.sha256.map((v, i) => (i === 0 ? v ^ 255 : v)) }
+  })
+  await h.click('查询对照')
+  expect(dialog.text()).toContain('上次提交结果尚未确认')
+  await h.click('保存、上传并激活方案资源')
+  expect(resourceWrites().some((input) => input['action'] === 'activate')).toBe(false)
+  expect(begin).toHaveBeenCalledTimes(1)
+  expect(finish).toHaveBeenCalledTimes(1)
+  await h.click('查询对照')
+  expect(read.mock.calls).toEqual([
+    begin.mock.calls[0]!.slice(0, 2),
+    begin.mock.calls[0]!.slice(0, 2),
+  ])
+  expect(dialog.text()).not.toContain('上次提交结果尚未确认')
+  await h.click('保存、上传并激活方案资源')
+  expect(dialog.text()).toContain('目标预检')
+  expect(begin).toHaveBeenCalledTimes(1)
+  expect(finish).toHaveBeenCalledTimes(1)
+  expect(resourceWrites().filter((input) => input['action'] === 'version')).toEqual([frozen])
+  expect(resourceWrites().filter((input) => input['action'] === 'activate')).toEqual([
+    { action: 'activate', version: frozen['version'] },
+  ])
+  await dialog.findAll('input[type=checkbox]').at(-1)!.setValue(true)
+  await h.click('确认发布策略变更')
+  expect(
+    h.requests.filter((r) => r.path === '/api/v1/policies/{id}' && r.method === 'POST').at(-1)!
+      .body,
+  ).toMatchObject({
+    input: {
+      definition: {
+        action: {
+          kind: 'telemetry_profile',
+          resource: { id: DEMO_PROFILE, version: frozen['version'] },
+        },
       },
     },
   })

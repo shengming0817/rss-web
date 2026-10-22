@@ -19,6 +19,7 @@ import { mdmI18n } from '../../../i18n'
 import { policyFeature } from '../../policies/routes'
 import { securityFeature } from '../../security/routes'
 import { operationsFeature } from '../../operations/routes'
+import { settingsFeature } from '../../settings/routes'
 import { deviceFeature } from '../routes'
 import { createPolicyClients } from '../../policies/client'
 import { createDeviceClients } from '../client'
@@ -133,6 +134,8 @@ async function setup(
       ...(securityFeature.routes ?? []),
       operationsFeature.entry,
       ...(operationsFeature.routes ?? []),
+      settingsFeature.entry,
+      ...(settingsFeature.routes ?? []),
     ],
   })
   await router.push({ name, params: { tenant: TENANT, ...params }, query })
@@ -1031,6 +1034,72 @@ it('creates a unified route and revokes the relation without credential writes',
     '/api/v1/device-associations',
     '/api/v1/device-associations/{id}/revoke',
   ])
+})
+it('clears an associated endpoint selection and rejects removed or invalid query targets', async () => {
+  const h = await setup('device-detail', { device: 'device-01' })
+  await chooseAssociation(h)
+  await h.click('确认关联')
+  await flushPromises()
+  await h.click('历史')
+  await h.click('性能数据')
+  const selector = () => h.wrapper.get('select'),
+    target = selector()
+      .findAll('option')
+      .find((o) => o.attributes('value'))!
+      .attributes('value')!
+  const performance = () => h.wrapper.findComponent({ name: 'DevicePerformance' })
+  await selector().setValue(target)
+  await flushPromises()
+  expect(performance().props('device')).toBe(target)
+  await selector().setValue('')
+  await flushPromises()
+  expect(performance().exists()).toBe(false)
+  expect(h.router.currentRoute.value.query['endpoint']).toBe('')
+  for (const endpoint of [undefined, 'unknown-endpoint']) {
+    await h.router.replace({ query: { endpoint: target } })
+    await flushPromises()
+    expect(performance().exists()).toBe(true)
+    await h.router.replace({ query: { endpoint } })
+    await flushPromises()
+    expect(performance().exists()).toBe(false)
+    await h.click('重新读取')
+    expect(performance().exists()).toBe(false)
+  }
+  await h.click('管理')
+  await selector().setValue(target)
+  await flushPromises()
+  expect(h.wrapper.findComponent({ name: 'DeviceControlPanel' }).exists()).toBe(true)
+  await selector().setValue('')
+  await flushPromises()
+  expect(h.wrapper.findComponent({ name: 'DeviceControlPanel' }).exists()).toBe(false)
+})
+it('restores an associated operation target while an explicit empty selection keeps its recovery identity', async () => {
+  const h = await setup('device-detail', { device: 'device-01' })
+  await chooseAssociation(h)
+  await h.click('确认关联')
+  await flushPromises()
+  const params = { ...h.router.currentRoute.value.params },
+    operation = crypto.randomUUID()
+  await h.router.push({ name: 'devices', params: { tenant: TENANT } })
+  await flushPromises()
+  await h.router.push({
+    name: 'device-view-management',
+    params,
+    query: { operation, operationDevice: 'device-01' },
+  })
+  await flushPromises()
+  const panel = () => h.wrapper.findComponent({ name: 'DeviceControlPanel' })
+  expect(panel().props('endpoint')).toMatchObject({ id: 'device-01' })
+  await h.wrapper.get('select').setValue('')
+  await flushPromises()
+  expect(panel().exists()).toBe(false)
+  expect(h.router.currentRoute.value.query).toMatchObject({
+    endpoint: '',
+    operation,
+    operationDevice: 'device-01',
+  })
+  await h.click('重新读取')
+  expect(panel().exists()).toBe(false)
 })
 it('locks an unknown association, survives navigation, and requires explicit exact POST replay', async () => {
   const h = await setup('device-detail', { device: 'device-01' })

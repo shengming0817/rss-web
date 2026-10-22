@@ -110,6 +110,19 @@ function clear() {
   inventory.value = undefined
   manualOpen.value = false
 }
+function syncTarget() {
+  const endpoint = route.query['endpoint']
+  const requested =
+    endpoint === undefined && typeof route.query['operation'] === 'string'
+      ? route.query['operationDevice']
+      : endpoint
+  target.value =
+    typeof requested === 'string' && endpoints.value.some((e) => e.id === requested)
+      ? requested
+      : endpoints.value.length === 1
+        ? endpoints.value[0]!.id
+        : ''
+}
 async function load() {
   view.value = undefined
   endpoints.value = []
@@ -124,14 +137,7 @@ async function load() {
     (result) => {
       view.value = result.value
       endpoints.value = result.details
-      if (!result.details.some((e) => e.id === target.value))
-        target.value = result.details.some(
-          (e) => e.id === (route.query['endpoint'] ?? route.query['operationDevice']),
-        )
-          ? String(route.query['endpoint'] ?? route.query['operationDevice'])
-          : result.details.length === 1
-            ? result.details[0]!.id
-            : ''
+      syncTarget()
     },
   )
 }
@@ -193,15 +199,10 @@ watch(target, () => {
 })
 function selectEndpoint(event: Event) {
   void router.replace({
-    query: { ...route.query, endpoint: (event.target as HTMLSelectElement).value || undefined },
+    query: { ...route.query, endpoint: (event.target as HTMLSelectElement).value },
   })
 }
-watch(
-  () => route.query['endpoint'],
-  (v) => {
-    if (typeof v === 'string' && endpoints.value.some((e) => e.id === v)) target.value = v
-  },
-)
+watch(() => route.query['endpoint'], syncTarget, { flush: 'sync' })
 watch(section, () => (manualOpen.value = false))
 watch(target, () => {
   manualOpen.value = false
