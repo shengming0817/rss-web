@@ -206,7 +206,7 @@ it('classifies native compliance under security before the generic device path',
     '/api/v1/compliance-rules/id/tasks/task',
     '/api/v1/devices/device-01/compliance',
     '/api/v1/devices/device-01/compliance/history',
-    '/api/v1/mdm-candidate/operations/audit',
+    '/api/v1/audit-events',
     '/api/v1/mdm-candidate/operations/alerts',
   ])
     expect((await scenario.handle('GET', path)).status, path).toBe(503)

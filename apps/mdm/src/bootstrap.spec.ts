@@ -100,7 +100,6 @@ it('provides the same session owner to auth, MDM and protected routes', async ()
     'security/experience',
     'security/actions',
     'policies/configurations',
-    'operations/audit',
     'operations/reports',
     'operations/alerts',
     'operations/alert-rules',
@@ -121,13 +120,15 @@ it('provides the same session owner to auth, MDM and protected routes', async ()
     'policy-executions',
     'software-catalog',
     'operations-authorization',
+    'operations-audit',
+    'operations-diagnostics',
     'settings-overview',
   ])
     expect(runtime.router.hasRoute(name)).toBe(true)
   runtime.app.runWithContext(() => {
     const mdm = inject(mdmKey)!
     expect(Object.keys(mdm.security).sort()).toEqual(['certificateArchive', 'compliance'])
-    expect(Object.keys(mdm.operations)).toEqual(['authorization'])
+    expect(Object.keys(mdm.operations).sort()).toEqual(['audit', 'authorization'])
     expect(mdm.policies).not.toHaveProperty('configurations')
   })
 

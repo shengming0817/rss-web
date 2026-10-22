@@ -114,14 +114,14 @@ it('retains installed expiry through issuance and command success until independ
       }),
     ],
   })
-  const audit = '/api/v1/mdm-candidate/operations/audit?action=alert_opened&from=' + expiringAt
+  const audit = '/api/v1/audit-events?action=alert_opened&from=' + expiringAt
   expect((await f.server.handle('GET', audit)).body).toMatchObject({
-    items: [expect.objectContaining({ at: expiringAt })],
+    items: [expect.objectContaining({ recordedAt: expiringAt })],
   })
   // Unchanged evidence must not publish another transition on a repeated projection read.
   await f.server.handle('GET', alerts)
   expect((await f.server.handle('GET', audit)).body).toMatchObject({
-    items: [expect.objectContaining({ at: expiringAt })],
+    items: [expect.objectContaining({ recordedAt: expiringAt })],
   })
   expect(((await f.server.handle('GET', audit)).body as { items: unknown[] }).items).toHaveLength(1)
 })

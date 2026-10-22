@@ -4,7 +4,6 @@ import type { Component } from 'vue'
 import { createSoftwareClients } from '../../../../src/features/software/client'
 import { createPolicyClients } from '../../policies/client'
 import AlertRulesView from './AlertRulesView.vue'
-import AuditView from './AuditView.vue'
 import AlertsView from './AlertsView.vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -141,20 +140,6 @@ it('saves and edits alert rules through the same HTTP owner', async () => {
   await f.wrapper.get('[data-testid="save-alert-rule"]').trigger('click')
   await flushPromises()
   expect(f.wrapper.text()).toContain('Updated queue monitor')
-  f.wrapper.unmount()
-})
-it('filters Identity security separately and opens an authorized audit detail', async () => {
-  const f = await fixture(AuditView)
-  const select = f.wrapper.findAll('select').find((s) => s.text().includes('identity_security'))!
-  await select.setValue('identity_security')
-  await f.wrapper.get('[data-testid="audit-filter"]').trigger('submit')
-  await flushPromises()
-  expect(f.wrapper.text()).toContain('Identity 会话创建')
-  await f.wrapper.findAll('tbody button')[0]!.trigger('click')
-  await flushPromises()
-  expect(f.wrapper.get('[data-testid="audit-detail"]').text()).toContain(
-    'identity_security / request / HTTP 200',
-  )
   f.wrapper.unmount()
 })
 it('compares native membership without replacing drafts and only adopts revision explicitly', async () => {

@@ -91,7 +91,7 @@ export function decodeMdmError(status: number, value: unknown): RssApiError {
   return identityWireFailure(status, v['code'])
 }
 const paths =
-  /^\/api\/v1\/(?:(?:user-attribute-definitions|user-attribute-operations|user-profiles|authorization|devices|device-views|device-associations|certificate-archive|asset-fields|asset-field-layout|device-queries|saved-queries|groups|scopes|policies|compliance-rules|resources|software|enrollments|registration-quotas|registration-channels)(?:\/|$)|operations$|collection-blueprints$|self-enrollments$|agent-(?:configurations|configuration-operations|enrollment-settings)(?:\/|$)|apple\/organizations(?:\/|$)|windows\/entra-policy$|windows\/entra\/terms\/context$|agent\/enroll\/packages(?:\/\{id\})?$|mdm-host\/config\.json$|mdm-candidate\/(?:workspace|devices|groups|policies|executions|software|security|support|authorization|audit)(?:\/|$)|mdm-candidate\/operations\/(?:metrics|reports|alert-rules|audit|alerts)(?:\/|$))/
+  /^\/api\/v1\/(?:(?:user-attribute-definitions|user-attribute-operations|user-profiles|authorization|devices|device-views|device-associations|certificate-archive|asset-fields|asset-field-layout|device-queries|saved-queries|groups|scopes|policies|compliance-rules|resources|software|enrollments|registration-quotas|registration-channels)(?:\/|$)|operations$|collection-blueprints$|self-enrollments$|agent-(?:configurations|configuration-operations|enrollment-settings)(?:\/|$)|apple\/organizations(?:\/|$)|windows\/entra-policy$|windows\/entra\/terms\/context$|agent\/enroll\/packages(?:\/\{id\})?$|mdm-host\/config\.json$|mdm-candidate\/(?:workspace|devices|groups|policies|executions|software|security|support|authorization)(?:\/|$)|mdm-candidate\/operations\/(?:metrics|reports|alert-rules|alerts)(?:\/|$))/
 export function createMdmTransport(): HttpTransport {
   const instance = axios.create({ baseURL: '' })
   return {
@@ -101,6 +101,7 @@ export function createMdmTransport(): HttpTransport {
         /^\/api\/v1\/(?:settings\/(?:catalog$|first-use(?:\/|$))|tenant-administration(?:\/|$)|apple\/materials(?:\/|$)|apple\/material-operations(?:\/|$)|storage\/connections(?:\/|$)|smtp(?:\/|$)|windows\/wns(?:\/|$)|task-signing(?:\/|$)|pki(?:\/|$)|webhooks(?:\/|$)|runtime\/diagnostics$|agent-packages(?:\/|$))/.test(
           options.path,
         )
+      const audit = options.method === 'GET' && options.path === '/api/v1/audit-events'
       const telemetry = [
         '/api/v1/telemetry/resources',
         '/api/v1/telemetry/history',
@@ -110,7 +111,8 @@ export function createMdmTransport(): HttpTransport {
         '/api/v1/asset-retention-policies',
         '/api/v1/asset-retention-policies/{key}/{revision}',
       ].includes(options.path)
-      if (!paths.test(options.path) && !settings && !readiness && !telemetry) throw clientError()
+      if (!paths.test(options.path) && !settings && !readiness && !telemetry && !audit)
+        throw clientError()
       const publicRead =
         options.path.startsWith('/api/v1/agent/enroll/packages') ||
         options.path === '/api/v1/windows/entra/terms/context' ||

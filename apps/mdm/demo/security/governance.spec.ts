@@ -133,7 +133,7 @@ it('keeps raw noncompliance intact through grace, separate approval and expiry',
   expect((await f.projection()).body).toMatchObject({
     items: [{ native, rules: [{ governance: 'action_required', request: null }] }],
   })
-  const audit = (await f.server.handle('GET', '/api/v1/mdm-candidate/operations/audit')).body
+  const audit = (await f.server.handle('GET', '/api/v1/audit-events')).body
   expect(JSON.stringify(audit)).not.toContain('Private business justification')
 })
 it('pins exact rule revisions, rejects stale approval and replays unknown baseline edits', async () => {

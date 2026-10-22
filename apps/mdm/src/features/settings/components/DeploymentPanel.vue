@@ -9,8 +9,7 @@ const maintenanceCommand =
 const runtime = useMdm(),
   { t } = useI18n(),
   { run, busy, failure } = useSettingsAction(() => 'deployment-readiness')
-const readiness = ref<Awaited<ReturnType<typeof runtime.settings.catalog.readiness>>>(),
-  diagnostics = ref<Awaited<ReturnType<typeof runtime.settings.runtime.read>>>()
+const readiness = ref<Awaited<ReturnType<typeof runtime.settings.catalog.readiness>>>()
 async function load() {
   readiness.value = undefined
   await run(
@@ -21,17 +20,9 @@ async function load() {
     },
   )
 }
-async function health() {
-  diagnostics.value = undefined
-  await run(
-    () => runtime.settings.runtime.read(),
-    (v) => (diagnostics.value = v),
-  )
-}
 onMounted(load)
 useSettingsFacts(() => {
   readiness.value = undefined
-  diagnostics.value = undefined
 })
 </script>
 <template>
@@ -60,23 +51,10 @@ useSettingsFacts(() => {
       >
     </dl>
     <p v-else>{{ t('settings.notObserved') }}</p>
-    <template v-if="runtime.realm === 'tenant'"
-      ><UiButton :disabled="busy" @click="health">{{ t('operations.diagnostics') }}</UiButton>
-      <article v-for="c in diagnostics?.components" :key="c.name">
-        <h3>{{ c.name }}</h3>
-        <p>{{ c.readiness }} · {{ c.health }} · {{ c.reasons.join(', ') }}</p>
-        <p v-for="q in c.queues" :key="q.name">
-          {{ q.name }}: {{ q.count ?? t('mdm.unknown') }} {{ q.truncated ? '≥' : '' }}
-        </p>
-        <p v-if="c.progress">
-          {{ c.progress.state }} · {{ c.progress.confirmedPosition ?? '—' }} /
-          {{ c.progress.sourceHead ?? '—' }}
-        </p>
-        <p v-if="c.runner">
-          {{ t('settings.pendingAttempts') }} {{ c.runner.unresolvedAttempts }} ·
-          {{ c.runner.latestFailure?.reason ?? '—' }}
-        </p>
-      </article></template
+    <RouterLink
+      v-if="runtime.realm === 'tenant'"
+      :to="{ name: 'operations-diagnostics', params: { tenant: runtime.tenant } }"
+      >{{ t('operations.diagnostics') }}</RouterLink
     >
   </section>
   <section class="console-panel">

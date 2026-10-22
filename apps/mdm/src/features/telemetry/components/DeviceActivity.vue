@@ -1,37 +1,54 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiMessage } from '@rss/core/components'
+import { UiButton, UiMessage, UiDialog } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../../devices/useDeviceBinding'
-import { utc } from '../format'
-const props = defineProps<{ device: string }>()
-const runtime = useMdm(),
+import { type AuditPage, type AuditFact, type AuditQuery } from '../../operations/clients/audit'
+import { auditDraft, auditFilter } from '../../operations/components/audit-filter'
+import { auditTime, auditOutcome } from '../../operations/format'
+import AuditFilters from '../../operations/components/AuditFilters.vue'
+import AuditCoverage from '../../operations/components/AuditCoverage.vue'
+import AuditFacts from '../../operations/components/AuditFacts.vue'
+const props = defineProps<{ device: string }>(),
+  runtime = useMdm(),
+  route = useRoute(),
   { t } = useI18n()
 const { run, busy, failure } = useOperation([], () => [...deviceBinding(runtime), props.device])
-type Page = Awaited<ReturnType<typeof runtime.devices.directory.history>>
-const result = ref<Page>(),
-  search = ref('')
-const items = computed(
-  () =>
-    result.value?.items.filter((x) =>
-      [x.action, x.actor, x.effect].join(' ').toLowerCase().includes(search.value.toLowerCase()),
-    ) ?? [],
-)
-async function load(next?: string) {
-  const previous = next ? (result.value?.items ?? []) : []
+const result = ref<AuditPage>(),
+  selected = ref<AuditFact>(),
+  draft = ref(auditDraft()),
+  applied = ref<AuditQuery>()
+function load(cursor?: string) {
+  if (busy.value) return
+  let filter: AuditQuery
   result.value = undefined
-  await run(
-    () => runtime.devices.directory.history(props.device, next),
-    (value) => (result.value = { ...value, items: [...previous, ...value.items] }),
+  selected.value = undefined
+  try {
+    filter = cursor && applied.value ? { ...applied.value } : auditFilter(draft.value, true)
+  } catch {
+    failure.value = 'invalidRequest'
+    return
+  }
+  void run(
+    () =>
+      runtime.devices.directory.history(props.device, { ...filter, ...(cursor ? { cursor } : {}) }),
+    (value) => {
+      result.value = value
+      applied.value = filter
+    },
   )
 }
 watch(
-  () => JSON.stringify([props.device, ...deviceBinding(runtime)]),
+  () => JSON.stringify([props.device, route.fullPath, ...deviceBinding(runtime)]),
   () => {
     result.value = undefined
-    void load()
+    selected.value = undefined
+    applied.value = undefined
+    draft.value = auditDraft(route.query)
+    load()
   },
   { immediate: true, flush: 'sync' },
 )
@@ -46,47 +63,47 @@ watch(
       <UiButton :disabled="busy" @click="load()">{{ t('devices.reload') }}</UiButton>
     </header>
     <UiMessage v-if="failure" tone="danger" :title="t('devices.' + failure)" />
-    <label class="telemetry-search"
-      >{{ t('devices.search') }}<input v-model="search" class="ui-input" type="search"
-    /></label>
-    <p v-if="result" class="telemetry-caption">
-      {{ t('devices.historyCoverage') }}:
-      {{ t(result.coverage.complete ? 'devices.yes' : 'devices.no') }} ·
-      {{ t('telemetry.indexedThrough') }}
-      {{ result.coverage.indexedThrough === null ? '—' : utc(result.coverage.indexedThrough) }} ·
-      {{ t('telemetry.sourceThrough') }}
-      {{ result.coverage.sourceThrough === null ? '—' : utc(result.coverage.sourceThrough) }}
-    </p>
-    <ol class="telemetry-activity">
-      <li v-for="event in items" :key="event.eventId">
-        <time>{{ utc(event.recordedAt) }}</time>
-        <div>
-          <strong>{{ event.action }}</strong>
-          <p>{{ event.auditOutcome }} · {{ event.effect }}</p>
-          <details>
-            <summary>{{ t('devices.evidence') }}</summary>
-            <dl class="telemetry-facts">
-              <dt>{{ t('telemetry.observedAt') }}</dt>
-              <dd>{{ utc(event.observedAt) }}</dd>
-              <dt>{{ t('telemetry.actor') }}</dt>
-              <dd>{{ event.actorKind }} / {{ event.actor }}</dd>
-              <dt>{{ t('telemetry.registration') }}</dt>
-              <dd>{{ event.registrationId ?? '—' }}</dd>
-              <dt>{{ t('telemetry.operation') }}</dt>
-              <dd>
-                {{ event.operationId ?? '—' }}
-                <p v-for="id in event.relatedOperationIds" :key="id">{{ id }}</p>
-              </dd>
-              <dt>{{ t('telemetry.phase') }}</dt>
-              <dd>{{ event.phase }} / {{ event.executionState ?? '—' }}</dd>
-            </dl>
-          </details>
-        </div>
-      </li>
-    </ol>
-    <p v-if="result && !items.length" class="telemetry-empty">{{ t('telemetry.empty') }}</p>
-    <UiButton v-if="result?.nextCursor" :disabled="busy" @click="load(result.nextCursor)">{{
-      t('devices.next')
-    }}</UiButton>
+    <p v-if="failure === 'conflict'" role="alert">{{ t('operations.auditUi.expired') }}</p>
+    <AuditFilters v-model="draft" :busy="busy" device-timeline @submit="load()" />
+    <template v-if="result">
+      <AuditCoverage :coverage="result.coverage" />
+      <ol class="telemetry-activity">
+        <li
+          v-for="event in result.items"
+          :key="`${event.source}/${event.position}/${event.eventId}`"
+        >
+          <time>{{ auditTime(event.recordedAt) }}</time>
+          <div>
+            <strong>{{ event.action }}</strong>
+            <p>
+              {{ auditOutcome(event.auditOutcome, t) }} · {{ event.phase }} · {{ event.effect }}
+            </p>
+            <UiButton variant="ghost" @click="selected = event">{{
+              t('operations.auditDetail')
+            }}</UiButton>
+          </div>
+        </li>
+      </ol>
+      <p v-if="!result.items.length" class="telemetry-empty">{{ t('telemetry.empty') }}</p>
+      <UiButton v-if="result.nextCursor" :disabled="busy" @click="load(result.nextCursor)">{{
+        t('devices.next')
+      }}</UiButton>
+      <RouterLink
+        :to="{
+          name: 'operations-audit',
+          params: { tenant: runtime.tenant },
+          query: { device, ...(applied?.operationId ? { operationId: applied.operationId } : {}) },
+        }"
+        >{{ t('operations.audit') }}</RouterLink
+      >
+    </template>
+    <UiDialog
+      :open="!!selected"
+      placement="right"
+      :title="t('operations.auditDetail')"
+      :close-label="t('console.close')"
+      @update:open="selected = undefined"
+      ><AuditFacts v-if="selected" :fact="selected" :device="device"
+    /></UiDialog>
   </section>
 </template>

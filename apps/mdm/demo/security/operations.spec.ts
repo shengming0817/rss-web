@@ -21,7 +21,7 @@ it('records native security changes once and keeps alert acknowledgement indepen
   const root = '/api/v1/mdm-candidate/operations',
     id = crypto.randomUUID(),
     path = `/api/v1/compliance-rules/${id}`
-  expect((await server.handle('GET', `${root}/audit`)).status).toBe(200)
+  expect((await server.handle('GET', `/api/v1/audit-events`)).status).toBe(200)
   const definition = {
     presentation: { name: 'Private administrator draft' },
     severity: 'high',
@@ -39,20 +39,18 @@ it('records native security changes once and keeps alert acknowledgement indepen
     created = await write('PUT', path, body)
   expect(created.status).toBe(200)
   await write('PUT', path, body)
-  const audit = (await server.handle('GET', `${root}/audit?action=compliance_saved`)).body as {
+  const audit = (await server.handle('GET', `/api/v1/audit-events?action=compliance_saved`))
+    .body as {
     items: { id: string }[]
   }
   expect(audit.items).toHaveLength(1)
   expect(audit.items[0]).toMatchObject({
     action: 'compliance_saved',
-    operation: body.operationId,
-    target: { kind: 'compliance_rule', id, revision: 1 },
-    outcome: 'accepted',
+    operationId: body.operationId,
+    target: { type: 'compliance_rule', id },
+    auditOutcome: 'succeeded',
   })
   expect(JSON.stringify(audit)).not.toContain(definition.presentation.name)
-  expect((await server.handle('GET', `${root}/audit/${audit.items[0]!.id}`)).body).toMatchObject({
-    entry: audit.items[0],
-  })
   const task = (created.body as { task: string }).task
   await server.handle('GET', `${path}/tasks/${task}`)
   await server.handle('GET', `${path}/tasks/${task}`)
@@ -116,22 +114,25 @@ it('records native security changes once and keeps alert acknowledgement indepen
   expect((await server.handle('GET', `${root}/alerts/${alert.id}`)).body).toMatchObject({
     alert: { acknowledgment: null },
   })
-  const rows = (await server.handle('GET', `${root}/audit?device=device-01&limit=1`)).body as {
+  const rows = (await server.handle('GET', `/api/v1/audit-events?device=device-01&limit=1`))
+    .body as {
     nextCursor: string
   }
   expect(rows.nextCursor).toBeTruthy()
   expect(
-    (await server.handle('GET', `${root}/audit?device=device-02&cursor=${rows.nextCursor}`)).status,
-  ).toBe(400)
-  const all = (await server.handle('GET', `${root}/audit`)).body
+    (await server.handle('GET', `/api/v1/audit-events?device=device-02&cursor=${rows.nextCursor}`))
+      .status,
+  ).toBe(409)
+  const all = (await server.handle('GET', `/api/v1/audit-events`)).body
   expect(JSON.stringify(all)).not.toContain(definition.presentation.name)
   await server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'reviewer',
     password: 'demo',
   })
   expect(
-    (await server.handle('GET', `${root}/audit?device=device-01&cursor=${rows.nextCursor}`)).status,
-  ).toBe(400)
+    (await server.handle('GET', `/api/v1/audit-events?device=device-01&cursor=${rows.nextCursor}`))
+      .status,
+  ).toBe(403)
 })
 
 it('uses the advanced scenario clock for alert transitions, acknowledgement and time-filtered audit', async () => {
@@ -204,7 +205,12 @@ it('uses the advanced scenario clock for alert transitions, acknowledgement and 
     ['alert_resolved', start + 120],
   ] as const) {
     expect(
-      (await server.handle('GET', `${root}/audit?action=${action}&from=${at}&until=${at}`)).body,
-    ).toMatchObject({ items: [expect.objectContaining({ at })] })
+      (
+        await server.handle(
+          'GET',
+          `/api/v1/audit-events?action=${action}&from=${at}&until=${at + 1}`,
+        )
+      ).body,
+    ).toMatchObject({ items: [expect.objectContaining({ recordedAt: at })] })
   }
 })

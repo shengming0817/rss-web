@@ -2,22 +2,10 @@ import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { operation } from '../../../../src/services/useOperation'
 import { createOperationsClients } from '../client'
-import { alert, auditEntry } from './model'
+import { alert } from './model'
 const id = '11111111-1111-4111-8111-111111111111',
   other = '22222222-2222-4222-8222-222222222222'
 const target = { kind: 'compliance_rule', id, revision: 1, device: 'device-01' }
-const auditValue = {
-  id,
-  at: 100,
-  actor: other,
-  action: 'compliance_saved',
-  target,
-  operation: id,
-  outcome: 'accepted',
-  stream: 'mdm_business',
-  stage: 'business',
-  status: null,
-}
 const value = {
   id,
   revision: 1,
@@ -32,15 +20,13 @@ const value = {
   acknowledgment: null,
   operation: null,
 }
-it('rejects contradictory resolution and raw sensitive audit metadata', () => {
+it('rejects contradictory alert resolution', () => {
   expect(alert(value).state).toBe('open')
   expect(() => alert({ ...value, target: { ...target, kind: 'security_request' } })).toThrow()
   expect(() => alert({ ...value, target: { ...target, device: null } })).toThrow()
   expect(() => alert({ ...value, state: 'resolved' })).toThrow()
   expect(() => alert({ ...value, state: 'resolved', resolvedAt: 101 })).toThrow()
   expect(() => alert({ ...value, acknowledgment: { actor: other, at: 100 } })).toThrow()
-  expect(auditEntry(auditValue)).toMatchObject({ id })
-  expect(() => auditEntry({ ...auditValue, body: { password: 'synthetic secret' } })).toThrow()
 })
 it('binds candidate tenant, source and acknowledgment receipt to the exact request', async () => {
   const body = operation({}, 1),
@@ -70,14 +56,4 @@ it('binds candidate tenant, source and acknowledgment receipt to the exact reque
     alert: { ...confirmed, operation: other },
   }
   await expect(client.alerts.acknowledge(id, body)).rejects.toThrow()
-  reply = {
-    contract: 'operations-v1',
-    tenantId: id,
-    source: 'mock',
-    entry: { ...auditValue, id: other },
-  }
-  reply = { ...(reply as object), entry: auditValue }
-  expect(await client.audit.read(id)).toEqual(auditValue)
-  reply = { ...(reply as object), entry: { ...auditValue, id: other } }
-  await expect(client.audit.read(id)).rejects.toThrow('Wrong audit')
 })

@@ -55,6 +55,8 @@ export const navigation = [
     label: 'operations.organization',
     items: [
       { name: 'operations-organization', label: 'operations.organization' },
+      { name: 'operations-audit', label: 'operations.audit' },
+      { name: 'operations-diagnostics', label: 'operations.diagnostics' },
       { name: 'operations-authorization', label: 'operations.authorization' },
       { name: 'operations-appleAccount', label: 'onboarding.appleAccount' },
       { name: 'operations-appleAde', label: 'onboarding.appleAde' },

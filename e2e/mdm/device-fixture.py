@@ -64,6 +64,7 @@ def seed_authority():
     if browser_module == 'device-browser.mjs':
         rule['grants'].append(dict(operation='user_profiles_read', scope=dict(kind='tenant')))
     if browser_module == 'operations-browser.mjs':
+        rule['grants'] += [dict(operation=o, scope=dict(kind='tenant')) for o in ['audit_read','runtime_diagnostics_read']]
         # Explicit authority for disposable HTTP acceptance, never production account initialization.
         rule['grants'] += [dict(operation=o, scope=dict(kind='all_devices')) for o in ['device_control','device_wipe','operation_cancel']]
     rule_id = str(uuid.uuid4())

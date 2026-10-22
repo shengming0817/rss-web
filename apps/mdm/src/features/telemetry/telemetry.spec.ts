@@ -17,6 +17,7 @@ import { createDeviceClients } from '../devices/client'
 import { createPolicyClients } from '../policies/client'
 import { createOperationsClients } from '../operations/client'
 import { settingsFeature } from '../settings/routes'
+import { operationsFeature } from '../operations/routes'
 import { policyFeature } from '../policies/routes'
 import DevicePerformance from './components/DevicePerformance.vue'
 import DeviceCollections from './components/DeviceCollections.vue'
@@ -103,6 +104,8 @@ async function setup(name = 'perf', query: Record<string, string> = {}) {
       })),
       settingsFeature.entry,
       ...settingsFeature.routes!,
+      operationsFeature.entry,
+      ...operationsFeature.routes!,
       policyFeature.entry,
       ...policyFeature.routes!,
     ],
@@ -218,10 +221,14 @@ it('shows receipt-window health, explicit truncation and registration diagnostic
   await h.click('重新读取')
   expect(h.wrapper.text()).not.toContain('有效 48')
 })
-it('renders actual activity and allows local filtering without fabricating events', async () => {
+it('renders actual activity and queries action filters without fabricating events', async () => {
   const h = await setup('activity')
   expect(h.requests.some((r) => r.path.endsWith('/timeline'))).toBe(true)
-  await h.wrapper.get('input[type=search]').setValue('nonexistent-action')
+  expect(h.wrapper.get('.telemetry-activity').text()).toContain('成功')
+  expect(h.wrapper.get('.telemetry-activity').text()).not.toContain('succeeded')
+  await h.wrapper.get('#audit-action').setValue('nonexistent-action')
+  await h.wrapper.get('[data-testid=audit-filter]').trigger('submit')
+  await flushPromises()
   expect(h.wrapper.text()).toContain('暂无记录')
 })
 it('publishes retention revisions and canonical custom fields through the existing CAS contract', async () => {

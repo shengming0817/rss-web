@@ -12,12 +12,7 @@ export const routes: RouteRecordRaw[] = [
     component: () => import('./views/AlertRulesView.vue'),
     meta: { protected: true },
   },
-  {
-    path: '/tenants/:tenant/operations/audit',
-    name: 'operations-audit',
-    component: () => import('./views/AuditView.vue'),
-    meta: { protected: true },
-  },
+
   {
     path: '/tenants/:tenant/operations/reports',
     name: 'operations-reports',

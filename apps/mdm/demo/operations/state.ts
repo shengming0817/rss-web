@@ -1,21 +1,16 @@
+import { createAuditDemo, type AuditAuthority } from './audit'
 import { randomUUID } from 'node:crypto'
-import { TENANT, type DomainHandler, type DemoObservation } from '../scenario'
-import { closed, count, enumeration, identifier, uuid } from '../../src/services/decode'
-import {
-  auditEntry,
-  alert,
-  auditActions,
-  alertStates,
-  type AuditEntry,
-  type Alert,
-} from '../features/operations/clients/model'
+import { TENANT, type DomainHandler } from '../scenario'
+import { closed, enumeration, identifier, uuid } from '../../src/services/decode'
+import { alert, alertStates, type Alert } from '../features/operations/clients/model'
 import { createPages, createReceipts, error, ok, operation } from '../http'
 const candidate = (body: object) =>
   ok({ contract: 'operations-v1', tenantId: TENANT, source: 'mock', ...body })
 /** One metadata-only operations owner. Domain owners alone publish evidence and resolve alerts. */
-export function createOperationsDemo(now: () => number) {
-  const audit = new Map<string, AuditEntry>(),
-    alerts = new Map<string, Alert>(),
+export function createOperationsDemo(now: () => number, authority: AuditAuthority) {
+  const audit = createAuditDemo(now, authority),
+    record = audit.record
+  const alerts = new Map<string, Alert>(),
     closures = new Map<
       string,
       {
@@ -29,32 +24,6 @@ export function createOperationsDemo(now: () => number) {
     >(),
     pages = createPages(),
     receipts = createReceipts()
-  const recorded = new Set<string>()
-  function record(
-    input: Omit<AuditEntry, 'id' | 'stream' | 'stage' | 'status'> &
-      Partial<Pick<AuditEntry, 'stream' | 'stage' | 'status'>>,
-  ) {
-    const value = auditEntry({
-      stream: 'mdm_business',
-      stage: 'business',
-      status: null,
-      ...input,
-      id: randomUUID(),
-    })
-    const key = JSON.stringify([
-      value.actor,
-      value.operation,
-      value.action,
-      value.target,
-      value.stage,
-      value.outcome,
-      value.status,
-    ])
-    if (value.operation && recorded.has(key)) return value.id
-    if (value.operation) recorded.add(key)
-    audit.set(value.id, structuredClone(value))
-    return value.id
-  }
   function observeAlert(input: Pick<Alert, 'code' | 'severity' | 'target' | 'evidence'>) {
     const key = JSON.stringify([
         input.code,
@@ -102,8 +71,10 @@ export function createOperationsDemo(now: () => number) {
       throw new Error('Invalid query')
   }
   const handle: DomainHandler = (request, scenario) => {
+    const auditReply = audit.handle(request, scenario)
+    if (auditReply) return auditReply
     const match =
-      /^\/api\/v1\/mdm-candidate\/operations\/(audit|alerts)(?:\/([^/]+)(?:\/([^/]+))?)?$/.exec(
+      /^\/api\/v1\/mdm-candidate\/operations\/(alerts)(?:\/([^/]+)(?:\/([^/]+))?)?$/.exec(
         request.path,
       )
     if (!match) return
@@ -119,80 +90,19 @@ export function createOperationsDemo(now: () => number) {
         if (id) {
           queryKeys(request.query, [])
           uuid(id)
-          const value =
-            kind === 'audit' ? audit.get(id) : [...alerts.values()].find((v) => v.id === id)
-          return value
-            ? candidate(kind === 'audit' ? { entry: value } : { alert: value })
-            : error('operation_not_found', 404)
+          const value = [...alerts.values()].find((v) => v.id === id)
+          return value ? candidate({ alert: value }) : error('operation_not_found', 404)
         }
-        queryKeys(request.query, [
-          'cursor',
-          'limit',
-          'device',
-          ...(kind === 'audit'
-            ? ['action', 'from', 'until', 'actor', 'object', 'operation', 'outcome', 'stream']
-            : ['state']),
-        ])
-        const q = request.query,
-          actor = q.has('actor') ? uuid(q.get('actor')) : null,
-          object = q.has('object') ? identifier(q.get('object')) : null,
-          operationId = q.has('operation') ? uuid(q.get('operation')) : null,
-          outcome = q.has('outcome')
-            ? enumeration(q.get('outcome'), [
-                'accepted',
-                'denied',
-                'failed',
-                'unknown',
-                'observed',
-              ] as const)
-            : null,
-          stream = q.has('stream')
-            ? enumeration(q.get('stream'), ['mdm_business', 'identity_security'] as const)
-            : null,
-          device = q.has('device') ? identifier(q.get('device')) : null,
-          selectedAction = q.has('action') ? enumeration(q.get('action'), auditActions) : null,
-          state = q.has('state') ? enumeration(q.get('state'), alertStates) : null,
-          from = q.has('from') ? count(Number(q.get('from'))) : null,
-          until = q.has('until') ? count(Number(q.get('until'))) : null,
-          limit = q.has('limit') ? count(Number(q.get('limit'))) : 20
-        if (!limit || limit > 100 || (from !== null && until !== null && from > until))
-          throw new Error('Invalid page')
-        const items =
-          kind === 'audit'
-            ? [...audit.values()]
-                .reverse()
-                .filter(
-                  (v) =>
-                    (!actor || v.actor === actor) &&
-                    (!object || v.target?.id === object) &&
-                    (!operationId || v.operation === operationId) &&
-                    (!outcome || v.outcome === outcome) &&
-                    (!stream || v.stream === stream) &&
-                    (!device || v.target?.device === device) &&
-                    (!selectedAction || v.action === selectedAction) &&
-                    (from === null || v.at >= from) &&
-                    (until === null || v.at <= until),
-                )
-            : [...alerts.values()]
-                .reverse()
-                .filter(
-                  (v) => (!device || v.target?.device === device) && (!state || v.state === state),
-                )
-        const key = JSON.stringify([
-          request.actor.principalId,
-          kind,
-          device,
-          selectedAction,
-          actor,
-          object,
-          operationId,
-          outcome,
-          stream,
-          state,
-          from,
-          until,
-        ])
-        return candidate(pages.page<AuditEntry | Alert>(key, scenario === 'empty' ? [] : items, q))
+        queryKeys(request.query, ['cursor', 'limit', 'device', 'state'])
+        const device = request.query.has('device') ? identifier(request.query.get('device')) : null,
+          state = request.query.has('state')
+            ? enumeration(request.query.get('state'), alertStates)
+            : null
+        const items = [...alerts.values()]
+          .reverse()
+          .filter((v) => (!device || v.target.device === device) && (!state || v.state === state))
+        const key = JSON.stringify([request.actor.principalId, 'alerts', device, state])
+        return candidate(pages.page(key, scenario === 'empty' ? [] : items, request.query))
       }
       if (
         request.method !== 'POST' ||
@@ -259,30 +169,11 @@ export function createOperationsDemo(now: () => number) {
   }
   return {
     record,
-    observe(event: DemoObservation) {
-      if (event.method === 'GET' || event.path.includes('/operations/audit')) return
-      record({
-        at: event.at,
-        actor: event.actor.principalId,
-        action:
-          event.stream === 'identity_security'
-            ? 'identity_session_created'
-            : event.status < 300
-              ? 'request_succeeded'
-              : 'request_failed',
-        target: event.target,
-        operation: event.operation,
-        outcome: event.outcome,
-        stream: event.stream,
-        stage: 'request',
-        status: event.status,
-      })
-    },
+    observe: audit.observe,
     observeAlert,
     handle,
     reset() {
-      recorded.clear()
-      audit.clear()
+      audit.reset()
       alerts.clear()
       closures.clear()
       pages.reset()
