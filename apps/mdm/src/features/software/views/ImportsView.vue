@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { UiButton } from '@rss/core/components'
-import { ref, watch } from 'vue'
+import { computed, onMounted, ref, watch, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
@@ -10,7 +10,33 @@ import PageFrame from '../../../components/PageFrame.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
   { run, runWrite, busy, failure, uncertain } = useOperation([], () => deviceBinding(runtime))
-const source = ref(''),
+const editor = ref<HTMLFormElement>()
+function next() {
+  const panel = editor.value?.querySelector<HTMLElement>(`[data-step="${step.value}"]`)
+  if (
+    panel &&
+    [
+      ...panel.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+        'input,textarea,select',
+      ),
+    ].some((v) => !v.reportValidity())
+  )
+    return
+  step.value++
+}
+const step = ref(0),
+  confirmedReplay = ref(false),
+  sources = ref<Awaited<ReturnType<typeof runtime.software.lifecycle.sources>>>(),
+  chosenSource = ref(''),
+  pending = ref<ReturnType<typeof operation<ReturnType<typeof importRequest>>>>(),
+  installerType = ref('msi'),
+  installerScope = ref('machine'),
+  installerId = ref(''),
+  manifestFiles = ref('manifest.json'),
+  brewPath = ref(''),
+  bottleTag = ref(''),
+  sourceLength = ref<number>(),
+  source = ref(''),
   sourceRevision = ref('1'),
   resource = ref(''),
   version = ref('1'),
@@ -21,9 +47,6 @@ const source = ref(''),
   architecture = ref<'x86_64' | 'aarch64'>('x86_64'),
   variant = ref('main'),
   length = ref(1),
-  selection = ref(
-    '{"kind":"winget","installerType":"msi","scope":"machine","installerId":null,"files":["manifest.json"]}',
-  ),
   behavior = ref('{}'),
   artifacts = ref('{}'),
   dependencies = ref('[]'),
@@ -33,11 +56,61 @@ const source = ref(''),
   nativeExport = ref(false),
   result = ref<Awaited<ReturnType<typeof runtime.software.imports.import>>>(),
   observed = ref<Awaited<ReturnType<typeof runtime.policies.resources.read>>>()
+const chosen = computed(() =>
+  sources.value?.items.find((v) => `${v.source.id}/${v.source.revision}` === chosenSource.value),
+)
+function loadSources(after?: string) {
+  void run(
+    () => runtime.software.lifecycle.sources(after),
+    (v) => {
+      sources.value = v
+    },
+  )
+}
+watch(chosenSource, () => {
+  source.value = chosen.value?.source.id ?? ''
+  sourceRevision.value = chosen.value?.source.revision ?? ''
+  platform.value = chosen.value?.source.protocol.kind === 'brew_tap' ? 'macos' : 'windows'
+})
+onMounted(() => loadSources())
+function writeOriginal() {
+  if (!pending.value || busy.value) return
+  const original = structuredClone(toRaw(pending.value))
+  void runWrite(
+    () => runtime.software.imports.import(original),
+    (v) => {
+      result.value = v
+      pending.value = undefined
+      confirmedReplay.value = false
+      step.value = 3
+    },
+  )
+}
+function replay() {
+  if (confirmedReplay.value && uncertain.value) writeOriginal()
+}
 async function submit() {
-  if (busy.value || uncertain.value) return
+  if (busy.value || uncertain.value || !chosen.value || step.value !== 2) return
   let input: ReturnType<typeof importRequest> | undefined
   try {
-    const selected = JSON.parse(selection.value),
+    const selected =
+        chosen.value?.source.protocol.kind === 'brew_tap'
+          ? {
+              kind: 'brew',
+              path: brewPath.value,
+              bottleTag: bottleTag.value,
+              sourceLength: sourceLength.value ?? null,
+            }
+          : {
+              kind: 'winget',
+              installerType: installerType.value,
+              scope: installerScope.value,
+              installerId: installerId.value || null,
+              files: manifestFiles.value
+                .split('\n')
+                .map((v) => v.trim())
+                .filter(Boolean),
+            },
       b = JSON.parse(behavior.value),
       a = JSON.parse(artifacts.value),
       d = JSON.parse(dependencies.value),
@@ -68,13 +141,9 @@ async function submit() {
       },
     )
     if (found && input) {
-      const body = operation(input, expectedRevision.value)
-      void runWrite(
-        () => runtime.software.imports.import(body),
-        (v) => {
-          result.value = v
-        },
-      )
+      pending.value = operation(input, expectedRevision.value)
+      confirmedReplay.value = false
+      writeOriginal()
     }
   } catch {
     failure.value = 'invalidRequest'
@@ -82,7 +151,10 @@ async function submit() {
 }
 function inspect() {
   void run(
-    () => runtime.policies.resources.read(resource.value),
+    () =>
+      runtime.policies.resources.read(
+        pending.value?.input.resource ?? result.value?.resource ?? resource.value,
+      ),
     (v) => {
       observed.value = v
     },
@@ -91,6 +163,11 @@ function inspect() {
 watch(
   () => deviceBinding(runtime),
   () => {
+    pending.value = undefined
+    confirmedReplay.value = false
+    sources.value = undefined
+    chosenSource.value = ''
+    step.value = 0
     result.value = undefined
     observed.value = undefined
     resource.value = ''
@@ -102,84 +179,195 @@ watch(
 <template>
   <PageFrame :title="t('software.imports')" :busy="busy" :failure="failure"
     ><p>{{ t('software.importDirectHint') }}</p>
-    <form @submit.prevent="submit">
+    <nav class="console-actions" :aria-label="t('software.ux.journey')">
+      <UiButton
+        v-for="(title, index) in ['source', 'coordinates', 'verify', 'deliver']"
+        :key="title"
+        :aria-current="step === index ? 'step' : undefined"
+        :disabled="busy || uncertain || !!result || index > step || index > 2"
+        @click="step = index"
+        >{{ index + 1 }} · {{ t(`software.ux.${title}`) }}</UiButton
+      >
+    </nav>
+    <section v-if="!result && step === 0" class="console-panel">
+      <h2>{{ t('software.ux.source') }}</h2>
+      <p>{{ t('software.ux.sourceHint') }}</p>
+      <label
+        >{{ t('software.source')
+        }}<select v-model="chosenSource" class="ui-input" :disabled="busy || uncertain">
+          <option value="">{{ t('devices.select') }}</option>
+          <option
+            v-for="item in sources?.items"
+            :key="`${item.source.id}/${item.source.revision}`"
+            :value="`${item.source.id}/${item.source.revision}`"
+            :disabled="
+              item.source.protocol.kind === 'private' || item.lifecycle.state !== 'enabled'
+            "
+          >
+            {{ item.source.id }} / {{ item.source.revision }} · {{ item.source.protocol.kind }} ·
+            {{ t(`software.lifecycle_${item.lifecycle.state}`) }}
+          </option>
+        </select></label
+      >
+      <UiButton :disabled="busy || uncertain" @click="loadSources()">{{
+        t('policies.reload')
+      }}</UiButton>
+      <UiButton
+        v-if="sources?.nextCursor"
+        :disabled="busy || uncertain"
+        @click="loadSources(sources.nextCursor)"
+        >{{ t('devices.next') }}</UiButton
+      >
+      <p v-if="sources && !sources.items.length">{{ t('policies.empty') }}</p>
+      <RouterLink :to="{ name: 'software-sources', params: { tenant: runtime.tenant } }">{{
+        t('software.sources')
+      }}</RouterLink>
+      <RouterLink
+        :to="{
+          name: 'policy-resources',
+          params: { tenant: runtime.tenant },
+          query: { kind: 'software', author: 'enterprise' },
+        }"
+        >{{ t('software.ux.enterprise') }}</RouterLink
+      >
+      <UiButton :disabled="busy || uncertain || !chosen" @click="step = 1">{{
+        t('software.ux.next')
+      }}</UiButton>
+    </section>
+    <form v-if="!result" ref="editor" @submit.prevent="submit">
       <fieldset :disabled="busy || uncertain">
-        <label>{{ t('software.source') }}<input v-model="source" class="ui-input" required /></label
-        ><label
-          >{{ t('software.sourceRevision')
-          }}<input v-model="sourceRevision" class="ui-input" required /></label
-        ><label
-          >{{ t('software.resource') }}<input v-model="resource" class="ui-input" required /></label
-        ><label
-          >{{ t('software.version') }}<input v-model="version" class="ui-input" required /></label
-        ><label
-          >{{ t('policies.revision')
-          }}<input
-            v-model.number="expectedRevision"
-            type="number"
-            min="0"
-            class="ui-input"
-            required /></label
-        ><label
-          >{{ t('software.package') }}<input v-model="packageId" class="ui-input" required /></label
-        ><label
-          >{{ t('software.packageVersion')
-          }}<input v-model="packageVersion" class="ui-input" required /></label
-        ><label
-          >{{ t('software.platform')
-          }}<select v-model="platform" class="ui-input">
-            <option value="windows">Windows</option>
-            <option value="macos">macOS</option>
-          </select></label
-        ><label
-          >{{ t('software.architecture')
-          }}<select v-model="architecture" class="ui-input">
-            <option value="x86_64">x86_64</option>
-            <option value="aarch64">aarch64</option>
-          </select></label
-        ><label
-          >{{ t('software.variant') }}<input v-model="variant" class="ui-input" required /></label
-        ><label
-          >{{ t('software.installerLength')
-          }}<input v-model.number="length" type="number" min="1" class="ui-input" required /></label
-        ><label
-          >{{ t('software.importSelection')
-          }}<textarea v-model="selection" class="ui-input" required /></label
-        ><label
-          >{{ t('software.behavior')
-          }}<textarea v-model="behavior" class="ui-input" required /></label
-        ><label
-          >{{ t('software.artifacts')
-          }}<textarea v-model="artifacts" class="ui-input" required /></label
-        ><label
-          >{{ t('software.dependencies')
-          }}<textarea v-model="dependencies" class="ui-input" required /></label
-        ><label
-          >{{ t('software.signatures')
-          }}<textarea v-model="signatures" class="ui-input" required /></label
-        ><label
-          >{{ t('software.reboot')
-          }}<select v-model="reboot" class="ui-input">
-            <option value="forbid">{{ t('software.rebootForbid') }}</option>
-            <option value="report">{{ t('software.rebootReport') }}</option>
-          </select></label
-        ><label
-          ><input v-model="downgrade" type="checkbox" />{{ t('software.allowDowngrade') }}</label
-        ><label
-          ><input v-model="nativeExport" type="checkbox" />{{ t('software.nativeExport') }}</label
-        ><UiButton type="submit">{{ t('software.import') }}</UiButton>
+        <section v-show="step === 1" data-step="1" class="console-panel">
+          <h2>{{ t('software.ux.coordinates') }}</h2>
+          <p>{{ source }} / {{ sourceRevision }}</p>
+          <label
+            >{{ t('software.resource')
+            }}<input v-model="resource" class="ui-input" required /></label
+          ><label
+            >{{ t('software.version') }}<input v-model="version" class="ui-input" required /></label
+          ><label
+            >{{ t('policies.revision')
+            }}<input
+              v-model.number="expectedRevision"
+              type="number"
+              min="0"
+              class="ui-input"
+              required /></label
+          ><label
+            >{{ t('software.package')
+            }}<input v-model="packageId" class="ui-input" required /></label
+          ><label
+            >{{ t('software.packageVersion')
+            }}<input v-model="packageVersion" class="ui-input" required /></label
+          ><label
+            >{{ t('software.platform')
+            }}<select v-model="platform" class="ui-input">
+              <option value="windows">Windows</option>
+              <option value="macos">macOS</option>
+            </select></label
+          ><label
+            >{{ t('software.architecture')
+            }}<select v-model="architecture" class="ui-input">
+              <option value="x86_64">x86_64</option>
+              <option value="aarch64">aarch64</option>
+            </select></label
+          ><label
+            >{{ t('software.variant') }}<input v-model="variant" class="ui-input" required /></label
+          ><label
+            >{{ t('software.installerLength')
+            }}<input v-model.number="length" type="number" min="1" class="ui-input" required
+          /></label>
+          <template v-if="chosen?.source.protocol.kind === 'brew_tap'">
+            <label
+              >{{ t('software.ux.brewPath') }}<input v-model="brewPath" class="ui-input"
+            /></label>
+            <label
+              >{{ t('software.ux.bottleTag') }}<input v-model="bottleTag" class="ui-input"
+            /></label>
+            <label
+              >{{ t('software.ux.sourceLength')
+              }}<input v-model.number="sourceLength" type="number" min="1" class="ui-input"
+            /></label>
+          </template>
+          <template v-else>
+            <label
+              >{{ t('software.ux.installerType') }}<input v-model="installerType" class="ui-input"
+            /></label>
+            <label
+              >{{ t('software.ux.installerScope')
+              }}<select v-model="installerScope" class="ui-input">
+                <option value="machine">machine</option>
+                <option value="user">user</option>
+              </select></label
+            >
+            <label
+              >{{ t('software.ux.installerId') }}<input v-model="installerId" class="ui-input"
+            /></label>
+            <label
+              >{{ t('software.ux.manifestFiles')
+              }}<textarea v-model="manifestFiles" class="ui-input" />
+            </label>
+          </template>
+          <UiButton type="button" :disabled="!chosen" @click="next">{{
+            t('software.ux.next')
+          }}</UiButton>
+        </section>
+        <section v-show="step === 2" class="console-panel">
+          <h2>{{ t('software.ux.verify') }}</h2>
+          <p>{{ t('software.ux.behaviorHint') }}</p>
+          <label
+            >{{ t('software.behavior')
+            }}<textarea v-model="behavior" class="ui-input" required /></label
+          ><label
+            >{{ t('software.artifacts')
+            }}<textarea v-model="artifacts" class="ui-input" required /></label
+          ><label
+            >{{ t('software.dependencies')
+            }}<textarea v-model="dependencies" class="ui-input" required /></label
+          ><label
+            >{{ t('software.signatures')
+            }}<textarea v-model="signatures" class="ui-input" required /></label
+          ><label
+            >{{ t('software.reboot')
+            }}<select v-model="reboot" class="ui-input">
+              <option value="forbid">{{ t('software.rebootForbid') }}</option>
+              <option value="report">{{ t('software.rebootReport') }}</option>
+            </select></label
+          ><label
+            ><input v-model="downgrade" type="checkbox" />{{ t('software.allowDowngrade') }}</label
+          ><label
+            ><input v-model="nativeExport" type="checkbox" />{{ t('software.nativeExport') }}</label
+          ><UiButton type="submit" :disabled="step !== 2 || !chosen">{{
+            t('software.import')
+          }}</UiButton>
+        </section>
       </fieldset>
     </form>
+    <h2 v-if="result">{{ t('software.ux.imported') }}</h2>
     <p v-if="result">{{ result.resource }} / {{ result.version }} · {{ result.storageRevision }}</p>
     <UiButton :disabled="busy || !resource" @click="inspect">{{ t('policies.verify') }}</UiButton>
     <p v-if="observed">{{ observed.id }} · {{ observed.revision }}</p>
-    <p v-if="uncertain">{{ t('software.importUnknownHint') }}</p>
+    <section v-if="uncertain && pending" class="console-panel" role="status">
+      <p>{{ t('software.importUnknownHint') }}</p>
+      <p>
+        {{ pending.operationId }} · {{ pending.input.resource }} /
+        {{ pending.input.resourceVersion }} · {{ pending.input.source.id }} /
+        {{ pending.input.source.revision }}
+      </p>
+      <label
+        ><input v-model="confirmedReplay" type="checkbox" />{{
+          t('software.publicationUnknown')
+        }}</label
+      >
+      <UiButton :disabled="busy || !confirmedReplay" @click="replay">{{
+        t('policies.replay')
+      }}</UiButton>
+    </section>
     <RouterLink
       v-if="result"
       :to="{
         name: 'software-catalog',
         params: { tenant: runtime.tenant },
-        query: { resource: result.resource },
+        query: { resource: result.resource, version: result.version },
       }"
       >{{ t('software.catalog') }}</RouterLink
     ></PageFrame

@@ -216,25 +216,40 @@ for (const outcome of ['published', 'not_applied'])
     expect(wrapper.find('[data-testid=publication-detail]').exists()).toBe(false)
     wrapper.unmount()
   })
-it('imports synchronously with a source snapshot, and a Resource read cannot settle a lost import', async () => {
+it('pins source and complete import operation across a lost response and explicit replay', async () => {
   const imported = vi.fn().mockRejectedValue(new Error('lost')),
     { definition } = softwareResource()
-  const { wrapper } = await fixture(ImportsView, {
+  const selected = {
+    ...source,
+    source: {
+      ...source.source,
+      protocol: { kind: 'winget_rest', location: 'https://source.test/', identifier: 'enterprise' },
+    },
+  }
+  const { wrapper, session } = await fixture(ImportsView, {
     software: {
-      lifecycle: { source: vi.fn().mockResolvedValue(source) },
+      lifecycle: {
+        sources: vi.fn(async () => ({ items: [selected], nextCursor: null })),
+        source: vi.fn().mockResolvedValue(selected),
+      },
       imports: { import: imported },
     },
     policies: { resources: { read: vi.fn().mockResolvedValue({ id: 'app', revision: 1 }) } },
   })
-  const inputs = wrapper.findAll('input')
-  await inputs[0]!.setValue('enterprise')
-  await inputs[2]!.setValue('app')
-  await inputs[5]!.setValue('Example.App')
-  await inputs[6]!.setValue('1.0')
-  await wrapper.findAll('textarea')[1]!.setValue(JSON.stringify(definition.behavior))
+  await field(wrapper, '企业来源 ID').setValue('enterprise/1')
+  await button(wrapper, '继续').trigger('click')
+  await field(wrapper, '软件资源').setValue('app')
+  await field(wrapper, '包标识').setValue('Example.App')
+  await field(wrapper, '来源包版本').setValue('1.0')
+  await field(wrapper, '原生安装行为').setValue(JSON.stringify(definition.behavior))
+  await wrapper
+    .findAll('button')
+    .filter((v) => v.text() === '继续')[1]!
+    .trigger('click')
   await wrapper.get('form').trigger('submit')
   await flushPromises()
-  expect(imported.mock.calls[0]?.[0]).toMatchObject({
+  const original = structuredClone(imported.mock.calls[0]?.[0])
+  expect(original).toMatchObject({
     expectedRevision: 0,
     input: { source: source.snapshot, resource: 'app', selection: { installerType: 'msi' } },
   })
@@ -242,11 +257,27 @@ it('imports synchronously with a source snapshot, and a Resource read cannot set
   await flushPromises()
   expect(button(wrapper, '导入').element.matches(':disabled')).toBe(true)
   expect(imported).toHaveBeenCalledTimes(1)
+  await wrapper.get('section[role=status] input[type=checkbox]').setValue(true)
+  await button(wrapper, '重放同一操作').trigger('click')
+  await flushPromises()
+  expect(imported.mock.calls[1]?.[0]).toEqual(original)
+  session.value = { ...session.value, session: { id: crypto.randomUUID() } }
+  await flushPromises()
+  expect(wrapper.find('section[role=status]').exists()).toBe(false)
+  expect(imported).toHaveBeenCalledTimes(2)
   wrapper.unmount()
 })
 it('uses Resource pages and reads versions only after selection without inventing directory metadata', async () => {
   const list = vi.fn().mockResolvedValue({
-      items: [{ id: 'app', revision: 2, kind: 'software', activeVersion: '1' }],
+      items: [
+        {
+          id: 'app',
+          presentation: { name: 'Example App' },
+          revision: 2,
+          kind: 'software',
+          activeVersion: '1',
+        },
+      ],
       nextCursor: 'app',
     }),
     read = vi.fn().mockResolvedValue({
@@ -262,9 +293,11 @@ it('uses Resource pages and reads versions only after selection without inventin
   })
   expect(list).toHaveBeenCalledWith('software', undefined)
   expect(read).not.toHaveBeenCalled()
-  await button(wrapper, 'app · 1').trigger('click')
+  await wrapper.get('tbody button').trigger('click')
   await flushPromises()
   expect(read).toHaveBeenCalledWith('app')
+  await button(wrapper, '← 企业软件目录').trigger('click')
+  await flushPromises()
   await button(wrapper, '下一页').trigger('click')
   await flushPromises()
   expect(list).toHaveBeenLastCalledWith('software', 'app')
@@ -276,7 +309,10 @@ it('uses Resource pages and reads versions only after selection without inventin
 it('selects a Resource header before reading real versions and clears the previous version', async () => {
   const list = vi
       .fn()
-      .mockResolvedValue({ items: [{ id: 'app', activeVersion: '1' }], nextCursor: null }),
+      .mockResolvedValue({
+        items: [{ id: 'app', presentation: {}, activeVersion: '1' }],
+        nextCursor: null,
+      }),
     read = vi.fn().mockResolvedValue({ kind: 'software', versions: [{ id: '1', state: 'active' }] })
   const { wrapper } = await fixture(
     defineComponent({

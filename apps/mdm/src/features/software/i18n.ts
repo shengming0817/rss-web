@@ -1,4 +1,37 @@
 export const softwareZh = {
+  ux: {
+    journey: '软件导入与交付',
+    source: '选择来源',
+    coordinates: '软件与固定版本',
+    verify: '核验内容',
+    deliver: '准备交付',
+    sourceHint:
+      '选择已启用的 WinGet REST、固定提交的 WinGet Community 或 Homebrew Tap。正式 API 需要精确包坐标和安装器选择，不提供软件搜索。私有来源请使用企业文件入口。',
+    enterprise: '上传企业安装文件',
+    next: '继续',
+    brewPath: 'Formula 路径',
+    bottleTag: 'Bottle 标签',
+    sourceLength: '源码字节数（可选）',
+    installerType: '安装器类型',
+    installerScope: '安装范围',
+    installerId: '安装器标识（可选）',
+    manifestFiles: '清单文件（每行一个相对路径）',
+    behaviorHint:
+      '按企业已审核的安装行为填写执行身份、范围、参数与独立检测。参数必须匹配来源元数据；不会自动推断静默安装或授权。',
+    imported: '来源导入已确认',
+    agentPackages: '管理 Agent 安装包',
+    search: '搜索本页名称或标识',
+    independentStages:
+      '来源解析、内容入库、版本准入和设备效果分别核验。准入不等于已安装；Resource 激活与软件准入各自维护。',
+    bytes: '字节',
+    download: '下载并核验私有安装包',
+    downloadVerified: '已核验下载长度和 SHA-256',
+    confirmReplay: '确认按原操作标识与完整正文重放',
+    contentPrerequisite: '内容后端未启用或此操作不可用。请核对服务端内容存储配置。',
+    admission: '版本准入',
+    enterpriseHint:
+      '企业文件使用现有 Resource 所有者：创建软件资源、声明固定版本及变体，然后上传、续传并明确完成入库。文件不会自动公开发布。',
+  },
   directPublicationHint: '选择确切的软件版本和实际目标即可发布。设备分批在部署策略中配置。',
   newPublication: '发布软件版本',
   publicationRecords: '发布记录',
@@ -219,6 +252,40 @@ export const softwareZh = {
   sourceHint: '来源摘要从已启用的企业来源读取；版本生命周期独立维护。',
 }
 export const softwareEn: typeof softwareZh = {
+  ux: {
+    journey: 'Software import and delivery',
+    source: 'Choose source',
+    coordinates: 'Software and pinned version',
+    verify: 'Verify content',
+    deliver: 'Prepare delivery',
+    sourceHint:
+      'Choose an enabled WinGet REST source, pinned WinGet Community commit or Homebrew Tap. The API requires exact package coordinates and installer selection; software search is unavailable. Use enterprise upload for private sources.',
+    enterprise: 'Upload enterprise installer',
+    next: 'Continue',
+    brewPath: 'Formula path',
+    bottleTag: 'Bottle tag',
+    sourceLength: 'Source bytes (optional)',
+    installerType: 'Installer type',
+    installerScope: 'Installation scope',
+    installerId: 'Installer ID (optional)',
+    manifestFiles: 'Manifest files (one relative path per line)',
+    behaviorHint:
+      'Supply enterprise-approved execution identity, scope, arguments and independent detection. Arguments must match source metadata. Silent installation and authority are never inferred.',
+    imported: 'Source import confirmed',
+    agentPackages: 'Manage Agent installers',
+    search: 'Search names or IDs on this page',
+    independentStages:
+      'Verify source resolution, content binding, version admission and device effects independently. Admission does not prove installation. Resource activation and software admission are separate.',
+    bytes: 'bytes',
+    download: 'Download and verify private installer',
+    downloadVerified: 'Downloaded length and SHA-256 verified',
+    confirmReplay: 'Confirm replay of the original operation ID and complete body',
+    contentPrerequisite:
+      'Content backend is disabled or this action is unavailable. Check server content storage configuration.',
+    admission: 'Version admission',
+    enterpriseHint:
+      'Use the existing Resource owner: create a software resource, declare a pinned version and variants, then upload, resume and explicitly complete content binding. Files are not published publicly.',
+  },
   directPublicationHint:
     'Publish an exact software version to an actual target. Configure device batches in its deployment policy.',
   newPublication: 'Publish software version',

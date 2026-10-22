@@ -204,8 +204,22 @@ function open(value = id.value) {
         current.value = v
         id.value = v.id
         kind.value = v.kind
-        resourceTab.value = 'versions'
+        resourceTab.value = route.query['tab'] === 'content' ? 'content' : 'versions'
         resetDraft()
+        if (v.kind === 'software') {
+          const selected =
+              v.versions.find((item) => item.id === route.query['version']) ?? v.versions[0],
+            variant = selected?.variants[0]
+          if (selected && variant) {
+            version.value = selected.id
+            target.value = {
+              version: selected.id,
+              variant: variant.key,
+              platform: variant.platform,
+              architecture: variant.architecture,
+            }
+          }
+        }
       },
     )
 }
@@ -506,6 +520,7 @@ watch(
     if (typeof route.query['resource'] === 'string') open(route.query['resource'])
     else {
       if (route.query['kind'] === 'software') kind.value = 'software'
+      if (route.query['author'] === 'enterprise') create()
       load()
     }
   },
@@ -656,20 +671,21 @@ watch(
             required
           /><UiButton type="button" @click="open()">{{ t('policies.open') }}</UiButton>
         </details>
+        <p v-if="route.query['author'] === 'enterprise'">{{ t('software.ux.enterpriseHint') }}</p>
         <label for="resource-kind">{{ t('policies.kind') }}</label
         ><select id="resource-kind" v-model="kind" class="ui-input" :disabled="!!current">
           <option value="script">{{ t('policies.scripts') }}</option>
           <option value="software">{{ t('policies.software') }}</option>
           <option value="configuration">{{ t('policies.configurations') }}</option></select
         ><UiButton
-          v-if="!current && kind !== 'software'"
+          v-if="!current && (kind !== 'software' || route.query['author'] === 'enterprise')"
           :disabled="!!!id"
           type="submit"
           @click="change({ action: 'create', kind })"
         >
           {{ t('policies.save') }}
         </UiButton>
-        <template v-if="kind === 'software'"
+        <template v-if="kind === 'software' && route.query['author'] !== 'enterprise'"
           ><p>{{ t('policies.ux.softwareImport') }}</p>
           <RouterLink :to="{ name: 'software-imports', params: { tenant: runtime.tenant } }">{{
             t('policies.ux.importSoftware')
@@ -848,6 +864,16 @@ watch(
           >
             <h2>{{ t('policies.upload') }}</h2>
             <p>{{ t('software.uploadSessionHint') }}</p>
+            <p v-if="failure === 'unsupported'" role="alert">
+              {{ t('software.ux.contentPrerequisite') }}
+              <RouterLink
+                :to="{
+                  name: 'settings-material',
+                  params: { tenant: runtime.tenant, material: 'storage' },
+                }"
+                >{{ t('settings.integrations') }}</RouterLink
+              >
+            </p>
             <label for="resource-upload-id">{{ t('software.uploadSessionId') }}</label>
             <input
               id="resource-upload-id"

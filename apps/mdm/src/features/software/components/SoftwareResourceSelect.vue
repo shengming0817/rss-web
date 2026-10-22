@@ -83,7 +83,10 @@ watch(
         >
           <option value="">{{ t('devices.select') }}</option>
           <option v-for="item in page.items" :key="item.id" :value="item.id">
-            {{ item.id }} · {{ item.activeVersion ?? '—' }}
+            {{
+              typeof item.presentation['name'] === 'string' ? item.presentation['name'] : item.id
+            }}
+            · {{ item.activeVersion ?? '—' }}
           </option>
         </select></label
       ><UiButton

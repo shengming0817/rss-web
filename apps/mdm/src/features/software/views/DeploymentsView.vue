@@ -418,7 +418,14 @@ watch(
     create()
     page.value = undefined
     if (typeof route.query['id'] === 'string') read(route.query['id'])
-    else list()
+    else if (
+      typeof route.query['resource'] === 'string' &&
+      typeof route.query['version'] === 'string'
+    ) {
+      beginCreate()
+      draft.value.action.resource.id = route.query['resource']
+      draft.value.action.resource.version = route.query['version']
+    } else list()
   },
   { immediate: true },
 )

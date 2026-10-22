@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import { UiButton, UiTable } from '@rss/core/components'
 import { onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { operation, useOperation, type Operation } from '../../../services/useOperation'
@@ -10,11 +11,12 @@ import SoftwareResourceSelect from '../components/SoftwareResourceSelect.vue'
 import PageFrame from '../../../components/PageFrame.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
+  route = useRoute(),
   client = runtime.software.publication,
   { run, runWrite, busy, failure, uncertain } = useOperation([], () => deviceBinding(runtime))
 const target = ref(''),
-  resource = ref(''),
-  version = ref(''),
+  resource = ref(typeof route.query['resource'] === 'string' ? route.query['resource'] : ''),
+  version = ref(typeof route.query['version'] === 'string' ? route.query['version'] : ''),
   current = ref<Publication>(),
   page = ref<Awaited<ReturnType<typeof client.list>>>(),
   targets = ref<Awaited<ReturnType<typeof client.targets>>>(),
@@ -169,16 +171,29 @@ onMounted(() => load())
     }}</UiButton>
     <section v-if="page" class="console-panel">
       <p v-if="!page.items.length">{{ t('policies.empty') }}</p>
-      <article v-for="item in page.items" :key="item.id">
-        <p>
-          {{ item.resource }} / {{ item.version }} · {{ item.target }} ·
-          {{ t(`software.publication_${item.outcome}`) }}
-        </p>
-        <p v-if="item.withdrawn">{{ t('software.lifecycle_withdrawn') }}</p>
-        <UiButton :disabled="busy || uncertain" @click="open(item.id)">{{
-          t('policies.open')
-        }}</UiButton>
-      </article>
+      <UiTable
+        :label="t('software.publicationRecords')"
+        :rows="page.items"
+        :row-key="(v) => v.id"
+        :busy-label="t('devices.loading')"
+        :empty-label="t('policies.empty')"
+        :columns="[
+          { key: 'resource', label: t('software.resource') },
+          { key: 'version', label: t('software.version') },
+          { key: 'target', label: t('software.binding') },
+          { key: 'outcome', label: t('policies.status') },
+        ]"
+      >
+        <template #cell-resource="{ row }"
+          ><UiButton variant="ghost" :disabled="busy || uncertain" @click="open(row.id)"
+            >{{ row.resource }} / {{ row.version }}</UiButton
+          ></template
+        >
+        <template #cell-outcome="{ row }"
+          >{{ t(`software.publication_${row.outcome}`)
+          }}<span v-if="row.withdrawn"> · {{ t('software.lifecycle_withdrawn') }}</span></template
+        >
+      </UiTable>
       <UiButton
         v-if="page.nextCursor"
         :disabled="busy || uncertain"
