@@ -1,26 +1,123 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiTable, UiBadge, UiDialog } from '@rss/core/components'
+import { UiButton, UiTable, UiBadge, UiDialog, UiStepIndicator } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { usePermission } from '../../enrollment/usePermission'
 import { useSettingsAction, useSettingsFacts } from '../../settings/useSettingsAction'
-import { pkiTrust, type PkiPurpose, type PkiTrust } from '../../settings/clients/pki'
+import {
+  pkiTrust,
+  type PkiPurpose,
+  type PkiTrust,
+  type pkiReceipt,
+} from '../../settings/clients/pki'
 import { downloadPublic } from '../../settings/download'
 import { auditTime } from '../../operations/format'
+import { inputDigest } from '../../settings/clients/value'
+import { uuid } from '../../../services/decode'
 import OperationNotice from '../../settings/components/OperationNotice.vue'
 const props = defineProps<{ purpose: PkiPurpose }>()
 const runtime = useMdm(),
   { t } = useI18n(),
   client = runtime.settings.pki,
   { canRead, canWrite } = usePermission('credentials', 'credentials'),
-  { run, busy, failure, pending, locked, compared, markCompared, resolveConflict } =
+  { run, busy, failure, pending, locked, compared, markCompared, resolveConflict, submit } =
     useSettingsAction(() => `pki:${props.purpose}`)
 const trust = ref<PkiTrust>(),
   readAt = ref<number>(),
   candidate = ref<PkiTrust>(),
   preparing = ref(false),
-  selected = ref<PkiTrust['issuers'][number]>()
+  selected = ref<PkiTrust['issuers'][number]>(),
+  rotation = ref(''),
+  rotationOpen = ref(false),
+  preparationReviewed = ref(false),
+  confirmation = ref<'activate' | 'retire'>(),
+  receipt = ref<ReturnType<typeof pkiReceipt>>()
+const intentRotation = computed(() =>
+  ['prepare', 'activate', 'retire'].includes(pending.value?.action ?? '')
+    ? pending.value?.id
+    : undefined,
+)
+const stage = computed(() =>
+  receipt.value ? ['distributing', 'activated', 'retired'].indexOf(receipt.value.state) + 1 : 0,
+)
+function closePreparation() {
+  preparing.value = false
+  candidate.value = undefined
+  preparationReviewed.value = false
+}
+function reviewPreparation() {
+  const current = trust.value,
+    next = candidate.value
+  if (
+    !current ||
+    !next ||
+    next.origin !== current.origin ||
+    next.revision !== current.revision + 1 ||
+    next.issuers.filter((i) => !current.issuers.some((old) => old.digest === i.digest)).length !==
+      1 ||
+    !next.issuers.some(
+      (i) => i.mode === 'prepared' && !current.issuers.some((old) => old.digest === i.digest),
+    )
+  ) {
+    failure.value = 'invalidRequest'
+    return
+  }
+  preparationReviewed.value = true
+}
+async function prepare() {
+  if (
+    locked.value ||
+    !canWrite.value ||
+    !trust.value ||
+    !candidate.value ||
+    !preparationReviewed.value
+  )
+    return
+  const input = candidate.value,
+    expected = trust.value.revision
+  await submit(
+    'prepare',
+    expected,
+    { purpose: props.purpose, candidateSha256: inputDigest(JSON.stringify(input)) },
+    (id) => client.prepare(id, props.purpose, expected, input),
+    (value) => {
+      receipt.value = value
+      rotation.value = value.operation
+      closePreparation()
+      rotationOpen.value = true
+    },
+  )
+  if (pending.value?.state === 'received') await load()
+}
+async function transition() {
+  const action = confirmation.value
+  if (!action || locked.value || !canWrite.value || !trust.value) return
+  let id: string
+  try {
+    id = uuid(rotation.value || intentRotation.value)
+  } catch {
+    failure.value = 'invalidRequest'
+    return
+  }
+  const expected = trust.value.revision
+  const ok = await submit(
+    action,
+    expected,
+    { purpose: props.purpose, rotation: id },
+    (original) => client.transition(original, props.purpose, expected, action),
+    (value) => {
+      receipt.value = value
+      rotation.value = value.operation
+    },
+    false,
+    id,
+  )
+  if (ok) {
+    confirmation.value = undefined
+    await load()
+  }
+}
 async function load() {
   trust.value = undefined
   selected.value = undefined
@@ -41,6 +138,7 @@ async function file(event: Event) {
     selectedFile = input.files?.[0]
   input.value = ''
   candidate.value = undefined
+  preparationReviewed.value = false
   if (!selectedFile) return
   if (selectedFile.size > 24 * 1024 * 1024) {
     failure.value = 'requestTooLarge'
@@ -58,7 +156,11 @@ useSettingsFacts(() => {
   trust.value = undefined
   candidate.value = undefined
   selected.value = undefined
-  preparing.value = false
+  closePreparation()
+  receipt.value = undefined
+  rotation.value = ''
+  rotationOpen.value = false
+  confirmation.value = undefined
   readAt.value = undefined
 })
 </script>
@@ -67,9 +169,14 @@ useSettingsFacts(() => {
     <header class="console-inline-actions">
       <h2>{{ t('security.pki.trust') }}</h2>
       <UiButton :disabled="busy || !canRead" @click="load">{{ t('devices.reload') }}</UiButton
-      ><UiButton :disabled="locked || !canWrite || !trust" @click="preparing = true">{{
-        t('security.pki.prepare')
-      }}</UiButton>
+      ><UiButton
+        :disabled="locked || !canWrite || !trust"
+        @click="
+          closePreparation()
+          preparing = true
+        "
+        >{{ t('security.pki.prepare') }}</UiButton
+      >
     </header>
     <p>{{ t('security.pki.publicHint') }}</p>
     <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
@@ -120,6 +227,19 @@ useSettingsFacts(() => {
     </template>
     <p v-else-if="!busy && !failure">{{ t('security.pki.noTrust') }}</p>
   </section>
+  <section class="console-panel">
+    <h2>{{ t('security.pki.lifecycle') }}</h2>
+    <p>{{ t('security.pki.noRotationRead') }}</p>
+    <p>{{ t('security.pki.rotationHint') }}</p>
+    <UiButton
+      :disabled="busy"
+      @click="
+        rotation = rotation || intentRotation || ''
+        rotationOpen = true
+      "
+      >{{ t('security.pki.rotations') }}</UiButton
+    >
+  </section>
   <UiDialog
     :open="!!selected"
     placement="right"
@@ -140,10 +260,11 @@ useSettingsFacts(() => {
   </UiDialog>
   <UiDialog
     :open="preparing"
+    :dismissible="!busy"
     placement="right"
     :title="t('security.pki.material')"
     :close-label="t('security.pki.close')"
-    @update:open="preparing = false"
+    @update:open="closePreparation"
   >
     <p>{{ t('security.pki.materialHint') }}</p>
     <p class="ui-help">{{ t('security.pki.unavailableMaterial') }}</p>
@@ -170,5 +291,96 @@ useSettingsFacts(() => {
         {{ issuer.digest }} · {{ t(`security.pki.${issuer.mode}`) }}
       </li>
     </ul>
+    <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
+    <p v-if="pending?.state === 'unknown'" role="alert">{{ t('security.pki.unknown') }}</p>
+    <template #footer>
+      <UiButton
+        v-if="!preparationReviewed"
+        :disabled="locked || !canWrite || !candidate || !trust"
+        @click="reviewPreparation"
+        >{{ t('security.pki.review') }}</UiButton
+      >
+      <UiButton v-else :disabled="locked || !canWrite || !candidate || !trust" @click="prepare">{{
+        t('security.pki.prepareConfirm')
+      }}</UiButton>
+    </template>
+  </UiDialog>
+  <UiDialog
+    :open="rotationOpen"
+    placement="right"
+    :dismissible="!busy"
+    :title="t('security.pki.rotations')"
+    :close-label="t('security.pki.close')"
+    @update:open="
+      rotationOpen = false
+      confirmation = undefined
+    "
+  >
+    <p>{{ t('security.pki.stageHint') }}</p>
+    <label for="pki-rotation">{{ t('security.pki.operation') }}</label
+    ><input
+      id="pki-rotation"
+      v-model="rotation"
+      maxlength="36"
+      :disabled="locked"
+      class="ui-input"
+    />
+    <p>{{ t('security.pki.expected') }} {{ trust?.revision ?? '—' }}</p>
+    <UiStepIndicator
+      v-if="receipt"
+      :label="t('security.pki.receipt')"
+      :current="stage"
+      :steps="[
+        t('security.pki.prepare'),
+        t('security.pki.distributing'),
+        t('security.pki.activated'),
+        t('security.pki.retired'),
+      ]"
+    />
+    <dl v-if="receipt" class="settings-facts">
+      <dt>{{ t('security.pki.receipt') }}</dt>
+      <dd>{{ t(`security.pki.${receipt.state}`) }}</dd>
+      <dt>{{ t('security.pki.operation') }}</dt>
+      <dd>{{ receipt.operation }}</dd>
+      <dt>{{ t('security.pki.revision') }}</dt>
+      <dd>{{ receipt.revision }}</dd>
+    </dl>
+    <p class="ui-help">{{ t('security.pki.noRotationRead') }}</p>
+    <p v-if="failure" role="alert">
+      {{ t(failure === 'conflict' ? 'security.pki.blocked' : 'devices.' + failure) }}
+    </p>
+    <p v-if="pending?.state === 'unknown'" role="alert">
+      {{ t('security.pki.unknown') }} · {{ pending.id }}
+    </p>
+    <OperationNotice
+      :operation="pending"
+      :busy="busy"
+      :can-write="canWrite"
+      :query-supported="false"
+      :compared="compared"
+      @compare="compare"
+      @edit="resolveConflict"
+    />
+    <p v-if="confirmation">
+      <strong>{{ t(`security.pki.${confirmation}`) }}</strong> ·
+      {{ t('security.pki.transitionConfirm') }}
+    </p>
+    <template #footer>
+      <UiButton :disabled="busy || !canRead" @click="load">{{ t('devices.reload') }}</UiButton>
+      <template v-if="!confirmation"
+        ><UiButton
+          :disabled="locked || !canWrite || !trust || !rotation"
+          @click="confirmation = 'activate'"
+          >{{ t('security.pki.activate') }}</UiButton
+        ><UiButton
+          :disabled="locked || !canWrite || !trust || !rotation"
+          @click="confirmation = 'retire'"
+          >{{ t('security.pki.retire') }}</UiButton
+        ></template
+      >
+      <UiButton v-else :disabled="locked || !canWrite || !trust || !rotation" @click="transition">{{
+        t('security.pki.transitionConfirm')
+      }}</UiButton>
+    </template>
   </UiDialog>
 </template>
