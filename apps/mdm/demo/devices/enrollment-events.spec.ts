@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import { expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { createDeviceDemo } from './state'
 import { request } from '../software/fixtures'
+afterEach(() => vi.useRealTimers())
 it('binds only an authorized pending enrollment and keeps Agent binding separate', () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-10-22T00:00:00Z'))
   const devices = createDeviceDemo(),
     now = Math.floor(Date.now() / 1000)
   const req = request('/api/v1/enrollments', {

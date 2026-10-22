@@ -61,12 +61,20 @@ async function download(index: number, artifact?: string) {
       const url = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' })),
         link = document.createElement('a')
       link.href = url
-      link.download = `${r.id}-${v.id}-${variant.platform}-${variant.architecture}.bin`
+      const extension = ['msi', 'pkg', 'exe', 'dmg', 'msix'].includes(spec.material.format)
+        ? spec.material.format
+        : 'bin'
+      link.download = `${r.id}-${v.id}-${variant.platform}-${variant.architecture}.${extension}`
       link.click()
       URL.revokeObjectURL(url)
       downloaded.value = `${r.id} / ${v.id} · ${variant.platform} / ${variant.architecture} / ${variant.key}`
     },
   )
+}
+function close() {
+  if (busy.value || locked.value) return
+  current.value = undefined
+  list()
 }
 function list(after?: string) {
   if (busy.value || locked.value) return
@@ -141,7 +149,12 @@ watch(
       >
     </template>
     <template v-if="!current">
-      <UiSearchInput v-model="query" :placeholder="t('software.ux.search')" />
+      <UiSearchInput
+        v-model="query"
+        :label="t('software.ux.search')"
+        :clear-label="t('console.clear')"
+        :placeholder="t('software.ux.search')"
+      />
       <UiButton :disabled="busy" @click="list()">{{ t('policies.reload') }}</UiButton>
       <p>{{ t('console.pageNotTotal') }}</p>
       <UiTable
@@ -185,15 +198,14 @@ watch(
       </details>
     </template>
     <section v-else class="console-panel">
-      <UiButton
-        :disabled="busy || locked"
-        @click="
-          current = undefined
-          list()
-        "
-        >← {{ t('software.catalog') }}</UiButton
-      >
+      <UiButton :disabled="busy || locked" @click="close">← {{ t('software.catalog') }}</UiButton>
       <h2>{{ title(current.presentation, current.id) }}</h2>
+      <p v-if="typeof current.presentation['description'] === 'string'">
+        {{ current.presentation['description'] }}
+      </p>
+      <p v-if="typeof current.presentation['publisher'] === 'string'">
+        {{ current.presentation['publisher'] }}
+      </p>
       <p data-testid="resource-locator">{{ current.id }} · {{ current.revision }}</p>
       <label
         >{{ t('software.version')
@@ -214,6 +226,12 @@ watch(
           <p>
             {{ variant.declaration.definition.package }} /
             {{ variant.declaration.definition.version }}
+          </p>
+          <p
+            v-for="signature in variant.declaration.definition.signatures"
+            :key="`${signature.artifact}/${signature.mechanism}/${signature.publisher}`"
+          >
+            {{ signature.publisher }} · {{ signature.mechanism }} · {{ signature.artifact }}
           </p>
           <dl v-for="(artifact, name) in variant.declaration.definition.artifacts" :key="name">
             <dt>{{ name }} · {{ artifact.length }} {{ t('software.ux.bytes') }}</dt>
@@ -236,7 +254,7 @@ watch(
         :version="version"
         @locked="locked = $event"
       />
-      <nav class="console-actions">
+      <nav class="console-inline-actions">
         <RouterLink
           :to="{
             name: 'policy-resources',

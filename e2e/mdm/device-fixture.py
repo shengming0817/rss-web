@@ -180,16 +180,21 @@ try:
                     self.send_error(404); return
                 body = json.dumps(data).encode()
                 self.send_response(200); self.send_header('Content-Type','application/json'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body)
-        server = ThreadingHTTPServer(('0.0.0.0', 0), SourceHandler)
+        pinned = socket.gethostbyname(socket.gethostname())
+        server = ThreadingHTTPServer((pinned, 0), SourceHandler)
         tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         tls.load_cert_chain(environment.root/'server.crt', environment.root/'server.key')
         server.socket = tls.wrap_socket(server.socket, server_side=True)
         upstream = f'https://localhost:{server.server_port}'
-        address = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        address.connect(('8.8.8.8', 53))
-        pinned = address.getsockname()[0]; address.close()
         threading.Thread(target=server.serve_forever, daemon=True).start()
         providers.callback(server.server_close); providers.callback(server.shutdown)
+        probe = http.client.HTTPSConnection(pinned, server.server_port, context=ssl.create_default_context(cafile=str(environment.root/'ca.crt')), timeout=5)
+        # Connect the reviewed address while TLS still verifies the configured localhost origin.
+        stream = socket.create_connection((pinned, server.server_port), timeout=5)
+        probe.sock = probe._context.wrap_socket(stream, server_hostname='localhost')
+        probe.request('GET', '/rest/information')
+        if probe.getresponse().status != 200: raise RuntimeError('source-readiness')
+        probe.close()
         config['content']['imports'] = {'browser-rest':[dict(base=upstream+'/', addresses=[pinned], private_ca=list((environment.root/'ca.crt').read_bytes()))]}
     private(config_path, config)
     phase = 'authority'

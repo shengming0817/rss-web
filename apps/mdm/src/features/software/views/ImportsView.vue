@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import { UiButton, UiStepIndicator } from '@rss/core/components'
 import { computed, onMounted, ref, watch, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -179,36 +179,35 @@ watch(
 <template>
   <PageFrame :title="t('software.imports')" :busy="busy" :failure="failure"
     ><p>{{ t('software.importDirectHint') }}</p>
-    <nav class="console-actions" :aria-label="t('software.ux.journey')">
-      <UiButton
-        v-for="(title, index) in ['source', 'coordinates', 'verify', 'deliver']"
-        :key="title"
-        :aria-current="step === index ? 'step' : undefined"
-        :disabled="busy || uncertain || !!result || index > step || index > 2"
-        @click="step = index"
-        >{{ index + 1 }} · {{ t(`software.ux.${title}`) }}</UiButton
-      >
-    </nav>
+    <UiStepIndicator
+      :steps="['source', 'coordinates', 'verify', 'deliver'].map((v) => t(`software.ux.${v}`))"
+      :current="step"
+      :label="t('software.ux.journey')"
+    />
+    <UiButton v-if="step > 0 && !result" :disabled="busy || uncertain" @click="step--">{{
+      t('console.back')
+    }}</UiButton>
     <section v-if="!result && step === 0" class="console-panel">
       <h2>{{ t('software.ux.source') }}</h2>
       <p>{{ t('software.ux.sourceHint') }}</p>
-      <label
-        >{{ t('software.source')
-        }}<select v-model="chosenSource" class="ui-input" :disabled="busy || uncertain">
-          <option value="">{{ t('devices.select') }}</option>
-          <option
-            v-for="item in sources?.items"
-            :key="`${item.source.id}/${item.source.revision}`"
-            :value="`${item.source.id}/${item.source.revision}`"
-            :disabled="
-              item.source.protocol.kind === 'private' || item.lifecycle.state !== 'enabled'
-            "
-          >
-            {{ item.source.id }} / {{ item.source.revision }} · {{ item.source.protocol.kind }} ·
-            {{ t(`software.lifecycle_${item.lifecycle.state}`) }}
-          </option>
-        </select></label
+      <label for="import-source">{{ t('software.source') }}</label
+      ><select
+        id="import-source"
+        v-model="chosenSource"
+        class="ui-input"
+        :disabled="busy || uncertain"
       >
+        <option value="">{{ t('devices.select') }}</option>
+        <option
+          v-for="item in sources?.items"
+          :key="`${item.source.id}/${item.source.revision}`"
+          :value="`${item.source.id}/${item.source.revision}`"
+          :disabled="item.source.protocol.kind === 'private' || item.lifecycle.state !== 'enabled'"
+        >
+          {{ item.source.id }} / {{ item.source.revision }} · {{ item.source.protocol.kind }} ·
+          {{ t(`software.lifecycle_${item.lifecycle.state}`) }}
+        </option>
+      </select>
       <UiButton :disabled="busy || uncertain" @click="loadSources()">{{
         t('policies.reload')
       }}</UiButton>
@@ -219,22 +218,24 @@ watch(
         >{{ t('devices.next') }}</UiButton
       >
       <p v-if="sources && !sources.items.length">{{ t('policies.empty') }}</p>
-      <RouterLink :to="{ name: 'software-sources', params: { tenant: runtime.tenant } }">{{
-        t('software.sources')
-      }}</RouterLink>
-      <RouterLink
-        :to="{
-          name: 'policy-resources',
-          params: { tenant: runtime.tenant },
-          query: { kind: 'software', author: 'enterprise' },
-        }"
-        >{{ t('software.ux.enterprise') }}</RouterLink
-      >
-      <UiButton :disabled="busy || uncertain || !chosen" @click="step = 1">{{
-        t('software.ux.next')
-      }}</UiButton>
+      <div class="console-inline-actions">
+        <RouterLink :to="{ name: 'software-sources', params: { tenant: runtime.tenant } }">{{
+          t('software.sources')
+        }}</RouterLink>
+        <RouterLink
+          :to="{
+            name: 'policy-resources',
+            params: { tenant: runtime.tenant },
+            query: { kind: 'software', author: 'enterprise' },
+          }"
+          >{{ t('software.ux.enterprise') }}</RouterLink
+        >
+        <UiButton :disabled="busy || uncertain || !chosen" @click="step = 1">{{
+          t('software.ux.next')
+        }}</UiButton>
+      </div>
     </section>
-    <form v-if="!result" ref="editor" @submit.prevent="submit">
+    <form v-if="!result" v-show="step > 0" ref="editor" @submit.prevent="submit">
       <fieldset :disabled="busy || uncertain">
         <section v-show="step === 1" data-step="1" class="console-panel">
           <h2>{{ t('software.ux.coordinates') }}</h2>
@@ -344,7 +345,9 @@ watch(
     </form>
     <h2 v-if="result">{{ t('software.ux.imported') }}</h2>
     <p v-if="result">{{ result.resource }} / {{ result.version }} · {{ result.storageRevision }}</p>
-    <UiButton :disabled="busy || !resource" @click="inspect">{{ t('policies.verify') }}</UiButton>
+    <UiButton v-if="result || uncertain" :disabled="busy || !resource" @click="inspect">{{
+      t('policies.verify')
+    }}</UiButton>
     <p v-if="observed">{{ observed.id }} · {{ observed.revision }}</p>
     <section v-if="uncertain && pending" class="console-panel" role="status">
       <p>{{ t('software.importUnknownHint') }}</p>

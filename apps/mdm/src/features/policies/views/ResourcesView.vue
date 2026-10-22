@@ -614,12 +614,20 @@ watch(
     <UiDialog
       v-model:open="creating"
       placement="right"
-      :title="t('policies.ux.selectType')"
+      :title="
+        route.query['author'] === 'enterprise'
+          ? t('software.ux.enterprise')
+          : t('policies.ux.selectType')
+      "
       :close-label="t('console.close')"
       :dismissible="!busy && !uncertain"
     >
       <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
-      <section class="console-panel" data-testid="collection-blueprints">
+      <section
+        v-if="route.query['author'] !== 'enterprise'"
+        class="console-panel"
+        data-testid="collection-blueprints"
+      >
         <h2>{{ t('policies.standardPackages') }}</h2>
         <p>{{ t('policies.standardPackagesNote') }}</p>
         <UiButton :disabled="busy" @click="loadBlueprints">{{
@@ -673,7 +681,12 @@ watch(
         </details>
         <p v-if="route.query['author'] === 'enterprise'">{{ t('software.ux.enterpriseHint') }}</p>
         <label for="resource-kind">{{ t('policies.kind') }}</label
-        ><select id="resource-kind" v-model="kind" class="ui-input" :disabled="!!current">
+        ><select
+          id="resource-kind"
+          v-model="kind"
+          class="ui-input"
+          :disabled="!!current || route.query['author'] === 'enterprise'"
+        >
           <option value="script">{{ t('policies.scripts') }}</option>
           <option value="software">{{ t('policies.software') }}</option>
           <option value="configuration">{{ t('policies.configurations') }}</option></select

@@ -64,11 +64,12 @@ async function fixture(component: Component, owners: object, props = {}, query =
   return { wrapper, session, router }
 }
 const button = (w: VueWrapper, name: string) => w.findAll('button').find((b) => b.text() === name)!
-const field = (w: VueWrapper, text: string) =>
-  w
-    .findAll('label')
-    .find((l) => l.text().startsWith(text))!
-    .find('input,textarea,select')
+const field = (w: VueWrapper, text: string) => {
+  const label = w.findAll('label').find((l) => l.text().startsWith(text))!
+  return label.attributes('for')
+    ? w.get(`#${label.attributes('for')}`)
+    : label.find('input,textarea,select')
+}
 it('registers a source directly and uses the displayed lifecycle CAS for disable and enable', async () => {
   const changeSource = vi.fn(async (_id, _revision, body) => ({
     ...source,
@@ -704,5 +705,51 @@ it('binds explicit Agent releases in the common Policy and reads canonical regis
   await button(wrapper, '执行中心').trigger('click')
   await flushPromises()
   expect(directory.mock.calls[0]?.[0].policy).toBe(saved?.id)
+  wrapper.unmount()
+})
+
+it('keeps the pinned Catalog version while admission is unknown and refuses mismatched private bytes', async () => {
+  const { resources } = softwareResource(),
+    read = vi.fn().mockResolvedValue(resources.read('app')),
+    content = vi.fn().mockResolvedValue(new Uint8Array([9, 9, 9]).buffer),
+    change = vi.fn().mockRejectedValue(new Error('lost'))
+  const { wrapper } = await fixture(
+    CatalogView,
+    {
+      policies: { resources: { read, list: vi.fn(async () => ({ items: [], nextCursor: null })) } },
+      software: {
+        content: { read: content },
+        lifecycle: {
+          version: vi.fn(async () => ({
+            resource: 'app',
+            version: '1',
+            resourceDigest: sha,
+            resourceRevision: 2,
+            presentation: {},
+            lifecycle: null,
+          })),
+          changeVersion: change,
+        },
+      },
+    },
+    {},
+    { resource: 'app', version: '1' },
+  )
+  await button(wrapper, '下载并核验私有安装包').trigger('click')
+  await flushPromises()
+  expect(content.mock.calls[0]).toEqual([
+    'app',
+    { version: '1', platform: 'windows', architecture: 'x86_64', variant: 'main' },
+  ])
+  expect(wrapper.text()).toContain('输入或响应无效，操作未确认。')
+  await button(wrapper, '启用').trigger('click')
+  await flushPromises()
+  expect(wrapper.get('select').attributes('disabled')).toBeDefined()
+  expect(button(wrapper, '← 企业软件目录').attributes('disabled')).toBeDefined()
+  const original = structuredClone(change.mock.calls[0])
+  await wrapper.get('section[role=status] input[type=checkbox]').setValue(true)
+  await button(wrapper, '重放同一操作').trigger('click')
+  await flushPromises()
+  expect(change.mock.calls[1]).toEqual(original)
   wrapper.unmount()
 })

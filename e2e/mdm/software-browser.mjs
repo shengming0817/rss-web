@@ -123,7 +123,7 @@ try {
   }
   await page.goto(route('software/imports'))
   await idle()
-  await page.getByLabel('企业来源 ID', { exact: true }).selectOption('browser-rest/1')
+  await page.locator('#import-source').selectOption('browser-rest/1')
   await click('继续')
   await page.getByLabel('软件资源', { exact: true }).fill(importedResource)
   await page.getByLabel('包标识', { exact: true }).fill('Acme.App')
@@ -133,12 +133,14 @@ try {
   await page
     .getByLabel('原生安装行为（含运行身份与安装范围）', { exact: true })
     .fill(JSON.stringify(behaviorImport))
-  const imports = []
+  const imports = [],
+    importStatuses = []
   const loseImport = async (r) => {
     if (r.request().method() !== 'POST') return r.continue()
     imports.push(r.request().postDataJSON())
     const response = await r.fetch()
-    assert.equal(response.status(), 200)
+    importStatuses.push(response.status())
+    if (response.status() !== 200) return r.fulfill({ response })
     if (imports.length === 1) await r.abort('failed')
     else await r.fulfill({ response })
   }
@@ -146,6 +148,7 @@ try {
   await page.getByRole('button', { name: '导入', exact: true }).click()
   const recovery = page.locator('section[role=status]')
   await recovery.waitFor()
+  assert.deepEqual(importStatuses, [200])
   await click('核实状态')
   assert.equal(imports.length, 1)
   await recovery.locator('input[type=checkbox]').check()
@@ -222,7 +225,8 @@ try {
   const revoked = await context.request.get(
     `${origin}/api/v1/software/resources/${importedResource}/versions/1/content?platform=windows&architecture=x86_64&variant=main`,
   )
-  assert.equal(revoked.status(), 409)
+  assert.equal(revoked.status(), 403)
+  assert.deepEqual(await revoked.json(), { code: 'permission_denied' })
   coverage.push(
     'admission-private-download-byte-digest-anonymous-denial-and-withdrawal-revokes-new-read',
   )
