@@ -324,7 +324,7 @@ it.each(['storage', 'smtp', 'wns'] as const)(
     expect(JSON.stringify([...f.settings.operations.records.values()])).not.toContain(
       'fixture-secret',
     )
-    expect(f.wrapper.text()).toContain('尚未观察')
+    expect(f.wrapper.text()).toContain('仍需核对运行应用及设备观察')
   },
 )
 it('clears credentials on tab hiding and prevents changed intent from replaying an unresolved operation', async () => {
@@ -414,7 +414,7 @@ it('prepares task trust with an explicit version and reads a null device observa
   await forms.at(-1)!.get('input').setValue('device-a')
   await forms.at(-1)!.trigger('submit')
   await flushPromises()
-  expect(f.wrapper.text()).toContain('尚未观察')
+  expect(f.wrapper.text()).toContain('仍需核对运行应用及设备观察')
 })
 it('submits Webhook preparation against the read configuration identity and never displays its imported secret', async () => {
   const f = await fixture(WebhookPanel)

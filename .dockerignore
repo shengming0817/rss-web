@@ -57,3 +57,6 @@
 !apps/mdm/demo/*.ts
 !apps/mdm/demo/*.vue
 !scripts/check-mdm-app-build.mjs
+!deploy/
+!deploy/mdm/
+!deploy/mdm/static.conf
