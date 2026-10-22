@@ -95,6 +95,51 @@ it('decodes unknown explanations and snake-case provenance without claiming memb
   expect(() => decodeGroupPage(response, id, task, 'members')).toThrow()
   expect(() => decodeGroupPage({ ...response, result: id }, id, task, 'decisions')).toThrow()
 })
+it.each([null, id])(
+  'preserves a frozen source member set %s, including the initial empty set',
+  (memberSet) => {
+    const source = {
+      group: '33333333-3333-4333-8333-333333333333',
+      coordinates: {
+        definitionVersion: 1,
+        memberVersion: 0,
+        authorityVersion: 1,
+        memberSet,
+        assetContext: 'endpoint',
+      },
+    }
+    for (const kind of ['members', 'changes', 'decisions'] as const) {
+      const page = kind === 'changes' ? { kind, added: [], removed: [] } : { kind, items: [] }
+      const result = decodeGroupPage(
+        {
+          group: id,
+          result: task,
+          current: true,
+          sources: [source],
+          totalObjects: 0,
+          totalMembers: 0,
+          page,
+          nextCursor: null,
+        },
+        id,
+        task,
+        kind,
+      )
+      expect(result.sources).toEqual([source])
+      expect(() =>
+        decodeGroupPage(
+          {
+            ...result,
+            sources: [{ ...source, coordinates: { ...source.coordinates, memberSet: 'invalid' } }],
+          },
+          id,
+          task,
+          kind,
+        ),
+      ).toThrow()
+    }
+  },
+)
 it('uses 200 for definition changes and 202 for recompute and preview, preserving CAS', async () => {
   const request = vi.fn(async (o: RequestOptions<unknown>) =>
     o.decode(

@@ -256,7 +256,7 @@ export function decodeGroupPage(
           definitionVersion: count(c['definitionVersion']),
           memberVersion: count(c['memberVersion']),
           authorityVersion: count(c['authorityVersion']),
-          memberSet: uuid(c['memberSet']),
+          memberSet: nullable(c['memberSet'], uuid),
           assetContext: enumeration(c['assetContext'], ['endpoint', 'associated_device'] as const),
         },
       }

@@ -1660,8 +1660,10 @@ it('renders shared fields in saved layout order after reloading the detail', asy
   await f.router.push({ name: 'device-detail', params: { tenant: TENANT, device: 'device-01' } })
   await flushPromises()
   await f.click('Ordered assets')
-  const labels = f.wrapper.findAll('.asset-detail-layout dl dt').map((label) => label.text())
-  expect(labels.indexOf('借用设备')).toBeLessThan(labels.indexOf('资产编号'))
+  const labels = f.wrapper
+    .findAll('.asset-detail-layout .console-panel > dl > dt')
+    .map((label) => label.text())
+  expect(labels).toEqual(['借用设备', '资产编号'])
 })
 it('compares a deleted group inside its unknown-result modal before replaying the original delete', async () => {
   const f = await setup('device-groups')
