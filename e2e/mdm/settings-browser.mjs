@@ -52,6 +52,12 @@ try {
     await page.waitForURL((url) => !url.pathname.endsWith('/login'))
   }
   const body = () => page.locator('body')
+  const catalogIds = async (path) => {
+    const response = await page.request.get(origin + path)
+    assert.equal(response.status(), 200)
+    return (await response.json()).items.map((item) => item.id).sort()
+  }
+
   const step = async (label) => {
     await page.getByRole('button').filter({ hasText: label }).click()
   }
@@ -198,6 +204,7 @@ try {
     const tenantIds = await page
       .locator('[data-setting]')
       .evaluateAll((nodes) => nodes.map((n) => n.getAttribute('data-setting')))
+    assert.deepEqual([...tenantIds].sort(), await catalogIds('/api/v1/settings/catalog'))
     await page.goto(origin + '/platform')
     await page.waitForURL((url) => url.pathname === '/platform/login')
     await page.locator('#login-name').fill(f.platformLogin)
@@ -208,7 +215,14 @@ try {
     const platformIds = await page
       .locator('[data-setting]')
       .evaluateAll((nodes) => nodes.map((n) => n.getAttribute('data-setting')))
-    assert.equal(new Set([...tenantIds, ...platformIds]).size, 43)
+    assert.deepEqual(
+      [...platformIds].sort(),
+      await catalogIds('/api/v1/tenant-administration/settings/catalog'),
+    )
+    assert.equal(
+      new Set([...tenantIds, ...platformIds]).size,
+      tenantIds.length + platformIds.length,
+    )
     assert.equal(await page.getByRole('link', { name: '设备目录', exact: true }).count(), 0)
     await page.goto(`${origin}/tenants/${f.tenant}/settings`)
     await page.waitForURL((url) => url.pathname === '/login')
@@ -229,7 +243,7 @@ try {
     assert.deepEqual(retired, [])
     coverage.push(
       'independent-platform-authentication-and-scope',
-      'all-43-setting-requirements-retained',
+      'all-authorized-setting-requirements-retained',
       'ordinary-reader-outside-mandatory-guide',
       'no-retired-approval-or-workflow-requests',
     )
@@ -248,6 +262,7 @@ try {
     const tenantIds = await page
       .locator('[data-setting]')
       .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-setting')))
+    assert.deepEqual([...tenantIds].sort(), await catalogIds('/api/v1/settings/catalog'))
     assert.ok(
       tenantIds.includes('apns-key') &&
         tenantIds.includes('task-key') &&
@@ -268,11 +283,18 @@ try {
     const platformIds = await page
       .locator('[data-setting]')
       .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-setting')))
-    assert.equal(new Set([...tenantIds, ...platformIds]).size, 43)
+    assert.deepEqual(
+      [...platformIds].sort(),
+      await catalogIds('/api/v1/tenant-administration/settings/catalog'),
+    )
+    assert.equal(
+      new Set([...tenantIds, ...platformIds]).size,
+      tenantIds.length + platformIds.length,
+    )
     assert.ok(!platformIds.includes('apns-key'))
     assert.equal(await page.getByRole('link', { name: '设备目录', exact: true }).count(), 0)
     coverage.push(
-      'all-43-requirements-across-authorized-scopes',
+      'all-current-requirements-across-authorized-scopes',
       'platform-independent-local-authentication',
     )
     phase = 'provisioning-unknown'
