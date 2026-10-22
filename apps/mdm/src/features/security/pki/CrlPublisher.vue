@@ -12,9 +12,8 @@ const props = defineProps<{ purpose: PkiPurpose }>()
 const runtime = useMdm(),
   { t } = useI18n(),
   { canWrite } = usePermission('credentials', 'credentials'),
-  { run, busy, failure, pending, locked, submit } = useSettingsAction(
-    () => `pki-crl:${props.purpose}`,
-  )
+  { run, busy, failure, pending, locked, submit, compared, markCompared, resolveConflict } =
+    useSettingsAction(() => `pki-crl:${props.purpose}`)
 const open = ref(false),
   publications = ref<Publication[]>(),
   received = ref(false),
@@ -23,6 +22,9 @@ function close() {
   open.value = false
   publications.value = undefined
   reviewed.value = false
+}
+async function compare() {
+  if (await run(() => runtime.settings.pki.read(props.purpose))) markCompared()
 }
 async function file(event: Event) {
   const input = event.target as HTMLInputElement,
@@ -74,6 +76,9 @@ useSettingsFacts(() => {
       :busy="busy"
       :can-write="canWrite"
       :query-supported="false"
+      :compared="compared"
+      @compare="compare"
+      @edit="resolveConflict"
     />
   </section>
   <UiDialog
@@ -107,6 +112,9 @@ useSettingsFacts(() => {
       :busy="busy"
       :can-write="canWrite"
       :query-supported="false"
+      :compared="compared"
+      @compare="compare"
+      @edit="resolveConflict"
     />
     <template #footer
       ><UiButton

@@ -1,3 +1,4 @@
+import { createPkiDemo } from './pki'
 import { createProfilesDemo } from './profiles'
 import { createPackageDemo } from './packages'
 import { createHash } from 'node:crypto'
@@ -25,6 +26,7 @@ const platformIds = [
   'host-config',
 ]
 export function createSettingsDemo() {
+  const pki = createPkiDemo()
   const packages = createPackageDemo()
   const profiles = createProfilesDemo()
   const operations = new Map<string, { input: string; receipt: unknown }>()
@@ -41,6 +43,8 @@ export function createSettingsDemo() {
     },
   ]
   const handle: DomainHandler = (r, scenario) => {
+    const pkiReply = pki.handle(r, scenario)
+    if (pkiReply) return pkiReply
     const profileReply = profiles.handle(r, scenario)
     if (profileReply) return profileReply
     const packageReply = packages.handle(r, scenario)
@@ -248,6 +252,7 @@ export function createSettingsDemo() {
   return {
     handle,
     reset() {
+      pki.reset()
       packages.reset()
       profiles.reset()
       operations.clear()
