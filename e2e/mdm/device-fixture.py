@@ -29,6 +29,8 @@ from pki_fixtures import running as pki
 from candidate_installation_driver import Browser
 from runtime_fixture import storage, readiness as readiness_status
 
+backend_revision = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD'], cwd=BACKEND, text=True).strip()
+print(json.dumps(dict(phase='backend-baseline', revision=backend_revision)), flush=True)
 environment = Environment(BACKEND, group='device-browser')
 processes = []
 providers = ExitStack()
@@ -49,10 +51,17 @@ for signum in (signal.SIGINT, signal.SIGTERM):
 def q(value):
     return "'" + str(value).replace("'", "''") + "'"
 
+browser_module = os.environ.get('MDM_DEVICE_BROWSER_MODULE', 'device-browser.mjs')
+if browser_module not in {'device-browser.mjs', 'operations-browser.mjs'}:
+    raise RuntimeError('unsupported browser module')
+
 def seed_authority():
     tenant = TENANTS[0]
     user = dict(instanceId=INSTANCE, tenantId=tenant, principalId=ADMIN)
     rule = dict(subject=dict(kind='user', user=user), grants=[dict(operation=o, scope=dict(kind='all_devices')) for o in ['inventory_read','inventory_collect','inventory_assign','device_association_write','credentials','enrollment','operation_read','script_execute']] + [dict(operation=o, scope=dict(kind='tenant')) for o in ['inventory_sensitive_read','inventory_fields_write','software_read','software_write','release_publish','software_withdraw','agent_enrollment_read','agent_enrollment_write','group_read','group_write','group_recompute','scope_read','scope_write','policy_read','policy_write','resource_read','resource_write','registration_configuration_read','registration_configuration_write']])
+    if browser_module == 'operations-browser.mjs':
+        # Explicit authority for disposable HTTP acceptance, never production account initialization.
+        rule['grants'] += [dict(operation=o, scope=dict(kind='all_devices')) for o in ['device_control','device_wipe','operation_cancel']]
     rule_id = str(uuid.uuid4())
     sql = [f"SET rss.tenant_id = '{tenant}'", f"INSERT INTO mdm_access.authorization_rules(tenant_id,instance,id,revision,document) VALUES('{tenant}','{INSTANCE}','{rule_id}',1,{q(json.dumps(rule))}::jsonb)"]
     environment.sql(';'.join(sql)+';', 'mdm_dev')
@@ -73,6 +82,10 @@ def seed():
             column, origin = 'agent_grant_id', grant
         sql += [f"INSERT INTO mdm_access.registrations(tenant_id,id,device,channel,generation,{column},state,purpose,epoch) VALUES('{tenant}','{registration}','{device}','{channel}',1,'{origin}','active','primary',gen_random_uuid())",
                 f"INSERT INTO mdm_access.credentials VALUES('{tenant}','{credential}','{registration}','{channel}',md5('{credential}')||md5('{registration}'),'active')"]
+        if browser_module == 'operations-browser.mjs' and device == 'fixture-mdm':
+            # Same synthetic Windows capability fixture as rss-mdm execution/support.rs; no device effect claim.
+            sql.append(f"INSERT INTO mdm_access.report_sources(tenant_id,registration,source,epoch,enabled) SELECT tenant_id,id,'mdm.windows',epoch,true FROM mdm_access.registrations WHERE tenant_id='{tenant}' AND id='{registration}'")
+            sql.append(f"INSERT INTO mdm_commands.capabilities(tenant_id,registration,generation,os_version,edition,session,observed_at) VALUES('{tenant}','{registration}',1,'10.0.22621.0',48,1,1)")
         for field, scalar in [('custom.asset_tag',dict(kind='string',value=device)), ('custom.browser_list',dict(kind='array',value=[dict(kind='integer',value=n) for n in range(25 if channel=='mdm' else 3)]))]:
             fact=dict(state=dict(kind='known',value=scalar),lastKnown=None,evidence=dict(scope=dict(kind='device'),source='manual',dataset=None,registration=None,registrationGeneration=None,epoch=None,snapshotId=str(uuid.uuid4()),observedAt=1,receivedAt=2,actor=ADMIN))
             sql.append(f"INSERT INTO mdm.manual_assignments(tenant_id,device,field,revision,fact) VALUES('{tenant}','{device}','{field}',1,{q(json.dumps(fact))}::jsonb)")
@@ -201,7 +214,7 @@ try:
     agent_fixture = collector.register(agent_origin, environment.root/'ca.crt', native/'pki'/'agent', operator, private, TENANTS[0])
     fixture=private(environment.root/'browser.json',dict(collector=agent_fixture,origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,principal=ADMIN,login='admin',passwordFile=str(environment.root/'account-password'),mdm='fixture-mdm',agent='fixture-agent',alone='fixture-alone',ruleId=rule_id,rule=rule))
     phase='browser'
-    browser=subprocess.run(['node',str(WEB/'e2e/mdm/device-browser.mjs')],cwd=WEB,env={**os.environ,'MDM_DEVICE_BROWSER_FIXTURE':str(fixture)},timeout=900,pass_fds=lease_fds())
+    browser=subprocess.run(['node',str(WEB/'e2e/mdm'/browser_module)],cwd=WEB,env={**os.environ,'MDM_DEVICE_BROWSER_FIXTURE':str(fixture)},timeout=900,pass_fds=lease_fds())
     if browser.returncode: raise RuntimeError('browser')
     result='passed'
 except BaseException as error:

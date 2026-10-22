@@ -99,8 +99,9 @@ it('retains installed expiry through issuance and command success until independ
     items: [expect.objectContaining({ code: 'certificate_expiry', state: 'resolved' })],
   })
   expect(
-    (await f.server.handle('GET', `/api/v1/mdm-candidate/executions/${dispatch.operationId}`)).body,
-  ).toMatchObject({ execution: { effect: 'verified_present', compliance: 'unknown' } })
+    (await f.server.handle('GET', `/api/v1/mdm-candidate/security/actions/${dispatch.operationId}`))
+      .body,
+  ).toMatchObject({ action: { summary: { effect: 'verified_present', compliance: 'unknown' } } })
   // Advance the wall clock without reading certificates or injecting a certificate event.
   const expiringAt = f.now + 1 + 84 * 86400
   vi.setSystemTime(expiringAt * 1000)
@@ -230,8 +231,11 @@ it('rejects mismatched fingerprints, out-of-order evidence and revoked registrat
     },
   })
   expect(
-    (await f.server.handle('GET', `/api/v1/mdm-candidate/executions/${dispatch.operationId}`)).body,
-  ).toMatchObject({ execution: { effect: 'unknown', nativeCode: 'source_registration_changed' } })
+    (await f.server.handle('GET', `/api/v1/mdm-candidate/security/actions/${dispatch.operationId}`))
+      .body,
+  ).toMatchObject({
+    action: { summary: { effect: 'unknown', nativeCode: 'source_registration_changed' } },
+  })
   expect(
     (await f.server.handle('GET', '/api/v1/mdm-candidate/operations/alerts?device=device-01')).body,
   ).toMatchObject({

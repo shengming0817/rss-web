@@ -32,6 +32,7 @@
     "image:mdm": "bash scripts/build-mdm-image.sh",
     "test:mdm:policy-browser": "node e2e/mdm/policy-browser.mjs",
     "test:mdm:enrollment-browser": "node e2e/mdm/enrollment-run.mjs",
+    "test:mdm:operations-browser": "node e2e/mdm/operations-run.mjs",
     "test:mdm:device-browser": "node e2e/mdm/device-run.mjs",
     "dev:ui": "pnpm -F @rss/ui-preview dev",
     "build:ui-preview": "pnpm -F @rss/ui-preview build",

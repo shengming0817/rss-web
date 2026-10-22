@@ -6,11 +6,11 @@ import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../../devices/useDeviceBinding'
-import type { ExecutionSummary } from '../clients/executions'
 import type { NativeOperation, Reauthorization } from '../clients/native'
 import PageFrame from '../../../components/PageFrame.vue'
-import ExecutionFacts from '../components/ExecutionFacts.vue'
+import NativeTaskFacts from '../components/NativeTaskFacts.vue'
 import PolicyRunFacts from '../components/PolicyRunFacts.vue'
+import { uuid } from '../../../services/decode'
 import type { PolicyRun } from '../clients/runs'
 const { t } = useI18n(),
   runtime = useMdm(),
@@ -19,8 +19,7 @@ const { t } = useI18n(),
 const confirmation = ref(false),
   registration = ref(''),
   generation = ref(1)
-const execution = ref<ExecutionSummary>(),
-  native = ref<NativeOperation>(),
+const native = ref<NativeOperation>(),
   software = ref<PolicyRun>()
 watch(
   [registration, generation],
@@ -30,58 +29,61 @@ watch(
   { flush: 'sync' },
 )
 async function load() {
-  const id = String(route.params['execution'])
-  const policy = route.query['policy']
+  let id: string
+  try {
+    id = uuid(String(route.params['execution']))
+  } catch {
+    failure.value = 'invalidRequest'
+    return
+  }
+  const policy = route.query['policy'],
+    device = route.query['device']
+  if ((typeof policy === 'string') === (typeof device === 'string')) {
+    failure.value = 'invalidRequest'
+    return
+  }
   if (typeof policy === 'string') {
     await run(
       () => runtime.policies.runs.read(policy, id),
-      (v) => {
-        software.value = v
+      (value) => {
+        software.value = value
       },
     )
-    return
-  }
-  const device = route.query['device']
-  if (typeof device === 'string') {
+  } else if (typeof device === 'string') {
     await run(
       () => runtime.policies.native.read(device, id),
-      (v) => {
-        native.value = v
+      (value) => {
+        native.value = value
         confirmation.value = false
+        compared.value = true
       },
     )
-    return
   }
-  await run(
-    async () => {
-      const summary = await runtime.policies.executions.read(id)
-      const n =
-        summary.origin.kind === 'native'
-          ? await runtime.policies.native.read(summary.device, summary.origin.operation)
-          : undefined
-      const updated = n ? await runtime.policies.executions.read(id) : summary
-      const s =
-        summary.origin.kind === 'software'
-          ? await runtime.policies.runs.read(summary.origin.policy, summary.origin.task)
-          : undefined
-      return { summary: s ? await runtime.policies.executions.read(id) : updated, n, s }
-    },
-    (v) => {
-      execution.value = v.summary
-      native.value = v.n
-      software.value = v.s
-    },
-  )
 }
-function change(action: 'reauthorize' | 'cancel') {
+const pending = ref<{
+    device: string
+    id: string
+    action: 'reauthorize' | 'cancel'
+    body: Reauthorization
+  }>(),
+  compared = ref(false)
+async function repeat() {
+  const original = pending.value
+  if (!original || busy.value || !compared.value) return
   if (
-    busy.value ||
-    uncertain.value ||
-    !native.value ||
-    (!execution.value && typeof route.query['device'] !== 'string')
-  )
+    await runWrite(() =>
+      runtime.policies.native[original.action](original.device, original.id, original.body),
+    )
+  ) {
+    pending.value = undefined
+    await load()
+  }
+}
+
+function change(action: 'reauthorize' | 'cancel') {
+  if (busy.value || uncertain.value || !native.value || typeof route.query['device'] !== 'string')
     return
-  const device = execution.value?.device ?? String(route.query['device']),
+  const device = String(route.query['device']),
     id = native.value.operationId,
     body: Reauthorization = {
       requestId: crypto.randomUUID(),
@@ -96,20 +98,26 @@ function change(action: 'reauthorize' | 'cancel') {
           }
         : {}),
     }
-  const change = async () => {
-    if (await runWrite(() => runtime.policies.native[action](device, id, body))) await load()
-  }
+  pending.value = { device, id, action, body }
+  compared.value = false
   confirmation.value = false
-  void change()
+  void (async () => {
+    if (await runWrite(() => runtime.policies.native[action](device, id, body))) {
+      pending.value = undefined
+      await load()
+    }
+  })()
 }
+
 watch(
   () => [route.fullPath, ...deviceBinding(runtime)],
   () => {
-    execution.value = undefined
     native.value = undefined
     software.value = undefined
     confirmation.value = false
     registration.value = ''
+    pending.value = undefined
+    compared.value = false
     void load()
   },
   { immediate: true },
@@ -117,60 +125,29 @@ watch(
 </script>
 <template>
   <PageFrame :title="t('policies.detail')" :busy="busy" :failure="failure"
-    ><UiButton :disabled="!!busy" type="submit" @click="load">{{ t('policies.verify') }}</UiButton
-    ><template v-if="execution"
-      ><h2>{{ execution.device }} · {{ execution.id }}</h2>
-      <ExecutionFacts :execution="execution" /><RouterLink
-        :to="{
-          name: 'policy-executions',
-          params: { tenant: runtime.tenant },
-          query: { batch: execution.batch ?? undefined },
-        }"
-        >{{ t('policies.batch') }}</RouterLink
-      ><RouterLink
-        v-if="execution.origin.kind === 'policy'"
-        :to="{
-          name: 'policy-policies',
-          params: { tenant: runtime.tenant },
-          query: { id: execution.origin.policy },
-        }"
-        >{{ t('policies.policies') }}</RouterLink
-      ></template
-    >
-    <RouterLink
-      v-if="execution?.origin.kind === 'security'"
-      :to="{
-        name: 'security-actions',
-        params: { tenant: runtime.tenant },
-        query: { id: execution.id },
-      }"
-      >{{ t('security.actions') }}</RouterLink
-    >
-    <section
-      v-if="execution?.origin.kind === 'policy' && execution.origin.output !== null"
-      class="console-panel"
-    >
-      <h2>{{ t('policies.output') }}</h2>
-      <pre>{{ JSON.stringify(execution.origin.output, null, 2) }}</pre>
-    </section>
-    <section v-if="execution?.origin.kind === 'policy'" class="console-panel">
-      <h2>{{ t('policies.executionBasis') }}</h2>
+    ><UiButton :disabled="!!busy" type="submit" @click="load">{{ t('policies.verify') }}</UiButton>
+    <p>{{ route.params['execution'] }}</p>
+    <p v-if="uncertain && pending">
+      {{ t('policies.originalChange') }} {{ pending.body.requestId }} ·
+      {{ pending.body.expectedRevision }}
+    </p>
+    <section v-if="uncertain && native" class="console-panel">
+      <h2>{{ t('devices.compare') }}</h2>
       <p>
-        {{ execution.origin.basis.source }} · {{ execution.origin.basis.resource }} /
-        {{ execution.origin.basis.version }} · Scope {{ execution.origin.basis.scope }} /
-        {{ execution.origin.basis.scopeRevision }}
+        {{ t('policies.revision') }} {{ native.revision }} · {{ native.commandStatus }} ·
+        {{ native.authorization }}
       </p>
-      <p>
-        {{ execution.origin.basis.resourceDigest }} · {{ execution.origin.basis.parameterDigest }}
-      </p>
-      <ul>
-        <li v-for="identity in execution.origin.basis.registrations" :key="identity.id">
-          {{ identity.id }} / {{ identity.generation }}
-        </li>
-      </ul>
     </section>
+    <UiButton v-if="uncertain && pending" :disabled="busy || !compared" @click="repeat">{{
+      t('policies.replay')
+    }}</UiButton>
     <section v-if="native" class="console-panel">
       <h2>{{ native.observation.protocol }}</h2>
+      <NativeTaskFacts :operation="native" :device="String(route.query['device'])" />
+      <details v-if="native.dispatchFailure" open>
+        <summary>{{ t('policies.dispatchFailure') }}</summary>
+        <pre>{{ JSON.stringify(native.dispatchFailure, null, 2) }}</pre>
+      </details>
       <details v-if="native.agentInstallation">
         <summary>{{ t('software.installAgent') }}</summary>
         <pre>{{ JSON.stringify(native.agentInstallation, null, 2) }}</pre>
@@ -205,9 +182,7 @@ watch(
       <UiButton
         v-if="
           native.authorization === 'blocked' &&
-          !['cancelled', 'applied', 'rejected', 'timed_out', 'superseded'].includes(
-            native.commandStatus,
-          )
+          ['queued', 'published'].includes(native.commandStatus)
         "
         :disabled="!!(busy || uncertain)"
         type="submit"
@@ -238,12 +213,7 @@ watch(
                 : 'policy-policies',
           params: { tenant: runtime.tenant },
           query: {
-            id:
-              typeof route.query['policy'] === 'string'
-                ? route.query['policy']
-                : execution?.origin.kind === 'software'
-                  ? execution.origin.policy
-                  : undefined,
+            id: typeof route.query['policy'] === 'string' ? route.query['policy'] : undefined,
           },
         }"
         >{{

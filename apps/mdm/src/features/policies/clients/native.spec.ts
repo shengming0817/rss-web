@@ -1,12 +1,22 @@
 import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
-import { createNativeClient, decodeNativeOperation, deviceControlAction } from './native'
+import {
+  createNativeClient,
+  decodeNativeOperation,
+  deviceControlAction,
+  controlKind,
+} from './native'
 const id = '11111111-1111-4111-8111-111111111111'
 const read = {
   operationId: id,
   commandId: id,
   revision: 1,
-  task: { platform: 'windows', request: { kind: 'sync_ml', request: {} } },
+  task: {
+    platform: 'windows',
+    kind: 'sync_ml',
+    name: 'SyncML',
+    objects: ['./Device/Vendor/MSFT/Reboot/RebootNow'],
+  },
   target: { kind: 'device' },
   inputVersion: 'device-control-v1',
   deadline: 4102444800,
@@ -30,6 +40,7 @@ it('decodes current command facts without accepting retired authorization or tas
   for (const bad of [
     { ...read, authorization: 'approved' },
     { ...read, task: { kind: 'profile_install', enabled: true } },
+    { ...read, task: { platform: 'windows', request: { kind: 'sync_ml', request: {} } } },
     { ...read, approval: {} },
     { ...read, commandId: crypto.randomUUID() },
   ])
@@ -78,4 +89,29 @@ it('uses exact control and reauthorization routes with original CAS and never re
     'lost',
   )
   expect(request).toHaveBeenCalledTimes(3)
+})
+
+it('identifies dangerous actions only from exact redacted task summaries, retaining generic tasks as generic', () => {
+  expect(
+    controlKind({ platform: 'macos', kind: 'command', name: 'EraseDevice', objects: [] }),
+  ).toBe('wipe')
+  expect(controlKind({ platform: 'macos', kind: 'command', name: 'DeviceLock', objects: [] })).toBe(
+    'lock',
+  )
+  expect(
+    controlKind({
+      platform: 'windows',
+      kind: 'sync_ml',
+      name: 'SyncML',
+      objects: ['./Device/Vendor/MSFT/RemoteWipe/doWipe'],
+    }),
+  ).toBe('wipe')
+  expect(
+    controlKind({
+      platform: 'windows',
+      kind: 'sync_ml',
+      name: 'SyncML',
+      objects: ['./Device/Vendor/MSFT/Reboot/RebootNow', 'other'],
+    }),
+  ).toBeNull()
 })

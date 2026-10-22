@@ -76,7 +76,7 @@ it('carries the shared formal Policy through the HTTP session, preserves existin
   expect(disabled.enabled).toBe(false)
   expect(disabled.versionId).toBe(saved.versionId)
   expect(disabled.definition.selfService?.published).toBe(true)
-  expect((await clients.executions.list()).items).toEqual([])
+  expect((await clients.executions.directory()).items).toEqual([])
   // Formal browser clients also consume these endpoints outside demo mode.
   expect(await createPolicyClients(transport, TENANT, false).policies.read(old.id)).toEqual(
     disabled,

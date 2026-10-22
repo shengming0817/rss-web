@@ -87,17 +87,19 @@ it('separates remediation approval, device completion, detection and independent
     })
   expect((await event('security_result', f.initial.asOf + 2)).status).toBe(204)
   expect(
-    (await f.server.handle('GET', `/api/v1/mdm-candidate/executions/${dispatch.operationId}`)).body,
+    (await f.server.handle('GET', `/api/v1/mdm-candidate/security/actions/${dispatch.operationId}`))
+      .body,
   ).toMatchObject({
-    execution: { execution: 'succeeded', effect: 'unverified', compliance: 'unknown' },
+    action: { summary: { execution: 'succeeded', effect: 'unverified', compliance: 'unknown' } },
   })
   expect((await f.server.handle('GET', f.path)).body).toMatchObject({
     assessment: { state: 'affected', software: { version: '128.0' } },
   })
   expect((await event('security_detect', f.initial.asOf + 1)).status).toBe(204)
   expect(
-    (await f.server.handle('GET', `/api/v1/mdm-candidate/executions/${dispatch.operationId}`)).body,
-  ).toMatchObject({ execution: { effect: 'unverified' } })
+    (await f.server.handle('GET', `/api/v1/mdm-candidate/security/actions/${dispatch.operationId}`))
+      .body,
+  ).toMatchObject({ action: { summary: { effect: 'unverified' } } })
   expect((await event('security_detect', f.initial.asOf + 3)).status).toBe(204)
   expect((await f.server.handle('GET', f.path)).body).toMatchObject({
     assessment: { state: 'affected' },
@@ -118,8 +120,9 @@ it('separates remediation approval, device completion, detection and independent
     (await f.server.handle('GET', '/api/v1/mdm-candidate/operations/alerts?device=device-01')).body,
   ).toMatchObject({ items: [{ code: 'risk_affected', state: 'resolved' }] })
   expect(
-    (await f.server.handle('GET', `/api/v1/mdm-candidate/executions/${dispatch.operationId}`)).body,
-  ).toMatchObject({ execution: { effect: 'verified_present', compliance: 'unknown' } })
+    (await f.server.handle('GET', `/api/v1/mdm-candidate/security/actions/${dispatch.operationId}`))
+      .body,
+  ).toMatchObject({ action: { summary: { effect: 'verified_present', compliance: 'unknown' } } })
 })
 it('invalidates stale approvals and rejects old registration evidence without clearing risk', async () => {
   const f = await setup(),
@@ -172,12 +175,15 @@ it('invalidates stale approvals and rejects old registration evidence without cl
     },
   })
   expect(
-    (await f.server.handle('GET', `/api/v1/mdm-candidate/executions/${dispatch.operationId}`)).body,
+    (await f.server.handle('GET', `/api/v1/mdm-candidate/security/actions/${dispatch.operationId}`))
+      .body,
   ).toMatchObject({
-    execution: {
-      execution: 'unknown',
-      effect: 'unknown',
-      nativeCode: 'source_registration_changed',
+    action: {
+      summary: {
+        execution: 'unknown',
+        effect: 'unknown',
+        nativeCode: 'source_registration_changed',
+      },
     },
   })
   expect((await f.server.handle('GET', f.path)).body).toMatchObject({
@@ -204,14 +210,17 @@ it('cancels queued work when approval is revoked and never lets a read-only inve
     },
   })
   expect(
-    (await f.server.handle('GET', `/api/v1/mdm-candidate/executions/${dispatch.operationId}`)).body,
+    (await f.server.handle('GET', `/api/v1/mdm-candidate/security/actions/${dispatch.operationId}`))
+      .body,
   ).toMatchObject({
-    execution: {
-      execution: 'failed',
-      dispatch: 'queued',
-      receipt: 'not_received',
-      effect: 'unverified',
-      nativeCode: 'authorization_changed',
+    action: {
+      summary: {
+        execution: 'failed',
+        dispatch: 'queued',
+        receipt: 'not_received',
+        effect: 'unverified',
+        nativeCode: 'authorization_changed',
+      },
     },
   })
   const a = (
@@ -265,8 +274,9 @@ it('keeps unknown device execution occupied until independent evidence and requi
     (await f.write(`${root}/requests/${next.operationId}/dispatch`, operation({}, 2))).status,
   ).toBe(409)
   expect(
-    (await f.server.handle('GET', `/api/v1/mdm-candidate/executions/${first.operationId}`)).body,
-  ).toMatchObject({ execution: { execution: 'unknown', effect: 'unknown' } })
+    (await f.server.handle('GET', `/api/v1/mdm-candidate/security/actions/${first.operationId}`))
+      .body,
+  ).toMatchObject({ action: { summary: { execution: 'unknown', effect: 'unknown' } } })
   const g = await setup()
   await g.login('reviewer')
   await g.write(`${root}/requests/${g.request.operationId}/approve`, operation({}, 1))
@@ -289,8 +299,9 @@ it('keeps unknown device execution occupied until independent evidence and requi
     ).status,
   ).toBe(204)
   expect(
-    (await g.server.handle('GET', `/api/v1/mdm-candidate/executions/${failed.operationId}`)).body,
-  ).toMatchObject({ execution: { execution: 'failed', effect: 'failed' } })
+    (await g.server.handle('GET', `/api/v1/mdm-candidate/security/actions/${failed.operationId}`))
+      .body,
+  ).toMatchObject({ action: { summary: { execution: 'failed', effect: 'failed' } } })
   g.server.set('normal')
   expect(
     (await g.write(`${root}/requests/${g.request.operationId}/dispatch`, operation({}, 2))).status,

@@ -286,15 +286,7 @@ export function runState(value: unknown) {
   }
 }
 function scriptAuthorization(value: unknown) {
-  const kind = enumeration(record(value)['kind'], [
-    'policy',
-    'remote_operation',
-    'self_service',
-  ] as const)
-  if (kind === 'remote_operation') {
-    const v = closed(value, ['kind', 'operationId'])
-    return { kind, operationId: uuid(v['operationId']) }
-  }
+  const kind = enumeration(record(value)['kind'], ['policy', 'self_service'] as const)
   if (kind === 'policy') {
     const v = closed(value, ['kind', 'policyId', 'policyVersion'])
     return { kind, policyId: uuid(v['policyId']), policyVersion: uuid(v['policyVersion']) }
@@ -353,6 +345,21 @@ function scriptAuthorization(value: unknown) {
     allowAi,
     riskLevel,
     confirmed,
+  }
+}
+export function decodeRunEvidence(value: unknown) {
+  const v = closed(value, ['state', 'effect', 'result'])
+  return {
+    kind: 'action_run' as const,
+    state: runState(v['state']),
+    effect: enumeration(v['effect'], [
+      'unverified',
+      'verified',
+      'unknown',
+      'waiting_reboot',
+      'failed',
+    ] as const),
+    result: nullable(v['result'], (value) => result(value, false)),
   }
 }
 export function policyRun(value: unknown, detail: boolean) {

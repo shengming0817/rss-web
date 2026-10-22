@@ -1,10 +1,7 @@
 import type { DomainHandler, Scenario, DemoObservation, DemoEvent } from '../scenario'
 import type { createDeviceDemo } from '../devices/state'
-import { uuid } from '../../src/services/decode'
-import type { ExecutionSummary } from '../../src/features/policies/clients/executions'
 import { objectKey } from '../../src/features/devices/clients/objects'
-import { createPages, error, ok } from '../http'
-import { candidate } from './http'
+import { error, ok } from '../http'
 import { createScopeDemo } from './scopes'
 import { createResourceDemo } from './resources'
 import { createNativeDemo } from './native'
@@ -15,7 +12,6 @@ import { createConfigurationDemo } from './configurations'
 import { createLifecycleDemo } from '../software/lifecycle'
 import { createPublicationDemo } from '../software/publication'
 import { createSoftwarePolicyDemo } from '../software/assignments'
-import { softwareExecution } from '../../src/features/software/clients/execution'
 import { createSecurityDemo } from '../security/state'
 import { createOperationsDemo } from '../operations/state'
 import { createAuthorizationDemo } from '../operations/authorization'
@@ -93,20 +89,6 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
   const configurationPolicies = createConfigurationPolicies(devices, scopes, resources, policyStore)
   const configurations = createConfigurationDemo(devices, scopes, configurationPolicies.assigned)
   const policies = createPolicyDemo(devices, scopes, resources, policyStore)
-  const pages = createPages()
-  function executions(): ExecutionSummary[] {
-    return [
-      ...security.executions(),
-      ...policies.executions(),
-      ...native.executions(),
-      ...software.runs.rows().map((r) =>
-        softwareExecution(r.policy.id, r.policy.versionId, {
-          ...r.value,
-          userAction: software.runs.userAction(r, software.now()),
-        }),
-      ),
-    ]
-  }
   const handle: DomainHandler = (request, scenario) => {
     try {
       const denied = authorization.guard(request)
@@ -182,6 +164,19 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       if (request.path === '/api/v1/operations' && request.method === 'GET') {
         const all = [
           ...native.directory(),
+          ...policies.rows().map((r) => ({
+            id: r.taskId,
+            kind: 'action_run' as const,
+            device: r.device,
+            registrationId: r.registrationId,
+            generation: r.generation,
+            origin: 'policy',
+            policy: r.policyId,
+            deadline: r.deadline,
+            status: r.state.execution,
+            detailUrl: `/api/v1/policies/${r.policyId}/runs/${r.taskId}`,
+            evidence: { state: r.state, effect: r.effect, result: r.result },
+          })),
           ...software.runs.rows().map((r) => ({
             id: r.value.taskId,
             kind: 'action_run' as const,
@@ -200,7 +195,10 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
             (i) =>
               authorization.can(request.actor.principalId, 'operation_read', i.device) &&
               (!request.query.get('policy') || i.policy === request.query.get('policy')) &&
-              (!request.query.get('device') || i.device === request.query.get('device')),
+              (!request.query.get('device') || i.device === request.query.get('device')) &&
+              (!request.query.get('kind') || i.kind === request.query.get('kind')) &&
+              (!request.query.get('status') || i.status === request.query.get('status')) &&
+              scenario !== 'empty',
           )
           .sort((a, b) => a.id.localeCompare(b.id) || a.kind.localeCompare(b.kind))
         const after = request.query.get('after'),
@@ -225,24 +223,6 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
           asOf: security.now(),
         })
       }
-      const execution = /^\/api\/v1\/mdm-candidate\/executions(?:\/([^/]+))?$/.exec(request.path)
-      if (!execution || request.method !== 'GET') return
-      if (scenario === 'denied') return error('permission_denied', 403)
-      const items = executions()
-      if (execution?.[1]) {
-        const id = uuid(execution[1]),
-          item = items.find((e) => e.id === id)
-        return item ? candidate({ execution: item }) : error('operation_not_found', 404)
-      }
-      const batch = request.query.get('batch')
-      if (batch !== null) uuid(batch)
-      return candidate(
-        pages.page(
-          `${request.path}:${batch ?? ''}`,
-          scenario === 'empty' ? [] : items.filter((e) => batch === null || e.batch === batch),
-          request.query,
-        ),
-      )
     } catch {
       return error('malformed_request', 400)
     }
@@ -299,7 +279,6 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         policies,
         configurationPolicies,
         configurations,
-        pages,
         lifecycle,
         publication,
         software,

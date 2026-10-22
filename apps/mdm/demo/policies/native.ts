@@ -7,7 +7,6 @@ import {
   type NativeOperation,
 } from '../../src/features/policies/clients/native'
 import type { Permission } from '../../src/features/operations/clients/authorization'
-import type { ExecutionSummary } from '../../src/features/policies/clients/executions'
 import { createReceipts, error, ok } from '../http'
 export function createNativeDemo(
   devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts'>,
@@ -62,7 +61,28 @@ export function createNativeDemo(
               operationId: id,
               commandId: id,
               revision: 1,
-              task: { platform: d.summary.platform, request: { kind: 'command', action: a.kind } },
+              task: {
+                platform: d.summary.platform,
+                kind: d.summary.platform === 'windows' ? 'sync_ml' : 'command',
+                name:
+                  d.summary.platform === 'windows'
+                    ? 'SyncML'
+                    : (
+                        {
+                          restart: 'RestartDevice',
+                          lock: 'DeviceLock',
+                          wipe: 'EraseDevice',
+                        } as const
+                      )[a.kind],
+                objects:
+                  d.summary.platform === 'windows'
+                    ? [
+                        a.kind === 'restart'
+                          ? './Device/Vendor/MSFT/Reboot/RebootNow'
+                          : './Device/Vendor/MSFT/RemoteWipe/doWipe',
+                      ]
+                    : [],
+              },
               target: { kind: 'device' },
               inputVersion: 'device-control-v1',
               deadline,
@@ -126,7 +146,11 @@ export function createNativeDemo(
       return receipts.write(request, uuid(b['requestId']), () => {
         if (
           count(b['expectedRevision']) !== s.read.revision ||
-          s.read.commandStatus === 'cancelled'
+          ['cancelled', 'applied', 'rejected', 'timed_out', 'superseded'].includes(
+            s.read.commandStatus,
+          ) ||
+          (m[3] === 'reauthorize' && s.read.commandStatus === 'received') ||
+          Math.floor(Date.now() / 1000) >= s.read.deadline
         )
           return error('operation_conflict')
         if (m[3] === 'cancel') s.read.commandStatus = 'cancelled'
@@ -179,35 +203,8 @@ export function createNativeDemo(
           commandStatus: s.read.commandStatus,
           observation: s.read.observation,
           dispatchFailure: s.read.dispatchFailure,
+          agentInstallation: s.read.agentInstallation,
         },
-      }))
-    },
-    executions(): ExecutionSummary[] {
-      return [...operations.values()].map((s) => ({
-        id: s.read.operationId,
-        batch: null,
-        device: s.device,
-        origin: { kind: 'native', operation: s.read.operationId },
-        admission: s.read.authorization === 'authorized' ? 'accepted' : 'blocked',
-        dispatch: s.reads
-          ? 'published'
-          : s.read.commandStatus === 'cancelled'
-            ? 'not_requested'
-            : 'queued',
-        receipt: s.read.commandStatus === 'received' ? 'received' : 'not_received',
-        execution:
-          s.read.commandStatus === 'cancelled'
-            ? 'cancelled'
-            : s.read.observation.progress === 'succeeded'
-              ? 'succeeded'
-              : s.read.observation.progress === 'failed'
-                ? 'failed'
-                : 'unknown',
-        effect: 'unverified',
-        compliance: 'unknown',
-        attempt: null,
-        nativeCode: null,
-        waitingReason: s.read.authorization === 'blocked' ? 'authorization' : 'device_receipt',
       }))
     },
     reset() {

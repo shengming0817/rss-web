@@ -14,6 +14,6 @@ export function createPolicyClients(transport: HttpTransport, tenant: string, de
     policies: createPoliciesClient(transport),
     native: createNativeClient(transport),
     configurations: createConfigurationsClient(transport, tenant, demo),
-    executions: createExecutionsClient(transport, tenant, demo),
+    executions: createExecutionsClient(transport),
   }
 }

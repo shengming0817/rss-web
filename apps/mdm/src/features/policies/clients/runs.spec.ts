@@ -185,7 +185,7 @@ it('decodes the current attempt and all authorization branches and rejects malfo
     riskLevel: 2,
     confirmed: true,
   }
-  for (const authorization of [policy, { kind: 'remote_operation', operationId: task }, self])
+  for (const authorization of [policy, self])
     expect(policyRun({ ...run, attemptId: task, authorization }, true)).toMatchObject({
       attemptId: task,
       authorization,

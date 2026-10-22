@@ -1296,7 +1296,8 @@ it('binds lock to the actual enrollment, clears its PIN, and queries an unknown 
   f.loseReply.path = '/api/v1/devices/{device}/operations'
   await dialog.get('form').trigger('submit')
   await flushPromises()
-  expect((dialog.get('input[type=password]').element as HTMLInputElement).value).toBe('')
+  expect(dialog.find('input[type=password]').exists()).toBe(false)
+  expect(f.wrapper.text()).toContain('提交结果未知')
   const op = f.router.currentRoute.value.query['operation']
   expect(op).toBeTruthy()
   expect(

@@ -14,7 +14,17 @@ it('consumes the formal mixed operation directory without following server-provi
     policy: id,
     deadline: 100,
     status: 'running',
-    evidence: { state: 'running' },
+    evidence: {
+      state: {
+        delivery: { kind: 'queued' },
+        execution: 'running',
+        cancellation: 'none',
+        deadline: 100,
+        startedAt: 1,
+      },
+      effect: 'unverified',
+      result: null,
+    },
     detailUrl: `/api/v1/policies/${id}/runs/${id}`,
   }
   let value: unknown = {
@@ -24,16 +34,28 @@ it('consumes the formal mixed operation directory without following server-provi
     asOf: 1,
   }
   const request = vi.fn(async (o: RequestOptions<unknown>) => o.decode(value)),
-    client = createExecutionsClient({ request } as unknown as HttpTransport, id, false)
+    client = createExecutionsClient({ request } as unknown as HttpTransport)
   expect((await client.directory({ policy: id })).items[0]).toMatchObject({
     kind: 'action_run',
     registrationId: id,
     generation: 2,
   })
-  await client.directory({ policy: id, after: id, afterKind: 'action_run' })
+  await client.directory({
+    policy: id,
+    after: id,
+    afterKind: 'action_run',
+    kind: 'action_run',
+    status: 'running',
+  })
   expect(request.mock.calls[1]?.[0]).toMatchObject({
     path: '/api/v1/operations',
-    query: { policy: id, after: id, afterKind: 'action_run' },
+    query: {
+      policy: id,
+      after: id,
+      afterKind: 'action_run',
+      kind: 'action_run',
+      status: 'running',
+    },
   })
   value = {
     items: [{ ...item, detailUrl: 'https://other.test/' }],
@@ -123,4 +145,60 @@ it('separates redacted collection summaries from authorized native detail eviden
   expect(() =>
     policyRun({ ...common, policyId: id, result: { ...projection, native, unknown: true } }, true),
   ).toThrow()
+})
+
+it('keeps formal native observations distinct from an effect claim and accepts absent optional installation evidence', async () => {
+  const device = 'endpoint~+'
+  let evidence: unknown = {
+    commandStatus: 'received',
+    dispatchFailure: null,
+    observation: {
+      protocol: 'syncml',
+      observationScope: 'native_objects',
+      progress: 'succeeded',
+      effect: 'unverified',
+      receipts: [],
+    },
+  }
+  const request = vi.fn(async (options: RequestOptions<unknown>) =>
+    options.decode({
+      items: [
+        {
+          id,
+          kind: 'command',
+          device,
+          registrationId: id,
+          generation: 1,
+          origin: 'direct',
+          policy: null,
+          deadline: 100,
+          status: 'received',
+          evidence,
+          detailUrl: `/api/v1/devices/endpoint%7E%2B/operations/${id}`,
+        },
+      ],
+      nextCursor: null,
+      statistics: { total: 1, commands: 1, actionRuns: 0, unknown: 0 },
+      asOf: 1,
+    }),
+  )
+  const client = createExecutionsClient({ request } as unknown as HttpTransport)
+  expect((await client.directory()).items[0]?.evidence).toMatchObject({
+    kind: 'command',
+    agentInstallation: null,
+    observation: { progress: 'succeeded', effect: 'unverified' },
+  })
+  evidence = {
+    commandStatus: 'received',
+    dispatchFailure: null,
+    observation: {
+      protocol: 'syncml',
+      observationScope: 'native_objects',
+      progress: 'succeeded',
+      effect: 'unverified',
+      receipts: [],
+      privateOutput: 'forbidden',
+    },
+  }
+  await expect(client.directory()).rejects.toThrow()
 })

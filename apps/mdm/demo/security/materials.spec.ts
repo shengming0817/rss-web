@@ -103,7 +103,6 @@ it('binds one-time disclosure to the approved requester and fresh session withou
     `${root}/actions`,
     '/api/v1/mdm-candidate/operations/audit',
     '/api/v1/mdm-candidate/operations/alerts',
-    '/api/v1/mdm-candidate/executions',
   ]) {
     const read = await f.server.handle('GET', path)
     expect(JSON.stringify(read.body)).not.toContain((revealed.body as { secret: string }).secret)
@@ -199,8 +198,9 @@ it('keeps rotation acceptance and command success separate from new escrow obser
   const stale = f.request()
   expect((await f.write(`${root}/requests`, stale)).status).toBe(409)
   expect(
-    (await f.server.handle('GET', `/api/v1/mdm-candidate/executions/${dispatch.operationId}`)).body,
-  ).toMatchObject({ execution: { effect: 'verified_present', compliance: 'unknown' } })
+    (await f.server.handle('GET', `/api/v1/mdm-candidate/security/actions/${dispatch.operationId}`))
+      .body,
+  ).toMatchObject({ action: { summary: { effect: 'verified_present', compliance: 'unknown' } } })
 })
 it('refuses revoked and expired authorizations and binds access to an existing volume', async () => {
   const f = await setup(),

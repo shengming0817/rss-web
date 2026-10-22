@@ -6,7 +6,7 @@ import type { createResourceDemo } from './resources'
 import type { ExecutionSummary } from '../../src/features/policies/clients/executions'
 import type { ExecutionDefinition } from '../../src/features/policies/clients/model'
 import { createPolicyStore } from './store'
-import { error } from '../http'
+import { error, ok } from '../http'
 import { resourceApplicability } from './applicability'
 import { validateParameterSources } from './script-validation'
 import { nativeDue } from '../software/schedule'
@@ -22,6 +22,46 @@ export function createPolicyDemo(
     lastAdmissions = new Map<string, number>(),
     versions = new Map<string, string>(),
     entries = new Map<string, number>()
+  const metadata = new Map<
+    string,
+    {
+      policyId: string
+      registrationId: string
+      generation: number
+      availableAt: number
+      deadline: number
+    }
+  >()
+  function rows() {
+    return [...runs.values()].flatMap((run) => {
+      const m = metadata.get(run.id)
+      if (!m || run.origin.kind !== 'policy') return []
+      return [
+        {
+          ...m,
+          taskId: run.id,
+          device: run.device,
+          state: {
+            delivery: !run.attempt
+              ? { kind: 'queued' as const }
+              : {
+                  kind: run.receipt === 'received' ? ('received' as const) : ('claimed' as const),
+                  attempt: run.attempt,
+                  leaseUntil: m.deadline,
+                },
+            execution: run.execution === 'cancelled' ? ('not_started' as const) : run.execution,
+            cancellation: run.origin.cancellation,
+            deadline: m.deadline,
+            startedAt: run.execution === 'not_started' ? null : m.availableAt,
+          },
+          effect: 'unverified' as const,
+          userAction: null,
+          result: null,
+          occurrence: 'script',
+        },
+      ]
+    })
+  }
   let members = new Set<string>()
   function selected(d: ExecutionDefinition) {
     const b = d.action.resource,
@@ -191,14 +231,60 @@ export function createPolicyDemo(
         nativeCode: null,
         waitingReason: 'device_receipt',
       })
+      const registration = device.registrations.find(
+        (r) => r.source === 'agent.builtin' && r.status === 'active',
+      )!
+      metadata.set(id, {
+        policyId: p.id,
+        registrationId: registration.registrationId,
+        generation: registration.generation,
+        availableAt: event.at,
+        deadline: event.at + a.runLifetimeSeconds,
+      })
       versions.set(id, p.versionId)
       admissions.set(key, id)
       lastAdmissions.set(admissionBasis, event.at)
     }
   }
-  const handle: DomainHandler = (request, scenario) => store.handle(request, scenario)
+  const handle: DomainHandler = (request, scenario) => {
+    const match = /^\/api\/v1\/policies\/([^/]+)\/runs(?:\/([^/]+))?$/.exec(request.path)
+    if (
+      match &&
+      request.method === 'GET' &&
+      store.get(match[1]!)?.definition.action.kind === 'execution'
+    ) {
+      const items = rows().filter((r) => r.policyId === match[1])
+      if (match[2]) {
+        const row = items.find((r) => r.taskId === match[2])
+        if (!row) return error('operation_not_found', 404)
+        const { occurrence: _occurrence, ...detail } = row
+        void _occurrence
+        return ok(detail)
+      }
+      const at = request.query.get('afterAt'),
+        id = request.query.get('afterId')
+      const visible = items
+        .filter(
+          (r) =>
+            !at ||
+            r.availableAt > Number(at) ||
+            (r.availableAt === Number(at) && r.taskId > (id ?? '')),
+        )
+        .sort((a, b) => a.availableAt - b.availableAt || a.taskId.localeCompare(b.taskId))
+      const last = visible[63]
+      return ok({
+        items: visible.slice(0, 64),
+        nextCursor:
+          visible.length > 64 && last
+            ? { availableAt: last.availableAt, taskId: last.taskId }
+            : null,
+      })
+    }
+    return store.handle(request, scenario)
+  }
   return {
     handle,
+    rows,
     reconcile,
     references: (resource: string, version: string) =>
       store
@@ -211,6 +297,7 @@ export function createPolicyDemo(
         ),
     executions: () => structuredClone([...runs.values()]),
     reset() {
+      metadata.clear()
       runs.clear()
       admissions.clear()
       lastAdmissions.clear()

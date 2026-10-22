@@ -43,9 +43,9 @@ it('seeds independently published, manual-only, withdrawn and disabled policies 
     [true, false, true, 2],
     [false, true, true, 2],
   ])
-  expect(
-    f.automation.handle(f.request('/api/v1/mdm-candidate/executions'), 'normal')?.body,
-  ).toMatchObject({ items: [] })
+  expect(f.automation.handle(f.request('/api/v1/operations'), 'normal')?.body).toMatchObject({
+    items: [],
+  })
   expect(
     f.automation.handle(f.request('/api/v1/mdm-candidate/policies/assignments/legacy'), 'normal'),
   ).toBeUndefined()
@@ -187,10 +187,10 @@ it('admits only fixed-input Agent check-ins and preserves Unknown runs through l
   f.automation.tick({ kind: 'check_in', device: 'device-01', at })
   const executions = () =>
     (
-      f.automation.handle(f.request('/api/v1/mdm-candidate/executions'), 'normal')!.body as {
-        items: { execution: string; origin: { kind: string; policy?: string } }[]
+      f.automation.handle(f.request(`/api/v1/policies/${id}/runs`), 'normal')!.body as {
+        items: { state: { execution: string } }[]
       }
-    ).items.filter((r) => r.origin.kind === 'policy' && r.origin.policy === id)
+    ).items.map((r) => ({ execution: r.state.execution }))
   expect(executions()).toEqual([])
   const action = {
     ...f.seed.definition.action,

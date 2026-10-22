@@ -178,7 +178,6 @@ it('never falls back to mock for published policy or native-operation paths', as
     '/api/v1/policies/id',
     '/api/v1/mdm-candidate/policies/assignments/id',
     '/api/v1/devices/device/operations/id',
-    '/api/v1/mdm-candidate/executions/id',
   ]) {
     expect((await scenario.handle('GET', path)).status, path).toBe(503)
   }

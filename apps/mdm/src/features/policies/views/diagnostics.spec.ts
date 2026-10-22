@@ -11,22 +11,7 @@ it('shows native receipt and cleanup diagnostics while withholding terminal acti
     history: createMemoryHistory(),
     routes: [{ path: '/:execution', component: ExecutionDetailView }],
   })
-  await router.push('/operation')
-  const summary = {
-    id: 'operation',
-    device: 'device',
-    batch: null,
-    origin: { kind: 'native', operation: 'operation' },
-    admission: 'accepted',
-    dispatch: 'published',
-    receipt: 'received',
-    execution: 'failed',
-    effect: 'unverified',
-    compliance: 'unknown',
-    attempt: 'attempt',
-    nativeCode: 500,
-    waitingReason: 'effect_verification',
-  }
+  await router.push('/11111111-1111-4111-8111-111111111111?device=device')
   const wrapper = mount(ExecutionDetailView, {
     global: {
       plugins: [router, mdmI18n()],
@@ -37,16 +22,27 @@ it('shows native receipt and cleanup diagnostics while withholding terminal acti
           session: { state: ref({ status: 'authenticated', session: { id: 'session' } }) },
           demo: true,
           policies: {
-            executions: { read: async () => summary },
             native: {
               read: async () => ({
                 operationId: 'operation',
                 revision: 1,
-                task: { platform: 'windows', request: { kind: 'sync_ml' } },
+                target: { kind: 'device' },
+                dispatchFailure: {
+                  platform: 'windows',
+                  reason: 'management_address_not_configured',
+                },
+                task: {
+                  platform: 'windows',
+                  kind: 'sync_ml',
+                  name: 'SyncML',
+                  objects: ['./Device/Vendor/MSFT/Reboot/RebootNow'],
+                },
                 authorization: 'authorized',
                 commandStatus: 'received',
                 observation: {
-                  protocol: 'mdm.windows',
+                  protocol: 'syncml',
+                  observationScope: 'native_objects',
+                  receipts: [{ writeStatus: 500, cleanup: 'unsupported' }],
                   result: 'matched',
                   effect: 'unknown',
                   progress: 'failed',
@@ -63,8 +59,10 @@ it('shows native receipt and cleanup diagnostics while withholding terminal acti
     },
   })
   await flushPromises()
-  expect(wrapper.text()).toContain('清理状态')
   expect(wrapper.text()).toContain('500')
+  expect(wrapper.text()).toContain('management_address_not_configured')
+  expect(wrapper.get('[data-testid=native-task-facts]').text()).toContain('重启')
+  expect(wrapper.get('[data-testid=native-task-facts]').text()).toContain('device')
   expect(wrapper.findAll('button').some((b) => b.text() === '请求取消')).toBe(false)
   wrapper.unmount()
 })
@@ -111,7 +109,13 @@ it('keeps reauthorization coordinates editable character by character and invali
   const read = vi.fn().mockResolvedValue({
     operationId: id,
     revision: 4,
-    task: { platform: 'windows', request: { kind: 'sync_ml', request: {} } },
+    target: { kind: 'device' },
+    task: {
+      platform: 'windows',
+      kind: 'sync_ml',
+      name: 'SyncML',
+      objects: ['./Device/Vendor/MSFT/Reboot/RebootNow'],
+    },
     authorization: 'blocked',
     commandStatus: 'queued',
     agentInstallation: null,

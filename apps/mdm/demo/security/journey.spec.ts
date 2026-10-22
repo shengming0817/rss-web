@@ -178,29 +178,30 @@ it('keeps native compliance and exceptions distinct while risk remediation uses 
     task: dispatch.operationId,
     at: f.now + 1,
   })
-  expect((await p.executions.read(dispatch.operationId)).effect).toBe('unverified')
+  expect((await s.actions.read(dispatch.operationId)).action.summary.effect).toBe('unverified')
   await f.event({
     kind: 'security_detect',
     device: 'device-01',
     task: dispatch.operationId,
     at: f.now + 2,
   })
-  expect((await p.executions.read(dispatch.operationId)).effect).toBe('verified_present')
+  expect((await s.actions.read(dispatch.operationId)).action.summary.effect).toBe(
+    'verified_present',
+  )
   expect((await s.risks.current(risk.id, 'device-01')).assessment.state).toBe('affected')
   await s.risks.reassess(risk.id, 'device-01', operation({}, assessment.version))
   expect((await o.alerts.read(alert.id)).state).toBe('resolved')
   expect(await s.compliance.current('device-01')).toEqual(native)
-  expect((await p.executions.list()).items).toHaveLength(1)
   expect(JSON.stringify(await o.audit.list())).not.toContain('Private')
   await f.control({ module: 'security', source: 'real', scenario: 'normal' })
   await expect(s.compliance.current('device-01')).rejects.toMatchObject({ status: 503 })
   await expect(s.risks.read(risk.id)).rejects.toMatchObject({ status: 503 })
-  await expect(p.executions.read(dispatch.operationId)).rejects.toMatchObject({ status: 503 })
+  await expect(s.actions.read(dispatch.operationId)).rejects.toMatchObject({ status: 503 })
   await expect(o.alerts.read(alert.id)).rejects.toMatchObject({ status: 503 })
 })
 it('requires new consent after a failed remote attempt and keeps user withdrawal distinct from a confirmed session end', async () => {
   const f = await setup(),
-    { security: s, operations: o, policies: p } = f,
+    { security: s, operations: o } = f,
     context = (await s.support.context('device-01')).context,
     definition = {
       target: {
@@ -239,7 +240,7 @@ it('requires new consent after a failed remote attempt and keeps user withdrawal
     at: f.now + 2,
   })
   f.server.set('normal')
-  expect((await p.executions.read(attempt.operationId)).execution).toBe('failed')
+  expect((await s.actions.read(attempt.operationId)).action.summary.execution).toBe('failed')
   const second = operation({
     ...definition,
     target: { ...definition.target, mode: 'control' as const },
@@ -302,16 +303,13 @@ it('requires new consent after a failed remote attempt and keeps user withdrawal
     device: 'device-01',
     at: f.now + 7,
   })
-  expect((await s.actions.read(next.operationId)).action.summary).toEqual(
-    await p.executions.read(next.operationId),
-  )
-  expect((await p.executions.read(next.operationId)).effect).toBe('verified_absent')
+  expect((await s.actions.read(next.operationId)).action.summary.effect).toBe('verified_absent')
   expect(JSON.stringify(await o.audit.list({ device: 'device-01' }))).not.toContain(
     definition.reason,
   )
   await f.control({ module: 'operations', source: 'real', scenario: 'normal' })
   await expect(s.support.read(second.operationId)).rejects.toMatchObject({ status: 503 })
   await expect(s.support.experience('device-01')).rejects.toMatchObject({ status: 503 })
-  await expect(p.executions.read(next.operationId)).rejects.toMatchObject({ status: 503 })
+  await expect(s.actions.read(next.operationId)).rejects.toMatchObject({ status: 503 })
   await expect(o.audit.list()).rejects.toMatchObject({ status: 503 })
 })

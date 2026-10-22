@@ -1,7 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { createConfigurationsClient } from './configurations'
-import { createExecutionsClient } from './executions'
 const tenant = '11111111-1111-4111-8111-111111111111'
 const id = '22222222-2222-4222-8222-222222222222'
 const snapshot = '33333333-3333-4333-8333-333333333333'
@@ -66,29 +65,5 @@ it('reads published configuration versions and server preflight facts without au
       },
     }),
   )
-  await expect(client.read(id)).rejects.toThrow()
-})
-it('keeps accepted/published/received/effect/compliance as independent execution facts', async () => {
-  const execution = {
-    id,
-    batch: snapshot,
-    device: 'device-01',
-    origin: { kind: 'native', operation: id },
-    admission: 'accepted',
-    dispatch: 'published',
-    receipt: 'received',
-    execution: 'succeeded',
-    effect: 'unverified',
-    compliance: 'unknown',
-    attempt: null,
-    nativeCode: 200,
-    waitingReason: 'effect_verification',
-  }
-  const t = transport(envelope({ execution }))
-  const client = createExecutionsClient(t.http, tenant, true)
-  expect(await client.read(id)).toEqual(execution)
-  t.reply(envelope({ execution: { ...execution, compliance: 'compliant' } }))
-  await expect(client.read(id)).rejects.toThrow()
-  t.reply(envelope({ execution: { ...execution, id: snapshot } }))
   await expect(client.read(id)).rejects.toThrow()
 })

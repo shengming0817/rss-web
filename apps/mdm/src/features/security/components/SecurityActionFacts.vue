@@ -34,10 +34,6 @@ const at = (value: number | null) =>
   <ExecutionFacts :execution="action.summary" />
   <nav class="console-inline-actions" :aria-label="t('security.relatedRecords')">
     <RouterLink
-      :to="{ name: 'policy-execution', params: { tenant: runtime.tenant, execution: action.id } }"
-      >{{ t('policies.detail') }}</RouterLink
-    >
-    <RouterLink
       :to="{
         name: 'security-requests',
         params: { tenant: runtime.tenant },

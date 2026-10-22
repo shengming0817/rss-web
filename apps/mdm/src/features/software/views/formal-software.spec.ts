@@ -12,7 +12,6 @@ import UpdatesView from './UpdatesView.vue'
 import CatalogView from './CatalogView.vue'
 import VersionLifecycle from '../components/VersionLifecycle.vue'
 import SoftwareResourceSelect from '../components/SoftwareResourceSelect.vue'
-import ExecutionsView from '../../policies/views/ExecutionsView.vue'
 import ExecutionDetailView from '../../policies/views/ExecutionDetailView.vue'
 import { defaultSchedule } from '../../policies/clients/model'
 import { softwareResource } from '../../../../demo/software/fixtures'
@@ -41,7 +40,7 @@ function publication(outcome = 'pending') {
     withdrawal: null,
   }
 }
-async function fixture(component: Component, owners: object, props = {}, query = {}) {
+async function fixture(component: Component, owners: object, props = {}, query = {}, path = '/') {
   const session = ref({
     status: 'authenticated',
     tenant: id,
@@ -52,7 +51,7 @@ async function fixture(component: Component, owners: object, props = {}, query =
     history: createMemoryHistory(),
     routes: [{ path: '/:execution?', component }],
   })
-  await router.push({ path: '/', query })
+  await router.push({ path, query })
   const wrapper = mount(component, {
     props,
     global: {
@@ -426,6 +425,7 @@ it('opens an onboarding action run without sending a native command read', async
     { policies: { runs: { read }, native: { read: native } } },
     {},
     { policy: id },
+    `/${id}`,
   )
   expect(read).toHaveBeenCalled()
   expect(native).not.toHaveBeenCalled()
@@ -434,30 +434,6 @@ it('opens an onboarding action run without sending a native command read', async
   wrapper.unmount()
 })
 
-it('invalidates dangerous confirmation and clears PIN when the action or target changes', async () => {
-  const create = vi.fn().mockResolvedValue({ operationId: id }),
-    directory = vi
-      .fn()
-      .mockResolvedValue({ items: [], statistics: { total: 0 }, asOf: 1, nextCursor: null })
-  const { wrapper } = await fixture(ExecutionsView, {
-    policies: { native: { create }, executions: { directory } },
-  })
-  await wrapper.get('#native-device').setValue('endpoint')
-  await wrapper.get('#native-kind').setValue('lock')
-  const control = wrapper.findAll('form')[1]!
-  const inputs = control.findAll('input')
-  await inputs[1]!.setValue(id)
-  await inputs[2]!.setValue(1)
-  await control.get('input[type=password]').setValue('123456')
-  await control.get('input[type=checkbox]').setValue(true)
-  await wrapper.get('#native-kind').setValue('wipe')
-  expect((control.get('input[type=checkbox]').element as HTMLInputElement).checked).toBe(false)
-  await control.get('input[type=checkbox]').setValue(true)
-  await wrapper.get('#native-device').setValue('other')
-  expect((control.get('input[type=checkbox]').element as HTMLInputElement).checked).toBe(false)
-  expect(create).not.toHaveBeenCalled()
-  wrapper.unmount()
-})
 for (const protocol of [
   { kind: 'winget_rest', location: 'https://packages.example.test/', identifier: 'enterprise' },
   {

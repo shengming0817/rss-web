@@ -72,4 +72,6 @@ MDM_SOFTWARE_BACKEND=/absolute/rss-mdm pnpm test:mdm:software-browser
 
 标准采集包、固定周期、设备人员与资产范围的操作和真实 HTTPS 验证见 [设备资产与采集接入](docs/architecture/20260926-2544-mdm-web.md#标准采集包与资产质量2727)。页面刷新只读取已上报数据。
 
+正式执行总览、设备控制与原操作恢复的 HTTPS Chromium 验证：`MDM_OPERATIONS_BACKEND=/absolute/rss-mdm pnpm test:mdm:operations-browser`。复用设备入口的隔离环境与清理，使用明确授权的可丢弃测试账户及合成 Windows 注册能力，只验证 UI/API 接缝；不代表真实重启、锁定、擦除效果。
+
 用户字段配置与资料显示的实际 HTTPS 验证：`MDM_PROFILE_BACKEND=/absolute/rss-mdm IDENTITY_BACKEND_FIXTURE=/absolute/rss-identity pnpm test:mdm:profiles-browser`。当前固定后端与验证边界见 [用户字段与登录资料](docs/architecture/20260926-2544-mdm-web.md#用户字段与登录资料2878)。

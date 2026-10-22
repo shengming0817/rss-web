@@ -1,5 +1,6 @@
 import type { HttpTransport } from '@rss/api/mdm'
 import {
+  array,
   boolean,
   closed,
   count,
@@ -48,13 +49,34 @@ export function deviceControlAction(value: unknown): DeviceControlAction {
   return { kind, ...confirmation, pin }
 }
 export function decodeNativeTask(value: unknown) {
-  const v = closed(value, ['platform', 'request'])
+  const v = closed(value, ['platform', 'kind', 'name', 'objects'])
   return {
     platform: enumeration(v['platform'], ['windows', 'macos'] as const),
-    request: record(jsonValue(v['request'], 1024 * 1024)),
+    kind: enumeration(v['kind'], [
+      'sync_ml',
+      'msi',
+      'command',
+      'install_profile',
+      'remove_profile',
+      'declarations',
+    ] as const),
+    name: identifier(v['name']),
+    objects: array(v['objects'], identifier),
   }
 }
-function observation(value: unknown) {
+export function controlKind(task: ReturnType<typeof decodeNativeTask>) {
+  if (task.platform === 'macos' && task.kind === 'command') {
+    if (task.name === 'RestartDevice') return 'restart'
+    if (task.name === 'DeviceLock') return 'lock'
+    if (task.name === 'EraseDevice') return 'wipe'
+  }
+  if (task.platform === 'windows' && task.kind === 'sync_ml' && task.objects.length === 1) {
+    if (task.objects[0] === './Device/Vendor/MSFT/Reboot/RebootNow') return 'restart'
+    if (task.objects[0] === './Device/Vendor/MSFT/RemoteWipe/doWipe') return 'wipe'
+  }
+  return null
+}
+export function decodeNativeObservation(value: unknown) {
   const raw = record(value),
     protocol = enumeration(raw['protocol'], ['syncml', 'mdm.apple'] as const),
     scope = enumeration(raw['observationScope'], [
@@ -129,7 +151,7 @@ export function decodeNativeOperation(value: unknown, id: string) {
       'cancelled',
     ] as const),
     agentInstallation: nullable(v['agentInstallation'], (v) => jsonValue(v, 65536)),
-    observation: observation(v['observation']),
+    observation: decodeNativeObservation(v['observation']),
   }
 }
 export type NativeOperation = ReturnType<typeof decodeNativeOperation>

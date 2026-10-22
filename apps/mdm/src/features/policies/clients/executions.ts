@@ -9,11 +9,12 @@ import {
   nullable,
   record,
   string,
-  unique,
   uuid,
 } from '../../../services/decode'
+import { decodeNativeObservation } from './native'
+import { decodeRunEvidence } from './runs'
 import { jsonValue, type Json } from './resources'
-import { candidate } from './candidate'
+/** Facts still consumed by Security actions and explicit demo state, not an execution API envelope. */
 export type ExecutionOrigin =
   | {
       kind: 'policy'
@@ -171,12 +172,14 @@ export function executionSummary(value: unknown) {
   }
 }
 export type ExecutionSummary = ReturnType<typeof executionSummary>
-export function createExecutionsClient(transport: HttpTransport, tenant: string, demo: boolean) {
+export function createExecutionsClient(transport: HttpTransport) {
   return {
     directory: (
       query: {
         policy?: string | undefined
         device?: string | undefined
+        kind?: 'command' | 'action_run' | undefined
+        status?: string | undefined
         after?: string | undefined
         afterKind?: 'command' | 'action_run' | undefined
       } = {},
@@ -217,7 +220,7 @@ export function createExecutionsClient(transport: HttpTransport, tenant: string,
                 policy = nullable(i['policy'], uuid)
               const expected =
                 kind === 'command'
-                  ? `/api/v1/devices/${encodeURIComponent(device)}/operations/${id}`
+                  ? `/api/v1/devices/${new URLSearchParams({ id: device }).toString().slice(3).replaceAll('+', '%20')}/operations/${id}`
                   : `/api/v1/policies/${policy}/runs/${id}`
               if ((kind === 'action_run' && !policy) || i['detailUrl'] !== expected)
                 throw new Error('Wrong operation locator')
@@ -231,7 +234,27 @@ export function createExecutionsClient(transport: HttpTransport, tenant: string,
                 origin: enumeration(i['origin'], ['direct', 'policy'] as const),
                 deadline: integer(i['deadline']),
                 status: identifier(i['status']),
-                evidence: jsonValue(i['evidence'], 1024 * 1024),
+                evidence:
+                  kind === 'action_run'
+                    ? decodeRunEvidence(i['evidence'])
+                    : (() => {
+                        const evidence = closed(
+                          i['evidence'],
+                          ['commandStatus', 'observation', 'dispatchFailure'],
+                          ['agentInstallation'],
+                        )
+                        return {
+                          kind: 'command' as const,
+                          commandStatus: identifier(evidence['commandStatus']),
+                          observation: decodeNativeObservation(evidence['observation']),
+                          dispatchFailure: nullable(evidence['dispatchFailure'], (v) =>
+                            jsonValue(v, 16384),
+                          ),
+                          agentInstallation: nullable(evidence['agentInstallation'] ?? null, (v) =>
+                            jsonValue(v, 65536),
+                          ),
+                        }
+                      })(),
               }
             }),
             nextCursor: nullable(v['nextCursor'], (value) => {
@@ -242,34 +265,6 @@ export function createExecutionsClient(transport: HttpTransport, tenant: string,
               }
             }),
           }
-        },
-      }),
-    list: (cursor?: string, batch?: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/mdm-candidate/executions',
-        query: { limit: 20, cursor, batch },
-        successStatus: 200,
-        decode(value) {
-          const v = candidate(value, tenant, demo, ['snapshot', 'items', 'nextCursor'])
-          return {
-            snapshot: uuid(v['snapshot']),
-            items: unique(array(v['items'], executionSummary), (e) => e.id),
-            nextCursor: nullable(v['nextCursor'], string),
-          }
-        },
-      }),
-    read: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/mdm-candidate/executions/{id}',
-        pathParams: { id },
-        successStatus: 200,
-        decode(value) {
-          const v = candidate(value, tenant, demo, ['execution'])
-          const e = executionSummary(v['execution'])
-          if (e.id !== id) throw new Error('Wrong execution')
-          return e
         },
       }),
   }

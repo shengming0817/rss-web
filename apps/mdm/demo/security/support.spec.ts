@@ -112,8 +112,9 @@ it('requires device consent for the exact approved remote attempt and keeps revo
     },
   })
   expect(
-    (await f.server.handle('GET', `/api/v1/mdm-candidate/executions/${dispatch.operationId}`)).body,
-  ).toMatchObject({ execution: { effect: 'unknown' } })
+    (await f.server.handle('GET', `/api/v1/mdm-candidate/security/actions/${dispatch.operationId}`))
+      .body,
+  ).toMatchObject({ action: { summary: { effect: 'unknown' } } })
   await f.event('remote_ended', dispatch.operationId, f.now + 5)
   expect(await f.read(id)).toMatchObject({
     support: { details: { session: { state: 'ended', endedAt: f.now + 5 } } },
@@ -207,7 +208,9 @@ it('ignores late consent after authorization expiry and refuses arbitrary elevat
     validUntil: f.now + 100,
   })
   expect((await f.write(`${root}/requests`, wrong)).status).toBe(409)
-  expect((await f.server.handle('GET', '/api/v1/mdm-candidate/executions')).body).toMatchObject({
+  expect(
+    (await f.server.handle('GET', '/api/v1/mdm-candidate/security/actions')).body,
+  ).toMatchObject({
     items: [],
   })
 })

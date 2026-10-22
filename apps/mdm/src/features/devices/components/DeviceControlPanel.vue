@@ -117,6 +117,7 @@ async function submit() {
             expectedGeneration: primary.value.generation,
           }
   clearSecrets()
+  action.value = undefined
   original.value = { device, id }
   result.value = undefined
   await router.replace({ query: { ...route.query, operation: id, operationDevice: device } })
