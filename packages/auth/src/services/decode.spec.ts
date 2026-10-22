@@ -12,7 +12,7 @@ describe('closed Identity wire projections', () => {
         ...providerValue.settings,
         claims: {
           subject: { kind: 'oidc' as const },
-          email: 'email',
+          profile: { extensionsClaim: null, maxAgeSeconds: 14400 },
           groups: null,
           departmentSnapshot,
         },
@@ -39,7 +39,7 @@ describe('closed Identity wire projections', () => {
           ...providerValue.settings,
           claims: {
             subject: { kind: 'oidc' as const },
-            email: 'email',
+            profile: { extensionsClaim: null, maxAgeSeconds: 14400 },
             groups: null,
             departmentSnapshot,
           },
@@ -47,23 +47,32 @@ describe('closed Identity wire projections', () => {
       ).toThrow()
     }
     for (const claims of [
-      { email: 'email', groups: null },
-      { email: 'email', groups: null, department: null },
-      { email: 'email', groups: null, departmentSnapshot: null, department: null },
+      { profile: { extensionsClaim: null, maxAgeSeconds: 14400 }, groups: null },
+      { profile: { extensionsClaim: null, maxAgeSeconds: 14400 }, groups: null, department: null },
+      {
+        profile: { extensionsClaim: null, maxAgeSeconds: 14400 },
+        groups: null,
+        departmentSnapshot: null,
+        department: null,
+      },
     ]) {
       expect(() => d.settings({ ...providerValue.settings, claims })).toThrow()
     }
   })
-  it('rejects department mappings that collide with other claims', () => {
-    for (const key of ['email', 'groups']) {
-      const claims = {
-        email: null,
-        groups: null,
+  it('rejects department mappings that collide with groups or profile extensions', () => {
+    for (const claims of [
+      {
+        ...providerValue.settings.claims,
+        groups: 'organization',
         departmentSnapshot: { claim: 'organization', maxAgeSeconds: 60 },
-        [key]: 'organization',
-      }
+      },
+      {
+        ...providerValue.settings.claims,
+        profile: { extensionsClaim: 'organization', maxAgeSeconds: 14400 },
+        departmentSnapshot: { claim: 'organization', maxAgeSeconds: 60 },
+      },
+    ])
       expect(() => d.settings({ ...providerValue.settings, claims })).toThrow()
-    }
   })
   it('requires explicit subject interpretation and validates an Entra tenant without OIDC fallback', () => {
     const settings = providerValue.settings
@@ -84,7 +93,7 @@ describe('closed Identity wire projections', () => {
   })
   it('accepts only the embedded v2 identity without role fields', () => {
     const value = {
-      session: { id: ID, authTime: 1, idleExpiresAt: 4102444800, absoluteExpiresAt: 4102444900 },
+      session: { id: ID, issuedAt: 1, idleExpiresAt: 4102444800, absoluteExpiresAt: 4102444900 },
       identity: { principalId: ID, hasLocalPassword: true },
       csrfToken: 'a'.repeat(64),
     }

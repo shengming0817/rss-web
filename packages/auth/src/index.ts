@@ -5,3 +5,5 @@ export { identityI18n } from './i18n'
 export { default as AuthShell } from './App.vue'
 
 export { useSessionLifecycle } from './useSessionLifecycle'
+
+export { profileJson, profileObject, type ProfileJson } from './services/profile'

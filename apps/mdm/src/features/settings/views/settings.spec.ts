@@ -14,6 +14,8 @@ import {
   permissions,
   devicePermissions,
 } from '../../operations/clients/authorization'
+import UserAttributeEditor from '../components/UserAttributeEditor.vue'
+import ProfilePanel from '../components/ProfilePanel.vue'
 import ApplePanel from '../components/ApplePanel.vue'
 import ProviderPanel from '../components/ProviderPanel.vue'
 import TaskTrustPanel from '../components/TaskTrustPanel.vue'
@@ -1348,3 +1350,86 @@ it.each(['received-before-return', 'received-after-return', 'unknown-after-retur
     expect(f.settings.operations.records.has('package-upload')).toBe(false)
   },
 )
+
+it('recovers field writes across remount without replay and compares conflicts before editing', async () => {
+  const value = {
+    key: 'employee',
+    displayName: 'Employee',
+    source: { kind: 'identity_local' },
+    pointer: '/extensions/employee',
+    valueType: 'string',
+    maxLength: null,
+    maxItems: null,
+    minimum: null,
+    maximum: null,
+    enabled: true,
+    sensitive: false,
+    visibility: 'both',
+    displayUse: 'profile',
+    required: true,
+    useExistingObservation: false,
+  }
+  const field = { fieldId: id, revision: 1, collectedAfterMicros: 1, value }
+  const f = await fixture(UserAttributeEditor, {
+    field,
+    sources: [
+      {
+        source: { kind: 'identity_local' },
+        providerConfigVersion: null,
+        extensionsRoot: 'extensions',
+        maxAgeSeconds: 14400,
+      },
+    ],
+  })
+  let operation = ''
+  f.setHandler((o) => {
+    if (o.method === 'PUT') {
+      operation = (o.body as { operationId: string }).operationId
+      throw new Error('lost')
+    }
+    return { operationId: operation, definition: { ...field, revision: 2 } }
+  })
+  await f.wrapper.get('#attribute-name').setValue('Updated')
+  await f.wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(f.settings.operations.records.get('user-attribute:' + id)?.state).toBe('unknown')
+  await f.remount()
+  expect(f.wrapper.get('fieldset').attributes('disabled')).toBeDefined()
+  await button(f.wrapper, '查询原操作').trigger('click')
+  await flushPromises()
+  expect(f.calls.filter((o) => o.method === 'PUT')).toHaveLength(1)
+  expect(f.settings.operations.records.get('user-attribute:' + id)?.state).toBe('received')
+  f.setHandler((o) => {
+    if (o.method === 'PUT') throw decodeMdmError(409, { code: 'operation_conflict' })
+    return { ...field, revision: 3 }
+  })
+  await f.wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(f.settings.operations.records.get('user-attribute:' + id)?.state).toBe('conflict')
+  await button(f.wrapper, '读取最新状态以比较').trigger('click')
+  await flushPromises()
+  expect(f.calls.filter((o) => o.method === 'PUT')).toHaveLength(2)
+})
+it('profile reads clear stale data on denied responses and authentication changes', async () => {
+  const f = await fixture(ProfilePanel)
+  const value = {
+    principalId: principal,
+    view: 'current',
+    profiles: [],
+    fields: [],
+    completeness: { required: 0, complete: 0, missing: 0 },
+  }
+  f.setHandler(() => value)
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  expect(f.wrapper.text()).toContain(principal)
+  f.setHandler(() => {
+    throw decodeMdmError(403, { code: 'permission_denied' })
+  })
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  expect(f.wrapper.text()).not.toContain(principal)
+  f.state.value = { ...f.state.value, status: 'anonymous' }
+  await flushPromises()
+  expect(f.wrapper.text()).not.toContain(principal)
+})

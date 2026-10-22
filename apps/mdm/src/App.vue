@@ -30,6 +30,7 @@ const consoleMode = computed(
   () => authenticated.value && route.meta['protected'] && !personal.value,
 )
 const authDestinations: NavigationItem[] = [
+  { name: 'user-profile', label: 'profiles.mine' },
   { name: 'sessions', label: 'identity.sessions' },
   { name: 'accounts', label: 'identity.accounts' },
   { name: 'providers', label: 'identity.providers' },

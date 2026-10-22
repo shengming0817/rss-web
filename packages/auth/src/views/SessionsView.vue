@@ -243,6 +243,10 @@ function submitConfirmed() {
           <h2 id="security-title">{{ t('identity.authentication') }}</h2>
           <template v-if="session.state.value.security">
             <p>
+              {{ t('identity.authenticationSource') }}:
+              {{ t('identity.' + session.state.value.security.authentication.source) }}
+            </p>
+            <p>
               {{ t('identity.authTime') }}:
               {{
                 session.state.value.security.authentication.authTime === null

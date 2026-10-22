@@ -42,7 +42,7 @@ export function list<T>(value: unknown, decode: (v: unknown) => T, max = 100): T
 }
 export interface Session {
   id: string
-  authTime: number
+  issuedAt: number
   idleExpiresAt: number
   absoluteExpiresAt: number
 }
@@ -56,14 +56,14 @@ export interface SessionResponse {
   csrfToken: string
 }
 export function session(value: unknown): Session {
-  const v = object(value, ['id', 'authTime', 'idleExpiresAt', 'absoluteExpiresAt'])
+  const v = object(value, ['id', 'issuedAt', 'idleExpiresAt', 'absoluteExpiresAt'])
   const result = {
     id: uuid(v['id']),
-    authTime: number(v['authTime']),
+    issuedAt: number(v['issuedAt']),
     idleExpiresAt: number(v['idleExpiresAt']),
     absoluteExpiresAt: number(v['absoluteExpiresAt']),
   }
-  if (result.authTime >= result.idleExpiresAt || result.idleExpiresAt > result.absoluteExpiresAt)
+  if (result.issuedAt >= result.idleExpiresAt || result.idleExpiresAt > result.absoluteExpiresAt)
     throw new Error('Invalid expiry')
   return result
 }
@@ -89,6 +89,7 @@ export function identity(value: unknown): Identity {
 export interface SessionSecurity {
   sessionId: string
   authentication: {
+    source: 'local_password' | 'oidc' | 'platform'
     authTime: number | null
     acr: 'unspecified' | 'mfa'
     amr: ('mfa' | 'otp' | 'pwd')[]
@@ -97,8 +98,11 @@ export interface SessionSecurity {
 }
 export function sessionSecurity(value: unknown): SessionSecurity {
   const v = object(value, ['sessionId', 'authentication', 'eligibleStepUpProviders'])
-  const a = object(v['authentication'], ['authTime', 'acr', 'amr'])
+  const a = object(v['authentication'], ['source', 'authTime', 'acr', 'amr'])
   if (a['acr'] !== 'unspecified' && a['acr'] !== 'mfa') throw new Error('Invalid assurance')
+  const source = a['source']
+  if (source !== 'local_password' && source !== 'oidc' && source !== 'platform')
+    throw new Error('Invalid source')
   const authTime = a['authTime'] === null ? null : number(a['authTime'])
   if (authTime === 0) throw new Error('Invalid authentication time')
   const methods = list(
@@ -118,7 +122,7 @@ export function sessionSecurity(value: unknown): SessionSecurity {
     throw new Error('Invalid providers')
   return {
     sessionId: uuid(v['sessionId']),
-    authentication: { authTime: authTime, acr: a['acr'], amr: methods },
+    authentication: { source, authTime: authTime, acr: a['acr'], amr: methods },
     eligibleStepUpProviders: providers,
   }
 }
@@ -214,7 +218,7 @@ export interface ProviderSettings {
   scopes: string[]
   claims: {
     subject: SubjectMapping
-    email: string | null
+    profile: { extensionsClaim: string | null; maxAgeSeconds: number }
     groups: string | null
     departmentSnapshot: DepartmentSnapshotClaim | null
   }
@@ -228,18 +232,45 @@ export interface Provider {
   enabled: boolean
   settings: ProviderSettings
 }
+function profileSettings(value: unknown) {
+  const v = object(value, ['extensionsClaim', 'maxAgeSeconds'])
+  const maxAgeSeconds = number(v['maxAgeSeconds'])
+  if (maxAgeSeconds < 60 || maxAgeSeconds > 86400) throw new Error('Invalid profile lifetime')
+  const extensionsClaim = v['extensionsClaim'] === null ? null : text(v['extensionsClaim'], 128)
+  if (
+    extensionsClaim !== null &&
+    (!extensionsClaim ||
+      [
+        'sub',
+        'iss',
+        'aud',
+        'exp',
+        'iat',
+        'nonce',
+        'auth_time',
+        'acr',
+        'amr',
+        'name',
+        'preferred_username',
+        'email',
+        'email_verified',
+      ].includes(extensionsClaim))
+  )
+    throw new Error('Invalid profile claim')
+  return { extensionsClaim, maxAgeSeconds }
+}
 export function settings(value: unknown): ProviderSettings {
   const v = object(value, ['issuer', 'clientId', 'redirectUri', 'scopes', 'claims', 'jit'])
-  const c = object(v['claims'], ['subject', 'email', 'groups', 'departmentSnapshot'])
+  const c = object(v['claims'], ['subject', 'profile', 'groups', 'departmentSnapshot'])
   const claims = {
     subject: subjectMapping(c['subject']),
-    email: c['email'] === null ? null : text(c['email'], 128),
+    profile: profileSettings(c['profile']),
     groups: c['groups'] === null ? null : text(c['groups'], 128),
     departmentSnapshot: departmentSnapshotClaim(c['departmentSnapshot']),
   }
   if (
     claims.departmentSnapshot &&
-    [claims.email, claims.groups].includes(claims.departmentSnapshot.claim)
+    [claims.profile.extensionsClaim, claims.groups].includes(claims.departmentSnapshot.claim)
   )
     throw new Error('Conflicting department snapshot claim')
   return {

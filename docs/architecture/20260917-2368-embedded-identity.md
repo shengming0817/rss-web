@@ -1,6 +1,6 @@
 # 产品宿主内认证 UI
 
-Identity 应用独立装配 `@rss/auth` 的唯一会话实例；MDM 复用该共享包但独立部署，见 [MDM 前端](20260926-2544-mdm-web.md)。UI 挂载 `/`，租户登录入口 `/tenants/{tenant UUID}/login`。API 仅 `/api/v1/identity`，唯一协议 callback `/api/v1/identity/oidc/callback`；宿主 return target `resume` 必须指向同源 `/auth/resume`。API DTO 均为 camelCase。Provider claims 只接受 email/groups/departmentSnapshot；departmentSnapshot 为 null 或完整 claim/maxAgeSeconds（1–300 秒），拒绝旧 department 字段。编辑其它设置保留后端配置的部门快照映射，新 provider 明确提交 null；部门配置通过后端管理 API 维护，本 UI 不新增部门目录或授权页面。此契约对应 Identity #2451。
+Identity 应用独立装配 `@rss/auth` 的唯一会话实例；MDM 复用该共享包但独立部署，见 [MDM 前端](20260926-2544-mdm-web.md)。UI 挂载 `/`，租户登录入口 `/tenants/{tenant UUID}/login`。API 仅 `/api/v1/identity`，唯一协议 callback `/api/v1/identity/oidc/callback`；宿主 return target `resume` 必须指向同源 `/auth/resume`。API DTO 均为 camelCase。Provider claims 只接受 subject/profile/groups/departmentSnapshot；profile 显式包含 extensionsClaim（null 或批准的普通扩展根）与 maxAgeSeconds（60–86400，默认 14400），固定资料来自验证后的标准声明，不提供自定义邮箱映射。；departmentSnapshot 为 null 或完整 claim/maxAgeSeconds（1–300 秒），拒绝旧 department 字段。编辑其它设置保留后端配置的部门快照映射，新 provider 明确提交 null；部门配置通过后端管理 API 维护，本 UI 不新增部门目录或授权页面。此契约对应 Identity #2451。
 
 上游 issuer/clientId 是外部企业 IdP 配置，默认本地认证不需要 IdP。
 
@@ -85,3 +85,9 @@ rm /tmp/rss-identity-web-dev.yaml
 会话页面分为会话列表和账户安全。修改密码、重新认证与企业身份关联按需展开，关闭任务或切换视图清除本地密码；退出全部会话先确认影响范围。MDM 和独立 Identity 宿主使用同一组认证页面，协议恢复与 HTTP 合同不随布局改变。
 
 宿主组合可配置固定登录路径、绑定 tenant、范围展示和类型化登录目标；Identity 默认保持租户登录路径和会话页。MDM 配置独立业务／平台入口，共享包不判断设置进度。匿名 401 显示普通登录；唯一 controller 仅对本次已接受会话的计时到期或 401 记录内存失效提示，成功认证或明确退出清除提示。依赖故障不当作匿名，403 不清除合法认证。
+
+## 登录观察与本地资料（#2868 / #2878）
+
+会话签发时间为 issuedAt；security.authentication.source 显式区分 local_password/oidc/platform，authTime 只表示真实认证时间，可为 null。共享账户页面通过独立资料管理权限读取／编辑本地 authority，邮箱验证状态不开放本地编辑。编辑使用 expectedRevision、operationId 和显式 value:null 删除；响应丢失查询原回执，409 重新读取后编辑，不自动重放。修改资料不会更新会话认证时间或生成登录观察，下次成功登录才采集。
+
+固定身份、会话及资料包络严格解码。只有普通扩展和业务属性值允许动态 JSON，预算为 64 KiB、256 个成员、深度 8、单数组 128 项，数值有限且整数在浏览器安全范围内。

@@ -1,3 +1,4 @@
+import { localProfile, profileReceipt, type LocalProfile } from './profile'
 import { isRssApiError } from '@rss/api/identity'
 import type { IdentitySession } from './session'
 import {
@@ -110,6 +111,28 @@ export function createApi(owner: IdentitySession) {
         200,
         undefined,
         cursor === undefined ? undefined : { cursor: uuid(cursor) },
+      ),
+    localProfile: (principal: string) =>
+      call('GET', `accounts/${uuid(principal)}/profile`, localProfile),
+    saveLocalProfile: (
+      principal: string,
+      operationId: string,
+      expectedRevision: number,
+      value: LocalProfile | null,
+    ) =>
+      call(
+        'PUT',
+        `accounts/${uuid(principal)}/profile`,
+        (v) => {
+          const receipt = profileReceipt(v, operationId)
+          if (!receipt) throw new Error('Missing profile receipt')
+          return receipt
+        },
+        { operationId: uuid(operationId), expectedRevision, value },
+      ),
+    localProfileOperation: (principal: string, operationId: string) =>
+      call('GET', `accounts/${uuid(principal)}/profile/operations/${uuid(operationId)}`, (v) =>
+        profileReceipt(v, operationId),
       ),
     createAccount: (login: string, password: string) =>
       call('POST', 'accounts', account, { login, password }, 201),

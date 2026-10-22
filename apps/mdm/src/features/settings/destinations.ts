@@ -7,6 +7,7 @@ export function settingsDestination(target: string, tenant: string): RouteLocati
     operations: 'settings-operations',
     tenants: 'settings-tenants',
     accounts: 'accounts',
+    'user-attributes': 'settings-user-attributes',
     providers: 'providers',
     ade: 'operations-appleAde',
     appleAccount: 'operations-appleAccount',

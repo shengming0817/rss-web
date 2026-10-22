@@ -10,13 +10,13 @@ export const TOKEN = 'a'.repeat(64)
 export function securityValue() {
   return {
     sessionId: ID,
-    authentication: { authTime: 1, acr: 'unspecified', amr: ['pwd'] },
+    authentication: { source: 'local_password', authTime: 1, acr: 'unspecified', amr: ['pwd'] },
     eligibleStepUpProviders: [] as { providerId: string; label: string }[],
   }
 }
 export function sessionValue(_admin = true, token = TOKEN) {
   return {
-    session: { id: ID, authTime: 1, idleExpiresAt: 4102444800, absoluteExpiresAt: 4102444900 },
+    session: { id: ID, issuedAt: 1, idleExpiresAt: 4102444800, absoluteExpiresAt: 4102444900 },
     identity: {
       principalId: ID,
       hasLocalPassword: true,
@@ -38,7 +38,7 @@ export const settingsValue = {
   scopes: ['openid'],
   claims: {
     subject: { kind: 'oidc' as const },
-    email: 'email',
+    profile: { extensionsClaim: null, maxAgeSeconds: 14400 },
     groups: null,
     departmentSnapshot: null,
   },

@@ -32,7 +32,8 @@ const client = ref('')
 const clientSecret = ref('')
 const caPem = ref('')
 const scopes = ref('openid profile email')
-const email = ref('email')
+const extensionsClaim = ref('')
+const profileMaxAge = ref(14400)
 const groups = ref('groups')
 const jit = ref(false)
 function clear() {
@@ -43,7 +44,8 @@ function clear() {
   clientSecret.value = ''
   caPem.value = ''
   scopes.value = 'openid profile email'
-  email.value = 'email'
+  extensionsClaim.value = ''
+  profileMaxAge.value = 14400
   groups.value = 'groups'
   jit.value = false
   report.value = ''
@@ -56,7 +58,8 @@ function edit(p: Provider) {
   clientSecret.value = ''
   caPem.value = ''
   scopes.value = p.settings.scopes.join(' ')
-  email.value = p.settings.claims.email ?? ''
+  extensionsClaim.value = p.settings.claims.profile.extensionsClaim ?? ''
+  profileMaxAge.value = p.settings.claims.profile.maxAgeSeconds
   groups.value = p.settings.claims.groups ?? ''
   jit.value = p.settings.jit
   report.value = ''
@@ -84,7 +87,10 @@ async function save() {
     scopes: scopes.value.split(/\s+/).filter(Boolean),
     claims: {
       subject: current ? { ...current.settings.claims.subject } : { kind: 'oidc' },
-      email: email.value || null,
+      profile: {
+        extensionsClaim: extensionsClaim.value || null,
+        maxAgeSeconds: profileMaxAge.value,
+      },
       groups: groups.value || null,
       departmentSnapshot: current ? current.settings.claims.departmentSnapshot : null,
     },
@@ -218,8 +224,18 @@ async function test(p: Provider) {
           <textarea id="ca-pem" v-model="caPem" class="ui-input" autocomplete="off"></textarea>
           <label for="scopes">{{ t('identity.scopes') }}</label
           ><input id="scopes" v-model="scopes" class="ui-input" required />
-          <label for="email-claim">{{ t('identity.emailClaim') }}</label
-          ><input id="email-claim" v-model="email" class="ui-input" />
+          <label for="profile-claim">{{ t('identity.profileClaim') }}</label
+          ><input id="profile-claim" v-model="extensionsClaim" class="ui-input" />
+          <label for="profile-age">{{ t('identity.profileAge') }}</label
+          ><input
+            id="profile-age"
+            v-model.number="profileMaxAge"
+            class="ui-input"
+            type="number"
+            min="60"
+            max="86400"
+            required
+          />
           <label for="groups-claim">{{ t('identity.groupsClaim') }}</label
           ><input id="groups-claim" v-model="groups" class="ui-input" />
           <label v-if="session.providerHint.value" class="auth-checkbox" for="jit"

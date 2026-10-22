@@ -17,6 +17,18 @@ export const settingsFeature: MdmFeature = {
     meta: { protected: true },
   },
   routes: [
+    {
+      path: '/tenants/:tenant/settings/user-attributes',
+      name: 'settings-user-attributes',
+      component: () => import('./views/UserAttributesView.vue'),
+      meta: { protected: true },
+    },
+    {
+      path: '/tenants/:tenant/profile',
+      name: 'user-profile',
+      component: () => import('./views/UserProfileView.vue'),
+      meta: { protected: true },
+    },
     ...settingsSections
       .filter((section) => section !== 'overview')
       .map((section) => ({
