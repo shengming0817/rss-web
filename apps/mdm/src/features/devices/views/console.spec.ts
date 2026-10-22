@@ -1616,3 +1616,53 @@ it.each([
     }
   },
 )
+it('renders shared fields in saved layout order after reloading the detail', async () => {
+  const f = await setup('device-detail', { device: 'device-01' })
+  await f.devices.assets.saveFieldLayout({
+    operationId: crypto.randomUUID(),
+    expectedRevision: 0,
+    input: {
+      groups: [
+        {
+          id: crypto.randomUUID(),
+          name: 'Ordered assets',
+          fields: ['custom.is_loaner', 'custom.asset_tag'],
+        },
+      ],
+    },
+  })
+  await f.router.push({ name: 'devices', params: { tenant: TENANT } })
+  await f.router.push({ name: 'device-detail', params: { tenant: TENANT, device: 'device-01' } })
+  await flushPromises()
+  await f.click('Ordered assets')
+  const labels = f.wrapper.findAll('.asset-detail-layout dl dt').map((label) => label.text())
+  expect(labels.indexOf('借用设备')).toBeLessThan(labels.indexOf('资产编号'))
+})
+it('compares a deleted group inside its unknown-result modal before replaying the original delete', async () => {
+  const f = await setup('device-groups')
+  await f.click('取消')
+  await f.wrapper
+    .findAll('button')
+    .find((b) => b.text().includes('Pilot devices'))!
+    .trigger('click')
+  await flushPromises()
+  await f.click('删除')
+  f.loseReply.path = '/api/v1/groups/{id}'
+  const dialog = new DOMWrapper(document.body).get('[role=alertdialog]')
+  await dialog
+    .findAll('button')
+    .find((b) => b.text() === '删除')!
+    .trigger('click')
+  await flushPromises()
+  f.loseReply.path = ''
+  await dialog
+    .findAll('button')
+    .find((b) => b.text() === '重读服务器值并比较')!
+    .trigger('click')
+  await flushPromises()
+  const replay = dialog.findAll('button').find((b) => b.text() === '明确重放原操作')!
+  expect(replay.attributes('disabled')).toBeUndefined()
+  await replay.trigger('click')
+  await flushPromises()
+  expect(new DOMWrapper(document.body).find('[role=alertdialog]').exists()).toBe(false)
+})
