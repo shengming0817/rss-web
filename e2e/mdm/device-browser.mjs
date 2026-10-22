@@ -983,7 +983,15 @@ try {
   assert.equal(await personnel.locator('input').count(), 0)
   await personnel.locator('[data-action=edit-owner]').click()
   await page.getByRole('dialog').getByRole('button', { name: '未指定', exact: true }).click()
-  await page.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).click()
+  const ownerWritten = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PUT' &&
+      new URL(response.url()).pathname === `/api/v1/devices/${collectorDevice}/registration-user`,
+  )
+  const ownerDialog = page.getByRole('dialog')
+  await ownerDialog.getByRole('button', { name: '保存', exact: true }).click()
+  assert.equal((await ownerWritten).status(), 200)
+  await ownerDialog.waitFor({ state: 'hidden' })
   await loaded()
   assert.equal((await api(`/api/v1/devices/${collectorDevice}/registration-user`)).user, null)
   assert.ok(
