@@ -682,13 +682,23 @@ watch(
         <fieldset v-if="step === 0" :disabled="locked">
           <label
             >{{ t('telemetry.templateKind')
-            }}<select v-model="templateKind" class="ui-input" @change="sources()">
+            }}<select
+              v-model="templateKind"
+              :aria-label="t('telemetry.templateKind')"
+              class="ui-input"
+              @change="sources()"
+            >
               <option value="agent_collection">{{ t('telemetry.nativeTemplate') }}</option>
               <option value="script">{{ t('telemetry.scriptTemplate') }}</option>
             </select></label
           ><label
             >{{ t('telemetry.template')
-            }}<select v-model="templateId" class="ui-input" @change="selectTemplate">
+            }}<select
+              v-model="templateId"
+              :aria-label="t('telemetry.template')"
+              class="ui-input"
+              @change="selectTemplate"
+            >
               <option value="">{{ t('devices.select') }}</option>
               <option v-for="item in templates" :key="item.id" :value="item.id">
                 {{ item.id }} / {{ item.activeVersion }}
@@ -699,7 +709,12 @@ watch(
           }}</UiButton
           ><label
             >{{ t('telemetry.variant')
-            }}<select v-model="variantKey" class="ui-input" @change="chosen = []">
+            }}<select
+              v-model="variantKey"
+              :aria-label="t('telemetry.variant')"
+              class="ui-input"
+              @change="chosen = []"
+            >
               <option v-for="v in variants" :key="v.key" :value="v.key">
                 {{ v.version }} / {{ v.variant.platform }} / {{ v.variant.architecture }} /
                 {{ v.variant.key }}
@@ -725,7 +740,7 @@ watch(
           <label>{{ t('telemetry.version') }}<input v-model="version" class="ui-input" /></label
           ><label
             >{{ t('telemetry.projection')
-            }}<select v-model="projection" class="ui-input">
+            }}<select v-model="projection" :aria-label="t('telemetry.projection')" class="ui-input">
               <option value="current">{{ t('telemetry.current') }}</option>
               <option value="history">{{ t('telemetry.historyOnly') }}</option>
               <option value="both">{{ t('telemetry.both') }}</option>
@@ -743,7 +758,7 @@ watch(
           </div>
           <label
             >{{ t('telemetry.scope')
-            }}<select v-model="scope" class="ui-input">
+            }}<select v-model="scope" :aria-label="t('telemetry.scope')" class="ui-input">
               <option value="">{{ t('devices.select') }}</option>
               <option
                 v-for="s in scopeOptions?.items.filter((s) => !s.deleted)"
@@ -829,7 +844,12 @@ watch(
             </p>
             <label v-if="policyAction === 'put'"
               >{{ t('telemetry.policy')
-              }}<select v-model="policyId" class="ui-input" @change="selectPolicy">
+              }}<select
+                v-model="policyId"
+                :aria-label="t('telemetry.policy')"
+                class="ui-input"
+                @change="selectPolicy"
+              >
                 <option value="">{{ t('telemetry.newPolicy') }}</option>
                 <option
                   v-for="p in usages.filter((p) => p.state !== 'archived')"

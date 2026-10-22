@@ -128,7 +128,9 @@ function definition() {
               ? ['min', 'max', 'mean', 'count']
               : kind.value === 'state'
                 ? ['timeline', 'transitions', 'coverage']
-                : ['increase', 'rate', 'count'],
+                : kind.value === 'delta_counter'
+                  ? ['sum', 'rate']
+                  : ['increase', 'rate'],
           retention: { key: retentionKey.value, revision: retentionRevision.value },
         }
       : null
@@ -303,7 +305,12 @@ watch(
           <div v-if="creating" class="telemetry-toolbar">
             <label
               >{{ t('telemetry.valueType')
-              }}<select v-model="type" class="ui-input" @change="advanced = ''">
+              }}<select
+                v-model="type"
+                :aria-label="t('telemetry.valueType')"
+                class="ui-input"
+                @change="advanced = ''"
+              >
                 <option value="number">number</option>
                 <option value="integer">integer</option>
                 <option value="boolean">boolean</option>
@@ -335,7 +342,7 @@ watch(
           <fieldset v-if="bindingEnabled" :disabled="!!selected?.timeSeries">
             <label
               >{{ t('telemetry.metricKind')
-              }}<select v-model="kind" class="ui-input">
+              }}<select v-model="kind" :aria-label="t('telemetry.metricKind')" class="ui-input">
                 <option
                   v-for="k in ['gauge', 'cumulative_counter', 'delta_counter', 'state']"
                   :key="k"

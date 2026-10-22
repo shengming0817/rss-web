@@ -21,7 +21,8 @@ const fields = ref<FieldDefinition[]>([]),
 const range = ref('1h'),
   resolution = ref('auto'),
   series = ref(''),
-  counterMode = ref('rate')
+  counterMode = ref('rate'),
+  counterGap = ref(300)
 const discoveryNext = ref<string | null>(null)
 const rows = ref<Observation[]>([]),
   buckets = ref<Bucket[]>([]),
@@ -100,6 +101,7 @@ const { run, busy, failure } = useOperation(
     resolution.value,
     series.value,
     counterMode.value,
+    String(counterGap.value),
     aggregateOperation.value,
   ],
   () => props.device,
@@ -124,10 +126,12 @@ function clearData() {
   discoveryNext.value = null
 }
 function clearSelection() {
+  const problem = failure.value
   clearData()
   resources.value = []
   resource.value = ''
   resourceNext.value = null
+  failure.value = problem
 }
 function reload() {
   return resource.value ? load() : loadResources()
@@ -214,6 +218,15 @@ async function aggregate(after: string | null = null, previous: Bucket[] = []) {
   if (!row || !step.value) return
   buckets.value = []
   next.value = null
+  if (
+    counter.value &&
+    (!Number.isSafeInteger(counterGap.value) ||
+      counterGap.value < 1 ||
+      !Number.isSafeInteger(counterGap.value * 1_000_000))
+  ) {
+    failure.value = 'invalidRequest'
+    return
+  }
   const ok = await run(
     () =>
       runtime.devices.telemetry.aggregate({
@@ -228,7 +241,7 @@ async function aggregate(after: string | null = null, previous: Bucket[] = []) {
           ? 'rate'
           : (aggregateOperation.value as 'min' | 'max' | 'sum' | 'count' | 'mean'),
         coverage: { coverage: 'observedOnly' },
-        maxGapMicros: null,
+        maxGapMicros: counter.value ? counterGap.value * 1_000_000 : null,
       }),
     (v) => {
       buckets.value = [...previous, ...v.buckets]
@@ -301,9 +314,13 @@ watch(
   },
   { flush: 'post' },
 )
-watch([resource, range, resolution, counterMode, aggregateOperation], () => void load(), {
-  flush: 'post',
-})
+watch(
+  [resource, range, resolution, counterMode, counterGap, aggregateOperation],
+  () => void load(),
+  {
+    flush: 'post',
+  },
+)
 </script>
 <template>
   <section class="telemetry-section" :aria-busy="busy">
@@ -318,7 +335,7 @@ watch([resource, range, resolution, counterMode, aggregateOperation], () => void
     <div class="telemetry-toolbar">
       <label
         >{{ t('telemetry.range')
-        }}<select v-model="range" class="ui-input">
+        }}<select v-model="range" :aria-label="t('telemetry.range')" class="ui-input">
           <option value="1h">{{ t('telemetry.hour') }}</option>
           <option value="24h">{{ t('telemetry.day') }}</option>
           <option value="7d">{{ t('telemetry.week') }}</option>
@@ -327,6 +344,7 @@ watch([resource, range, resolution, counterMode, aggregateOperation], () => void
         >{{ t('telemetry.resolution')
         }}<select
           v-model="resolution"
+          :aria-label="t('telemetry.resolution')"
           class="ui-input"
           :disabled="state || (counter && counterMode === 'total')"
         >
@@ -337,7 +355,11 @@ watch([resource, range, resolution, counterMode, aggregateOperation], () => void
         </select></label
       ><label v-if="!state && !counter && step"
         >{{ t('telemetry.aggregateOperation')
-        }}<select v-model="aggregateOperation" class="ui-input">
+        }}<select
+          v-model="aggregateOperation"
+          :aria-label="t('telemetry.aggregateOperation')"
+          class="ui-input"
+        >
           <option v-for="op in operations" :key="op" :value="op">
             {{ t('telemetry.aggregation.' + op) }}
           </option>
@@ -363,7 +385,7 @@ watch([resource, range, resolution, counterMode, aggregateOperation], () => void
           ><div class="telemetry-toolbar">
             <label
               >{{ t('telemetry.resource')
-              }}<select v-model="resource" class="ui-input">
+              }}<select v-model="resource" :aria-label="t('telemetry.resource')" class="ui-input">
                 <option v-for="id in resources" :key="id" :value="id">{{ id }}</option>
               </select></label
             ><UiButton v-if="resourceNext" :disabled="busy" @click="loadResources(resourceNext)">{{
@@ -371,7 +393,12 @@ watch([resource, range, resolution, counterMode, aggregateOperation], () => void
             }}</UiButton
             ><label v-if="choices.length"
               >{{ t('telemetry.series')
-              }}<select :value="series" class="ui-input" @change="chooseSeries">
+              }}<select
+                :value="series"
+                :aria-label="t('telemetry.series')"
+                class="ui-input"
+                @change="chooseSeries"
+              >
                 <option v-for="[key, row] in choices" :key="key" :value="key">
                   v{{ row.sample.series.definition.version }} · {{ row.source }} ·
                   {{ row.registration }} · {{ row.epoch }} ·
@@ -383,7 +410,11 @@ watch([resource, range, resolution, counterMode, aggregateOperation], () => void
             }}</UiButton
             ><label v-if="counter"
               >{{ t('telemetry.counterMode')
-              }}<select v-model="counterMode" class="ui-input">
+              }}<select
+                v-model="counterMode"
+                :aria-label="t('telemetry.counterMode')"
+                class="ui-input"
+              >
                 <option
                   value="rate"
                   :disabled="!selectedField?.timeSeries?.aggregations.includes('rate')"
@@ -394,6 +425,10 @@ watch([resource, range, resolution, counterMode, aggregateOperation], () => void
               </select></label
             >
           </div>
+          <label v-if="counter && counterMode === 'rate'"
+            >{{ t('telemetry.counterGap')
+            }}<input v-model.number="counterGap" type="number" min="1" class="ui-input"
+          /></label>
           <p v-if="retired" role="status">{{ t('telemetry.retired') }}</p>
           <TelemetryChart
             v-if="points.length"

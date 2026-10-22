@@ -183,6 +183,13 @@ export function createTelemetryDemo(
       end = count(query['endMicros']),
       kind = field.timeSeries.kind
     if (path.endsWith('/aggregate')) {
+      const gap = body['maxGapMicros']
+      if (
+        kind.endsWith('_counter')
+          ? typeof gap !== 'number' || !Number.isSafeInteger(gap) || gap <= 0
+          : gap !== null
+      )
+        return error('malformed_request', 400)
       const resolution = count(body['resolutionMicros']),
         total = Math.ceil((end - start) / resolution),
         limit = Math.min(256, total)

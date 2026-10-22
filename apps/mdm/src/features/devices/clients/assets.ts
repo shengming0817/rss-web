@@ -29,6 +29,7 @@ import {
   sourceIds,
   collectionScope,
   readScalar,
+  retentionKey,
   type CollectionScope,
   type ManualChange,
   type Query,
@@ -519,7 +520,7 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
 export function retentionPolicy(value: unknown) {
   const p = closed(value, ['key', 'revision', 'rawSeconds', 'summarySeconds', 'restoreSeconds'])
   const result = {
-    key: identifier(p['key']),
+    key: retentionKey(p['key']),
     revision: count(p['revision']),
     rawSeconds: count(p['rawSeconds']),
     summarySeconds: count(p['summarySeconds']),
@@ -528,6 +529,9 @@ export function retentionPolicy(value: unknown) {
   if (
     !result.revision ||
     !result.rawSeconds ||
+    result.rawSeconds > 0xffffffff ||
+    result.summarySeconds > 0xffffffff ||
+    result.restoreSeconds > 0xffffffff ||
     result.summarySeconds < result.rawSeconds ||
     result.restoreSeconds > result.rawSeconds
   )

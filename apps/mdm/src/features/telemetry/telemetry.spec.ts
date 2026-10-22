@@ -158,10 +158,16 @@ it('uses server resolution and rate statistics, while raw counters and states re
     .body as Record<string, unknown>
   expect(aggregate).toMatchObject({
     operation: 'rate',
+    maxGapMicros: 300_000_000,
     coverage: { coverage: 'observedOnly' },
     source: 'agent.script',
   })
   expect(h.wrapper.text()).toContain('/s')
+  await h.wrapper.get('input[type=number]').setValue(60)
+  await flushPromises()
+  expect(
+    h.requests.filter((r) => r.path === '/api/v1/telemetry/aggregate').at(-1)!.body,
+  ).toMatchObject({ maxGapMicros: 60_000_000 })
   const mode = h.wrapper.findAll('select').find((s) => s.find('option[value=total]').exists())!
   await mode.setValue('total')
   await flushPromises()
@@ -221,17 +227,17 @@ it('publishes retention revisions and canonical custom fields through the existi
   const h = await setup('settings-metrics')
   await h.click('保留策略')
   let dialog = h.body().get('[role=dialog][data-state=open]')
-  await dialog.findAll('input')[0]!.setValue('custom.retention')
+  await dialog.findAll('input')[0]!.setValue('custom_retention')
   await h.click('保存新版本')
   expect(
     h.requests.filter((r) => r.path === '/api/v1/asset-retention-policies').at(-1)!.body,
-  ).toMatchObject({ expectedRevision: 0, input: { key: 'custom.retention', revision: 1 } })
+  ).toMatchObject({ expectedRevision: 0, input: { key: 'custom_retention', revision: 1 } })
   await h.click('新建字段')
   dialog = h.body().get('[role=dialog][data-state=open]')
   await dialog.findAll('input')[0]!.setValue('custom.telemetry_new')
   const labels = dialog.findAll('label'),
     retention = labels.find((l) => l.text() === '保留策略标识')!
-  await retention.get('input').setValue('custom.retention')
+  await retention.get('input').setValue('custom_retention')
   await dialog.findAll('input[type=checkbox]').at(-1)!.setValue(true)
   await h.click('保存新版本')
   expect(
@@ -243,10 +249,31 @@ it('publishes retention revisions and canonical custom fields through the existi
         key: 'custom.telemetry_new',
         valueType: { kind: 'number' },
         sources: { 'agent.native': 0, 'agent.script': 1, 'agent.osquery': 2 },
-        timeSeries: { kind: 'gauge', retention: { key: 'custom.retention', revision: 1 } },
+        timeSeries: { kind: 'gauge', retention: { key: 'custom_retention', revision: 1 } },
       },
     },
   })
+})
+it.each([
+  ['cumulative_counter', ['increase', 'rate']],
+  ['delta_counter', ['sum', 'rate']],
+] as const)('publishes a %s field with admitted counter operations', async (kind, aggregations) => {
+  const h = await setup('settings-metrics')
+  await h.click('新建字段')
+  const dialog = h.body().get('[role=dialog][data-state=open]')
+  await dialog.findAll('input')[0]!.setValue('custom.' + kind)
+  await dialog.get('select[aria-label="指标种类"]').setValue(kind)
+  await dialog
+    .findAll('label')
+    .find((l) => l.text() === '保留策略标识')!
+    .get('input')
+    .setValue('demo_standard')
+  await dialog.findAll('input[type=checkbox]').at(-1)!.setValue(true)
+  await h.click('保存新版本')
+  expect(
+    h.requests.filter((r) => r.path === '/api/v1/asset-fields/{field}').at(-1)!.body,
+  ).toMatchObject({ input: { definition: { timeSeries: { kind, aggregations } } } })
+  expect(h.body().find('[role=dialog][data-state=open]').exists()).toBe(false)
 })
 it('freezes unknown field writes, treats current state as comparison and replays exactly', async () => {
   const h = await setup('settings-metrics')

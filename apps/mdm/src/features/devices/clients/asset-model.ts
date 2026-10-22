@@ -49,6 +49,11 @@ export function fieldKey(value: unknown) {
     throw new Error('Invalid field')
   return v
 }
+export function retentionKey(value: unknown) {
+  const v = string(value)
+  if (!/^[a-z][a-z0-9_]{0,63}$/.test(v)) throw new Error('Invalid retention key')
+  return v
+}
 export function scalar(value: unknown): Scalar {
   const v = closed(value, ['kind', 'value'])
   const kind = enumeration(v['kind'], ['string', 'boolean', 'integer', 'time'] as const)
@@ -277,7 +282,7 @@ function timeSeries(value: unknown) {
   ])
   const path = (value: unknown) => array(value, identifier)
   const retention = closed(v['retention'], ['key', 'revision'])
-  return {
+  const result = {
     kind: enumeration(v['kind'], [
       'gauge',
       'cumulative_counter',
@@ -309,9 +314,24 @@ function timeSeries(value: unknown) {
         'coverage',
       ] as const),
     ),
-    retention: { key: identifier(retention['key']), revision: count(retention['revision']) },
+    retention: { key: retentionKey(retention['key']), revision: count(retention['revision']) },
     maxResources: count(v['maxResources']),
   }
+  const allowed = {
+    gauge: ['min', 'max', 'sum', 'count', 'mean'],
+    cumulative_counter: ['increase', 'rate'],
+    delta_counter: ['sum', 'rate'],
+    state: ['timeline', 'transitions', 'coverage'],
+  }[result.kind]
+  if (
+    !result.aggregations.length ||
+    result.aggregations.some((a) => !allowed.includes(a)) ||
+    !result.retention.revision ||
+    result.maxResources < 1 ||
+    result.maxResources > 4096
+  )
+    throw new Error('Invalid time series binding')
+  return result
 }
 export type ValueType =
   | { kind: 'integer' | 'number' | 'boolean' | 'time' }

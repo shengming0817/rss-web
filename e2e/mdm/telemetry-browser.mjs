@@ -102,7 +102,7 @@ try {
   csrf = (await api('GET', `/api/v1/identity/tenants/${fixture.tenant}/session`)).csrfToken
   phase = 'formal-fields-and-template'
   await write('POST', '/api/v1/asset-retention-policies', {
-    key: 'browser.telemetry',
+    key: 'browser_telemetry',
     revision: 1,
     rawSeconds: 604800,
     summarySeconds: 2592000,
@@ -113,6 +113,7 @@ try {
     ['counter', 'cumulative_counter', { kind: 'integer' }, 'byte'],
     ['state', 'state', { kind: 'enum', values: ['running', 'stopped'] }, 'state'],
   ]) {
+    phase = 'formal-field-' + name
     const definition = {
       key: `custom.browser.${name}`,
       version: 1,
@@ -135,8 +136,8 @@ try {
             ? ['min', 'max', 'mean', 'count']
             : kind === 'state'
               ? ['timeline', 'transitions', 'coverage']
-              : ['increase', 'rate', 'count'],
-        retention: { key: 'browser.telemetry', revision: 1 },
+              : ['increase', 'rate'],
+        retention: { key: 'browser_telemetry', revision: 1 },
         maxResources: 1,
       },
     }
@@ -145,6 +146,7 @@ try {
   const template = randomUUID(),
     scope = randomUUID(),
     content = Buffer.from('#!/bin/sh\n# Controlled synthetic telemetry fixture.\n')
+  phase = 'formal-template'
   await write('POST', `/api/v1/resources/${template}`, { action: 'create', kind: 'script' })
   const spec = {
     profile: 'posix_sh',
@@ -213,7 +215,7 @@ try {
   )
   await api(
     'POST',
-    `/api/v1/resources/${template}/content?version=v1&variant=default&platform=macos&architecture=aarch64`,
+    `/api/v1/resources/${template}/content?version=v1&variant=default&platform=macos&architecture=aarch64&operation=${randomUUID()}`,
     content,
     true,
   )
@@ -375,7 +377,10 @@ try {
     })
     assert.equal(response.status(), 403)
   }
-  const before = await api('GET', '/api/v1/authorization/rules/' + fixture.ruleId)
+  const before = (await api('GET', '/api/v1/authorization/rules')).items.find(
+    (rule) => rule.id === fixture.ruleId,
+  )
+  assert.ok(before?.value, 'current fixture authorization rule')
   const grants = before.value.grants.filter((g) => g.operation !== 'inventory_sensitive_read')
   await api('PUT', '/api/v1/authorization/rules/' + fixture.ruleId, {
     operationId: randomUUID(),
@@ -384,9 +389,12 @@ try {
   })
   await deniedContinuation({ ...counterQuery, after: counterPage.next })
   await page.getByRole('button', { name: '重新读取', exact: true }).last().click()
-  await page.getByRole('alert').waitFor()
+  await page.getByRole('alert').first().waitFor()
   assert.equal(await page.locator('.telemetry-chart').count(), 0)
-  const scoped = await api('GET', '/api/v1/authorization/rules/' + fixture.ruleId)
+  const scoped = (await api('GET', '/api/v1/authorization/rules')).items.find(
+    (rule) => rule.id === fixture.ruleId,
+  )
+  assert.ok(scoped?.value, 'current scoped authorization rule')
   await api('PUT', '/api/v1/authorization/rules/' + fixture.ruleId, {
     operationId: randomUUID(),
     expectedRevision: scoped.revision,
@@ -397,7 +405,7 @@ try {
   })
   await deniedContinuation({ ...gaugeQuery, after: gaugePage.next })
   await page.reload()
-  await page.getByRole('alert').waitFor()
+  await page.getByRole('alert').first().waitFor()
   assert.equal(await page.locator('.telemetry-chart').count(), 0)
   coverage.push('sensitive-field-and-device-revocation-clear-returned-data')
   assert.deepEqual(pageErrors, [])
@@ -414,6 +422,15 @@ try {
         ?.trim(),
       failures,
       pageErrors,
+      controls: await page.locator('select').evaluateAll((elements) =>
+        elements.map((element) => ({
+          name: element.getAttribute('aria-label'),
+          disabled: element.matches(':disabled'),
+          value: element.value,
+          options: [...element.options].map((option) => option.value),
+        })),
+      ),
+      alerts: await page.getByRole('alert').allTextContents(),
     }),
   )
 } finally {

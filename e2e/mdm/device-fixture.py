@@ -222,7 +222,7 @@ try:
     module = importlib.util.spec_from_file_location('device_agent', WEB/'e2e/mdm/device-agent.py')
     collector = importlib.util.module_from_spec(module)
     module.loader.exec_module(collector)
-    agent_fixture = collector.register(agent_origin, environment.root/'ca.crt', native/'pki'/'agent', operator, private, TENANTS[0], capabilities=['inventory.collect.v1','inventory.native.v1','task.execute.v1','telemetry.collect.v1'] if browser_module == 'telemetry-browser.mjs' else None)
+    agent_fixture = collector.register(agent_origin, environment.root/'ca.crt', native/'pki'/'agent', operator, private, TENANTS[0], capabilities=['inventory.collect.v1','task.execute.v1','inventory.native.v1','telemetry.collect.v1'] if browser_module == 'telemetry-browser.mjs' else None)
     fixture=private(environment.root/'browser.json',dict(collector=agent_fixture,origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,principal=ADMIN,login='admin',passwordFile=str(environment.root/'account-password'),mdm='fixture-mdm',agent='fixture-agent',alone='fixture-alone',ruleId=rule_id,rule=rule))
     phase='browser'
     browser=subprocess.run(['node',str(WEB/'e2e/mdm'/browser_module)],cwd=WEB,env={**os.environ,'MDM_DEVICE_BROWSER_FIXTURE':str(fixture)},timeout=900,pass_fds=lease_fds())
@@ -232,6 +232,8 @@ except BaseException as error:
     if phase == 'readiness' and readiness:
         print(json.dumps(dict(phase=phase, result='failed', **readiness)), flush=True)
     print(json.dumps(dict(phase=phase,result='failed',classification=type(error).__name__)),flush=True)
+    if phase == 'collector-registration' and isinstance(error, RuntimeError) and re.fullmatch(r'collector-[a-z0-9-]+', str(error)):
+        print(json.dumps(dict(phase=phase, reason=str(error))), flush=True)
     product_log = environment.root/'product.log'
     if product_log.exists():
         diagnostic = Path(tempfile.mkdtemp(prefix='mdm-device-failure-'))

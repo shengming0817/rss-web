@@ -87,12 +87,12 @@ watch([field, hours], () => void load(), { flush: 'post' })
     <div class="telemetry-toolbar">
       <label
         >{{ t('telemetry.metrics')
-        }}<select v-model="field" class="ui-input">
+        }}<select v-model="field" :aria-label="t('telemetry.metrics')" class="ui-input">
           <option v-for="key in fields" :key="key" :value="key">{{ key }}</option>
         </select></label
       ><label
         >{{ t('telemetry.range')
-        }}<select v-model="hours" class="ui-input">
+        }}<select v-model="hours" :aria-label="t('telemetry.range')" class="ui-input">
           <option value="1">{{ t('telemetry.hour') }}</option>
           <option value="24">{{ t('telemetry.day') }}</option>
           <option value="168">{{ t('telemetry.week') }}</option>

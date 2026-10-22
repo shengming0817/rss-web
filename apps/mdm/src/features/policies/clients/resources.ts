@@ -378,7 +378,7 @@ export function createResourcesClient(transport: HttpTransport) {
           const v = closed(value, ['items', 'nextCursor'])
           return {
             items: array(v['items'], (value) => {
-              const i = closed(value, ['id', 'revision', 'kind', 'activeVersion'])
+              const i = closed(value, ['id', 'revision', 'kind', 'activeVersion', 'presentation'])
               return {
                 id: identifier(i['id']),
                 revision: count(i['revision']),
@@ -391,6 +391,7 @@ export function createResourcesClient(transport: HttpTransport) {
                   'telemetry_profile',
                 ] as const),
                 activeVersion: nullable(i['activeVersion'], identifier),
+                presentation: record(jsonValue(i['presentation'], 65536)),
               }
             }),
             nextCursor: nullable(v['nextCursor'], identifier),

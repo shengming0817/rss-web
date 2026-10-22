@@ -29,9 +29,9 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
   const originalCatalog = structuredClone(catalog),
     retentions = new Map<string, ReturnType<typeof retentionPolicy>>([
       [
-        'demo.standard/1',
+        'demo_standard/1',
         {
-          key: 'demo.standard',
+          key: 'demo_standard',
           revision: 1,
           rawSeconds: 604800,
           summarySeconds: 2592000,
@@ -365,8 +365,8 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
     reset() {
       catalog.splice(0, catalog.length, ...structuredClone(originalCatalog))
       retentions.clear()
-      retentions.set('demo.standard/1', {
-        key: 'demo.standard',
+      retentions.set('demo_standard/1', {
+        key: 'demo_standard',
         revision: 1,
         rawSeconds: 604800,
         summarySeconds: 2592000,

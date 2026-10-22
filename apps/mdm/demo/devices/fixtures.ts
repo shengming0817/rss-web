@@ -123,9 +123,9 @@ for (const [key, kind, unit] of [
             ? ['timeline', 'transitions', 'coverage']
             : kind === 'gauge'
               ? ['min', 'max', 'mean', 'count']
-              : ['increase', 'rate', 'count'],
-        retention: { key: 'demo.standard', revision: 1 },
-        maxResources: 64,
+              : ['increase', 'rate'],
+        retention: { key: 'demo_standard', revision: 1 },
+        maxResources: 1,
       },
     }),
   )

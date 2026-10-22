@@ -44,7 +44,7 @@ export interface AggregateQuery {
     | 'transitions'
     | 'coverage'
   coverage: { coverage: 'observedOnly' }
-  maxGapMicros: null
+  maxGapMicros: number | null
 }
 export function seriesKey(row: Observation) {
   const s = row.sample

@@ -157,6 +157,7 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
           kind: r.kind,
           revision: r.revision,
           activeVersion: r.versions.find((v) => v.state === 'active')?.id ?? null,
+          presentation: r.presentation,
         })),
         nextCursor: items.length > limit ? items[limit - 1]!.id : null,
       })
