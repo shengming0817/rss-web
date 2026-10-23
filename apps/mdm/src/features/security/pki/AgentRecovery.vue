@@ -190,9 +190,9 @@ watch(failure, (value) => {
       :busy="busy"
       :can-write="canWrite"
       :query-supported="kind === 'issuance'"
+      :compare-supported="false"
       @query="lookup"
       @retry="recover(true)"
-      :compare-supported="false"
     />
     <p v-if="pending?.state === 'conflict'" role="alert">
       {{ t('security.recovery.conflictHandoff') }}

@@ -567,8 +567,10 @@ it('requires current channel observations and keeps loaded material distinct fro
 })
 
 it('rejects retired task origin and PKI documents without stable identity', () => {
-  const { service_id: _taskService, ...oldTask } = task
+  const oldTask: Record<string, unknown> = { ...task }
+  delete oldTask['service_id']
   expect(() => taskTrust({ ...oldTask, origin: 'https://mdm.test' }, b)).toThrow()
-  const { service_id: _pkiService, ...oldPki } = pki
+  const oldPki: Record<string, unknown> = { ...pki }
+  delete oldPki['service_id']
   expect(() => pkiTrust(oldPki, b, 'agent')).toThrow()
 })

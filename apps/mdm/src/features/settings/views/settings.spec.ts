@@ -1846,8 +1846,8 @@ it('reads device connection observation with inventory access independently of g
   expect(f.calls.filter((o) => o.path.includes('connections/devices')).at(-1)).toMatchObject({
     pathParams: { device: 'endpoint-a' },
   })
-  f.state.value = { ...f.state.value, session: { id: tenant } }
   f.setHandler(() => null)
+  f.state.value = { ...f.state.value, session: { id: tenant } }
   await flushPromises()
   expect(f.wrapper.text()).not.toContain('https://b.test')
 })

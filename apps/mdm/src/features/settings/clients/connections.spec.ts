@@ -123,7 +123,7 @@ it('keeps desired, published, deployment and device facts distinct and rejects i
 it('binds write receipts and pagination, and downloads only the exact public signed attachment', async () => {
   let reply: unknown = { configuration: config }
   const request = vi.fn(async (o: RequestOptions<unknown>) => o.decode(reply)),
-    client = createConnectionsClient({ request } as HttpTransport, tenant)
+    client = createConnectionsClient({ request } as unknown as HttpTransport, tenant)
   await client.save(operation, 1, config.preferredOrigin, config.origins)
   expect(request.mock.lastCall![0]).toMatchObject({
     method: 'PUT',
@@ -157,8 +157,11 @@ it('binds write receipts and pagination, and downloads only the exact public sig
   expect((await client.devices(2, tenant)).next).toBe(service)
   expect(request.mock.lastCall![0]).toMatchObject({ query: { revision: 2, after: tenant } })
   await expect(client.devices(3)).rejects.toThrow()
+  const encoded = new TextEncoder().encode(JSON.stringify(signed)),
+    bytes = new ArrayBuffer(encoded.byteLength)
+  new Uint8Array(bytes).set(encoded)
   reply = {
-    bytes: new TextEncoder().encode(JSON.stringify(signed)).buffer,
+    bytes,
     contentType: 'application/json',
     contentDisposition: `attachment; filename="${connectionsFilename}"`,
   }
@@ -178,7 +181,8 @@ it('embeds the signed locations in enrollment and rejects retired origin-only co
     keyId: 'enrollment',
   }
   expect(enrollment(file, tenant).connections.configuration.serviceId).toBe(service)
-  const { connections: _connections, ...old } = file
+  const old: Record<string, unknown> = { ...file }
+  delete old['connections']
   expect(() => enrollment({ ...old, origin: 'https://a.test' }, tenant)).toThrow()
   expect(() =>
     enrollment(

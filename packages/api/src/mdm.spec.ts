@@ -810,7 +810,9 @@ it('keeps connections and original issuance reads same-origin with exact recover
   const spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance),
     transport = createMdmTransport()
   spy.mockRestore()
-  mock.onAny().reply(200, null)
+  mock
+    .onAny()
+    .reply((config) => [200, config.responseType === 'arraybuffer' ? new ArrayBuffer(1) : null])
   for (const [method, path] of [
     ['GET', '/api/v1/agent-connections'],
     ['PUT', '/api/v1/agent-connections'],
@@ -821,7 +823,11 @@ it('keeps connections and original issuance reads same-origin with exact recover
     await transport.request({
       method,
       path,
-      pathParams: { id: 'original', issuance: 'attempt', operation: 'recovery' },
+      pathParams: Object.fromEntries(
+        Object.entries({ id: 'original', issuance: 'attempt', operation: 'recovery' }).filter(
+          ([key]) => path.includes('{' + key + '}'),
+        ),
+      ),
       successStatus: 200,
       decode: (v) => v,
     })
