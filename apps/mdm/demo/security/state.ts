@@ -10,7 +10,6 @@ import { createSecurityActions } from './actions'
 import { createMaterialsDemo } from './materials'
 import { createSupportDemo } from './support'
 import { isSupportTarget } from '../features/security/clients/support-model'
-import { createCertificatesDemo } from './certificates'
 export function createSecurityDemo(
   devices: ReturnType<typeof createDeviceDemo>,
   operations: ReturnType<typeof createOperationsDemo>,
@@ -26,11 +25,9 @@ export function createSecurityDemo(
         ? governance.valid(target)
         : target.kind === 'risk_remediation'
           ? risks.valid(target)
-          : target.kind === 'certificate_deploy'
-            ? certificates.valid(target)
-            : isSupportTarget(target)
-              ? support.valid(target)
-              : materials.valid(target),
+          : isSupportTarget(target)
+            ? support.valid(target)
+            : materials.valid(target),
     operations,
   )
   const governance = createGovernanceDemo(now, scopes, compliance, requests, operations)
@@ -38,7 +35,6 @@ export function createSecurityDemo(
   const materials = createMaterialsDemo(now, devices, requests, (device, kind): boolean =>
     actions.blocksDisclosure(device, kind),
   )
-  const certificates = createCertificatesDemo(now, devices, operations)
   const support = createSupportDemo(now, devices, requests, operations)
   const actions = createSecurityActions(
     now,
@@ -46,21 +42,11 @@ export function createSecurityDemo(
     requests,
     risks,
     materials,
-    certificates,
     support,
     operations,
   )
   const handle: DomainHandler = (request, scenario) => {
-    for (const owner of [
-      compliance,
-      governance,
-      requests,
-      risks,
-      actions,
-      materials,
-      certificates,
-      support,
-    ]) {
+    for (const owner of [compliance, governance, requests, risks, actions, materials, support]) {
       const reply = owner.handle(request, scenario)
       if (reply) return reply
     }
@@ -73,35 +59,23 @@ export function createSecurityDemo(
     risks,
     actions,
     materials,
-    certificates,
     support,
     // Settle once before public projections; blocksDisclosure stays a non-recursive predicate.
     settle() {
       requests.settle()
       actions.settle()
-      certificates.settle()
     },
     executions: actions.executions,
     handle,
     tick(event: DemoEvent, scenario: Scenario) {
       time = Math.max(now(), event.at)
       requests.settle()
-      certificates.tick(event, scenario)
       const accepted = support.tick(event, scenario)
       actions.tick(event, scenario)
       return !['remote_consent', 'remote_revoke'].includes(event.kind) || accepted
     },
     reset() {
-      for (const owner of [
-        compliance,
-        governance,
-        requests,
-        risks,
-        actions,
-        materials,
-        certificates,
-        support,
-      ])
+      for (const owner of [compliance, governance, requests, risks, actions, materials, support])
         owner.reset()
       time = Math.floor(Date.now() / 1000)
     },

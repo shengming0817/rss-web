@@ -278,10 +278,48 @@ try:
         stop_host(initial)
         private(config_path,config)
         ready(initialized['origin'],start_host(binary,config_path,initialized['gateway'],log))
+        # Disposable management accounts and legal grants prepare the existing HTTPS carrier.
+        from candidate_installation_driver import Browser
+        manager=Browser(initialized['origin'],environment.root/'ca.crt')
+        manager.login(management,'admin',(environment.root/'account-password').read_text().strip())
+        api='/api/v1/identity/tenants/'+management
+        def expect_status(actual,expected):
+            if actual!=expected:raise RuntimeError('management-fixture-status-'+str(actual))
+        def managed_rule(principal,permissions):
+            return dict(subject=dict(kind='user',user=dict(instanceId=INSTANCE,tenantId=management,principalId=principal)),grants=[dict(operation=p,scope=dict(kind='tenant')) for p in permissions])
+        prepared={}
+        for name,permissions in [('authorization-target',[]),('authorization-maintainer',['authorization_read','authorization_write']),('authorization-reader',['authorization_read'])]:
+            secret='Disposable-'+uuid.uuid4().hex+'!'
+            status,account=manager.call('POST',api+'/accounts',dict(login=name,password=secret))
+            expect_status(status,201)
+            prepared[name]=dict(login=name,principalId=account['principalId'],passwordFile=str(private(environment.root/(name+'-password'),secret)))
+            if permissions:
+                status,_=manager.call('PUT','/api/v1/tenant-administration/authorization/rules/'+str(uuid.uuid4()),dict(operationId=str(uuid.uuid4()),expectedRevision=0,value=managed_rule(account['principalId'],permissions)))
+                expect_status(status,200)
+        # Page size is the server's fixed 100; all subjects are actual existing accounts.
+        pagination_rows=[]
+        for index in range(101):
+            identifier='09090909-0909-4909-8909-'+str(index).zfill(12)
+            document=json.dumps(managed_rule(prepared['authorization-target']['principalId'],['tenant_read'])).replace("'","''")
+            pagination_rows.append(f"('{management}','{INSTANCE}','{identifier}',1,'{document}'::jsonb)")
+        environment.sql(f"SET rss.tenant_id='{management}';INSERT INTO mdm_access.authorization_rules(tenant_id,instance,id,revision,document) VALUES "+','.join(pagination_rows),'mdm_dev')
+        status,initial_rules=manager.call('GET','/api/v1/tenant-administration/authorization/rules')
+        expect_status(status,200)
+        initial_rule=None
+        cursor=None
+        while True:
+            for row in initial_rules['items']:
+                if row['value'] and row['value']['subject']['user']['principalId']==ADMIN and any(g['operation']=='identity_accounts_manage' for g in row['value']['grants']):initial_rule=row
+            cursor=initial_rules['nextCursor']
+            if not cursor:break
+            status,initial_rules=manager.call('GET','/api/v1/tenant-administration/authorization/rules?after='+cursor)
+            expect_status(status,200)
+        if not initial_rule:raise RuntimeError('initial-rule-not-found')
+        authorization_fixture=dict(accounts=prepared,initialRule=initial_rule,instanceId=INSTANCE)
         revision=subprocess.run(['/usr/bin/git','rev-parse','HEAD'],cwd=BACKEND,capture_output=True,text=True,check=True).stdout.strip()
         request=environment.root/'target-request.json'
         response=environment.root/'target-ready.json'
-        fixture=private(environment.root/'browser.json',dict(backendRevision=revision,origin=initialized['origin'],tenant=TENANTS[0],managementTenant=management,login='admin',passwordFile=str(environment.root/'account-password'),targetRequest=str(request),targetReady=str(response)))
+        fixture=private(environment.root/'browser.json',dict(backendRevision=revision,origin=initialized['origin'],tenant=TENANTS[0],managementTenant=management,login='admin',passwordFile=str(environment.root/'account-password'),targetRequest=str(request),targetReady=str(response),authorization=authorization_fixture))
         phase='browser'
         browser=subprocess.Popen(['node',str(WEB/'e2e/mdm/settings-browser.mjs')],cwd=WEB,env={**os.environ,'MDM_SETTINGS_BROWSER_FIXTURE':str(fixture)},pass_fds=lease_fds())
         processes.append(browser)

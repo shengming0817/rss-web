@@ -13,12 +13,6 @@ export const routes: RouteRecordRaw[] = [
     meta: { protected: true },
   },
   {
-    path: '/tenants/:tenant/security/certificates',
-    name: 'security-certificates',
-    component: () => import('./views/CertificatesView.vue'),
-    meta: { protected: true },
-  },
-  {
     path: '/tenants/:tenant/security/materials',
     name: 'security-materials',
     component: () => import('./views/MaterialsView.vue'),

@@ -3,7 +3,7 @@ import axios from 'axios'
 import { isMdmContentRequest, MDM_CONTENT_BODY_LIMIT, mdmJsonBodyLimit } from './mdm-limits'
 import { decodeIdentityError } from './identity'
 import { execute } from './transport'
-import { clientError, identityWireFailure, protocolError } from './wire-error'
+import { clientError, identityWireFailure, agentWireFailure, protocolError } from './wire-error'
 import type { HttpTransport, NoContentRequest, RequestOptions, RssApiError } from './types'
 export type {
   BinaryResponse,
@@ -91,7 +91,7 @@ export function decodeMdmError(status: number, value: unknown): RssApiError {
   return identityWireFailure(status, v['code'])
 }
 const paths =
-  /^\/api\/v1\/(?:(?:user-attribute-definitions|user-attribute-operations|user-profiles|authorization|devices|device-views|device-associations|certificate-archive|asset-fields|asset-field-layout|device-queries|saved-queries|groups|scopes|policies|compliance-rules|resources|software|enrollments|registration-quotas|registration-channels)(?:\/|$)|operations$|collection-blueprints$|self-enrollments$|agent-(?:configurations|configuration-operations|enrollment-settings)(?:\/|$)|apple\/organizations(?:\/|$)|windows\/entra-policy$|windows\/entra\/terms\/context$|agent\/enroll\/packages(?:\/\{id\})?$|mdm-host\/config\.json$|mdm-candidate\/(?:workspace|devices|groups|policies|executions|software|security|support|authorization)(?:\/|$)|mdm-candidate\/operations\/(?:metrics|reports|alert-rules|alerts)(?:\/|$))/
+  /^\/api\/v1\/(?:(?:user-attribute-definitions|user-attribute-operations|user-profiles|authorization|devices|device-views|device-associations|certificate-archive|asset-fields|asset-field-layout|device-queries|saved-queries|groups|scopes|policies|compliance-rules|resources|software|enrollments|registration-quotas|registration-channels)(?:\/|$)|operations$|collection-blueprints$|self-enrollments$|agent-(?:configurations|configuration-operations|enrollment-settings)(?:\/|$)|apple\/organizations(?:\/|$)|windows\/entra-policy$|windows\/entra\/terms\/context$|agent\/enroll\/packages(?:\/\{id\})?$|mdm-host\/config\.json$|mdm-candidate\/(?:workspace|devices|groups|policies|executions|software|security\/(?:baselines|support|risks|actions|requests|materials)|support|authorization)(?:\/|$)|mdm-candidate\/operations\/(?:metrics|reports|alert-rules|alerts)(?:\/|$))/
 export function createMdmTransport(): HttpTransport {
   const instance = axios.create({ baseURL: '' })
   return {
@@ -99,6 +99,11 @@ export function createMdmTransport(): HttpTransport {
       const readiness = options.path === '/readyz'
       const settings =
         /^\/api\/v1\/(?:settings\/(?:catalog$|first-use(?:\/|$))|tenant-administration(?:\/|$)|apple\/materials(?:\/|$)|apple\/material-operations(?:\/|$)|storage\/connections(?:\/|$)|smtp(?:\/|$)|windows\/wns(?:\/|$)|task-signing(?:\/|$)|pki(?:\/|$)|webhooks(?:\/|$)|runtime\/diagnostics$|agent-packages(?:\/|$))/.test(
+          options.path,
+        )
+      const agentRecovery =
+        options.method === 'POST' &&
+        /^\/api\/v1\/(?:agent-registrations\/\{registration\}\/recovery|agent-issuances\/\{issuance\}\/recover)$/.test(
           options.path,
         )
       const audit = options.method === 'GET' && options.path === '/api/v1/audit-events'
@@ -111,7 +116,14 @@ export function createMdmTransport(): HttpTransport {
         '/api/v1/asset-retention-policies',
         '/api/v1/asset-retention-policies/{key}/{revision}',
       ].includes(options.path)
-      if (!paths.test(options.path) && !settings && !readiness && !telemetry && !audit)
+      if (
+        !paths.test(options.path) &&
+        !settings &&
+        !readiness &&
+        !telemetry &&
+        !audit &&
+        !agentRecovery
+      )
         throw clientError()
       const publicRead =
         options.path.startsWith('/api/v1/agent/enroll/packages') ||
@@ -216,7 +228,11 @@ export function decodeAgentError(status: number, value: unknown): RssApiError {
         (typeof v['issuanceId'] === 'string' &&
           /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(v['issuanceId'])))
     )
-      return identityWireFailure(status, v['code'])
+      return agentWireFailure(
+        status,
+        v['code'],
+        typeof v['issuanceId'] === 'string' ? v['issuanceId'] : undefined,
+      )
   }
   return decodeMdmError(status, value)
 }

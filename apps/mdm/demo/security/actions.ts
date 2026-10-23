@@ -4,7 +4,6 @@ import type { createOperationsDemo } from '../operations/state'
 import type { createSecurityRequests } from './requests'
 import type { createRisksDemo } from './risks'
 import type { createMaterialsDemo } from './materials'
-import type { createCertificatesDemo } from './certificates'
 import type { createSupportDemo } from './support'
 import { isSupportTarget } from '../features/security/clients/support-model'
 import type { MaterialKind } from '../features/security/clients/materials-model'
@@ -19,7 +18,6 @@ export function createSecurityActions(
   requests: Pick<ReturnType<typeof createSecurityRequests>, 'rows'>,
   risks: ReturnType<typeof createRisksDemo>,
   materials: ReturnType<typeof createMaterialsDemo>,
-  certificates: ReturnType<typeof createCertificatesDemo>,
   support: ReturnType<typeof createSupportDemo>,
   operations: ReturnType<typeof createOperationsDemo>,
 ) {
@@ -30,35 +28,25 @@ export function createSecurityActions(
   const source = (target: SecurityAction['target']) =>
     target.kind === 'risk_remediation'
       ? remediationSource(devices.facts().find((d) => d.summary.id === target.device))
-      : target.kind === 'certificate_deploy'
-        ? certificates.source(target.device)
-        : isSupportTarget(target)
-          ? support.source(target)
-          : materials.source(target.device, target.material)
+      : isSupportTarget(target)
+        ? support.source(target)
+        : materials.source(target.device, target.material)
   const valid = (target: SecurityAction['target']) =>
     target.kind === 'risk_remediation'
       ? risks.valid(target)
-      : target.kind === 'certificate_deploy'
-        ? certificates.valid(target)
-        : isSupportTarget(target)
-          ? support.valid(target)
-          : materials.valid(target)
+      : isSupportTarget(target)
+        ? support.valid(target)
+        : materials.valid(target)
   const targetKey = (target: SecurityAction['target']) =>
     JSON.stringify(
       target.kind === 'risk_remediation'
         ? [target.kind, target.device, target.risk]
-        : target.kind === 'certificate_deploy'
-          ? [target.kind, target.device, target.certificate]
-          : isSupportTarget(target)
-            ? [target.kind, target.device, target.kind === 'elevation' ? target.account : null]
-            : [target.kind, target.device, target.material, target.volume],
+        : isSupportTarget(target)
+          ? [target.kind, target.device, target.kind === 'elevation' ? target.account : null]
+          : [target.kind, target.device, target.material, target.volume],
     )
   const targetDetection = (kind: SecurityAction['target']['kind']) =>
-    kind === 'certificate_deploy'
-      ? 'certificate_detect'
-      : kind === 'material_operation'
-        ? 'material_detect'
-        : 'support_detect'
+    kind === 'material_operation' ? 'material_detect' : 'support_detect'
   function audit(
     value: SecurityAction,
     action: 'security_dispatched' | 'security_result' | 'security_detected',
@@ -175,7 +163,6 @@ export function createSecurityActions(
           r.validUntil <= now() ||
           (r.target.kind !== 'risk_remediation' &&
             r.target.kind !== 'material_operation' &&
-            r.target.kind !== 'certificate_deploy' &&
             !isSupportTarget(r.target)) ||
           !valid(r.target) ||
           (isSupportTarget(r.target) && !support.executionAllowed(r.id))
@@ -240,13 +227,9 @@ export function createSecurityActions(
     tick(event: DemoEvent, scenario: Scenario) {
       settle()
       if (
-        ![
-          'security_result',
-          'security_detect',
-          'material_detect',
-          'certificate_detect',
-          'support_detect',
-        ].includes(event.kind) ||
+        !['security_result', 'security_detect', 'material_detect', 'support_detect'].includes(
+          event.kind,
+        ) ||
         !event.task
       )
         return
@@ -289,11 +272,9 @@ export function createSecurityActions(
         !['partial', 'unknown', 'unsupported'].includes(scenario) &&
         (a.target.kind === 'risk_remediation'
           ? risks.observe(a.target, a.source, event.at)
-          : a.target.kind === 'certificate_deploy'
-            ? certificates.observe(a.target, a.source, event.at)
-            : isSupportTarget(a.target)
-              ? support.observe(a.request, a.source, event.at)
-              : materials.observe(a.target, a.source, event.at))
+          : isSupportTarget(a.target)
+            ? support.observe(a.request, a.source, event.at)
+            : materials.observe(a.target, a.source, event.at))
       ) {
         s.effect = 'verified_present'
         a.detectedAt = event.at

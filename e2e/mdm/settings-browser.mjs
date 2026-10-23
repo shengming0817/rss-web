@@ -1,5 +1,6 @@
 // Production Vue against real PG/Identity/HTTPS; faults only discard browser responses.
 import { chromium } from 'playwright'
+import { authorizationJourney } from './authorization-browser.mjs'
 import { readFileSync, statSync, writeFileSync, existsSync } from 'node:fs'
 import assert from 'node:assert/strict'
 import process from 'node:process'
@@ -297,6 +298,8 @@ try {
       'all-current-requirements-across-authorized-scopes',
       'platform-independent-local-authentication',
     )
+    phase = 'management-authorization'
+    await authorizationJourney({ page, context, origin, fixture: f, login, password, coverage })
     phase = 'provisioning-unknown'
     await page.goto(`${origin}/tenants/${f.managementTenant}/settings/tenants`)
     const form = page.locator('form').first()
@@ -461,7 +464,7 @@ try {
     JSON.stringify({
       phase,
       result: 'failed',
-      location: /settings-browser\.mjs:\d+:\d+/.exec(error?.stack ?? '')?.[0],
+      location: /(?:settings|authorization)-browser\.mjs:\d+:\d+/.exec(error?.stack ?? '')?.[0],
       classification:
         error?.name === 'AssertionError'
           ? 'assertion'

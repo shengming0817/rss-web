@@ -5,7 +5,6 @@ import { createSecurityRequestsClient } from './clients/requests'
 import { createRisksClient } from './clients/risks'
 import { createSecurityActionsClient } from './clients/actions'
 import { createMaterialsClient } from './clients/materials'
-import { createCertificatesClient } from './clients/certificates'
 import { createSupportClient } from './clients/support'
 export function createSecurityClients(transport: HttpTransport, tenant: string, demo: boolean) {
   return {
@@ -15,7 +14,6 @@ export function createSecurityClients(transport: HttpTransport, tenant: string, 
     risks: createRisksClient(transport, tenant, demo),
     actions: createSecurityActionsClient(transport, tenant, demo),
     materials: createMaterialsClient(transport, tenant, demo),
-    certificates: createCertificatesClient(transport, tenant, demo),
     support: createSupportClient(transport, tenant, demo),
   }
 }

@@ -12,7 +12,7 @@ export interface SettingsOperation {
   queried: boolean
   state: 'submitting' | 'unknown' | 'received' | 'conflict'
 }
-/** Non-secret domain operation locators only. No request closure, credentials, replay or persistence. */
+/** Session-bound non-secret domain intent and locators. No credentials, persistence or automatic replay. */
 export function createSettingsOperations(session: IdentitySession) {
   const records = reactive(new Map<string, SettingsOperation>())
   const binding = () => {
@@ -75,7 +75,12 @@ export function createSettingsOperations(session: IdentitySession) {
           const unknown =
             !isRssApiError(error) ||
             ['network', 'timeout', 'aborted', 'protocol'].includes(error.cause) ||
-            ['operation_unknown', 'operation_rollback_unconfirmed'].includes(error.code)
+            [
+              'operation_unknown',
+              'operation_rollback_unconfirmed',
+              'issuance_unknown',
+              'activation_unknown',
+            ].includes(error.code)
           if (conflict || unknown)
             records.set(target, {
               ...metadata,

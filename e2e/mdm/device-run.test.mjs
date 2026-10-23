@@ -128,3 +128,152 @@ for (const feature of ['device', 'software', 'settings']) {
     () => exercise(true, feature),
   )
 }
+
+test(
+  'PKI collector cancellation releases its waiting HTTP process before the browser owner continues',
+  { timeout: 10000 },
+  async () => {
+    const { createServer } = await import('node:http')
+    const { runPkiCollector } = await import('./pki-browser.mjs')
+    const dir = mkdtempSync(resolve(tmpdir(), 'mdm-pki-collector-cancel-'))
+    let interrupted = false,
+      terminate,
+      released = false,
+      pending,
+      timer
+    let observed
+    const received = new Promise((done) => {
+      observed = done
+    })
+    const server = createServer(() => {
+      observed()
+    })
+    await new Promise((done) => server.listen(0, '127.0.0.1', done))
+    const originalPath = process.env.PATH
+    writeFileSync(
+      resolve(dir, 'python3'),
+      `#!/usr/bin/env node
+const fs=require('node:fs'),http=require('node:http')
+process.on('SIGTERM',()=>{fs.writeFileSync(${JSON.stringify(resolve(dir, 'stopped'))},'');process.exit(0)})
+http.get('http://127.0.0.1:${server.address().port}',()=>{})
+`,
+      { mode: 0o700 },
+    )
+    try {
+      process.env.PATH = dir + ':' + originalPath
+      pending = runPkiCollector(resolve(dir, 'fixture.json'), {
+        interrupted: () => interrupted,
+        onChild: (_child, stop) => {
+          terminate = stop
+        },
+        onRelease: () => {
+          released = true
+        },
+      })
+      pending.catch(() => {})
+      await Promise.race([
+        received,
+        new Promise((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error('collector HTTP deadline')), 5000)
+        }),
+      ])
+      interrupted = true
+      terminate()
+      await assert.rejects(pending, /PKI collector cancelled/)
+      assert.equal(released, true)
+      assert.equal(existsSync(resolve(dir, 'stopped')), true)
+    } finally {
+      clearTimeout(timer)
+      process.env.PATH = originalPath
+      terminate?.()
+      await pending?.catch(() => {})
+      await new Promise((done) => server.close(done))
+      rmSync(dir, { recursive: true, force: true })
+    }
+  },
+)
+
+test('PKI diagnostics preserve timeout, signal and closed HTTP classifications without raw output', async () => {
+  const { pkiCollectorFailure } = await import('./pki-browser.mjs')
+  assert.equal(
+    pkiCollectorFailure({ timedOut: true, status: null, signal: 'SIGTERM', stdout: 'private' })
+      .classification,
+    'timeout',
+  )
+  assert.equal(
+    pkiCollectorFailure({ status: null, signal: 'SIGKILL', stdout: 'private' }).classification,
+    'signal',
+  )
+  const http = pkiCollectorFailure({
+    status: 7,
+    stdout: JSON.stringify({
+      result: 'failed',
+      classification: 'collector-http-acknowledgements-403-permission_denied',
+      secret: 'private',
+    }),
+  })
+  assert.deepEqual(http, {
+    phase: 'pki-ack',
+    classification: 'http',
+    exitCode: 7,
+    signal: null,
+    httpStage: 'acknowledgements',
+    httpStatus: 403,
+    httpCode: 'permission_denied',
+  })
+  assert.equal(
+    JSON.stringify(
+      pkiCollectorFailure({
+        status: 1,
+        stdout: JSON.stringify({ result: 'failed', classification: 'private' }),
+      }),
+    ).includes('private'),
+    false,
+  )
+})
+test('PKI process failure reaches the report as a safe collector error after child release', async () => {
+  const { runPkiCollector, PkiCollectorError } = await import('./pki-browser.mjs')
+  const dir = mkdtempSync(resolve(tmpdir(), 'mdm-pki-failure-')),
+    originalPath = process.env.PATH
+  let released = false
+  writeFileSync(
+    resolve(dir, 'python3'),
+    `#!/usr/bin/env node
+console.log(JSON.stringify({result:'failed',classification:'collector-pki-readback',secret:'private'}));process.exit(7)`,
+    { mode: 0o700 },
+  )
+  try {
+    process.env.PATH = dir + ':' + originalPath
+    await assert.rejects(
+      runPkiCollector(resolve(dir, 'fixture.json'), {
+        onRelease: () => {
+          released = true
+        },
+      }),
+      (error) =>
+        error instanceof PkiCollectorError &&
+        error.collector.classification === 'collector-pki-readback' &&
+        error.collector.exitCode === 7 &&
+        !JSON.stringify(error).includes('private'),
+    )
+    assert.equal(released, true)
+    rmSync(resolve(dir, 'python3'))
+    process.env.PATH = dir
+    released = false
+    await assert.rejects(
+      runPkiCollector(resolve(dir, 'fixture.json'), {
+        onRelease: () => {
+          released = true
+        },
+      }),
+      (error) =>
+        error instanceof PkiCollectorError &&
+        error.collector.classification === 'spawn' &&
+        error.collector.exitCode === null,
+    )
+    assert.equal(released, true)
+  } finally {
+    process.env.PATH = originalPath
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

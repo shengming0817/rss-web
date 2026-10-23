@@ -7,10 +7,11 @@ withDefaults(
     operation?: SettingsOperation | undefined
     busy?: boolean
     canWrite?: boolean
+    compareSupported?: boolean
     querySupported?: boolean
     compared?: boolean
   }>(),
-  { querySupported: true },
+  { querySupported: true, compareSupported: true },
 )
 defineEmits<{ query: []; retry: []; compare: []; edit: [] }>()
 const { t } = useI18n()
@@ -51,7 +52,7 @@ const { t } = useI18n()
         >{{ t('settings.retryOriginal') }}</UiButton
       >
       <UiButton
-        v-if="operation.state === 'conflict'"
+        v-if="operation.state === 'conflict' && compareSupported !== false"
         :disabled="!!busy || !canWrite"
         @click="$emit('compare')"
         >{{ t('settings.readComparison') }}</UiButton

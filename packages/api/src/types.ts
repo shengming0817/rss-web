@@ -44,4 +44,6 @@ export interface RssApiError extends Error {
   readonly cause: RssApiErrorCause
   readonly code: string
   readonly status?: number
+  /** Validated Agent signing attempt locator; never raw error metadata. */
+  readonly issuanceId?: string
 }

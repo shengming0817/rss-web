@@ -85,8 +85,6 @@ async function simulate() {
             'security_result',
             'security_detect',
             'material_detect',
-            'certificate_issued',
-            'certificate_detect',
             'remote_consent',
             'remote_revoke',
             'remote_ended',
@@ -256,7 +254,6 @@ function submitConfirmed() {
                   : 'Synthetic security command result (effect unverified)'
               }}
             </option>
-            <option value="certificate_issued">{{ t('security.demoCertificateIssued') }}</option>
             <option value="remote_consent">{{ t('security.supportEvents.remote_consent') }}</option>
             <option value="remote_revoke">{{ t('security.supportEvents.remote_revoke') }}</option>
             <option value="remote_ended">{{ t('security.supportEvents.remote_ended') }}</option>
@@ -274,7 +271,6 @@ function submitConfirmed() {
             <option value="diagnostic_scanned">
               {{ t('security.supportEvents.diagnostic_scanned') }}
             </option>
-            <option value="certificate_detect">{{ t('security.demoCertificateDetected') }}</option>
             <option value="material_detect">
               {{
                 locale === 'zh-CN'
@@ -318,8 +314,6 @@ function submitConfirmed() {
                 'security_result',
                 'security_detect',
                 'material_detect',
-                'certificate_issued',
-                'certificate_detect',
                 'remote_consent',
                 'remote_revoke',
                 'remote_ended',

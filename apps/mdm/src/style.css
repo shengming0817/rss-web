@@ -1346,3 +1346,27 @@
   gap: 0.5rem;
   flex-wrap: wrap;
 }
+
+.authorization-grants {
+  margin: 0;
+  padding-inline-start: var(--space-4);
+}
+.settings-form .authorization-permissions {
+  display: grid;
+  gap: var(--space-3);
+}
+.settings-form .authorization-permission {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: var(--space-3);
+  background: var(--bg-raised);
+}
+.authorization-permission small {
+  display: block;
+  color: var(--fg-muted);
+  margin-top: var(--space-1);
+}

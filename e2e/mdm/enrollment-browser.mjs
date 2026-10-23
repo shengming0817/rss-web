@@ -1,3 +1,4 @@
+import { exercisePki, PkiCollectorError } from './pki-browser.mjs'
 // Current production UI against a disposable real HTTPS host. No response/credential/trace output.
 import { chromium } from 'playwright'
 import { readFileSync, mkdtempSync, rmSync, statSync } from 'node:fs'
@@ -15,18 +16,20 @@ let browser,
   result = 'failed',
   cleanup = 'passed',
   interrupted = false,
-  failure
+  failure,
+  collectorTerminate
 const coverage = [],
   gaps = [],
   httpFailures = []
 const temp = mkdtempSync(join(tmpdir(), 'rss-enrollment-browser-'))
 async function stop() {
   interrupted = true
+  collectorTerminate?.()
   await browser?.close().catch(() => {})
 }
 process.once('SIGINT', stop)
 process.once('SIGTERM', stop)
-const deadline = setTimeout(stop, 180000)
+const deadline = setTimeout(stop, 300000)
 function active() {
   assert.equal(interrupted, false, 'Browser run cancelled')
 }
@@ -441,6 +444,28 @@ try {
     assert.equal(finished, true)
     coverage.push('real-browser-native-tou-form')
   } else gaps.push('native-Entra-start-material')
+  if (fixture.pki) {
+    phase = 'administrator-pki-and-recovery'
+    await login(fixture.admin)
+    await exercisePki({
+      page,
+      context,
+      fixture,
+      coverage,
+      temp,
+      go,
+      collectorLifecycle: {
+        interrupted: () => interrupted,
+        onChild: (_child, terminate) => {
+          collectorTerminate = terminate
+          if (interrupted) terminate()
+        },
+        onRelease: () => {
+          collectorTerminate = undefined
+        },
+      },
+    })
+  }
   gaps.push('native-OS-installation-and-Apple-Entra-interoperability')
   assert.equal(interrupted, false)
   result = 'passed'
@@ -448,6 +473,7 @@ try {
   failure = {
     ...failure,
     kind: error.name,
+    ...(error instanceof PkiCollectorError ? { collector: error.collector } : {}),
     location: error.stack?.match(/enrollment-browser\.mjs:([0-9]+):([0-9]+)/)?.slice(1),
     operator: error.code === 'ERR_ASSERTION' ? error.operator : undefined,
     actual:
@@ -461,6 +487,8 @@ try {
   }
   result = 'failed'
 } finally {
+  // exercisePki awaits the collector close/release before this cleanup owns the host.
+  collectorTerminate?.()
   clearTimeout(deadline)
   process.removeListener('SIGINT', stop)
   process.removeListener('SIGTERM', stop)

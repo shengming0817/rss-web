@@ -168,10 +168,10 @@ it('uses the advanced scenario clock for alert transitions, acknowledgement and 
     },
     start = Math.floor(Date.now() / 1000) + 3600,
     id = crypto.randomUUID(),
-    target = { kind: 'certificate' as const, id, device: 'device-01', revision: 1 },
+    target = { kind: 'settings' as const, id, device: 'device-01', revision: 1 },
     observe = (version: number, state: 'active' | 'cleared') =>
       automation.operations.observeAlert({
-        code: 'certificate_expiry',
+        code: 'agent_health',
         severity: 'high',
         target,
         evidence: { id, version, at: start - 1, state },
