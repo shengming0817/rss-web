@@ -876,3 +876,36 @@ it('preserves closed connection and package rejection reasons while rejecting ma
     expect(decodeMdmError(409, { code, detail: 'secret' }).cause).toBe('protocol')
   }
 })
+
+it('dispatches exact-version script bytes through the canonical executor and rejects binary mutations', async () => {
+  const instance = axios.create(),
+    mock = new AxiosMockAdapter(instance)
+  const spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance)
+  const transport = createMdmTransport()
+  spy.mockRestore()
+  const bytes = new Uint8Array([35, 33, 10]).buffer
+  mock.onGet('/api/v1/resources/script/versions/2/script').reply(200, bytes)
+  const options = {
+    method: 'GET' as const,
+    path: '/api/v1/resources/{id}/versions/{version}/script',
+    pathParams: { id: 'script', version: '2' },
+    query: { platform: 'macos', architecture: 'aarch64', variant: 'default' },
+    responseType: 'arraybuffer' as const,
+    successStatus: 200,
+    decode: (value: unknown) => value,
+  }
+  expect(await transport.request(options)).toEqual({
+    bytes,
+    contentType: null,
+    contentDisposition: null,
+  })
+  expect(mock.history.get[0]).toMatchObject({
+    responseType: 'arraybuffer',
+    params: options.query,
+  })
+  await expect(transport.request({ ...options, method: 'POST' })).rejects.toMatchObject({
+    cause: 'client',
+  })
+  expect(mock.history.post).toHaveLength(0)
+  mock.restore()
+})

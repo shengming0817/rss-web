@@ -170,7 +170,9 @@ export function createMdmTransport(): HttpTransport {
           (options.method === 'GET' &&
             options.path === '/api/v1/apple/organizations/{id}/ade/public-key') ||
           (options.method === 'GET' &&
-            options.path === '/api/v1/software/resources/{id}/versions/{version}/content')
+            options.path === '/api/v1/software/resources/{id}/versions/{version}/content') ||
+          (options.method === 'GET' &&
+            options.path === '/api/v1/resources/{id}/versions/{version}/script')
         )
       )
         throw clientError()

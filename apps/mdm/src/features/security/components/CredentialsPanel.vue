@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { UiButton } from '@rss/core/components'
 import { useMdm } from '../../../context'
@@ -32,6 +32,9 @@ const rows = ref<Material[]>([]),
   clearLock = ref(false),
   confirmation = ref(false),
   resultId = ref('')
+const nativePending = computed(
+  () => (pending.value?.input as { kind: string } | undefined)?.kind === 'native',
+)
 const needsPassword = computed(
   () =>
     action.value === 'rotate_filevault' ||
@@ -84,14 +87,13 @@ async function revoke(entry: Material, replay = false) {
   clear()
   if (!confirmation.value || (locked.value && !replay)) return
   confirmation.value = false
-  await submit(
-    { kind: 'revoke' as const, entry: structuredClone(entry) },
+  const ok = await submit(
+    { kind: 'revoke' as const, entry: structuredClone(toRaw(entry)) },
     (_id, original) => client.revoke(props.endpoint.id, original.entry),
-    () => {
-      void load()
-    },
+    () => {},
     replay,
   )
+  if (ok) await load()
 }
 function input(): CredentialInput {
   const registration = props.endpoint.channels.find(
@@ -211,6 +213,7 @@ async function query() {
       ><UiButton @click="clear">{{ t('gap.clear') }}</UiButton></template
     >
     <p>{{ t('gap.revokedHint') }}</p>
+    <label><input v-model="confirmation" type="checkbox" />{{ t('gap.confirmation') }}</label>
     <form
       v-if="endpoint.primaryMdmRegistration?.source === 'mdm.apple'"
       @submit.prevent="execute()"
@@ -242,7 +245,6 @@ async function query() {
       <label v-if="needsPassword"
         >{{ t('gap.password') }}<input v-model="password" type="password" autocomplete="off"
       /></label>
-      <label><input v-model="confirmation" type="checkbox" />{{ t('gap.confirmation') }}</label>
       <UiButton type="submit" :disabled="locked || !confirmation">{{ t('gap.save') }}</UiButton>
     </form>
     <p v-if="pending" role="alert">{{ t('gap.unknown') }} {{ pending.id }}</p>
@@ -252,7 +254,7 @@ async function query() {
       @click="restore"
       >{{ t('gap.replayOriginal') }}</UiButton
     >
-    <UiButton v-if="resultId || pending" :disabled="busy" @click="query">{{
+    <UiButton v-if="resultId || nativePending" :disabled="busy" @click="query">{{
       t('gap.queryOriginal')
     }}</UiButton>
     <RouterLink

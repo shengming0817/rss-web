@@ -43,7 +43,7 @@ const choices = [
   'verify_local_administrator',
 ]
 const { run, submit, pending, locked, busy, failure, resolvedConflict } = useOriginalOperation(
-  () => 'lifecycle-policy/' + id.value,
+  () => 'lifecycle-policy',
 )
 const rows = ref<Awaited<ReturnType<typeof client.list>>>(),
   assignments = ref<Awaited<ReturnType<typeof client.assignments>>>(),
@@ -103,7 +103,7 @@ async function load(cursor?: string) {
     },
   )
 }
-async function read(policy = id.value) {
+async function read(policy = (pending.value?.input as { id: string } | undefined)?.id ?? id.value) {
   current.value = undefined
   await run(() => client.read(policy), apply)
 }
@@ -145,23 +145,28 @@ function save() {
     failure.value = 'invalidRequest'
   }
 }
-function trigger(replay = false) {
-  if (!current.value || !confirmation.value) return
+async function trigger(replay = false) {
+  if ((!current.value && !replay) || !confirmation.value) return
   confirmation.value = false
-  void submit(
-    {
-      type: 'trigger' as const,
-      id: current.value.id,
-      revision: current.value.revision,
-      deadline: deadline.value,
-    },
+  const input = replay
+    ? (pending.value!.input as { type: 'trigger'; id: string; revision: number; deadline: number })
+    : {
+        type: 'trigger' as const,
+        id: current.value!.id,
+        revision: current.value!.revision,
+        deadline: deadline.value,
+      }
+  const ok = await submit(
+    input,
     (operation, original) =>
       client.rerun(original.id, operation, original.revision, original.deadline),
-    () => {
-      void progress()
-    },
+    () => {},
     replay,
   )
+  if (ok) {
+    await read(input.id)
+    await progress()
+  }
 }
 function restore() {
   const original = pending.value?.input as { type: string; input?: PolicyChange } | undefined

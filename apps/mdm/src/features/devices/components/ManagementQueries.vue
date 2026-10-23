@@ -18,10 +18,12 @@ const groups = ref<Awaited<ReturnType<typeof runtime.devices.management.groups>>
   ddm = ref<Awaited<ReturnType<typeof runtime.devices.management.ddm>>>()
 const asset = useOriginalOperation(() => 'asset/' + props.device),
   state = ref<'active' | 'archived' | 'deleted'>('archived'),
-  confirmation = ref(false)
+  confirmation = ref(false),
+  currentAssetState = ref<string>()
 function clear() {
   groups.value = undefined
   ddm.value = undefined
+  currentAssetState.value = undefined
 }
 watch(() => props.device, clear)
 useSettingsFacts(clear)
@@ -44,6 +46,15 @@ async function load(kind: 'groups' | 'ddm', cursor?: string) {
     )
   }
   if (failure.value) clear()
+}
+async function compareAsset() {
+  const ok = await asset.run(
+    () => runtime.devices.views.detail({ kind: 'endpoint', id: props.device }),
+    (v) => {
+      currentAssetState.value = v.endpoints[0]!.assetState
+    },
+  )
+  if (ok) asset.resolvedConflict()
 }
 function change(replay = false) {
   if (!confirmation.value) return
@@ -104,6 +115,7 @@ function change(replay = false) {
     }}</UiButton>
     <h2>{{ t('gap.assetState') }}</h2>
     <p v-if="asset.failure.value" role="alert">{{ t('devices.' + asset.failure.value) }}</p>
+    <p v-if="currentAssetState">{{ t('gap.assetState') }}: {{ currentAssetState }}</p>
     <label
       >{{ t('gap.assetState')
       }}<select v-model="state" :disabled="asset.locked.value">
@@ -116,12 +128,20 @@ function change(replay = false) {
       t('gap.save')
     }}</UiButton>
     <template v-if="asset.pending.value"
-      ><p role="alert">{{ t('gap.unknown') }} {{ asset.pending.value.id }}</p>
+      ><p role="alert">
+        {{ t(asset.pending.value.state === 'conflict' ? 'gap.compare' : 'gap.unknown') }}
+        {{ asset.pending.value.id }}
+      </p>
       <UiButton
         v-if="asset.pending.value.state === 'unknown'"
         :disabled="asset.busy.value || !confirmation"
         @click="change(true)"
         >{{ t('gap.replayOriginal') }}</UiButton
+      ><UiButton
+        v-if="asset.pending.value.state === 'conflict'"
+        :disabled="asset.busy.value"
+        @click="compareAsset"
+        >{{ t('gap.compare') }}</UiButton
       ></template
     >
   </section>

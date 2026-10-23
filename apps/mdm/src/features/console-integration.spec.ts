@@ -10,6 +10,9 @@ import { mdmKey } from '../context'
 import { mdmI18n } from '../i18n'
 import { useOriginalOperation } from '../services/useOriginalOperation'
 import { createCredentialsClient, material } from './security/clients/credentials'
+import ApiAccessPanel from './settings/components/ApiAccessPanel.vue'
+import LifecyclePoliciesView from './policies/views/LifecyclePoliciesView.vue'
+import ManagementQueries from './devices/components/ManagementQueries.vue'
 import CredentialsPanel from './security/components/CredentialsPanel.vue'
 import { createPoliciesClient } from './policies/clients/policies'
 import { defaultSchedule, policyAction } from './policies/clients/model'
@@ -298,6 +301,12 @@ async function mountAt(
     history: createMemoryHistory(),
     routes: [
       { path: '/', component },
+      {
+        path: '/execution/:execution',
+        name: 'policy-execution',
+        component: { template: '<div />' },
+      },
+      { path: '/policies', name: 'policy-policies', component: { template: '<div />' } },
       { path: '/lifecycle', name: 'policy-lifecycle', component: { template: '<div />' } },
     ],
   })
@@ -439,4 +448,228 @@ it('renders credential outcomes without confusing escrow or recovered mutation w
       result: { effect: 'applied', recoveredByTask: b, recoveredByAttempt: c, diagnostics: null },
     }),
   ).toMatchObject({ effect: 'applied', result: { kind: 'credential_recovery' } })
+})
+
+function button(w: VueWrapper, label: string) {
+  return w.findAll('button').find((b) => b.text() === label)!
+}
+async function confirm(w: VueWrapper) {
+  await w.findAll('input[type="checkbox"]').at(-1)!.setValue(true)
+}
+async function seedUnknown(runtime: object, key: string, input: unknown) {
+  let op!: ReturnType<typeof useOriginalOperation>
+  const component = defineComponent({
+    setup() {
+      op = useOriginalOperation(() => key)
+      return () => null
+    },
+  })
+  const w = await mountAt(component, runtime)
+  await op.submit(
+    input,
+    async () => {
+      throw new Error('lost response')
+    },
+    () => {},
+  )
+  const id = op.pending.value!.id
+  w.unmount()
+  return id
+}
+it('revokes an exact Windows credential through the shared confirmation without cloning a Vue proxy', async () => {
+  const revoke = vi.fn(async () => ({ ...entry, validity: 'revoked' }))
+  const w = await mountAt(
+    CredentialsPanel,
+    {
+      tenant: a,
+      session: session(),
+      security: { credentials: { list: async () => [material(entry, 'mac')], revoke } },
+    },
+    { endpoint: { id: 'mac', channels: [], primaryMdmRegistration: null } },
+  )
+  await button(w, '读取').trigger('click')
+  await flushPromises()
+  expect(button(w, '撤销托管读取').attributes('disabled')).toBeDefined()
+  await confirm(w)
+  await button(w, '撤销托管读取').trigger('click')
+  await flushPromises()
+  expect(revoke).toHaveBeenCalledWith('mac', material(entry, 'mac'))
+})
+it.each(['create', 'update'] as const)(
+  'replays an unknown Key %s after SPA remount using the original input',
+  async (kind) => {
+    const input = {
+      kind,
+      id: a,
+      revision: kind === 'create' ? 0 : 3,
+      metadata: {
+        name: 'original',
+        enabled: true,
+        expiresAt: null,
+        grants: [{ operation: 'inventory_read', scope: { kind: 'all_devices' } }],
+      },
+    }
+    const change = vi.fn(async () => ({
+      receipt: { id: a, revision: 4, deleted: false },
+      secret: null,
+    }))
+    const runtime = {
+      tenant: a,
+      realm: 'tenant',
+      session: session(),
+      settings: { apiAccess: { change } },
+      operations: {
+        authorization: {
+          effective: async () => ({
+            principalId: b,
+            grants: [{ operation: 'authorization_write', scope: { kind: 'tenant' } }],
+          }),
+        },
+      },
+    }
+    const originalId = await seedUnknown(runtime, 'api-access', input)
+    const w = await mountAt(ApiAccessPanel, runtime)
+    expect(change).not.toHaveBeenCalled()
+    expect(w.text()).toContain(originalId)
+    await confirm(w)
+    await button(w, '重送原请求').trigger('click')
+    await flushPromises()
+    expect(change).toHaveBeenCalledWith(originalId, input)
+    expect(w.text()).not.toContain(originalId)
+  },
+)
+it.each(['change', 'trigger'] as const)(
+  'restores lifecycle %s after SPA remount without requiring a new locator or current form',
+  async (type) => {
+    const definition = {
+      scope: a,
+      action: { kind: 'unmanage_device', schedule: defaultSchedule(), runLifetimeSeconds: 3600 },
+    }
+    const input =
+      type === 'change'
+        ? { type, id: a, expectedRevision: 0, input: { action: 'put', definition, enabled: false } }
+        : { type, id: a, revision: 4, deadline: 4000 }
+    const p = { id: a, revision: 4, definition, enabled: false, state: 'disabled' }
+    const change = vi.fn(async () => p),
+      rerun = vi.fn(async () => ({ operationId: c }))
+    const runtime = {
+      tenant: a,
+      session: session(),
+      policies: {
+        policies: {
+          list: async () => ({ items: [], nextCursor: null }),
+          change,
+          rerun,
+          read: async () => p,
+          assignments: async () => ({ items: [], nextCursor: null }),
+        },
+      },
+    }
+    const originalId = await seedUnknown(runtime, 'lifecycle-policy', input)
+    const w = await mountAt(LifecyclePoliciesView, runtime)
+    expect(w.text()).toContain(originalId)
+    expect(change).not.toHaveBeenCalled()
+    expect(rerun).not.toHaveBeenCalled()
+    await confirm(w)
+    await button(w, '重送原请求').trigger('click')
+    await flushPromises()
+    if (type === 'change')
+      expect(change).toHaveBeenCalledWith(a, {
+        operationId: originalId,
+        expectedRevision: 0,
+        input: input.input,
+      })
+    else expect(rerun).toHaveBeenCalledWith(a, originalId, 4, 4000)
+    expect(w.text()).not.toContain(originalId)
+  },
+)
+it('unlocks an asset conflict only after reading the current authoritative state', async () => {
+  const asset = vi
+    .fn()
+    .mockRejectedValueOnce(decodeMdmError(409, { code: 'operation_conflict' }))
+    .mockResolvedValueOnce({})
+  const detail = vi.fn(async () => ({ endpoints: [{ assetState: 'active' }] }))
+  const runtime = {
+    tenant: a,
+    session: session(),
+    devices: { lifecycle: { asset }, views: { detail }, management: {} },
+  }
+  const w = await mountAt(ManagementQueries, runtime, { device: 'mac' })
+  await confirm(w)
+  await button(w, '保存').trigger('click')
+  await flushPromises()
+  expect(w.find('select').attributes('disabled')).toBeDefined()
+  await button(w, '冲突：重新读取并比较后编辑').trigger('click')
+  await flushPromises()
+  expect(detail).toHaveBeenCalledWith({ kind: 'endpoint', id: 'mac' })
+  expect(w.text()).toContain('active')
+  expect(w.find('select').attributes('disabled')).toBeUndefined()
+  await w.find('select').setValue('active')
+  await confirm(w)
+  await button(w, '保存').trigger('click')
+  await flushPromises()
+  expect(asset.mock.calls[1]?.[2]).toBe('active')
+})
+it('renders nonempty redacted DDM facts, unknown observation and the exact operation link across opaque pages', async () => {
+  const observation = {
+    protocol: 'mdm.apple',
+    observationScope: 'declarations',
+    progress: 'received',
+    effect: 'unverified',
+    compliance: 'unknown',
+    synchronization: 'published',
+    inputVersion: 'v1',
+    expected: { Configurations: [] },
+    nativeStatus: {
+      items: {},
+      unknownItems: [],
+      declarations: [],
+      errors: [],
+      completeness: 'unknown',
+      effect: 'unverified',
+      synchronized: false,
+      compliance: 'unknown',
+    },
+  }
+  const page = {
+    items: [
+      {
+        operationId: a,
+        registrationId: b,
+        generation: 7,
+        channel: 'mdm.apple',
+        userKey: '',
+        nativeValuesRedacted: true,
+        observation,
+      },
+    ],
+    nextCursor: 'opaque-ddm-cursor',
+    availability: 'current_registration',
+    effect: 'unverified',
+    compliance: 'unknown',
+  }
+  const decoded = ddmPage(page)
+  expect(decoded.items[0]).toMatchObject({ generation: 7, nativeValuesRedacted: true, observation })
+  const ddm = vi
+    .fn()
+    .mockResolvedValueOnce(decoded)
+    .mockResolvedValueOnce(ddmPage({ ...page, items: [], nextCursor: null }))
+  const w = await mountAt(
+    ManagementQueries,
+    { tenant: a, session: session(), devices: { management: { ddm } } },
+    { device: 'mac' },
+  )
+  await w
+    .findAll('button')
+    .filter((b) => b.text() === '读取')[1]!
+    .trigger('click')
+  await flushPromises()
+  expect(w.text()).toContain(b + ' / 7')
+  expect(w.text()).toContain('unverified')
+  expect(w.text()).toContain('unknown')
+  expect(w.find(`a[href="/execution/${a}?device=mac"]`).exists()).toBe(true)
+  await button(w, '下一页').trigger('click')
+  await flushPromises()
+  expect(ddm).toHaveBeenLastCalledWith('mac', 'opaque-ddm-cursor')
+  expect(w.findAll('article')).toHaveLength(0)
 })

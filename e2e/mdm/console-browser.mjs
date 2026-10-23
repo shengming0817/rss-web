@@ -272,10 +272,20 @@ try {
   await mutation(`/api/v1/resources/${resource}`, { action: 'activate', version: '1' }, 2)
   await page.goto(at('policies/resources') + '?resource=' + resource)
   await ready()
+  const request = page.waitForRequest(
+    (r) => new URL(r.url()).pathname === `/api/v1/resources/${resource}/versions/1/script`,
+  )
   const download = page.waitForEvent('download')
   await page.getByRole('button', { name: /^下载此版本脚本/ }).click()
   const savedDownload = await download
+  const requested = new URL((await request).url())
+  assert.deepEqual(Object.fromEntries(requested.searchParams), {
+    platform: 'macos',
+    architecture: 'aarch64',
+    variant: 'default',
+  })
   assert.equal(savedDownload.suggestedFilename(), 'script.txt')
+  assert.deepEqual(readFileSync(await savedDownload.path()), bytes)
   await savedDownload.delete()
   coverage.push('exact-script-version-download')
   phase = 'software-channel-default'

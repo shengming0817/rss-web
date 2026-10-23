@@ -60,10 +60,19 @@ def configure(environment, config, providers, private, binary):
                 self.send_header('Content-Length', '0')
                 self.end_headers()
     pinned = socket.gethostbyname(socket.gethostname())
-    server = ThreadingHTTPServer((pinned, 0), Receiver)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(str(environment.root / 'server.crt'), str(environment.root / 'server.key'))
-    server.socket = context.wrap_socket(server.socket, server_side=True)
+    class ReceiverServer(ThreadingHTTPServer):
+        daemon_threads = False
+        def get_request(self):
+            connection, address = super().get_request()
+            connection.settimeout(5)
+            try:
+                return context.wrap_socket(connection, server_side=True, do_handshake_on_connect=False), address
+            except Exception:
+                connection.close()
+                raise
+    server = ReceiverServer((pinned, 0), Receiver)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     providers.callback(server.server_close)
     providers.callback(server.shutdown)

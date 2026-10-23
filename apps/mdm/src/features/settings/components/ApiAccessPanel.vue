@@ -85,8 +85,9 @@ async function change(kind: KeyIntent['kind'], replay = false) {
   clearSecret()
   const epoch = secretEpoch
   try {
-    const input: KeyIntent =
-      kind === 'create' || kind === 'update'
+    const input: KeyIntent = replay
+      ? (pending.value!.input as KeyIntent)
+      : kind === 'create' || kind === 'update'
         ? {
             kind,
             id: id.value,
