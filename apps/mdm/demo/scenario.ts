@@ -409,7 +409,7 @@ export function createScenario(
         path,
       )
     const operationsPath =
-      /^\/api\/(?:v1\/(?:audit-events|runtime\/diagnostics|authorization|apple\/organizations|windows\/entra-policy|agent-configurations|agent-configuration-operations|agent-enrollment-settings)(?:\/|$)|v1\/mdm-candidate\/(?:authorization|audit|operations|integrations)(?:\/|$))/.test(
+      /^\/api\/(?:v1\/(?:audit-events|runtime\/diagnostics|authorization|tenant-administration\/authorization|apple\/organizations|windows\/entra-policy|agent-configurations|agent-configuration-operations|agent-enrollment-settings)(?:\/|$)|v1\/mdm-candidate\/(?:authorization|audit|operations|integrations)(?:\/|$))/.test(
         path,
       )
     const module = operationsPath

@@ -3,9 +3,10 @@ import { computed, onMounted, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { useIdentity } from '@rss/auth'
+import { isRssApiError } from '@rss/api/mdm'
 import { UiButton, UiTable, UiDialog, UiMessage, UiBadge } from '@rss/core/components'
 import { useMdm } from '../../../context'
-import { uuid, closed, string } from '../../../services/decode'
+import { uuid, closed } from '../../../services/decode'
 import { useSettingsAction, useSettingsFacts } from '../../settings/useSettingsAction'
 import {
   ruleForRealm,
@@ -47,7 +48,8 @@ const page = ref<Awaited<ReturnType<typeof client.rules>>>(),
   selectedDeleted = ref(false),
   accounts = ref<LocalAccount[]>([]),
   accountCursor = ref<string | null>(null),
-  accountsRead = ref(false)
+  accountsRead = ref(false),
+  directoryDenied = ref(false)
 const bound = computed(() => {
     const s = runtime.session.state.value
     return (
@@ -101,14 +103,20 @@ function clearFacts() {
   accounts.value = []
   accountCursor.value = null
   accountsRead.value = false
+  directoryDenied.value = false
   clearDraft()
+}
+function intentDocument(value: unknown) {
+  if (typeof value !== 'string' || new TextEncoder().encode(value).length > 2 * 1024 * 1024)
+    throw new Error('Invalid authorization intent')
+  return JSON.parse(value) as unknown
 }
 function frozen() {
   if (!pending.value) throw new Error('No original operation')
   const v = closed(JSON.parse(pending.value.publicInput), ['ruleId', 'definition', 'basis']),
     target = uuid(v['ruleId']),
-    value: unknown = JSON.parse(string(v['definition']))
-  const basis: unknown = JSON.parse(string(v['basis']))
+    value: unknown = intentDocument(v['definition'])
+  const basis: unknown = intentDocument(v['basis'])
   return {
     target,
     value: value === null ? null : ruleForRealm(value, runtime.tenant, runtime.realm),
@@ -185,20 +193,32 @@ async function loadAccounts(more = false) {
     accountsRead.value = false
     accountCursor.value = null
   }
+  directoryDenied.value = false
   await run(
     async () => {
-      const v = await identity.api.accounts(cursor)
-      if (v.next !== null && v.next === cursor) throw new Error('Repeated account cursor')
-      return v
+      try {
+        const page = await identity.api.accounts(cursor)
+        if (page.next !== null && page.next === cursor) throw new Error('Repeated account cursor')
+        return { page, denied: false }
+      } catch (error) {
+        if (isRssApiError(error) && error.status === 403) return { page: null, denied: true }
+        throw error
+      }
     },
-    (v) => {
-      accounts.value = [
-        ...new Map(
-          [...(more ? accounts.value : []), ...v.accounts].map((a) => [a.principalId, a]),
-        ).values(),
-      ]
-      accountCursor.value = v.next
-      accountsRead.value = true
+    (result) => {
+      directoryDenied.value = result.denied
+      if (result.page) {
+        accounts.value = [
+          ...new Map(
+            [...(more ? accounts.value : []), ...result.page.accounts].map((a) => [
+              a.principalId,
+              a,
+            ]),
+          ).values(),
+        ]
+        accountCursor.value = result.page.next
+        accountsRead.value = true
+      }
     },
   )
 }
@@ -239,6 +259,13 @@ function review(action: 'save' | 'delete') {
     failure.value = 'invalidRequest'
   }
 }
+const intentTarget = computed(() => {
+  try {
+    return frozen().target
+  } catch {
+    return '—'
+  }
+})
 const proposed = computed(() =>
     preview.value === 'delete'
       ? null
@@ -480,7 +507,9 @@ onMounted(initialize)
         <p>
           {{ t('operations.ruleUi.originalOperation') }} · <code>{{ pending.id }}</code>
         </p>
-        <p>{{ pending.publicInput }}</p>
+        <p>
+          {{ t('operations.ruleUi.originalTarget') }} · <code>{{ intentTarget }}</code>
+        </p>
       </details>
       <UiButton
         v-if="pending.state === 'unknown' || pending.state === 'conflict'"
@@ -562,6 +591,7 @@ onMounted(initialize)
           :existing="existing"
           :can-browse="canBrowse"
           :loaded="accountsRead"
+          :denied="directoryDenied"
           :more="!!accountCursor"
           :busy="busy"
           @load="loadAccounts()"

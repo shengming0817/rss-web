@@ -1,4 +1,5 @@
 export const authorizationZh = {
+  directoryDenied: '账户目录拒绝访问。可使用已有规则主体或 UUID；目录权限与授权维护权限分别核验。',
   platformTitle: '平台授权',
   realmTitle: '管理租户 · 独立授权',
   realmHint: '当前许可只管理平台租户与管理身份，不授予业务设备、软件或合规资源的访问权。',
@@ -97,6 +98,8 @@ export const authorizationZh = {
   },
 }
 export const authorizationEn: typeof authorizationZh = {
+  directoryDenied:
+    'The account directory denied access. Existing rule subjects or a UUID remain available; directory access and authorization maintenance are checked separately.',
   platformTitle: 'Platform authorization',
   realmTitle: 'Management tenant · Independent authority',
   realmHint:

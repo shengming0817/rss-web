@@ -1,3 +1,4 @@
+import { createManagementAuthorizationDemo } from './management-authorization'
 import { createPkiDemo } from './pki'
 import { createProfilesDemo } from './profiles'
 import { createPackageDemo } from './packages'
@@ -5,9 +6,7 @@ import { createHash } from 'node:crypto'
 /** MOCK_SOURCE: explicit scenario-only settings; no provider or host success is invented. */
 import { entries } from '../src/features/settings/entries'
 import { channels } from '../src/features/settings/clients/firstUse'
-import { permissions, devicePermissions } from '../src/features/operations/clients/authorization'
 import { TENANT, MANAGEMENT_TENANT, type DomainHandler } from './scenario'
-import { INSTANCE } from './operations/authorization'
 import { closed, record, string, uuid } from '../src/services/decode'
 import { error, ok } from './http'
 const platformIds = [
@@ -26,6 +25,7 @@ const platformIds = [
   'host-config',
 ]
 export function createSettingsDemo() {
+  const managementAuthorization = createManagementAuthorizationDemo()
   const pki = createPkiDemo()
   const packages = createPackageDemo()
   const profiles = createProfilesDemo()
@@ -43,6 +43,8 @@ export function createSettingsDemo() {
     },
   ]
   const handle: DomainHandler = (r, scenario) => {
+    const managementReply = managementAuthorization.handle(r, scenario)
+    if (managementReply) return managementReply
     const pkiReply = pki.handle(r, scenario)
     if (pkiReply) return pkiReply
     const profileReply = profiles.handle(r, scenario)
@@ -142,15 +144,6 @@ export function createSettingsDemo() {
         complete: false,
       })
     }
-    if (r.path === '/api/v1/tenant-administration/authorization' && r.method === 'GET')
-      return ok({
-        instanceId: INSTANCE,
-        tenantId: MANAGEMENT_TENANT,
-        principalId: r.actor.principalId,
-        grants: permissions
-          .filter((p) => !(devicePermissions as readonly string[]).includes(p))
-          .map((operation) => ({ operation, scope: { kind: 'tenant' } })),
-      })
     if (
       r.path === '/api/v1/settings/catalog' ||
       r.path === '/api/v1/tenant-administration/settings/catalog'
@@ -252,6 +245,7 @@ export function createSettingsDemo() {
   return {
     handle,
     reset() {
+      managementAuthorization.reset()
       pki.reset()
       packages.reset()
       profiles.reset()

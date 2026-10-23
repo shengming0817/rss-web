@@ -8,6 +8,7 @@ const props = defineProps<{
     existing: string[]
     canBrowse: boolean
     loaded: boolean
+    denied: boolean
     more: boolean
     busy: boolean
   }>(),
@@ -42,6 +43,7 @@ function label(id: string) {
     <option value="">{{ t('operations.ruleUi.selectPrincipal') }}</option>
     <option v-for="id in choices" :key="id" :value="id">{{ label(id) }}</option>
   </select>
+  <p v-if="denied" role="alert">{{ t('operations.ruleUi.directoryDenied') }}</p>
   <p class="ui-help">
     {{ t(loaded ? 'operations.ruleUi.directoryRead' : 'operations.ruleUi.directoryBoundary') }}
   </p>
