@@ -999,7 +999,18 @@ try {
   )
   const retainedMemory = await api(`/api/v1/devices/${collectorDevice}/inventory`)
   assert.equal(retainedMemory.asset.device.fields['device.memory.bytes'].state.value.value, 8194)
+  const isCollectorDetail = (response) =>
+    new URL(response.url()).pathname === `/api/v1/device-views/endpoint/${collectorDevice}`
+  const readingDetail = page.waitForResponse(isCollectorDetail)
   await page.goto(path(`devices/${collectorDevice}`))
+  const detailReply = await readingDetail
+  if (detailReply.status() === 409) {
+    assert.equal((await detailReply.json()).code, 'device_view_cursor_invalidated')
+    await loaded()
+    const rereadingDetail = page.waitForResponse(isCollectorDetail)
+    await page.getByRole('button', { name: '重新读取', exact: true }).click()
+    assert.equal((await rereadingDetail).status(), 200)
+  } else assert.equal(detailReply.status(), 200)
   await page.getByRole('button', { name: '硬件', exact: true }).click()
   assert.ok((await page.locator('.asset-detail-layout').textContent()).includes('8194'))
   const personnel = page.locator(`[data-personnel-device="${collectorDevice}"]`)
