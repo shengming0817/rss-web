@@ -57,7 +57,7 @@ function clear() {
 function apply(value: ConnectionState) {
   state.value = value
   reviewed.value = false
-  if (!locked.value) {
+  if (!pending.value || pending.value.state === 'received') {
     preferred.value = value.draft?.configuration.preferredOrigin ?? ''
     candidates.value = value.draft?.configuration.origins.join('\n') ?? ''
   }

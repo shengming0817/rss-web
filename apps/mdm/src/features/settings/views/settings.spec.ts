@@ -1765,6 +1765,14 @@ it('keeps saved connections separate from publication, queries unknown receipts 
     if (o.path.includes('connection-operations')) return null
     return latest
   })
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  expect((f.wrapper.get('#connection-preferred').element as HTMLInputElement).value).toBe(
+    latest.draft.configuration.preferredOrigin,
+  )
+  expect((f.wrapper.get('#connection-origins').element as HTMLTextAreaElement).value).toBe(
+    latest.draft.configuration.origins.join('\n'),
+  )
   await f.wrapper.get('#connection-preferred').setValue('https://b.test:9443')
   await f.wrapper.get('#connection-origins').setValue('https://a.test\nhttps://b.test:9443')
   await f.wrapper.get('form').trigger('submit')
