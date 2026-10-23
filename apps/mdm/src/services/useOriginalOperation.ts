@@ -68,7 +68,7 @@ export function useOriginalOperation(key: () => string) {
             !isRssApiError(error) ||
             ['network', 'timeout', 'protocol', 'aborted'].includes(error.cause) ||
             ['operation_unknown', 'operation_rollback_unconfirmed'].includes(error.code)
-          if (isRssApiError(error) && [401, 403].includes(error.status))
+          if (isRssApiError(error) && (error.status === 401 || error.status === 403))
             owner.intents.delete(target)
           else if (unknown || replay)
             owner.intents.set(target, { id, input: original, state: 'unknown' })
