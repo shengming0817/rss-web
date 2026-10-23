@@ -282,16 +282,29 @@ export function policyAction(value: unknown) {
   if (kind === 'unmanage_device') {
     const v = closed(value, ['kind', 'schedule', 'runLifetimeSeconds'])
     const schedule = nativeSchedule(v['schedule'])
-    if (['registration', 'check_in'].includes(schedule.trigger.kind)) throw new Error('Invalid retirement trigger')
+    if (['registration', 'check_in'].includes(schedule.trigger.kind))
+      throw new Error('Invalid retirement trigger')
     return { kind, schedule, runLifetimeSeconds: lifetime(v['runLifetimeSeconds']) }
   }
   if (kind === 'credential') {
-    const v = closed(value, ['kind', 'operation', 'architecture', 'schedule', 'frequency', 'runLifetimeSeconds'])
+    const v = closed(value, [
+      'kind',
+      'operation',
+      'architecture',
+      'schedule',
+      'frequency',
+      'runLifetimeSeconds',
+    ])
     return {
-      kind, operation: credentialOperation(v['operation']),
+      kind,
+      operation: credentialOperation(v['operation']),
       architecture: enumeration(v['architecture'], architectures),
       schedule: nativeSchedule(v['schedule']),
-      frequency: enumeration(v['frequency'], ['once_per_version', 'once_per_entry', 'every_trigger'] as const),
+      frequency: enumeration(v['frequency'], [
+        'once_per_version',
+        'once_per_entry',
+        'every_trigger',
+      ] as const),
       runLifetimeSeconds: lifetime(v['runLifetimeSeconds']),
     }
   }
@@ -370,16 +383,16 @@ export function policyAction(value: unknown) {
       runLifetimeSeconds: lifetime(v['runLifetimeSeconds']),
     }
   }
-  const v = closed(
-    value,
-    [
-      'kind',
-      'resource',
-      'schedule',
-      'runLifetimeSeconds',
-      'delivery', 'intent', 'rollout', 'channel',
-    ],
-  )
+  const v = closed(value, [
+    'kind',
+    'resource',
+    'schedule',
+    'runLifetimeSeconds',
+    'delivery',
+    'intent',
+    'rollout',
+    'channel',
+  ])
   const base = {
     resource: resourceBinding(v['resource']),
     schedule: nativeSchedule(v['schedule']),
@@ -501,10 +514,18 @@ export type ConfigurationDefinition = PolicyDefinition & {
 
 export function credentialOperation(value: unknown) {
   const kind = enumeration(record(value)['kind'], [
-    'rotate_rss_login', 'verify_rss_login', 'collect_bitlocker', 'verify_bitlocker',
-    'rotate_bitlocker', 'rotate_local_administrator', 'verify_local_administrator',
+    'rotate_rss_login',
+    'verify_rss_login',
+    'collect_bitlocker',
+    'verify_bitlocker',
+    'rotate_bitlocker',
+    'rotate_local_administrator',
+    'verify_local_administrator',
   ] as const)
-  if (kind === 'collect_bitlocker') { closed(value, ['kind']); return { kind } }
+  if (kind === 'collect_bitlocker') {
+    closed(value, ['kind'])
+    return { kind }
+  }
   if (kind === 'verify_bitlocker' || kind === 'rotate_bitlocker') {
     const v = closed(value, ['kind', 'volume', 'protector'])
     return { kind, volume: identifier(v['volume']), protector: uuid(v['protector']) }

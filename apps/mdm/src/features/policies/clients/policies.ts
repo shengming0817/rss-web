@@ -27,7 +27,13 @@ import {
 function baseTargetFacts(v: Record<string, unknown>, lifecycle = false) {
   return {
     object: objectRef(v['object']),
-    channel: lifecycle ? (v['channel'] === null ? null : (() => { throw new Error('Lifecycle channel must be null') })()) : enumeration(v['channel'], channels),
+    channel: lifecycle
+      ? v['channel'] === null
+        ? null
+        : (() => {
+            throw new Error('Lifecycle channel must be null')
+          })()
+      : enumeration(v['channel'], channels),
     availability: enumeration(v['availability'], ['ready', 'unavailable'] as const),
     reason: nullable(v['reason'], string),
     target: nullable(v['target'], primaryRegistration),
@@ -38,13 +44,42 @@ function targetFacts(v: Record<string, unknown>) {
 }
 export function createPoliciesClient(transport: HttpTransport) {
   return {
-    capabilities: () => transport.request({ method: 'GET', path: '/api/v1/policies/capabilities', successStatus: 200,
-      decode(value) { const v = closed(value, ['defaultSoftwareChannel', 'mdmSoftwareDistributionEnabled']); return { defaultSoftwareChannel: enumeration(v['defaultSoftwareChannel'], ['agent'] as const), mdmSoftwareDistributionEnabled: boolean(v['mdmSoftwareDistributionEnabled']) } },
-    }),
-    rerun: (id: string, operationId: string, expectedRevision: number, deadline: number) => transport.request({
-      method: 'POST', path: '/api/v1/policies/{id}/reruns', pathParams: { id }, body: { operationId, expectedRevision, input: { deadline } }, successStatus: 200,
-      decode(value) { const v = closed(value, ['operationId', 'policyId', 'versionId', 'deadline']); if (v['operationId'] !== operationId || v['policyId'] !== id || v['deadline'] !== deadline) throw new Error('Wrong trigger receipt'); return { operationId: uuid(v['operationId']), policyId: uuid(v['policyId']), versionId: uuid(v['versionId']), deadline } },
-    }),
+    capabilities: () =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/policies/capabilities',
+        successStatus: 200,
+        decode(value) {
+          const v = closed(value, ['defaultSoftwareChannel', 'mdmSoftwareDistributionEnabled'])
+          return {
+            defaultSoftwareChannel: enumeration(v['defaultSoftwareChannel'], ['agent'] as const),
+            mdmSoftwareDistributionEnabled: boolean(v['mdmSoftwareDistributionEnabled']),
+          }
+        },
+      }),
+    rerun: (id: string, operationId: string, expectedRevision: number, deadline: number) =>
+      transport.request({
+        method: 'POST',
+        path: '/api/v1/policies/{id}/reruns',
+        pathParams: { id },
+        body: { operationId, expectedRevision, input: { deadline } },
+        successStatus: 200,
+        decode(value) {
+          const v = closed(value, ['operationId', 'policyId', 'versionId', 'deadline'])
+          if (
+            v['operationId'] !== operationId ||
+            v['policyId'] !== id ||
+            v['deadline'] !== deadline
+          )
+            throw new Error('Wrong trigger receipt')
+          return {
+            operationId: uuid(v['operationId']),
+            policyId: uuid(v['policyId']),
+            versionId: uuid(v['versionId']),
+            deadline,
+          }
+        },
+      }),
     preview: (definition: PolicyDefinition, after?: string, scopeResult?: string) =>
       transport.request({
         method: 'POST',
@@ -71,7 +106,9 @@ export function createPoliciesClient(transport: HttpTransport) {
             scopeResult: result,
             items: array(v['items'], (value) => {
               const d = closed(value, [
-                ...(action.kind === 'unmanage_device' ? ['qualification', 'sources', 'scopeResult', 'operationIds'] : []),
+                ...(action.kind === 'unmanage_device'
+                  ? ['qualification', 'sources', 'scopeResult', 'operationIds']
+                  : []),
                 'object',
                 'channel',
                 'availability',
@@ -83,8 +120,17 @@ export function createPoliciesClient(transport: HttpTransport) {
                   : ['taskAdmission']),
               ])
               if (action.kind === 'unmanage_device') {
-                if (d['target'] !== null || d['taskAdmission'] !== null) throw new Error('Invalid lifecycle target')
-                return { ...baseTargetFacts(d, true), taskAdmission: null, eligibility: eligibility(d['eligibility']), qualification: eligibility(d['qualification']), sources: array(d['sources'], deviceObject), scopeResult: nullable(d['scopeResult'], uuid), operationIds: array(d['operationIds'], uuid) }
+                if (d['target'] !== null || d['taskAdmission'] !== null)
+                  throw new Error('Invalid lifecycle target')
+                return {
+                  ...baseTargetFacts(d, true),
+                  taskAdmission: null,
+                  eligibility: eligibility(d['eligibility']),
+                  qualification: eligibility(d['qualification']),
+                  sources: array(d['sources'], deviceObject),
+                  scopeResult: nullable(d['scopeResult'], uuid),
+                  operationIds: array(d['operationIds'], uuid),
+                }
               }
               return action.kind === 'telemetry_profile'
                 ? {
@@ -127,7 +173,9 @@ export function createPoliciesClient(transport: HttpTransport) {
                 'operationIds',
               ])
               return {
-                ...(lifecycle ? { ...baseTargetFacts(d, true), taskAdmission: null } : targetFacts(d)),
+                ...(lifecycle
+                  ? { ...baseTargetFacts(d, true), taskAdmission: null }
+                  : targetFacts(d)),
                 qualification: eligibility(d['qualification']),
                 sources: array(d['sources'], deviceObject),
                 scopeResult: lifecycle ? nullable(d['scopeResult'], uuid) : uuid(d['scopeResult']),
@@ -138,7 +186,17 @@ export function createPoliciesClient(transport: HttpTransport) {
           }
         },
       }),
-    list: (cursor?: string, action?: PolicyDefinition['action']['kind'], resource?: string, filters: { state?: 'enabled' | 'disabled' | 'archived' | undefined; category?: string | undefined; scope?: string | undefined; descending?: boolean | undefined } = {}) =>
+    list: (
+      cursor?: string,
+      action?: PolicyDefinition['action']['kind'],
+      resource?: string,
+      filters: {
+        state?: 'enabled' | 'disabled' | 'archived' | undefined
+        category?: string | undefined
+        scope?: string | undefined
+        descending?: boolean | undefined
+      } = {},
+    ) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/policies',
