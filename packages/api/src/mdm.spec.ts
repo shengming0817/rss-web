@@ -891,7 +891,7 @@ it('dispatches exact-version script bytes through the canonical executor and rej
     pathParams: { id: 'script', version: '2' },
     query: { platform: 'macos', architecture: 'aarch64', variant: 'default' },
     responseType: 'arraybuffer' as const,
-    successStatus: 200,
+    successStatus: 200 as const,
     decode: (value: unknown) => value,
   }
   expect(await transport.request(options)).toEqual({

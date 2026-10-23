@@ -89,10 +89,8 @@ export const gapZh = {
   networks: '程序化 API 来源白名单',
   expires: '到期时间（Unix 秒，可空）',
   rotate: '轮换',
-  keyHint:
-    'API Key 使用 X-API-Key；账号 Bearer Token 使用 Authorization: Bearer，两者独立。Key 不兑换 Token。浏览器保持 Cookie 会话。',
-  networkHint:
-    '平台设置同时限制 Token 签发、Bearer 和 API Key 调用。空列表拒绝全部程序化入口，不影响浏览器 Cookie。',
+  keyHint: '为程序化调用创建最小权限的 API Key；浏览器会话保持独立。',
+  networkHint: '平台网络策略限制所有程序化访问。空列表拒绝全部程序化入口，不影响浏览器会话。',
   firstSecret: '秘密仅本次签发响应可见；关闭后不可找回。丢失响应时先按 ID 核对，再撤销或重新签发。',
   queryOriginal: '查询原操作',
   close: '关闭',
@@ -198,7 +196,7 @@ export const gapEn: typeof gapZh = {
   keyHint:
     'API Keys use X-API-Key; account tokens use Authorization: Bearer. They are independent. Keys do not exchange tokens. Browsers keep Cookie sessions.',
   networkHint:
-    'Installation policy restricts token issuance, Bearer and API Keys. Empty lists deny all programmatic access without affecting Cookie sessions.',
+    'The installation network policy restricts all programmatic access. Empty lists deny it without affecting browser sessions.',
   firstSecret:
     'The secret is visible only in its initial issuance response. Read the key ID before revoking or reissuing a lost response.',
   queryOriginal: 'Query original operation',

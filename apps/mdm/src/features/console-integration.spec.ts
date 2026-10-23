@@ -10,6 +10,7 @@ import { mdmKey } from '../context'
 import { mdmI18n } from '../i18n'
 import { useOriginalOperation } from '../services/useOriginalOperation'
 import { createCredentialsClient, material } from './security/clients/credentials'
+import WebhookSubscriptionsPanel from './settings/components/WebhookSubscriptionsPanel.vue'
 import ApiAccessPanel from './settings/components/ApiAccessPanel.vue'
 import LifecyclePoliciesView from './policies/views/LifecyclePoliciesView.vue'
 import ManagementQueries from './devices/components/ManagementQueries.vue'
@@ -672,4 +673,323 @@ it('renders nonempty redacted DDM facts, unknown observation and the exact opera
   await flushPromises()
   expect(ddm).toHaveBeenLastCalledWith('mac', 'opaque-ddm-cursor')
   expect(w.findAll('article')).toHaveLength(0)
+})
+
+function authority(operations: string[]) {
+  return {
+    authorization: {
+      effective: async () => ({
+        principalId: b,
+        grants: operations.map((operation) => ({ operation, scope: { kind: 'tenant' } })),
+      }),
+    },
+  }
+}
+function field(w: VueWrapper, label: string) {
+  const container =
+    w.findAll('label').find((l) => l.text() === label) ??
+    w.findAll('label').find((l) => l.text().startsWith(label))!
+  return container.find('input, textarea, select')
+}
+it('edits webhook metadata without losing extensions and consumes actual replay and redrive receipts', async () => {
+  let record = { id: a, revision: 1, targetVersion: 1, enabled: false, deleted: false, settings }
+  const d = {
+    id: b,
+    eventId: c,
+    subscriptionId: a,
+    targetVersion: 1,
+    recoveryVersion: 3,
+    redriveWindowOpen: true,
+    sourceDelivery: null,
+    attempts: 2,
+    status: 'dead_letter',
+    transportObservation: 'rejected',
+    failureStage: 'transport',
+    failureReason: 'gone',
+  }
+  const f = transport((o: RequestOptions<unknown>) => {
+    if (o.path.endsWith('/event-types')) return { version: 1, items: ['device.retired'] }
+    if (o.path.endsWith('/deliveries/{id}/replay')) return { id: c, eventId: c, sourceDelivery: b }
+    if (o.path.endsWith('/deliveries/{id}/redrive'))
+      return {
+        id: b,
+        operationId: (o.body as { operationId: string }).operationId,
+        status: 'redriven',
+        recoveryVersion: 4,
+      }
+    if (o.path.endsWith('/deliveries') || o.path.endsWith('/deliveries/{id}'))
+      return { items: [d], nextCursor: null }
+    if (o.path.endsWith('/test')) return { id: b, eventId: c }
+    if (o.method === 'PUT') {
+      const body = o.body as {
+        change: { kind: string; value: typeof settings | boolean }
+        expectedRevision: number
+      }
+      record = { ...record, revision: body.expectedRevision + 1 }
+      if (body.change.kind === 'put') record.settings = body.change.value as typeof settings
+      if (body.change.kind === 'enabled') record.enabled = body.change.value as boolean
+      if (body.change.kind === 'delete') record.deleted = true
+    }
+    return o.path.endsWith('/subscriptions') ? { items: [record] } : record
+  })
+  const client = createWebhookSubscriptions(f.client)
+  const w = await mountAt(WebhookSubscriptionsPanel, {
+    tenant: a,
+    session: session(),
+    settings: { subscriptions: client },
+    operations: authority(['webhook_read', 'webhook_write', 'webhook_replay']),
+  })
+  await button(w, '读取').trigger('click')
+  await flushPromises()
+  await w
+    .findAll('button')
+    .find((x) => x.text().startsWith('Receiver ·'))!
+    .trigger('click')
+  await flushPromises()
+  await field(w, '名称').setValue('Updated receiver')
+  await field(w, 'HTTPS').setValue('https://receiver.test/new')
+  await field(w, '设备范围').setValue('groups')
+  await w.find('textarea').setValue(c)
+  await w.find('input[value="device.retired"]').setValue(true)
+  await field(w, '签名').setValue('signing-next')
+  await field(w, '网络').setValue('network-next')
+  await confirm(w)
+  await w.find('form').trigger('submit')
+  await flushPromises()
+  expect(record.settings.presentation).toEqual({
+    name: 'Updated receiver',
+    vendor: { nested: ['retained'] },
+  })
+  expect(record.settings.selection).toEqual({ kind: 'groups', ids: [c] })
+  await confirm(w)
+  await button(w, '启用整个 Policy').trigger('click')
+  await flushPromises()
+  await field(w, '设备').setValue('mac')
+  await confirm(w)
+  await button(w, '测试投递').trigger('click')
+  await flushPromises()
+  expect(f.calls.find((x) => x.path.endsWith('/test'))?.body).toMatchObject({ deviceId: 'mac' })
+  await w
+    .findAll('button')
+    .filter((x) => x.text() === '读取')
+    .at(-1)!
+    .trigger('click')
+  await flushPromises()
+  await w
+    .findAll('button')
+    .find((x) => x.text().startsWith(b + ' ·'))!
+    .trigger('click')
+  await flushPromises()
+  await confirm(w)
+  await button(w, '创建重放投递').trigger('click')
+  await flushPromises()
+  expect(w.text()).toContain('sourceDelivery')
+  await confirm(w)
+  await button(w, '恢复原投递').trigger('click')
+  await flushPromises()
+  expect(w.text()).toContain('redriven')
+  expect(f.calls.find((x) => x.path.endsWith('/redrive'))?.body).toMatchObject({
+    expectedVersion: 3,
+  })
+  await confirm(w)
+  await button(w, '软删除').trigger('click')
+  await flushPromises()
+  expect(record.deleted).toBe(true)
+  await button(w, '新建').trigger('click')
+  await flushPromises()
+  expect(field(w, '名称').element).toHaveProperty('value', '')
+})
+it('reads and rotates a Key with a local first-response secret, then revokes using the current revision', async () => {
+  const metadata = {
+    name: 'Inventory',
+    enabled: true,
+    expiresAt: null,
+    grants: [{ operation: 'inventory_read', scope: { kind: 'all_devices' } }],
+  }
+  const key = {
+    id: a,
+    revision: 1,
+    authorityRevision: 1,
+    credentialRevision: 1,
+    metadata,
+    createdBy: { instanceId: c, tenantId: a, principalId: b },
+    createdAt: 1,
+    revoked: false,
+  }
+  const f = transport((o: RequestOptions<unknown>) => {
+    if (o.path.endsWith('/api-keys')) return { items: [key], nextCursor: null }
+    if (o.method === 'GET') return key
+    const body = o.body as { expectedRevision: number }
+    return {
+      receipt: { id: a, revision: body.expectedRevision + 1, deleted: o.path.endsWith('/revoke') },
+      secret: o.path.endsWith('/rotate') ? 'first-response-secret' : null,
+    }
+  })
+  const client = createApiAccess(f.client, a)
+  const w = await mountAt(ApiAccessPanel, {
+    tenant: a,
+    realm: 'tenant',
+    session: session(),
+    settings: { apiAccess: client },
+    operations: authority(['authorization_read', 'authorization_write']),
+  })
+  await button(w, '读取').trigger('click')
+  await flushPromises()
+  await w
+    .findAll('button')
+    .find((x) => x.text().startsWith('Inventory ·'))!
+    .trigger('click')
+  await flushPromises()
+  await confirm(w)
+  await button(w, '轮换').trigger('click')
+  await flushPromises()
+  expect(w.find('output').text()).toBe('first-response-secret')
+  await button(w, '清除明文').trigger('click')
+  expect(w.find('output').exists()).toBe(false)
+  await w
+    .findAll('button')
+    .filter((x) => x.text() === '读取')[1]!
+    .trigger('click')
+  await flushPromises()
+  await confirm(w)
+  await button(w, '撤销托管读取').trigger('click')
+  await flushPromises()
+  expect(f.calls.find((x) => x.path.endsWith('/revoke'))?.body).toMatchObject({
+    expectedRevision: 1,
+  })
+  await button(w, '新草稿').trigger('click')
+  await flushPromises()
+  expect(field(w, '名称').element).toHaveProperty('value', '')
+})
+it('compares a platform network conflict, then writes the newly read revision and CIDRs', async () => {
+  const network = vi
+    .fn()
+    .mockResolvedValueOnce({ revision: 1, networks: ['127.0.0.1/32'] })
+    .mockResolvedValueOnce({ revision: 2, networks: [] })
+  const changeNetwork = vi
+    .fn()
+    .mockRejectedValueOnce(decodeMdmError(409, { code: 'operation_conflict' }))
+    .mockResolvedValueOnce({ revision: 3, networks: ['::1/128'] })
+  const w = await mountAt(ApiAccessPanel, {
+    tenant: a,
+    realm: 'platform',
+    session: session(),
+    settings: { apiAccess: { network, changeNetwork } },
+    operations: authority(['authorization_read', 'authorization_write']),
+  })
+  await button(w, '读取').trigger('click')
+  await flushPromises()
+  await w.find('textarea').setValue('::1/128')
+  await confirm(w)
+  await w.find('form').trigger('submit')
+  await flushPromises()
+  await button(w, '冲突：重新读取并比较后编辑').trigger('click')
+  await flushPromises()
+  expect(w.find('textarea').element).toHaveProperty('value', '')
+  await w.find('textarea').setValue('::1/128')
+  await confirm(w)
+  await w.find('form').trigger('submit')
+  await flushPromises()
+  expect(changeNetwork.mock.calls[1]?.slice(1)).toEqual([2, ['::1/128']])
+})
+it('creates and edits a credential Policy with the exact operation, then enables, triggers, disables and archives it', async () => {
+  let policy = {
+    id: a,
+    revision: 0,
+    enabled: false,
+    state: 'disabled',
+    definition: {
+      scope: a,
+      action: {
+        kind: 'credential',
+        operation: { kind: 'collect_bitlocker' },
+        architecture: 'x86_64',
+        frequency: 'once_per_version',
+        schedule: defaultSchedule(),
+        runLifetimeSeconds: 3600,
+      },
+    },
+  }
+  const change = vi.fn(async (id, operation) => {
+    policy = { ...policy, id, revision: operation.expectedRevision + 1 }
+    if (operation.input.action === 'put')
+      policy = {
+        ...policy,
+        definition: operation.input.definition,
+        enabled: operation.input.enabled,
+      }
+    if (operation.input.action === 'enable') policy = { ...policy, enabled: true, state: 'enabled' }
+    if (operation.input.action === 'disable')
+      policy = { ...policy, enabled: false, state: 'disabled' }
+    if (operation.input.action === 'archive') policy = { ...policy, state: 'archived' }
+    return policy
+  })
+  const preview = vi.fn(async () => ({ items: [], nextCursor: null, scopeResult: a })),
+    rerun = vi.fn(async () => ({})),
+    assignments = vi.fn(async () => ({ items: [], nextCursor: null }))
+  const runtime = {
+    tenant: a,
+    session: session(),
+    policies: {
+      policies: {
+        change,
+        preview,
+        rerun,
+        assignments,
+        read: async () => policy,
+        list: async () => ({ items: [], nextCursor: null }),
+      },
+    },
+  }
+  const w = await mountAt(LifecyclePoliciesView, runtime)
+  await w.find('select').setValue('credential')
+  await flushPromises()
+  await field(w, '策略 ID').setValue(a)
+  await field(w, '设备范围 ID').setValue(a)
+  await w
+    .findAll('select')
+    .find((s) => s.find('option[value="rotate_bitlocker"]').exists())!
+    .setValue('rotate_bitlocker')
+  await field(w, '处理器架构').setValue('aarch64')
+  await field(w, '卷 DeviceID').setValue('volume')
+  await field(w, '保护器 ID').setValue(b)
+  await field(w, '账户 SID').setValue('S-1-5-21')
+  await button(w, '预览').trigger('click')
+  await flushPromises()
+  expect(preview).toHaveBeenCalledWith(
+    expect.objectContaining({
+      action: expect.objectContaining({
+        operation: { kind: 'rotate_bitlocker', volume: 'volume', protector: b },
+        architecture: 'aarch64',
+      }),
+    }),
+    undefined,
+    undefined,
+  )
+  await confirm(w)
+  await w.find('form').trigger('submit')
+  await flushPromises()
+  expect(change.mock.calls[0]?.[1]).toMatchObject({
+    expectedRevision: 0,
+    input: { enabled: false },
+  })
+  await confirm(w)
+  await button(w, '启用整个 Policy').trigger('click')
+  await flushPromises()
+  await field(w, '原操作期限').setValue('5000')
+  await confirm(w)
+  await button(w, '显式触发').trigger('click')
+  await flushPromises()
+  expect(rerun).toHaveBeenCalledWith(a, expect.any(String), expect.any(Number), 5000)
+  expect(assignments).toHaveBeenCalledWith(a, undefined, false)
+  await confirm(w)
+  await button(w, '禁用整个 Policy').trigger('click')
+  await flushPromises()
+  await confirm(w)
+  await button(w, '已归档').trigger('click')
+  await flushPromises()
+  expect(policy.state).toBe('archived')
+  await button(w, '新草稿').trigger('click')
+  await flushPromises()
+  expect(field(w, '策略 ID').element).not.toHaveProperty('value', a)
 })
