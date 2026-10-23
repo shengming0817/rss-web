@@ -68,13 +68,28 @@ export function pkiReceipt(value: unknown) {
   return {
     operation: uuid(v['operation']),
     revision: positive(v['revision']),
-    state: string(v['state']),
+    state: enumeration(v['state'], ['distributing', 'activated', 'retired'] as const),
   }
 }
 export interface Publication {
   issuer: string
   crl: string
   root_crl: string
+}
+export function pkiPublications(value: unknown): Publication[] {
+  const items = unique(
+    array(value, (value) => {
+      const v = closed(value, ['issuer', 'crl', 'root_crl'])
+      return {
+        issuer: sha256(v['issuer']),
+        crl: encoded(v['crl']),
+        root_crl: encoded(v['root_crl']),
+      }
+    }),
+    (v) => v.issuer,
+  )
+  if (!items.length || items.length > 16) throw new Error('Invalid publication set')
+  return items
 }
 export function createPkiClient(transport: HttpTransport, tenant: string) {
   return {
@@ -92,14 +107,15 @@ export function createPkiClient(transport: HttpTransport, tenant: string) {
         path: '/api/v1/pki/rotations',
         body: {
           id: uuid(id),
-          purpose,
-          expected_revision: expectedRevision,
+          purpose: enumeration(purpose, pkiPurposes),
+          expected_revision: positive(expectedRevision),
           candidate: pkiTrust(candidate, tenant, purpose),
         },
         successStatus: 200,
         decode(value) {
           const result = pkiReceipt(value)
-          if (result.operation !== id) throw new Error('Wrong original operation')
+          if (result.operation !== id || result.state !== 'distributing')
+            throw new Error('Wrong original rotation')
           return result
         },
       }),
@@ -112,12 +128,16 @@ export function createPkiClient(transport: HttpTransport, tenant: string) {
       transport.request({
         method: 'POST',
         path: '/api/v1/pki/{purpose}/rotations',
-        pathParams: { purpose },
-        body: { id: uuid(id), expected_revision: expectedRevision, action },
+        pathParams: { purpose: enumeration(purpose, pkiPurposes) },
+        body: { id: uuid(id), expected_revision: positive(expectedRevision), action },
         successStatus: 200,
         decode(value) {
           const result = pkiReceipt(value)
-          if (result.operation !== id) throw new Error('Wrong original operation')
+          if (
+            result.operation !== id ||
+            result.state !== (action === 'activate' ? 'activated' : 'retired')
+          )
+            throw new Error('Wrong original rotation')
           return result
         },
       }),
@@ -128,11 +148,7 @@ export function createPkiClient(transport: HttpTransport, tenant: string) {
         body: {
           operation: uuid(id),
           purpose,
-          publications: publications.map((p) => ({
-            issuer: sha256(p.issuer),
-            crl: encoded(p.crl),
-            root_crl: encoded(p.root_crl),
-          })),
+          publications: pkiPublications(publications),
         },
         successStatus: 204,
       }),

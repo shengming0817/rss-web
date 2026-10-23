@@ -44,7 +44,7 @@ export function useOperation(
           write &&
           (!isRssApiError(e) ||
             ['network', 'timeout', 'aborted', 'protocol'].includes(e.cause) ||
-            e.code === 'operation_unknown' ||
+            ['operation_unknown', 'issuance_unknown', 'activation_unknown'].includes(e.code) ||
             e.code === 'operation_rollback_unconfirmed' ||
             unknownCodes.includes(e.code))
         )
@@ -71,8 +71,11 @@ export function useOperation(
                               : e.code === 'device_view_cursor_invalidated'
                                 ? 'cursorInvalidated'
                                 : 'conflict'
-                            : e.code === 'operation_unknown' ||
-                                e.code === 'operation_rollback_unconfirmed'
+                            : [
+                                  'operation_unknown',
+                                  'issuance_unknown',
+                                  'activation_unknown',
+                                ].includes(e.code) || e.code === 'operation_rollback_unconfirmed'
                               ? 'unknownWrite'
                               : e.status === 403
                                 ? 'denied'

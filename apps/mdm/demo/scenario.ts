@@ -12,8 +12,6 @@ export interface DemoEvent {
     | 'security_result'
     | 'security_detect'
     | 'material_detect'
-    | 'certificate_issued'
-    | 'certificate_detect'
     | 'remote_consent'
     | 'remote_revoke'
     | 'remote_ended'
@@ -201,8 +199,6 @@ export function createScenario(
             'security_result',
             'security_detect',
             'material_detect',
-            'certificate_issued',
-            'certificate_detect',
             'remote_consent',
             'remote_revoke',
             'remote_ended',
@@ -223,8 +219,6 @@ export function createScenario(
             'security_result',
             'security_detect',
             'material_detect',
-            'certificate_issued',
-            'certificate_detect',
             'remote_consent',
             'remote_revoke',
             'remote_ended',
@@ -411,7 +405,9 @@ export function createScenario(
         path,
       )
     const securityPath =
-      /^\/api\/v1\/(?:compliance-rules(?:\/|$)|devices\/[^/]+\/compliance(?:\/|$))/.test(path)
+      /^\/api\/v1\/(?:pki(?:\/|$)|agent-registrations(?:\/|$)|agent-issuances(?:\/|$)|compliance-rules(?:\/|$)|devices\/[^/]+\/compliance(?:\/|$))/.test(
+        path,
+      )
     const operationsPath =
       /^\/api\/(?:v1\/(?:audit-events|runtime\/diagnostics|authorization|apple\/organizations|windows\/entra-policy|agent-configurations|agent-configuration-operations|agent-enrollment-settings)(?:\/|$)|v1\/mdm-candidate\/(?:authorization|audit|operations|integrations)(?:\/|$))/.test(
         path,

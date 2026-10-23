@@ -25,21 +25,10 @@ export function requestTarget(value: unknown) {
     'risk_remediation',
     'material_access',
     'material_operation',
-    'certificate_deploy',
     ...supportKinds,
   ] as const)
   if (kind === 'elevation' || kind === 'diagnostics' || kind === 'remote_support')
     return supportTarget(value)
-  if (kind === 'certificate_deploy') {
-    const v = closed(value, ['kind', 'device', 'certificate', 'certificateRevision', 'fingerprint'])
-    return {
-      kind,
-      device: identifier(v['device']),
-      certificate: uuid(v['certificate']),
-      certificateRevision: positive(v['certificateRevision']),
-      fingerprint: identifier(v['fingerprint']),
-    }
-  }
   if (kind === 'material_access' || kind === 'material_operation') {
     const v = closed(value, ['kind', 'device', 'material', 'materialRevision', 'volume', 'action']),
       material = enumeration(

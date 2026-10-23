@@ -1,10 +1,12 @@
+import AgentRecovery from '../../security/pki/AgentRecovery.vue'
+import { createRecoveryClient } from '../../enrollment/clients/recovery'
 import { afterEach, expect, it, vi } from 'vitest'
 import { defineComponent, shallowRef, type Component } from 'vue'
-import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
+import { mount, flushPromises, DOMWrapper, type VueWrapper } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import type { IdentitySession } from '@rss/auth'
 import type { HttpTransport, RequestOptions, NoContentRequest } from '@rss/api/mdm'
-import { decodeMdmError } from '@rss/api/mdm'
+import { decodeMdmError, decodeAgentError } from '@rss/api/mdm'
 import { mdmKey, type MdmRuntime } from '../../../context'
 import { mdmI18n } from '../../../i18n'
 import { useSettingsAction } from '../useSettingsAction'
@@ -20,7 +22,7 @@ import ApplePanel from '../components/ApplePanel.vue'
 import ProviderPanel from '../components/ProviderPanel.vue'
 import TaskTrustPanel from '../components/TaskTrustPanel.vue'
 import WebhookPanel from '../components/WebhookPanel.vue'
-import PkiPanel from '../components/PkiPanel.vue'
+import TrustPurpose from '../../security/pki/TrustPurpose.vue'
 import PackagesPanel from '../components/PackagesPanel.vue'
 import PackageUpload from '../components/PackageUpload.vue'
 import TenantEditor from '../components/TenantEditor.vue'
@@ -33,6 +35,26 @@ const tenant = '11111111-1111-4111-8111-111111111111',
   principal = '22222222-2222-4222-8222-222222222222',
   id = '33333333-3333-4333-8333-333333333333',
   digest = 'a'.repeat(64)
+const pkiValue = () => ({
+  version: 1,
+  origin: 'https://mdm.test',
+  tenant,
+  purpose: 'agent',
+  revision: 1,
+  issuers: [
+    {
+      digest,
+      mode: 'active',
+      certificate: 'YQ==',
+      root: 'YQ==',
+      crl: 'YQ==',
+      root_crl: 'YQ==',
+      provisioner: 'agent',
+      kid: 'kid-a',
+    },
+  ],
+})
+const body = () => new DOMWrapper(document.body)
 const wrappers: VueWrapper[] = [],
   dispose: (() => void)[] = []
 afterEach(() => {
@@ -134,6 +156,7 @@ async function fixture(
         value = { revision: 0, desiredRevision: null, versions: [] }
       else if (o.path === '/api/v1/webhooks/materials')
         value = { configurationSha256: digest, keys: { heads: [], materials: [] } }
+      else if (o.path === '/api/v1/pki/{purpose}/trust') value = pkiValue()
       else if (o.path === '/api/v1/agent-packages') value = []
       else throw decodeMdmError(503, { code: 'service_unavailable' })
       return typeof o.decode === 'function' ? o.decode(value) : undefined
@@ -148,6 +171,7 @@ async function fixture(
     demo: false,
     session,
     settings,
+    onboarding: { recovery: createRecoveryClient(transport) },
     operations: { authorization: createAuthorizationClient(transport, tenant, realm) },
   } as unknown as MdmRuntime
   const router = createRouter({
@@ -194,7 +218,7 @@ async function fixture(
     },
   }
 }
-function button(w: VueWrapper, label: string) {
+function button(w: VueWrapper | DOMWrapper<Node>, label: string) {
   return w.findAll('button').find((b) => b.text() === label)!
 }
 it('clears imported private keys immediately, keeps unknown writes across remount and queries before exact replay', async () => {
@@ -380,9 +404,9 @@ it('keeps business sessions out of tenant administration', async () => {
   expect(f.calls.filter((o) => o.path.includes('/tenant-administration/'))).toHaveLength(0)
 })
 it('keeps PKI current trust reads from unlocking an unknown original operation', async () => {
-  const f = await fixture(PkiPanel)
+  const f = await fixture(TrustPurpose, { purpose: 'agent' })
   await expect(
-    f.settings.operations.submit('pki', 'activate', 2, '{}', async () => {
+    f.settings.operations.submit('pki:agent', 'activate', 2, '{}', async () => {
       throw new Error('lost')
     }),
   ).rejects.toThrow()
@@ -391,7 +415,7 @@ it('keeps PKI current trust reads from unlocking an unknown original operation',
   expect(f.wrapper.findAll('button').some((b) => b.text() === '查询原操作')).toBe(false)
   await button(f.wrapper, '重新读取').trigger('click')
   await flushPromises()
-  expect(f.settings.operations.records.get('pki')?.state).toBe('unknown')
+  expect(f.settings.operations.records.get('pki:agent')?.state).toBe('unknown')
 })
 it('prepares task trust with an explicit version and reads a null device observation honestly', async () => {
   const f = await fixture(TaskTrustPanel)
@@ -529,7 +553,7 @@ it('requires reading the conflicting version and a separate explicit edit decisi
 })
 
 it('retains one PKI rotation identity and advances the revision through every phase', async () => {
-  const f = await fixture(PkiPanel)
+  const f = await fixture(TrustPurpose, { purpose: 'agent' })
   let trust = {
     version: 1,
     origin: 'https://mdm.test',
@@ -567,32 +591,49 @@ it('retains one PKI rotation identity and advances the revision through every ph
     expect(input.id).toBe(rotation)
     expect(input.expected_revision).toBe(trust.revision)
     trust = input.candidate ?? { ...trust, revision: trust.revision + 1 }
-    return { operation: rotation, revision: trust.revision, state: input.action ?? 'distributing' }
+    return {
+      operation: rotation,
+      revision: trust.revision,
+      state:
+        input.action === 'activate'
+          ? 'activated'
+          : input.action === 'retire'
+            ? 'retired'
+            : 'distributing',
+    }
   })
   await button(f.wrapper, '重新读取').trigger('click')
   await flushPromises()
-  const file = f.wrapper.get('input[type=file]')
+  await button(f.wrapper, '准备轮换').trigger('click')
+  await flushPromises()
+  const file = body().get('#pki-trust-file')
   Object.defineProperty(file.element, 'files', {
     configurable: true,
     value: [{ size: 1024, text: async () => JSON.stringify(candidate) }],
   })
   await file.trigger('change')
   await flushPromises()
-  await button(f.wrapper, '导入材料').trigger('click')
+  await button(body(), '核对并继续').trigger('click')
   await flushPromises()
-  for (const label of ['启用新版本', '退出旧版本']) {
-    await button(f.wrapper, label).trigger('click')
+  await button(body(), '核对后准备分发').trigger('click')
+  await flushPromises()
+  for (const label of ['检查并激活', '检查并退休']) {
+    await button(body(), label).trigger('click')
+    await flushPromises()
+    await button(body(), '确认提交此阶段').trigger('click')
     await flushPromises()
   }
   const writes = f.calls.filter((o) => o.method === 'POST')
   expect(writes).toHaveLength(3)
   expect(writes.map((o) => (o.body as { id: string }).id)).toEqual([rotation, rotation, rotation])
-  expect(f.settings.operations.records.get('pki')?.id).toBe(rotation)
+  expect(f.settings.operations.records.get('pki:agent')?.id).toBe(rotation)
 })
 it('fences delayed public file reads before they can repopulate a new session', async () => {
-  const f = await fixture(PkiPanel)
+  const f = await fixture(TrustPurpose, { purpose: 'agent' })
   let resolve!: (value: string) => void
-  const file = f.wrapper.get('input[type=file]')
+  await button(f.wrapper, '准备轮换').trigger('click')
+  await flushPromises()
+  const file = body().get('#pki-trust-file')
   Object.defineProperty(file.element, 'files', {
     configurable: true,
     value: [{ size: 10, text: () => new Promise<string>((r) => (resolve = r)) }],
@@ -602,7 +643,11 @@ it('fences delayed public file reads before they can repopulate a new session', 
   resolve('{}')
   await flushPromises()
   expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(0)
-  expect(button(f.wrapper, '导入材料').attributes('disabled')).toBeDefined()
+  expect(
+    body()
+      .findAll('button')
+      .some((b) => b.text() === '核对后准备分发'),
+  ).toBe(false)
 })
 it('clears an unused imported Apple key when submitting a different material action', async () => {
   const f = await fixture(ApplePanel, { purpose: 'apns' })
@@ -1563,4 +1608,92 @@ it('expires rendered observations without renewing them and preserves false and 
   expect(f.wrapper.find('pre').exists()).toBe(false)
   expect(f.wrapper.text()).toContain('已过期')
   expect(f.calls).toHaveLength(reads)
+})
+
+it('clears recovery secrets on submission and preserves exact Agent issuance unknown locators without automatic replay', async () => {
+  const f = await fixture(AgentRecovery, { kind: 'registration' })
+  await f.wrapper.get('#agent-registration').setValue(tenant)
+  await f.wrapper.get('#agent-recovery-operation').setValue(id)
+  await f.wrapper.get('#agent-recovery-secret').setValue('A'.repeat(43))
+  await f.wrapper.get('#agent-recovery-csr').setValue('YQ==')
+  f.setHandler(() => {
+    throw decodeAgentError(503, { code: 'issuance_unknown', issuanceId: principal })
+  })
+  await button(f.wrapper, '核对并继续').trigger('click')
+  await flushPromises()
+  await button(f.wrapper, '核验并继续原恢复').trigger('click')
+  await flushPromises()
+  expect((f.wrapper.get('#agent-recovery-secret').element as HTMLInputElement).value).toBe('')
+  const pending = f.settings.operations.records.get('agent-recovery:registration')!
+  expect(pending).toMatchObject({ id, state: 'unknown' })
+  expect(pending.publicInput).not.toContain('A'.repeat(43))
+  expect(f.wrapper.text()).toContain(principal)
+  f.state.value = { ...f.state.value, session: { id: principal } }
+  await flushPromises()
+  expect(f.settings.operations.records.size).toBe(0)
+  expect(f.wrapper.text()).not.toContain(principal)
+  expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(1)
+})
+it('presents recovered Agent candidates with original signing identity while keeping activation as a device responsibility', async () => {
+  const f = await fixture(AgentRecovery, { kind: 'issuance' })
+  await f.wrapper.get('#agent-issuance').setValue(principal)
+  await f.wrapper.get('#agent-recovery-operation').setValue(id)
+  await f.wrapper.get('#agent-recovery-chain').setValue('["YQ=="]')
+  f.setHandler(() => ({
+    wireVersion: 1,
+    issuanceId: principal,
+    operationId: tenant,
+    certificateChain: ['YQ=='],
+    activateBefore: 1760000000,
+  }))
+  await button(f.wrapper, '核对并继续').trigger('click')
+  await flushPromises()
+  await button(f.wrapper, '核验并继续原恢复').trigger('click')
+  await flushPromises()
+  expect(f.wrapper.text()).toContain('仍需设备通过实际候选 mTLS 激活')
+  expect(f.wrapper.text()).toContain(tenant)
+  expect(f.calls.filter((o) => o.method === 'POST').map((o) => o.path)).toEqual([
+    '/api/v1/agent-issuances/{issuance}/recover',
+  ])
+})
+
+it('discards a late Agent recovery error locator after a session changes during the request', async () => {
+  const f = await fixture(AgentRecovery, { kind: 'registration' })
+  await f.wrapper.get('#agent-registration').setValue(tenant)
+  await f.wrapper.get('#agent-recovery-operation').setValue(id)
+  await f.wrapper.get('#agent-recovery-secret').setValue('A'.repeat(43))
+  await f.wrapper.get('#agent-recovery-csr').setValue('YQ==')
+  let reject!: (error: unknown) => void
+  f.setHandler(
+    () =>
+      new Promise((_resolve, fail) => {
+        reject = fail
+      }),
+  )
+  await button(f.wrapper, '核对并继续').trigger('click')
+  await flushPromises()
+  await button(f.wrapper, '核验并继续原恢复').trigger('click')
+  await flushPromises()
+  f.state.value = { ...f.state.value, session: { id: principal } }
+  reject(decodeAgentError(503, { code: 'issuance_unknown', issuanceId: principal }))
+  await flushPromises()
+  expect(f.wrapper.text()).not.toContain(principal)
+  expect(f.settings.operations.records.size).toBe(0)
+})
+it('offers controlled handoff for recovery conflicts without exposing a nonfunctional read action', async () => {
+  const f = await fixture(AgentRecovery, { kind: 'registration' })
+  await f.wrapper.get('#agent-registration').setValue(tenant)
+  await f.wrapper.get('#agent-recovery-operation').setValue(id)
+  await f.wrapper.get('#agent-recovery-secret').setValue('A'.repeat(43))
+  await f.wrapper.get('#agent-recovery-csr').setValue('YQ==')
+  f.setHandler(() => {
+    throw decodeAgentError(409, { code: 'operation_conflict', issuanceId: null })
+  })
+  await button(f.wrapper, '核对并继续').trigger('click')
+  await flushPromises()
+  await button(f.wrapper, '核验并继续原恢复').trigger('click')
+  await flushPromises()
+  expect(f.wrapper.text()).toContain('请由受控运维核对原操作')
+  expect(f.wrapper.findAll('button').some((b) => b.text() === '读取最新状态以比较')).toBe(false)
+  expect(f.wrapper.get('fieldset').attributes('disabled')).toBeDefined()
 })

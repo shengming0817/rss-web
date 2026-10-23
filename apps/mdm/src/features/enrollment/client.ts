@@ -1,3 +1,4 @@
+import { createRecoveryClient } from './clients/recovery'
 import { createEntraClient } from './clients/entra'
 import { createAppleClient } from './clients/apple'
 import type { HttpTransport } from '@rss/api/mdm'
@@ -10,6 +11,7 @@ export function createOnboardingClients(
   tenant: string,
 ) {
   return {
+    recovery: createRecoveryClient(transport),
     entra: createEntraClient(transport, publicTransport),
     apple: createAppleClient(transport),
     native: createNativeClient(publicTransport),

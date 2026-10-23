@@ -22,7 +22,6 @@ export function securityAction(value: unknown) {
   if (
     target.kind !== 'risk_remediation' &&
     target.kind !== 'material_operation' &&
-    target.kind !== 'certificate_deploy' &&
     !isSupportTarget(target)
   )
     throw new Error('Not a device action')
@@ -53,14 +52,12 @@ export function securityAction(value: unknown) {
     result.summary.origin.kind !== 'security' ||
     result.summary.origin.request !== result.request ||
     result.summary.attempt !== result.id ||
-    (target.kind === 'certificate_deploy'
-      ? result.source.source === 'agent.builtin'
-      : result.source.source !==
-        (target.kind === 'risk_remediation' || isSupportTarget(target) || target.material === 'laps'
-          ? 'agent.builtin'
-          : target.material === 'bitlocker'
-            ? 'mdm.windows'
-            : 'mdm.apple'))
+    result.source.source !==
+      (target.kind === 'risk_remediation' || isSupportTarget(target) || target.material === 'laps'
+        ? 'agent.builtin'
+        : target.material === 'bitlocker'
+          ? 'mdm.windows'
+          : 'mdm.apple')
   )
     throw new Error('Wrong security execution')
   return result

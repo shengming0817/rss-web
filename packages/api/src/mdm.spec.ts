@@ -766,3 +766,41 @@ it('dispatches only the formal read-only audit collection through the shared exe
   expect(mock.history.post).toHaveLength(0)
   mock.restore()
 })
+
+it('keeps only the closed Agent issuance locator and allows exact administrator recovery POST routes', async () => {
+  const issuance = '11111111-1111-4111-8111-111111111111'
+  const error = decodeAgentError(503, { code: 'issuance_unknown', issuanceId: issuance })
+  expect(error).toMatchObject({ cause: 'wire', code: 'issuance_unknown', issuanceId: issuance })
+  expect(
+    decodeAgentError(503, { code: 'issuance_unknown', issuanceId: issuance, body: 'secret' }),
+  ).toMatchObject({ cause: 'protocol' })
+  expect(decodeAgentError(503, { code: 'issuance_unknown', issuanceId: 'invalid' })).toMatchObject({
+    cause: 'protocol',
+  })
+  const instance = axios.create(),
+    mock = new AxiosMockAdapter(instance),
+    spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance)
+  const transport = createMdmTransport()
+  spy.mockRestore()
+  mock.onPost().reply(200, { accepted: true })
+  for (const [path, pathParams] of [
+    ['/api/v1/agent-registrations/{registration}/recovery', { registration: issuance }],
+    ['/api/v1/agent-issuances/{issuance}/recover', { issuance }],
+  ] as const) {
+    await expect(
+      transport.request({
+        method: 'POST',
+        path,
+        pathParams,
+        body: { operationId: issuance },
+        successStatus: 200,
+        decode: (v) => v,
+      }),
+    ).resolves.toEqual({ accepted: true })
+    await expect(
+      transport.request({ method: 'GET', path, pathParams, successStatus: 200, decode: (v) => v }),
+    ).rejects.toMatchObject({ cause: 'client' })
+  }
+  expect(mock.history.post).toHaveLength(2)
+  mock.restore()
+})

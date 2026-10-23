@@ -35,7 +35,6 @@ export function reference(value: unknown) {
       'security_request',
       'risk',
       'security_action',
-      'certificate',
     ] as const),
     id: identifier(v['id']),
     device: nullable(v['device'], identifier),
@@ -68,7 +67,6 @@ export function alert(value: unknown) {
       'agent_health',
       'compliance_noncompliant',
       'risk_affected',
-      'certificate_expiry',
     ] as const),
     severity: enumeration(v['severity'], ['low', 'medium', 'high', 'critical'] as const),
     target: reference(v['target']),
@@ -89,13 +87,8 @@ export function alert(value: unknown) {
     operation: nullable(v['operation'], uuid),
   }
   if (
-    (['compliance_noncompliant', 'risk_affected', 'certificate_expiry'].includes(result.code) &&
-      (result.target.kind !==
-        (result.code === 'risk_affected'
-          ? 'risk'
-          : result.code === 'certificate_expiry'
-            ? 'certificate'
-            : 'compliance_rule') ||
+    (['compliance_noncompliant', 'risk_affected'].includes(result.code) &&
+      (result.target.kind !== (result.code === 'risk_affected' ? 'risk' : 'compliance_rule') ||
         result.target.device === null)) ||
     (['projection_backlog', 'connector_failure', 'agent_health'].includes(result.code) &&
       !['settings', 'alert_rule'].includes(result.target.kind)) ||

@@ -418,12 +418,15 @@ it('checks task/PKI tenant bindings and current-generation installation observat
   const trust = pkiTrust(pki, b, 'agent')
   expect(() => pkiTrust(pki, b, 'apple')).toThrow()
   expect(() => pkiTrust({ ...pki, issuers: [] }, b, 'agent')).toThrow()
-  const q = transport({ operation: a, revision: 2, state: 'prepared' }),
+  const q = transport({ operation: a, revision: 2, state: 'distributing' }),
     pkiClient = createPkiClient(q.client, b)
   await pkiClient.prepare(a, 'agent', 1, trust)
-  await pkiClient.transition(a, 'agent', 1, 'activate')
+  await createPkiClient(
+    transport({ operation: a, revision: 3, state: 'activated' }).client,
+    b,
+  ).transition(a, 'agent', 2, 'activate')
   await expect(pkiClient.transition(c, 'agent', 1, 'retire')).rejects.toThrow()
-  expect(pkiReceipt({ operation: a, revision: 2, state: 'prepared' }).revision).toBe(2)
+  expect(() => pkiReceipt({ operation: a, revision: 2, state: 'prepared' })).toThrow()
   const j = transport(pki)
   await createPkiClient(j.client, b).read('agent')
   const z = transport(undefined)
