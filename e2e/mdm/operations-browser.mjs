@@ -215,44 +215,49 @@ try {
     assert.equal(reply.status(), 200)
   }
   await changeRule(fixture.rule.grants.filter((g) => g.operation !== 'device_control'))
-  assert.equal(
-    (await get(`/api/v1/devices/${fixture.mdm}/operations/${first.operationId}`)).authorization,
-    'blocked',
-  )
+  let revoked
+  const revokedDeadline = Date.now() + 30000
+  do {
+    revoked = await get(`/api/v1/devices/${fixture.mdm}/operations/${first.operationId}`)
+    if (revoked.commandStatus === 'cancelled') break
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  } while (Date.now() < revokedDeadline)
+  assert.equal(revoked.authorization, 'blocked')
+  assert.equal(revoked.commandStatus, 'cancelled')
   await changeRule(fixture.rule.grants)
   await page.goto(at(`policies/executions/${first.operationId}?device=${fixture.mdm}`))
   await load()
+  assert.equal(await page.getByRole('button', { name: '重新授权', exact: true }).count(), 0)
+  const terminalReauthorization = await request(
+    'post',
+    `/api/v1/devices/${fixture.mdm}/operations/${first.operationId}/reauthorize`,
+    {
+      headers,
+      data: { requestId: randomUUID(), expectedRevision: revoked.revision },
+    },
+  )
+  assert.equal(terminalReauthorization.status(), 409)
+  // A fresh command retains live authority; never revive a command cancelled by recovery.
+  const live = await create()
   const beforeAuthorization = await get(
-    `/api/v1/devices/${fixture.mdm}/operations/${first.operationId}`,
+    `/api/v1/devices/${fixture.mdm}/operations/${live.operationId}`,
   )
-  statuses.push({
-    resource: 'before-reauthorization',
-    revision: beforeAuthorization.revision,
-    commandStatus: beforeAuthorization.commandStatus,
-    authorization: beforeAuthorization.authorization,
-  })
-  const [authorizationReply] = await Promise.all([
-    page.waitForResponse(
-      (response) =>
-        response.request().method() === 'POST' &&
-        new URL(response.url()).pathname.endsWith(`/${first.operationId}/reauthorize`),
-    ),
-    page.getByRole('button', { name: '重新授权', exact: true }).click(),
-  ])
-  const authorizationSnapshot = await get(
-    `/api/v1/devices/${fixture.mdm}/operations/${first.operationId}`,
+  const authorizationReply = await request(
+    'post',
+    `/api/v1/devices/${fixture.mdm}/operations/${live.operationId}/reauthorize`,
+    {
+      headers,
+      data: { requestId: randomUUID(), expectedRevision: beforeAuthorization.revision },
+    },
   )
-  statuses.push({
-    resource: 'reauthorization-observation',
-    status: authorizationReply.status(),
-    expectedRevision: authorizationReply.request().postDataJSON().expectedRevision,
-    revision: authorizationSnapshot.revision,
-    commandStatus: authorizationSnapshot.commandStatus,
-    authorization: authorizationSnapshot.authorization,
-  })
   assert.equal(authorizationReply.status(), 200)
-  await load()
+  const authorizationSnapshot = await get(
+    `/api/v1/devices/${fixture.mdm}/operations/${live.operationId}`,
+  )
   assert.equal(authorizationSnapshot.authorization, 'authorized')
+  assert.equal(authorizationSnapshot.revision, beforeAuthorization.revision + 1)
+  await page.goto(at(`policies/executions/${live.operationId}?device=${fixture.mdm}`))
+  await load()
   await changeRule(fixture.rule.grants.filter((g) => g.operation !== 'operation_cancel'))
   await page.getByRole('button', { name: '请求取消', exact: true }).click()
   await page.getByRole('alert').filter({ hasText: '请求被拒绝' }).waitFor()
@@ -263,7 +268,7 @@ try {
   )
   assert.equal(
     (
-      await request('get', `/api/v1/devices/${fixture.mdm}/operations/${first.operationId}`)
+      await request('get', `/api/v1/devices/${fixture.mdm}/operations/${live.operationId}`)
     ).status(),
     403,
   )
@@ -386,7 +391,7 @@ try {
   } finally {
     await anonymous.close()
   }
-  coverage.push('real-reauthorize-permission-403-device-scope-and-anonymous-401')
+  coverage.push('real-reauthorization-api-terminal-ui-permission-403-device-scope-and-anonymous-401')
   result = 'passed'
 } catch (error) {
   console.log(
