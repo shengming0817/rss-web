@@ -12,7 +12,7 @@ export interface SettingsOperation {
   queried: boolean
   state: 'submitting' | 'unknown' | 'received' | 'conflict'
 }
-/** Non-secret domain operation locators only. No request closure, credentials, replay or persistence. */
+/** Session-bound non-secret domain intent and locators. No credentials, persistence or automatic replay. */
 export function createSettingsOperations(session: IdentitySession) {
   const records = reactive(new Map<string, SettingsOperation>())
   const binding = () => {
