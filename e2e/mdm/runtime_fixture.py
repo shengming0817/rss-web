@@ -60,10 +60,18 @@ def storage(environment, binary, config, tenant):
 
 
 def signer(environment, origin, tenant, login, password):
-    operator = Browser(origin, environment.root/'ca.crt')
+    operator = Browser(origin, environment.root/'ca.crt', urlsplit(origin).port)
     operator.login(tenant, login, password)
     status, trust = operator.call('POST', '/api/v1/task-signing/trust',
         dict(action='prepare', expectedRevision=0, origin=origin), str(uuid.uuid4()))
     if status != 200 or trust['revision'] != 1:
         raise RuntimeError('baseline-task-signing')
     return trust['revision']
+
+
+def native_proxy(gateway, public_port, backend_port):
+    """A loopback test carrier uses the production PROXY-before-TLS transport."""
+    text = gateway.read_text()
+    block = f"server {{ listen 127.0.0.1:{public_port}; proxy_protocol on; proxy_pass 127.0.0.1:{backend_port}; proxy_connect_timeout 5s; proxy_timeout 60s; }}"
+    if text.count('stream {') != 1: raise RuntimeError('one stream owner required')
+    private(gateway, text.replace('stream {', 'stream {\n    '+block, 1))

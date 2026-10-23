@@ -58,6 +58,15 @@ export function createSettingsDemo() {
         at = Math.floor(Date.now() / 1000)
       return ok({
         alive: true,
+        channels: ['apple', 'windows', 'agent', 'windows_push', 'agent_bootstrap', 'signing'].map(
+          (name) => ({
+            name,
+            state: 'disabled',
+            reasons: [],
+            listening: false,
+            loadedMaterials: {},
+          }),
+        ),
         ready: !partial,
         components: [
           {
@@ -101,7 +110,6 @@ export function createSettingsDemo() {
             queues: [{ name: 'pending', count: null, truncated: null }],
             runner: { scan: null, unresolvedAttempts: 0, truncated: false, latestFailure: null },
           },
-          { name: 'apple', readiness: 'not_applicable', health: 'not_applicable', reasons: [] },
           {
             name: 'identity_audit',
             readiness: 'ready',

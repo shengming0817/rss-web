@@ -27,7 +27,7 @@ from candidate_fixture import INSTANCE, TENANTS, ADMIN
 from build_run import lease_fds
 from pki_fixtures import running as pki
 from candidate_installation_driver import Browser
-from runtime_fixture import storage, readiness as readiness_status
+from runtime_fixture import storage, readiness as readiness_status, native_proxy
 
 backend_revision = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD'], cwd=BACKEND, text=True).strip()
 print(json.dumps(dict(phase='backend-baseline', revision=backend_revision)), flush=True)
@@ -154,7 +154,8 @@ try:
         private(native/name, (environment.root/name).read_text())
     private(native/'case.json', dict(tenant=TENANTS[0]))
     ports = Environment(BACKEND, group='device-agent').host_ports()
-    agent_origin = f"https://localhost:{ports['backend']}"
+    agent_origin = f"https://localhost:{ports['https']}"
+    native_proxy(Path(initialized['gateway']), ports['https'], ports['backend'])
     providers.enter_context(pki(native, dict(os.environ), case=str(WEB)+':device-browser', agent=True, agent_origin=agent_origin))
     agent = json.loads((native/'agent-pki.json').read_text())
     agent['endpoint']['listen'] = f"127.0.0.1:{ports['backend']}"
@@ -214,7 +215,7 @@ try:
     phase = 'readiness'
     start(binary, initialized, log, expected=503)
     phase = 'task-signing'
-    operator = Browser(initialized['origin'], environment.root/'ca.crt')
+    operator = Browser(initialized['origin'], environment.root/'ca.crt', urlsplit(initialized['origin']).port)
     operator.login(TENANTS[0], 'admin', (environment.root/'account-password').read_text())
     status, trust = operator.call('POST', '/api/v1/task-signing/trust', dict(action='prepare',expectedRevision=0,origin=initialized['origin']), str(uuid.uuid4()))
     if status != 200 or trust['revision'] != 1:
@@ -226,16 +227,6 @@ try:
     config = json.loads(config_path.read_text())
     config['task_signing'] = dict(revision=trust['revision'])
     config['agent_pki'] = agent
-    # Consume the production public-download gateway location, as enrollment acceptance does.
-    gateway = Path(initialized['gateway'])
-    text = gateway.read_text()
-    example = (WEB/'deploy/mdm/gateway.conf.example').read_text()
-    location = example[example.index('    location ~ "^/api/v1/agent/enroll/packages'):]
-    location = location[:location.index('\n    }')+6]
-    location = location.replace('agent.example.test:8447', f"localhost:{ports['backend']}").replace('https://agent:8447', f"https://127.0.0.1:{ports['backend']}").replace('/run/config/agent-ca.pem', str(environment.root/'ca.crt')).replace('proxy_ssl_name agent.example.test;', 'proxy_ssl_name localhost;')
-    text = text.replace('location ^~ /api/v1/agent/', 'location /api/v1/agent/')
-    text = text.replace('        location /api/v1/agent/', location+'\n        location /api/v1/agent/')
-    private(gateway, text)
     # A deployment-owned entry for the disabled Policy's frozen input, not OS enrollment proof.
     config['enrollment_entries'] = dict(windows=initialized['origin'], macos=None)
     private(config_path, config)

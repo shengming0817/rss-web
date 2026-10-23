@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ChannelPanel from './ChannelPanel.vue'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { UiButton } from '@rss/core/components'
@@ -104,4 +105,5 @@ useSettingsFacts(() => {
     >
     <p>{{ t('settings.backupLimit') }}</p>
   </section>
+  <ChannelPanel v-if="runtime.realm === 'tenant'" />
 </template>

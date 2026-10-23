@@ -38,6 +38,7 @@ def cleanup_compose():
     root=Path(value['root'])
     if value['backend']!=str(BACKEND) or root.is_symlink() or root.parent.resolve()!=Path(tempfile.gettempdir()).resolve() or not re.fullmatch(r'mdm-first-use-compose-[a-z0-9_]+',root.name) or not re.fullmatch(r'mdm-first-use-[0-9a-f]{12}',value['project']):raise RuntimeError('foreign-compose-cleanup-locator')
     owner=Installation(root,root/'production.compose.yaml',value['project'])
+    owner.prefix+=['-f',str(root/'browser.compose.json')]
     failures=[]
     for name,action in [('compose',owner.cleanup),('provider',lambda:Provider(root/'inputs/browser-materials/pki/windows',hashlib.sha256((str(WEB)+':first-use-compose:windows').encode()).hexdigest()[:20],owner_root=BACKEND).reset())]:
         try:action()
@@ -66,26 +67,41 @@ def compose_browser(candidate):
     import socket
     import tempfile
     from contextlib import ExitStack
-    from candidate_runtime import verify_candidate,load_ui,image_identity
+    from candidate_runtime import verify_candidate,load_ui,image_identity,immutable_image
     from candidate_installation import tls
     from candidate_installation_driver import Installation,until,Browser
+    from ingress_network import Ingress
     from windows_fixtures import generate
     from pki_fixtures import running
     candidate=Path(candidate).resolve()
     manifest=verify_candidate(candidate)
     image=load_ui(candidate,manifest['ui'])
+    browser_image=image_identity(immutable_image(os.environ['MDM_SETTINGS_BROWSER_IMAGE']))['id']
     if (WEB/'artifacts/settings-browser/compose.json').exists():raise RuntimeError('previous-compose-cleanup-required')
     root=Path(tempfile.mkdtemp(prefix='mdm-first-use-compose-')).resolve()
     with ExitStack() as providers:
         inputs=root/'inputs';inputs.mkdir(mode=0o700)
         tls(inputs)
+        # Browser and gateway share an isolated network; device effects are not exercised.
+        (inputs/'leaf.ext').write_text('subjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\nbasicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=DNS:mdm.example.test,DNS:enroll.example.test,DNS:manage.example.test\n')
+        subprocess.run(['openssl','x509','-req','-in',str(inputs/'gateway.csr'),'-CA',str(inputs/'ca.crt'),'-CAkey',str(inputs/'ca.key'),'-CAcreateserial','-days','2','-extfile',str(inputs/'leaf.ext'),'-out',str(inputs/'gateway.crt')],check=True,capture_output=True,timeout=30)
         with socket.socket() as listener:
             listener.bind(('127.0.0.1',0));port=listener.getsockname()[1]
-        origin='https://localhost:'+str(port)
-        values=dict(MDM_POSTGRES_IMAGE=manifest['providers']['postgres'],MDM_SERVER_IMAGE=image_identity(manifest['image'])['id'],MDM_INSTALLER_IMAGE=image_identity(manifest['installer']['image'])['id'],MDM_WEB_IMAGE=image['id'],MDM_INPUT_DIRECTORY=str(inputs),MDM_PRODUCT_ORIGIN=origin,MDM_HTTPS_PORT=port)
+        origin='https://mdm.example.test'
+        project='mdm-first-use-'+uuid.uuid4().hex[:12]
+        ingress=Ingress(root,project,project)
+        providers.callback(ingress.release)
+        allocation=ingress.allocate()
+        values=dict(MDM_GATEWAY_IMAGE=manifest['providers']['nginx'], **allocation, MDM_POSTGRES_IMAGE=manifest['providers']['postgres'],MDM_SERVER_IMAGE=image_identity(manifest['image'])['id'],MDM_INSTALLER_IMAGE=image_identity(manifest['installer']['image'])['id'],MDM_WEB_IMAGE=image['id'],MDM_INPUT_DIRECTORY=str(inputs),MDM_PRODUCT_ORIGIN=origin,MDM_PUBLISH_ADDRESS=f'127.0.0.1:{port}')
         private(root/'.env',''.join(k+'='+str(v)+'\n' for k,v in values.items()))
         compose=root/'production.compose.yaml';shutil.copyfile(candidate/'deployment/production.compose.yaml',compose)
-        owner=Installation(root,compose,'mdm-first-use-'+uuid.uuid4().hex[:12])
+        owner=Installation(root,compose,project)
+        overlay=root/'browser.compose.json'
+        private(overlay,dict(services=dict(gateway=dict(networks=dict(default=dict(aliases=['mdm.example.test']))),
+            browser=dict(image=browser_image,profiles=['browser'],entrypoint=['node',str(WEB/'e2e/mdm/settings-browser.mjs')],
+                shm_size='1gb',volumes=[str(WEB)+':'+str(WEB)+':ro',str(root)+':'+str(root)+':ro'],
+                environment=dict(MDM_SETTINGS_BROWSER_FIXTURE=str(root/'browser.json'))))))
+        owner.prefix+=['-f',str(overlay)]
         private(WEB/'artifacts/settings-browser/compose.json',dict(root=str(root),project=owner.project,backend=str(BACKEND)))
         child=None
         def interrupt(_signal,_frame):
@@ -94,7 +110,7 @@ def compose_browser(candidate):
         previous={sig:signal.signal(sig,interrupt) for sig in (signal.SIGINT,signal.SIGTERM)}
         try:
             owner.compose('up','-d')
-            api=Browser(origin,inputs/'ca.crt')
+            api=Browser(origin,inputs/'ca.crt',port)
             until(lambda:api.call('GET','/readyz')[0]==200)
             seeded=json.loads(owner.read('/var/lib/rss-mdm/installation/installation.json'))['receipt']
             owner.product('prepare-hosts')
@@ -106,6 +122,8 @@ def compose_browser(candidate):
                 private(material/target,(inputs/source).read_text())
             private(material/'case.json',dict(tenant=seeded['tenantId']))
             windows=generate(material,material/'server.crt',material/'server.key')
+            for key,host,listen in [('enrollment','enroll.example.test',8443),('management','manage.example.test',8444)]:
+                windows[key].update(origin='https://'+host,listen=allocation['MDM_BACKEND_ADDRESS']+':'+str(listen))
             private(material/'windows.json',windows)
             provider=providers.enter_context(running(material,dict(os.environ),case=str(WEB)+':first-use-compose',windows=True,owner_root=BACKEND))
             server=owner.compose('ps','-q','server')
@@ -132,22 +150,21 @@ def compose_browser(candidate):
                 "shutil.copyfile('/inputs/configure-browser.json','/var/lib/rss-mdm/configure-browser.json');pathlib.Path('/var/lib/rss-mdm/configure-browser.json').chmod(0o600);os.chown('/var/lib/rss-mdm/configure-browser.json',10001,10001)"
             owner.compose('run','--rm','--no-deps','--user','0:0','--entrypoint','python3','init','-c',importer)
             owner.product('configure-host','/var/lib/rss-mdm/configure-browser.json')
-            # The gateway shares the server's network namespace. Stop it before
-            # replacing that namespace, then attach it to the restarted server.
-            owner.compose('stop','gateway')
-            owner.compose('restart','server')
-            owner.compose('start','gateway')
+            owner.product('prepare-hosts')
+            owner.compose('restart','server','gateway')
             # Network attachments survive restart; the operator observes the actual new process.
             until(lambda:api.call('GET','/readyz')[0]==200)
             owner.product('configure-host','/var/lib/rss-mdm/configure-browser.json')
             owner.product('prepare-hosts')
+            owner.script("from pathlib import Path;p=Path('/var/lib/rss-mdm/runtime/gateway/nginx.conf');s=p.read_text();p.write_text(s.replace('listen 8443;', 'listen 443; listen 8443;'))")
+            owner.compose('exec','-T','gateway','nginx','-s','reload','-c','/run/gateway/nginx.conf')
             api.login(seeded['tenantId'],'administrator',(inputs/'administrator-password').read_text().strip())
             reader_password=private(root/'reader-password','First-use-browser-reader-2026!')
             status,_=api.call('POST','/api/v1/identity/tenants/'+seeded['tenantId']+'/accounts',dict(login='reader',password=reader_password.read_text()))
             if status!=201:raise RuntimeError('reader-account')
             _,host=api.call('GET','/api/v1/mdm-host/config.json')
             fixture=private(root/'browser.json',dict(compose=True,backendRevision=subprocess.check_output(['/usr/bin/git','rev-parse','HEAD'],cwd=BACKEND,text=True).strip(),origin=origin,tenant=seeded['tenantId'],managementTenant=host['managementTenant'],login='administrator',passwordFile=str(inputs/'administrator-password'),platformLogin='platform',platformPasswordFile=str(inputs/'platform-password'),reader=dict(login='reader',passwordFile=str(reader_password))))
-            child=subprocess.Popen(['node',str(WEB/'e2e/mdm/settings-browser.mjs')],cwd=WEB,env={**os.environ,'MDM_SETTINGS_BROWSER_FIXTURE':str(fixture)},pass_fds=lease_fds())
+            child=subprocess.Popen([*owner.prefix,'run','--rm','--no-deps','browser'],cwd=WEB,pass_fds=lease_fds())
             try:
                 if child.wait(timeout=480)!=0:raise RuntimeError('compose-browser')
             finally:
@@ -327,7 +344,7 @@ try:
                 public=command(binary,'public-host-config',target)
                 gateway_dir=environment.root/'target-gateway';gateway_dir.mkdir(mode=0o700)
                 for name in ('ui.json','mdm.json'):private(gateway_dir/name,public[name])
-                original=Path(initialized['gateway']);gateway=original.read_text().replace(str(original.parent),str(gateway_dir)).replace('listen '+str(urlsplit(initialized['origin']).port)+' ssl;', 'listen '+str(ports['https'])+' ssl;').replace(config['listen'],target['listen'])
+                original=Path(initialized['gateway']);gateway=original.read_text().replace(str(original.parent),str(gateway_dir)).replace('listen '+str(urlsplit(initialized['origin']).port)+';', 'listen '+str(ports['https'])+';').replace('127.0.0.1:'+str(int(config['listen'].rsplit(':',1)[1])+1), '127.0.0.1:'+str(ports['backend']+1)).replace(config['listen'],target['listen']).replace(urlsplit(initialized['origin']).netloc,urlsplit(origin).netloc)
                 for name in ('server.crt','server.key'):private(gateway_dir/name,(original.parent/name).read_text())
                 gateway_path=private(gateway_dir/'nginx.conf',gateway)
                 initial=start_host(binary,path,gateway_path,log);ready(origin,initial,expected=503)

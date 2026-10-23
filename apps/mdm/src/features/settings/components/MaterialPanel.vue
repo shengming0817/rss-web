@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ChannelPanel from './ChannelPanel.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { UiMessage } from '@rss/core/components'
@@ -37,4 +38,5 @@ const provider = computed(() =>
       tone="warning"
       :title="t('settings.notSupported')" /></template
   ><UiMessage v-else tone="warning" :title="t('settings.scopeHint')" />
+  <ChannelPanel v-if="runtime.realm === 'tenant'" />
 </template>

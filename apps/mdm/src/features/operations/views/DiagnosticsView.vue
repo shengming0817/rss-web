@@ -6,6 +6,7 @@ import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import PageFrame from '../../../components/PageFrame.vue'
+import ChannelFacts from '../../settings/components/ChannelFacts.vue'
 import { auditTime } from '../format'
 const runtime = useMdm(),
   { t } = useI18n(),
@@ -19,7 +20,7 @@ const expected = [
   'inventory',
   'automation',
   'execution_recovery',
-  'apple',
+  'initialization',
   'identity_audit',
   'telemetry',
 ] as const
@@ -69,6 +70,7 @@ watch(
           >{{ t('operations.diagnosticUi.readAt') }} {{ auditTime(readAt) }}</span
         >
       </div>
+      <ChannelFacts :channels="snapshot.channels" />
       <UiTable
         :label="t('operations.diagnostics')"
         :rows="snapshot.components"

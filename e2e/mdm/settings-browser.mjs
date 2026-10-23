@@ -29,7 +29,7 @@ try {
     origin = new URL(f.origin).origin
   backendRevision = f.backendRevision
   assert.equal(new URL(origin).protocol, 'https:')
-  assert.equal(new URL(origin).hostname, 'localhost')
+  assert.equal(new URL(origin).hostname, f.compose ? 'mdm.example.test' : 'localhost')
   assert.equal(statSync(f.passwordFile).mode & 0o077, 0)
   const password = readFileSync(f.passwordFile, 'utf8').trim()
   browser = await chromium.launch()
@@ -53,6 +53,12 @@ try {
     await page.waitForURL((url) => !url.pathname.endsWith('/login'))
   }
   const body = () => page.locator('body')
+  const catalogIds = async (path) => {
+    const response = await page.request.get(origin + path)
+    assert.equal(response.status(), 200)
+    return (await response.json()).items.map((item) => item.id).sort()
+  }
+
   const step = async (label) => {
     await page.getByRole('button').filter({ hasText: label }).click()
   }
@@ -71,6 +77,21 @@ try {
     await page.locator('#login-password').fill(password)
     await page.locator('form').first().getByRole('button', { name: '登录', exact: true }).click()
     await page.waitForURL((url) => url.pathname.endsWith('/settings/guide'))
+    await page.getByRole('button', { name: '读取实际通道状态', exact: true }).click()
+    await page.locator('[data-testid=channel-facts] article').first().waitFor()
+    const channelResponse = await page.request.get(origin + '/api/v1/runtime/diagnostics')
+    assert.equal(channelResponse.status(), 200)
+    const observed = await channelResponse.json()
+    assert.equal(
+      await page.locator('[data-testid=channel-facts] article').count(),
+      observed.channels.length,
+    )
+    assert.ok(
+      observed.channels.some((c) => c.name === 'windows' && c.state === 'ready' && c.listening),
+    )
+    assert.ok(observed.channels.some((c) => c.name === 'apple' && c.state === 'disabled'))
+    coverage.push('first-use-actual-channel-observation-independent-of-core-and-selection')
+
     await page.locator('input[value="agent"]').uncheck()
     await page.locator('input[value="windows_mdm"]').check()
     await step('通知与其他集成')
@@ -184,6 +205,7 @@ try {
     const tenantIds = await page
       .locator('[data-setting]')
       .evaluateAll((nodes) => nodes.map((n) => n.getAttribute('data-setting')))
+    assert.deepEqual([...tenantIds].sort(), await catalogIds('/api/v1/settings/catalog'))
     await page.goto(origin + '/platform')
     await page.waitForURL((url) => url.pathname === '/platform/login')
     await page.locator('#login-name').fill(f.platformLogin)
@@ -194,7 +216,14 @@ try {
     const platformIds = await page
       .locator('[data-setting]')
       .evaluateAll((nodes) => nodes.map((n) => n.getAttribute('data-setting')))
-    assert.equal(new Set([...tenantIds, ...platformIds]).size, 44)
+    assert.deepEqual(
+      [...platformIds].sort(),
+      await catalogIds('/api/v1/tenant-administration/settings/catalog'),
+    )
+    assert.equal(
+      new Set([...tenantIds, ...platformIds]).size,
+      tenantIds.length + platformIds.length,
+    )
     assert.equal(await page.getByRole('link', { name: '设备目录', exact: true }).count(), 0)
     await page.goto(`${origin}/tenants/${f.tenant}/settings`)
     await page.waitForURL((url) => url.pathname === '/login')
@@ -215,7 +244,7 @@ try {
     assert.deepEqual(retired, [])
     coverage.push(
       'independent-platform-authentication-and-scope',
-      'all-44-setting-requirements-retained',
+      'all-authorized-setting-requirements-retained',
       'ordinary-reader-outside-mandatory-guide',
       'no-retired-approval-or-workflow-requests',
     )
@@ -234,6 +263,7 @@ try {
     const tenantIds = await page
       .locator('[data-setting]')
       .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-setting')))
+    assert.deepEqual([...tenantIds].sort(), await catalogIds('/api/v1/settings/catalog'))
     assert.ok(
       tenantIds.includes('apns-key') &&
         tenantIds.includes('task-key') &&
@@ -254,11 +284,18 @@ try {
     const platformIds = await page
       .locator('[data-setting]')
       .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-setting')))
-    assert.equal(new Set([...tenantIds, ...platformIds]).size, 44)
+    assert.deepEqual(
+      [...platformIds].sort(),
+      await catalogIds('/api/v1/tenant-administration/settings/catalog'),
+    )
+    assert.equal(
+      new Set([...tenantIds, ...platformIds]).size,
+      tenantIds.length + platformIds.length,
+    )
     assert.ok(!platformIds.includes('apns-key'))
     assert.equal(await page.getByRole('link', { name: '设备目录', exact: true }).count(), 0)
     coverage.push(
-      'all-44-requirements-across-authorized-scopes',
+      'all-current-requirements-across-authorized-scopes',
       'platform-independent-local-authentication',
     )
     phase = 'management-authorization'

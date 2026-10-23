@@ -32,6 +32,23 @@ export const operationsZh = {
     instance: '实例标识',
   },
   diagnosticUi: {
+    channels: '通道与子能力',
+    channelHint:
+      '核心服务就绪不代表所有通道可用。已加载材料也不等于实际就绪；监听和阻断原因以本次进程观察为准。',
+    materialHint:
+      '保存或选择材料不代表已加载。待应用材料由运维执行 prepare-hosts 并受控重启，核对进程 generation、revision 后重新读取通道状态。',
+    readChannels: '读取实际通道状态',
+    listening: '监听已绑定',
+    loaded: '已加载材料版本',
+    channelName: {
+      apple: 'Apple 管理',
+      windows: 'Windows 管理',
+      agent: 'Agent',
+      windows_push: 'Windows 推送',
+      agent_bootstrap: 'Agent 引导',
+      signing: '任务与配置签名',
+    },
+
     notObserved: '未观察到',
     hint: '只读正式组件投影。进程响应、组件就绪、健康与观察进度分别判断；不自动修复。',
     alive: '进程响应',
@@ -62,11 +79,12 @@ export const operationsZh = {
       inventory: 'Inventory · 资产投影',
       automation: 'Automation · 策略调度',
       execution_recovery: 'Execution recovery · 执行恢复',
-      apple: 'Apple 管理',
       identity_audit: 'Identity audit · 身份审计',
       telemetry: 'Telemetry · 遥测',
     },
     state: {
+      disabled: '未启用',
+      waiting: '等待材料',
       ready: '已就绪',
       not_ready: '未就绪',
       not_applicable: '不适用',
@@ -85,6 +103,13 @@ export const operationsZh = {
       limited: '本次观察受限',
     },
     reason: {
+      material_not_selected: '未选择材料',
+      material_unreadable: '材料不可读取',
+      material_invalid: '材料无效',
+      trust_conflict: '持久信任冲突（阻断）',
+      material_revoked: '材料已撤销',
+      material_version_mismatch: '所选与加载版本不一致',
+      listener_unavailable: '监听不可用',
       initialization_authorization: '等待初始化授权',
       initialization_content: '等待内容配置',
       initialization_conflict: '初始化冲突',
@@ -331,6 +356,23 @@ export const operationsEn: typeof operationsZh = {
     instance: 'Instance ID',
   },
   diagnosticUi: {
+    channels: 'Channels and capabilities',
+    channelHint:
+      'Core readiness does not imply channel availability. Loaded materials do not imply readiness; listeners and blocking reasons reflect this process observation.',
+    materialHint:
+      'Saving or selecting materials does not load them. Apply pending selections with prepare-hosts and a controlled restart, verify process generation and revision, then read channel status again.',
+    readChannels: 'Read actual channel status',
+    listening: 'Listener bound',
+    loaded: 'Loaded material revisions',
+    channelName: {
+      apple: 'Apple management',
+      windows: 'Windows management',
+      agent: 'Agent',
+      windows_push: 'Windows push',
+      agent_bootstrap: 'Agent bootstrap',
+      signing: 'Task and configuration signing',
+    },
+
     notObserved: 'Not observed',
     hint: 'Read-only formal component projections. Process response, component readiness, health and progress are independent; no automatic repair.',
     alive: 'Process responding',
@@ -361,11 +403,12 @@ export const operationsEn: typeof operationsZh = {
       inventory: 'Inventory',
       automation: 'Automation',
       execution_recovery: 'Execution recovery',
-      apple: 'Apple',
       identity_audit: 'Identity audit',
       telemetry: 'Telemetry',
     },
     state: {
+      disabled: 'Disabled',
+      waiting: 'Waiting for materials',
       ready: 'Ready',
       not_ready: 'Not ready',
       not_applicable: 'Not applicable',
@@ -384,6 +427,13 @@ export const operationsEn: typeof operationsZh = {
       limited: 'Observation limited',
     },
     reason: {
+      material_not_selected: 'Material not selected',
+      material_unreadable: 'Material unreadable',
+      material_invalid: 'Material invalid',
+      trust_conflict: 'Persistent trust conflict (blocked)',
+      material_revoked: 'Material revoked',
+      material_version_mismatch: 'Selected and loaded revisions differ',
+      listener_unavailable: 'Listener unavailable',
       initialization_authorization: 'Initialization authorization pending',
       initialization_content: 'Content configuration pending',
       initialization_conflict: 'Initialization conflict',
