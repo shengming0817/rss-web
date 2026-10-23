@@ -7,7 +7,6 @@ import { createSecurityRequests } from './requests'
 import { createGovernanceDemo } from './governance'
 import { createRisksDemo } from './risks'
 import { createSecurityActions } from './actions'
-import { createMaterialsDemo } from './materials'
 import { createSupportDemo } from './support'
 import { isSupportTarget } from '../features/security/clients/support-model'
 export function createSecurityDemo(
@@ -27,26 +26,15 @@ export function createSecurityDemo(
           ? risks.valid(target)
           : isSupportTarget(target)
             ? support.valid(target)
-            : materials.valid(target),
+            : false,
     operations,
   )
   const governance = createGovernanceDemo(now, scopes, compliance, requests, operations)
   const risks = createRisksDemo(now, devices, operations)
-  const materials = createMaterialsDemo(now, devices, requests, (device, kind): boolean =>
-    actions.blocksDisclosure(device, kind),
-  )
   const support = createSupportDemo(now, devices, requests, operations)
-  const actions = createSecurityActions(
-    now,
-    devices,
-    requests,
-    risks,
-    materials,
-    support,
-    operations,
-  )
+  const actions = createSecurityActions(now, devices, requests, risks, support, operations)
   const handle: DomainHandler = (request, scenario) => {
-    for (const owner of [compliance, governance, requests, risks, actions, materials, support]) {
+    for (const owner of [compliance, governance, requests, risks, actions, support]) {
       const reply = owner.handle(request, scenario)
       if (reply) return reply
     }
@@ -58,7 +46,6 @@ export function createSecurityDemo(
     requests,
     risks,
     actions,
-    materials,
     support,
     // Settle once before public projections; blocksDisclosure stays a non-recursive predicate.
     settle() {
@@ -75,8 +62,7 @@ export function createSecurityDemo(
       return !['remote_consent', 'remote_revoke'].includes(event.kind) || accepted
     },
     reset() {
-      for (const owner of [compliance, governance, requests, risks, actions, materials, support])
-        owner.reset()
+      for (const owner of [compliance, governance, requests, risks, actions, support]) owner.reset()
       time = Math.floor(Date.now() / 1000)
     },
   }

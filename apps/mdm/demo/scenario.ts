@@ -11,7 +11,6 @@ export interface DemoEvent {
     | 'agent_binding'
     | 'security_result'
     | 'security_detect'
-    | 'material_detect'
     | 'remote_consent'
     | 'remote_revoke'
     | 'remote_ended'
@@ -198,7 +197,6 @@ export function createScenario(
             'agent_binding',
             'security_result',
             'security_detect',
-            'material_detect',
             'remote_consent',
             'remote_revoke',
             'remote_ended',
@@ -218,7 +216,6 @@ export function createScenario(
             'software_detect',
             'security_result',
             'security_detect',
-            'material_detect',
             'remote_consent',
             'remote_revoke',
             'remote_ended',

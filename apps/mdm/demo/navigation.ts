@@ -54,7 +54,6 @@ export const navigation = [
       { name: 'security-recovery', label: 'security.pki.recover' },
       { name: 'security-device-trust', label: 'security.pki.title' },
       { name: 'security-certificate-archive', label: 'security.certificate-archive' },
-      { name: 'security-materials', label: 'security.materials' },
       { name: 'security-support', label: 'security.support' },
       { name: 'security-experience', label: 'security.experience' },
     ],
