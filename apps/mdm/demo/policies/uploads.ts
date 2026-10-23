@@ -51,6 +51,10 @@ export function createResourceUploads(
       purpose: {
         kind: 'resource',
         binding: {
+          inspection:
+            d.kind === 'software' && artifact.reference === softwareInstaller(d.definition)
+              ? d.definition.format
+              : null,
           storage_class: d.kind === 'configuration' ? 'native_configuration' : 'artifact',
           resource: id,
           version: version.id,

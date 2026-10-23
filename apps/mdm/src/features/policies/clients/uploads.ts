@@ -12,13 +12,14 @@ import {
   uuid,
 } from '../../../services/decode'
 import type { UploadTarget } from './resources'
-import { softwareSource } from './software-definition'
+import { softwareFormats, softwareSource } from './software-definition'
 export function decodeUpload(value: unknown, resource: string, upload: string) {
   const v = closed(value, ['id', 'binding', 'offset', 'expires', 'complete'])
   const b = closed(v['binding'], ['purpose', 'reference', 'length', 'sha256', 'actor'])
   const purpose = closed(b['purpose'], ['kind', 'binding'])
   enumeration(purpose['kind'], ['resource'] as const)
   const r = closed(purpose['binding'], [
+    'inspection',
     'storage_class',
     'resource',
     'version',
@@ -33,6 +34,7 @@ export function decodeUpload(value: unknown, resource: string, upload: string) {
     purpose: {
       kind: 'resource' as const,
       binding: {
+        inspection: nullable(r['inspection'], (value) => enumeration(value, softwareFormats)),
         storage_class: enumeration(r['storage_class'], [
           'artifact',
           'native_configuration',

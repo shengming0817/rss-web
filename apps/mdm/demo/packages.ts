@@ -15,6 +15,7 @@ export function createPackageDemo() {
       sha256: number[]
       bytes: Uint8Array
       complete: boolean
+      parsed: boolean
       actor: string
     }
   >()
@@ -60,6 +61,7 @@ export function createPackageDemo() {
         sha256,
         bytes: new Uint8Array(),
         complete: false,
+        parsed: false,
         actor: `${INSTANCE}:${r.actor.principalId}`,
       }
       uploads.set(key, value)
@@ -120,18 +122,28 @@ export function createPackageDemo() {
         )
           return error('malformed_request', 400)
         value.complete = true
+        value.parsed = value.length <= 1_073_741_824
         return ok(undefined, 201)
       }
     }
-    if (r.path.startsWith('/api/v1/agent-packages/uploads/') && r.method === 'GET') {
+    if (
+      r.path.startsWith('/api/v1/agent-packages/uploads/') &&
+      (r.method === 'GET' || r.method === 'POST')
+    ) {
       const value = uploads.get(id)
       if (!value?.complete) return error('operation_conflict')
+      if (value.actor !== `${INSTANCE}:${r.actor.principalId}`)
+        return error('permission_denied', 403)
+      if (r.method === 'POST') value.parsed = true
       return ok({
         packageId: id,
         filename: value.filename,
         length: value.length,
         sha256: value.sha256,
-        facts: facts(value.filename),
+        format: facts(value.filename).format,
+        inspection: value.parsed
+          ? { status: 'parsed', facts: facts(value.filename) }
+          : { status: 'skipped_size_limit' },
       })
     }
     if (r.path.startsWith('/api/v1/agent-packages/operations/') && r.method === 'GET')
@@ -156,7 +168,11 @@ export function createPackageDemo() {
             version: 'v1',
             variant: 'default',
             productVersion: b['version'],
-            material: facts(value.filename),
+            material: {
+              ...facts(value.filename),
+              version: b['version'],
+              architectures: [selected.architecture],
+            },
             sha256: value.sha256,
             length: value.length,
             filename: value.filename,

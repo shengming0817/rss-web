@@ -10,6 +10,7 @@ import {
   digest,
   string,
   nullable,
+  record,
   enumeration,
   identifier,
 } from '../../../services/decode'
@@ -25,6 +26,20 @@ export function installerFacts(value: unknown) {
     ),
     bundleId: nullable(v['bundleId'], string),
   }
+}
+function installerInspection(value: unknown) {
+  const status = enumeration(record(value)['status'], [
+    'parsed',
+    'skipped_size_limit',
+    'not_requested',
+    'rejected',
+  ] as const)
+  if (status === 'parsed') {
+    const v = closed(value, ['status', 'facts'])
+    return { status, facts: installerFacts(v['facts']) }
+  }
+  closed(value, ['status'])
+  return { status }
 }
 export function savedInstaller(value: unknown, expected: string) {
   const v = closed(value, [
@@ -78,6 +93,34 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
       sha256: digest(b['sha256']),
       filename: string(binding['filename']),
     }
+  }
+  function inspection(method: 'GET' | 'POST', id: string, signal?: AbortSignal) {
+    return transport.request({
+      method,
+      path: '/api/v1/agent-packages/uploads/{id}',
+      pathParams: { id: uuid(id) },
+      ...(signal ? { signal } : {}),
+      successStatus: 200,
+      decode: (value) => {
+        const v = closed(value, [
+          'packageId',
+          'filename',
+          'length',
+          'sha256',
+          'format',
+          'inspection',
+        ])
+        if (uuid(v['packageId']) !== id) throw new Error('Wrong inspected package')
+        return {
+          packageId: id,
+          filename: string(v['filename']),
+          length: count(v['length']),
+          sha256: digest(v['sha256']),
+          format: enumeration(v['format'], ['exe', 'msi', 'msix', 'pkg'] as const),
+          inspection: installerInspection(v['inspection']),
+        }
+      },
+    })
   }
   return {
     begin: (
@@ -145,25 +188,8 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
         successStatus: 201,
         responseType: 'empty',
       }),
-    inspect: (id: string, signal?: AbortSignal) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/agent-packages/uploads/{id}',
-        pathParams: { id: uuid(id) },
-        ...(signal ? { signal } : {}),
-        successStatus: 200,
-        decode: (value) => {
-          const v = closed(value, ['packageId', 'filename', 'length', 'sha256', 'facts'])
-          if (uuid(v['packageId']) !== id) throw new Error('Wrong inspected package')
-          return {
-            packageId: id,
-            filename: string(v['filename']),
-            length: count(v['length']),
-            sha256: digest(v['sha256']),
-            facts: installerFacts(v['facts']),
-          }
-        },
-      }),
+    inspect: (id: string, signal?: AbortSignal) => inspection('GET', id, signal),
+    parse: (id: string, signal?: AbortSignal) => inspection('POST', id, signal),
     save: (
       operationId: string,
       packageId: string,

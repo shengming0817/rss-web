@@ -142,6 +142,7 @@ it('resumes the same upload after a lost chunk response, rejects different bytes
     purpose: {
       kind: 'resource',
       binding: {
+        inspection: null,
         storage_class: 'artifact',
         resource: 'app',
         version: '1',
@@ -389,6 +390,7 @@ it.each([false, true])(
       purpose: {
         kind: 'resource',
         binding: {
+          inspection: null,
           storage_class: 'artifact',
           resource: 'app',
           version: '1',
