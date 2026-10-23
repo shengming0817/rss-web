@@ -1,4 +1,5 @@
 /** MOCK_SOURCE: safe synthetic formal PKI only; no real CA or device trust effect. */
+import { INSTANCE } from './operations/authorization'
 import type { DomainHandler } from './scenario'
 import { TENANT } from './scenario'
 import { error, ok } from './http'
@@ -31,6 +32,7 @@ export function createPkiDemo() {
     for (const purpose of pkiPurposes)
       trusts.set(purpose, {
         version: 1,
+        service_id: INSTANCE,
         origin,
         tenant: TENANT,
         purpose,
@@ -62,6 +64,11 @@ export function createPkiDemo() {
     if (read && r.method === 'GET') return ok(trusts.get(read[1] as PkiPurpose))
     if (
       /^\/api\/v1\/pki\/agent\/trust\/devices\/[^/]+\/observation$/.test(r.path) &&
+      r.method === 'GET'
+    )
+      return ok(null)
+    if (
+      /^\/api\/v1\/agent-issuances\/[^/]+\/recovery-operations\/[^/]+$/.test(r.path) &&
       r.method === 'GET'
     )
       return ok(null)
@@ -122,7 +129,7 @@ export function createPkiDemo() {
         if (
           count(v['expected_revision']) !== current.revision ||
           candidate.revision !== current.revision + 1 ||
-          candidate.origin !== current.origin
+          candidate.service_id !== current.service_id
         )
           return error('operation_conflict')
         const added = candidate.issuers.filter(

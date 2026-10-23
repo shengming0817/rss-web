@@ -87,7 +87,7 @@ try {
       observed.channels.length,
     )
     assert.ok(
-      observed.channels.some((c) => c.name === 'windows' && c.state === 'ready' && c.listening),
+      observed.channels.some((c) => c.name === 'windows' && c.state === 'ready' && c.mounted),
     )
     assert.ok(observed.channels.some((c) => c.name === 'apple' && c.state === 'disabled'))
     coverage.push('first-use-actual-channel-observation-independent-of-core-and-selection')

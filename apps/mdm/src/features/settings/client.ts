@@ -11,6 +11,7 @@ import { createPkiClient } from './clients/pki'
 import { createRuntimeDiagnostics } from './clients/runtime'
 import { createManagedPackages } from './clients/packages'
 import { createFirstUseClient } from './clients/firstUse'
+import { createConnectionsClient } from './clients/connections'
 import { createSettingsOperations } from './operations'
 
 export function createSettingsClients(
@@ -19,8 +20,10 @@ export function createSettingsClients(
   session: IdentitySession,
   tenant: string,
   realm: Realm,
+  serviceId: string,
 ) {
   return {
+    connections: createConnectionsClient(transport, tenant, serviceId),
     profiles: createProfilesClient(transport),
     firstUse: createFirstUseClient(transport, tenant),
     runtime: createRuntimeDiagnostics(transport),
@@ -32,8 +35,8 @@ export function createSettingsClients(
     mail: createMailClient(transport),
     wns: createWnsClient(transport),
     webhook: createWebhookMaterials(transport),
-    task: createTaskTrustClient(transport, tenant),
-    pki: createPkiClient(transport, tenant),
+    task: createTaskTrustClient(transport, tenant, serviceId),
+    pki: createPkiClient(transport, tenant, serviceId),
     operations: createSettingsOperations(session),
   }
 }

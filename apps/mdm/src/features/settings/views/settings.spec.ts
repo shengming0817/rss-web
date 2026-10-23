@@ -1,3 +1,5 @@
+import ConnectionsPanel from '../components/ConnectionsPanel.vue'
+import AgentConnectionObservation from '../../devices/components/AgentConnectionObservation.vue'
 import AgentRecovery from '../../security/pki/AgentRecovery.vue'
 import { createRecoveryClient } from '../../enrollment/clients/recovery'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -39,6 +41,7 @@ const tenant = '11111111-1111-4111-8111-111111111111',
   digest = 'a'.repeat(64)
 const pkiValue = () => ({
   version: 1,
+  service_id: id,
   origin: 'https://mdm.test',
   tenant,
   purpose: 'agent',
@@ -112,6 +115,7 @@ async function fixture(
       session: { id },
     }),
     session = { state } as unknown as IdentitySession
+  let allowed: readonly string[] | undefined
   let handler: ((o: Options) => unknown | Promise<unknown>) | undefined
   const calls: Options[] = []
   const transport = {
@@ -128,21 +132,23 @@ async function fixture(
             : permissions.filter(
                 (p) => !(tenantAdministrationPermissions as readonly string[]).includes(p),
               )
-          ).map((operation) => ({
-            ruleId: id,
-            ruleRevision: 1,
-            subject: {
-              kind: 'user',
-              user: { instanceId: id, tenantId: tenant, principalId: principal },
-            },
-            operation,
-            scope: {
-              kind: (devicePermissions as readonly string[]).includes(operation)
-                ? 'all_devices'
-                : 'tenant',
-            },
-            observation: null,
-          })),
+          )
+            .filter((p) => !allowed || allowed.includes(p))
+            .map((operation) => ({
+              ruleId: id,
+              ruleRevision: 1,
+              subject: {
+                kind: 'user',
+                user: { instanceId: id, tenantId: tenant, principalId: principal },
+              },
+              operation,
+              scope: {
+                kind: (devicePermissions as readonly string[]).includes(operation)
+                  ? 'all_devices'
+                  : 'tenant',
+              },
+              observation: null,
+            })),
         }
       else if (handler) value = await handler(o)
       else if (o.path.includes('/settings/catalog')) value = { items: [], domains: [] }
@@ -164,20 +170,27 @@ async function fixture(
       else if (o.path === '/api/v1/webhooks/materials')
         value = { configurationSha256: digest, keys: { heads: [], materials: [] } }
       else if (o.path === '/api/v1/pki/{purpose}/trust') value = pkiValue()
+      else if (o.path === '/api/v1/agent-connections') value = connectionValue()
       else if (o.path === '/api/v1/agent-packages') value = []
       else throw decodeMdmError(503, { code: 'service_unavailable' })
       return typeof o.decode === 'function' ? o.decode(value) : undefined
     },
   } as HttpTransport
-  const settings = createSettingsClients(transport, transport, session, tenant, realm)
+  const settings = createSettingsClients(transport, transport, session, tenant, realm, id)
   const runtime = {
     tenant,
+    serviceId: id,
     businessTenant: tenant,
     managementTenant: id,
     realm,
     demo: false,
     session,
     settings,
+    registrationChannels: {
+      refresh: async () => {},
+      publicEndpoints: shallowRef(undefined),
+      failure: shallowRef(false),
+    },
     onboarding: { recovery: createRecoveryClient(transport) },
     operations: { authorization: createAuthorizationClient(transport, tenant, realm) },
   } as unknown as MdmRuntime
@@ -220,6 +233,9 @@ async function fixture(
     state,
     settings,
     router,
+    setPermissions(value: readonly string[]) {
+      allowed = value
+    },
     setHandler(value: typeof handler) {
       handler = value
     },
@@ -431,13 +447,13 @@ it('prepares task trust with an explicit version and reads a null device observa
       ? null
       : {
           version: 1,
-          origin: 'https://mdm.test',
+          service_id: id,
           tenant,
           revision: 1,
           keys: [{ id: 'key', public_key: 'A'.repeat(43), state: 'active' }],
         },
   )
-  await f.wrapper.get('input[type=url]').setValue('https://mdm.test')
+  expect(f.wrapper.find('input[type=url]').exists()).toBe(false)
   await f.wrapper.get('form').trigger('submit')
   await flushPromises()
   expect(f.settings.operations.records.get('task')?.state).toBe('received')
@@ -563,6 +579,7 @@ it('retains one PKI rotation identity and advances the revision through every ph
   const f = await fixture(TrustPurpose, { purpose: 'agent' })
   let trust = {
     version: 1,
+    service_id: id,
     origin: 'https://mdm.test',
     tenant,
     purpose: 'agent',
@@ -838,7 +855,7 @@ it('refreshes current task trust after confirming a historical receipt before al
   const f = await fixture(TaskTrustPanel)
   const trust = (revision: number) => ({
     version: 1,
-    origin: 'https://mdm.test',
+    service_id: id,
     tenant,
     revision,
     keys: [{ id: 'key-a', public_key: 'A'.repeat(43), state: 'active' }],
@@ -1703,4 +1720,265 @@ it('offers controlled handoff for recovery conflicts without exposing a nonfunct
   expect(f.wrapper.text()).toContain('请由受控运维核对原操作')
   expect(f.wrapper.findAll('button').some((b) => b.text() === '读取最新状态以比较')).toBe(false)
   expect(f.wrapper.get('fieldset').attributes('disabled')).toBeDefined()
+})
+
+function connectionValue(revision = 1) {
+  const configuration = {
+    wireVersion: 1,
+    serviceId: id,
+    tenantId: tenant,
+    revision,
+    preferredOrigin: 'https://a.test',
+    origins: ['https://a.test'],
+    keyId: 'connections',
+  }
+  return {
+    serviceId: id,
+    draft: { configuration },
+    published: { configuration: { ...configuration, revision: 1 }, signature: 'A'.repeat(86) },
+    verificationKeys: { connections: 'A'.repeat(43) },
+    deployments: [],
+    convergence: { targetRevision: 1, activeDevices: 2, confirmedDevices: 0 },
+    retirementBlockers: { configurations: 1, installations: 0 },
+  }
+}
+it('keeps saved connections separate from publication, queries unknown receipts and explicitly reuses exact input after navigation', async () => {
+  const f = await fixture(ConnectionsPanel)
+  let latest = connectionValue(),
+    lose = true
+  f.setHandler((o) => {
+    if (o.method === 'PUT') {
+      const input = o.body as {
+        expectedRevision: number
+        preferredOrigin: string
+        origins: string[]
+      }
+      latest = connectionValue(input.expectedRevision + 1)
+      latest.draft.configuration = {
+        ...latest.draft.configuration,
+        preferredOrigin: input.preferredOrigin,
+        origins: input.origins,
+      }
+      if (lose) throw new Error('response discarded')
+      return latest.draft
+    }
+    if (o.path.includes('connection-operations')) return null
+    return latest
+  })
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  expect((f.wrapper.get('#connection-preferred').element as HTMLInputElement).value).toBe(
+    latest.draft.configuration.preferredOrigin,
+  )
+  expect((f.wrapper.get('#connection-origins').element as HTMLTextAreaElement).value).toBe(
+    latest.draft.configuration.origins.join('\n'),
+  )
+  await f.wrapper.get('#connection-preferred').setValue('https://b.test:9443')
+  await f.wrapper.get('#connection-origins').setValue('https://a.test\nhttps://b.test:9443')
+  await f.wrapper.get('form').trigger('submit')
+  await flushPromises()
+  const original = f.settings.operations.records.get('connections')!
+  expect(original.state).toBe('unknown')
+  await f.remount()
+  expect(f.calls.filter((o) => o.method === 'PUT')).toHaveLength(1)
+  await button(f.wrapper, '查询原操作').trigger('click')
+  await flushPromises()
+  expect(f.settings.operations.records.get('connections')).toMatchObject({
+    state: 'unknown',
+    queried: true,
+  })
+  lose = false
+  await button(f.wrapper, '按原输入显式重试').trigger('click')
+  await flushPromises()
+  const writes = f.calls.filter((o) => o.method === 'PUT')
+  expect(writes).toHaveLength(2)
+  expect(writes[1]?.body).toEqual(writes[0]?.body)
+  expect(f.settings.operations.records.get('connections')?.state).toBe('received')
+  expect(f.wrapper.text()).toContain('已发布版本 1')
+  expect(f.wrapper.text()).toContain('期望配置版本 · 2')
+  expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(0)
+})
+it('shows authoritative deployment and retirement reasons, clears forbidden facts and never retries publication automatically', async () => {
+  const f = await fixture(ConnectionsPanel)
+  f.setHandler((o) => {
+    if (o.method === 'POST')
+      throw decodeAgentError(409, { code: 'connection_retirement_blocked', issuanceId: null })
+    return connectionValue(2)
+  })
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  await f.wrapper.get('input[type=checkbox]').setValue(true)
+  await button(f.wrapper, '发布保存的配置').trigger('click')
+  await flushPromises()
+  expect(f.wrapper.text()).toContain('仍有设备、注册配置或安装交付依赖旧入口')
+  expect(f.settings.operations.records.get('connections')?.state).toBe('conflict')
+  await flushPromises()
+  expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(1)
+  f.setHandler(() => {
+    throw decodeAgentError(403, { code: 'permission_denied', issuanceId: null })
+  })
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  expect(f.wrapper.text()).not.toContain('https://a.test')
+})
+it('exposes connection facts to readers without write controls and clears data after session change', async () => {
+  const f = await fixture(ConnectionsPanel)
+  f.setPermissions(['registration_configuration_read'])
+  await f.remount()
+  expect(f.wrapper.get('fieldset').attributes('disabled')).toBeDefined()
+  expect(f.wrapper.text()).toContain('当前范围只读')
+  expect(f.wrapper.text()).toContain(id)
+  f.state.value = { ...f.state.value, status: 'anonymous' }
+  await flushPromises()
+  expect(f.wrapper.text()).not.toContain('https://a.test')
+  expect(f.calls.some((o) => ['PUT', 'POST'].includes(o.method))).toBe(false)
+})
+it('reads device connection observation with inventory access independently of global configuration permissions', async () => {
+  const f = await fixture(AgentConnectionObservation, { device: 'endpoint-a' })
+  f.setHandler(() => ({
+    targetRevision: 3,
+    registration: principal,
+    generation: 2,
+    acknowledgement: { operationId: id, revision: 2, digest, origin: 'https://b.test' },
+    receivedAt: 100,
+    failure: {
+      report: { operationId: tenant, revision: 3, reason: 'persistence_failed' },
+      origin: 'https://b.test',
+      receivedAt: 101,
+    },
+  }))
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  expect(f.wrapper.text()).toContain('目标版本3')
+  expect(f.wrapper.text()).toContain('已安装版本2')
+  expect(f.wrapper.text()).toContain('配置未能持久化')
+  expect(f.calls.filter((o) => o.path.includes('connections/devices')).at(-1)).toMatchObject({
+    pathParams: { device: 'endpoint-a' },
+  })
+  f.setHandler(() => null)
+  f.state.value = { ...f.state.value, session: { id: tenant } }
+  await flushPromises()
+  expect(f.wrapper.text()).not.toContain('https://b.test')
+})
+it('keeps issuance recovery unknown after null query and retries only the original administrative operation and public chain', async () => {
+  const f = await fixture(AgentRecovery, { kind: 'issuance' })
+  let lose = true
+  f.setHandler((o) => {
+    if (o.method === 'GET') return null
+    if (lose) throw decodeAgentError(503, { code: 'issuance_unknown', issuanceId: principal })
+    return {
+      wireVersion: 1,
+      issuanceId: principal,
+      operationId: tenant,
+      certificateChain: ['YQ=='],
+      activateBefore: 1760000000,
+    }
+  })
+  await f.wrapper.get('#agent-issuance').setValue(principal)
+  await f.wrapper.get('#agent-recovery-operation').setValue(id)
+  await f.wrapper.get('#agent-recovery-chain').setValue('["YQ=="]')
+  await button(f.wrapper, '核对并继续').trigger('click')
+  await flushPromises()
+  await button(f.wrapper, '核验并继续原恢复').trigger('click')
+  await flushPromises()
+  await f.wrapper
+    .findAll('button')
+    .find((b) => b.text() === '查询原操作')!
+    .trigger('click')
+  await flushPromises()
+  expect(f.settings.operations.records.get('agent-recovery:issuance')).toMatchObject({
+    state: 'unknown',
+    queried: true,
+    id,
+  })
+  expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(1)
+  lose = false
+  await button(f.wrapper, '按原输入显式重试').trigger('click')
+  await flushPromises()
+  const writes = f.calls.filter((o) => o.method === 'POST')
+  expect(writes).toHaveLength(2)
+  expect(writes[1]?.body).toEqual(writes[0]?.body)
+  expect(f.settings.operations.records.get('agent-recovery:issuance')?.state).toBe('received')
+  expect(f.wrapper.text()).toContain(tenant)
+})
+it('queries a committed publication after response loss and does not manufacture a second publish', async () => {
+  const f = await fixture(ConnectionsPanel)
+  const value = connectionValue(2)
+  let published = false
+  f.setHandler((o) => {
+    if (o.method === 'POST') {
+      published = true
+      throw new Error('lost committed response')
+    }
+    if (o.path.includes('connection-operations'))
+      return {
+        action: 'published',
+        configuration: { ...value.published, configuration: value.draft.configuration },
+      }
+    return published
+      ? {
+          ...value,
+          published: { ...value.published, configuration: value.draft.configuration },
+          convergence: { ...value.convergence, targetRevision: 2 },
+        }
+      : value
+  })
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  await f.wrapper.get('input[type=checkbox]').setValue(true)
+  await button(f.wrapper, '发布保存的配置').trigger('click')
+  await flushPromises()
+  const operation = f.settings.operations.records.get('connections')!
+  expect(operation.state).toBe('unknown')
+  await button(f.wrapper, '查询原操作').trigger('click')
+  await flushPromises()
+  expect(f.settings.operations.records.get('connections')).toMatchObject({
+    id: operation.id,
+    state: 'received',
+  })
+  expect(f.wrapper.text()).toContain('已发布版本 2')
+  expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(1)
+})
+it('clears a previously queried issuance candidate when the same session loses Credentials permission', async () => {
+  const f = await fixture(AgentRecovery, { kind: 'issuance' })
+  await f.wrapper.get('#agent-issuance').setValue(principal)
+  await f.wrapper.get('#agent-recovery-operation').setValue(id)
+  f.setHandler(() => ({
+    wireVersion: 1,
+    issuanceId: principal,
+    operationId: tenant,
+    certificateChain: ['YQ=='],
+    activateBefore: 1760000000,
+  }))
+  await button(f.wrapper, '查询原操作').trigger('click')
+  await flushPromises()
+  expect(f.wrapper.find('dl').exists()).toBe(true)
+  f.setHandler(() => {
+    throw decodeAgentError(403, { code: 'permission_denied', issuanceId: null })
+  })
+  await button(f.wrapper, '查询原操作').trigger('click')
+  await flushPromises()
+  expect(f.wrapper.find('dl').exists()).toBe(false)
+  expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(0)
+})
+
+it('rejects a different service PKI candidate before any administrative operation exists', async () => {
+  const f = await fixture(TrustPurpose, { purpose: 'agent' })
+  await button(f.wrapper, '准备轮换').trigger('click')
+  await flushPromises()
+  const file = body().get('#pki-trust-file')
+  Object.defineProperty(file.element, 'files', {
+    configurable: true,
+    value: [
+      {
+        size: 1024,
+        text: async () => JSON.stringify({ ...pkiValue(), service_id: principal, revision: 2 }),
+      },
+    ],
+  })
+  await file.trigger('change')
+  await flushPromises()
+  expect(f.wrapper.text()).toContain('输入或响应无效，操作未确认。')
+  expect(f.settings.operations.records.size).toBe(0)
+  expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(0)
 })

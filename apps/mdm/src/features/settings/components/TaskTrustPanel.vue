@@ -6,7 +6,6 @@ import { useMdm } from '../../../context'
 import { usePermission } from '../../enrollment/usePermission'
 import { useSettingsFacts, useSettingsAction } from '../useSettingsAction'
 import type { TaskTrust, TaskChange } from '../clients/trust'
-import { origin as httpsOrigin } from '../clients/value'
 import { downloadPublic } from '../download'
 import OperationNotice from './OperationNotice.vue'
 import ObservationPanel from './ObservationPanel.vue'
@@ -31,12 +30,10 @@ const {
 } = useSettingsAction(() => 'task')
 const trust = ref<TaskTrust>(),
   revision = ref(0),
-  origin = ref(window.location.origin),
   keyId = ref('')
 function applyTrust(value: TaskTrust) {
   trust.value = value
   revision.value = value.revision
-  origin.value = value.origin
 }
 async function load() {
   trust.value = undefined
@@ -59,21 +56,15 @@ async function lookup() {
 }
 async function change(action: TaskChange['action'], replay = false) {
   if (!canWrite.value) return
-  try {
-    httpsOrigin(origin.value)
-  } catch {
-    failure.value = 'invalidRequest'
-    return
-  }
   const expectedRevision = replay ? pending.value!.expectedRevision : revision.value
   const input: TaskChange =
     action === 'prepare'
-      ? { action, expectedRevision, origin: origin.value }
+      ? { action, expectedRevision }
       : { action, expectedRevision, keyId: keyId.value }
   await submit(
     action,
     expectedRevision,
-    action === 'prepare' ? { origin: origin.value } : { keyId: keyId.value },
+    action === 'prepare' ? {} : { keyId: keyId.value },
     (id) => client.change(id, input),
     applyTrust,
     replay,
@@ -100,6 +91,12 @@ useSettingsFacts(() => {
   />
   <div v-if="trust" class="console-panel">
     <p>{{ t('settings.savedVersion') }} {{ trust.revision }}</p>
+    <p>
+      {{ t('settings.connections.service') }} <code>{{ trust.service_id }}</code>
+    </p>
+    <RouterLink :to="{ name: 'settings-deployment', params: { tenant: runtime.tenant } }">{{
+      t('settings.connections.title')
+    }}</RouterLink>
     <ul>
       <li v-for="key in trust.keys" :key="key.id">
         <code>{{ key.id }}</code> · {{ key.state }}
@@ -115,7 +112,6 @@ useSettingsFacts(() => {
       <label
         >{{ t('settings.revision')
         }}<input v-model.number="revision" type="number" min="0" step="1" required /></label
-      ><label>{{ t('settings.origin') }}<input v-model="origin" type="url" required /></label
       ><UiButton type="submit" :disabled="locked">{{ t('settings.generate') }}</UiButton>
     </fieldset>
   </form>

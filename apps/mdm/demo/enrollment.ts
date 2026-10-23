@@ -1,3 +1,4 @@
+import { demoConnections } from './connections'
 /** Explicit synthetic onboarding control plane; never imported by production. */
 import { randomUUID } from 'node:crypto'
 import { TENANT, type DomainHandler } from './scenario'
@@ -183,7 +184,7 @@ export function createOnboardingDemo(
             wireVersion: 1,
             configurationId: randomUUID(),
             tenantId: TENANT,
-            origin: 'https://agent.example.test',
+            connections: demoConnections(),
             targets: v['targets'],
             quantity: quantity(v['quantity']),
             keyId: 'demo',

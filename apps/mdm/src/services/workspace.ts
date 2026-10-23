@@ -28,7 +28,7 @@ export function decodeWorkspace(value: unknown): Workspace {
 }
 export function decodeMdmConfig(value: unknown, origin: string) {
   const v = record(value)
-  if (Object.keys(v).sort().join() !== 'canonicalOrigin,managementTenant,tenant')
+  if (Object.keys(v).sort().join() !== 'canonicalOrigin,managementTenant,serviceId,tenant')
     throw new Error('Invalid config')
   const canonicalOrigin = string(v['canonicalOrigin'])
   if (canonicalOrigin !== origin || new URL(canonicalOrigin).protocol !== 'https:')
@@ -36,7 +36,7 @@ export function decodeMdmConfig(value: unknown, origin: string) {
   const tenant = uuid(v['tenant']),
     managementTenant = uuid(v['managementTenant'])
   if (tenant === managementTenant) throw new Error('Invalid tenant binding')
-  return { canonicalOrigin, tenant, managementTenant }
+  return { canonicalOrigin, tenant, managementTenant, serviceId: uuid(v['serviceId']) }
 }
 export function createWorkspaceClient(transport: HttpTransport, demo: boolean) {
   return {

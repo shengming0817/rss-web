@@ -15,6 +15,13 @@ const tenant = '11111111-1111-4111-8111-111111111111',
 const snapshot = () => ({
   tenantId: tenant,
   instanceId: instance,
+  publicEndpoints: {
+    console: 'https://console.test',
+    agent: ['https://agent.test:9443'],
+    windowsEnrollment: 'https://native.test/enrollment',
+    windowsManagement: ['https://native.test/management'],
+    appleManagement: null,
+  },
   channels: registrationChannels.map((channel) => ({
     channel,
     revision: 0,
@@ -28,7 +35,7 @@ afterEach(() => {
   stores.splice(0).forEach((s) => s.dispose())
 })
 it('decodes the complete current contract and rejects malformed or foreign projections', () => {
-  expect(decodeChannels(snapshot(), tenant, instance)).toHaveLength(3)
+  expect(decodeChannels(snapshot(), tenant, instance).channels).toHaveLength(3)
   const value = snapshot()
   for (const bad of [
     { ...value, tenantId: instance },
@@ -83,6 +90,7 @@ it('loads lazily, shares reads and clears facts and commands synchronously on a 
   expect(store.commands.get('agent')?.state).toBe('unknown')
   state.value = { ...state.value, session: { id: tenant } }
   expect(store.statuses.value).toEqual([])
+  expect(store.publicEndpoints.value).toBeUndefined()
   expect(store.commands.size).toBe(0)
   expect(store.canWrite.value).toBe(false)
 })
@@ -101,6 +109,7 @@ it('discards late reads after binding changes and never displays stale availabil
   resolve(decodeChannels(snapshot(), tenant, instance))
   await pending
   expect(store.statuses.value).toEqual([])
+  expect(store.publicEndpoints.value).toBeUndefined()
   state.value = { ...state.value, tenant }
   await store.refresh()
   read.mockRejectedValueOnce(new Error('offline'))

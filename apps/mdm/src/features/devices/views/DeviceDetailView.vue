@@ -11,6 +11,7 @@ import type { DeviceView } from '../clients/device-views'
 import type { EndpointDetail } from '../clients/endpoint-model'
 import type { FieldDefinition, Inventory } from '../clients/assets'
 import type { Association } from '../clients/associations'
+import AgentConnectionObservation from '../components/AgentConnectionObservation.vue'
 import AssignedConfigurations from '../../telemetry/components/AssignedConfigurations.vue'
 import DeviceActivity from '../../telemetry/components/DeviceActivity.vue'
 import DevicePerformance from '../../telemetry/components/DevicePerformance.vue'
@@ -265,6 +266,7 @@ watch(target, () => {
           :device-name="displayName"
         />
         <AssignedConfigurations v-if="selected" :key="selected.id" :device="selected.id" />
+        <AgentConnectionObservation v-if="selected" :key="selected.id" :device="selected.id" />
         <RegistrationPanel
           v-if="selected"
           :key="selected.id"

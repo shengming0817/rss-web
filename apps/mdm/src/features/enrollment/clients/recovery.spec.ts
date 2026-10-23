@@ -82,3 +82,24 @@ it('accepts only original public chains and device-generated grant inputs withou
     }),
   ).toThrow()
 })
+it('queries the original administrative operation without confusing its locator with device signing identity', async () => {
+  let reply: unknown = null
+  const request = vi.fn(async (o: RequestOptions<unknown>) => o.decode(reply)),
+    client = createRecoveryClient({ request } as unknown as HttpTransport)
+  expect(await client.operation(issuance, operation)).toBeNull()
+  expect(request.mock.lastCall![0]).toMatchObject({
+    method: 'GET',
+    path: '/api/v1/agent-issuances/{issuance}/recovery-operations/{operation}',
+    pathParams: { issuance, operation },
+  })
+  reply = {
+    wireVersion: 1,
+    issuanceId: issuance,
+    operationId: registration,
+    certificateChain: ['YQ=='],
+    activateBefore: 1700000000,
+  }
+  expect((await client.operation(issuance, operation))?.operationId).toBe(registration)
+  reply = { ...(reply as object), issuanceId: registration }
+  await expect(client.operation(issuance, operation)).rejects.toThrow()
+})

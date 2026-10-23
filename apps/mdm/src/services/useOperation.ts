@@ -52,37 +52,47 @@ export function useOperation(
         failure.value =
           write && uncertain.value
             ? 'unknownWrite'
-            : isRssApiError(e)
-              ? e.status === 413
-                ? 'requestTooLarge'
-                : e.status === 404
-                  ? 'notFound'
-                  : e.code === 'enrollment_paused'
-                    ? 'enrollmentPaused'
-                    : e.code === 'registration_limit'
-                      ? 'registrationLimit'
-                      : e.status === 429
-                        ? 'limited'
-                        : e.status === 400
-                          ? 'invalidRequest'
-                          : e.status === 409
-                            ? e.code === 'first_use_not_ready'
-                              ? 'firstUseNotReady'
-                              : e.code === 'device_view_cursor_invalidated'
-                                ? 'cursorInvalidated'
-                                : 'conflict'
-                            : [
-                                  'operation_unknown',
-                                  'issuance_unknown',
-                                  'activation_unknown',
-                                ].includes(e.code) || e.code === 'operation_rollback_unconfirmed'
-                              ? 'unknownWrite'
-                              : e.status === 403
-                                ? 'denied'
-                                : e.status === 501
-                                  ? 'unsupported'
-                                  : 'unavailable'
-              : 'invalidResponse'
+            : isRssApiError(e) &&
+                [
+                  'connection_deployment_unobserved',
+                  'connection_retirement_blocked',
+                  'agent_package_installer_mismatch',
+                  'agent_package_lifecycle_not_admitted',
+                  'agent_package_source_not_admitted',
+                  'agent_package_binding_not_admitted',
+                ].includes(e.code)
+              ? e.code
+              : isRssApiError(e)
+                ? e.status === 413
+                  ? 'requestTooLarge'
+                  : e.status === 404
+                    ? 'notFound'
+                    : e.code === 'enrollment_paused'
+                      ? 'enrollmentPaused'
+                      : e.code === 'registration_limit'
+                        ? 'registrationLimit'
+                        : e.status === 429
+                          ? 'limited'
+                          : e.status === 400
+                            ? 'invalidRequest'
+                            : e.status === 409
+                              ? e.code === 'first_use_not_ready'
+                                ? 'firstUseNotReady'
+                                : e.code === 'device_view_cursor_invalidated'
+                                  ? 'cursorInvalidated'
+                                  : 'conflict'
+                              : [
+                                    'operation_unknown',
+                                    'issuance_unknown',
+                                    'activation_unknown',
+                                  ].includes(e.code) || e.code === 'operation_rollback_unconfirmed'
+                                ? 'unknownWrite'
+                                : e.status === 403
+                                  ? 'denied'
+                                  : e.status === 501
+                                    ? 'unsupported'
+                                    : 'unavailable'
+                : 'invalidResponse'
       }
       return false
     } finally {

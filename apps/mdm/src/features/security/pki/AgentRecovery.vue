@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onBeforeUnmount } from 'vue'
+import { ref, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { UiButton } from '@rss/core/components'
 import { isRssApiError } from '@rss/api/mdm'
@@ -14,6 +14,7 @@ import {
   type grantReceipt,
   type issuanceCandidate,
 } from '../../enrollment/clients/recovery'
+import { usePermission } from '../../enrollment/usePermission'
 import { uuid } from '../../../services/decode'
 import { inputDigest } from '../../settings/clients/value'
 import { auditTime } from '../../operations/format'
@@ -23,13 +24,10 @@ const props = defineProps<{ kind: 'registration' | 'issuance' }>()
 const runtime = useMdm(),
   { t } = useI18n(),
   client = runtime.onboarding.recovery,
-  { busy, failure, pending, locked, submit } = useSettingsAction(
+  { busy, failure, pending, locked, submit, query } = useSettingsAction(
     () => `agent-recovery:${props.kind}`,
   )
-const canWrite = computed(() => {
-  const s = runtime.session.state.value
-  return s.status === 'authenticated' && s.tenant === runtime.tenant
-})
+const { canWrite } = usePermission('credentials', 'credentials')
 const locator = ref(''),
   originalOperation = ref(''),
   secret = ref(''),
@@ -71,8 +69,8 @@ async function capture<T>(request: () => Promise<T>) {
     throw error
   }
 }
-async function recover() {
-  if (locked.value || !canWrite.value) return
+async function recover(replay = false) {
+  if ((!replay && locked.value) || !canWrite.value || (replay && props.kind !== 'issuance')) return
   let original: string
   try {
     original = uuid(locator.value)
@@ -127,7 +125,7 @@ async function recover() {
       failure.value = 'invalidRequest'
       return
     }
-    if (!reviewed.value) {
+    if (!replay && !reviewed.value) {
       reviewed.value = true
       return
     }
@@ -141,11 +139,44 @@ async function recover() {
         chain.value = ''
         reviewed.value = false
       },
-      false,
+      replay,
       operation,
     )
   }
 }
+async function lookup() {
+  if (props.kind !== 'issuance') return
+  candidate.value = undefined
+  returnedIssuance.value = undefined
+  try {
+    const original = pending.value
+    const issuance = original
+      ? uuid((JSON.parse(original.publicInput) as { issuance: string }).issuance)
+      : uuid(locator.value)
+    const operation = original?.id ?? uuid(originalOperation.value)
+    await query(
+      operation,
+      () => client.operation(issuance, operation),
+      (value) => {
+        candidate.value = value ?? undefined
+        if (value) {
+          chain.value = ''
+          reviewed.value = false
+        }
+      },
+      (value) => value !== null,
+    )
+  } catch {
+    failure.value = 'invalidRequest'
+  }
+}
+watch(failure, (value) => {
+  if (value === 'denied') {
+    candidate.value = undefined
+    grant.value = undefined
+    returnedIssuance.value = undefined
+  }
+})
 </script>
 <template>
   <section class="console-panel">
@@ -158,14 +189,18 @@ async function recover() {
       :operation="pending"
       :busy="busy"
       :can-write="canWrite"
-      :query-supported="false"
+      :query-supported="kind === 'issuance'"
       :compare-supported="false"
+      @query="lookup"
+      @retry="recover(true)"
     />
     <p v-if="pending?.state === 'conflict'" role="alert">
       {{ t('security.recovery.conflictHandoff') }}
     </p>
-    <form class="settings-form" @submit.prevent="recover">
-      <fieldset :disabled="locked || !canWrite">
+    <form class="settings-form" @submit.prevent="recover()">
+      <fieldset
+        :disabled="busy || !canWrite || (!!pending && pending.state !== 'unknown' && locked)"
+      >
         <label :for="'agent-' + kind">{{
           t(
             kind === 'registration'
@@ -230,11 +265,14 @@ async function recover() {
         <p v-if="reviewed">
           {{ t('security.recovery.confirm') }} · {{ locator }} · {{ originalOperation }}
         </p>
-        <UiButton type="submit">{{
+        <UiButton type="submit" :disabled="locked">{{
           t(reviewed ? 'security.recovery.continue' : 'security.pki.review')
         }}</UiButton>
       </fieldset>
     </form>
+    <UiButton v-if="kind === 'issuance'" :disabled="busy" @click="lookup">{{
+      t('settings.queryOperation')
+    }}</UiButton>
     <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
     <p v-if="returnedIssuance" class="console-locator">
       {{ t('security.recovery.issuanceId') }} · {{ returnedIssuance }}

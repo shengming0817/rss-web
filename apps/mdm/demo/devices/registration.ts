@@ -90,6 +90,13 @@ export function createRegistrationDemo(
       return ok({
         tenantId: TENANT,
         instanceId: INSTANCE,
+        publicEndpoints: {
+          console: 'https://mdm.example.test',
+          agent: ['https://agent.example.test'],
+          windowsEnrollment: 'https://mdm.example.test/enrollment/windows',
+          windowsManagement: ['https://mdm.example.test/management/windows'],
+          appleManagement: 'https://mdm.example.test/mdm/apple',
+        },
         channels: [...admission.values()].map((v) => ({
           ...v,
           availability: 'ready',

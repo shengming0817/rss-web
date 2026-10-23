@@ -107,13 +107,14 @@ const provision = {
 }
 const task = {
   version: 1,
-  origin: 'https://mdm.test',
+  service_id: c,
   tenant: b,
   revision: 1,
   keys: [{ id: 'key-a', public_key: 'A'.repeat(43), state: 'active' }],
 }
 const pki = {
   version: 1,
+  service_id: c,
   origin: 'https://mdm.test',
   tenant: b,
   purpose: 'agent',
@@ -383,10 +384,10 @@ it('checks task/PKI tenant bindings and current-generation installation observat
   expect(() => taskTrust(task, a)).toThrow()
   expect(() => taskTrust({ ...task, keys: [] }, b)).toThrow()
   const f = transport(task),
-    client = createTaskTrustClient(f.client, b)
+    client = createTaskTrustClient(f.client, b, c)
   await client.read()
   await client.operation(a)
-  await client.change(a, { action: 'prepare', expectedRevision: 0, origin: 'https://mdm.test' })
+  await client.change(a, { action: 'prepare', expectedRevision: 0 })
   expect(installationObservation(null)).toBeNull()
   const observation = {
     observation: {
@@ -413,29 +414,30 @@ it('checks task/PKI tenant bindings and current-generation installation observat
     }),
   ).toThrow()
   const o = transport(observation)
-  await createTaskTrustClient(o.client, b).observation('device-a')
-  await createPkiClient(o.client, b).observation('device-a')
+  await createTaskTrustClient(o.client, b, c).observation('device-a')
+  await createPkiClient(o.client, b, c).observation('device-a')
   const trust = pkiTrust(pki, b, 'agent')
   expect(() => pkiTrust(pki, b, 'apple')).toThrow()
   expect(() => pkiTrust({ ...pki, issuers: [] }, b, 'agent')).toThrow()
   const q = transport({ operation: a, revision: 2, state: 'distributing' }),
-    pkiClient = createPkiClient(q.client, b)
+    pkiClient = createPkiClient(q.client, b, c)
   await pkiClient.prepare(a, 'agent', 1, trust)
   await createPkiClient(
     transport({ operation: a, revision: 3, state: 'activated' }).client,
     b,
+    c,
   ).transition(a, 'agent', 2, 'activate')
   await expect(pkiClient.transition(c, 'agent', 1, 'retire')).rejects.toThrow()
   expect(() => pkiReceipt({ operation: a, revision: 2, state: 'prepared' })).toThrow()
   const j = transport(pki)
-  await createPkiClient(j.client, b).read('agent')
+  await createPkiClient(j.client, b, c).read('agent')
   const z = transport(undefined)
-  await createPkiClient(z.client, b).publish(a, 'agent', [
+  await createPkiClient(z.client, b, c).publish(a, 'agent', [
     { issuer: digest, crl: 'YQ==', root_crl: 'YQ==' },
   ])
   expect(z.calls[0]?.successStatus).toBe(204)
   const recover = transport({ attempt: c, fingerprint: digest })
-  await createPkiClient(recover.client, b).recover(a, c, ['YQ=='])
+  await createPkiClient(recover.client, b, c).recover(a, c, ['YQ=='])
 })
 it('reads explicit runtime facts and never turns missing counts into zero', async () => {
   const snapshot = {
@@ -548,7 +550,7 @@ it('requires current channel observations and keeps loaded material distinct fro
     name: 'apple',
     state: 'degraded',
     reasons: ['trust_conflict'],
-    listening: false,
+    mounted: false,
     loadedMaterials: { apns: 4 },
   }
   const value = { alive: true, ready: true, components: [], channels: [channel] }
@@ -563,4 +565,13 @@ it('requires current channel observations and keeps loaded material distinct fro
   ]) {
     expect(() => runtimeSnapshot({ ...value, channels: [bad] })).toThrow()
   }
+})
+
+it('rejects retired task origin and PKI documents without stable identity', () => {
+  const oldTask: Record<string, unknown> = { ...task }
+  delete oldTask['service_id']
+  expect(() => taskTrust({ ...oldTask, origin: 'https://mdm.test' }, b)).toThrow()
+  const oldPki: Record<string, unknown> = { ...pki }
+  delete oldPki['service_id']
+  expect(() => pkiTrust(oldPki, b, 'agent')).toThrow()
 })

@@ -804,3 +804,75 @@ it('keeps only the closed Agent issuance locator and allows exact administrator 
   expect(mock.history.post).toHaveLength(2)
   mock.restore()
 })
+it('keeps connections and original issuance reads same-origin with exact recovery method and binary boundaries', async () => {
+  const instance = axios.create(),
+    mock = new AxiosMockAdapter(instance)
+  const spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance),
+    transport = createMdmTransport()
+  spy.mockRestore()
+  mock
+    .onAny()
+    .reply((config) => [200, config.responseType === 'arraybuffer' ? new ArrayBuffer(1) : null])
+  for (const [method, path] of [
+    ['GET', '/api/v1/agent-connections'],
+    ['PUT', '/api/v1/agent-connections'],
+    ['POST', '/api/v1/agent-connections/publish'],
+    ['GET', '/api/v1/agent-connection-operations/{id}'],
+    ['GET', '/api/v1/agent-issuances/{issuance}/recovery-operations/{operation}'],
+  ] as const)
+    await transport.request({
+      method,
+      path,
+      pathParams: Object.fromEntries(
+        Object.entries({ id: 'original', issuance: 'attempt', operation: 'recovery' }).filter(
+          ([key]) => path.includes('{' + key + '}'),
+        ),
+      ),
+      successStatus: 200,
+      decode: (v) => v,
+    })
+  await transport.request({
+    method: 'GET',
+    path: '/api/v1/agent-connections/configuration',
+    responseType: 'arraybuffer',
+    successStatus: 200,
+    decode: (v) => v,
+  })
+  for (const [method, path] of [
+    ['POST', '/api/v1/agent-issuances/{issuance}/recovery-operations/{operation}'],
+    ['GET', '/api/v1/agent-issuances/{issuance}/private-key'],
+    ['GET', 'https://agent.test/api/v1/agent-connections'],
+    ['GET', '//agent.test/api/v1/agent-connections'],
+  ] as const)
+    await expect(
+      transport.request({ method, path, successStatus: 200, decode: (v) => v }),
+    ).rejects.toMatchObject({ cause: 'client' })
+  await expect(
+    transport.request({
+      method: 'POST',
+      path: '/api/v1/agent-connections/configuration',
+      responseType: 'arraybuffer',
+      successStatus: 200,
+      decode: (v) => v,
+    }),
+  ).rejects.toMatchObject({ cause: 'client' })
+  mock.restore()
+})
+it('preserves closed connection and package rejection reasons while rejecting malformed status/envelopes', () => {
+  for (const code of ['connection_deployment_unobserved', 'connection_retirement_blocked']) {
+    expect(decodeAgentError(409, { code, issuanceId: null })).toMatchObject({ cause: 'wire', code })
+    expect(decodeAgentError(400, { code, issuanceId: null }).cause).toBe('protocol')
+    expect(decodeAgentError(409, { code, issuanceId: null, detail: 'secret' }).cause).toBe(
+      'protocol',
+    )
+  }
+  for (const code of [
+    'agent_package_installer_mismatch',
+    'agent_package_lifecycle_not_admitted',
+    'agent_package_source_not_admitted',
+    'agent_package_binding_not_admitted',
+  ]) {
+    expect(decodeMdmError(409, { code })).toMatchObject({ cause: 'wire', code })
+    expect(decodeMdmError(409, { code, detail: 'secret' }).cause).toBe('protocol')
+  }
+})

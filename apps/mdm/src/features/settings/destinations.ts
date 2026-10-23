@@ -6,6 +6,7 @@ export function settingsDestination(target: string, tenant: string): RouteLocati
   const routes: Record<string, string> = {
     pki: 'security-device-trust',
     deployment: 'settings-deployment',
+    connections: 'settings-deployment',
     operations: 'settings-operations',
     tenants: 'settings-tenants',
     accounts: 'accounts',

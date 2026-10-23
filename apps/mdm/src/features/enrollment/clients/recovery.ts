@@ -1,6 +1,6 @@
 /** Administrator-only continuation of existing registration/signing attempts. No device-key owner. */
 import type { HttpTransport } from '@rss/api/mdm'
-import { array, closed, enumeration, count, uuid } from '../../../services/decode'
+import { array, closed, enumeration, count, nullable, uuid } from '../../../services/decode'
 import { encoded } from '../../settings/clients/pki'
 import { base64url, platforms } from './packages'
 export function publicChain(value: unknown) {
@@ -62,6 +62,14 @@ export function issuanceCandidate(value: unknown, issuance: string) {
 }
 export function createRecoveryClient(transport: HttpTransport) {
   return {
+    operation: (issuance: string, operation: string) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/agent-issuances/{issuance}/recovery-operations/{operation}',
+        pathParams: { issuance: uuid(issuance), operation: uuid(operation) },
+        successStatus: 200,
+        decode: (v) => nullable(v, (v) => issuanceCandidate(v, issuance)),
+      }),
     registration: (registration: string, input: RecoveryGrant) =>
       transport.request({
         method: 'POST',

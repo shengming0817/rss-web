@@ -39,6 +39,10 @@ const statuses: Readonly<Record<string, number>> = {
   software_source_not_found: 404,
   software_publication_not_found: 404,
   group_rule_not_found: 404,
+  agent_package_installer_mismatch: 409,
+  agent_package_lifecycle_not_admitted: 409,
+  agent_package_source_not_admitted: 409,
+  agent_package_binding_not_admitted: 409,
   operation_conflict: 409,
   device_view_cursor_invalidated: 409,
   upload_offset_conflict: 409,
@@ -96,6 +100,17 @@ export function createMdmTransport(): HttpTransport {
   const instance = axios.create({ baseURL: '' })
   return {
     async request(options: NoContentRequest | RequestOptions<unknown>) {
+      const connections =
+        (options.method === 'GET' &&
+          [
+            '/api/v1/agent-connections',
+            '/api/v1/agent-connections/configuration',
+            '/api/v1/agent-connections/devices',
+            '/api/v1/agent-connections/devices/{device}/observation',
+            '/api/v1/agent-connection-operations/{id}',
+          ].includes(options.path)) ||
+        (options.method === 'PUT' && options.path === '/api/v1/agent-connections') ||
+        (options.method === 'POST' && options.path === '/api/v1/agent-connections/publish')
       const readiness = options.path === '/readyz'
       const settings =
         /^\/api\/v1\/(?:settings\/(?:catalog$|first-use(?:\/|$))|tenant-administration(?:\/|$)|apple\/materials(?:\/|$)|apple\/material-operations(?:\/|$)|storage\/connections(?:\/|$)|smtp(?:\/|$)|windows\/wns(?:\/|$)|task-signing(?:\/|$)|pki(?:\/|$)|webhooks(?:\/|$)|runtime\/diagnostics$|agent-packages(?:\/|$))/.test(
@@ -106,6 +121,9 @@ export function createMdmTransport(): HttpTransport {
         /^\/api\/v1\/(?:agent-registrations\/\{registration\}\/recovery|agent-issuances\/\{issuance\}\/recover)$/.test(
           options.path,
         )
+      const recoveryQuery =
+        options.method === 'GET' &&
+        options.path === '/api/v1/agent-issuances/{issuance}/recovery-operations/{operation}'
       const audit = options.method === 'GET' && options.path === '/api/v1/audit-events'
       const telemetry = [
         '/api/v1/telemetry/resources',
@@ -118,11 +136,13 @@ export function createMdmTransport(): HttpTransport {
       ].includes(options.path)
       if (
         !paths.test(options.path) &&
+        !connections &&
         !settings &&
         !readiness &&
         !telemetry &&
         !audit &&
-        !agentRecovery
+        !agentRecovery &&
+        !recoveryQuery
       )
         throw clientError()
       const publicRead =
@@ -141,6 +161,8 @@ export function createMdmTransport(): HttpTransport {
         options.responseType === 'arraybuffer' &&
         !(
           (options.method === 'POST' && options.path === '/api/v1/agent-configurations') ||
+          (options.method === 'GET' &&
+            options.path === '/api/v1/agent-connections/configuration') ||
           (options.method === 'POST' && options.path === '/api/v1/enrollments/{id}/profile') ||
           (options.method === 'GET' &&
             options.path === '/api/v1/apple/organizations/{id}/ade/public-key') ||
@@ -211,6 +233,8 @@ export function decodeAgentError(status: number, value: unknown): RssApiError {
       grant_expired: 403,
       registration_limit: 429,
       enrollment_paused: 409,
+      connection_deployment_unobserved: 409,
+      connection_retirement_blocked: 409,
       operation_conflict: 409,
       device_view_cursor_invalidated: 409,
       issuance_unknown: 503,

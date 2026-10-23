@@ -277,6 +277,13 @@ export const devicesZh = {
   registrationLimit: '已达到该渠道的注册额度。取消未完成注册或联系管理员调整额度。',
   limited: '请求受限，请稍后手动重试。',
   firstUseNotReady: '所选必要条件尚未就绪，请重新读取进度。',
+  connection_deployment_unobserved:
+    '新入口尚无绑定本版本的有效部署观察，请由部署操作员核验后重新比较。',
+  connection_retirement_blocked: '仍有设备、注册配置或安装交付依赖旧入口，请先完成收敛再退役。',
+  agent_package_installer_mismatch: '安装文件与选择的包或目标不匹配。',
+  agent_package_lifecycle_not_admitted: '安装包当前生命周期不允许发布。',
+  agent_package_source_not_admitted: '安装包来源未通过发布校验。',
+  agent_package_binding_not_admitted: '安装包的服务、租户或内容绑定不符合要求。',
   invalidRequest: '请求无效，请检查输入。',
   unavailable: '服务暂不可用。未自动重试。',
   refreshDetail: '凭据已撤销。详情尚未刷新，请重新加载。',
@@ -801,6 +808,15 @@ export const devicesEn: typeof devicesZh = {
     'This channel has reached its registration limit. Cancel a pending enrollment or ask an administrator to adjust the limit.',
   limited: 'Request limited; retry manually later.',
   firstUseNotReady: 'Required setup facts are not ready. Reload progress.',
+  connection_deployment_unobserved:
+    'No fresh deployment observation is bound to this revision. Ask the deployment operator to verify it, then compare again.',
+  connection_retirement_blocked:
+    'Devices, enrollment configurations or installation deliveries still depend on a retiring location. Complete convergence first.',
+  agent_package_installer_mismatch: 'The installer does not match the selected package or target.',
+  agent_package_lifecycle_not_admitted: 'The package lifecycle does not allow publication.',
+  agent_package_source_not_admitted: 'The package source was not admitted for publication.',
+  agent_package_binding_not_admitted:
+    'The package service, tenant or content binding was not admitted.',
   invalidRequest: 'Invalid request; check the input.',
   unavailable: 'Service unavailable. No automatic retry.',
   refreshDetail: 'Credential revoked. Details are stale; reload to refresh.',

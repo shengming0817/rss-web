@@ -18,9 +18,22 @@ export function encoded(value: unknown, max = 24 * 1024 * 1024) {
     throw new Error('Invalid encoded public material')
   return s
 }
-export function pkiTrust(value: unknown, tenant: string, purpose: PkiPurpose) {
-  const v = closed(value, ['version', 'origin', 'tenant', 'purpose', 'revision', 'issuers'])
-  if (v['version'] !== 1 || v['tenant'] !== tenant || v['purpose'] !== purpose)
+export function pkiTrust(value: unknown, tenant: string, purpose: PkiPurpose, service?: string) {
+  const v = closed(value, [
+    'version',
+    'service_id',
+    'origin',
+    'tenant',
+    'purpose',
+    'revision',
+    'issuers',
+  ])
+  if (
+    v['version'] !== 1 ||
+    v['tenant'] !== tenant ||
+    v['purpose'] !== purpose ||
+    (service !== undefined && uuid(v['service_id']) !== service)
+  )
     throw new Error('Wrong PKI trust binding')
   const issuers = unique(
     array(v['issuers'], (value) => {
@@ -55,6 +68,7 @@ export function pkiTrust(value: unknown, tenant: string, purpose: PkiPurpose) {
     throw new Error('Invalid issuer set')
   return {
     version: 1 as const,
+    service_id: uuid(v['service_id']),
     origin: origin(v['origin']),
     tenant: uuid(tenant),
     purpose,
@@ -91,7 +105,7 @@ export function pkiPublications(value: unknown): Publication[] {
   if (!items.length || items.length > 16) throw new Error('Invalid publication set')
   return items
 }
-export function createPkiClient(transport: HttpTransport, tenant: string) {
+export function createPkiClient(transport: HttpTransport, tenant: string, service: string) {
   return {
     read: (purpose: PkiPurpose) =>
       transport.request({
@@ -99,7 +113,7 @@ export function createPkiClient(transport: HttpTransport, tenant: string) {
         path: '/api/v1/pki/{purpose}/trust',
         pathParams: { purpose: enumeration(purpose, pkiPurposes) },
         successStatus: 200,
-        decode: (v) => pkiTrust(v, tenant, purpose),
+        decode: (v) => pkiTrust(v, tenant, purpose, service),
       }),
     prepare: (id: string, purpose: PkiPurpose, expectedRevision: number, candidate: PkiTrust) =>
       transport.request({
@@ -109,7 +123,7 @@ export function createPkiClient(transport: HttpTransport, tenant: string) {
           id: uuid(id),
           purpose: enumeration(purpose, pkiPurposes),
           expected_revision: positive(expectedRevision),
-          candidate: pkiTrust(candidate, tenant, purpose),
+          candidate: pkiTrust(candidate, tenant, purpose, service),
         },
         successStatus: 200,
         decode(value) {

@@ -32,7 +32,7 @@ export async function exercisePki({
       revision: trusted.revision + 1,
       issuers: [...trusted.issuers, { ...fixture.pki.candidateTrust.issuers[0], mode: 'prepared' }],
     }
-  assert.equal(fixture.pki.candidateTrust.origin, trusted.origin)
+  assert.equal(fixture.pki.candidateTrust.service_id, trusted.service_id)
   const candidateFile = join(temp, 'public-trust.json')
   writeFileSync(candidateFile, JSON.stringify(candidate), { mode: 0o600 })
   await go(page, at('security/device-trust'))
@@ -158,9 +158,24 @@ export async function exercisePki({
   })
   await page.getByRole('button', { name: '核验并继续原恢复', exact: true }).click()
   await page.getByRole('alert').filter({ hasText: '提交结果未知' }).waitFor()
-  assert.equal(await page.locator('#agent-issuance').isDisabled(), true)
+  assert.equal(
+    await page.getByRole('button', { name: '核对并继续', exact: true }).isDisabled(),
+    true,
+  )
   assert.equal(posts, 1)
   await page.unroute(recoverPath)
+  const queried = reply(
+    `/api/v1/agent-issuances/${original.issuanceId}/recovery-operations/${unknownOperation}`,
+    'GET',
+  )
+  await page.getByRole('button', { name: '查询原操作', exact: true }).first().click()
+  const queriedResponse = await queried
+  assert.equal(queriedResponse.status(), 200)
+  const receipt = await queriedResponse.json()
+  assert.equal(receipt.issuanceId, original.issuanceId)
+  assert.equal(receipt.operationId, original.operationId)
+  assert.equal(posts, 1)
+  coverage.push('agent-original-administrative-recovery-readback-after-committed-response-loss')
   coverage.push(
     'agent-real-registration-recovery-secret-clear-wrong-chain-403-response-loss-unknown-no-replay',
   )

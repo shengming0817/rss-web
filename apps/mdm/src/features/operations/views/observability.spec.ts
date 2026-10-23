@@ -176,7 +176,7 @@ it('renders diagnostic uncertainty and independent health, then clears the snaps
           name: 'apple',
           state: 'degraded',
           reasons: ['material_version_mismatch'],
-          listening: false,
+          mounted: false,
           loadedMaterials: { apns: 4 },
         },
       ],

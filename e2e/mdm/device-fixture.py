@@ -27,7 +27,7 @@ from candidate_fixture import INSTANCE, TENANTS, ADMIN
 from build_run import lease_fds
 from pki_fixtures import running as pki
 from candidate_installation_driver import Browser
-from runtime_fixture import storage, readiness as readiness_status, native_proxy
+from runtime_fixture import storage, readiness as readiness_status
 
 backend_revision = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD'], cwd=BACKEND, text=True).strip()
 print(json.dumps(dict(phase='backend-baseline', revision=backend_revision)), flush=True)
@@ -154,11 +154,9 @@ try:
         private(native/name, (environment.root/name).read_text())
     private(native/'case.json', dict(tenant=TENANTS[0]))
     ports = Environment(BACKEND, group='device-agent').host_ports()
-    agent_origin = f"https://localhost:{ports['https']}"
-    native_proxy(Path(initialized['gateway']), ports['https'], ports['backend'])
+    agent_origin = initialized['origin']
     providers.enter_context(pki(native, dict(os.environ), case=str(WEB)+':device-browser', agent=True, agent_origin=agent_origin))
     agent = json.loads((native/'agent-pki.json').read_text())
-    agent['endpoint']['listen'] = f"127.0.0.1:{ports['backend']}"
     # Prepare task signing over the product session before enabling Agent runtime.
     config['device_pki'] = json.loads((native/'device-pki.json').read_text())
     binary = Path(os.environ['CARGO_TARGET_DIR'])/'debug/rss-mdm'
@@ -217,7 +215,7 @@ try:
     phase = 'task-signing'
     operator = Browser(initialized['origin'], environment.root/'ca.crt', urlsplit(initialized['origin']).port)
     operator.login(TENANTS[0], 'admin', (environment.root/'account-password').read_text())
-    status, trust = operator.call('POST', '/api/v1/task-signing/trust', dict(action='prepare',expectedRevision=0,origin=initialized['origin']), str(uuid.uuid4()))
+    status, trust = operator.call('POST', '/api/v1/task-signing/trust', dict(action='prepare',expectedRevision=0), str(uuid.uuid4()))
     if status != 200 or trust['revision'] != 1:
         raise RuntimeError('task-signing')
     stop()

@@ -28,6 +28,7 @@ export function createRegistrationChannels(
   enabled = true,
 ) {
   const statuses = shallowRef<ChannelStatus[]>([]),
+    publicEndpoints = shallowRef<Awaited<ReturnType<typeof client.read>>['publicEndpoints']>(),
     loading = shallowRef(false),
     failure = shallowRef(false),
     writable = shallowRef(false),
@@ -46,6 +47,7 @@ export function createRegistrationChannels(
     generation++
     reads++
     statuses.value = []
+    publicEndpoints.value = undefined
     loading.value = false
     failure.value = false
     writable.value = false
@@ -70,6 +72,7 @@ export function createRegistrationChannels(
     failure.value = false
     // Failed refreshes cannot leave a stale permissive projection usable.
     statuses.value = []
+    publicEndpoints.value = undefined
     writable.value = false
     const request = (async () => {
       try {
@@ -78,7 +81,8 @@ export function createRegistrationChannels(
           throw new Error('Wrong registration actor')
         const values = await client.read(identity.instanceId)
         if (disposed || current !== generation || read !== reads) return
-        statuses.value = values
+        statuses.value = values.channels
+        publicEndpoints.value = values.publicEndpoints
         writable.value = identity.grants.some(
           (g) => g.operation === 'registration_configuration_write' && g.scope.kind === 'tenant',
         )
@@ -161,6 +165,7 @@ export function createRegistrationChannels(
   }
   return {
     statuses: readonly(statuses),
+    publicEndpoints: readonly(publicEndpoints),
     commands: readonly(commands),
     loading: readonly(loading),
     failure: readonly(failure),

@@ -16,7 +16,7 @@ const reasons = [
   'trust_conflict',
   'material_revoked',
   'material_version_mismatch',
-  'listener_unavailable',
+  'ingress_unavailable',
   'initialization_authorization',
   'initialization_content',
   'initialization_conflict',
@@ -56,7 +56,7 @@ export function runtimeSnapshot(value: unknown) {
     ready: boolean(v['ready']),
     channels: unique(
       array(v['channels'], (value) => {
-        const c = closed(value, ['name', 'state', 'reasons', 'listening', 'loadedMaterials'])
+        const c = closed(value, ['name', 'state', 'reasons', 'mounted', 'loadedMaterials'])
         return {
           name: enumeration(c['name'], [
             'apple',
@@ -68,7 +68,7 @@ export function runtimeSnapshot(value: unknown) {
           ] as const),
           state: enumeration(c['state'], ['disabled', 'waiting', 'ready', 'degraded'] as const),
           reasons: array(c['reasons'], reason),
-          listening: boolean(c['listening']),
+          mounted: boolean(c['mounted']),
           loadedMaterials: Object.fromEntries(
             Object.entries(record(c['loadedMaterials'])).map(([key, value]) => [key, count(value)]),
           ),
