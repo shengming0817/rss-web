@@ -29,6 +29,20 @@ export async function authorizationJourney({
       headers: { Origin: origin, 'X-Identity-Request': '1', 'X-CSRF-Token': csrf },
     })
   }
+  let activeTenant = f.managementTenant
+  async function signIn(tenant, name, secret) {
+    const logout = await api(
+      'POST',
+      `/api/v1/identity/tenants/${activeTenant}/session/logout`,
+      undefined,
+      activeTenant,
+    )
+    assert.equal(logout.status(), 204)
+    const anonymous = await context.request.get(origin + prefix + '/rules')
+    assert.equal(anonymous.status(), 401)
+    await login(origin, tenant, name, secret)
+    activeTenant = tenant
+  }
   const rule = (operations) => ({
     subject: {
       kind: 'user',
@@ -168,7 +182,7 @@ export async function authorizationJourney({
   await close()
   coverage.push('real-delete-tombstone-and-initial-three-core-grant-protection-403')
   const maintainer = prepared.accounts['authorization-maintainer']
-  await login(origin, f.managementTenant, maintainer.login, secret(maintainer))
+  await signIn(f.managementTenant, maintainer.login, secret(maintainer))
   await page.goto(url)
   await page.getByRole('button', { name: '添加授权规则', exact: true }).click()
   assert.equal(
@@ -186,7 +200,7 @@ export async function authorizationJourney({
   const delegated = await save()
   await close()
   const reader = prepared.accounts['authorization-reader']
-  await login(origin, f.managementTenant, reader.login, secret(reader))
+  await signIn(f.managementTenant, reader.login, secret(reader))
   await page.goto(url)
   await page.getByText('当前会话没有授权维护许可，页面仅展示可读事实。', { exact: true }).waitFor()
   assert.equal(
@@ -201,10 +215,10 @@ export async function authorizationJourney({
   assert.equal(readerWrite.status(), 403)
   const managementBusiness = await context.request.get(origin + '/api/v1/resources')
   assert.ok([401, 403].includes(managementBusiness.status()))
-  await login(origin, f.tenant, f.login, password)
+  await signIn(f.tenant, f.login, password)
   const businessManagement = await context.request.get(origin + prefix + '/rules')
   assert.ok([401, 403].includes(businessManagement.status()))
-  await login(origin, f.managementTenant, f.login, password)
+  await signIn(f.managementTenant, f.login, password)
   await page.goto(`${origin}/tenants/${f.managementTenant}/settings`)
   await page.locator('[data-setting]').first().waitFor()
   coverage.push(
