@@ -269,6 +269,8 @@ function delivery(value: unknown) {
 export function policyAction(value: unknown) {
   const kind = enumeration(record(value)['kind'], [
     'execution',
+    'credential',
+    'unmanage_device',
     'native_collection',
     'agent_collection',
     'telemetry_profile',
@@ -277,6 +279,22 @@ export function policyAction(value: unknown) {
     'ensure_agent_installed',
     'request_mdm_enrollment',
   ] as const)
+  if (kind === 'unmanage_device') {
+    const v = closed(value, ['kind', 'schedule', 'runLifetimeSeconds'])
+    const schedule = nativeSchedule(v['schedule'])
+    if (['registration', 'check_in'].includes(schedule.trigger.kind)) throw new Error('Invalid retirement trigger')
+    return { kind, schedule, runLifetimeSeconds: lifetime(v['runLifetimeSeconds']) }
+  }
+  if (kind === 'credential') {
+    const v = closed(value, ['kind', 'operation', 'architecture', 'schedule', 'frequency', 'runLifetimeSeconds'])
+    return {
+      kind, operation: credentialOperation(v['operation']),
+      architecture: enumeration(v['architecture'], architectures),
+      schedule: nativeSchedule(v['schedule']),
+      frequency: enumeration(v['frequency'], ['once_per_version', 'once_per_entry', 'every_trigger'] as const),
+      runLifetimeSeconds: lifetime(v['runLifetimeSeconds']),
+    }
+  }
   if (kind === 'telemetry_profile') {
     const v = closed(value, ['kind', 'resource'])
     return { kind, resource: exactResource(v['resource']) }
@@ -359,9 +377,8 @@ export function policyAction(value: unknown) {
       'resource',
       'schedule',
       'runLifetimeSeconds',
-      ...(kind === 'software' ? ['delivery', 'intent', 'rollout'] : []),
+      'delivery', 'intent', 'rollout', 'channel',
     ],
-    ['channel'],
   )
   const base = {
     resource: resourceBinding(v['resource']),
@@ -394,10 +411,7 @@ export function policyAction(value: unknown) {
   return {
     kind,
     ...base,
-    channel:
-      v['channel'] === undefined
-        ? ('agent' as const)
-        : enumeration(v['channel'], ['agent', 'mdm'] as const),
+    channel: enumeration(v['channel'], ['agent', 'mdm'] as const),
     delivery: delivery(v['delivery']),
     intent: enumeration(v['intent'], intents),
     rollout: { stages },
@@ -483,4 +497,24 @@ export function eligibility(value: unknown) {
 
 export type ConfigurationDefinition = PolicyDefinition & {
   action: Extract<PolicyDefinition['action'], { kind: 'configuration' }>
+}
+
+export function credentialOperation(value: unknown) {
+  const kind = enumeration(record(value)['kind'], [
+    'rotate_rss_login', 'verify_rss_login', 'collect_bitlocker', 'verify_bitlocker',
+    'rotate_bitlocker', 'rotate_local_administrator', 'verify_local_administrator',
+  ] as const)
+  if (kind === 'collect_bitlocker') { closed(value, ['kind']); return { kind } }
+  if (kind === 'verify_bitlocker' || kind === 'rotate_bitlocker') {
+    const v = closed(value, ['kind', 'volume', 'protector'])
+    return { kind, volume: identifier(v['volume']), protector: uuid(v['protector']) }
+  }
+  if (kind === 'rotate_rss_login' || kind === 'verify_rss_login') {
+    const v = closed(value, ['kind', 'binding', 'bindingGeneration', 'sid'])
+    const bindingGeneration = count(v['bindingGeneration'])
+    if (!bindingGeneration) throw new Error('Invalid binding generation')
+    return { kind, binding: uuid(v['binding']), bindingGeneration, sid: identifier(v['sid']) }
+  }
+  const v = closed(value, ['kind', 'sid'])
+  return { kind, sid: identifier(v['sid']) }
 }
