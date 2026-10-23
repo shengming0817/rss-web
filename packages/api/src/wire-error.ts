@@ -3,16 +3,18 @@ import type { RssApiError, RssApiErrorCause } from './types'
 class RssApiErrorImpl extends Error implements RssApiError {
   override readonly name = 'RssApiError' as const
   declare readonly issuanceId?: string
+  declare readonly retryAfterSeconds?: number
   declare readonly status?: number
   constructor(
     override readonly cause: RssApiErrorCause,
     readonly code: string,
     status?: number,
-    issuanceId?: string,
+    details: { issuanceId?: string; retryAfterSeconds?: number } = {},
   ) {
     super(code)
     if (status !== undefined) this.status = status
-    if (issuanceId !== undefined) this.issuanceId = issuanceId
+    if (details.issuanceId !== undefined) this.issuanceId = details.issuanceId
+    if (details.retryAfterSeconds !== undefined) this.retryAfterSeconds = details.retryAfterSeconds
   }
 }
 
@@ -34,11 +36,20 @@ export function timeoutError(): RssApiError {
 export function networkError(): RssApiError {
   return new RssApiErrorImpl('network', 'NETWORK_ERROR')
 }
-export function identityWireFailure(status: number, code: string): RssApiError {
-  return new RssApiErrorImpl('wire', code, status)
+export function identityWireFailure(
+  status: number,
+  code: string,
+  retryAfterSeconds?: number,
+): RssApiError {
+  return new RssApiErrorImpl(
+    'wire',
+    code,
+    status,
+    retryAfterSeconds === undefined ? {} : { retryAfterSeconds },
+  )
 }
 
 /** Only the closed Agent error decoder supplies this validated locator. */
 export function agentWireFailure(status: number, code: string, issuanceId?: string): RssApiError {
-  return new RssApiErrorImpl('wire', code, status, issuanceId)
+  return new RssApiErrorImpl('wire', code, status, issuanceId === undefined ? {} : { issuanceId })
 }

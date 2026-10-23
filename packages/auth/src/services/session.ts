@@ -239,6 +239,7 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
   }
   async function login(tenant: string, login: string, password: string) {
     tenant = uuid(tenant)
+    const previous = state.value
     lifetime++
     const expected = ++generation
     state.value = {
@@ -267,7 +268,14 @@ export function createSession(transport: HttpTransport, config: HostConfig) {
       )
       await loadContext()
     } catch (error) {
-      if (generation === expected) failure(error)
+      if (generation === expected) {
+        if (isRssApiError(error) && error.cause === 'wire' && error.status === 429) {
+          if (previous.status === 'authenticated' && previous.tenant === tenant) {
+            state.value = previous
+            armExpiry()
+          } else clear()
+        } else failure(error)
+      }
       throw error
     }
   }

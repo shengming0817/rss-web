@@ -7,7 +7,7 @@ import { useOperation } from '../services/operation'
 import type { Provider, ProviderSettings } from '../services/decode'
 const { t } = useI18n()
 const { api, session } = useIdentity()
-const { busy, error, run, checkpoint } = useOperation()
+const { busy, error, errorMessage, run, checkpoint } = useOperation()
 const blocked = computed(() =>
   ['configuration_changed', 'unknown_result', 'identity_unavailable'].includes(error.value),
 )
@@ -137,7 +137,7 @@ async function test(p: Provider) {
 <template>
   <section class="auth-page">
     <h1>{{ t('identity.providers') }}</h1>
-    <p v-if="error" role="alert">{{ t(`identity.errors.${error}`) }}</p>
+    <p v-if="error" role="alert">{{ errorMessage }}</p>
     <p v-if="report" role="status">{{ report }}</p>
     <p v-if="session.state.value.navigation !== 'ready'" role="status">
       {{ t('identity.navigationUnavailable') }}
@@ -196,7 +196,7 @@ async function test(p: Provider) {
         :dismissible="!busy"
         @update:open="!$event && closeEditor()"
       >
-        <p v-if="error" role="alert">{{ t(`identity.errors.${error}`) }}</p>
+        <p v-if="error" role="alert">{{ errorMessage }}</p>
         <form class="auth-form" @submit.prevent="save">
           <h2>{{ t(selected ? 'identity.editProvider' : 'identity.newProvider') }}</h2>
           <p>{{ t('identity.providerHelp') }}</p>

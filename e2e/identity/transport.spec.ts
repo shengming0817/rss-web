@@ -22,7 +22,9 @@ it('consumes V1 cookie/CSRF, host policy, account and provider operations throug
     task.meta['step'] = 'refresh'
     await session.refresh()
     task.meta['step'] = 'reauthenticate'
-    await session.reauthenticate('correct horse battery staple')
+    for (let attempt = 0; attempt < 7; attempt++)
+      await session.reauthenticate('correct horse battery staple')
+    expect(session.state.value.status).toBe('authenticated')
     task.meta['step'] = 'accounts'
     const account = await api.createAccount('joint-member', 'private joint member password')
     expect((await api.accounts()).accounts.some((a) => a.principalId === account.principalId)).toBe(
@@ -42,7 +44,7 @@ it('consumes V1 cookie/CSRF, host policy, account and provider operations throug
       scopes: ['openid'],
       claims: {
         subject: { kind: 'oidc' as const },
-        email: null,
+        profile: { extensionsClaim: null, maxAgeSeconds: 14400 },
         groups: null,
         departmentSnapshot: { claim: 'organization_snapshot', maxAgeSeconds: 120 },
       },
@@ -95,6 +97,18 @@ it('consumes V1 cookie/CSRF, host policy, account and provider operations throug
       { status: 403 },
     )
     await session.logout()
+    for (let attempt = 0; attempt < 5; attempt++)
+      await expect(
+        session.login(tenant, 'joint-unknown', 'private rejected password'),
+      ).rejects.toMatchObject({ status: 401, code: 'invalid_credential' })
+    await expect(
+      session.login(tenant, 'joint-unknown', 'private rejected password'),
+    ).rejects.toMatchObject({
+      status: 429,
+      code: 'rate_limited',
+      retryAfterSeconds: expect.any(Number),
+    })
+    expect(session.state.value.status).toBe('anonymous')
   } catch (error) {
     task.meta['failure'] = isRssApiError(error)
       ? error.cause === 'timeout'

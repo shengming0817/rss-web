@@ -9,7 +9,7 @@ import type { Session } from '../services/decode'
 const { t } = useI18n()
 const router = useRouter()
 const { session, api, flows, hostLogin: host } = useIdentity()
-const { busy, error, run, checkpoint } = useOperation()
+const { busy, error, errorMessage, run, checkpoint } = useOperation()
 const rows = ref<Session[]>([])
 const next = ref<string | null>(null)
 const current = ref('')
@@ -179,7 +179,7 @@ function submitConfirmed() {
     <p v-if="session.logoutOutcome.value === 'unconfirmed'" role="alert">
       {{ t('identity.logoutUnconfirmed') }}
     </p>
-    <p v-else-if="error" role="alert">{{ t(`identity.errors.${error}`) }}</p>
+    <p v-else-if="error" role="alert">{{ errorMessage }}</p>
     <p class="auth-muted">{{ t('identity.logoutHelp') }}</p>
     <UiTabs
       v-model="tab"

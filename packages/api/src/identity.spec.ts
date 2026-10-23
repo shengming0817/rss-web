@@ -71,3 +71,55 @@ it('rejects retired authentication routes and other API owners before dispatch',
     ).rejects.toMatchObject({ cause: 'client' })
   }
 })
+
+describe('mandatory Identity rate-limit deadline', () => {
+  it('accepts bounded positive delta seconds only', () => {
+    for (const seconds of ['1', '537', '4294967295'])
+      expect(decodeIdentityError(429, { code: 'rate_limited' }, seconds)).toMatchObject({
+        cause: 'wire',
+        status: 429,
+        code: 'rate_limited',
+        retryAfterSeconds: Number(seconds),
+      })
+    for (const header of [
+      undefined,
+      null,
+      600,
+      '',
+      '0',
+      '-1',
+      '1.5',
+      '1e3',
+      'Infinity',
+      '4294967296',
+      'Wed, 21 Oct 2037 07:28:00 GMT',
+      ['600'],
+    ])
+      expect(decodeIdentityError(429, { code: 'rate_limited' }, header).cause).toBe('protocol')
+    expect(decodeIdentityError(403, { code: 'rate_limited' }, '600').cause).toBe('protocol')
+  })
+  it('passes the header through production transport and never replays the rejected request', async () => {
+    const instance = axios.create()
+    const mock = new AxiosMockAdapter(instance)
+    const create = vi.spyOn(axios, 'create').mockReturnValueOnce(instance)
+    const transport = createIdentityTransport()
+    create.mockRestore()
+    mock.onPost().reply(429, { code: 'rate_limited' }, { 'Retry-After': '537' })
+    try {
+      await expect(
+        transport.request({
+          method: 'POST',
+          path: '/api/v1/identity/tenants/{tenant}/login',
+          pathParams: { tenant: '11111111-1111-4111-8111-111111111111' },
+          headers: { 'X-Identity-Request': '1' },
+          body: { login: 'admin', password: 'private' },
+          successStatus: 200,
+          decode: (v) => v,
+        }),
+      ).rejects.toMatchObject({ cause: 'wire', status: 429, retryAfterSeconds: 537 })
+      expect(mock.history.post).toHaveLength(1)
+    } finally {
+      mock.restore()
+    }
+  })
+})
