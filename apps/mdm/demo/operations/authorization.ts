@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { TENANT, type DemoRequest, type DomainHandler } from '../scenario'
+import { TENANT, MANAGEMENT_TENANT, type DemoRequest, type DomainHandler } from '../scenario'
 import { createReceipts, error, ok, operation } from '../http'
 import { closed, count, record as objectRecord, uuid } from '../../src/services/decode'
 import {
@@ -7,6 +7,7 @@ import {
   groupDefinition,
   permissions,
   devicePermissions,
+  tenantAdministrationPermissions,
   type Rule,
   type UserGroup,
   type Permission,
@@ -50,12 +51,14 @@ export function createAuthorizationDemo(
       revision: 1,
       value: {
         subject: user(ADMIN),
-        grants: permissions.map((operation) => ({
-          operation,
-          scope: (devicePermissions as readonly string[]).includes(operation)
-            ? { kind: 'all_devices' as const }
-            : { kind: 'tenant' as const },
-        })),
+        grants: permissions
+          .filter((p) => !(tenantAdministrationPermissions as readonly string[]).includes(p))
+          .map((operation) => ({
+            operation,
+            scope: (devicePermissions as readonly string[]).includes(operation)
+              ? { kind: 'all_devices' as const }
+              : { kind: 'tenant' as const },
+          })),
       },
     })
     const id = '77777777-7777-4777-8777-777777777777'
@@ -127,6 +130,16 @@ export function createAuthorizationDemo(
   }
   function guard(request: DemoRequest) {
     const path = request.path
+    if (
+      path.startsWith('/api/v1/tenant-administration/') &&
+      request.actor.tenantId !== MANAGEMENT_TENANT
+    )
+      return error('permission_denied', 403)
+    if (
+      request.actor.tenantId === MANAGEMENT_TENANT &&
+      !path.startsWith('/api/v1/tenant-administration/')
+    )
+      return error('permission_denied', 403)
     if (path === '/api/v1/audit-events' || /^\/api\/v1\/devices\/[^/]+\/timeline$/.test(path))
       return can(request.actor.principalId, 'audit_read')
         ? undefined

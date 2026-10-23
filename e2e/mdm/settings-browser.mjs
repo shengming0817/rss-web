@@ -1,5 +1,6 @@
 // Production Vue against real PG/Identity/HTTPS; faults only discard browser responses.
 import { chromium } from 'playwright'
+import { authorizationJourney } from './authorization-browser.mjs'
 import { readFileSync, statSync, writeFileSync, existsSync } from 'node:fs'
 import assert from 'node:assert/strict'
 import process from 'node:process'
@@ -193,7 +194,7 @@ try {
     const platformIds = await page
       .locator('[data-setting]')
       .evaluateAll((nodes) => nodes.map((n) => n.getAttribute('data-setting')))
-    assert.equal(new Set([...tenantIds, ...platformIds]).size, 43)
+    assert.equal(new Set([...tenantIds, ...platformIds]).size, 44)
     assert.equal(await page.getByRole('link', { name: '设备目录', exact: true }).count(), 0)
     await page.goto(`${origin}/tenants/${f.tenant}/settings`)
     await page.waitForURL((url) => url.pathname === '/login')
@@ -214,7 +215,7 @@ try {
     assert.deepEqual(retired, [])
     coverage.push(
       'independent-platform-authentication-and-scope',
-      'all-43-setting-requirements-retained',
+      'all-44-setting-requirements-retained',
       'ordinary-reader-outside-mandatory-guide',
       'no-retired-approval-or-workflow-requests',
     )
@@ -253,13 +254,15 @@ try {
     const platformIds = await page
       .locator('[data-setting]')
       .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-setting')))
-    assert.equal(new Set([...tenantIds, ...platformIds]).size, 43)
+    assert.equal(new Set([...tenantIds, ...platformIds]).size, 44)
     assert.ok(!platformIds.includes('apns-key'))
     assert.equal(await page.getByRole('link', { name: '设备目录', exact: true }).count(), 0)
     coverage.push(
-      'all-43-requirements-across-authorized-scopes',
+      'all-44-requirements-across-authorized-scopes',
       'platform-independent-local-authentication',
     )
+    phase = 'management-authorization'
+    await authorizationJourney({ page, context, origin, fixture: f, login, password, coverage })
     phase = 'provisioning-unknown'
     await page.goto(`${origin}/tenants/${f.managementTenant}/settings/tenants`)
     const form = page.locator('form').first()
@@ -424,7 +427,7 @@ try {
     JSON.stringify({
       phase,
       result: 'failed',
-      location: /settings-browser\.mjs:\d+:\d+/.exec(error?.stack ?? '')?.[0],
+      location: /(?:settings|authorization)-browser\.mjs:\d+:\d+/.exec(error?.stack ?? '')?.[0],
       classification:
         error?.name === 'AssertionError'
           ? 'assertion'

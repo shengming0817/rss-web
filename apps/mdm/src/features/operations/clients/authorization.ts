@@ -174,6 +174,25 @@ export function rule(value: unknown, tenant: string) {
   return { subject: subject(v['subject'], tenant), grants }
 }
 export type Rule = ReturnType<typeof rule>
+export type AuthorizationRealm = 'tenant' | 'platform'
+export function grantForRealm(value: unknown, realm: AuthorizationRealm) {
+  const g = grant(value)
+  if (
+    realm === 'platform'
+      ? !(platformPermissions as readonly string[]).includes(g.operation) ||
+        g.scope.kind !== 'tenant'
+      : (tenantAdministrationPermissions as readonly string[]).includes(g.operation)
+  )
+    throw new Error('Permission belongs to another realm')
+  return g
+}
+export function ruleForRealm(value: unknown, tenant: string, realm: AuthorizationRealm) {
+  const result = rule(value, tenant)
+  if (realm === 'platform' && result.subject.kind !== 'user')
+    throw new Error('Management rules require a local user')
+  result.grants.forEach((g) => grantForRealm(g, realm))
+  return result
+}
 export interface Change<T> {
   operationId: string
   expectedRevision: number
@@ -268,10 +287,14 @@ export function departments(value: unknown) {
 export function createAuthorizationClient(
   transport: HttpTransport,
   tenant: string,
-  realm: 'tenant' | 'platform' = 'tenant',
+  realm: AuthorizationRealm = 'tenant',
 ) {
   const prefix =
     realm === 'platform' ? '/api/v1/tenant-administration/authorization' : '/api/v1/authorization'
+  const decodeRule = (value: unknown) => ruleForRealm(value, tenant, realm)
+  function tenantOnly() {
+    if (realm === 'platform') throw new Error('Directory is not available in the management realm')
+  }
   function list<T>(path: string, decode: (v: unknown) => T, after?: string) {
     return transport.request({
       method: 'GET',
@@ -280,17 +303,22 @@ export function createAuthorizationClient(
       successStatus: 200,
       decode(value) {
         const v = closed(value, ['items', 'nextCursor'])
-        return {
-          items: unique(
+        const items = unique(
             array(v['items'], (x) => revision(x, decode)),
             (x) => x.id,
           ),
-          nextCursor: nullable(v['nextCursor'], uuid),
-        }
+          nextCursor = nullable(v['nextCursor'], uuid)
+        if (
+          items.length > 100 ||
+          (nextCursor !== null && (items.length !== 100 || items.at(-1)?.id !== nextCursor))
+        )
+          throw new Error('Invalid authorization page')
+        return { items, nextCursor }
       },
     })
   }
   function write<T>(kind: string, id: string, body: Change<T>) {
+    closed(body, ['operationId', 'expectedRevision', 'value'])
     uuid(id)
     uuid(body.operationId)
     count(body.expectedRevision)
@@ -318,6 +346,7 @@ export function createAuthorizationClient(
     })
   }
   async function memberPage(id: string, offset = 0, expectedRevision?: number) {
+    tenantOnly()
     return transport.request({
       method: 'GET',
       path: `${prefix}/user-groups/{id}/members`,
@@ -353,12 +382,12 @@ export function createAuthorizationClient(
       const page = await list(path, decode, after),
         value = page.items.find((v) => v.id === id)
       if (value) return value
-      if (!page.nextCursor) break
+      if (!page.nextCursor) return null
       if (seen.has(page.nextCursor)) throw new Error('Repeated authorization cursor')
       seen.add(page.nextCursor)
       after = page.nextCursor
     }
-    return null
+    throw new Error('Authorization scan did not complete')
   }
   return {
     effective: () =>
@@ -383,10 +412,15 @@ export function createAuthorizationClient(
                 'observation',
               ])
               return {
-                ...grant({ operation: g['operation'], scope: g['scope'] }),
+                ...grantForRealm({ operation: g['operation'], scope: g['scope'] }, realm),
                 ruleId: uuid(g['ruleId']),
                 ruleRevision: count(g['ruleRevision']),
-                subject: subject(g['subject'], tenant),
+                subject: (() => {
+                  const s = subject(g['subject'], tenant)
+                  if (realm === 'platform' && s.kind !== 'user')
+                    throw new Error('Wrong management subject')
+                  return s
+                })(),
                 observation: nullable(g['observation'], (value) => {
                   const o = closed(value, [
                     'snapshotId',
@@ -406,17 +440,25 @@ export function createAuthorizationClient(
           }
         },
       }),
-    findRule: (id: string) => find(`${prefix}/rules`, (v) => rule(v, tenant), id),
-    findGroup: (id: string) => find(`${prefix}/user-groups`, summary, id),
-    rules: (after?: string) => list(`${prefix}/rules`, (v) => rule(v, tenant), after),
-    groups: (after?: string) => list(`${prefix}/user-groups`, summary, after),
-    departments: () =>
-      transport.request({
+    findRule: (id: string) => find(`${prefix}/rules`, decodeRule, id),
+    findGroup: (id: string) => {
+      tenantOnly()
+      return find(`${prefix}/user-groups`, summary, id)
+    },
+    rules: (after?: string) => list(`${prefix}/rules`, decodeRule, after),
+    groups: (after?: string) => {
+      tenantOnly()
+      return list(`${prefix}/user-groups`, summary, after)
+    },
+    departments: () => {
+      tenantOnly()
+      return transport.request({
         method: 'GET',
         path: `${prefix}/departments`,
         successStatus: 200,
         decode: departments,
-      }),
+      })
+    },
     members: memberPage,
     async allMembers(id: string, revision: number) {
       const items: User[] = []
@@ -431,10 +473,11 @@ export function createAuthorizationClient(
       return unique(items, (m) => m.principalId)
     },
     changeRule: (id: string, body: Change<Rule>) => {
-      if (body.value !== null) rule(body.value, tenant)
+      if (body.value !== null) decodeRule(body.value)
       return write('rules', id, body)
     },
     changeGroup: (id: string, body: Change<UserGroup>) => {
+      tenantOnly()
       if (body.value !== null) groupDefinition(body.value, tenant)
       return write('user-groups', id, body)
     },

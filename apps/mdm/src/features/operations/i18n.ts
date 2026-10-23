@@ -1,4 +1,6 @@
+import { authorizationZh, authorizationEn } from './components/authorization-messages'
 export const operationsZh = {
+  ruleUi: authorizationZh,
   auditUi: {
     filters: '按服务端精确条件筛选',
     targetId: '资源标识',
@@ -295,6 +297,7 @@ export const operationsZh = {
   },
 }
 export const operationsEn: typeof operationsZh = {
+  ruleUi: authorizationEn,
   auditUi: {
     filters: 'Exact server filters',
     targetId: 'Resource ID',
