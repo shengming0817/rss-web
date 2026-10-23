@@ -10,9 +10,9 @@ import {
   unique,
   uuid,
 } from '../../../services/decode'
-import { origin, positive, sha256 } from './value'
+import { positive, sha256 } from './value'
 export function taskTrust(value: unknown, tenant: string) {
-  const v = closed(value, ['version', 'origin', 'tenant', 'revision', 'keys'])
+  const v = closed(value, ['version', 'service_id', 'tenant', 'revision', 'keys'])
   if (v['version'] !== 1 || uuid(v['tenant']) !== tenant)
     throw new Error('Wrong task trust binding')
   const keys = unique(
@@ -45,7 +45,7 @@ export function taskTrust(value: unknown, tenant: string) {
     throw new Error('Invalid task key set')
   return {
     version: 1 as const,
-    origin: origin(v['origin']),
+    service_id: uuid(v['service_id']),
     tenant,
     revision: positive(v['revision']),
     keys,
@@ -102,7 +102,7 @@ export function installationObservation(value: unknown) {
 }
 export type TaskTrust = ReturnType<typeof taskTrust>
 export type TaskChange =
-  | { action: 'prepare'; expectedRevision: number; origin: string }
+  | { action: 'prepare'; expectedRevision: number }
   | { action: 'activate' | 'retire'; expectedRevision: number; keyId: string }
 export function createTaskTrustClient(transport: HttpTransport, tenant: string) {
   const decode = (v: unknown) => taskTrust(v, tenant)

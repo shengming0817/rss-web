@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ConnectionsPanel from './ConnectionsPanel.vue'
 import ChannelPanel from './ChannelPanel.vue'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -105,5 +106,6 @@ useSettingsFacts(() => {
     >
     <p>{{ t('settings.backupLimit') }}</p>
   </section>
+  <ConnectionsPanel v-if="runtime.realm === 'tenant'" />
   <ChannelPanel v-if="runtime.realm === 'tenant'" />
 </template>

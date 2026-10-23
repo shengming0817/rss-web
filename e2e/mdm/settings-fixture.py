@@ -123,7 +123,7 @@ def compose_browser(candidate):
             private(material/'case.json',dict(tenant=seeded['tenantId']))
             windows=generate(material,material/'server.crt',material/'server.key')
             for key,host,listen in [('enrollment','enroll.example.test',8443),('management','manage.example.test',8444)]:
-                windows[key].update(origin='https://'+host,listen=allocation['MDM_BACKEND_ADDRESS']+':'+str(listen))
+                windows[key].update(origin='https://'+host)
             private(material/'windows.json',windows)
             provider=providers.enter_context(running(material,dict(os.environ),case=str(WEB)+':first-use-compose',windows=True,owner_root=BACKEND))
             server=owner.compose('ps','-q','server')
@@ -344,7 +344,7 @@ try:
                 public=command(binary,'public-host-config',target)
                 gateway_dir=environment.root/'target-gateway';gateway_dir.mkdir(mode=0o700)
                 for name in ('ui.json','mdm.json'):private(gateway_dir/name,public[name])
-                original=Path(initialized['gateway']);gateway=original.read_text().replace(str(original.parent),str(gateway_dir)).replace('listen '+str(urlsplit(initialized['origin']).port)+';', 'listen '+str(ports['https'])+';').replace('127.0.0.1:'+str(int(config['listen'].rsplit(':',1)[1])+1), '127.0.0.1:'+str(ports['backend']+1)).replace(config['listen'],target['listen']).replace(urlsplit(initialized['origin']).netloc,urlsplit(origin).netloc)
+                original=Path(initialized['gateway']);gateway=original.read_text().replace(str(original.parent),str(gateway_dir)).replace('listen '+str(urlsplit(initialized['origin']).port)+' ssl', 'listen '+str(ports['https'])+' ssl').replace(config['listen'],target['listen']).replace(urlsplit(initialized['origin']).netloc,urlsplit(origin).netloc)
                 for name in ('server.crt','server.key'):private(gateway_dir/name,(original.parent/name).read_text())
                 gateway_path=private(gateway_dir/'nginx.conf',gateway)
                 initial=start_host(binary,path,gateway_path,log);ready(origin,initial,expected=503)

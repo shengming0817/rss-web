@@ -107,13 +107,14 @@ const provision = {
 }
 const task = {
   version: 1,
-  origin: 'https://mdm.test',
+  service_id: c,
   tenant: b,
   revision: 1,
   keys: [{ id: 'key-a', public_key: 'A'.repeat(43), state: 'active' }],
 }
 const pki = {
   version: 1,
+  service_id: c,
   origin: 'https://mdm.test',
   tenant: b,
   purpose: 'agent',
@@ -386,7 +387,7 @@ it('checks task/PKI tenant bindings and current-generation installation observat
     client = createTaskTrustClient(f.client, b)
   await client.read()
   await client.operation(a)
-  await client.change(a, { action: 'prepare', expectedRevision: 0, origin: 'https://mdm.test' })
+  await client.change(a, { action: 'prepare', expectedRevision: 0 })
   expect(installationObservation(null)).toBeNull()
   const observation = {
     observation: {
@@ -548,7 +549,7 @@ it('requires current channel observations and keeps loaded material distinct fro
     name: 'apple',
     state: 'degraded',
     reasons: ['trust_conflict'],
-    listening: false,
+    mounted: false,
     loadedMaterials: { apns: 4 },
   }
   const value = { alive: true, ready: true, components: [], channels: [channel] }
@@ -563,4 +564,11 @@ it('requires current channel observations and keeps loaded material distinct fro
   ]) {
     expect(() => runtimeSnapshot({ ...value, channels: [bad] })).toThrow()
   }
+})
+
+it('rejects retired task origin and PKI documents without stable identity', () => {
+  const { service_id: _taskService, ...oldTask } = task
+  expect(() => taskTrust({ ...oldTask, origin: 'https://mdm.test' }, b)).toThrow()
+  const { service_id: _pkiService, ...oldPki } = pki
+  expect(() => pkiTrust(oldPki, b, 'agent')).toThrow()
 })

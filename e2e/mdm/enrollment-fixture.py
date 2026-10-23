@@ -25,7 +25,7 @@ sys.path.insert(0, str(BACKEND / 'hack'))
 from t2_environment import Environment, private
 from candidate_fixture import INSTANCE, TENANTS, ADMIN
 from build_run import lease_fds
-from runtime_fixture import storage, readiness, native_proxy
+from runtime_fixture import storage, readiness
 from windows_fixtures import generate
 from candidate_installation_driver import Browser
 from pki_fixtures import running as pki
@@ -115,7 +115,7 @@ def prepare_signer(origin, reader_password):
     login = post(f'/api/v1/identity/tenants/{TENANTS[0]}/login',
                  dict(login='admin',password=(environment.root/'account-password').read_text()))
     post(f'/api/v1/identity/tenants/{TENANTS[0]}/accounts', dict(login='reader', password=reader_password.read_text()), login['csrfToken'], expected=201)
-    return post('/api/v1/task-signing/trust', dict(action='prepare',expectedRevision=0,origin=origin),
+    return post('/api/v1/task-signing/trust', dict(action='prepare',expectedRevision=0),
                 login['csrfToken'], str(uuid.uuid4()))['revision']
 
 try:
@@ -163,16 +163,14 @@ try:
         private(root/'case.json', dict(tenant=TENANTS[0]))
         windows = generate(root, root/'server.crt', root/'server.key')
         for key, port in [('enrollment',native_ports['backend']), ('management',native_ports['https'])]:
-            windows[key].update(listen=f'127.0.0.1:{port}', origin=f'https://localhost:{port}')
+            windows[key].update(origin=initialized['origin'])
         private(root/'windows.json', windows)
-        native_proxy(Path(initialized['gateway']), agent_ports['https'], agent_ports['backend'])
         provider_env = dict(os.environ)
         providers.enter_context(pki(root, provider_env, case=str(WEB)+':enrollment-browser', windows=True))
         providers.enter_context(pki(root, provider_env, case=str(WEB)+':enrollment-browser', agent=True,
-            agent_origin=f"https://localhost:{agent_ports['https']}"))
-        providers.enter_context(pki(root, provider_env, case=str(WEB)+':enrollment-browser', agent=True, generation='next',agent_origin=f"https://localhost:{agent_ports['https']}"))
+            agent_origin=initialized['origin']))
+        providers.enter_context(pki(root, provider_env, case=str(WEB)+':enrollment-browser', agent=True, generation='next',agent_origin=initialized['origin']))
         agent = json.loads((root/'agent-pki.json').read_text())
-        agent['endpoint']['listen'] = f"127.0.0.1:{agent_ports['backend']}"
         config.update(native_protocols=dict(windows=json.loads((root/'windows.json').read_text())),
                       agent_pki=agent, device_pki=json.loads((root/'device-pki.json').read_text()))
         private(config_path, config)

@@ -1,3 +1,4 @@
+import { createConnectionsDemo } from './connections'
 import { createManagementAuthorizationDemo } from './management-authorization'
 import { createPkiDemo } from './pki'
 import { createProfilesDemo } from './profiles'
@@ -25,6 +26,7 @@ const platformIds = [
   'host-config',
 ]
 export function createSettingsDemo() {
+  const connections = createConnectionsDemo()
   const managementAuthorization = createManagementAuthorizationDemo()
   const pki = createPkiDemo()
   const packages = createPackageDemo()
@@ -43,6 +45,8 @@ export function createSettingsDemo() {
     },
   ]
   const handle: DomainHandler = (r, scenario) => {
+    const connectionsReply = connections.handle(r, scenario)
+    if (connectionsReply) return connectionsReply
     const managementReply = managementAuthorization.handle(r, scenario)
     if (managementReply) return managementReply
     const pkiReply = pki.handle(r, scenario)
@@ -63,7 +67,7 @@ export function createSettingsDemo() {
             name,
             state: 'disabled',
             reasons: [],
-            listening: false,
+            mounted: false,
             loadedMaterials: {},
           }),
         ),
@@ -253,6 +257,7 @@ export function createSettingsDemo() {
   return {
     handle,
     reset() {
+      connections.reset()
       managementAuthorization.reset()
       pki.reset()
       packages.reset()

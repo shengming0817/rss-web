@@ -1,4 +1,51 @@
 export const settingsZh = {
+  connections: {
+    title: 'Agent 连接配置',
+    service: '稳定服务身份',
+    console: '控制台入口',
+    windowsEnrollment: 'Windows 注册地址',
+    windowsManagement: 'Windows 管理地址',
+    apple: 'Apple 管理地址',
+    boundary:
+      '公网 HTTPS 与设备证书认证由 Nginx 网关负责。此处保存并发布 Agent 受信地址；原生 Windows/Apple 地址仍由各自协议配置管理。',
+    desired: '期望配置版本',
+    preferred: '首选 HTTPS origin',
+    origins: '已授权 HTTPS origins（每行一个，最多 8 个）',
+    published: '已发布版本',
+    savedHint: '保存仅创建期望配置，不会应用 Nginx，也不表示设备已安装。',
+    diff: '发布差异',
+    added: '新增地址',
+    removed: '退役地址',
+    retirement:
+      '按 A → A+B → B 发布。先部署并验证 B，再发布包含 B 的配置；确认设备经 B 回报后，保存仅含 B 的配置并发布以退役 A。',
+    blockers: '仍有 {configurations} 份注册配置、{installations} 个安装交付阻止退役。',
+    deployment: '部署观察',
+    deploymentHint:
+      '由部署流程应用并通过真实 HTTPS 核验。观察必须绑定本次期望版本且保持新鲜；页面不执行部署命令。',
+    review: '已核对保存的差异及部署观察',
+    publish: '发布保存的配置',
+    convergence: '设备安装确认',
+    confirmed: '已确认 {confirmed} / {active} 台当前活跃设备',
+    unconfirmed: '查看未确认设备',
+    installed: '已安装版本',
+    target: '目标版本',
+    registration: '当前注册 / 代次',
+    failure: '最近失败报告',
+    more: '读取下一页',
+    download: '下载已发布的离线连接配置',
+    offline:
+      '所有已知地址失联时，由管理员通过受保护的本机导入恢复。此文件由后端签名，不更换设备身份、根信任或软件源权限。',
+    factsHint:
+      '目标版本来自服务端期望状态；安装版本、地址与接收时间来自当前注册的设备报告。未确认不表示未安装。',
+    noReceipt: '尚无原操作回执；结果仍未确定。',
+    reasons: {
+      signature_rejected: '配置签名不受信',
+      identity_mismatch: '服务或租户身份不匹配',
+      revision_rejected: '配置版本被拒绝',
+      persistence_failed: '配置未能持久化',
+      network_unavailable: '授权地址网络不可用',
+    },
+  },
   packageTaskNote:
     '选择安装文件，系统识别版本与目标后发布。签名或公证不是发布前提；发布成功不表示设备已安装。',
   chooseInstaller: '选择安装文件',
@@ -312,6 +359,55 @@ export const settingsZh = {
   },
 } as const
 export const settingsEn = {
+  connections: {
+    title: 'Agent connections',
+    service: 'Stable service identity',
+    console: 'Console endpoint',
+    windowsEnrollment: 'Windows enrollment URL',
+    windowsManagement: 'Windows management URLs',
+    apple: 'Apple management URL',
+    boundary:
+      'Nginx owns public HTTPS and device certificate authentication. Publish trusted Agent locations here; Windows and Apple native URLs remain managed by their own protocols.',
+    desired: 'Desired revision',
+    preferred: 'Preferred HTTPS origin',
+    origins: 'Authorized HTTPS origins (one per line, up to 8)',
+    published: 'Published revision',
+    savedHint:
+      'Saving creates desired state. It neither applies Nginx nor confirms device installation.',
+    diff: 'Publication changes',
+    added: 'Added origins',
+    removed: 'Retiring origins',
+    retirement:
+      'Publish A → A+B → B. Deploy and verify B, publish the configuration containing B, then confirm devices report through B. Save and publish B alone to retire A.',
+    blockers:
+      'Retirement is blocked by {configurations} enrollment configurations and {installations} installation deliveries.',
+    deployment: 'Deployment observations',
+    deploymentHint:
+      'The deployment workflow applies and verifies real HTTPS endpoints. Observations must be fresh and bound to the desired revision. This page does not execute deployment commands.',
+    review: 'I checked the saved changes and deployment observations',
+    publish: 'Publish saved configuration',
+    convergence: 'Device installation confirmations',
+    confirmed: 'Confirmed {confirmed} / {active} active devices',
+    unconfirmed: 'View unconfirmed devices',
+    installed: 'Installed revision',
+    target: 'Target revision',
+    registration: 'Current registration / generation',
+    failure: 'Latest failure report',
+    more: 'Load next page',
+    download: 'Download published offline connection configuration',
+    offline:
+      'If every known location is unreachable, an administrator can import this server-signed file through the protected local recovery operation. It retains device identity, root trust and software source permissions.',
+    factsHint:
+      'The target is server-desired state. Installed revision, location and receipt time come from the current device registration. Missing confirmation does not prove absence.',
+    noReceipt: 'No original receipt yet; the outcome remains unknown.',
+    reasons: {
+      signature_rejected: 'Untrusted configuration signature',
+      identity_mismatch: 'Service or tenant identity mismatch',
+      revision_rejected: 'Configuration revision rejected',
+      persistence_failed: 'Configuration persistence failed',
+      network_unavailable: 'Authorized locations are unreachable',
+    },
+  },
   packageTaskNote:
     'Choose an installer, review its version and target, then publish. Signing and notarization are optional. Publication does not confirm installation.',
   chooseInstaller: 'Choose installer',

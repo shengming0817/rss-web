@@ -11,6 +11,7 @@ import { createPkiClient } from './clients/pki'
 import { createRuntimeDiagnostics } from './clients/runtime'
 import { createManagedPackages } from './clients/packages'
 import { createFirstUseClient } from './clients/firstUse'
+import { createConnectionsClient } from './clients/connections'
 import { createSettingsOperations } from './operations'
 
 export function createSettingsClients(
@@ -21,6 +22,7 @@ export function createSettingsClients(
   realm: Realm,
 ) {
   return {
+    connections: createConnectionsClient(transport, tenant),
     profiles: createProfilesClient(transport),
     firstUse: createFirstUseClient(transport, tenant),
     runtime: createRuntimeDiagnostics(transport),

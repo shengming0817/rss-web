@@ -9,11 +9,21 @@ const runtime = useMdm(),
   { t } = useI18n(),
   domain = ref(runtime.realm === 'platform' ? 'provision' : 'apns'),
   id = ref(''),
-  result = ref<{ revision: number; state: string }>()
+  result = ref<{ revision: number; state: string } | null>()
 const domains = computed(() =>
   runtime.realm === 'platform'
     ? ['provision', 'registry']
-    : ['apns', 'profile', 'managed_account', 'storage', 'smtp', 'wns', 'webhook', 'task'],
+    : [
+        'apns',
+        'profile',
+        'managed_account',
+        'storage',
+        'smtp',
+        'wns',
+        'webhook',
+        'task',
+        'connections',
+      ],
 )
 const { query, busy, failure } = useSettingsAction(() => domain.value)
 const records = computed(() => [...runtime.settings.operations.records.values()])
@@ -59,10 +69,23 @@ async function lookup() {
           state: 'confirmed' in v ? (v.confirmed ? 'qualified' : 'pending') : 'received',
         }
       }
+      if (d === 'connections') {
+        const v = await s.connections.operation(original)
+        return v === null
+          ? null
+          : {
+              revision:
+                v.action === 'saved'
+                  ? v.draft.configuration.revision
+                  : v.configuration.configuration.revision,
+              state: v.action,
+            }
+      }
       const v = await s.task.operation(original)
       return { revision: v.revision, state: 'received' }
     },
     (v) => (result.value = v),
+    (v) => v !== null,
   )
 }
 useSettingsFacts(() => {
@@ -87,6 +110,7 @@ useSettingsFacts(() => {
       {{ t('settings.revision') }} {{ result.revision }} · {{ result.state }} ·
       {{ t('settings.notObserved') }}
     </p>
+    <p v-if="result === null" role="status">{{ t('settings.connections.noReceipt') }}</p>
   </section>
   <p v-if="!records.length">{{ t('settings.noOperations') }}</p>
   <article v-for="operation in records" :key="operation.id" class="console-panel">

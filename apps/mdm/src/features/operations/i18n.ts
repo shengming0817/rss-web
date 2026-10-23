@@ -38,7 +38,7 @@ export const operationsZh = {
     materialHint:
       '保存或选择材料不代表已加载。待应用材料由运维执行 prepare-hosts 并受控重启，核对进程 generation、revision 后重新读取通道状态。',
     readChannels: '读取实际通道状态',
-    listening: '监听已绑定',
+    mounted: '内部路由已挂载',
     loaded: '已加载材料版本',
     channelName: {
       apple: 'Apple 管理',
@@ -109,7 +109,7 @@ export const operationsZh = {
       trust_conflict: '持久信任冲突（阻断）',
       material_revoked: '材料已撤销',
       material_version_mismatch: '所选与加载版本不一致',
-      listener_unavailable: '监听不可用',
+      ingress_unavailable: '网关接入不可用',
       initialization_authorization: '等待初始化授权',
       initialization_content: '等待内容配置',
       initialization_conflict: '初始化冲突',
@@ -362,7 +362,7 @@ export const operationsEn: typeof operationsZh = {
     materialHint:
       'Saving or selecting materials does not load them. Apply pending selections with prepare-hosts and a controlled restart, verify process generation and revision, then read channel status again.',
     readChannels: 'Read actual channel status',
-    listening: 'Listener bound',
+    mounted: 'Internal routes mounted',
     loaded: 'Loaded material revisions',
     channelName: {
       apple: 'Apple management',
@@ -433,7 +433,7 @@ export const operationsEn: typeof operationsZh = {
       trust_conflict: 'Persistent trust conflict (blocked)',
       material_revoked: 'Material revoked',
       material_version_mismatch: 'Selected and loaded revisions differ',
-      listener_unavailable: 'Listener unavailable',
+      ingress_unavailable: 'Gateway ingress unavailable',
       initialization_authorization: 'Initialization authorization pending',
       initialization_content: 'Content configuration pending',
       initialization_conflict: 'Initialization conflict',

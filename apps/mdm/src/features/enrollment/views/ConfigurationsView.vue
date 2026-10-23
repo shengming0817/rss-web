@@ -9,7 +9,7 @@ import { generateEnrollmentPassword } from '../../devices/clients/enrollment'
 import { usePermission } from '../usePermission'
 import { useAttachment } from '../useAttachment'
 import { platforms, architectures } from '../clients/packages'
-import { configurationFilename } from '../clients/configurations'
+import { configurationFilename, type configuration } from '../clients/configurations'
 import RegistrationStatus from '../../../components/RegistrationStatus.vue'
 import PageFrame from '../../../components/PageFrame.vue'
 const runtime = useMdm(),
@@ -29,7 +29,8 @@ const { canRead, canWrite } = permission,
 const delivery = useAttachment(),
   { url, filename } = delivery
 const settings = ref<Awaited<ReturnType<typeof client.settings>>>(),
-  current = ref<Awaited<ReturnType<typeof client.read>>>()
+  current = ref<Awaited<ReturnType<typeof client.read>>>(),
+  delivered = ref<ReturnType<typeof configuration>>()
 const lifetime = ref<number | null>(null),
   finite = ref(true),
   amount = ref(1),
@@ -80,6 +81,7 @@ async function create() {
   pending.value = 'create'
   current.value = undefined
   delivery.clear()
+  delivered.value = undefined
   const stamp = delivery.stamp()
   let file: Awaited<ReturnType<typeof client.create>> | undefined
   try {
@@ -102,6 +104,7 @@ async function create() {
       },
       (result) => {
         if (!canWrite.value || stamp !== delivery.stamp()) return
+        delivered.value = result.configuration
         configurationId.value = result.configuration.configurationId
         delivery.deliver(result.file, settings.value!.configurationFilename, stamp)
         pending.value = undefined
@@ -315,6 +318,11 @@ watch(
       <a v-if="url" :href="url" :download="filename"
         >{{ t('onboarding.saveFile') }} · {{ configurationFilename }}</a
       >
+      <p v-if="delivered && url">
+        {{ t('settings.connections.service') }}
+        {{ delivered.connections.configuration.serviceId }} · {{ t('settings.connections.target') }}
+        {{ delivered.connections.configuration.revision }}
+      </p>
       <p>{{ t('onboarding.sameDirectory') }}</p>
       <p v-if="operationId">{{ t('devices.operation') }}: {{ operationId }}</p>
       <p v-if="uncertain">{{ t('onboarding.unknownConfiguration') }}</p>
@@ -335,6 +343,12 @@ watch(
         </form>
       </section>
       <dl v-if="current">
+        <dt>{{ t('settings.connections.service') }}</dt>
+        <dd>{{ current.configuration.connections.configuration.serviceId }}</dd>
+        <dt>{{ t('settings.connections.target') }}</dt>
+        <dd>{{ current.configuration.connections.configuration.revision }}</dd>
+        <dt>{{ t('settings.connections.origins') }}</dt>
+        <dd>{{ current.configuration.connections.configuration.origins.join(', ') }}</dd>
         <dt>{{ t('devices.status') }}</dt>
         <dd>{{ current.state }}</dd>
         <dt>{{ t('onboarding.reserved') }}</dt>

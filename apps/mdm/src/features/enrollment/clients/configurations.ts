@@ -11,8 +11,9 @@ import {
   uuid,
 } from '../../../services/decode'
 import { user } from '../../operations/clients/authorization'
-import { base64url, httpsOrigin, platforms, target } from './packages'
+import { base64url, platforms, target } from './packages'
 import { attachment } from './binary'
+import { signedConnections } from '../../settings/clients/connections'
 export const configurationFilename = 'rss-agent-enrollment.json'
 export function quantity(value: unknown) {
   const v = closed(value, ['kind'], ['count']),
@@ -31,7 +32,7 @@ export function configuration(value: unknown, tenant: string) {
     'wireVersion',
     'configurationId',
     'tenantId',
-    'origin',
+    'connections',
     'targets',
     'expiresAt',
     'quantity',
@@ -51,7 +52,7 @@ export function configuration(value: unknown, tenant: string) {
     wireVersion: 1 as const,
     configurationId: uuid(v['configurationId']),
     tenantId: tenant,
-    origin: httpsOrigin(v['origin']),
+    connections: signedConnections(v['connections'], tenant),
     targets,
     expiresAt: integer(v['expiresAt']),
     quantity: quantity(v['quantity']),

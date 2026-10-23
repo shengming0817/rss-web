@@ -14,8 +14,8 @@ const { t } = useI18n()
       <dl class="settings-facts">
         <dt>{{ t('settings.state') }}</dt>
         <dd>{{ t(`operations.diagnosticUi.state.${channel.state}`) }}</dd>
-        <dt>{{ t('operations.diagnosticUi.listening') }}</dt>
-        <dd>{{ t(channel.listening ? 'devices.yes' : 'devices.no') }}</dd>
+        <dt>{{ t('operations.diagnosticUi.mounted') }}</dt>
+        <dd>{{ t(channel.mounted ? 'devices.yes' : 'devices.no') }}</dd>
         <dt>{{ t('operations.diagnosticUi.loaded') }}</dt>
         <dd>
           <span v-for="(revision, key) in channel.loadedMaterials" :key="key"

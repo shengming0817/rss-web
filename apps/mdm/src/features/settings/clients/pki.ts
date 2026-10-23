@@ -19,7 +19,15 @@ export function encoded(value: unknown, max = 24 * 1024 * 1024) {
   return s
 }
 export function pkiTrust(value: unknown, tenant: string, purpose: PkiPurpose) {
-  const v = closed(value, ['version', 'origin', 'tenant', 'purpose', 'revision', 'issuers'])
+  const v = closed(value, [
+    'version',
+    'service_id',
+    'origin',
+    'tenant',
+    'purpose',
+    'revision',
+    'issuers',
+  ])
   if (v['version'] !== 1 || v['tenant'] !== tenant || v['purpose'] !== purpose)
     throw new Error('Wrong PKI trust binding')
   const issuers = unique(
@@ -55,6 +63,7 @@ export function pkiTrust(value: unknown, tenant: string, purpose: PkiPurpose) {
     throw new Error('Invalid issuer set')
   return {
     version: 1 as const,
+    service_id: uuid(v['service_id']),
     origin: origin(v['origin']),
     tenant: uuid(tenant),
     purpose,

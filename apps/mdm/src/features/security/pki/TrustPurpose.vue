@@ -66,7 +66,7 @@ function reviewPreparation() {
   if (
     !current ||
     !next ||
-    next.origin !== current.origin ||
+    next.service_id !== current.service_id ||
     next.revision !== current.revision + 1 ||
     next.issuers.filter((i) => !current.issuers.some((old) => old.digest === i.digest)).length !==
       1 ||
@@ -200,6 +200,7 @@ useSettingsFacts(() => {
     />
     <template v-if="trust">
       <p>
+        {{ t('settings.connections.service') }} {{ trust.service_id }} ·
         {{ t('security.pki.revision') }} {{ trust.revision }} · {{ t('security.pki.origin') }}
         {{ trust.origin }}
         <span v-if="readAt">· {{ t('security.pki.readAt') }} {{ auditTime(readAt) }}</span>

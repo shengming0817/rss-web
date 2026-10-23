@@ -58,14 +58,14 @@ def register(origin, ca, native, operator, private, tenant, capabilities=None, a
     binding = activation['runtime']
     check('inventory.native.v1' in binding['capabilities'], 'collector-binding')
     trust = call(origin, ca, '/api/v1/agent/runtime/task-trust', cert=cert, key=key, method='GET')
-    check(trust['version'] == 1 and trust['origin'] == operator.origin and trust['tenant'] == tenant, 'collector-trust-authority')
+    check(trust['version'] == 1 and trust['service_id'] == '33333333-3333-4333-8333-333333333333' and trust['tenant'] == tenant, 'collector-trust-authority')
     installed = private(native/'collector-trust.json', json.dumps(trust))
     with installed.open('rb') as material:
         os.fsync(material.fileno())
     readback = json.loads(installed.read_text())
     check(readback == trust, 'collector-trust-readback')
     # Trust::installation_digest uses this struct order, not JSON object key sorting.
-    canonical = {key: readback[key] for key in ['version', 'origin', 'tenant', 'revision', 'keys']}
+    canonical = {key: readback[key] for key in ['version', 'service_id', 'tenant', 'revision', 'keys']}
     canonical['keys'] = [{key: item[key] for key in ['id', 'public_key', 'state']} for item in readback['keys']]
     digest = hashlib.sha256(json.dumps(['rss-mdm/task-signing-trust/v1', canonical], separators=(',', ':')).encode()).hexdigest()
     acknowledgement = dict(operation=str(uuid.uuid4()), version=1, registration=binding['registrationId'], generation=binding['generation'], revision=trust['revision'], digest=digest)
@@ -152,7 +152,7 @@ def acknowledge_pki(path):
     readback = json.loads(installed.read_text())
     check(readback == trust, 'collector-pki-readback')
     generations = [[i[k] for k in ['digest','mode','certificate','root','provisioner','kid']] for i in readback['issuers']]
-    digest = hashlib.sha256(json.dumps(['device-trust-install/v1',readback['version'],readback['origin'],readback['tenant'],readback['purpose'],readback['revision'],generations],separators=(',',':')).encode()).hexdigest()
+    digest = hashlib.sha256(json.dumps(['device-trust-install/v1',readback['version'],readback['service_id'],readback['tenant'],readback['purpose'],readback['revision'],generations],separators=(',',':')).encode()).hexdigest()
     ack = dict(operation=str(uuid.uuid4()),version=1,revision=trust['revision'],digest=digest)
     call(agent['origin'],agent['ca'],'/api/v1/agent/enroll/trust/acknowledgements',ack,agent['cert'],agent['key'],expected=204)
     observation = dict(operation=str(uuid.uuid4()),version=1,registration=agent['runtime']['registrationId'],generation=agent['runtime']['generation'],sequence=1,target_revision=trust['revision'],target_digest=digest,actual_revision=trust['revision'],actual_digest=digest,state='applied',reason=None,observed_at=int(time.time()))
