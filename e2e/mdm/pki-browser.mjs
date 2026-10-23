@@ -211,7 +211,10 @@ export async function runPkiCollector(fixtureFile, lifecycle = {}) {
       onChild: lifecycle.onChild,
       onRelease: lifecycle.onRelease,
     },
-  )
+  ).catch(() => {
+    if (lifecycle.interrupted?.()) throw new Error('PKI collector cancelled')
+    throw new PkiCollectorError({ spawnFailed: true })
+  })
   if (lifecycle.interrupted?.()) throw new Error('PKI collector cancelled')
   if (result.timedOut || result.signal || result.status !== 0) throw new PkiCollectorError(result)
   return result
@@ -228,7 +231,13 @@ export class PkiCollectorError extends Error {
 export function pkiCollectorFailure(result) {
   const diagnostic = {
     phase: 'pki-ack',
-    classification: result.timedOut ? 'timeout' : result.signal ? 'signal' : 'exit',
+    classification: result.spawnFailed
+      ? 'spawn'
+      : result.timedOut
+        ? 'timeout'
+        : result.signal
+          ? 'signal'
+          : 'exit',
     exitCode: Number.isInteger(result.status) ? result.status : null,
     signal: ['SIGTERM', 'SIGKILL', 'SIGINT'].includes(result.signal) ? result.signal : null,
   }

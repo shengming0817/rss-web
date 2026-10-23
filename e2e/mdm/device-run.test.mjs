@@ -257,6 +257,21 @@ console.log(JSON.stringify({result:'failed',classification:'collector-pki-readba
         !JSON.stringify(error).includes('private'),
     )
     assert.equal(released, true)
+    rmSync(resolve(dir, 'python3'))
+    process.env.PATH = dir
+    released = false
+    await assert.rejects(
+      runPkiCollector(resolve(dir, 'fixture.json'), {
+        onRelease: () => {
+          released = true
+        },
+      }),
+      (error) =>
+        error instanceof PkiCollectorError &&
+        error.collector.classification === 'spawn' &&
+        error.collector.exitCode === null,
+    )
+    assert.equal(released, true)
   } finally {
     process.env.PATH = originalPath
     rmSync(dir, { recursive: true, force: true })
