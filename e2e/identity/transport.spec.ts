@@ -44,7 +44,7 @@ it('consumes V1 cookie/CSRF, host policy, account and provider operations throug
       scopes: ['openid'],
       claims: {
         subject: { kind: 'oidc' as const },
-        email: null,
+        profile: { extensionsClaim: null, maxAgeSeconds: 14400 },
         groups: null,
         departmentSnapshot: { claim: 'organization_snapshot', maxAgeSeconds: 120 },
       },

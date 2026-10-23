@@ -127,11 +127,10 @@ export async function execute<T>(
           throw protocolError(response.status)
         }
       }
-      throw decodeError(
-        response.status,
-        value,
-        axios.AxiosHeaders.from(response.headers).get('Retry-After'),
-      )
+      const retryAfter = Object.entries(response.headers).find(
+        ([name]) => name.toLowerCase() === 'retry-after',
+      )?.[1]
+      throw decodeError(response.status, value, retryAfter)
     }
     const accepted = Array.isArray(options.successStatus)
       ? options.successStatus.includes(response.status)
