@@ -8,7 +8,7 @@ import LocalProfileEditor from './LocalProfileEditor.vue'
 import type { Account } from '../services/decode'
 const { t } = useI18n()
 const { api, session } = useIdentity()
-const { busy, error, run } = useOperation()
+const { busy, error, errorMessage, run } = useOperation()
 const rows = ref<Account[]>([])
 const loaded = ref(false)
 const next = ref<string | null>(null)
@@ -83,7 +83,7 @@ async function reset() {
 <template>
   <section class="auth-page">
     <h1>{{ t('identity.accounts') }}</h1>
-    <p v-if="error" role="alert">{{ t(`identity.errors.${error}`) }}</p>
+    <p v-if="error" role="alert">{{ errorMessage }}</p>
     <p v-if="session.state.value.navigation !== 'ready'" role="status">
       {{ t('identity.navigationUnavailable') }}
     </p>
@@ -168,7 +168,7 @@ async function reset() {
         :dismissible="!busy"
         @update:open="!$event && closeCreate()"
       >
-        <p v-if="error" role="alert">{{ t(`identity.errors.${error}`) }}</p>
+        <p v-if="error" role="alert">{{ errorMessage }}</p>
         <form class="auth-form" @submit.prevent="create">
           <h2>{{ t('identity.createAccount') }}</h2>
           <label for="account-login">{{ t('identity.username') }}</label

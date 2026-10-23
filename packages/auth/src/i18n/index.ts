@@ -126,7 +126,7 @@ const zh = {
     account_already_exists: '账户名已存在，请使用其它名称。',
     configuration_changed: '配置已发生变化，请重新读取后再编辑。',
     identity_link_conflict: '身份关联冲突，请联系管理员。',
-    rate_limited: '请求过于频繁，请稍后再试。',
+    rate_limited: '请求过于频繁，最早可于 {time} 重试。',
     identity_unavailable: '身份服务暂时不可用，当前结果不能作为成功依据。',
   },
 }
@@ -269,7 +269,7 @@ const en = {
     account_already_exists: 'This login already exists. Choose another name.',
     configuration_changed: 'The configuration changed. Reload before editing again.',
     identity_link_conflict: 'Identity link conflict. Contact your administrator.',
-    rate_limited: 'Too many requests. Try again later.',
+    rate_limited: 'Too many requests. Try again at or after {time}.',
     identity_unavailable:
       'Identity is unavailable. This outcome must not be treated as successful.',
   },

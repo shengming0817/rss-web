@@ -21,7 +21,11 @@ const statuses: Readonly<Record<string, number>> = {
   rate_limited: 429,
   identity_unavailable: 503,
 }
-export function decodeIdentityError(status: number, value: unknown): RssApiError {
+export function decodeIdentityError(
+  status: number,
+  value: unknown,
+  retryAfter?: unknown,
+): RssApiError {
   if (typeof value !== 'object' || value === null || Array.isArray(value))
     return protocolError(status)
   const v = value as Record<string, unknown>
@@ -31,6 +35,14 @@ export function decodeIdentityError(status: number, value: unknown): RssApiError
     statuses[v['code']] !== status
   )
     return protocolError(status)
+  if (status === 429) {
+    if (typeof retryAfter !== 'string' || !/^\d+$/.test(retryAfter.trim()))
+      return protocolError(status)
+    const seconds = Number(retryAfter.trim())
+    if (!Number.isSafeInteger(seconds) || seconds < 1 || seconds > 4_294_967_295)
+      return protocolError(status)
+    return identityWireFailure(status, v['code'], seconds)
+  }
   return identityWireFailure(status, v['code'])
 }
 export function createIdentityTransport(): HttpTransport {
@@ -47,9 +59,7 @@ export function createIdentityTransport(): HttpTransport {
       const headers = Object.keys(options.headers ?? {}).map((v) => v.toLowerCase())
       if (headers.some((v) => !['x-identity-request', 'x-csrf-token'].includes(v)))
         throw clientError()
-      return execute(instance, 30_000, options, (status, value) =>
-        decodeIdentityError(status, value),
-      )
+      return execute(instance, 30_000, options, decodeIdentityError)
     },
   } as HttpTransport
 }

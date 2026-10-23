@@ -29,6 +29,7 @@ async function view(
   name = 'sessions',
   query: Record<string, string> = {},
   sessionProviders: { providerId: string; label: string }[] = [],
+  locale = 'zh-CN',
 ) {
   const router = createRouter({
     history: createMemoryHistory(),
@@ -55,10 +56,12 @@ async function view(
   await router.isReady()
   if (component === SessionsView && f.session.config.oidcEnabled)
     f.replies.push(securityValue(), { providers: sessionProviders })
+  const i18n = identityI18n()
+  i18n.global.locale.value = locale as 'zh-CN' | 'en-US'
   const wrapper = mount(component, {
     attachTo: document.body,
     global: {
-      plugins: [createPinia(), identityI18n(), router],
+      plugins: [createPinia(), i18n, router],
       provide: { [runtimeKey as symbol]: f },
     },
   })
@@ -860,4 +863,45 @@ it('preserves empty local fields and explicitly recovers an uncommitted unknown 
   expect(writes()).toHaveLength(1)
   wrapper.unmount()
   f.session.clear()
+})
+
+it('shows the server recovery time in each locale, clears passwords and waits for explicit resubmission', async () => {
+  for (const locale of ['zh-CN', 'en-US']) {
+    const f = fixture(false)
+    f.replies.push(decodeIdentityError(401, { code: 'invalid_credential' }))
+    const { wrapper } = await view(LoginView, f, 'login', {}, [], locale)
+    const now = Date.now()
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
+    try {
+      await wrapper.get('#login-name').setValue('admin')
+      await wrapper.get('#login-password').setValue('private password')
+      f.replies.push(decodeIdentityError(429, { code: 'rate_limited' }, '537'))
+      const requests = f.request.mock.calls.length
+      await wrapper.get('form').trigger('submit')
+      await flushPromises()
+      expect((wrapper.get('#login-password').element as HTMLInputElement).value).toBe('')
+      expect(wrapper.get('[role=alert]').text()).toContain(
+        new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'medium' }).format(
+          now + 537_000,
+        ),
+      )
+      expect(wrapper.get('[role=alert]').text()).toContain(
+        locale === 'zh-CN' ? '最早可于' : 'Try again at or after',
+      )
+      clock.mockReturnValue(now + 600_000)
+      await flushPromises()
+      expect(f.request.mock.calls).toHaveLength(requests + 1)
+      expect(f.session.state.value.status).toBe('anonymous')
+      await wrapper.get('#login-password').setValue('new private password')
+      f.replies.push(decodeIdentityError(401, { code: 'invalid_credential' }))
+      await wrapper.get('form').trigger('submit')
+      await flushPromises()
+      expect(wrapper.get('[role=alert]').text()).not.toContain('537')
+      expect(f.request.mock.calls).toHaveLength(requests + 2)
+    } finally {
+      clock.mockRestore()
+      wrapper.unmount()
+      f.session.clear()
+    }
+  }
 })

@@ -10,7 +10,7 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const { session, api, flows, landingTarget, hostLogin: host } = useIdentity()
-const { busy, error, run, checkpoint } = useOperation()
+const { busy, error, errorMessage, run, checkpoint } = useOperation()
 const tenant = ref('')
 const login = ref('')
 const password = ref('')
@@ -81,7 +81,7 @@ onMounted(() => {
     <h1 id="login-title">{{ t('identity.login') }}</h1>
     <p>{{ t(host?.descriptionKey ?? 'identity.loginDescription') }}</p>
     <p v-if="session.invalidated.value" role="status">{{ t('identity.expired') }}</p>
-    <p v-if="error" role="alert">{{ t(`identity.errors.${error}`) }}</p>
+    <p v-if="error" role="alert">{{ errorMessage }}</p>
     <template
       v-if="session.state.value.status === 'authenticated' && session.state.value.tenant === tenant"
     >

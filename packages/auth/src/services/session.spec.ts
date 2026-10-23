@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { decodeIdentityError } from '@rss/api/identity'
 import { fixture, sessionValue, TENANT, TOKEN } from '../../tests/support'
 describe('one instance cookie session owner', () => {
@@ -333,4 +333,71 @@ it('distinguishes first anonymous checks, known session invalidation and explici
   await f.session.logout()
   expect(f.session.invalidated.value).toBe(false)
   expect(f.storage.size).toBe(0)
+})
+
+describe('rate-limited password operations', () => {
+  const limited = () => decodeIdentityError(429, { code: 'rate_limited' }, '537')
+  it('retains a same-tenant accepted session and private CSRF without renewal or replay', async () => {
+    const f = fixture()
+    await f.login()
+    const previous = f.session.state.value
+    const requests = f.request.mock.calls.length
+    for (const operation of [
+      () => f.session.login(TENANT, 'admin', 'private password'),
+      () => f.session.reauthenticate('private password'),
+      () => f.api.ownPassword('private old password', 'private new password'),
+    ]) {
+      f.replies.push(limited())
+      await expect(operation()).rejects.toMatchObject({ status: 429, retryAfterSeconds: 537 })
+      expect(f.session.state.value).toEqual(previous)
+      expect(f.session.headers()['X-CSRF-Token']).toBe(TOKEN)
+    }
+    expect(f.request.mock.calls).toHaveLength(requests + 3)
+    f.session.clear()
+  })
+  it('keeps anonymous and cross-tenant logins anonymous', async () => {
+    for (const authenticated of [false, true]) {
+      const f = fixture()
+      if (authenticated) await f.login()
+      f.replies.push(limited())
+      await expect(
+        f.session.login('33333333-3333-4333-8333-333333333333', 'admin', 'private password'),
+      ).rejects.toMatchObject({ status: 429 })
+      expect(f.session.state.value.status).toBe('anonymous')
+      expect(f.session.headers(false)['X-CSRF-Token']).toBeUndefined()
+      f.session.clear()
+    }
+  })
+  it('cannot resurrect a cleared or expired session from a delayed 429', async () => {
+    for (const expired of [false, true]) {
+      const f = fixture()
+      const now = Date.now()
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
+      try {
+        f.replies.push({
+          ...sessionValue(),
+          session: { ...sessionValue().session, idleExpiresAt: Math.floor(now / 1000) + 60 },
+        })
+        await f.session.login(TENANT, 'admin', 'private password')
+        let reject!: (error: unknown) => void
+        f.replies.push(
+          () =>
+            new Promise((_resolve, r) => {
+              reject = r
+            }),
+        )
+        const pending = f.session.login(TENANT, 'admin', 'private password')
+        await Promise.resolve()
+        if (expired) clock.mockReturnValue(now + 61_000)
+        else f.session.clear()
+        reject(limited())
+        await expect(pending).rejects.toMatchObject({ status: 429 })
+        expect(f.session.state.value.status).toBe('anonymous')
+        expect(f.session.state.value.session).toBeNull()
+      } finally {
+        clock.mockRestore()
+        f.session.clear()
+      }
+    }
+  })
 })

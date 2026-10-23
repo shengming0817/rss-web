@@ -103,7 +103,7 @@ export async function execute<T>(
   instance: AxiosInstance,
   defaultTimeoutMs: number,
   options: NoContentRequest | RequestOptions<T>,
-  decodeError: (status: number, value: unknown) => RssApiError,
+  decodeError: (status: number, value: unknown, retryAfter: unknown) => RssApiError,
 ): Promise<T | void> {
   if (options.signal?.aborted === true) throw abortedError()
   try {
@@ -127,7 +127,11 @@ export async function execute<T>(
           throw protocolError(response.status)
         }
       }
-      throw decodeError(response.status, value)
+      throw decodeError(
+        response.status,
+        value,
+        axios.AxiosHeaders.from(response.headers).get('Retry-After'),
+      )
     }
     const accepted = Array.isArray(options.successStatus)
       ? options.successStatus.includes(response.status)
