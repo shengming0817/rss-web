@@ -141,9 +141,15 @@ export async function authorizationJourney({
   assert.equal(attempts, 1)
   assert.equal(interceptionFailure, false)
   await close()
-  await page.getByRole('link', { name: '设置', exact: true }).click()
-  await page.getByRole('link', { name: '平台管理', exact: true }).click()
-  await page.getByRole('link', { name: '授权规则', exact: true }).click()
+  await page.locator('.console-navigation').getByRole('link', { name: '设置', exact: true }).click()
+  await page
+    .locator('.console-navigation')
+    .getByRole('link', { name: '平台管理', exact: true })
+    .click()
+  await page
+    .locator('.console-navigation')
+    .getByRole('link', { name: '授权规则', exact: true })
+    .click()
   await dialog().getByTestId('replay-write').waitFor()
   assert.equal(attempts, 1)
   await dialog().getByRole('button', { name: '回读当前规则以核对', exact: true }).click()

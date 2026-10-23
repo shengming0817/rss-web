@@ -1351,12 +1351,13 @@
   margin: 0;
   padding-inline-start: var(--space-4);
 }
-.authorization-permissions {
+.settings-form .authorization-permissions {
   display: grid;
   gap: var(--space-3);
 }
-.authorization-permission {
+.settings-form .authorization-permission {
   display: flex;
+  flex-direction: row;
   align-items: flex-start;
   gap: var(--space-3);
   border: 1px solid var(--line);
