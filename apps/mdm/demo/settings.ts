@@ -116,10 +116,35 @@ export function createSettingsDemo() {
           },
           {
             name: 'identity_audit',
-            readiness: 'ready',
+            readiness: 'not_applicable',
             health: 'healthy',
             reasons: [],
             bridge: { successful: true, observedAt: at },
+          },
+          {
+            name: 'audit_source',
+            readiness: 'ready',
+            health: partial ? 'degraded' : 'healthy',
+            reasons: partial ? ['audit_backlog_warning'] : [],
+            auditBacklog: {
+              events: partial ? 80 : 0,
+              sourceBytes: partial ? 800 : 0,
+              reservedEvents: 0,
+              reservedSourceBytes: 0,
+              maxEvents: 100,
+              maxSourceBytes: 1000,
+              oldestSeconds: partial ? 301 : null,
+              warning: partial,
+              admissionClosed: false,
+              reserveExhausted: false,
+            },
+          },
+          {
+            name: 'audit_projection',
+            readiness: 'not_applicable',
+            health: partial ? 'degraded' : 'healthy',
+            reasons: partial ? ['delivery_retrying'] : [],
+            task: 'running',
           },
           ...(!partial
             ? [

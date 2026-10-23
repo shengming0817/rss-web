@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createScenario, TENANT, MANAGEMENT_TENANT } from './scenario'
 import { createSettingsDemo } from './settings'
+import { runtimeSnapshot } from '../src/features/settings/clients/runtime'
 import { decodeFirstUse } from '../src/features/settings/clients/firstUse'
 async function control(scenario: ReturnType<typeof createScenario>, body: unknown) {
   const session = await scenario.handle('GET', `/api/v1/identity/tenants/${TENANT}/session`)
@@ -277,4 +278,26 @@ it('injects automation events only into the explicit mock source after login', a
   await control(scenario, { scenario: 'normal', module: 'policies', source: 'real' })
   expect((await control(scenario, { event })).status).toBe(409)
   expect(events).toHaveLength(1)
+})
+
+it('serves the current audit source and projection contract in normal and partial demos', async () => {
+  const settings = createSettingsDemo(),
+    server = createScenario([settings.handle])
+  await server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
+    login: 'demo',
+    password: 'demo',
+  })
+  for (const scenario of ['normal', 'partial'] as const) {
+    server.set(scenario)
+    const response = await server.handle('GET', '/api/v1/runtime/diagnostics')
+    expect(response.status).toBe(200)
+    const snapshot = runtimeSnapshot(response.body)
+    expect(snapshot.components.find((c) => c.name === 'audit_source')?.auditBacklog).toMatchObject({
+      events: scenario === 'partial' ? 80 : 0,
+      warning: scenario === 'partial',
+      admissionClosed: false,
+    })
+    for (const name of ['identity_audit', 'audit_projection'])
+      expect(snapshot.components.find((c) => c.name === name)?.readiness).toBe('not_applicable')
+  }
 })
