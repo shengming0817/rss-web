@@ -1,3 +1,5 @@
+import { createManagementQueries } from './clients/management-queries'
+import { createLifecycleClient } from './clients/lifecycle'
 import { createTelemetryClient } from '../telemetry/client'
 import type { HttpTransport } from '@rss/api/mdm'
 import { createAssetsClient } from './clients/assets'
@@ -9,6 +11,8 @@ import { createRegistrationClient } from './clients/registration'
 import { createGroupsClient } from './clients/groups'
 export function createDeviceClients(transport: HttpTransport, tenant: string) {
   return {
+    management: createManagementQueries(transport),
+    lifecycle: createLifecycleClient(transport),
     assets: createAssetsClient(transport, tenant),
     telemetry: createTelemetryClient(transport, tenant),
     registration: createRegistrationClient(transport, tenant),

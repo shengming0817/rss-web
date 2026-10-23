@@ -95,7 +95,10 @@ async function fixture(
   })
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/', component }],
+    routes: [
+      { path: '/', component },
+      { path: '/lifecycle', name: 'policy-lifecycle', component: { template: '<div />' } },
+    ],
   })
   await router.push({ path: '/', query: { id } })
   const wrapper = mount(component, {

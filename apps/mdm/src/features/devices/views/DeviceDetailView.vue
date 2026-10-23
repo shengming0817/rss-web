@@ -24,6 +24,8 @@ import ScopedInventory from '../components/ScopedInventory.vue'
 import ManualPanel from '../components/ManualPanel.vue'
 import AssociationPanel from '../components/AssociationPanel.vue'
 import DeviceControlPanel from '../components/DeviceControlPanel.vue'
+import CredentialsPanel from '../../security/components/CredentialsPanel.vue'
+import ManagementQueries from '../components/ManagementQueries.vue'
 import RegistrationPanel from '../components/RegistrationPanel.vue'
 const runtime = useMdm(),
   route = useRoute(),
@@ -265,6 +267,8 @@ watch(target, () => {
           :endpoint="selected"
           :device-name="displayName"
         />
+        <ManagementQueries v-if="selected" :key="selected.id" :device="selected.id" />
+        <CredentialsPanel v-if="selected" :key="selected.id" :endpoint="selected" />
         <AssignedConfigurations v-if="selected" :key="selected.id" :device="selected.id" />
         <AgentConnectionObservation v-if="selected" :key="selected.id" :device="selected.id" />
         <RegistrationPanel

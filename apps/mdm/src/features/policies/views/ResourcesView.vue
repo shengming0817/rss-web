@@ -56,6 +56,25 @@ const kindLabel = (value: ResourceKind) =>
               ? 'policies.nativeCollection'
               : 'policies.agentCollection',
   )
+async function downloadScript(version: string, variant: Variant) {
+  if (!current.value) return
+  await run(
+    () =>
+      client.script(current.value!.id, version, {
+        platform: variant.platform,
+        architecture: variant.architecture,
+        variant: variant.key,
+      }),
+    (v) => {
+      const url = URL.createObjectURL(new Blob([v.bytes], { type: 'application/octet-stream' }))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'script.txt'
+      a.click()
+      URL.revokeObjectURL(url)
+    },
+  )
+}
 function closeResource() {
   if (busy.value || uncertain.value) return
   resetDraft()
@@ -762,6 +781,16 @@ watch(
                   <td>{{ item.id }}</td>
                   <td>{{ t(`policies.state.${item.state}`) }}</td>
                   <td>
+                    <template v-if="current.kind === 'script' && item.state !== 'archived'"
+                      ><UiButton
+                        v-for="variant in item.variants"
+                        :key="variant.key + variant.platform + variant.architecture"
+                        :disabled="busy"
+                        @click="downloadScript(item.id, variant)"
+                        >{{ t('gap.script') }} · {{ variant.platform }} /
+                        {{ variant.architecture }} / {{ variant.key }}</UiButton
+                      ></template
+                    >
                     <UiButton
                       v-for="action in (item.state === 'frozen'
                         ? ['activate', 'archive']
