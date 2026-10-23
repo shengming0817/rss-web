@@ -42,7 +42,7 @@ def configure(environment, config, providers, private, binary):
             pass
         def do_POST(self):
             self.rfile.read(int(self.headers.get('content-length', '0')))
-            # Genuine permanent receiver rejection gives product-owned dead letters.
+            # Non-2xx acceptance is ambiguous; the product retains its pending delivery.
             self.send_response(410)
             self.send_header('Content-Length', '0')
             self.end_headers()

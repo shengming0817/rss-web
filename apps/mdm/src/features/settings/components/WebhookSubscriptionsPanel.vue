@@ -221,7 +221,7 @@ function restore() {
         ><UiButton type="submit" :disabled="!confirmation">{{ t('gap.save') }}</UiButton>
         <template v-if="selected"
           ><UiButton type="button" :disabled="!confirmation" @click="transition('enabled')">{{
-            t(selected.enabled ? 'policies.selfService.disable' : 'policies.selfService.enable')
+            t(selected.enabled ? 'gap.disable' : 'gap.enabled')
           }}</UiButton
           ><UiButton type="button" :disabled="!confirmation" @click="transition('delete')">{{
             t('gap.deleted')
@@ -273,6 +273,7 @@ function restore() {
           locked ||
           !confirmation ||
           !replayPermission.canWrite.value ||
+          currentDelivery.status !== 'dead_letter' ||
           !currentDelivery.redriveWindowOpen
         "
         @click="recover('redrive')"

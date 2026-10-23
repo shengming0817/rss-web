@@ -115,11 +115,16 @@ it('decodes lifecycle preview and retained assignments without loosening ordinar
     taskAdmission: null,
     operationIds: [b],
   }
-  const f = transport((o: RequestOptions<unknown>) =>
-    o.path.endsWith('previews')
-      ? { action, scopeResult: a, items: [row], nextCursor: null }
-      : { items: [{ ...row, eligibility: undefined }], nextCursor: null },
-  )
+  const previewRow = {
+    object: row.object,
+    channel: null,
+    target: null,
+    availability: row.availability,
+    reason: row.reason,
+    eligibility: row.eligibility,
+    taskAdmission: null,
+  }
+  const f = transport({ action, scopeResult: a, items: [previewRow], nextCursor: null })
   expect((await createPoliciesClient(f.client).preview(definition)).items[0]?.channel).toBeNull()
   const retained = Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'eligibility'))
   const normal = transport({ items: [retained], nextCursor: null })
@@ -501,9 +506,9 @@ it('revokes an exact Windows credential through the shared confirmation without 
   )
   await button(w, '读取').trigger('click')
   await flushPromises()
-  expect(button(w, '撤销托管读取').attributes('disabled')).toBeDefined()
+  expect(button(w, '撤销').attributes('disabled')).toBeDefined()
   await confirm(w)
-  await button(w, '撤销托管读取').trigger('click')
+  await button(w, '撤销').trigger('click')
   await flushPromises()
   expect(revoke).toHaveBeenCalledWith('win', windows)
 })
@@ -713,7 +718,7 @@ it('edits webhook metadata without losing extensions and consumes actual replay 
     redriveWindowOpen: true,
     sourceDelivery: null,
     attempts: 2,
-    status: 'dead_letter',
+    status: 'pending',
     transportObservation: 'rejected',
     failureStage: 'transport',
     failureReason: 'gone',
@@ -773,7 +778,7 @@ it('edits webhook metadata without losing extensions and consumes actual replay 
   })
   expect(record.settings.selection).toEqual({ kind: 'groups', ids: [c] })
   await confirm(w)
-  await button(w, '启用整个 Policy').trigger('click')
+  await button(w, '启用').trigger('click')
   await flushPromises()
   await field(w, '设备').setValue('mac')
   await confirm(w)
@@ -786,6 +791,15 @@ it('edits webhook metadata without losing extensions and consumes actual replay 
     .at(-1)!
     .trigger('click')
   await flushPromises()
+  await w
+    .findAll('button')
+    .find((x) => x.text().startsWith(b + ' ·'))!
+    .trigger('click')
+  await flushPromises()
+  await confirm(w)
+  expect(button(w, '创建重放投递').attributes('disabled')).toBeDefined()
+  expect(button(w, '恢复原投递').attributes('disabled')).toBeDefined()
+  d.status = 'dead_letter'
   await w
     .findAll('button')
     .find((x) => x.text().startsWith(b + ' ·'))!
@@ -864,7 +878,7 @@ it('reads and rotates a Key with a local first-response secret, then revokes usi
     .trigger('click')
   await flushPromises()
   await confirm(w)
-  await button(w, '撤销托管读取').trigger('click')
+  await button(w, '撤销').trigger('click')
   await flushPromises()
   expect(f.calls.find((x) => x.path.endsWith('/revoke'))?.body).toMatchObject({
     expectedRevision: 1,

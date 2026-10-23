@@ -50,6 +50,16 @@ try {
         method === 'GET' ? {} : { Origin: origin, 'X-Identity-Request': '1', 'X-CSRF-Token': csrf },
       ...(data === undefined ? {} : { data }),
     })
+    if (response.status() !== expected)
+      console.error(
+        JSON.stringify({
+          phase,
+          method,
+          path: path.split('?')[0],
+          status: response.status(),
+          expected,
+        }),
+      )
     assert.equal(response.status(), expected, `${phase}: ${method} ${path.split('?')[0]}`)
     const text = await response.text()
     return text ? JSON.parse(text) : null
@@ -104,18 +114,12 @@ try {
   await materials.getByRole('button', { name: '读取', exact: true }).click()
   await materials.getByRole('button', { name: '查阅明文', exact: true }).first().waitFor()
   phase = 'credential-disclose'
-  await until(async () => {
-    if (await materials.locator('output').count()) return true
-    const disclosed = page.waitForResponse(
-      (r) => r.request().method() === 'GET' && r.url().endsWith('/secret'),
-    )
-    await materials.getByRole('button', { name: '查阅明文', exact: true }).first().click()
-    const response = await disclosed
-    if (response.status() === 503) return false
-    assert.equal(response.status(), 200)
-    await materials.locator('output').waitFor()
-    return true
-  }, Boolean)
+  const disclosed = page.waitForResponse(
+    (r) => r.request().method() === 'GET' && r.url().endsWith('/secret'),
+  )
+  await materials.getByRole('button', { name: '查阅明文', exact: true }).first().click()
+  assert.equal((await disclosed).status(), 200)
+  await materials.locator('output').waitFor()
   assert.ok((await materials.locator('output').textContent()).length > 0)
   const displayedSecret = await materials.locator('output').textContent()
   assert.ok(
@@ -142,7 +146,7 @@ try {
   )
   await until(
     () => api(`/api/v1/groups/${group}/tasks/${membership.task}`),
-    (v) => v.status === 'succeeded',
+    (v) => v.status === 'completed',
   )
   const scope = randomUUID()
   await mutation(`/api/v1/scopes/${scope}`, {
@@ -153,15 +157,34 @@ try {
     () => api(`/api/v1/scopes/${scope}`),
     (v) => v.resolution !== null,
   )
-  phase = 'device-read-queries'
+  phase = 'device-query-navigation'
   await page.goto(at(`devices/${f.mdm}/management`))
   await ready()
   const queries = page.locator('[data-panel="device-management-queries"]')
+  phase = 'device-memberships'
+  const groupRead = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'GET' &&
+      new URL(r.url()).pathname === `/api/v1/devices/${f.mdm}/groups`,
+  )
   await queries.getByRole('button', { name: '读取', exact: true }).first().click()
+  const groupResponse = await groupRead
+  assert.equal(groupResponse.status(), 200)
+  const groupFacts = await groupResponse.json()
+  assert.ok(groupFacts.items.some((v) => v.id === group))
   await queries.getByRole('heading', { name: 'Console membership', exact: true }).waitFor()
+  phase = 'device-ddm-summary'
+  const ddmRead = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'GET' &&
+      new URL(r.url()).pathname === `/api/v1/devices/${f.mdm}/ddm`,
+  )
   await queries.getByRole('button', { name: '读取', exact: true }).nth(1).click()
-  await queries.getByText('no_current_registration', { exact: false }).waitFor()
-  coverage.push('nonempty-membership-and-no-current-ddm')
+  const ddmResponse = await ddmRead
+  assert.equal(ddmResponse.status(), 200)
+  assert.equal((await ddmResponse.json()).availability, 'current_registration')
+  await queries.getByText('current_registration', { exact: false }).waitFor()
+  coverage.push('nonempty-membership-and-current-registration-ddm')
   phase = 'retirement-policy'
   await page.goto(at('policies/assignments/lifecycle'))
   await ready()
@@ -175,6 +198,20 @@ try {
   )
   await page.getByRole('button', { name: '保存', exact: true }).click()
   assert.equal((await saved).status(), 200)
+  phase = 'lifecycle-preview'
+  const previewed = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/v1/policies/previews',
+  )
+  await page.getByRole('button', { name: '预览', exact: true }).click()
+  assert.equal((await previewed).status(), 200)
+  await page
+    .locator('ul')
+    .last()
+    .getByRole('link', { name: new RegExp(f.alone) })
+    .waitFor()
+  coverage.push('formal-lifecycle-preview-target')
+  phase = 'retirement-policy'
   // A genuine concurrent revision makes the current edit stale.
   await mutation(`/api/v1/policies/${policy}`, { action: 'enable' }, 1)
   await page.getByLabel('确认对当前目标执行此操作', { exact: true }).check()
@@ -190,16 +227,28 @@ try {
   const triggered = page.waitForResponse(
     (r) => r.request().method() === 'POST' && r.url().endsWith(`/policies/${policy}/reruns`),
   )
+  const policyReload = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'GET' && new URL(r.url()).pathname === `/api/v1/policies/${policy}`,
+  )
   await page.getByRole('button', { name: '显式触发', exact: true }).click()
   assert.equal((await triggered).status(), 200)
+  assert.equal((await policyReload).status(), 200)
+  coverage.push('rerun-receipt-decoded-and-policy-reloaded')
   const assignments = await until(
     () => api(`/api/v1/policies/${policy}/assignments`),
     (v) => v.items.some((i) => i.operationIds.length > 0),
   )
   const retirement = assignments.items.flatMap((i) => i.operationIds)[0]
-  await page.getByRole('button', { name: '刷新执行进度', exact: true }).click()
+  phase = 'retirement-progress'
+  await page.getByRole('button', { name: '刷新进度（保留编辑）', exact: true }).click()
+  phase = 'retirement-open'
   await page.getByRole('button', { name: retirement, exact: true }).click()
-  await page.locator('[data-panel="retirement"]').waitFor()
+  phase = 'retirement-facts'
+  await page
+    .locator('[data-panel="retirement"]')
+    .getByRole('heading', { name: new RegExp(f.alone) })
+    .waitFor()
   assert.ok((await page.locator('[data-panel="retirement"]').textContent()).includes(f.alone))
   coverage.push('policy-retirement-cas-trigger-and-channel-facts')
   phase = 'policy-directory-pagination'
@@ -231,12 +280,14 @@ try {
   await ready()
   assert.notEqual(await page.locator('ul').first().textContent(), firstIds)
   coverage.push('opaque-policy-directory-pagination')
-  phase = 'exact-script-download'
+  phase = 'script-resource-create'
   const resource = randomUUID(),
     upload = randomUUID(),
     bytes = Buffer.from('#!/bin/sh\necho console-fixture\n'),
     digest = [...createHash('sha256').update(bytes).digest()]
+  phase = 'script-resource-create'
   await mutation(`/api/v1/resources/${resource}`, { action: 'create', kind: 'script' })
+  phase = 'script-resource-version'
   await mutation(
     `/api/v1/resources/${resource}`,
     {
@@ -256,7 +307,12 @@ try {
               sql: null,
               runAs: 'system',
               encoding: 'utf8',
-              parameters: { type: 'object', properties: {}, additionalProperties: false },
+              parameters: {
+                type: 'object',
+                properties: {},
+                required: [],
+                additionalProperties: false,
+              },
               bindings: {},
               output: { type: 'object' },
               purpose: { kind: 'action' },
@@ -270,6 +326,7 @@ try {
     },
     1,
   )
+  phase = 'script-content-upload'
   await api(
     `/api/v1/resources/${resource}/uploads/${upload}?version=1&platform=macos&architecture=aarch64&variant=default`,
     'POST',
@@ -290,6 +347,8 @@ try {
   assert.equal(appended.status(), 200)
   await api(`/api/v1/resources/${resource}/uploads/${upload}/complete`, 'POST', undefined, 201)
   await mutation(`/api/v1/resources/${resource}`, { action: 'activate', version: '1' }, 2)
+  phase = 'exact-script-download'
+  console.log(JSON.stringify({ phase }))
   await page.goto(at('policies/resources') + '?resource=' + resource)
   await ready()
   const request = page.waitForRequest(
@@ -322,10 +381,12 @@ try {
   assert.equal(await page.locator('#deployment-channel option[value="mdm"]').isDisabled(), true)
   coverage.push('server-owned-disabled-mdm-and-agent-default')
   phase = 'webhook-original-operation'
+  console.log(JSON.stringify({ phase }))
   await page.goto(at('settings/integrations'))
   await ready()
   const hooks = page.locator('[data-panel="webhooks"]'),
     sub = randomUUID()
+  phase = 'webhook-read-directory'
   await hooks.getByRole('button', { name: '读取', exact: true }).first().click()
   await hooks.getByLabel('订阅', { exact: true }).fill(sub)
   await hooks.getByLabel('名称', { exact: true }).fill('Console receiver')
@@ -340,14 +401,17 @@ try {
     if (route.request().method() !== 'PUT') return route.continue()
     original = route.request().postDataJSON()
     const response = await route.fetch({ maxRetries: 0 })
+    console.log(JSON.stringify({ phase: 'webhook-committed-write', status: response.status() }))
     assert.equal(response.status(), 200)
     await context.unroute(pattern, lose)
     await route.abort('failed')
   }
+  phase = 'webhook-commit-response-loss'
   await context.route(pattern, lose)
   await hooks.getByLabel('确认对当前目标执行此操作', { exact: true }).first().check()
   await hooks.getByRole('button', { name: '保存', exact: true }).click()
   await hooks.getByRole('button', { name: '重送原请求', exact: true }).waitFor()
+  phase = 'webhook-spa-remount'
   await page
     .locator('.settings-tabs')
     .getByRole('link', { name: '组织与访问', exact: true })
@@ -362,18 +426,21 @@ try {
   const capture = (r) => {
     if (r.method() === 'PUT' && new URL(r.url()).pathname.endsWith(sub)) resent = r.postDataJSON()
   }
+  phase = 'webhook-original-replay'
   page.on('request', capture)
   await hooks.getByLabel('确认对当前目标执行此操作', { exact: true }).last().check()
   await hooks.getByRole('button', { name: '重送原请求', exact: true }).click()
-  await hooks.getByRole('button', { name: '启用整个 Policy', exact: true }).waitFor()
+  await hooks.getByRole('button', { name: '启用', exact: true }).waitFor()
   page.off('request', capture)
   assert.deepEqual(resent, original)
+  phase = 'webhook-enable'
   await hooks.getByLabel('确认对当前目标执行此操作', { exact: true }).first().check()
   const enabled = page.waitForResponse(
     (r) => r.request().method() === 'PUT' && r.url().endsWith(sub),
   )
-  await hooks.getByRole('button', { name: '启用整个 Policy', exact: true }).click()
+  await hooks.getByRole('button', { name: '启用', exact: true }).click()
   assert.equal((await enabled).status(), 200)
+  phase = 'webhook-test-delivery'
   await hooks.getByLabel('设备', { exact: true }).fill(f.mdm)
   await hooks.getByLabel('确认对当前目标执行此操作', { exact: true }).first().check()
   const tested = page.waitForResponse(
@@ -383,25 +450,26 @@ try {
   const testResponse = await tested
   assert.equal(testResponse.status(), 200)
   const delivery = (await testResponse.json()).id
+  // Any non-2xx receiver response is ambiguous under the formal transport contract.
+  // Observe the real pending delivery; dead-letter recovery receipts are verified by
+  // the domain T1 tests and backend recovery T2, without editing outbox state/time.
   await until(
     () => api(`/api/v1/webhooks/deliveries/${delivery}`),
-    (v) => v.items[0].status === 'dead_letter',
+    (v) => v.items[0].status === 'pending' && v.items[0].transportObservation === 'unknown',
   )
+  phase = 'webhook-delivery-observation'
   await hooks.getByRole('button', { name: '读取', exact: true }).last().click()
   await hooks.getByRole('button', { name: new RegExp('^' + delivery) }).click()
   await hooks.getByLabel('确认对当前目标执行此操作', { exact: true }).last().check()
-  const replayed = page.waitForResponse(
-    (r) => r.request().method() === 'POST' && r.url().endsWith(`/deliveries/${delivery}/replay`),
+  assert.equal(
+    await hooks.getByRole('button', { name: '创建重放投递', exact: true }).isDisabled(),
+    true,
   )
-  await hooks.getByRole('button', { name: '创建重放投递', exact: true }).click()
-  assert.equal((await replayed).status(), 200)
-  await hooks.getByLabel('确认对当前目标执行此操作', { exact: true }).last().check()
-  const redriven = page.waitForResponse(
-    (r) => r.request().method() === 'POST' && r.url().endsWith(`/deliveries/${delivery}/redrive`),
+  assert.equal(
+    await hooks.getByRole('button', { name: '恢复原投递', exact: true }).isDisabled(),
+    true,
   )
-  await hooks.getByRole('button', { name: '恢复原投递', exact: true }).click()
-  assert.equal((await redriven).status(), 200)
-  coverage.push('webhook-committed-response-loss-spa-replay-and-redrive')
+  coverage.push('webhook-committed-response-loss-spa-replay-and-pending-delivery')
   phase = 'api-key-issuance'
   await page.goto(at('settings/access'))
   await ready()
@@ -422,7 +490,8 @@ try {
   assert.equal(await keys.locator('output').count(), 0)
   coverage.push('key-management-first-response-secret')
   phase = 'current-permission-denial'
-  const authority = await api(`/api/v1/authorization/rules/${f.ruleId}`)
+  const authority = (await api('/api/v1/authorization/rules')).items.find((r) => r.id === f.ruleId)
+  assert.ok(authority, 'fixture authorization rule must remain in the current directory')
   await api(`/api/v1/authorization/rules/${f.ruleId}`, 'PUT', {
     operationId: randomUUID(),
     expectedRevision: authority.revision,
@@ -495,7 +564,16 @@ try {
   result = 'passed'
 } catch (error) {
   // Do not print bodies, secrets, traces, screenshots or credentials.
-  console.error(JSON.stringify({ phase, result: 'failed', classification: error.name }))
+  console.error(
+    JSON.stringify({
+      phase,
+      result: 'failed',
+      classification: error.name,
+      ...(typeof error.actual === 'number'
+        ? { actual: error.actual, expected: error.expected }
+        : {}),
+    }),
+  )
   process.exitCode = 1
 } finally {
   clearTimeout(timer)

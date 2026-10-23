@@ -106,9 +106,6 @@ export function createPoliciesClient(transport: HttpTransport) {
             scopeResult: result,
             items: array(v['items'], (value) => {
               const d = closed(value, [
-                ...(action.kind === 'unmanage_device'
-                  ? ['qualification', 'sources', 'scopeResult', 'operationIds']
-                  : []),
                 'object',
                 'channel',
                 'availability',
@@ -126,10 +123,6 @@ export function createPoliciesClient(transport: HttpTransport) {
                   ...baseTargetFacts(d, true),
                   taskAdmission: null,
                   eligibility: eligibility(d['eligibility']),
-                  qualification: eligibility(d['qualification']),
-                  sources: array(d['sources'], deviceObject),
-                  scopeResult: nullable(d['scopeResult'], uuid),
-                  operationIds: array(d['operationIds'], uuid),
                 }
               }
               return action.kind === 'telemetry_profile'

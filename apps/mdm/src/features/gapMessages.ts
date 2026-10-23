@@ -5,7 +5,7 @@ export const gapZh = {
   credential: 'Windows 凭据操作',
   metadata: '材料与有效性',
   reveal: '查阅明文',
-  revoke: '撤销托管读取',
+  revoke: '撤销',
   clear: '清除明文',
   escrowHint: '托管状态与材料有效性分别记录；托管或命令受理不证明已成功解锁设备。',
   revokedHint: '撤销托管读取不会修改设备上的密码。',
@@ -37,6 +37,7 @@ export const gapZh = {
   action: '操作类型',
   architecture: '处理器架构',
   enabled: '启用',
+  disable: '停用',
   trigger: '显式触发',
   deadline: '原操作期限（Unix 秒）',
   unknown: '提交结果未知；禁止新写。请查询原操作或显式重送原请求。',
@@ -104,7 +105,7 @@ export const gapEn: typeof gapZh = {
   credential: 'Windows credential operation',
   metadata: 'Materials and validity',
   reveal: 'Reveal secret',
-  revoke: 'Revoke escrow access',
+  revoke: 'Revoke',
   clear: 'Clear secret',
   escrowHint:
     'Escrow, validity and device effects are separate facts. Acceptance does not prove recovery.',
@@ -137,6 +138,7 @@ export const gapEn: typeof gapZh = {
   action: 'Action',
   architecture: 'Architecture',
   enabled: 'Enabled',
+  disable: 'Disable',
   trigger: 'Trigger explicitly',
   deadline: 'Original deadline (Unix seconds)',
   unknown:

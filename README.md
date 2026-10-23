@@ -80,4 +80,4 @@ MDM_SOFTWARE_BACKEND=/absolute/rss-mdm pnpm test:mdm:software-browser
 
 用户字段配置与资料显示的实际 HTTPS 验证：`MDM_PROFILE_BACKEND=/absolute/rss-mdm IDENTITY_BACKEND_FIXTURE=/absolute/rss-identity pnpm test:mdm:profiles-browser`。当前固定后端与验证边界见 [用户字段与登录资料](docs/architecture/20260926-2544-mdm-web.md#用户字段与登录资料2878)。
 
-新增能力的正式控制台验证使用 `MDM_CONSOLE_BACKEND=/absolute/rss-mdm pnpm test:mdm:console-browser`，覆盖恢复凭据、Policy 退役、Webhook 订阅/投递恢复及 Key/平台白名单。复用既有构建租约、隔离 HTTPS 宿主和独立清理；只使用可丢弃合成输入，设备实际效果另行验收。接口与恢复边界见 [控制台新增能力](docs/architecture/20260926-2544-mdm-web.md#控制台新增能力2799)。
+新增能力的正式控制台验证使用 `MDM_CONSOLE_BACKEND=/absolute/rss-mdm pnpm test:mdm:console-browser`，覆盖恢复凭据、Policy 退役、Webhook 订阅原请求恢复/投递观察及 Key/平台白名单。复用既有构建租约、隔离 HTTPS 宿主和独立清理；只使用可丢弃合成输入，设备实际效果另行验收。接口与恢复边界见 [控制台新增能力](docs/architecture/20260926-2544-mdm-web.md#控制台新增能力2799)。
