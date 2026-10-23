@@ -1,5 +1,6 @@
 """Fresh leased cleanup, independent of the cancelled fixture process group."""
 import hashlib
+import os
 from pathlib import Path
 import sys
 
@@ -13,4 +14,4 @@ case = hashlib.sha256((str(web) + ':device-browser:agent').encode()).hexdigest()
 Environment(backend, group='t2-pki-' + case).reset()
 Environment(backend, group='device-agent').host_ports(release=True)
 # Remove certificate inputs only after the CA has stopped using them.
-Environment(backend, group='device-browser').reset()
+Environment(backend, group='console-browser' if os.environ.get('MDM_DEVICE_BROWSER_MODULE') == 'console-browser.mjs' else 'device-browser').reset()
