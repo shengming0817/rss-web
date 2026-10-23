@@ -113,3 +113,79 @@ it('uses current native configuration permissions and service-owned device versu
       rule({ subject, grants: [{ operation, scope: { kind: 'all_devices' } }] }, tenant),
     ).toThrow()
 })
+
+it('admits only management user subjects and its eight tenant permissions on every boundary', async () => {
+  const { ruleForRealm, platformPermissions } = await import('./authorization')
+  const subject = {
+    kind: 'user',
+    user: { instanceId: tenant, tenantId: tenant, principalId: group },
+  }
+  const definition = {
+    subject,
+    grants: platformPermissions.map((operation) => ({ operation, scope: { kind: 'tenant' } })),
+  }
+  expect(ruleForRealm(definition, tenant, 'platform')).toEqual(definition)
+  expect(() =>
+    ruleForRealm({ ...definition, subject: { kind: 'user_group', id: group } }, tenant, 'platform'),
+  ).toThrow()
+  expect(() =>
+    ruleForRealm(
+      { ...definition, grants: [{ operation: 'inventory_read', scope: { kind: 'all_devices' } }] },
+      tenant,
+      'platform',
+    ),
+  ).toThrow()
+  expect(() =>
+    ruleForRealm(
+      { ...definition, grants: [{ operation: 'tenant_read', scope: { kind: 'tenant' } }] },
+      tenant,
+      'tenant',
+    ),
+  ).toThrow()
+  const request = vi.fn(async (o: RequestOptions<unknown>) =>
+    o.decode({ id: group, revision: 1, deleted: false }),
+  )
+  const client = createAuthorizationClient(
+    { request } as unknown as HttpTransport,
+    tenant,
+    'platform',
+  )
+  await client.changeRule(group, {
+    operationId: group,
+    expectedRevision: 0,
+    value: definition as unknown as ReturnType<typeof rule>,
+  })
+  expect(request.mock.lastCall![0]).toMatchObject({
+    path: '/api/v1/tenant-administration/authorization/rules/{id}',
+    method: 'PUT',
+    pathParams: { id: group },
+  })
+  expect(() => client.groups()).toThrow()
+  expect(() => client.departments()).toThrow()
+  expect(() =>
+    client.changeGroup(group, { operationId: group, expectedRevision: 0, value: null }),
+  ).toThrow()
+  expect(request).toHaveBeenCalledTimes(1)
+})
+it('keeps rules pagination at the current endpoint and rejects oversized or repeated pages', async () => {
+  const subject = { kind: 'user_group', id: group },
+    definition = {
+      subject,
+      grants: [{ operation: 'authorization_read', scope: { kind: 'tenant' } }],
+    }
+  const items = Array.from({ length: 100 }, (_, i) => ({
+    id: `33333333-3333-4333-8333-${String(i + 1).padStart(12, '0')}`,
+    revision: 1,
+    value: definition,
+  }))
+  let reply: unknown = { items, nextCursor: items.at(-1)!.id }
+  const request = vi.fn(async (o: RequestOptions<unknown>) => o.decode(reply)),
+    client = createAuthorizationClient({ request } as unknown as HttpTransport, tenant)
+  expect((await client.rules()).items).toHaveLength(100)
+  expect(request.mock.lastCall![0].query).toEqual({ after: undefined })
+  await expect(client.findRule(group)).rejects.toThrow('Repeated authorization cursor')
+  reply = { items: [...items, items[0]], nextCursor: null }
+  await expect(client.rules()).rejects.toThrow()
+  reply = { items: items.slice(0, 1), nextCursor: items[0]!.id }
+  await expect(client.rules()).rejects.toThrow()
+})

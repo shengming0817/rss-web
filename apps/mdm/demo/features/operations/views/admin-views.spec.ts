@@ -16,7 +16,6 @@ import { createScenario, TENANT } from '../../../scenario'
 import { createAutomationDemo } from '../../../policies/state'
 import { createDeviceDemo } from '../../../devices/state'
 import OrganizationView from '../../../../src/features/operations/views/OrganizationView.vue'
-import AuthorizationView from '../../../../src/features/operations/views/AuthorizationView.vue'
 import DelegationsView from './DelegationsView.vue'
 import ReportsView from './ReportsView.vue'
 async function fixture(component: Component, realm: 'tenant' | 'platform' = 'tenant') {
@@ -105,15 +104,6 @@ it('manages all group members and preserves a draft on conflict', async () => {
   expect((f.wrapper.get('[data-testid="group-name"]').element as HTMLInputElement).value).toBe(
     'Draft',
   )
-  f.wrapper.unmount()
-})
-it('creates native grants and explains server-provided effective authority', async () => {
-  const f = await fixture(AuthorizationView)
-  expect(f.wrapper.text()).toContain('authorization_read')
-  await f.wrapper.get('[data-testid="subject-id"]').setValue('33333333-3333-4333-8333-333333333333')
-  await f.wrapper.get('[data-testid="save-rule"]').trigger('click')
-  await flushPromises()
-  expect(f.wrapper.find('[role="alert"]').exists()).toBe(false)
   f.wrapper.unmount()
 })
 it('renders partial metrics and explicit report acceptance without fabricated completion', async () => {
@@ -277,43 +267,6 @@ it('opens group/report links and follows target query changes', async () => {
   report.wrapper.unmount()
 })
 
-it('locates a native rule beyond page one and reports missing/tombstone targets', async () => {
-  const f = await fixture(AuthorizationView),
-    e = await f.clients.authorization.effective()
-  let last = ''
-  for (let i = 1; i <= 101; i++) {
-    last = `99999999-9999-4999-8999-${String(i).padStart(12, '0')}`
-    await f.clients.authorization.changeRule(last, {
-      operationId: crypto.randomUUID(),
-      expectedRevision: 0,
-      value: {
-        subject: {
-          kind: 'user',
-          user: { instanceId: e.instanceId, tenantId: TENANT, principalId: e.principalId },
-        },
-        grants: [{ operation: 'inventory_read', scope: { kind: 'device', id: 'device-01' } }],
-      },
-    })
-  }
-  await f.router.push({ path: '/', query: { id: last } })
-  await flushPromises()
-  expect(f.wrapper.text()).toContain(last)
-  expect((f.wrapper.get('[data-testid="subject-id"]').element as HTMLInputElement).value).toBe(
-    e.principalId,
-  )
-  await f.clients.authorization.changeRule(last, {
-    operationId: crypto.randomUUID(),
-    expectedRevision: 1,
-    value: null,
-  })
-  await f.router.push({ path: '/', query: { id: last, refresh: '1' } })
-  await flushPromises()
-  expect(f.wrapper.text()).toContain('已删除')
-  await f.router.push({ path: '/', query: { id: crypto.randomUUID() } })
-  await flushPromises()
-  expect(f.wrapper.find('[role="alert"]').exists()).toBe(true)
-  f.wrapper.unmount()
-})
 it('does not transfer a closed ticket to another alert when its closure read fails', async () => {
   const f = await fixture(AlertsView)
   for (let i = 1; i <= 2; i++)
@@ -362,42 +315,6 @@ it('does not transfer a closed ticket to another alert when its closure read fai
   f.wrapper.unmount()
 })
 
-it('shows the exact device scope in both draft grants and effective authority', async () => {
-  const f = await fixture(AuthorizationView),
-    effective = await f.clients.authorization.effective(),
-    id = crypto.randomUUID()
-  await f.clients.authorization.changeRule(id, {
-    operationId: crypto.randomUUID(),
-    expectedRevision: 0,
-    value: {
-      subject: {
-        kind: 'user',
-        user: {
-          instanceId: effective.instanceId,
-          tenantId: TENANT,
-          principalId: effective.principalId,
-        },
-      },
-      grants: [{ operation: 'inventory_read', scope: { kind: 'device', id: 'device-exact-99' } }],
-    },
-  })
-  await f.router.push({ path: '/', query: { id } })
-  await flushPromises()
-  await f.wrapper
-    .findAll('button')
-    .filter((v) => v.text() === '重新读取')
-    .at(-1)!
-    .trigger('click')
-  await flushPromises()
-  expect(
-    f.wrapper
-      .findAll('li')
-      .filter(
-        (v) => v.text().includes('inventory_read / device') && v.text().includes('device-exact-99'),
-      ),
-  ).toHaveLength(2)
-  f.wrapper.unmount()
-})
 it('reads delegation evidence only through its explicit demo page', async () => {
   const f = await fixture(DelegationsView)
   try {
@@ -407,88 +324,4 @@ it('reads delegation evidence only through its explicit demo page', async () => 
   } finally {
     f.wrapper.unmount()
   }
-})
-it('authors an explicit department grant and adopts a concurrent revision before deleting it', async () => {
-  const f = await fixture(AuthorizationView)
-  const click = async (text: string) => {
-    await f.wrapper
-      .findAll('button')
-      .find((b) => b.text() === text)!
-      .trigger('click')
-    await flushPromises()
-  }
-  await click('新建授权规则')
-  const form = f.wrapper.get('form')
-  await form.findAll('select')[0]!.setValue('department')
-  await form.get('[data-testid=subject-id]').setValue('engineering')
-  const inputs = form.findAll('input')
-  await inputs[1]!.setValue('66666666-6666-4666-8666-666666666666')
-  await inputs[2]!.setValue('https://idp.example.test')
-  await inputs[3]!.setValue(1)
-  await form.findAll('select')[1]!.setValue('subtree')
-  await form.findAll('select')[2]!.setValue('inventory_read')
-  await form.findAll('select')[3]!.setValue('device')
-  await form.findAll('input').at(-1)!.setValue('device-01')
-  await click('添加授权')
-  await f.wrapper.get('[data-testid=save-rule]').trigger('click')
-  await flushPromises()
-  const saved = (await f.clients.authorization.rules()).items.find(
-    (r) => r.value?.subject.kind === 'department' && r.value.subject.id === 'engineering',
-  )!
-  expect(saved.value).toMatchObject({
-    subject: {
-      kind: 'department',
-      id: 'engineering',
-      matching: 'subtree',
-      source: { configurationVersion: 1 },
-    },
-    grants: [{ operation: 'inventory_read', scope: { kind: 'device', id: 'device-01' } }],
-  })
-  await f.clients.authorization.changeRule(saved.id, {
-    operationId: crypto.randomUUID(),
-    expectedRevision: 1,
-    value: {
-      ...saved.value!,
-      grants: [{ operation: 'inventory_read', scope: { kind: 'all_devices' } }],
-    },
-  })
-  await click('读取服务器版本并比较')
-  expect(f.wrapper.text()).toContain('all_devices')
-  await click('保留草稿，采用当前 revision')
-  await form.get('input[type=checkbox]').setValue(true)
-  await click('删除')
-  expect((await f.clients.authorization.findRule(saved.id))?.value).toBeNull()
-  f.wrapper.unmount()
-})
-
-it('offers only locally authenticated platform subjects and admitted tenant permissions', async () => {
-  const f = await fixture(AuthorizationView, 'platform')
-  const selects = f.wrapper.findAll('select'),
-    subject = selects[0]!,
-    permission = selects[1]!,
-    scope = selects[2]!
-  expect(subject.findAll('option').map((o) => o.text())).toEqual(['user'])
-  expect(permission.findAll('option').map((o) => o.text())).toEqual([
-    'tenant_create',
-    'tenant_read',
-    'tenant_update',
-    'tenant_delete',
-    'tenant_administrator_create',
-    'authorization_read',
-    'authorization_write',
-    'identity_accounts_manage',
-  ])
-  expect((permission.element as HTMLSelectElement).value).toBe('tenant_read')
-  expect(scope.findAll('option').map((o) => o.text())).toEqual(['tenant'])
-  f.wrapper.unmount()
-})
-it('excludes installation tenant administration permissions from business authorization choices', async () => {
-  const f = await fixture(AuthorizationView)
-  expect(
-    f.wrapper
-      .findAll('select')[1]!
-      .findAll('option')
-      .some((o) => o.text() === 'tenant_create'),
-  ).toBe(false)
-  f.wrapper.unmount()
 })

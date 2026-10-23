@@ -15,6 +15,8 @@ import {
   createAuthorizationClient,
   permissions,
   devicePermissions,
+  platformPermissions,
+  tenantAdministrationPermissions,
 } from '../../operations/clients/authorization'
 import UserAttributeEditor from '../components/UserAttributeEditor.vue'
 import ProfilePanel from '../components/ProfilePanel.vue'
@@ -121,7 +123,12 @@ async function fixture(
           instanceId: id,
           tenantId: tenant,
           principalId: principal,
-          grants: permissions.map((operation) => ({
+          grants: (realm === 'platform'
+            ? platformPermissions
+            : permissions.filter(
+                (p) => !(tenantAdministrationPermissions as readonly string[]).includes(p),
+              )
+          ).map((operation) => ({
             ruleId: id,
             ruleRevision: 1,
             subject: {
