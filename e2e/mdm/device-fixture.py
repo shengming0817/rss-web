@@ -91,9 +91,12 @@ def seed():
             column, origin = 'agent_grant_id', grant
         sql += [f"INSERT INTO mdm_access.registrations(tenant_id,id,device,channel,generation,{column},state,purpose,epoch) VALUES('{tenant}','{registration}','{device}','{channel}',1,'{origin}','active','primary',gen_random_uuid())",
                 f"INSERT INTO mdm_access.credentials VALUES('{tenant}','{credential}','{registration}','{channel}',md5('{credential}')||md5('{registration}'),'active')"]
+        if browser_module == 'console-browser.mjs' and channel == 'mdm':
+            sql.append(f"INSERT INTO mdm_access.report_sources(tenant_id,registration,source,epoch,enabled) SELECT tenant_id,id,'{source}',epoch,true FROM mdm_access.registrations WHERE tenant_id='{tenant}' AND id='{registration}'")
         if browser_module in {'operations-browser.mjs','console-browser.mjs'} and device == 'fixture-mdm':
             # Same synthetic Windows capability fixture as rss-mdm execution/support.rs; no device effect claim.
-            sql.append(f"INSERT INTO mdm_access.report_sources(tenant_id,registration,source,epoch,enabled) SELECT tenant_id,id,'mdm.windows',epoch,true FROM mdm_access.registrations WHERE tenant_id='{tenant}' AND id='{registration}'")
+            if browser_module != 'console-browser.mjs':
+                sql.append(f"INSERT INTO mdm_access.report_sources(tenant_id,registration,source,epoch,enabled) SELECT tenant_id,id,'mdm.windows',epoch,true FROM mdm_access.registrations WHERE tenant_id='{tenant}' AND id='{registration}'")
             sql.append(f"INSERT INTO mdm_commands.capabilities(tenant_id,registration,generation,os_version,edition,session,observed_at) VALUES('{tenant}','{registration}',1,'10.0.22621.0',48,1,1)")
         for field, scalar in [('custom.asset_tag',dict(kind='string',value=device)), ('custom.browser_list',dict(kind='array',value=[dict(kind='integer',value=n) for n in range(25 if channel=='mdm' else 3)]))]:
             fact=dict(state=dict(kind='known',value=scalar),lastKnown=None,evidence=dict(scope=dict(kind='device'),source='manual',dataset=None,registration=None,registrationGeneration=None,epoch=None,snapshotId=str(uuid.uuid4()),observedAt=1,receivedAt=2,actor=ADMIN))
@@ -265,7 +268,7 @@ try:
         if status != 200: raise RuntimeError('personnel-owner-write')
     if browser_module == 'console-browser.mjs':
         phase = 'console-prerequisites'
-        console_fixture.prepare(operator, console)
+        console_fixture.prepare(operator, console, environment)
     phase = 'collector-registration'
     module = importlib.util.spec_from_file_location('device_agent', WEB/'e2e/mdm/device-agent.py')
     collector = importlib.util.module_from_spec(module)
@@ -282,6 +285,17 @@ except BaseException as error:
     print(json.dumps(dict(phase=phase,result='failed',classification=type(error).__name__)),flush=True)
     if phase == 'collector-registration' and isinstance(error, RuntimeError) and re.fullmatch(r'collector-[a-z0-9-]+', str(error)):
         print(json.dumps(dict(phase=phase, reason=str(error))), flush=True)
+    if browser_module == 'console-browser.mjs':
+        diagnostics = subprocess.run(['docker', 'logs', environment.container()], capture_output=True, text=True, timeout=10, pass_fds=lease_fds())
+        for line in (diagnostics.stdout + diagnostics.stderr).splitlines():
+            if 'ERROR:' not in line:
+                continue
+            permission = re.search(r'permission denied for (table|schema|relation|function) ([a-z0-9_.]+)', line)
+            if permission:
+                print(json.dumps(dict(phase='postgres-diagnostic', classification='permission-denied', kind=permission[1], identifier=permission[2])), flush=True)
+            else:
+                classification = next((kind for text, kind in [('lock timeout', 'lock-timeout'), ('statement timeout', 'statement-timeout'), ('deadlock detected', 'deadlock'), ('duplicate key value', 'duplicate-key'), ('violates check constraint', 'check-constraint'), ('violates foreign key constraint', 'foreign-key'), ('row-level security', 'row-security')] if text in line), 'sql-error')
+                print(json.dumps(dict(phase='postgres-diagnostic', classification=classification)), flush=True)
     product_log = environment.root/'product.log'
     if product_log.exists():
         diagnostic = Path(tempfile.mkdtemp(prefix='mdm-device-failure-'))

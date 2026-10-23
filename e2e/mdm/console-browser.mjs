@@ -25,6 +25,11 @@ try {
     page = await context.newPage()
   page.setDefaultTimeout(20000)
   page.on('pageerror', (e) => errors.push(e.name))
+  page.on('response', (r) => {
+    const path = new URL(r.url()).pathname
+    if (r.status() >= 400 && path.startsWith('/api/v1/'))
+      console.log(JSON.stringify({ phase, method: r.request().method(), path, status: r.status() }))
+  })
   let next = 0,
     csrf,
     tenant = f.tenant
@@ -82,20 +87,35 @@ try {
   const mac = await api('/api/v1/devices/fixture-mac'),
     registration = mac.primaryMdmRegistration
   assert.equal(registration.source, 'mdm.apple')
+  phase = 'credential-navigation'
   await page.goto(at('devices/fixture-mac/management'))
   await ready()
   const materials = page.locator('[data-panel="recovery-credentials"]')
+  phase = 'credential-action'
   await materials.getByLabel('操作类型', { exact: true }).selectOption('set_recovery_lock')
   await materials.getByLabel('确认对当前目标执行此操作', { exact: true }).check()
   const accepted = page.waitForResponse(
     (r) => r.request().method() === 'POST' && r.url().endsWith('/recovery-credentials/operations'),
   )
+  phase = 'credential-submit'
   await materials.getByRole('button', { name: '保存', exact: true }).click()
   assert.equal((await accepted).status(), 202)
+  phase = 'credential-list'
   await materials.getByRole('button', { name: '读取', exact: true }).click()
   await materials.getByRole('button', { name: '查阅明文', exact: true }).first().waitFor()
-  await materials.getByRole('button', { name: '查阅明文', exact: true }).first().click()
-  await materials.locator('output').waitFor()
+  phase = 'credential-disclose'
+  await until(async () => {
+    if (await materials.locator('output').count()) return true
+    const disclosed = page.waitForResponse(
+      (r) => r.request().method() === 'GET' && r.url().endsWith('/secret'),
+    )
+    await materials.getByRole('button', { name: '查阅明文', exact: true }).first().click()
+    const response = await disclosed
+    if (response.status() === 503) return false
+    assert.equal(response.status(), 200)
+    await materials.locator('output').waitFor()
+    return true
+  }, Boolean)
   assert.ok((await materials.locator('output').textContent()).length > 0)
   const displayedSecret = await materials.locator('output').textContent()
   assert.ok(

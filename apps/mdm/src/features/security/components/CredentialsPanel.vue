@@ -221,7 +221,7 @@ async function query() {
       <fieldset :disabled="locked">
         <label
           >{{ t('gap.action')
-          }}<select v-model="action">
+          }}<select v-model="action" :aria-label="t('gap.action')">
             <option v-for="kind in appleCredentialActions" :key="kind" :value="kind">
               {{ t('gap.' + kind) }}
             </option>

@@ -478,15 +478,26 @@ async function seedUnknown(runtime: object, key: string, input: unknown) {
   return id
 }
 it('revokes an exact Windows credential through the shared confirmation without cloning a Vue proxy', async () => {
-  const revoke = vi.fn(async () => ({ ...entry, validity: 'revoked' }))
+  const windows = material(
+    {
+      ...entry,
+      binding: {
+        ...entry.binding,
+        device: 'win',
+        subject: { kind: 'bitlocker', volume: 'volume', protector: a },
+      },
+    },
+    'win',
+  )
+  const revoke = vi.fn(async () => ({ ...windows, validity: 'revoked' }))
   const w = await mountAt(
     CredentialsPanel,
     {
       tenant: a,
       session: session(),
-      security: { credentials: { list: async () => [material(entry, 'mac')], revoke } },
+      security: { credentials: { list: async () => [windows], revoke } },
     },
-    { endpoint: { id: 'mac', channels: [], primaryMdmRegistration: null } },
+    { endpoint: { id: 'win', channels: [], primaryMdmRegistration: null } },
   )
   await button(w, '读取').trigger('click')
   await flushPromises()
@@ -494,7 +505,7 @@ it('revokes an exact Windows credential through the shared confirmation without 
   await confirm(w)
   await button(w, '撤销托管读取').trigger('click')
   await flushPromises()
-  expect(revoke).toHaveBeenCalledWith('mac', material(entry, 'mac'))
+  expect(revoke).toHaveBeenCalledWith('win', windows)
 })
 it.each(['create', 'update'] as const)(
   'replays an unknown Key %s after SPA remount using the original input',

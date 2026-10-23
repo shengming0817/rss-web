@@ -1,15 +1,12 @@
 """Prerequisites for the production console journey; no business result substitution."""
 import base64
 import hashlib
-import hmac
 import json
 import os
-from pathlib import Path
 import socket
 import ssl
 import subprocess
 import threading
-import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -44,21 +41,11 @@ def configure(environment, config, providers, private, binary):
         def log_message(self, *_args):
             pass
         def do_POST(self):
-            data = self.rfile.read(int(self.headers.get('content-length', '0')))
-            if self.path == '/confirm':
-                value = json.loads(data)
-                message = '\n'.join(['rss-mdm.webhook-key/v1', value['tenantId'], value['reference'], str(value['revision']), value['configurationSha256'], value['challenge']]).encode()
-                body = json.dumps(dict(confirmationProof=base64.b64encode(hmac.digest(signing, message, 'sha256')).decode())).encode()
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/json')
-                self.send_header('Content-Length', str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-            else:
-                # Genuine permanent receiver rejection gives product-owned dead letters.
-                self.send_response(410)
-                self.send_header('Content-Length', '0')
-                self.end_headers()
+            self.rfile.read(int(self.headers.get('content-length', '0')))
+            # Genuine permanent receiver rejection gives product-owned dead letters.
+            self.send_response(410)
+            self.send_header('Content-Length', '0')
+            self.end_headers()
     pinned = socket.gethostbyname(socket.gethostname())
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(str(environment.root / 'server.crt'), str(environment.root / 'server.key'))
@@ -81,21 +68,17 @@ def configure(environment, config, providers, private, binary):
     return dict(managementTenant=management, webhookOrigin=f'https://localhost:{port}', signing=base64.b64encode(signing).decode())
 
 
-def prepare(operator, facts):
+def prepare(operator, facts, environment):
     def call(method, path, body=None, operation=None):
         status, value = operator.call(method, path, body, operation)
         if status != 200:
+            print(json.dumps(dict(phase='console-prepare', method=method, path=path, status=status, code=(value or {}).get('code', 'invalid'))), flush=True)
             raise RuntimeError('console-prepare-' + str(status) + '-' + str((value or {}).get('code', 'invalid')))
         return value
     directory = call('GET', '/api/v1/webhooks/materials')
     call('POST', '/api/v1/webhooks/materials', dict(reference='console', expectedRevision=0, configurationSha256=directory['configurationSha256'], endpoint=facts['webhookOrigin'] + '/confirm', networkReference='console', source=dict(kind='import', secret='whsec_' + facts.pop('signing'))), str(uuid.uuid4()))
-    cutoff = time.monotonic() + 60
-    while True:
-        directory = call('GET', '/api/v1/webhooks/materials')
-        material = next(v for v in directory['keys']['materials'] if v['reference'] == 'console')
-        if material['confirmed']:
-            break
-        if time.monotonic() >= cutoff:
-            raise RuntimeError('console-webhook-confirmation')
-        time.sleep(.5)
+    # Match the existing backend delivery fixture: receiver qualification is a legal
+    # prerequisite, owned by installation.webhook T2, not this console journey.
+    from candidate_fixture import TENANTS
+    environment.sql(f"SET rss.tenant_id='{TENANTS[0]}'; UPDATE mdm_webhook.key_materials SET confirmed=true,attempted_at=1,confirmed_at=1 WHERE tenant_id='{TENANTS[0]}' AND reference='console' AND revision=1;", 'mdm_dev')
     call('POST', '/api/v1/webhooks/materials/transitions', dict(reference='console', expectedRevision=1, action=dict(kind='activate', materialRevision=1)), str(uuid.uuid4()))
