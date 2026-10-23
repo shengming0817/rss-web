@@ -8,7 +8,7 @@ import {
   UiBadge,
 } from '@rss/core/components'
 import { ref, watch, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
@@ -68,32 +68,24 @@ async function applyFilters() {
     failure.value = 'invalidRequest'
     return
   }
-  const same =
-    search.value.trim() === String(route.query['search'] ?? '') &&
-    platform.value === String(route.query['platform'] ?? '') &&
-    assetState.value === String(route.query['assetState'] ?? '') &&
-    limit.value === String(route.query['limit'] ?? '20') &&
-    status.value === String(route.query['status'] ?? '') &&
-    channel.value === String(route.query['channel'] ?? '') &&
-    source.value === String(route.query['source'] ?? '') &&
-    descending.value === (route.query['descending'] === 'true')
-  const before = route.fullPath
-  await router.push({
-    query: {
-      ...(same ? route.query : {}),
-      search: search.value.trim() || undefined,
-      platform: platform.value || undefined,
-      assetState: assetState.value || undefined,
-      limit: limit.value,
-      status: status.value || undefined,
-      channel: channel.value || undefined,
-      source: source.value || undefined,
-      descending: descending.value ? 'true' : undefined,
-      columns: visibleColumns.value,
-    },
+  await queryFirstPage({
+    search: search.value.trim() || undefined,
+    platform: platform.value || undefined,
+    assetState: assetState.value || undefined,
+    limit: limit.value,
+    status: status.value || undefined,
+    channel: channel.value || undefined,
+    source: source.value || undefined,
+    descending: descending.value ? 'true' : undefined,
+    columns: visibleColumns.value,
   })
-  if (route.fullPath === before)
-    await load(typeof route.query['cursor'] === 'string' ? route.query['cursor'] : undefined)
+}
+async function queryFirstPage(query: LocationQueryRaw, replace = false) {
+  if (busy.value) return
+  const before = route.fullPath
+  const location = { query: { ...query, cursor: undefined, trail: undefined } }
+  await (replace ? router.replace(location) : router.push(location))
+  if (route.fullPath === before) await load()
 }
 async function load(cursor?: string) {
   page.value = undefined
@@ -254,10 +246,9 @@ const sourceOptions = computed(() => [
     </form>
     <p v-if="failure === 'cursorInvalidated'">
       {{ t('devices.restartDirectory')
-      }}<UiButton
-        @click="router.replace({ query: { ...route.query, cursor: undefined, trail: undefined } })"
-        >{{ t('devices.reload') }}</UiButton
-      >
+      }}<UiButton :disabled="busy" @click="queryFirstPage(route.query, true)">{{
+        t('devices.reload')
+      }}</UiButton>
     </p>
     <details class="console-panel">
       <summary>{{ t('devices.displayColumns') }}</summary>
