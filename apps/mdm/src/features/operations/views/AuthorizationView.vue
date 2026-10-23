@@ -162,7 +162,7 @@ function create() {
   editorOpen.value = true
 }
 function select(row: Revision<Rule>) {
-  if (busy.value || locked.value) return
+  if (busy.value || locked.value || !canRead.value) return
   fill(row.value, row.id, row.revision)
   editorOpen.value = true
 }
@@ -207,6 +207,11 @@ async function loadAccounts(more = false) {
     },
     (result) => {
       directoryDenied.value = result.denied
+      if (result.denied) {
+        accounts.value = []
+        accountsRead.value = false
+        accountCursor.value = null
+      }
       if (result.page) {
         accounts.value = [
           ...new Map(
@@ -417,7 +422,8 @@ async function routeTarget() {
   )
 }
 async function initialize() {
-  if (!bound.value) return
+  if (!bound.value || busy.value) return
+  clearFacts()
   const principal = runtime.session.state.value.identity?.principalId
   const ok = await run(
     async () => {
@@ -654,7 +660,10 @@ onMounted(initialize)
               : subjectId
         }}
       </p>
-      <p v-if="subjectChanged">{{ t('operations.ruleUi.subjectChange') }}</p>
+      <p v-if="subjectChanged && baseline && proposed">
+        {{ t('operations.ruleUi.subjectChange') }}<br />{{ principalLabel(baseline.subject) }} →
+        {{ principalLabel(proposed.subject) }}
+      </p>
       <h3>{{ t('operations.ruleUi.added') }}</h3>
       <GrantFacts :grants="additions" />
       <h3>{{ t('operations.ruleUi.removed') }}</h3>
@@ -678,11 +687,21 @@ onMounted(initialize)
       <UiButton :disabled="busy || !canRead" @click="compare">{{
         t('operations.ruleUi.readCurrent')
       }}</UiButton>
+      <section v-if="baseline" class="console-panel">
+        <h2>{{ t('operations.ruleUi.baseSnapshot') }}</h2>
+        <p>{{ t('operations.ruleUi.subject') }} · {{ principalLabel(baseline.subject) }}</p>
+        <GrantFacts :grants="baseline.grants" />
+      </section>
       <section v-if="remote !== undefined" class="console-panel">
         <h2>{{ t('operations.ruleUi.current') }}</h2>
         <template v-if="remote"
           ><p>r{{ remote.revision }}</p>
-          <GrantFacts v-if="remote.value" :grants="remote.value.grants" />
+          <template v-if="remote.value"
+            ><p>
+              {{ t('operations.ruleUi.subject') }} · {{ principalLabel(remote.value.subject) }}
+            </p>
+            <GrantFacts :grants="remote.value.grants"
+          /></template>
           <p v-else>{{ t('operations.ruleUi.deletedCurrent') }}</p></template
         >
         <p v-else>{{ t('operations.ruleUi.missingCurrent') }}</p>

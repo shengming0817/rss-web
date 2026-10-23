@@ -117,12 +117,20 @@ async function fixture(
       return o.decode(await (intercept ? intercept(o, next) : next()))
     },
   } as HttpTransport
-  const accounts = vi.fn(async () => ({
-    accounts: [
-      { principalId: target, login: 'Existing manager', enabled: true, memberActive: true },
-    ],
-    next: null,
-  }))
+  const accounts = vi.fn(
+    async (): Promise<Awaited<ReturnType<Runtime['api']['accounts']>>> => ({
+      accounts: [
+        {
+          principalId: target,
+          login: 'Existing manager',
+          enabled: true,
+          memberActive: true,
+          hasLocalPassword: true,
+        },
+      ],
+      next: null,
+    }),
+  )
   const runtime = {
     session,
     realm,
@@ -137,7 +145,7 @@ async function fixture(
     routes: [
       { path: '/tenants/:tenant/operations/authorization', component: AuthorizationView },
       {
-        path: '/tenants/:tenant/devices/:id',
+        path: '/tenants/:tenant/devices/:device',
         name: 'device-detail',
         component: { template: '<div />' },
       },
@@ -172,6 +180,7 @@ async function fixture(
     rows,
     calls,
     accounts,
+    permissions,
     router,
     remount,
     setIntercept: (v: typeof intercept) => {
@@ -180,7 +189,9 @@ async function fixture(
   }
 }
 async function click(label: string, scope = body()) {
-  const b = scope.findAll('button').find((b) => b.text() === label)
+  const b = scope
+    .findAll('button')
+    .find((b) => b.text() === label || b.attributes('aria-label') === label)
   expect(b, label).toBeDefined()
   await b!.trigger('click')
   await flushPromises()
@@ -293,6 +304,7 @@ it('compares a conflict and retains local edits while adopting only the current 
   expect(f.operations.records.get('authorization:platform')?.state).toBe('conflict')
   await click('回读当前规则以核对')
   expect(body().text()).toContain('删除租户')
+  expect(body().text()).toContain(actor)
   await click('保留草稿，采用已核对版本')
   await confirm()
   expect(writes(f)[1]).toMatchObject({
@@ -357,7 +369,7 @@ it('uses the actual UUID after cursor for next and previous pages and presents t
   expect(body().find('[data-testid=review-rule]').exists()).toBe(false)
   await click('关闭')
   await click('上一页')
-  expect(f.calls.at(-1)?.query).toBeUndefined()
+  expect(f.calls.at(-1)?.query).toEqual({ after: undefined })
   expect(f.wrapper.text()).toContain('当前页 1')
 })
 it.each(['anonymous', 'principal', 'tenant', 'session'] as const)(
@@ -396,7 +408,7 @@ it.each(['anonymous', 'principal', 'tenant', 'session'] as const)(
 it('hides management facts immediately for a different route tenant and discards delayed directory data', async () => {
   const f = await fixture()
   await newRule()
-  let resolve!: (v: unknown) => void
+  let resolve!: (v: Awaited<ReturnType<typeof f.accounts>>) => void
   f.accounts.mockImplementationOnce(
     () =>
       new Promise((r) => {
@@ -407,7 +419,13 @@ it('hides management facts immediately for a different route tenant and discards
   await f.router.push(`/tenants/${target}/operations/authorization`)
   resolve({
     accounts: [
-      { principalId: target, login: 'Late secret label', enabled: true, memberActive: true },
+      {
+        principalId: target,
+        login: 'Late secret label',
+        enabled: true,
+        memberActive: true,
+        hasLocalPassword: true,
+      },
     ],
     next: null,
   })
@@ -436,4 +454,49 @@ it('preserves business department source, matching and exact-device grants throu
   ).not.toContain('tenant_create')
   await confirm()
   expect(writes(f)[0]).toMatchObject({ body: { expectedRevision: 3, value } })
+})
+
+it('clears readable facts after same-session permission revocation or an effective read failure while retaining unknown intent', async () => {
+  const f = await fixture()
+  await newRule()
+  f.setIntercept((o, next) => {
+    if (o.method === 'PUT') throw new Error('lost')
+    return next()
+  })
+  await confirm()
+  await click('关闭')
+  f.permissions.splice(0)
+  await click('重新读取')
+  expect(f.wrapper.text()).not.toContain('查看租户')
+  expect(f.wrapper.findAll('tbody tr button')).toHaveLength(0)
+  expect(f.operations.records.get('authorization:platform')?.state).toBe('unknown')
+  expect(body().find('[role=dialog]').exists()).toBe(false)
+})
+it('clears cached account names and next cursor when a later directory page is denied', async () => {
+  const f = await fixture()
+  await newRule()
+  f.accounts.mockResolvedValueOnce({
+    accounts: [
+      {
+        principalId: target,
+        login: 'Revoked directory name',
+        enabled: true,
+        memberActive: true,
+        hasLocalPassword: true,
+      },
+    ],
+    next: actor,
+  })
+  await click('读取已有管理账户')
+  expect(body().text()).toContain('Revoked directory name')
+  f.accounts.mockRejectedValueOnce(decodeMdmError(403, { code: 'permission_denied' }))
+  await click('下一页管理账户')
+  expect(body().text()).not.toContain('Revoked directory name')
+  expect(body().text()).toContain('账户目录拒绝访问')
+  expect(
+    body()
+      .findAll('button')
+      .some((b) => b.text() === '下一页管理账户'),
+  ).toBe(false)
+  expect((body().get('#authorization-principal-id').element as HTMLInputElement).value).toBe(target)
 })

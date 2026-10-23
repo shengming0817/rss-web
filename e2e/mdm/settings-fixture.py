@@ -280,10 +280,12 @@ try:
                 status,_=manager.call('PUT','/api/v1/tenant-administration/authorization/rules/'+str(uuid.uuid4()),dict(operationId=str(uuid.uuid4()),expectedRevision=0,value=managed_rule(account['principalId'],permissions)))
                 expect_status(status,200)
         # Page size is the server's fixed 100; all subjects are actual existing accounts.
+        pagination_rows=[]
         for index in range(101):
             identifier='09090909-0909-4909-8909-'+str(index).zfill(12)
             document=json.dumps(managed_rule(prepared['authorization-target']['principalId'],['tenant_read'])).replace("'","''")
-            environment.sql(f"SET rss.tenant_id='{management}';INSERT INTO mdm_access.authorization_rules(tenant_id,instance,id,revision,document) VALUES('{management}','{INSTANCE}','{identifier}',1,'{document}'::jsonb)",'mdm_dev')
+            pagination_rows.append(f"('{management}','{INSTANCE}','{identifier}',1,'{document}'::jsonb)")
+        environment.sql(f"SET rss.tenant_id='{management}';INSERT INTO mdm_access.authorization_rules(tenant_id,instance,id,revision,document) VALUES "+','.join(pagination_rows),'mdm_dev')
         status,initial_rules=manager.call('GET','/api/v1/tenant-administration/authorization/rules')
         expect_status(status,200)
         initial_rule=None
