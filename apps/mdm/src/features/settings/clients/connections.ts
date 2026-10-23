@@ -65,7 +65,7 @@ function draft(value: unknown, tenant: string, service?: string) {
   const v = closed(value, ['configuration'])
   return { configuration: connectionConfiguration(v['configuration'], tenant, service) }
 }
-export function connectionState(value: unknown, tenant: string) {
+export function connectionState(value: unknown, tenant: string, service?: string) {
   const v = closed(value, [
     'serviceId',
     'draft',
@@ -78,6 +78,7 @@ export function connectionState(value: unknown, tenant: string) {
   const serviceId = uuid(v['serviceId']),
     c = closed(v['convergence'], ['targetRevision', 'activeDevices', 'confirmedDevices']),
     b = closed(v['retirementBlockers'], ['configurations', 'installations'])
+  if (service && serviceId !== service) throw new Error('Wrong host service')
   const verificationKeys = Object.fromEntries(
     Object.entries(record(v['verificationKeys'])).map(([k, v]) => {
       if (!/^[A-Za-z0-9._-]{1,128}$/.test(k)) throw new Error('Invalid connection key')
@@ -129,16 +130,16 @@ export function connectionState(value: unknown, tenant: string) {
   return result
 }
 export type ConnectionState = ReturnType<typeof connectionState>
-export function connectionReceipt(value: unknown, tenant: string) {
+export function connectionReceipt(value: unknown, tenant: string, service?: string) {
   return nullable(value, (value) => {
     const v = record(value),
       action = enumeration(v['action'], ['saved', 'published'] as const)
     if (action === 'saved') {
       closed(v, ['action', 'draft'])
-      return { action, draft: draft(v['draft'], tenant) }
+      return { action, draft: draft(v['draft'], tenant, service) }
     }
     closed(v, ['action', 'configuration'])
-    return { action, configuration: signedConnections(v['configuration'], tenant) }
+    return { action, configuration: signedConnections(v['configuration'], tenant, service) }
   })
 }
 export function connectionObservation(value: unknown) {
@@ -220,14 +221,14 @@ export function connectionDevices(value: unknown, revision: number) {
     next: nullable(v['next'], uuid),
   }
 }
-export function createConnectionsClient(transport: HttpTransport, tenant: string) {
+export function createConnectionsClient(transport: HttpTransport, tenant: string, service: string) {
   return {
     read: () =>
       transport.request({
         method: 'GET',
         path: '/api/v1/agent-connections',
         successStatus: 200,
-        decode: (v) => connectionState(v, tenant),
+        decode: (v) => connectionState(v, tenant, service),
       }),
     save: (
       operationId: string,
@@ -246,7 +247,7 @@ export function createConnectionsClient(transport: HttpTransport, tenant: string
         },
         successStatus: 200,
         decode: (v) => {
-          const d = draft(v, tenant)
+          const d = draft(v, tenant, service)
           if (
             d.configuration.revision !== expectedRevision + 1 ||
             d.configuration.preferredOrigin !== preferredOrigin ||
@@ -263,7 +264,7 @@ export function createConnectionsClient(transport: HttpTransport, tenant: string
         body: { operationId: uuid(operationId), expectedRevision: positive(expectedRevision) },
         successStatus: 200,
         decode: (v) => {
-          const c = signedConnections(v, tenant)
+          const c = signedConnections(v, tenant, service)
           if (c.configuration.revision !== expectedRevision)
             throw new Error('Wrong published connection receipt')
           return c
@@ -275,7 +276,7 @@ export function createConnectionsClient(transport: HttpTransport, tenant: string
         path: '/api/v1/agent-connection-operations/{id}',
         pathParams: { id: uuid(id) },
         successStatus: 200,
-        decode: (v) => connectionReceipt(v, tenant),
+        decode: (v) => connectionReceipt(v, tenant, service),
       }),
     devices: (revision: number, after?: string) =>
       transport.request({
@@ -304,6 +305,7 @@ export function createConnectionsClient(transport: HttpTransport, tenant: string
           signedConnections(
             JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(file.bytes)),
             tenant,
+            service,
           )
           return file
         },

@@ -20,9 +20,10 @@ export function createSettingsClients(
   session: IdentitySession,
   tenant: string,
   realm: Realm,
+  serviceId: string,
 ) {
   return {
-    connections: createConnectionsClient(transport, tenant),
+    connections: createConnectionsClient(transport, tenant, serviceId),
     profiles: createProfilesClient(transport),
     firstUse: createFirstUseClient(transport, tenant),
     runtime: createRuntimeDiagnostics(transport),
@@ -34,8 +35,8 @@ export function createSettingsClients(
     mail: createMailClient(transport),
     wns: createWnsClient(transport),
     webhook: createWebhookMaterials(transport),
-    task: createTaskTrustClient(transport, tenant),
-    pki: createPkiClient(transport, tenant),
+    task: createTaskTrustClient(transport, tenant, serviceId),
+    pki: createPkiClient(transport, tenant, serviceId),
     operations: createSettingsOperations(session),
   }
 }

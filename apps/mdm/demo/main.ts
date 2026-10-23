@@ -10,6 +10,7 @@ const runtime = createDemo(
   { canonicalOrigin: window.location.origin, oidcEnabled: false },
   {
     canonicalOrigin: window.location.origin,
+    serviceId: '44444444-4444-4444-8444-444444444444',
     tenant: TENANT,
     managementTenant: '99999999-9999-4999-8999-999999999999',
   },

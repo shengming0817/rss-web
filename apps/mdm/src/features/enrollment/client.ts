@@ -9,13 +9,14 @@ export function createOnboardingClients(
   transport: HttpTransport,
   publicTransport: HttpTransport,
   tenant: string,
+  serviceId: string,
 ) {
   return {
     recovery: createRecoveryClient(transport),
     entra: createEntraClient(transport, publicTransport),
     apple: createAppleClient(transport),
     native: createNativeClient(publicTransport),
-    configurations: createConfigurationsClient(transport, tenant),
+    configurations: createConfigurationsClient(transport, tenant, serviceId),
     packages: createPackagesClient(publicTransport, tenant),
   }
 }

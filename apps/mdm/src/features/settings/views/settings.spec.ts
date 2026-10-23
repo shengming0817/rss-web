@@ -176,9 +176,10 @@ async function fixture(
       return typeof o.decode === 'function' ? o.decode(value) : undefined
     },
   } as HttpTransport
-  const settings = createSettingsClients(transport, transport, session, tenant, realm)
+  const settings = createSettingsClients(transport, transport, session, tenant, realm, id)
   const runtime = {
     tenant,
+    serviceId: id,
     businessTenant: tenant,
     managementTenant: id,
     realm,
@@ -1950,5 +1951,26 @@ it('clears a previously queried issuance candidate when the same session loses C
   await button(f.wrapper, '查询原操作').trigger('click')
   await flushPromises()
   expect(f.wrapper.find('dl').exists()).toBe(false)
+  expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(0)
+})
+
+it('rejects a different service PKI candidate before any administrative operation exists', async () => {
+  const f = await fixture(TrustPurpose, { purpose: 'agent' })
+  await button(f.wrapper, '准备轮换').trigger('click')
+  await flushPromises()
+  const file = body().get('#pki-trust-file')
+  Object.defineProperty(file.element, 'files', {
+    configurable: true,
+    value: [
+      {
+        size: 1024,
+        text: async () => JSON.stringify({ ...pkiValue(), service_id: principal, revision: 2 }),
+      },
+    ],
+  })
+  await file.trigger('change')
+  await flushPromises()
+  expect(f.wrapper.text()).toContain('输入或响应无效，操作未确认。')
+  expect(f.settings.operations.records.size).toBe(0)
   expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(0)
 })

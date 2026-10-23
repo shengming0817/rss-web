@@ -64,6 +64,7 @@ it('provides the same session owner to auth, MDM and protected routes', async ()
     { canonicalOrigin: 'https://mdm.example.test', oidcEnabled: false },
     {
       canonicalOrigin: 'https://mdm.example.test',
+      serviceId: id,
       tenant,
       managementTenant: '99999999-9999-4999-8999-999999999999',
     },
@@ -180,7 +181,7 @@ it('composes platform routes with one independent local session and no business 
   const runtime = createMdm(
     transport,
     { canonicalOrigin: 'https://mdm.example.test', oidcEnabled: true },
-    { canonicalOrigin: 'https://mdm.example.test', tenant, managementTenant },
+    { canonicalOrigin: 'https://mdm.example.test', serviceId: id, tenant, managementTenant },
   )
   runtime.mount()
   running.push(runtime)
@@ -208,6 +209,7 @@ it.each(['/', '/login'])(
       { canonicalOrigin: 'https://mdm.example.test', oidcEnabled: false },
       {
         canonicalOrigin: 'https://mdm.example.test',
+        serviceId: id,
         tenant,
         managementTenant: '99999999-9999-4999-8999-999999999999',
       },

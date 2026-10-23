@@ -27,7 +27,7 @@ export function quantity(value: unknown) {
   if (!n || n > 4294967295) throw new Error('Invalid quantity')
   return { kind, count: n }
 }
-export function configuration(value: unknown, tenant: string) {
+export function configuration(value: unknown, tenant: string, service?: string) {
   const v = closed(value, [
     'wireVersion',
     'configurationId',
@@ -52,14 +52,14 @@ export function configuration(value: unknown, tenant: string) {
     wireVersion: 1 as const,
     configurationId: uuid(v['configurationId']),
     tenantId: tenant,
-    connections: signedConnections(v['connections'], tenant),
+    connections: signedConnections(v['connections'], tenant, service),
     targets,
     expiresAt: integer(v['expiresAt']),
     quantity: quantity(v['quantity']),
     keyId: identifier(v['keyId']),
   }
 }
-export function readConfiguration(value: unknown, tenant: string, id?: string) {
+export function readConfiguration(value: unknown, tenant: string, id?: string, service?: string) {
   const v = closed(value, [
     'configuration',
     'state',
@@ -70,7 +70,7 @@ export function readConfiguration(value: unknown, tenant: string, id?: string) {
     'remaining',
   ])
   const result = {
-    configuration: configuration(v['configuration'], tenant),
+    configuration: configuration(v['configuration'], tenant, service),
     state: enumeration(v['state'], ['available', 'expired', 'revoked'] as const),
     createdBy: identifier(v['createdBy']),
     responsibleUser: nullable(v['responsibleUser'], (v) => user(v, tenant)),
@@ -131,7 +131,11 @@ export interface ConfigurationInput {
   quantity: ReturnType<typeof quantity>
   targets: ReturnType<typeof target>[]
 }
-export function createConfigurationsClient(transport: HttpTransport, tenant: string) {
+export function createConfigurationsClient(
+  transport: HttpTransport,
+  tenant: string,
+  service: string,
+) {
   return {
     settings: () =>
       transport.request({
@@ -174,7 +178,7 @@ export function createConfigurationsClient(transport: HttpTransport, tenant: str
               JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(file.bytes)),
               ['configuration', 'secret', 'signature'],
             )
-            const metadata = configuration(raw['configuration'], tenant)
+            const metadata = configuration(raw['configuration'], tenant, service)
             base64url(raw['secret'], 32)
             base64url(raw['signature'], 64)
             if (
@@ -196,7 +200,7 @@ export function createConfigurationsClient(transport: HttpTransport, tenant: str
         path: '/api/v1/agent-configurations/{id}',
         pathParams: { id: uuid(id) },
         successStatus: 200,
-        decode: (v) => readConfiguration(v, tenant, id),
+        decode: (v) => readConfiguration(v, tenant, id, service),
       }),
     operation: (id: string) =>
       transport.request({
@@ -204,7 +208,7 @@ export function createConfigurationsClient(transport: HttpTransport, tenant: str
         path: '/api/v1/agent-configuration-operations/{id}',
         pathParams: { id: uuid(id) },
         successStatus: 200,
-        decode: (v) => nullable(v, (v) => readConfiguration(v, tenant)),
+        decode: (v) => nullable(v, (v) => readConfiguration(v, tenant, undefined, service)),
       }),
     revoke: (id: string, operationId: string) =>
       transport.request({

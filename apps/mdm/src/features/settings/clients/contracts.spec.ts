@@ -384,7 +384,7 @@ it('checks task/PKI tenant bindings and current-generation installation observat
   expect(() => taskTrust(task, a)).toThrow()
   expect(() => taskTrust({ ...task, keys: [] }, b)).toThrow()
   const f = transport(task),
-    client = createTaskTrustClient(f.client, b)
+    client = createTaskTrustClient(f.client, b, c)
   await client.read()
   await client.operation(a)
   await client.change(a, { action: 'prepare', expectedRevision: 0 })
@@ -414,29 +414,30 @@ it('checks task/PKI tenant bindings and current-generation installation observat
     }),
   ).toThrow()
   const o = transport(observation)
-  await createTaskTrustClient(o.client, b).observation('device-a')
-  await createPkiClient(o.client, b).observation('device-a')
+  await createTaskTrustClient(o.client, b, c).observation('device-a')
+  await createPkiClient(o.client, b, c).observation('device-a')
   const trust = pkiTrust(pki, b, 'agent')
   expect(() => pkiTrust(pki, b, 'apple')).toThrow()
   expect(() => pkiTrust({ ...pki, issuers: [] }, b, 'agent')).toThrow()
   const q = transport({ operation: a, revision: 2, state: 'distributing' }),
-    pkiClient = createPkiClient(q.client, b)
+    pkiClient = createPkiClient(q.client, b, c)
   await pkiClient.prepare(a, 'agent', 1, trust)
   await createPkiClient(
     transport({ operation: a, revision: 3, state: 'activated' }).client,
     b,
+    c,
   ).transition(a, 'agent', 2, 'activate')
   await expect(pkiClient.transition(c, 'agent', 1, 'retire')).rejects.toThrow()
   expect(() => pkiReceipt({ operation: a, revision: 2, state: 'prepared' })).toThrow()
   const j = transport(pki)
-  await createPkiClient(j.client, b).read('agent')
+  await createPkiClient(j.client, b, c).read('agent')
   const z = transport(undefined)
-  await createPkiClient(z.client, b).publish(a, 'agent', [
+  await createPkiClient(z.client, b, c).publish(a, 'agent', [
     { issuer: digest, crl: 'YQ==', root_crl: 'YQ==' },
   ])
   expect(z.calls[0]?.successStatus).toBe(204)
   const recover = transport({ attempt: c, fingerprint: digest })
-  await createPkiClient(recover.client, b).recover(a, c, ['YQ=='])
+  await createPkiClient(recover.client, b, c).recover(a, c, ['YQ=='])
 })
 it('reads explicit runtime facts and never turns missing counts into zero', async () => {
   const snapshot = {

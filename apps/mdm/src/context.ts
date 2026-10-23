@@ -24,6 +24,7 @@ export interface MdmRuntime {
   operations: ReturnType<typeof createOperationsClients>
   settings: ReturnType<typeof createSettingsClients>
   realm: Realm
+  serviceId: string
   businessTenant: string
   managementTenant: string
   tenant: string

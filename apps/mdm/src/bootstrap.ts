@@ -114,7 +114,14 @@ export function createMdm(
     ],
     login,
   )
-  const settings = createSettingsClients(business, publicTransport, session, tenant, realm)
+  const settings = createSettingsClients(
+    business,
+    publicTransport,
+    session,
+    tenant,
+    realm,
+    host.serviceId,
+  )
   const operations = createOperationsClients(business, tenant, realm)
   const registrationChannels = createRegistrationChannels(
     createRegistrationChannelsClient(business, tenant),
@@ -139,7 +146,7 @@ export function createMdm(
     session,
     registrationChannels,
     transport: business,
-    onboarding: createOnboardingClients(business, publicTransport, tenant),
+    onboarding: createOnboardingClients(business, publicTransport, tenant, host.serviceId),
     workspace: createWorkspaceClient(business, false),
     devices: createDeviceClients(business, tenant),
     policies: createPolicyClients(business),
@@ -148,6 +155,7 @@ export function createMdm(
     operations,
     settings,
     realm,
+    serviceId: host.serviceId,
     businessTenant: host.tenant,
     managementTenant: host.managementTenant,
     tenant,

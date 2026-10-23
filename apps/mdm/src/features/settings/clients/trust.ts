@@ -11,9 +11,13 @@ import {
   uuid,
 } from '../../../services/decode'
 import { positive, sha256 } from './value'
-export function taskTrust(value: unknown, tenant: string) {
+export function taskTrust(value: unknown, tenant: string, service?: string) {
   const v = closed(value, ['version', 'service_id', 'tenant', 'revision', 'keys'])
-  if (v['version'] !== 1 || uuid(v['tenant']) !== tenant)
+  if (
+    v['version'] !== 1 ||
+    uuid(v['tenant']) !== tenant ||
+    (service !== undefined && uuid(v['service_id']) !== service)
+  )
     throw new Error('Wrong task trust binding')
   const keys = unique(
     array(v['keys'], (value) => {
@@ -104,8 +108,8 @@ export type TaskTrust = ReturnType<typeof taskTrust>
 export type TaskChange =
   | { action: 'prepare'; expectedRevision: number }
   | { action: 'activate' | 'retire'; expectedRevision: number; keyId: string }
-export function createTaskTrustClient(transport: HttpTransport, tenant: string) {
-  const decode = (v: unknown) => taskTrust(v, tenant)
+export function createTaskTrustClient(transport: HttpTransport, tenant: string, service: string) {
+  const decode = (v: unknown) => taskTrust(v, tenant, service)
   return {
     read: () =>
       transport.request({

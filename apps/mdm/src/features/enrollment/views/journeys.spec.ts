@@ -81,7 +81,7 @@ async function setup(view: unknown, allow = true) {
     },
   } as HttpTransport
   const runtime = {
-    onboarding: createOnboardingClients(transport, transport, TENANT),
+    onboarding: createOnboardingClients(transport, transport, TENANT, INSTANCE),
     session: { state },
     tenant: TENANT,
     demo: true,

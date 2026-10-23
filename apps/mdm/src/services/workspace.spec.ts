@@ -41,6 +41,7 @@ it('validates the static host identity and closed module data', () => {
     decodeMdmConfig(
       {
         tenant,
+        serviceId: '44444444-4444-4444-8444-444444444444',
         managementTenant: '99999999-9999-4999-8999-999999999999',
         canonicalOrigin: 'https://mdm.test',
       },
@@ -82,4 +83,15 @@ it('rejects the retired host shape, identical scopes and unexpected config keys'
     },
   ])
     expect(() => decodeMdmConfig(value, origin)).toThrow()
+})
+
+it('requires current stable service identity and rejects the prior host shape', () => {
+  const v = {
+    canonicalOrigin: 'https://mdm.test',
+    tenant: '11111111-1111-4111-8111-111111111111',
+    managementTenant: '99999999-9999-4999-8999-999999999999',
+  }
+  expect(() => decodeMdmConfig(v, v.canonicalOrigin)).toThrow()
+  expect(() => decodeMdmConfig({ ...v, serviceId: 'not-a-uuid' }, v.canonicalOrigin)).toThrow()
+  expect(decodeMdmConfig({ ...v, serviceId: v.tenant }, v.canonicalOrigin).serviceId).toBe(v.tenant)
 })

@@ -62,7 +62,7 @@ beforeEach(() => {
       )
     },
   } as HttpTransport
-  client = createOnboardingClients(transport, transport, TENANT)
+  client = createOnboardingClients(transport, transport, TENANT, INSTANCE)
 })
 it('delivers the complete exact JSON, looks up only secret-free outcomes and revokes before replacement', async () => {
   const initial = await client.configurations.settings()

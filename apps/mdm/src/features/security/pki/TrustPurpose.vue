@@ -159,7 +159,13 @@ async function file(event: Event) {
     return
   }
   await run(
-    async () => pkiTrust(JSON.parse(await selectedFile.text()), runtime.tenant, props.purpose),
+    async () =>
+      pkiTrust(
+        JSON.parse(await selectedFile.text()),
+        runtime.tenant,
+        props.purpose,
+        runtime.serviceId,
+      ),
     (v) => {
       candidate.value = v
     },

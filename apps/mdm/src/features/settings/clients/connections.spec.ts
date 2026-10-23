@@ -112,6 +112,7 @@ it('keeps desired, published, deployment and device facts distinct and rejects i
       },
     }),
   ).toThrow()
+  expect(() => connectionState(state, tenant, operation)).toThrow()
   expect(connectionReceipt(null, tenant)).toBeNull()
   expect(() =>
     connectionReceipt(
@@ -123,7 +124,7 @@ it('keeps desired, published, deployment and device facts distinct and rejects i
 it('binds write receipts and pagination, and downloads only the exact public signed attachment', async () => {
   let reply: unknown = { configuration: config }
   const request = vi.fn(async (o: RequestOptions<unknown>) => o.decode(reply)),
-    client = createConnectionsClient({ request } as unknown as HttpTransport, tenant)
+    client = createConnectionsClient({ request } as unknown as HttpTransport, tenant, service)
   await client.save(operation, 1, config.preferredOrigin, config.origins)
   expect(request.mock.lastCall![0]).toMatchObject({
     method: 'PUT',
