@@ -262,7 +262,7 @@ try {
       'platform-independent-local-authentication',
     )
     phase = 'management-authorization'
-    await authorizationJourney({page,context,origin,fixture:f,login,password,coverage})
+    await authorizationJourney({ page, context, origin, fixture: f, login, password, coverage })
     phase = 'provisioning-unknown'
     await page.goto(`${origin}/tenants/${f.managementTenant}/settings/tenants`)
     const form = page.locator('form').first()

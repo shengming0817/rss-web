@@ -72,7 +72,8 @@ async function fixture(
       : ['authorization_read', 'authorization_write'])
   const transport = {
     async request(o: Options) {
-      calls.push(structuredClone({ ...o, decode: undefined }) as Options)
+      const { decode, ...request } = o
+      calls.push({ ...structuredClone(request), decode })
       const next = () => {
         if (o.method === 'GET' && o.path.endsWith('/authorization'))
           return {
@@ -159,7 +160,7 @@ async function fixture(
     wrapper = mount(AuthorizationView, {
       attachTo: document.body,
       global: {
-        plugins: [router, mdmI18n('zh')],
+        plugins: [router, mdmI18n()],
         provide: {
           [mdmKey as symbol]: runtime,
           [runtimeKey as symbol]: { session, api: { accounts } } as unknown as Runtime,
@@ -298,7 +299,7 @@ it('compares a conflict and retains local edits while adopting only the current 
   f.rows.set(ruleId, {
     id: ruleId,
     revision: 2,
-    value: definition(['tenant_read', 'tenant_delete']),
+    value: { ...definition(['tenant_read', 'tenant_delete']), subject: subject(actor) },
   })
   await confirm()
   expect(f.operations.records.get('authorization:platform')?.state).toBe('conflict')
