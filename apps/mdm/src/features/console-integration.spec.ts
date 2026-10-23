@@ -844,7 +844,8 @@ it('reads and rotates a Key with a local first-response secret, then revokes usi
   await button(w, '轮换').trigger('click')
   await flushPromises()
   expect(w.find('output').text()).toBe('first-response-secret')
-  await button(w, '清除明文').trigger('click')
+  window.dispatchEvent(new Event('pagehide'))
+  await flushPromises()
   expect(w.find('output').exists()).toBe(false)
   await w
     .findAll('button')

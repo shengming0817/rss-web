@@ -102,9 +102,11 @@ export function useSettingsSecrets(clear: () => void) {
     if (document.visibilityState === 'hidden') clear()
   }
   document.addEventListener('visibilitychange', visibility)
+  window.addEventListener('pagehide', clear)
   onBeforeUnmount(() => {
     clear()
     document.removeEventListener('visibilitychange', visibility)
+    window.removeEventListener('pagehide', clear)
   })
 }
 

@@ -162,7 +162,7 @@ try {
     (r) =>
       r.request().method() === 'POST' && new URL(r.url()).pathname === `/api/v1/policies/${policy}`,
   )
-  await page.getByRole('button', { name: '启用', exact: true }).click()
+  await page.getByRole('button', { name: '启用整个 Policy', exact: true }).click()
   assert.equal((await conflict).status(), 409)
   await page.getByRole('button', { name: '冲突：重新读取并比较后编辑', exact: true }).click()
   await ready()
@@ -328,9 +328,15 @@ try {
   await hooks.getByLabel('确认对当前目标执行此操作', { exact: true }).first().check()
   await hooks.getByRole('button', { name: '保存', exact: true }).click()
   await hooks.getByRole('button', { name: '重送原请求', exact: true }).waitFor()
-  await page.goto(at('settings/access'))
+  await page
+    .locator('.settings-tabs')
+    .getByRole('link', { name: '组织与访问', exact: true })
+    .click()
   await ready()
-  await page.goto(at('settings/integrations'))
+  await page
+    .locator('.settings-tabs')
+    .getByRole('link', { name: '集成与运行凭据', exact: true })
+    .click()
   await ready()
   await hooks.getByRole('button', { name: '重送原请求', exact: true }).waitFor()
   const capture = (r) => {
@@ -339,14 +345,14 @@ try {
   page.on('request', capture)
   await hooks.getByLabel('确认对当前目标执行此操作', { exact: true }).last().check()
   await hooks.getByRole('button', { name: '重送原请求', exact: true }).click()
-  await hooks.getByRole('button', { name: '启用', exact: true }).waitFor()
+  await hooks.getByRole('button', { name: '启用整个 Policy', exact: true }).waitFor()
   page.off('request', capture)
   assert.deepEqual(resent, original)
   await hooks.getByLabel('确认对当前目标执行此操作', { exact: true }).first().check()
   const enabled = page.waitForResponse(
     (r) => r.request().method() === 'PUT' && r.url().endsWith(sub),
   )
-  await hooks.getByRole('button', { name: '启用', exact: true }).click()
+  await hooks.getByRole('button', { name: '启用整个 Policy', exact: true }).click()
   assert.equal((await enabled).status(), 200)
   await hooks.getByLabel('设备', { exact: true }).fill(f.mdm)
   await hooks.getByLabel('确认对当前目标执行此操作', { exact: true }).first().check()
