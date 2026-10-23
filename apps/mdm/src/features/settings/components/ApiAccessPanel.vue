@@ -46,7 +46,7 @@ useSettingsFacts(clear)
 async function read() {
   clearSecret()
   current.value = undefined
-  await run(
+  const ok = await run(
     () => client.key(id.value),
     (k) => {
       current.value = k
@@ -57,6 +57,7 @@ async function read() {
     },
   )
   if (failure.value) clear()
+  return ok
 }
 async function load(after?: string) {
   clearSecret()
@@ -116,7 +117,7 @@ async function change(kind: KeyIntent['kind'], replay = false) {
 }
 async function readNetwork() {
   network.value = undefined
-  await run(
+  const ok = await run(
     () => client.network(),
     (v) => {
       network.value = v
@@ -127,6 +128,7 @@ async function readNetwork() {
     network.value = undefined
     networks.value = ''
   }
+  return ok
 }
 async function saveNetwork(replay = false) {
   if (!confirmation.value || (!network.value && !replay)) return
@@ -154,9 +156,15 @@ function restore() {
   else if (input) void change(input.kind, true)
 }
 async function compare() {
-  if (runtime.realm === 'platform') await readNetwork()
-  else await read()
-  if (!failure.value) resolvedConflict()
+  const original = pending.value?.input as KeyIntent | undefined
+  if (!original || pending.value?.state !== 'conflict') return
+  let ok
+  if (original.kind === 'network') ok = await readNetwork()
+  else {
+    id.value = original.id
+    ok = await read()
+  }
+  if (ok) resolvedConflict()
 }
 </script>
 <template>

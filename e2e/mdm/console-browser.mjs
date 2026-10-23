@@ -130,6 +130,23 @@ try {
   await materials.getByRole('button', { name: '清除明文', exact: true }).click()
   assert.equal(await materials.locator('output').count(), 0)
   coverage.push('direct-disclosure-and-local-secret-clear')
+  phase = 'credential-cas-comparison'
+  await materials.getByLabel('确认对当前目标执行此操作', { exact: true }).check()
+  const credentialConflict = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      new URL(r.url()).pathname === '/api/v1/devices/fixture-mac/recovery-credentials/operations',
+  )
+  await materials.getByRole('button', { name: '保存', exact: true }).click()
+  assert.equal((await credentialConflict).status(), 409)
+  const credentialCompare = materials.getByRole('button', {
+    name: '冲突：重新读取并比较后编辑',
+    exact: true,
+  })
+  await credentialCompare.click()
+  await credentialCompare.waitFor({ state: 'hidden' })
+  await materials.getByLabel('预期修订', { exact: true }).fill('1')
+  coverage.push('credential-cas-conflict-authoritative-comparison')
   phase = 'group-and-scope-prerequisites'
   const group = randomUUID()
   await mutation(`/api/v1/groups/${group}`, {
@@ -251,6 +268,29 @@ try {
     .waitFor()
   assert.ok((await page.locator('[data-panel="retirement"]').textContent()).includes(f.alone))
   coverage.push('policy-retirement-cas-trigger-and-channel-facts')
+  phase = 'retirement-force-reload'
+  const retirementPanel = page.locator('[data-panel="retirement"]')
+  await retirementPanel
+    .getByLabel('原因', { exact: true })
+    .fill('Explicit console recovery fixture')
+  await retirementPanel.getByLabel('确认对当前目标执行此操作', { exact: true }).check()
+  const forceReceipt = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      new URL(r.url()).pathname === `/api/v1/device-retirements/${retirement}/force-revoke`,
+  )
+  const forcedFacts = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'GET' &&
+      new URL(r.url()).pathname === `/api/v1/device-retirements/${retirement}`,
+  )
+  await retirementPanel.getByRole('button', { name: '强制撤权', exact: true }).click()
+  assert.equal((await forceReceipt).status(), 200)
+  const forcedResponse = await forcedFacts
+  assert.equal(forcedResponse.status(), 200)
+  assert.notEqual((await forcedResponse.json()).forcedAt, null)
+  await retirementPanel.getByRole('heading', { name: new RegExp(f.alone) }).waitFor()
+  coverage.push('force-revocation-receipt-and-authoritative-channel-reload')
   phase = 'policy-directory-pagination'
   for (let i = 0; i < 21; i++)
     await mutation(`/api/v1/policies/${randomUUID()}`, {

@@ -105,7 +105,7 @@ async function load(cursor?: string) {
 }
 async function read(policy = (pending.value?.input as { id: string } | undefined)?.id ?? id.value) {
   current.value = undefined
-  await run(() => client.read(policy), apply)
+  return run(() => client.read(policy), apply)
 }
 function fresh() {
   if (locked.value) return
@@ -319,10 +319,11 @@ watch(
         >{{ t('gap.replayOriginal') }}</UiButton
       ><UiButton
         v-if="pending.state === 'conflict'"
+        :disabled="busy"
         @click="
           async () => {
-            await read()
-            if (!failure) resolvedConflict()
+            const ok = await read()
+            if (ok) resolvedConflict()
           }
         "
         >{{ t('gap.compare') }}</UiButton

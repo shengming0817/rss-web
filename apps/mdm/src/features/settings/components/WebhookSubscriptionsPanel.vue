@@ -151,17 +151,29 @@ async function loadDeliveries(after?: string) {
 }
 async function readDelivery(id: string) {
   currentDelivery.value = undefined
-  await run(
+  const ok = await run(
     () => client.delivery(id),
     (v) => {
       currentDelivery.value = v
     },
   )
   if (failure.value) clear()
+  return ok
 }
 function recover(kind: 'replay' | 'redrive') {
   const d = currentDelivery.value
   if (d) void execute({ kind, id: d.id, expectedVersion: d.recoveryVersion })
+}
+async function compare() {
+  const original = pending.value?.input as WebhookIntent | undefined
+  if (!original || pending.value?.state !== 'conflict') return
+  let ok
+  if (original.kind === 'subscription' || original.kind === 'test') {
+    if (original.kind === 'test') device.value = original.deviceId
+    selected.value = undefined
+    ok = await run(() => client.read(original.id), apply)
+  } else ok = await readDelivery(original.id)
+  if (ok) resolvedConflict()
 }
 function restore() {
   if (pending.value?.state === 'unknown') void execute(pending.value.input as WebhookIntent, true)
@@ -290,16 +302,9 @@ function restore() {
         :disabled="busy || !confirmation"
         @click="restore"
         >{{ t('gap.replayOriginal') }}</UiButton
-      ><UiButton
-        v-if="pending.state === 'conflict'"
-        @click="
-          async () => {
-            await read()
-            if (!failure) resolvedConflict()
-          }
-        "
-        >{{ t('gap.compare') }}</UiButton
-      ></template
+      ><UiButton v-if="pending.state === 'conflict'" :disabled="busy" @click="compare">{{
+        t('gap.compare')
+      }}</UiButton></template
     >
     <details v-if="receipt">
       <summary>{{ t('gap.result') }}</summary>

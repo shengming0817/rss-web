@@ -67,7 +67,9 @@ function change(replay = false) {
         operation,
         original.state,
       ),
-    () => {},
+    (value) => {
+      currentAssetState.value = value.state
+    },
     replay,
   )
 }

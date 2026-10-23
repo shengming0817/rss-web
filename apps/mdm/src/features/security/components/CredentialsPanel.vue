@@ -16,10 +16,10 @@ const props = defineProps<{ endpoint: EndpointDetail }>(),
   runtime = useMdm(),
   { t } = useI18n()
 const client = runtime.security.credentials
-const { run, submit, pending, locked, busy, failure, confirmOriginal } = useOriginalOperation(
-  () => 'credentials/' + props.endpoint.id,
-)
-const rows = ref<Material[]>([]),
+const { run, submit, pending, locked, busy, failure, confirmOriginal, resolvedConflict } =
+  useOriginalOperation(() => 'credentials/' + props.endpoint.id)
+const currentEndpoint = ref<EndpointDetail>(),
+  rows = ref<Material[]>([]),
   more = ref(false),
   secret = ref(''),
   action = ref<AppleAction>('collect_filevault'),
@@ -49,9 +49,10 @@ function clear() {
 }
 useSettingsSecrets(clear)
 watch(
-  () => props.endpoint.id,
+  () => props.endpoint,
   () => {
     clear()
+    currentEndpoint.value = undefined
     rows.value = []
     more.value = false
     resultId.value = ''
@@ -69,6 +70,26 @@ async function load(next = false) {
   if (failure.value) {
     rows.value = []
     more.value = false
+  }
+}
+async function compare() {
+  clear()
+  rows.value = []
+  more.value = false
+  const ok = await run(
+    async () => ({
+      endpoint: await runtime.devices.directory.detail(props.endpoint.id),
+      materials: await client.list(props.endpoint.id),
+    }),
+    (value) => {
+      currentEndpoint.value = value.endpoint
+      rows.value = value.materials
+      more.value = value.materials.length === 100
+    },
+  )
+  if (ok) {
+    resultId.value = ''
+    resolvedConflict()
   }
 }
 async function reveal(entry: Material) {
@@ -96,7 +117,7 @@ async function revoke(entry: Material, replay = false) {
   if (ok) await load()
 }
 function input(): CredentialInput {
-  const registration = props.endpoint.channels.find(
+  const registration = (currentEndpoint.value ?? props.endpoint).channels.find(
     (c) => c.channel === 'mdm' && c.status === 'active',
   )
   if (!registration) throw new Error('No current MDM registration')
@@ -213,9 +234,13 @@ async function query() {
       ><UiButton @click="clear">{{ t('gap.clear') }}</UiButton></template
     >
     <p>{{ t('gap.revokedHint') }}</p>
+    <p v-if="currentEndpoint?.primaryMdmRegistration">
+      {{ t('gap.registration') }}: {{ currentEndpoint.primaryMdmRegistration.registrationId }} ·
+      {{ t('gap.generation') }}: {{ currentEndpoint.primaryMdmRegistration.generation }}
+    </p>
     <label><input v-model="confirmation" type="checkbox" />{{ t('gap.confirmation') }}</label>
     <form
-      v-if="endpoint.primaryMdmRegistration?.source === 'mdm.apple'"
+      v-if="(currentEndpoint ?? endpoint).primaryMdmRegistration?.source === 'mdm.apple'"
       @submit.prevent="execute()"
     >
       <fieldset :disabled="locked">
@@ -247,7 +272,12 @@ async function query() {
       /></label>
       <UiButton type="submit" :disabled="locked || !confirmation">{{ t('gap.save') }}</UiButton>
     </form>
-    <p v-if="pending" role="alert">{{ t('gap.unknown') }} {{ pending.id }}</p>
+    <p v-if="pending" role="alert">
+      {{ t(pending.state === 'conflict' ? 'gap.compare' : 'gap.unknown') }} {{ pending.id }}
+    </p>
+    <UiButton v-if="pending?.state === 'conflict'" :disabled="busy" @click="compare">{{
+      t('gap.compare')
+    }}</UiButton>
     <UiButton
       v-if="pending?.state === 'unknown'"
       :disabled="busy || !confirmation"

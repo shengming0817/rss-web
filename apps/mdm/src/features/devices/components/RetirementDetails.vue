@@ -24,17 +24,16 @@ async function load() {
   )
 }
 watch(() => props.id, load, { immediate: true })
-function force(replay = false) {
+async function force(replay = false) {
   if (!confirmation.value) return
   confirmation.value = false
-  void submit(
+  const ok = await submit(
     { reason: reason.value },
     (operation, input) => runtime.devices.lifecycle.force(props.id, operation, input.reason),
-    () => {
-      void load()
-    },
+    () => {},
     replay,
   )
+  if (ok) await load()
 }
 </script>
 <template>

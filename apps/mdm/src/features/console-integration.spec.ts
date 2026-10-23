@@ -14,6 +14,7 @@ import WebhookSubscriptionsPanel from './settings/components/WebhookSubscription
 import ApiAccessPanel from './settings/components/ApiAccessPanel.vue'
 import LifecyclePoliciesView from './policies/views/LifecyclePoliciesView.vue'
 import ManagementQueries from './devices/components/ManagementQueries.vue'
+import RetirementDetails from './devices/components/RetirementDetails.vue'
 import CredentialsPanel from './security/components/CredentialsPanel.vue'
 import { createPoliciesClient } from './policies/clients/policies'
 import { defaultSchedule, policyAction } from './policies/clients/model'
@@ -462,7 +463,12 @@ function button(w: VueWrapper, label: string) {
 async function confirm(w: VueWrapper) {
   await w.findAll('input[type="checkbox"]').at(-1)!.setValue(true)
 }
-async function seedUnknown(runtime: object, key: string, input: unknown) {
+async function seedPending(
+  runtime: object,
+  key: string,
+  input: unknown,
+  rejection = new Error('lost response'),
+) {
   let op!: ReturnType<typeof useOriginalOperation>
   const component = defineComponent({
     setup() {
@@ -474,7 +480,7 @@ async function seedUnknown(runtime: object, key: string, input: unknown) {
   await op.submit(
     input,
     async () => {
-      throw new Error('lost response')
+      throw rejection
     },
     () => {},
   )
@@ -544,7 +550,7 @@ it.each(['create', 'update'] as const)(
         },
       },
     }
-    const originalId = await seedUnknown(runtime, 'api-access', input)
+    const originalId = await seedPending(runtime, 'api-access', input)
     const w = await mountAt(ApiAccessPanel, runtime)
     expect(change).not.toHaveBeenCalled()
     expect(w.text()).toContain(originalId)
@@ -582,7 +588,7 @@ it.each(['change', 'trigger'] as const)(
         },
       },
     }
-    const originalId = await seedUnknown(runtime, 'lifecycle-policy', input)
+    const originalId = await seedPending(runtime, 'lifecycle-policy', input)
     const w = await mountAt(LifecyclePoliciesView, runtime)
     expect(w.text()).toContain(originalId)
     expect(change).not.toHaveBeenCalled()
@@ -604,7 +610,7 @@ it('unlocks an asset conflict only after reading the current authoritative state
   const asset = vi
     .fn()
     .mockRejectedValueOnce(decodeMdmError(409, { code: 'operation_conflict' }))
-    .mockResolvedValueOnce({})
+    .mockResolvedValueOnce({ operationId: b, devices: ['mac'], state: 'archived' })
   const detail = vi.fn(async () => ({ endpoints: [{ assetState: 'active' }] }))
   const runtime = {
     tenant: a,
@@ -621,11 +627,13 @@ it('unlocks an asset conflict only after reading the current authoritative state
   expect(detail).toHaveBeenCalledWith({ kind: 'endpoint', id: 'mac' })
   expect(w.text()).toContain('active')
   expect(w.find('select').attributes('disabled')).toBeUndefined()
-  await w.find('select').setValue('active')
+  await w.find('select').setValue('archived')
   await confirm(w)
   await button(w, '保存').trigger('click')
   await flushPromises()
-  expect(asset.mock.calls[1]?.[2]).toBe('active')
+  expect(asset.mock.calls[1]?.[2]).toBe('archived')
+  expect(w.text()).toContain('资产状态: archived')
+  expect(w.text()).not.toContain('资产状态: active')
 })
 it('renders nonempty redacted DDM facts, unknown observation and the exact operation link across opaque pages', async () => {
   const observation = {
@@ -1018,4 +1026,301 @@ it('creates and edits a credential Policy with the exact operation, then enables
   await button(w, '新草稿').trigger('click')
   await flushPromises()
   expect(field(w, '策略 ID').element).not.toHaveProperty('value', a)
+})
+
+it('compares current Apple registration and material facts before unlocking a rejected CAS operation', async () => {
+  const endpoint = {
+    id: 'mac',
+    primaryMdmRegistration: { source: 'mdm.apple', registrationId: b, generation: 2 },
+    channels: [{ channel: 'mdm', status: 'active', registrationId: b, generation: 2 }],
+  }
+  const current = {
+    ...endpoint,
+    primaryMdmRegistration: { source: 'mdm.apple', registrationId: c, generation: 3 },
+    channels: [{ channel: 'mdm', status: 'active', registrationId: c, generation: 3 }],
+  }
+  const detail = vi
+    .fn()
+    .mockRejectedValueOnce(decodeMdmError(503, { code: 'unavailable' }))
+    .mockResolvedValue(current)
+  const list = vi.fn(async () => [
+    material({ ...entry, binding: { ...entry.binding, registration: c, generation: 3 } }, 'mac'),
+  ])
+  const create = vi
+    .fn()
+    .mockRejectedValueOnce(decodeMdmError(409, { code: 'operation_conflict' }))
+    .mockResolvedValue({ operationId: a, revision: 1 })
+  const w = await mountAt(
+    CredentialsPanel,
+    {
+      tenant: a,
+      session: session(),
+      devices: { directory: { detail } },
+      security: { credentials: { create, list } },
+    },
+    { endpoint },
+  )
+  await confirm(w)
+  await w.find('form').trigger('submit')
+  await flushPromises()
+  expect(w.find('fieldset').attributes('disabled')).toBeDefined()
+  await button(w, '冲突：重新读取并比较后编辑').trigger('click')
+  await flushPromises()
+  expect(w.find('fieldset').attributes('disabled')).toBeDefined()
+  await button(w, '冲突：重新读取并比较后编辑').trigger('click')
+  await flushPromises()
+  expect(detail).toHaveBeenLastCalledWith('mac')
+  expect(list).toHaveBeenCalledWith('mac')
+  expect(w.text()).toContain(c)
+  expect(w.find('fieldset').attributes('disabled')).toBeUndefined()
+  await field(w, '预期修订').setValue(3)
+  await confirm(w)
+  await w.find('form').trigger('submit')
+  await flushPromises()
+  expect(create.mock.calls[1]?.[2]).toMatchObject({
+    registration: c,
+    generation: 3,
+    action: { expectedRevision: 3 },
+  })
+  expect(create.mock.calls[1]?.[1]).not.toBe(create.mock.calls[0]?.[1])
+})
+
+it('compares the original delivery after a recovery conflict without requiring a selected subscription', async () => {
+  const d = {
+    id: b,
+    eventId: c,
+    subscriptionId: a,
+    targetVersion: 1,
+    recoveryVersion: 3,
+    redriveWindowOpen: true,
+    sourceDelivery: null,
+    attempts: 2,
+    status: 'dead_letter',
+    transportObservation: 'notSent',
+    failureStage: 'admission',
+    failureReason: 'provider_rejected',
+  }
+  const delivery = vi
+    .fn()
+    .mockResolvedValueOnce(d)
+    .mockRejectedValueOnce(decodeMdmError(404, { code: 'not_found' }))
+    .mockResolvedValueOnce({
+      ...d,
+      recoveryVersion: 4,
+      status: 'published',
+      redriveWindowOpen: false,
+    })
+  const read = vi.fn(async () => {
+    throw decodeMdmError(404, { code: 'not_found' })
+  })
+  const write = vi.fn(async () => {
+    throw decodeMdmError(409, { code: 'operation_conflict' })
+  })
+  const w = await mountAt(WebhookSubscriptionsPanel, {
+    tenant: a,
+    session: session(),
+    settings: {
+      subscriptions: {
+        deliveries: async () => ({ items: [d], nextCursor: null }),
+        delivery,
+        read,
+        write,
+      },
+    },
+    operations: authority(['webhook_read', 'webhook_write', 'webhook_replay']),
+  })
+  await w
+    .findAll('button')
+    .filter((x) => x.text() === '读取')
+    .at(-1)!
+    .trigger('click')
+  await flushPromises()
+  await w
+    .findAll('button')
+    .find((x) => x.text().startsWith(b + ' ·'))!
+    .trigger('click')
+  await flushPromises()
+  await confirm(w)
+  await button(w, '恢复原投递').trigger('click')
+  await flushPromises()
+  expect(button(w, '新建').attributes('disabled')).toBeDefined()
+  await button(w, '冲突：重新读取并比较后编辑').trigger('click')
+  await flushPromises()
+  expect(button(w, '新建').attributes('disabled')).toBeDefined()
+  await button(w, '冲突：重新读取并比较后编辑').trigger('click')
+  await flushPromises()
+  expect(read).not.toHaveBeenCalled()
+  expect(delivery.mock.calls).toEqual([[b], [b], [b]])
+  expect(w.text()).toContain('published')
+  expect(button(w, '新建').attributes('disabled')).toBeUndefined()
+})
+
+it('reloads retirement channel facts after a confirmed force receipt leaves the write busy region', async () => {
+  const before = retirement(
+    {
+      id: a,
+      policy: b,
+      version: c,
+      target: {
+        object: { kind: 'endpoint', id: 'mac' },
+        verified: true,
+        associationVersion: null,
+        members: [{ device: 'mac', channel: 'mdm', registrationId: b, generation: 2 }],
+      },
+      createdAt: 1,
+      forcedAt: null,
+      channels: [
+        {
+          device: 'mac',
+          channel: 'mdm',
+          registration: b,
+          generation: 2,
+          parentRegistration: null,
+          stage: 'cleanup',
+          effect: 'blocked',
+          execution: null,
+          blockingExecution: null,
+          reason: 'cleanup_blocked',
+        },
+      ],
+    },
+    a,
+  )
+  const after = {
+    ...before,
+    forcedAt: 3,
+    channels: before.channels.map((v) => ({
+      ...v,
+      stage: 'revoke',
+      effect: 'unknown',
+      reason: 'forced_revoke_cleanup_unconfirmed',
+    })),
+  }
+  const read = vi.fn().mockResolvedValueOnce(before).mockResolvedValueOnce(after)
+  const force = vi.fn(async () => ({ operationId: b, retirementId: a, revocation: 'pending' }))
+  const w = await mountAt(
+    RetirementDetails,
+    { tenant: a, session: session(), devices: { lifecycle: { read, force } } },
+    { id: a },
+  )
+  expect(w.text()).toContain('cleanup_blocked')
+  await field(w, '原因').setValue('explicit cleanup uncertainty')
+  await confirm(w)
+  await button(w, '强制撤权').trigger('click')
+  await flushPromises()
+  expect(force).toHaveBeenCalledWith(a, expect.any(String), 'explicit cleanup uncertainty')
+  expect(read.mock.calls).toEqual([[a], [a]])
+  expect(w.text()).toContain('forced_revoke_cleanup_unconfirmed')
+})
+
+it('keeps a Key conflict after a disposed comparison and reads its frozen ID on the next mount', async () => {
+  const metadata = keyMetadata({
+    name: 'Current key',
+    enabled: true,
+    expiresAt: null,
+    grants: [{ operation: 'inventory_read', scope: { kind: 'all_devices' } }],
+  })
+  const record = {
+    id: a,
+    revision: 2,
+    authorityRevision: 2,
+    credentialRevision: 1,
+    metadata,
+    createdBy: { instanceId: c, tenantId: a, principalId: b },
+    createdAt: 1,
+    revoked: false,
+  }
+  let resolve!: (v: typeof record) => void
+  const key = vi
+    .fn()
+    .mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          resolve = r
+        }),
+    )
+    .mockResolvedValue(record)
+  const change = vi.fn(async () => ({
+    receipt: { id: a, revision: 3, deleted: false },
+    secret: null,
+  }))
+  const runtime = {
+    tenant: a,
+    realm: 'tenant',
+    session: session(),
+    settings: { apiAccess: { key, change } },
+    operations: authority(['authorization_read', 'authorization_write']),
+  }
+  const original = await seedPending(
+    runtime,
+    'api-access',
+    { kind: 'update', id: a, revision: 1, metadata },
+    decodeMdmError(409, { code: 'operation_conflict' }),
+  )
+  const first = await mountAt(ApiAccessPanel, runtime)
+  await button(first, '冲突：重新读取并比较后编辑').trigger('click')
+  expect(key).toHaveBeenCalledWith(a)
+  first.unmount()
+  resolve(record)
+  await flushPromises()
+  const current = await mountAt(ApiAccessPanel, runtime)
+  expect(current.text()).toContain(original)
+  await button(current, '冲突：重新读取并比较后编辑').trigger('click')
+  await flushPromises()
+  expect(key.mock.calls).toEqual([[a], [a]])
+  expect(field(current, '名称').element).toHaveProperty('value', 'Current key')
+  await field(current, '名称').setValue('Compared key')
+  await confirm(current)
+  await current.find('form').trigger('submit')
+  await flushPromises()
+  expect(change).toHaveBeenCalledWith(
+    expect.any(String),
+    expect.objectContaining({ kind: 'update', id: a, revision: 2 }),
+  )
+})
+
+it('does not resolve a Policy conflict when its authoritative comparison is disposed', async () => {
+  const definition = {
+    scope: b,
+    action: { kind: 'unmanage_device', schedule: defaultSchedule(), runLifetimeSeconds: 3600 },
+  }
+  const policy = { id: a, revision: 2, definition, enabled: false, state: 'disabled' }
+  let resolve!: (v: typeof policy) => void
+  const read = vi
+    .fn()
+    .mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          resolve = r
+        }),
+    )
+    .mockResolvedValue(policy)
+  const runtime = {
+    tenant: a,
+    session: session(),
+    policies: { policies: { read, list: async () => ({ items: [], nextCursor: null }) } },
+  }
+  const original = await seedPending(
+    runtime,
+    'lifecycle-policy',
+    {
+      type: 'change',
+      id: a,
+      expectedRevision: 1,
+      input: { action: 'put', enabled: false, definition },
+    },
+    decodeMdmError(409, { code: 'operation_conflict' }),
+  )
+  const first = await mountAt(LifecyclePoliciesView, runtime)
+  await button(first, '冲突：重新读取并比较后编辑').trigger('click')
+  first.unmount()
+  resolve(policy)
+  await flushPromises()
+  const current = await mountAt(LifecyclePoliciesView, runtime)
+  expect(current.text()).toContain(original)
+  await button(current, '冲突：重新读取并比较后编辑').trigger('click')
+  await flushPromises()
+  expect(read.mock.calls).toEqual([[a], [a]])
+  expect(current.text()).not.toContain(original)
+  expect(field(current, '策略 ID').element).toHaveProperty('value', a)
 })
