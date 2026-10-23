@@ -1920,11 +1920,13 @@ it('restarts an invalidated first page even when its route does not change', asy
   expect(f.wrapper.text()).toContain(f.i18n.global.t('devices.restartDirectory'))
   expect(f.wrapper.find('tbody').exists()).toBe(false)
   const calls = list.mock.calls.length
+  await f.wrapper.get('input[type=search]').setValue('unsubmitted draft')
   await f.wrapper.get('form + p button').trigger('click')
   await flushPromises()
   expect(f.router.currentRoute.value.fullPath).toBe(before)
   expect(list).toHaveBeenCalledTimes(calls + 1)
   expect(list.mock.lastCall![0]?.cursor).toBeUndefined()
+  expect(list.mock.lastCall![0]?.search).toBeUndefined()
   expect(f.wrapper.text()).toContain('device-01')
 })
 
@@ -1943,6 +1945,7 @@ it('restarts an invalidated deep page with its applied filters and columns and o
   await flushPromises()
   expect(f.wrapper.find('tbody').exists()).toBe(false)
   const calls = list.mock.calls.length
+  await f.wrapper.get('input[type=search]').setValue('unsubmitted draft')
   await f.wrapper.get('form + p button').trigger('click')
   await flushPromises()
   expect(list).toHaveBeenCalledTimes(calls + 1)

@@ -85,7 +85,7 @@ async function queryFirstPage(query: LocationQueryRaw, replace = false) {
   const before = route.fullPath
   const location = { query: { ...query, cursor: undefined, trail: undefined } }
   await (replace ? router.replace(location) : router.push(location))
-  if (route.fullPath === before) await load()
+  if (route.fullPath === before) await loadRoute()
 }
 async function load(cursor?: string) {
   page.value = undefined
@@ -105,43 +105,42 @@ async function load(cursor?: string) {
     (v) => (page.value = v),
   )
 }
-watch(
-  () => [route.fullPath, ...deviceBinding(runtime)],
-  () => {
-    search.value = typeof route.query['search'] === 'string' ? route.query['search'] : ''
-    platform.value = typeof route.query['platform'] === 'string' ? route.query['platform'] : ''
-    assetState.value =
-      typeof route.query['assetState'] === 'string' ? route.query['assetState'] : ''
-    limit.value = ['20', '50', '100'].includes(String(route.query['limit']))
-      ? String(route.query['limit'])
-      : '20'
-    status.value = typeof route.query['status'] === 'string' ? route.query['status'] : ''
-    channel.value = typeof route.query['channel'] === 'string' ? route.query['channel'] : ''
-    source.value = typeof route.query['source'] === 'string' ? route.query['source'] : ''
-    descending.value = route.query['descending'] === 'true'
-    const cols = route.query['columns']
-    if (cols)
-      visibleColumns.value = [
-        ...new Set([
-          'reference',
-          ...(Array.isArray(cols) ? cols : [cols]).filter((x): x is string =>
-            [
-              'platform',
-              'serialNumber',
-              'registrationUser',
-              'currentUser',
-              'status',
-              'channels',
-              'endpoints',
-            ].includes(String(x)),
-          ),
-        ]),
-      ]
-    page.value = undefined
-    void load(typeof route.query['cursor'] === 'string' ? route.query['cursor'] : undefined)
-  },
-  { immediate: true, flush: 'sync' },
-)
+function loadRoute() {
+  search.value = typeof route.query['search'] === 'string' ? route.query['search'] : ''
+  platform.value = typeof route.query['platform'] === 'string' ? route.query['platform'] : ''
+  assetState.value = typeof route.query['assetState'] === 'string' ? route.query['assetState'] : ''
+  limit.value = ['20', '50', '100'].includes(String(route.query['limit']))
+    ? String(route.query['limit'])
+    : '20'
+  status.value = typeof route.query['status'] === 'string' ? route.query['status'] : ''
+  channel.value = typeof route.query['channel'] === 'string' ? route.query['channel'] : ''
+  source.value = typeof route.query['source'] === 'string' ? route.query['source'] : ''
+  descending.value = route.query['descending'] === 'true'
+  const cols = route.query['columns']
+  if (cols)
+    visibleColumns.value = [
+      ...new Set([
+        'reference',
+        ...(Array.isArray(cols) ? cols : [cols]).filter((x): x is string =>
+          [
+            'platform',
+            'serialNumber',
+            'registrationUser',
+            'currentUser',
+            'status',
+            'channels',
+            'endpoints',
+          ].includes(String(x)),
+        ),
+      ]),
+    ]
+  page.value = undefined
+  return load(typeof route.query['cursor'] === 'string' ? route.query['cursor'] : undefined)
+}
+watch(() => [route.fullPath, ...deviceBinding(runtime)], loadRoute, {
+  immediate: true,
+  flush: 'sync',
+})
 type Row = NonNullable<typeof page.value>['items'][number]
 const columns = computed(() =>
   [

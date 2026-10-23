@@ -165,7 +165,31 @@ try {
   await page.getByRole('button', { name: '下一页', exact: true }).click()
   await loaded()
   assert.ok((await page.locator('tbody').textContent()).includes(fixture.mdm))
-  coverage.push('real-directory-counters-and-pagination')
+  const staleDirectory = page.url()
+  await writeRule(fixture.rule.grants)
+  const directoryInvalidated = page.waitForResponse(
+    (r) => new URL(r.url()).pathname === '/api/v1/device-views' && r.status() === 409,
+  )
+  await page.reload()
+  await directoryInvalidated
+  await loaded()
+  assert.equal(await page.locator('tbody').count(), 0)
+  assert.ok(new URL(staleDirectory).searchParams.has('cursor'))
+  let restartedReads = 0
+  const countRestart = (r) => {
+    if (new URL(r.url()).pathname === '/api/v1/device-views') restartedReads++
+  }
+  page.on('request', countRestart)
+  await page
+    .locator('form.console-toolbar + p')
+    .getByRole('button', { name: '重新读取', exact: true })
+    .click()
+  await page.waitForURL((url) => !url.searchParams.has('cursor') && !url.searchParams.has('trail'))
+  await loaded()
+  page.off('request', countRestart)
+  assert.equal(restartedReads, 1)
+  assert.ok(await page.locator('tbody').count())
+  coverage.push('real-directory-counters-pagination-and-explicit-invalidated-window-restart')
   phase = 'personnel-display-search'
   let directoryLookups = 0
   const observePersonnel = (request) => {
