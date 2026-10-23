@@ -156,7 +156,7 @@ function restore() {
   else if (input) void change(input.kind, true)
 }
 async function compare() {
-  const original = pending.value?.input as KeyIntent | undefined
+  const original = pending.value?.input as KeyIntent | { kind: 'network' } | undefined
   if (!original || pending.value?.state !== 'conflict') return
   let ok
   if (original.kind === 'network') ok = await readNetwork()
