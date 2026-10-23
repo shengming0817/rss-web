@@ -38,6 +38,7 @@ export const settingsZh = {
     factsHint:
       '目标版本来自服务端期望状态；安装版本、地址与接收时间来自当前注册的设备报告。未确认不表示未安装。',
     noReceipt: '尚无原操作回执；结果仍未确定。',
+    endpointsFailed: '公开入口读取失败，请重新读取。连接配置状态单独显示。',
     reasons: {
       signature_rejected: '配置签名不受信',
       identity_mismatch: '服务或租户身份不匹配',
@@ -400,6 +401,8 @@ export const settingsEn = {
     factsHint:
       'The target is server-desired state. Installed revision, location and receipt time come from the current device registration. Missing confirmation does not prove absence.',
     noReceipt: 'No original receipt yet; the outcome remains unknown.',
+    endpointsFailed:
+      'Public endpoints could not be read. Reload to check them; connection state is shown separately.',
     reasons: {
       signature_rejected: 'Untrusted configuration signature',
       identity_mismatch: 'Service or tenant identity mismatch',

@@ -185,7 +185,11 @@ async function fixture(
     demo: false,
     session,
     settings,
-    registrationChannels: { refresh: async () => {}, publicEndpoints: shallowRef(undefined) },
+    registrationChannels: {
+      refresh: async () => {},
+      publicEndpoints: shallowRef(undefined),
+      failure: shallowRef(false),
+    },
     onboarding: { recovery: createRecoveryClient(transport) },
     operations: { authorization: createAuthorizationClient(transport, tenant, realm) },
   } as unknown as MdmRuntime
@@ -1887,4 +1891,64 @@ it('keeps issuance recovery unknown after null query and retries only the origin
   expect(writes[1]?.body).toEqual(writes[0]?.body)
   expect(f.settings.operations.records.get('agent-recovery:issuance')?.state).toBe('received')
   expect(f.wrapper.text()).toContain(tenant)
+})
+it('queries a committed publication after response loss and does not manufacture a second publish', async () => {
+  const f = await fixture(ConnectionsPanel)
+  const value = connectionValue(2)
+  let published = false
+  f.setHandler((o) => {
+    if (o.method === 'POST') {
+      published = true
+      throw new Error('lost committed response')
+    }
+    if (o.path.includes('connection-operations'))
+      return {
+        action: 'published',
+        configuration: { ...value.published, configuration: value.draft.configuration },
+      }
+    return published
+      ? {
+          ...value,
+          published: { ...value.published, configuration: value.draft.configuration },
+          convergence: { ...value.convergence, targetRevision: 2 },
+        }
+      : value
+  })
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  await f.wrapper.get('input[type=checkbox]').setValue(true)
+  await button(f.wrapper, '发布保存的配置').trigger('click')
+  await flushPromises()
+  const operation = f.settings.operations.records.get('connections')!
+  expect(operation.state).toBe('unknown')
+  await button(f.wrapper, '查询原操作').trigger('click')
+  await flushPromises()
+  expect(f.settings.operations.records.get('connections')).toMatchObject({
+    id: operation.id,
+    state: 'received',
+  })
+  expect(f.wrapper.text()).toContain('已发布版本 2')
+  expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(1)
+})
+it('clears a previously queried issuance candidate when the same session loses Credentials permission', async () => {
+  const f = await fixture(AgentRecovery, { kind: 'issuance' })
+  await f.wrapper.get('#agent-issuance').setValue(principal)
+  await f.wrapper.get('#agent-recovery-operation').setValue(id)
+  f.setHandler(() => ({
+    wireVersion: 1,
+    issuanceId: principal,
+    operationId: tenant,
+    certificateChain: ['YQ=='],
+    activateBefore: 1760000000,
+  }))
+  await button(f.wrapper, '查询原操作').trigger('click')
+  await flushPromises()
+  expect(f.wrapper.find('dl').exists()).toBe(true)
+  f.setHandler(() => {
+    throw decodeAgentError(403, { code: 'permission_denied', issuanceId: null })
+  })
+  await button(f.wrapper, '查询原操作').trigger('click')
+  await flushPromises()
+  expect(f.wrapper.find('dl').exists()).toBe(false)
+  expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(0)
 })

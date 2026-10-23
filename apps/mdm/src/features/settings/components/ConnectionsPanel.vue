@@ -223,6 +223,10 @@ useSettingsFacts(clear)
         <dt>{{ t('settings.connections.apple') }}</dt>
         <dd>{{ runtime.registrationChannels.publicEndpoints.value.appleManagement ?? '—' }}</dd>
       </dl>
+      <p v-else-if="runtime.registrationChannels.failure.value" role="alert">
+        {{ t('settings.connections.endpointsFailed') }}
+      </p>
+      <p v-else>{{ t('settings.notObserved') }}</p>
       <form class="settings-form" @submit.prevent="save()">
         <fieldset :disabled="!editable">
           <legend>{{ t('settings.connections.desired') }} · {{ draft?.revision ?? '—' }}</legend>

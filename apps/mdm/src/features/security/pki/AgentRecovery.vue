@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onBeforeUnmount } from 'vue'
+import { ref, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { UiButton } from '@rss/core/components'
 import { isRssApiError } from '@rss/api/mdm'
@@ -146,6 +146,8 @@ async function recover(replay = false) {
 }
 async function lookup() {
   if (props.kind !== 'issuance') return
+  candidate.value = undefined
+  returnedIssuance.value = undefined
   try {
     const original = pending.value
     const issuance = original
@@ -168,6 +170,13 @@ async function lookup() {
     failure.value = 'invalidRequest'
   }
 }
+watch(failure, (value) => {
+  if (value === 'denied') {
+    candidate.value = undefined
+    grant.value = undefined
+    returnedIssuance.value = undefined
+  }
+})
 </script>
 <template>
   <section class="console-panel">
