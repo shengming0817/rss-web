@@ -75,27 +75,6 @@ const at = (seconds: number) =>
         >{{ t('security.support') }}</RouterLink
       >
     </dd>
-    <dd v-else>
-      <RouterLink
-        :to="{
-          name: 'security-materials',
-          params: { tenant: runtime.tenant },
-          query: {
-            device: request.target.device,
-            kind: request.target.material,
-            ...(request.target.kind === 'material_access' ? { request: request.id } : {}),
-          },
-        }"
-        >{{ request.target.device }} ·
-        {{ t(`security.materialKinds.${request.target.material}`) }}</RouterLink
-      >
-      / {{ request.target.materialRevision }} · {{ request.target.volume ?? '—' }} ·
-      {{ request.target.action }}
-    </dd>
-    <template v-if="request.consumption"
-      ><dt>{{ t('security.consumption') }}</dt>
-      <dd>{{ request.consumption.disclosure }} · {{ at(request.consumption.at) }}</dd></template
-    >
     <dt>{{ t('security.justification') }}</dt>
     <dd>{{ request.reason }}</dd>
     <dt>{{ t('security.validFrom') }}</dt>

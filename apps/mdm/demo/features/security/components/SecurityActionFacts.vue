@@ -60,16 +60,6 @@ const at = (value: number | null) =>
       >{{ t(`security.supportKinds.${action.target.kind}`) }}</RouterLink
     >
     <RouterLink
-      v-else
-      :to="{
-        name: 'security-materials',
-        params: { tenant: runtime.tenant },
-        query: { device: action.target.device, kind: action.target.material },
-      }"
-      >{{ t(`security.materialKinds.${action.target.material}`) }} /
-      {{ action.target.materialRevision }} · {{ action.target.volume ?? '—' }}</RouterLink
-    >
-    <RouterLink
       :to="{
         name: 'operations-audit',
         params: { tenant: runtime.tenant },

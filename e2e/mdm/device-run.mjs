@@ -70,7 +70,13 @@ try {
           phase,
           result: 'failed',
           classification: error.message,
-          recoveryDirectory: resolve(backend, 'artifacts/dev-environment/device-browser'),
+          recoveryDirectory: resolve(
+            backend,
+            'artifacts/dev-environment',
+            process.env.MDM_DEVICE_BROWSER_MODULE === 'console-browser.mjs'
+              ? 'console-browser'
+              : 'device-browser',
+          ),
         }),
       )
       process.exitCode = 1

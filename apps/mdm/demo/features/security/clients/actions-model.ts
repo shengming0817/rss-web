@@ -19,11 +19,7 @@ export function securityAction(value: unknown) {
       'summary',
     ]),
     target = requestTarget(v['target'])
-  if (
-    target.kind !== 'risk_remediation' &&
-    target.kind !== 'material_operation' &&
-    !isSupportTarget(target)
-  )
+  if (target.kind !== 'risk_remediation' && !isSupportTarget(target))
     throw new Error('Not a device action')
   const result = {
     id: uuid(v['id']),
@@ -52,12 +48,7 @@ export function securityAction(value: unknown) {
     result.summary.origin.kind !== 'security' ||
     result.summary.origin.request !== result.request ||
     result.summary.attempt !== result.id ||
-    result.source.source !==
-      (target.kind === 'risk_remediation' || isSupportTarget(target) || target.material === 'laps'
-        ? 'agent.builtin'
-        : target.material === 'bitlocker'
-          ? 'mdm.windows'
-          : 'mdm.apple')
+    result.source.source !== 'agent.builtin'
   )
     throw new Error('Wrong security execution')
   return result

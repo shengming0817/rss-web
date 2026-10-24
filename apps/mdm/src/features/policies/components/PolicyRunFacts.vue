@@ -55,6 +55,27 @@ const utc = (at: number) =>
       </p>
       <pre v-if="'output' in run.result">{{ JSON.stringify(run.result.output, null, 2) }}</pre>
     </template>
+    <section v-if="run.result?.kind === 'credential'">
+      <h4>{{ t('gap.credentials') }}</h4>
+      <p>
+        {{ run.result.complete }} · {{ run.result.failure ?? '—' }} ·
+        {{ run.result.recovery ?? '—' }}
+      </p>
+      <article v-for="(item, index) in run.result.items" :key="index">
+        <p>{{ item.subject.kind }} · {{ item.outcome }}</p>
+        <details>
+          <summary>{{ t('devices.evidence') }}</summary>
+          <pre>{{ JSON.stringify(item.subject, null, 2) }}</pre>
+        </details>
+      </article>
+    </section>
+    <section v-if="run.result?.kind === 'credential_recovery'">
+      <h4>{{ t('gap.credentials') }}</h4>
+      <p>
+        {{ run.result.effect }} · {{ run.result.recoveredByTask }} /
+        {{ run.result.recoveredByAttempt ?? '—' }}
+      </p>
+    </section>
     <section v-if="run.result?.kind === 'software'">
       <article v-for="step in run.result.evidence.steps" :key="step.index">
         <h4>{{ step.index + 1 }} · {{ step.package }}</h4>

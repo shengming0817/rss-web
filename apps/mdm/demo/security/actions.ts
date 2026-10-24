@@ -3,10 +3,8 @@ import type { createDeviceDemo } from '../devices/state'
 import type { createOperationsDemo } from '../operations/state'
 import type { createSecurityRequests } from './requests'
 import type { createRisksDemo } from './risks'
-import type { createMaterialsDemo } from './materials'
 import type { createSupportDemo } from './support'
 import { isSupportTarget } from '../features/security/clients/support-model'
-import type { MaterialKind } from '../features/security/clients/materials-model'
 import { closed, identifier, uuid } from '../../src/services/decode'
 import { securityAction, type SecurityAction } from '../features/security/clients/actions-model'
 import { createReceipts, error, operation } from '../http'
@@ -17,7 +15,6 @@ export function createSecurityActions(
   devices: Pick<ReturnType<typeof createDeviceDemo>, 'facts'>,
   requests: Pick<ReturnType<typeof createSecurityRequests>, 'rows'>,
   risks: ReturnType<typeof createRisksDemo>,
-  materials: ReturnType<typeof createMaterialsDemo>,
   support: ReturnType<typeof createSupportDemo>,
   operations: ReturnType<typeof createOperationsDemo>,
 ) {
@@ -28,25 +25,15 @@ export function createSecurityActions(
   const source = (target: SecurityAction['target']) =>
     target.kind === 'risk_remediation'
       ? remediationSource(devices.facts().find((d) => d.summary.id === target.device))
-      : isSupportTarget(target)
-        ? support.source(target)
-        : materials.source(target.device, target.material)
+      : support.source(target)
   const valid = (target: SecurityAction['target']) =>
-    target.kind === 'risk_remediation'
-      ? risks.valid(target)
-      : isSupportTarget(target)
-        ? support.valid(target)
-        : materials.valid(target)
+    target.kind === 'risk_remediation' ? risks.valid(target) : support.valid(target)
   const targetKey = (target: SecurityAction['target']) =>
     JSON.stringify(
       target.kind === 'risk_remediation'
         ? [target.kind, target.device, target.risk]
-        : isSupportTarget(target)
-          ? [target.kind, target.device, target.kind === 'elevation' ? target.account : null]
-          : [target.kind, target.device, target.material, target.volume],
+        : [target.kind, target.device, target.kind === 'elevation' ? target.account : null],
     )
-  const targetDetection = (kind: SecurityAction['target']['kind']) =>
-    kind === 'material_operation' ? 'material_detect' : 'support_detect'
   function audit(
     value: SecurityAction,
     action: 'security_dispatched' | 'security_result' | 'security_detected',
@@ -161,9 +148,7 @@ export function createSecurityActions(
           r.state !== 'approved' ||
           r.validFrom > now() ||
           r.validUntil <= now() ||
-          (r.target.kind !== 'risk_remediation' &&
-            r.target.kind !== 'material_operation' &&
-            !isSupportTarget(r.target)) ||
+          (r.target.kind !== 'risk_remediation' && !isSupportTarget(r.target)) ||
           !valid(r.target) ||
           (isSupportTarget(r.target) && !support.executionAllowed(r.id))
         )
@@ -227,9 +212,7 @@ export function createSecurityActions(
     tick(event: DemoEvent, scenario: Scenario) {
       settle()
       if (
-        !['security_result', 'security_detect', 'material_detect', 'support_detect'].includes(
-          event.kind,
-        ) ||
+        !['security_result', 'security_detect', 'support_detect'].includes(event.kind) ||
         !event.task
       )
         return
@@ -264,7 +247,7 @@ export function createSecurityActions(
       } else if (
         (a.target.kind === 'risk_remediation'
           ? event.kind === 'security_detect'
-          : targetDetection(a.target.kind) === event.kind) &&
+          : event.kind === 'support_detect') &&
         a.resultAt !== null &&
         event.at > a.resultAt &&
         a.detectedAt === null &&
@@ -272,9 +255,7 @@ export function createSecurityActions(
         !['partial', 'unknown', 'unsupported'].includes(scenario) &&
         (a.target.kind === 'risk_remediation'
           ? risks.observe(a.target, a.source, event.at)
-          : isSupportTarget(a.target)
-            ? support.observe(a.request, a.source, event.at)
-            : materials.observe(a.target, a.source, event.at))
+          : support.observe(a.request, a.source, event.at))
       ) {
         s.effect = 'verified_present'
         a.detectedAt = event.at
@@ -286,16 +267,6 @@ export function createSecurityActions(
     executions() {
       settle()
       return structuredClone([...actions.values()].map((a) => a.summary))
-    },
-    blocksDisclosure(device: string, kind: MaterialKind) {
-      return [...actions.values()].some(
-        (a) =>
-          a.target.kind === 'material_operation' &&
-          a.target.device === device &&
-          a.target.material === kind &&
-          !['failed', 'cancelled'].includes(a.summary.execution) &&
-          a.summary.effect !== 'verified_present',
-      )
     },
     reset() {
       actions.clear()

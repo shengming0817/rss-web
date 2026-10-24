@@ -36,6 +36,9 @@ const { run, runWrite, busy, failure, uncertain } = useOperation([], () => devic
 const list = ref<Awaited<ReturnType<typeof client.list>>>(),
   current = ref<PolicyRead>(),
   resource = ref<ResourceRead>()
+const queryState = ref<'' | 'enabled' | 'disabled' | 'archived'>(''),
+  queryCategory = ref(''),
+  queryScope = ref('')
 const editing = ref(false)
 const id = ref(typeof route.query['id'] === 'string' ? route.query['id'] : '')
 function fresh(
@@ -262,7 +265,12 @@ function apply(p: PolicyRead) {
 }
 function load(after?: string) {
   return run(
-    () => client.list(after),
+    () =>
+      client.list(after, undefined, undefined, {
+        state: queryState.value || undefined,
+        category: queryCategory.value || undefined,
+        scope: queryScope.value || undefined,
+      }),
     (v) => {
       list.value = {
         ...v,
@@ -492,12 +500,38 @@ onMounted(async () => {
 <template>
   <PageFrame :title="t('policies.policies')" :busy="busy" :failure="failure">
     <p>{{ t('policies.policyHint') }}</p>
+    <RouterLink :to="{ name: 'policy-lifecycle', params: { tenant: runtime.tenant } }">{{
+      t('gap.lifecycle')
+    }}</RouterLink>
     <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="create">{{
       t('policies.create')
     }}</UiButton
     ><UiButton :disabled="!!busy" type="submit" @click="load()">{{
       t('policies.reload')
     }}</UiButton>
+    <div class="console-toolbar">
+      <label
+        >{{ t('gap.state')
+        }}<select v-model="queryState" @change="list = undefined">
+          <option value="">{{ t('gap.allStates') }}</option>
+          <option v-for="s in ['enabled', 'disabled', 'archived']" :key="s">{{ s }}</option>
+        </select></label
+      ><label
+        >{{ t('gap.category') }}<input v-model="queryCategory" @input="list = undefined" /></label
+      ><label
+        >{{ t('gap.queryScope') }}<input v-model="queryScope" @input="list = undefined" /></label
+      ><UiButton
+        type="button"
+        :disabled="busy"
+        @click="
+          () => {
+            list = undefined
+            load()
+          }
+        "
+        >{{ t('gap.load') }}</UiButton
+      >
+    </div>
     <p v-if="list && !list.items.length">{{ t('policies.empty') }}</p>
     <UiTable
       :label="t('policies.policies')"

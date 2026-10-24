@@ -8,53 +8,17 @@ import {
   uuid,
 } from '../../../../src/services/decode'
 import { boundedText, positive } from '../../../../src/features/security/clients/compliance-model'
-import { materialKinds, secretMaterialKinds } from './materials-model'
 import { isSupportTarget, supportKinds, supportTarget } from './support-model'
-export const requestStates = [
-  'pending',
-  'approved',
-  'denied',
-  'revoked',
-  'expired',
-  'consumed',
-] as const
+export const requestStates = ['pending', 'approved', 'denied', 'revoked', 'expired'] as const
 export const requestDecisions = ['approve', 'deny', 'revoke'] as const
 export function requestTarget(value: unknown) {
   const kind = enumeration(record(value)['kind'], [
     'compliance_exception',
     'risk_remediation',
-    'material_access',
-    'material_operation',
     ...supportKinds,
   ] as const)
   if (kind === 'elevation' || kind === 'diagnostics' || kind === 'remote_support')
     return supportTarget(value)
-  if (kind === 'material_access' || kind === 'material_operation') {
-    const v = closed(value, ['kind', 'device', 'material', 'materialRevision', 'volume', 'action']),
-      material = enumeration(
-        v['material'],
-        kind === 'material_access' ? secretMaterialKinds : materialKinds,
-      ),
-      volume = nullable(v['volume'], identifier),
-      base = {
-        device: identifier(v['device']),
-        material,
-        materialRevision: positive(v['materialRevision']),
-        volume,
-      }
-    if ((material === 'bitlocker') !== (volume !== null)) throw new Error('Invalid material volume')
-    if (kind === 'material_access')
-      return {
-        ...base,
-        material: enumeration(v['material'], secretMaterialKinds),
-        kind,
-        action: enumeration(v['action'], ['reveal'] as const),
-      }
-    const action = enumeration(v['action'], ['rotate', 'reescrow'] as const)
-    if ((material === 'bootstrap_token') !== (action === 'reescrow'))
-      throw new Error('Invalid material operation')
-    return { ...base, kind, action }
-  }
   if (kind === 'risk_remediation') {
     const v = closed(value, ['kind', 'risk', 'assessment', 'assessmentVersion', 'device'])
     return {
@@ -86,8 +50,6 @@ export function requestDefinition(value: unknown) {
   }
   if (result.validUntil <= result.validFrom || result.validUntil - result.validFrom > 30 * 86400)
     throw new Error('Invalid request window')
-  if (result.target.kind === 'material_access' && result.validUntil - result.validFrom > 900)
-    throw new Error('Material access window too long')
   if (isSupportTarget(result.target) && result.validUntil - result.validFrom > 3600)
     throw new Error('Support authorization window too long')
   return result
@@ -107,7 +69,6 @@ export function securityRequest(value: unknown) {
     'validUntil',
     'decision',
     'revocation',
-    'consumption',
   ])
   const result = {
     id: uuid(v['id']),
@@ -134,20 +95,13 @@ export function securityRequest(value: unknown) {
       const r = closed(value, ['by', 'at'])
       return { by: uuid(r['by']), at: count(r['at']) }
     }),
-    consumption: nullable(v['consumption'], (value) => {
-      const c = closed(value, ['disclosure', 'at'])
-      return { disclosure: uuid(c['disclosure']), at: count(c['at']) }
-    }),
   }
   if (
     result.decision?.by === result.requester ||
     (result.state === 'approved' && result.decision?.value !== 'approved') ||
     (result.state === 'denied' && result.decision?.value !== 'denied') ||
     (result.state === 'pending' && result.decision !== null) ||
-    (result.state === 'revoked') !== (result.revocation !== null) ||
-    (result.state === 'consumed') !== (result.consumption !== null) ||
-    (result.state === 'consumed' &&
-      (result.target.kind !== 'material_access' || result.decision?.value !== 'approved'))
+    (result.state === 'revoked') !== (result.revocation !== null)
   )
     throw new Error('Invalid request decision')
   return result

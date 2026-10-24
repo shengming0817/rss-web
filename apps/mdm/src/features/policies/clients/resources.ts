@@ -1,3 +1,4 @@
+import { attachment } from '../../enrollment/clients/binary'
 import { applicability, templateScope, valueMapping, type ValueMapping } from './collection-mapping'
 import { telemetryProfile, type TelemetryProfile } from './telemetry-profile'
 import { fieldKey } from '../../devices/clients/asset-model'
@@ -324,6 +325,24 @@ export interface UploadTarget {
 }
 export function createResourcesClient(transport: HttpTransport) {
   return {
+    script: (
+      id: string,
+      version: string,
+      selection: {
+        platform: 'windows' | 'macos'
+        architecture: 'x86_64' | 'aarch64'
+        variant: string
+      },
+    ) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/resources/{id}/versions/{version}/script',
+        pathParams: { id, version },
+        query: { ...selection },
+        responseType: 'arraybuffer',
+        successStatus: 200,
+        decode: (v) => attachment(v, 'application/octet-stream', 'script.txt', 32 * 1024 * 1024),
+      }),
     blueprints: () =>
       transport.request({
         method: 'GET',

@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { defaultSchedule, policyAction } from '../../policies/clients/model'
-it('normalizes the management default and preserves an explicitly selected software channel', () => {
+it('requires canonical response channels and preserves explicit channel selection', () => {
   const action = {
     kind: 'software',
     delivery: { kind: 'direct' },
@@ -19,7 +19,8 @@ it('normalizes the management default and preserves an explicitly selected softw
       ],
     },
   }
-  expect(policyAction(action)).toMatchObject({ channel: 'agent' })
+  expect(() => policyAction(action)).toThrow()
+  expect(policyAction({ ...action, channel: 'agent' })).toMatchObject({ channel: 'agent' })
   expect(policyAction({ ...action, channel: 'mdm' })).toMatchObject({ channel: 'mdm' })
   expect(() => policyAction({ ...action, channel: 'automatic' })).toThrow()
 })

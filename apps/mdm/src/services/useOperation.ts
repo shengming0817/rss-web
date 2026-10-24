@@ -54,6 +54,7 @@ export function useOperation(
             ? 'unknownWrite'
             : isRssApiError(e) &&
                 [
+                  'mdm_software_disabled',
                   'connection_deployment_unobserved',
                   'connection_retirement_blocked',
                   'agent_package_installer_mismatch',

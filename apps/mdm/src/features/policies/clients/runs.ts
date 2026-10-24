@@ -1,3 +1,4 @@
+import { subject } from '../../security/clients/credentials'
 import { jsonValue } from '../../../services/json'
 import type { HttpTransport } from '@rss/api/mdm'
 
@@ -64,6 +65,65 @@ function result(value: unknown, detail: boolean) {
         'failed',
         'unknown',
       ] as const),
+    }
+  }
+  if ('recoveredByTask' in record(value)) {
+    const v = closed(
+      value,
+      ['effect', 'recoveredByTask', 'recoveredByAttempt'],
+      detail ? [] : ['diagnostics'],
+    )
+    if ('diagnostics' in v && v['diagnostics'] !== null)
+      throw new Error('Invalid recovery diagnostics')
+    return {
+      kind: 'credential_recovery' as const,
+      effect: enumeration(v['effect'], ['not_attempted', 'unchanged', 'applied'] as const),
+      recoveredByTask: uuid(v['recoveredByTask']),
+      recoveredByAttempt: nullable(v['recoveredByAttempt'], uuid),
+    }
+  }
+  if ('complete' in record(value) && 'items' in record(value)) {
+    const v = closed(
+      value,
+      ['recovery', 'failure', 'definitionDigest', 'complete', 'items'],
+      detail ? [] : ['diagnostics'],
+    )
+    if ('diagnostics' in v && v['diagnostics'] !== null)
+      throw new Error('Invalid credential diagnostics')
+    return {
+      kind: 'credential' as const,
+      recovery: nullable(v['recovery'], (x) =>
+        enumeration(x, ['not_attempted', 'unchanged', 'applied'] as const),
+      ),
+      failure: nullable(v['failure'], (x) =>
+        enumeration(x, [
+          'no_materials',
+          'unsupported',
+          'permission_denied',
+          'owner_conflict',
+          'target_missing',
+          'recovery_state',
+          'native_failure',
+        ] as const),
+      ),
+      definitionDigest: digest(v['definitionDigest']),
+      complete: boolean(v['complete']),
+      items: array(v['items'], (value) => {
+        const i = closed(value, ['subject', 'outcome']),
+          target = subject(i['subject'])
+        if (!['rss_login', 'bitlocker', 'local_administrator'].includes(target.kind))
+          throw new Error('Wrong credential subject')
+        return {
+          subject: target,
+          outcome: enumeration(i['outcome'], [
+            'verified',
+            'escrowed',
+            'unknown',
+            'failed',
+            'blocked',
+          ] as const),
+        }
+      }),
     }
   }
   // Native history spans immutable Policy versions, including prior script versions.
@@ -354,6 +414,9 @@ export function decodeRunEvidence(value: unknown) {
     kind: 'action_run' as const,
     state: runState(v['state']),
     effect: enumeration(v['effect'], [
+      'not_attempted',
+      'unchanged',
+      'applied',
       'unverified',
       'verified',
       'unknown',
@@ -400,6 +463,9 @@ export function policyRun(value: unknown, detail: boolean) {
     deadline,
     state,
     effect: enumeration(v['effect'], [
+      'not_attempted',
+      'unchanged',
+      'applied',
       'unverified',
       'verified',
       'unknown',

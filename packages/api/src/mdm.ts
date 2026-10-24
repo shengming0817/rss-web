@@ -44,6 +44,9 @@ const statuses: Readonly<Record<string, number>> = {
   agent_package_source_not_admitted: 409,
   agent_package_binding_not_admitted: 409,
   operation_conflict: 409,
+  mdm_software_disabled: 409,
+  recovery_credential_not_found: 404,
+  recovery_credential_integrity: 500,
   device_view_cursor_invalidated: 409,
   upload_offset_conflict: 409,
   capability_unknown: 409,
@@ -95,7 +98,7 @@ export function decodeMdmError(status: number, value: unknown): RssApiError {
   return identityWireFailure(status, v['code'])
 }
 const paths =
-  /^\/api\/v1\/(?:(?:user-attribute-definitions|user-attribute-operations|user-profiles|authorization|devices|device-views|device-associations|certificate-archive|asset-fields|asset-field-layout|device-queries|saved-queries|groups|scopes|policies|compliance-rules|resources|software|enrollments|registration-quotas|registration-channels)(?:\/|$)|operations$|collection-blueprints$|self-enrollments$|agent-(?:configurations|configuration-operations|enrollment-settings)(?:\/|$)|apple\/organizations(?:\/|$)|windows\/entra-policy$|windows\/entra\/terms\/context$|agent\/enroll\/packages(?:\/\{id\})?$|mdm-host\/config\.json$|mdm-candidate\/(?:workspace|devices|groups|policies|executions|software|security\/(?:baselines|support|risks|actions|requests|materials)|support|authorization)(?:\/|$)|mdm-candidate\/operations\/(?:metrics|reports|alert-rules|alerts)(?:\/|$))/
+  /^\/api\/v1\/(?:(?:user-attribute-definitions|user-attribute-operations|user-profiles|authorization|devices|device-views|device-retirements|api-keys|device-associations|certificate-archive|asset-fields|asset-field-layout|device-queries|saved-queries|groups|scopes|policies|compliance-rules|resources|software|enrollments|registration-quotas|registration-channels)(?:\/|$)|operations$|collection-blueprints$|self-enrollments$|agent-(?:configurations|configuration-operations|enrollment-settings)(?:\/|$)|apple\/organizations(?:\/|$)|windows\/entra-policy$|windows\/entra\/terms\/context$|agent\/enroll\/packages(?:\/\{id\})?$|mdm-host\/config\.json$|mdm-candidate\/(?:workspace|devices|groups|policies|executions|software|security\/(?:baselines|support|risks|actions|requests)|support|authorization)(?:\/|$)|mdm-candidate\/operations\/(?:metrics|reports|alert-rules|alerts)(?:\/|$))/
 export function createMdmTransport(): HttpTransport {
   const instance = axios.create({ baseURL: '' })
   return {
@@ -167,7 +170,9 @@ export function createMdmTransport(): HttpTransport {
           (options.method === 'GET' &&
             options.path === '/api/v1/apple/organizations/{id}/ade/public-key') ||
           (options.method === 'GET' &&
-            options.path === '/api/v1/software/resources/{id}/versions/{version}/content')
+            options.path === '/api/v1/software/resources/{id}/versions/{version}/content') ||
+          (options.method === 'GET' &&
+            options.path === '/api/v1/resources/{id}/versions/{version}/script')
         )
       )
         throw clientError()

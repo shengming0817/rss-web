@@ -1,3 +1,5 @@
+import { createApiAccess } from './clients/apiAccess'
+import { createWebhookSubscriptions } from './clients/webhookSubscriptions'
 import { createProfilesClient } from './clients/profiles'
 import type { HttpTransport } from '@rss/api/mdm'
 import type { IdentitySession } from '@rss/auth'
@@ -23,6 +25,8 @@ export function createSettingsClients(
   serviceId: string,
 ) {
   return {
+    apiAccess: createApiAccess(transport, tenant),
+    subscriptions: createWebhookSubscriptions(transport),
     connections: createConnectionsClient(transport, tenant, serviceId),
     profiles: createProfilesClient(transport),
     firstUse: createFirstUseClient(transport, tenant),

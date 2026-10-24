@@ -23,7 +23,6 @@ const id = '11111111-1111-4111-8111-111111111111',
     validUntil: 200,
     decision: { by: id, at: 95, value: 'approved' },
     revocation: null,
-    consumption: null,
   },
   support = {
     request: id,
