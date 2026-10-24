@@ -1,4 +1,5 @@
 import type { HttpTransport } from '@rss/api/mdm'
+import { MDM_CONTENT_TIMEOUT_MS } from '@rss/api/mdm-limits'
 import {
   array,
   uuid,
@@ -10,6 +11,7 @@ import {
   digest,
   string,
   nullable,
+  record,
   enumeration,
   identifier,
 } from '../../../services/decode'
@@ -18,13 +20,27 @@ export function installerFacts(value: unknown) {
   const v = closed(value, ['format', 'version', 'architectures', 'bundleId'])
   return {
     format: enumeration(v['format'], ['exe', 'msi', 'msix', 'pkg'] as const),
-    version: nullable(v['version'], identifier),
+    version: nullable(v['version'], string),
     architectures: unique(
       array(v['architectures'], (x) => enumeration(x, ['x86_64', 'aarch64'] as const)),
       (x) => x,
     ),
     bundleId: nullable(v['bundleId'], string),
   }
+}
+function installerInspection(value: unknown) {
+  const status = enumeration(record(value)['status'], [
+    'parsed',
+    'skipped_size_limit',
+    'not_requested',
+    'rejected',
+  ] as const)
+  if (status === 'parsed') {
+    const v = closed(value, ['status', 'facts'])
+    return { status, facts: installerFacts(v['facts']) }
+  }
+  closed(value, ['status'])
+  return { status }
 }
 export function savedInstaller(value: unknown, expected: string) {
   const v = closed(value, [
@@ -79,6 +95,35 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
       filename: string(binding['filename']),
     }
   }
+  function inspection(method: 'GET' | 'POST', id: string, signal?: AbortSignal) {
+    return transport.request({
+      method,
+      ...(method === 'POST' ? { timeoutMs: MDM_CONTENT_TIMEOUT_MS } : {}),
+      path: '/api/v1/agent-packages/uploads/{id}',
+      pathParams: { id: uuid(id) },
+      ...(signal ? { signal } : {}),
+      successStatus: 200,
+      decode: (value) => {
+        const v = closed(value, [
+          'packageId',
+          'filename',
+          'length',
+          'sha256',
+          'format',
+          'inspection',
+        ])
+        if (uuid(v['packageId']) !== id) throw new Error('Wrong inspected package')
+        return {
+          packageId: id,
+          filename: string(v['filename']),
+          length: count(v['length']),
+          sha256: digest(v['sha256']),
+          format: enumeration(v['format'], ['exe', 'msi', 'msix', 'pkg'] as const),
+          inspection: installerInspection(v['inspection']),
+        }
+      },
+    })
+  }
   return {
     begin: (
       operationId: string,
@@ -128,6 +173,7 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
     append: (id: string, offset: number, body: ArrayBuffer, signal?: AbortSignal) =>
       transport.request({
         method: 'PATCH',
+        timeoutMs: MDM_CONTENT_TIMEOUT_MS,
         path: uploadPath,
         pathParams: { resource: uuid(id), upload: uuid(id) },
         query: { offset },
@@ -139,31 +185,15 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
     complete: (id: string, signal?: AbortSignal) =>
       transport.request({
         method: 'POST',
+        timeoutMs: MDM_CONTENT_TIMEOUT_MS,
         path: uploadPath + '/complete',
         pathParams: { resource: uuid(id), upload: uuid(id) },
         ...(signal ? { signal } : {}),
         successStatus: 201,
         responseType: 'empty',
       }),
-    inspect: (id: string, signal?: AbortSignal) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/agent-packages/uploads/{id}',
-        pathParams: { id: uuid(id) },
-        ...(signal ? { signal } : {}),
-        successStatus: 200,
-        decode: (value) => {
-          const v = closed(value, ['packageId', 'filename', 'length', 'sha256', 'facts'])
-          if (uuid(v['packageId']) !== id) throw new Error('Wrong inspected package')
-          return {
-            packageId: id,
-            filename: string(v['filename']),
-            length: count(v['length']),
-            sha256: digest(v['sha256']),
-            facts: installerFacts(v['facts']),
-          }
-        },
-      }),
+    inspect: (id: string, signal?: AbortSignal) => inspection('GET', id, signal),
+    parse: (id: string, signal?: AbortSignal) => inspection('POST', id, signal),
     save: (
       operationId: string,
       packageId: string,

@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useSettingsAction, useSettingsFacts } from '../useSettingsAction'
 import { useOperation } from '../../../services/useOperation'
+import { fileHash } from '../../../services/file-hash'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import { target as decodeTarget } from '../../enrollment/clients/packages'
 const props = defineProps<{
@@ -120,9 +121,7 @@ async function chooseFile(selected?: File) {
   const signal = controller.signal
   await upload.run(
     async () => {
-      sha256 = Array.from(
-        new Uint8Array(await crypto.subtle.digest('SHA-256', await selected.arrayBuffer())),
-      )
+      sha256 = await fileHash(selected, signal)
       signal.throwIfAborted()
       return client.begin(packageId.value, selected.name, selected.size, sha256, signal)
     },
@@ -152,47 +151,71 @@ async function transfer() {
     signal = controller?.signal,
     id = packageId.value
   if (!selected || !signal || !props.canUpload) return
-  await upload.run(
-    async () => {
-      const status = await client.status(id, signal)
-      if (
-        status.length !== selected.size ||
-        status.filename !== selected.name ||
-        status.sha256.some((n, i) => n !== sha256[i])
-      )
-        throw new Error('Wrong upload binding')
-      let offset = status.offset
-      if (!status.complete) {
-        while (offset < selected.size) {
-          signal.throwIfAborted()
-          const body = await selected.slice(offset, offset + 16 * 1024 * 1024).arrayBuffer()
-          const result = await client.append(id, offset, body, signal)
-          signal.throwIfAborted()
-          if (result.offset !== offset + body.byteLength) throw new Error('Invalid upload frontier')
-          offset = result.offset
-          progress.value = Math.round((offset / selected.size) * 100)
-        }
-        await client.complete(id, signal)
+  await upload.run(async () => {
+    const status = await client.status(id, signal)
+    if (
+      status.length !== selected.size ||
+      status.filename !== selected.name ||
+      status.sha256.some((n, i) => n !== sha256[i])
+    )
+      throw new Error('Wrong upload binding')
+    let offset = status.offset
+    if (!status.complete) {
+      while (offset < selected.size) {
+        signal.throwIfAborted()
+        const body = await selected.slice(offset, offset + 16 * 1024 * 1024).arrayBuffer()
+        const result = await client.append(id, offset, body, signal)
+        signal.throwIfAborted()
+        if (result.offset !== offset + body.byteLength) throw new Error('Invalid upload frontier')
+        offset = result.offset
+        progress.value = Math.round((offset / selected.size) * 100)
       }
-      signal.throwIfAborted()
-      stage.value = 'checking'
-      const result = await client.inspect(id, signal)
-      if (
-        result.length !== selected.size ||
-        result.filename !== selected.name ||
-        result.sha256.some((n, i) => n !== sha256[i]) ||
-        (result.facts.format === 'pkg') !== (selection.value.platform === 'macos') ||
-        (result.facts.architectures.length &&
-          !result.facts.architectures.includes(selection.value.architecture))
-      )
-        throw new Error('Wrong installer target')
-      return result
-    },
-    (result) => {
-      inspected.value = result
-      version.value = result.facts.version ?? ''
-      stage.value = 'ready'
-    },
+      await client.complete(id, signal)
+    }
+    signal.throwIfAborted()
+    stage.value = 'checking'
+    return checkedInspection(await client.inspect(id, signal), selected)
+  }, applyInspection)
+}
+function checkedInspection(result: Awaited<ReturnType<typeof client.inspect>>, selected: File) {
+  if (
+    result.length !== selected.size ||
+    result.filename !== selected.name ||
+    result.sha256.some((n, i) => n !== sha256[i]) ||
+    (result.format === 'pkg') !== (selection.value.platform === 'macos')
+  )
+    throw new Error('Wrong installer target')
+  return result
+}
+function applyInspection(result: Awaited<ReturnType<typeof client.inspect>>) {
+  inspected.value = result
+  if (!version.value.trim() && result.inspection.status === 'parsed')
+    version.value = result.inspection.facts.version ?? ''
+  stage.value = 'ready'
+}
+const parseable = computed(
+  () =>
+    inspected.value &&
+    ['not_requested', 'skipped_size_limit'].includes(inspected.value.inspection.status),
+)
+async function parse() {
+  const selected = file,
+    signal = controller?.signal,
+    id = packageId.value
+  if (
+    !selected ||
+    !signal ||
+    !props.canUpload ||
+    !parseable.value ||
+    saved.value ||
+    locked.value ||
+    busy.value ||
+    uploading.value
+  )
+    return
+  await upload.run(
+    async () => checkedInspection(await client.parse(id, signal), selected),
+    applyInspection,
   )
 }
 async function publish(replay = false) {
@@ -274,7 +297,11 @@ async function check() {
       <strong v-if="filename">{{ filename }}</strong>
       {{ t('settings.packageStage.' + displayStage) }}
     </p>
-    <UiProgress v-if="uploading" :label="t('settings.uploadProgress')" :value="progress" />
+    <UiProgress
+      v-if="uploading && !inspected"
+      :label="t('settings.uploadProgress')"
+      :value="progress"
+    />
     <p v-if="upload.failure.value || failure" role="alert">
       {{ t('devices.' + (upload.failure.value ?? failure)) }}
     </p>
@@ -286,16 +313,19 @@ async function check() {
     >
     <template v-if="inspected || saved || restored"
       ><p>
-        {{ inspected?.facts.format.toUpperCase() ?? '' }} · {{ selection.platform }} ·
+        {{ inspected?.format.toUpperCase() ?? '' }} · {{ selection.platform }} ·
         {{ selection.architecture }}
       </p>
+      <p v-if="inspected">{{ t('settings.packageInspection.' + inspected.inspection.status) }}</p>
+      <UiButton
+        v-if="parseable && !saved && !locked"
+        :disabled="uploading || busy || !canUpload"
+        @click="parse"
+        >{{ t('settings.parseInstaller') }}</UiButton
+      >
       <label
         >{{ t('settings.packageVersion')
-        }}<input
-          v-model="version"
-          class="ui-input"
-          :readonly="!!inspected?.facts.version || saved"
-          :disabled="locked"
+        }}<input v-model="version" class="ui-input" :readonly="saved" :disabled="locked"
       /></label>
       <UiButton
         v-if="!locked"
@@ -319,8 +349,6 @@ async function check() {
         t('console.edit')
       }}</UiButton>
     </template>
-    <UiButton :disabled="locked || uploading" @click="emit('close')">{{
-      t('console.cancel')
-    }}</UiButton>
+    <UiButton :disabled="locked" @click="emit('close')">{{ t('console.cancel') }}</UiButton>
   </section>
 </template>

@@ -1,5 +1,6 @@
 /** Native content-service upload sessions. No retry or session ownership here. */
 import type { HttpTransport } from '@rss/api/mdm'
+import { MDM_CONTENT_TIMEOUT_MS } from '@rss/api/mdm-limits'
 import {
   boolean,
   closed,
@@ -12,13 +13,14 @@ import {
   uuid,
 } from '../../../services/decode'
 import type { UploadTarget } from './resources'
-import { softwareSource } from './software-definition'
+import { softwareFormats, softwareSource } from './software-definition'
 export function decodeUpload(value: unknown, resource: string, upload: string) {
   const v = closed(value, ['id', 'binding', 'offset', 'expires', 'complete'])
   const b = closed(v['binding'], ['purpose', 'reference', 'length', 'sha256', 'actor'])
   const purpose = closed(b['purpose'], ['kind', 'binding'])
   enumeration(purpose['kind'], ['resource'] as const)
   const r = closed(purpose['binding'], [
+    'inspection',
     'storage_class',
     'resource',
     'version',
@@ -33,6 +35,7 @@ export function decodeUpload(value: unknown, resource: string, upload: string) {
     purpose: {
       kind: 'resource' as const,
       binding: {
+        inspection: nullable(r['inspection'], (value) => enumeration(value, softwareFormats)),
         storage_class: enumeration(r['storage_class'], [
           'artifact',
           'native_configuration',
@@ -108,6 +111,7 @@ export function createUploadsClient(transport: HttpTransport) {
     append: (id: string, upload: string, offset: number, body: ArrayBuffer, signal?: AbortSignal) =>
       transport.request({
         method: 'PATCH',
+        timeoutMs: MDM_CONTENT_TIMEOUT_MS,
         path,
         pathParams: { id, upload },
         query: { offset },
@@ -120,6 +124,7 @@ export function createUploadsClient(transport: HttpTransport) {
     complete: (id: string, upload: string, signal?: AbortSignal) =>
       transport.request({
         method: 'POST',
+        timeoutMs: MDM_CONTENT_TIMEOUT_MS,
         path: `${path}/complete`,
         pathParams: { id, upload },
         ...(signal ? { signal } : {}),

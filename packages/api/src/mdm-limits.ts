@@ -1,6 +1,9 @@
 /** Shared browser/demo budget matching the MDM JSON ingress contract. */
 export const MDM_JSON_BODY_LIMIT = 16_384
 export const MDM_CONTENT_BODY_LIMIT = 16_777_216
+// Allow the content owner's maximum 24h budget plus normal request setup time.
+// The view's AbortSignal still cancels the request.
+export const MDM_CONTENT_TIMEOUT_MS = 86_400_000 + 30_000
 export const isMdmContentRequest = (method: string, path: string) =>
   (method === 'POST' && /^\/api\/v1\/resources\/[^/]+\/content$/.test(path)) ||
   (method === 'PATCH' && /^\/api\/v1\/resources\/[^/]+\/uploads\/[^/]+$/.test(path))

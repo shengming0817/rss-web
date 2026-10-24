@@ -48,8 +48,15 @@ export const settingsZh = {
     },
   },
   packageTaskNote:
-    '选择安装文件，系统识别版本与目标后发布。签名或公证不是发布前提；发布成功不表示设备已安装。',
+    '选择安装文件，填写版本并确认目标后发布。元数据识别仅辅助填写；发布成功不表示设备已安装。',
   chooseInstaller: '选择安装文件',
+  parseInstaller: '读取安装元数据',
+  packageInspection: {
+    parsed: '已读取元数据，可修改版本后发布。',
+    skipped_size_limit: '此文件默认跳过元数据解析，可手动填写或按需读取。',
+    not_requested: '尚未读取元数据，可手动填写或按需读取。',
+    rejected: '未能识别元数据，请手动填写版本并确认目标。',
+  },
   uploadProgress: '上传进度',
   resumeUpload: '核对并继续上传',
   publishSavedPackage: '发布已保存安装包',
@@ -59,7 +66,7 @@ export const settingsZh = {
   packageStage: {
     choose: '等待文件',
     uploading: '上传中',
-    checking: '识别中',
+    checking: '读取上传信息',
     ready: '待发布',
     saving: '正在保存安装包',
     publishing: '正在发布安装包',
@@ -412,8 +419,16 @@ export const settingsEn = {
     },
   },
   packageTaskNote:
-    'Choose an installer, review its version and target, then publish. Signing and notarization are optional. Publication does not confirm installation.',
+    'Choose an installer, enter its version and confirm the target, then publish. Metadata only helps fill the form. Publication does not confirm installation.',
   chooseInstaller: 'Choose installer',
+  parseInstaller: 'Read installer metadata',
+  packageInspection: {
+    parsed: 'Metadata is available. You can edit the version before publishing.',
+    skipped_size_limit:
+      'Metadata was skipped by default for this file. Enter the details or read it on demand.',
+    not_requested: 'Metadata has not been read. Enter the details or read it on demand.',
+    rejected: 'Metadata could not be identified. Enter the version and confirm the target.',
+  },
   uploadProgress: 'Upload progress',
   resumeUpload: 'Check and resume upload',
   publishSavedPackage: 'Publish saved installer',
@@ -423,7 +438,7 @@ export const settingsEn = {
   packageStage: {
     choose: 'Choose a file',
     uploading: 'Uploading',
-    checking: 'Inspecting',
+    checking: 'Reading upload details',
     ready: 'Ready to publish',
     saving: 'Saving installer',
     publishing: 'Publishing installer',

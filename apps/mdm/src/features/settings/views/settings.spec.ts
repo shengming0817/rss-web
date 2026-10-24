@@ -1,3 +1,4 @@
+import { sha256 } from '@noble/hashes/sha2.js'
 import ConnectionsPanel from '../components/ConnectionsPanel.vue'
 import AgentConnectionObservation from '../../devices/components/AgentConnectionObservation.vue'
 import AgentRecovery from '../../security/pki/AgentRecovery.vue'
@@ -1134,7 +1135,7 @@ it.each(['save', 'publish'] as const)(
     }
   },
 )
-it('resumes the durable upload frontier and retries publication without saving a second software version', async () => {
+it('keeps metadata optional while resuming upload and retrying publication', async () => {
   const f = await fixture(PackageUpload, {
     target: { platform: 'windows', architecture: 'x86_64' },
     canUpload: true,
@@ -1144,12 +1145,12 @@ it('resumes the durable upload frontier and retries publication without saving a
   let uploadId = '',
     offset = 0,
     failAppend = true,
-    failPublish = true
+    failPublish = true,
+    parsed = false
   const bytes = new Uint8Array(8).fill(7),
-    checksum = Array(32).fill(1)
+    checksum = [...sha256(bytes)]
   vi.stubGlobal('crypto', {
     randomUUID: () => id,
-    subtle: { digest: async () => new Uint8Array(checksum).buffer },
   })
   const status = () => ({
     id: uploadId,
@@ -1189,14 +1190,27 @@ it('resumes the durable upload frontier and retries publication without saving a
       offset = bytes.length
       return status()
     }
-    if (o.path === '/api/v1/agent-packages/uploads/{id}')
+    if (o.path === '/api/v1/agent-packages/uploads/{id}') {
+      if (o.method === 'POST') parsed = true
       return {
         packageId: uploadId,
         filename: 'agent.exe',
         length: bytes.length,
         sha256: checksum,
-        facts: { format: 'exe', version: null, architectures: ['x86_64'], bundleId: null },
+        format: 'exe',
+        inspection: parsed
+          ? {
+              status: 'parsed',
+              facts: {
+                format: 'exe',
+                version: '2.3-' + 'x'.repeat(300),
+                architectures: ['aarch64'],
+                bundleId: null,
+              },
+            }
+          : { status: 'skipped_size_limit' },
       }
+    }
     if (o.path.endsWith('/save'))
       return {
         packageId: uploadId,
@@ -1227,7 +1241,11 @@ it('resumes the durable upload frontier and retries publication without saving a
     }
   })
   const file = new File([bytes], 'agent.exe')
-  Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes.buffer })
+  Object.defineProperty(file, 'arrayBuffer', {
+    value: async () => {
+      throw new Error('whole-file read')
+    },
+  })
   Object.defineProperty(file, 'slice', {
     value: (start: number, end: number) => ({
       arrayBuffer: async () => bytes.slice(start, end).buffer,
@@ -1242,6 +1260,21 @@ it('resumes the durable upload frontier and retries publication without saving a
     .trigger('click')
   await flushPromises()
   await f.wrapper.get('input.ui-input').setValue('1.2')
+  expect(f.wrapper.text()).toContain('默认跳过元数据解析')
+  expect(
+    f.wrapper
+      .findAll('button')
+      .find((b) => b.text() === '发布安装包')!
+      .attributes('disabled'),
+  ).toBeUndefined()
+  await f.wrapper
+    .findAll('button')
+    .find((b) => b.text() === '读取安装元数据')!
+    .trigger('click')
+  await flushPromises()
+  expect(f.wrapper.get('input.ui-input').element).toHaveProperty('value', '1.2')
+  expect(f.wrapper.get('input.ui-input').attributes('readonly')).toBeUndefined()
+  expect(f.wrapper.text()).toContain('已读取元数据')
   await f.wrapper
     .findAll('button')
     .find((b) => b.text() === '发布安装包')!

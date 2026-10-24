@@ -6,6 +6,7 @@ const binding = {
   purpose: {
     kind: 'resource',
     binding: {
+      inspection: null,
       storage_class: 'artifact',
       resource: 'app',
       version: '1',
