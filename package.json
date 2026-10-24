@@ -39,7 +39,8 @@
     "test:mdm:software-browser": "node e2e/mdm/software-run.mjs",
     "test:mdm:settings-browser": "node e2e/mdm/settings-run.mjs",
     "test:mdm:profiles-browser": "node e2e/mdm/profiles-run.mjs",
-    "test:mdm:telemetry-browser": "node e2e/mdm/telemetry-run.mjs"
+    "test:mdm:telemetry-browser": "node e2e/mdm/telemetry-run.mjs",
+    "test:mdm:console-browser": "node e2e/mdm/console-run.mjs"
   },
   "lint-staged": {
     "*.{ts,vue}": [

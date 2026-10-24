@@ -93,7 +93,6 @@ it('provides the same session owner to auth, MDM and protected routes', async ()
   expect(runtime.session.state.value.status).toBe('authenticated')
   for (const path of [
     'security/requests',
-    'security/materials',
     'security/support',
     'security/risks',
     'security/baselines',
@@ -128,7 +127,8 @@ it('provides the same session owner to auth, MDM and protected routes', async ()
     expect(runtime.router.hasRoute(name)).toBe(true)
   runtime.app.runWithContext(() => {
     const mdm = inject(mdmKey)!
-    expect(Object.keys(mdm.security).sort()).toEqual(['certificateArchive', 'compliance'])
+    expect(mdm.security.credentials.list).toBeTypeOf('function')
+    expect(mdm.security).not.toHaveProperty('requests')
     expect(Object.keys(mdm.operations).sort()).toEqual(['audit', 'authorization'])
     expect(mdm.policies).not.toHaveProperty('configurations')
   })

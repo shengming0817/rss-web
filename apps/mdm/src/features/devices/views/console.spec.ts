@@ -1,4 +1,5 @@
 import GroupDependencies from '../components/GroupDependencies.vue'
+import { createSecurityClients as createFormalSecurityClients } from '../../security/client'
 import TenantUserSelect from '../components/TenantUserSelect.vue'
 import { shallowRef } from 'vue'
 import { runtimeKey, type IdentitySession } from '@rss/auth'
@@ -163,6 +164,7 @@ async function setup(
       provide: {
         [mdmKey as symbol]: {
           devices,
+          security: createFormalSecurityClients(transport, TENANT),
           policies: createPolicyClients(transport, TENANT, true),
           transport,
           operations,

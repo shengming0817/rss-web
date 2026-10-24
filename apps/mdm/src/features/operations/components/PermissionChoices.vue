@@ -12,7 +12,10 @@ import {
   type AuthorizationRealm,
 } from '../clients/authorization'
 import GrantFacts from './GrantFacts.vue'
-const props = defineProps<{ realm: AuthorizationRealm }>(),
+const props = defineProps<{
+    realm: AuthorizationRealm
+    operations?: readonly Grant['operation'][]
+  }>(),
   model = defineModel<Grant[]>({ required: true }),
   { t } = useI18n()
 const operation = ref<Grant['operation']>('inventory_read'),
@@ -20,7 +23,11 @@ const operation = ref<Grant['operation']>('inventory_read'),
   device = ref(''),
   invalid = ref(false)
 const allowed = computed(() =>
-  permissions.filter((p) => !(tenantAdministrationPermissions as readonly string[]).includes(p)),
+  permissions.filter(
+    (p) =>
+      !(tenantAdministrationPermissions as readonly string[]).includes(p) &&
+      (!props.operations || props.operations.includes(p)),
+  ),
 )
 function toggle(operation: Grant['operation'], checked: boolean) {
   model.value = checked

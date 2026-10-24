@@ -27,8 +27,7 @@ export function createSecurityRequests(
       | 'request_denied'
       | 'request_revoked'
       | 'request_expired'
-      | 'request_decision_denied'
-      | 'request_consumed',
+      | 'request_decision_denied',
     actor: string | null,
     op: string | null,
   ) {
@@ -118,7 +117,6 @@ export function createSecurityRequests(
             state: 'pending',
             decision: null,
             revocation: null,
-            consumption: null,
           })
           requests.set(value.id, value)
           audit(value, 'request_created', request.actor.principalId, op.operationId)
@@ -168,27 +166,6 @@ export function createSecurityRequests(
   return {
     handle,
     settle,
-    consume(id: string, revision: number, actor: string, disclosure: string) {
-      settle()
-      const value = requests.get(id)
-      if (
-        !value ||
-        value.revision !== revision ||
-        value.state !== 'approved' ||
-        value.target.kind !== 'material_access' ||
-        value.requester !== actor ||
-        now() < value.validFrom ||
-        now() >= value.validUntil ||
-        !valid(value.target)
-      )
-        return null
-      value.state = 'consumed'
-      value.revision++
-      value.operation = disclosure
-      value.consumption = { disclosure, at: now() }
-      audit(value, 'request_consumed', actor, disclosure)
-      return structuredClone(value)
-    },
     rows() {
       settle()
       return structuredClone([...requests.values()])

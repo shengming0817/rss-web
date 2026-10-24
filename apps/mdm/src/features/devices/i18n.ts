@@ -279,6 +279,7 @@ export const devicesZh = {
   firstUseNotReady: '所选必要条件尚未就绪，请重新读取进度。',
   connection_deployment_unobserved:
     '新入口尚无绑定本版本的有效部署观察，请由部署操作员核验后重新比较。',
+  mdm_software_disabled: 'MDM 软件分发未开启，禁止启用或派发。Agent 路径仍可用。',
   connection_retirement_blocked: '仍有设备、注册配置或安装交付依赖旧入口，请先完成收敛再退役。',
   agent_package_installer_mismatch: '安装文件与选择的包或目标不匹配。',
   agent_package_lifecycle_not_admitted: '安装包当前生命周期不允许发布。',
@@ -810,6 +811,7 @@ export const devicesEn: typeof devicesZh = {
   firstUseNotReady: 'Required setup facts are not ready. Reload progress.',
   connection_deployment_unobserved:
     'No fresh deployment observation is bound to this revision. Ask the deployment operator to verify it, then compare again.',
+  mdm_software_disabled: 'MDM software distribution is disabled. Agent remains available.',
   connection_retirement_blocked:
     'Devices, enrollment configurations or installation deliveries still depend on a retiring location. Complete convergence first.',
   agent_package_installer_mismatch: 'The installer does not match the selected package or target.',

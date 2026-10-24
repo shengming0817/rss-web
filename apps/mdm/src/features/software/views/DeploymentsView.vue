@@ -6,7 +6,7 @@ import {
   UiProgress,
   UiUtcDateTimeInput,
 } from '@rss/core/components'
-import { computed, onBeforeUnmount, ref, toRaw, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
 import SelfServiceEditor from '../../policies/components/SelfServiceEditor.vue'
 import ResourceIdentity from '../../policies/components/ResourceIdentity.vue'
 import { useRoute } from 'vue-router'
@@ -38,6 +38,31 @@ const { t } = useI18n(),
   route = useRoute(),
   client = runtime.policies.policies
 const { run, runWrite, busy, failure, uncertain } = useOperation([], () => deviceBinding(runtime))
+const capabilities = ref<Awaited<ReturnType<typeof client.capabilities>>>()
+const capabilityRequest = useOperation([], () => deviceBinding(runtime))
+async function loadCapabilities() {
+  capabilities.value = undefined
+  await capabilityRequest.run(
+    () => client.capabilities(),
+    (v) => {
+      capabilities.value = v
+    },
+  )
+}
+onMounted(loadCapabilities)
+function selectChannel(event: Event) {
+  const channel = (event.target as HTMLSelectElement).value
+  if (
+    channel === 'mdm' &&
+    (!capabilities.value?.mdmSoftwareDistributionEnabled ||
+      draft.value.action.delivery.kind !== 'direct' ||
+      draft.value.action.intent !== 'required_install' ||
+      draft.value.selfService)
+  )
+    return
+  if (channel === 'agent' || channel === 'mdm') draft.value.action.channel = channel
+}
+
 const editing = ref(false),
   wizardStep = ref(0),
   editorForm = ref<HTMLFormElement>()
@@ -312,6 +337,18 @@ function replay() {
   )
 }
 function change(input: PolicyChange) {
+  const action = input.action === 'put' ? input.definition.action : current.value?.definition.action
+  const enabling = input.action === 'enable' || (input.action === 'put' && input.enabled)
+  if (
+    enabling &&
+    action?.kind === 'software' &&
+    action.channel === 'mdm' &&
+    !capabilities.value?.mdmSoftwareDistributionEnabled
+  ) {
+    failure.value = 'mdm_software_disabled'
+    return
+  }
+
   if (
     busy.value ||
     uncertain.value ||
@@ -538,6 +575,27 @@ watch(
               }}
             </p>
             <ResourceIdentity :binding="draft.action.resource" />
+            <label for="deployment-channel">{{ t('gap.softwareChannel') }}</label>
+            <select id="deployment-channel" :value="draft.action.channel" @change="selectChannel">
+              <option value="agent">Agent</option>
+              <option
+                value="mdm"
+                :disabled="
+                  !capabilities?.mdmSoftwareDistributionEnabled ||
+                  draft.action.delivery.kind !== 'direct' ||
+                  draft.action.intent !== 'required_install' ||
+                  !!draft.selfService
+                "
+              >
+                MDM
+              </option>
+            </select>
+            <p v-if="!capabilities">{{ t('gap.capabilityUnknown') }}</p>
+            <p v-else-if="!capabilities.mdmSoftwareDistributionEnabled">
+              {{ t('gap.mdmDisabled') }}
+            </p>
+            <p>{{ t('gap.mdmConstraints') }}</p>
+            <UiButton type="button" @click="loadCapabilities">{{ t('gap.load') }}</UiButton>
             <label for="deployment-delivery">{{ t('software.delivery') }}</label>
             <select
               id="deployment-delivery"
@@ -546,7 +604,9 @@ watch(
               @change="delivery"
             >
               <option value="direct">{{ t('software.deliveryDirect') }}</option>
-              <option value="native">{{ t('software.deliveryNative') }}</option>
+              <option value="native" :disabled="draft.action.channel === 'mdm'">
+                {{ t('software.deliveryNative') }}
+              </option>
             </select>
             <section v-if="draft.action.delivery.kind === 'native'" class="console-panel">
               <p>{{ t('software.nativePublicationHint') }}</p>
@@ -586,7 +646,12 @@ watch(
               :value="draft.action.intent"
               @change="intent"
             >
-              <option v-for="optionIntent in intents" :key="optionIntent" :value="optionIntent">
+              <option
+                v-for="optionIntent in intents"
+                :key="optionIntent"
+                :value="optionIntent"
+                :disabled="draft.action.channel === 'mdm' && optionIntent !== 'required_install'"
+              >
                 {{ t(`software.intent_${optionIntent}`) }}
               </option>
             </select>

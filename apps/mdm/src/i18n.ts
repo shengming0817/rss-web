@@ -1,3 +1,4 @@
+import { gapZh, gapEn } from './features/gapMessages'
 import { telemetryZh, telemetryEn } from './features/telemetry/i18n'
 import { profilesZh, profilesEn } from './features/settings/profileMessages'
 import { settingsZh, settingsEn } from './features/settings/i18n'
@@ -82,6 +83,8 @@ const en: typeof zh = {
 }
 export function mdmI18n() {
   const i18n = identityI18n()
+  i18n.global.mergeLocaleMessage('zh-CN', { gap: gapZh })
+  i18n.global.mergeLocaleMessage('en-US', { gap: gapEn })
   i18n.global.mergeLocaleMessage('zh-CN', { profiles: profilesZh })
   i18n.global.mergeLocaleMessage('en-US', { profiles: profilesEn })
   i18n.global.mergeLocaleMessage('zh-CN', { console: consoleZh })

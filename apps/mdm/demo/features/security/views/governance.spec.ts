@@ -202,7 +202,6 @@ it('limits decisions, revocation and dispatch to their displayed actor relations
     validUntil: 200,
     decision: null,
     revocation: null,
-    consumption: null,
   }
   const read = vi.fn().mockResolvedValue({ request, asOf: 101 }),
     decide = vi.fn(),

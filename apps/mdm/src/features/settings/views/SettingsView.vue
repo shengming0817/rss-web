@@ -12,6 +12,8 @@ import { useSettingsFacts, useSettingsAction } from '../useSettingsAction'
 import type { SettingsCatalog } from '../clients/catalog'
 import MaterialPanel from '../components/MaterialPanel.vue'
 import DeploymentPanel from '../components/DeploymentPanel.vue'
+import WebhookSubscriptionsPanel from '../components/WebhookSubscriptionsPanel.vue'
+import ApiAccessPanel from '../components/ApiAccessPanel.vue'
 import OperationsPanel from '../components/OperationsPanel.vue'
 const runtime = useMdm(),
   route = useRoute(),
@@ -189,6 +191,8 @@ useSettingsFacts(() => (catalog.value = undefined))
       @update:open="!$event && (material = '')"
       ><MaterialPanel v-if="material" :key="material" :material="material"
     /></UiDialog>
+    <WebhookSubscriptionsPanel v-if="section === 'integrations' && runtime.realm === 'tenant'" />
+    <ApiAccessPanel v-if="section === 'access'" />
     <DeploymentPanel v-if="section === 'deployment'" />
     <OperationsPanel v-if="section === 'operations'" />
   </PageFrame>

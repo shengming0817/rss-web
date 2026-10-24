@@ -84,7 +84,6 @@ async function simulate() {
             'software_detect',
             'security_result',
             'security_detect',
-            'material_detect',
             'remote_consent',
             'remote_revoke',
             'remote_ended',
@@ -271,13 +270,7 @@ function submitConfirmed() {
             <option value="diagnostic_scanned">
               {{ t('security.supportEvents.diagnostic_scanned') }}
             </option>
-            <option value="material_detect">
-              {{
-                locale === 'zh-CN'
-                  ? '模拟新材料独立托管观测'
-                  : 'Independent synthetic material escrow observation'
-              }}
-            </option>
+
             <option value="security_detect">
               {{
                 locale === 'zh-CN'
@@ -313,7 +306,6 @@ function submitConfirmed() {
                 'software_detect',
                 'security_result',
                 'security_detect',
-                'material_detect',
                 'remote_consent',
                 'remote_revoke',
                 'remote_ended',

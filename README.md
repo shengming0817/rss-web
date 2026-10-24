@@ -79,3 +79,5 @@ MDM_SOFTWARE_BACKEND=/absolute/rss-mdm pnpm test:mdm:software-browser
 正式执行总览、设备控制、原操作恢复、审计/设备时间线与运行诊断的 HTTPS Chromium 验证：`MDM_OPERATIONS_BACKEND=/absolute/rss-mdm pnpm test:mdm:operations-browser`。复用设备入口的隔离环境与清理，使用明确授权的可丢弃测试账户及合成 Windows 注册能力，只验证 UI/API 接缝；不代表真实重启、锁定、擦除效果。
 
 用户字段配置与资料显示的实际 HTTPS 验证：`MDM_PROFILE_BACKEND=/absolute/rss-mdm IDENTITY_BACKEND_FIXTURE=/absolute/rss-identity pnpm test:mdm:profiles-browser`。当前固定后端与验证边界见 [用户字段与登录资料](docs/architecture/20260926-2544-mdm-web.md#用户字段与登录资料2878)。
+
+新增能力的正式控制台验证使用 `MDM_CONSOLE_BACKEND=/absolute/rss-mdm pnpm test:mdm:console-browser`，覆盖恢复凭据、Policy 退役、Webhook 订阅原请求恢复/投递观察及 Key/平台白名单。复用既有构建租约、隔离 HTTPS 宿主和独立清理；只使用可丢弃合成输入，设备实际效果另行验收。接口与恢复边界见 [控制台新增能力](docs/architecture/20260926-2544-mdm-web.md#控制台新增能力2799)。

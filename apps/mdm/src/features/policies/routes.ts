@@ -9,6 +9,12 @@ export const policyFeature: MdmFeature = {
   },
   routes: [
     {
+      path: `${base}/assignments/lifecycle`,
+      name: 'policy-lifecycle',
+      component: () => import('./views/LifecyclePoliciesView.vue'),
+      meta: { protected: true },
+    },
+    {
       path: `${base}/resources/telemetry`,
       name: 'policy-telemetry',
       component: () => import('../telemetry/views/ProfilesView.vue'),

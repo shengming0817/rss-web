@@ -177,12 +177,7 @@ onMounted(routeChanged)
     <section v-if="selected" class="console-panel" data-testid="security-request">
       <h2>{{ selected.request.id }}</h2>
       <RequestFacts :request="selected.request" :as-of="selected.asOf" />
-      <template
-        v-if="
-          selected.request.target.kind === 'risk_remediation' ||
-          selected.request.target.kind === 'material_operation'
-        "
-      >
+      <template v-if="selected.request.target.kind === 'risk_remediation'">
         <p>{{ t('security.dispatchHint') }}</p>
         <UiButton
           v-if="selected.request.state === 'approved' && !actionId"
