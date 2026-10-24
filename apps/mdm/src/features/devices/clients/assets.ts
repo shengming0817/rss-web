@@ -365,9 +365,10 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
           if (v['run'] !== id || v['field'] !== field) throw new Error('Wrong item quality')
           return {
             items: array(v['items'], (x) => {
-              const item = closed(x, ['index', 'quality'])
+              const item = closed(x, ['index', 'quality', 'value'])
               return {
                 index: count(item['index']),
+                value: nullable(item['value'], readScalar),
                 quality: enumeration(item['quality'], [
                   'pending',
                   'success',

@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../useDeviceBinding'
-import type { CollectionScope } from '../clients/asset-model'
+import type { CollectionScope, ReadScalar } from '../clients/asset-model'
 const props = defineProps<{ device: string; id: string; scope?: CollectionScope }>()
 const emit = defineEmits<{ invalidated: [reason: 'denied' | 'notFound'] }>()
 const runtime = useMdm(),
@@ -19,6 +19,16 @@ const { run, busy, failure } = useOperation([], () => [
 const result = ref<Awaited<ReturnType<typeof runtime.devices.assets.collectionRun>>>()
 const items = ref<Awaited<ReturnType<typeof runtime.devices.assets.collectionItems>>>()
 const field = ref('')
+function display(value: ReadScalar): string {
+  if (value.kind === 'object')
+    return Object.entries(value.value)
+      .map(([key, item]) => `${key}: ${display(item)}`)
+      .join(' · ')
+  if (value.kind === 'array') return value.value.map(display).join(', ')
+  if (value.kind === 'boolean') return t(`devices.${value.value ? 'yes' : 'no'}`)
+  return String(value.value)
+}
+
 function invalidate() {
   if (failure.value !== 'denied' && failure.value !== 'notFound') return
   result.value = undefined
@@ -106,9 +116,11 @@ watch(
       </ul>
       <div v-if="items">
         <h4>{{ t('devices.itemQuality') }} · {{ field }}</h4>
+        <p>{{ t('devices.itemEvidenceNotice') }}</p>
         <ol>
           <li v-for="item in items.items" :key="item.index">
             {{ item.index }} · {{ t('devices.quality.' + item.quality) }}
+            <span v-if="item.value"> · {{ display(item.value) }}</span>
           </li>
         </ol>
         <UiButton

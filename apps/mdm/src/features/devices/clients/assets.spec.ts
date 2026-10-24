@@ -518,3 +518,38 @@ it('reads shared layouts without dropping empty retired groups and fences tenant
   value.asset.groups[0]!.fields = ['custom.asset_tag', 'custom.asset_tag'] as never[]
   expect(() => decodeFieldLayout(value, tenant)).toThrow()
 })
+
+it('reads valid collection rows without converting invalid rows into a complete inventory list', async () => {
+  const value = { kind: 'object', value: { id: { kind: 'string', value: 'com.example.verified' } } }
+  const response = {
+    tenantId: tenant,
+    asset: {
+      kind: 'collection_items',
+      run: task,
+      field: 'device.software.apple.installed_applications',
+      items: [
+        { index: 0, quality: 'success', value },
+        { index: 1, quality: 'invalid', value: null },
+      ],
+      nextOffset: 2,
+    },
+  }
+  const request = vi.fn(async (options: RequestOptions<unknown>) => options.decode(response))
+  const client = createAssetsClient({ request } as unknown as HttpTransport, tenant)
+  const page = await client.collectionItems('device-01', task, response.asset.field, {
+    kind: 'device',
+  })
+  expect(page.items).toEqual(response.asset.items)
+  expect(page.nextOffset).toBe(2)
+  const options = request.mock.calls[0]![0]
+  expect(() => options.decode({ ...response, tenantId: task })).toThrow()
+  expect(() =>
+    options.decode({
+      ...response,
+      asset: {
+        ...response.asset,
+        items: [{ index: 0, quality: 'success', value: { kind: 'invented', value: 1 } }],
+      },
+    }),
+  ).toThrow()
+})

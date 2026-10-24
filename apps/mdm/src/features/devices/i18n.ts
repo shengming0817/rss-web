@@ -103,6 +103,8 @@ export const devicesZh = {
   },
   invalidItems: '无效条目',
   itemQuality: '逐条质量',
+  itemEvidenceNotice:
+    '以下为本次采集的逐条证据；不完整清单不会替换最后可信资产，也不能证明应用已卸载。',
 
   returnDirectory: '返回设备目录',
   management: '管理',
@@ -614,6 +616,8 @@ export const devicesEn: typeof devicesZh = {
   },
   invalidItems: 'Invalid items',
   itemQuality: 'Item quality',
+  itemEvidenceNotice:
+    'These rows are evidence from this collection. An incomplete list does not replace trusted inventory or prove an application was removed.',
 
   returnDirectory: 'Back to device directory',
   management: 'Management',

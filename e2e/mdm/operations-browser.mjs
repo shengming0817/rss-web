@@ -391,7 +391,9 @@ try {
   } finally {
     await anonymous.close()
   }
-  coverage.push('real-reauthorization-api-terminal-ui-permission-403-device-scope-and-anonymous-401')
+  coverage.push(
+    'real-reauthorization-api-terminal-ui-permission-403-device-scope-and-anonymous-401',
+  )
   result = 'passed'
 } catch (error) {
   console.log(

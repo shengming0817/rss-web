@@ -1604,7 +1604,21 @@ it.each([
       delivery: { projection: 'pending', receipt: null },
     })
     const readItems = vi.spyOn(h.devices.assets, 'collectionItems').mockResolvedValue({
-      items: [{ index: 0, quality: 'unknown' }],
+      items: [
+        {
+          index: 0,
+          quality: 'success',
+          value: {
+            kind: 'object',
+            value: {
+              id: { kind: 'string', value: 'com.example.verified' },
+              validated: { kind: 'boolean', value: true },
+              versions: { kind: 'array', value: [{ kind: 'integer', value: 12 }] },
+            },
+          },
+        },
+        { index: 1, quality: 'invalid', value: null },
+      ],
       nextOffset: null,
     })
     await h.router.push({ name: 'device-detail', params: { tenant: TENANT, device: 'device-01' } })
@@ -1635,6 +1649,8 @@ it.each([
         .trigger('click')
       await flushPromises()
       expect(run.find('ol li').exists()).toBe(true)
+      expect(run.text()).toContain('com.example.verified')
+      expect(run.text()).toContain('不完整清单不会替换最后可信资产')
       readItems.mockRejectedValueOnce(
         decodeMdmError(status, {
           code: status === 403 ? 'permission_denied' : 'inventory_not_found',
