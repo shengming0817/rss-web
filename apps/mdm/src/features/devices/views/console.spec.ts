@@ -1,3 +1,4 @@
+import GroupDependencies from '../components/GroupDependencies.vue'
 import { createSecurityClients as createFormalSecurityClients } from '../../security/client'
 import TenantUserSelect from '../components/TenantUserSelect.vue'
 import { shallowRef } from 'vue'
@@ -1909,4 +1910,98 @@ it('searches the complete authorized device set by personnel through the view AP
   await expect(f.devices.views.list({ limit: 1, cursor: stale.nextCursor! })).rejects.toMatchObject(
     { code: 'device_view_cursor_invalidated' },
   )
+})
+
+it('restarts an invalidated first page even when its route does not change', async () => {
+  const f = await setup()
+  const list = vi.spyOn(f.devices.views, 'list')
+  list.mockRejectedValueOnce(decodeMdmError(409, { code: 'device_view_cursor_invalidated' }))
+  await f.wrapper.get('form').trigger('submit')
+  await flushPromises()
+  const before = f.router.currentRoute.value.fullPath
+  expect(f.wrapper.text()).toContain(f.i18n.global.t('devices.restartDirectory'))
+  expect(f.wrapper.find('tbody').exists()).toBe(false)
+  const calls = list.mock.calls.length
+  await f.wrapper.get('input[type=search]').setValue('unsubmitted draft')
+  await f.wrapper.get('form + p button').trigger('click')
+  await flushPromises()
+  expect(f.router.currentRoute.value.fullPath).toBe(before)
+  expect(list).toHaveBeenCalledTimes(calls + 1)
+  expect(list.mock.lastCall![0]?.cursor).toBeUndefined()
+  expect(list.mock.lastCall![0]?.search).toBeUndefined()
+  expect(f.wrapper.text()).toContain('device-01')
+})
+
+it('restarts an invalidated deep page with its applied filters and columns and one request', async () => {
+  const f = await setup(
+    'devices',
+    {},
+    { assetState: 'active', descending: 'true', columns: 'status' },
+  )
+  await f.click('下一页')
+  const applied = { ...f.router.currentRoute.value.query }
+  expect(applied['cursor']).toBeTruthy()
+  const list = vi.spyOn(f.devices.views, 'list')
+  list.mockRejectedValueOnce(decodeMdmError(409, { code: 'device_view_cursor_invalidated' }))
+  await f.router.replace({ query: { ...applied, trail: ['', ''] } })
+  await flushPromises()
+  expect(f.wrapper.find('tbody').exists()).toBe(false)
+  const calls = list.mock.calls.length
+  await f.wrapper.get('input[type=search]').setValue('unsubmitted draft')
+  await f.wrapper.get('form + p button').trigger('click')
+  await flushPromises()
+  expect(list).toHaveBeenCalledTimes(calls + 1)
+  expect(f.router.currentRoute.value.query).toEqual({
+    assetState: 'active',
+    descending: 'true',
+    columns: 'status',
+  })
+  expect(list.mock.lastCall![0]).toMatchObject({
+    assetState: 'active',
+    descending: true,
+    limit: 20,
+  })
+  expect(list.mock.lastCall![0]?.cursor).toBeUndefined()
+  expect(f.wrapper.findAll('thead th')).toHaveLength(2)
+  // A regular query submission also starts a fresh window, even with unchanged filters.
+  await f.click('下一页')
+  const before = list.mock.calls.length
+  await f.wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(list).toHaveBeenCalledTimes(before + 1)
+  expect(f.router.currentRoute.value.query['cursor']).toBeUndefined()
+  expect(f.router.currentRoute.value.query['trail']).toBeUndefined()
+})
+
+it('preserves hidden Group deletion blockers and withdraws the decision on a failed next page', async () => {
+  const f = await setup()
+  const references = vi
+    .spyOn(f.devices.groups, 'references')
+    .mockResolvedValueOnce({ items: [], nextCursor: 'opaque', deletionBlocked: true })
+    .mockRejectedValueOnce(decodeMdmError(409, { code: 'operation_conflict' }))
+    .mockResolvedValueOnce({ items: [], nextCursor: null, deletionBlocked: false })
+  const wrapper = mount(GroupDependencies, {
+    props: { group: '11111111-1111-4111-8111-111111111111' },
+    global: {
+      plugins: [f.router, f.i18n],
+      provide: { [mdmKey as symbol]: { tenant: TENANT, session: f.session, devices: f.devices } },
+    },
+  })
+  wrappers.push(wrapper)
+  await flushPromises()
+  expect(wrapper.emitted('loaded')?.at(-1)).toEqual([true])
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text() === '下一页')!
+    .trigger('click')
+  await flushPromises()
+  expect(wrapper.emitted('loaded')?.at(-1)).toEqual([undefined])
+  expect(wrapper.findAll('button').some((b) => b.text() === '下一页')).toBe(false)
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text() === '重新读取')!
+    .trigger('click')
+  await flushPromises()
+  expect(references.mock.lastCall![1]?.cursor).toBeUndefined()
+  expect(wrapper.emitted('loaded')?.at(-1)).toEqual([false])
 })

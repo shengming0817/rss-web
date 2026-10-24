@@ -575,3 +575,84 @@ it('rejects retired task origin and PKI documents without stable identity', () =
   delete oldPki['service_id']
   expect(() => pkiTrust(oldPki, b, 'agent')).toThrow()
 })
+
+it('decodes current audit source capacity and independent projector health without legacy defaults', () => {
+  const backlog = {
+    events: 80,
+    sourceBytes: 800,
+    reservedEvents: 1,
+    reservedSourceBytes: 10,
+    maxEvents: 100,
+    maxSourceBytes: 1000,
+    oldestSeconds: 301,
+    warning: true,
+    admissionClosed: false,
+    reserveExhausted: false,
+  }
+  const source = {
+    name: 'audit_source',
+    readiness: 'ready',
+    health: 'degraded',
+    reasons: ['audit_backlog_warning'],
+    auditBacklog: backlog,
+  }
+  const snapshot = (component: unknown) => ({
+    alive: true,
+    ready: true,
+    channels: [],
+    components: [
+      component,
+      {
+        name: 'audit_projection',
+        readiness: 'not_applicable',
+        health: 'degraded',
+        reasons: ['delivery_retrying'],
+        task: 'running',
+      },
+    ],
+  })
+  expect(runtimeSnapshot(snapshot(source)).components).toMatchObject([
+    { auditBacklog: backlog },
+    {
+      name: 'audit_projection',
+      readiness: 'not_applicable',
+      health: 'degraded',
+      auditBacklog: null,
+    },
+  ])
+  expect(
+    runtimeSnapshot(
+      snapshot({
+        ...source,
+        auditBacklog: {
+          ...backlog,
+          events: 0,
+          sourceBytes: 0,
+          reservedEvents: 0,
+          reservedSourceBytes: 0,
+          oldestSeconds: null,
+          warning: false,
+        },
+      }),
+    ).components[0]?.auditBacklog?.oldestSeconds,
+  ).toBeNull()
+  for (const invalid of [
+    { ...backlog, events: -1 },
+    { ...backlog, sourceBytes: Number.MAX_SAFE_INTEGER + 1 },
+    { ...backlog, oldestSeconds: '301' },
+    { ...backlog, admissionClosed: 1 },
+    { ...backlog, secret: 'unexpected' },
+    { events: 0 },
+    null,
+  ])
+    expect(() => runtimeSnapshot(snapshot({ ...source, auditBacklog: invalid }))).toThrow()
+  expect(
+    runtimeSnapshot(
+      snapshot({
+        ...source,
+        readiness: 'not_ready',
+        reasons: ['audit_backpressure', 'audit_reserve_exhausted'],
+      }),
+    ).components[0]?.reasons,
+  ).toEqual(['audit_backpressure', 'audit_reserve_exhausted'])
+})

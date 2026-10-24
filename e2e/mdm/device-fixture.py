@@ -98,13 +98,9 @@ def seed():
             if browser_module != 'console-browser.mjs':
                 sql.append(f"INSERT INTO mdm_access.report_sources(tenant_id,registration,source,epoch,enabled) SELECT tenant_id,id,'mdm.windows',epoch,true FROM mdm_access.registrations WHERE tenant_id='{tenant}' AND id='{registration}'")
             sql.append(f"INSERT INTO mdm_commands.capabilities(tenant_id,registration,generation,os_version,edition,session,observed_at) VALUES('{tenant}','{registration}',1,'10.0.22621.0',48,1,1)")
-        manual_fields = [('custom.asset_tag', dict(kind='string', value=device))]
-        # Array paging belongs only to the independent device browser scenario.
-        if browser_module == 'device-browser.mjs':
-            manual_fields.append(('custom.browser_list', dict(kind='array', value=[dict(kind='integer', value=n) for n in range(25 if channel == 'mdm' else 3)])))
-        for field, scalar in manual_fields:
-            fact=dict(state=dict(kind='known',value=scalar),lastKnown=None,evidence=dict(scope=dict(kind='device'),source='manual',dataset=None,registration=None,registrationGeneration=None,epoch=None,snapshotId=str(uuid.uuid4()),observedAt=1,receivedAt=2,actor=ADMIN))
-            sql.append(f"INSERT INTO mdm.manual_assignments(tenant_id,device,field,revision,fact) VALUES('{tenant}','{device}','{field}',1,{q(json.dumps(fact))}::jsonb)")
+        fact=dict(state=dict(kind='known',value=dict(kind='string',value=device)),lastKnown=None,evidence=dict(scope=dict(kind='device'),source='manual',dataset=None,registration=None,registrationGeneration=None,epoch=None,snapshotId=str(uuid.uuid4()),observedAt=1,receivedAt=2,actor=ADMIN))
+        sql.append(f"INSERT INTO mdm.manual_assignments(tenant_id,device,field,revision,fact) VALUES('{tenant}','{device}','custom.asset_tag',1,{q(json.dumps(fact))}::jsonb)")
+    # Array paging belongs only to the independent device browser scenario.
     if browser_module == 'device-browser.mjs':
         definition=dict(key='custom.browser_list',version=1,valueType=dict(kind='array',items=dict(kind='integer'),maxItems=1000),nullable=True,manual=True,sources=dict(manual=0),platforms=['windows','macos'],sensitivity='standard',unit=None,searchable=True,itemKey=None)
         # Private disposable fixture publication; no user operation or current-state assertion is forged.
@@ -249,6 +245,16 @@ try:
     seed()
     phase = 'readiness'
     start(binary, initialized, log)
+    if browser_module == 'device-browser.mjs':
+        phase = 'manual-array-seed'
+        # The product owner stores immutable array versions and ordinal indexes atomically.
+        for device, count in [('fixture-mdm',25),('fixture-agent',3),('fixture-alone',25)]:
+            time.sleep(.2)  # Keep fixture writes below the unchanged gateway request budget.
+            status, _ = operator.call('PUT', f'/api/v1/devices/{device}/manual-fields/custom.browser_list',
+                dict(operationId=str(uuid.uuid4()),expectedRevision=0,
+                     input=dict(action='set',value=dict(kind='array',value=[dict(kind='integer',value=n) for n in range(count)]))))
+            if status != 200:
+                raise RuntimeError('manual-array-seed')
     # Keep the real initializer's rule administration, while the one fixture rule owns business grants.
     status, rules = operator.call('GET', '/api/v1/authorization/rules')
     if status != 200:

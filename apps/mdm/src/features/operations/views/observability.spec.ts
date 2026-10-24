@@ -235,3 +235,160 @@ it('retains unfamiliar safe audit outcome metadata without inventing a translate
   await flushPromises()
   expect(f.body().get('[data-testid=audit-detail]').text()).toContain('provider_pending')
 })
+
+it('shows audit source capacity separately from host admission and projector health', async () => {
+  let mode: 'pending' | 'empty' | 'missing' | 'denied' = 'pending'
+  const f = await fixture(DiagnosticsView, () => {
+    if (mode === 'denied') throw decodeMdmError(403, { code: 'permission_denied' })
+    return {
+      alive: true,
+      ready: true,
+      channels: [],
+      components: [
+        {
+          name: 'audit_source',
+          readiness: 'not_ready',
+          health: 'degraded',
+          reasons: ['audit_backpressure', 'audit_reserve_exhausted'],
+          ...(mode === 'missing'
+            ? {}
+            : {
+                auditBacklog: {
+                  events: mode === 'empty' ? 0 : 80,
+                  sourceBytes: mode === 'empty' ? 0 : 800,
+                  reservedEvents: mode === 'empty' ? 0 : 1,
+                  reservedSourceBytes: mode === 'empty' ? 0 : 10,
+                  maxEvents: 100,
+                  maxSourceBytes: 1000,
+                  oldestSeconds: mode === 'empty' ? null : 301,
+                  warning: mode !== 'empty',
+                  admissionClosed: false,
+                  reserveExhausted: false,
+                },
+              }),
+        },
+        {
+          name: 'audit_projection',
+          readiness: 'not_applicable',
+          health: 'degraded',
+          reasons: ['delivery_retrying'],
+          task: 'running',
+        },
+        { name: 'identity_audit', readiness: 'not_applicable', health: 'healthy', reasons: [] },
+      ],
+    }
+  })
+  const openSource = async () => {
+    await f.wrapper.findAll('tbody button')[0]!.trigger('click')
+    await flushPromises()
+    return f.body().get('[data-testid=audit-backlog]')
+  }
+  const backlog = await openSource()
+  expect(backlog.findAll('dd').map((d) => d.text())).toEqual([
+    '80',
+    '800',
+    '1',
+    '10',
+    '100',
+    '1000',
+    '301',
+    '是',
+    '否',
+    '否',
+  ])
+  expect(backlog.text()).toContain('明细仅属于业务租户')
+  expect(backlog.text()).toContain('不含数据库物理开销')
+  await f.wrapper.findAll('tbody button')[1]!.trigger('click')
+  await flushPromises()
+  expect(f.body().get('[data-testid=diagnostic-detail]').text()).toContain('不适用')
+  expect(f.body().get('[data-testid=diagnostic-detail]').text()).toContain('健康不代表积压清零')
+  expect(f.body().find('[data-testid=audit-backlog]').exists()).toBe(false)
+  expect(f.wrapper.text()).toContain('就绪 · 是')
+  const reload = async () => {
+    await f.wrapper
+      .findAll('button')
+      .find((b) => b.text() === '重新读取')!
+      .trigger('click')
+    await flushPromises()
+  }
+  mode = 'empty'
+  await reload()
+  expect((await openSource()).text()).toContain('无待投影事件')
+  expect(f.body().get('[data-testid=audit-backlog]').findAll('dd')[0]!.text()).toBe('0')
+  expect(f.body().get('[data-testid=diagnostic-detail]').text()).toContain('未就绪')
+  mode = 'missing'
+  await reload()
+  expect((await openSource()).text()).toContain('未观察到')
+  expect(f.body().get('[data-testid=audit-backlog]').findAll('dd')).toHaveLength(0)
+  mode = 'denied'
+  await reload()
+  expect(f.wrapper.find('tbody').exists()).toBe(false)
+  expect(f.body().find('[data-testid=diagnostic-detail]').exists()).toBe(false)
+  expect(
+    f.request.mock.calls.every(
+      ([r]) => r.method === 'GET' && r.path === '/api/v1/runtime/diagnostics',
+    ),
+  ).toBe(true)
+})
+
+it('discards a late audit source snapshot after the session changes', async () => {
+  let resolve!: (value: unknown) => void
+  let calls = 0
+  const f = await fixture(DiagnosticsView, () =>
+    ++calls === 1
+      ? new Promise((r) => {
+          resolve = r
+        })
+      : {
+          alive: true,
+          ready: true,
+          channels: [],
+          components: [],
+        },
+  )
+  f.state.value = { ...f.state.value, session: { id: 'session-2' } }
+  await flushPromises()
+  resolve({
+    alive: true,
+    ready: false,
+    channels: [],
+    components: [
+      {
+        name: 'audit_source',
+        readiness: 'not_ready',
+        health: 'degraded',
+        reasons: ['audit_backpressure'],
+      },
+    ],
+  })
+  await flushPromises()
+  expect(f.wrapper.findAll('tbody button')).toHaveLength(0)
+  expect(f.wrapper.get('tbody').text()).not.toContain('普通审计容量已满')
+  expect(f.request).toHaveBeenCalledTimes(2)
+})
+
+it('keeps a caught-up empty audit query eventually consistent and refreshes only audit reads', async () => {
+  let arrived = false
+  const f = await fixture(AuditView, () =>
+    arrived
+      ? page
+      : {
+          items: [],
+          nextCursor: null,
+          coverage: { indexedThrough: 17, sourceThrough: 17, complete: true },
+        },
+  )
+  expect(f.wrapper.get('[data-testid=audit-coverage]').text()).toContain(
+    '查询索引已追到已投影审计水位',
+  )
+  expect(f.wrapper.text()).toContain('已提交事实可能仍待异步审计投影')
+  expect(f.wrapper.text()).toContain('空结果不证明操作未发生')
+  arrived = true
+  await f.wrapper.get('[data-testid=audit-filter]').trigger('submit')
+  await flushPromises()
+  expect(f.wrapper.get('tbody').text()).toContain('operator')
+  expect(f.request).toHaveBeenCalledTimes(2)
+  expect(
+    f.request.mock.calls.every(([r]) => r.method === 'GET' && r.path === '/api/v1/audit-events'),
+  ).toBe(true)
+})

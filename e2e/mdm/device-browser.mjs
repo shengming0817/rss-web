@@ -165,7 +165,31 @@ try {
   await page.getByRole('button', { name: '下一页', exact: true }).click()
   await loaded()
   assert.ok((await page.locator('tbody').textContent()).includes(fixture.mdm))
-  coverage.push('real-directory-counters-and-pagination')
+  const staleDirectory = page.url()
+  await writeRule(fixture.rule.grants)
+  const directoryInvalidated = page.waitForResponse(
+    (r) => new URL(r.url()).pathname === '/api/v1/device-views' && r.status() === 409,
+  )
+  await page.reload()
+  await directoryInvalidated
+  await loaded()
+  assert.equal(await page.locator('tbody').count(), 0)
+  assert.ok(new URL(staleDirectory).searchParams.has('cursor'))
+  let restartedReads = 0
+  const countRestart = (r) => {
+    if (new URL(r.url()).pathname === '/api/v1/device-views') restartedReads++
+  }
+  page.on('request', countRestart)
+  await page
+    .locator('form.console-toolbar + p')
+    .getByRole('button', { name: '重新读取', exact: true })
+    .click()
+  await page.waitForURL((url) => !url.searchParams.has('cursor') && !url.searchParams.has('trail'))
+  await loaded()
+  page.off('request', countRestart)
+  assert.equal(restartedReads, 1)
+  assert.ok(await page.locator('tbody').count())
+  coverage.push('real-directory-counters-pagination-and-explicit-invalidated-window-restart')
   phase = 'personnel-display-search'
   let directoryLookups = 0
   const observePersonnel = (request) => {
@@ -975,7 +999,18 @@ try {
   )
   const retainedMemory = await api(`/api/v1/devices/${collectorDevice}/inventory`)
   assert.equal(retainedMemory.asset.device.fields['device.memory.bytes'].state.value.value, 8194)
+  const isCollectorDetail = (response) =>
+    new URL(response.url()).pathname === `/api/v1/device-views/endpoint/${collectorDevice}`
+  const readingDetail = page.waitForResponse(isCollectorDetail)
   await page.goto(path(`devices/${collectorDevice}`))
+  const detailReply = await readingDetail
+  if (detailReply.status() === 409) {
+    assert.equal((await detailReply.json()).code, 'device_view_cursor_invalidated')
+    await loaded()
+    const rereadingDetail = page.waitForResponse(isCollectorDetail)
+    await page.getByRole('button', { name: '重新读取', exact: true }).click()
+    assert.equal((await rereadingDetail).status(), 200)
+  } else assert.equal(detailReply.status(), 200)
   await page.getByRole('button', { name: '硬件', exact: true }).click()
   assert.ok((await page.locator('.asset-detail-layout').textContent()).includes('8194'))
   const personnel = page.locator(`[data-personnel-device="${collectorDevice}"]`)
