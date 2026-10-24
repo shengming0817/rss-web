@@ -53,7 +53,7 @@ export function createResourceUploads(
         binding: {
           inspection:
             d.kind === 'software' && artifact.reference === softwareInstaller(d.definition)
-              ? d.definition.format
+              ? d.definition.material.format
               : null,
           storage_class: d.kind === 'configuration' ? 'native_configuration' : 'artifact',
           resource: id,

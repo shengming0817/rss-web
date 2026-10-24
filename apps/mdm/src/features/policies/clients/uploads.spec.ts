@@ -1,5 +1,4 @@
 import { expect, it, vi } from 'vitest'
-import { MDM_CONTENT_TIMEOUT_MS } from '@rss/api/mdm-limits'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { createUploadsClient, decodeUpload } from './uploads'
 const id = '11111111-1111-4111-8111-111111111111'
@@ -85,7 +84,6 @@ it('uses native begin/status/append/complete/receipt routes and rejects wrong co
   expect(request.mock.lastCall![0]).toMatchObject({
     method: 'PATCH',
     query: { offset: 0 },
-    timeoutMs: MDM_CONTENT_TIMEOUT_MS,
     body,
     headers: { 'Content-Type': 'application/octet-stream' },
   })
@@ -95,7 +93,6 @@ it('uses native begin/status/append/complete/receipt routes and rejects wrong co
     method: 'POST',
     path: '/api/v1/resources/{id}/uploads/{upload}/complete',
     successStatus: 201,
-    timeoutMs: MDM_CONTENT_TIMEOUT_MS,
   })
   reply = {
     operationId: id,
