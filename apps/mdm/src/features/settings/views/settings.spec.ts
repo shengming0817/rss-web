@@ -1201,7 +1201,12 @@ it('keeps metadata optional while resuming upload and retrying publication', asy
         inspection: parsed
           ? {
               status: 'parsed',
-              facts: { format: 'exe', version: '2.3', architectures: ['aarch64'], bundleId: null },
+              facts: {
+                format: 'exe',
+                version: '2.3-' + 'x'.repeat(300),
+                architectures: ['aarch64'],
+                bundleId: null,
+              },
             }
           : { status: 'skipped_size_limit' },
       }

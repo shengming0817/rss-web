@@ -1,4 +1,5 @@
 import type { HttpTransport } from '@rss/api/mdm'
+import { MDM_CONTENT_TIMEOUT_MS } from '@rss/api/mdm-limits'
 import {
   array,
   uuid,
@@ -19,7 +20,7 @@ export function installerFacts(value: unknown) {
   const v = closed(value, ['format', 'version', 'architectures', 'bundleId'])
   return {
     format: enumeration(v['format'], ['exe', 'msi', 'msix', 'pkg'] as const),
-    version: nullable(v['version'], identifier),
+    version: nullable(v['version'], string),
     architectures: unique(
       array(v['architectures'], (x) => enumeration(x, ['x86_64', 'aarch64'] as const)),
       (x) => x,
@@ -97,6 +98,7 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
   function inspection(method: 'GET' | 'POST', id: string, signal?: AbortSignal) {
     return transport.request({
       method,
+      ...(method === 'POST' ? { timeoutMs: MDM_CONTENT_TIMEOUT_MS } : {}),
       path: '/api/v1/agent-packages/uploads/{id}',
       pathParams: { id: uuid(id) },
       ...(signal ? { signal } : {}),
@@ -171,6 +173,7 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
     append: (id: string, offset: number, body: ArrayBuffer, signal?: AbortSignal) =>
       transport.request({
         method: 'PATCH',
+        timeoutMs: MDM_CONTENT_TIMEOUT_MS,
         path: uploadPath,
         pathParams: { resource: uuid(id), upload: uuid(id) },
         query: { offset },
@@ -182,6 +185,7 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
     complete: (id: string, signal?: AbortSignal) =>
       transport.request({
         method: 'POST',
+        timeoutMs: MDM_CONTENT_TIMEOUT_MS,
         path: uploadPath + '/complete',
         pathParams: { resource: uuid(id), upload: uuid(id) },
         ...(signal ? { signal } : {}),

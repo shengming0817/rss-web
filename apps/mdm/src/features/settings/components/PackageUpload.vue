@@ -349,8 +349,6 @@ async function check() {
         t('console.edit')
       }}</UiButton>
     </template>
-    <UiButton :disabled="locked || uploading" @click="emit('close')">{{
-      t('console.cancel')
-    }}</UiButton>
+    <UiButton :disabled="locked" @click="emit('close')">{{ t('console.cancel') }}</UiButton>
   </section>
 </template>

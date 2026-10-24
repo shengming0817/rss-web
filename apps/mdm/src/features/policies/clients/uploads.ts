@@ -1,5 +1,6 @@
 /** Native content-service upload sessions. No retry or session ownership here. */
 import type { HttpTransport } from '@rss/api/mdm'
+import { MDM_CONTENT_TIMEOUT_MS } from '@rss/api/mdm-limits'
 import {
   boolean,
   closed,
@@ -110,6 +111,7 @@ export function createUploadsClient(transport: HttpTransport) {
     append: (id: string, upload: string, offset: number, body: ArrayBuffer, signal?: AbortSignal) =>
       transport.request({
         method: 'PATCH',
+        timeoutMs: MDM_CONTENT_TIMEOUT_MS,
         path,
         pathParams: { id, upload },
         query: { offset },
@@ -122,6 +124,7 @@ export function createUploadsClient(transport: HttpTransport) {
     complete: (id: string, upload: string, signal?: AbortSignal) =>
       transport.request({
         method: 'POST',
+        timeoutMs: MDM_CONTENT_TIMEOUT_MS,
         path: `${path}/complete`,
         pathParams: { id, upload },
         ...(signal ? { signal } : {}),
