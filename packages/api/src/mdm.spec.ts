@@ -435,6 +435,7 @@ it('dispatches formal device views and associations through the shared boundary 
   const instance = axios.create(),
     mock = new AxiosMockAdapter(instance)
   mock.onGet('/api/v1/device-views').reply(409, { code: 'device_view_cursor_invalidated' })
+  mock.onGet('/api/v1/resources').reply(409, { code: 'resource_cursor_invalidated' })
   mock.onPost('/api/v1/device-associations').reply(503, { code: 'operation_unknown' })
   const spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance),
     transport = createMdmTransport()
@@ -456,7 +457,15 @@ it('dispatches formal device views and associations through the shared boundary 
       decode: (v) => v,
     }),
   ).rejects.toMatchObject({ cause: 'wire', status: 503, code: 'operation_unknown' })
-  expect(mock.history.get).toHaveLength(1)
+  await expect(
+    transport.request({
+      method: 'GET',
+      path: '/api/v1/resources',
+      successStatus: 200,
+      decode: (v) => v,
+    }),
+  ).rejects.toMatchObject({ cause: 'wire', status: 409, code: 'resource_cursor_invalidated' })
+  expect(mock.history.get).toHaveLength(2)
   expect(mock.history.post).toHaveLength(1)
 })
 
