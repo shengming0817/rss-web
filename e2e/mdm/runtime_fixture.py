@@ -34,7 +34,7 @@ def storage(environment, binary, config, tenant):
         content.mkdir(mode=0o700)
         config['content'] = dict(storage=dict(kind='volume', directory=str(content)), imports={},
             max_artifact_bytes=32*1024*1024, max_temporary_bytes=64*1024*1024, max_uploads=4,
-            transfer_seconds=60, retention_seconds=3600, max_bundle_bytes=64*1024*1024,
+            transfer_seconds=60, retention_seconds=3600,
             max_bundle_entries=100, max_expansion_ratio=100)
     name = 'telemetry_' + uuid.UUID(tenant).hex
     environment.sql(f'CREATE DATABASE "{name}"')
@@ -67,3 +67,29 @@ def signer(environment, origin, tenant, login, password):
     if status != 200 or trust['revision'] != 1:
         raise RuntimeError('baseline-task-signing')
     return trust['revision']
+
+
+def configuration_prerequisite(environment, web, runtime, origin, tenant):
+    """Reuse the backend's signed connection fixture; publication is a separate product journey."""
+    import tomllib
+    from shutil import copyfile
+    root = environment.root/'configuration-prerequisite'
+    (root/'src').mkdir(parents=True, mode=0o700)
+    copyfile(web/'e2e/mdm/configuration-prerequisite.rs', root/'src/main.rs')
+    workspace = tomllib.loads((environment.worktree/'Cargo.toml').read_text())['workspace']['dependencies']
+    manifest = ['[package]', 'name = "rss-web-configuration-prerequisite"', 'version = "0.0.0"', 'edition = "2024"', '[workspace]', '[dependencies]']
+    for name, features in [('serde_json', []), ('tokio', ['macros','rt-multi-thread']), ('sqlx', ['postgres','runtime-tokio','tls-rustls','uuid']), ('zeroize', [])]:
+        source = workspace[name]
+        version = source if isinstance(source, str) else source['version']
+        manifest.append(f'{name} = {{ version = {json.dumps(version)}, default-features = false, features = {json.dumps(features)} }}')
+    for name, directory, features in [('rss-mdm-registration-service','registration-service',['integration']),('rss-mdm-native-protection','native-protection',[])]:
+        manifest.append(f'{name} = {{ path = {json.dumps(str(environment.worktree/"crates"/directory))}, features = {json.dumps(features)} }}')
+    private(root/'Cargo.toml', '\n'.join(manifest)+'\n')
+    copyfile(environment.worktree/'Cargo.lock', root/'Cargo.lock')
+    request = private(root/'input.json', dict(runtime=str(runtime),origin=origin,tenant=tenant,port=environment.port(),
+        ca=str(environment.root/'ca.crt'),passwordFile=str(environment.root/'pg/pg-password')))
+    with (root/'build.log').open('w') as log:
+        result = subprocess.run(['cargo','run','--offline','--manifest-path',str(root/'Cargo.toml'),'--',str(request)],
+            cwd=environment.worktree, stdout=log, stderr=log, timeout=300, pass_fds=lease_fds())
+    if result.returncode:
+        raise RuntimeError('configuration-prerequisite')

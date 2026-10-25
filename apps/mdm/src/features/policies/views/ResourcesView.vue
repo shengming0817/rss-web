@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { comparison as queryComparison } from '../../../services/directory-query'
 import { UiButton, UiTable, UiBadge, UiTabs, UiSearchInput, UiDialog } from '@rss/core/components'
 import { computed, onBeforeUnmount, ref, shallowRef, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useMdm } from '../../../context'
+import { deviceBinding } from '../../devices/useDeviceBinding'
 import { operation, useOperation } from '../../../services/useOperation'
 import { fileHash, FILE_CHUNK_BYTES } from '../../../services/file-hash'
 import type { UploadSession } from '../clients/uploads'
@@ -29,7 +31,7 @@ const { t } = useI18n(),
   route = useRoute(),
   router = useRouter(),
   client = runtime.policies.resources,
-  { run, runWrite, busy, failure, uncertain } = useOperation()
+  { run, runWrite, busy, failure, uncertain } = useOperation([], () => deviceBinding(runtime))
 const creating = ref(false),
   resourceTab = ref('versions'),
   query = ref(''),
@@ -196,11 +198,17 @@ let transfer: AbortController | undefined
 let pending: (() => Promise<void>) | undefined
 const hashText = (bytes: number[]) => bytes.map((n) => n.toString(16).padStart(2, '0')).join('')
 function load(cursor?: string) {
+  list.value = undefined
   if (busy.value) return
   const selection = cursor ? appliedKind : resourceFilter.value || undefined
   void run(
-    () => client.list(selection, cursor),
+    () =>
+      client.list({
+        filter: selection ? queryComparison('kind', '==', selection) : undefined,
+        cursor,
+      }),
     (v) => {
+      if ((resourceFilter.value || undefined) !== selection) return
       list.value = v
       appliedKind = selection
     },
@@ -527,7 +535,7 @@ onBeforeUnmount(() => {
   uploadPending.value = undefined
 })
 watch(
-  () => route.fullPath,
+  () => JSON.stringify([route.fullPath, ...deviceBinding(runtime)]),
   () => {
     resetDraft()
     current.value = undefined

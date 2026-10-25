@@ -1,6 +1,12 @@
+import {
+  queryParameters,
+  projectedPage,
+  type DirectoryQuery,
+} from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import type { Operation } from '../../../services/useOperation'
 import {
+  count,
   array,
   closed,
   nullable,
@@ -12,6 +18,7 @@ import {
 import {
   decodePolicy,
   policyAction,
+  policyDefinition,
   eligibility,
   taskAdmission,
   type PolicyChange,
@@ -24,6 +31,16 @@ import {
   deviceObject,
 } from '../../devices/clients/objects'
 
+const policyFields = {
+  id: uuid,
+  revision: count,
+  version: count,
+  versionId: uuid,
+  state: (v: unknown) => enumeration(v, ['enabled', 'disabled', 'archived'] as const),
+  definition: policyDefinition,
+}
+export type PolicyDirectoryQuery<F extends keyof typeof policyFields = keyof typeof policyFields> =
+  DirectoryQuery<F>
 function baseTargetFacts(v: Record<string, unknown>, lifecycle = false) {
   return {
     object: objectRef(v['object']),
@@ -179,28 +196,21 @@ export function createPoliciesClient(transport: HttpTransport) {
           }
         },
       }),
-    list: (
-      cursor?: string,
-      action?: PolicyDefinition['action']['kind'],
-      resource?: string,
-      filters: {
-        state?: 'enabled' | 'disabled' | 'archived' | undefined
-        category?: string | undefined
-        scope?: string | undefined
-        descending?: boolean | undefined
-      } = {},
+    list: <F extends keyof typeof policyFields = keyof typeof policyFields>(
+      query: PolicyDirectoryQuery<F> = {},
     ) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/policies',
-        query: { cursor, action, resource, ...filters, limit: 20 },
+        query: queryParameters({
+          limit: 20,
+          ...query,
+          fields: query.fields ?? Object.keys(policyFields),
+        }),
         successStatus: 200,
         decode(value) {
-          const v = closed(value, ['items', 'nextCursor'])
-          return {
-            items: array(v['items'], (item) => decodePolicy(item)),
-            nextCursor: nullable(v['nextCursor'], string),
-          }
+          const page = projectedPage(value, policyFields, query.fields, ['id'])
+          return page
         },
       }),
     read: (id: string) =>

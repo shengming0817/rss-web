@@ -1,4 +1,5 @@
 /** MOCK_SOURCE: explicit synthetic profiles; never authentication evidence. */
+import { directoryPage } from './directory'
 import { randomUUID } from 'node:crypto'
 import { type DomainHandler } from './scenario'
 import { ADMIN as PRINCIPAL } from './operations/authorization'
@@ -28,8 +29,12 @@ export function createProfilesDemo() {
     if (r.path === '/api/v1/user-attribute-definitions' && r.method === 'GET')
       return admin
         ? ok({
-            definitions: [...definitions.values()].filter((v) => v.value !== null),
-            nextCursor: null,
+            ...directoryPage(
+              [...definitions.values()].filter((v) => v.value !== null),
+              r,
+              ['fieldId'],
+              { maxLimit: 128 },
+            ),
             sources: [
               {
                 source,

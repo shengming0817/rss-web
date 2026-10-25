@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { comparison, allOf } from '../../../services/directory-query'
 import {
   UiButton,
   UiTable,
@@ -14,7 +15,6 @@ import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../useDeviceBinding'
 import PageFrame from '../../../components/PageFrame.vue'
-import { sourceIds } from '../clients/asset-model'
 import { endpointStatuses } from '../clients/endpoint-model'
 import PersonDisplay from '../components/PersonDisplay.vue'
 const { t } = useI18n(),
@@ -22,6 +22,9 @@ const { t } = useI18n(),
   route = useRoute(),
   router = useRouter(),
   { run, busy, failure } = useOperation([], () => deviceBinding(runtime))
+const statisticsOperation = useOperation([], () => deviceBinding(runtime))
+const statistics = ref<Awaited<ReturnType<typeof runtime.devices.views.statistics>>>()
+let statisticsBinding = ''
 const page = ref<Awaited<ReturnType<typeof runtime.devices.views.list>>>(),
   search = ref(''),
   platform = ref(''),
@@ -89,21 +92,41 @@ async function queryFirstPage(query: LocationQueryRaw, replace = false) {
 }
 async function load(cursor?: string) {
   page.value = undefined
+  const filter = allOf(
+    search.value.trim() ? comparison('search', '=icontains=', search.value.trim()) : undefined,
+    ...(['platform', 'assetState', 'status', 'channel', 'source'] as const).map((key) => {
+      const value = { platform, assetState, status, channel, source }[key].value
+      return value ? comparison(key, '==', value) : undefined
+    }),
+  )
+  const binding = JSON.stringify([deviceBinding(runtime), filter])
+  if (!cursor || !statistics.value || binding !== statisticsBinding) {
+    statisticsBinding = binding
+    statistics.value = undefined
+    void statisticsOperation.run(
+      () => runtime.devices.views.statistics(filter),
+      (v) => {
+        if (binding === statisticsBinding) statistics.value = v
+      },
+    )
+  }
   await run(
     () =>
       runtime.devices.views.list({
         cursor,
-        search: search.value.trim() || undefined,
-        platform: platform.value || undefined,
-        assetState: assetState.value || undefined,
+        filter,
+        sort: [descending.value ? '-key' : 'key'],
+        fields: ['key', 'reference', 'association', 'endpoints'],
         limit: Number(limit.value),
-        status: status.value || undefined,
-        channel: channel.value || undefined,
-        source: source.value || undefined,
-        descending: descending.value,
       }),
-    (v) => (page.value = v),
+    (v) => {
+      page.value = v
+    },
   )
+  if (['denied', 'cursorInvalidated', 'conflict'].includes(failure.value ?? '')) {
+    statisticsBinding = ''
+    statistics.value = undefined
+  }
 }
 function loadRoute() {
   search.value = typeof route.query['search'] === 'string' ? route.query['search'] : ''
@@ -179,12 +202,10 @@ const channelOptions = computed(() => [
 ])
 const sourceOptions = computed(() => [
   { value: '', label: t('devices.all') },
-  ...sourceIds
-    .filter((x) => x !== 'manual')
-    .map((value) => ({
-      value,
-      label: t(`devices['${value}']`),
-    })),
+  ...(['mdm.windows', 'mdm.apple', 'agent.builtin'] as const).map((value) => ({
+    value,
+    label: t(`devices['${value}']`),
+  })),
 ])
 </script>
 <template>
@@ -267,14 +288,17 @@ const sourceOptions = computed(() => [
         }}</label
       ><UiButton @click="applyFilters">{{ t('devices.save') }}</UiButton>
     </details>
-    <div v-if="page" class="console-stat-grid" :aria-label="t('console.queryStatistics')">
+    <p v-if="statisticsOperation.failure.value" role="alert">
+      {{ t('devices.' + statisticsOperation.failure.value) }}
+    </p>
+    <div v-if="statistics" class="console-stat-grid" :aria-label="t('console.queryStatistics')">
       <article
         v-for="key in ['deviceViewCount', 'endpointCount'] as const"
         :key="key"
         class="console-stat"
       >
         <h2>{{ t(`devices.${key}`) }}</h2>
-        <strong>{{ page.statistics[key] }}</strong>
+        <strong>{{ statistics.statistics[key] }}</strong>
       </article>
     </div>
     <div class="console-results">

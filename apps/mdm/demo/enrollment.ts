@@ -1,3 +1,4 @@
+import { directoryPage } from './directory'
 import { demoConnections } from './connections'
 /** Explicit synthetic onboarding control plane; never imported by production. */
 import { randomUUID } from 'node:crypto'
@@ -21,7 +22,12 @@ export function createOnboardingDemo(
   const receipts = createReceipts(),
     configurations = new Map<
       string,
-      { value: ReturnType<typeof configuration>; state: 'available' | 'revoked'; actor: string }
+      {
+        value: ReturnType<typeof configuration>
+        state: 'available' | 'revoked'
+        actor: string
+        createdAt: number
+      }
     >(),
     configurationOperations = new Map<string, string>()
   let settings = {
@@ -174,6 +180,31 @@ export function createOnboardingDemo(
           : error('permission_denied', 403)
     }
     if (configurationPath) {
+      if (!configurationPath[1] && method === 'GET') {
+        const rows = [...configurations.values()].map((item) => {
+          const view = read(item)
+          return {
+            configurationId: item.value.configurationId,
+            state: view.state,
+            createdAt: item.createdAt,
+            expiresAt: item.value.expiresAt,
+            createdBy: view.createdBy,
+            targets: item.value.targets,
+            quantity: item.value.quantity,
+            reserved: view.reserved,
+            consumed: view.consumed,
+            remaining: view.remaining,
+          }
+        })
+        return ok(
+          directoryPage(rows, request, ['configurationId'], {
+            lookup: (row, field) =>
+              field === 'platform' || field === 'architecture'
+                ? row.targets.map((target) => target[field])
+                : row[field as keyof typeof row],
+          }),
+        )
+      }
       if (!configurationPath[1] && method === 'POST') {
         const v = closed(body, ['operationId', 'secret', 'lifetimeSeconds', 'quantity', 'targets']),
           operation = uuid(v['operationId'])
@@ -200,6 +231,7 @@ export function createOnboardingDemo(
           value,
           state: 'available',
           actor: actor.principalId,
+          createdAt: Math.floor(Date.now() / 1000),
         })
         configurationOperations.set(operation, value.configurationId)
         return {

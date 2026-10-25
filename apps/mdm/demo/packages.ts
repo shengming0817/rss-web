@@ -1,3 +1,4 @@
+import { directoryPage } from './directory'
 /** Explicit synthetic installer HTTP scenario. It makes no operating-system installation claim. */
 import { INSTANCE } from './operations/authorization'
 import { createHash, randomUUID } from 'node:crypto'
@@ -21,6 +22,7 @@ export function createPackageDemo() {
   >()
   const saved = new Map<string, Record<string, unknown>>()
   const published = new Map<string, Record<string, unknown>>()
+  const withdrawn = new Set<string>()
   const operations = new Map<string, unknown>()
   const facts = (filename: string) => ({
     format: ({ exe: 'exe', msi: 'msi', msix: 'msix', pkg: 'pkg' } as Record<string, string>)[
@@ -210,7 +212,7 @@ export function createPackageDemo() {
         }
         if (r.path.endsWith('/withdraw')) {
           const release = r.path.split('/').at(-2)!
-          published.delete(release)
+          withdrawn.add(release)
           operations.set(op, { withdrawn: release })
           return ok(undefined, 204)
         }
@@ -218,12 +220,25 @@ export function createPackageDemo() {
       })
     }
     if (r.method === 'GET') {
-      if (r.path === '/api/v1/agent-packages' || r.path === '/api/v1/agent/enroll/packages')
-        return ok([...published.values()])
+      if (r.path === '/api/v1/agent-packages')
+        return ok(
+          directoryPage(
+            [...published.values()].map((p) => ({
+              ...p,
+              state: withdrawn.has(String(p['releaseId'])) ? 'withdrawn' : 'published',
+              ...target(p['target']),
+            })),
+            r,
+            ['releaseId'],
+            { defaultLimit: 64 },
+          ),
+        )
+      if (r.path === '/api/v1/agent/enroll/packages')
+        return ok([...published.values()].filter((p) => !withdrawn.has(String(p['releaseId']))))
       if (r.path.endsWith('/content')) {
         const key = r.path.split('/').at(-2)!,
           release = published.get(key)
-        if (release) {
+        if (release && !withdrawn.has(key)) {
           const value = [...uploads.values()].find(
             (x) => JSON.stringify(x.sha256) === JSON.stringify(release['installerSha256']),
           )
@@ -240,6 +255,7 @@ export function createPackageDemo() {
       uploads.clear()
       saved.clear()
       published.clear()
+      withdrawn.clear()
       operations.clear()
     },
   }

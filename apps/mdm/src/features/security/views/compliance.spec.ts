@@ -1,3 +1,4 @@
+import { ref } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -13,7 +14,11 @@ const definition = {
   severity: 'medium',
   platform: 'all',
   target: { kind: 'all' },
-  criteria: { kind: 'and', children: [] },
+  criteria: {
+    selector: { kind: 'device' },
+    quantifier: 'one',
+    criteria: { kind: 'and', children: [] },
+  },
 }
 const assessment = {
   ruleId: id,
@@ -47,6 +52,7 @@ async function setup(
       provide: {
         [mdmKey as symbol]: {
           tenant: id,
+          session: { state: ref({ status: 'authenticated' }) },
           demo: true,
           security: { compliance },
           devices: {

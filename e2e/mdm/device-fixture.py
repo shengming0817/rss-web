@@ -65,6 +65,8 @@ def seed_authority():
         rule['grants'] += [dict(operation=o, scope=dict(kind='tenant')) for o in ['release_read','release_recover','release_withdraw']] + [dict(operation='software_deploy', scope=dict(kind='all_devices'))]
     if browser_module == 'device-browser.mjs':
         rule['grants'].append(dict(operation='user_profiles_read', scope=dict(kind='tenant')))
+        rule['grants'] += [dict(operation=o, scope=dict(kind='tenant')) for o in ['user_attribute_definitions_read','user_attribute_definitions_write','compliance_write','compliance_rule_read']]
+        rule['grants'].append(dict(operation='compliance_read', scope=dict(kind='all_devices')))
     if browser_module == 'operations-browser.mjs':
         rule['grants'] += [dict(operation=o, scope=dict(kind='tenant')) for o in ['audit_read','runtime_diagnostics_read']]
         # Explicit authority for disposable HTTP acceptance, never production account initialization.
@@ -155,7 +157,7 @@ try:
     config = json.loads(config_path.read_text())
     content_directory = environment.root/'content'
     content_directory.mkdir(mode=0o700)
-    config['content'] = dict(storage=dict(kind='volume',directory=str(content_directory)),imports={},max_artifact_bytes=32*1024*1024,max_temporary_bytes=64*1024*1024,max_uploads=4,transfer_seconds=60,retention_seconds=3600,max_bundle_bytes=64*1024*1024,max_bundle_entries=100,max_expansion_ratio=100)
+    config['content'] = dict(storage=dict(kind='volume',directory=str(content_directory)),imports={},max_artifact_bytes=32*1024*1024,max_temporary_bytes=64*1024*1024,max_uploads=4,transfer_seconds=60,retention_seconds=3600,max_bundle_entries=100,max_expansion_ratio=100)
     native = environment.root/'agent-native'
     native.mkdir(mode=0o700)
     for name in ('ca.crt', 'server.crt', 'server.key'):
@@ -200,7 +202,8 @@ try:
                 except Exception:
                     connection.close()
                     raise
-        pinned = socket.gethostbyname(socket.gethostname())
+        from source_fixtures import local_address
+        pinned = local_address()
         server = SourceServer((pinned, 0), SourceHandler)
         upstream = f'https://localhost:{server.server_port}'
         threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -294,7 +297,7 @@ except BaseException as error:
     if phase == 'readiness' and readiness:
         print(json.dumps(dict(phase=phase, result='failed', **readiness)), flush=True)
     print(json.dumps(dict(phase=phase,result='failed',classification=type(error).__name__)),flush=True)
-    if phase == 'collector-registration' and isinstance(error, RuntimeError) and re.fullmatch(r'collector-[a-z0-9-]+', str(error)):
+    if phase == 'collector-registration' and isinstance(error, RuntimeError) and re.fullmatch(r'collector-[a-z0-9_-]+', str(error)):
         print(json.dumps(dict(phase=phase, reason=str(error))), flush=True)
     if browser_module == 'console-browser.mjs':
         diagnostics = subprocess.run(['docker', 'logs', environment.container()], capture_output=True, text=True, timeout=10, pass_fds=lease_fds())

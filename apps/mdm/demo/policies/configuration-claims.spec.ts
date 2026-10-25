@@ -172,9 +172,9 @@ it('publishes exact immutable native bindings, previews without admission, and s
   expect(f.automation.configurationPolicies.plans()).toEqual([])
   const a = await f.put(scope, binding),
     b = await f.put(scope, binding)
-  expect((await f.policies.list(undefined, 'configuration')).items.map((p) => p.id).sort()).toEqual(
-    [a.id, b.id].sort(),
-  )
+  expect(
+    (await f.policies.list({ filter: "action=='configuration'" })).items.map((p) => p.id).sort(),
+  ).toEqual([a.id, b.id].sort())
   const da = (await f.policies.assignments(a.id)).items[0]!,
     db = (await f.policies.assignments(b.id)).items[0]!
   expect(da.operationIds).toHaveLength(1)

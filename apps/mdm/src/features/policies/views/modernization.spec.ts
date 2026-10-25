@@ -33,34 +33,36 @@ it('queries authorized groups by name and type and keeps the applied query when 
   await filter.get('select').setValue('dynamic')
   await filter.trigger('submit')
   await flushPromises()
-  expect(list.mock.calls.at(-1)?.[0]).toEqual({ name: 'macOS', kind: 'dynamic', after: undefined })
+  expect(list.mock.calls.at(-1)?.[0]).toEqual({
+    filter: "(name=icontains='macOS');(kind=='dynamic')",
+    cursor: undefined,
+  })
   await filter.get('input[type=search]').setValue('unsaved draft')
   await wrapper
     .findAll('button')
     .find((button) => button.text() === '下一页')!
     .trigger('click')
   await flushPromises()
-  expect(list.mock.calls.at(-1)?.[0]).toEqual({ name: 'macOS', kind: 'dynamic', after: 'next' })
+  expect(list.mock.calls.at(-1)?.[0]).toEqual({
+    filter: "(name=icontains='macOS');(kind=='dynamic')",
+    cursor: 'next',
+  })
   await filter.get('input[type=search]').trigger('keydown', { key: 'Enter' })
   await flushPromises()
   expect(list.mock.calls.at(-1)?.[0]).toEqual({
-    name: 'unsaved draft',
-    kind: 'dynamic',
-    after: undefined,
+    filter: "(name=icontains='unsaved draft');(kind=='dynamic')",
+    cursor: undefined,
   })
   list.mockRejectedValueOnce(new Error('directory unavailable'))
   await filter.get('select').setValue('static')
   await filter.trigger('submit')
   await flushPromises()
-  await wrapper
-    .findAll('button')
-    .find((button) => button.text() === '下一页')!
-    .trigger('click')
+  expect(wrapper.findAll('button').some((button) => button.text() === '下一页')).toBe(false)
+  await filter.trigger('submit')
   await flushPromises()
-  expect(list.mock.calls.at(-1)?.[0]).toEqual({
-    name: 'unsaved draft',
-    kind: 'dynamic',
-    after: 'next',
+  expect(list.mock.lastCall?.[0]).toEqual({
+    filter: "(name=icontains='unsaved draft');(kind=='static')",
+    cursor: undefined,
   })
   wrapper.unmount()
 })
@@ -95,7 +97,11 @@ it('filters Resource kinds through the formal directory and opens software impor
     global: {
       plugins: [router, mdmI18n()],
       provide: {
-        [mdmKey as symbol]: { tenant: 'tenant', policies: { resources: { list } } },
+        [mdmKey as symbol]: {
+          tenant: 'tenant',
+          session: { state: ref({ status: 'authenticated' }) },
+          policies: { resources: { list } },
+        },
       },
     },
   })
@@ -105,22 +111,18 @@ it('filters Resource kinds through the formal directory and opens software impor
   expect(wrapper.text()).toContain('尚无激活版本')
   await wrapper.get('.task-filterbar select').setValue('configuration')
   await flushPromises()
-  expect(list.mock.calls.at(-1)).toEqual(['configuration', undefined])
+  expect(list.mock.calls.at(-1)).toEqual([{ filter: "kind=='configuration'", cursor: undefined }])
   await wrapper
     .findAll('button')
     .find((button) => button.text() === '下一页')!
     .trigger('click')
   await flushPromises()
-  expect(list.mock.calls.at(-1)).toEqual(['configuration', 'next'])
+  expect(list.mock.calls.at(-1)).toEqual([{ filter: "kind=='configuration'", cursor: 'next' }])
   list.mockRejectedValueOnce(new Error('directory unavailable'))
   await wrapper.get('.task-filterbar select').setValue('script')
   await flushPromises()
-  await wrapper
-    .findAll('button')
-    .find((button) => button.text() === '下一页')!
-    .trigger('click')
-  await flushPromises()
-  expect(list.mock.calls.at(-1)).toEqual(['configuration', 'next'])
+  expect(wrapper.findAll('button').some((button) => button.text() === '下一页')).toBe(false)
+  expect(list.mock.lastCall).toEqual([{ filter: "kind=='script'", cursor: undefined }])
   await wrapper
     .findAll('button')
     .find((button) => button.text() === '新建')!
@@ -190,6 +192,7 @@ it('keeps Resource creation errors and exact original replay reachable inside th
       provide: {
         [mdmKey as symbol]: {
           tenant: 'tenant',
+          session: { state: ref({ status: 'authenticated' }) },
           policies: {
             resources: {
               list: async () => ({ items: [] }),

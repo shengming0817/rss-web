@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { comparison as queryComparison } from '../../../services/directory-query'
 import { UiButton } from '@rss/core/components'
 import { onBeforeUnmount, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -61,7 +62,7 @@ function apply(p: PolicyRead) {
 }
 function list(cursor?: string) {
   void run(
-    () => client.list(cursor, action.value),
+    () => client.list({ cursor, filter: queryComparison('action', '==', action.value) }),
     (v) => {
       page.value = v
     },
@@ -140,12 +141,15 @@ function progress(after?: string) {
       },
     )
 }
-function executions(cursor?: { id: string; kind: 'command' | 'action_run' }) {
+function executions(cursor?: string) {
   const policy = current.value?.id
   if (!policy) return
   void run(
     () =>
-      runtime.policies.executions.directory({ policy, after: cursor?.id, afterKind: cursor?.kind }),
+      runtime.policies.executions.directory({
+        filter: queryComparison('policy', '==', policy),
+        cursor,
+      }),
     (v) => {
       records.value = v
     },
@@ -331,7 +335,7 @@ watch(
       >
     </section>
     <section v-if="records" class="console-panel">
-      <p>{{ records.statistics.total }} · {{ records.asOf }}</p>
+      <p>{{ t('console.pageNotTotal') }}</p>
       <ul>
         <li v-for="record in records.items" :key="record.id">
           <RouterLink

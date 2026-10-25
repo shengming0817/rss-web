@@ -61,7 +61,7 @@ const chosen = computed(() =>
 )
 function loadSources(after?: string) {
   void run(
-    () => runtime.software.lifecycle.sources(after),
+    () => runtime.software.lifecycle.sources({ cursor: after }),
     (v) => {
       sources.value = v
     },

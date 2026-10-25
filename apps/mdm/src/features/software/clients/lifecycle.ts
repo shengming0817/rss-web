@@ -1,8 +1,12 @@
+import {
+  queryParameters,
+  projectedPage,
+  type DirectoryQuery,
+} from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import { jsonObject } from '../../../services/json'
 import type { Operation } from '../../../services/useOperation'
 import {
-  array,
   closed,
   count,
   digest,
@@ -106,24 +110,31 @@ function mutationReceipt<T extends { lifecycle: ReturnType<typeof lifecycle> }>(
   if (receipt.lifecycle.operation !== operation) throw new Error('Wrong lifecycle receipt')
   return receipt
 }
+const sourceFields = { source: sourceDefinition, snapshot: softwareSource, lifecycle }
 export function createLifecycleClient(transport: HttpTransport) {
   return {
-    sources: (after?: string) =>
+    sources: <F extends keyof typeof sourceFields = keyof typeof sourceFields>(
+      query: DirectoryQuery<F> = {},
+    ) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/software/sources',
-        query: { after, limit: 20 },
+        query: queryParameters({
+          limit: 20,
+          ...query,
+          fields: query.fields ?? Object.keys(sourceFields),
+        }),
         successStatus: 200,
         decode(value) {
-          const v = closed(value, ['items', 'nextCursor'])
-          return {
-            items: array(v['items'], (value) => {
-              const item = record(value),
-                source = sourceDefinition(item['source'])
-              return sourceRead(value, source.id, source.revision)
-            }),
-            nextCursor: nullable(v['nextCursor'], string),
-          }
+          const page = projectedPage(value, sourceFields, query.fields)
+          if (!query.fields)
+            page.items.forEach((item) => {
+              if ('source' in item && 'snapshot' in item && item.source && item.snapshot) {
+                const source = item.source as SourceDefinition
+                sourceRead(item, source.id, source.revision)
+              }
+            })
+          return page
         },
       }),
     source: (id: string, revision: string) =>

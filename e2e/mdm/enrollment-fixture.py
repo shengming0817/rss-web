@@ -25,7 +25,7 @@ sys.path.insert(0, str(BACKEND / 'hack'))
 from t2_environment import Environment, private
 from candidate_fixture import INSTANCE, TENANTS, ADMIN
 from build_run import lease_fds
-from runtime_fixture import storage, readiness
+from runtime_fixture import storage, readiness, configuration_prerequisite
 from windows_fixtures import generate
 from candidate_installation_driver import Browser
 from pki_fixtures import running as pki
@@ -162,8 +162,8 @@ try:
             private(root/name, (environment.root/name).read_text())
         private(root/'case.json', dict(tenant=TENANTS[0]))
         windows = generate(root, root/'server.crt', root/'server.key')
-        for key, port in [('enrollment',native_ports['backend']), ('management',native_ports['https'])]:
-            windows[key].update(origin=initialized['origin'])
+        windows['enrollment'].update(origin=f"https://localhost:{native_ports['backend']}")
+        windows['management'].update(origin=initialized['origin'])
         private(root/'windows.json', windows)
         provider_env = dict(os.environ)
         providers.enter_context(pki(root, provider_env, case=str(WEB)+':enrollment-browser', windows=True))
@@ -178,6 +178,7 @@ try:
         start(binary, initialized, log)
         operator = Browser(initialized['origin'],environment.root/'ca.crt',urlsplit(initialized['origin']).port)
         operator.login(TENANTS[0],'admin',(environment.root/'account-password').read_text())
+        configuration_prerequisite(environment, WEB, config_path, agent['endpoint']['origin'], TENANTS[0])
         module = importlib.util.spec_from_file_location('enrollment_device_agent',WEB/'e2e/mdm/device-agent.py')
         collector = importlib.util.module_from_spec(module); module.loader.exec_module(collector)
         agent_fixture = collector.register(agent['endpoint']['origin'],environment.root/'ca.crt',root/'pki/agent',operator,private,TENANTS[0])

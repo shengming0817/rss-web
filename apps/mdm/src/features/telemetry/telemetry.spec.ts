@@ -33,8 +33,13 @@ import {
 import { decodeScriptSpec } from '../policies/clients/resources'
 import { profileBytes, telemetryProfile } from '../policies/clients/telemetry-profile'
 const wrappers: VueWrapper[] = []
+const cleanups: (() => void)[] = []
 afterEach(() => {
   wrappers.splice(0).forEach((w) => w.unmount())
+  cleanups
+    .splice(0)
+    .reverse()
+    .forEach((reset) => reset())
   document.body.innerHTML = ''
   vi.restoreAllMocks()
 })
@@ -43,6 +48,10 @@ async function setup(name = 'perf', query: Record<string, string> = {}) {
     automation = createAutomationDemo(domain)
   domain.bindAuthorization(automation.authorization.can)
   seedTelemetry(automation)
+  cleanups.push(() => {
+    domain.reset()
+    automation.reset()
+  })
   const scenario = createScenario([automation.handle, domain.handle], () => {
     domain.reset()
     automation.reset()
@@ -813,6 +822,9 @@ it('preserves the original boost expiration and the newly chosen scope when upda
     .setValue('99999999-9999-4999-8999-999999999999')
   await flushPromises()
   await h.click('保存、上传并激活方案资源')
+  await vi.waitFor(() =>
+    expect(h.requests.some((request) => request.path === '/api/v1/policies/previews')).toBe(true),
+  )
   const version = h.requests
     .filter(
       (r) =>

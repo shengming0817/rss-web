@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { comparison, allOf } from '../../../services/directory-query'
 import { UiButton, UiTable, UiBadge, UiDialog } from '@rss/core/components'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -15,9 +16,10 @@ import type { EndpointDetail } from '../../devices/clients/endpoint-model'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute()
+const activeFilter = ref<string>()
 const { run, busy, failure } = useOperation(
   [],
-  () => deviceBinding(runtime),
+  () => [...deviceBinding(runtime), activeFilter.value],
   () => JSON.stringify([route.path, route.query['device'], route.query['policy']]),
 )
 const picker = useOperation(
@@ -25,6 +27,8 @@ const picker = useOperation(
   () => deviceBinding(runtime),
   () => JSON.stringify([route.path, route.query['device'], route.query['policy']]),
 )
+const statisticsOperation = useOperation([], () => [...deviceBinding(runtime), activeFilter.value])
+const statistics = ref<Awaited<ReturnType<typeof runtime.policies.executions.statistics>>>()
 const commandDetails = ref<Record<string, NativeOperation>>({})
 const applied = ref<{
   device?: string | undefined
@@ -49,8 +53,9 @@ function beginRemote() {
 const utc = (at: number) =>
   new Date(at * 1000).toISOString().replace('T', ' ').replace('.000Z', ' UTC')
 const pinned = computed(() => typeof route.query['operation'] === 'string')
-function load(cursor?: { id: string; kind: 'command' | 'action_run' }) {
+function load(cursor?: string) {
   if (busy.value) return
+  records.value = undefined
   const selection = cursor
     ? applied.value
     : {
@@ -59,7 +64,22 @@ function load(cursor?: { id: string; kind: 'command' | 'action_run' }) {
         kind: kind.value || undefined,
         status: status.value || undefined,
       }
-  const query = { ...selection, after: cursor?.id, afterKind: cursor?.kind }
+  const filter = allOf(
+    ...Object.entries(selection).map(([key, value]) =>
+      value ? comparison(key, '==', value) : undefined,
+    ),
+  )
+  activeFilter.value = filter
+  const query = { filter, cursor }
+  if (!cursor) {
+    statistics.value = undefined
+    void statisticsOperation.run(
+      () => runtime.policies.executions.statistics(filter),
+      (v) => {
+        statistics.value = v
+      },
+    )
+  }
   void run(
     () => runtime.policies.executions.directory(query),
     (value) => {
@@ -79,7 +99,7 @@ function inspect(device: string, id: string) {
 }
 function loadDevices(after?: string) {
   void picker.run(
-    () => runtime.devices.directory.list(after),
+    () => runtime.devices.directory.list({ cursor: after }),
     (value) => {
       devices.value = value
     },
@@ -159,22 +179,25 @@ watch(
         t('policies.ux.remote')
       }}</UiButton></template
     >
-    <dl v-if="records" class="task-statistics">
+    <p v-if="statisticsOperation.failure.value" role="alert">
+      {{ t('devices.' + statisticsOperation.failure.value) }}
+    </p>
+    <dl v-if="statistics" class="task-statistics">
       <div>
         <dt>{{ t('policies.ux.total') }}</dt>
-        <dd>{{ records.statistics.total }}</dd>
+        <dd>{{ statistics.statistics.total }}</dd>
       </div>
       <div>
         <dt>{{ t('policies.ux.commands') }}</dt>
-        <dd>{{ records.statistics.commands }}</dd>
+        <dd>{{ statistics.statistics.commands }}</dd>
       </div>
       <div>
         <dt>{{ t('policies.ux.runs') }}</dt>
-        <dd>{{ records.statistics.actionRuns }}</dd>
+        <dd>{{ statistics.statistics.actionRuns }}</dd>
       </div>
       <div>
         <dt>{{ t('policies.ux.unknown') }}</dt>
-        <dd>{{ records.statistics.unknown }}</dd>
+        <dd>{{ statistics.statistics.unknown }}</dd>
       </div>
     </dl>
     <form class="console-toolbar" @submit.prevent="load()">
@@ -243,7 +266,9 @@ watch(
       :device-name="name"
     />
     <section v-if="records" class="console-panel">
-      <p class="ui-help">{{ t('policies.ux.observedAt') }} · {{ utc(records.asOf) }}</p>
+      <p v-if="statistics" class="ui-help">
+        {{ t('policies.ux.observedAt') }} · {{ utc(statistics.asOf) }}
+      </p>
       <UiTable
         :label="t('policies.executions')"
         :rows="records.items"
@@ -286,6 +311,7 @@ watch(
           <details class="operation-evidence">
             <summary>{{ t('devices.evidence') }}</summary>
             <OperationStages
+              v-if="item.evidence"
               :kind="item.kind"
               :dispatch="
                 item.evidence.kind === 'command'
@@ -294,17 +320,19 @@ watch(
               "
               :receipt="
                 item.evidence.kind === 'command'
-                  ? item.evidence.observation.progress
+                  ? (commandDetails[item.id]?.observation.progress ??
+                    item.evidence.observation.progress)
                   : item.evidence.state.execution
               "
               :effect="
                 item.evidence.kind === 'command'
-                  ? item.evidence.observation.effect
+                  ? (commandDetails[item.id]?.observation.effect ??
+                    item.evidence.observation.effect)
                   : item.evidence.effect
               "
             />
             <p
-              v-if="item.evidence.kind === 'command' && item.evidence.dispatchFailure"
+              v-if="item.evidence?.kind === 'command' && item.evidence.dispatchFailure"
               role="status"
             >
               {{ t('policies.dispatchFailure') }}

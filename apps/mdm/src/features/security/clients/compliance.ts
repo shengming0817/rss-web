@@ -1,34 +1,38 @@
+import {
+  queryParameters,
+  projectedPage,
+  type DirectoryQuery,
+} from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import type { Operation } from '../../../services/useOperation'
 import { array, closed, nullable, string, unique, uuid } from '../../../services/decode'
 import {
   complianceHistory,
+  complianceDefinition,
   complianceRule,
   complianceTask,
   currentCompliance,
   positive,
   type ComplianceDefinition,
 } from './compliance-model'
+const ruleFields = { id: uuid, revision: positive, definition: complianceDefinition }
 export type HistoryFilter = { cursor?: string; from?: number; until?: number; limit?: number }
 /** Published rss-mdm v2 wire: no candidate envelope and distinct rule/history pagination. */
 export function createComplianceClient(transport: HttpTransport) {
   return {
-    list: (after?: string) =>
+    list: <F extends keyof typeof ruleFields = keyof typeof ruleFields>(
+      query: DirectoryQuery<F> = {},
+    ) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/compliance-rules',
-        query: { after },
+        query: queryParameters({
+          limit: 20,
+          ...query,
+          fields: query.fields ?? Object.keys(ruleFields),
+        }),
         successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['items', 'nextCursor'])
-          return {
-            items: unique(
-              array(v['items'], (v) => complianceRule(v)),
-              (v) => v.id,
-            ),
-            nextCursor: nullable(v['nextCursor'], uuid),
-          }
-        },
+        decode: (value) => projectedPage(value, ruleFields, query.fields, ['id']),
       }),
     read: (id: string) =>
       transport.request({

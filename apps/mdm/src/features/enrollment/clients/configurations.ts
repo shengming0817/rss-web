@@ -1,3 +1,8 @@
+import {
+  queryParameters,
+  projectedPage,
+  type DirectoryQuery,
+} from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -124,6 +129,22 @@ function settings(value: unknown) {
     throw new Error('Invalid settings')
   return result
 }
+const configurationFields = {
+  configurationId: uuid,
+  state: (v: unknown) => enumeration(v, ['available', 'revoked', 'expired'] as const),
+  createdAt: integer,
+  expiresAt: integer,
+  createdBy: identifier,
+  targets: (v: unknown) => {
+    const values = unique(array(v, target), (x) => `${x.platform}/${x.architecture}`)
+    if (!values.length || values.length > 4) throw new Error('Invalid targets')
+    return values
+  },
+  quantity,
+  reserved: count,
+  consumed: count,
+  remaining: (v: unknown) => nullable(v, count),
+}
 export interface ConfigurationInput {
   operationId: string
   secret: string
@@ -137,6 +158,34 @@ export function createConfigurationsClient(
   service: string,
 ) {
   return {
+    list: <F extends keyof typeof configurationFields = keyof typeof configurationFields>(
+      query: DirectoryQuery<F> = {},
+    ) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/agent-configurations',
+        query: queryParameters({ limit: 20, ...query }),
+        successStatus: 200,
+        decode(value) {
+          const page = projectedPage(value, configurationFields, query.fields, ['configurationId'])
+          if (!query.fields)
+            for (const item of page.items) {
+              const row = item as unknown as {
+                quantity: ReturnType<typeof quantity>
+                remaining: number | null
+                reserved: number
+                consumed: number
+              }
+              if (
+                row.quantity.kind === 'unlimited'
+                  ? row.remaining !== null
+                  : row.remaining !== row.quantity.count! - row.reserved - row.consumed
+              )
+                throw new Error('Invalid usage')
+            }
+          return page
+        },
+      }),
     settings: () =>
       transport.request({
         method: 'GET',

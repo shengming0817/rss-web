@@ -1,3 +1,4 @@
+import { encodeAssetQuery } from './asset-query'
 import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import {
@@ -123,9 +124,12 @@ it('rejects duplicate catalog keys and malformed manual fields', () => {
   }
   expect(
     decodeCatalog(
-      { tenantId: tenant, asset: { kind: 'fields', dictionary: 'assets-v1', fields: [field] } },
+      {
+        tenantId: tenant,
+        asset: { kind: 'field_list', dictionary: 'assets-v1', items: [field], nextCursor: null },
+      },
       tenant,
-    ).fields,
+    ).items,
   ).toEqual([
     {
       key: field.key,
@@ -148,7 +152,12 @@ it('rejects duplicate catalog keys and malformed manual fields', () => {
     decodeCatalog(
       {
         tenantId: tenant,
-        asset: { kind: 'fields', dictionary: 'assets-v1', fields: [field, field] },
+        asset: {
+          kind: 'field_list',
+          dictionary: 'assets-v1',
+          items: [field, field],
+          nextCursor: null,
+        },
       },
       tenant,
     ),
@@ -167,7 +176,7 @@ it('uses exact async and CAS requests with one dispatch and no TTL', async () =>
   await client.search({
     operationId: task,
     expectedRevision: 0,
-    input: { criteria: null, select: [], sort: null },
+    input: encodeAssetQuery(null, [], []),
   })
   expect(request.mock.calls[0]?.[0]).toMatchObject({
     method: 'POST',
@@ -332,10 +341,13 @@ it('consumes only the current dictionary and validates record property schemas',
   }
   const decode = (dictionary: string, value: unknown) =>
     decodeCatalog(
-      { tenantId: tenant, asset: { kind: 'fields', dictionary, fields: [value] } },
+      {
+        tenantId: tenant,
+        asset: { kind: 'field_list', dictionary, items: [value], nextCursor: null },
+      },
       tenant,
     )
-  expect(decode('assets-v1', field).fields[0]?.kind).toBe('object')
+  expect(decode('assets-v1', field).items[0]?.kind).toBe('object')
 
   const timeSeries = {
     kind: 'gauge',
@@ -356,7 +368,7 @@ it('consumes only the current dictionary and validates record property schemas',
       },
       unit: 'bytes',
       timeSeries,
-    }).fields[0]?.timeSeries,
+    }).items[0]?.timeSeries,
   ).toEqual(timeSeries)
   for (const [kind, allowed, forbidden] of [
     ['cumulative_counter', ['increase', 'rate'], ['count']],
@@ -367,7 +379,7 @@ it('consumes only the current dictionary and validates record property schemas',
       valueType: { kind: 'integer' },
       timeSeries: { ...timeSeries, kind, valuePath: [], dimensions: {}, aggregations: allowed },
     }
-    expect(decode('assets-v1', counter).fields[0]?.timeSeries?.aggregations).toEqual(allowed)
+    expect(decode('assets-v1', counter).items[0]?.timeSeries?.aggregations).toEqual(allowed)
     expect(() =>
       decode('assets-v1', {
         ...counter,
@@ -381,7 +393,7 @@ it('consumes only the current dictionary and validates record property schemas',
       ...field,
       valueType: { kind: 'array', items: { kind: 'integer' }, maxItems: 128 },
       operations: ['contains_any', 'contains_all'],
-    }).fields[0]?.operations,
+    }).items[0]?.operations,
   ).toEqual(['contains_any', 'contains_all'])
   expect(() => decode('assets-v2', field)).toThrow('Unknown asset dictionary')
   expect(() =>
@@ -531,7 +543,7 @@ it('reads valid collection rows without converting invalid rows into a complete 
         { index: 0, quality: 'success', value },
         { index: 1, quality: 'invalid', value: null },
       ],
-      nextOffset: 2,
+      nextCursor: 'YWJj',
     },
   }
   const request = vi.fn(async (options: RequestOptions<unknown>) => options.decode(response))
@@ -540,7 +552,7 @@ it('reads valid collection rows without converting invalid rows into a complete 
     kind: 'device',
   })
   expect(page.items).toEqual(response.asset.items)
-  expect(page.nextOffset).toBe(2)
+  expect(page.nextCursor).toBe('YWJj')
   const options = request.mock.calls[0]![0]
   expect(() => options.decode({ ...response, tenantId: task })).toThrow()
   expect(() =>

@@ -172,7 +172,7 @@ async function fixture(
         value = { configurationSha256: digest, keys: { heads: [], materials: [] } }
       else if (o.path === '/api/v1/pki/{purpose}/trust') value = pkiValue()
       else if (o.path === '/api/v1/agent-connections') value = connectionValue()
-      else if (o.path === '/api/v1/agent-packages') value = []
+      else if (o.path === '/api/v1/agent-packages') value = { items: [], nextCursor: null }
       else throw decodeMdmError(503, { code: 'service_unavailable' })
       return typeof o.decode === 'function' ? o.decode(value) : undefined
     },
@@ -898,7 +898,7 @@ it('saves first-use choices, restores backend facts, and finishes only through a
     revision = 0,
     ready = false
   f.setHandler((o) => {
-    if (o.path === '/api/v1/agent-packages') return []
+    if (o.path === '/api/v1/agent-packages') return { items: [], nextCursor: null }
     if (o.method === 'PUT') {
       const body = o.body as { expectedRevision: number; intent: FirstUseIntent }
       expect(body.expectedRevision).toBe(revision)
@@ -959,7 +959,7 @@ it('queries the original first-use operation after a lost response and never rep
   let committed = false,
     operation = ''
   f.setHandler((o) => {
-    if (o.path === '/api/v1/agent-packages') return []
+    if (o.path === '/api/v1/agent-packages') return { items: [], nextCursor: null }
     if (o.method === 'PUT') {
       operation = o.headers!['Idempotency-Key']!
       throw decodeMdmError(503, { code: 'operation_unknown' })
@@ -1005,7 +1005,7 @@ it('restores the exact in-memory first-use request across navigation before expl
   const ids: string[] = [],
     bodies: unknown[] = []
   f.setHandler((o) => {
-    if (o.path === '/api/v1/agent-packages') return []
+    if (o.path === '/api/v1/agent-packages') return { items: [], nextCursor: null }
     if (o.method === 'PUT') {
       ids.push(o.headers!['Idempotency-Key']!)
       bodies.push(o.body)
@@ -1331,7 +1331,12 @@ it('confirms an ordinary withdrawal without treating its click event as a replay
       withdrawn = true
       return undefined
     }
-    return withdrawn ? [] : [releaseForRecovery]
+    return {
+      items: withdrawn
+        ? []
+        : [{ ...releaseForRecovery, state: 'published', ...releaseForRecovery.target }],
+      nextCursor: null,
+    }
   })
   await button(f.wrapper, '重新读取').trigger('click')
   await flushPromises()
@@ -1354,7 +1359,15 @@ it.each([false, true])(
         if (++attempts === 1) throw new Error('lost receipt')
         return undefined
       }
-      return o.path.includes('/operations/') ? null : attempts > 1 ? [] : [releaseForRecovery]
+      return o.path.includes('/operations/')
+        ? null
+        : {
+            items:
+              attempts > 1
+                ? []
+                : [{ ...releaseForRecovery, state: 'published', ...releaseForRecovery.target }],
+            nextCursor: null,
+          }
     })
     await button(f.wrapper, '重新读取').trigger('click')
     await flushPromises()

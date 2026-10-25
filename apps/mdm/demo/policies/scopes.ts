@@ -1,3 +1,4 @@
+import { directoryPage } from '../directory'
 import { endpointObject, type DeviceObject } from '../devices/objects'
 import { objectKey, type Channel } from '../../src/features/devices/clients/objects'
 import { targetFacts } from './targets'
@@ -158,26 +159,24 @@ export function createScopeDemo(devices: Devices) {
       )
     if (request.path === '/api/v1/scopes' && request.method === 'GET') {
       const items = [...scopes.values()]
-          .filter((s) => !deleted.has(s.id) && s.id > (request.query.get('after') ?? ''))
-          .filter((s) => {
-            const ready = request.query.get('ready')
-            const job = jobs.get(current.get(s.id) ?? '')
-            const fresh = job?.status === 'completed' && job.frozen.revision === s.revision
-            return ready === null || fresh === (ready === 'true')
-          })
-          .sort((a, b) => a.id.localeCompare(b.id)),
-        limit = Number(request.query.get('limit') ?? 20)
-      return ok({
-        items: items.slice(0, limit).map((s) => ({
+        .filter((s) => request.query.get('filter')?.includes('deleted') || !deleted.has(s.id))
+        .map((s) => ({
           id: s.id,
           revision: s.revision,
-          deleted: false,
+          deleted: deleted.has(s.id),
           calculationRevision: s.revision,
           resolution: current.get(s.id) ?? null,
           resolutionRevision: jobs.get(current.get(s.id) ?? '')?.frozen.revision ?? null,
-        })),
-        nextCursor: items.length > limit ? items[limit - 1]!.id : null,
-      })
+        }))
+      return ok(
+        directoryPage(items, request, ['id'], {
+          defaultLimit: 64,
+          lookup: (row, field) =>
+            field === 'ready'
+              ? jobs.get(current.get(row.id) ?? '')?.status === 'completed'
+              : row[field as keyof typeof row],
+        }),
+      )
     }
     if (!match) return
     try {

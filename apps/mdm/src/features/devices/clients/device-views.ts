@@ -1,9 +1,15 @@
+import {
+  queryParameters,
+  projectedPage,
+  type DirectoryQuery,
+} from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
   closed,
   count,
   identifier,
+  integer,
   nullable,
   record,
   unique,
@@ -23,17 +29,14 @@ import {
   sourceIdentity,
 } from './asset-model'
 import { objectRef, objectKey, type ObjectRef } from './objects'
-export interface ViewQuery {
-  search?: string | undefined
-  platform?: string | undefined
-  assetState?: string | undefined
-  limit?: number | undefined
-  cursor?: string | undefined
-  status?: string | undefined
-  channel?: string | undefined
-  source?: string | undefined
-  descending?: boolean
+const viewFields = {
+  key: identifier,
+  reference: objectRef,
+  association: (v: unknown) => nullable(v, association),
+  endpoints: (v: unknown) => unique(array(v, viewEndpoint), (e) => e.id),
 }
+export type ViewQuery<F extends keyof typeof viewFields = keyof typeof viewFields> =
+  DirectoryQuery<F>
 function matches(a: ObjectRef, b: ObjectRef) {
   return objectKey(a) === objectKey(b)
 }
@@ -154,20 +157,24 @@ export function decodeView(value: unknown, expected: ObjectRef) {
   }
 }
 export type DeviceView = ReturnType<typeof decodeView>
-export function decodeViews(value: unknown) {
-  const v = closed(value, ['items', 'statistics', 'nextCursor']),
-    s = closed(v['statistics'], ['endpointCount', 'deviceViewCount'])
-  return {
-    items: unique(
-      array(v['items'], (x) => summary(x)),
-      (s) => objectKey(s.reference),
-    ),
-    statistics: {
-      endpointCount: count(s['endpointCount']),
-      deviceViewCount: count(s['deviceViewCount']),
-    },
-    nextCursor: cursor(v['nextCursor']),
+export function decodeViews<F extends keyof typeof viewFields = keyof typeof viewFields>(
+  value: unknown,
+  fields?: readonly F[],
+) {
+  const page = projectedPage(value, viewFields, fields, ['key'])
+  for (const row of page.items) {
+    if (['reference', 'association', 'endpoints'].every((key) => key in row)) {
+      const { key, ...item } = row as {
+        key?: string
+        reference: ObjectRef
+        association: unknown
+        endpoints: ViewEndpoint[]
+      }
+      const view = summary(item)
+      if (key !== undefined && key !== objectKey(view.reference)) throw new Error('Wrong view key')
+    }
   }
+  return page
 }
 export function createDeviceViewsClient(transport: HttpTransport, tenant: string) {
   function bound<T extends { endpoints: ViewEndpoint[] }>(value: T): T {
@@ -177,16 +184,35 @@ export function createDeviceViewsClient(transport: HttpTransport, tenant: string
     return value
   }
   return {
-    list: (query: ViewQuery = {}) =>
+    list: <F extends keyof typeof viewFields = keyof typeof viewFields>(query: ViewQuery<F> = {}) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/device-views',
-        query: { limit: 20, ...query },
+        query: queryParameters({ limit: 20, ...query }),
         successStatus: 200,
         decode: (v) => {
-          const page = decodeViews(v)
-          page.items.forEach(bound)
+          const page = decodeViews(v, query.fields)
+          for (const item of page.items)
+            if ('endpoints' in item) bound(item as { endpoints: ViewEndpoint[] })
           return page
+        },
+      }),
+    statistics: (filter?: string) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/device-views/statistics',
+        query: queryParameters({ filter }),
+        successStatus: 200,
+        decode(value) {
+          const v = closed(value, ['statistics', 'asOf']),
+            stats = closed(v['statistics'], ['endpointCount', 'deviceViewCount'])
+          return {
+            statistics: {
+              endpointCount: count(stats['endpointCount']),
+              deviceViewCount: count(stats['deviceViewCount']),
+            },
+            asOf: integer(v['asOf']),
+          }
         },
       }),
     detail: (ref: ObjectRef) =>

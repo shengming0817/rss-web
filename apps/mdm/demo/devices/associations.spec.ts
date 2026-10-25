@@ -20,10 +20,10 @@ async function confirmation() {
 }
 it('deduplicates only server-confirmed views and revokes without changing registrations', async () => {
   const h = await confirmation(),
-    before = await h.views.list(),
+    before = await h.views.statistics(),
     registrations = await h.enrollment.registrations(h.body.agent.device),
     a = await h.associations.confirm(h.body)
-  const page = await h.views.list()
+  const page = await h.views.statistics()
   expect(page.statistics.endpointCount).toBe(before.statistics.endpointCount)
   expect(page.statistics.deviceViewCount).toBe(before.statistics.deviceViewCount - 1)
   const view = await h.views.detail({ kind: 'association', id: a.id })
@@ -33,7 +33,7 @@ it('deduplicates only server-confirmed views and revokes without changing regist
     expectedVersion: a.version,
     reason: 'separate instances',
   })
-  expect((await h.views.list()).statistics).toEqual(before.statistics)
+  expect((await h.views.statistics()).statistics).toEqual(before.statistics)
   expect(await h.enrollment.registrations(h.body.agent.device)).toEqual(registrations)
 })
 it('replays immutable receipts and rejects reused operation identity with changed evidence', async () => {
@@ -110,7 +110,7 @@ it('projects a singly authorized endpoint without revealing its hidden counterpa
     a = await h.associations.confirm(h.body)
   h.domain.bindAuthorization((_actor, _permission, id) => id === h.body.mdm.device)
   const page = await h.views.list()
-  expect(page.statistics).toEqual({ endpointCount: 1, deviceViewCount: 1 })
+  expect((await h.views.statistics()).statistics).toEqual({ endpointCount: 1, deviceViewCount: 1 })
   expect(page.items[0]?.association).toBeNull()
   expect(JSON.stringify(page)).not.toContain(a.id)
   expect(JSON.stringify(page)).not.toContain(h.body.agent.device)

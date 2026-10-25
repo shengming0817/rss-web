@@ -1,8 +1,9 @@
+import { directoryPage } from '../directory'
 import { randomUUID } from 'node:crypto'
 import type { DomainHandler, Scenario } from '../scenario'
 import type { createDeviceDemo } from '../devices/state'
 import type { createOperationsDemo } from '../operations/state'
-import { evaluate, referencedFields } from '../devices/criteria'
+import { evaluateCondition, referencedFields } from '../devices/criteria'
 import { createPages, createReceipts, error, ok, operation } from '../http'
 import { closed, count, identifier, uuid } from '../../src/services/decode'
 import {
@@ -35,7 +36,7 @@ export function createComplianceDemo(
   let watermark = 0
   function capture(definition: ComplianceDefinition) {
     const facts = devices.facts(),
-      selected = referencedFields(definition.criteria)
+      selected = referencedFields(definition.criteria.criteria)
     const groups = (definition.target.kind === 'groups' ? definition.target.ids : []).map((id) => {
       const g = devices.publishedGroup(id)
       if (!g) throw new Error('Unknown group')
@@ -143,7 +144,10 @@ export function createComplianceDemo(
       }))
       const groupDecision =
         !groups.length || groups.some((g) => g.decision === 'match') ? 'match' : 'no_match'
-      const result = evaluate(d.criteria, device.inventory)
+      const result = evaluateCondition(d.criteria, [
+        device.inventory,
+        ...(device.scopedInventory ?? []),
+      ])
       const status =
         platformDecision === 'no_match' || groupDecision === 'no_match'
           ? 'not_applicable'
@@ -176,7 +180,7 @@ export function createComplianceDemo(
         condition: result.decision,
         applicability: { platform: d.platform, platformDecision, sources, groups },
         explanations: result.explanations,
-        evidence: referencedFields(d.criteria).map((field) => ({
+        evidence: referencedFields(d.criteria.criteria).map((field) => ({
           field,
           sources: (device.inventory.fields[field]?.sources ?? []).map((s) =>
             structuredClone(s.evidence),
@@ -322,16 +326,16 @@ export function createComplianceDemo(
       }
       if (!ruleRoute![1]) {
         if (request.method !== 'GET') return error('malformed_request', 400)
-        queryKeys(request.query, ['after'])
-        const after = request.query.has('after') ? uuid(request.query.get('after')) : null
-        const all = [...rules.values()]
-          .map((r) => r.rule)
-          .filter((r) => !after || r.id > after)
-          .sort((a, b) => a.id.localeCompare(b.id))
-        return ok({
-          items: structuredClone(all.slice(0, 50)),
-          nextCursor: all.length > 50 ? all[49]!.id : null,
-        })
+        const items = [...rules.values()].map((row) => ({
+          ...row.rule,
+          name: row.rule.definition.presentation.name,
+          enabled: row.rule.definition.enabled,
+          deleted: false,
+          severity: row.rule.definition.severity,
+          platform: row.rule.definition.platform,
+          targetKind: row.rule.definition.target.kind,
+        }))
+        return ok(directoryPage(items, request, ['id'], { maxLimit: 50, defaultLimit: 50 }))
       }
       queryKeys(request.query, [])
       const id = uuid(ruleRoute![1]),
@@ -377,7 +381,11 @@ export function createComplianceDemo(
         const definition = complianceDefinition(op.input)
         capture(definition)
         // Validate predicate fields/operators even when the first evaluation is still queued.
-        for (const device of devices.facts()) evaluate(definition.criteria, device.inventory)
+        for (const device of devices.facts())
+          evaluateCondition(definition.criteria, [
+            device.inventory,
+            ...(device.scopedInventory ?? []),
+          ])
         if (!r && rules.size >= 100) return error('malformed_request', 400)
         const rule = { id, revision: op.expectedRevision + 1, definition }
         const next: RuleState = {

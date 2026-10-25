@@ -36,7 +36,7 @@ const metadata = {
   riskLevel: 1,
 }
 it('accepts only the closed formal Policy and rejects the retired candidate DTO', () => {
-  expect(decodePolicy(policy, id)).toMatchObject({ id, enabled: true, definition })
+  expect(decodePolicy(policy, id)).toMatchObject({ id, state: 'enabled', definition })
   for (const value of [
     { ...policy, computation: {} },
     { contract: 'policies-v1', policy },
@@ -101,7 +101,7 @@ it('uses formal V1 collection and operation/CAS without a candidate fallback or 
     expectedRevision: 0,
     input: { action: 'put' as const, definition, enabled: true },
   }
-  expect(await client.change(id, body)).toMatchObject({ id, enabled: true, definition })
+  expect(await client.change(id, body)).toMatchObject({ id, state: 'enabled', definition })
   expect(request.mock.calls[0]?.[0]).toMatchObject({
     method: 'POST',
     path: '/api/v1/policies/{id}',
@@ -109,12 +109,12 @@ it('uses formal V1 collection and operation/CAS without a candidate fallback or 
     body,
   })
   response = { items: [policy], nextCursor: null }
-  expect((await client.list(undefined, 'execution')).items).toMatchObject([
-    { id, enabled: true, definition },
+  expect((await client.list({ filter: "action=='execution'" })).items).toMatchObject([
+    { id, state: 'enabled', definition },
   ])
   expect(request.mock.calls.at(-1)?.[0]).toMatchObject({
     path: '/api/v1/policies',
-    query: { action: 'execution', limit: 20 },
+    query: { filter: "action=='execution'", limit: 20 },
   })
   request.mockRejectedValueOnce(new Error('lost response'))
   await expect(client.change(id, body)).rejects.toThrow('lost response')

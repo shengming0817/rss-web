@@ -22,7 +22,7 @@ function load(after?: string) {
   void run(
     async () => {
       if (kind.value === 'group') {
-        const result = await runtime.devices.groups.list({ after })
+        const result = await runtime.devices.groups.list({ cursor: after })
         return {
           ...result,
           items: result.items.map((g) => ({
@@ -31,7 +31,7 @@ function load(after?: string) {
           })),
         }
       }
-      const result = await runtime.devices.directory.list(after)
+      const result = await runtime.devices.directory.list({ cursor: after })
       return { ...result, items: result.items.map((d) => ({ id: d.id, name: d.id })) }
     },
     (value) => {

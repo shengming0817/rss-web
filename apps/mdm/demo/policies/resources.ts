@@ -1,3 +1,4 @@
+import { directoryPage } from '../directory'
 // Frozen blueprint sample exported from rss-mdm 70a764d9aba667df00884d84cd0da29c22737803.
 import blueprintSample from './blueprints.json'
 import { jsonObject } from '../../src/services/json'
@@ -140,28 +141,20 @@ export function createResourceDemo(referenced: (id: string, version: string) => 
         })),
       })
     if (request.path === '/api/v1/resources' && request.method === 'GET') {
-      const kind = request.query.get('kind'),
-        items = [...resources.values()]
-          .filter((r) => (!kind || r.kind === kind) && r.id > (request.query.get('after') ?? ''))
-          .filter((r) => {
-            const active = request.query.get('active')
-            return (
-              active === null ||
-              r.versions.some((v) => v.state === 'active') === (active === 'true')
-            )
-          })
-          .sort((a, b) => a.id.localeCompare(b.id)),
-        limit = Number(request.query.get('limit') ?? 20)
-      return ok({
-        items: items.slice(0, limit).map((r) => ({
-          id: r.id,
-          kind: r.kind,
-          revision: r.revision,
-          activeVersion: r.versions.find((v) => v.state === 'active')?.id ?? null,
-          presentation: r.presentation,
-        })),
-        nextCursor: items.length > limit ? items[limit - 1]!.id : null,
-      })
+      const rows = [...resources.values()].map((r) => ({
+        id: r.id,
+        kind: r.kind,
+        revision: r.revision,
+        activeVersion: r.versions.find((v) => v.state === 'active')?.id ?? null,
+        presentation: r.presentation,
+      }))
+      return ok(
+        directoryPage(rows, request, ['id'], {
+          defaultLimit: 64,
+          lookup: (row, field) =>
+            field === 'active' ? row.activeVersion !== null : row[field as keyof typeof row],
+        }),
+      )
     }
     const uploaded = uploads.handle(request, scenario)
     if (uploaded) return uploaded

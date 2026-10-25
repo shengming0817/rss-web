@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import { deviceBinding } from '../../devices/useDeviceBinding'
 import { UiButton } from '@rss/core/components'
 import { onMounted, ref, toRaw, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
-import type { Criteria, FieldDefinition } from '../../devices/clients/assets'
+import type { InventoryCondition, FieldDefinition } from '../../devices/clients/assets'
 import {
   platforms,
   severities,
@@ -13,7 +14,7 @@ import {
   type ComplianceRule,
   type ComplianceTask,
 } from '../clients/compliance-model'
-import CriteriaEditor from '../../devices/components/CriteriaEditor.vue'
+import ConditionEditor from '../../devices/components/ConditionEditor.vue'
 import PageFrame from '../../../components/PageFrame.vue'
 const editorOpen = ref(false)
 function beginCreate() {
@@ -25,7 +26,7 @@ const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
   client = runtime.security.compliance,
-  { run, runWrite, busy, failure, uncertain } = useOperation()
+  { run, runWrite, busy, failure, uncertain } = useOperation([], () => deviceBinding(runtime))
 const list = ref<Awaited<ReturnType<typeof client.list>>>(),
   fields = ref<FieldDefinition[]>([]),
   groups = ref<Awaited<ReturnType<typeof runtime.devices.groups.list>>>(),
@@ -39,14 +40,15 @@ const list = ref<Awaited<ReturnType<typeof client.list>>>(),
   platform = ref<ComplianceDefinition['platform']>('all'),
   target = ref<'all' | 'groups'>('all'),
   groupIds = ref(''),
-  criteria = ref<Criteria | null>(null),
+  criteria = ref<InventoryCondition | null>(null),
   taskId = ref(''),
   task = ref<ComplianceTask>(),
   editable = ref(true)
 let pending: (() => Promise<void>) | undefined
 function load(after?: string) {
+  list.value = undefined
   void run(
-    () => client.list(after),
+    () => client.list({ cursor: after }),
     (v) => (list.value = v),
   )
 }
@@ -162,7 +164,7 @@ function loadVersion() {
 }
 function groupPage(cursor?: string) {
   void run(
-    () => runtime.devices.groups.list({ after: cursor }),
+    () => runtime.devices.groups.list({ cursor }),
     (v) =>
       (groups.value = {
         ...v,
@@ -182,6 +184,22 @@ function routeRule() {
     void open(rule, typeof selectedTask === 'string' ? selectedTask : undefined)
 }
 watch(() => route.fullPath, routeRule, { flush: 'sync' })
+watch(
+  () => JSON.stringify(deviceBinding(runtime)),
+  () => {
+    list.value = undefined
+    current.value = undefined
+    historical.value = undefined
+    fields.value = []
+    groups.value = undefined
+    pending = undefined
+    task.value = undefined
+    taskId.value = ''
+    id.value = ''
+    editorOpen.value = false
+  },
+  { flush: 'sync' },
+)
 onMounted(async () => {
   const initial = route.fullPath
   create()
@@ -303,7 +321,7 @@ onMounted(async () => {
               {{ t('devices.next') }}
             </UiButton>
           </template>
-          <CriteriaEditor v-model="criteria" :fields="fields" />
+          <ConditionEditor v-model="criteria" :fields="fields" />
           <p v-if="!criteria">{{ t('security.criteriaRequired') }}</p>
           <UiButton :disabled="!!!criteria" data-testid="save-rule" type="submit">{{
             t('devices.save')
@@ -354,7 +372,7 @@ onMounted(async () => {
           }}
         </p>
         <fieldset disabled>
-          <CriteriaEditor :model-value="historical.definition.criteria" :fields="fields" />
+          <ConditionEditor :model-value="historical.definition.criteria" :fields="fields" />
         </fieldset>
       </div>
     </section>

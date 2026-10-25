@@ -140,7 +140,7 @@ it('uses opaque query-bound cursors and action filtering from the same authorita
       f.request(
         '/api/v1/policies',
         undefined,
-        new URLSearchParams({ action: 'execution', limit: '2' }),
+        new URLSearchParams({ filter: "action=='execution'", limit: '2' }),
       ),
       'normal',
     )!.body as { items: PolicyRead[]; nextCursor: string }
@@ -149,7 +149,7 @@ it('uses opaque query-bound cursors and action filtering from the same authorita
     f.request(
       '/api/v1/policies',
       undefined,
-      new URLSearchParams({ cursor: first.nextCursor, action: 'execution', limit: '2' }),
+      new URLSearchParams({ cursor: first.nextCursor, filter: "action=='execution'", limit: '2' }),
     ),
     'normal',
   )!.body as { items: PolicyRead[]; nextCursor: null }
@@ -391,10 +391,12 @@ it('archives only disabled Policies, replays the exact DELETE, and retains read-
       items: { id: string }[]
     }
   expect(directory(new URLSearchParams()).items.some((p) => p.id === id)).toBe(false)
-  expect(directory(new URLSearchParams({ state: 'archived' })).items.map((p) => p.id)).toEqual([id])
-  expect(directory(new URLSearchParams({ state: 'disabled' })).items.some((p) => p.id === id)).toBe(
-    false,
-  )
+  expect(
+    directory(new URLSearchParams({ filter: "state=='archived'" })).items.map((p) => p.id),
+  ).toEqual([id])
+  expect(
+    directory(new URLSearchParams({ filter: "state=='disabled'" })).items.some((p) => p.id === id),
+  ).toBe(false)
   for (const action of [
     { action: 'enable' },
     { action: 'disable' },

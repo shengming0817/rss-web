@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { comparison as queryComparison, allOf } from '../../../services/directory-query'
 import { computed, ref, shallowRef, watch, toRaw } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -66,7 +67,7 @@ const budget = ref({
   }),
   backfill = ref(86400)
 const preview = ref<Awaited<ReturnType<typeof pc.preview>>>(),
-  usages = ref<PolicyRead[]>([]),
+  usages = ref<Awaited<ReturnType<typeof pc.list>>['items']>([]),
   usageNext = ref<string | null>(null),
   confirmed = ref(false),
   comparison = ref<unknown>()
@@ -124,7 +125,7 @@ const locked = computed(() => busy.value || !!pending.value || !!frozen.value ||
 async function load(after?: string) {
   list.value = undefined
   await run(
-    () => rc.list('telemetry_profile', after),
+    () => rc.list({ cursor: after, filter: queryComparison('kind', '==', 'telemetry_profile') }),
     (v) => (list.value = v),
   )
 }
@@ -132,7 +133,14 @@ async function sources(after?: string) {
   const old = after ? templates.value : []
   templates.value = []
   await run(
-    () => rc.list(templateKind.value, after, true),
+    () =>
+      rc.list({
+        cursor: after,
+        filter: allOf(
+          queryComparison('kind', '==', templateKind.value),
+          queryComparison('active', '==', true),
+        ),
+      }),
     (v) => {
       templates.value = [...old, ...v.items]
       templateAfter.value = v.nextCursor
@@ -142,7 +150,8 @@ async function sources(after?: string) {
 async function scopes(after?: string) {
   const old = after ? (scopeOptions.value?.items ?? []) : []
   await run(
-    () => runtime.policies.scopes.list({ after, ready: true }),
+    () =>
+      runtime.policies.scopes.list({ cursor: after, filter: queryComparison('ready', '==', true) }),
     (v) => (scopeOptions.value = { ...v, items: [...old, ...v.items] }),
   )
 }
@@ -163,7 +172,14 @@ async function references(after?: string) {
   const old = after ? usages.value : []
   usages.value = []
   await run(
-    () => pc.list(after, 'telemetry_profile', id.value),
+    () =>
+      pc.list({
+        cursor: after,
+        filter: allOf(
+          queryComparison('action', '==', 'telemetry_profile'),
+          queryComparison('resource', '==', id.value),
+        ),
+      }),
     (v) => {
       usages.value = [...old, ...v.items]
       usageNext.value = v.nextCursor
@@ -553,7 +569,20 @@ async function publish() {
   }
   await execute()
 }
-async function toggle(p: PolicyRead) {
+async function toggle(summary: { id: string }) {
+  if (locked.value) return
+  let actual: PolicyRead | undefined
+  if (
+    !(await run(
+      () => pc.read(summary.id),
+      (v) => {
+        actual = v
+      },
+    )) ||
+    !actual
+  )
+    return
+  const p = actual
   if (
     busy.value ||
     pending.value ||
@@ -829,7 +858,7 @@ watch(
               }}
             </p>
             <UiButton :disabled="busy || !!pending || !canWrite" @click="toggle(p)">{{
-              t(p.enabled ? 'telemetry.disablePolicy' : 'telemetry.enablePolicy')
+              t(p.state === 'enabled' ? 'telemetry.disablePolicy' : 'telemetry.enablePolicy')
             }}</UiButton>
           </article>
           <UiButton v-if="usageNext" :disabled="busy" @click="references(usageNext)">{{

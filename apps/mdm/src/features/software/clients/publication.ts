@@ -1,3 +1,8 @@
+import {
+  queryParameters,
+  projectedPage,
+  type DirectoryQuery,
+} from '../../../services/directory-query'
 import { jsonValue } from '../../../services/json'
 import type { HttpTransport } from '@rss/api/mdm'
 import type { Operation } from '../../../services/useOperation'
@@ -167,42 +172,64 @@ export function publicationTarget(value: unknown) {
   }
 }
 export type PublicationTarget = ReturnType<typeof publicationTarget>
-export interface PublicationQuery {
-  after?: string | undefined
-  target?: string | undefined
-  resource?: string | undefined
-  version?: string | undefined
-  operationId?: string | undefined
+const publicationFields = {
+  id: identifier,
+  revision: count,
+  target: identifier,
+  resource: identifier,
+  version: identifier,
+  publication: digest,
+  contentDigest: digest,
+  manifestDigest: digest,
+  targetDigest: digest,
+  attempt: (v: unknown) => {
+    const n = count(v)
+    if (n < 1) throw new Error('Invalid attempt')
+    return n
+  },
+  outcome: (v: unknown) =>
+    enumeration(v, ['pending', 'unknown', 'not_applied', 'published'] as const),
+  withdrawn: boolean,
+  withdrawal: (v: unknown) =>
+    nullable(v, (x) =>
+      enumeration(x, [
+        'withdrawn',
+        'not_published',
+        'waiting_publication',
+        'preflight_retryable',
+        'unknown',
+      ] as const),
+    ),
 }
+const targetFields = {
+  id: identifier,
+  digest,
+  protocol: (v: unknown) => enumeration(v, ['winget', 'brew'] as const),
+}
+export type PublicationQuery<
+  F extends keyof typeof publicationFields = keyof typeof publicationFields,
+> = DirectoryQuery<F>
 export function createPublicationClient(transport: HttpTransport) {
   return {
-    targets: (after?: string) =>
+    targets: <F extends keyof typeof targetFields = keyof typeof targetFields>(
+      query: DirectoryQuery<F> = {},
+    ) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/software/publication-targets',
-        query: { after, limit: 20 },
+        query: queryParameters({ limit: 20, ...query }),
         successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['items', 'nextCursor'])
-          return {
-            items: array(v['items'], publicationTarget),
-            nextCursor: nullable(v['nextCursor'], string),
-          }
-        },
+        decode: (value) => projectedPage(value, targetFields, query.fields),
       }),
-    list: (query: PublicationQuery = {}) =>
+    list: <F extends keyof typeof publicationFields = keyof typeof publicationFields>(
+      query: PublicationQuery<F> = {},
+    ) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/software/publications',
-        query: { ...query, limit: 20 },
+        query: queryParameters({ limit: 20, ...query }),
         successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['items', 'nextCursor'])
-          return {
-            items: array(v['items'], (v) => decodePublication(v)),
-            nextCursor: nullable(v['nextCursor'], string),
-          }
-        },
+        decode: (value) => projectedPage(value, publicationFields, query.fields),
       }),
     read: (id: string) =>
       transport.request({

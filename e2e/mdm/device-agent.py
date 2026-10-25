@@ -45,7 +45,7 @@ def register(origin, ca, native, operator, private, tenant, capabilities=None, a
     status, grant = operator.call('POST', '/api/v1/agent-requests/'+request['grantId']+'/authorize', dict(operationId=str(uuid.uuid4())))
     check(status == 200, 'collector-authorization')
     context = dict(revision=1, osVersion=[14,0,0,0], userHelper=True, systemBroker=True,
-                   interactiveUser=dict(generatedUid='00000000-0000-0000-0000-000000000501', identity='501', sessionId=str(uuid.uuid4()), administrator=False),
+                   interactiveUser=dict(windowsAuthority=None, generatedUid='00000000-0000-0000-0000-000000000501', identity='501', sessionId=str(uuid.uuid4()), administrator=False),
                    sourceCredentials=[], msixSideload=False, msixUnsigned=False)
     candidate = call(origin, ca, '/api/v1/agent/enroll/certificates', dict(wireVersion=1, operationId=str(uuid.uuid4()), grantId=grant['grantId'], secret=secret, csr=csr,
                      runtime=dict(capabilities=capabilities or ['inventory.collect.v1','inventory.native.v1'], platform='macos', architecture='aarch64', executionContext=context)))

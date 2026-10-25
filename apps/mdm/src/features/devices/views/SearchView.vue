@@ -1,23 +1,41 @@
 <script setup lang="ts">
+import { encodeAssetQuery, decodeAssetCondition } from '../clients/asset-query'
+import { deviceBinding } from '../useDeviceBinding'
 import { UiButton } from '@rss/core/components'
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
-import type { FieldDefinition, Query, SavedQuery } from '../clients/assets'
+import type { FieldDefinition, QueryInput, SavedQuery } from '../clients/assets'
 import { operation, useOperation } from '../../../services/useOperation'
 import PageFrame from '../../../components/PageFrame.vue'
 import ConditionEditor from '../components/ConditionEditor.vue'
-import { inventoryCondition, type InventoryCondition } from '../clients/asset-model'
+import { type InventoryCondition } from '../clients/asset-model'
 import AssetValue from '../components/AssetValue.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.devices.assets,
-  { run, runWrite, busy, failure, uncertain } = useOperation()
+  { run, runWrite, busy, failure, uncertain } = useOperation([], () => deviceBinding(runtime))
 const fields = ref<FieldDefinition[]>([]),
   criteria = ref<InventoryCondition | null>(null),
   select = ref<string[]>([]),
-  sort = ref(''),
-  descending = ref(false)
+  sortTerms = ref<QueryInput['sort']>([])
+const sort = computed({
+    get: () => sortTerms.value[0]?.field ?? '',
+    set: (field: string) => {
+      sortTerms.value = field
+        ? [
+            { field, descending: descending.value },
+            ...sortTerms.value.slice(1).filter((term) => term.field !== field),
+          ]
+        : []
+    },
+  }),
+  descending = computed({
+    get: () => sortTerms.value[0]?.descending ?? false,
+    set: (value: boolean) => {
+      if (sortTerms.value[0]) sortTerms.value[0].descending = value
+    },
+  })
 const task = ref<string>(),
   status = ref<Awaited<ReturnType<typeof client.status>>>(),
   page = ref<Awaited<ReturnType<typeof client.items>>>()
@@ -33,13 +51,13 @@ function write<T>(request: () => Promise<T>, apply: (value: T) => void) {
   pending = () => runWrite(request, apply)
   void pending()
 }
-function definition(): Query | null {
+function definition(): QueryInput | null {
   try {
-    return {
-      criteria: criteria.value ? inventoryCondition(criteria.value) : null,
-      select: [...select.value],
-      sort: sort.value ? { field: sort.value, descending: descending.value } : null,
-    }
+    return encodeAssetQuery(
+      criteria.value,
+      [...select.value],
+      sortTerms.value.map((term) => ({ ...term })),
+    )
   } catch {
     failure.value = 'invalidRequest'
     return null
@@ -83,8 +101,9 @@ function loadFacets(next?: string) {
     )
 }
 function loadSaved(after?: string) {
+  saved.value = undefined
   void run(
-    () => client.saved(after),
+    () => client.saved({ cursor: after }),
     (v) => (saved.value = v),
   )
 }
@@ -93,13 +112,16 @@ function load(item: SavedQuery) {
   void run(
     () => client.readSaved(item.id),
     (v) => {
+      if (!v.definition) {
+        current.value = v
+        return
+      }
+      const condition = decodeAssetCondition(v.definition.query, fields.value)
       current.value = v
-      if (!v.definition) return
       name.value = v.definition.name
-      criteria.value = structuredClone(v.definition.query.criteria)
-      select.value = v.definition.query.select
-      sort.value = v.definition.query.sort?.field ?? ''
-      descending.value = v.definition.query.sort?.descending ?? false
+      criteria.value = condition
+      select.value = v.definition.query.fields
+      sortTerms.value = v.definition.query.sort.map((term) => ({ ...term }))
     },
   )
 }
@@ -128,6 +150,24 @@ function executeSaved() {
     body = operation({}, current.value.revision)
   write(() => client.executeSaved(id, body), accepted)
 }
+watch(
+  () => JSON.stringify(deviceBinding(runtime)),
+  () => {
+    task.value = undefined
+    status.value = undefined
+    page.value = undefined
+    facets.value = undefined
+    saved.value = undefined
+    current.value = undefined
+    fields.value = []
+    criteria.value = null
+    select.value = []
+    sortTerms.value = []
+    name.value = ''
+    pending = undefined
+  },
+  { flush: 'sync' },
+)
 onMounted(() => {
   void run(
     async () => ({ catalog: await client.catalog(), saved: await client.saved() }),
@@ -267,7 +307,12 @@ function newSaved() {
           </UiButton>
         </li>
       </ul>
-      <UiButton v-if="saved?.next" :disabled="!!busy" type="submit" @click="loadSaved(saved.next)">
+      <UiButton
+        v-if="saved?.nextCursor"
+        :disabled="!!busy"
+        type="submit"
+        @click="loadSaved(saved.nextCursor ?? undefined)"
+      >
         {{ t('devices.next') }}
       </UiButton>
       <p v-if="current">
@@ -279,15 +324,23 @@ function newSaved() {
         <p>{{ current.definition.name }}</p>
         <p>
           {{ t('devices.columns') }}:
-          {{ current.definition.query.select.join(', ') || t('devices.all') }}
+          {{ current.definition.query.fields.join(', ') || t('devices.all') }}
         </p>
         <p>
-          {{ t('devices.sort') }}: {{ current.definition.query.sort?.field ?? '—' }} ·
-          {{ t('devices.descending') }}:
-          {{ t(`devices.${current.definition.query.sort?.descending ? 'yes' : 'no'}`) }}
+          {{ t('devices.sort') }}:
+          {{
+            current.definition.query.sort
+              .map((term) => `${term.descending ? '-' : ''}${term.field}`)
+              .join(', ') || '—'
+          }}
+          · {{ t('devices.descending') }}:
+          {{ t(`devices.${current.definition.query.sort[0]?.descending ? 'yes' : 'no'}`) }}
         </p>
         <fieldset disabled>
-          <ConditionEditor :model-value="current.definition.query.criteria" :fields="fields" />
+          <ConditionEditor
+            :model-value="decodeAssetCondition(current.definition.query, fields)"
+            :fields="fields"
+          />
         </fieldset>
       </section>
       <form @submit.prevent="save()">

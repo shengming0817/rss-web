@@ -16,7 +16,11 @@ const definition = complianceDefinition({
   enabled: true,
   platform: 'all',
   target: { kind: 'all' },
-  criteria: { kind: 'and', children: [] },
+  criteria: {
+    selector: { kind: 'device' },
+    quantifier: 'one',
+    criteria: { kind: 'and', children: [] },
+  },
 })
 const assessment = {
   ruleId: id,
@@ -36,10 +40,10 @@ it('keeps native pagination, versions, CAS receipts and explicit history filters
   let reply: unknown = { items: [], nextCursor: id }
   const request = vi.fn(async (o: RequestOptions<unknown>) => o.decode(reply))
   const client = createComplianceClient({ request } as unknown as HttpTransport)
-  await client.list(id)
+  await client.list({ cursor: id })
   expect(request.mock.lastCall![0]).toMatchObject({
     path: '/api/v1/compliance-rules',
-    query: { after: id },
+    query: { cursor: id },
   })
   reply = { id, revision: 2, definition }
   expect(await client.version(id, 2)).toEqual(reply)
@@ -87,6 +91,9 @@ it('retains explicit unknown, pending previous evidence and more than two platfo
     ),
   ).toThrow()
   expect(() => complianceDefinition({ ...definition, criteria: null })).toThrow()
+  expect(() =>
+    complianceDefinition({ ...definition, criteria: { kind: 'and', children: [] } }),
+  ).toThrow()
   expect(() =>
     complianceAssessment({
       ...assessment,

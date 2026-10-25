@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { comparison } from '../../../services/directory-query'
 import { UiButton, UiTable } from '@rss/core/components'
 import { onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -23,16 +24,18 @@ const target = ref(''),
   confirmedReplay = ref(false)
 let pending: { id: string; body: Operation<PublicationChange> } | undefined
 function load(after?: string) {
+  page.value = undefined
   void run(
-    () => client.list({ after }),
+    () => client.list({ cursor: after }),
     (v) => {
       page.value = v
     },
   )
 }
 function loadTargets(after?: string) {
+  targets.value = undefined
   void run(
-    () => client.targets(after),
+    () => client.targets({ cursor: after }),
     (v) => {
       targets.value = v
     },
@@ -119,7 +122,9 @@ function reconcile() {
   const original = pending
   void run(
     async () => {
-      const result = await client.list({ operationId: original.body.operationId })
+      const result = await client.list({
+        filter: comparison('operationId', '==', original.body.operationId),
+      })
       const found = result.items.find((v) => v.id === original.id)
       return found ? client.read(found.id) : undefined
     },

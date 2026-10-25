@@ -1,3 +1,4 @@
+import { parseFilter } from '../../../services/query-filter'
 import {
   array,
   boolean,
@@ -32,15 +33,16 @@ export type Operator = (typeof operators)[number]
 export type Scalar =
   | { kind: 'string'; value: string }
   | { kind: 'boolean'; value: boolean }
-  | { kind: 'integer' | 'time'; value: number }
+  | { kind: 'integer' | 'time' | 'number'; value: number }
 export type AssetState = ReadState
 export type Criteria =
   | { kind: 'predicate'; field: string; op: Operator; value?: Scalar; values?: Scalar[] }
   | { kind: 'and' | 'or'; children: Criteria[] }
-export interface Query {
-  criteria: InventoryCondition | null
-  select: string[]
-  sort: { field: string; descending: boolean } | null
+export interface QueryInput {
+  filter: string | null
+  scope: ConditionContext
+  fields: string[]
+  sort: { field: string; descending: boolean }[]
 }
 export type ManualChange = { action: 'set'; value: Scalar } | { action: 'null' | 'delete' }
 export function fieldKey(value: unknown) {
@@ -56,12 +58,17 @@ export function retentionKey(value: unknown) {
 }
 export function scalar(value: unknown): Scalar {
   const v = closed(value, ['kind', 'value'])
-  const kind = enumeration(v['kind'], ['string', 'boolean', 'integer', 'time'] as const)
+  const kind = enumeration(v['kind'], ['string', 'boolean', 'integer', 'time', 'number'] as const)
   if (kind === 'string') {
     const value = string(v['value'])
     if (!value.trim() || [...value].length > 256 || /\p{Cc}/u.test(value))
       throw new Error('Invalid scalar text')
     return { kind, value }
+  }
+  if (kind === 'number') {
+    const n = v['value']
+    if (typeof n !== 'number' || !Number.isFinite(n)) throw new Error('Invalid number')
+    return { kind, value: n }
   }
   if (kind === 'boolean') return { kind, value: boolean(v['value']) }
   return { kind, value: integer(v['value']) }
@@ -447,26 +454,37 @@ export function criteria(value: unknown, depth = 0): Criteria {
   if (v['values'] != null) throw new Error('Unexpected operands')
   return { kind, field, op, value: scalar(v['value']) }
 }
-export function query(value: unknown): Query {
-  const v = closed(value, ['criteria', 'select', 'sort'])
-  return {
-    criteria: nullable(v['criteria'], inventoryCondition),
-    select: unique(array(v['select'], fieldKey), (s) => s),
-    sort: nullable(v['sort'], (value) => {
+export function queryInput(value: unknown): QueryInput {
+  const v = closed(value, ['filter', 'scope', 'fields', 'sort'])
+  const filter = nullable(v['filter'], (value) => {
+    if (typeof value !== 'string') throw new Error('Invalid filter')
+    parseFilter(value)
+    return value
+  })
+  const scope = conditionContext(v['scope'])
+  if (filter === null && (scope.selector.kind !== 'device' || scope.quantifier !== 'one'))
+    throw new Error('Scope requires a predicate')
+  const fields = unique(array(v['fields'], fieldKey), (s) => s)
+  const sort = unique(
+    array(v['sort'], (value) => {
       const s = closed(value, ['field', 'descending'])
       return { field: fieldKey(s['field']), descending: boolean(s['descending']) }
     }),
-  }
+    (s) => s.field,
+  )
+  if (fields.length > 1024 || sort.length > 16) throw new Error('Invalid query budget')
+  return { filter, scope, fields, sort }
+}
+export function savedDefinition(value: unknown) {
+  const d = closed(value, ['name', 'query'])
+  return { name: identifier(d['name']), query: queryInput(d['query']) }
 }
 export function savedQuery(value: unknown) {
   const v = closed(value, ['id', 'revision', 'definition'])
   return {
     id: uuid(v['id']),
     revision: count(v['revision']),
-    definition: nullable(v['definition'], (value) => {
-      const d = closed(value, ['name', 'query'])
-      return { name: identifier(d['name']), query: query(d['query']) }
-    }),
+    definition: nullable(v['definition'], savedDefinition),
   }
 }
 export type SavedQuery = ReturnType<typeof savedQuery>

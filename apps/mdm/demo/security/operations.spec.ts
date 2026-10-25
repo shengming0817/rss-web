@@ -29,10 +29,14 @@ it('records native security changes once and keeps alert acknowledgement indepen
     platform: 'all',
     target: { kind: 'all' },
     criteria: {
-      kind: 'predicate',
-      field: 'custom.office_floor',
-      op: 'ge',
-      value: { kind: 'integer', value: 1 },
+      selector: { kind: 'device' },
+      quantifier: 'one',
+      criteria: {
+        kind: 'predicate',
+        field: 'custom.office_floor',
+        op: 'ge',
+        value: { kind: 'integer', value: 1 },
+      },
     },
   }
   const body = operation(definition),
@@ -86,7 +90,17 @@ it('records native security changes once and keeps alert acknowledgement indepen
   const changed = await write(
     'PUT',
     path,
-    operation({ ...definition, criteria: { kind: 'and', children: [] } }, 1),
+    operation(
+      {
+        ...definition,
+        criteria: {
+          selector: { kind: 'device' },
+          quantifier: 'one',
+          criteria: { kind: 'and', children: [] },
+        },
+      },
+      1,
+    ),
   )
   const next = (changed.body as { task: string }).task
   await server.handle('GET', `${path}/tasks/${next}`)

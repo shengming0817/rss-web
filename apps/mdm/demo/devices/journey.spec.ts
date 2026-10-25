@@ -1,3 +1,4 @@
+import { encodeAssetQuery } from '../../src/features/devices/clients/asset-query'
 import { expect, it } from 'vitest'
 import { setup } from './test-harness'
 import { generateEnrollmentPassword } from '../../src/features/devices/clients/enrollment'
@@ -25,22 +26,20 @@ it('replays a committed unknown write exactly and rejects changed content under 
 })
 it('reads current endpoint statistics and permits pending onboarding without claiming registration', async () => {
   const { directory, enrollment } = await setup()
-  const first = await directory.list()
+  const first = await directory.statistics()
   await enrollment.create(crypto.randomUUID(), {
     deviceId: 'new-native-platform',
     password: generateEnrollmentPassword(),
     source: 'mdm.windows',
   })
-  expect((await directory.list(first.nextCursor!)).statistics.total).toBe(
-    first.statistics.total + 1,
-  )
-  expect((await directory.list()).statistics.total).toBe(first.statistics.total + 1)
+  expect((await directory.statistics()).statistics.total).toBe(first.statistics.total + 1)
+  expect((await directory.statistics()).statistics.total).toBe(first.statistics.total + 1)
   expect((await directory.detail('new-native-platform')).channels).toEqual([])
   expect((await enrollment.registrations('new-native-platform')).items).toEqual([])
 })
 it('freezes searches while manual changes preserve CAS, deleted history and exact replay', async () => {
   const { assets } = await setup()
-  const accepted = await assets.search(operation({ criteria: null, select: [], sort: null }))
+  const accepted = await assets.search(operation(encodeAssetQuery(null, [], [])))
   expect((await assets.status(accepted.task)).status).toBe('running')
   await expect(assets.items(accepted.task)).rejects.toMatchObject({ status: 409 })
   expect((await assets.status(accepted.task)).status).toBe('completed')

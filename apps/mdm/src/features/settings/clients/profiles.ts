@@ -1,3 +1,9 @@
+import {
+  queryParameters,
+  projectedRow,
+  nextCursor,
+  type DirectoryQuery,
+} from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import { profileJson, type ProfileJson } from '@rss/auth/profile-json'
 import {
@@ -203,19 +209,35 @@ export type SourceMetadata = {
   extensionsRoot: string | null
   maxAgeSeconds: number
 }
+const definitionFields = {
+  fieldId: uuid,
+  revision: (value: unknown) => {
+    const n = count(value)
+    if (!n) throw new Error('Invalid definition revision')
+    return n
+  },
+  collectedAfterMicros: count,
+  value: (v: unknown) => nullable(v, definitionValue),
+}
 export function createProfilesClient(transport: HttpTransport) {
   return {
-    definitions: (after?: string) =>
+    definitions: <F extends keyof typeof definitionFields = keyof typeof definitionFields>(
+      query: DirectoryQuery<F> = {},
+    ) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/user-attribute-definitions',
-        ...(after ? { query: { after: uuid(after) } } : {}),
+        query: queryParameters({
+          limit: 20,
+          ...query,
+          fields: query.fields ?? Object.keys(definitionFields),
+        }),
         successStatus: 200,
         decode(value) {
-          const v = closed(value, ['definitions', 'nextCursor', 'sources'])
+          const v = closed(value, ['items', 'nextCursor', 'sources'])
           return {
-            definitions: array(v['definitions'], definition),
-            nextCursor: nullable(v['nextCursor'], uuid),
+            items: array(v['items'], (row) => projectedRow(row, definitionFields, query.fields)),
+            nextCursor: nextCursor(v['nextCursor']),
             sources: array(v['sources'], (item) => {
               const s = closed(item, [
                 'source',

@@ -12,6 +12,7 @@ import { assertNativeCallback } from './enrollment-callback.mjs'
 let browser,
   context,
   employeeContext,
+  page,
   phase = 'environment',
   result = 'failed',
   cleanup = 'passed',
@@ -71,7 +72,7 @@ try {
     target.setDefaultTimeout(10000)
     return target
   }
-  let page = await freshPage()
+  page = await freshPage()
   active()
   phase = 'anonymous-downloads'
   await go(page, `${origin}/downloads/agent`)
@@ -131,7 +132,7 @@ try {
     await go(target, `${origin}/login`)
     await target.locator('#login-name').fill(account.login)
     await target.locator('#login-password').fill(secret(account.passwordFile))
-    await target.locator('form').evaluate((f) => f.requestSubmit())
+    await target.locator('form button[type=submit]').click()
     await target.waitForURL((url) => /\/(?:workspace|settings\/guide)$/.test(url.pathname))
   }
   if (fixture.reader) {
@@ -226,16 +227,28 @@ try {
       await page.locator('summary').filter({ hasText: '生成完整 JSON' }).click()
       await page.getByRole('button', { name: '生成完整 JSON', exact: true }).waitFor()
       let commits = 0
+      const created = Promise.withResolvers()
       await page.route('**/api/v1/agent-configurations', async (route) => {
         if (route.request().method() !== 'POST') return route.continue()
         active()
         const response = await route.fetch({ timeout: 10000 })
-        assert.equal(response.status(), 200)
+        created.resolve(response.status())
+        if (response.status() !== 200) {
+          const body = await response.json()
+          failure = {
+            apiCode:
+              typeof body.code === 'string' && /^[a-z_]{1,64}$/.test(body.code)
+                ? body.code
+                : 'invalid',
+          }
+          return route.fulfill({ response })
+        }
         commits++
         await route.abort('failed')
       })
       active()
       await page.getByRole('button', { name: '生成完整 JSON', exact: true }).click()
+      assert.equal(await created.promise, 200)
       await page.getByText('提交结果未知', { exact: false }).first().waitFor()
       await page.unroute('**/api/v1/agent-configurations')
       const found = page.waitForResponse(
@@ -269,6 +282,34 @@ try {
       assert.equal(reloaded.status(), 200)
       assert.equal((await reloaded.json()).state, 'revoked')
       await page.getByText('revoked', { exact: true }).waitFor()
+      phase = 'configuration-metadata-discovery'
+      const listed = await context.request.get(
+        `${origin}/api/v1/agent-configurations?filter=state==revoked&sort=-createdAt&limit=1`,
+      )
+      assert.equal(listed.status(), 200)
+      const configurationPage = await listed.json()
+      assert.equal(
+        configurationPage.items[0].configurationId,
+        metadata.configuration.configurationId,
+      )
+      for (const item of configurationPage.items)
+        for (const key of ['secret', 'signature', 'connections', 'configuration'])
+          assert.equal(Object.hasOwn(item, key), false)
+      await page.reload()
+      await page
+        .getByRole('button', { name: metadata.configuration.configurationId, exact: true })
+        .waitFor()
+      const detail = page.waitForResponse(
+        (r) =>
+          r.request().method() === 'GET' &&
+          new URL(r.url()).pathname ===
+            `/api/v1/agent-configurations/${metadata.configuration.configurationId}`,
+      )
+      await page
+        .getByRole('button', { name: metadata.configuration.configurationId, exact: true })
+        .click()
+      assert.equal((await detail).status(), 200)
+      coverage.push('configuration-metadata-discovery-detail-and-secret-exclusion')
       coverage.push('configuration-unknown-query-and-revoke')
     } else gaps.push('configuration-PKI-and-signer')
   } else gaps.push('administrator-organization-configuration')
@@ -473,8 +514,10 @@ try {
   failure = {
     ...failure,
     kind: error.name,
+    route: page ? new URL(page.url()).pathname : undefined,
+    alerts: page && !page.isClosed() ? await page.getByRole('alert').allTextContents() : [],
     ...(error instanceof PkiCollectorError ? { collector: error.collector } : {}),
-    location: error.stack?.match(/enrollment-browser\.mjs:([0-9]+):([0-9]+)/)?.slice(1),
+    location: error.stack?.match(/(?:enrollment|pki)-browser\.mjs:([0-9]+):([0-9]+)/)?.slice(1),
     operator: error.code === 'ERR_ASSERTION' ? error.operator : undefined,
     actual:
       typeof error.actual === 'number' || typeof error.actual === 'boolean'

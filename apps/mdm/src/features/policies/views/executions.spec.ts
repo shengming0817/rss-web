@@ -8,16 +8,14 @@ import ExecutionsView from './ExecutionsView.vue'
 import ExecutionDetailView from './ExecutionDetailView.vue'
 import DeviceControlPanel from '../../devices/components/DeviceControlPanel.vue'
 
-it('keeps formal filters attached to compound pagination and does not enter a candidate batch path', async () => {
+it('keeps applied filters on opaque pagination and clears continuation after a failed new query', async () => {
   const directory = vi
     .fn()
     .mockResolvedValueOnce({
       items: [],
-      statistics: { total: 0 },
-      asOf: 1,
-      nextCursor: { id: 'cursor', kind: 'command' },
+      nextCursor: 'YWJj',
     })
-    .mockResolvedValue({ items: [], statistics: { total: 0 }, asOf: 1, nextCursor: null })
+    .mockResolvedValue({ items: [], nextCursor: null })
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [{ path: '/', component: ExecutionsView }],
@@ -30,7 +28,15 @@ it('keeps formal filters attached to compound pagination and does not enter a ca
         [mdmKey as symbol]: {
           tenant: 'tenant',
           session: { state: ref({ status: 'authenticated' }) },
-          policies: { executions: { directory } },
+          policies: {
+            executions: {
+              directory,
+              statistics: async () => ({
+                statistics: { total: 0, commands: 0, actionRuns: 0, unknown: 0 },
+                asOf: 1,
+              }),
+            },
+          },
           devices: {
             directory: {
               detail: async () => {
@@ -46,29 +52,24 @@ it('keeps formal filters attached to compound pagination and does not enter a ca
   const form = wrapper.get('form')
   await form.get('select').setValue('command')
   await form.findAll('input')[2]!.setValue('unknown')
+  directory.mockResolvedValueOnce({ items: [], nextCursor: 'ZA' })
   await wrapper
     .findAll('button')
     .find((b) => b.text() === '下一页')!
     .trigger('click')
   await flushPromises()
   expect(directory.mock.calls[1]?.[0]).toEqual({
-    device: 'endpoint',
-    policy: 'policy',
-    kind: undefined,
-    status: undefined,
-    after: 'cursor',
-    afterKind: 'command',
+    filter: "(device=='endpoint');(policy=='policy')",
+    cursor: 'YWJj',
   })
+  directory.mockRejectedValueOnce(new Error('unavailable'))
   await form.trigger('submit')
   await flushPromises()
+  expect(wrapper.findAll('button').some((button) => button.text() === '下一页')).toBe(false)
   expect(directory.mock.calls[2]?.[0]).toMatchObject({
-    kind: 'command',
-    status: 'unknown',
-    after: undefined,
-    afterKind: undefined,
+    filter: "(device=='endpoint');(policy=='policy');(kind=='command');(status=='unknown')",
+    cursor: undefined,
   })
-  expect(wrapper.text()).toContain('当前没有结果')
-  expect(wrapper.find('#execution-batch').exists()).toBe(false)
   wrapper.unmount()
 })
 

@@ -11,7 +11,7 @@ import {
   unique,
   uuid,
 } from '../../../services/decode'
-import { criteria, evidence } from '../../devices/clients/asset-model'
+import { inventoryCondition, evidence } from '../../devices/clients/asset-model'
 
 export const complianceStatuses = [
   'compliant',
@@ -47,7 +47,7 @@ export function complianceDefinition(value: unknown) {
     enabled: boolean(v['enabled']),
     platform: enumeration(v['platform'], platforms),
     target: kind === 'all' ? { kind } : { kind, ids },
-    criteria: criteria(v['criteria']),
+    criteria: inventoryCondition(v['criteria']),
   }
 }
 export type ComplianceDefinition = ReturnType<typeof complianceDefinition>

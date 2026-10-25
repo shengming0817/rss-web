@@ -1,3 +1,9 @@
+import {
+  queryParameters,
+  nextCursor,
+  projectedRow,
+  type DirectoryQuery,
+} from '../../../services/directory-query'
 import type { Operation } from '../../../services/useOperation'
 /** Current rss-mdm asset contract. */
 import type { HttpTransport } from '@rss/api/mdm'
@@ -23,7 +29,8 @@ import {
   type fieldInput,
   inventory,
   savedQuery,
-  query,
+  savedDefinition,
+  queryInput,
   summary,
   qualityRun,
   sourceIds,
@@ -32,18 +39,19 @@ import {
   retentionKey,
   type CollectionScope,
   type ManualChange,
-  type Query,
+  type QueryInput,
 } from './asset-model'
 export * from './asset-model'
 export function decodeInventory(value: unknown, tenant: string) {
   return inventory(assetEnvelope(value, tenant, 'detail', ['device'])['device'])
 }
 export function decodeCatalog(value: unknown, tenant: string) {
-  const v = assetEnvelope(value, tenant, 'fields', ['dictionary', 'fields'])
+  const v = assetEnvelope(value, tenant, 'field_list', ['dictionary', 'items', 'nextCursor'])
   if (v['dictionary'] !== 'assets-v1') throw new Error('Unknown asset dictionary')
   return {
     dictionary: 'assets-v1',
-    fields: unique(array(v['fields'], fieldDefinition), (f) => f.key),
+    items: unique(array(v['items'], fieldDefinition), (f) => f.key),
+    nextCursor: nextCursor(v['nextCursor']),
   }
 }
 export interface FieldDisplayGroup {
@@ -154,6 +162,13 @@ export function decodeCollectionRun(value: unknown, tenant: string, id: string) 
     reason: nullable(v['reason'], identifier),
   }
 }
+const savedFields = {
+  id: uuid,
+  revision: count,
+  definition: (v: unknown) => nullable(v, savedDefinition),
+  name: (v: unknown) => nullable(v, string),
+  deleted: boolean,
+}
 export function createAssetsClient(transport: HttpTransport, tenant: string) {
   const accepted = (value: unknown, operation: string) => {
     const v = assetEnvelope(value, tenant, 'accepted', ['task', 'statusUrl'])
@@ -186,13 +201,27 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
           return { revision: count(v['revision']) }
         },
       }),
-    catalog: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/asset-fields',
-        successStatus: 200,
-        decode: (v) => decodeCatalog(v, tenant),
-      }),
+    async catalog() {
+      const fields: ReturnType<typeof fieldDefinition>[] = [],
+        seen = new Set<string>()
+      let cursor: string | undefined
+      do {
+        const page = await transport.request({
+          method: 'GET',
+          path: '/api/v1/asset-fields',
+          query: queryParameters({ limit: 100, cursor }),
+          successStatus: 200,
+          decode: (v) => decodeCatalog(v, tenant),
+        })
+        fields.push(...page.items)
+        if (fields.length > 1024) throw new Error('Invalid field catalog budget')
+        if (page.nextCursor !== null && seen.has(page.nextCursor))
+          throw new Error('Repeated catalog cursor')
+        if (page.nextCursor !== null) seen.add(page.nextCursor)
+        cursor = page.nextCursor ?? undefined
+      } while (cursor)
+      return { dictionary: 'assets-v1', fields: unique(fields, (field) => field.key) }
+    },
     writeField: (
       field: string,
       body: Operation<{ action: 'put'; definition: ReturnType<typeof fieldInput> }>,
@@ -212,14 +241,20 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
           return { version: count(v['version']) }
         },
       }),
-    fieldReferences: (field: string) =>
+    fieldReferences: (field: string, cursor?: string) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/asset-fields/{field}/references',
         pathParams: { field },
+        query: { cursor, limit: 64 },
         successStatus: 200,
         decode(value) {
-          const v = assetEnvelope(value, tenant, 'field_references', ['field', 'impact'])
+          const v = assetEnvelope(value, tenant, 'field_references', [
+            'field',
+            'impact',
+            'mappings',
+            'nextCursor',
+          ])
           if (v['field'] !== field) throw new Error('Wrong reference field')
           const i = closed(v['impact'], [
             'groups',
@@ -229,7 +264,24 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
             'compliance',
             'savedQueries',
           ])
-          return Object.fromEntries(Object.entries(i).map(([k, v]) => [k, count(v)]))
+          return {
+            impact: Object.fromEntries(Object.entries(i).map(([k, v]) => [k, count(v)])),
+            mappings: array(v['mappings'], (value) => {
+              const mapping = closed(value, ['resource', 'version', 'state', 'telemetry'])
+              return {
+                resource: identifier(mapping['resource']),
+                version: identifier(mapping['version']),
+                state: enumeration(mapping['state'], [
+                  'frozen',
+                  'active',
+                  'deprecated',
+                  'archived',
+                ] as const),
+                telemetry: boolean(mapping['telemetry']),
+              }
+            }),
+            nextCursor: nextCursor(v['nextCursor']),
+          }
         },
       }),
     retention: (key: string, revision: number) =>
@@ -347,20 +399,20 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
       id: string,
       field: string,
       scope: CollectionScope,
-      offset = 0,
+      next?: string,
     ) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/devices/{device}/collections/{run}/fields/{field}/items',
         pathParams: { device, run: uuid(id), field },
-        query: { scope: JSON.stringify(collectionScope(scope)), offset, limit: 100 },
+        query: { scope: JSON.stringify(collectionScope(scope)), cursor: next, limit: 100 },
         successStatus: 200,
         decode: (value) => {
           const v = assetEnvelope(value, tenant, 'collection_items', [
             'run',
             'field',
             'items',
-            'nextOffset',
+            'nextCursor',
           ])
           if (v['run'] !== id || v['field'] !== field) throw new Error('Wrong item quality')
           return {
@@ -381,15 +433,15 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
                 ] as const),
               }
             }),
-            nextOffset: nullable(v['nextOffset'], count),
+            nextCursor: nextCursor(v['nextCursor']),
           }
         },
       }),
-    search: (body: Operation<Query>) =>
+    search: (body: Operation<QueryInput>) =>
       transport.request({
         method: 'POST',
         path: '/api/v1/device-queries',
-        body: { ...body, input: query(body.input) },
+        body: { ...body, input: queryInput(body.input) },
         successStatus: 202,
         decode: (v) => accepted(v, body.operationId),
       }),
@@ -473,15 +525,29 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
           return { device, field, revision: count(v['revision']) }
         },
       }),
-    saved: (after?: string) =>
+    saved: <F extends keyof typeof savedFields = keyof typeof savedFields>(
+      query: DirectoryQuery<F> = {},
+    ) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/saved-queries',
-        query: { after },
+        query: queryParameters({ limit: 20, ...query }),
         successStatus: 200,
-        decode: (value) => {
-          const v = assetEnvelope(value, tenant, 'saved_list', ['items', 'next'])
-          return { items: array(v['items'], savedQuery), next: nullable(v['next'], uuid) }
+        decode(value) {
+          const v = assetEnvelope(value, tenant, 'saved_list', ['items', 'nextCursor'])
+          return {
+            items: array(v['items'], (item) => {
+              const row = projectedRow(item, savedFields, query.fields)
+              if (
+                'deleted' in row &&
+                'definition' in row &&
+                row.deleted !== (row.definition === null)
+              )
+                throw new Error('Wrong saved query state')
+              return row
+            }),
+            nextCursor: nextCursor(v['nextCursor']),
+          }
         },
       }),
     readSaved: (id: string) =>
@@ -495,7 +561,7 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
     save: (
       id: string,
       body: Operation<
-        { action: 'put'; definition: { name: string; query: Query } } | { action: 'delete' }
+        { action: 'put'; definition: { name: string; query: QueryInput } } | { action: 'delete' }
       >,
     ) =>
       transport.request({

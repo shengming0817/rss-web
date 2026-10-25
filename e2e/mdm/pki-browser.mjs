@@ -159,7 +159,11 @@ export async function exercisePki({
   await page.getByRole('button', { name: '核验并继续原恢复', exact: true }).click()
   await page.getByRole('alert').filter({ hasText: '提交结果未知' }).waitFor()
   assert.equal(
-    await page.getByRole('button', { name: '核对并继续', exact: true }).isDisabled(),
+    await page
+      .locator('form.settings-form')
+      .filter({ has: page.locator('#agent-issuance') })
+      .locator('button[type=submit]')
+      .isDisabled(),
     true,
   )
   assert.equal(posts, 1)
@@ -194,7 +198,7 @@ export async function exercisePki({
   await page
     .locator('#login-password')
     .fill(readFileSync(fixture.reader.passwordFile, 'utf8').trim())
-  await page.locator('form').evaluate((f) => f.requestSubmit())
+  await page.locator('form button[type=submit]').click()
   await page.waitForURL((url) => /\/(workspace|settings\/guide)$/.test(url.pathname))
   assert.equal((await context.request.get(origin + '/api/v1/pki/agent/trust')).status(), 403)
   const session = await get(`/api/v1/identity/tenants/${fixture.tenant}/session`)

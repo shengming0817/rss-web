@@ -1,3 +1,8 @@
+import {
+  queryParameters,
+  projectedPage,
+  type DirectoryQuery,
+} from '../../../services/directory-query'
 import { jsonObject } from '../../../services/json'
 import {
   conditionContext,
@@ -59,11 +64,10 @@ export function groupCondition(value: unknown): GroupCondition {
     criteria: groupCriteria(v['criteria']),
   }
 }
-export interface GroupQuery {
-  after?: string | undefined
-  name?: string | undefined
-  kind?: 'static' | 'dynamic' | 'system' | undefined
-  assetContext?: 'endpoint' | 'associated_device' | undefined
+export type GroupDirectoryField = keyof typeof groupFields
+export interface GroupQuery<
+  F extends GroupDirectoryField = GroupDirectoryField,
+> extends DirectoryQuery<F> {
   referenceableFor?: string | undefined
 }
 export function groupReferences(value: unknown) {
@@ -120,6 +124,20 @@ export type GroupChange =
   | { action: 'members'; add: ObjectRef[]; remove: ObjectRef[] }
   | { action: 'delete' | 'recompute' }
 export type GroupProjection = 'members' | 'changes' | 'decisions'
+const groupFields = {
+  id: uuid,
+  kind: (v: unknown) => enumeration(v, ['static', 'dynamic', 'system'] as const),
+  systemSelector: (v: unknown) =>
+    nullable(v, (x) => enumeration(x, ['all_active', 'windows', 'macos'] as const)),
+  assetContext: (v: unknown) => enumeration(v, ['endpoint', 'associated_device'] as const),
+  calculationRevision: count,
+  presentation: groupPresentation,
+  revision: count,
+  memberVersion: count,
+  memberCount: count,
+  ruleVersion: (v: unknown) => nullable(v, identifier),
+  deleted: boolean,
+}
 export function groupSummary(value: unknown) {
   const v = closed(value, [
     'id',
@@ -283,20 +301,23 @@ export function createGroupsClient(transport: HttpTransport) {
     return { task, statusUrl: string(v['statusUrl']) }
   }
   return {
-    list: (query: GroupQuery = {}) =>
-      transport.request({
+    list: <F extends GroupDirectoryField = GroupDirectoryField>(query: GroupQuery<F> = {}) => {
+      const { referenceableFor, ...parameters } = query
+      return transport.request({
         method: 'GET',
         path: '/api/v1/groups',
-        query: { ...query, limit: 20 },
+        query: {
+          ...queryParameters({ limit: 20, ...parameters }),
+          ...(referenceableFor === undefined ? {} : { referenceableFor: uuid(referenceableFor) }),
+        },
         successStatus: 200,
         decode(value) {
-          const v = closed(value, ['items', 'nextCursor'])
-          return {
-            items: array(v['items'], groupSummary),
-            nextCursor: nullable(v['nextCursor'], uuid),
-          }
+          const page = projectedPage(value, groupFields, query.fields, ['id'])
+          if (query.fields === undefined) page.items.forEach(groupSummary)
+          return page
         },
-      }),
+      })
+    },
     references: (
       id: string,
       query: {

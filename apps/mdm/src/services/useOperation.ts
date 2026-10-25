@@ -79,7 +79,10 @@ export function useOperation(
                             : e.status === 409
                               ? e.code === 'first_use_not_ready'
                                 ? 'firstUseNotReady'
-                                : e.code === 'device_view_cursor_invalidated'
+                                : [
+                                      'device_view_cursor_invalidated',
+                                      'resource_cursor_invalidated',
+                                    ].includes(e.code)
                                   ? 'cursorInvalidated'
                                   : 'conflict'
                               : [

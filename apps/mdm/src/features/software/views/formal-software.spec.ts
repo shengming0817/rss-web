@@ -290,7 +290,7 @@ it('uses Resource pages and reads versions only after selection without inventin
   const { wrapper, session } = await fixture(CatalogView, {
     policies: { resources: { list, read } },
   })
-  expect(list).toHaveBeenCalledWith('software', undefined)
+  expect(list).toHaveBeenCalledWith({ cursor: undefined, filter: "kind=='software'" })
   expect(read).not.toHaveBeenCalled()
   await wrapper.get('tbody button').trigger('click')
   await flushPromises()
@@ -299,7 +299,7 @@ it('uses Resource pages and reads versions only after selection without inventin
   await flushPromises()
   await button(wrapper, '下一页').trigger('click')
   await flushPromises()
-  expect(list).toHaveBeenLastCalledWith('software', 'app')
+  expect(list).toHaveBeenLastCalledWith({ cursor: 'app', filter: "kind=='software'" })
   session.value = { ...session.value, session: { id: crypto.randomUUID() } }
   await flushPromises()
   expect(wrapper.find('[data-testid=resource-locator]').exists()).toBe(false)
@@ -410,7 +410,7 @@ it('saves onboarding as the shared Policy and reads the formal execution directo
   })
   await button(wrapper, '执行中心').trigger('click')
   await flushPromises()
-  expect(directory.mock.calls[0]?.[0].policy).toBe(change.mock.calls[0]?.[0])
+  expect(directory.mock.calls[0]?.[0].filter).toContain(change.mock.calls[0]?.[0])
   wrapper.unmount()
 })
 it('instantiates an update blueprint through Resource and exposes the existing Policy entry', async () => {
@@ -712,7 +712,7 @@ it('binds explicit Agent releases in the common Policy and reads canonical regis
   expect(new DOMWrapper(document.body).get('[role=dialog]').text()).toContain('2')
   await button(wrapper, '执行中心').trigger('click')
   await flushPromises()
-  expect(directory.mock.calls[0]?.[0].policy).toBe(saved?.id)
+  expect(directory.mock.calls[0]?.[0].filter).toContain(saved?.id)
   wrapper.unmount()
 })
 

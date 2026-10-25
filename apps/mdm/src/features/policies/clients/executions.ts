@@ -1,3 +1,8 @@
+import {
+  queryParameters,
+  projectedPage,
+  type DirectoryQuery,
+} from '../../../services/directory-query'
 import { jsonValue, type Json } from '../../../services/json'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
@@ -12,8 +17,8 @@ import {
   string,
   uuid,
 } from '../../../services/decode'
-import { decodeNativeObservation } from './native'
 import { decodeRunEvidence } from './runs'
+import { decodeNativeObservation } from './native'
 
 /** Facts still consumed by Security actions and explicit demo state, not an execution API envelope. */
 export type ExecutionOrigin =
@@ -173,98 +178,98 @@ export function executionSummary(value: unknown) {
   }
 }
 export type ExecutionSummary = ReturnType<typeof executionSummary>
+const executionFields = {
+  id: uuid,
+  kind: (v: unknown) => enumeration(v, ['command', 'action_run'] as const),
+  device: identifier,
+  policy: (v: unknown) => nullable(v, uuid),
+  registrationId: uuid,
+  generation: count,
+  origin: (v: unknown) => enumeration(v, ['direct', 'policy'] as const),
+  deadline: integer,
+  status: identifier,
+  detailUrl: (v: unknown) => {
+    const path = string(v)
+    if (
+      !/^\/api\/v1\/(?:devices\/[^/?#]+\/operations|policies\/[0-9a-f-]{36}\/runs)\/[0-9a-f-]{36}$/.test(
+        path,
+      )
+    )
+      throw new Error('Invalid operation locator')
+    return path
+  },
+  evidence: (v: unknown) => {
+    if (!('commandStatus' in record(v))) return decodeRunEvidence(v)
+    const raw = closed(
+      v,
+      ['commandStatus', 'observation', 'dispatchFailure'],
+      ['agentInstallation'],
+    )
+    return {
+      kind: 'command' as const,
+      commandStatus: identifier(raw['commandStatus']),
+      observation: decodeNativeObservation(raw['observation']),
+      dispatchFailure: nullable(raw['dispatchFailure'], (v) => jsonValue(v, 16384)),
+      ...('agentInstallation' in raw
+        ? { agentInstallation: jsonValue(raw['agentInstallation'], 65536) }
+        : {}),
+    }
+  },
+}
 export function createExecutionsClient(transport: HttpTransport) {
   return {
-    directory: (
-      query: {
-        policy?: string | undefined
-        device?: string | undefined
-        kind?: 'command' | 'action_run' | undefined
-        status?: string | undefined
-        after?: string | undefined
-        afterKind?: 'command' | 'action_run' | undefined
-      } = {},
+    directory: <F extends keyof typeof executionFields = keyof typeof executionFields>(
+      query: DirectoryQuery<F> = {},
     ) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/operations',
-        query: { ...query, limit: 20 },
+        query: queryParameters({ limit: 20, ...query }),
         successStatus: 200,
         decode(value) {
-          const v = closed(value, ['items', 'nextCursor', 'statistics', 'asOf'])
-          const stats = closed(v['statistics'], ['total', 'commands', 'actionRuns', 'unknown'])
+          const page = projectedPage(value, executionFields, query.fields, ['id', 'kind'])
+          for (const row of page.items) {
+            if (
+              'kind' in row &&
+              'evidence' in row &&
+              (row.evidence as ReturnType<typeof executionFields.evidence>).kind !== row.kind
+            )
+              throw new Error('Wrong operation evidence')
+            if (
+              'id' in row &&
+              'kind' in row &&
+              'device' in row &&
+              'policy' in row &&
+              'detailUrl' in row
+            ) {
+              const expected =
+                row.kind === 'command'
+                  ? `/api/v1/devices/${new URLSearchParams({ id: String(row.device) }).toString().slice(3).replaceAll('+', '%20')}/operations/${row.id}`
+                  : `/api/v1/policies/${row.policy}/runs/${row.id}`
+              if ((row.kind === 'action_run' && row.policy === null) || row.detailUrl !== expected)
+                throw new Error('Wrong operation locator')
+            }
+          }
+          return page
+        },
+      }),
+    statistics: (filter?: string) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/operations/statistics',
+        query: queryParameters({ filter }),
+        successStatus: 200,
+        decode(value) {
+          const v = closed(value, ['statistics', 'asOf']),
+            stats = closed(v['statistics'], ['total', 'commands', 'actionRuns', 'unknown'])
           return {
-            asOf: integer(v['asOf']),
             statistics: {
               total: count(stats['total']),
               commands: count(stats['commands']),
               actionRuns: count(stats['actionRuns']),
               unknown: count(stats['unknown']),
             },
-            items: array(v['items'], (value) => {
-              const i = closed(value, [
-                'id',
-                'kind',
-                'device',
-                'registrationId',
-                'generation',
-                'origin',
-                'policy',
-                'deadline',
-                'status',
-                'evidence',
-                'detailUrl',
-              ])
-              const kind = enumeration(i['kind'], ['command', 'action_run'] as const),
-                id = uuid(i['id']),
-                device = identifier(i['device']),
-                policy = nullable(i['policy'], uuid)
-              const expected =
-                kind === 'command'
-                  ? `/api/v1/devices/${new URLSearchParams({ id: device }).toString().slice(3).replaceAll('+', '%20')}/operations/${id}`
-                  : `/api/v1/policies/${policy}/runs/${id}`
-              if ((kind === 'action_run' && !policy) || i['detailUrl'] !== expected)
-                throw new Error('Wrong operation locator')
-              return {
-                id,
-                kind,
-                device,
-                policy,
-                registrationId: uuid(i['registrationId']),
-                generation: count(i['generation']),
-                origin: enumeration(i['origin'], ['direct', 'policy'] as const),
-                deadline: integer(i['deadline']),
-                status: identifier(i['status']),
-                evidence:
-                  kind === 'action_run'
-                    ? decodeRunEvidence(i['evidence'])
-                    : (() => {
-                        const evidence = closed(
-                          i['evidence'],
-                          ['commandStatus', 'observation', 'dispatchFailure'],
-                          ['agentInstallation'],
-                        )
-                        return {
-                          kind: 'command' as const,
-                          commandStatus: identifier(evidence['commandStatus']),
-                          observation: decodeNativeObservation(evidence['observation']),
-                          dispatchFailure: nullable(evidence['dispatchFailure'], (v) =>
-                            jsonValue(v, 16384),
-                          ),
-                          agentInstallation: nullable(evidence['agentInstallation'] ?? null, (v) =>
-                            jsonValue(v, 65536),
-                          ),
-                        }
-                      })(),
-              }
-            }),
-            nextCursor: nullable(v['nextCursor'], (value) => {
-              const c = closed(value, ['id', 'kind'])
-              return {
-                id: uuid(c['id']),
-                kind: enumeration(c['kind'], ['command', 'action_run'] as const),
-              }
-            }),
+            asOf: integer(v['asOf']),
           }
         },
       }),

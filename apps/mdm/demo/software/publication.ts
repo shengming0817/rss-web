@@ -1,3 +1,4 @@
+import { directoryPage } from '../directory'
 import { createHash } from 'node:crypto'
 import type { DomainHandler } from '../scenario'
 import type { createResourceDemo } from '../policies/resources'
@@ -41,29 +42,18 @@ export function createPublicationDemo(
           const row = rows.get(identifier(decodeURIComponent(m[1]!)))
           return row ? ok(refresh(row)) : error('software_publication_not_found', 404)
         }
-        const limit = Number(request.query.get('limit') ?? 20),
-          after = request.query.get('after')
-        if (!Number.isInteger(limit) || limit < 1 || limit > 100)
-          return error('malformed_request', 400)
-        const op = request.query.get('operationId')
-        const values = targets
+        const values: Record<string, unknown>[] = targets
           ? publicationTargets
-          : [...rows.values()]
-              .map(refresh)
-              .filter(
-                (v) =>
-                  ['target', 'resource', 'version'].every(
-                    (k) =>
-                      !request.query.has(k) ||
-                      v[k as 'target' | 'resource' | 'version'] === request.query.get(k),
-                  ) &&
-                  (!op || operations.get(op) === v.id),
-              )
-        const page = values
-            .filter((v) => !after || v.id > after)
-            .sort((a, b) => a.id.localeCompare(b.id)),
-          items = page.slice(0, limit)
-        return ok({ items, nextCursor: page.length > limit ? items.at(-1)!.id : null })
+          : [...rows.values()].map(refresh)
+        return ok(
+          directoryPage(values, request, ['id'], {
+            maxLimit: 100,
+            lookup: (row, field) =>
+              field === 'operationId'
+                ? [...operations].filter(([, id]) => id === row.id).map(([op]) => op)
+                : row[field as keyof typeof row],
+          }),
+        )
       }
       if (request.method !== 'POST' || targets) return
       const op = operation(request.body),

@@ -46,7 +46,7 @@ async function load() {
   )
   invalidate()
 }
-async function loadItems(key: string, offset = 0) {
+async function loadItems(key: string, cursor?: string) {
   items.value = undefined
   field.value = key
   await run(
@@ -56,7 +56,7 @@ async function loadItems(key: string, offset = 0) {
         props.id,
         key,
         props.scope ?? { kind: 'device' },
-        offset,
+        cursor,
       ),
     (v) => {
       items.value = v
@@ -124,9 +124,9 @@ watch(
           </li>
         </ol>
         <UiButton
-          v-if="items.nextOffset !== null"
+          v-if="items.nextCursor !== null"
           :disabled="busy"
-          @click="loadItems(field, items.nextOffset)"
+          @click="loadItems(field, items.nextCursor)"
           >{{ t('devices.next') }}</UiButton
         >
       </div>

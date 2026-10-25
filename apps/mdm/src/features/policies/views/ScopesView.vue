@@ -57,7 +57,7 @@ function closeScope() {
 }
 function load(cursor?: string) {
   void run(
-    () => runtime.policies.scopes.list({ after: cursor }),
+    () => runtime.policies.scopes.list({ cursor }),
     (v) => (list.value = v),
   )
 }

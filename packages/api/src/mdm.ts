@@ -47,6 +47,7 @@ const statuses: Readonly<Record<string, number>> = {
   mdm_software_disabled: 409,
   recovery_credential_not_found: 404,
   recovery_credential_integrity: 500,
+  resource_cursor_invalidated: 409,
   device_view_cursor_invalidated: 409,
   upload_offset_conflict: 409,
   capability_unknown: 409,
@@ -127,6 +128,8 @@ export function createMdmTransport(): HttpTransport {
       const recoveryQuery =
         options.method === 'GET' &&
         options.path === '/api/v1/agent-issuances/{issuance}/recovery-operations/{operation}'
+      const operationStatistics =
+        options.method === 'GET' && options.path === '/api/v1/operations/statistics'
       const audit = options.method === 'GET' && options.path === '/api/v1/audit-events'
       const telemetry = [
         '/api/v1/telemetry/resources',
@@ -144,6 +147,7 @@ export function createMdmTransport(): HttpTransport {
         !readiness &&
         !telemetry &&
         !audit &&
+        !operationStatistics &&
         !agentRecovery &&
         !recoveryQuery
       )
