@@ -399,6 +399,210 @@ try {
     assert.equal(response.status(), expectedStatus)
     return response.json()
   }
+  phase = 'query-resource-contract'
+  const queryResources = Array.from({ length: 3 }, () => `query-${randomUUID()}`)
+  for (let i = 0; i < queryResources.length; i++) {
+    await mutate(`/api/v1/resources/${queryResources[i]}`, { action: 'create', kind: 'script' })
+    for (let revision = 1; revision <= i; revision++)
+      await mutate(
+        `/api/v1/resources/${queryResources[i]}`,
+        {
+          action: 'present',
+          presentation: { name: `Query resource ${i}`, extra: { retained: false } },
+        },
+        revision,
+      )
+  }
+  const resourceQuery = new URLSearchParams({
+    filter: `id=in=(${queryResources.join(',')})`,
+    sort: '-revision,id',
+    fields: 'id,revision',
+    limit: '1',
+  })
+  const resourcePages = []
+  let resourceCursor
+  do {
+    if (resourceCursor) resourceQuery.set('cursor', resourceCursor)
+    const value = await api('/api/v1/resources?' + resourceQuery)
+    assert.equal(value.items.length, 1)
+    assert.deepEqual(Object.keys(value.items[0]).sort(), ['id', 'revision'])
+    resourcePages.push(value.items[0])
+    resourceCursor = value.nextCursor
+  } while (resourceCursor)
+  assert.deepEqual(
+    resourcePages.map((row) => row.id),
+    [...queryResources].reverse(),
+  )
+  assert.deepEqual(
+    resourcePages.map((row) => row.revision),
+    [3, 2, 1],
+  )
+  assert.equal(
+    (await api(`/api/v1/resources/${queryResources[2]}`)).presentation.extra.retained,
+    false,
+  )
+  coverage.push('resource-global-filter-sort-projection-and-contiguous-opaque-pages')
+
+  phase = 'query-ordinary-directory-consumers'
+  const attributeId = randomUUID()
+  const attribute = await request(
+    'put',
+    origin + `/api/v1/user-attribute-definitions/${attributeId}`,
+    {
+      headers: await headers(),
+      data: {
+        operationId: randomUUID(),
+        expectedRevision: 0,
+        value: {
+          key: 'query_contract_label',
+          displayName: 'Query contract label',
+          source: { kind: 'identity_local' },
+          pointer: '/extensions/query_contract_label',
+          valueType: 'string',
+          maxLength: 256,
+          maxItems: null,
+          minimum: null,
+          maximum: null,
+          enabled: true,
+          sensitive: false,
+          visibility: 'both',
+          displayUse: 'profile',
+          required: false,
+          useExistingObservation: false,
+        },
+      },
+    },
+  )
+  assert.equal(attribute.status(), 200)
+  const attributes = await api(
+    '/api/v1/user-attribute-definitions?' +
+      new URLSearchParams({
+        filter: `fieldId==${attributeId}`,
+        fields: 'fieldId,revision,value,collectedAfterMicros',
+        limit: '1',
+      }),
+  )
+  assert.equal(attributes.items[0].fieldId, attributeId)
+  assert.ok(Array.isArray(attributes.sources))
+  await page.goto(path('settings/user-attributes'))
+  await loaded()
+  await page.getByText('Query contract label', { exact: true }).waitFor()
+  const complianceId = randomUUID()
+  const compliance = await request('put', origin + `/api/v1/compliance-rules/${complianceId}`, {
+    headers: await headers(),
+    data: {
+      operationId: randomUUID(),
+      expectedRevision: 0,
+      input: {
+        presentation: { name: 'Query contract rule' },
+        severity: 'low',
+        enabled: false,
+        platform: 'all',
+        target: { kind: 'all' },
+        criteria: {
+          kind: 'predicate',
+          field: 'custom.asset_tag',
+          op: 'eq',
+          value: { kind: 'string', value: 'changed fixture' },
+        },
+      },
+    },
+  })
+  assert.equal(compliance.status(), 200)
+  const compliancePage = await api(
+    '/api/v1/compliance-rules?' +
+      new URLSearchParams({
+        filter: `id==${complianceId}`,
+        fields: 'id,revision,definition',
+        limit: '1',
+      }),
+  )
+  assert.equal(compliancePage.items[0].id, complianceId)
+  await page.goto(path('security'))
+  await loaded()
+  await page.getByText('Query contract rule', { exact: false }).first().waitFor()
+  coverage.push('nonempty-user-attribute-and-compliance-client-pages')
+
+  phase = 'asset-rsql-fixed-results'
+  const inventoryBefore = await api(`/api/v1/devices/${fixture.mdm}/inventory`)
+  const tagBefore = inventoryBefore.asset.device.fields['custom.asset_tag'].state
+  assert.equal(tagBefore.kind, 'known')
+  const tagRevision = inventoryBefore.asset.device.revisions['custom.asset_tag']
+  const assignedNull = await request(
+    'put',
+    origin + `/api/v1/devices/${fixture.mdm}/manual-fields/custom.asset_tag`,
+    {
+      headers: await headers(),
+      data: { operationId: randomUUID(), expectedRevision: tagRevision, input: { action: 'null' } },
+    },
+  )
+  assert.equal(assignedNull.status(), 200)
+  const assetQuery = {
+    filter: 'custom.asset_tag=isnull=true',
+    scope: { selector: { kind: 'device' }, quantifier: 'one' },
+    fields: ['custom.asset_tag'],
+    sort: [],
+  }
+  const acceptedQuery = await mutate('/api/v1/device-queries', assetQuery, 0, 202)
+  let queryState
+  const queryDeadline = Date.now() + 90000
+  do {
+    queryState = (await api(`/api/v1/device-queries/${acceptedQuery.task}`)).asset
+    if (queryState.status === 'completed') break
+    assert.ok(['pending', 'running'].includes(queryState.status))
+    await new Promise((resolve) => setTimeout(resolve, 250))
+  } while (Date.now() < queryDeadline)
+  assert.equal(queryState.status, 'completed')
+  assert.ok(queryState.summary.matched >= 1)
+  assert.ok(queryState.summary.unknown >= 1)
+  const fixedResults = await api(`/api/v1/device-queries/${acceptedQuery.task}/items?limit=1`)
+  assert.equal(fixedResults.asset.items[0].fields['custom.asset_tag'].state.kind, 'null')
+  const restoredTag = await request(
+    'put',
+    origin + `/api/v1/devices/${fixture.mdm}/manual-fields/custom.asset_tag`,
+    {
+      headers: await headers(),
+      data: {
+        operationId: randomUUID(),
+        expectedRevision: tagRevision + 1,
+        input: { action: 'set', value: tagBefore.value },
+      },
+    },
+  )
+  assert.equal(restoredTag.status(), 200)
+  assert.deepEqual(
+    (await api(`/api/v1/device-queries/${acceptedQuery.task}/items?limit=1`)).asset,
+    fixedResults.asset,
+  )
+  const savedQueryId = randomUUID()
+  const savedQuery = await request('put', origin + `/api/v1/saved-queries/${savedQueryId}`, {
+    headers: await headers(),
+    data: {
+      operationId: randomUUID(),
+      expectedRevision: 0,
+      input: { action: 'put', definition: { name: 'Query contract saved', query: assetQuery } },
+    },
+  })
+  assert.equal(savedQuery.status(), 200)
+  const savedPage = await api(
+    '/api/v1/saved-queries?' + new URLSearchParams({ filter: `id==${savedQueryId}`, limit: '1' }),
+  )
+  assert.equal(savedPage.asset.items[0].definition.query.filter, assetQuery.filter)
+  await page.goto(path('devices/search'))
+  await loaded()
+  await page
+    .locator('details')
+    .filter({ has: page.locator('summary', { hasText: '个人保存查询' }) })
+    .locator('summary')
+    .click()
+  await page.getByRole('button', { name: /Query contract saved/ }).click()
+  await loaded()
+  await page
+    .locator('[data-testid=server-definition]')
+    .getByText('Query contract saved', { exact: true })
+    .waitFor()
+  coverage.push('asset-rsql-null-missing-unknown-and-immutable-result-with-saved-query-consumer')
+
   const settled = async (url) => {
     const deadline = Date.now() + 90000
     while (Date.now() < deadline) {
@@ -484,7 +688,9 @@ try {
   const firstScopes = await api('/api/v1/scopes?limit=1')
   assert.equal(firstScopes.items.length, 1)
   assert.ok(firstScopes.nextCursor)
-  const secondScopes = await api(`/api/v1/scopes?limit=1&after=${firstScopes.nextCursor}`)
+  const secondScopes = await api(
+    `/api/v1/scopes?limit=1&cursor=${encodeURIComponent(firstScopes.nextCursor)}`,
+  )
   assert.ok(secondScopes.items[0].id > firstScopes.items[0].id)
   await page.goto(path('policies'))
   await loaded()
@@ -1143,7 +1349,10 @@ try {
   assert.equal((await confirm(body(association))).status(), 403)
   await writeRule([{ operation: 'inventory_read', scope: { kind: 'device', id: fixture.mdm } }])
   const scoped = await api('/api/v1/device-views')
-  assert.deepEqual(scoped.statistics, { endpointCount: 1, deviceViewCount: 1 })
+  assert.deepEqual((await api('/api/v1/device-views/statistics')).statistics, {
+    endpointCount: 1,
+    deviceViewCount: 1,
+  })
   assert.ok(!JSON.stringify(scoped).includes(fixture.agent))
   assert.ok(!JSON.stringify(scoped).includes(id))
   assert.equal(

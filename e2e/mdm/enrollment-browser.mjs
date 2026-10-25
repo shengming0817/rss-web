@@ -269,6 +269,34 @@ try {
       assert.equal(reloaded.status(), 200)
       assert.equal((await reloaded.json()).state, 'revoked')
       await page.getByText('revoked', { exact: true }).waitFor()
+      phase = 'configuration-metadata-discovery'
+      const listed = await context.request.get(
+        `${origin}/api/v1/agent-configurations?filter=state==revoked&sort=-createdAt&limit=1`,
+      )
+      assert.equal(listed.status(), 200)
+      const configurationPage = await listed.json()
+      assert.equal(
+        configurationPage.items[0].configurationId,
+        metadata.configuration.configurationId,
+      )
+      for (const item of configurationPage.items)
+        for (const key of ['secret', 'signature', 'connections', 'configuration'])
+          assert.equal(Object.hasOwn(item, key), false)
+      await page.reload()
+      await page
+        .getByRole('button', { name: metadata.configuration.configurationId, exact: true })
+        .waitFor()
+      const detail = page.waitForResponse(
+        (r) =>
+          r.request().method() === 'GET' &&
+          new URL(r.url()).pathname ===
+            `/api/v1/agent-configurations/${metadata.configuration.configurationId}`,
+      )
+      await page
+        .getByRole('button', { name: metadata.configuration.configurationId, exact: true })
+        .click()
+      assert.equal((await detail).status(), 200)
+      coverage.push('configuration-metadata-discovery-detail-and-secret-exclusion')
       coverage.push('configuration-unknown-query-and-revoke')
     } else gaps.push('configuration-PKI-and-signer')
   } else gaps.push('administrator-organization-configuration')

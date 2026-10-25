@@ -128,6 +128,8 @@ export function createMdmTransport(): HttpTransport {
       const recoveryQuery =
         options.method === 'GET' &&
         options.path === '/api/v1/agent-issuances/{issuance}/recovery-operations/{operation}'
+      const operationStatistics =
+        options.method === 'GET' && options.path === '/api/v1/operations/statistics'
       const audit = options.method === 'GET' && options.path === '/api/v1/audit-events'
       const telemetry = [
         '/api/v1/telemetry/resources',
@@ -145,6 +147,7 @@ export function createMdmTransport(): HttpTransport {
         !readiness &&
         !telemetry &&
         !audit &&
+        !operationStatistics &&
         !agentRecovery &&
         !recoveryQuery
       )

@@ -116,12 +116,14 @@ try {
   coverage.push('real-unprepared-device-control-501')
   const first = await create()
   for (let i = 0; i < 20; i++) await create()
-  const sample = await get('/api/v1/operations?kind=command&limit=1')
+  const sample = await get('/api/v1/operations?filter=kind==command&limit=1')
   const filterStatus = sample.items[0].status
-  const directory = await get(`/api/v1/operations?kind=command&status=${filterStatus}&limit=1`)
+  const directory = await get(
+    `/api/v1/operations?filter=${encodeURIComponent(`kind==command;status==${filterStatus}`)}&limit=1`,
+  )
   assert.ok(directory.nextCursor)
   const following = await get(
-    `/api/v1/operations?kind=command&status=${filterStatus}&limit=1&after=${directory.nextCursor.id}&afterKind=${directory.nextCursor.kind}`,
+    `/api/v1/operations?filter=${encodeURIComponent(`kind==command;status==${filterStatus}`)}&limit=1&cursor=${encodeURIComponent(directory.nextCursor)}`,
   )
   assert.notEqual(directory.items[0].id, following.items[0].id)
   await page.goto(at('policies/executions'))
