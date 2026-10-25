@@ -285,3 +285,30 @@ it('bounds plaintext Entra terms and forces a new version after text changes', a
   ])
     expect(() => termsContext({ ...context, ...delta })).toThrow()
 })
+
+it('discovers only configuration metadata and keeps signed delivery outside list pages', async () => {
+  const created = await client.configurations.create({
+    operationId: operation(),
+    secret: generateEnrollmentPassword(),
+    lifetimeSeconds: 300,
+    quantity: { kind: 'finite', count: 2 },
+    targets: [{ platform: 'windows', architecture: 'x86_64' }],
+  })
+  const page = await client.configurations.list({ filter: 'state==available', limit: 1 })
+  expect(page.items).toHaveLength(1)
+  expect(page.items[0]).toMatchObject({
+    configurationId: created.configuration.configurationId,
+    state: 'available',
+    remaining: 2,
+  })
+  for (const key of ['secret', 'signature', 'connections', 'configuration'])
+    expect(page.items[0]).not.toHaveProperty(key)
+  expect(
+    (await client.configurations.read(page.items[0]!.configurationId)).configuration
+      .configurationId,
+  ).toBe(created.configuration.configurationId)
+  await client.configurations.revoke(page.items[0]!.configurationId, operation())
+  expect((await client.configurations.list({ filter: 'state==revoked' })).items[0]?.state).toBe(
+    'revoked',
+  )
+})

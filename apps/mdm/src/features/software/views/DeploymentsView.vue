@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { comparison as queryComparison, allOf } from '../../../services/directory-query'
 import {
   UiButton,
   UiStepIndicator,
@@ -104,7 +105,14 @@ const nativeChoices = computed(
 function loadPublications(after?: string) {
   const r = draft.value.action.resource
   void run(
-    () => runtime.software.publication.list({ resource: r.id, version: r.version, after }),
+    () =>
+      runtime.software.publication.list({
+        cursor: after,
+        filter: allOf(
+          queryComparison('resource', '==', r.id),
+          queryComparison('version', '==', r.version),
+        ),
+      }),
     (v) => {
       published.value = v
     },
@@ -268,7 +276,7 @@ function cancelEdit() {
 }
 function list(after?: string) {
   void run(
-    () => client.list(after, 'software'),
+    () => client.list({ cursor: after, filter: queryComparison('action', '==', 'software') }),
     (v) => {
       page.value = v
     },
@@ -483,7 +491,7 @@ watch(
           {{ p.definition.action.kind === 'software' ? p.definition.action.resource.id : p.id }} /
           {{ p.definition.action.kind === 'software' ? p.definition.action.resource.version : '—' }}
           · {{ p.id }} ·
-          {{ p.enabled ? t('software.enabled') : t('software.paused') }}
+          {{ p.state === 'enabled' ? t('software.enabled') : t('software.paused') }}
         </UiButton>
       </li>
     </ul>

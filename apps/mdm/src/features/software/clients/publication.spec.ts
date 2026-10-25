@@ -76,6 +76,8 @@ it('uses bounded directories and keeps writes explicit with server-owned attempt
   request.mockImplementationOnce(async (o: RequestOptions<unknown>) =>
     o.decode({ items: [value], nextCursor: null }),
   )
-  await client.list({ operationId: id })
-  expect(request.mock.calls[3]?.[0]).toMatchObject({ query: { operationId: id, limit: 20 } })
+  await client.list({ filter: "operationId=='" + id + "'" })
+  expect(request.mock.calls[3]?.[0]).toMatchObject({
+    query: { filter: "operationId=='" + id + "'", limit: 20 },
+  })
 })

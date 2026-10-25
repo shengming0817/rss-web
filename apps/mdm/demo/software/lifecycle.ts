@@ -1,3 +1,4 @@
+import { directoryPage } from '../directory'
 import { createHash } from 'node:crypto'
 import type { DomainHandler } from '../scenario'
 import type { createResourceDemo } from '../policies/resources'
@@ -92,32 +93,14 @@ export function createLifecycleDemo(resources: ReturnType<typeof createResourceD
     if (request.path === '/api/v1/software/sources' && request.method === 'GET') {
       if (scenario === 'denied') return error('permission_denied', 403)
       try {
-        const limit = Number(request.query.get('limit') ?? 20),
-          after = request.query.get('after')
-        if (!Number.isInteger(limit) || limit < 1 || limit > 100)
-          return error('malformed_request', 400)
-        const cursor = after ? (JSON.parse(after) as [string, string]) : undefined
-        const values = [...sources.values()]
-          .sort(
-            (a, b) =>
-              a.source.id.localeCompare(b.source.id) ||
-              a.source.revision.localeCompare(b.source.revision),
-          )
-          .filter(
-            (v) =>
-              !cursor ||
-              v.source.id > cursor[0] ||
-              (v.source.id === cursor[0] && v.source.revision > cursor[1]),
-          )
-        const items = values.slice(0, limit),
-          last = items.at(-1)
-        return ok({
-          items: structuredClone(items),
-          nextCursor:
-            values.length > limit && last
-              ? JSON.stringify([last.source.id, last.source.revision])
-              : null,
-        })
+        const rows = [...sources.values()].map((row) => ({
+          ...structuredClone(row),
+          id: row.source.id,
+          revision: row.source.revision,
+          protocol: row.source.protocol.kind,
+          state: row.lifecycle.state,
+        }))
+        return ok(directoryPage(rows, request, ['id', 'revision'], { maxLimit: 100 }))
       } catch {
         return error('malformed_request', 400)
       }

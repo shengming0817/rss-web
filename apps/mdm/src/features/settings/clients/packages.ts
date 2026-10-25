@@ -1,3 +1,8 @@
+import {
+  queryParameters,
+  projectedPage,
+  type DirectoryQuery,
+} from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import { MDM_CONTENT_TIMEOUT_MS } from '@rss/api/mdm-limits'
 import {
@@ -15,7 +20,13 @@ import {
   enumeration,
   identifier,
 } from '../../../services/decode'
-import { installer, type target } from '../../enrollment/clients/packages'
+import {
+  installer,
+  target,
+  installerFormats,
+  platforms,
+  architectures,
+} from '../../enrollment/clients/packages'
 export function installerFacts(value: unknown) {
   const v = closed(value, ['format', 'version', 'architectures', 'bundleId'])
   return {
@@ -73,6 +84,19 @@ export function savedInstaller(value: unknown, expected: string) {
     version: identifier(v['version']),
     variant: identifier(v['variant']),
   }
+}
+const packageFields = {
+  releaseId: uuid,
+  tenantId: uuid,
+  target,
+  state: (v: unknown) => enumeration(v, ['published', 'withdrawn'] as const),
+  platform: (v: unknown) => enumeration(v, platforms),
+  architecture: (v: unknown) => enumeration(v, architectures),
+  format: (v: unknown) => enumeration(v, installerFormats),
+  version: identifier,
+  filename: identifier,
+  length: count,
+  installerSha256: digest,
 }
 export function createManagedPackages(transport: HttpTransport, tenant: string) {
   const uploadPath = '/api/v1/resources/{resource}/uploads/{upload}'
@@ -235,16 +259,33 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
         },
       }),
 
-    read: () =>
+    list: <F extends keyof typeof packageFields = keyof typeof packageFields>(
+      query: DirectoryQuery<F> = {},
+    ) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/agent-packages',
+        query: queryParameters({ limit: 20, ...query }),
         successStatus: 200,
-        decode: (v) =>
-          unique(
-            array(v, (item) => installer(item, tenant)),
-            (p) => p.releaseId,
-          ),
+        decode(value) {
+          const page = projectedPage(value, packageFields, query.fields, ['releaseId'])
+          for (const row of page.items) {
+            if ('tenantId' in row && row.tenantId !== tenant)
+              throw new Error('Wrong package tenant')
+            if (!query.fields) {
+              const { platform, architecture } = row
+              const metadata = Object.fromEntries(
+                Object.entries(row).filter(
+                  ([key]) => !['state', 'platform', 'architecture'].includes(key),
+                ),
+              )
+              const item = installer(metadata, tenant)
+              if (item.target.platform !== platform || item.target.architecture !== architecture)
+                throw new Error('Wrong package target')
+            }
+          }
+          return page
+        },
       }),
     withdraw: (id: string, release: string) =>
       transport.request({

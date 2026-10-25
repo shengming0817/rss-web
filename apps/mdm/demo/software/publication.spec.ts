@@ -52,7 +52,7 @@ it('publishes one exact version to one target and recovers the original operatio
       '/api/v1/software/publications',
       undefined,
       undefined,
-      new URLSearchParams({ operationId: recover.operationId }),
+      new URLSearchParams({ filter: `operationId==${recover.operationId}` }),
     ),
     'normal',
   )!

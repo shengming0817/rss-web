@@ -26,6 +26,29 @@ const { canRead, canWrite } = permission,
       runtime.session.state.value.session?.id,
     ],
   )
+const directoryOperation = useOperation([], () => [
+  runtime.session.state.value.tenant ?? undefined,
+  runtime.session.state.value.identity?.principalId,
+  runtime.session.state.value.session?.id,
+])
+const directory = ref<Awaited<ReturnType<typeof client.list>>>()
+function loadDirectory(cursor?: string) {
+  if (!canRead.value) return
+  directory.value = undefined
+  void directoryOperation.run(
+    () => client.list({ cursor }),
+    (page) => {
+      directory.value = page
+    },
+  )
+}
+function selectConfiguration(id: string) {
+  if (busy.value || uncertain.value || pending.value) return
+  delivery.clear()
+  delivered.value = undefined
+  configurationId.value = id
+  read()
+}
 const delivery = useAttachment(),
   { url, filename } = delivery
 const settings = ref<Awaited<ReturnType<typeof client.settings>>>(),
@@ -220,7 +243,11 @@ watch(
     delivery.clear()
     current.value = undefined
     settings.value = undefined
-    if (allowed) refresh()
+    directory.value = undefined
+    if (allowed) {
+      refresh()
+      loadDirectory()
+    }
   },
   { immediate: true },
 )
@@ -238,6 +265,7 @@ watch(
     delivery.clear()
     current.value = undefined
     settings.value = undefined
+    directory.value = undefined
     operationId.value = ''
     configurationId.value = ''
     pending.value = undefined
@@ -257,6 +285,32 @@ watch(
       <UiButton type="button" :disabled="!!busy" @click="permission.refresh">
         {{ t('onboarding.refreshAccess') }}
       </UiButton>
+      <section class="console-panel" :aria-busy="directoryOperation.busy.value">
+        <h2>{{ t('onboarding.configurations') }}</h2>
+        <UiButton :disabled="directoryOperation.busy.value" @click="loadDirectory()">{{
+          t('devices.reload')
+        }}</UiButton>
+        <p v-if="directoryOperation.failure.value" role="alert">
+          {{ t('devices.' + directoryOperation.failure.value) }}
+        </p>
+        <p v-if="directory && !directory.items.length">{{ t('devices.empty') }}</p>
+        <p v-for="item in directory?.items" :key="item.configurationId">
+          <UiButton
+            :disabled="busy || uncertain || !!pending"
+            @click="selectConfiguration(item.configurationId)"
+            >{{ item.configurationId }}</UiButton
+          >
+          {{ item.state }} · {{ item.createdBy }} ·
+          {{ item.targets.map((target) => target.platform + '/' + target.architecture).join(', ') }}
+          · {{ t('onboarding.remaining') }}: {{ item.remaining ?? t('onboarding.unlimited') }}
+        </p>
+        <UiButton
+          v-if="directory?.nextCursor"
+          :disabled="directoryOperation.busy.value"
+          @click="loadDirectory(directory.nextCursor)"
+          >{{ t('devices.next') }}</UiButton
+        >
+      </section>
       <details
         v-if="canWrite && settings"
         class="console-panel console-task"

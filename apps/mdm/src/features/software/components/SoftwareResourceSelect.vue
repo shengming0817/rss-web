@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { comparison as queryComparison } from '../../../services/directory-query'
 import { nextTick, ref, watch } from 'vue'
 import { UiButton } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
@@ -17,7 +18,11 @@ const page = ref<Awaited<ReturnType<typeof runtime.policies.resources.list>>>(),
   selected = ref<ResourceRead>()
 function load(after?: string) {
   void run(
-    () => runtime.policies.resources.list('software', after),
+    () =>
+      runtime.policies.resources.list({
+        filter: queryComparison('kind', '==', 'software'),
+        cursor: after,
+      }),
     (v) => {
       page.value = v
     },

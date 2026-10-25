@@ -91,6 +91,7 @@ export const settingsZh = {
   managedAppleEnrollment: 'Managed Apple Account',
   noPackage: '尚未发布此平台安装包',
   packagePublished: '已发布',
+  packageWithdrawn: '已撤回',
   withdrawPackageHint: '撤回后此发行包将不再用于新的安装交付。',
   initializeCaHint:
     '运维使用 initialize-ca 统一核对并准备真实签发者、用途、信任与回调；configure-host 自动接入通道。重建服务后核对原操作和当前进程观察，不重新创建既有 CA 或设备身份。',
@@ -464,6 +465,7 @@ export const settingsEn = {
   managedAppleEnrollment: 'Managed Apple Account',
   noPackage: 'No published package for this platform',
   packagePublished: 'Published',
+  packageWithdrawn: 'Withdrawn',
   withdrawPackageHint: 'This release will no longer be available for new installation delivery.',
   initializeCaHint:
     'Operations uses initialize-ca to verify and prepare the actual issuer, purposes, trust and callbacks. configure-host connects channels automatically. Recreate services and verify the original operation and current process observation; preserve the existing CA and device identities.',

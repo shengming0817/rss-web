@@ -23,8 +23,9 @@ const id = ref(''),
 let pending: { id: string; revision: string; operationId: string } | undefined
 const page = ref<Awaited<ReturnType<typeof client.sources>>>()
 function list(after?: string) {
+  page.value = undefined
   void run(
-    () => client.sources(after),
+    () => client.sources({ cursor: after }),
     (v) => {
       page.value = v
     },

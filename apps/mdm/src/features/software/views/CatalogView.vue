@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { comparison as queryComparison } from '../../../services/directory-query'
 import { UiButton, UiTable, UiSearchInput } from '@rss/core/components'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -79,7 +80,7 @@ function close() {
 function list(after?: string) {
   if (busy.value || locked.value) return
   void run(
-    () => client.list('software', after),
+    () => client.list({ filter: queryComparison('kind', '==', 'software'), cursor: after }),
     (v) => {
       page.value = v
     },

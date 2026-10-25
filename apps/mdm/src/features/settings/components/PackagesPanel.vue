@@ -24,7 +24,8 @@ const {
   markCompared,
   query,
 } = useSettingsAction(() => 'packages')
-const packages = ref<Awaited<ReturnType<typeof client.read>>>([]),
+const packages = ref<Awaited<ReturnType<typeof client.list>>['items']>([]),
+  next = ref<string | null>(null),
   withdrawTarget = ref<string>(),
   uploadTarget = ref<(typeof targets)[number]>()
 const targets = [
@@ -63,11 +64,14 @@ watch(
   },
   { immediate: true, flush: 'sync' },
 )
-async function load() {
-  packages.value = []
+async function load(cursor?: string) {
+  if (!cursor) packages.value = []
   return run(
-    () => client.read(),
-    (v) => (packages.value = v),
+    () => client.list({ cursor }),
+    (v) => {
+      packages.value = cursor ? [...packages.value, ...v.items] : v.items
+      next.value = v.nextCursor
+    },
   )
 }
 async function compare() {
@@ -101,16 +105,18 @@ async function withdraw(replay = false) {
   )
     await load()
 }
-onMounted(load)
+onMounted(() => load())
 useSettingsFacts(() => {
   packages.value = []
+  next.value = null
   withdrawTarget.value = undefined
   uploadTarget.value = undefined
 })
 </script>
 <template>
   <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
-  <UiButton :disabled="busy || !canRead" @click="load">{{ t('settings.reload') }}</UiButton>
+  <UiButton :disabled="busy || !canRead" @click="load()">{{ t('settings.reload') }}</UiButton>
+  <UiButton v-if="next" :disabled="busy" @click="load(next)">{{ t('devices.next') }}</UiButton>
   <OperationNotice
     v-if="!withdrawTarget"
     :operation="pending"
@@ -136,11 +142,18 @@ useSettingsFacts(() => {
     <article v-for="p in slot.packages" :key="p.releaseId" class="package-release">
       <div>
         <strong>{{ p.filename }}</strong>
-        <p>{{ p.version }} · {{ t('settings.packagePublished') }}</p>
+        <p>
+          {{ p.version }} ·
+          {{
+            t(p.state === 'published' ? 'settings.packagePublished' : 'settings.packageWithdrawn')
+          }}
+        </p>
       </div>
-      <UiButton :disabled="locked || !canWrite" @click="withdrawTarget = p.releaseId">{{
-        t('settings.withdrawPackage')
-      }}</UiButton>
+      <UiButton
+        :disabled="locked || !canWrite || p.state !== 'published'"
+        @click="withdrawTarget = p.releaseId"
+        >{{ t('settings.withdrawPackage') }}</UiButton
+      >
     </article>
   </section>
   <PackageUpload

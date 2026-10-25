@@ -134,8 +134,10 @@ async function load() {
         value,
         packages:
           value.saved.intent.channels.includes('agent') || value.saved.revision === 0
-            ? await runtime.settings.packages.read().catch(() => null)
-            : [],
+            ? await runtime.settings.packages
+                .list({ filter: 'state==published', limit: 1 })
+                .catch(() => null)
+            : { items: [] },
         writable: authorization.grants.some(
           (g) => g.operation === 'registration_configuration_write' && g.scope.kind === 'tenant',
         ),
@@ -145,7 +147,7 @@ async function load() {
       progress.value = result.value
       writable.value = result.writable
       packageKnown.value = result.packages !== null
-      packageReady.value = (result.packages?.length ?? 0) > 0
+      packageReady.value = (result.packages?.items.length ?? 0) > 0
       if (!pending.value || pending.value.state === 'received') {
         draft.value = structuredClone(result.value.saved.intent)
         if (!finished.value) {
