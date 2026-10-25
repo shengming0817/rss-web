@@ -1,3 +1,4 @@
+import { directoryPage } from '../directory'
 import {
   groupPresentation,
   groupCondition,
@@ -285,29 +286,24 @@ export function createGroupDemo(
     const { path, method, query } = request
     if (path === '/api/v1/groups' && method === 'GET') {
       const items = (
-          scenario === 'empty'
-            ? []
-            : [...groups.values()].filter((g) => !g.read.group.deleted).map((g) => g.read.group)
-        )
-          .filter(
-            (g) =>
-              (!query.get('name') ||
-                g.presentation.name.toLowerCase().includes(query.get('name')!.toLowerCase())) &&
-              (!query.get('assetContext') || g.assetContext === query.get('assetContext')) &&
-              (!query.get('kind') || g.kind === query.get('kind')) &&
-              (!query.get('referenceableFor') ||
-                (g.id !== query.get('referenceableFor') &&
-                  !references(groups.get(g.id)?.read.criteria?.criteria).includes(
-                    query.get('referenceableFor')!,
-                  ))),
-          )
-          .filter((g) => g.id > (query.get('after') ?? ''))
-          .sort((a, b) => a.id.localeCompare(b.id)),
-        limit = Number(query.get('limit') ?? 20)
-      return ok({
-        items: items.slice(0, limit),
-        nextCursor: items.length > limit ? items[limit - 1]!.id : null,
-      })
+        scenario === 'empty' ? [] : [...groups.values()].map((g) => g.read.group)
+      ).filter(
+        (g) =>
+          (query.get('filter')?.includes('deleted') || !g.deleted) &&
+          (!query.get('referenceableFor') ||
+            (g.id !== query.get('referenceableFor') &&
+              !references(groups.get(g.id)?.read.criteria?.criteria).includes(
+                query.get('referenceableFor')!,
+              ))),
+      )
+      return ok(
+        directoryPage(items, request, ['id'], {
+          defaultLimit: 64,
+          context: ['referenceableFor'],
+          lookup: (row, field) =>
+            field === 'name' ? row.presentation.name : row[field as keyof typeof row],
+        }),
+      )
     }
     const referenceMatch = /^\/api\/v1\/groups\/([^/]+)\/references$/.exec(path)
     if (referenceMatch && method === 'GET') {

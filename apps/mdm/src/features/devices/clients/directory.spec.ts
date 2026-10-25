@@ -14,8 +14,6 @@ it('decodes only the formal endpoint directory', () => {
         enrollments: [],
       },
     ],
-    statistics: { total: 1, pending: 1, active: 0, revoked: 0 },
-    asOf: 0,
     nextCursor: null,
   }
   expect(decodeDirectory(response).items[0]?.inventoryAvailable).toBe(false)

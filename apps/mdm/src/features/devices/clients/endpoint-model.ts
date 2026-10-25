@@ -140,11 +140,11 @@ export function viewEndpoint(value: unknown) {
   }
 }
 export type ViewEndpoint = ReturnType<typeof viewEndpoint>
-function endpointFields(v: Record<string, unknown>) {
-  return {
-    id: identifier(v['id']),
-    status: enumeration(v['status'], endpointStatuses),
-    primaryMdmRegistration: nullable(v['primaryMdmRegistration'], (x) => {
+export const endpointDirectoryFields = {
+  id: (value: unknown) => identifier(value),
+  status: (value: unknown) => enumeration(value, endpointStatuses),
+  primaryMdmRegistration: (value: unknown) =>
+    nullable(value, (x) => {
       const p = closed(x, ['registrationId', 'generation', 'source'])
       return {
         registrationId: uuid(p['registrationId']),
@@ -152,8 +152,9 @@ function endpointFields(v: Record<string, unknown>) {
         source: enumeration(p['source'], ['mdm.windows', 'mdm.apple'] as const),
       }
     }),
-    channels: unique(
-      array(v['channels'], (x) => {
+  channels: (value: unknown) =>
+    unique(
+      array(value, (x) => {
         const c = closed(x, [
           'registrationId',
           'channel',
@@ -215,7 +216,8 @@ function endpointFields(v: Record<string, unknown>) {
       }),
       (c) => c.channel,
     ),
-    enrollments: array(v['enrollments'], (x) => {
+  enrollments: (value: unknown) =>
+    array(value, (x) => {
       const e = closed(x, ['enrollmentId', 'source', 'status', 'expiresAt', 'platform'])
       return {
         enrollmentId: uuid(e['enrollmentId']),
@@ -225,6 +227,16 @@ function endpointFields(v: Record<string, unknown>) {
         expiresAt: integer(e['expiresAt']),
       }
     }),
+}
+function endpointFields(v: Record<string, unknown>) {
+  return {
+    id: endpointDirectoryFields.id(v['id']),
+    status: endpointDirectoryFields.status(v['status']),
+    primaryMdmRegistration: endpointDirectoryFields.primaryMdmRegistration(
+      v['primaryMdmRegistration'],
+    ),
+    channels: endpointDirectoryFields.channels(v['channels']),
+    enrollments: endpointDirectoryFields.enrollments(v['enrollments']),
   }
 }
 export type Endpoint = ReturnType<typeof endpoint>

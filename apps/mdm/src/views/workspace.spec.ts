@@ -42,7 +42,7 @@ async function setup(
           demo: true,
           session: { state },
           workspace: { read },
-          devices: { views: { list: directory } },
+          devices: { views: { statistics: directory } },
           policies: { policies: { list: async () => ({ items: [] }) } },
           software: { assignments: { list: async () => ({ items: [] }) } },
           operations: { audit: { list: async () => ({ items: [] }) } },

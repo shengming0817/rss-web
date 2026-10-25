@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { comparison as queryComparison, allOf } from '../../../services/directory-query'
 import { UiButton, UiDialog, UiTable, UiTabs, UiBadge, UiSearchInput } from '@rss/core/components'
 import { ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -7,7 +8,6 @@ import { operation, useOperation } from '../../../services/useOperation'
 import type { FieldDefinition } from '../clients/assets'
 import {
   type GroupChange,
-  type GroupQuery,
   type GroupProjection,
   type GroupRead,
   groupCondition,
@@ -29,8 +29,8 @@ const { t } = useI18n(),
 const list = ref<Awaited<ReturnType<typeof runtime.devices.groups.list>>>(),
   fields = ref<FieldDefinition[]>([])
 const query = ref(''),
-  filter = ref<'' | GroupQuery['kind']>('')
-let applied: GroupQuery = {}
+  filter = ref<'' | 'static' | 'dynamic' | 'system'>('')
+let applied: { name?: string | undefined; kind?: 'static' | 'dynamic' | 'system' | undefined } = {}
 function closeDetail() {
   if (busy.value || uncertain.value) return
   current.value = undefined
@@ -107,12 +107,20 @@ function write<T>(request: () => Promise<T>, apply: (value: T) => void) {
   void pending()
 }
 function loadList(next?: string) {
+  list.value = undefined
   if (busy.value) return
   const selection = next
     ? applied
     : { name: query.value || undefined, kind: filter.value || undefined }
   void run(
-    () => runtime.devices.groups.list({ ...selection, after: next }),
+    () =>
+      runtime.devices.groups.list({
+        cursor: next,
+        filter: allOf(
+          selection.name ? queryComparison('name', '=icontains=', selection.name) : undefined,
+          selection.kind ? queryComparison('kind', '==', selection.kind) : undefined,
+        ),
+      }),
     (v) => {
       list.value = v
       applied = selection

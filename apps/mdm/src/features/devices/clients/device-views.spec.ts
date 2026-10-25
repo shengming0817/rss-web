@@ -50,13 +50,13 @@ const endpoint = {
 }
 const reference = { kind: 'endpoint' as const, id: endpoint.id }
 const item = {
+  key: 'endpoint:device-one',
   reference,
   association: null,
   endpoints: [{ ...endpoint, assetState: 'active', platform: { state: 'unknown', values: [] } }],
 }
 const page = {
   items: [item],
-  statistics: { endpointCount: 1, deviceViewCount: 1 },
   nextCursor: null,
 }
 it('requires the current asset state on view endpoints while the device directory keeps its own shape', () => {
@@ -77,8 +77,6 @@ it('requires the current asset state on view endpoints while the device director
     expect(() => decodeViews({ ...page, items: [{ ...item, endpoints: [invalid] }] })).toThrow()
   const directory = {
     items: [{ ...endpoint, inventoryAvailable: false }],
-    statistics: { total: 1, pending: 0, active: 0, revoked: 0 },
-    asOf: 0,
     nextCursor: null,
   }
   expect(decodeDirectory(directory).items[0]?.id).toBe(endpoint.id)
@@ -108,7 +106,9 @@ it('retains scoped source evidence on view detail and rejects evidence outside t
     },
   }
   const detail = {
-    ...item,
+    reference: item.reference,
+    association: item.association,
+    endpoints: item.endpoints,
     fields: {
       'custom.is_loaner': {
         field: 'custom.is_loaner',

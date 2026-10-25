@@ -1,3 +1,4 @@
+import { directoryPage, filterRows } from '../directory'
 import { randomUUID } from 'node:crypto'
 import type { DomainHandler, DemoEvent } from '../scenario'
 import { makeDevices } from './fixtures'
@@ -28,7 +29,7 @@ export function createDeviceDemo() {
   )
   const directory: DomainHandler = (request, scenario) => {
     const { path, method, query } = request
-    if (path === '/api/v1/devices' && method === 'GET') {
+    if (['/api/v1/devices', '/api/v1/devices/statistics'].includes(path) && method === 'GET') {
       const items =
         scenario === 'empty'
           ? []
@@ -39,19 +40,25 @@ export function createDeviceDemo() {
                 ...endpointProjection(d),
                 inventoryAvailable: d.summary.inventoryAvailable,
               }))
-      const selected = items.filter((d) => d.id > (query.get('after') ?? '')),
-        limit = Number(query.get('limit') ?? 20)
-      return ok({
-        items: selected.slice(0, limit),
-        statistics: {
-          total: items.length,
-          pending: items.filter((d) => d.status === 'pending').length,
-          active: items.filter((d) => d.status === 'active').length,
-          revoked: items.filter((d) => d.status === 'revoked').length,
-        },
-        asOf: Math.floor(Date.now() / 1000),
-        nextCursor: selected.length > limit ? selected[limit - 1]!.id : null,
-      })
+      const lookup = (row: (typeof items)[number], field: string) =>
+        field === 'channel'
+          ? row.channels.map((c) => c.channel)
+          : field === 'source'
+            ? row.channels.map((c) => c.source)
+            : row[field as keyof typeof row]
+      if (path.endsWith('/statistics')) {
+        const filtered = filterRows(items, query.get('filter'), lookup)
+        return ok({
+          statistics: {
+            total: filtered.length,
+            pending: filtered.filter((d) => d.status === 'pending').length,
+            active: filtered.filter((d) => d.status === 'active').length,
+            revoked: filtered.filter((d) => d.status === 'revoked').length,
+          },
+          asOf: Math.floor(Date.now() / 1000),
+        })
+      }
+      return ok(directoryPage(items, request, ['id'], { defaultLimit: 64, lookup }))
     }
     const endpointPath = /^\/api\/v1\/devices\/([^/]+)(?:\/(timeline))?$/.exec(path)
     if (endpointPath && method === 'GET') {

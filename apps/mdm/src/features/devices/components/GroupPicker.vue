@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { comparison as queryComparison, allOf } from '../../../services/directory-query'
 import { computed, ref, watch } from 'vue'
 import { UiButton, UiPopover } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
@@ -37,10 +38,14 @@ async function load(more = false) {
   await run(
     () =>
       runtime.devices.groups.list({
-        name: search.value || undefined,
-        assetContext: props.assetContext,
+        filter: allOf(
+          search.value ? queryComparison('name', '=icontains=', search.value) : undefined,
+          props.assetContext
+            ? queryComparison('assetContext', '==', props.assetContext)
+            : undefined,
+        ),
         referenceableFor: props.referenceableFor,
-        after: more ? (next.value ?? undefined) : undefined,
+        cursor: more ? (next.value ?? undefined) : undefined,
       }),
     (value) => {
       rows.value = more ? [...rows.value, ...value.items] : value.items

@@ -11,7 +11,7 @@ import {
   uuid,
 } from '../../../services/decode'
 import { member, positive, type Member } from './endpoint-model'
-import { cursor } from './asset-model'
+import { pageCursor } from '../../../services/directory-query'
 export interface ConfirmAssociation {
   operationId: string
   associationId: string | null
@@ -60,19 +60,23 @@ export function verificationText(value: string) {
 }
 export function createAssociationsClient(transport: HttpTransport) {
   return {
-    candidates: (device: string, channel: Member['channel'], after?: string) =>
+    candidates: (device: string, channel: Member['channel'], cursor?: string) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/devices/{device}/association-candidates',
         pathParams: { device },
-        query: { channel, after, limit: 20 },
+        query: {
+          channel,
+          cursor: cursor === undefined ? undefined : pageCursor(cursor),
+          limit: 20,
+        },
         successStatus: 200,
         decode: (value) => {
           const v = closed(value, ['items', 'nextCursor']),
             items = unique(array(v['items'], member), (m) => m.device)
           if (items.some((m) => m.device === device || m.channel === channel))
             throw new Error('Wrong candidate channel')
-          return { items, nextCursor: cursor(v['nextCursor']) }
+          return { items, nextCursor: nullable(v['nextCursor'], pageCursor) }
         },
       }),
     get: (id: string) =>

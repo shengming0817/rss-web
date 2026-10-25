@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { comparison } from '../../../services/directory-query'
 import { computed, ref, watch } from 'vue'
 import { UiButton } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
@@ -23,7 +24,7 @@ async function load(more = false) {
   await run(
     () =>
       runtime.devices.views.list({
-        search: search.value || undefined,
+        filter: search.value ? comparison('search', '=icontains=', search.value) : undefined,
         cursor: more ? (next.value ?? undefined) : undefined,
         limit: 20,
       }),

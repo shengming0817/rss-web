@@ -1,3 +1,4 @@
+import { directoryPage, filterRows } from '../directory'
 /** MOCK_SOURCE: same wire as the product; synthetic facts never enter production bundles. */
 import { randomUUID } from 'node:crypto'
 import { array, closed, count, uuid } from '../../src/services/decode'
@@ -314,62 +315,62 @@ export function createDeviceViewsDemo(devices: () => Map<string, DemoDevice>, ca
   }
   const handle: DomainHandler = (request, scenario) => {
     const { method, path, query } = request
-    if (path === '/api/v1/device-views' && method === 'GET') {
-      let items = scenario === 'empty' ? [] : groups(request)
-      items = items.filter((g) =>
-        g.endpoints.some(
-          (e) =>
-            (!query.get('search') ||
-              [
-                e.displayName?.state.kind === 'known'
-                  ? String(e.displayName.state.value.value)
-                  : '',
-                e.serialNumber?.state.kind === 'known'
-                  ? String(e.serialNumber.state.value.value)
-                  : '',
-                e.registrationUser?.user?.principalId ?? '',
-                e.currentUser?.user?.principalId ?? '',
-                ...[e.registrationUser?.display, e.currentUser?.display].flatMap((display) => [
-                  display?.login ?? '',
-                  ...(display?.profiles
-                    .filter((p) => p.status === 'available')
-                    .map((p) => p.displayName ?? '') ?? []),
-                ]),
-              ].some((v) => v.toLowerCase().includes(query.get('search')!.toLowerCase()))) &&
-            (!query.get('platform') ||
-              e.platform.values.includes(query.get('platform') as 'windows' | 'macos')) &&
-            (!query.get('assetState') || e.assetState === query.get('assetState')) &&
-            (!query.get('status') || e.status === query.get('status')) &&
-            (!query.get('channel') || e.channels.some((c) => c.channel === query.get('channel'))) &&
-            (!query.get('source') || e.channels.some((c) => c.source === query.get('source'))),
-        ),
-      )
-      if (query.get('descending') === 'true') items.reverse()
-      const b = binding(request, [
-          path,
-          query.get('search'),
-          query.get('platform'),
-          query.get('assetState'),
-          query.get('status'),
-          query.get('channel'),
-          query.get('source'),
-          query.get('descending'),
-        ]),
-        old = query.get('cursor') ? tokens.get(query.get('cursor')!) : undefined
-      if (query.has('cursor') && (!old || old.binding !== b))
-        return error('device_view_cursor_invalidated')
-      const offset = old?.offset ?? 0,
-        limit = Number(query.get('limit') ?? 20)
-      if (!Number.isInteger(limit) || limit < 1 || limit > 100)
-        return error('malformed_request', 400)
-      return ok({
-        items: items.slice(offset, offset + limit),
-        statistics: {
-          endpointCount: items.reduce((n, g) => n + g.endpoints.length, 0),
-          deviceViewCount: items.length,
-        },
-        nextCursor: offset + limit < items.length ? token(b, offset + limit) : null,
-      })
+    if (
+      ['/api/v1/device-views', '/api/v1/device-views/statistics'].includes(path) &&
+      method === 'GET'
+    ) {
+      const rows = (scenario === 'empty' ? [] : groups(request)).map((g) => ({
+        ...g,
+        key: `${g.reference.kind}:${g.reference.id}`,
+      }))
+      const lookup = (row: (typeof rows)[number], field: string): unknown => {
+        if (field === 'search')
+          return row.endpoints.flatMap((e) => [
+            e.id,
+            e.displayName?.state.kind === 'known' ? String(e.displayName.state.value.value) : '',
+            e.serialNumber?.state.kind === 'known' ? String(e.serialNumber.state.value.value) : '',
+            e.registrationUser?.user?.principalId ?? '',
+            e.currentUser?.user?.principalId ?? '',
+            ...[e.registrationUser?.display, e.currentUser?.display].flatMap((display) => [
+              display?.login ?? '',
+              ...(display?.profiles
+                .filter((p) => p.status === 'available')
+                .flatMap((p) => [p.displayName ?? '', p.username ?? '']) ?? []),
+            ]),
+          ])
+        if (field === 'platform') return row.endpoints.flatMap((e) => e.platform.values)
+        if (field === 'assetState' || field === 'status') return row.endpoints.map((e) => e[field])
+        if (field === 'channel' || field === 'source')
+          return row.endpoints.flatMap((e) => e.channels.map((c) => c[field]))
+        return row[field as keyof typeof row]
+      }
+      const items = request.query.get('filter')?.includes('assetState')
+        ? rows
+        : rows.filter((r) => r.endpoints.some((e) => e.assetState === 'active'))
+      if (path.endsWith('/statistics')) {
+        const selected = filterRows(items, query.get('filter'), lookup)
+        return ok({
+          statistics: {
+            endpointCount: selected.reduce((n, g) => n + g.endpoints.length, 0),
+            deviceViewCount: selected.length,
+          },
+          asOf: Math.floor(Date.now() / 1000),
+        })
+      }
+      try {
+        return ok(
+          directoryPage(items, request, ['key'], {
+            maxLimit: 100,
+            defaultLimit: 64,
+            lookup,
+            binding: binding(request, query.get('filter')),
+          }),
+        )
+      } catch (e) {
+        if (e instanceof Error && e.message === 'Invalidated cursor')
+          return error('device_view_cursor_invalidated')
+        throw e
+      }
     }
     const vm =
       /^\/api\/v1\/device-views\/(endpoint|association)\/([^/]+)(?:\/inventory-lists\/([^/]+))?$/.exec(
@@ -412,6 +413,13 @@ export function createDeviceViewsDemo(devices: () => Map<string, DemoDevice>, ca
         !currentMember(endpointProjection(d), channel as 'mdm' | 'agent')
       )
         return error('operation_conflict')
+      if ([...query.keys()].some((key) => !['channel', 'cursor', 'limit'].includes(key)))
+        return error('malformed_request', 400)
+      const cursor = query.get('cursor'),
+        old = cursor ? tokens.get(cursor) : undefined
+      const candidateBinding = binding(request, [id, channel])
+      if (cursor && (!old || old.binding !== candidateBinding))
+        return error('device_view_cursor_invalidated', 409)
       const other = channel === 'mdm' ? 'agent' : 'mdm',
         items =
           scenario === 'empty'
@@ -421,7 +429,6 @@ export function createDeviceViewsDemo(devices: () => Map<string, DemoDevice>, ca
                   (d) =>
                     d.summary.id !== id &&
                     writable(request, d.summary.id) &&
-                    d.summary.id > (query.get('after') ?? '') &&
                     ![...relations.values()].some(
                       (a) =>
                         a.state !== 'revoked' && a.members.some((m) => m.device === d.summary.id),
@@ -434,8 +441,11 @@ export function createDeviceViewsDemo(devices: () => Map<string, DemoDevice>, ca
                 .sort((a, b) => a.device.localeCompare(b.device)),
         limit = Number(query.get('limit') ?? 20)
       return ok({
-        items: items.slice(0, limit),
-        nextCursor: items.length > limit ? items[limit - 1]!.device : null,
+        items: items.slice(old?.offset ?? 0, (old?.offset ?? 0) + limit),
+        nextCursor:
+          items.length > (old?.offset ?? 0) + limit
+            ? token(candidateBinding, (old?.offset ?? 0) + limit)
+            : null,
       })
     }
     const am = /^\/api\/v1\/device-associations\/([^/]+)(?:\/(revoke))?$/.exec(path)

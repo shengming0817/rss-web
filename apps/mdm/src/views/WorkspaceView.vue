@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { comparison } from '../services/directory-query'
 import { ref, watch } from 'vue'
 import { isRssApiError } from '@rss/api/mdm'
 import { UiButton, UiBadge, UiMessage } from '@rss/core/components'
@@ -14,7 +15,7 @@ const { t } = useI18n(),
 const { run, busy, failure } = useOperation([], () => deviceBinding(runtime))
 type Part<T> = { status: 'ready'; value: T } | { status: 'denied' | 'unavailable' | 'unsupported' }
 const navigation = ref<Part<Workspace>>()
-const directory = ref<Part<Awaited<ReturnType<typeof runtime.devices.views.list>>>>()
+const directory = ref<Part<Awaited<ReturnType<typeof runtime.devices.views.statistics>>>>()
 const deployments = ref<Part<Awaited<ReturnType<typeof runtime.policies.policies.list>>>>()
 const readAt = ref('')
 async function part<T>(read: () => Promise<T>): Promise<Part<T>> {
@@ -44,8 +45,10 @@ async function load() {
     async () => {
       const [nav, devices, policies] = await Promise.all([
         part(() => runtime.workspace.read()),
-        part(() => runtime.devices.views.list({})),
-        part(() => runtime.policies.policies.list(undefined, 'software')),
+        part(() => runtime.devices.views.statistics()),
+        part(() =>
+          runtime.policies.policies.list({ filter: comparison('action', '==', 'software') }),
+        ),
       ])
       return { nav, devices, policies }
     },
@@ -171,7 +174,9 @@ watch(
                     : '—'
                 }}</small
               ></RouterLink
-            ><UiBadge>{{ t(policy.enabled ? 'software.enabled' : 'software.paused') }}</UiBadge
+            ><UiBadge>{{
+              t(policy.state === 'enabled' ? 'software.enabled' : 'software.paused')
+            }}</UiBadge
             ><RouterLink
               :to="{
                 name: 'software-deployments',

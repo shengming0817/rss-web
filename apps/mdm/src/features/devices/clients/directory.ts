@@ -1,45 +1,47 @@
+import {
+  queryParameters,
+  projectedPage,
+  type DirectoryQuery,
+} from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
-import { array, boolean, closed, count, integer, unique } from '../../../services/decode'
-import { endpoint, endpointDetail } from './endpoint-model'
-import { cursor } from './asset-model'
+import { boolean, closed, count, integer } from '../../../services/decode'
+import { endpointDirectoryFields, endpointDetail } from './endpoint-model'
 import { timelinePage, auditQuery, type AuditQuery } from '../../operations/clients/audit'
+const directoryFields = { ...endpointDirectoryFields, inventoryAvailable: boolean }
 export function decodeDirectory(value: unknown) {
-  const v = closed(value, ['items', 'statistics', 'asOf', 'nextCursor']),
-    s = closed(v['statistics'], ['total', 'pending', 'active', 'revoked'])
-  return {
-    items: unique(
-      array(v['items'], (x) => {
-        const d = closed(x, [
-          'id',
-          'status',
-          'primaryMdmRegistration',
-          'channels',
-          'enrollments',
-          'inventoryAvailable',
-        ])
-        return { ...endpoint(d), inventoryAvailable: boolean(d['inventoryAvailable']) }
-      }),
-      (d) => d.id,
-    ),
-    statistics: {
-      total: count(s['total']),
-      pending: count(s['pending']),
-      active: count(s['active']),
-      revoked: count(s['revoked']),
-    },
-    asOf: integer(v['asOf']),
-    nextCursor: cursor(v['nextCursor']),
-  }
+  return projectedPage(value, directoryFields)
 }
 export function createDirectoryClient(transport: HttpTransport) {
   return {
-    list: (after?: string) =>
+    list: <F extends keyof typeof directoryFields = keyof typeof directoryFields>(
+      query: DirectoryQuery<F> = {},
+    ) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/devices',
-        query: { limit: 20, after },
+        query: queryParameters({ limit: 20, ...query }),
         successStatus: 200,
-        decode: decodeDirectory,
+        decode: (value) => projectedPage(value, directoryFields, query.fields, ['id']),
+      }),
+    statistics: (filter?: string) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/devices/statistics',
+        query: queryParameters({ filter }),
+        successStatus: 200,
+        decode(value) {
+          const v = closed(value, ['statistics', 'asOf']),
+            stats = closed(v['statistics'], ['total', 'pending', 'active', 'revoked'])
+          return {
+            statistics: {
+              total: count(stats['total']),
+              pending: count(stats['pending']),
+              active: count(stats['active']),
+              revoked: count(stats['revoked']),
+            },
+            asOf: integer(v['asOf']),
+          }
+        },
       }),
     detail: (id: string) =>
       transport.request({

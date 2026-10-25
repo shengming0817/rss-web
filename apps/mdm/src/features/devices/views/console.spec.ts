@@ -1,3 +1,4 @@
+import { encodeAssetQuery } from '../clients/asset-query'
 import GroupDependencies from '../components/GroupDependencies.vue'
 import { createSecurityClients as createFormalSecurityClients } from '../../security/client'
 import TenantUserSelect from '../components/TenantUserSelect.vue'
@@ -356,6 +357,32 @@ it('executes asynchronous searches, facets, and personal saved query create/read
   await click('创建')
   expect(saveForm.find('input').element.value).toBe('')
 })
+it('preserves secondary sort terms when renaming a saved query', async () => {
+  const { wrapper, click, devices } = await setup('device-search')
+  const sort = [
+    { field: 'device.model', descending: true },
+    { field: 'device.serial_number', descending: false },
+  ]
+  const saved = await devices.assets.save(crypto.randomUUID(), {
+    operationId: crypto.randomUUID(),
+    expectedRevision: 0,
+    input: {
+      action: 'put',
+      definition: { name: 'Multi sort', query: encodeAssetQuery(null, [], sort) },
+    },
+  })
+  await click('重新读取')
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text().includes('Multi sort'))!
+    .trigger('click')
+  await flushPromises()
+  const form = wrapper.findAll('form').at(-1)!
+  await form.find('input').setValue('Renamed')
+  await form.trigger('submit')
+  await flushPromises()
+  expect((await devices.assets.readSaved(saved.id)).definition?.query.sort).toEqual(sort)
+})
 it('creates a group, edits its definition, previews and recomputes server membership', async () => {
   const { wrapper, click } = await setup('device-groups')
   const form = new DOMWrapper(document.body).get('[role=dialog] form')
@@ -446,8 +473,8 @@ it('compares a saved server definition without replacing the local draft', async
       action: 'put',
       definition: {
         name: 'Other operator',
-        query: {
-          criteria: {
+        query: encodeAssetQuery(
+          {
             selector: { kind: 'device' },
             quantifier: 'one',
             criteria: {
@@ -457,9 +484,9 @@ it('compares a saved server definition without replacing the local draft', async
               value: { kind: 'string', value: 'MacBook Pro' },
             },
           },
-          select: ['device.model'],
-          sort: { field: 'device.model', descending: true },
-        },
+          ['device.model'],
+          [{ field: 'device.model', descending: true }],
+        ),
       },
     },
   })
@@ -615,7 +642,7 @@ it('does not switch saved-query targets while the original write is unresolved',
     expectedRevision: 0,
     input: {
       action: 'put',
-      definition: { name: 'Other query', query: { criteria: null, select: [], sort: null } },
+      definition: { name: 'Other query', query: encodeAssetQuery(null, [], []) },
     },
   })
   const form = wrapper.findAll('form').at(-1)!
@@ -1282,15 +1309,7 @@ it.each(['zh-CN', 'en-US'] as const)(
         .find((select) => select.find('option[value="mdm.windows"]').exists())!
         .findAll('option')
         .map((o) => o.text()),
-    ).toEqual([
-      locale === 'zh-CN' ? '全部' : 'All',
-      'Windows MDM',
-      'Apple MDM',
-      'Agent',
-      locale === 'zh-CN' ? 'Agent 脚本' : 'Agent script',
-      locale === 'zh-CN' ? 'Agent 原生采集' : 'Agent native collection',
-      'Agent osquery',
-    ])
+    ).toEqual([locale === 'zh-CN' ? '全部' : 'All', 'Windows MDM', 'Apple MDM', 'Agent'])
   },
 )
 
@@ -1619,7 +1638,7 @@ it.each([
         },
         { index: 1, quality: 'invalid', value: null },
       ],
-      nextOffset: null,
+      nextCursor: null,
     })
     await h.router.push({ name: 'device-detail', params: { tenant: TENANT, device: 'device-01' } })
     await flushPromises()
@@ -1915,11 +1934,14 @@ it('searches the complete authorized device set by personnel through the view AP
     instanceId: me.instanceId,
     principalId: ADMIN,
   })
-  const result = await f.devices.views.list({ limit: 1, search: 'Demo profile' })
+  const result = await f.devices.views.list({ limit: 1, filter: "search=icontains='Demo profile'" })
   expect(result.items).toHaveLength(1)
-  expect(result.statistics.deviceViewCount).toBe(1)
+  expect(
+    (await f.devices.views.statistics("search=icontains='Demo profile'")).statistics
+      .deviceViewCount,
+  ).toBe(1)
   expect(result.items[0]?.endpoints[0]?.id).toBe('device-02')
-  const login = await f.devices.views.list({ limit: 1, search: 'demo' })
+  const login = await f.devices.views.list({ limit: 1, filter: "search=icontains='demo'" })
   expect(login.items[0]?.endpoints[0]?.registrationUser?.display?.login).toBe('demo')
   const stale = await f.devices.views.list({ limit: 1 })
   await f.devices.registration.assign('device-02', crypto.randomUUID(), 1, null)
@@ -1944,7 +1966,7 @@ it('restarts an invalidated first page even when its route does not change', asy
   expect(f.router.currentRoute.value.fullPath).toBe(before)
   expect(list).toHaveBeenCalledTimes(calls + 1)
   expect(list.mock.lastCall![0]?.cursor).toBeUndefined()
-  expect(list.mock.lastCall![0]?.search).toBeUndefined()
+  expect(list.mock.lastCall![0]?.filter).toBeUndefined()
   expect(f.wrapper.text()).toContain('device-01')
 })
 
@@ -1973,8 +1995,8 @@ it('restarts an invalidated deep page with its applied filters and columns and o
     columns: 'status',
   })
   expect(list.mock.lastCall![0]).toMatchObject({
-    assetState: 'active',
-    descending: true,
+    filter: "(assetState=='active')",
+    sort: ['-key'],
     limit: 20,
   })
   expect(list.mock.lastCall![0]?.cursor).toBeUndefined()

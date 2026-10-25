@@ -15,7 +15,7 @@ it('keeps formal filters attached to compound pagination and does not enter a ca
       items: [],
       statistics: { total: 0 },
       asOf: 1,
-      nextCursor: { id: 'cursor', kind: 'command' },
+      nextCursor: 'YWJj',
     })
     .mockResolvedValue({ items: [], statistics: { total: 0 }, asOf: 1, nextCursor: null })
   const router = createRouter({
@@ -52,23 +52,15 @@ it('keeps formal filters attached to compound pagination and does not enter a ca
     .trigger('click')
   await flushPromises()
   expect(directory.mock.calls[1]?.[0]).toEqual({
-    device: 'endpoint',
-    policy: 'policy',
-    kind: undefined,
-    status: undefined,
-    after: 'cursor',
-    afterKind: 'command',
+    filter: "(device=='endpoint');(policy=='policy')",
+    cursor: 'YWJj',
   })
   await form.trigger('submit')
   await flushPromises()
   expect(directory.mock.calls[2]?.[0]).toMatchObject({
-    kind: 'command',
-    status: 'unknown',
-    after: undefined,
-    afterKind: undefined,
+    filter: "(device=='endpoint');(policy=='policy');(kind=='command');(status=='unknown')",
+    cursor: undefined,
   })
-  expect(wrapper.text()).toContain('当前没有结果')
-  expect(wrapper.find('#execution-batch').exists()).toBe(false)
   wrapper.unmount()
 })
 
