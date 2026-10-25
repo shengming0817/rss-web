@@ -24,6 +24,7 @@ const { t } = useI18n(),
   { run, busy, failure } = useOperation([], () => deviceBinding(runtime))
 const statisticsOperation = useOperation([], () => deviceBinding(runtime))
 const statistics = ref<Awaited<ReturnType<typeof runtime.devices.views.statistics>>>()
+let statisticsBinding = ''
 const page = ref<Awaited<ReturnType<typeof runtime.devices.views.list>>>(),
   search = ref(''),
   platform = ref(''),
@@ -98,12 +99,14 @@ async function load(cursor?: string) {
       return value ? comparison(key, '==', value) : undefined
     }),
   )
-  if (!cursor || !statistics.value) {
+  const binding = JSON.stringify([deviceBinding(runtime), filter])
+  if (!cursor || !statistics.value || binding !== statisticsBinding) {
+    statisticsBinding = binding
     statistics.value = undefined
     void statisticsOperation.run(
       () => runtime.devices.views.statistics(filter),
       (v) => {
-        statistics.value = v
+        if (binding === statisticsBinding) statistics.value = v
       },
     )
   }

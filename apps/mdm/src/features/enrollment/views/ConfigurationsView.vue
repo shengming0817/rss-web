@@ -46,6 +46,7 @@ function selectConfiguration(id: string) {
   if (busy.value || uncertain.value || pending.value) return
   delivery.clear()
   delivered.value = undefined
+  current.value = undefined
   configurationId.value = id
   read()
 }
@@ -176,6 +177,7 @@ function revoke() {
       pending.value !== 'create' &&
       !(pending.value === 'revoke' && pendingRevocation.value && revocationRead.value)) ||
     !current.value ||
+    current.value.configuration.configurationId !== configurationId.value ||
     current.value.state !== 'available' ||
     (pendingRevocation.value &&
       current.value.configuration.configurationId !== pendingRevocation.value.id)

@@ -499,3 +499,27 @@ it('blocks paused configuration creates in the handler while preserving settings
   expect(calls.some((p) => p === 'GET /api/v1/agent-enrollment-settings')).toBe(true)
   expect(await runtime.onboarding.configurations.operation(crypto.randomUUID())).toBeNull()
 })
+
+it('does not revoke the previous configuration after a directory selection fails to read', async () => {
+  const { wrapper, runtime, click } = await setup(ConfigurationsView)
+  const create = vi.spyOn(runtime.onboarding.configurations, 'create')
+  await wrapper.find('form').trigger('submit')
+  await flushPromises()
+  await wrapper.findAll('form')[1]!.trigger('submit')
+  await flushPromises()
+  const replacement = await runtime.onboarding.configurations.create({
+    ...create.mock.calls[0]![0],
+    operationId: crypto.randomUUID(),
+    secret: generateEnrollmentPassword(),
+  })
+  await click('重新读取')
+  const read = vi
+    .spyOn(runtime.onboarding.configurations, 'read')
+    .mockRejectedValueOnce(decodeMdmError(403, { code: 'permission_denied' }))
+  const revoke = vi.spyOn(runtime.onboarding.configurations, 'revoke')
+  await click(replacement.configuration.configurationId)
+  expect(read).toHaveBeenCalledWith(replacement.configuration.configurationId)
+  expect(wrapper.findAll('button').some((button) => button.text() === '确认撤销配置')).toBe(false)
+  expect(revoke).not.toHaveBeenCalled()
+  new Uint8Array(replacement.file.bytes).fill(0)
+})

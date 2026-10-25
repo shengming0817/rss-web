@@ -273,7 +273,10 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
             if ('tenantId' in row && row.tenantId !== tenant)
               throw new Error('Wrong package tenant')
             if (!query.fields) {
-              const { platform, architecture } = row
+              const { platform, architecture } = row as ReturnType<typeof installer> & {
+                platform: string
+                architecture: string
+              }
               const metadata = Object.fromEntries(
                 Object.entries(row).filter(
                   ([key]) => !['state', 'platform', 'architecture'].includes(key),

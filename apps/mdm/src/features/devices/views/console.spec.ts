@@ -142,14 +142,13 @@ async function setup(
   })
   await router.push({ name, params: { tenant: TENANT, ...params }, query })
   await router.isReady()
-  const session = {
-    state: shallowRef({
-      status: 'authenticated',
-      tenant: TENANT,
-      identity: { principalId: ADMIN },
-      session: { id: 'demo-session' },
-    }),
-  } as unknown as IdentitySession
+  const sessionState = shallowRef({
+    status: 'authenticated',
+    tenant: TENANT,
+    identity: { principalId: ADMIN },
+    session: { id: 'demo-session' },
+  })
+  const session = { state: sessionState } as unknown as IdentitySession
   const registrationChannels = createRegistrationChannels(
     createRegistrationChannelsClient(transport, TENANT),
     session,
@@ -233,6 +232,7 @@ async function setup(
     registrationChannels,
     transport,
     session,
+    sessionState,
   }
 }
 async function confirmCredential() {
@@ -2042,4 +2042,25 @@ it('preserves hidden Group deletion blockers and withdraws the decision on a fai
   await flushPromises()
   expect(references.mock.lastCall![1]?.cursor).toBeUndefined()
   expect(wrapper.emitted('loaded')?.at(-1)).toEqual([false])
+})
+
+it('clears directory statistics when the principal changes on a continuation page', async () => {
+  const f = await setup()
+  await f.click('下一页')
+  expect(f.router.currentRoute.value.query['cursor']).toBeTruthy()
+  expect(f.wrapper.find('.console-stat-grid').exists()).toBe(true)
+  const stats = vi
+    .spyOn(f.devices.views, 'statistics')
+    .mockRejectedValueOnce(decodeMdmError(403, { code: 'permission_denied' }))
+  vi.spyOn(f.devices.views, 'list').mockRejectedValueOnce(
+    decodeMdmError(403, { code: 'permission_denied' }),
+  )
+  f.sessionState.value = {
+    ...f.sessionState.value,
+    identity: { principalId: '44444444-4444-4444-8444-444444444444' },
+  }
+  await flushPromises()
+  expect(stats).toHaveBeenCalledTimes(1)
+  expect(f.wrapper.find('.console-stat-grid').exists()).toBe(false)
+  expect(f.wrapper.find('tbody').exists()).toBe(false)
 })
