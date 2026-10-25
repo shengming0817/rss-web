@@ -47,6 +47,7 @@ const statuses: Readonly<Record<string, number>> = {
   mdm_software_disabled: 409,
   recovery_credential_not_found: 404,
   recovery_credential_integrity: 500,
+  resource_cursor_invalidated: 409,
   device_view_cursor_invalidated: 409,
   upload_offset_conflict: 409,
   capability_unknown: 409,
