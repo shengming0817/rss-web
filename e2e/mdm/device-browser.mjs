@@ -130,6 +130,16 @@ try {
   }
   const panel = () => page.locator('[data-testid=association-panel]')
   const loaded = () => page.locator('section.console-page:not([aria-busy="true"])').waitFor()
+  const restartDirectory = async () => {
+    const restart = page
+      .locator('form.console-toolbar + p')
+      .getByRole('button', { name: '重新读取', exact: true })
+    for (let attempt = 0; attempt < 3 && (await restart.count()); attempt++) {
+      await restart.click()
+      await loaded()
+    }
+    assert.equal(await restart.count(), 0)
+  }
   const advanceGeneration = (channel) => {
     const fds = JSON.parse(process.env._MDM_BUILD_LEASE).fds
     assert.ok(fds.length === 2 && fds.every((fd) => Number.isInteger(fd) && fd >= 3 && fd < 1024))
@@ -183,8 +193,13 @@ try {
   phase = 'directory'
   await page.goto(path('devices'))
   await loaded()
-  await page.getByRole('button', { name: '下一页', exact: true }).click()
-  await loaded()
+  await restartDirectory()
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await page.getByRole('button', { name: '下一页', exact: true }).click()
+    await loaded()
+    if (await page.locator('tbody').count()) break
+    await restartDirectory()
+  }
   assert.ok((await page.locator('tbody').textContent()).includes(fixture.mdm))
   const staleDirectory = page.url()
   await writeRule(fixture.rule.grants)
@@ -221,20 +236,14 @@ try {
   page.on('request', observePersonnel)
   await page.goto(path('devices'))
   await loaded()
+  await restartDirectory()
   for (const search of ['Device Browser Person', 'admin']) {
     await page.locator('input[type=search]').fill(search)
     await page.locator('form.console-toolbar').evaluate((form) => form.requestSubmit())
     await page.waitForURL((url) => url.searchParams.get('search') === search)
     await loaded()
-    const restart = page
-      .locator('form.console-toolbar + p')
-      .getByRole('button', { name: '重新读取', exact: true })
-    if (await restart.count()) {
-      // A concurrent authorized projection may invalidate even the first page; restart explicitly.
-      await restart.click()
-      await loaded()
-      assert.equal(new URL(page.url()).searchParams.get('search'), search)
-    }
+    await restartDirectory()
+    assert.equal(new URL(page.url()).searchParams.get('search'), search)
     assert.ok((await page.locator('tbody').textContent()).includes(fixture.mdm))
     assert.ok((await page.locator('tbody').textContent()).includes('Device Browser Person'))
   }

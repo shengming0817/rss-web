@@ -55,6 +55,7 @@ const utc = (at: number) =>
 const pinned = computed(() => typeof route.query['operation'] === 'string')
 function load(cursor?: string) {
   if (busy.value) return
+  records.value = undefined
   const selection = cursor
     ? applied.value
     : {

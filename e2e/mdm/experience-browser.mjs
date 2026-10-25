@@ -198,7 +198,9 @@ export async function acceptExperience({
       .getByText(release.filename, { exact: true })
       .waitFor()
     assert.ok(
-      (await api('/api/v1/agent-packages')).some((item) => item.releaseId === release.releaseId),
+      (await api('/api/v1/agent-packages')).items.some(
+        (item) => item.releaseId === release.releaseId,
+      ),
     )
     assert.ok(release)
     assert.deepEqual(release.target, { platform, architecture })
@@ -296,7 +298,11 @@ export async function acceptExperience({
   await page.unroute(origin + withdrawPath)
   await withdrawal.getByRole('button', { name: '查询原操作', exact: true }).click()
   await withdrawal.waitFor({ state: 'hidden' })
-  const remaining = await api('/api/v1/agent-packages')
+  const withdrawn = (await api('/api/v1/agent-packages')).items.find(
+    (item) => item.releaseId === old.releaseId,
+  )
+  assert.equal(withdrawn.state, 'withdrawn')
+  const remaining = (await api('/api/v1/agent-packages?filter=state==published')).items
   assert.ok(!remaining.some((p) => p.releaseId === old.releaseId))
   assert.ok(remaining.some((p) => p.releaseId === releases.at(-1).releaseId))
   assert.equal(remaining.length, 4)
