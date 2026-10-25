@@ -1,3 +1,4 @@
+import { ref } from 'vue'
 import { createHash, webcrypto } from 'node:crypto'
 import { File as NodeFile } from 'node:buffer'
 import { flushPromises, mount } from '@vue/test-utils'
@@ -86,6 +87,7 @@ it('publishes all staged software variants in one immutable version at the curre
       provide: {
         [mdmKey as symbol]: {
           tenant: 'tenant',
+          session: { state: ref({ status: 'authenticated' }) },
           demo: true,
           policies: {
             resources: { read, change, upload },
@@ -195,6 +197,7 @@ it('resumes the same upload after a lost chunk response, rejects different bytes
       provide: {
         [mdmKey as symbol]: {
           tenant: 'tenant',
+          session: { state: ref({ status: 'authenticated' }) },
           demo: true,
           policies: {
             resources: {
@@ -271,6 +274,7 @@ it('hashes metadata for a software artifact larger than one HTTP chunk without r
       provide: {
         [mdmKey as symbol]: {
           tenant: 'tenant',
+          session: { state: ref({ status: 'authenticated' }) },
           demo: true,
           policies: {
             resources: {
@@ -330,6 +334,7 @@ it('clears the software definition and artifact draft when opening another resou
       provide: {
         [mdmKey as symbol]: {
           tenant: 'tenant',
+          session: { state: ref({ status: 'authenticated' }) },
           demo: true,
           policies: {
             resources: {
@@ -442,6 +447,7 @@ it.each([false, true])(
         provide: {
           [mdmKey as symbol]: {
             tenant: 'tenant',
+            session: { state: ref({ status: 'authenticated' }) },
             demo: true,
             policies: {
               resources: {
@@ -533,7 +539,13 @@ it('edits Resource presentation through the current client without dropping unkn
           template: '<section v-show="open" role="dialog"><slot /><slot name="footer" /></section>',
         },
       },
-      provide: { [mdmKey as symbol]: { tenant: 'tenant', policies: { resources: client } } },
+      provide: {
+        [mdmKey as symbol]: {
+          tenant: 'tenant',
+          session: { state: ref({ status: 'authenticated' }) },
+          policies: { resources: client },
+        },
+      },
     },
   })
   await flushPromises()

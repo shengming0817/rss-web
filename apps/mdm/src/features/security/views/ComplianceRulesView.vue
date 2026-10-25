@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { deviceBinding } from '../../devices/useDeviceBinding'
 import { UiButton } from '@rss/core/components'
 import { onMounted, ref, toRaw, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -25,7 +26,7 @@ const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
   client = runtime.security.compliance,
-  { run, runWrite, busy, failure, uncertain } = useOperation()
+  { run, runWrite, busy, failure, uncertain } = useOperation([], () => deviceBinding(runtime))
 const list = ref<Awaited<ReturnType<typeof client.list>>>(),
   fields = ref<FieldDefinition[]>([]),
   groups = ref<Awaited<ReturnType<typeof runtime.devices.groups.list>>>(),
@@ -45,8 +46,9 @@ const list = ref<Awaited<ReturnType<typeof client.list>>>(),
   editable = ref(true)
 let pending: (() => Promise<void>) | undefined
 function load(after?: string) {
+  list.value = undefined
   void run(
-    () => client.list(after),
+    () => client.list({ cursor: after }),
     (v) => (list.value = v),
   )
 }
@@ -162,7 +164,7 @@ function loadVersion() {
 }
 function groupPage(cursor?: string) {
   void run(
-    () => runtime.devices.groups.list({ after: cursor }),
+    () => runtime.devices.groups.list({ cursor }),
     (v) =>
       (groups.value = {
         ...v,
@@ -182,6 +184,22 @@ function routeRule() {
     void open(rule, typeof selectedTask === 'string' ? selectedTask : undefined)
 }
 watch(() => route.fullPath, routeRule, { flush: 'sync' })
+watch(
+  () => JSON.stringify(deviceBinding(runtime)),
+  () => {
+    list.value = undefined
+    current.value = undefined
+    historical.value = undefined
+    fields.value = []
+    groups.value = undefined
+    pending = undefined
+    task.value = undefined
+    taskId.value = ''
+    id.value = ''
+    editorOpen.value = false
+  },
+  { flush: 'sync' },
+)
 onMounted(async () => {
   const initial = route.fullPath
   create()

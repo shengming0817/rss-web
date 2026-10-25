@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { comparison as queryComparison, allOf } from '../../../services/directory-query'
 import type { Json } from '../../../services/json'
 import { UiButton, UiTable, UiBadge } from '@rss/core/components'
 import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
@@ -264,21 +265,22 @@ function apply(p: PolicyRead) {
   progress.value = undefined
 }
 function load(after?: string) {
+  list.value = undefined
   return run(
     () =>
-      client.list(after, undefined, undefined, {
-        state: queryState.value || undefined,
-        category: queryCategory.value || undefined,
-        scope: queryScope.value || undefined,
+      client.list({
+        cursor: after,
+        filter: allOf(
+          'action=in=(execution,configuration,native_collection,agent_collection)',
+          queryState.value ? queryComparison('state', '==', queryState.value) : undefined,
+          queryCategory.value ? queryComparison('category', '==', queryCategory.value) : undefined,
+          queryScope.value ? queryComparison('scope', '==', queryScope.value) : undefined,
+        ),
       }),
     (v) => {
       list.value = {
         ...v,
-        items: v.items.filter((p) =>
-          ['execution', 'configuration', 'native_collection', 'agent_collection'].includes(
-            p.definition.action.kind,
-          ),
-        ),
+        items: v.items,
       }
     },
   )
@@ -554,7 +556,7 @@ onMounted(async () => {
           t(
             row.state === 'archived'
               ? 'policies.state.archived'
-              : row.enabled
+              : row.state === 'enabled'
                 ? 'policies.state.active'
                 : 'policies.state.paused',
           )

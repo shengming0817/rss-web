@@ -234,7 +234,7 @@ export function createAuthorizationDemo(
         }
       }
     }
-    if (path === '/api/v1/operations') {
+    if (path === '/api/v1/operations' || path === '/api/v1/operations/statistics') {
       if (!effective(actor).some((g) => g.operation === 'operation_read'))
         return error('permission_denied', 403)
     }

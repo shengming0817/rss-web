@@ -35,7 +35,7 @@ function open(id = device.value) {
 }
 function devices(cursor?: string) {
   void run(
-    () => runtime.devices.directory.list(cursor),
+    () => runtime.devices.directory.list({ cursor }),
     (v) => (directory.value = v),
   )
 }

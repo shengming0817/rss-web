@@ -1,3 +1,4 @@
+import { directoryPage } from '../directory'
 import { randomUUID } from 'node:crypto'
 import { boolean, closed, enumeration, record, uuid } from '../../src/services/decode'
 import {
@@ -96,66 +97,25 @@ export function createPolicyStore() {
     try {
       if (scenario === 'denied') return error('permission_denied', 403)
       if (request.path === '/api/v1/policies' && request.method === 'GET') {
-        if (
-          [...request.query.keys()].some(
-            (k) =>
-              ![
-                'cursor',
-                'limit',
-                'descending',
-                'state',
-                'category',
-                'action',
-                'scope',
-                'resource',
-              ].includes(k),
-          )
+        const rowsToRead = (scenario === 'empty' ? [] : [...rows.values()])
+          .filter((p) => request.query.get('filter')?.includes('state') || p.state !== 'archived')
+          .map(wire)
+        return ok(
+          directoryPage(rowsToRead, request, ['id'], {
+            defaultLimit: 64,
+            lookup: (row, field) => {
+              if (field === 'action') return row.definition.action.kind
+              if (field === 'scope') return row.definition.scope
+              if (field === 'resource')
+                return 'resource' in row.definition.action
+                  ? row.definition.action.resource.id
+                  : null
+              if (field === 'category')
+                return row.definition.selfService?.presentation?.['category'] ?? null
+              return row[field as keyof typeof row]
+            },
+          }),
         )
-          return error('malformed_request', 400)
-        const cursor = request.query.get('cursor'),
-          binding = JSON.stringify([
-            request.actor,
-            [...request.query].filter(([k]) => k !== 'cursor' && k !== 'limit').sort(),
-          ]),
-          position = cursor ? cursors.get(cursor) : undefined,
-          after = position?.after,
-          action = request.query.get('action'),
-          limit = Number(request.query.get('limit') ?? 64),
-          descending = request.query.get('descending') === 'true'
-        if (cursor && (!position || position.binding !== binding))
-          return error('operation_conflict')
-        if (!Number.isInteger(limit) || limit < 1 || limit > 1000) throw new Error('Invalid limit')
-        if (action)
-          enumeration(action, [
-            'execution',
-            'native_collection',
-            'telemetry_profile',
-            'configuration',
-            'software',
-            'ensure_agent_installed',
-            'request_mdm_enrollment',
-          ] as const)
-        const state = request.query.get('state'),
-          scope = request.query.get('scope'),
-          resource = request.query.get('resource')
-        if (state !== null && !['enabled', 'disabled', 'archived'].includes(state))
-          throw new Error('Invalid filter')
-        if (scope) uuid(scope)
-        const items = (scenario === 'empty' ? [] : [...rows.values()])
-          .filter(
-            (p) =>
-              (!after || (descending ? p.id < after : p.id > after)) &&
-              (!action || p.definition.action.kind === action) &&
-              (state === null ? p.state !== 'archived' : p.state === state) &&
-              (!scope || p.definition.scope === scope) &&
-              (!resource ||
-                ('resource' in p.definition.action &&
-                  p.definition.action.resource.id === resource)),
-          )
-          .sort((a, b) => (a.id < b.id ? -1 : 1) * (descending ? -1 : 1))
-        const nextCursor = items.length > limit ? randomUUID() + ':page' : null
-        if (nextCursor) cursors.set(nextCursor, { after: items[limit - 1]!.id, binding })
-        return ok({ items: items.slice(0, limit).map(wire), nextCursor })
       }
       const id = uuid(request.path.split('/').at(-1)),
         old = rows.get(id)

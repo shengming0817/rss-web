@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { comparison as queryComparison } from '../../../services/directory-query'
 import { ref, watch } from 'vue'
 import { UiButton } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
@@ -22,7 +23,10 @@ function load(cursor?: string) {
   void run(
     async () => {
       if (props.collection === 'scopes') {
-        const p = await runtime.policies.scopes.list({ after: cursor, ready: true })
+        const p = await runtime.policies.scopes.list({
+          cursor,
+          filter: queryComparison('ready', '==', true),
+        })
         return {
           ...p,
           items: p.items.map((i) => ({
@@ -32,7 +36,10 @@ function load(cursor?: string) {
         }
       }
       {
-        const p = await runtime.policies.resources.list(undefined, cursor, true)
+        const p = await runtime.policies.resources.list({
+          cursor,
+          filter: queryComparison('active', '==', true),
+        })
         return {
           ...p,
           items: p.items.map((i) => ({

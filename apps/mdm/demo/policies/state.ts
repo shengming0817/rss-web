@@ -1,3 +1,4 @@
+import { directoryPage, filterRows } from '../directory'
 import { createTelemetryDemo } from '../telemetry'
 import type { DomainHandler, Scenario, DemoObservation, DemoEvent } from '../scenario'
 import type { createDeviceDemo } from '../devices/state'
@@ -168,7 +169,10 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
           return reply
         }
       }
-      if (request.path === '/api/v1/operations' && request.method === 'GET') {
+      if (
+        ['/api/v1/operations', '/api/v1/operations/statistics'].includes(request.path) &&
+        request.method === 'GET'
+      ) {
         const all = [
           ...native.directory(),
           ...policies.rows().map((r) => ({
@@ -201,34 +205,45 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
           .filter(
             (i) =>
               authorization.can(request.actor.principalId, 'operation_read', i.device) &&
-              (!request.query.get('policy') || i.policy === request.query.get('policy')) &&
-              (!request.query.get('device') || i.device === request.query.get('device')) &&
-              (!request.query.get('kind') || i.kind === request.query.get('kind')) &&
-              (!request.query.get('status') || i.status === request.query.get('status')) &&
               scenario !== 'empty',
           )
-          .sort((a, b) => a.id.localeCompare(b.id) || a.kind.localeCompare(b.kind))
-        const after = request.query.get('after'),
-          afterKind = request.query.get('afterKind'),
-          limit = Number(request.query.get('limit') ?? 20)
-        if (!!after !== !!afterKind || !Number.isInteger(limit) || limit < 1 || limit > 1000)
-          return error('malformed_request', 400)
-        const items = all.filter(
-            (i) => !after || i.id > after || (i.id === after && i.kind > afterKind!),
-          ),
-          selected = items.slice(0, limit),
-          last = selected.at(-1)
-        return ok({
-          items: selected,
-          nextCursor: items.length > limit && last ? { id: last.id, kind: last.kind } : null,
-          statistics: {
-            total: all.length,
-            commands: all.filter((i) => i.kind === 'command').length,
-            actionRuns: all.filter((i) => i.kind === 'action_run').length,
-            unknown: all.filter((i) => i.status === 'unknown').length,
-          },
-          asOf: security.now(),
-        })
+          .map(({ detailUrl: _url, evidence, ...metadata }) => ({
+            ...metadata,
+            evidence:
+              'commandStatus' in evidence
+                ? {
+                    commandStatus: evidence.commandStatus,
+                    dispatchFailure: evidence.dispatchFailure,
+                    ...(evidence.agentInstallation
+                      ? { agentInstallation: evidence.agentInstallation }
+                      : {}),
+                  }
+                : evidence,
+          }))
+        if (request.path.endsWith('/statistics')) {
+          const items = filterRows(all, request.query.get('filter'))
+          return ok({
+            statistics: {
+              total: items.length,
+              commands: items.filter((i) => i.kind === 'command').length,
+              actionRuns: items.filter((i) => i.kind === 'action_run').length,
+              unknown: items.filter((i) => i.status === 'unknown').length,
+            },
+            asOf: security.now(),
+          })
+        }
+        const fields = request.query.get('fields'),
+          parameters = new URLSearchParams(request.query)
+        parameters.delete('fields')
+        const rows =
+          fields && !fields.split(',').includes('evidence')
+            ? all.map(({ evidence: _evidence, ...row }) => row)
+            : all
+        return ok(
+          directoryPage(rows, { ...request, query: parameters }, ['id', 'kind'], {
+            binding: JSON.stringify([fields, authorization.effective(request.actor.principalId)]),
+          }),
+        )
       }
     } catch {
       return error('malformed_request', 400)

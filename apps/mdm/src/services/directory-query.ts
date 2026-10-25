@@ -34,7 +34,12 @@ export function queryParameters(query: DirectoryQuery = {}) {
   for (const key of ['sort', 'fields'] as const) {
     const values = query[key]
     if (values !== undefined) {
-      if (!values.length || values.length > 16 || new Set(values).size !== values.length)
+      if (
+        !values.length ||
+        values.length > 16 ||
+        new Set(key === 'sort' ? values.map((v) => v.replace(/^-/, '')) : values).size !==
+          values.length
+      )
         throw new Error('Invalid field set')
       for (const name of values)
         if (
@@ -79,12 +84,16 @@ export function projectedPage<C extends Record<string, Decoder>, F extends keyof
   value: unknown,
   codecs: C,
   fields?: readonly F[],
+  keys: readonly (keyof C & string)[] = [],
 ) {
   const page = closed(value, ['items', 'nextCursor'])
-  return {
-    items: array(page['items'], (v) => projectedRow(v, codecs, fields)),
-    nextCursor: nextCursor(page['nextCursor']),
+  const items = array(page['items'], (v) => projectedRow(v, codecs, fields))
+  if (keys.length && (fields === undefined || keys.every((key) => fields.includes(key as F)))) {
+    const identities = items.map((row) => JSON.stringify(keys.map((key) => Reflect.get(row, key))))
+    if (new Set(identities).size !== identities.length)
+      throw new Error('Duplicate directory identity')
   }
+  return { items, nextCursor: nextCursor(page['nextCursor']) }
 }
 
 /** Serialize literal operands; this does not evaluate filters or grant authority. */

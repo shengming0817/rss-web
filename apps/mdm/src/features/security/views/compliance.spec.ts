@@ -1,3 +1,4 @@
+import { ref } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -47,6 +48,7 @@ async function setup(
       provide: {
         [mdmKey as symbol]: {
           tenant: id,
+          session: { state: ref({ status: 'authenticated' }) },
           demo: true,
           security: { compliance },
           devices: {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { comparison as queryComparison, allOf } from '../../../services/directory-query'
 import { ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { UiButton } from '@rss/core/components'
@@ -97,7 +98,14 @@ function apply(p: PolicyRead) {
 async function load(cursor?: string) {
   rows.value = undefined
   await run(
-    () => client.list(cursor, kind.value, undefined, { state: state.value || undefined }),
+    () =>
+      client.list({
+        cursor,
+        filter: allOf(
+          queryComparison('action', '==', kind.value),
+          state.value ? queryComparison('state', '==', state.value) : undefined,
+        ),
+      }),
     (v) => {
       rows.value = v
     },

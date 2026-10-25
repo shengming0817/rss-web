@@ -3,6 +3,33 @@ import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { createResourcesClient, decodeResource, decodeScriptSpec } from './resources'
 const operationId = '11111111-1111-4111-8111-111111111111'
+it('sends the selected query and strictly decodes an actual partial Resource row', async () => {
+  let response: unknown = {
+    items: [{ id: 'resource', presentation: { vendor: { enabled: false } } }],
+    nextCursor: 'A'.repeat(4096),
+  }
+  const request = vi.fn(async (options: RequestOptions<unknown>) => options.decode(response))
+  const client = createResourcesClient({ request } as unknown as HttpTransport)
+  const page = await client.list({
+    filter: 'kind==script;active==false',
+    sort: ['kind', '-revision'],
+    fields: ['id', 'presentation'],
+    limit: 1,
+  })
+  expect(request.mock.lastCall?.[0].query).toEqual({
+    filter: 'kind==script;active==false',
+    sort: 'kind,-revision',
+    fields: 'id,presentation',
+    limit: 1,
+  })
+  expect(page.items).toEqual([{ id: 'resource', presentation: { vendor: { enabled: false } } }])
+  expect(page.items[0]).not.toHaveProperty('revision')
+  expect(page.nextCursor).toHaveLength(4096)
+  response = { items: [{ id: 'resource', presentation: {}, revision: 9 }], nextCursor: null }
+  await expect(client.list({ fields: ['id', 'presentation'] })).rejects.toThrow()
+  response = { items: [{ id: 'resource' }], nextCursor: null }
+  await expect(client.list({ fields: ['id', 'presentation'] })).rejects.toThrow()
+})
 it('consumes the complete formal resource directory header', async () => {
   const item = {
     id: 'profile',
@@ -15,7 +42,7 @@ it('consumes the complete formal resource directory header', async () => {
   const client = createResourcesClient({
     request: async (options: RequestOptions<unknown>) => options.decode(response),
   } as HttpTransport)
-  expect((await client.list('telemetry_profile')).items).toEqual([item])
+  expect((await client.list({ filter: "kind=='telemetry_profile'" })).items).toEqual([item])
   response = { items: [{ ...item, presentation: null }], nextCursor: null }
   await expect(client.list()).rejects.toThrow()
 })

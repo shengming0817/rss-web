@@ -1,3 +1,8 @@
+import {
+  queryParameters,
+  projectedPage,
+  type DirectoryQuery,
+} from '../../../services/directory-query'
 import { calculationTask } from '../../devices/clients/calculation-task'
 import type { HttpTransport } from '@rss/api/mdm'
 import type { Operation } from '../../../services/useOperation'
@@ -16,10 +21,16 @@ import {
 import { channels, objectRef, objectKey, type Channel } from '../../devices/clients/objects'
 import { eligibility } from './model'
 
-export interface ScopeQuery {
-  after?: string | undefined
-  ready?: boolean | undefined
+const scopeFields = {
+  id: uuid,
+  revision: count,
+  deleted: boolean,
+  calculationRevision: count,
+  resolution: (v: unknown) => nullable(v, uuid),
+  resolutionRevision: (v: unknown) => nullable(v, count),
 }
+export type ScopeQuery<F extends keyof typeof scopeFields = keyof typeof scopeFields> =
+  DirectoryQuery<F>
 export type Reference = { kind: 'device' | 'group'; id: string }
 export interface ScopeDefinition {
   targets: Reference[]
@@ -125,36 +136,15 @@ export function decodeScopePage(
 }
 export function createScopesClient(transport: HttpTransport) {
   return {
-    list: (query: ScopeQuery = {}) =>
+    list: <F extends keyof typeof scopeFields = keyof typeof scopeFields>(
+      query: ScopeQuery<F> = {},
+    ) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/scopes',
-        query: { ...query, limit: 20 },
+        query: queryParameters({ limit: 20, ...query }),
         successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['items', 'nextCursor'])
-          return {
-            items: array(v['items'], (value) => {
-              const i = closed(value, [
-                'id',
-                'revision',
-                'deleted',
-                'calculationRevision',
-                'resolution',
-                'resolutionRevision',
-              ])
-              return {
-                id: uuid(i['id']),
-                revision: count(i['revision']),
-                deleted: boolean(i['deleted']),
-                calculationRevision: count(i['calculationRevision']),
-                resolution: nullable(i['resolution'], uuid),
-                resolutionRevision: nullable(i['resolutionRevision'], count),
-              }
-            }),
-            nextCursor: nullable(v['nextCursor'], uuid),
-          }
-        },
+        decode: (value) => projectedPage(value, scopeFields, query.fields, ['id']),
       }),
     read: (id: string) =>
       transport.request({

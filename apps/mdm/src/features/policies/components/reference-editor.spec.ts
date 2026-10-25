@@ -42,7 +42,7 @@ it('paginates authorized references without discarding saved references and clea
   expect(wrapper.get('select[id$="-choice"]').text()).toContain('First · 版本 7')
   await button('下一页').trigger('click')
   await flushPromises()
-  expect(groups.mock.calls[1]?.[0]).toEqual({ after: 'g1' })
+  expect(groups.mock.calls[1]?.[0]).toEqual({ cursor: 'g1' })
   expect(wrapper.get('select[id$="-choice"]').text()).toContain('Second')
   expect(wrapper.text()).toContain('saved')
   await wrapper.get('select').setValue('device')

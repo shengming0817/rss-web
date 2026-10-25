@@ -153,16 +153,13 @@ it('keeps policy-directory cursor filters separate from ID pagination and valida
         : { items: [], nextCursor: null },
     ),
     client = createPoliciesClient(f.client)
-  await client.list('opaque', undefined, undefined, {
-    state: 'archived',
-    scope: b,
-    category: 'retirement',
+  await client.list({
+    cursor: 'YWJj',
+    filter: `state=='archived';scope=='${b}';category=='retirement'`,
   })
   expect(f.calls[0]?.query).toMatchObject({
-    cursor: 'opaque',
-    state: 'archived',
-    scope: b,
-    category: 'retirement',
+    cursor: 'YWJj',
+    filter: `state=='archived';scope=='${b}';category=='retirement'`,
   })
   expect(await client.rerun(a, b, 7, 100)).toMatchObject({ operationId: b })
   expect(f.calls[1]?.body).toEqual({

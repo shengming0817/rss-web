@@ -153,14 +153,14 @@ function readDevices(cursor?: string) {
 }
 function rulePage(after?: string) {
   void run(
-    () => runtime.security.compliance.list(after),
+    () => runtime.security.compliance.list({ cursor: after }),
     (v) => (rules.value = v),
   )
 }
 function scopePage(cursor?: string) {
   void run(
     async () => {
-      const page = await runtime.policies.scopes.list({ after: cursor })
+      const page = await runtime.policies.scopes.list({ cursor })
       return {
         ...page,
         items: page.items.map((s) => ({

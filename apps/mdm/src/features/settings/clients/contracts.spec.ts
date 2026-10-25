@@ -498,8 +498,11 @@ it('reads formal Agent package metadata and withdraws with the same operation ow
     length: 100,
     installerSha256: Array(32).fill(1),
   }
-  const f = transport([value])
-  expect((await createManagedPackages(f.client, b).read()).length).toBe(1)
+  const f = transport({
+    items: [{ ...value, state: 'published', ...value.target }],
+    nextCursor: null,
+  })
+  expect((await createManagedPackages(f.client, b).list()).items.length).toBe(1)
   const w = transport(undefined)
   await createManagedPackages(w.client, b).withdraw(a, c)
   expect(w.calls[0]).toMatchObject({ successStatus: 204, body: { operationId: a } })

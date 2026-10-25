@@ -1,3 +1,4 @@
+import { directoryPage } from '../directory'
 import { randomUUID } from 'node:crypto'
 import type { DomainHandler, Scenario } from '../scenario'
 import type { createDeviceDemo } from '../devices/state'
@@ -322,16 +323,16 @@ export function createComplianceDemo(
       }
       if (!ruleRoute![1]) {
         if (request.method !== 'GET') return error('malformed_request', 400)
-        queryKeys(request.query, ['after'])
-        const after = request.query.has('after') ? uuid(request.query.get('after')) : null
-        const all = [...rules.values()]
-          .map((r) => r.rule)
-          .filter((r) => !after || r.id > after)
-          .sort((a, b) => a.id.localeCompare(b.id))
-        return ok({
-          items: structuredClone(all.slice(0, 50)),
-          nextCursor: all.length > 50 ? all[49]!.id : null,
-        })
+        const items = [...rules.values()].map((row) => ({
+          ...row.rule,
+          name: row.rule.definition.presentation.name,
+          enabled: row.rule.definition.enabled,
+          deleted: false,
+          severity: row.rule.definition.severity,
+          platform: row.rule.definition.platform,
+          targetKind: row.rule.definition.target.kind,
+        }))
+        return ok(directoryPage(items, request, ['id'], { maxLimit: 50, defaultLimit: 50 }))
       }
       queryKeys(request.query, [])
       const id = uuid(ruleRoute![1]),

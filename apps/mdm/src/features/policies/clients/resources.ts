@@ -1,3 +1,8 @@
+import {
+  queryParameters,
+  projectedPage,
+  type DirectoryQuery,
+} from '../../../services/directory-query'
 import { attachment } from '../../enrollment/clients/binary'
 import { applicability, templateScope, valueMapping, type ValueMapping } from './collection-mapping'
 import { telemetryProfile, type TelemetryProfile } from './telemetry-profile'
@@ -22,6 +27,22 @@ import {
   record,
   unique,
 } from '../../../services/decode'
+const resourceFields = {
+  id: identifier,
+  revision: count,
+  kind: (v: unknown) =>
+    enumeration(v, [
+      'software',
+      'script',
+      'configuration',
+      'native_collection',
+      'agent_collection',
+      'telemetry_profile',
+    ] as const),
+  activeVersion: (v: unknown) => nullable(v, identifier),
+  presentation: (v: unknown) => jsonObject(v, 65536),
+}
+export type ResourceDirectoryField = keyof typeof resourceFields
 export const platforms = ['windows', 'macos'] as const
 export const architectures = ['x86_64', 'aarch64'] as const
 export type Platform = (typeof platforms)[number]
@@ -373,35 +394,15 @@ export function createResourcesClient(transport: HttpTransport) {
           }
         },
       }),
-    list: (kind?: ResourceKind, after?: string, active?: boolean) =>
+    list: <F extends ResourceDirectoryField = ResourceDirectoryField>(
+      query: DirectoryQuery<F> = {},
+    ) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/resources',
-        query: { kind, after, active, limit: 20 },
+        query: queryParameters({ limit: 20, ...query }),
         successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['items', 'nextCursor'])
-          return {
-            items: array(v['items'], (value) => {
-              const i = closed(value, ['id', 'revision', 'kind', 'activeVersion', 'presentation'])
-              return {
-                id: identifier(i['id']),
-                revision: count(i['revision']),
-                kind: enumeration(i['kind'], [
-                  'software',
-                  'script',
-                  'configuration',
-                  'native_collection',
-                  'agent_collection',
-                  'telemetry_profile',
-                ] as const),
-                activeVersion: nullable(i['activeVersion'], identifier),
-                presentation: record(jsonValue(i['presentation'], 65536)),
-              }
-            }),
-            nextCursor: nullable(v['nextCursor'], identifier),
-          }
-        },
+        decode: (value) => projectedPage(value, resourceFields, query.fields, ['id']),
       }),
     read: (id: string) =>
       transport.request({

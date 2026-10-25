@@ -200,7 +200,7 @@ it('replays exact unknown native operations and requires nonempty Criteria witho
   expect((await f.server.handle('GET', path)).status).toBe(403)
 })
 
-it('keeps native rule list after pagination separate from history cursor pagination', async () => {
+it('uses opaque query-bound rule pagination independently of history windows', async () => {
   const f = await fixture()
   const ids = Array.from({ length: 51 }, () => crypto.randomUUID()).sort()
   for (const id of ids)
@@ -218,9 +218,10 @@ it('keeps native rule list after pagination separate from history cursor paginat
     nextCursor: string
   }
   expect(first.items.map((v) => v.id)).toEqual(ids.slice(0, 50))
-  expect(first.nextCursor).toBe(ids[49])
+  expect(typeof first.nextCursor).toBe('string')
+  expect(first.nextCursor).not.toBe(ids[49])
   expect(
-    (await f.server.handle('GET', `/api/v1/compliance-rules?after=${first.nextCursor}`)).body,
+    (await f.server.handle('GET', `/api/v1/compliance-rules?cursor=${first.nextCursor}`)).body,
   ).toMatchObject({ items: [{ id: ids[50] }], nextCursor: null })
   expect((await f.server.handle('GET', '/api/v1/compliance-rules?cursor=unsupported')).status).toBe(
     400,
