@@ -33,8 +33,13 @@ import {
 import { decodeScriptSpec } from '../policies/clients/resources'
 import { profileBytes, telemetryProfile } from '../policies/clients/telemetry-profile'
 const wrappers: VueWrapper[] = []
+const cleanups: (() => void)[] = []
 afterEach(() => {
   wrappers.splice(0).forEach((w) => w.unmount())
+  cleanups
+    .splice(0)
+    .reverse()
+    .forEach((reset) => reset())
   document.body.innerHTML = ''
   vi.restoreAllMocks()
 })
@@ -43,6 +48,10 @@ async function setup(name = 'perf', query: Record<string, string> = {}) {
     automation = createAutomationDemo(domain)
   domain.bindAuthorization(automation.authorization.can)
   seedTelemetry(automation)
+  cleanups.push(() => {
+    domain.reset()
+    automation.reset()
+  })
   const scenario = createScenario([automation.handle, domain.handle], () => {
     domain.reset()
     automation.reset()

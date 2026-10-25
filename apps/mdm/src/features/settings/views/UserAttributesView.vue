@@ -44,9 +44,9 @@ async function load(after?: string) {
     sources.value = []
   }
   await run(
-    () => runtime.settings.profiles.definitions(after),
+    () => runtime.settings.profiles.definitions({ cursor: after }),
     (v) => {
-      rows.value = after ? [...rows.value, ...v.definitions] : v.definitions
+      rows.value = after ? [...rows.value, ...v.items] : v.items
       sources.value = v.sources
       next.value = v.nextCursor
     },

@@ -38,7 +38,7 @@ const valuePath = ref('[]'),
   retentionRevision = ref(1)
 const bindingEnabled = ref(true),
   advanced = ref(''),
-  references = ref<Record<string, number>>(),
+  references = ref<Awaited<ReturnType<typeof client.fieldReferences>>>(),
   confirmed = ref(false)
 const retention = ref({
     key: '',
@@ -66,6 +66,16 @@ async function load() {
     (v) => (fields.value = v.fields),
   )
 }
+async function loadReferences(cursor?: string) {
+  const field = selected.value?.key
+  if (!field) return
+  await run(
+    () => client.fieldReferences(field, cursor),
+    (value) => {
+      if (field === selected.value?.key) references.value = value
+    },
+  )
+}
 async function edit(field?: FieldDefinition) {
   if (pending.value) return
   selected.value = field
@@ -87,11 +97,7 @@ async function edit(field?: FieldDefinition) {
   confirmed.value = false
   comparison.value = undefined
   open.value = true
-  if (field)
-    await run(
-      () => client.fieldReferences(field.key),
-      (v) => (references.value = v),
-    )
+  if (field) await loadReferences()
 }
 function definition() {
   const base = selected.value
@@ -376,8 +382,30 @@ watch(
           </div>
           <section v-if="references">
             <h3>{{ t('telemetry.references') }}</h3>
+            <ul>
+              <li
+                v-for="mapping in references.mappings"
+                :key="mapping.resource + '/' + mapping.version"
+              >
+                <RouterLink
+                  :to="{
+                    name: 'policy-resources',
+                    params: { tenant: runtime.tenant },
+                    query: { resource: mapping.resource, version: mapping.version },
+                  }"
+                  >{{ mapping.resource }} / {{ mapping.version }}</RouterLink
+                >
+                · {{ mapping.state }}
+              </li>
+            </ul>
+            <UiButton
+              v-if="references.nextCursor"
+              :disabled="busy"
+              @click="loadReferences(references.nextCursor)"
+              >{{ t('devices.next') }}</UiButton
+            >
             <dl class="telemetry-facts">
-              <template v-for="(count, name) in references" :key="name"
+              <template v-for="(count, name) in references.impact" :key="name"
                 ><dt>{{ t('telemetry.reference.' + name) }}</dt>
                 <dd>{{ count }}</dd></template
               >

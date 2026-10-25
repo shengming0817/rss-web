@@ -1,13 +1,15 @@
+import { directoryPage } from '../directory'
+import { decodeAssetCondition } from '../../src/features/devices/clients/asset-query'
 import type { DomainHandler } from '../scenario'
 import { closed, enumeration, identifier, nullable, record, uuid } from '../../src/services/decode'
 import {
   collectionScope,
   fieldDefinition,
   fieldInput,
-  query as decodeQuery,
+  queryInput as decodeQuery,
   scalar,
   type Inventory,
-  type Query,
+  type QueryInput,
   type SavedQuery,
 } from '../../src/features/devices/clients/asset-model'
 import {
@@ -44,13 +46,13 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
   const saved = new Map<string, SavedQuery>()
   const pages = createPages()
   const receipts = createReceipts()
-  function search(task: string, input: Query, empty: boolean) {
+  function search(task: string, input: QueryInput, empty: boolean) {
     const all = empty
       ? []
       : [...devices().values()].filter((d) => d.summary.inventoryAvailable).map((d) => d.inventory)
     const evaluations = all.map((device) => ({
       device,
-      ...evaluateCondition(input.criteria, [
+      ...evaluateCondition(decodeAssetCondition(input, catalog), [
         device,
         ...(devices().get(device.device)?.scopedInventory ?? []),
       ]),
@@ -58,8 +60,8 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
     const selected = evaluations
       .filter((v) => v.decision === 'match')
       .map((v) => structuredClone(v.device))
-    if (input.sort) {
-      const sort = input.sort
+    if (input.sort[0]) {
+      const sort = input.sort[0]
       selected.sort((a, b) => {
         const av = a.fields[sort.field]?.state,
           bv = b.fields[sort.field]?.state
@@ -79,7 +81,7 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
         total: all.length,
       },
     })
-    selections.set(task, input.select)
+    selections.set(task, input.fields)
     return asset({ kind: 'accepted', task, statusUrl: `/api/v1/device-queries/${task}` }, 202)
   }
   const selections = new Map<string, string[]>()
@@ -103,9 +105,14 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
     }
     if (path === '/api/v1/asset-fields' && method === 'GET')
       return asset({
-        kind: 'fields',
+        kind: 'field_list',
         dictionary: 'assets-v1',
-        fields: catalog.map((f) => ({ ...fieldInput(f), operations: f.operations })),
+        ...directoryPage(
+          catalog.map((f) => ({ ...fieldInput(f), operations: f.operations })),
+          request,
+          ['key'],
+          { maxLimit: 1024 },
+        ),
       })
     const fieldPath = /^\/api\/v1\/asset-fields\/([^/]+)(?:\/(references))?$/.exec(path)
     if (fieldPath) {
@@ -115,6 +122,8 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
         return asset({
           kind: 'field_references',
           field: key,
+          mappings: [],
+          nextCursor: null,
           impact: {
             groups: 0,
             templates: 0,
@@ -320,14 +329,18 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
       return asset({ kind: 'facets', task, facet, items: page.items, nextCursor: page.nextCursor })
     }
     if (path === '/api/v1/saved-queries' && method === 'GET') {
-      const after = query.get('after')
-      const items = [...saved.values()]
-        .filter((s) => s.definition && (!after || s.id > after))
-        .sort((a, b) => a.id.localeCompare(b.id))
       return asset({
         kind: 'saved_list',
-        items: items.slice(0, 100),
-        next: items.length > 100 ? items[99]!.id : null,
+        ...directoryPage(
+          [...saved.values()].map((s) => ({
+            ...s,
+            name: s.definition?.name ?? null,
+            deleted: s.definition === null,
+          })),
+          request,
+          ['id'],
+          { maxLimit: 100 },
+        ),
       })
     }
     const savedPath = /^\/api\/v1\/saved-queries\/([^/]+)(\/execute)?$/.exec(path)
