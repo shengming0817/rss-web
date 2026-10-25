@@ -6,7 +6,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
-import type { Criteria, FieldDefinition } from '../../devices/clients/assets'
+import type { InventoryCondition, FieldDefinition } from '../../devices/clients/assets'
 import {
   platforms,
   severities,
@@ -14,7 +14,7 @@ import {
   type ComplianceRule,
   type ComplianceTask,
 } from '../clients/compliance-model'
-import CriteriaEditor from '../../devices/components/CriteriaEditor.vue'
+import ConditionEditor from '../../devices/components/ConditionEditor.vue'
 import PageFrame from '../../../components/PageFrame.vue'
 const editorOpen = ref(false)
 function beginCreate() {
@@ -40,7 +40,7 @@ const list = ref<Awaited<ReturnType<typeof client.list>>>(),
   platform = ref<ComplianceDefinition['platform']>('all'),
   target = ref<'all' | 'groups'>('all'),
   groupIds = ref(''),
-  criteria = ref<Criteria | null>(null),
+  criteria = ref<InventoryCondition | null>(null),
   taskId = ref(''),
   task = ref<ComplianceTask>(),
   editable = ref(true)
@@ -321,7 +321,7 @@ onMounted(async () => {
               {{ t('devices.next') }}
             </UiButton>
           </template>
-          <CriteriaEditor v-model="criteria" :fields="fields" />
+          <ConditionEditor v-model="criteria" :fields="fields" />
           <p v-if="!criteria">{{ t('security.criteriaRequired') }}</p>
           <UiButton :disabled="!!!criteria" data-testid="save-rule" type="submit">{{
             t('devices.save')
@@ -372,7 +372,7 @@ onMounted(async () => {
           }}
         </p>
         <fieldset disabled>
-          <CriteriaEditor :model-value="historical.definition.criteria" :fields="fields" />
+          <ConditionEditor :model-value="historical.definition.criteria" :fields="fields" />
         </fieldset>
       </div>
     </section>

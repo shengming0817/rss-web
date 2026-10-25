@@ -2064,3 +2064,14 @@ it('clears directory statistics when the principal changes on a continuation pag
   expect(f.wrapper.find('.console-stat-grid').exists()).toBe(false)
   expect(f.wrapper.find('tbody').exists()).toBe(false)
 })
+
+it('withdraws cached directory counts when a continuation loses its authority', async () => {
+  const f = await setup()
+  expect(f.wrapper.find('.console-stat-grid').exists()).toBe(true)
+  vi.spyOn(f.devices.views, 'list').mockRejectedValueOnce(
+    decodeMdmError(403, { code: 'permission_denied' }),
+  )
+  await f.click('下一页')
+  expect(f.wrapper.find('.console-stat-grid').exists()).toBe(false)
+  expect(f.wrapper.find('tbody').exists()).toBe(false)
+})

@@ -47,10 +47,14 @@ async function setup() {
     platform: 'all',
     target: { kind: 'all' },
     criteria: {
-      kind: 'predicate',
-      field: 'custom.office_floor',
-      op: 'ge',
-      value: { kind: 'integer', value: 1 },
+      selector: { kind: 'device' },
+      quantifier: 'one',
+      criteria: {
+        kind: 'predicate',
+        field: 'custom.office_floor',
+        op: 'ge',
+        value: { kind: 'integer', value: 1 },
+      },
     },
   }
   const created = await write('PUT', `/api/v1/compliance-rules/${rule}`, operation(ruleDefinition))
@@ -146,7 +150,17 @@ it('pins exact rule revisions, rejects stale approval and replays unknown baseli
       await f.write(
         'PUT',
         `/api/v1/compliance-rules/${f.rule}`,
-        operation({ ...f.ruleDefinition, criteria: { kind: 'and', children: [] } }, 1),
+        operation(
+          {
+            ...f.ruleDefinition,
+            criteria: {
+              selector: { kind: 'device' },
+              quantifier: 'one',
+              criteria: { kind: 'and', children: [] },
+            },
+          },
+          1,
+        ),
       )
     ).status,
   ).toBe(200)

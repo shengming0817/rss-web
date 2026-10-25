@@ -319,12 +319,14 @@ watch(
               "
               :receipt="
                 item.evidence.kind === 'command'
-                  ? (commandDetails[item.id]?.observation.progress ?? 'unknown')
+                  ? (commandDetails[item.id]?.observation.progress ??
+                    item.evidence.observation.progress)
                   : item.evidence.state.execution
               "
               :effect="
                 item.evidence.kind === 'command'
-                  ? (commandDetails[item.id]?.observation.effect ?? 'unverified')
+                  ? (commandDetails[item.id]?.observation.effect ??
+                    item.evidence.observation.effect)
                   : item.evidence.effect
               "
             />

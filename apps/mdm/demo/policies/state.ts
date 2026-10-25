@@ -201,25 +201,11 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
             detailUrl: `/api/v1/policies/${r.policy.id}/runs/${r.value.taskId}`,
             evidence: { state: r.value.state, effect: r.value.effect, result: null },
           })),
-        ]
-          .filter(
-            (i) =>
-              authorization.can(request.actor.principalId, 'operation_read', i.device) &&
-              scenario !== 'empty',
-          )
-          .map(({ detailUrl: _url, evidence, ...metadata }) => ({
-            ...metadata,
-            evidence:
-              'commandStatus' in evidence
-                ? {
-                    commandStatus: evidence.commandStatus,
-                    dispatchFailure: evidence.dispatchFailure,
-                    ...(evidence.agentInstallation
-                      ? { agentInstallation: evidence.agentInstallation }
-                      : {}),
-                  }
-                : evidence,
-          }))
+        ].filter(
+          (i) =>
+            authorization.can(request.actor.principalId, 'operation_read', i.device) &&
+            scenario !== 'empty',
+        )
         if (request.path.endsWith('/statistics')) {
           const items = filterRows(all, request.query.get('filter'))
           return ok({
@@ -232,16 +218,9 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
             asOf: security.now(),
           })
         }
-        const fields = request.query.get('fields'),
-          parameters = new URLSearchParams(request.query)
-        parameters.delete('fields')
-        const rows =
-          fields && !fields.split(',').includes('evidence')
-            ? all.map(({ evidence: _evidence, ...row }) => row)
-            : all
         return ok(
-          directoryPage(rows, { ...request, query: parameters }, ['id', 'kind'], {
-            binding: JSON.stringify([fields, authorization.effective(request.actor.principalId)]),
+          directoryPage(all, request, ['id', 'kind'], {
+            binding: JSON.stringify(authorization.effective(request.actor.principalId)),
           }),
         )
       }

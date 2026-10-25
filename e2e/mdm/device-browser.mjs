@@ -148,13 +148,34 @@ try {
       ],
       { cwd: process.env.MDM_DEVICE_BACKEND, stdio, timeout: 30000 },
     )
+    if (control.status !== 0) {
+      const diagnostic =
+        [
+          'deadlock detected',
+          'lock timeout',
+          'statement timeout',
+          'permission denied',
+          'does not exist',
+          'lease',
+          'No such file',
+        ].find((text) => String(control.stderr).includes(text)) ?? 'unclassified'
+      console.log(
+        JSON.stringify({
+          phase: 'fixture-control',
+          status: control.status,
+          signal: control.signal,
+          code: control.error?.code,
+          diagnostic,
+        }),
+      )
+    }
     assert.equal(control.status, 0)
   }
   phase = 'login'
   await page.goto(origin + '/login')
   await page.locator('#login-name').fill(fixture.login)
   await page.locator('#login-password').fill(readFileSync(fixture.passwordFile, 'utf8').trim())
-  await page.locator('form').evaluate((f) => f.requestSubmit())
+  await page.locator('form button[type=submit]').click()
   await page.waitForURL((url) => /\/(?:workspace|settings\/guide)$/.test(url.pathname))
   phase = 'directory-http'
   await api('/api/v1/devices?limit=20')
@@ -205,6 +226,15 @@ try {
     await page.locator('form.console-toolbar').evaluate((form) => form.requestSubmit())
     await page.waitForURL((url) => url.searchParams.get('search') === search)
     await loaded()
+    const restart = page
+      .locator('form.console-toolbar + p')
+      .getByRole('button', { name: '重新读取', exact: true })
+    if (await restart.count()) {
+      // A concurrent authorized projection may invalidate even the first page; restart explicitly.
+      await restart.click()
+      await loaded()
+      assert.equal(new URL(page.url()).searchParams.get('search'), search)
+    }
     assert.ok((await page.locator('tbody').textContent()).includes(fixture.mdm))
     assert.ok((await page.locator('tbody').textContent()).includes('Device Browser Person'))
   }
@@ -238,7 +268,20 @@ try {
   assert.equal(currentRegistration.generation, 2)
   assert.notEqual(currentRegistration.registrationId, oldRegistration.registrationId)
   await page.getByRole('button', { name: '查找另一通道候选', exact: true }).click()
+  const candidateRead = () =>
+    page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === `/api/v1/device-views/endpoint/${fixture.agent}`,
+    )
+  let inspected = candidateRead()
   await panel().locator(`input[type=radio][value="${fixture.agent}"]`).check()
+  if ((await inspected).status() === 409) {
+    // Registration advancement may invalidate the candidate snapshot; explicitly discover it again.
+    await page.getByRole('button', { name: '查找另一通道候选', exact: true }).click()
+    inspected = candidateRead()
+    await panel().locator(`input[type=radio][value="${fixture.agent}"]`).check()
+    assert.equal((await inspected).status(), 200)
+  }
   const coordinates = panel().locator('[data-testid=confirmation-coordinates]')
   await coordinates.getByText(currentRegistration.registrationId, { exact: false }).waitFor()
   assert.ok(
@@ -408,7 +451,10 @@ try {
         `/api/v1/resources/${queryResources[i]}`,
         {
           action: 'present',
-          presentation: { name: `Query resource ${i}`, extra: { retained: false } },
+          presentation: {
+            name: `Query resource ${i} revision ${revision}`,
+            extra: { retained: false },
+          },
         },
         revision,
       )
@@ -500,10 +546,14 @@ try {
         platform: 'all',
         target: { kind: 'all' },
         criteria: {
-          kind: 'predicate',
-          field: 'custom.asset_tag',
-          op: 'eq',
-          value: { kind: 'string', value: 'changed fixture' },
+          selector: { kind: 'device' },
+          quantifier: 'one',
+          criteria: {
+            kind: 'predicate',
+            field: 'custom.asset_tag',
+            op: 'eq',
+            value: { kind: 'string', value: 'changed fixture' },
+          },
         },
       },
     },
@@ -543,7 +593,7 @@ try {
     fields: ['custom.asset_tag'],
     sort: [],
   }
-  const acceptedQuery = await mutate('/api/v1/device-queries', assetQuery, 0, 202)
+  const acceptedQuery = (await mutate('/api/v1/device-queries', assetQuery, 0, 202)).asset
   let queryState
   const queryDeadline = Date.now() + 90000
   do {

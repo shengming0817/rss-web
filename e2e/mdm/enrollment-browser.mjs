@@ -12,6 +12,7 @@ import { assertNativeCallback } from './enrollment-callback.mjs'
 let browser,
   context,
   employeeContext,
+  page,
   phase = 'environment',
   result = 'failed',
   cleanup = 'passed',
@@ -71,7 +72,7 @@ try {
     target.setDefaultTimeout(10000)
     return target
   }
-  let page = await freshPage()
+  page = await freshPage()
   active()
   phase = 'anonymous-downloads'
   await go(page, `${origin}/downloads/agent`)
@@ -131,7 +132,7 @@ try {
     await go(target, `${origin}/login`)
     await target.locator('#login-name').fill(account.login)
     await target.locator('#login-password').fill(secret(account.passwordFile))
-    await target.locator('form').evaluate((f) => f.requestSubmit())
+    await target.locator('form button[type=submit]').click()
     await target.waitForURL((url) => /\/(?:workspace|settings\/guide)$/.test(url.pathname))
   }
   if (fixture.reader) {
@@ -226,16 +227,28 @@ try {
       await page.locator('summary').filter({ hasText: '生成完整 JSON' }).click()
       await page.getByRole('button', { name: '生成完整 JSON', exact: true }).waitFor()
       let commits = 0
+      const created = Promise.withResolvers()
       await page.route('**/api/v1/agent-configurations', async (route) => {
         if (route.request().method() !== 'POST') return route.continue()
         active()
         const response = await route.fetch({ timeout: 10000 })
-        assert.equal(response.status(), 200)
+        created.resolve(response.status())
+        if (response.status() !== 200) {
+          const body = await response.json()
+          failure = {
+            apiCode:
+              typeof body.code === 'string' && /^[a-z_]{1,64}$/.test(body.code)
+                ? body.code
+                : 'invalid',
+          }
+          return route.fulfill({ response })
+        }
         commits++
         await route.abort('failed')
       })
       active()
       await page.getByRole('button', { name: '生成完整 JSON', exact: true }).click()
+      assert.equal(await created.promise, 200)
       await page.getByText('提交结果未知', { exact: false }).first().waitFor()
       await page.unroute('**/api/v1/agent-configurations')
       const found = page.waitForResponse(
@@ -501,8 +514,10 @@ try {
   failure = {
     ...failure,
     kind: error.name,
+    route: page ? new URL(page.url()).pathname : undefined,
+    alerts: page && !page.isClosed() ? await page.getByRole('alert').allTextContents() : [],
     ...(error instanceof PkiCollectorError ? { collector: error.collector } : {}),
-    location: error.stack?.match(/enrollment-browser\.mjs:([0-9]+):([0-9]+)/)?.slice(1),
+    location: error.stack?.match(/(?:enrollment|pki)-browser\.mjs:([0-9]+):([0-9]+)/)?.slice(1),
     operator: error.code === 'ERR_ASSERTION' ? error.operator : undefined,
     actual:
       typeof error.actual === 'number' || typeof error.actual === 'boolean'

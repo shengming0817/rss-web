@@ -16,7 +16,11 @@ const definition = complianceDefinition({
   enabled: true,
   platform: 'all',
   target: { kind: 'all' },
-  criteria: { kind: 'and', children: [] },
+  criteria: {
+    selector: { kind: 'device' },
+    quantifier: 'one',
+    criteria: { kind: 'and', children: [] },
+  },
 })
 const assessment = {
   ruleId: id,
@@ -87,6 +91,9 @@ it('retains explicit unknown, pending previous evidence and more than two platfo
     ),
   ).toThrow()
   expect(() => complianceDefinition({ ...definition, criteria: null })).toThrow()
+  expect(() =>
+    complianceDefinition({ ...definition, criteria: { kind: 'and', children: [] } }),
+  ).toThrow()
   expect(() =>
     complianceAssessment({
       ...assessment,

@@ -49,6 +49,8 @@ export const tenantPermissions = [
   'tenant_administrator_create',
   'identity_accounts_manage',
   'identity_providers_manage',
+  'enterprise_applications_read',
+  'enterprise_applications_write',
   'storage_configuration_read',
   'storage_configuration_write',
   'registration_configuration_read',

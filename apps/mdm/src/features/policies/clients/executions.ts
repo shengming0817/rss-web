@@ -1,4 +1,8 @@
-import { queryParameters, nextCursor, type DirectoryQuery } from '../../../services/directory-query'
+import {
+  queryParameters,
+  projectedPage,
+  type DirectoryQuery,
+} from '../../../services/directory-query'
 import { jsonValue, type Json } from '../../../services/json'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
@@ -14,6 +18,7 @@ import {
   uuid,
 } from '../../../services/decode'
 import { decodeRunEvidence } from './runs'
+import { decodeNativeObservation } from './native'
 
 /** Facts still consumed by Security actions and explicit demo state, not an execution API envelope. */
 export type ExecutionOrigin =
@@ -173,77 +178,79 @@ export function executionSummary(value: unknown) {
   }
 }
 export type ExecutionSummary = ReturnType<typeof executionSummary>
+const executionFields = {
+  id: uuid,
+  kind: (v: unknown) => enumeration(v, ['command', 'action_run'] as const),
+  device: identifier,
+  policy: (v: unknown) => nullable(v, uuid),
+  registrationId: uuid,
+  generation: count,
+  origin: (v: unknown) => enumeration(v, ['direct', 'policy'] as const),
+  deadline: integer,
+  status: identifier,
+  detailUrl: (v: unknown) => {
+    const path = string(v)
+    if (
+      !/^\/api\/v1\/(?:devices\/[^/?#]+\/operations|policies\/[0-9a-f-]{36}\/runs)\/[0-9a-f-]{36}$/.test(
+        path,
+      )
+    )
+      throw new Error('Invalid operation locator')
+    return path
+  },
+  evidence: (v: unknown) => {
+    if (!('commandStatus' in record(v))) return decodeRunEvidence(v)
+    const raw = closed(
+      v,
+      ['commandStatus', 'observation', 'dispatchFailure'],
+      ['agentInstallation'],
+    )
+    return {
+      kind: 'command' as const,
+      commandStatus: identifier(raw['commandStatus']),
+      observation: decodeNativeObservation(raw['observation']),
+      dispatchFailure: nullable(raw['dispatchFailure'], (v) => jsonValue(v, 16384)),
+      ...('agentInstallation' in raw
+        ? { agentInstallation: jsonValue(raw['agentInstallation'], 65536) }
+        : {}),
+    }
+  },
+}
 export function createExecutionsClient(transport: HttpTransport) {
   return {
-    directory: (query: DirectoryQuery = {}) =>
+    directory: <F extends keyof typeof executionFields = keyof typeof executionFields>(
+      query: DirectoryQuery<F> = {},
+    ) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/operations',
         query: queryParameters({ limit: 20, ...query }),
         successStatus: 200,
         decode(value) {
-          const page = closed(value, ['items', 'nextCursor'])
-          return {
-            items: array(page['items'], (value) => {
-              const row = closed(
-                value,
-                [
-                  'id',
-                  'kind',
-                  'device',
-                  'registrationId',
-                  'generation',
-                  'origin',
-                  'policy',
-                  'deadline',
-                  'status',
-                ],
-                ['evidence'],
-              )
-              const kind = enumeration(row['kind'], ['command', 'action_run'] as const)
-              const policy = nullable(row['policy'], uuid)
-              if (kind === 'action_run' && policy === null) throw new Error('Missing run policy')
-              if (
-                (query.fields === undefined || query.fields.includes('evidence')) !==
-                'evidence' in row
-              )
-                throw new Error('Wrong evidence projection')
-              const evidence = !('evidence' in row)
-                ? undefined
-                : kind === 'action_run'
-                  ? decodeRunEvidence(row['evidence'])
-                  : (() => {
-                      const raw = closed(
-                        row['evidence'],
-                        ['commandStatus', 'dispatchFailure'],
-                        ['agentInstallation'],
-                      )
-                      return {
-                        kind: 'command' as const,
-                        commandStatus: identifier(raw['commandStatus']),
-                        dispatchFailure: nullable(raw['dispatchFailure'], (v) =>
-                          jsonValue(v, 16384),
-                        ),
-                        ...('agentInstallation' in raw
-                          ? { agentInstallation: jsonValue(raw['agentInstallation'], 65536) }
-                          : {}),
-                      }
-                    })()
-              return {
-                id: uuid(row['id']),
-                kind,
-                device: identifier(row['device']),
-                policy,
-                registrationId: uuid(row['registrationId']),
-                generation: count(row['generation']),
-                origin: enumeration(row['origin'], ['direct', 'policy'] as const),
-                deadline: integer(row['deadline']),
-                status: identifier(row['status']),
-                evidence,
-              }
-            }),
-            nextCursor: nextCursor(page['nextCursor']),
+          const page = projectedPage(value, executionFields, query.fields, ['id', 'kind'])
+          for (const row of page.items) {
+            if (
+              'kind' in row &&
+              'evidence' in row &&
+              (row.evidence as ReturnType<typeof executionFields.evidence>).kind !== row.kind
+            )
+              throw new Error('Wrong operation evidence')
+            if (
+              'id' in row &&
+              'kind' in row &&
+              'device' in row &&
+              'policy' in row &&
+              'detailUrl' in row
+            ) {
+              const expected =
+                row.kind === 'command'
+                  ? `/api/v1/devices/${new URLSearchParams({ id: String(row.device) }).toString().slice(3).replaceAll('+', '%20')}/operations/${row.id}`
+                  : `/api/v1/policies/${row.policy}/runs/${row.id}`
+              if ((row.kind === 'action_run' && row.policy === null) || row.detailUrl !== expected)
+                throw new Error('Wrong operation locator')
+            }
           }
+          return page
         },
       }),
     statistics: (filter?: string) =>

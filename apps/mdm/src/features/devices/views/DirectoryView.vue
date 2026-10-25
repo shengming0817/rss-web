@@ -123,6 +123,10 @@ async function load(cursor?: string) {
       page.value = v
     },
   )
+  if (['denied', 'cursorInvalidated', 'conflict'].includes(failure.value ?? '')) {
+    statisticsBinding = ''
+    statistics.value = undefined
+  }
 }
 function loadRoute() {
   search.value = typeof route.query['search'] === 'string' ? route.query['search'] : ''

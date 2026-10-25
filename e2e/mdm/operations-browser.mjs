@@ -130,7 +130,7 @@ try {
   await load()
   await page.getByRole('button', { name: '下一页', exact: true }).click()
   await load()
-  coverage.push('formal-operation-kind-status-filter-and-compound-pagination')
+  coverage.push('formal-operation-kind-status-filter-and-opaque-pagination')
   phase = 'control-unknown-original-query'
   await page.goto(at(`policies/executions?device=${fixture.mdm}`))
   await load()
@@ -406,6 +406,7 @@ try {
       line: error.stack?.match(/operations-browser\.mjs:(\d+)/)?.[1],
       statuses,
       pageErrors,
+      alerts: page ? await page.getByRole('alert').allTextContents() : [],
       originalLocator: page ? new URL(page.url()).searchParams.has('operation') : false,
       route: page ? new URL(page.url()).pathname : undefined,
     }),

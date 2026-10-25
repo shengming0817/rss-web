@@ -3,7 +3,7 @@ import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { createExecutionsClient } from './executions'
 import { policyRun } from './runs'
 const id = '11111111-1111-4111-8111-111111111111'
-it('consumes the formal operation page and independent statistics without legacy locators', async () => {
+it('consumes the formal operation page and independent statistics with HTTP-owned locators', async () => {
   const item = {
     id,
     kind: 'action_run',
@@ -14,6 +14,7 @@ it('consumes the formal operation page and independent statistics without legacy
     policy: id,
     deadline: 100,
     status: 'running',
+    detailUrl: `/api/v1/policies/${id}/runs/${id}`,
     evidence: {
       state: {
         delivery: { kind: 'queued' },
@@ -137,8 +138,15 @@ it('separates redacted collection summaries from authorized native detail eviden
   ).toThrow()
 })
 
-it('keeps native protocol observations in detail and strictly decodes summary evidence', async () => {
-  let evidence: unknown = { commandStatus: 'received', dispatchFailure: null }
+it('decodes the HTTP native observation and rejects incomplete evidence', async () => {
+  const observation = {
+    protocol: 'syncml',
+    observationScope: 'native_objects',
+    receipts: [],
+    progress: 'received',
+    effect: 'unverified',
+  }
+  let evidence: unknown = { commandStatus: 'received', dispatchFailure: null, observation }
   const request = vi.fn(async (options: RequestOptions<unknown>) =>
     options.decode({
       items: [
@@ -152,6 +160,7 @@ it('keeps native protocol observations in detail and strictly decodes summary ev
           policy: null,
           deadline: 100,
           status: 'received',
+          detailUrl: `/api/v1/devices/endpoint/operations/${id}`,
           evidence,
         },
       ],
@@ -163,11 +172,22 @@ it('keeps native protocol observations in detail and strictly decodes summary ev
     kind: 'command',
     commandStatus: 'received',
     dispatchFailure: null,
+    observation,
   })
   evidence = {
     commandStatus: 'received',
     dispatchFailure: null,
     observation: { progress: 'succeeded', effect: 'unverified' },
   }
+  await expect(client.directory()).rejects.toThrow()
+})
+
+it('decodes precisely the requested execution projection', async () => {
+  const request = vi.fn(async (options: RequestOptions<unknown>) =>
+    options.decode({ items: [{ id }], nextCursor: null }),
+  )
+  const client = createExecutionsClient({ request } as unknown as HttpTransport)
+  expect((await client.directory({ fields: ['id'] })).items).toEqual([{ id }])
+  expect(request.mock.lastCall?.[0].query).toEqual({ fields: 'id', limit: 20 })
   await expect(client.directory()).rejects.toThrow()
 })

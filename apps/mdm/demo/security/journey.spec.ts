@@ -91,10 +91,14 @@ it('keeps native compliance and exceptions distinct while risk remediation uses 
         platform: 'all',
         target: { kind: 'all' },
         criteria: {
-          kind: 'predicate',
-          field: 'custom.office_floor',
-          op: 'ge',
-          value: { kind: 'integer', value: 1 },
+          selector: { kind: 'device' },
+          quantifier: 'one',
+          criteria: {
+            kind: 'predicate',
+            field: 'custom.office_floor',
+            op: 'ge',
+            value: { kind: 'integer', value: 1 },
+          },
         },
       }),
     )

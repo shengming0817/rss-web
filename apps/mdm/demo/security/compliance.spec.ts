@@ -37,10 +37,14 @@ const definition = {
   platform: 'all',
   target: { kind: 'all' },
   criteria: {
-    kind: 'predicate',
-    field: 'custom.office_floor',
-    op: 'ge',
-    value: { kind: 'integer', value: 1 },
+    selector: { kind: 'device' },
+    quantifier: 'one',
+    criteria: {
+      kind: 'predicate',
+      field: 'custom.office_floor',
+      op: 'ge',
+      value: { kind: 'integer', value: 1 },
+    },
   },
 }
 
@@ -119,7 +123,10 @@ it('keeps native rule versions, pending previous evidence and immutable history 
   expect(JSON.stringify(failed)).not.toContain('"value"')
   const revised = {
     ...definition,
-    criteria: { ...definition.criteria, value: { kind: 'integer', value: 0 } },
+    criteria: {
+      ...definition.criteria,
+      criteria: { ...definition.criteria.criteria, value: { kind: 'integer', value: 0 } },
+    },
   }
   clock.mockReturnValue(1780000001000)
   const changed = await f.write('PUT', path, operation(revised, 1))
@@ -316,7 +323,7 @@ it('invalidates dynamic group inputs after fact changes even when the compliance
     action: 'create',
     assetContext: 'endpoint' as const,
     presentation: { name: 'Office members', description: '' },
-    criteria: { selector: { kind: 'device' }, quantifier: 'one', criteria: definition.criteria },
+    criteria: definition.criteria,
   })
   expect((await f.write('POST', groupPath, groupWrite)).status).toBe(200)
   await f.server.handle('GET', `${groupPath}/tasks/${groupWrite.operationId}`)
@@ -330,7 +337,11 @@ it('invalidates dynamic group inputs after fact changes even when the compliance
       operation({
         ...definition,
         target: { kind: 'groups', ids: [group] },
-        criteria: { kind: 'and', children: [] },
+        criteria: {
+          selector: { kind: 'device' },
+          quantifier: 'one',
+          criteria: { kind: 'and', children: [] },
+        },
       }),
     )
   ).body as { task: string }
@@ -374,7 +385,15 @@ it('uses active platform provenance and keeps partial tasks from publishing a co
     await f.write(
       'PUT',
       path,
-      operation({ ...definition, platform: 'windows', criteria: { kind: 'and', children: [] } }),
+      operation({
+        ...definition,
+        platform: 'windows',
+        criteria: {
+          selector: { kind: 'device' },
+          quantifier: 'one',
+          criteria: { kind: 'and', children: [] },
+        },
+      }),
     )
   ).body as { task: string }
   await f.server.handle('GET', `${path}/tasks/${task}`)

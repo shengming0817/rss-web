@@ -189,3 +189,16 @@ it('keeps rules pagination at the current endpoint and rejects oversized or repe
   reply = { items: items.slice(0, 1), nextCursor: items[0]!.id }
   await expect(client.rules()).rejects.toThrow()
 })
+
+it('accepts current enterprise application grants without accepting device scopes', () => {
+  for (const operation of ['enterprise_applications_read', 'enterprise_applications_write']) {
+    const value = {
+      subject: { kind: 'user_group', id: group },
+      grants: [{ operation, scope: { kind: 'tenant' } }],
+    }
+    expect(rule(value, tenant)).toEqual(value)
+    expect(() =>
+      rule({ ...value, grants: [{ operation, scope: { kind: 'all_devices' } }] }, tenant),
+    ).toThrow()
+  }
+})

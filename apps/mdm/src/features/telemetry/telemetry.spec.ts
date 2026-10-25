@@ -822,6 +822,9 @@ it('preserves the original boost expiration and the newly chosen scope when upda
     .setValue('99999999-9999-4999-8999-999999999999')
   await flushPromises()
   await h.click('保存、上传并激活方案资源')
+  await vi.waitFor(() =>
+    expect(h.requests.some((request) => request.path === '/api/v1/policies/previews')).toBe(true),
+  )
   const version = h.requests
     .filter(
       (r) =>

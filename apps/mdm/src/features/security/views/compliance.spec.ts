@@ -14,7 +14,11 @@ const definition = {
   severity: 'medium',
   platform: 'all',
   target: { kind: 'all' },
-  criteria: { kind: 'and', children: [] },
+  criteria: {
+    selector: { kind: 'device' },
+    quantifier: 'one',
+    criteria: { kind: 'and', children: [] },
+  },
 }
 const assessment = {
   ruleId: id,
