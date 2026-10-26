@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { VTextField, VSelect, VBtn } from 'vuetify/components'
+import { controlEvent } from '../control-event'
+
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton } from '@rss/core/components'
 import type { ValueMapping } from '../../../contracts/collection/generated/ResourceWrite'
 import type { FieldView } from '../../../contracts/collection/generated/FieldView'
 import { identityMapping } from '../collection-draft'
@@ -131,18 +133,20 @@ function removeColumn(name: string) {
   <div class="console-panel" data-testid="value-mapping">
     <label
       >{{ t('telemetry.outputPointer')
-      }}<input v-model="model.pointer" class="ui-input" pattern="(?:/(?:[^~]|~[01])*)*"
+      }}<VTextField
+        v-model="model.pointer"
+        pattern="(?:/(?:[^~]|~[01])*)*"
+        variant="outlined"
+        density="comfortable"
+        hide-details="auto"
     /></label>
     <label
       >{{ t('telemetry.conversion')
-      }}<select
-        :value="model.conversion.kind"
-        class="ui-input"
+      }}<VSelect
         :disabled="Object.keys(model.columns).length > 0"
-        @change="conversion"
-      >
-        <option
-          v-for="kind in [
+        :model-value="model.conversion.kind"
+        :items="[
+          ...[
             'identity',
             'integer',
             'number',
@@ -151,50 +155,68 @@ function removeColumn(name: string) {
             'array_member',
             'scale',
             'bitmask',
-          ]"
-          :key="kind"
-        >
-          {{ kind }}
-        </option>
-      </select></label
-    >
+          ].map((kind) => ({ title: String(kind), value: String(kind) })),
+        ]"
+        variant="outlined"
+        density="comfortable"
+        hide-details="auto"
+        @update:model-value="conversion(controlEvent($event))"
+    /></label>
     <template v-if="model.conversion.kind === 'scale'">
       <label
         >{{ t('telemetry.mappingUi.numerator')
-        }}<input
-          :value="model.conversion.numerator"
+        }}<VTextField
           inputmode="numeric"
-          class="ui-input"
           required
+          :model-value="model.conversion.numerator"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto"
           @input="number($event, 'numerator')"
       /></label>
       <label
         >{{ t('telemetry.mappingUi.denominator')
-        }}<input
-          :value="model.conversion.denominator"
+        }}<VTextField
           inputmode="numeric"
-          class="ui-input"
           required
+          :model-value="model.conversion.denominator"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto"
           @input="number($event, 'denominator')"
       /></label>
     </template>
     <template v-if="model.conversion.kind === 'array_member'">
       <label
         >{{ t('telemetry.mappingUi.member')
-        }}<input
-          :value="model.conversion.member"
-          class="ui-input"
+        }}<VTextField
           inputmode="numeric"
           required
+          :model-value="model.conversion.member"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto"
           @input="number($event, 'member')"
       /></label>
       <label
         >{{ t('telemetry.mappingUi.present')
-        }}<input v-model="model.conversion.present" class="ui-input" maxlength="128" required
+        }}<VTextField
+          v-model="model.conversion.present"
+          maxlength="128"
+          required
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto"
       /></label>
       <label
         >{{ t('telemetry.mappingUi.absent')
-        }}<input v-model="model.conversion.absent" class="ui-input" maxlength="128" required
+        }}<VTextField
+          v-model="model.conversion.absent"
+          maxlength="128"
+          required
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto"
       /></label>
     </template>
     <template v-if="model.conversion.kind === 'enum' || model.conversion.kind === 'bitmask'">
@@ -206,34 +228,53 @@ function removeColumn(name: string) {
           :key="key"
         >
           {{ key }} → {{ value }}
-          <UiButton type="button" @click="removeCode(String(key))">{{
+          <VBtn type="button" @click="removeCode(String(key))">{{
             t('telemetry.removeMapping')
-          }}</UiButton>
+          }}</VBtn>
         </li>
       </ul>
       <label
-        >{{ t('telemetry.mappingUi.code') }}<input v-model="token" class="ui-input" maxlength="256"
+        >{{ t('telemetry.mappingUi.code')
+        }}<VTextField
+          v-model="token"
+          maxlength="256"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto"
       /></label>
       <label v-if="model.conversion.kind === 'enum'"
         >{{ t('telemetry.valueType')
-        }}<select v-model="scalar" class="ui-input">
-          <option>string</option>
-          <option>number</option>
-          <option>boolean</option>
-        </select></label
-      >
+        }}<VSelect
+          v-model="scalar"
+          :items="[
+            { title: 'string', value: 'string' },
+            { title: 'number', value: 'number' },
+            { title: 'boolean', value: 'boolean' },
+          ]"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto"
+      /></label>
       <label
         >{{ t('telemetry.mappingUi.value')
-        }}<select
+        }}<VSelect
           v-if="scalar === 'boolean' && model.conversion.kind === 'enum'"
           v-model="literal"
-          class="ui-input"
-        >
-          <option>true</option>
-          <option>false</option></select
-        ><input v-else v-model="literal" class="ui-input" maxlength="256"
+          :items="[
+            { title: 'true', value: 'true' },
+            { title: 'false', value: 'false' },
+          ]"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto" /><VTextField
+          v-else
+          v-model="literal"
+          maxlength="256"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto"
       /></label>
-      <UiButton type="button" @click="addCode">{{ t('telemetry.mappingUi.addCode') }}</UiButton>
+      <VBtn type="button" @click="addCode">{{ t('telemetry.mappingUi.addCode') }}</VBtn>
       <p v-if="failure" role="alert">{{ t('telemetry.mappingUi.precision') }}</p>
     </template>
     <template v-for="(value, name) in model.columns" :key="name">
@@ -244,26 +285,27 @@ function removeColumn(name: string) {
         :depth="props.depth + 1"
         @update:model-value="model = { ...model, columns: { ...model.columns, [name]: $event } }"
       />
-      <UiButton type="button" @click="removeColumn(String(name))">{{
+      <VBtn type="button" @click="removeColumn(String(name))">{{
         t('telemetry.removeMapping')
-      }}</UiButton>
+      }}</VBtn>
     </template>
     <template v-if="columns.length && props.depth < 4"
       ><label
         >{{ t('telemetry.mappingUi.column')
-        }}<select v-model="column" class="ui-input">
-          <option value="">{{ t('devices.select') }}</option>
-          <option
-            v-for="c in columns.filter((c) => !model.columns[c.name])"
-            :key="c.name"
-            :value="c.name"
-          >
-            {{ c.name }}
-          </option>
-        </select></label
-      ><UiButton type="button" :disabled="!column" @click="addColumn">{{
+        }}<VSelect
+          v-model="column"
+          :items="[
+            { title: String(t('devices.select')), value: '' },
+            ...columns
+              .filter((c) => !model.columns[c.name])
+              .map((c) => ({ title: String(c.name), value: c.name })),
+          ]"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto" /></label
+      ><VBtn type="button" :disabled="!column" @click="addColumn">{{
         t('telemetry.mappingUi.addColumn')
-      }}</UiButton></template
+      }}</VBtn></template
     >
   </div>
 </template>

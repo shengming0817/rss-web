@@ -36,6 +36,7 @@ it('projects the exact version and fences a late prior-resource result without a
     variant: 'main',
   }
   const wrapper = mount(ResourceIdentity, {
+    attachTo: document.body,
     props: { binding },
     global: {
       plugins: [mdmI18n()],

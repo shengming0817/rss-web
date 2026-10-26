@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { VTextField } from 'vuetify/components'
+
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { defaultCollectionSchedule, type Schedule } from '../clients/model'
@@ -22,16 +24,18 @@ const seconds = computed({
 <template>
   <label
     >{{ t('policies.collectionPeriod')
-    }}<input
+    }}<VTextField
       v-model.number="seconds"
       data-field="collection-period"
-      class="ui-input"
       type="number"
       min="60"
       max="31536000"
       step="1"
       required
-      :disabled="disabled"
+      :disabled="!!disabled"
+      variant="outlined"
+      density="comfortable"
+      hide-details="auto"
   /></label>
   <p>{{ t('policies.collectionPeriodNote') }}</p>
 </template>

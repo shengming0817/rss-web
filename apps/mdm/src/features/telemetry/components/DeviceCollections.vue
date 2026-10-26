@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { VBtn } from 'vuetify/components'
+import { VAlert, VSelect, VBtn } from 'vuetify/components'
+
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiMessage } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../../devices/useDeviceBinding'
@@ -84,21 +84,31 @@ watch([field, hours], () => void load(), { flush: 'post' })
       </div>
       <v-btn :disabled="busy || !field" @click="load">{{ t('devices.reload') }}</v-btn>
     </header>
-    <UiMessage v-if="failure" tone="danger" :title="t('devices.' + failure)" />
+    <VAlert v-if="failure" type="error" variant="tonal" :title="t('devices.' + failure)" />
     <div class="telemetry-toolbar">
       <label
         >{{ t('telemetry.metrics')
-        }}<select v-model="field" :aria-label="t('telemetry.metrics')" class="ui-input">
-          <option v-for="key in fields" :key="key" :value="key">{{ key }}</option>
-        </select></label
+        }}<VSelect
+          v-model="field"
+          :aria-label="t('telemetry.metrics')"
+          :items="[...fields.map((key) => ({ title: String(key), value: key }))]"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto" /></label
       ><label
         >{{ t('telemetry.range')
-        }}<select v-model="hours" :aria-label="t('telemetry.range')" class="ui-input">
-          <option value="1">{{ t('telemetry.hour') }}</option>
-          <option value="24">{{ t('telemetry.day') }}</option>
-          <option value="168">{{ t('telemetry.week') }}</option>
-        </select></label
-      >
+        }}<VSelect
+          v-model="hours"
+          :aria-label="t('telemetry.range')"
+          :items="[
+            { title: String(t('telemetry.hour')), value: '1' },
+            { title: String(t('telemetry.day')), value: '24' },
+            { title: String(t('telemetry.week')), value: '168' },
+          ]"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto"
+      /></label>
     </div>
     <p class="telemetry-notice">
       {{ t('telemetry.receivedWindowHint')

@@ -1,15 +1,21 @@
 import type { PolicyRead } from './clients/model'
-export function policyDestination(policy: PolicyRead, tenant: string) {
+/** All Policy action editors consume the same Policy identity and route. */
+export function policyDestination(policy: Pick<PolicyRead, 'id' | 'definition'>, tenant: string) {
   const kind = policy.definition.action.kind
-  const name =
-    kind === 'software'
-      ? 'software-deployments'
-      : kind === 'ensure_agent_installed' || kind === 'request_mdm_enrollment'
-        ? 'software-bootstrap'
-        : kind === 'unmanage_device' || kind === 'credential'
-          ? 'policy-lifecycle'
-          : ['execution', 'configuration', 'native_collection', 'agent_collection'].includes(kind)
-            ? 'policy-policies'
-            : null
-  return name ? { name, params: { tenant }, query: { id: policy.id } } : null
+  if (kind === 'telemetry_profile')
+    return {
+      name: 'policy-telemetry',
+      params: { tenant },
+      query: { policy: policy.id, resource: policy.definition.action.resource.id },
+    }
+  return {
+    name: 'policy-policies',
+    params: { tenant },
+    query: {
+      id: policy.id,
+      ...(['execution', 'configuration', 'native_collection', 'agent_collection'].includes(kind)
+        ? {}
+        : { action: kind }),
+    },
+  }
 }
