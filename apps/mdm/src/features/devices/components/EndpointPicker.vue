@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { VBtn, VTextField, VCheckbox, VAlert } from 'vuetify/components'
 import { comparison } from '../../../services/directory-query'
 import { computed, ref, watch } from 'vue'
-import { UiButton } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
@@ -54,34 +54,26 @@ watch(
 </script>
 <template>
   <section class="endpoint-picker">
-    <label
-      >{{ t('devices.directorySearch')
-      }}<input
-        v-model="search"
-        class="ui-input"
-        type="search"
-        @keydown.enter.prevent="load()" /></label
-    ><UiButton type="button" :disabled="busy" @click="load()">{{
-      t('devices.searchGroups')
-    }}</UiButton>
+    <v-text-field
+      v-model="search"
+      type="search"
+      :label="t('devices.directorySearch')"
+      @keydown.enter.prevent="load()"
+    />
+    <v-btn type="button" :disabled="busy" @click="load()">{{ t('devices.searchGroups') }}</v-btn>
     <p>{{ t('devices.selectedDevices') }}: {{ model.length }}</p>
-    <div v-for="endpoint in choices" :key="endpoint.id" class="field-choice">
-      <label
-        ><input
-          type="checkbox"
-          :checked="model.includes(endpoint.id)"
-          @change="toggle(endpoint.id)"
-        />
-        {{ label(endpoint) }}</label
-      >
-      <details>
-        <summary>{{ t('devices.evidence') }}</summary>
-        {{ endpoint.id }}
-      </details>
-    </div>
-    <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
-    <UiButton v-if="next" type="button" :disabled="busy" @click="load(true)">{{
+    <v-checkbox
+      v-for="endpoint in choices"
+      :key="endpoint.id"
+      :model-value="model.includes(endpoint.id)"
+      :label="label(endpoint)"
+      :hint="endpoint.id"
+      persistent-hint
+      @update:model-value="toggle(endpoint.id)"
+    />
+    <v-alert v-if="failure" type="error" variant="tonal">{{ t('devices.' + failure) }}</v-alert>
+    <v-btn v-if="next" type="button" :disabled="busy" @click="load(true)">{{
       t('devices.next')
-    }}</UiButton>
+    }}</v-btn>
   </section>
 </template>

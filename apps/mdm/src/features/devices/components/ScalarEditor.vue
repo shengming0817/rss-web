@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { VSelect, VTextField } from 'vuetify/components'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Scalar } from '../clients/asset-model'
@@ -33,20 +34,20 @@ function input(event: Event) {
 }
 </script>
 <template>
-  <select
+  <v-select
     v-if="modelValue.kind === 'boolean'"
-    class="ui-input"
-    :aria-label="t('devices.value')"
-    :value="String(modelValue.value)"
-    @change="input"
-  >
-    <option value="false">{{ t('devices.no') }}</option>
-    <option value="true">{{ t('devices.yes') }}</option>
-  </select>
-  <input
+    :model-value="modelValue.value"
+    :label="t('devices.value')"
+    :items="[
+      { value: false, title: t('devices.no') },
+      { value: true, title: t('devices.yes') },
+    ]"
+    @update:model-value="emit('update:modelValue', { kind: 'boolean', value: $event })"
+  />
+  <v-text-field
     v-else
-    class="ui-input"
-    :aria-label="t('devices.value')"
+    :model-value="modelValue.kind === 'time' ? timeValue : modelValue.value"
+    :label="t('devices.value')"
     :type="
       modelValue.kind === 'time'
         ? 'datetime-local'
@@ -54,11 +55,11 @@ function input(event: Event) {
           ? 'text'
           : 'number'
     "
-    :value="modelValue.kind === 'time' ? timeValue : modelValue.value"
     :maxlength="modelValue.kind === 'string' ? 256 : undefined"
     step="1"
     required
+    :hint="modelValue.kind === 'time' ? 'UTC' : undefined"
+    persistent-hint
     @input="input"
   />
-  <small v-if="modelValue.kind === 'time'">UTC</small>
 </template>

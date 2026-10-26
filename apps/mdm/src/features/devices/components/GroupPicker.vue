@@ -1,7 +1,16 @@
 <script setup lang="ts">
+import {
+  VMenu,
+  VBtn,
+  VCard,
+  VCardText,
+  VTextField,
+  VList,
+  VListItem,
+  VAlert,
+} from 'vuetify/components'
 import { comparison as queryComparison, allOf } from '../../../services/directory-query'
 import { computed, ref, watch } from 'vue'
-import { UiButton, UiPopover } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
@@ -65,35 +74,37 @@ watch(
 )
 </script>
 <template>
-  <div class="group-picker">
-    <UiPopover v-model:open="open" :label="label" :close-label="t('console.close')">
-      <div class="group-picker-content">
-        <label
-          >{{ t('devices.findGroup')
-          }}<input
-            v-model="search"
-            class="ui-input"
-            type="search"
-            :disabled="disabled || busy"
-            @keydown.enter.prevent="load()" /></label
-        ><UiButton :disabled="disabled || busy" @click="load()">{{
-          t('devices.searchGroups')
-        }}</UiButton>
-        <UiButton
-          v-for="group in rows"
-          :key="group.id"
+  <v-menu v-model="open" :close-on-content-click="false" max-width="560">
+    <template #activator="{ props: activator }"
+      ><v-btn v-bind="activator" :disabled="!!disabled" variant="outlined">{{
+        label
+      }}</v-btn></template
+    >
+    <v-card
+      ><v-card-text>
+        <v-text-field
+          v-model="search"
+          type="search"
+          :label="t('devices.findGroup')"
           :disabled="disabled || busy"
-          :aria-pressed="modelValue === group.id"
-          variant="ghost"
-          @click="select(group.id)"
-          >{{ group.presentation.name }}</UiButton
-        >
+          @keydown.enter.prevent="load()"
+        />
+        <v-btn :disabled="disabled || busy" @click="load()">{{ t('devices.searchGroups') }}</v-btn>
+        <v-list :aria-label="t('devices.findGroup')"
+          ><v-list-item
+            v-for="group in rows"
+            :key="group.id"
+            :disabled="disabled || busy"
+            :active="modelValue === group.id"
+            :title="group.presentation.name"
+            @click="select(group.id)"
+        /></v-list>
         <p v-if="!rows.length && !busy">{{ t('devices.empty') }}</p>
-        <UiButton v-if="next" :disabled="disabled || busy" @click="load(true)">{{
+        <v-btn v-if="next" :disabled="disabled || busy" @click="load(true)">{{
           t('devices.next')
-        }}</UiButton>
-        <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
-      </div>
-    </UiPopover>
-  </div>
+        }}</v-btn>
+        <v-alert v-if="failure" type="error" variant="tonal">{{ t('devices.' + failure) }}</v-alert>
+      </v-card-text></v-card
+    >
+  </v-menu>
 </template>

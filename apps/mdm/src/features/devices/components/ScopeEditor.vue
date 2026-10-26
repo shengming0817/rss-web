@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { VSelect, VTextField, VCheckbox } from 'vuetify/components'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CollectionScope } from '../clients/asset-model'
@@ -73,124 +74,93 @@ function ownerPlatform(value: 'windows' | 'macos') {
     value === 'windows' ? { kind: value, sid: '' } : { kind: value, uid: 1, generated_uid: '' },
   )
 }
-function ownerField(key: string, event: Event) {
+function ownerValue(key: string, value: string | number) {
   if ('owner' in model.value && model.value.owner)
-    update('owner', {
-      ...model.value.owner,
-      [key]:
-        key === 'uid'
-          ? Number((event.target as HTMLInputElement).value)
-          : (event.target as HTMLInputElement).value,
-    })
+    update('owner', { ...model.value.owner, [key]: key === 'uid' ? Number(value) : value })
 }
 </script>
 <template>
   <div class="condition-scope-fields">
-    <label
-      >{{ t('devices.conditionScope')
-      }}<select
-        class="ui-input"
-        :value="model.kind"
-        @change="changeKind(($event.target as HTMLSelectElement).value as CollectionScope['kind'])"
-      >
-        <option v-for="kind in kinds" :key="kind" :value="kind">
-          {{ t(`devices.scopeKind.${kind}`) }}
-        </option>
-      </select></label
-    >
-    <label v-for="[key, value] in fields" :key="key"
-      >{{ t(`devices.scopeField.${key}`) }}
-      <select
+    <v-select
+      :model-value="model.kind"
+      :label="t('devices.conditionScope')"
+      :items="kinds.map((value) => ({ value, title: t('devices.scopeKind.' + value) }))"
+      @update:model-value="changeKind"
+    />
+    <template v-for="[key, value] in fields" :key="key">
+      <v-select
         v-if="choices(key).length"
-        class="ui-input"
-        :value="value"
-        @change="update(key, ($event.target as HTMLSelectElement).value)"
-      >
-        <option v-for="choice in choices(key)" :key="choice" :value="choice">
-          {{ t(`devices.scopeValue.${choice}`) }}
-        </option>
-      </select>
-      <input
+        :model-value="value"
+        :label="t('devices.scopeField.' + key)"
+        :items="choices(key).map((value) => ({ value, title: t('devices.scopeValue.' + value) }))"
+        @update:model-value="update(key, $event)"
+      />
+      <v-text-field
         v-else-if="Array.isArray(value)"
-        class="ui-input"
-        :value="value.join(', ')"
-        @input="
+        :model-value="value.join(', ')"
+        :label="t('devices.scopeField.' + key)"
+        @update:model-value="
           update(
             key,
-            ($event.target as HTMLInputElement).value
+            $event
               .split(',')
-              .map((v) => v.trim())
+              .map((v: string) => v.trim())
               .filter(Boolean),
           )
         "
       />
-      <input
+      <v-text-field
         v-else
-        class="ui-input"
+        :model-value="value ?? ''"
+        :label="t('devices.scopeField.' + key)"
         :type="key === 'uid' ? 'number' : 'text'"
         :required="value !== null"
         :min="key === 'uid' ? 1 : undefined"
-        :value="value ?? ''"
-        @input="
-          update(
-            key,
-            key === 'uid'
-              ? Number(($event.target as HTMLInputElement).value)
-              : ($event.target as HTMLInputElement).value,
-          )
+        @update:model-value="update(key, key === 'uid' ? Number($event) : $event)"
+      />
+    </template>
+    <template v-if="'owner' in model">
+      <v-checkbox
+        v-if="model.kind !== 'native_user'"
+        :model-value="!!model.owner"
+        :label="t('devices.scopeOwner')"
+        @update:model-value="
+          $event
+            ? ownerPlatform('platform' in model ? model.platform : 'windows')
+            : update('owner', null)
         "
       />
-    </label>
-    <template v-if="'owner' in model">
-      <label v-if="model.kind !== 'native_user'"
-        ><input
-          type="checkbox"
-          :checked="!!model.owner"
-          @change="
-            ($event.target as HTMLInputElement).checked
-              ? ownerPlatform('platform' in model ? model.platform : 'windows')
-              : update('owner', null)
-          "
-        />{{ t('devices.scopeOwner') }}</label
-      >
       <template v-if="model.owner">
-        <label
-          >{{ t('devices.scopeField.platform')
-          }}<select
-            class="ui-input"
-            :value="model.owner.kind"
-            :disabled="'platform' in model"
-            @change="
-              ownerPlatform(($event.target as HTMLSelectElement).value as 'windows' | 'macos')
-            "
-          >
-            <option value="windows">Windows</option>
-            <option value="macos">macOS</option>
-          </select></label
-        >
-        <label v-if="model.owner.kind === 'windows'"
-          >SID<input
-            class="ui-input"
-            required
-            :value="model.owner.sid"
-            @input="ownerField('sid', $event)"
-        /></label>
+        <v-select
+          :model-value="model.owner.kind"
+          :label="t('devices.scopeField.platform')"
+          :disabled="'platform' in model"
+          :items="[
+            { value: 'windows', title: 'Windows' },
+            { value: 'macos', title: 'macOS' },
+          ]"
+          @update:model-value="ownerPlatform"
+        />
+        <v-text-field
+          v-if="model.owner.kind === 'windows'"
+          :model-value="model.owner.sid"
+          label="SID"
+          required
+          @update:model-value="ownerValue('sid', $event)"
+        />
         <template v-else
-          ><label
-            >UID<input
-              class="ui-input"
-              type="number"
-              min="1"
-              required
-              :value="model.owner.uid"
-              @input="ownerField('uid', $event)" /></label
-          ><label
-            >GeneratedUID<input
-              class="ui-input"
-              required
-              :value="model.owner.generated_uid"
-              @input="ownerField('generated_uid', $event)" /></label
-        ></template>
+          ><v-text-field
+            :model-value="model.owner.uid"
+            label="UID"
+            type="number"
+            min="1"
+            required
+            @update:model-value="ownerValue('uid', $event)" /><v-text-field
+            :model-value="model.owner.generated_uid"
+            label="GeneratedUID"
+            required
+            @update:model-value="ownerValue('generated_uid', $event)"
+        /></template>
       </template>
     </template>
   </div>

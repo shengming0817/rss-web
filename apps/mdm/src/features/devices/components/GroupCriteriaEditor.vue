@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import { VSelect, VBtn } from 'vuetify/components'
 import { useI18n } from 'vue-i18n'
 import type { GroupCriteria } from '../clients/groups'
 import type { Criteria, FieldDefinition } from '../clients/asset-model'
@@ -49,34 +49,29 @@ function scalar(value: Criteria | null) {
 </script>
 <template>
   <div class="group-criteria">
-    <div class="console-toolbar">
-      <select
-        class="ui-input"
-        :aria-label="t('devices.condition')"
-        :value="modelValue.kind"
-        @change="select(($event.target as HTMLSelectElement).value)"
-      >
-        <option value="predicate">{{ t('devices.predicate') }}</option>
-        <option value="group">{{ t('devices.groupMembership') }}</option>
-        <option v-if="(depth ?? 0) < 16" value="and">{{ t('devices.and') }}</option>
-        <option v-if="(depth ?? 0) < 16" value="or">{{ t('devices.or') }}</option>
-      </select>
-    </div>
+    <v-select
+      :model-value="modelValue.kind"
+      :label="t('devices.condition')"
+      :items="[
+        { value: 'predicate', title: t('devices.predicate') },
+        { value: 'group', title: t('devices.groupMembership') },
+        ...((depth ?? 0) < 16
+          ? ['and', 'or'].map((value) => ({ value, title: t('devices.' + value) }))
+          : []),
+      ]"
+      @update:model-value="select"
+    />
     <template v-if="modelValue.kind === 'group'"
-      ><select
-        class="ui-input"
-        :aria-label="t('devices.groupMembership')"
-        :value="modelValue.op"
-        @change="
-          emit('update:modelValue', {
-            ...modelValue,
-            op: ($event.target as HTMLSelectElement).value as 'member_of' | 'not_member_of',
-          })
-        "
-      >
-        <option value="member_of">{{ t('devices.memberOf') }}</option>
-        <option value="not_member_of">{{ t('devices.notMemberOf') }}</option></select
-      ><GroupPicker
+      ><v-select
+        :model-value="modelValue.op"
+        :label="t('devices.groupMembership')"
+        :items="[
+          { value: 'member_of', title: t('devices.memberOf') },
+          { value: 'not_member_of', title: t('devices.notMemberOf') },
+        ]"
+        @update:model-value="
+          emit('update:modelValue', { ...modelValue, op: $event })
+        " /><GroupPicker
         :model-value="modelValue.groupId"
         :asset-context="assetContext"
         :referenceable-for="group"
@@ -99,9 +94,9 @@ function scalar(value: Criteria | null) {
           :group="group"
           :depth="(depth ?? 0) + 1"
           @update:model-value="child(index, $event)"
-        /><UiButton @click="child(index)">{{ t('devices.remove') }}</UiButton>
+        /><v-btn @click="child(index)">{{ t('devices.remove') }}</v-btn>
       </div>
-      <UiButton
+      <v-btn
         v-if="(depth ?? 0) < 16"
         @click="
           emit('update:modelValue', {
@@ -109,8 +104,8 @@ function scalar(value: Criteria | null) {
             children: [...modelValue.children, { kind: 'group', groupId: '', op: 'member_of' }],
           })
         "
-        >{{ t('devices.addGroupCondition') }}</UiButton
-      ><UiButton
+        >{{ t('devices.addGroupCondition') }}</v-btn
+      ><v-btn
         v-if="(depth ?? 0) < 16"
         @click="
           emit('update:modelValue', {
@@ -118,7 +113,7 @@ function scalar(value: Criteria | null) {
             children: [...modelValue.children, { kind: 'and', children: [] }],
           })
         "
-        >{{ t('devices.addConditionSet') }}</UiButton
+        >{{ t('devices.addConditionSet') }}</v-btn
       ></template
     >
   </div>
