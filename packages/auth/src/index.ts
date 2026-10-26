@@ -5,3 +5,7 @@ export { identityI18n } from './i18n'
 export { default as AuthShell } from './App.vue'
 
 export { useSessionLifecycle } from './useSessionLifecycle'
+
+export { useLoginFlow } from './useLoginFlow'
+export { bindSession } from './bindSession'
+export type { IdentityRoutePresentation } from './router'

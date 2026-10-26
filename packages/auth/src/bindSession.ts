@@ -1,5 +1,5 @@
-import type { HttpTransport, NoContentRequest, RequestOptions } from '@rss/api/mdm'
-import type { IdentitySession } from '@rss/auth'
+import type { HttpTransport, NoContentRequest, RequestOptions } from '@rss/api/identity'
+import type { IdentitySession } from './services/session'
 /** The existing session owner coordinates credentials and failure recovery; never replay writes. */
 export function bindSession(transport: HttpTransport, session: IdentitySession): HttpTransport {
   return {

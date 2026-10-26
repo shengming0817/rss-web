@@ -30,7 +30,12 @@
       "@rss/api/identity": ["packages/api/src/identity.ts"],
       "@rss/auth": ["packages/auth/src/index.ts"],
       "@rss/api/mdm": ["packages/api/src/mdm.ts"],
-      "@rss/auth/session": ["packages/auth/src/session.ts"]
+      "@rss/auth/session": ["packages/auth/src/session.ts"],
+      "@rss/device-access/client": ["packages/device-access/src/client.ts"],
+      "@rss/device-access/model": ["packages/device-access/src/model.ts"],
+      "@rss/device-access/components": ["packages/device-access/src/components.ts"],
+      "@rss/api/device-access": ["packages/api/src/device-access.ts"],
+      "@rss/api/device-access-demo": ["packages/api/src/device-access-demo.ts"]
     }
   }
 }
