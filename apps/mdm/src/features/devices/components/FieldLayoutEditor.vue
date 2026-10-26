@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { VDialog, VCard, VBtn } from 'vuetify/components'
+import { VDialog, VCard, VBtn, VTextField, VCheckbox } from 'vuetify/components'
 import { useDialogFocus } from '../../../ui/dialog-focus'
 import { computed, ref, toRaw } from 'vue'
 
@@ -99,6 +99,9 @@ async function save(replay = false) {
     )
   }
 }
+const editLocked = computed(
+  () => busy.value || uncertain.value || (failure.value === 'conflict' && !compared.value),
+)
 const restoreDialogFocus = useDialogFocus(open)
 </script>
 <template>
@@ -143,30 +146,29 @@ const restoreDialogFocus = useDialogFocus(open)
               </li>
             </ol>
           </div>
-          <fieldset
-            v-if="current"
-            :disabled="busy || uncertain || (failure === 'conflict' && !compared)"
-          >
-            <label
-              >{{ t('devices.fieldGroupName')
-              }}<input v-model="current.name" class="ui-input" maxlength="40"
-            /></label>
-            <label
-              >{{ t('devices.searchFields')
-              }}<input v-model="search" class="ui-input" type="search"
-            /></label>
+          <fieldset v-if="current" :disabled="editLocked">
+            <v-text-field
+              v-model="current.name"
+              :label="t('devices.fieldGroupName')"
+              :disabled="editLocked"
+              maxlength="40"
+            />
+            <v-text-field
+              v-model="search"
+              :label="t('devices.searchFields')"
+              :disabled="editLocked"
+              type="search"
+            />
             <div v-for="field in available" :key="field.key" class="field-choice">
-              <label
-                ><input
-                  type="checkbox"
-                  :checked="current.fields.includes(field.key)"
-                  @change="toggle(field.key)"
-                />
-                {{ assetLabel(field.key, locale) }}
-                <small
-                  >{{ field.manual ? t('devices.manualField') : t('devices.collectedField') }} ·
-                  {{ field.sensitivity }}</small
-                ></label
+              <v-checkbox
+                :model-value="current.fields.includes(field.key)"
+                :label="assetLabel(field.key, locale)"
+                :disabled="editLocked"
+                @update:model-value="toggle(field.key)"
+              />
+              <small
+                >{{ field.manual ? t('devices.manualField') : t('devices.collectedField') }} ·
+                {{ field.sensitivity }}</small
               >
             </div>
             <ol>
@@ -175,13 +177,13 @@ const restoreDialogFocus = useDialogFocus(open)
                 }}<v-btn
                   type="button"
                   :aria-label="t('devices.moveUp')"
-                  :disabled="index === 0"
+                  :disabled="editLocked || index === 0"
                   @click="move(current.fields, index, -1)"
                   >↑</v-btn
                 ><v-btn
                   type="button"
                   :aria-label="t('devices.moveDown')"
-                  :disabled="index === current.fields.length - 1"
+                  :disabled="editLocked || index === current.fields.length - 1"
                   @click="move(current.fields, index, 1)"
                   >↓</v-btn
                 >

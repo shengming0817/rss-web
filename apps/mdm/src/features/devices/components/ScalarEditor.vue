@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { VSelect, VTextField } from 'vuetify/components'
 import { computed } from 'vue'
+import { VSelect, VTextField } from 'vuetify/components'
 import { useI18n } from 'vue-i18n'
 import type { Scalar } from '../clients/asset-model'
-const props = defineProps<{ modelValue: Scalar }>()
+const props = defineProps<{ modelValue: Scalar; disabled?: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [value: Scalar] }>()
 const { t } = useI18n()
 const timeValue = computed(() =>
@@ -27,7 +27,10 @@ function input(event: Event) {
   } else {
     const value = Number(target.value)
     target.setCustomValidity(
-      target.value !== '' && Number.isSafeInteger(value) ? '' : t('devices.invalidResponse'),
+      target.value !== '' &&
+        (kind === 'number' ? Number.isFinite(value) : Number.isSafeInteger(value))
+        ? ''
+        : t('devices.invalidResponse'),
     )
     if (target.validity.valid) emit('update:modelValue', { kind, value })
   }
@@ -36,18 +39,19 @@ function input(event: Event) {
 <template>
   <v-select
     v-if="modelValue.kind === 'boolean'"
-    :model-value="modelValue.value"
     :label="t('devices.value')"
+    :disabled="!!disabled"
+    :model-value="modelValue.value"
     :items="[
-      { value: false, title: t('devices.no') },
-      { value: true, title: t('devices.yes') },
+      { title: t('devices.no'), value: false },
+      { title: t('devices.yes'), value: true },
     ]"
     @update:model-value="emit('update:modelValue', { kind: 'boolean', value: $event })"
   />
   <v-text-field
     v-else
-    :model-value="modelValue.kind === 'time' ? timeValue : modelValue.value"
     :label="t('devices.value')"
+    :disabled="!!disabled"
     :type="
       modelValue.kind === 'time'
         ? 'datetime-local'
@@ -55,11 +59,11 @@ function input(event: Event) {
           ? 'text'
           : 'number'
     "
+    :model-value="modelValue.kind === 'time' ? timeValue : modelValue.value"
     :maxlength="modelValue.kind === 'string' ? 256 : undefined"
-    step="1"
+    :step="modelValue.kind === 'number' ? 'any' : '1'"
     required
-    :hint="modelValue.kind === 'time' ? 'UTC' : undefined"
-    persistent-hint
     @input="input"
   />
+  <small v-if="modelValue.kind === 'time'">UTC</small>
 </template>
