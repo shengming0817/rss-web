@@ -8,8 +8,8 @@ import { mdmI18n } from '../../../i18n'
 import { defaultSchedule, type PolicyChange, type PolicyRead } from '../clients/model'
 import type { Operation } from '../../../services/useOperation'
 import PoliciesView from './PoliciesView.vue'
-import DeploymentsView from '../../software/views/DeploymentsView.vue'
-import BootstrapView from '../../software/views/BootstrapView.vue'
+import DeploymentsView from './SoftwarePoliciesView.vue'
+import BootstrapView from './OnboardingPoliciesView.vue'
 import PolicyDelete from '../components/PolicyDelete.vue'
 
 const id = '11111111-1111-4111-8111-111111111111'
@@ -103,10 +103,11 @@ async function fixture(
   })
   await router.push({ path: '/', query: { id } })
   const wrapper = mount(component, {
+    attachTo: document.body,
     global: {
       plugins: [router, mdmI18n()],
       stubs: {
-        UiDialog: dialog,
+        PolicyDialog: dialog,
         ResourceIdentity: true,
         SelfServiceEditor: true,
         CatalogLocator: true,
@@ -281,8 +282,9 @@ it.each(['remove', 'retain'] as const)(
       },
     } as PolicyRead
     const wrapper = mount(PolicyDelete, {
+      attachTo: document.body,
       props: { policy, disabled: false },
-      global: { plugins: [mdmI18n()], stubs: { UiDialog: dialog } },
+      global: { plugins: [mdmI18n()], stubs: { PolicyDialog: dialog } },
     })
     await wrapper.get('[data-action="delete-policy"]').trigger('click')
     expect(wrapper.get('[role="alertdialog"]').text()).toContain(

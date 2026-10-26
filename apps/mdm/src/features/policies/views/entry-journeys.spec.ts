@@ -1,6 +1,8 @@
+import { selectControl } from '../vuetify-test-controls'
+import { createFeatureRouter as createRouter } from '../../../../tests/feature-router'
 import { ref, nextTick } from 'vue'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
-import { createMemoryHistory, createRouter } from 'vue-router'
+import { createMemoryHistory } from 'vue-router'
 import { expect, it, vi } from 'vitest'
 import type { Component } from 'vue'
 import { UiDialog } from '@rss/core/components'
@@ -184,8 +186,6 @@ async function setup(
     'policy-events',
     'policy-policies',
     'policy-lifecycle',
-    'software-deployments',
-    'software-bootstrap',
     'operations-audit',
     'policy-execution',
   ]
@@ -202,6 +202,7 @@ async function setup(
   })
   await router.push(path)
   const wrapper = mount(component, {
+    attachTo: document.body,
     props,
     global: { plugins: [router, mdmI18n()], provide: { [mdmKey as symbol]: runtime } },
   })
@@ -219,8 +220,8 @@ it('edits alias and event without inventing a display-name or executing anything
     event: null,
     fixedParameters: false,
   })
-  await wrapper.get('[data-field=policy-alias]').setValue(' Support ')
-  await wrapper.get('[data-field=policy-event]').setValue('refresh')
+  await wrapper.get('[data-field=policy-alias] input').setValue(' Support ')
+  await wrapper.get('[data-field=policy-event] input').setValue('refresh')
   expect(wrapper.emitted('update:alias')?.[0]).toEqual([' Support '])
   expect(wrapper.emitted('update:event')?.[0]).toEqual(['refresh'])
   await wrapper.setProps({ event: 'refresh' })
@@ -237,8 +238,8 @@ it('queries event members on the server, preserves applied pagination, and resol
   expect(runtime.policies.policies.list).toHaveBeenLastCalledWith(
     expect.objectContaining({ cursor: 'YQ', filter: "customEvent=='support.event'" }),
   )
-  await wrapper.get('select').setValue('alias')
-  await wrapper.get('input').setValue('support')
+  await selectControl(wrapper, 'select').setValue('alias')
+  await wrapper.get('input:not([type=hidden]):not([role=combobox])').setValue('support')
   await wrapper.get('form').trigger('submit')
   await flushPromises()
   expect(runtime.policies.policies.resolve).toHaveBeenCalledWith({
@@ -326,9 +327,10 @@ it('offers selectable link text on clipboard failure and never copies invalid lo
   await button(wrapper, '复制 Deep Link').trigger('click')
   await flushPromises()
   expect(wrapper.text()).toContain('复制失败')
-  expect((wrapper.get('input').element as HTMLInputElement).value).toContain(
-    'rssmdm://open/v1/policy?',
-  )
+  expect(
+    (wrapper.get('input:not([type=hidden]):not([role=combobox])').element as HTMLInputElement)
+      .value,
+  ).toContain('rssmdm://open/v1/policy?')
   writeText.mockResolvedValue(undefined)
   await button(wrapper, '复制 Deep Link').trigger('click')
   await flushPromises()

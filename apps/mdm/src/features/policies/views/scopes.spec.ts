@@ -1,10 +1,11 @@
+import { createFeatureRouter as createRouter } from '../../../../tests/feature-router'
 import { ref } from 'vue'
 import { flushPromises, mount, DOMWrapper } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
-import { createRouter, createMemoryHistory } from 'vue-router'
+import { createMemoryHistory } from 'vue-router'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
-import ScopesView from './ScopesView.vue'
+import ScopesView from '../components/PolicyScopeEditor.vue'
 it('locks the original Scope after an unknown write and replays its exact frozen operation', async () => {
   const change = vi
     .fn()
@@ -25,6 +26,7 @@ it('locks the original Scope after an unknown write and replays its exact frozen
   })
   await router.push('/')
   const wrapper = mount(ScopesView, {
+    attachTo: document.body,
     global: {
       plugins: [router, mdmI18n()],
       stubs: { RouterLink: true },
@@ -46,6 +48,10 @@ it('locks the original Scope after an unknown write and replays its exact frozen
       },
     },
   })
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text() === '配置设备组与目标范围')!
+    .trigger('click')
   await flushPromises()
   const button = (text: string) => wrapper.findAll('button').find((b) => b.text() === text)!
   await button('新建').trigger('click')
@@ -116,6 +122,7 @@ it.each([
     })
     await router.push('/')
     const wrapper = mount(ScopesView, {
+      attachTo: document.body,
       global: {
         plugins: [router, mdmI18n()],
         stubs: { RouterLink: true },
@@ -129,6 +136,10 @@ it.each([
         },
       },
     })
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '配置设备组与目标范围')!
+      .trigger('click')
     await flushPromises()
     expect(wrapper.text()).toContain('已有保存结果')
     expect(wrapper.text()).toContain('暂无保存结果')

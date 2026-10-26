@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { VBtn } from 'vuetify/components'
+
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../../devices/useDeviceBinding'
@@ -56,9 +57,9 @@ function inspect() {
         id: policy.id,
       }"
     />
-    <UiButton type="button" :disabled="op.busy.value" @click="inspect">{{
+    <VBtn type="button" :disabled="op.busy.value" @click="inspect">{{
       t('policies.entry.inspect')
-    }}</UiButton>
+    }}</VBtn>
     <p v-if="op.failure.value" role="alert">{{ t(`devices.${op.failure.value}`) }}</p>
     <template v-if="resolved">
       <dl>

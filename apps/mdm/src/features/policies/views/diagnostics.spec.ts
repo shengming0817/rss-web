@@ -1,5 +1,6 @@
+import { createFeatureRouter as createRouter } from '../../../../tests/feature-router'
 import { flushPromises, mount } from '@vue/test-utils'
-import { createRouter, createMemoryHistory } from 'vue-router'
+import { createMemoryHistory } from 'vue-router'
 import { ref } from 'vue'
 import { expect, it, vi } from 'vitest'
 import { mdmKey } from '../../../context'
@@ -12,6 +13,7 @@ it('shows native receipt and cleanup diagnostics while withholding terminal acti
   })
   await router.push('/11111111-1111-4111-8111-111111111111?device=device')
   const wrapper = mount(ExecutionDetailView, {
+    attachTo: document.body,
     global: {
       plugins: [router, mdmI18n()],
       stubs: { RouterLink: true },
@@ -113,19 +115,19 @@ it('keeps reauthorization coordinates editable character by character and invali
   })
   try {
     await flushPromises()
-    const input = wrapper.get<HTMLInputElement>('input:not([type])'),
+    const input = wrapper.get<HTMLInputElement>('input[type=text]'),
       confirmation = wrapper.get('input[type=checkbox]')
     expect((confirmation.element as HTMLInputElement).checked).toBe(false)
     input.element.focus()
     for (let length = 1; length <= registration.length; length++) {
       await input.setValue(registration.slice(0, length))
       expect(document.activeElement).toBe(input.element)
-      expect(wrapper.get('input:not([type])').element).toBe(input.element)
+      expect(wrapper.get('input[type=text]').element).toBe(input.element)
     }
     await confirmation.setValue(true)
     await wrapper.get('input[type=number]').setValue(2)
     expect((confirmation.element as HTMLInputElement).checked).toBe(false)
-    expect(wrapper.get('input:not([type])').element).toBe(input.element)
+    expect(wrapper.get('input[type=text]').element).toBe(input.element)
     expect(reauthorize).not.toHaveBeenCalled()
     await confirmation.setValue(true)
     await wrapper

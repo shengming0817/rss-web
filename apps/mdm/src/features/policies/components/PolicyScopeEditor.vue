@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import { UiButton, UiDialog, UiTable, UiBadge, UiTabs } from '@rss/core/components'
+import PolicyFieldset from './PolicyFieldset.vue'
+import PolicyDialog from '../components/PolicyDialog.vue'
+import PolicyTabs from '../components/PolicyTabs.vue'
+
+import { VBtn, VDataTable, VChip, VTextField, VCheckbox, VSelect, VTable } from 'vuetify/components'
+
 import { ref, toRaw, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -8,9 +13,12 @@ import { operation, useOperation } from '../../../services/useOperation'
 import type { Reference, ScopeRead, ScopeProjection, ScopeChange } from '../clients/scopes'
 import { objectKey, type Channel } from '../../devices/clients/objects'
 import ObjectLink from '../../devices/components/ObjectLink.vue'
-import PageFrame from '../../../components/PageFrame.vue'
+
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import ReferenceEditor from '../components/ReferenceEditor.vue'
+const props = defineProps<{ disabled?: boolean }>()
+const selected = defineModel<string>({ default: '' })
+const scopeOpen = ref(false)
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.policies.scopes,
@@ -47,6 +55,11 @@ const task = ref<string>(),
   projection = ref<ScopeProjection>('members'),
   channel = ref<Channel>('mdm')
 let pending: (() => Promise<void>) | undefined
+function chooseScope() {
+  if (!current.value || busy.value || uncertain.value) return
+  selected.value = current.value.id
+  scopeOpen.value = false
+}
 function closeScope() {
   if (busy.value || uncertain.value) return
   current.value = undefined
@@ -143,8 +156,9 @@ watch([projection, channel], () => {
   result.value = undefined
 })
 watch(
-  () => JSON.stringify([route.fullPath, ...deviceBinding(runtime)]),
+  () => JSON.stringify([scopeOpen.value, ...deviceBinding(runtime)]),
   async () => {
+    if (!scopeOpen.value) return
     editing.value = false
     current.value = undefined
     list.value = undefined
@@ -179,59 +193,72 @@ watch(
   },
   { immediate: true, flush: 'sync' },
 )
+if (route.query['device'] || route.query['group']) scopeOpen.value = true
 </script>
 <template>
-  <PageFrame
-    :title="t('policies.scopes')"
-    :description="t('policies.ux.scopeHint')"
-    :busy="busy"
-    :failure="failure"
+  <VBtn type="button" variant="tonal" :disabled="props.disabled" @click="scopeOpen = true">{{
+    t('policies.scopeEditor.manage')
+  }}</VBtn>
+  <PolicyDialog
+    v-model:open="scopeOpen"
+    :title="t('policies.scopeEditor.manage')"
+    :close-label="t('console.close')"
+    :dismissible="!busy && !uncertain"
   >
-    <template #actions
-      ><UiButton :disabled="!!(busy || uncertain)" type="submit" @click="create">{{
+    <p>{{ t('policies.scopeEditor.contract') }}</p>
+    <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
+    <div class="d-flex ga-2 mb-4">
+      <VBtn :disabled="!!(busy || uncertain)" type="submit" @click="create">{{
         t('policies.create')
-      }}</UiButton
-      ><UiButton :disabled="!!busy" type="submit" @click="load()">{{
-        t('policies.reload')
-      }}</UiButton></template
-    >
+      }}</VBtn
+      ><VBtn :disabled="!!busy" type="submit" @click="load()">{{ t('policies.reload') }}</VBtn>
+    </div>
     <template v-if="!current">
       <div class="task-directory-summary">
         <strong>{{ t('policies.ux.loaded', { count: list?.items.length ?? 0 }) }}</strong
         ><span>{{ t('policies.ux.memberBoundary') }}</span>
       </div>
-      <UiTable
-        :label="t('policies.scopes')"
-        :rows="list?.items ?? []"
-        :columns="[
-          { key: 'scope', label: t('policies.scopes') },
-          { key: 'revision', label: t('policies.revision') },
-          { key: 'resolution', label: t('console.result') },
-        ]"
-        :row-key="(s) => s.id"
-        :busy-label="t('devices.loading')"
-        :empty-label="t('policies.empty')"
-        ><template #cell-scope="{ row }"
-          ><UiButton variant="ghost" :disabled="busy || uncertain" @click="open(row.id)"
-            >{{ t('policies.scopes') }} · {{ row.id.slice(0, 8) }}</UiButton
+      <VDataTable
+        :aria-label="t('policies.scopes')"
+        :items-per-page="-1"
+        hide-default-footer
+        :items="list?.items ?? []"
+        :headers="
+          [
+            { key: 'scope', label: t('policies.scopes') },
+            { key: 'revision', label: t('policies.revision') },
+            { key: 'resolution', label: t('console.result') },
+          ].map((column) => ({ key: column.key, title: column.label, sortable: false }))
+        "
+        item-value="id"
+        :loading-text="t('devices.loading')"
+        :no-data-text="t('policies.empty')"
+        ><template #[`item.scope`]="{ item: row }"
+          ><VBtn variant="text" :disabled="busy || uncertain" @click="open(row.id)"
+            >{{ t('policies.scopes') }} · {{ row.id.slice(0, 8) }}</VBtn
           ></template
-        ><template #cell-resolution="{ row }"
-          ><UiBadge>{{
+        ><template #[`item.resolution`]="{ item: row }"
+          ><VChip>{{
             t(row.resolution ? 'policies.savedResult' : 'policies.awaitingResult')
-          }}</UiBadge></template
-        ></UiTable
+          }}</VChip></template
+        ></VDataTable
       >
-      <UiButton
-        v-if="list?.nextCursor"
-        :disabled="!!busy"
-        type="submit"
-        @click="load(list.nextCursor)"
-      >
+      <VBtn v-if="list?.nextCursor" :disabled="!!busy" type="submit" @click="load(list.nextCursor)">
         {{ t('policies.next') }}
-      </UiButton>
+      </VBtn>
     </template>
-    <UiButton v-if="current" variant="ghost" :disabled="busy || uncertain" @click="closeScope"
-      >← {{ t('policies.ux.backScopes') }}</UiButton
+    <VBtn v-if="current" variant="text" :disabled="busy || uncertain" @click="closeScope"
+      >← {{ t('policies.ux.backScopes') }}</VBtn
+    >
+    <VBtn
+      v-if="current && !editing"
+      type="button"
+      color="primary"
+      :disabled="
+        busy || uncertain || current.resolutionRevision !== current.revision || !current.resolution
+      "
+      @click="chooseScope"
+      >{{ t('policies.scopeEditor.use') }}</VBtn
     >
     <section v-if="current && !editing" class="console-panel task-scope-definition">
       <h2>{{ t('policies.ux.scopeSaved') }}</h2>
@@ -246,7 +273,7 @@ watch(
               v-for="reference in current.definition[role]"
               :key="`${reference.kind}/${reference.id}`"
             >
-              <UiBadge>{{ t(`policies.${reference.kind}`) }}</UiBadge
+              <VChip>{{ t(`policies.${reference.kind}`) }}</VChip
               ><span class="coordinate">{{ reference.id }}</span>
             </li>
           </ul>
@@ -255,30 +282,32 @@ watch(
       </div>
     </section>
     <div v-if="current && !editing" class="console-toolbar">
-      <UiButton type="button" :disabled="busy || uncertain" @click="editing = true">{{
+      <VBtn type="button" :disabled="busy || uncertain" @click="editing = true">{{
         t('console.edit')
-      }}</UiButton>
+      }}</VBtn>
     </div>
-    <UiDialog
+    <PolicyDialog
       v-model:open="editing"
       placement="right"
       :title="t(current ? 'console.edit' : 'console.create')"
       :close-label="t('console.close')"
       ><p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
       <form class="scope-form" @submit.prevent="save">
-        <fieldset :disabled="busy || uncertain">
+        <PolicyFieldset :disabled="busy || uncertain">
           <details class="task-technical">
             <summary>{{ t('policies.ux.technical') }}</summary>
             <label for="scope-id">{{ t('policies.id') }}</label
-            ><input
+            ><VTextField
               id="scope-id"
               v-model="id"
-              class="ui-input"
               required
               :readonly="!!current"
-            /><UiButton type="button" @click="open()">
+              variant="outlined"
+              density="comfortable"
+              hide-details="auto"
+            /><VBtn type="button" @click="open()">
               {{ t('policies.open') }}
-            </UiButton>
+            </VBtn>
           </details>
           <section class="task-scope-role">
             <h3>{{ t('policies.targets') }}</h3>
@@ -289,7 +318,9 @@ watch(
             <h3>{{ t('policies.limitations') }}</h3>
             <p>{{ t('policies.ux.scopeLimitations') }}</p>
             <label
-              ><input v-model="unlimited" type="checkbox" />{{ t('policies.unlimited') }}</label
+              ><VCheckbox v-model="unlimited" hide-details="auto" />{{
+                t('policies.unlimited')
+              }}</label
             >
             <p>{{ t('policies.emptyLimit') }}</p>
             <ReferenceEditor
@@ -303,11 +334,11 @@ watch(
             <p>{{ t('policies.ux.scopeExclusions') }}</p>
             <ReferenceEditor v-model="exclusions" :label="t('policies.exclusions')" />
           </section>
-          <UiButton type="submit">{{ t('policies.save') }}</UiButton
-          ><UiButton v-if="current" type="button" @click="change({ action: 'delete' })">
+          <VBtn type="submit">{{ t('policies.save') }}</VBtn
+          ><VBtn v-if="current" type="button" @click="change({ action: 'delete' })">
             {{ t('policies.remove') }}
-          </UiButton>
-        </fieldset>
+          </VBtn>
+        </PolicyFieldset>
       </form>
       <section v-if="compared" data-testid="scope-comparison" class="console-panel">
         <h3>{{ t('devices.compare') }}</h3>
@@ -329,48 +360,49 @@ watch(
         </dl>
         <p v-else>{{ t('devices.notFound') }}</p>
       </section>
-      <UiButton v-if="uncertain || failure === 'conflict'" :disabled="busy" @click="compare">{{
+      <VBtn v-if="uncertain || failure === 'conflict'" :disabled="busy" @click="compare">{{
         t('devices.compare')
-      }}</UiButton>
-      <UiButton v-if="uncertain && pending" :disabled="busy || !compared" @click="pending()">{{
+      }}</VBtn>
+      <VBtn v-if="uncertain && pending" :disabled="busy || !compared" @click="pending()">{{
         t('policies.replay')
-      }}</UiButton>
-    </UiDialog>
-    <UiButton v-if="uncertain || failure === 'conflict'" :disabled="busy" @click="compare">{{
+      }}</VBtn>
+    </PolicyDialog>
+    <VBtn v-if="uncertain || failure === 'conflict'" :disabled="busy" @click="compare">{{
       t('devices.compare')
-    }}</UiButton>
-    <UiButton
+    }}</VBtn>
+    <VBtn
       v-if="uncertain && pending"
       :disabled="busy || !compared"
       type="button"
       @click="pending()"
     >
       {{ t('policies.replay') }}
-    </UiButton>
+    </VBtn>
     <section v-if="task" class="console-panel scope-results">
       <h2>{{ t('console.result') }}</h2>
       <p>{{ task }} · {{ status ? t(`policies.state.${status.status}`) : '—' }}</p>
-      <UiButton :disabled="!!busy" type="submit" @click="refresh">{{
-        t('policies.refresh')
-      }}</UiButton
+      <VBtn :disabled="!!busy" type="submit" @click="refresh">{{ t('policies.refresh') }}</VBtn
       ><template v-if="status?.status === 'completed'"
         ><p>{{ t('policies.frozen') }}</p>
         <label
           >{{ t('policies.channel')
-          }}<select v-model="channel" class="ui-input">
-            <option value="mdm">MDM</option>
-            <option value="agent">Agent</option>
-          </select></label
-        ><UiTabs
+          }}<VSelect
+            v-model="channel"
+            :items="[
+              { title: 'MDM', value: 'mdm' },
+              { title: 'Agent', value: 'agent' },
+            ]"
+            variant="outlined"
+            density="comfortable"
+            hide-details="auto" /></label
+        ><PolicyTabs
           v-model="projection"
           :label="t('policies.detail')"
           :items="[
             { value: 'members', label: t('policies.members') },
             { value: 'decisions', label: t('policies.decisions') },
           ]"
-        /><UiButton :disabled="!!busy" type="submit" @click="page()">{{
-          t('policies.open')
-        }}</UiButton>
+        /><VBtn :disabled="!!busy" type="submit" @click="page()">{{ t('policies.open') }}</VBtn>
         <template v-if="result"
           ><p>
             {{ result.channel }} ·
@@ -382,7 +414,7 @@ watch(
             </li>
           </ul>
           <div v-else class="ui-table-scroll">
-            <table class="ui-table">
+            <VTable density="comfortable">
               <thead>
                 <tr>
                   <th>{{ t('policies.device') }}</th>
@@ -414,18 +446,18 @@ watch(
                   </td>
                 </tr>
               </tbody>
-            </table>
+            </VTable>
           </div>
         </template>
-        <UiButton
+        <VBtn
           v-if="result?.nextCursor"
           :disabled="!!busy"
           type="submit"
           @click="page(result.nextCursor)"
         >
           {{ t('policies.next') }}
-        </UiButton></template
+        </VBtn></template
       >
     </section>
-  </PageFrame>
+  </PolicyDialog>
 </template>

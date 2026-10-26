@@ -3,8 +3,8 @@ const base = '/tenants/:tenant/policies'
 export const policyFeature: MdmFeature = {
   entry: {
     path: base,
-    name: 'policy-scopes',
-    component: () => import('./views/ScopesView.vue'),
+    name: 'policy-policies',
+    component: () => import('./views/PolicyWorkspaceView.vue'),
     meta: { protected: true },
   },
   routes: [
@@ -51,15 +51,9 @@ export const policyFeature: MdmFeature = {
       meta: { protected: true },
     },
     {
-      path: `${base}/assignments`,
-      name: 'policy-policies',
-      component: () => import('./views/PoliciesView.vue'),
-      meta: { protected: true },
-    },
-    {
-      path: `${base}/scripts`,
-      name: 'policy-scripts',
-      component: () => import('./views/ScriptsView.vue'),
+      path: `${base}/metrics`,
+      name: 'policy-metrics',
+      component: () => import('../telemetry/views/MetricsView.vue'),
       meta: { protected: true },
     },
     {

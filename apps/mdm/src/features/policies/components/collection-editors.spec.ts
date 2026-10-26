@@ -1,6 +1,8 @@
+import { selectControl } from '../vuetify-test-controls'
+import { createFeatureRouter as createRouter } from '../../../../tests/feature-router'
 import { afterEach, expect, it, vi } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
-import { createRouter, createMemoryHistory } from 'vue-router'
+import { createMemoryHistory } from 'vue-router'
 import { shallowRef } from 'vue'
 import { webcrypto } from 'node:crypto'
 import { mdmI18n } from '../../../i18n'
@@ -42,6 +44,7 @@ it('edits declared conversions, safe integer ratios, exact codes and nested colu
     void wrapper.setProps({ modelValue: value })
   }
   const wrapper = mount(ValueMappingEditor, {
+    attachTo: document.body,
     props: {
       modelValue: identityMapping(''),
       valueType: {
@@ -62,34 +65,45 @@ it('edits declared conversions, safe integer ratios, exact codes and nested colu
     global: { plugins: [mdmI18n()] },
   })
   wrappers.push(wrapper)
-  const select = () => label(wrapper, '类型转换').get('select')
+  const select = () => selectControl(label(wrapper, '类型转换'))
   await select().setValue('scale')
-  await label(wrapper, '分子').get('input').setValue('9007199254740993')
+  await label(wrapper, '分子')
+    .get('input:not([type=hidden]):not([role=combobox])')
+    .setValue('9007199254740993')
   expect(
-    (label(wrapper, '分子').get('input').element as HTMLInputElement).validationMessage,
+    (
+      label(wrapper, '分子').get('input:not([type=hidden]):not([role=combobox])')
+        .element as HTMLInputElement
+    ).validationMessage,
   ).not.toBe('')
-  await label(wrapper, '分子').get('input').setValue('1024')
+  await label(wrapper, '分子').get('input:not([type=hidden]):not([role=combobox])').setValue('1024')
   expect(wrapper.props('modelValue').conversion).toEqual({
     kind: 'scale',
     numerator: 1024,
     denominator: 1,
   })
   await select().setValue('array_member')
-  await label(wrapper, '数组成员').get('input').setValue('7')
+  await label(wrapper, '数组成员')
+    .get('input:not([type=hidden]):not([role=combobox])')
+    .setValue('7')
   expect(wrapper.props('modelValue').conversion).toMatchObject({ kind: 'array_member', member: 7 })
   for (const kind of ['enum', 'bitmask']) {
     await select().setValue(kind)
     await label(wrapper, '原始代码')
-      .get('input')
+      .get('input:not([type=hidden]):not([role=combobox])')
       .setValue(kind === 'enum' ? 'active' : '3')
-    await label(wrapper, '目标值').get('input').setValue('running')
+    await label(wrapper, '目标值')
+      .get('input:not([type=hidden]):not([role=combobox])')
+      .setValue('running')
     await wrapper
       .findAll('button')
       .find((b) => b.text() === '添加转换项')!
       .trigger('click')
     if (kind === 'bitmask') {
       expect(wrapper.find('[role=alert]').exists()).toBe(true)
-      await label(wrapper, '原始代码').get('input').setValue('2')
+      await label(wrapper, '原始代码')
+        .get('input:not([type=hidden]):not([role=combobox])')
+        .setValue('2')
       await wrapper
         .findAll('button')
         .find((b) => b.text() === '添加转换项')!
@@ -102,7 +116,7 @@ it('edits declared conversions, safe integer ratios, exact codes and nested colu
       .trigger('click')
   }
   await select().setValue('identity')
-  await label(wrapper, '输出属性').get('select').setValue('name')
+  await selectControl(label(wrapper, '输出属性')).setValue('name')
   await wrapper
     .findAll('button')
     .find((b) => b.text() === '添加属性映射')!
@@ -112,6 +126,7 @@ it('edits declared conversions, safe integer ratios, exact codes and nested colu
 })
 it('authors scalar and structured list field types using controls', async () => {
   const wrapper = mount(FieldTypeEditor, {
+    attachTo: document.body,
     props: {
       modelValue: { kind: 'number' },
       'onUpdate:modelValue': (value) => {
@@ -122,10 +137,12 @@ it('authors scalar and structured list field types using controls', async () => 
   })
   wrappers.push(wrapper)
   for (const kind of ['string', 'integer', 'boolean', 'time', 'enum', 'record', 'array']) {
-    await wrapper.find('select').setValue(kind)
+    await selectControl(wrapper, 'select').setValue(kind)
     expect(wrapper.props('modelValue').kind).toBe(kind)
     if (kind === 'enum') {
-      await label(wrapper, '状态词汇').get('input').setValue('ready')
+      await label(wrapper, '状态词汇')
+        .get('input:not([type=hidden]):not([role=combobox])')
+        .setValue('ready')
       await wrapper
         .findAll('button')
         .find((b) => b.text() === '添加转换项')!
@@ -133,7 +150,9 @@ it('authors scalar and structured list field types using controls', async () => 
       expect(wrapper.props('modelValue')).toMatchObject({ kind: 'enum', values: ['ready'] })
     }
     if (kind === 'record') {
-      await label(wrapper, '输出属性').get('input').setValue('identifier')
+      await label(wrapper, '输出属性')
+        .get('input:not([type=hidden]):not([role=combobox])')
+        .setValue('identifier')
       await wrapper
         .findAll('button')
         .find((b) => b.text() === '添加属性')!
@@ -183,6 +202,7 @@ async function context() {
 it('selects available catalog fields and removes only the selected draft mapping', async () => {
   const c = await context()
   const wrapper = mount(CollectionMappings, {
+    attachTo: document.body,
     props: {
       modelValue: {},
       source: 'mdm.windows',
@@ -196,7 +216,7 @@ it('selects available catalog fields and removes only the selected draft mapping
   wrappers.push(wrapper)
   await flushPromises()
   expect(wrapper.find('option[value="custom.secret"]').exists()).toBe(false)
-  await wrapper.get('select').setValue('custom.extra')
+  await selectControl(wrapper, 'select').setValue('custom.extra')
   await wrapper
     .findAll('button')
     .find((b) => b.text() === '添加字段映射')!
@@ -244,21 +264,22 @@ it('preserves all variants and emits regenerated artifact bytes for a new collec
     'resource',
   )
   const wrapper = mount(CollectionVersionEditor, {
+    attachTo: document.body,
     props: { resource, locked: false },
     global: c.global,
   })
   wrappers.push(wrapper)
-  await label(wrapper, '基准版本').get('select').setValue('1')
-  await label(wrapper, '新版本').get('input').setValue('2')
+  await selectControl(label(wrapper, '基准版本')).setValue('1')
+  await label(wrapper, '新版本').get('input:not([type=hidden]):not([role=combobox])').setValue('2')
   await flushPromises()
   const picker = wrapper.findComponent(CollectionMappings)
-  await picker.get('select').setValue('custom.extra')
+  await selectControl(picker, 'select').setValue('custom.extra')
   await picker
     .findAll('button')
     .find((b) => b.text() === '添加字段映射')!
     .trigger('click')
-  const physical = label(wrapper, 'custom.extra · 物理读取来源').get('select')
-  await physical.setValue((physical.findAll('option')[1]!.element as HTMLOptionElement).value)
+  const physical = selectControl(label(wrapper, 'custom.extra · 物理读取来源'))
+  await physical.setValue((physical.props('items') as { value: string }[])[1]!.value)
   await wrapper.get('[data-testid=value-mapping] input').setValue('/value')
   await wrapper.get('form').trigger('submit')
   await vi.waitFor(() => expect(wrapper.emitted('prepare')).toHaveLength(1))
@@ -315,11 +336,12 @@ it.each([
     'resource',
   )
   const wrapper = mount(CollectionVersionEditor, {
+    attachTo: document.body,
     props: { resource, locked: false },
     global: c.global,
   })
   wrappers.push(wrapper)
-  await label(wrapper, '基准版本').get('select').setValue('1')
+  await selectControl(label(wrapper, '基准版本')).setValue('1')
   await flushPromises()
   const mapper = wrapper.findComponent(CollectionMappings)
   mapper.vm.$emit('update:modelValue', {})
@@ -327,9 +349,9 @@ it.each([
   mapper.vm.$emit('update:modelValue', { 'custom.extra': identityMapping('') })
   await flushPromises()
   expect(wrapper.findAllComponents(ValueMappingEditor)).toHaveLength(1)
-  const query = label(wrapper, 'custom.extra · 物理读取来源').get('select')
-  expect((query.element as HTMLSelectElement).value).toBe('')
-  expect(query.findAll('option')).toHaveLength(
+  const query = selectControl(label(wrapper, 'custom.extra · 物理读取来源'))
+  expect(query.props('modelValue')).toBe('')
+  expect(query.props('items')).toHaveLength(
     1 +
       new Set(
         Object.values(d.definition.mappings).map((m: unknown) =>

@@ -1,8 +1,13 @@
 <script setup lang="ts">
+import PolicyFieldset from '../../policies/components/PolicyFieldset.vue'
+import PolicyDialog from '../../policies/components/PolicyDialog.vue'
+
+import { VBtn, VTextField, VTable, VAlert, VCheckbox, VSelect, VTextarea } from 'vuetify/components'
+import { controlEvent } from '../../policies/control-event'
+
 import { computed, ref, shallowRef, watch, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiDialog, UiMessage } from '@rss/core/components'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 import { useMdm } from '../../../context'
 import { operation, useOperation, type Operation } from '../../../services/useOperation'
 import { deviceBinding } from '../../devices/useDeviceBinding'
@@ -279,30 +284,34 @@ watch(
 )
 </script>
 <template>
-  <PageFrame :title="t('telemetry.metricsSettings')" :busy="busy" :failure="failure"
+  <MdmPage :title="t('telemetry.metricsSettings')" :busy="busy" :failure="failure"
     ><template #actions
-      ><UiButton :disabled="busy || !!pending" @click="load">{{ t('devices.reload') }}</UiButton
-      ><UiButton :disabled="!canWrite || !!pending" @click="edit()">{{
-        t('telemetry.newField')
-      }}</UiButton
-      ><UiButton :disabled="!canWrite || !!pending" @click="openRetention">{{
+      ><VBtn :disabled="busy || !!pending" @click="load">{{ t('devices.reload') }}</VBtn
+      ><VBtn :disabled="!canWrite || !!pending" @click="edit()">{{ t('telemetry.newField') }}</VBtn
+      ><VBtn :disabled="!canWrite || !!pending" @click="openRetention">{{
         t('telemetry.retentionPolicies')
-      }}</UiButton></template
+      }}</VBtn></template
     >
     <p class="telemetry-caption">{{ t('telemetry.metricsHint') }}</p>
     <nav class="telemetry-tabs">
-      <RouterLink :to="{ name: 'settings-overview', params: { tenant: runtime.tenant } }">{{
-        t('settings.title')
+      <RouterLink :to="{ name: 'policy-policies', params: { tenant: runtime.tenant } }">{{
+        t('policies.policies')
       }}</RouterLink
       ><RouterLink :to="{ name: 'policy-telemetry', params: { tenant: runtime.tenant } }">{{
         t('telemetry.profiles')
       }}</RouterLink>
     </nav>
     <label class="telemetry-search"
-      >{{ t('devices.search') }}<input v-model="search" type="search" class="ui-input"
+      >{{ t('devices.search')
+      }}<VTextField
+        v-model="search"
+        type="search"
+        variant="outlined"
+        density="comfortable"
+        hide-details="auto"
     /></label>
     <div class="telemetry-table-wrap">
-      <table class="telemetry-table">
+      <VTable density="comfortable">
         <thead>
           <tr>
             <th>{{ t('telemetry.field') }}</th>
@@ -330,143 +339,199 @@ watch(
             </td>
             <td>{{ Object.keys(f.sources).join(', ') }}</td>
             <td>
-              <UiButton :disabled="busy || !!pending" @click="edit(f)">{{
+              <VBtn :disabled="busy || !!pending" @click="edit(f)">{{
                 t(canWrite ? 'telemetry.configure' : 'telemetry.view')
-              }}</UiButton>
+              }}</VBtn>
             </td>
           </tr>
         </tbody>
-      </table>
+      </VTable>
     </div>
-    <UiDialog
+    <PolicyDialog
       :open="open"
       :title="t(creating ? 'telemetry.newField' : 'telemetry.historyBinding')"
       :close-label="t('console.cancel')"
       placement="right"
       @update:open="!pending && (open = $event)"
       ><section class="telemetry-form">
-        <UiMessage v-if="failure" tone="danger" :title="t('devices.' + failure)" />
-        <fieldset :disabled="locked || !!pending">
+        <VAlert v-if="failure" type="error" variant="tonal" :title="t('devices.' + failure)" />
+        <PolicyFieldset :disabled="locked || !!pending">
           <label
-            >{{ t('telemetry.field') }}<input v-model="key" class="ui-input" :readonly="!creating"
+            >{{ t('telemetry.field')
+            }}<VTextField
+              v-model="key"
+              :readonly="!creating"
+              variant="outlined"
+              density="comfortable"
+              hide-details="auto"
           /></label>
-          <fieldset :disabled="!creating">
+          <PolicyFieldset :disabled="!creating">
             <FieldTypeEditor v-model="fieldType" />
-            <label>{{ t('telemetry.unit') }}<input v-model="unit" class="ui-input" /></label>
             <label
-              ><input v-model="manual" type="checkbox" />{{ t('telemetry.fieldUi.manual') }}</label
+              >{{ t('telemetry.unit')
+              }}<VTextField
+                v-model="unit"
+                variant="outlined"
+                density="comfortable"
+                hide-details="auto"
+            /></label>
+            <label
+              ><VCheckbox v-model="manual" hide-details="auto" />{{
+                t('telemetry.fieldUi.manual')
+              }}</label
             >
             <label
-              ><input v-model="nullable" type="checkbox" />{{
+              ><VCheckbox v-model="nullable" hide-details="auto" />{{
                 t('telemetry.fieldUi.nullable')
               }}</label
             >
             <label
-              ><input v-model="searchable" type="checkbox" />{{
+              ><VCheckbox v-model="searchable" hide-details="auto" />{{
                 t('telemetry.fieldUi.searchable')
               }}</label
             >
             <label
               >{{ t('telemetry.fieldUi.sensitivity')
-              }}<select v-model="sensitivity" class="ui-input">
-                <option>standard</option>
-                <option>sensitive</option>
-              </select></label
-            >
+              }}<VSelect
+                v-model="sensitivity"
+                :items="[
+                  { title: 'standard', value: 'standard' },
+                  { title: 'sensitive', value: 'sensitive' },
+                ]"
+                variant="outlined"
+                density="comfortable"
+                hide-details="auto"
+            /></label>
             <label v-if="fieldType.kind === 'array'"
               >{{ t('telemetry.mappingUi.itemKey')
-              }}<select v-model="itemKey" class="ui-input">
-                <option value="">—</option>
-                <option
-                  v-for="name in fieldType.items.kind === 'record' ||
-                  fieldType.items.kind === 'object'
+              }}<VSelect
+                v-model="itemKey"
+                :items="[
+                  { title: '—', value: '' },
+                  ...(fieldType.items.kind === 'record' || fieldType.items.kind === 'object'
                     ? Object.keys(fieldType.items.properties)
-                    : []"
-                  :key="name"
-                >
-                  {{ name }}
-                </option>
-              </select></label
-            >
-            <fieldset>
+                    : []
+                  ).map((name) => ({ title: String(name), value: String(name) })),
+                ]"
+                variant="outlined"
+                density="comfortable"
+                hide-details="auto"
+            /></label>
+            <PolicyFieldset>
               <legend>{{ t('telemetry.fieldUi.platforms') }}</legend>
               <label v-for="platform in ['windows', 'macos']" :key="platform"
-                ><input v-model="platforms" :value="platform" type="checkbox" />{{
+                ><VCheckbox v-model="platforms" :value="platform" hide-details="auto" />{{
                   platform
                 }}</label
               >
-            </fieldset>
-            <fieldset>
+            </PolicyFieldset>
+            <PolicyFieldset>
               <legend>{{ t('telemetry.fieldUi.sources') }}</legend>
               <label v-for="source in sourceIds" :key="source"
-                ><input
-                  :checked="Object.hasOwn(sources, source)"
-                  type="checkbox"
-                  @change="
-                    ($event.target as HTMLInputElement).checked
+                ><VCheckbox
+                  :model-value="Object.hasOwn(sources, source)"
+                  hide-details="auto"
+                  @update:model-value="
+                    (controlEvent($event).target as HTMLInputElement).checked
                       ? (sources[source] = 0)
                       : delete sources[source]
                   " />{{ source
-                }}<input
+                }}<VTextField
                   v-if="Object.hasOwn(sources, source)"
                   v-model.number="sources[source]"
-                  class="ui-input"
                   type="number"
                   min="0"
                   max="65535"
                   :aria-label="source + ' ' + t('telemetry.fieldUi.priority')"
+                  variant="outlined"
+                  density="comfortable"
+                  hide-details="auto"
               /></label>
-            </fieldset>
-          </fieldset>
+            </PolicyFieldset>
+          </PolicyFieldset>
           <p v-if="selected?.timeSeries" class="telemetry-notice">
             {{ t('telemetry.immutableBinding') }}
           </p>
           <label v-else
-            ><input v-model="bindingEnabled" type="checkbox" />
+            ><VCheckbox v-model="bindingEnabled" hide-details="auto" />
             {{ t('telemetry.bindHistory') }}</label
           >
-          <fieldset v-if="bindingEnabled" :disabled="!!selected?.timeSeries">
+          <PolicyFieldset v-if="bindingEnabled" :disabled="!!selected?.timeSeries">
             <label
               >{{ t('telemetry.metricKind')
-              }}<select v-model="kind" :aria-label="t('telemetry.metricKind')" class="ui-input">
-                <option
-                  v-for="k in ['gauge', 'cumulative_counter', 'delta_counter', 'state']"
-                  :key="k"
-                  :value="k"
-                >
-                  {{ k }}
-                </option>
-              </select></label
+              }}<VSelect
+                v-model="kind"
+                :aria-label="t('telemetry.metricKind')"
+                :items="[
+                  ...['gauge', 'cumulative_counter', 'delta_counter', 'state'].map((k) => ({
+                    title: String(k),
+                    value: k,
+                  })),
+                ]"
+                variant="outlined"
+                density="comfortable"
+                hide-details="auto" /></label
             ><label
               >{{ t('telemetry.valuePath')
-              }}<input v-model="valuePath" class="ui-input telemetry-code" /></label
+              }}<VTextField
+                v-model="valuePath"
+                class="ui-input telemetry-code"
+                variant="outlined"
+                density="comfortable"
+                hide-details="auto" /></label
             ><label
               >{{ t('telemetry.intervalPath')
-              }}<input v-model="intervalPath" class="ui-input telemetry-code" /></label
+              }}<VTextField
+                v-model="intervalPath"
+                class="ui-input telemetry-code"
+                variant="outlined"
+                density="comfortable"
+                hide-details="auto" /></label
             ><label
               >{{ t('telemetry.dimensions')
-              }}<textarea v-model="dimensions" class="ui-input telemetry-code" /></label
+              }}<VTextarea
+                v-model="dimensions"
+                class="ui-input telemetry-code"
+                variant="outlined"
+                density="comfortable"
+                hide-details="auto" /></label
             ><label
               >{{ t('telemetry.maxResources')
-              }}<input v-model.number="maxResources" type="number" min="1" class="ui-input"
+              }}<VTextField
+                v-model.number="maxResources"
+                type="number"
+                min="1"
+                variant="outlined"
+                density="comfortable"
+                hide-details="auto"
             /></label>
-          </fieldset>
+          </PolicyFieldset>
           <div v-if="bindingEnabled" class="telemetry-toolbar">
             <label
               >{{ t('telemetry.retentionKey')
-              }}<input v-model="retentionKey" class="ui-input" /></label
+              }}<VTextField
+                v-model="retentionKey"
+                variant="outlined"
+                density="comfortable"
+                hide-details="auto" /></label
             ><label
               >{{ t('telemetry.revision')
-              }}<input v-model.number="retentionRevision" type="number" min="1" class="ui-input"
+              }}<VTextField
+                v-model.number="retentionRevision"
+                type="number"
+                min="1"
+                variant="outlined"
+                density="comfortable"
+                hide-details="auto"
             /></label>
           </div>
           <p v-if="!canReadReferences">{{ t('telemetry.fieldUi.referencePermission') }}</p>
           <p v-if="referencesBusy" role="status">{{ t('telemetry.fieldUi.referenceLoading') }}</p>
           <p v-if="referenceFailure" role="alert">
             {{ t('devices.' + referenceFailure) }}
-            <UiButton :disabled="referencesBusy" @click="loadReferences()">{{
+            <VBtn :disabled="referencesBusy" @click="loadReferences()">{{
               t('devices.reload')
-            }}</UiButton>
+            }}</VBtn>
           </p>
           <p>{{ t('telemetry.fieldUi.configurationOnly') }}</p>
           <section v-if="references">
@@ -487,11 +552,11 @@ watch(
                 · {{ mapping.state }}
               </li>
             </ul>
-            <UiButton
+            <VBtn
               v-if="references.nextCursor"
               :disabled="referencesBusy"
               @click="loadReferences(references.nextCursor)"
-              >{{ t('devices.next') }}</UiButton
+              >{{ t('devices.next') }}</VBtn
             >
             <dl class="telemetry-facts">
               <template v-for="(count, name) in references.impact" :key="name"
@@ -502,11 +567,10 @@ watch(
           </section>
           <p class="telemetry-caption">{{ t('telemetry.newSamplesOnly') }}</p>
           <label
-            ><input v-model="confirmed" type="checkbox" /> {{ t('telemetry.confirmField') }}</label
-          ><UiButton :disabled="!confirmed" @click="submit">{{
-            t('telemetry.saveVersion')
-          }}</UiButton>
-        </fieldset>
+            ><VCheckbox v-model="confirmed" hide-details="auto" />
+            {{ t('telemetry.confirmField') }}</label
+          ><VBtn :disabled="!confirmed" @click="submit">{{ t('telemetry.saveVersion') }}</VBtn>
+        </PolicyFieldset>
         <WriteRecovery
           v-if="pending && uncertain"
           :id="pending.body.operationId"
@@ -516,8 +580,8 @@ watch(
           @compare="compare"
           @replay="execute"
         /></section
-    ></UiDialog>
-    <UiDialog
+    ></PolicyDialog>
+    <PolicyDialog
       :open="retentionOpen"
       :title="t('telemetry.retentionPolicies')"
       :close-label="t('console.cancel')"
@@ -525,29 +589,37 @@ watch(
       @update:open="!pending && (retentionOpen = $event)"
       ><section class="telemetry-form">
         <p>{{ t('telemetry.retentionHint') }}</p>
-        <fieldset :disabled="locked || !!pending">
+        <PolicyFieldset :disabled="locked || !!pending">
           <label
             >{{ t('telemetry.retentionKey')
-            }}<input v-model="retention.key" class="ui-input" /></label
+            }}<VTextField
+              v-model="retention.key"
+              variant="outlined"
+              density="comfortable"
+              hide-details="auto" /></label
           ><label
             >{{ t('telemetry.revision')
-            }}<input
+            }}<VTextField
               v-model.number="retention.revision"
               type="number"
               min="1"
-              class="ui-input" /></label
-          ><UiButton @click="readRetention">{{ t('telemetry.readRetention') }}</UiButton
+              variant="outlined"
+              density="comfortable"
+              hide-details="auto" /></label
+          ><VBtn @click="readRetention">{{ t('telemetry.readRetention') }}</VBtn
           ><label
             v-for="name in ['rawSeconds', 'summarySeconds', 'restoreSeconds'] as const"
             :key="name"
             >{{ t('telemetry.' + name)
-            }}<input
+            }}<VTextField
               v-model.number="retention[name]"
               type="number"
               min="0"
-              class="ui-input" /></label
-          ><UiButton @click="saveRetention">{{ t('telemetry.saveVersion') }}</UiButton>
-        </fieldset>
+              variant="outlined"
+              density="comfortable"
+              hide-details="auto" /></label
+          ><VBtn @click="saveRetention">{{ t('telemetry.saveVersion') }}</VBtn>
+        </PolicyFieldset>
         <pre v-if="comparison !== undefined">{{ comparison }}</pre>
         <WriteRecovery
           v-if="pending && uncertain"
@@ -558,6 +630,6 @@ watch(
           @compare="compare"
           @replay="execute"
         /></section
-    ></UiDialog>
-  </PageFrame>
+    ></PolicyDialog>
+  </MdmPage>
 </template>

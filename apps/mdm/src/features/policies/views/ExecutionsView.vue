@@ -1,12 +1,15 @@
 <script setup lang="ts">
+import PolicyDialog from '../components/PolicyDialog.vue'
+
+import { VBtn, VTextField, VSelect, VDataTable, VChip } from 'vuetify/components'
+
 import { comparison, allOf } from '../../../services/directory-query'
-import { UiButton, UiTable, UiBadge, UiDialog } from '@rss/core/components'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import DeviceControlPanel from '../../devices/components/DeviceControlPanel.vue'
 import AuthorizationFacts from '../components/AuthorizationFacts.vue'
@@ -206,16 +209,16 @@ watch(
 )
 </script>
 <template>
-  <PageFrame
+  <MdmPage
     :title="t('policies.executions')"
     :description="t('policies.ux.executionsHint')"
     :busy="busy"
     :failure="failure"
   >
     <template #actions
-      ><UiButton :disabled="picker.busy.value || pinned" @click="beginRemote">{{
+      ><VBtn :disabled="picker.busy.value || pinned" @click="beginRemote">{{
         t('policies.ux.remote')
-      }}</UiButton></template
+      }}</VBtn></template
     >
     <p v-if="statisticsOperation.failure.value" role="alert">
       {{ t('devices.' + statisticsOperation.failure.value) }}
@@ -239,65 +242,85 @@ watch(
       </div>
     </dl>
     <div class="console-toolbar" role="group" :aria-label="t('policies.queues.title')">
-      <UiButton
+      <VBtn
         v-for="value in ['all', 'waiting', 'blocked', 'unknown'] as const"
         :key="value"
         :aria-pressed="queue === value"
         :disabled="busy"
         @click="selectQueue(value)"
-        >{{ t(`policies.queues.${value}`) }}</UiButton
+        >{{ t(`policies.queues.${value}`) }}</VBtn
       >
     </div>
     <form class="console-toolbar" @submit.prevent="load()">
-      <label>{{ t('policies.device') }}<input v-model="device" class="ui-input" /></label>
-      <label>{{ t('policies.policies') }}<input v-model="policy" class="ui-input" /></label>
+      <label
+        >{{ t('policies.device')
+        }}<VTextField v-model="device" variant="outlined" density="comfortable" hide-details="auto"
+      /></label>
+      <label
+        >{{ t('policies.policies')
+        }}<VTextField v-model="policy" variant="outlined" density="comfortable" hide-details="auto"
+      /></label>
       <label
         >{{ t('policies.kind')
-        }}<select v-model="kind" class="ui-input">
-          <option value="">{{ t('devices.all') }}</option>
-          <option value="command">{{ t('policies.nativeAction') }}</option>
-          <option value="action_run">{{ t('policies.policies') }}</option>
-        </select></label
-      >
+        }}<VSelect
+          v-model="kind"
+          :items="[
+            { title: String(t('devices.all')), value: '' },
+            { title: String(t('policies.nativeAction')), value: 'command' },
+            { title: String(t('policies.policies')), value: 'action_run' },
+          ]"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto"
+      /></label>
       <label
         >{{ t('policies.execution')
-        }}<input v-model="status" class="ui-input" :placeholder="t('policies.statusFilter')"
+        }}<VTextField
+          v-model="status"
+          :placeholder="t('policies.statusFilter')"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto"
       /></label>
       <label
         >{{ t('policies.authorization.title')
-        }}<select v-model="authorizationState" class="ui-input">
-          <option value="">{{ t('devices.all') }}</option>
-          <option
-            v-for="value in ['authorized', 'blocked', 'not_applicable']"
-            :key="value"
-            :value="value"
-          >
-            {{ t(`policies.authorization.${value}`) }}
-          </option>
-        </select></label
-      >
+        }}<VSelect
+          v-model="authorizationState"
+          :items="[
+            { title: String(t('devices.all')), value: '' },
+            ...['authorized', 'blocked', 'not_applicable'].map((value) => ({
+              title: String(t(`policies.authorization.${value}`)),
+              value: value,
+            })),
+          ]"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto"
+      /></label>
       <label
         >{{ t('policies.authorization.reason')
-        }}<select v-model="authorizationReason" class="ui-input">
-          <option value="">{{ t('devices.all') }}</option>
-          <option
-            v-for="value in [
+        }}<VSelect
+          v-model="authorizationReason"
+          :items="[
+            { title: String(t('devices.all')), value: '' },
+            ...[
               'lifecycle_blocked',
               'registration_changed',
               'input_mismatch',
               'source_invalid',
-            ]"
-            :key="value"
-            :value="value"
-          >
-            {{ t(`policies.authorization.${value}`) }}
-          </option>
-        </select></label
-      >
-      <UiButton :disabled="busy" type="submit">{{ t('policies.reload') }}</UiButton>
+            ].map((value) => ({
+              title: String(t(`policies.authorization.${value}`)),
+              value: value,
+            })),
+          ]"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto"
+      /></label>
+      <VBtn :disabled="busy" type="submit">{{ t('policies.reload') }}</VBtn>
     </form>
     <p>{{ t('policies.statusFilterBoundary') }}</p>
-    <UiDialog
+    <PolicyDialog
       v-model:open="choosingDevice"
       placement="right"
       :title="t('policies.ux.chooseDevice')"
@@ -305,39 +328,36 @@ watch(
       :close-label="t('console.close')"
     >
       <h2>{{ t('policies.nativeAction') }}</h2>
-      <UiButton :disabled="picker.busy.value || pinned" @click="loadDevices()">{{
+      <VBtn :disabled="picker.busy.value || pinned" @click="loadDevices()">{{
         t('console.chooseLoaded')
-      }}</UiButton>
+      }}</VBtn>
       <template v-if="devices"
         ><p>{{ t('console.pageNotTotal') }}</p>
         <label
           >{{ t('policies.device')
-          }}<select
+          }}<VSelect
             v-model="selectedDevice"
-            class="ui-input"
             :disabled="picker.busy.value || pinned"
-            @change="choose"
-          >
-            <option value="">{{ t('devices.select') }}</option>
-            <option
-              v-if="selectedDevice && !devices.items.some((d) => d.id === selectedDevice)"
-              :value="selectedDevice"
-            >
-              {{ selectedDevice }}
-            </option>
-            <option v-for="item in devices.items" :key="item.id" :value="item.id">
-              {{ item.id }}
-            </option>
-          </select></label
-        ><UiButton
+            :items="[
+              { title: String(t('devices.select')), value: '' },
+              ...(selectedDevice && !devices.items.some((d) => d.id === selectedDevice)
+                ? [{ title: String(selectedDevice), value: selectedDevice }]
+                : []),
+              ...devices.items.map((item) => ({ title: String(item.id), value: item.id })),
+            ]"
+            variant="outlined"
+            density="comfortable"
+            hide-details="auto"
+            @update:model-value="choose()" /></label
+        ><VBtn
           v-if="devices.nextCursor"
           :disabled="picker.busy.value || pinned"
           @click="loadDevices(devices.nextCursor)"
-          >{{ t('policies.next') }}</UiButton
+          >{{ t('policies.next') }}</VBtn
         ></template
       >
       <p v-if="picker.failure.value" role="alert">{{ t(`devices.${picker.failure.value}`) }}</p>
-    </UiDialog>
+    </PolicyDialog>
     <DeviceControlPanel
       v-if="selected"
       :key="selected.id"
@@ -348,22 +368,26 @@ watch(
       <p v-if="statistics" class="ui-help">
         {{ t('policies.ux.observedAt') }} · {{ utc(statistics.asOf) }}
       </p>
-      <UiTable
-        :label="t('policies.executions')"
-        :rows="records.items"
-        :row-key="(item) => `${item.kind}/${item.id}`"
-        :busy="busy"
-        :busy-label="t('devices.loading')"
-        :empty-label="t('policies.empty')"
-        :columns="[
-          { key: 'operation', label: t('policies.operation') },
-          { key: 'device', label: t('policies.device') },
-          { key: 'status', label: t('policies.execution') },
-          { key: 'authorization', label: t('policies.authorization.title') },
-          { key: 'evidence', label: t('devices.evidence') },
-        ]"
+      <VDataTable
+        :aria-label="t('policies.executions')"
+        :items-per-page="-1"
+        hide-default-footer
+        :items="records.items"
+        item-value="id"
+        :loading="busy"
+        :loading-text="t('devices.loading')"
+        :no-data-text="t('policies.empty')"
+        :headers="
+          [
+            { key: 'operation', label: t('policies.operation') },
+            { key: 'device', label: t('policies.device') },
+            { key: 'status', label: t('policies.execution') },
+            { key: 'authorization', label: t('policies.authorization.title') },
+            { key: 'evidence', label: t('devices.evidence') },
+          ].map((column) => ({ key: column.key, title: column.label, sortable: false }))
+        "
       >
-        <template #cell-operation="{ row: item }"
+        <template #[`item.operation`]="{ item }"
           ><RouterLink
             :to="{
               name: 'policy-execution',
@@ -376,23 +400,23 @@ watch(
             >{{ item.registrationId }} / {{ item.generation }}</small
           ></template
         >
-        <template #cell-device="{ row }"
+        <template #[`item.device`]="{ item: row }"
           ><RouterLink
             :to="{ name: 'device-detail', params: { tenant: runtime.tenant, device: row.device } }"
             >{{ row.device }}</RouterLink
           ></template
         >
-        <template #cell-status="{ row }"
-          ><UiBadge :tone="row.status === 'unknown' ? 'warning' : 'neutral'">{{
+        <template #[`item.status`]="{ item: row }"
+          ><VChip :color="row.status === 'unknown' ? 'warning' : undefined">{{
             row.status
-          }}</UiBadge></template
+          }}</VChip></template
         >
-        <template #cell-authorization="{ row }"
+        <template #[`item.authorization`]="{ item: row }"
           ><AuthorizationFacts
             :authorization="row.authorization"
             :reauthorization="row.reauthorization"
         /></template>
-        <template #cell-evidence="{ row: item }">
+        <template #[`item.evidence`]="{ item }">
           <details class="operation-evidence">
             <summary>{{ t('devices.evidence') }}</summary>
             <OperationStages
@@ -423,9 +447,9 @@ watch(
               {{ t('policies.dispatchFailure') }}
             </p>
             <template v-if="item.kind === 'command'"
-              ><UiButton :disabled="busy" @click="inspect(item.device, item.id)">{{
+              ><VBtn :disabled="busy" @click="inspect(item.device, item.id)">{{
                 t('policies.inspectAction')
-              }}</UiButton
+              }}</VBtn
               ><NativeTaskFacts
                 v-if="commandDetails[item.id]"
                 :operation="commandDetails[item.id]!"
@@ -434,10 +458,10 @@ watch(
             <p class="ui-help">{{ t('policies.ux.stagesHint') }}</p>
           </details>
         </template>
-      </UiTable>
-      <UiButton v-if="records.nextCursor" :disabled="busy" @click="load(records.nextCursor)">{{
+      </VDataTable>
+      <VBtn v-if="records.nextCursor" :disabled="busy" @click="load(records.nextCursor)">{{
         t('policies.next')
-      }}</UiButton>
+      }}</VBtn>
     </section>
-  </PageFrame>
+  </MdmPage>
 </template>

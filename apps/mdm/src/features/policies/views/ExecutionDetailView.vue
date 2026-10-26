@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import PolicyFieldset from '../components/PolicyFieldset.vue'
+import { VBtn, VTextField, VCheckbox } from 'vuetify/components'
+
 import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -7,7 +9,7 @@ import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import type { NativeOperation, Reauthorization } from '../clients/native'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 import AuthorizationFacts from '../components/AuthorizationFacts.vue'
 import NativeTaskFacts from '../components/NativeTaskFacts.vue'
 import PolicyRunFacts from '../components/PolicyRunFacts.vue'
@@ -145,7 +147,7 @@ watch(
 )
 </script>
 <template>
-  <PageFrame
+  <MdmPage
     :title="t('policies.detail')"
     :description="t('policies.ux.executionsHint')"
     :busy="busy"
@@ -179,9 +181,9 @@ watch(
     /></template>
 
     <template #actions
-      ><UiButton :disabled="!!busy" type="submit" @click="load">{{
+      ><VBtn :disabled="!!busy" type="submit" @click="load">{{
         t('policies.verify')
-      }}</UiButton></template
+      }}</VBtn></template
     >
     <RouterLink
       :to="{
@@ -203,9 +205,9 @@ watch(
         {{ t(`policies.authorization.${native.authorization.state}`) }}
       </p>
     </section>
-    <UiButton v-if="uncertain && pending" :disabled="busy || !compared" @click="repeat">{{
+    <VBtn v-if="uncertain && pending" :disabled="busy || !compared" @click="repeat">{{
       t('policies.replay')
-    }}</UiButton>
+    }}</VBtn>
     <section v-if="native" class="console-panel">
       <OperationStages
         kind="command"
@@ -242,7 +244,7 @@ watch(
         :authorization="native.authorization"
         :reauthorization="native.reauthorization"
       />
-      <fieldset
+      <PolicyFieldset
         v-if="
           native.reauthorization.state === 'available' &&
           native.reauthorization.confirmationRequired
@@ -251,20 +253,29 @@ watch(
       >
         <label
           >{{ t('devices.registration')
-          }}<input v-model="registration" class="ui-input" required /></label
+          }}<VTextField
+            v-model="registration"
+            required
+            variant="outlined"
+            density="comfortable"
+            hide-details="auto" /></label
         ><label
           >{{ t('policies.generation')
-          }}<input
+          }}<VTextField
             v-model.number="generation"
             type="number"
             min="1"
-            class="ui-input"
-            required /></label
+            required
+            variant="outlined"
+            density="comfortable"
+            hide-details="auto" /></label
         ><label
-          ><input v-model="confirmation" type="checkbox" />{{ t('policies.confirmControl') }}</label
+          ><VCheckbox v-model="confirmation" hide-details="auto" />{{
+            t('policies.confirmControl')
+          }}</label
         >
-      </fieldset>
-      <UiButton
+      </PolicyFieldset>
+      <VBtn
         v-if="native.reauthorization.state === 'available'"
         :disabled="
           !!(
@@ -281,8 +292,8 @@ watch(
         type="submit"
         @click="change('reauthorize')"
       >
-        {{ t('policies.reauthorize') }}</UiButton
-      ><UiButton
+        {{ t('policies.reauthorize') }}</VBtn
+      ><VBtn
         v-if="
           ['queued', 'published', 'received'].includes(native.commandStatus) &&
           !['succeeded', 'failed'].includes(native.observation.progress)
@@ -292,18 +303,13 @@ watch(
         @click="change('cancel')"
       >
         {{ t('policies.cancel') }}
-      </UiButton>
+      </VBtn>
     </section>
     <template v-if="software">
       <RouterLink
         v-if="software.result"
         :to="{
-          name:
-            software.result?.kind === 'enrollment'
-              ? 'software-bootstrap'
-              : software.result?.kind === 'software'
-                ? 'software-deployments'
-                : 'policy-policies',
+          name: 'policy-policies',
           params: { tenant: runtime.tenant },
           query: {
             id: typeof route.query['policy'] === 'string' ? route.query['policy'] : undefined,
@@ -328,5 +334,5 @@ watch(
       <p class="ui-help">{{ t('policies.ux.stagesHint') }}</p>
       <PolicyRunFacts :run="software" />
     </template>
-  </PageFrame>
+  </MdmPage>
 </template>
