@@ -1,10 +1,17 @@
 <script setup lang="ts">
-import { VBtn } from 'vuetify/components'
+import {
+  VBtn,
+  VDialog,
+  VCard,
+  VCardText,
+  VCardActions,
+  VSpacer,
+  VTextField,
+} from 'vuetify/components'
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { uuid } from '../../../services/decode'
 import { useI18n } from 'vue-i18n'
-import { VDialog, VCard, VCardText, VCardActions, VSpacer, VTextField } from 'vuetify/components'
 import { useDialogFocus } from '../../../ui/dialog-focus'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
@@ -39,6 +46,8 @@ const canSubmit = computed(
         ? /^\d{6}$/.test(pin.value)
         : confirmation.value === props.deviceName)),
 )
+let alive = true
+const context = () => JSON.stringify([...deviceBinding(runtime), binding.value])
 function clearSecrets() {
   pin.value = ''
   confirmation.value = ''
@@ -59,6 +68,7 @@ function hidden() {
 }
 document.addEventListener('visibilitychange', hidden)
 onBeforeUnmount(() => {
+  alive = false
   clearSecrets()
   document.removeEventListener('visibilitychange', hidden)
 })
@@ -75,11 +85,14 @@ watch(
 async function lookup() {
   if (!original.value) return
   const op = original.value
+  const stamp = context()
   if (
-    await run(
+    (await run(
       () => runtime.policies.native.read(op.device, op.id),
       (v) => (result.value = v),
-    )
+    )) &&
+    alive &&
+    stamp === context()
   ) {
     original.value = undefined
     action.value = undefined
@@ -101,6 +114,7 @@ if (
 }
 async function submit() {
   if (!canSubmit.value || !action.value || !primary.value || locked.value) return
+  const stamp = context()
   const id = crypto.randomUUID(),
     device = props.endpoint.id
   const input: DeviceControlAction =
@@ -126,6 +140,7 @@ async function submit() {
   result.value = undefined
   await router.replace({ query: { ...route.query, operation: id, operationDevice: device } })
   try {
+    if (!alive || stamp !== context()) return
     const ok = await runWrite(() =>
       runtime.policies.native.create(device, {
         operationId: id,
@@ -133,6 +148,7 @@ async function submit() {
         deadline: Math.floor(Date.now() / 1000) + 3600,
       }),
     )
+    if (!alive || stamp !== context()) return
     if (ok) {
       action.value = undefined
       await lookup()

@@ -51,7 +51,8 @@ export function deviceStyles(): Plugin {
         },
       }).theme.styles.value
       // Scope the upstream reset/utilities so navigation, authentication and other workspaces retain their styles.
-      return `@scope (.mdm-device-surface) {\n${base}\n}\n${theme.replaceAll(':where(.mdm-device-surface) .v-theme--', ':where(.mdm-device-surface).v-theme--')}`
+      // Upstream root defaults (including overlay opacity) must live on the local scope root.
+      return `@scope (.mdm-device-surface) {\n${base.replaceAll(':root', ':scope')}\n}\n${theme.replaceAll(':where(.mdm-device-surface) .v-theme--', ':where(.mdm-device-surface).v-theme--')}`
     },
   }
 }

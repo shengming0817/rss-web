@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { VDialog, VCard, VCardActions } from 'vuetify/components'
+import { VDialog, VCard, VCardActions, VBtn } from 'vuetify/components'
 import { useDialogFocus } from '../../../ui/dialog-focus'
-import { VBtn } from 'vuetify/components'
 import { computed, ref, watch } from 'vue'
 
 import { useI18n } from 'vue-i18n'

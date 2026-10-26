@@ -23,3 +23,4 @@ window.matchMedia ??= (query: string) => ({
 beforeEach(() => {
   config.global.plugins = [createPinia(), createDeviceVuetify()]
 })
+Object.defineProperty(globalThis, 'visualViewport', { configurable: true, value: null })

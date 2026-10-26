@@ -8,6 +8,7 @@ export default defineConfig({
     name: 'mdm',
     root: fileURLToPath(new URL('.', import.meta.url)),
     environment: 'jsdom',
+    server: { deps: { inline: ['vuetify'] } },
     setupFiles: ['./src/test-setup.ts'],
     include: ['src/**/*.spec.ts', 'demo/**/*.spec.ts'],
     coverage: {

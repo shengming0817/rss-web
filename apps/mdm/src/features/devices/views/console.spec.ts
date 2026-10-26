@@ -208,14 +208,32 @@ async function setup(
     return result
   }
   const click = async (text: string) => {
+    await vi.waitFor(() => {
+      button(text)
+    })
     const target = button(text)
+    const href = target.attributes('href')
+    const before = router.currentRoute.value.fullPath
+    const directoryPage =
+      router.currentRoute.value.name === 'devices' && ['下一页', '上一页'].includes(text)
     await target.trigger(
-      target.attributes('role') === 'tab' && !target.attributes('href') ? 'mousedown' : 'click',
-      {
-        button: 0,
-        ctrlKey: false,
-      },
+      target.attributes('role') === 'tab' && !href && !target.classes().includes('v-tab')
+        ? 'mousedown'
+        : 'click',
+      { button: 0, ctrlKey: false },
     )
+    if (href?.startsWith('/'))
+      await vi.waitFor(() =>
+        expect(router.currentRoute.value.fullPath).toBe(router.resolve(href).fullPath),
+      )
+    if (directoryPage)
+      await vi.waitFor(() => expect(router.currentRoute.value.fullPath).not.toBe(before))
+    if (href?.startsWith('/') || directoryPage || text === '编辑人工资产信息') {
+      await vi.waitFor(() =>
+        expect(wrapper.find('section.console-page[aria-busy="true"]').exists()).toBe(false),
+      )
+    }
+    await flushPromises()
     await flushPromises()
   }
   if (name === 'device-search') {
@@ -261,7 +279,7 @@ it('renders server view counters, endpoint references, pagination and empty stat
   expect(wrapper.text()).toContain('device-21')
   scenario.set('empty')
   await click('重新读取')
-  expect(wrapper.text()).toContain('当前没有结果')
+  await vi.waitFor(() => expect(wrapper.text()).toContain('当前没有结果'))
 })
 it('opens the existing registration owner from a software source-policy deep link', async () => {
   const { wrapper, requests, router } = await setup(
@@ -903,6 +921,7 @@ it('administrator quota editing preserves exact commands after a lost response',
 })
 it('edits the canonical device owner in detail and locks an unknown write until explicit comparison and replay', async () => {
   const f = await setup('device-detail', { device: 'device-01' })
+  await f.click('概览')
   const panel = () => f.wrapper.get('[data-personnel-device="device-01"]')
   await panel().get('[data-action=edit-owner]').trigger('click')
   await flushPromises()
@@ -1095,16 +1114,25 @@ it('clears an associated endpoint selection and rejects removed or invalid query
   await flushPromises()
   await h.click('历史')
   await h.click('性能数据')
-  const selector = () => h.wrapper.get('select'),
-    target = selector()
-      .findAll('option')
-      .find((o) => o.attributes('value'))!
-      .attributes('value')!
+  const selector = () =>
+    h.wrapper
+      .findAllComponents(VSelect)
+      .find(
+        (component) => component.props('label') === h.i18n.global.t('devices.originalEndpoint'),
+      )!
+  const target = selector()
+    .props('items')!
+    .find((item) => item.value)!.value as string
+  const choose = async (value: string) => {
+    selector().vm.$emit('update:modelValue', value)
+    await vi.waitFor(() => expect(h.router.currentRoute.value.query['endpoint']).toBe(value))
+    await flushPromises()
+  }
   const performance = () => h.wrapper.findComponent({ name: 'DevicePerformance' })
-  await selector().setValue(target)
+  await choose(target)
   await flushPromises()
   expect(performance().props('device')).toBe(target)
-  await selector().setValue('')
+  await choose('')
   await flushPromises()
   expect(performance().exists()).toBe(false)
   expect(h.router.currentRoute.value.query['endpoint']).toBe('')
@@ -1119,10 +1147,10 @@ it('clears an associated endpoint selection and rejects removed or invalid query
     expect(performance().exists()).toBe(false)
   }
   await h.click('管理')
-  await selector().setValue(target)
+  await choose(target)
   await flushPromises()
   expect(h.wrapper.findComponent({ name: 'DeviceControlPanel' }).exists()).toBe(true)
-  await selector().setValue('')
+  await choose('')
   await flushPromises()
   expect(h.wrapper.findComponent({ name: 'DeviceControlPanel' }).exists()).toBe(false)
 })
@@ -1130,6 +1158,7 @@ it('restores an associated operation target while an explicit empty selection ke
   const h = await setup('device-detail', { device: 'device-01' })
   await chooseAssociation(h)
   await h.click('确认关联')
+  await vi.waitFor(() => expect(h.router.currentRoute.value.name).toBe('device-view-detail'))
   await flushPromises()
   const params = { ...h.router.currentRoute.value.params },
     operation = crypto.randomUUID()
@@ -1143,7 +1172,11 @@ it('restores an associated operation target while an explicit empty selection ke
   await flushPromises()
   const panel = () => h.wrapper.findComponent({ name: 'DeviceControlPanel' })
   expect(panel().props('endpoint')).toMatchObject({ id: 'device-01' })
-  await h.wrapper.get('select').setValue('')
+  h.wrapper
+    .findAllComponents(VSelect)
+    .find((component) => component.props('label') === h.i18n.global.t('devices.originalEndpoint'))!
+    .vm.$emit('update:modelValue', '')
+  await vi.waitFor(() => expect(h.router.currentRoute.value.query['endpoint']).toBe(''))
   await flushPromises()
   expect(panel().exists()).toBe(false)
   expect(h.router.currentRoute.value.query).toMatchObject({
@@ -1155,7 +1188,14 @@ it('restores an associated operation target while an explicit empty selection ke
   expect(panel().exists()).toBe(false)
   for (const section of ['历史', '性能数据', '管理']) {
     await h.click(section)
-    expect(h.wrapper.get('select').element.value).toBe('')
+    expect(
+      h.wrapper
+        .findAllComponents(VSelect)
+        .find(
+          (component) => component.props('label') === h.i18n.global.t('devices.originalEndpoint'),
+        )!
+        .props('modelValue'),
+    ).toBe('')
     expect(panel().exists()).toBe(false)
     expect(h.wrapper.findComponent({ name: 'DeviceActivity' }).exists()).toBe(false)
     expect(h.wrapper.findComponent({ name: 'DevicePerformance' }).exists()).toBe(false)
@@ -1454,10 +1494,7 @@ it('retains directory cursor and display columns when opening and returning from
   await vi.waitFor(() =>
     expect(f.wrapper.findAll('a').some((a) => a.text() === '返回设备目录')).toBe(true),
   )
-  await f.wrapper
-    .findAll('a')
-    .find((a) => a.text() === '返回设备目录')!
-    .trigger('click')
+  await f.click('返回设备目录')
   await flushPromises()
   expect(f.router.currentRoute.value.query).toEqual(query)
   expect(f.wrapper.text()).toContain('device-21')
@@ -1466,10 +1503,7 @@ it('retains directory cursor and display columns when opening and returning from
   await vi.waitFor(() =>
     expect(f.wrapper.findAll('a').some((a) => a.text() === '返回设备目录')).toBe(true),
   )
-  await f.wrapper
-    .findAll('a')
-    .find((a) => a.text() === '返回设备目录')!
-    .trigger('click')
+  await f.click('返回设备目录')
   await flushPromises()
   expect(f.router.currentRoute.value.query).toEqual(query)
   await f.click('上一页')
@@ -1484,7 +1518,7 @@ it('binds lock to the actual enrollment, clears its PIN, and queries an unknown 
   await dialog.get('form').trigger('submit')
   await flushPromises()
   expect(dialog.find('input[type=password]').exists()).toBe(false)
-  expect(f.wrapper.text()).toContain('提交结果未知')
+  await vi.waitFor(() => expect(f.wrapper.text()).toContain('提交结果未知'))
   const op = f.router.currentRoute.value.query['operation']
   expect(op).toBeTruthy()
   expect(
@@ -1499,8 +1533,8 @@ it('binds lock to the actual enrollment, clears its PIN, and queries an unknown 
     query: { operation: String(op), operationDevice: 'device-02' },
   })
   await flushPromises()
-  expect(f.router.currentRoute.value.query['operation']).toBeUndefined()
-  expect(f.wrapper.text()).toContain('unverified')
+  await vi.waitFor(() => expect(f.router.currentRoute.value.query['operation']).toBeUndefined())
+  await vi.waitFor(() => expect(f.wrapper.text()).toContain('unverified'))
   expect(
     f.requests.filter((r) => r.method === 'POST' && r.path.endsWith('/operations')),
   ).toHaveLength(1)
@@ -1518,7 +1552,7 @@ it('disables Windows lock and requires the displayed name before wipe', async ()
   expect(submit.attributes('disabled')).toBeUndefined()
   await dialog.get('form').trigger('submit')
   await flushPromises()
-  expect(f.wrapper.text()).toContain('unverified')
+  await vi.waitFor(() => expect(f.wrapper.text()).toContain('unverified'))
 })
 
 it('rejects an invalid condition locally without entering unknown-write recovery', async () => {
@@ -1537,7 +1571,7 @@ it('rejects an invalid condition locally without entering unknown-write recovery
 
 it('keeps Group save errors and exact unknown-write recovery inside its dialog', async () => {
   const { wrapper, requests, loseReply, scenario } = await setup('device-groups')
-  const dialog = new DOMWrapper(document.body).get('[role=dialog]')
+  const dialog = new DOMWrapper(document.body).get('[role=dialog][data-state=open]')
   await dialog.get('[data-testid=group-name]').setValue('Recover in current drawer')
   scenario.set('denied')
   await dialog.get('form').trigger('submit')
@@ -2005,15 +2039,17 @@ it('restarts an invalidated first page even when its route does not change', asy
   list.mockRejectedValueOnce(decodeMdmError(409, { code: 'device_view_cursor_invalidated' }))
   await f.wrapper.get('form').trigger('submit')
   await flushPromises()
+  await vi.waitFor(() =>
+    expect(f.wrapper.text()).toContain(f.i18n.global.t('devices.restartDirectory')),
+  )
   const before = f.router.currentRoute.value.fullPath
-  expect(f.wrapper.text()).toContain(f.i18n.global.t('devices.restartDirectory'))
   expect(f.wrapper.find('tbody').exists()).toBe(false)
   const calls = list.mock.calls.length
   await f.wrapper.get('input[type=search]').setValue('unsubmitted draft')
   await f.wrapper.get('form + p button').trigger('click')
   await flushPromises()
   expect(f.router.currentRoute.value.fullPath).toBe(before)
-  expect(list).toHaveBeenCalledTimes(calls + 1)
+  await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(calls + 1))
   expect(list.mock.lastCall![0]?.cursor).toBeUndefined()
   expect(list.mock.lastCall![0]?.filter).toBeUndefined()
   expect(f.wrapper.text()).toContain('device-01')
@@ -2037,7 +2073,7 @@ it('restarts an invalidated deep page with its applied filters and columns and o
   await f.wrapper.get('input[type=search]').setValue('unsubmitted draft')
   await f.wrapper.get('form + p button').trigger('click')
   await flushPromises()
-  expect(list).toHaveBeenCalledTimes(calls + 1)
+  await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(calls + 1))
   expect(f.router.currentRoute.value.query).toEqual({
     assetState: 'active',
     descending: 'true',
@@ -2055,7 +2091,7 @@ it('restarts an invalidated deep page with its applied filters and columns and o
   const before = list.mock.calls.length
   await f.wrapper.get('form').trigger('submit')
   await flushPromises()
-  expect(list).toHaveBeenCalledTimes(before + 1)
+  await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(before + 1))
   expect(f.router.currentRoute.value.query['cursor']).toBeUndefined()
   expect(f.router.currentRoute.value.query['trail']).toBeUndefined()
 })
@@ -2132,7 +2168,7 @@ it('keeps inventory filters in all fields and opens category facts in a detail d
   const row = f.wrapper.get('[data-asset-field="device.model"]')
   await row.get('button').trigger('click')
   await flushPromises()
-  const dialog = new DOMWrapper(document.body).get('[role=dialog]')
+  const dialog = new DOMWrapper(document.body).get('[role=dialog][data-state=open]')
   expect(dialog.text()).toContain('ThinkPad T14')
   await dialog
     .findAll('button')
@@ -2176,12 +2212,15 @@ it('does not apply a late manual inventory read after switching the selected ass
   )
   const select = f.wrapper
     .findAllComponents(VSelect)
-    .find((component) => component.props('label') === '原始端点')!
+    .find((component) => component.props('label') === f.i18n.global.t('devices.originalEndpoint'))!
   select.vm.$emit('update:modelValue', a)
+  await vi.waitFor(() => expect(f.router.currentRoute.value.query['endpoint']).toBe(a))
   await flushPromises()
   await f.button('编辑人工资产信息').trigger('click')
   await flushPromises()
+  await vi.waitFor(() => expect(typeof finish).toBe('function'))
   select.vm.$emit('update:modelValue', b)
+  await vi.waitFor(() => expect(f.router.currentRoute.value.query['endpoint']).toBe(b))
   await flushPromises()
   finish(inventoryA)
   await flushPromises()
@@ -2195,13 +2234,23 @@ it('does not apply a late manual inventory read after switching the selected ass
 it('keeps both original endpoint identities in the associated scalar field detail', async () => {
   const f = await setup('device-detail', { device: 'device-01' })
   await chooseAssociation(f)
+  const candidate = f.wrapper.get('[data-testid=association-panel] input[type=radio]:checked')
+    .element as HTMLInputElement
+  for (const device of ['device-01', candidate.value]) {
+    const inventory = await f.devices.assets.inventory(device)
+    await f.devices.assets.assign(device, 'custom.asset_tag', {
+      operationId: crypto.randomUUID(),
+      expectedRevision: inventory.revisions['custom.asset_tag'] ?? 0,
+      input: { action: 'set', value: { kind: 'string', value: 'TAG-' + device } },
+    })
+  }
   await f.click('确认关联')
   await vi.waitFor(() => expect(f.router.currentRoute.value.name).toBe('device-view-detail'))
   await f.click('资产信息')
   await f.click('未分组扩展字段')
   await f.wrapper.get('[data-asset-field="custom.asset_tag"] button').trigger('click')
   await flushPromises()
-  const dialog = new DOMWrapper(document.body).get('[role=dialog]')
+  const dialog = new DOMWrapper(document.body).get('[role=dialog][data-state=open]')
   const evidence = dialog.findAll('[data-source-endpoint]')
   expect(new Set(evidence.map((section) => section.attributes('data-source-endpoint'))).size).toBe(
     2,
@@ -2284,7 +2333,7 @@ it('retains the running rule definition when its drawer is closed and preview is
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   try {
     const h = await setup('device-groups')
-    let dialog = new DOMWrapper(document.body).get('[role=dialog]')
+    let dialog = new DOMWrapper(document.body).get('[role=dialog][data-state=open]')
     await dialog.get('[data-testid=group-name]').setValue('Pending rule owner')
     await dialog.get('[data-testid=group-kind]').setValue('dynamic')
     await dialog.get('form').trigger('submit')

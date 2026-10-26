@@ -295,3 +295,16 @@
 .device-panel-grid > div {
   min-width: 0;
 }
+/* Core link/button inheritance is unlayered; retain Vuetify's public semantic color contrast. */
+.mdm-device-surface .device-button.text-primary {
+  color: rgb(var(--v-theme-primary));
+}
+.mdm-device-surface .device-button.text-error {
+  color: rgb(var(--v-theme-error));
+}
+.mdm-device-surface .device-button.bg-primary {
+  color: rgb(var(--v-theme-on-primary));
+}
+.mdm-device-surface .device-button.bg-error {
+  color: rgb(var(--v-theme-on-error));
+}

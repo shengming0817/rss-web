@@ -340,7 +340,7 @@ const sourceOptions = computed(() => [
                     .map((e) =>
                       e.displayName?.state.kind === 'known'
                         ? e.displayName.state.value.value
-                        : t('devices.unnamedDevice'),
+                        : `${t('devices.unnamedDevice')} · ${e.id}`,
                     )
                     .join(' / ')
                 }}</RouterLink>

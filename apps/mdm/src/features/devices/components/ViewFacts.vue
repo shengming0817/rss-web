@@ -457,6 +457,7 @@ function summary(row: (typeof rows.value)[number]) {
     </div>
     <v-dialog
       v-model="detailOpen"
+      :data-state="detailOpen ? 'open' : 'closed'"
       :aria-label="t('devices.workspace.fieldDetails')"
       @after-leave="restoreFocus"
     >

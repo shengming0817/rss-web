@@ -264,6 +264,7 @@ watch(target, () => {
           v-for="item in ['overview', 'inventory', 'management', 'history']"
           :key="item"
           :value="item"
+          exact
           :to="destination(item, item === 'history' ? 'activity' : undefined)"
           >{{ t(item === 'inventory' ? 'devices.workspace.assets' : 'devices.' + item) }}</v-tab
         >
