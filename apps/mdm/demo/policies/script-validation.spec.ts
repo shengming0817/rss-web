@@ -1,7 +1,4 @@
-import {
-  defaultApplicability,
-  identityMapping,
-} from '../../src/features/policies/clients/collection-mapping'
+import { defaultApplicability, identityMapping } from '../../src/features/policies/collection-draft'
 import { createHash } from 'node:crypto'
 import { expect, it } from 'vitest'
 import { validateScriptVariant, validateScriptParameters } from './script-validation'

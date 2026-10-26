@@ -3,11 +3,9 @@ import type { createAutomationDemo } from './policies/state'
 import type { DemoRequest } from './scenario'
 import { ADMIN } from './operations/authorization'
 import { catalog } from './devices/fixtures'
-import {
-  defaultApplicability,
-  identityMapping,
-} from '../src/features/policies/clients/collection-mapping'
-import { profileBytes, telemetryProfile } from '../src/features/policies/clients/telemetry-profile'
+import { defaultApplicability, identityMapping } from '../src/features/policies/collection-draft'
+import { telemetryProfile } from '../src/features/policies/clients/telemetry-profile'
+import { telemetryBytes } from '../src/contracts/collection/canonical'
 export const DEMO_PROFILE = 'demo-telemetry-profile'
 export function seedTelemetry(automation: ReturnType<typeof createAutomationDemo>) {
   const actor = { principalId: ADMIN, sessionId: randomUUID() },
@@ -130,7 +128,7 @@ export function seedTelemetry(automation: ReturnType<typeof createAutomationDemo
     boost: null,
     backfillSeconds: 86400,
   })
-  publish(DEMO_PROFILE, 'telemetry_profile', profile, profileBytes(profile))
+  publish(DEMO_PROFILE, 'telemetry_profile', profile, telemetryBytes(profile))
   write('/api/v1/policies/99999999-9999-4999-8999-999999999999', {
     action: 'put',
     enabled: true,

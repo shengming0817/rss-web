@@ -100,6 +100,112 @@ try {
   await page.locator('button[type=submit]').click()
   await page.waitForURL((url) => url.pathname.startsWith('/tenants/'))
   csrf = (await api('GET', `/api/v1/identity/tenants/${fixture.tenant}/session`)).csrfToken
+  phase = 'generic-mapping-native-version-ui'
+  const nativeResource = randomUUID(),
+    customNative = 'custom.browser.native_name'
+  await write('PUT', `/api/v1/asset-fields/${customNative}`, {
+    action: 'put',
+    definition: {
+      key: customNative,
+      version: 1,
+      valueType: { kind: 'string', maxLength: 256, allowEmpty: false },
+      nullable: true,
+      manual: false,
+      sources: { 'mdm.windows': 0 },
+      platforms: ['windows'],
+      sensitivity: 'standard',
+      unit: null,
+      searchable: false,
+      itemKey: null,
+      timeSeries: null,
+    },
+  })
+  await write('PUT', '/api/v1/asset-fields/custom.browser.list', {
+    action: 'put',
+    definition: {
+      key: 'custom.browser.list',
+      version: 1,
+      valueType: {
+        kind: 'array',
+        maxItems: 100,
+        items: {
+          kind: 'record',
+          properties: {
+            id: {
+              required: true,
+              valueType: { kind: 'string', maxLength: 128, allowEmpty: false },
+            },
+            value: { required: false, valueType: { kind: 'number' } },
+          },
+        },
+      },
+      nullable: true,
+      manual: false,
+      sources: { 'agent.script': 0 },
+      platforms: ['macos'],
+      sensitivity: 'standard',
+      unit: null,
+      searchable: false,
+      itemKey: 'id',
+      timeSeries: null,
+    },
+  })
+  await write('POST', `/api/v1/resources/${nativeResource}`, {
+    action: 'instantiate',
+    blueprint: 'windows.identity',
+    version: '1',
+  })
+  const nativeBase = await api('GET', `/api/v1/resources/${nativeResource}`)
+  await page.goto(path(`policies/resources?resource=${nativeResource}&tab=content`))
+  const nativeEditor = page.getByTestId('collection-version')
+  await nativeEditor.getByLabel('基准版本', { exact: true }).selectOption('1')
+  await nativeEditor.getByLabel('新版本', { exact: true }).fill('browser-v2')
+  const fieldPicker = nativeEditor.getByTestId('collection-mappings')
+  await fieldPicker.getByLabel('字段', { exact: true }).selectOption(customNative)
+  await fieldPicker.getByRole('button', { name: '添加映射', exact: true }).click()
+  const physical = nativeEditor.getByLabel(`${customNative} · 物理读取来源`, { exact: true })
+  const sourceValue = await physical.locator('option').nth(1).getAttribute('value')
+  await physical.selectOption(sourceValue)
+  const versionResponse = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      new URL(r.url()).pathname === `/api/v1/resources/${nativeResource}` &&
+      r.request().postDataJSON()?.input?.action === 'version',
+  )
+  await nativeEditor.getByRole('button', { name: '生成并保存新版本', exact: true }).click()
+  assert.equal((await versionResponse).status(), 200)
+  await page.getByTestId('collection-upload-remaining').waitFor()
+  for (
+    let variantIndex = 0;
+    variantIndex < nativeBase.versions[0].variants.length;
+    variantIndex++
+  ) {
+    await page.getByRole('button', { name: '上传内容', exact: true }).click()
+    await page.locator('[data-action=complete-upload]').waitFor()
+    await page.locator('[data-action=complete-upload]').click()
+    await page.locator('[data-action=complete-upload]').waitFor({ state: 'hidden' })
+  }
+  await page.getByTestId('collection-upload-remaining').waitFor({ state: 'hidden' })
+  const nativeRead = await api('GET', `/api/v1/resources/${nativeResource}`)
+  const nativeVersion = nativeRead.versions.find((v) => v.id === 'browser-v2')
+  assert.equal(nativeVersion.variants.length, nativeBase.versions[0].variants.length)
+  assert.ok(nativeVersion.variants.some((v) => v.declaration.definition.mappings[customNative]))
+  await write(
+    'POST',
+    `/api/v1/resources/${nativeResource}`,
+    { action: 'activate', version: 'browser-v2' },
+    nativeRead.revision,
+  )
+  const refs = await api('GET', '/api/v1/asset-fields/device.name/references?limit=1')
+  assert.ok(refs.nextCursor)
+  const continued = await api(
+    'GET',
+    `/api/v1/asset-fields/device.name/references?limit=1&cursor=${encodeURIComponent(refs.nextCursor)}`,
+  )
+  assert.notDeepEqual(continued.mappings[0], refs.mappings[0])
+  coverage.push(
+    'generic-scalar-list-field-carriers-and-native-mapping-version-all-variants-canonical-upload-activation-reference-continuation',
+  )
   phase = 'formal-fields-and-template'
   await write('POST', '/api/v1/asset-retention-policies', {
     key: 'browser_telemetry',
@@ -262,7 +368,10 @@ try {
     .check()
   await dialog.getByRole('button', { name: '确认发布策略变更', exact: true }).click()
   await dialog.waitFor({ state: 'hidden' })
-  const policies = await api('GET', `/api/v1/policies?action=telemetry_profile&resource=${profile}`)
+  const policies = await api(
+    'GET',
+    `/api/v1/policies?filter=${encodeURIComponent("action=='telemetry_profile';resource=='" + profile + "'")}`,
+  )
   assert.equal(policies.items.length, 1)
   const policy = policies.items[0]
   coverage.push(
