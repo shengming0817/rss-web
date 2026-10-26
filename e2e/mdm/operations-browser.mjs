@@ -343,9 +343,13 @@ try {
   const diagnostics = await get('/api/v1/runtime/diagnostics')
   assert.ok(diagnostics.components.some((c) => c.name === 'inventory'))
   assert.ok(diagnostics.components.some((c) => c.name === 'execution_recovery'))
-  assert.ok(diagnostics.components.find((c) => c.name === 'audit_source')?.auditBacklog)
-  for (const name of ['identity_audit', 'audit_projection'])
-    assert.equal(diagnostics.components.find((c) => c.name === name)?.readiness, 'not_applicable')
+  assert.deepEqual(diagnostics.components.map((c) => c.name).sort(), [
+    'automation',
+    'execution_recovery',
+    'initialization',
+    'inventory',
+    'telemetry',
+  ])
   assert.deepEqual(diagnostics.channels.map((c) => c.name).sort(), [
     'agent',
     'agent_bootstrap',
@@ -361,10 +365,8 @@ try {
     await page.locator('[data-testid=channel-facts] article').count(),
     diagnostics.channels.length,
   )
-  await page.getByRole('button', { name: 'Audit source · 审计源持久化', exact: true }).click()
-  await page.getByTestId('audit-backlog').waitFor()
-  assert.equal(await page.getByTestId('audit-backlog').locator('dd').count(), 10)
-  assert.ok((await page.getByTestId('audit-backlog').textContent()).includes('明细仅属于业务租户'))
+  await page.getByRole('button', { name: 'Inventory · 资产投影', exact: true }).click()
+  await page.getByTestId('diagnostic-detail').waitFor()
   await changeRule(
     fixture.rule.grants.filter(
       (g) => !['audit_read', 'runtime_diagnostics_read'].includes(g.operation),

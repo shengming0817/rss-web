@@ -37,9 +37,6 @@ const reasons = [
   'ownership_lost',
   'work_rejected',
   'observation_limit',
-  'audit_backlog_warning',
-  'audit_backpressure',
-  'audit_reserve_exhausted',
 ] as const
 const reason = (v: unknown) => enumeration(v, reasons)
 function run(value: unknown) {
@@ -97,7 +94,6 @@ export function runtimeSnapshot(value: unknown) {
                 'bridge',
                 'runner',
                 'dispatch',
-                'auditBacklog',
               ].includes(k),
           )
         )
@@ -107,9 +103,6 @@ export function runtimeSnapshot(value: unknown) {
             'initialization',
             'telemetry',
             'inventory',
-            'identity_audit',
-            'audit_source',
-            'audit_projection',
             'automation',
             'execution_recovery',
           ] as const),
@@ -205,35 +198,6 @@ export function runtimeSnapshot(value: unknown) {
                     completedPassAgeMs: nullable(p['completedPassAgeMs'], count),
                     sourceObservationAgeMs: nullable(p['sourceObservationAgeMs'], count),
                     applied: nullable(p['applied'], count),
-                  }
-                })(),
-          auditBacklog:
-            c['auditBacklog'] === undefined
-              ? null
-              : (() => {
-                  const b = closed(c['auditBacklog'], [
-                    'events',
-                    'sourceBytes',
-                    'reservedEvents',
-                    'reservedSourceBytes',
-                    'maxEvents',
-                    'maxSourceBytes',
-                    'oldestSeconds',
-                    'warning',
-                    'admissionClosed',
-                    'reserveExhausted',
-                  ])
-                  return {
-                    events: count(b['events']),
-                    sourceBytes: count(b['sourceBytes']),
-                    reservedEvents: count(b['reservedEvents']),
-                    reservedSourceBytes: count(b['reservedSourceBytes']),
-                    maxEvents: count(b['maxEvents']),
-                    maxSourceBytes: count(b['maxSourceBytes']),
-                    oldestSeconds: nullable(b['oldestSeconds'], count),
-                    warning: boolean(b['warning']),
-                    admissionClosed: boolean(b['admissionClosed']),
-                    reserveExhausted: boolean(b['reserveExhausted']),
                   }
                 })(),
           bridge: c['bridge'] === undefined ? null : run(c['bridge']),

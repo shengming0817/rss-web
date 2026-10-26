@@ -66,7 +66,7 @@ watch(
       <UiTable
         :label="t('operations.audit')"
         :rows="page.items"
-        :row-key="(v) => `${v.source}/${v.position}/${v.eventId}`"
+        :row-key="(v) => `${v.source}/${v.eventId}`"
         :busy="busy"
         :busy-label="t('devices.loading')"
         :empty-label="t('operations.emptyAudit')"

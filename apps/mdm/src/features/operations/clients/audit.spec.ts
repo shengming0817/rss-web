@@ -31,7 +31,7 @@ it('uses the same safe projection and exact formal query names for audit and dev
   const page = {
     items: [fact],
     nextCursor: 'opaque',
-    coverage: { indexedThrough: 17, sourceThrough: 20, complete: false },
+    coverage: { complete: false },
   }
   const request = vi.fn(async (o: RequestOptions<unknown>) => o.decode(page))
   const transport = { request } as unknown as HttpTransport
@@ -69,7 +69,7 @@ it('rejects sensitive fields, retired envelopes and malformed filter bindings', 
   const page = {
     items: [fact],
     nextCursor: null,
-    coverage: { indexedThrough: null, sourceThrough: null, complete: false },
+    coverage: { complete: false },
   }
   expect(timelinePage(page).items[0]?.recordedAt).toBe(1760000000)
   expect(() =>

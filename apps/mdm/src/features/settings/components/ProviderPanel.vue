@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { UiButton, UiMessage } from '@rss/core/components'
 import { useMdm } from '../../../context'
@@ -27,21 +27,11 @@ const {
   compared,
   markCompared,
 } = useSettingsAction(() => props.kind)
-type Directory = {
-  revision: number
-  desiredRevision: number | null
-  versions: {
-    revision: number
-    operationId: string
-    state?: string
-    selected?: boolean
-    revoked?: boolean
-    failureReason: string | null
-    qualifiedAt?: number | null
-    acceptedAt?: number | null
-    expiresAt?: number | null
-  }[]
-}
+type Directory =
+  | Awaited<ReturnType<typeof runtime.settings.storage.read>>
+  | Awaited<ReturnType<typeof runtime.settings.mail.read>>
+  | Awaited<ReturnType<typeof runtime.settings.wns.read>>
+type Version = NonNullable<Directory['current']>
 const directory = ref<Directory>(),
   profile = ref(''),
   sender = ref(''),
@@ -56,7 +46,32 @@ const directory = ref<Directory>(),
   secretKey = ref(''),
   sessionToken = ref(''),
   expires = ref(''),
-  materialRevision = ref(0)
+  materialRevision = ref(0),
+  history = ref<Version[]>([]),
+  historyCursor = ref<string | null>(null)
+const client = computed(() =>
+  props.kind === 'storage'
+    ? runtime.settings.storage
+    : props.kind === 'smtp'
+      ? runtime.settings.mail
+      : runtime.settings.wns,
+)
+const currentVersions = computed(() => [
+  ...new Map(
+    [directory.value?.current, directory.value?.latest, directory.value?.applied].flatMap((v) =>
+      v ? [[v.revision, v] as const] : [],
+    ),
+  ).values(),
+])
+async function loadHistory(cursor?: string) {
+  await run<{ items: Version[]; nextCursor: string | null }>(
+    () => client.value.history({ cursor }),
+    (page) => {
+      history.value = cursor ? [...history.value, ...page.items] : page.items
+      historyCursor.value = page.nextCursor
+    },
+  )
+}
 function clear() {
   password.value = ''
   username.value = ''
@@ -76,6 +91,8 @@ async function read(): Promise<Directory> {
 }
 async function load() {
   directory.value = undefined
+  history.value = []
+  historyCursor.value = null
   return run(read, (v) => (directory.value = v))
 }
 async function compare() {
@@ -190,6 +207,8 @@ async function revoke(replay = false) {
 onMounted(load)
 useSettingsFacts(() => {
   directory.value = undefined
+  history.value = []
+  historyCursor.value = null
 })
 </script>
 <template>
@@ -213,9 +232,22 @@ useSettingsFacts(() => {
   <MaterialVersions
     v-if="directory"
     :revision="directory.revision"
-    :desired-revision="directory.desiredRevision"
-    :versions="directory.versions"
+    :desired-revision="directory.activeRevision"
+    :versions="currentVersions"
   />
+  <section v-if="directory" class="console-panel">
+    <p>{{ t('settings.historyCount', { count: directory.versionCount }) }}</p>
+    <UiButton :disabled="busy" @click="loadHistory()">{{ t('settings.history') }}</UiButton>
+    <MaterialVersions
+      v-if="history.length"
+      :revision="directory.revision"
+      :desired-revision="directory.activeRevision"
+      :versions="history"
+    />
+    <UiButton v-if="historyCursor" :disabled="busy" @click="loadHistory(historyCursor)">{{
+      t('settings.next')
+    }}</UiButton>
+  </section>
   <form class="settings-form" @submit.prevent="save()">
     <fieldset :disabled="busy || !canWrite || !directory">
       <legend>{{ t('settings.save') }}</legend>
@@ -298,7 +330,7 @@ useSettingsFacts(() => {
         }}<select v-model.number="materialRevision" required>
           <option :value="0" disabled>{{ t('settings.select') }}</option>
           <option
-            v-for="v in directory?.versions.filter((v) => !v.revoked)"
+            v-for="v in currentVersions.filter((v) => !('revoked' in v && v.revoked))"
             :key="v.revision"
             :value="v.revision"
           >

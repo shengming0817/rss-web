@@ -68,10 +68,7 @@ watch(
     <template v-if="result">
       <AuditCoverage :coverage="result.coverage" />
       <ol class="telemetry-activity">
-        <li
-          v-for="event in result.items"
-          :key="`${event.source}/${event.position}/${event.eventId}`"
-        >
+        <li v-for="event in result.items" :key="`${event.source}/${event.eventId}`">
           <time>{{ auditTime(event.recordedAt) }}</time>
           <div>
             <strong>{{ event.action }}</strong>

@@ -292,12 +292,9 @@ it('serves the current audit source and projection contract in normal and partia
     const response = await server.handle('GET', '/api/v1/runtime/diagnostics')
     expect(response.status).toBe(200)
     const snapshot = runtimeSnapshot(response.body)
-    expect(snapshot.components.find((c) => c.name === 'audit_source')?.auditBacklog).toMatchObject({
-      events: scenario === 'partial' ? 80 : 0,
-      warning: scenario === 'partial',
-      admissionClosed: false,
-    })
-    for (const name of ['identity_audit', 'audit_projection'])
-      expect(snapshot.components.find((c) => c.name === name)?.readiness).toBe('not_applicable')
+    expect(snapshot.components.some((c) => c.name === 'inventory')).toBe(true)
+    expect(snapshot.components.map((c) => c.name)).toEqual(
+      expect.arrayContaining(['initialization', 'automation', 'execution_recovery']),
+    )
   }
 })

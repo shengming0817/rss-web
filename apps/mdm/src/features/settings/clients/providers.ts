@@ -1,7 +1,7 @@
+import { windowParameters, windowPage } from '../../../services/directory-query'
 import { operationReceipt, positive } from './value'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
-  array,
   boolean,
   closed,
   count,
@@ -9,7 +9,6 @@ import {
   nullable,
   uuid,
   string,
-  unique,
 } from '../../../services/decode'
 function receiptHead(value: unknown, keys: string[]) {
   return closed(value, ['operationId', 'revision', ...keys])
@@ -88,16 +87,21 @@ export function wnsOperation(value: unknown) {
     },
   }
 }
-function directory<T extends { revision: number }>(
+function providerState<T extends { revision: number }>(
   value: unknown,
-  selected: 'desiredRevision' | 'selectedRevision',
+  selection: 'desiredRevision' | 'selectedRevision',
   decode: (v: unknown) => T,
 ) {
-  const v = closed(value, ['revision', selected, 'versions'])
+  const keys = ['revision', selection, 'versionCount', 'current', 'latest']
+  if (selection === 'desiredRevision') keys.push('applied')
+  const v = closed(value, keys)
   return {
     revision: count(v['revision']),
-    desiredRevision: nullable(v[selected], positive),
-    versions: unique(array(v['versions'], decode), (v) => v.revision),
+    activeRevision: nullable(v[selection], positive),
+    versionCount: count(v['versionCount']),
+    current: nullable(v['current'], decode),
+    latest: nullable(v['latest'], decode),
+    applied: selection === 'desiredRevision' ? nullable(v['applied'], decode) : null,
   }
 }
 export type StorageInput = {
@@ -134,7 +138,15 @@ export function createStorageClient(transport: HttpTransport) {
         method: 'GET',
         path: '/api/v1/storage/connections',
         successStatus: 200,
-        decode: (v) => directory(v, 'desiredRevision', storageReceipt),
+        decode: (v) => providerState(v, 'desiredRevision', storageReceipt),
+      }),
+    history: (query: { limit?: number | undefined; cursor?: string | undefined } = {}) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/storage/connections/versions',
+        query: windowParameters({ limit: 64, ...query }),
+        successStatus: 200,
+        decode: (v) => windowPage(v, storageReceipt),
       }),
     operation: (id: string) =>
       transport.request({
@@ -166,7 +178,15 @@ export function createMailClient(transport: HttpTransport) {
         method: 'GET',
         path: '/api/v1/smtp',
         successStatus: 200,
-        decode: (v) => directory(v, 'selectedRevision', mailReceipt),
+        decode: (v) => providerState(v, 'selectedRevision', mailReceipt),
+      }),
+    history: (query: { limit?: number | undefined; cursor?: string | undefined } = {}) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/smtp/versions',
+        query: windowParameters({ limit: 64, ...query }),
+        successStatus: 200,
+        decode: (v) => windowPage(v, mailReceipt),
       }),
     operation: (id: string) =>
       transport.request({
@@ -198,7 +218,15 @@ export function createWnsClient(transport: HttpTransport) {
         method: 'GET',
         path: '/api/v1/windows/wns',
         successStatus: 200,
-        decode: (v) => directory(v, 'desiredRevision', wnsReceipt),
+        decode: (v) => providerState(v, 'desiredRevision', wnsReceipt),
+      }),
+    history: (query: { limit?: number | undefined; cursor?: string | undefined } = {}) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/windows/wns/versions',
+        query: windowParameters({ limit: 64, ...query }),
+        successStatus: 200,
+        decode: (v) => windowPage(v, wnsReceipt),
       }),
     operation: (id: string) =>
       transport.request({

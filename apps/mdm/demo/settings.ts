@@ -1,3 +1,4 @@
+import { directoryPage } from './directory'
 import { createConnectionsDemo } from './connections'
 import { createManagementAuthorizationDemo } from './management-authorization'
 import { createPkiDemo } from './pki'
@@ -58,8 +59,7 @@ export function createSettingsDemo() {
     const platform = r.actor.tenantId === MANAGEMENT_TENANT
     if (r.path === '/api/v1/runtime/diagnostics' && r.method === 'GET') {
       if (platform || scenario === 'denied') return error('permission_denied', 403)
-      const partial = scenario === 'partial',
-        at = Math.floor(Date.now() / 1000)
+      const partial = scenario === 'partial'
       return ok({
         alive: true,
         channels: ['apple', 'windows', 'agent', 'windows_push', 'agent_bootstrap', 'signing'].map(
@@ -113,38 +113,6 @@ export function createSettingsDemo() {
             reasons: ['unobserved'],
             queues: [{ name: 'pending', count: null, truncated: null }],
             runner: { scan: null, unresolvedAttempts: 0, truncated: false, latestFailure: null },
-          },
-          {
-            name: 'identity_audit',
-            readiness: 'not_applicable',
-            health: 'healthy',
-            reasons: [],
-            bridge: { successful: true, observedAt: at },
-          },
-          {
-            name: 'audit_source',
-            readiness: 'ready',
-            health: partial ? 'degraded' : 'healthy',
-            reasons: partial ? ['audit_backlog_warning'] : [],
-            auditBacklog: {
-              events: partial ? 80 : 0,
-              sourceBytes: partial ? 800 : 0,
-              reservedEvents: 0,
-              reservedSourceBytes: 0,
-              maxEvents: 100,
-              maxSourceBytes: 1000,
-              oldestSeconds: partial ? 301 : null,
-              warning: partial,
-              admissionClosed: false,
-              reserveExhausted: false,
-            },
-          },
-          {
-            name: 'audit_projection',
-            readiness: 'not_applicable',
-            health: partial ? 'degraded' : 'healthy',
-            reasons: partial ? ['delivery_retrying'] : [],
-            task: 'running',
           },
           ...(!partial
             ? [
@@ -214,9 +182,21 @@ export function createSettingsDemo() {
     if (r.path.startsWith('/api/v1/tenant-administration/')) {
       if (!platform) return error('permission_denied', 403)
       const base = '/api/v1/tenant-administration'
-      if (r.method === 'GET' && r.path === base + '/tenants') return ok({ items: tenants })
+      if (r.method === 'GET' && r.path === base + '/tenants')
+        return ok(directoryPage(tenants, r, ['tenantId'], { defaultLimit: 100 }))
+      if (r.method === 'GET' && r.path.startsWith(base + '/tenants/')) {
+        const value = tenants.find((v) => v.tenantId === r.path.split('/').at(-1))
+        return value ? ok(value) : error('resource_not_found', 404)
+      }
       if (r.method === 'GET' && r.path === base + '/provisionings')
-        return ok({ items: [...operations.values()].map((v) => v.receipt), nextAfter: null })
+        return ok(
+          directoryPage(
+            [...operations.values()].map((v) => v.receipt as Record<string, unknown>),
+            r,
+            ['operationId'],
+            { defaultLimit: 100 },
+          ),
+        )
       if (r.method === 'GET' && r.path.startsWith(base + '/provisionings/')) {
         const old = operations.get(r.path.split('/').at(-1)!)
         return old ? ok(old.receipt) : error('operation_not_found', 404)
@@ -255,6 +235,14 @@ export function createSettingsDemo() {
       return error('action_not_supported', 501)
     }
     if (r.method === 'GET') {
+      if (
+        [
+          '/api/v1/smtp/versions',
+          '/api/v1/storage/connections/versions',
+          '/api/v1/windows/wns/versions',
+        ].includes(r.path)
+      )
+        return ok({ items: [], nextCursor: null })
       if (/^\/api\/v1\/apple\/materials\/(apns|profile|managed_account)$/.test(r.path))
         return ok({
           revision: 0,
@@ -264,9 +252,22 @@ export function createSettingsDemo() {
           accountBindings: {},
         })
       if (r.path === '/api/v1/storage/connections' || r.path === '/api/v1/windows/wns')
-        return ok({ revision: 0, desiredRevision: null, versions: [] })
+        return ok({
+          revision: 0,
+          desiredRevision: null,
+          versionCount: 0,
+          current: null,
+          latest: null,
+          applied: null,
+        })
       if (r.path === '/api/v1/smtp')
-        return ok({ revision: 0, selectedRevision: null, versions: [] })
+        return ok({
+          revision: 0,
+          selectedRevision: null,
+          versionCount: 0,
+          current: null,
+          latest: null,
+        })
       if (r.path === '/api/v1/webhooks/materials')
         return ok({ configurationSha256: '0'.repeat(64), keys: { heads: [], materials: [] } })
     }

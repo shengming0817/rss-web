@@ -309,9 +309,35 @@ it('preserves provider-specific states, qualification times and WNS tagged opera
   await wnsClient.revoke(a, { expectedRevision: 1, materialRevision: 1 })
   await expect(wnsClient.operation(c)).rejects.toThrow()
   for (const [kind, value, client] of [
-    ['storage', { revision: 1, desiredRevision: null, versions: [storage] }, createStorageClient],
-    ['mail', { revision: 1, selectedRevision: 1, versions: [mail] }, createMailClient],
-    ['wns', { revision: 1, desiredRevision: null, versions: [wns] }, createWnsClient],
+    [
+      'storage',
+      {
+        revision: 1,
+        desiredRevision: null,
+        versionCount: 1,
+        current: null,
+        latest: storage,
+        applied: null,
+      },
+      createStorageClient,
+    ],
+    [
+      'mail',
+      { revision: 1, selectedRevision: 1, versionCount: 1, current: mail, latest: mail },
+      createMailClient,
+    ],
+    [
+      'wns',
+      {
+        revision: 1,
+        desiredRevision: null,
+        versionCount: 1,
+        current: null,
+        latest: wns,
+        applied: null,
+      },
+      createWnsClient,
+    ],
   ] as const) {
     const f = transport(value)
     expect((await client(f.client).read()).revision, kind).toBe(1)
@@ -358,9 +384,9 @@ it('keeps provisioning pending and binds metadata and administrator receipts to 
   })
   expect(f.calls[0]?.successStatus).toEqual([200, 202])
   await client.operation(a)
-  const d = transport({ items: [t] })
+  const d = transport({ items: [t], nextCursor: null })
   await createPlatformClient(d.client).tenants()
-  const p = transport({ items: [provision], nextAfter: null })
+  const p = transport({ items: [provision], nextCursor: null })
   await createPlatformClient(p.client).provisionings()
   const u = transport({ operationId: a, action: 'update', result: t })
   await createPlatformClient(u.client).update(b, a, 1, { name: 'Changed', notes: null })
@@ -579,83 +605,17 @@ it('rejects retired task origin and PKI documents without stable identity', () =
   expect(() => pkiTrust(oldPki, b, 'agent')).toThrow()
 })
 
-it('decodes current audit source capacity and independent projector health without legacy defaults', () => {
-  const backlog = {
-    events: 80,
-    sourceBytes: 800,
-    reservedEvents: 1,
-    reservedSourceBytes: 10,
-    maxEvents: 100,
-    maxSourceBytes: 1000,
-    oldestSeconds: 301,
-    warning: true,
-    admissionClosed: false,
-    reserveExhausted: false,
-  }
-  const source = {
-    name: 'audit_source',
-    readiness: 'ready',
-    health: 'degraded',
-    reasons: ['audit_backlog_warning'],
-    auditBacklog: backlog,
-  }
-  const snapshot = (component: unknown) => ({
+it('decodes current runtime components and rejects retired component shapes', () => {
+  const value = {
     alive: true,
     ready: true,
     channels: [],
     components: [
-      component,
-      {
-        name: 'audit_projection',
-        readiness: 'not_applicable',
-        health: 'degraded',
-        reasons: ['delivery_retrying'],
-        task: 'running',
-      },
+      { name: 'inventory', readiness: 'ready', health: 'unknown', reasons: ['unobserved'] },
     ],
-  })
-  expect(runtimeSnapshot(snapshot(source)).components).toMatchObject([
-    { auditBacklog: backlog },
-    {
-      name: 'audit_projection',
-      readiness: 'not_applicable',
-      health: 'degraded',
-      auditBacklog: null,
-    },
-  ])
-  expect(
-    runtimeSnapshot(
-      snapshot({
-        ...source,
-        auditBacklog: {
-          ...backlog,
-          events: 0,
-          sourceBytes: 0,
-          reservedEvents: 0,
-          reservedSourceBytes: 0,
-          oldestSeconds: null,
-          warning: false,
-        },
-      }),
-    ).components[0]?.auditBacklog?.oldestSeconds,
-  ).toBeNull()
-  for (const invalid of [
-    { ...backlog, events: -1 },
-    { ...backlog, sourceBytes: Number.MAX_SAFE_INTEGER + 1 },
-    { ...backlog, oldestSeconds: '301' },
-    { ...backlog, admissionClosed: 1 },
-    { ...backlog, secret: 'unexpected' },
-    { events: 0 },
-    null,
-  ])
-    expect(() => runtimeSnapshot(snapshot({ ...source, auditBacklog: invalid }))).toThrow()
-  expect(
-    runtimeSnapshot(
-      snapshot({
-        ...source,
-        readiness: 'not_ready',
-        reasons: ['audit_backpressure', 'audit_reserve_exhausted'],
-      }),
-    ).components[0]?.reasons,
-  ).toEqual(['audit_backpressure', 'audit_reserve_exhausted'])
+  }
+  expect(runtimeSnapshot(value).components[0]?.name).toBe('inventory')
+  expect(() =>
+    runtimeSnapshot({ ...value, components: [{ ...value.components[0], name: 'unknown' }] }),
+  ).toThrow()
 })

@@ -21,9 +21,6 @@ const expected = [
   'automation',
   'execution_recovery',
   'initialization',
-  'identity_audit',
-  'audit_source',
-  'audit_projection',
   'telemetry',
 ] as const
 const missing = computed(() =>
@@ -151,53 +148,7 @@ watch(
             }}
           </dd>
         </dl>
-        <section
-          v-if="selected.name === 'audit_source'"
-          class="console-panel"
-          data-testid="audit-backlog"
-        >
-          <h3>{{ t('operations.diagnosticUi.backlog.title') }}</h3>
-          <p class="ui-help">{{ t('operations.diagnosticUi.backlog.scopeHint') }}</p>
-          <dl v-if="selected.auditBacklog" class="settings-facts">
-            <template
-              v-for="key in [
-                'events',
-                'sourceBytes',
-                'reservedEvents',
-                'reservedSourceBytes',
-                'maxEvents',
-                'maxSourceBytes',
-              ] as const"
-              :key="key"
-            >
-              <dt>{{ t('operations.diagnosticUi.backlog.' + key) }}</dt>
-              <dd>{{ selected.auditBacklog[key] }}</dd>
-            </template>
-            <dt>{{ t('operations.diagnosticUi.backlog.oldestSeconds') }}</dt>
-            <dd>
-              {{
-                selected.auditBacklog.oldestSeconds === null
-                  ? t('operations.diagnosticUi.backlog.empty')
-                  : selected.auditBacklog.oldestSeconds
-              }}
-            </dd>
-            <template
-              v-for="key in ['warning', 'admissionClosed', 'reserveExhausted'] as const"
-              :key="key"
-            >
-              <dt>{{ t('operations.diagnosticUi.backlog.' + key) }}</dt>
-              <dd>{{ bool(selected.auditBacklog[key]) }}</dd>
-            </template>
-          </dl>
-          <p v-else>{{ notObserved() }}</p>
-          <p class="ui-help">{{ t('operations.diagnosticUi.backlog.bytesHint') }}</p>
-        </section>
-        <p
-          v-if="selected.name === 'identity_audit' || selected.name === 'audit_projection'"
-          class="ui-help"
-        >
-          {{ t('operations.diagnosticUi.projectionHint') }}
-        </p>
+
         <section v-if="selected.dependencies.length" class="console-panel">
           <h3>{{ t('operations.diagnosticUi.dependencies') }}</h3>
           <dl

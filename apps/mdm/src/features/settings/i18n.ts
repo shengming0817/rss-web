@@ -1,4 +1,6 @@
 export const settingsZh = {
+  history: '版本历史',
+  historyCount: '历史版本共 {count} 个；当前摘要不是完整历史。',
   connections: {
     title: 'Agent 连接配置',
     service: '稳定服务身份',
@@ -620,6 +622,8 @@ export const settingsEn = {
   reload: 'Reload',
   open: 'Open',
   next: 'Next',
+  history: 'Version history',
+  historyCount: '{count} historical versions; the current summary is not the full history.',
   previous: 'Previous',
   finish: 'Complete setup',
   selectChannels: 'Choose enrollment channels',
