@@ -1,3 +1,4 @@
+import { decodeCapability, decodeSelector, toolName, type CapabilitySelector } from './addressing'
 import {
   queryParameters,
   windowParameters,
@@ -20,6 +21,7 @@ import {
 } from '../../../services/decode'
 import {
   decodePolicy,
+  policyName,
   policyAction,
   policyDefinition,
   eligibility,
@@ -36,6 +38,9 @@ import {
 
 const policyFields = {
   id: uuid,
+  toolName,
+  alias: (v: unknown) => nullable(v, policyName),
+  customEvent: (v: unknown) => nullable(v, policyName),
   revision: count,
   version: count,
   versionId: uuid,
@@ -191,7 +196,38 @@ export function createPoliciesClient(transport: HttpTransport) {
         successStatus: 200,
         decode(value) {
           const page = projectedPage(value, policyFields, query.fields, ['id'])
+          for (const row of page.items)
+            if (
+              'id' in row &&
+              'toolName' in row &&
+              row.toolName !== `policy_${String(row.id).replaceAll('-', '')}`
+            )
+              throw new Error('Wrong tool identity')
           return page
+        },
+      }),
+    resolve: (selector: CapabilitySelector) =>
+      transport.request({
+        method: 'POST',
+        path: '/api/v1/policies/resolve',
+        body: decodeSelector(selector),
+        successStatus: 200,
+        decode(value) {
+          const v = closed(value, ['capability', 'policy'])
+          const policy = decodePolicy(v['policy']),
+            capability = decodeCapability(v['capability'])
+          if (
+            capability.id !== policy.id ||
+            capability.revision !== policy.revision ||
+            capability.version !== policy.versionId ||
+            capability.alias !== policy.definition.alias ||
+            policy.state === 'archived' ||
+            (selector.kind === 'id' && selector.id !== policy.id) ||
+            (selector.kind === 'tool_name' && selector.name !== capability.toolName) ||
+            (selector.kind === 'alias' && policyName(selector.alias) !== capability.alias)
+          )
+            throw new Error('Wrong resolved Policy')
+          return { capability, policy }
         },
       }),
     read: (id: string) =>

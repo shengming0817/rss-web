@@ -3,6 +3,9 @@ import type { PreviewInput } from '../clients/policies'
 
 import { comparison as queryComparison, allOf } from '../../../services/directory-query'
 import { ref, toRaw, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import PolicyIdentityEditor from '../components/PolicyIdentityEditor.vue'
+import PolicyEntry from '../components/PolicyEntry.vue'
 import { useI18n } from 'vue-i18n'
 import { UiButton } from '@rss/core/components'
 import { useMdm } from '../../../context'
@@ -20,9 +23,12 @@ import AssignmentFacts from '../components/AssignmentFacts.vue'
 import CatalogLocator from '../components/CatalogLocator.vue'
 import RetirementDetails from '../../devices/components/RetirementDetails.vue'
 import PageFrame from '../../../components/PageFrame.vue'
-const runtime = useMdm(),
+const route = useRoute(),
+  runtime = useMdm(),
   client = runtime.policies.policies,
   { t } = useI18n()
+const alias = ref<string | null>(null),
+  customEvent = ref<string | null>(null)
 const id = ref(crypto.randomUUID() as string),
   current = ref<PolicyRead>(),
   scope = ref(''),
@@ -65,9 +71,9 @@ function definition(): PolicyDefinition {
           : { kind: credential.value, sid: sid.value }
   return policyDefinition({
     ...current.value?.definition,
-    customEvent: current.value?.definition.customEvent ?? null,
+    customEvent: customEvent.value,
     scope: scope.value,
-    alias: current.value?.definition.alias ?? null,
+    alias: alias.value,
     action:
       kind.value === 'unmanage_device'
         ? { kind: kind.value, schedule: toRaw(schedule.value), runLifetimeSeconds: duration.value }
@@ -85,6 +91,8 @@ function apply(p: PolicyRead) {
   if (p.definition.action.kind !== 'unmanage_device' && p.definition.action.kind !== 'credential')
     throw new Error('Wrong policy action')
   current.value = p
+  alias.value = p.definition.alias
+  customEvent.value = p.definition.customEvent
   id.value = p.id
   scope.value = p.definition.scope
   kind.value = p.definition.action.kind
@@ -124,6 +132,8 @@ async function read(policy = (pending.value?.input as { id: string } | undefined
 function fresh() {
   if (locked.value) return
   current.value = undefined
+  alias.value = null
+  customEvent.value = null
   id.value = crypto.randomUUID()
   scope.value = ''
   enabled.value = false
@@ -257,6 +267,8 @@ async function check(cursor?: string) {
 watch(
   () => JSON.stringify(deviceBinding(runtime)),
   () => {
+    alias.value = null
+    customEvent.value = null
     current.value = undefined
     rows.value = undefined
     assignments.value = undefined
@@ -279,14 +291,25 @@ watch(
   [kind, state],
   () => {
     rows.value = undefined
-    void load()
+    if (typeof route.query['id'] === 'string' && !current.value) void read(route.query['id'])
+    else void load()
   },
   { immediate: true },
+)
+watch(
+  () => route.query['id'],
+  (value) => {
+    if (typeof value === 'string') void read(value)
+  },
 )
 </script>
 <template>
   <PageFrame :title="t('gap.lifecycle')" :busy="busy" :failure="failure">
     <p>{{ t('gap.retirementHint') }}</p>
+    <PolicyEntry v-if="current" :policy="current" />
+    <fieldset :disabled="locked || current?.state === 'archived'">
+      <PolicyIdentityEditor v-model:alias="alias" v-model:event="customEvent" />
+    </fieldset>
     <RouterLink :to="{ name: 'policy-policies', params: { tenant: runtime.tenant } }">{{
       t('policies.policies')
     }}</RouterLink>

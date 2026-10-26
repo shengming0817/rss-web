@@ -110,7 +110,12 @@ it('uses formal V1 collection and operation/CAS without a candidate fallback or 
     pathParams: { id },
     body,
   })
-  response = { items: [policy], nextCursor: null }
+  response = {
+    items: [
+      { ...policy, toolName: `policy_${id.replaceAll('-', '')}`, alias: null, customEvent: null },
+    ],
+    nextCursor: null,
+  }
   expect((await client.list({ filter: "action=='execution'" })).items).toMatchObject([
     { id, state: 'enabled', definition },
   ])

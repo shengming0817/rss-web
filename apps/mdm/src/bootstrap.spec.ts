@@ -129,7 +129,7 @@ it('provides the same session owner to auth, MDM and protected routes', async ()
     const mdm = inject(mdmKey)!
     expect(mdm.security.credentials.list).toBeTypeOf('function')
     expect(mdm.security).not.toHaveProperty('requests')
-    expect(Object.keys(mdm.operations).sort()).toEqual(['audit', 'authorization'])
+    expect(Object.keys(mdm.operations).sort()).toEqual(['activities', 'audit', 'authorization'])
     expect(mdm.policies).not.toHaveProperty('configurations')
   })
 

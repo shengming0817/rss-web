@@ -1,6 +1,7 @@
+import { createFeatureRouter as createRouter } from '../../../../tests/feature-router'
 import { defineComponent, ref, type Component } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
-import { createMemoryHistory, createRouter } from 'vue-router'
+import { createMemoryHistory } from 'vue-router'
 import { expect, it, vi } from 'vitest'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'

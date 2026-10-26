@@ -1,7 +1,8 @@
+import { createFeatureRouter as createRouter } from '../../../../tests/feature-router'
 import { decodeMdmError } from '@rss/api/mdm'
 import { DOMWrapper, mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { defineComponent, h, ref, type Component } from 'vue'
-import { createMemoryHistory, createRouter } from 'vue-router'
+import { createMemoryHistory } from 'vue-router'
 import { expect, it, vi } from 'vitest'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
@@ -394,9 +395,8 @@ it('saves onboarding as the shared Policy and reads the formal execution directo
   await wrapper.get('select').setValue('request_mdm_enrollment')
   await button(wrapper, '新建').trigger('click')
   await flushPromises()
-  const inputs = wrapper.get('form').findAll('input')
-  await inputs[0]!.setValue(id)
-  await inputs[1]!.setValue(id)
+  await wrapper.get('#onboarding-scope').setValue(id)
+  await wrapper.get('#onboarding-organization').setValue(id)
   await wrapper.get('form').trigger('submit')
   await flushPromises()
   expect(change.mock.calls[0]?.[1].input.definition).toEqual({
@@ -673,7 +673,7 @@ it('binds explicit Agent releases in the common Policy and reads canonical regis
   })
   await button(wrapper, '新建').trigger('click')
   await flushPromises()
-  await wrapper.get('form input').setValue(id)
+  await wrapper.get('#onboarding-scope').setValue(id)
   await button(wrapper, '读取 Agent 发行包').trigger('click')
   await flushPromises()
   const selectors = wrapper

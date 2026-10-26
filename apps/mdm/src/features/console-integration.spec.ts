@@ -1,8 +1,9 @@
+import { createFeatureRouter as createRouter } from '../../tests/feature-router'
 import { decodeRunEvidence } from './policies/clients/runs'
 import { afterEach, expect, it, vi } from 'vitest'
 import { defineComponent, shallowRef } from 'vue'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
-import { createMemoryHistory, createRouter } from 'vue-router'
+import { createMemoryHistory } from 'vue-router'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { decodeMdmError } from '@rss/api/mdm'
 import type { IdentitySession } from '@rss/auth'
@@ -1018,7 +1019,11 @@ it('creates and edits a credential Policy with the exact operation, then enables
     input: { enabled: false },
   })
   policy.definition.customEvent = 'refresh.credentials'
-  await button(w, '读取').trigger('click')
+  await w
+    .get('form')
+    .findAll('button')
+    .find((b) => b.text() === '读取')!
+    .trigger('click')
   await flushPromises()
   await confirm(w)
   await w.find('form').trigger('submit')
@@ -1342,4 +1347,69 @@ it('does not resolve a Policy conflict when its authoritative comparison is disp
   expect(read.mock.calls).toEqual([[a], [a]])
   expect(current.text()).not.toContain(original)
   expect(field(current, '策略 ID').element).toHaveProperty('value', a)
+})
+
+it('clears lifecycle alias and event on same-route principal and session replacement before a new write', async () => {
+  const actor = session()
+  const policy = {
+    id: a,
+    revision: 1,
+    version: 1,
+    versionId: a,
+    state: 'disabled',
+    enabled: false,
+    definition: {
+      alias: 'previous.actor',
+      customEvent: 'previous.event',
+      scope: a,
+      action: { kind: 'unmanage_device', schedule: defaultSchedule(), runLifetimeSeconds: 3600 },
+    },
+  }
+  const change = vi.fn(async (id, operation) => ({
+    ...policy,
+    id,
+    definition: operation.input.definition,
+  }))
+  const w = await mountAt(LifecyclePoliciesView, {
+    tenant: a,
+    session: actor,
+    policies: {
+      policies: {
+        read: vi.fn().mockResolvedValue(policy),
+        list: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
+        change,
+      },
+    },
+  })
+  await field(w, '策略 ID').setValue(a)
+  await w
+    .get('form')
+    .findAll('button')
+    .find((b) => b.text() === '读取')!
+    .trigger('click')
+  await flushPromises()
+  expect((w.get('[data-field=policy-alias]').element as HTMLInputElement).value).toBe(
+    'previous.actor',
+  )
+  expect((w.get('[data-field=policy-event]').element as HTMLInputElement).value).toBe(
+    'previous.event',
+  )
+  ;(actor.state as ReturnType<typeof shallowRef>).value = {
+    status: 'authenticated',
+    tenant: a,
+    identity: { principalId: c },
+    session: { id: b },
+  } as typeof actor.state.value
+  await flushPromises()
+  expect((w.get('[data-field=policy-alias]').element as HTMLInputElement).value).toBe('')
+  expect((w.get('[data-field=policy-event]').element as HTMLInputElement).value).toBe('')
+  await field(w, '设备范围 ID').setValue(a)
+  await confirm(w)
+  await w.get('form').trigger('submit')
+  await flushPromises()
+  expect(change).toHaveBeenCalledOnce()
+  expect(change.mock.calls[0]?.[1].input.definition).toMatchObject({
+    alias: null,
+    customEvent: null,
+  })
 })

@@ -573,6 +573,8 @@ try {
   await page.getByRole('button', { name: '编辑', exact: true }).click()
   await page.getByRole('button', { name: '加载资源版本', exact: true }).click()
   await page.locator('#policy-lifetime').fill('3400')
+  await page.getByLabel('唯一别名', { exact: true }).fill(' Support.Tool ')
+  await page.getByLabel('自定义事件', { exact: true }).fill('refresh.contract')
   const updated = page.waitForResponse(
     (r) =>
       r.request().method() === 'POST' &&
@@ -584,6 +586,109 @@ try {
   assert.equal(reread.definition.customEvent, 'refresh.contract')
   assert.ok(reread.revision > edited.revision)
   coverage.push('fixed-producer-four-opaque-windows-and-policy-event-roundtrip')
+  phase = 'tool-alias-event-and-link'
+  assert.equal(reread.definition.alias, 'support.tool')
+  const resolved = await api('/api/v1/policies/resolve', 'POST', {
+    kind: 'alias',
+    alias: 'support.tool',
+  })
+  assert.equal(resolved.policy.id, windowPolicy)
+  assert.equal(resolved.capability.toolName, `policy_${windowPolicy.replaceAll('-', '')}`)
+  assert.deepEqual(resolved.capability.operations, ['read'])
+  await mutation(
+    `/api/v1/policies/${randomUUID()}`,
+    { action: 'put', enabled: false, definition: { ...windowDefinition, alias: 'support.tool' } },
+    0,
+    409,
+  )
+  await mutation(
+    `/api/v1/policies/${windowPolicy}`,
+    { action: 'put', enabled: false, definition: reread.definition },
+    reread.revision - 1,
+    409,
+  )
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin })
+  await page.goto(at('policies/events') + '?event=refresh.contract')
+  await ready()
+  await page.getByText(resolved.capability.toolName, { exact: true }).waitFor()
+  await page.locator('[data-action="copy-deep-link"]').first().click()
+  const copiedEvent = new URL(await page.evaluate(() => navigator.clipboard.readText()))
+  assert.equal(copiedEvent.protocol, 'rssmdm:')
+  assert.equal(copiedEvent.host, 'open')
+  assert.equal(copiedEvent.pathname, '/v1/event')
+  assert.equal(copiedEvent.searchParams.get('event'), 'refresh.contract')
+  assert.equal(copiedEvent.searchParams.get('tenant'), tenant)
+  assert.ok(
+    ![...copiedEvent.searchParams.keys()].some((k) =>
+      /token|cookie|secret|approve|server/i.test(k),
+    ),
+  )
+  const eventRequest = {
+    operationId: randomUUID(),
+    event: 'refresh.contract',
+    source: { kind: 'human' },
+    executionContext: null,
+  }
+  const acceptedEvent = await api(
+    `/api/v1/devices/${f.collector.runtime.deviceId}/policy-events`,
+    'POST',
+    eventRequest,
+    202,
+  )
+  const replayedEvent = await api(
+    `/api/v1/devices/${f.collector.runtime.deviceId}/policy-events`,
+    'POST',
+    eventRequest,
+    202,
+  )
+  assert.equal(replayedEvent.batchId, acceptedEvent.batchId)
+  await page.goto(
+    at(`devices/${f.collector.runtime.deviceId}/policy-event-batches/${acceptedEvent.batchId}`),
+  )
+  await ready()
+  await page.locator('[data-section="event-batch"]').waitFor()
+  const frozenMembers = await until(
+    () =>
+      api(
+        `/api/v1/devices/${f.collector.runtime.deviceId}/policy-event-batches/${acceptedEvent.batchId}/members`,
+      ),
+    (p) => p.items.length > 0 && p.items.every((m) => m.state !== 'pending'),
+  )
+  assert.ok(frozenMembers.items.some((m) => m.policyId === windowPolicy))
+  await page.getByRole('button', { name: '重新读取', exact: true }).first().click()
+  await ready()
+  assert.ok((await page.locator('[data-section="event-member"]').count()) > 0)
+  await page.locator('[data-section="event-batch"] [data-action="copy-deep-link"]').click()
+  const copiedBatch = new URL(await page.evaluate(() => navigator.clipboard.readText()))
+  assert.equal(copiedBatch.searchParams.get('batch'), acceptedEvent.batchId)
+  const eventDevice = f.collector.runtime.deviceId
+  await page.goto(at(`devices/${eventDevice}/activities`) + '?batch=' + acceptedEvent.batchId)
+  await ready()
+  await page.getByText('观察时间 · UTC', { exact: false }).waitFor()
+  // Withdraw through the same current Policy editor. Original batch facts remain frozen.
+  await page.goto(at('policies/assignments') + '?id=' + windowPolicy)
+  await ready()
+  await page.getByRole('button', { name: '编辑', exact: true }).click()
+  await page.getByRole('button', { name: '加载资源版本', exact: true }).click()
+  await page.getByLabel('唯一别名', { exact: true }).fill('')
+  await page.getByLabel('自定义事件', { exact: true }).fill('')
+  const withdrawn = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      new URL(r.url()).pathname === `/api/v1/policies/${windowPolicy}`,
+  )
+  await page.locator('[data-form="policy"]').evaluate((form) => form.requestSubmit())
+  assert.equal((await withdrawn).status(), 200)
+  await api('/api/v1/policies/resolve', 'POST', { kind: 'alias', alias: 'support.tool' }, 404)
+  assert.equal(
+    (await api(`/api/v1/devices/${eventDevice}/policy-event-batches/${acceptedEvent.batchId}`))
+      .event,
+    'refresh.contract',
+  )
+  coverage.push(
+    'formal-alias-cas-duplicate-withdraw-event-members-frozen-batch-and-deeplink-clipboard',
+  )
+
   phase = 'software-channel-default'
   const capabilities = await api('/api/v1/policies/capabilities')
   assert.deepEqual(capabilities, {

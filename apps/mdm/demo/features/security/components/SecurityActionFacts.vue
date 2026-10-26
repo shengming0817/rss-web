@@ -3,7 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { isSupportTarget } from '../clients/support-model'
 import { useDemo } from '../../../context'
 import type { SecurityAction } from '../clients/actions-model'
-import ExecutionFacts from '../../../../src/features/policies/components/ExecutionFacts.vue'
+import ExecutionFacts from './ExecutionFacts.vue'
 defineProps<{ action: SecurityAction }>()
 const { t } = useI18n(),
   runtime = useDemo()
