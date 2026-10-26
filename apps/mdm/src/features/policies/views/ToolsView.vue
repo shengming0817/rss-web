@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import { VSelect, VTextField, VBtn, VDataTable } from 'vuetify/components'
+
 import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiTable } from '@rss/core/components'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 import CopyDeepLink from '../../../components/CopyDeepLink.vue'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
@@ -110,22 +111,33 @@ watch([mode, term], () => {
 })
 </script>
 <template>
-  <PageFrame :title="t('policies.entry.title')" :busy="op.busy.value" :failure="op.failure.value">
+  <MdmPage :title="t('policies.entry.title')" :busy="op.busy.value" :failure="op.failure.value">
     <p>{{ t('policies.entry.identityHint') }}</p>
     <form class="console-toolbar" @submit.prevent="load()">
       <label
         >{{ t('policies.entry.findBy')
-        }}<select v-model="mode" class="ui-input">
-          <option v-for="kind in ['event', 'alias', 'tool_name', 'id']" :key="kind" :value="kind">
-            {{ t(`policies.entry.${kind}`) }}
-          </option>
-        </select></label
-      >
+        }}<VSelect
+          v-model="mode"
+          :items="[
+            ...['event', 'alias', 'tool_name', 'id'].map((kind) => ({
+              title: String(t(`policies.entry.${kind}`)),
+              value: kind,
+            })),
+          ]"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto"
+      /></label>
       <label
         >{{ t('policies.entry.name')
-        }}<input v-model="term" class="ui-input" :required="mode !== 'event'"
+        }}<VTextField
+          v-model="term"
+          :required="mode !== 'event'"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto"
       /></label>
-      <UiButton type="submit" :disabled="op.busy.value">{{ t('policies.entry.find') }}</UiButton>
+      <VBtn type="submit" :disabled="op.busy.value">{{ t('policies.entry.find') }}</VBtn>
     </form>
     <CopyDeepLink
       v-if="mode === 'event' && applied"
@@ -137,23 +149,27 @@ watch([mode, term], () => {
       }"
     />
     <p v-if="rows">{{ t('console.pageNotTotal') }}</p>
-    <UiTable
+    <VDataTable
       v-if="rows"
-      :rows="rows.items"
-      :row-key="(row) => row.id"
-      :label="t('policies.entry.members')"
-      :columns="[
-        { key: 'toolName', label: t('policies.entry.toolName') },
-        { key: 'alias', label: t('policies.entry.alias') },
-        { key: 'customEvent', label: t('policies.entry.event') },
-      ]"
-      :busy-label="t('devices.loading')"
-      :empty-label="t('policies.empty')"
+      :items="rows.items"
+      item-value="id"
+      :aria-label="t('policies.entry.members')"
+      :items-per-page="-1"
+      hide-default-footer
+      :headers="
+        [
+          { key: 'toolName', label: t('policies.entry.toolName') },
+          { key: 'alias', label: t('policies.entry.alias') },
+          { key: 'customEvent', label: t('policies.entry.event') },
+        ].map((column) => ({ key: column.key, title: column.label, sortable: false }))
+      "
+      :loading-text="t('devices.loading')"
+      :no-data-text="t('policies.empty')"
     >
-      <template #cell-toolName="{ row }"
-        ><UiButton
+      <template #item.toolName="{ item: row }"
+        ><VBtn
           type="button"
-          variant="ghost"
+          variant="text"
           @click="
             op.run(
               () => client.read(row.id),
@@ -162,7 +178,7 @@ watch([mode, term], () => {
           "
           >{{
             row.definition.selfService?.presentation.displayName ?? row.alias ?? row.toolName
-          }}</UiButton
+          }}</VBtn
         >
         <p>{{ row.toolName }}</p>
         <CopyDeepLink
@@ -173,10 +189,10 @@ watch([mode, term], () => {
             toolName: row.toolName,
           }"
       /></template>
-    </UiTable>
-    <UiButton v-if="rows?.nextCursor" :disabled="op.busy.value" @click="load(rows.nextCursor)">{{
+    </VDataTable>
+    <VBtn v-if="rows?.nextCursor" :disabled="op.busy.value" @click="load(rows.nextCursor)">{{
       t('devices.next')
-    }}</UiButton>
+    }}</VBtn>
     <template v-if="selected"
       ><PolicyEntry :policy="selected" /><RouterLink
         v-if="policyDestination(selected, runtime.tenant)"
@@ -184,5 +200,5 @@ watch([mode, term], () => {
         >{{ t('policies.entry.configure') }}</RouterLink
       ></template
     >
-  </PageFrame>
+  </MdmPage>
 </template>

@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { VSelect, VTextField, VBtn } from 'vuetify/components'
+import { controlEvent } from '../control-event'
+
 import { computed, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import type { ResourceRead, ResourceChange, Variant, UploadTarget } from '../clients/resources'
@@ -222,29 +224,43 @@ async function prepare(event: Event) {
     <fieldset :disabled="locked || preparing">
       <label
         >{{ t('policies.collectionEditor.base')
-        }}<select v-model="base" class="ui-input" required @change="copy">
-          <option value="">{{ t('devices.select') }}</option>
-          <option
-            v-for="v in resource.versions.filter((v) => v.state !== 'archived')"
-            :key="v.id"
-            :value="v.id"
-          >
-            {{ v.id }} · {{ v.state }}
-          </option>
-        </select></label
-      >
+        }}<VSelect
+          v-model="base"
+          required
+          @update:model-value="copy()"
+          :items="[
+            { title: String(t('devices.select')), value: '' },
+            ...resource.versions
+              .filter((v) => v.state !== 'archived')
+              .map((v) => ({ title: String(v.id) + '·' + String(v.state), value: v.id })),
+          ]"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto"
+      /></label>
       <label
         >{{ t('policies.collectionEditor.version')
-        }}<input v-model="version" class="ui-input" required
+        }}<VTextField
+          v-model="version"
+          required
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto"
       /></label>
       <label v-if="variants.length"
         >{{ t('policies.variant')
-        }}<select v-model.number="index" class="ui-input">
-          <option v-for="(v, i) in variants" :key="i" :value="i">
-            {{ v.platform }} / {{ v.architecture }} / {{ v.key }}
-          </option>
-        </select></label
-      >
+        }}<VSelect
+          v-model.number="index"
+          :items="[
+            ...variants.map((v, i) => ({
+              title: String(v.platform) + '/' + String(v.architecture) + '/' + String(v.key),
+              value: i,
+            })),
+          ]"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto"
+      /></label>
       <p v-if="declaration?.kind === 'native_collection'">
         {{ t('policies.collectionEditor.nativePair') }}
       </p>
@@ -272,21 +288,23 @@ async function prepare(event: Event) {
         />
         <label v-for="key in Object.keys(mappings)" :key="key"
           >{{ key }} · {{ t('policies.collectionEditor.query')
-          }}<select
-            :value="choices[bindingKey(key)] ?? ''"
-            class="ui-input"
+          }}<VSelect
             required
-            @change="chooseQuery(key, $event)"
-          >
-            <option value="">{{ t('devices.select') }}</option>
-            <option v-for="q in sourceQueries" :key="q.key" :value="q.key">{{ q.label }}</option>
-          </select></label
-        >
+            :model-value="choices[bindingKey(key)] ?? ''"
+            @update:model-value="chooseQuery(key, controlEvent($event))"
+            :items="[
+              { title: String(t('devices.select')), value: '' },
+              ...sourceQueries.map((q) => ({ title: String(q.label), value: q.key })),
+            ]"
+            variant="outlined"
+            density="comfortable"
+            hide-details="auto"
+        /></label>
       </template>
       <p v-if="failure" role="alert">{{ t('policies.collectionEditor.invalid') }}</p>
-      <UiButton type="submit" :disabled="!base || !version">{{
+      <VBtn type="submit" :disabled="!base || !version">{{
         t('policies.collectionEditor.prepare')
-      }}</UiButton>
+      }}</VBtn>
     </fieldset>
   </form>
 </template>

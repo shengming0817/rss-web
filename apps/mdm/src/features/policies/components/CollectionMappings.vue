@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { VBtn, VSelect } from 'vuetify/components'
+
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../../devices/useDeviceBinding'
@@ -49,20 +50,27 @@ function remove(key: string) {
     <p>{{ t('telemetry.mappingHint') }}</p>
     <p v-if="failure" role="alert">
       {{ t('devices.' + failure) }}
-      <UiButton type="button" :disabled="busy" @click="load">{{ t('devices.reload') }}</UiButton>
+      <VBtn type="button" :disabled="busy" @click="load">{{ t('devices.reload') }}</VBtn>
     </p>
     <label
       >{{ t('telemetry.field')
-      }}<select v-model="selected" class="ui-input" :disabled="busy || !!failure">
-        <option value="">{{ t('devices.select') }}</option>
-        <option v-for="f in available.filter((f) => !model[f.key])" :key="f.key" :value="f.key">
-          {{ f.key }} · v{{ f.version }} · {{ f.valueType.kind }}
-        </option>
-      </select></label
-    >
-    <UiButton type="button" :disabled="!selected" @click="add">{{
-      t('telemetry.addMapping')
-    }}</UiButton>
+      }}<VSelect
+        v-model="selected"
+        :disabled="busy || !!failure"
+        :items="[
+          { title: String(t('devices.select')), value: '' },
+          ...available
+            .filter((f) => !model[f.key])
+            .map((f) => ({
+              title: String(f.key) + '· v' + String(f.version) + '·' + String(f.valueType.kind),
+              value: f.key,
+            })),
+        ]"
+        variant="outlined"
+        density="comfortable"
+        hide-details="auto"
+    /></label>
+    <VBtn type="button" :disabled="!selected" @click="add">{{ t('telemetry.addMapping') }}</VBtn>
     <article v-for="(mapping, key) in model" :key="key" class="console-panel">
       <strong>{{ key }}</strong>
       <p v-if="fields.find((f) => f.key === key)">
@@ -79,7 +87,7 @@ function remove(key: string) {
         :value-type="fields.find((f) => f.key === key)?.valueType"
         @update:model-value="model = { ...model, [key]: $event }"
       />
-      <UiButton type="button" @click="remove(key)">{{ t('telemetry.removeMapping') }}</UiButton>
+      <VBtn type="button" @click="remove(key)">{{ t('telemetry.removeMapping') }}</VBtn>
     </article>
     <p v-if="!Object.keys(model).length">{{ t('telemetry.mappingUi.noMapping') }}</p>
   </section>

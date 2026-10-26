@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 const { t } = useI18n(),
   runtime = useMdm()
 </script>
 <template>
-  <PageFrame :title="t('policies.scripts')">
+  <MdmPage :title="t('policies.scripts')">
     <p>{{ t('policies.scriptAssignment') }}</p>
     <ol class="console-journey">
       <li
@@ -24,5 +24,5 @@ const { t } = useI18n(),
         >
       </li>
     </ol>
-  </PageFrame>
+  </MdmPage>
 </template>

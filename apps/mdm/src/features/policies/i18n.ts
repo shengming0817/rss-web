@@ -1,4 +1,6 @@
 export const policiesZh = {
+  publishedSoftware: '已发布软件',
+  scopeEditor: { manage: '配置设备组与目标范围', use: '使用此范围', contract: '范围由目标并集、可选限制交集与排除构成。不限与空限制的含义不同；保存后需等待计算完成。设备组用于设备策略，用户组在自助服务访问配置中选择。' },
   queues: {
     title: '执行队列',
     all: '全部',
@@ -620,6 +622,8 @@ export const policiesZh = {
   cancel: '请求取消',
 }
 export const policiesEn: typeof policiesZh = {
+  publishedSoftware: 'Published software',
+  scopeEditor: { manage: 'Configure device groups and targeting', use: 'Use this scope', contract: 'A scope combines the target union, optional limitations and exclusions. An unrestricted limitation differs from an empty one. Wait for calculation after saving. Device groups target device policies; user groups are selected in self-service access settings.' },
   queues: {
     title: 'Execution queues',
     all: 'All',

@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { UiButton, UiDialog } from '@rss/core/components'
+import PolicyDialog from './PolicyDialog.vue'
+
+import { VBtn } from 'vuetify/components'
+
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { PolicyRead } from '../clients/model'
@@ -23,14 +26,14 @@ function confirm() {
 <template>
   <template v-if="policy.state !== 'archived'">
     <p v-if="policy.state === 'enabled'">{{ t('policies.disableBeforeDelete') }}</p>
-    <UiButton
+    <VBtn
       type="button"
       data-action="delete-policy"
       :disabled="disabled || policy.state !== 'disabled'"
       @click="confirming = true"
-      >{{ t('policies.deletePolicy') }}</UiButton
+      >{{ t('policies.deletePolicy') }}</VBtn
     >
-    <UiDialog
+    <PolicyDialog
       :open="confirming"
       :title="t('policies.deletePolicy')"
       :description="t('policies.deletePolicyHint')"
@@ -52,10 +55,8 @@ function confirm() {
         }}
       </p>
       <template #footer
-        ><UiButton :disabled="disabled" @click="confirm">{{
-          t('identity.confirm')
-        }}</UiButton></template
+        ><VBtn :disabled="!!disabled" @click="confirm">{{ t('identity.confirm') }}</VBtn></template
       >
-    </UiDialog>
+    </PolicyDialog>
   </template>
 </template>

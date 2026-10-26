@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { VAlert, VSelect, VTextField, VTable } from 'vuetify/components'
+import { controlEvent } from '../../policies/control-event'
+
 import { VBtn } from 'vuetify/components'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiMessage } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../../devices/useDeviceBinding'
@@ -332,39 +334,50 @@ watch(
       </div>
       <v-btn :disabled="busy || !field" @click="reload">{{ t('devices.reload') }}</v-btn>
     </header>
-    <UiMessage v-if="failure" tone="danger" :title="t('devices.' + failure)" />
+    <VAlert v-if="failure" type="error" variant="tonal" :title="t('devices.' + failure)" />
     <div class="telemetry-toolbar">
       <label
         >{{ t('telemetry.range')
-        }}<select v-model="range" :aria-label="t('telemetry.range')" class="ui-input">
-          <option value="1h">{{ t('telemetry.hour') }}</option>
-          <option value="24h">{{ t('telemetry.day') }}</option>
-          <option value="7d">{{ t('telemetry.week') }}</option>
-        </select></label
+        }}<VSelect
+          v-model="range"
+          :aria-label="t('telemetry.range')"
+          :items="[
+            { title: String(t('telemetry.hour')), value: '1h' },
+            { title: String(t('telemetry.day')), value: '24h' },
+            { title: String(t('telemetry.week')), value: '7d' },
+          ]"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto" /></label
       ><label
         >{{ t('telemetry.resolution')
-        }}<select
+        }}<VSelect
           v-model="resolution"
           :aria-label="t('telemetry.resolution')"
-          class="ui-input"
           :disabled="state || (counter && counterMode === 'total')"
-        >
-          <option value="auto">{{ t('telemetry.auto') }}</option>
-          <option v-if="!counter" value="raw">{{ t('telemetry.raw') }}</option>
-          <option value="5m">{{ t('telemetry.fiveMinutes') }}</option>
-          <option value="1h">{{ t('telemetry.oneHour') }}</option>
-        </select></label
+          :items="[
+            { title: String(t('telemetry.auto')), value: 'auto' },
+            ...(!counter ? [{ title: String(t('telemetry.raw')), value: 'raw' }] : []),
+            { title: String(t('telemetry.fiveMinutes')), value: '5m' },
+            { title: String(t('telemetry.oneHour')), value: '1h' },
+          ]"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto" /></label
       ><label v-if="!state && !counter && step"
         >{{ t('telemetry.aggregateOperation')
-        }}<select
+        }}<VSelect
           v-model="aggregateOperation"
           :aria-label="t('telemetry.aggregateOperation')"
-          class="ui-input"
-        >
-          <option v-for="op in operations" :key="op" :value="op">
-            {{ t('telemetry.aggregation.' + op) }}
-          </option>
-        </select></label
+          :items="[
+            ...operations.map((op) => ({
+              title: String(t('telemetry.aggregation.' + op)),
+              value: op,
+            })),
+          ]"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto" /></label
       ><span class="telemetry-caption">{{ utc(start) }} — {{ utc(end) }}</span>
     </div>
     <div class="telemetry-history-layout">
@@ -386,49 +399,71 @@ watch(
           ><div class="telemetry-toolbar">
             <label
               >{{ t('telemetry.resource')
-              }}<select v-model="resource" :aria-label="t('telemetry.resource')" class="ui-input">
-                <option v-for="id in resources" :key="id" :value="id">{{ id }}</option>
-              </select></label
+              }}<VSelect
+                v-model="resource"
+                :aria-label="t('telemetry.resource')"
+                :items="[...resources.map((id) => ({ title: String(id), value: id }))]"
+                variant="outlined"
+                density="comfortable"
+                hide-details="auto" /></label
             ><v-btn v-if="resourceNext" :disabled="busy" @click="loadResources(resourceNext)">{{
               t('devices.next')
             }}</v-btn
             ><label v-if="choices.length"
               >{{ t('telemetry.series')
-              }}<select
-                :value="series"
+              }}<VSelect
                 :aria-label="t('telemetry.series')"
-                class="ui-input"
-                @change="chooseSeries"
-              >
-                <option v-for="[key, row] in choices" :key="key" :value="key">
-                  v{{ row.sample.series.definition.version }} · {{ row.source }} ·
-                  {{ row.registration }} · {{ row.epoch }} ·
-                  {{ JSON.stringify(row.sample.series.dimensions) }}
-                </option>
-              </select></label
+                :model-value="series"
+                @update:model-value="chooseSeries(controlEvent($event))"
+                :items="[
+                  ...choices.map(([key, row]) => ({
+                    title:
+                      'v' +
+                      String(row.sample.series.definition.version) +
+                      '·' +
+                      String(row.source) +
+                      '·' +
+                      String(row.registration) +
+                      '·' +
+                      String(row.epoch) +
+                      '·' +
+                      String(JSON.stringify(row.sample.series.dimensions)),
+                    value: key,
+                  })),
+                ]"
+                variant="outlined"
+                density="comfortable"
+                hide-details="auto" /></label
             ><v-btn v-if="step && discoveryNext" :disabled="busy" @click="discover">{{
               t('telemetry.moreSeries')
             }}</v-btn
             ><label v-if="counter"
               >{{ t('telemetry.counterMode')
-              }}<select
+              }}<VSelect
                 v-model="counterMode"
                 :aria-label="t('telemetry.counterMode')"
-                class="ui-input"
-              >
-                <option
-                  value="rate"
-                  :disabled="!selectedField?.timeSeries?.aggregations.includes('rate')"
-                >
-                  {{ t('telemetry.rate') }}
-                </option>
-                <option value="total">{{ t('telemetry.total') }}</option>
-              </select></label
-            >
+                :items="[
+                  {
+                    title: String(t('telemetry.rate')),
+                    value: 'rate',
+                    props: { disabled: !selectedField?.timeSeries?.aggregations.includes('rate') },
+                  },
+                  { title: String(t('telemetry.total')), value: 'total' },
+                ]"
+                variant="outlined"
+                density="comfortable"
+                hide-details="auto"
+            /></label>
           </div>
           <label v-if="counter && counterMode === 'rate'"
             >{{ t('telemetry.counterGap')
-            }}<input v-model.number="counterGap" type="number" min="1" class="ui-input"
+            }}<VTextField
+              v-model.number="counterGap"
+              type="number"
+              min="1"
+              variant="outlined"
+              density="comfortable"
+              hide-details="auto"
           /></label>
           <p v-if="retired" role="status">{{ t('telemetry.retired') }}</p>
           <TelemetryChart
@@ -453,7 +488,7 @@ watch(
             t('telemetry.dataDetails')
           }}</v-btn>
           <div v-if="table" class="telemetry-table-wrap">
-            <table class="telemetry-table">
+            <VTable density="comfortable">
               <thead>
                 <tr>
                   <th>{{ t('telemetry.observedAt') }}</th>
@@ -491,7 +526,7 @@ watch(
                   </td>
                 </tr>
               </tbody>
-            </table>
+            </VTable>
           </div>
           <v-btn v-if="next" :disabled="busy" @click="load(next)">{{ t('devices.next') }}</v-btn>
         </template>

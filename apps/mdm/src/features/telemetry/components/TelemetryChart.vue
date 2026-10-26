@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { VTextField } from 'vuetify/components'
+
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { utc, quantity } from '../format'
@@ -123,7 +125,7 @@ const paths = computed(() => {
     </svg>
     <label v-if="points.length" class="telemetry-scrubber"
       >{{ t('telemetry.inspectPoint')
-      }}<input
+      }}<VTextField
         v-model.number="index"
         type="range"
         min="0"
@@ -134,6 +136,9 @@ const paths = computed(() => {
             ? utc(selected.at) + ' / ' + String(selected.value ?? t('telemetry.noValue'))
             : undefined
         "
+        variant="outlined"
+        density="comfortable"
+        hide-details="auto"
     /></label>
     <figcaption v-if="selected" class="telemetry-readout">
       <time>{{ utc(selected.at) }}</time

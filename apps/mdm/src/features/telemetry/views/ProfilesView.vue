@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import PolicyDialog from '../../policies/components/PolicyDialog.vue'
+
+import { VBtn, VAlert, VSelect, VTextarea, VCheckbox, VTextField, VTable } from 'vuetify/components'
+
 import type { PreviewInput } from '../../policies/clients/policies'
 
 import { telemetryBytes } from '../../../contracts/collection/canonical'
@@ -7,8 +11,7 @@ import { comparison as queryComparison, allOf } from '../../../services/director
 import { computed, ref, shallowRef, watch, toRaw } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiDialog, UiMessage } from '@rss/core/components'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 import { useMdm } from '../../../context'
 import { operation, useOperation, type Operation } from '../../../services/useOperation'
 import { deviceBinding } from '../../devices/useDeviceBinding'
@@ -691,7 +694,7 @@ watch(
 )
 </script>
 <template>
-  <PageFrame :title="t('telemetry.profiles')" :busy="busy" :failure="failure"
+  <MdmPage :title="t('telemetry.profiles')" :busy="busy" :failure="failure"
     ><template #actions
       ><RouterLink :to="{ name: 'policy-resources', params: { tenant: runtime.tenant } }">{{
         t('telemetry.resourceLibrary')
@@ -699,9 +702,9 @@ watch(
       ><RouterLink :to="{ name: 'settings-metrics', params: { tenant: runtime.tenant } }">{{
         t('telemetry.metricsSettings')
       }}</RouterLink
-      ><UiButton :disabled="busy || !canWrite || !!pending" @click="edit()">{{
+      ><VBtn :disabled="busy || !canWrite || !!pending" @click="edit()">{{
         t('telemetry.newProfile')
-      }}</UiButton></template
+      }}</VBtn></template
     >
     <p>{{ t('telemetry.profilesHint') }}</p>
     <div class="telemetry-profile-grid">
@@ -715,16 +718,16 @@ watch(
         }}</span>
         <h2>{{ item.id }}</h2>
         <p>{{ item.activeVersion ?? '—' }} · {{ t('telemetry.revision') }} {{ item.revision }}</p>
-        <UiButton :disabled="busy || !!pending" @click="edit(item.id)">{{
+        <VBtn :disabled="busy || !!pending" @click="edit(item.id)">{{
           t(canWrite ? 'telemetry.configure' : 'telemetry.view')
-        }}</UiButton>
+        }}</VBtn>
       </article>
     </div>
     <p v-if="list && !list.items.length" class="telemetry-empty">{{ t('telemetry.noProfiles') }}</p>
-    <UiButton v-if="list?.nextCursor" :disabled="busy" @click="load(list.nextCursor)">{{
+    <VBtn v-if="list?.nextCursor" :disabled="busy" @click="load(list.nextCursor)">{{
       t('devices.next')
-    }}</UiButton>
-    <UiDialog
+    }}</VBtn>
+    <PolicyDialog
       :open="open"
       :title="t('telemetry.profileEditor')"
       :close-label="t('console.cancel')"
@@ -740,56 +743,74 @@ watch(
             {{ i + 1 }} · {{ t('telemetry.' + name) }}
           </li>
         </ol>
-        <UiMessage v-if="failure" tone="danger" :title="t('devices.' + failure)" />
+        <VAlert v-if="failure" type="error" variant="tonal" :title="t('devices.' + failure)" />
         <fieldset v-if="step === 0" :disabled="locked">
           <label
             >{{ t('telemetry.templateKind')
-            }}<select
+            }}<VSelect
               v-model="templateKind"
               :aria-label="t('telemetry.templateKind')"
-              class="ui-input"
-              @change="sources()"
-            >
-              <option value="agent_collection">{{ t('telemetry.nativeTemplate') }}</option>
-              <option value="script">{{ t('telemetry.scriptTemplate') }}</option>
-            </select></label
+              @update:model-value="sources()"
+              :items="[
+                { title: String(t('telemetry.nativeTemplate')), value: 'agent_collection' },
+                { title: String(t('telemetry.scriptTemplate')), value: 'script' },
+              ]"
+              variant="outlined"
+              density="comfortable"
+              hide-details="auto" /></label
           ><label
             >{{ t('telemetry.template')
-            }}<select
+            }}<VSelect
               v-model="templateId"
               :aria-label="t('telemetry.template')"
-              class="ui-input"
-              @change="selectTemplate"
-            >
-              <option value="">{{ t('devices.select') }}</option>
-              <option v-for="item in templates" :key="item.id" :value="item.id">
-                {{ item.id }} / {{ item.activeVersion }}
-              </option>
-            </select></label
-          ><UiButton v-if="templateAfter" @click="sources(templateAfter)">{{
-            t('devices.next')
-          }}</UiButton
+              @update:model-value="selectTemplate()"
+              :items="[
+                { title: String(t('devices.select')), value: '' },
+                ...templates.map((item) => ({
+                  title: String(item.id) + '/' + String(item.activeVersion),
+                  value: item.id,
+                })),
+              ]"
+              variant="outlined"
+              density="comfortable"
+              hide-details="auto" /></label
+          ><VBtn v-if="templateAfter" @click="sources(templateAfter)">{{ t('devices.next') }}</VBtn
           ><label
             >{{ t('telemetry.variant')
-            }}<select
+            }}<VSelect
               v-model="variantKey"
               :aria-label="t('telemetry.variant')"
-              class="ui-input"
-              @change="chosen = []"
-            >
-              <option v-for="v in variants" :key="v.key" :value="v.key">
-                {{ v.version }} / {{ v.variant.platform }} / {{ v.variant.architecture }} /
-                {{ v.variant.key }}
-              </option>
-            </select></label
+              @update:model-value="chosen = []"
+              :items="[
+                ...variants.map((v) => ({
+                  title:
+                    String(v.version) +
+                    '/' +
+                    String(v.variant.platform) +
+                    '/' +
+                    String(v.variant.architecture) +
+                    '/' +
+                    String(v.variant.key),
+                  value: v.key,
+                })),
+              ]"
+              variant="outlined"
+              density="comfortable"
+              hide-details="auto" /></label
           ><label
             >{{ t('telemetry.parameters')
-            }}<textarea v-model="parameters" class="ui-input telemetry-code" />
+            }}<VTextarea
+              v-model="parameters"
+              class="ui-input telemetry-code"
+              variant="outlined"
+              density="comfortable"
+              hide-details="auto"
+            />
           </label>
           <h3>{{ t('telemetry.fieldsAndMappings') }}</h3>
           <p v-if="!eligibleFields.length">{{ t('telemetry.noMappedFields') }}</p>
           <label v-for="f in eligibleFields" :key="f.key" class="telemetry-pick"
-            ><input v-model="chosen" type="checkbox" :value="f.key" /><span
+            ><VCheckbox v-model="chosen" :value="f.key" hide-details="auto" /><span
               ><strong>{{ f.key }} / v{{ f.version }}</strong
               ><small>{{ f.timeSeries?.kind }} · {{ f.unit }} · {{ f.sensitivity }}</small
               ><code>{{ JSON.stringify(mapping[f.key]) }}</code></span
@@ -799,40 +820,69 @@ watch(
           }}</RouterLink>
         </fieldset>
         <fieldset v-if="step === 1" :disabled="locked">
-          <label>{{ t('telemetry.version') }}<input v-model="version" class="ui-input" /></label
+          <label
+            >{{ t('telemetry.version')
+            }}<VTextField
+              v-model="version"
+              variant="outlined"
+              density="comfortable"
+              hide-details="auto" /></label
           ><label
             >{{ t('telemetry.projection')
-            }}<select v-model="projection" :aria-label="t('telemetry.projection')" class="ui-input">
-              <option value="current">{{ t('telemetry.current') }}</option>
-              <option value="history">{{ t('telemetry.historyOnly') }}</option>
-              <option value="both">{{ t('telemetry.both') }}</option>
-            </select></label
-          >
+            }}<VSelect
+              v-model="projection"
+              :aria-label="t('telemetry.projection')"
+              :items="[
+                { title: String(t('telemetry.current')), value: 'current' },
+                { title: String(t('telemetry.historyOnly')), value: 'history' },
+                { title: String(t('telemetry.both')), value: 'both' },
+              ]"
+              variant="outlined"
+              density="comfortable"
+              hide-details="auto"
+          /></label>
           <p>{{ t('telemetry.projectionHint') }}</p>
           <div class="telemetry-toolbar">
             <label
               >{{ t('telemetry.sampleSeconds')
-              }}<input v-model.number="sample" class="ui-input" type="number" min="1" /></label
+              }}<VTextField
+                v-model.number="sample"
+                type="number"
+                min="1"
+                variant="outlined"
+                density="comfortable"
+                hide-details="auto" /></label
             ><label
               >{{ t('telemetry.uploadSeconds')
-              }}<input v-model.number="upload" class="ui-input" type="number" min="1"
+              }}<VTextField
+                v-model.number="upload"
+                type="number"
+                min="1"
+                variant="outlined"
+                density="comfortable"
+                hide-details="auto"
             /></label>
           </div>
           <label
             >{{ t('telemetry.scope')
-            }}<select v-model="scope" :aria-label="t('telemetry.scope')" class="ui-input">
-              <option value="">{{ t('devices.select') }}</option>
-              <option
-                v-for="s in scopeOptions?.items.filter((s) => !s.deleted)"
-                :key="s.id"
-                :value="s.id"
-              >
-                {{ s.id }} / {{ s.resolution ?? '—' }}
-              </option>
-            </select></label
-          ><UiButton v-if="scopeOptions?.nextCursor" @click="scopes(scopeOptions.nextCursor)">{{
+            }}<VSelect
+              v-model="scope"
+              :aria-label="t('telemetry.scope')"
+              :items="[
+                { title: String(t('devices.select')), value: '' },
+                ...(scopeOptions?.items ?? [])
+                  .filter((s) => !s.deleted)
+                  .map((s) => ({
+                    title: String(s.id) + '/' + String(s.resolution ?? '—'),
+                    value: s.id,
+                  })),
+              ]"
+              variant="outlined"
+              density="comfortable"
+              hide-details="auto" /></label
+          ><VBtn v-if="scopeOptions?.nextCursor" @click="scopes(scopeOptions.nextCursor)">{{
             t('devices.next')
-          }}</UiButton>
+          }}</VBtn>
           <details>
             <summary>{{ t('telemetry.budget') }}</summary>
             <label
@@ -845,20 +895,40 @@ watch(
               ] as const"
               :key="name"
               >{{ t('telemetry.' + name)
-              }}<input
+              }}<VTextField
                 v-model.number="budget[name]"
-                class="ui-input"
                 type="number"
-                min="1" /></label
+                min="1"
+                variant="outlined"
+                density="comfortable"
+                hide-details="auto" /></label
             ><label
               >{{ t('telemetry.backfillSeconds')
-              }}<input v-model.number="backfill" class="ui-input" type="number" min="1" /></label
+              }}<VTextField
+                v-model.number="backfill"
+                type="number"
+                min="1"
+                variant="outlined"
+                density="comfortable"
+                hide-details="auto" /></label
             ><label
               >{{ t('telemetry.boostSeconds')
-              }}<input v-model.number="boostSample" class="ui-input" type="number" min="0" /></label
+              }}<VTextField
+                v-model.number="boostSample"
+                type="number"
+                min="0"
+                variant="outlined"
+                density="comfortable"
+                hide-details="auto" /></label
             ><label
               >{{ t('telemetry.boostUntil')
-              }}<input v-model="boostUntil" type="datetime-local" step="1" class="ui-input"
+              }}<VTextField
+                v-model="boostUntil"
+                type="datetime-local"
+                step="1"
+                variant="outlined"
+                density="comfortable"
+                hide-details="auto"
             /></label>
           </details>
         </fieldset>
@@ -890,13 +960,13 @@ watch(
                   : '—'
               }}
             </p>
-            <UiButton :disabled="busy || !!pending || !canWrite" @click="toggle(p)">{{
+            <VBtn :disabled="busy || !!pending || !canWrite" @click="toggle(p)">{{
               t(p.state === 'enabled' ? 'telemetry.disablePolicy' : 'telemetry.enablePolicy')
-            }}</UiButton>
+            }}</VBtn>
           </article>
-          <UiButton v-if="usageNext" :disabled="busy" @click="references(usageNext)">{{
+          <VBtn v-if="usageNext" :disabled="busy" @click="references(usageNext)">{{
             t('devices.next')
-          }}</UiButton>
+          }}</VBtn>
           <p v-if="!usageNext && !usages.length">{{ t('telemetry.empty') }}</p>
           <fieldset :disabled="busy || !!pending || !canWrite">
             <p v-if="policyAction !== 'put'" class="telemetry-notice">
@@ -906,25 +976,23 @@ watch(
             </p>
             <label v-if="policyAction === 'put'"
               >{{ t('telemetry.policy')
-              }}<select
+              }}<VSelect
                 v-model="policyId"
                 :aria-label="t('telemetry.policy')"
-                class="ui-input"
-                @change="selectPolicy"
-              >
-                <option value="">{{ t('telemetry.newPolicy') }}</option>
-                <option
-                  v-for="p in usages.filter((p) => p.state !== 'archived')"
-                  :key="p.id"
-                  :value="p.id"
-                >
-                  {{ p.id }}
-                </option>
-              </select></label
-            ><UiButton v-if="!frozen?.activated" :disabled="!scope" @click="prepare">{{
+                @update:model-value="selectPolicy()"
+                :items="[
+                  { title: String(t('telemetry.newPolicy')), value: '' },
+                  ...usages
+                    .filter((p) => p.state !== 'archived')
+                    .map((p) => ({ title: String(p.id), value: p.id })),
+                ]"
+                variant="outlined"
+                density="comfortable"
+                hide-details="auto" /></label
+            ><VBtn v-if="!frozen?.activated" :disabled="!scope" @click="prepare">{{
               t('telemetry.prepareResource')
-            }}</UiButton
-            ><UiButton v-else @click="check()">{{ t('telemetry.previewTargets') }}</UiButton>
+            }}</VBtn
+            ><VBtn v-else @click="check()">{{ t('telemetry.previewTargets') }}</VBtn>
           </fieldset>
           <p v-if="frozen" class="telemetry-caption">
             {{ t('telemetry.saved') }} {{ frozen.created ? '✓' : '—' }} ·
@@ -936,7 +1004,7 @@ watch(
             <h3>{{ t('telemetry.targetPreview') }} · {{ preview.items.length }}</h3>
             <p v-if="preview.nextCursor">{{ t('telemetry.previewIncomplete') }}</p>
             <div class="telemetry-table-wrap">
-              <table class="telemetry-table">
+              <VTable density="comfortable">
                 <thead>
                   <tr>
                     <th>{{ t('telemetry.target') }}</th>
@@ -960,22 +1028,20 @@ watch(
                     </td>
                   </tr>
                 </tbody>
-              </table>
+              </VTable>
             </div>
-            <UiButton
-              v-if="preview.nextCursor"
-              :disabled="busy"
-              @click="check(preview.nextCursor)"
-              >{{ t('devices.next') }}</UiButton
+            <VBtn v-if="preview.nextCursor" :disabled="busy" @click="check(preview.nextCursor)">{{
+              t('devices.next')
+            }}</VBtn
             ><label class="telemetry-pick"
-              ><input
+              ><VCheckbox
                 v-model="confirmed"
-                type="checkbox"
                 :disabled="!!preview.nextCursor || !!usageNext"
+                hide-details="auto"
               />{{ t('telemetry.confirmPublish') }}</label
-            ><UiButton :disabled="busy || !confirmed || !!pending || !canWrite" @click="publish">{{
+            ><VBtn :disabled="busy || !confirmed || !!pending || !canWrite" @click="publish">{{
               t('telemetry.publishPolicy')
-            }}</UiButton>
+            }}</VBtn>
           </section>
         </section>
         <WriteRecovery
@@ -988,17 +1054,17 @@ watch(
           @replay="execute"
         />
         <footer class="telemetry-toolbar">
-          <UiButton v-if="step > 0" :disabled="busy || !!pending || !!frozen" @click="step--">{{
+          <VBtn v-if="step > 0" :disabled="busy || !!pending || !!frozen" @click="step--">{{
             t('telemetry.previous')
-          }}</UiButton
-          ><UiButton
+          }}</VBtn
+          ><VBtn
             v-if="step < 2"
             :disabled="busy || !chosen.length || (step === 1 && !scope)"
             @click="step++"
-            >{{ t('telemetry.continue') }}</UiButton
+            >{{ t('telemetry.continue') }}</VBtn
           >
         </footer>
-      </section></UiDialog
+      </section></PolicyDialog
     >
-  </PageFrame>
+  </MdmPage>
 </template>

@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { VSelect, VTextField, VCheckbox, VBtn } from 'vuetify/components'
+import { controlEvent } from '../../policies/control-event'
+
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton } from '@rss/core/components'
 import type { FieldDefinition } from '../../../contracts/collection/generated/FieldWrite'
 const props = withDefaults(defineProps<{ depth?: number }>(), { depth: 0 })
 const model = defineModel<FieldDefinition['valueType']>({ required: true })
@@ -68,9 +70,11 @@ function removeProperty(key: string) {
   <section class="console-panel" data-testid="field-type">
     <label
       >{{ t('telemetry.valueType')
-      }}<select :value="model.kind" class="ui-input" @change="kind">
-        <option
-          v-for="optionKind in [
+      }}<VSelect
+        :model-value="model.kind"
+        @update:model-value="kind(controlEvent($event))"
+        :items="[
+          ...[
             'string',
             'integer',
             'number',
@@ -78,26 +82,27 @@ function removeProperty(key: string) {
             'time',
             'enum',
             ...(props.depth < 4 ? ['array', 'record'] : []),
-          ]"
-          :key="optionKind"
-        >
-          {{ optionKind }}
-        </option>
-        <option v-if="model.kind === 'object'">object</option>
-      </select></label
-    >
+          ].map((optionKind) => ({ title: String(optionKind), value: String(optionKind) })),
+          ...(model.kind === 'object' ? [{ title: 'object', value: 'object' }] : []),
+        ]"
+        variant="outlined"
+        density="comfortable"
+        hide-details="auto"
+    /></label>
     <template v-if="model.kind === 'string'"
       ><label
         >{{ t('telemetry.fieldUi.maxLength')
-        }}<input
+        }}<VTextField
           v-model.number="model.maxLength"
           type="number"
           min="1"
           max="65536"
-          class="ui-input"
-          required /></label
+          required
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto" /></label
       ><label
-        ><input v-model="model.allowEmpty" type="checkbox" />{{
+        ><VCheckbox v-model="model.allowEmpty" hide-details="auto" />{{
           t('telemetry.fieldUi.allowEmpty')
         }}</label
       ></template
@@ -106,53 +111,63 @@ function removeProperty(key: string) {
       ><ul>
         <li v-for="(value, index) in model.values" :key="value">
           {{ value }}
-          <UiButton type="button" @click="model.values.splice(index, 1)">{{
+          <VBtn type="button" @click="model.values.splice(index, 1)">{{
             t('telemetry.removeMapping')
-          }}</UiButton>
+          }}</VBtn>
         </li>
       </ul>
       <label
         >{{ t('telemetry.stateMembers')
-        }}<input v-model="member" class="ui-input" maxlength="256" /></label
-      ><UiButton
+        }}<VTextField
+          v-model="member"
+          maxlength="256"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto" /></label
+      ><VBtn
         type="button"
         :disabled="!member || model.values.includes(member)"
         @click="addMember"
-        >{{ t('telemetry.mappingUi.addCode') }}</UiButton
+        >{{ t('telemetry.mappingUi.addCode') }}</VBtn
       ></template
     >
     <template v-if="model.kind === 'array'"
       ><label
         >{{ t('telemetry.fieldUi.maxItems')
-        }}<input
+        }}<VTextField
           v-model.number="model.maxItems"
           type="number"
           min="1"
           max="1000"
-          class="ui-input"
-          required /></label
+          required
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto" /></label
       ><FieldTypeEditor v-model="model.items" :depth="props.depth + 1"
     /></template>
     <template v-if="model.kind === 'record'"
       ><article v-for="key in propertyNames" :key="key">
         <h4>{{ key }}</h4>
         <label
-          ><input v-model="model.properties[key]!.required" type="checkbox" />{{
+          ><VCheckbox v-model="model.properties[key]!.required" hide-details="auto" />{{
             t('telemetry.fieldUi.required')
           }}</label
         ><FieldTypeEditor
           v-model="model.properties[key]!.valueType"
           :depth="props.depth + 1"
-        /><UiButton type="button" @click="removeProperty(key)">{{
-          t('telemetry.removeMapping')
-        }}</UiButton>
+        /><VBtn type="button" @click="removeProperty(key)">{{ t('telemetry.removeMapping') }}</VBtn>
       </article>
       <label
         >{{ t('telemetry.mappingUi.column')
-        }}<input v-model="name" class="ui-input" maxlength="64" /></label
-      ><UiButton type="button" :disabled="!name || props.depth >= 4" @click="addProperty">{{
+        }}<VTextField
+          v-model="name"
+          maxlength="64"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto" /></label
+      ><VBtn type="button" :disabled="!name || props.depth >= 4" @click="addProperty">{{
         t('telemetry.fieldUi.addProperty')
-      }}</UiButton></template
+      }}</VBtn></template
     >
     <template v-if="model.kind === 'object'"
       ><article v-for="key in propertyNames" :key="key">

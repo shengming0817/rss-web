@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import { VAlert } from 'vuetify/components'
+
 import { VDialog, VCard, VCardActions, VBtn } from 'vuetify/components'
 import { useDialogFocus } from '../../../ui/dialog-focus'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { UiMessage } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../../devices/useDeviceBinding'
@@ -65,7 +66,7 @@ const restoreDialogFocus = useDialogFocus(computed(() => !!selected.value))
       </div>
       <v-btn :disabled="busy" @click="load()">{{ t('devices.reload') }}</v-btn>
     </header>
-    <UiMessage v-if="failure" tone="danger" :title="t('devices.' + failure)" />
+    <VAlert v-if="failure" type="error" variant="tonal" :title="t('devices.' + failure)" />
     <p v-if="failure === 'conflict'" role="alert">{{ t('operations.auditUi.expired') }}</p>
     <AuditFilters v-model="draft" :busy="busy" device-timeline @submit="load()" />
     <template v-if="result">

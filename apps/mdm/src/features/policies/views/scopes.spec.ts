@@ -4,7 +4,7 @@ import { expect, it, vi } from 'vitest'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
-import ScopesView from './ScopesView.vue'
+import ScopesView from '../components/PolicyScopeEditor.vue'
 it('locks the original Scope after an unknown write and replays its exact frozen operation', async () => {
   const change = vi
     .fn()

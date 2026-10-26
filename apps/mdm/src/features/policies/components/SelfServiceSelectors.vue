@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import { VBtn, VSelect, VTextField } from 'vuetify/components'
+
 import { ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -126,34 +127,53 @@ function label(s: SelfServiceSelector) {
     <ul>
       <li v-for="(s, index) in model" :key="JSON.stringify(s)">
         {{ label(s) }}
-        <UiButton
+        <VBtn
           type="button"
           :aria-label="`${t('policies.remove')} ${label(s)}`"
           @click="remove(index)"
         >
           {{ t('policies.remove') }}
-        </UiButton>
+        </VBtn>
       </li>
     </ul>
     <p v-if="!model.length" role="alert">{{ t('policies.selfService.emptyUsers') }}</p>
     <label :for="`${id}-kind`">{{ t('policies.selfService.selectorKind') }}</label
-    ><select :id="`${id}-kind`" v-model="kind" class="ui-input" :disabled="busy">
-      <option v-for="k in selectorKinds" :key="k" :value="k">
-        {{ t(`policies.selfService.selector_${k}`) }}
-      </option>
-    </select>
+    ><VSelect
+      :id="`${id}-kind`"
+      v-model="kind"
+      :disabled="busy"
+      :items="[
+        ...selectorKinds.map((k) => ({
+          title: String(t(`policies.selfService.selector_${k}`)),
+          value: k,
+        })),
+      ]"
+      variant="outlined"
+      density="comfortable"
+      hide-details="auto"
+    />
     <TenantUserSelect v-if="kind === 'user'" v-model="principal" :disabled="busy" />
     <template v-else-if="kind === 'user_group'">
       <label :for="`${id}-group`">{{ t('policies.selfService.selector_user_group') }}</label
-      ><select :id="`${id}-group`" v-model="selectedId" class="ui-input" :disabled="busy">
-        <option value="">{{ t('policies.selfService.choose') }}</option>
-        <option v-for="g in groups" :key="g.id" :value="g.id" :disabled="!g.value?.enabled">
-          {{ g.value?.name ?? g.id }}
-        </option>
-      </select>
-      <UiButton v-if="cursor" type="button" :disabled="!!busy" @click="load(true)">
+      ><VSelect
+        :id="`${id}-group`"
+        v-model="selectedId"
+        :disabled="busy"
+        :items="[
+          { title: String(t('policies.selfService.choose')), value: '' },
+          ...groups.map((g) => ({
+            title: String(g.value?.name ?? g.id),
+            value: g.id,
+            props: { disabled: !g.value?.enabled },
+          })),
+        ]"
+        variant="outlined"
+        density="comfortable"
+        hide-details="auto"
+      />
+      <VBtn v-if="cursor" type="button" :disabled="!!busy" @click="load(true)">
         {{ t('policies.next') }}
-      </UiButton>
+      </VBtn>
     </template>
     <template v-else-if="kind === 'department'">
       <p v-if="departments?.status !== 'available'" role="status">
@@ -161,44 +181,80 @@ function label(s: SelfServiceSelector) {
       </p>
       <template v-else>
         <label :for="`${id}-department`">{{ t('policies.selfService.selector_department') }}</label
-        ><select :id="`${id}-department`" v-model="selectedId" class="ui-input" :disabled="busy">
-          <option value="">{{ t('policies.selfService.choose') }}</option>
-          <option v-for="d in departments.snapshot.nodes" :key="d.id" :value="d.id">
-            {{ d.displayName }}
-          </option>
-        </select>
+        ><VSelect
+          :id="`${id}-department`"
+          v-model="selectedId"
+          :disabled="busy"
+          :items="[
+            { title: String(t('policies.selfService.choose')), value: '' },
+            ...departments.snapshot.nodes.map((d) => ({
+              title: String(d.displayName),
+              value: d.id,
+            })),
+          ]"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto"
+        />
         <label :for="`${id}-matching`">{{ t('policies.selfService.matching') }}</label
-        ><select :id="`${id}-matching`" v-model="matching" class="ui-input">
-          <option value="exact">{{ t('policies.selfService.exact') }}</option>
-          <option value="subtree">{{ t('policies.selfService.subtree') }}</option>
-        </select>
+        ><VSelect
+          :id="`${id}-matching`"
+          v-model="matching"
+          :items="[
+            { title: String(t('policies.selfService.exact')), value: 'exact' },
+            { title: String(t('policies.selfService.subtree')), value: 'subtree' },
+          ]"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto"
+        />
       </template>
     </template>
     <template v-else>
       <label :for="`${id}-group-id`">{{ t('policies.selfService.groupId') }}</label
-      ><input :id="`${id}-group-id`" v-model="selectedId" class="ui-input" />
+      ><VTextField
+        :id="`${id}-group-id`"
+        v-model="selectedId"
+        variant="outlined"
+        density="comfortable"
+        hide-details="auto"
+      />
       <label :for="`${id}-provider`">{{ t('policies.selfService.provider') }}</label
-      ><input :id="`${id}-provider`" v-model="provider" class="ui-input" />
+      ><VTextField
+        :id="`${id}-provider`"
+        v-model="provider"
+        variant="outlined"
+        density="comfortable"
+        hide-details="auto"
+      />
       <label :for="`${id}-issuer`">{{ t('policies.selfService.issuer') }}</label
-      ><input :id="`${id}-issuer`" v-model="issuer" class="ui-input" />
+      ><VTextField
+        :id="`${id}-issuer`"
+        v-model="issuer"
+        variant="outlined"
+        density="comfortable"
+        hide-details="auto"
+      />
       <label :for="`${id}-configuration-version`">{{
         t('policies.selfService.sourceRevision')
       }}</label
-      ><input
+      ><VTextField
         :id="`${id}-configuration-version`"
         v-model.number="configurationVersion"
-        class="ui-input"
         type="number"
         min="1"
         step="1"
+        variant="outlined"
+        density="comfortable"
+        hide-details="auto"
       />
     </template>
-    <UiButton type="button" :disabled="!!(busy || model.length >= 256)" @click="add">
+    <VBtn type="button" :disabled="!!(busy || model.length >= 256)" @click="add">
       {{ t('policies.add') }}
-    </UiButton>
-    <UiButton v-if="kind !== 'idp_group'" type="button" :disabled="!!busy" @click="load()">
+    </VBtn>
+    <VBtn v-if="kind !== 'idp_group'" type="button" :disabled="!!busy" @click="load()">
       {{ t('policies.reload') }}
-    </UiButton>
+    </VBtn>
     <p v-if="failure" role="alert">{{ t(`policies.${failure}`) }}</p>
   </fieldset>
 </template>
