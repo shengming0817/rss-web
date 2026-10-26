@@ -700,7 +700,7 @@ watch(
       ><RouterLink :to="{ name: 'policy-resources', params: { tenant: runtime.tenant } }">{{
         t('telemetry.resourceLibrary')
       }}</RouterLink
-      ><RouterLink :to="{ name: 'settings-metrics', params: { tenant: runtime.tenant } }">{{
+      ><RouterLink :to="{ name: 'policy-metrics', params: { tenant: runtime.tenant } }">{{
         t('telemetry.metricsSettings')
       }}</RouterLink
       ><VBtn :disabled="busy || !canWrite || !!pending" @click="edit()">{{

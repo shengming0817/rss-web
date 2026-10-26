@@ -100,6 +100,8 @@ export function createPolicyStore() {
     if (request.path.endsWith('/previews')) return
     try {
       if (scenario === 'denied') return error('permission_denied', 403)
+      if (request.path === '/api/v1/policies/capabilities' && request.method === 'GET')
+        return ok({ defaultSoftwareChannel: 'agent', mdmSoftwareDistributionEnabled: false })
       if (request.path === '/api/v1/policies' && request.method === 'GET') {
         const rowsToRead = (scenario === 'empty' ? [] : [...rows.values()])
           .filter((p) => request.query.get('filter')?.includes('state') || p.state !== 'archived')
