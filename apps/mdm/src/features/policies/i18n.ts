@@ -1,4 +1,31 @@
 export const policiesZh = {
+  queues: {
+    title: '执行队列',
+    all: '全部',
+    waiting: '等待设备',
+    blocked: '待重新授权',
+    unknown: '未知结果',
+  },
+  authorization: {
+    title: '当前执行授权',
+    reason: '阻断原因',
+    reauthorization: '重新授权资格',
+    authorized: '已授权',
+    blocked: '授权受阻',
+    not_applicable: '不适用',
+    available: '可重新授权',
+    unavailable: '不可重新授权',
+    lifecycle_blocked: '设备生命周期阻断',
+    registration_changed: '注册代次已变化',
+    input_mismatch: '原操作材料不匹配',
+    source_invalid: '来源当前不可用',
+    permission_denied: '当前操作者无动作权限',
+    terminal: '操作已终结',
+    already_received: '设备已接收',
+    expired: '操作已过期',
+    unsupported: '当前设备不支持此操作',
+  },
+
   ux: {
     planning: '配置与部署',
     groupsHint: '将需要一起管理的设备组织起来。智能群组随资产变化更新，静态群组由你维护。',
@@ -439,7 +466,7 @@ export const policiesZh = {
   dispatchFailure: '派发失败：请核对详情中的平台准备与配置原因。',
   inspectAction: '读取动作与目标',
   statusFilterBoundary:
-    '按命令或运行的实际状态查询；当前正式目录不支持全量待重新授权队列，需进入设备操作详情核对授权状态。',
+    '队列、列表和统计使用同一服务端筛选。等待设备仅包含未接收的命令；未知结果不等于浏览器写入响应未知。授权受阻不代表当前可以重新授权。',
   controlImpact: {
     restart: '将请求设备重启；受理与回执不证明设备已经重启。',
     lock: '将请求锁定当前设备；重新授权保留原动作及 PIN，不创建新操作。',
@@ -963,7 +990,7 @@ export const policiesEn: typeof policiesZh = {
   dispatchFailure: 'Dispatch failed: review platform preparation and configuration details.',
   inspectAction: 'Read action and target',
   statusFilterBoundary:
-    'Filter by actual command or run status. The current directory has no complete reauthorization queue; inspect device operation details for authorization.',
+    'Queues, lists and statistics use the same server filter. Waiting for device includes unreceived commands only; unknown results are distinct from lost browser write responses. Blocked does not imply reauthorization is available.',
   controlImpact: {
     restart:
       'Requests a device restart. Acceptance and receipts do not prove the device restarted.',

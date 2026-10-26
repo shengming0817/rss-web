@@ -509,6 +509,9 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
   await editor.findAll('select')[1]!.setValue('custom.is_loaner')
   await form.trigger('submit')
   await flushPromises()
+  await click('读取任务状态')
+  await click('读取任务状态')
+  await click('读取任务状态')
   expect(wrapper.findAll('[role=alert]').map((v) => v.text())).toEqual([])
   await click('规则')
   await wrapper
@@ -521,6 +524,9 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
   await form.find('.condition-editor').findAll('select').at(-1)!.setValue('true')
   await form.trigger('submit')
   await flushPromises()
+  await click('读取任务状态')
+  await click('读取任务状态')
+  await click('读取任务状态')
   const group = (await devices.groups.list()).items.find((g) => g.presentation.name === 'Dynamic')!
   expect((await devices.groups.read(group.id)).criteria).toMatchObject({
     criteria: { value: { kind: 'boolean', value: true } },
@@ -2074,4 +2080,47 @@ it('withdraws cached directory counts when a continuation loses its authority', 
   await f.click('下一页')
   expect(f.wrapper.find('.console-stat-grid').exists()).toBe(false)
   expect(f.wrapper.find('tbody').exists()).toBe(false)
+})
+
+it('automatically observes a definition task before reading the separately published member set and stops on unmount', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    const h = await setup('device-groups')
+    const form = new DOMWrapper(document.body).get('[role=dialog] form')
+    await form.get('[data-testid=group-name]').setValue('Async group')
+    await form.get('[data-testid=group-kind]').setValue('dynamic')
+    await form.trigger('submit')
+    await flushPromises()
+    const write = h.requests
+      .filter((r) => r.method === 'POST' && r.path === '/api/v1/groups/{id}')
+      .at(-1)!
+    const group = write.pathParams!['id']!,
+      definition = (write.body as { operationId: string }).operationId
+    expect(
+      h.requests.some(
+        (r) =>
+          r.method === 'GET' && r.path === '/api/v1/groups/{id}' && r.pathParams?.['id'] === group,
+      ),
+    ).toBe(false)
+    await vi.advanceTimersByTimeAsync(2000)
+    await flushPromises()
+    expect(h.wrapper.find('[data-testid=server-definition]').exists()).toBe(false)
+    await vi.advanceTimersByTimeAsync(4000)
+    await flushPromises()
+    const read = await h.devices.groups.read(group)
+    expect(read.memberSet).toBeTruthy()
+    expect(read.memberSet).not.toBe(definition)
+    expect(h.wrapper.find('[data-testid=server-definition]').text()).toContain('Async group')
+    expect(
+      h.requests
+        .filter((r) => r.path.includes('/results/'))
+        .every((r) => r.pathParams?.['result'] !== definition),
+    ).toBe(true)
+    h.wrapper.unmount()
+    const count = h.requests.length
+    await vi.advanceTimersByTimeAsync(6000)
+    expect(h.requests).toHaveLength(count)
+  } finally {
+    vi.useRealTimers()
+  }
 })

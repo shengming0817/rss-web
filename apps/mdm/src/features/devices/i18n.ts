@@ -1,4 +1,6 @@
 export const devicesZh = {
+  definitionTask: '群组定义保存任务',
+  membersPending: '成员计算尚未发布新结果；已发布的完整结果仍可查看。',
   personLogin: '登录名',
   personLocal: '本地资料',
   personIdp: '身份源',

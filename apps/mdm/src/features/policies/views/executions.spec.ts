@@ -117,7 +117,8 @@ it('queries an unknown cancellation, displays the observed revision, and explici
       name: 'SyncML',
       objects: ['./Device/Vendor/MSFT/Reboot/RebootNow'],
     },
-    authorization: 'authorized',
+    authorization: { state: 'authorized' },
+    reauthorization: { state: 'unavailable', reason: 'already_received' },
     commandStatus: 'queued',
     observation: { protocol: 'syncml', progress: 'unknown', effect: 'unverified' },
   }
@@ -215,4 +216,136 @@ it('removes the old control target when the device selection is cleared without 
   expect(detail.mock.calls).toEqual([['endpoint']])
   expect(view).toHaveBeenCalledTimes(1)
   wrapper.unmount()
+})
+
+it('uses the same server queue predicate for the directory and statistics without deriving blocked from queued', async () => {
+  const directory = vi.fn().mockResolvedValue({ items: [], nextCursor: 'YWJj' })
+  const statistics = vi.fn().mockResolvedValue({
+    statistics: { total: 21, commands: 21, actionRuns: 0, unknown: 0 },
+    asOf: 1,
+  })
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/', component: ExecutionsView }],
+  })
+  await router.push('/')
+  const wrapper = mount(ExecutionsView, {
+    global: {
+      plugins: [router, mdmI18n()],
+      provide: {
+        [mdmKey as symbol]: {
+          tenant: 'tenant',
+          session: { state: ref({ status: 'authenticated' }) },
+          policies: { executions: { directory, statistics } },
+        },
+      },
+    },
+  })
+  try {
+    await flushPromises()
+    for (const [label, field] of [
+      ['等待设备', "kind=='command'"],
+      ['待重新授权', "authorization.state=='blocked'"],
+      ['未知结果', "status=='unknown'"],
+    ]) {
+      await wrapper
+        .findAll('button')
+        .find((b) => b.text() === label)!
+        .trigger('click')
+      await flushPromises()
+      const filter = directory.mock.lastCall?.[0].filter
+      expect(filter).toContain(field)
+      expect(statistics.mock.lastCall?.[0]).toBe(filter)
+      if (label === '待重新授权') expect(filter).not.toContain('reauthorization.state')
+    }
+    const filter = directory.mock.lastCall?.[0].filter
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === '下一页')!
+      .trigger('click')
+    await flushPromises()
+    expect(directory.mock.lastCall?.[0]).toEqual({ filter, cursor: 'YWJj' })
+    directory.mockRejectedValueOnce(new Error('invalidated cursor'))
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === '下一页')!
+      .trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('button').some((b) => b.text() === '下一页')).toBe(false)
+    expect(directory.mock.lastCall?.[0].filter).toBe(filter)
+  } finally {
+    wrapper.unmount()
+  }
+})
+
+it('uses current reauthorization eligibility and replays a lost response with the original CAS and body', async () => {
+  const id = '11111111-1111-4111-8111-111111111111'
+  let value = {
+    operationId: id,
+    revision: 1,
+    target: { kind: 'device' },
+    task: {
+      platform: 'windows',
+      kind: 'sync_ml',
+      name: 'SyncML',
+      objects: ['./Device/Vendor/MSFT/Reboot/RebootNow'],
+    },
+    authorization: { state: 'blocked', reason: 'source_invalid' } as Record<string, unknown>,
+    reauthorization: { state: 'unavailable', reason: 'permission_denied' } as Record<
+      string,
+      unknown
+    >,
+    commandStatus: 'queued',
+    observation: { protocol: 'syncml', progress: 'unknown', effect: 'unverified' },
+  }
+  const read = vi.fn(async () => value)
+  const reauthorize = vi
+    .fn()
+    .mockRejectedValueOnce(new Error('lost'))
+    .mockResolvedValue({ operationId: id, revision: 2 })
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/:execution', component: ExecutionDetailView }],
+  })
+  await router.push(`/${id}?device=endpoint`)
+  const wrapper = mount(ExecutionDetailView, {
+    global: {
+      plugins: [router, mdmI18n()],
+      stubs: { RouterLink: true },
+      provide: {
+        [mdmKey as symbol]: {
+          tenant: 'tenant',
+          session: { state: ref({ status: 'authenticated' }) },
+          policies: { native: { read, reauthorize } },
+        },
+      },
+    },
+  })
+  const button = (label: string) => wrapper.findAll('button').find((b) => b.text() === label)!
+  try {
+    await flushPromises()
+    expect(button('重新授权')).toBeUndefined()
+    expect(wrapper.text()).toContain('当前操作者无动作权限')
+    value = {
+      ...value,
+      authorization: { state: 'authorized' },
+      reauthorization: { state: 'available', confirmationRequired: false },
+    }
+    await button('核实状态').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('input[type=checkbox]').exists()).toBe(false)
+    await button('重新授权').trigger('click')
+    await flushPromises()
+    const original = reauthorize.mock.calls[0]?.[2]
+    expect(original).not.toHaveProperty('confirmation')
+    value = { ...value, revision: 2 }
+    await button('核实状态').trigger('click')
+    await flushPromises()
+    await button('重放同一操作').trigger('click')
+    await flushPromises()
+    expect(reauthorize.mock.calls[1]?.[2]).toEqual(original)
+    expect(original.expectedRevision).toBe(1)
+  } finally {
+    wrapper.unmount()
+  }
 })

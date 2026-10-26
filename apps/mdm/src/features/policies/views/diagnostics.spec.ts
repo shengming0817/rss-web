@@ -36,7 +36,8 @@ it('shows native receipt and cleanup diagnostics while withholding terminal acti
                   name: 'SyncML',
                   objects: ['./Device/Vendor/MSFT/Reboot/RebootNow'],
                 },
-                authorization: 'authorized',
+                authorization: { state: 'authorized' },
+                reauthorization: { state: 'unavailable', reason: 'already_received' },
                 commandStatus: 'received',
                 observation: {
                   protocol: 'syncml',
@@ -83,7 +84,8 @@ it('keeps reauthorization coordinates editable character by character and invali
       name: 'SyncML',
       objects: ['./Device/Vendor/MSFT/Reboot/RebootNow'],
     },
-    authorization: 'blocked',
+    authorization: { state: 'blocked', reason: 'lifecycle_blocked' },
+    reauthorization: { state: 'available', confirmationRequired: true },
     commandStatus: 'queued',
     agentInstallation: null,
     observation: {
