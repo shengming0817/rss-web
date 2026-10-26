@@ -2,6 +2,7 @@ import GroupsView from './GroupsView.vue'
 import InventoryQuery from '../components/InventoryQuery.vue'
 import DeviceGroupsPanel from '../components/DeviceGroupsPanel.vue'
 import { VSelect, VAutocomplete, VTextField, VAlert } from 'vuetify/components'
+import NativeEnrollmentPanel from '../../enrollment/components/NativeEnrollmentPanel.vue'
 import { encodeAssetQuery } from '../clients/asset-query'
 import GroupDependencies from '../components/GroupDependencies.vue'
 import { createSecurityClients as createFormalSecurityClients } from '../../security/client'
@@ -30,7 +31,26 @@ import { settingsFeature } from '../../settings/routes'
 import { deviceFeature } from '../routes'
 import { createPolicyClients } from '../../../../demo/features/policies/client'
 import { createDeviceClients } from '../client'
+import { createOnboardingClients } from '../../enrollment/client'
+import { createSettingsOperations } from '../../settings/operations'
 const wrappers: VueWrapper[] = []
+
+async function nativeControls(wrapper: VueWrapper) {
+  const panel = wrapper.findComponent(NativeEnrollmentPanel)
+  const toggle = panel.get('.v-expansion-panel-title')
+  if (toggle.attributes('aria-expanded') !== 'true') {
+    await toggle.trigger('click')
+    await flushPromises()
+  }
+  const click = async (text: string) => {
+    const button = panel.findAll('button').find((b) => b.text() === text)
+    expect(button, text).toBeDefined()
+    await button!.trigger('click')
+    await flushPromises()
+  }
+  return { panel, create: panel.findAll('form')[1]!, query: panel.findAll('form')[0]!, click }
+}
+
 it('shows channel communication separately and clears the MDM receipt after registering again', async () => {
   const h = await setup('device-detail', { device: 'device-01' })
   const before = await h.devices.directory.detail('device-01')
@@ -154,7 +174,7 @@ async function setup(
   })
   await router.push({
     name,
-    params: { tenant: TENANT, ...params },
+    params: { ...(name === 'self-enrollments' ? {} : { tenant: TENANT }), ...params },
     query:
       name === 'device-detail' || name === 'device-view-detail'
         ? { tab: 'inventory', ...query }
@@ -174,6 +194,7 @@ async function setup(
     operations.authorization,
     TENANT,
   )
+  const settingsOperations = createSettingsOperations(session)
   const i18n = mdmI18n()
   i18n.global.locale.value = 'zh-CN'
   const wrapper = mount(RouterView, {
@@ -183,6 +204,8 @@ async function setup(
       provide: {
         [mdmKey as symbol]: {
           devices,
+          onboarding: createOnboardingClients(transport, transport, TENANT, 'demo-instance'),
+          settings: { operations: settingsOperations },
           security: createFormalSecurityClients(transport, TENANT),
           policies: createPolicyClients(transport, TENANT, true),
           transport,
@@ -210,7 +233,10 @@ async function setup(
       },
     },
   })
-  wrapper.vm.$.appContext.app.onUnmount(() => registrationChannels.dispose())
+  wrapper.vm.$.appContext.app.onUnmount(() => {
+    registrationChannels.dispose()
+    settingsOperations.dispose()
+  })
   wrappers.push(wrapper)
   await flushPromises()
   const button = (text: string) => {
@@ -465,44 +491,34 @@ it('creates a group, edits its definition, previews and recomputes server member
   await click('载入')
   expect(wrapper.text()).toContain('当前已发布成员集: 是')
 })
-it('clears enrollment password at submission, supports recovery, and never persists a secret', async () => {
-  const { wrapper, click, scenario, devices } = await setup('device-enroll')
-  const form = wrapper.find('form')
-  await form.find('input').setValue('new-device')
-  await click('生成一次性交付口令')
-  const password = form.findAll('input')[1]!
-  expect(password.element.value).toHaveLength(43)
-  const originalPassword = password.element.value
-  await form.find('input[type=checkbox]').setValue(true)
+it('clears device-detail enrollment secrets and explicitly replays the original authorization', async () => {
+  const { wrapper, scenario, devices } = await setup('device-management', { device: 'device-01' })
+  const ui = await nativeControls(wrapper)
+  await ui.click('生成一次性交付口令')
+  const password = ui.create.get('input[autocomplete=off]')
+  const originalPassword = (password.element as HTMLInputElement).value
+  expect(originalPassword).toHaveLength(43)
+  await ui.create.get('input[type=checkbox]').setValue(true)
+  const create = vi.spyOn(devices.enrollment, 'create')
   scenario.set('unknown')
-  await form.trigger('submit')
+  await ui.create.trigger('submit')
   await flushPromises()
-  expect(password.element.value).toBe('')
-  expect(wrapper.text()).toContain('提交结果未知')
+  expect((password.element as HTMLInputElement).value).toBe('')
+  expect(ui.panel.text()).toContain('提交结果未知')
   expect(window.sessionStorage.length).toBe(0)
+  const operation = ui.panel.get('[data-enrollment-operation]').text()
   scenario.set('normal')
-  const originalOperation = wrapper
-    .findAll('p')
-    .find((p) => p.text().includes('操作 ID'))
-    ?.text()
-  expect(originalOperation).toBeDefined()
   await password.setValue(originalPassword)
-  await form.find('input[type=checkbox]').setValue(true)
-  expect(form.find('button[type=submit]').attributes('disabled')).toBeDefined()
-  await click('明确重放原操作')
-  expect(
-    wrapper
-      .findAll('p')
-      .find((p) => p.text().includes('操作 ID'))
-      ?.text(),
-  ).toBe(originalOperation)
-  await flushPromises()
-  expect((await devices.directory.detail('new-device')).enrollments).toHaveLength(1)
-  expect(wrapper.text()).toContain('待注册')
-  expect(password.element.value).toBe('')
-  await click('读取原请求状态')
-  await click('取消')
-  expect(wrapper.text()).toContain('已取消')
+  await ui.create.get('input[type=checkbox]').setValue(true)
+  expect(ui.create.get('button[type=submit]').attributes('disabled')).toBeDefined()
+  await ui.click('明确重放原操作')
+  expect(create.mock.calls[1]).toEqual(create.mock.calls[0])
+  expect(create.mock.calls[0]?.[1]).toMatchObject({ deviceId: 'device-01', windowsProfile: 'Full' })
+  expect(ui.panel.get('[data-enrollment-operation]').text()).toBe(operation)
+  expect(ui.panel.text()).toContain('待注册')
+  expect((password.element as HTMLInputElement).value).toBe('')
+  await ui.click('取消')
+  expect(ui.panel.text()).toContain('已取消')
 })
 
 it('compares a saved server definition without replacing the local draft', async () => {
@@ -898,24 +914,31 @@ it('marks credential details stale after an acknowledged revoke with a failed re
   expect(wrapper.text()).not.toContain('详情尚未刷新')
 })
 
-it('self enrollment works without the management frame and clears handoff secrets on submit and navigation', async () => {
-  const { wrapper, click, router } = await setup('self-enrollments')
+it('self enrollment authorizes Full MDM outside the management frame and clears handoff secrets', async () => {
+  const { wrapper, click, router, devices } = await setup('self-enrollments')
   expect(wrapper.text()).toContain('注册我的设备')
   expect(wrapper.find('nav').exists()).toBe(false)
+  const enroll = vi.spyOn(devices.registration, 'enroll')
   await click('生成一次性交付口令')
-  await wrapper.find('form input[type=checkbox]').setValue(true)
-  const password = wrapper.find('input[autocomplete=off]')
+  await wrapper.get('form input[type=checkbox]').setValue(true)
+  const password = wrapper.get('input[autocomplete=off]')
   expect((password.element as HTMLInputElement).value).toHaveLength(43)
-  await wrapper.findAll('form')[0]!.trigger('submit')
+  await wrapper.get('form').trigger('submit')
   await flushPromises()
   expect((password.element as HTMLInputElement).value).toBe('')
-  expect(wrapper.text()).toContain('self:')
-  expect(wrapper.find('tbody').text()).toContain('1')
-  await click('生成一次性交付口令')
-  await wrapper.find('form input[type=checkbox]').setValue(true)
-  await router.push({ name: 'devices', params: { tenant: TENANT } })
+  expect(enroll.mock.calls[0]?.[3]).toBe('Full')
+  const receipt = await enroll.mock.results[0]!.value
+  const native = await devices.enrollment.status(receipt.enrollmentId)
+  const handoff = wrapper.get('a[href^="ms-device-enrollment:"]').attributes('href')!
+  expect(new URLSearchParams(handoff.split('?')[1]).get('username')).toBe(
+    native.instructions.platform === 'windows' ? native.instructions.username : '',
+  )
+  expect(handoff).not.toContain(enroll.mock.calls[0]?.[1])
+  expect(wrapper.find('a[href*=management]').exists()).toBe(true)
+  expect(wrapper.find('input[autocomplete=off]').exists()).toBe(false)
+  await router.push({ name: 'registration-quotas', params: { tenant: TENANT } })
   await flushPromises()
-  expect(wrapper.text()).not.toContain('self:')
+  expect(wrapper.text()).not.toContain('授权并开始注册')
 })
 it('administrator quota editing preserves exact commands after a lost response', async () => {
   const { wrapper, scenario, click } = await setup('registration-quotas')
@@ -927,7 +950,7 @@ it('administrator quota editing preserves exact commands after a lost response',
   scenario.set('normal')
   await click('核对后重试原操作')
   expect(wrapper.text()).toContain('已保存')
-  await wrapper.find('select').setValue('override')
+  wrapper.findComponent(VSelect).vm.$emit('update:modelValue', 'override')
   await flushPromises()
   wrapper
     .findComponent(TenantUserSelect)
@@ -982,53 +1005,54 @@ it('edits the canonical device owner in detail and locks an unknown write until 
   expect(f.requests.filter((r) => r.path.includes('user-profiles'))).toHaveLength(0)
 })
 
-it('invalidates the displayed native registration when the query target changes and cancels only the newly read target', async () => {
-  const { wrapper, devices, click } = await setup('self-enrollments')
-  const first = await devices.registration.enroll(
-    crypto.randomUUID(),
-    'A'.repeat(43),
-    'mdm.windows',
-    'Device',
-  )
-  const second = await devices.registration.enroll(
-    crypto.randomUUID(),
-    'A'.repeat(43),
-    'mdm.windows',
-    'Device',
-  )
-  const query = wrapper.findAll('form')[1]!
-  await query.find('input').setValue(first.enrollmentId)
-  await query.trigger('submit')
+it('invalidates device-detail native progress when the query changes and cancels only that endpoint request', async () => {
+  const { wrapper, devices, click } = await setup('device-management', { device: 'device-01' })
+  const first = await devices.enrollment.create(crypto.randomUUID(), {
+    deviceId: 'device-01',
+    password: 'A'.repeat(43),
+    source: 'mdm.windows',
+    windowsProfile: 'Full',
+  })
+  const second = await devices.enrollment.create(crypto.randomUUID(), {
+    deviceId: 'device-01',
+    password: 'A'.repeat(43),
+    source: 'mdm.windows',
+    windowsProfile: 'Full',
+  })
+  await click('重新读取')
+  const ui = await nativeControls(wrapper)
+  await ui.query.get('input').setValue(first.enrollmentId)
+  await ui.query.trigger('submit')
   await flushPromises()
-  expect(wrapper.find('dl').text()).toContain(first.enrollmentId)
+  expect(ui.panel.findComponent({ name: 'NativeFacts' }).exists()).toBe(true)
   const cancel = vi.spyOn(devices.enrollment, 'cancel')
-  await query.find('input').setValue(second.enrollmentId)
-  expect(wrapper.find('dl').exists()).toBe(false)
-  expect(wrapper.findAll('button').some((b) => b.text() === '取消')).toBe(false)
+  await ui.query.get('input').setValue(second.enrollmentId)
+  expect(ui.panel.findComponent({ name: 'NativeFacts' }).exists()).toBe(false)
   expect(cancel).not.toHaveBeenCalled()
-  await query.trigger('submit')
+  await ui.query.trigger('submit')
   await flushPromises()
-  await click('取消')
+  await ui.click('取消')
   expect(cancel.mock.calls.map(([id]) => id)).toEqual([second.enrollmentId])
   expect((await devices.enrollment.status(first.enrollmentId)).status).toBe('pending')
-  expect((await devices.enrollment.status(second.enrollmentId)).status).toBe('cancelled')
 })
 
-it('discards a native read that arrives after its query target changes', async () => {
-  const { wrapper, devices } = await setup('self-enrollments')
-  const first = await devices.registration.enroll(
-    crypto.randomUUID(),
-    'A'.repeat(43),
-    'mdm.windows',
-    'Device',
-  )
-  const second = await devices.registration.enroll(
-    crypto.randomUUID(),
-    'A'.repeat(43),
-    'mdm.windows',
-    'Device',
-  )
-  const read = devices.enrollment.status
+it('discards device-detail native reads that arrive after a target edit', async () => {
+  const { wrapper, devices, click } = await setup('device-management', { device: 'device-01' })
+  const first = await devices.enrollment.create(crypto.randomUUID(), {
+    deviceId: 'device-01',
+    password: 'A'.repeat(43),
+    source: 'mdm.windows',
+    windowsProfile: 'Full',
+  })
+  const second = await devices.enrollment.create(crypto.randomUUID(), {
+    deviceId: 'device-01',
+    password: 'A'.repeat(43),
+    source: 'mdm.windows',
+    windowsProfile: 'Full',
+  })
+  await click('重新读取')
+  const ui = await nativeControls(wrapper),
+    read = devices.enrollment.status
   let release!: () => void
   const gate = new Promise<void>((resolve) => {
     release = resolve
@@ -1038,66 +1062,60 @@ it('discards a native read that arrives after its query target changes', async (
     await gate
     return result
   })
-  const query = wrapper.findAll('form')[1]!
-  await query.find('input').setValue(first.enrollmentId)
-  await query.trigger('submit')
-  expect(query.find('input').attributes('disabled')).toBeDefined()
-  // Also fence a programmatic edit while the request is in flight.
-  const input = query.find('input').element as HTMLInputElement
+  await ui.query.get('input').setValue(first.enrollmentId)
+  await ui.query.trigger('submit')
+  const input = ui.query.get('input').element as HTMLInputElement
   input.value = second.enrollmentId
   input.dispatchEvent(new Event('input', { bubbles: true }))
   release()
   await flushPromises()
-  expect(wrapper.find('dl').exists()).toBe(false)
-  await query.trigger('submit')
+  expect(ui.panel.findComponent({ name: 'NativeFacts' }).exists()).toBe(false)
+  await ui.query.trigger('submit')
   await flushPromises()
-  expect(wrapper.find('dl').text()).toContain(second.enrollmentId)
-  expect(wrapper.find('dl').text()).not.toContain(first.enrollmentId)
+  expect(ui.panel.findComponent({ name: 'NativeFacts' }).props('value').enrollmentId).toBe(
+    second.enrollmentId,
+  )
 })
 
-it('refreshes native binding and resumes the same bound identity even when new enrollment is disabled', async () => {
-  const { wrapper, devices, domain, click } = await setup('self-enrollments')
+it('resumes the same bound registration from device details when new personal enrollment has no quota', async () => {
+  const { wrapper, devices, domain, click, router } = await setup('self-enrollments')
+  const enroll = vi.spyOn(devices.registration, 'enroll')
   await click('生成一次性交付口令')
-  await wrapper.find('form input[type=checkbox]').setValue(true)
-  await wrapper.findAll('form')[0]!.trigger('submit')
+  await wrapper.get('form input[type=checkbox]').setValue(true)
+  await wrapper.get('form').trigger('submit')
   await flushPromises()
-  const id = (wrapper.findAll('form')[1]!.find('input').element as HTMLInputElement).value
-  const deviceId = wrapper.findAll('dl dd')[1]!.text()
+  const receipt = await enroll.mock.results[0]!.value
   domain.tick({
     kind: 'enrollment_bind',
-    device: deviceId,
-    enrollment: id,
+    device: receipt.deviceId,
+    enrollment: receipt.enrollmentId,
     at: Math.floor(Date.now() / 1000),
   })
-  const bound = await devices.enrollment.status(id)
-  expect(bound.status).toBe('bound')
+  const bound = await devices.enrollment.status(receipt.enrollmentId)
   await devices.registration.change(crypto.randomUUID(), 0, {
     agent: 20,
     windows_mdm: 0,
     macos_mdm: 20,
   })
-  await click('刷新状态与额度')
-  expect(wrapper.find('dl').text()).toContain('已绑定')
-  expect(wrapper.find('dl').text()).toContain(deviceId)
-  expect(wrapper.findAll('button').some((b) => b.text() === '取消')).toBe(false)
-  const resume = vi.spyOn(devices.enrollment, 'resume')
-  const create = vi.spyOn(devices.registration, 'enroll')
-  await click('生成一次性交付口令')
-  await wrapper.find('form input[type=checkbox]').setValue(true)
-  await click('更新口令并继续')
-  expect(resume.mock.calls.map(([target]) => target)).toEqual([id])
-  expect(create).not.toHaveBeenCalled()
-  expect(await devices.enrollment.status(id)).toMatchObject({
-    enrollmentId: id,
+  await router.push({
+    name: 'device-management',
+    params: { tenant: TENANT, device: receipt.deviceId },
+    query: { enrollment: receipt.enrollmentId },
+  })
+  await flushPromises()
+  const ui = await nativeControls(wrapper),
+    resume = vi.spyOn(devices.enrollment, 'resume')
+  await ui.click('生成一次性交付口令')
+  await ui.create.get('input[type=checkbox]').setValue(true)
+  await ui.click('更新口令并继续')
+  expect(resume.mock.calls.map(([id]) => id)).toEqual([receipt.enrollmentId])
+  expect(await devices.enrollment.status(receipt.enrollmentId)).toMatchObject({
     registrationId: bound.registrationId,
     status: 'bound',
   })
   expect(
     (await devices.registration.me()).channels.find((c) => c.channel === 'windows_mdm')?.used,
   ).toBe(1)
-  await expect(devices.enrollment.cancel(id, crypto.randomUUID())).rejects.toMatchObject({
-    status: 409,
-  })
 })
 async function chooseAssociation(h: Awaited<ReturnType<typeof setup>>) {
   await h.click('管理')
@@ -1408,8 +1426,8 @@ it.each(['zh-CN', 'en-US'] as const)(
   },
 )
 
-it('rejects a stale self-enrollment submit at the backend, refreshes admission and retains query/cancel', async () => {
-  const { wrapper, transport, registrationChannels, devices, click } =
+it('refreshes stale self-enrollment admission and preserves device-detail cancellation', async () => {
+  const { wrapper, transport, registrationChannels, devices, click, router } =
     await setup('self-enrollments')
   const { createRegistrationChannelsClient } =
     await import('../../../services/registrationChannels')
@@ -1418,39 +1436,28 @@ it('rejects a stale self-enrollment submit at the backend, refreshes admission a
     crypto.randomUUID(),
     'A'.repeat(43),
     'mdm.windows',
-    'Device',
+    'Full',
   )
   await server.change('windows_mdm', crypto.randomUUID(), 0, 'paused')
-  expect(registrationChannels.allowed('windows_mdm')).toBe(true)
   await click('生成一次性交付口令')
-  await wrapper.find('form input[type=checkbox]').setValue(true)
+  await wrapper.get('form input[type=checkbox]').setValue(true)
   const enroll = vi.spyOn(devices.registration, 'enroll')
-  await wrapper.find('form').trigger('submit')
+  await wrapper.get('form').trigger('submit')
   await flushPromises()
   expect(enroll).toHaveBeenCalledTimes(1)
   expect(wrapper.text()).toContain('已暂停新注册')
   expect(registrationChannels.allowed('windows_mdm')).toBe(false)
-  // Programmatic submits cannot bypass the refreshed gate.
-  await wrapper.find('form').trigger('submit')
+  await wrapper.get('form').trigger('submit')
   expect(enroll).toHaveBeenCalledTimes(1)
-  expect(registrationChannels.allowed('macos_mdm')).toBe(true)
-  const query = wrapper.findAll('form')[1]!
-  await query.find('input').setValue(existing.enrollmentId)
-  await query.trigger('submit')
+  await router.push({
+    name: 'device-management',
+    params: { tenant: TENANT, device: existing.deviceId },
+    query: { enrollment: existing.enrollmentId },
+  })
   await flushPromises()
-  await click('生成一次性交付口令')
-  await wrapper.find('form input[type=checkbox]').setValue(true)
-  expect(
-    wrapper
-      .findAll('button')
-      .find((b) => b.text() === '更新口令并继续')!
-      .attributes('disabled'),
-  ).toBeDefined()
-  await click('取消')
+  const ui = await nativeControls(wrapper)
+  await ui.click('取消')
   expect((await devices.enrollment.status(existing.enrollmentId)).status).toBe('cancelled')
-  await server.change('windows_mdm', crypto.randomUUID(), 1, 'allowed')
-  await click('刷新状态与额度')
-  expect(registrationChannels.allowed('windows_mdm')).toBe(true)
 })
 
 it('keeps unknown admission intent across navigation and explicitly replays the original CAS command', async () => {

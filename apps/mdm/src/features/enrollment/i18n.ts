@@ -1,9 +1,30 @@
 export const onboardingZh = {
+  enrollmentJourney: '为当前组织注册 Windows 或 macOS 企业设备，按系统引导完成管理授权。',
+  enterpriseMdm: '企业完整 MDM',
+  deviceAuthorization:
+    '为当前组织中的此设备创建或更新短时原生注册授权。管理员注册不占个人额度。安全保存注册密码，提交后页面会清除；原注册的进展、继续与取消仍由服务器校验。',
+  profileEnrollment: '配置描述文件注册',
+  authorizeDevice: '授权并开始注册',
+  enrollmentAuthorization:
+    '授权将设备绑定到当前组织与登录用户，并使用个人注册额度。注册密码用于短时验证这次原生注册，请安全保存；提交后页面会清除密码。系统仍需你确认允许组织管理此设备。',
+  openWindowsEnrollment: '打开 Windows 企业 MDM 注册',
+  protocolUsernameNote:
+    '此临时 UPN 由服务器为本次注册生成，用于把 Windows 请求关联到当前租户、用户和短时授权。它不是登录账号或邮箱；请保留原值，使用已保存的注册密码。链接不包含密码。',
+  macDownload: '1. 下载 MDM 描述文件',
+  profileAuthority:
+    '输入本次注册的短时密码。服务器核对原授权后交付描述文件；下载不会完成设备注册。',
+  macInstall: '2. 在系统设置中安装并批准',
+  macVerify: '3. 回到页面核对管理状态',
+  verifyFacts:
+    '系统完成安装后，重新读取进展。只有服务端观察到证书、首次认证签到和管理就绪，才表示注册完成。',
+  continueInDevice: '在设备详情查看进展与恢复',
+  renewAuthorization: '为此设备授权或恢复原注册',
+
   downloads: '下载 Agent 安装器',
   downloadNote:
-    '无需登录。下载和安装不代表注册；安装器只消费管理员交付的 JSON 配置。请选择与目标设备一致的系统和原生架构。',
+    '无需登录。直接下载与设备系统和原生架构一致的安装器。下载和安装不代表注册；安装器消费管理员安全交付的 JSON 配置。',
   architecture: '原生架构',
-  noInstaller: '当前选择没有已发布的安装器。',
+  noInstaller: '此系统与架构没有已发布的安装器。',
   fileSize: '文件大小（字节）',
   download: '下载',
   sameDirectory:
@@ -34,14 +55,14 @@ export const onboardingZh = {
   grantLifetime: '单设备授权有效期（秒）',
   nativeSteps: '系统原生注册步骤与当前事实',
   windowsSteps:
-    'Windows 11：设置 → 账户 → 访问工作或学校 → 注册到设备管理。按下列 UPN 与 discovery 地址继续；Full 包含用户与设备管理，Device 仅设备管理。',
+    '使用企业完整 MDM，包含设备与用户管理。打开 Windows 注册后，使用下列临时 UPN 与已保存的注册密码完成授权；系统可能要求本地管理员确认。',
   openSettings: '打开访问工作或学校',
   discovery: 'Discovery 地址',
   server: '注册服务器',
   username: 'UPN',
   localAdministrator: '此 Full 管理范围要求本地管理员确认。',
   macosSteps:
-    '企业 Mac（macOS 15+，优先 Apple Silicon；Intel 按产品验证范围使用）：输入已交付的注册口令下载签名 mobileconfig，在系统设置的设备管理中安装并确认。安装文件不代表管理已就绪。',
+    '打开已下载的 mobileconfig，然后进入系统设置 → 通用 → 设备管理，检查组织名称并安装描述文件。按系统提示使用本地管理员批准设备管理。',
   downloadProfile: '获取签名描述文件',
   saveProfile: '保存 mobileconfig',
   channelUnavailable: '原生通道未配置或不可用，请联系管理员。',
@@ -147,11 +168,33 @@ export const onboardingZh = {
   token_unverified: '尚未验证',
 }
 export const onboardingEn: typeof onboardingZh = {
+  enrollmentJourney:
+    'Enroll a corporate Windows or macOS device in the current organization and complete system management approval.',
+  enterpriseMdm: 'Full enterprise MDM',
+  deviceAuthorization:
+    'Create or refresh short-lived native enrollment authorization for this device in the current organization. Administrator enrollment uses no personal quota. Save the enrollment password securely; it is cleared on submission. The server continues to verify progress, resume and cancellation against the original enrollment.',
+  profileEnrollment: 'Profile-based enrollment',
+  authorizeDevice: 'Authorize and start enrollment',
+  enrollmentAuthorization:
+    'Authorization binds the device to the current organization and signed-in user and reserves personal quota. Save the short-lived enrollment password securely; the page clears it on submission. The operating system still requires your approval for device management.',
+  openWindowsEnrollment: 'Open Windows enterprise MDM enrollment',
+  protocolUsernameNote:
+    'The server generates this temporary UPN for this enrollment, binding Windows requests to the current tenant, user and short-lived authorization. Keep it unchanged and use the saved enrollment password. It is separate from your login or email. The link contains no password.',
+  macDownload: '1. Download the MDM profile',
+  profileAuthority:
+    'Enter the short-lived enrollment password. The server verifies the original authorization before delivering the profile. Downloading does not complete enrollment.',
+  macInstall: '2. Install and approve in System Settings',
+  macVerify: '3. Return to verify management status',
+  verifyFacts:
+    'After system installation, refresh progress. Enrollment is complete only when the server observes the certificate, first authenticated check-in and management readiness.',
+  continueInDevice: 'View progress and recovery in device details',
+  renewAuthorization: 'Authorize this device or resume its enrollment',
+
   downloads: 'Download Agent installer',
   downloadNote:
     'No sign-in required. Downloading or installing does not prove enrollment. The installer consumes an administrator-delivered JSON configuration. Select the target OS and native architecture.',
   architecture: 'Native architecture',
-  noInstaller: 'No published installer matches this selection.',
+  noInstaller: 'No installer has been published for this operating system and architecture.',
   fileSize: 'Size (bytes)',
   download: 'Download',
   sameDirectory:
@@ -182,14 +225,14 @@ export const onboardingEn: typeof onboardingZh = {
   grantLifetime: 'Machine grant lifetime (seconds)',
   nativeSteps: 'Native enrollment steps and current facts',
   windowsSteps:
-    'Windows 11: Settings → Accounts → Access work or school → Enroll only in device management. Use the UPN and discovery address below. Full manages user and device; Device manages the device only.',
+    'Full enterprise MDM includes device and user management. Open Windows enrollment and use the temporary UPN below with your saved enrollment password. Windows may require local administrator approval.',
   openSettings: 'Open Access work or school',
   discovery: 'Discovery address',
   server: 'Enrollment server',
   username: 'UPN',
   localAdministrator: 'Full management requires local administrator confirmation.',
   macosSteps:
-    'Enterprise Mac (macOS 15+, Apple Silicon first; Intel within validated product scope): enter the delivered password to download the signed mobileconfig, then install and confirm in System Settings device management. The file does not prove management readiness.',
+    'Open the downloaded mobileconfig, then go to System Settings → General → Device Management. Verify the organization and install the profile. Approve device management with the local administrator when prompted.',
   downloadProfile: 'Get signed profile',
   saveProfile: 'Save mobileconfig',
   channelUnavailable: 'Native channel is unconfigured or unavailable. Contact an administrator.',

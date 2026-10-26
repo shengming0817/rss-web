@@ -207,6 +207,37 @@ export function generateEnrollmentPassword(): string {
     bytes.fill(0)
   }
 }
+/** Microsoft native handoff: use only the server-issued protocol identity, never a login hint. */
+export function windowsEnrollmentLink(instructions: {
+  platform: string
+  username?: string
+  discoveryUrl?: string
+  server?: string
+  windowsProfile?: string
+}): string | undefined {
+  if (
+    instructions.platform !== 'windows' ||
+    instructions.windowsProfile !== 'Full' ||
+    !instructions.username ||
+    !instructions.server
+  )
+    return undefined
+  const server = new URL(instructions.server)
+  if (
+    server.protocol !== 'https:' ||
+    server.username ||
+    server.password ||
+    server.search ||
+    server.hash ||
+    server.pathname !== '/'
+  )
+    throw new Error('Invalid native URL')
+  return `ms-device-enrollment:?${new URLSearchParams({
+    mode: 'mdm',
+    username: instructions.username,
+    servername: instructions.server,
+  })}`
+}
 export function createEnrollmentClient(transport: HttpTransport) {
   return {
     create: (operation: string, body: EnrollmentInput) =>

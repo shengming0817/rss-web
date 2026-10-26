@@ -1,64 +1,51 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import {
+  VAlert,
+  VBtn,
+  VCard,
+  VCardText,
+  VCardTitle,
+  VCheckbox,
+  VCol,
+  VForm,
+  VList,
+  VListItem,
+  VRow,
+  VSelect,
+  VTextField,
+} from 'vuetify/components'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import RegistrationStatus from '../../../components/RegistrationStatus.vue'
 import NativeFacts from '../../enrollment/components/NativeFacts.vue'
 import { generateEnrollmentPassword } from '../clients/enrollment'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 const { t } = useI18n(),
-  route = useRoute(),
   runtime = useMdm(),
   client = runtime.devices.registration
-const { run, runWrite, busy, uncertain, failure } = useOperation(
-  [],
-  () => runtime.session.state.value.session?.id,
-)
+const { run, runWrite, busy, uncertain, failure } = useOperation([], () => [
+  runtime.session.state.value.tenant ?? undefined,
+  runtime.session.state.value.identity?.principalId,
+  runtime.session.state.value.session?.id,
+])
 const usage = ref<Awaited<ReturnType<typeof client.me>>>(),
   channel = ref<'windows_mdm' | 'macos_mdm'>('windows_mdm')
 const channelState = runtime.registrationChannels
-const quotaAvailable = computed(() => {
-  const value = usage.value?.channels.find((c) => c.channel === channel.value)
-  return !!value && value.used < value.limit
-})
-const canCreate = computed(() => channelState.allowed(channel.value) && quotaAvailable.value)
-const profile = ref<'Full' | 'Device'>('Device')
+const quota = computed(() => usage.value?.channels.find((c) => c.channel === channel.value))
+const quotaAvailable = computed(() => !!quota.value && quota.value.used < quota.value.limit)
+const canCreate = computed(
+  () =>
+    channelState.allowed(channel.value) && !!quota.value && quota.value.used < quota.value.limit,
+)
 const password = ref(''),
   handedOff = ref(false),
   enrollmentId = ref(''),
   deviceId = ref('')
 const native = ref<Awaited<ReturnType<typeof runtime.devices.enrollment.status>>>()
-type Command = {
-  kind: 'create' | 'resume' | 'cancel'
-  operation: string
-  channel: 'windows_mdm' | 'macos_mdm'
-  profile: 'Full' | 'Device'
-  id: string
-}
+type Command = { operation: string; channel: 'windows_mdm' | 'macos_mdm' }
 const pending = ref<Command>()
-let nativeTargetVersion = 0
-function refresh(rejection?: string) {
-  void channelState.refresh()
-  const knownNative = native.value,
-    version = nativeTargetVersion
-  void run(
-    async () => ({
-      usage: await client.me(),
-      native: enrollmentId.value
-        ? await runtime.devices.enrollment.status(enrollmentId.value)
-        : undefined,
-    }),
-    (v) => {
-      usage.value = v.usage
-      if (rejection) failure.value = rejection
-      if (v.native && version === nativeTargetVersion)
-        native.value = { ...knownNative, ...v.native }
-    },
-  )
-}
 function clearSecret() {
   password.value = ''
   handedOff.value = false
@@ -67,97 +54,72 @@ function generate() {
   password.value = generateEnrollmentPassword()
   handedOff.value = false
 }
-function submit(kind: Command['kind'], replay = false) {
-  if (busy.value || (!replay && uncertain.value)) return
+function refresh(rejection?: string) {
+  void channelState.refresh()
+  const id = enrollmentId.value
+  void run(
+    async () => ({
+      usage: await client.me(),
+      native: id ? await runtime.devices.enrollment.status(id) : undefined,
+    }),
+    (v) => {
+      usage.value = v.usage
+      if (rejection) failure.value = rejection
+      if (id === enrollmentId.value && v.native) native.value = v.native
+    },
+  )
+}
+function submit(replay = false) {
   if (
-    !replay &&
-    ((kind === 'create' && !canCreate.value) ||
-      (kind === 'resume' && !channelState.canContinue(native.value)))
+    busy.value ||
+    (!replay && (uncertain.value || !canCreate.value)) ||
+    !password.value ||
+    !handedOff.value
   )
     return
   const command = replay
     ? pending.value
-    : {
-        kind,
-        operation: crypto.randomUUID(),
-        channel: channel.value,
-        profile: profile.value,
-        id: native.value?.enrollmentId ?? '',
-      }
-  if (
-    !command ||
-    (command.kind !== 'create' && !command.id) ||
-    ((command.kind === 'create' || command.kind === 'resume') &&
-      (!handedOff.value || !password.value))
-  )
-    return
+    : { operation: crypto.randomUUID(), channel: channel.value }
+  if (!command) return
   const secret = password.value
   clearSecret()
   pending.value = command
   void runWrite(
-    async () => {
-      if (command.kind === 'cancel')
-        return { native: await runtime.devices.enrollment.cancel(command.id, command.operation) }
-      if (command.kind === 'resume')
-        return {
-          native: await runtime.devices.enrollment.resume(command.id, command.operation, secret),
-        }
-      return {
-        native: await client.enroll(
-          command.operation,
-          secret,
-          command.channel === 'windows_mdm' ? 'mdm.windows' : 'mdm.apple',
-          command.profile,
-        ),
-      }
-    },
+    () =>
+      client.enroll(
+        command.operation,
+        secret,
+        command.channel === 'windows_mdm' ? 'mdm.windows' : 'mdm.apple',
+        'Full',
+      ),
     (v) => {
-      if (v.native) {
-        enrollmentId.value = v.native.enrollmentId
-        if ('deviceId' in v.native && typeof v.native.deviceId === 'string')
-          deviceId.value = v.native.deviceId
-        native.value = undefined
-      }
+      enrollmentId.value = v.enrollmentId
+      deviceId.value = v.deviceId
+      native.value = undefined
       pending.value = undefined
     },
   ).then((ok) => {
     if (ok) refresh()
-    else if (failure.value === 'enrollmentPaused' || failure.value === 'registrationLimit') {
-      void channelState.refresh()
+    else if (failure.value === 'enrollmentPaused' || failure.value === 'registrationLimit')
       refresh(failure.value)
-    }
   })
 }
-function status() {
-  const id = enrollmentId.value,
-    version = nativeTargetVersion
-  if (!id) return
-  void run(
-    () => runtime.devices.enrollment.status(id),
-    (v) => {
-      if (version === nativeTargetVersion && id === enrollmentId.value)
-        native.value = { ...native.value, ...v }
-    },
-  )
-}
+watch(channel, clearSecret)
 watch(
-  enrollmentId,
-  () => {
-    nativeTargetVersion++
-    deviceId.value = ''
-    native.value = undefined
-    clearSecret()
-  },
-  { flush: 'sync' },
-)
-watch(
-  [() => route.fullPath, () => runtime.session.state.value.session?.id],
+  () =>
+    JSON.stringify([
+      runtime.session.state.value.tenant,
+      runtime.session.state.value.identity?.principalId,
+      runtime.session.state.value.session?.id,
+    ]),
   () => {
     clearSecret()
     native.value = undefined
     pending.value = undefined
     enrollmentId.value = ''
+    deviceId.value = ''
     usage.value = undefined
+    refresh()
   },
   { flush: 'sync' },
 )
@@ -165,130 +127,119 @@ onBeforeUnmount(clearSecret)
 refresh()
 </script>
 <template>
-  <PageFrame :title="t('registration.self')" :busy="busy" :failure="failure">
-    <RegistrationStatus :channel="channel" />
-    <p v-if="usage && !quotaAvailable" role="status">{{ t('registration.quotaBlocked') }}</p>
-    <p>{{ t('registration.note') }}</p>
-    <UiButton type="button" :disabled="!!busy" @click="refresh()">
-      {{ t('registration.refresh') }}
-    </UiButton>
-    <div v-if="usage" class="ui-table-scroll">
-      <table class="ui-table">
-        <thead>
-          <tr>
-            <th>{{ t('devices.source') }}</th>
-            <th>{{ t('registration.limit') }}</th>
-            <th>{{ t('registration.active') }}</th>
-            <th>{{ t('registration.reserved') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="c in usage.channels" :key="c.channel">
-            <th>{{ t(`registration.${c.channel}`) }}</th>
-            <td>{{ c.limit }}</td>
-            <td>{{ c.active }}</td>
-            <td>{{ c.reserved }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <p>{{ t('registration.handoff') }}</p>
-    <section class="console-panel">
-      <h2>{{ t('console.prepareEnrollment') }}</h2>
-      <form @submit.prevent="submit('create')">
-        <fieldset :disabled="busy">
-          <label
-            >{{ t('devices.source')
-            }}<select v-model="channel" class="ui-input" :disabled="uncertain">
-              <option
-                v-for="c in usage?.channels.filter((c) => c.channel !== 'agent')"
+  <MdmPage
+    :title="t('registration.self')"
+    :description="t('onboarding.enrollmentJourney')"
+    :busy="busy"
+    :failure="failure"
+  >
+    <template #actions
+      ><v-btn variant="text" :disabled="busy" @click="refresh()">{{
+        t('registration.refresh')
+      }}</v-btn
+      ><v-btn variant="outlined" :to="{ name: 'agent-downloads' }">{{
+        t('onboarding.downloads')
+      }}</v-btn></template
+    >
+    <v-row>
+      <v-col cols="12" lg="8">
+        <v-card variant="outlined">
+          <v-card-title>{{ t('onboarding.authorizeDevice') }}</v-card-title>
+          <v-card-text>
+            <v-alert type="info" variant="tonal" class="mb-4">{{
+              t('onboarding.enrollmentAuthorization')
+            }}</v-alert>
+            <v-form @submit.prevent="submit()">
+              <v-select
+                v-model="channel"
+                :label="t('devices.platform')"
+                :disabled="busy || uncertain || !!enrollmentId"
+                :items="[
+                  { value: 'windows_mdm', title: 'Windows · ' + t('onboarding.enterpriseMdm') },
+                  { value: 'macos_mdm', title: 'macOS · ' + t('onboarding.profileEnrollment') },
+                ]"
+              />
+              <template v-if="!enrollmentId || uncertain">
+                <v-btn variant="outlined" :disabled="busy || uncertain" @click="generate">{{
+                  t('devices.generate')
+                }}</v-btn>
+                <v-text-field
+                  v-model="password"
+                  class="mt-4"
+                  :label="t('devices.password')"
+                  required
+                  pattern="[A-Za-z0-9_\-]{43}"
+                  autocomplete="off"
+                  spellcheck="false"
+                  :disabled="busy"
+                />
+                <v-checkbox
+                  v-model="handedOff"
+                  :label="t('devices.handoff')"
+                  :disabled="busy"
+                  required
+                />
+                <v-btn
+                  type="submit"
+                  color="primary"
+                  :disabled="busy || uncertain || !handedOff || !password || !canCreate"
+                  >{{ t('onboarding.authorizeDevice') }}</v-btn
+                >
+                <v-btn
+                  v-if="uncertain && pending"
+                  variant="outlined"
+                  :disabled="busy || !password || !handedOff"
+                  @click="submit(true)"
+                  >{{ t('devices.replay') }}</v-btn
+                >
+              </template>
+            </v-form>
+            <v-alert v-if="uncertain" type="warning" variant="tonal" class="mt-4">{{
+              t('devices.unknownWrite')
+            }}</v-alert>
+            <v-alert
+              v-if="usage && !quotaAvailable && !enrollmentId"
+              type="warning"
+              variant="tonal"
+              class="mt-4"
+              >{{ t('registration.quotaBlocked') }}</v-alert
+            >
+          </v-card-text>
+        </v-card>
+        <NativeFacts v-if="native" :value="native" class="mt-4" />
+        <v-card v-if="enrollmentId" variant="outlined" class="mt-4">
+          <v-card-title>{{ t('console.enrollmentProgress') }}</v-card-title>
+          <v-card-text>
+            <p>{{ t('devices.enrollmentId') }}: {{ enrollmentId }}</p>
+            <p v-if="native">{{ t('devices.status') }}: {{ t(`devices.${native.status}`) }}</p>
+            <v-btn
+              v-if="deviceId"
+              color="primary"
+              :to="{
+                name: 'device-management',
+                params: { tenant: runtime.tenant, device: deviceId },
+                query: { enrollment: enrollmentId },
+              }"
+              >{{ t('onboarding.continueInDevice') }}</v-btn
+            >
+          </v-card-text>
+        </v-card>
+      </v-col>
+      <v-col cols="12" lg="4">
+        <RegistrationStatus :channel="channel" />
+        <v-card v-if="usage" variant="outlined" class="mt-4">
+          <v-card-title>{{ t('registration.quotas') }}</v-card-title>
+          <v-card-text
+            ><p>{{ t('registration.note') }}</p>
+            <v-list density="compact"
+              ><v-list-item
+                v-for="c in usage.channels"
                 :key="c.channel"
-                :value="c.channel"
-                :disabled="!channelState.allowed(c.channel) || c.used >= c.limit"
-              >
-                {{ t(`registration.${c.channel}`) }}
-              </option>
-            </select></label
-          >
-          <label v-if="channel === 'windows_mdm'"
-            >{{ t('registration.profile')
-            }}<select v-model="profile" class="ui-input" :disabled="uncertain">
-              <option value="Device">Device</option>
-              <option value="Full">Full</option>
-            </select></label
-          >
-          <UiButton type="button" :disabled="!!uncertain" @click="generate()">
-            {{ t('devices.generate') }}
-          </UiButton>
-          <label
-            >{{ t('devices.password')
-            }}<input
-              v-model="password"
-              class="ui-input"
-              required
-              pattern="[A-Za-z0-9_\-]{43}"
-              autocomplete="off"
-              spellcheck="false"
-          /></label>
-          <label
-            ><input v-model="handedOff" type="checkbox" required />{{ t('devices.handoff') }}</label
-          >
-          <UiButton :disabled="!!(uncertain || !handedOff || !canCreate)" type="submit">
-            {{ t('devices.submitEnrollment') }}
-          </UiButton>
-          <UiButton
-            v-if="uncertain && pending"
-            type="button"
-            :disabled="!!(['create', 'resume'].includes(pending.kind) && (!password || !handedOff))"
-            @click="submit(pending!.kind, true)"
-          >
-            {{ t('devices.replay') }}
-          </UiButton>
-        </fieldset>
-      </form>
-    </section>
-    <RouterLink :to="{ name: 'agent-downloads' }">{{ t('onboarding.downloads') }}</RouterLink>
-    <dl v-if="native">
-      <dt>{{ t('devices.enrollmentId') }}</dt>
-      <dd>{{ native.enrollmentId }}</dd>
-      <dt>{{ t('devices.deviceId') }}</dt>
-      <dd>{{ deviceId || '—' }}</dd>
-      <dt>{{ t('devices.status') }}</dt>
-      <dd>{{ t(`devices.${native.status}`) }}</dd>
-      <dt>{{ t('devices.expires') }}</dt>
-      <dd>{{ native.expiresAt }}</dd>
-    </dl>
-    <NativeFacts v-if="native" :value="native" />
-    <section class="console-panel">
-      <h2>{{ t('console.enrollmentProgress') }}</h2>
-      <form @submit.prevent="status()">
-        <label
-          >{{ t('devices.enrollmentId')
-          }}<input
-            v-model="enrollmentId"
-            class="ui-input"
-            required
-            :disabled="busy || uncertain" /></label
-        ><UiButton :disabled="!!busy" type="submit">{{ t('devices.recover') }}</UiButton>
-      </form>
-    </section>
-    <UiButton
-      v-if="native && ['pending', 'bound'].includes(native.status)"
-      type="button"
-      :disabled="
-        !!(busy || uncertain || !password || !handedOff || !channelState.canContinue(native))
-      "
-      @click="submit('resume')"
-    >
-      {{ t('devices.resume') }}
-    </UiButton>
-    <UiButton
-      v-if="native?.status === 'pending'"
-      type="button"
-      :disabled="!!(busy || uncertain)"
-      @click="submit('cancel')"
-    >
-      {{ t('devices.cancel') }}
-    </UiButton>
-  </PageFrame>
+                :title="t(`registration.${c.channel}`)"
+                :subtitle="`${t('registration.used')}: ${c.used} / ${c.limit} · ${t('registration.reserved')}: ${c.reserved}`" /></v-list
+          ></v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+  </MdmPage>
 </template>

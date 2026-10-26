@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import { VForm, VSelect, VTextField, VBtn, VCard, VCardText, VTable } from 'vuetify/components'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -9,7 +9,7 @@ import { registrationChannels as channels } from '../../../services/registration
 import type { User } from '../../operations/clients/authorization'
 import RegistrationChannels from '../../../components/RegistrationChannels.vue'
 import { usePermission } from '../../enrollment/usePermission'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 import TenantUserSelect from '../components/TenantUserSelect.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
@@ -32,8 +32,7 @@ const currentUsage = ref<Awaited<ReturnType<typeof client.usage>>>()
 const saved = ref(false)
 type Command = { operation: string; revision: number; limits: Limits; target?: User | undefined }
 const pending = ref<Command>()
-function updateLimit(channel: (typeof channels)[number], event: Event) {
-  const value = (event.target as HTMLInputElement).value
+function updateLimit(channel: (typeof channels)[number], value: string) {
   limits.value[channel] = value === '' ? null : Number(value)
 }
 function target(): User | undefined {
@@ -108,19 +107,22 @@ watch(
 )
 </script>
 <template>
-  <PageFrame :title="t('registration.quotas')" :busy="busy" :failure="failure">
+  <MdmPage :title="t('registration.quotas')" :busy="busy" :failure="failure">
     <RegistrationChannels />
     <template v-if="canRead">
       <p>{{ t('registration.note') }}</p>
       <p>{{ t('registration.zero') }}</p>
       <fieldset :disabled="busy || uncertain">
-        <label
-          >{{ t('registration.quotas')
-          }}<select v-model="mode" class="ui-input" @change="load()">
-            <option value="defaults">{{ t('registration.defaults') }}</option>
-            <option value="override">{{ t('registration.override') }}</option>
-          </select></label
-        >
+        <v-select
+          v-model="mode"
+          :label="t('registration.quotas')"
+          :disabled="busy || uncertain"
+          :items="[
+            { value: 'defaults', title: t('registration.defaults') },
+            { value: 'override', title: t('registration.override') },
+          ]"
+          @update:model-value="load()"
+        />
         <TenantUserSelect
           v-if="mode === 'override'"
           v-model="principal"
@@ -129,59 +131,66 @@ watch(
         />
       </fieldset>
       <p v-if="mode === 'override' && !principal">{{ t('registration.selectUser') }}</p>
-      <section v-if="revision !== undefined" class="console-panel">
-        <h2>{{ t('registration.quotas') }}</h2>
-        <form @submit.prevent="save()">
-          <fieldset :disabled="busy || uncertain || !canWrite">
-            <label v-for="channel in channels" :key="channel"
-              >{{ t(`registration.${channel}`) }}
-              <input
-                class="ui-input"
-                :value="limits[channel] ?? ''"
-                type="number"
-                min="0"
-                max="4294967295"
-                step="1"
-                :required="mode === 'defaults'"
-                @input="updateLimit(channel, $event)"
-              />
-              <UiButton v-if="mode === 'override'" type="button" @click="limits[channel] = null">
-                {{ t('registration.inherit') }}
-              </UiButton>
-            </label>
-            <UiButton type="submit">{{ t('registration.save') }}</UiButton>
-          </fieldset>
-        </form>
-      </section>
-      <UiButton v-if="uncertain && pending" type="button" :disabled="!!busy" @click="save(true)">
+      <v-card v-if="revision !== undefined" variant="outlined" class="console-panel"
+        ><v-card-text>
+          <h2>{{ t('registration.quotas') }}</h2>
+          <v-form @submit.prevent="save()">
+            <fieldset :disabled="busy || uncertain || !canWrite">
+              <div v-for="channel in channels" :key="channel" class="mb-4">
+                <v-text-field
+                  :label="t(`registration.${channel}`)"
+                  :model-value="limits[channel] ?? ''"
+                  type="number"
+                  min="0"
+                  max="4294967295"
+                  step="1"
+                  :required="mode === 'defaults'"
+                  :disabled="busy || uncertain || !canWrite"
+                  @update:model-value="updateLimit(channel, $event)"
+                />
+                <v-btn
+                  v-if="mode === 'override'"
+                  type="button"
+                  variant="text"
+                  :disabled="busy || uncertain || !canWrite"
+                  @click="limits[channel] = null"
+                  >{{ t('registration.inherit') }}</v-btn
+                >
+              </div>
+              <v-btn type="submit" :disabled="busy || uncertain || !canWrite">{{
+                t('registration.save')
+              }}</v-btn>
+            </fieldset>
+          </v-form>
+        </v-card-text></v-card
+      >
+      <v-btn v-if="uncertain && pending" type="button" :disabled="!!busy" @click="save(true)">
         {{ t('registration.replay') }}
-      </UiButton>
-      <UiButton type="button" :disabled="!!(busy || uncertain)" @click="load()">
+      </v-btn>
+      <v-btn type="button" :disabled="!!(busy || uncertain)" @click="load()">
         {{ t('devices.reload') }}
-      </UiButton>
+      </v-btn>
       <p v-if="saved" role="status">{{ t('registration.saved') }}</p>
-      <div v-if="currentUsage" class="ui-table-scroll">
-        <table class="ui-table">
-          <thead>
-            <tr>
-              <th>{{ t('devices.source') }}</th>
-              <th>{{ t('registration.limit') }}</th>
-              <th>{{ t('registration.active') }}</th>
-              <th>{{ t('registration.reserved') }}</th>
-              <th>{{ t('registration.overLimit') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="c in currentUsage.channels" :key="c.channel">
-              <th>{{ t(`registration.${c.channel}`) }}</th>
-              <td>{{ c.limit }}</td>
-              <td>{{ c.active }}</td>
-              <td>{{ c.reserved }}</td>
-              <td>{{ c.overLimit }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <v-table v-if="currentUsage">
+        <thead>
+          <tr>
+            <th>{{ t('devices.source') }}</th>
+            <th>{{ t('registration.limit') }}</th>
+            <th>{{ t('registration.active') }}</th>
+            <th>{{ t('registration.reserved') }}</th>
+            <th>{{ t('registration.overLimit') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="c in currentUsage.channels" :key="c.channel">
+            <th>{{ t(`registration.${c.channel}`) }}</th>
+            <td>{{ c.limit }}</td>
+            <td>{{ c.active }}</td>
+            <td>{{ c.reserved }}</td>
+            <td>{{ c.overLimit }}</td>
+          </tr>
+        </tbody>
+      </v-table>
     </template>
-  </PageFrame>
+  </MdmPage>
 </template>
