@@ -322,6 +322,58 @@ it('keeps a bound field immutable and displays actual references before publishi
   expect(dialog.text()).toContain('采集方案')
   expect(dialog.findAll('fieldset').some((f) => f.attributes('disabled') !== undefined)).toBe(true)
 })
+it.each([false, true])(
+  'starts a fresh reference query on immediate reopen (same field: %s)',
+  async (same) => {
+    const h = await setup('settings-metrics')
+    const original = h.runtime.devices.assets.fieldReferences
+    let release!: (value: Awaited<ReturnType<typeof original>>) => void
+    const pending = new Promise<Awaited<ReturnType<typeof original>>>((resolve) => {
+      release = resolve
+    })
+    const read = vi
+      .spyOn(h.runtime.devices.assets, 'fieldReferences')
+      .mockImplementationOnce(() => pending)
+    const rows = h.wrapper.findAll('tbody tr')
+    await rows[0]!.get('button').trigger('click')
+    await flushPromises()
+    expect(read).toHaveBeenCalledTimes(1)
+    const first = read.mock.calls[0]![0]
+    const stale = {
+      ...(await original(first)),
+      mappings: [{ resource: 'stale-reference', version: '1', state: 'frozen', telemetry: false }],
+    }
+    await h.body().get('[role=dialog][data-state=open] button[aria-label]').trigger('click')
+    await flushPromises()
+    await rows[same ? 0 : 1]!.get('button').trigger('click')
+    await flushPromises()
+    expect(read).toHaveBeenCalledTimes(2)
+    expect(read.mock.calls[1]![0] === first).toBe(same)
+    expect(h.body().get('[role=dialog][data-state=open]').text()).toContain('引用影响')
+    release(stale)
+    await flushPromises()
+    expect(h.body().get('[role=dialog][data-state=open]').text()).not.toContain('stale-reference')
+  },
+)
+it('shows reference read failure and retries the current field explicitly', async () => {
+  const h = await setup('settings-metrics')
+  const read = vi
+    .spyOn(h.runtime.devices.assets, 'fieldReferences')
+    .mockRejectedValueOnce(networkErrorForTest())
+  await h.wrapper.findAll('tbody tr')[0]!.get('button').trigger('click')
+  await flushPromises()
+  const dialog = h.body().get('[role=dialog][data-state=open]')
+  expect(dialog.find('[role=alert]').exists()).toBe(true)
+  await dialog
+    .findAll('button')
+    .find((button) => button.text() === '重新读取')!
+    .trigger('click')
+  await flushPromises()
+  expect(read).toHaveBeenCalledTimes(2)
+  expect(read.mock.calls[1]![0]).toBe(read.mock.calls[0]![0])
+  expect(dialog.text()).toContain('引用影响')
+  expect(dialog.find('[role=alert]').exists()).toBe(false)
+})
 it('freezes an immutable profile resource, uploads canonical bytes, previews actual targets and publishes an exact Policy', async () => {
   const h = await setup('policy-telemetry', { resource: DEMO_PROFILE })
   const dialog = h.body().get('[role=dialog][data-state=open]')

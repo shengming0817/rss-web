@@ -11,6 +11,7 @@ export const telemetryZh = {
   },
   outputPointer: '输出 JSON Pointer',
   fieldUi: {
+    referenceLoading: '正在读取字段引用…',
     maxLength: '文本长度上限',
     allowEmpty: '允许空文本',
     maxItems: '列表项上限',
@@ -255,6 +256,7 @@ export const telemetryEn: typeof telemetryZh = {
   },
   outputPointer: 'Output JSON Pointer',
   fieldUi: {
+    referenceLoading: 'Loading field references…',
     maxLength: 'Maximum text length',
     allowEmpty: 'Allow empty text',
     maxItems: 'Maximum list items',

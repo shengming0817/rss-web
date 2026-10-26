@@ -28,17 +28,22 @@ const { run, runWrite, busy, failure, uncertain } = useOperation([], () => devic
 const permission = usePermission('inventory_read', 'inventory_fields_write'),
   { canWrite } = permission
 const canReadReferences = computed(() => canWrite.value && permission.allows('resource_read'))
-const {
-  run: runReferences,
-  busy: referencesBusy,
-  failure: referenceFailure,
-} = useOperation([], () => deviceBinding(runtime))
-let referenceGeneration = 0
 const fields = ref<FieldDefinition[]>([]),
   search = ref(''),
   selected = ref<FieldDefinition>(),
   open = ref(false),
   creating = ref(false)
+const {
+  run: runReferences,
+  busy: referencesBusy,
+  failure: referenceFailure,
+} = useOperation([], () => [
+  ...deviceBinding(runtime),
+  selected.value?.key,
+  String(open.value),
+  String(canReadReferences.value),
+])
+let referenceGeneration = 0
 const key = ref(''),
   unit = ref(''),
   fieldType = ref<Definition['valueType']>({ kind: 'number' }),
@@ -102,14 +107,15 @@ async function loadReferences(cursor?: string) {
   )
 }
 watch(
-  open,
+  [open, () => selected.value?.key, canReadReferences],
   () => {
     referenceGeneration++
     references.value = undefined
+    if (open.value && selected.value && canReadReferences.value) void loadReferences()
   },
   { flush: 'sync' },
 )
-async function edit(field?: FieldDefinition) {
+function edit(field?: FieldDefinition) {
   if (pending.value) return
   selected.value = field
   creating.value = !field
@@ -138,7 +144,6 @@ async function edit(field?: FieldDefinition) {
   confirmed.value = false
   comparison.value = undefined
   open.value = true
-  if (field) await loadReferences()
 }
 function definition() {
   const base = selected.value
@@ -456,6 +461,7 @@ watch(
             /></label>
           </div>
           <p v-if="!canReadReferences">{{ t('telemetry.fieldUi.referencePermission') }}</p>
+          <p v-if="referencesBusy" role="status">{{ t('telemetry.fieldUi.referenceLoading') }}</p>
           <p v-if="referenceFailure" role="alert">
             {{ t('devices.' + referenceFailure) }}
             <UiButton :disabled="referencesBusy" @click="loadReferences()">{{
