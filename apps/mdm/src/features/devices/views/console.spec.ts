@@ -31,6 +31,15 @@ import { createDeviceClients } from '../client'
 import { createOnboardingClients } from '../../enrollment/client'
 import { createSettingsOperations } from '../../settings/operations'
 const wrappers: VueWrapper[] = []
+const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+async function preparePersonal(wrapper: VueWrapper, click: (text: string) => Promise<void>) {
+  const copy = vi.fn().mockResolvedValue(undefined)
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: copy } })
+  await click('继续准备注册')
+  const secret = wrapper.get('[data-enrollment-secret]').text()
+  expect(secret).toHaveLength(43)
+  return { secret, copy }
+}
 
 async function nativeControls(wrapper: VueWrapper) {
   const panel = wrapper.findComponent(NativeEnrollmentPanel)
@@ -93,6 +102,8 @@ it('shows channel communication separately and clears the MDM receipt after regi
 })
 afterEach(() => {
   wrappers.splice(0).forEach((w) => w.unmount())
+  if (originalClipboard) Object.defineProperty(navigator, 'clipboard', originalClipboard)
+  else Reflect.deleteProperty(navigator, 'clipboard')
   document.body.innerHTML = ''
 })
 async function setup(
@@ -901,13 +912,11 @@ it('self enrollment authorizes Full MDM outside the management frame and clears 
   expect(wrapper.text()).toContain('注册我的设备')
   expect(wrapper.find('nav').exists()).toBe(false)
   const enroll = vi.spyOn(devices.registration, 'enroll')
-  await click('生成一次性交付口令')
-  await wrapper.get('form input[type=checkbox]').setValue(true)
-  const password = wrapper.get('input[autocomplete=off]')
-  expect((password.element as HTMLInputElement).value).toHaveLength(43)
-  await wrapper.get('form').trigger('submit')
-  await flushPromises()
-  expect((password.element as HTMLInputElement).value).toBe('')
+  const prepared = await preparePersonal(wrapper, click)
+  expect(wrapper.find('input[autocomplete=off]').exists()).toBe(false)
+  await click('复制口令并继续')
+  expect(prepared.copy).toHaveBeenCalledWith(prepared.secret)
+  expect(wrapper.find('[data-enrollment-secret]').exists()).toBe(false)
   expect(enroll.mock.calls[0]?.[3]).toBe('Full')
   const receipt = await enroll.mock.results[0]!.value
   const native = await devices.enrollment.status(receipt.enrollmentId)
@@ -1062,9 +1071,8 @@ it('discards device-detail native reads that arrive after a target edit', async 
 it('resumes the same bound registration from device details when new personal enrollment has no quota', async () => {
   const { wrapper, devices, domain, click, router } = await setup('self-enrollments')
   const enroll = vi.spyOn(devices.registration, 'enroll')
-  await click('生成一次性交付口令')
-  await wrapper.get('form input[type=checkbox]').setValue(true)
-  await wrapper.get('form').trigger('submit')
+  await preparePersonal(wrapper, click)
+  await click('复制口令并继续')
   await flushPromises()
   const receipt = await enroll.mock.results[0]!.value
   domain.tick({
@@ -1421,15 +1429,13 @@ it('refreshes stale self-enrollment admission and preserves device-detail cancel
     'Full',
   )
   await server.change('windows_mdm', crypto.randomUUID(), 0, 'paused')
-  await click('生成一次性交付口令')
-  await wrapper.get('form input[type=checkbox]').setValue(true)
+  await preparePersonal(wrapper, click)
   const enroll = vi.spyOn(devices.registration, 'enroll')
-  await wrapper.get('form').trigger('submit')
-  await flushPromises()
+  await click('复制口令并继续')
   expect(enroll).toHaveBeenCalledTimes(1)
   expect(wrapper.text()).toContain('已暂停新注册')
   expect(registrationChannels.allowed('windows_mdm')).toBe(false)
-  await wrapper.get('form').trigger('submit')
+  await click('重新准备注册')
   expect(enroll).toHaveBeenCalledTimes(1)
   await router.push({
     name: 'device-management',
@@ -2476,9 +2482,8 @@ it('does not restore manual inventory when detail authority is withdrawn during 
 it('reads and cancels personal progress without calling inventory clients and rejects a mismatched route device', async () => {
   const { wrapper, devices, click, router } = await setup('self-enrollments')
   const enroll = vi.spyOn(devices.registration, 'enroll')
-  await click('生成一次性交付口令')
-  await wrapper.get('form input[type=checkbox]').setValue(true)
-  await wrapper.get('form').trigger('submit')
+  await preparePersonal(wrapper, click)
+  await click('复制口令并继续')
   await flushPromises()
   const receipt = await enroll.mock.results[0]!.value
   const views = vi
