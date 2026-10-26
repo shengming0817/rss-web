@@ -1,4 +1,6 @@
-import { VSelect } from 'vuetify/components'
+import InventoryQuery from '../components/InventoryQuery.vue'
+import DeviceGroupsPanel from '../components/DeviceGroupsPanel.vue'
+import { VSelect, VAutocomplete } from 'vuetify/components'
 import { encodeAssetQuery } from '../clients/asset-query'
 import GroupDependencies from '../components/GroupDependencies.vue'
 import { createSecurityClients as createFormalSecurityClients } from '../../security/client'
@@ -128,7 +130,10 @@ async function setup(
     routes: [
       { path: '/downloads/agent', name: 'agent-downloads', component: { template: '<div />' } },
       deviceFeature.entry,
-      ...(deviceFeature.routes ?? []),
+      ...(deviceFeature.routes ?? []).map((route) =>
+        route.name === 'device-groups' ? { ...route, component: DeviceGroupsPanel } : route,
+      ),
+      { path: '/test/inventory-query', name: 'inventory-query', component: InventoryQuery },
       policyFeature.entry,
       ...(policyFeature.routes ?? []),
       securityFeature.entry,
@@ -236,10 +241,10 @@ async function setup(
     await flushPromises()
     await flushPromises()
   }
-  if (name === 'device-search') {
+  if (name === 'inventory-query') {
     await wrapper
-      .findAll('details > summary')
-      .find((s) => s.text() === '个人保存查询')!
+      .findAll('button')
+      .find((b) => b.text().includes('个人保存查询'))!
       .trigger('click')
     await flushPromises()
   }
@@ -357,7 +362,7 @@ it('renders asset categories, edits manual fields and keeps ownership blocked', 
   expect(wrapper.text()).not.toContain('擦除成功')
 })
 it('executes asynchronous searches, facets, and personal saved query create/read/delete', async () => {
-  const { wrapper, click } = await setup('device-search')
+  const { wrapper, click } = await setup('inventory-query')
   await wrapper.find('form').trigger('submit')
   await flushPromises()
   await click('读取任务状态')
@@ -391,7 +396,7 @@ it('executes asynchronous searches, facets, and personal saved query create/read
   expect(saveForm.find('input').element.value).toBe('')
 })
 it('preserves secondary sort terms when renaming a saved query', async () => {
-  const { wrapper, click, devices } = await setup('device-search')
+  const { wrapper, click, devices } = await setup('inventory-query')
   const sort = [
     { field: 'device.model', descending: true },
     { field: 'device.serial_number', descending: false },
@@ -419,7 +424,7 @@ it('preserves secondary sort terms when renaming a saved query', async () => {
 it('creates a group, edits its definition, previews and recomputes server membership', async () => {
   const { wrapper, click } = await setup('device-groups')
   const form = new DOMWrapper(document.body).get('[role=dialog] form')
-  await form.get('[data-testid=group-name]').setValue('New group')
+  await form.get('[data-testid=group-name] input').setValue('New group')
   await form.trigger('submit')
   await flushPromises()
   await click('概览')
@@ -493,7 +498,7 @@ it('clears enrollment password at submission, supports recovery, and never persi
 })
 
 it('compares a saved server definition without replacing the local draft', async () => {
-  const { wrapper, click, devices } = await setup('device-search')
+  const { wrapper, click, devices } = await setup('inventory-query')
   const form = wrapper.findAll('form').at(-1)!
   await form.find('input').setValue('Original')
   await form.trigger('submit')
@@ -534,12 +539,12 @@ it('compares a saved server definition without replacing the local draft', async
 it('saves dynamic rules and renders unknown decisions, explanations and provenance', async () => {
   const { wrapper, click, devices, scenario } = await setup('device-groups')
   let form = new DOMWrapper(document.body).get('[role=dialog] form')
-  await form.get('[data-testid=group-name]').setValue('Dynamic')
-  await form.get('[data-testid=group-kind]').setValue('dynamic')
-  await form.get('.group-criteria > .console-toolbar select').setValue('predicate')
+  await form.get('[data-testid=group-name] input').setValue('Dynamic')
+  await setSelect(wrapperFor(form), form.get('[data-testid=group-kind]'), 'dynamic')
+  await setSelect(wrapperFor(form), form.get('.group-criteria > .v-select'), 'predicate')
   const editor = form.find('.condition-editor')
-  await editor.find('select').setValue('predicate')
-  await editor.findAll('select')[1]!.setValue('custom.is_loaner')
+  await setSelect(wrapper, editor.get('.v-select'), 'predicate')
+  await setSelect(wrapper, editor.get('.v-autocomplete'), 'custom.is_loaner')
   await form.trigger('submit')
   await flushPromises()
   await click('读取任务状态')
@@ -554,7 +559,7 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
     .trigger('click')
   await flushPromises()
   form = new DOMWrapper(document.body).get('[role=dialog] form')
-  await form.find('.condition-editor').findAll('select').at(-1)!.setValue('true')
+  await setSelect(wrapper, form.find('.condition-editor').findAll('.v-select').at(-1)!, true)
   await form.trigger('submit')
   await flushPromises()
   await click('读取任务状态')
@@ -598,7 +603,7 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
   await click('概览')
   await click('编辑')
   form = new DOMWrapper(document.body).get('[role=dialog] form')
-  await form.get('[data-testid=group-name]').setValue('Retained group draft')
+  await form.get('[data-testid=group-name] input').setValue('Retained group draft')
   await form
     .findAll('button')
     .find((b) => b.text() === '重读服务器值并比较')!
@@ -606,7 +611,7 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
   await flushPromises()
   expect(wrapper.find('[data-testid=server-definition]').text()).toContain('Server changed name')
   expect(wrapper.find('[data-testid=server-definition]').text()).toContain('Server description')
-  expect((form.get('[data-testid=group-name]').element as HTMLInputElement).value).toBe(
+  expect((form.get('[data-testid=group-name] input').element as HTMLInputElement).value).toBe(
     'Retained group draft',
   )
 })
@@ -629,7 +634,7 @@ it('does not call a confirmed manual write unknown when its follow-up read fails
 })
 
 it('replays the original search after a lost committed response, even after an intervening read', async () => {
-  const { wrapper, requests, click, loseReply } = await setup('device-search')
+  const { wrapper, requests, click, loseReply } = await setup('inventory-query')
   loseReply.path = '/api/v1/device-queries'
   await wrapper.find('form').trigger('submit')
   await flushPromises()
@@ -674,7 +679,7 @@ it('keeps the current group target when directory refresh fails', async () => {
   expect((await devices.groups.read(other)).group.deleted).toBe(false)
 })
 it('does not switch saved-query targets while the original write is unresolved', async () => {
-  const { wrapper, click, devices, scenario } = await setup('device-search')
+  const { wrapper, click, devices, scenario } = await setup('inventory-query')
   const other = crypto.randomUUID()
   await devices.assets.save(other, {
     operationId: crypto.randomUUID(),
@@ -1560,21 +1565,27 @@ it('disables Windows lock and requires the displayed name before wipe', async ()
 it('rejects an invalid condition locally without entering unknown-write recovery', async () => {
   const { wrapper, requests } = await setup('device-groups')
   const form = new DOMWrapper(document.body).get('[role=dialog] form')
-  await form.get('[data-testid=group-name]').setValue('Invalid identity')
-  await form.get('[data-testid=group-kind]').setValue('dynamic')
-  await form.get('.inventory-condition details select').setValue('local_user')
-  await form.get('.inventory-condition details input').setValue('invalid-sid')
+  await form.get('[data-testid=group-name] input').setValue('Invalid identity')
+  await setSelect(wrapperFor(form), form.get('[data-testid=group-kind]'), 'dynamic')
+  await setSelect(
+    wrapper,
+    form.get('.inventory-condition .v-expansion-panel .v-select'),
+    'local_user',
+  )
+  await form
+    .get('.inventory-condition .v-expansion-panel input[type=text]:not([readonly])')
+    .setValue('invalid-sid')
   await form.trigger('submit')
   await flushPromises()
   expect(requests.filter((r) => r.method === 'POST')).toHaveLength(0)
-  expect(wrapper.text()).toContain('请求无效，请检查输入。')
+  expect(new DOMWrapper(document.body).text()).toContain('请求无效，请检查输入。')
   expect(wrapper.text()).not.toContain('明确重放原操作')
 })
 
 it('keeps Group save errors and exact unknown-write recovery inside its dialog', async () => {
   const { wrapper, requests, loseReply, scenario } = await setup('device-groups')
   const dialog = new DOMWrapper(document.body).get('[role=dialog][data-state=open]')
-  await dialog.get('[data-testid=group-name]').setValue('Recover in current drawer')
+  await dialog.get('[data-testid=group-name] input').setValue('Recover in current drawer')
   scenario.set('denied')
   await dialog.get('form').trigger('submit')
   await flushPromises()
@@ -1983,9 +1994,9 @@ it('edits shared groups in one drawer and recovers an unknown saved layout throu
 it('chooses an authorized referenced group in a popover without displaying identifier fields', async () => {
   const f = await setup('device-groups')
   const dialog = new DOMWrapper(document.body).get('[role=dialog][data-state=open]')
-  await dialog.get('[data-testid=group-name]').setValue('Nested managed devices')
-  await dialog.get('[data-testid=group-kind]').setValue('dynamic')
-  await dialog.get('.group-criteria > .console-toolbar select').setValue('group')
+  await dialog.get('[data-testid=group-name] input').setValue('Nested managed devices')
+  await setSelect(wrapperFor(dialog), dialog.get('[data-testid=group-kind]'), 'dynamic')
+  await setSelect(wrapperFor(dialog), dialog.get('.group-criteria > .v-select'), 'group')
   await flushPromises()
   await dialog.get('.group-picker > button').trigger('click')
   await flushPromises()
@@ -2264,8 +2275,8 @@ it('automatically observes a definition task before reading the separately publi
   try {
     const h = await setup('device-groups')
     const form = new DOMWrapper(document.body).get('[role=dialog] form')
-    await form.get('[data-testid=group-name]').setValue('Async group')
-    await form.get('[data-testid=group-kind]').setValue('dynamic')
+    await form.get('[data-testid=group-name] input').setValue('Async group')
+    await setSelect(wrapperFor(form), form.get('[data-testid=group-kind]'), 'dynamic')
     await form.trigger('submit')
     await flushPromises()
     const write = h.requests
@@ -2307,8 +2318,8 @@ it('stops automatic observation after a member task fails and permits preview af
   try {
     const h = await setup('device-groups')
     const form = new DOMWrapper(document.body).get('[role=dialog] form')
-    await form.get('[data-testid=group-name]').setValue('Observe then preview')
-    await form.get('[data-testid=group-kind]').setValue('dynamic')
+    await form.get('[data-testid=group-name] input').setValue('Observe then preview')
+    await setSelect(wrapperFor(form), form.get('[data-testid=group-kind]'), 'dynamic')
     await form.trigger('submit')
     await flushPromises()
     await vi.advanceTimersByTimeAsync(6000)
@@ -2336,8 +2347,8 @@ it('retains the running rule definition when its drawer is closed and preview is
   try {
     const h = await setup('device-groups')
     let dialog = new DOMWrapper(document.body).get('[role=dialog][data-state=open]')
-    await dialog.get('[data-testid=group-name]').setValue('Pending rule owner')
-    await dialog.get('[data-testid=group-kind]').setValue('dynamic')
+    await dialog.get('[data-testid=group-name] input').setValue('Pending rule owner')
+    await setSelect(wrapperFor(dialog), dialog.get('[data-testid=group-kind]'), 'dynamic')
     await dialog.get('form').trigger('submit')
     await flushPromises()
     await vi.advanceTimersByTimeAsync(6000)
@@ -2465,3 +2476,23 @@ it('does not restore manual inventory when detail authority is withdrawn during 
   expect(f.wrapper.findComponent({ name: 'ManualPanel' }).exists()).toBe(false)
   expect(document.querySelector('[role=dialog][data-state=open]')).toBeNull()
 })
+
+function wrapperFor(target: DOMWrapper<Element>) {
+  const wrapper = wrappers.find((wrapper) =>
+    wrapper.findAllComponents(VSelect).some((select) => target.element.contains(select.element)),
+  )
+  if (!wrapper) throw new Error('Select owner is not mounted')
+  return wrapper
+}
+async function setSelect(root: VueWrapper, target: DOMWrapper<Element>, value: unknown) {
+  const component = [
+    ...root.findAllComponents(VSelect),
+    ...root.findAllComponents(VAutocomplete),
+  ].find(
+    (component) =>
+      component.element === target.element || target.element.contains(component.element),
+  )
+  if (!component) throw new Error('Select is not mounted')
+  component.vm.$emit('update:modelValue', value)
+  await flushPromises()
+}

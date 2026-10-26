@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { VTabs, VTab, VAlert } from 'vuetify/components'
@@ -10,10 +10,12 @@ import { groupMessages } from '../group-i18n'
 const { t } = useI18n({ useScope: 'local', messages: groupMessages })
 const route = useRoute(),
   router = useRouter()
+const locked = ref(false)
 const categories = ['device-dynamic', 'device-static', 'user-dynamic', 'user-static'] as const
 const category = computed({
   get: () => categories.find((value) => value === route.query['category']) ?? 'device-dynamic',
   set: (value) => {
+    if (locked.value) return
     void router.push({ query: { ...route.query, category: value } })
   },
 })
@@ -21,16 +23,21 @@ const category = computed({
 <template>
   <MdmPage :title="t('groupModule.title')" :description="t('groupModule.boundary')">
     <v-tabs v-model="category" :aria-label="t('groupModule.title')"
-      ><v-tab v-for="value in categories" :key="value" :value="value">{{
-        t('groupModule.' + value)
-      }}</v-tab></v-tabs
+      ><v-tab
+        v-for="value in categories"
+        :key="value"
+        :value="value"
+        :disabled="locked && value !== category"
+        >{{ t('groupModule.' + value) }}</v-tab
+      ></v-tabs
     >
     <DeviceGroupsPanel
       v-if="category === 'device-dynamic' || category === 'device-static'"
       :key="category"
       :group-kind="category === 'device-dynamic' ? 'dynamic' : 'static'"
+      @locked="locked = $event"
     />
-    <UserGroupsPanel v-else-if="category === 'user-static'" />
+    <UserGroupsPanel v-else-if="category === 'user-static'" @locked="locked = $event" />
     <v-alert v-else type="info" variant="tonal">{{ t('groupModule.dynamicUnavailable') }}</v-alert>
   </MdmPage>
 </template>

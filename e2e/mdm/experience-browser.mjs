@@ -1,3 +1,4 @@
+import { chooseGroupOption } from './vuetify-groups.mjs'
 // Real production UI/HTTP acceptance; native containers are synthetic, not installable releases.
 // ref: rss-mdm crates/content-service/tests/fixtures/installers.rs (same minimal PE/XAR formats).
 import assert from 'node:assert/strict'
@@ -82,12 +83,11 @@ export async function acceptExperience({
   await page.getByRole('button', { name: 'Browser shared fields', exact: true }).click()
   assert.ok((await page.locator('.asset-detail-layout').textContent()).includes(fixture.mdm))
   coverage.push('real-shared-field-layout-save-order-and-reload')
-  await page.goto(path('devices/groups'))
+  await page.goto(path('groups'))
   await page.getByRole('button', { name: '创建', exact: true }).click()
   dialog = page.getByRole('dialog')
-  await dialog.getByTestId('group-name').fill('Browser nested group')
-  await dialog.getByTestId('group-kind').selectOption('dynamic')
-  await dialog.locator('.group-criteria > .console-toolbar select').first().selectOption('group')
+  await dialog.getByTestId('group-name').locator('input').fill('Browser nested group')
+  await chooseGroupOption(page, dialog.locator('.group-criteria > .v-select').getByRole('combobox'), '组成员关系')
   await dialog.locator('.group-picker > button').click()
   await page.getByRole('button', { name: 'Browser endpoint group', exact: true }).click()
   const created = page.waitForResponse(
@@ -109,9 +109,10 @@ export async function acceptExperience({
   await page.locator('.group-dependencies').waitFor()
   coverage.push('real-nested-group-save-members-and-authoritative-references')
   // A never-edited static group's null memberSet is a real empty set, not a missing result.
+  await page.getByRole('tab', {name:'设备静态组',exact:true}).click()
   await page.getByRole('button', { name: '创建', exact: true }).click()
   dialog = page.getByRole('dialog')
-  await dialog.getByTestId('group-name').fill('Browser initial empty group')
+  await dialog.getByTestId('group-name').locator('input').fill('Browser initial empty group')
   const emptyCreated = page.waitForResponse(
     (r) =>
       r.request().method() === 'POST' &&
@@ -121,11 +122,11 @@ export async function acceptExperience({
   const empty = await (await emptyCreated).json()
   assert.equal((await api(`/api/v1/groups/${empty.group.id}`)).memberSet, null)
   await dialog.waitFor({ state: 'hidden' })
+  await page.getByRole('tab', {name:'设备动态组',exact:true}).click()
   await page.getByRole('button', { name: '创建', exact: true }).click()
   dialog = page.getByRole('dialog')
-  await dialog.getByTestId('group-name').fill('Browser nested empty source')
-  await dialog.getByTestId('group-kind').selectOption('dynamic')
-  await dialog.locator('.group-criteria > .console-toolbar select').first().selectOption('group')
+  await dialog.getByTestId('group-name').locator('input').fill('Browser nested empty source')
+  await chooseGroupOption(page, dialog.locator('.group-criteria > .v-select').getByRole('combobox'), '组成员关系')
   await dialog.locator('.group-picker > button').click()
   await page.getByRole('button', { name: 'Browser initial empty group', exact: true }).click()
   const emptyNestedCreated = page.waitForResponse(

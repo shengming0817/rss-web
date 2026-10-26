@@ -74,37 +74,44 @@ watch(
 )
 </script>
 <template>
-  <v-menu v-model="open" :close-on-content-click="false" max-width="560">
-    <template #activator="{ props: activator }"
-      ><v-btn v-bind="activator" :disabled="!!disabled" variant="outlined">{{
-        label
-      }}</v-btn></template
-    >
-    <v-card
-      ><v-card-text>
-        <v-text-field
-          v-model="search"
-          type="search"
-          :label="t('devices.findGroup')"
-          :disabled="disabled || busy"
-          @keydown.enter.prevent="load()"
-        />
-        <v-btn :disabled="disabled || busy" @click="load()">{{ t('devices.searchGroups') }}</v-btn>
-        <v-list :aria-label="t('devices.findGroup')"
-          ><v-list-item
-            v-for="group in rows"
-            :key="group.id"
+  <div class="group-picker">
+    <v-menu v-model="open" :close-on-content-click="false" max-width="560">
+      <template #activator="{ props: activator }"
+        ><v-btn v-bind="activator" :disabled="!!disabled" variant="outlined">{{
+          label
+        }}</v-btn></template
+      >
+      <v-card
+        ><v-card-text class="group-picker-content">
+          <v-text-field
+            v-model="search"
+            type="search"
+            :label="t('devices.findGroup')"
             :disabled="disabled || busy"
-            :active="modelValue === group.id"
-            :title="group.presentation.name"
-            @click="select(group.id)"
-        /></v-list>
-        <p v-if="!rows.length && !busy">{{ t('devices.empty') }}</p>
-        <v-btn v-if="next" :disabled="disabled || busy" @click="load(true)">{{
-          t('devices.next')
-        }}</v-btn>
-        <v-alert v-if="failure" type="error" variant="tonal">{{ t('devices.' + failure) }}</v-alert>
-      </v-card-text></v-card
-    >
-  </v-menu>
+            @keydown.enter.prevent="load()"
+          />
+          <v-btn :disabled="disabled || busy" @click="load()">{{
+            t('devices.searchGroups')
+          }}</v-btn>
+          <v-list :aria-label="t('devices.findGroup')"
+            ><v-list-item
+              tag="button"
+              v-for="group in rows"
+              :key="group.id"
+              :disabled="disabled || busy"
+              :active="modelValue === group.id"
+              :title="group.presentation.name"
+              @click="select(group.id)"
+          /></v-list>
+          <p v-if="!rows.length && !busy">{{ t('devices.empty') }}</p>
+          <v-btn v-if="next" :disabled="disabled || busy" @click="load(true)">{{
+            t('devices.next')
+          }}</v-btn>
+          <v-alert v-if="failure" type="error" variant="tonal">{{
+            t('devices.' + failure)
+          }}</v-alert>
+        </v-card-text></v-card
+      >
+    </v-menu>
+  </div>
 </template>

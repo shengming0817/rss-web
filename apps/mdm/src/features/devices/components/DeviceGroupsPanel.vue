@@ -40,6 +40,7 @@ import EndpointPicker from '../components/EndpointPicker.vue'
 import { deviceBinding } from '../useDeviceBinding'
 import { deviceCondition } from '../clients/asset-model'
 const props = defineProps<{ groupKind?: 'static' | 'dynamic' }>()
+const emit = defineEmits<{ locked: [value: boolean] }>()
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.devices.groups,
@@ -75,6 +76,11 @@ const definitionPending = computed(
   () =>
     !!definitionTask.value &&
     (!definitionStatus.value || ['pending', 'running'].includes(definitionStatus.value.status)),
+)
+watch(
+  () => busy.value || uncertain.value || definitionPending.value,
+  (value) => emit('locked', value),
+  { immediate: true },
 )
 const task = ref<string>(),
   status = ref<Awaited<ReturnType<typeof client.status>>>(),
@@ -738,7 +744,11 @@ function openGroup(group: string) {
         </v-card-text></v-card
       >
     </template>
-    <v-dialog v-model="membersEditing" max-width="800" :persistent="busy || uncertain"
+    <v-dialog
+      v-model="membersEditing"
+      :data-state="membersEditing ? 'open' : 'closed'"
+      max-width="800"
+      :persistent="busy || uncertain"
       ><v-card :title="t('devices.manageMembers')"
         ><v-card-text
           ><form class="group-member-editor" @submit.prevent="changeMembers">
@@ -762,6 +772,7 @@ function openGroup(group: string) {
     >
     <v-dialog
       v-model="editing"
+      :data-state="editing ? 'open' : 'closed'"
       max-width="960"
       scrollable
       :persistent="busy || uncertain || definitionPending"
@@ -856,7 +867,12 @@ function openGroup(group: string) {
       </form>
       <p>{{ current?.group.id }} · {{ current?.group.revision }} · {{ task }}</p>
     </details>
-    <v-dialog v-model="deleting" max-width="800" role="alertdialog" :persistent="busy || uncertain"
+    <v-dialog
+      v-model="deleting"
+      :data-state="deleting ? 'open' : 'closed'"
+      max-width="800"
+      role="alertdialog"
+      :persistent="busy || uncertain"
       ><v-card :title="t('devices.delete')"
         ><v-card-text
           ><p>{{ current?.group.presentation.name }}</p>

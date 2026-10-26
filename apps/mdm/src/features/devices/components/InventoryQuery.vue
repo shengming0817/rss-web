@@ -12,7 +12,7 @@ import {
   VExpansionPanel,
   VExpansionPanelText,
 } from 'vuetify/components'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import type { FieldDefinition, QueryInput, SavedQuery } from '../clients/assets'
@@ -182,18 +182,16 @@ watch(
     sortTerms.value = []
     name.value = ''
     pending = undefined
+    void run(
+      async () => ({ catalog: await client.catalog(), saved: await client.saved() }),
+      (v) => {
+        fields.value = v.catalog.fields
+        saved.value = v.saved
+      },
+    )
   },
-  { flush: 'sync' },
+  { immediate: true, flush: 'sync' },
 )
-onMounted(() => {
-  void run(
-    async () => ({ catalog: await client.catalog(), saved: await client.saved() }),
-    (v) => {
-      fields.value = v.catalog.fields
-      saved.value = v.saved
-    },
-  )
-})
 function newSaved() {
   if (busy.value || uncertain.value) return
   current.value = undefined
@@ -282,7 +280,7 @@ function newSaved() {
       t('devices.next')
     }}</v-btn>
     <section v-if="status?.status === 'completed' && !status.failure">
-      <h3>{{ t('devices.facets') }}</h3>
+      <h2>{{ t('devices.facets') }}</h2>
       <p>{{ t('devices.facetNote') }}</p>
       <v-select
         v-model="facet"

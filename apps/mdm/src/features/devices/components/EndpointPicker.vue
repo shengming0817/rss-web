@@ -63,6 +63,7 @@ watch(
     <v-btn type="button" :disabled="busy" @click="load()">{{ t('devices.searchGroups') }}</v-btn>
     <p>{{ t('devices.selectedDevices') }}: {{ model.length }}</p>
     <v-checkbox
+      class="field-choice"
       v-for="endpoint in choices"
       :key="endpoint.id"
       :model-value="model.includes(endpoint.id)"

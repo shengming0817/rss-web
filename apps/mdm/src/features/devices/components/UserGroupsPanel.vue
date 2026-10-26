@@ -10,7 +10,7 @@ import {
   VTable,
   VAlert,
 } from 'vuetify/components'
-import { onMounted, ref, toRaw, watch } from 'vue'
+import { ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { useMdm } from '../../../context'
@@ -20,6 +20,7 @@ import { user, type UserGroup } from '../../operations/clients/authorization'
 import MdmPage from '../../../ui/MdmPage.vue'
 import TenantUserSelect from './TenantUserSelect.vue'
 import { groupMessages } from '../group-i18n'
+const emit = defineEmits<{ locked: [value: boolean] }>()
 const confirmingAction = ref<'delete'>()
 function confirmAction() {
   const action = confirmingAction.value
@@ -37,6 +38,11 @@ const { t } = useI18n({ useScope: 'local', messages: groupMessages }),
   route = useRoute(),
   client = runtime.operations.authorization,
   { run, runWrite, busy, failure, uncertain } = useOperation([], () => deviceBinding(runtime))
+watch(
+  () => busy.value || uncertain.value,
+  (value) => emit('locked', value),
+  { immediate: true },
+)
 const page = ref<Awaited<ReturnType<typeof client.groups>>>(),
   effective = ref<Awaited<ReturnType<typeof client.effective>>>()
 const fresh = (): UserGroup => ({ name: '', enabled: true, members: [] })
@@ -179,26 +185,28 @@ watch(
     effective.value = undefined
     remote.value = undefined
     pending = undefined
+    void initialize()
   },
-  { flush: 'sync' },
+  { immediate: true, flush: 'sync' },
 )
 watch(
   () => route.fullPath,
   () => {
+    if (busy.value || uncertain.value) return
     pending = undefined
     create()
     void routeTarget()
   },
   { flush: 'post' },
 )
-onMounted(async () => {
+async function initialize() {
   await run(
     () => client.effective(),
     (v) => (effective.value = v),
   )
   await load()
   await routeTarget()
-})
+}
 </script>
 <template>
   <MdmPage
