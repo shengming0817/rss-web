@@ -1,12 +1,24 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import {
+  VBtn,
+  VCard,
+  VCardText,
+  VCardTitle,
+  VChip,
+  VDataTable,
+  VExpansionPanel,
+  VExpansionPanelText,
+  VExpansionPanels,
+  VSelect,
+  VTextField,
+} from 'vuetify/components'
 import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
 import { sourceDefinition, type SourceChange } from '../clients/lifecycle'
 import { deviceBinding } from '../../devices/useDeviceBinding'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.software.lifecycle,
@@ -108,94 +120,150 @@ watch(
 )
 </script>
 <template>
-  <PageFrame :title="t('software.sources')" :busy="busy" :failure="failure">
-    <UiButton :disabled="busy || uncertain" @click="list()">{{
-      t('software.sourceDirectory')
-    }}</UiButton>
-    <section v-if="page" class="console-panel">
-      <p v-if="!page.items.length">{{ t('policies.empty') }}</p>
-      <article v-for="item in page.items" :key="`${item.source.id}/${item.source.revision}`">
-        <p>
-          {{ item.source.id }} / {{ item.source.revision }} · {{ item.source.protocol.kind }} ·
-          {{ t(`software.lifecycle_${item.lifecycle.state}`) }}
-        </p>
-        <UiButton :disabled="busy || uncertain" @click="choose(item)">{{
-          t('policies.open')
-        }}</UiButton>
-      </article>
-      <UiButton
-        v-if="page.nextCursor"
-        :disabled="busy || uncertain"
-        @click="list(page.nextCursor)"
-        >{{ t('devices.next') }}</UiButton
-      >
-    </section>
-    <form @submit.prevent="read">
-      <fieldset :disabled="busy || uncertain">
-        <label>{{ t('software.source') }}<input v-model="id" class="ui-input" required /></label
-        ><label
-          >{{ t('software.sourceRevision')
-          }}<input v-model="revision" class="ui-input" required /></label
-        ><UiButton type="submit">{{ t('policies.open') }}</UiButton>
-      </fieldset>
-    </form>
-    <UiButton :disabled="busy" @click="read">{{ t('software.reconcile') }}</UiButton>
-    <section v-if="current" class="console-panel">
-      <h2>{{ current.source.id }} / {{ current.source.revision }}</h2>
-      <p>
-        {{ current.source.protocol.kind }} ·
-        {{ t(`software.lifecycle_${current.lifecycle.state}`) }}
-      </p>
-      <p>{{ current.lifecycle.operation }} · {{ current.lifecycle.actor }}</p>
-      <UiButton
-        :disabled="busy || uncertain || current.lifecycle.state === 'enabled'"
-        @click="change({ action: 'enable' })"
-        >{{ t('software.enable') }}</UiButton
-      ><UiButton
-        :disabled="busy || uncertain || current.lifecycle.state !== 'enabled'"
-        @click="change({ action: 'disable' })"
-        >{{ t('software.disable') }}</UiButton
-      >
-      <pre>{{ JSON.stringify(current.snapshot, null, 2) }}</pre>
-    </section>
-    <details class="console-panel">
-      <summary>{{ t('software.registerSource') }}</summary>
-      <form @submit.prevent="register">
-        <fieldset :disabled="busy || uncertain">
-          <label
-            >{{ t('software.kind')
-            }}<select v-model="kind" class="ui-input">
-              <option
-                v-for="protocol in ['private', 'winget_rest', 'winget_community', 'brew_tap']"
-                :key="protocol"
-                :value="protocol"
-              >
-                {{ protocol }}
-              </option>
-            </select></label
-          ><template v-if="kind === 'winget_rest'"
-            ><label
-              >{{ t('software.location')
-              }}<input v-model="location" class="ui-input" type="url" required /></label
-            ><label
-              >{{ t('policies.id')
-              }}<input v-model="identifier" class="ui-input" required /></label></template
-          ><template v-if="kind === 'winget_community' || kind === 'brew_tap'"
-            ><label
-              >{{ t('software.repository')
-              }}<input v-model="repository" class="ui-input" type="url" required /></label
-            ><label
-              >{{ t('software.commit')
-              }}<input
-                v-model="commit"
-                class="ui-input"
-                pattern="[0-9a-f]{40}"
-                required /></label></template
-          ><label v-if="kind === 'brew_tap'"
-            >Tap<input v-model="tap" class="ui-input" required /></label
-          ><UiButton type="submit">{{ t('software.registerSource') }}</UiButton>
-        </fieldset>
-      </form>
-    </details></PageFrame
+  <MdmPage
+    :title="t('software.sources')"
+    :description="t('software.sourcesHint')"
+    :busy="busy"
+    :failure="failure"
   >
+    <template #actions
+      ><VBtn :disabled="busy || uncertain" @click="list()">{{
+        t('policies.reload')
+      }}</VBtn></template
+    >
+    <VDataTable
+      v-if="page"
+      :items="page.items"
+      :headers="[
+        { key: 'source.id', title: t('software.source') },
+        { key: 'source.revision', title: t('software.sourceRevision') },
+        { key: 'source.protocol.kind', title: t('software.kind') },
+        { key: 'lifecycle.state', title: t('policies.status') },
+        { key: 'open', title: t('policies.open'), sortable: false },
+      ]"
+      :items-per-page="-1"
+      hide-default-footer
+      :no-data-text="t('policies.empty')"
+      :loading="busy"
+    >
+      <template #[`item.lifecycle.state`]="{ item }"
+        ><VChip size="small">{{ t(`software.lifecycle_${item.lifecycle.state}`) }}</VChip></template
+      >
+      <template #[`item.open`]="{ item }"
+        ><VBtn variant="text" :disabled="busy || uncertain" @click="choose(item)">{{
+          t('policies.open')
+        }}</VBtn></template
+      >
+    </VDataTable>
+    <VBtn v-if="page?.nextCursor" :disabled="busy || uncertain" @click="list(page.nextCursor)">{{
+      t('devices.next')
+    }}</VBtn>
+    <VCard class="my-4" variant="outlined"
+      ><VCardText>
+        <form @submit.prevent="read">
+          <fieldset :disabled="busy || uncertain" class="software-fields">
+            <VTextField
+              v-model="id"
+              :label="t('software.source')"
+              required
+              :disabled="busy || uncertain"
+            />
+            <VTextField
+              v-model="revision"
+              :label="t('software.sourceRevision')"
+              required
+              :disabled="busy || uncertain"
+            />
+            <VBtn type="submit" :disabled="busy || uncertain">{{ t('policies.open') }}</VBtn>
+          </fieldset>
+        </form>
+        <VBtn class="mt-3" :disabled="busy" @click="read">{{ t('software.reconcile') }}</VBtn>
+      </VCardText></VCard
+    >
+    <VCard v-if="current" class="my-4" variant="outlined"
+      ><VCardTitle>{{ current.source.id }} / {{ current.source.revision }}</VCardTitle
+      ><VCardText>
+        <VChip>{{ current.source.protocol.kind }}</VChip>
+        <VChip class="ml-2">{{ t(`software.lifecycle_${current.lifecycle.state}`) }}</VChip>
+        <p class="my-3">{{ current.lifecycle.operation }} · {{ current.lifecycle.actor }}</p>
+        <VBtn
+          :disabled="busy || uncertain || current.lifecycle.state === 'enabled'"
+          @click="change({ action: 'enable' })"
+          >{{ t('software.enable') }}</VBtn
+        >
+        <VBtn
+          class="ml-2"
+          :disabled="busy || uncertain || current.lifecycle.state !== 'enabled'"
+          @click="change({ action: 'disable' })"
+          >{{ t('software.disable') }}</VBtn
+        >
+        <pre class="mt-4">{{ JSON.stringify(current.snapshot, null, 2) }}</pre>
+      </VCardText></VCard
+    >
+    <VExpansionPanels variant="accordion"
+      ><VExpansionPanel :title="t('software.registerSource')"
+        ><VExpansionPanelText eager>
+          <form @submit.prevent="register">
+            <fieldset :disabled="busy || uncertain" class="software-fields">
+              <VSelect
+                v-model="kind"
+                :label="t('software.kind')"
+                :items="['private', 'winget_rest', 'winget_community', 'brew_tap']"
+                :disabled="busy || uncertain"
+              />
+              <template v-if="kind === 'winget_rest'">
+                <VTextField
+                  v-model="location"
+                  :label="t('software.location')"
+                  type="url"
+                  required
+                  :disabled="busy || uncertain"
+                />
+                <VTextField
+                  v-model="identifier"
+                  :label="t('policies.id')"
+                  required
+                  :disabled="busy || uncertain"
+                />
+              </template>
+              <template v-if="kind === 'winget_community' || kind === 'brew_tap'">
+                <VTextField
+                  v-model="repository"
+                  :label="t('software.repository')"
+                  type="url"
+                  required
+                  :disabled="busy || uncertain"
+                />
+                <VTextField
+                  v-model="commit"
+                  :label="t('software.commit')"
+                  pattern="[0-9a-f]{40}"
+                  required
+                  :disabled="busy || uncertain"
+                />
+              </template>
+              <VTextField
+                v-if="kind === 'brew_tap'"
+                v-model="tap"
+                label="Tap"
+                required
+                :disabled="busy || uncertain"
+              />
+              <VBtn type="submit" :disabled="busy || uncertain">{{
+                t('software.registerSource')
+              }}</VBtn>
+            </fieldset>
+          </form>
+        </VExpansionPanelText></VExpansionPanel
+      ></VExpansionPanels
+    >
+  </MdmPage>
 </template>
+<style scoped>
+.software-fields {
+  border: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+</style>

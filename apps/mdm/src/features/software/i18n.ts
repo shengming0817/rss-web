@@ -1,4 +1,9 @@
 export const softwareZh = {
+  catalogHint:
+    '用于分发的企业软件资源。发布可用版本后，通过策略分配给设备组。实际采集的安装资产具有独立身份，不按名称自动关联到资源库。',
+  sourcesHint: '软件来源与固定版本的准入配置。来源配置由设置统一管理，设备安装和执行由策略持有。',
+  assignPolicy: '通过策略分配',
+
   platform: '平台',
   architecture: '架构',
   variant: '变体',
@@ -229,7 +234,7 @@ export const softwareZh = {
   variantDraftHint:
     '分别编辑并保存每个平台、架构、变体；同一组合会替换草稿。最后一次提交完整不可变版本，文件随后按变体上传。',
   removeVariant: '移除变体草稿',
-  catalog: '企业软件目录',
+  catalog: '企业软件资源',
   authorPackage: '编辑包版本与文件',
   unknown: '未知',
   publications: '外部软件源发布',
@@ -255,6 +260,12 @@ export const softwareZh = {
   sourceHint: '来源摘要从已启用的企业来源读取；版本生命周期独立维护。',
 }
 export const softwareEn: typeof softwareZh = {
+  catalogHint:
+    'Distributable enterprise software resources. Publish an available version, then assign it to device groups through a policy. Observed installations have a separate identity and are never matched to resources by display name.',
+  sourcesHint:
+    'Configure source and pinned-version admission in settings. Policies own device installation and execution.',
+  assignPolicy: 'Assign through a policy',
+
   platform: 'Platform',
   architecture: 'Architecture',
   variant: 'Variant',
@@ -293,12 +304,12 @@ export const softwareEn: typeof softwareZh = {
       'Use the existing Resource owner: create a software resource, declare a pinned version and variants, then upload, resume and explicitly complete content binding. Files are not published publicly.',
   },
   directPublicationHint:
-    'Publish an exact software version to an actual target. Configure device batches in its deployment policy.',
+    'Publish an exact software version to an actual target. Assign devices through the shared policy editor.',
   newPublication: 'Publish software version',
   publicationRecords: 'Publication records',
   loadTargets: 'Load actual targets',
   noTargets:
-    'No publication targets configured. Installer packages can still use direct deployment.',
+    'No publication targets configured. Installer resources can still be assigned through a policy.',
   publicationAttempt: 'Publication attempt',
   recoverPublication: 'Recover publication',
   lookupOperation: 'Look up original operation',
@@ -504,7 +515,7 @@ export const softwareEn: typeof softwareZh = {
   variantDraftHint:
     'Save each platform, architecture and variant separately; saving the same coordinate replaces its draft. Submit the complete immutable version, then upload its files per variant.',
   removeVariant: 'Remove variant draft',
-  catalog: 'Enterprise software catalog',
+  catalog: 'Enterprise software resources',
   authorPackage: 'Edit package versions & files',
   unknown: 'Unknown',
   publications: 'External source publication',
