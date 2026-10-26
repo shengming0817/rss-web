@@ -27,7 +27,7 @@ it('defaults only a first publication and preserves values across withdrawal and
   expect(wrapper.emitted('update:modelValue')).toHaveLength(1)
   wrapper.unmount()
 })
-it('keeps migrated access undecided until explicit selection and hides software risk controls', async () => {
+it('keeps access undecided while letting administrators select risk and AI settings', async () => {
   const value = {
     published: false,
     access: null,
@@ -43,12 +43,14 @@ it('keeps migrated access undecided until explicit selection and hides software 
     riskLevel: 2,
   } as SelfService
   const wrapper = mount(SelfServiceEditor, {
-    props: { modelValue: value, software: true },
+    props: { modelValue: value },
     global: { plugins: [mdmI18n()] },
   })
   expect(wrapper.find('[data-field="access-required"]').exists()).toBe(true)
-  expect(wrapper.find('[data-field="riskLevel"]').exists()).toBe(false)
-  expect(wrapper.find('[data-field="allowAi"]').exists()).toBe(false)
+  await wrapper.get('[data-field="riskLevel"]').setValue('1')
+  expect(value.riskLevel).toBe(1)
+  await wrapper.get('[data-field="allowAi"]').setValue(true)
+  expect(value.allowAi).toBe(true)
   await wrapper.get('[data-field="access"]').setValue('device')
   expect(value.access).toEqual({ kind: 'device' })
   expect(wrapper.find('[data-field="access-required"]').exists()).toBe(false)

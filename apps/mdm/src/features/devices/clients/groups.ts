@@ -123,6 +123,7 @@ export type GroupChange =
   | { action: 'rule'; criteria: GroupCondition }
   | { action: 'members'; add: ObjectRef[]; remove: ObjectRef[] }
   | { action: 'delete' | 'recompute' }
+export type GroupTaskKind = 'group' | 'group_preview' | 'group_definition'
 export type GroupProjection = 'members' | 'changes' | 'decisions'
 const groupFields = {
   id: uuid,
@@ -288,17 +289,17 @@ export function decodeGroupPage(
   }
 }
 export function createGroupsClient(transport: HttpTransport) {
-  function accepted(value: unknown, id: string, operation: string) {
+  function accepted(value: unknown, id: string, operation: string, kind: GroupTaskKind) {
     const v = closed(value, ['task', 'kind', 'target', 'statusUrl'])
     const task = uuid(v['task'])
     if (
       task !== operation ||
-      v['kind'] !== 'group' ||
+      v['kind'] !== kind ||
       v['target'] !== id ||
       v['statusUrl'] !== `/api/v1/groups/${id}/tasks/${task}`
     )
       throw new Error('Wrong group task')
-    return { task, statusUrl: string(v['statusUrl']) }
+    return { task, kind, statusUrl: string(v['statusUrl']) }
   }
   return {
     list: <F extends GroupDirectoryField = GroupDirectoryField>(query: GroupQuery<F> = {}) => {
@@ -355,11 +356,24 @@ export function createGroupsClient(transport: HttpTransport) {
         pathParams: { id },
         body,
       }
-      if (body.input.action === 'members' || body.input.action === 'recompute')
+      if (
+        body.input.action === 'members' ||
+        body.input.action === 'recompute' ||
+        body.input.action === 'rule' ||
+        (body.input.action === 'create' && body.input.criteria !== null)
+      )
         return transport.request({
           ...options,
           successStatus: 202,
-          decode: (v) => accepted(v, id, body.operationId),
+          decode: (v) =>
+            accepted(
+              v,
+              id,
+              body.operationId,
+              body.input.action === 'rule' || body.input.action === 'create'
+                ? 'group_definition'
+                : 'group',
+            ),
         })
       return transport.request({
         ...options,
@@ -386,15 +400,15 @@ export function createGroupsClient(transport: HttpTransport) {
         pathParams: { id },
         body,
         successStatus: 202,
-        decode: (v) => accepted(v, id, body.operationId),
+        decode: (v) => accepted(v, id, body.operationId, 'group_preview'),
       }),
-    status: (group: string, task: string) =>
+    status: (group: string, task: string, kind: GroupTaskKind = 'group') =>
       transport.request({
         method: 'GET',
         path: '/api/v1/groups/{group}/tasks/{task}',
         pathParams: { group, task },
         successStatus: 200,
-        decode: (value) => calculationTask(value, 'group', group, task),
+        decode: (value) => calculationTask(value, kind, group, task),
       }),
     page: (group: string, result: string, kind: GroupProjection, next?: string) =>
       transport.request({

@@ -8,6 +8,7 @@ import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import type { NativeOperation, Reauthorization } from '../clients/native'
 import PageFrame from '../../../components/PageFrame.vue'
+import AuthorizationFacts from '../components/AuthorizationFacts.vue'
 import NativeTaskFacts from '../components/NativeTaskFacts.vue'
 import PolicyRunFacts from '../components/PolicyRunFacts.vue'
 import OperationStages from '../components/OperationStages.vue'
@@ -31,6 +32,9 @@ watch(
   { flush: 'sync' },
 )
 async function load() {
+  native.value = undefined
+  software.value = undefined
+  compared.value = false
   let id: string
   try {
     id = uuid(String(route.params['execution']))
@@ -83,14 +87,29 @@ async function repeat() {
 }
 
 function change(action: 'reauthorize' | 'cancel') {
-  if (busy.value || uncertain.value || !native.value || typeof route.query['device'] !== 'string')
+  if (
+    busy.value ||
+    uncertain.value ||
+    !native.value ||
+    typeof route.query['device'] !== 'string' ||
+    (action === 'reauthorize' &&
+      (native.value.reauthorization.state !== 'available' ||
+        (native.value.reauthorization.confirmationRequired &&
+          (!confirmation.value ||
+            !registration.value ||
+            !Number.isSafeInteger(generation.value) ||
+            generation.value < 1))))
+  )
     return
   const device = String(route.query['device']),
     id = native.value.operationId,
     body: Reauthorization = {
       requestId: crypto.randomUUID(),
       expectedRevision: native.value.revision,
-      ...(action === 'reauthorize' && confirmation.value
+      ...(action === 'reauthorize' &&
+      native.value.reauthorization.state === 'available' &&
+      native.value.reauthorization.confirmationRequired &&
+      confirmation.value
         ? {
             confirmation: {
               confirmed: true,
@@ -181,7 +200,7 @@ watch(
       <h2>{{ t('devices.compare') }}</h2>
       <p>
         {{ t('policies.revision') }} {{ native.revision }} · {{ native.commandStatus }} ·
-        {{ native.authorization }}
+        {{ t(`policies.authorization.${native.authorization.state}`) }}
       </p>
     </section>
     <UiButton v-if="uncertain && pending" :disabled="busy || !compared" @click="repeat">{{
@@ -219,7 +238,17 @@ watch(
         {{ t(`policies.state.${native.task.platform}`) }} ·
         {{ t(`policies.state.${native.commandStatus}`) }}
       </p>
-      <fieldset :disabled="busy || uncertain">
+      <AuthorizationFacts
+        :authorization="native.authorization"
+        :reauthorization="native.reauthorization"
+      />
+      <fieldset
+        v-if="
+          native.reauthorization.state === 'available' &&
+          native.reauthorization.confirmationRequired
+        "
+        :disabled="busy || uncertain"
+      >
         <label
           >{{ t('devices.registration')
           }}<input v-model="registration" class="ui-input" required /></label
@@ -236,11 +265,19 @@ watch(
         >
       </fieldset>
       <UiButton
-        v-if="
-          native.authorization === 'blocked' &&
-          ['queued', 'published'].includes(native.commandStatus)
+        v-if="native.reauthorization.state === 'available'"
+        :disabled="
+          !!(
+            busy ||
+            uncertain ||
+            (native.reauthorization.state === 'available' &&
+              native.reauthorization.confirmationRequired &&
+              (!confirmation ||
+                !registration ||
+                !Number.isSafeInteger(generation) ||
+                generation < 1))
+          )
         "
-        :disabled="!!(busy || uncertain)"
         type="submit"
         @click="change('reauthorize')"
       >

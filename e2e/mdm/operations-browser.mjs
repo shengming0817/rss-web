@@ -146,6 +146,30 @@ try {
   await page.getByRole('button', { name: '下一页', exact: true }).click()
   await load()
   coverage.push('formal-operation-kind-filter-and-opaque-pagination')
+  for (const [label, predicate] of [
+    ['等待设备', "kind=='command'"],
+    ['待重新授权', "authorization.state=='blocked'"],
+    ['未知结果', "status=='unknown'"],
+  ]) {
+    const directoryResponse = page.waitForResponse(
+      (r) => r.request().method() === 'GET' && new URL(r.url()).pathname === '/api/v1/operations',
+    )
+    const statisticsResponse = page.waitForResponse(
+      (r) =>
+        r.request().method() === 'GET' &&
+        new URL(r.url()).pathname === '/api/v1/operations/statistics',
+    )
+    await page.getByRole('button', { name: label, exact: true }).click()
+    const [listReply, statsReply] = await Promise.all([directoryResponse, statisticsResponse])
+    assert.equal(listReply.status(), 200)
+    assert.equal(statsReply.status(), 200)
+    const filter = new URL(listReply.url()).searchParams.get('filter')
+    assert.ok(filter.includes(predicate))
+    assert.equal(new URL(statsReply.url()).searchParams.get('filter'), filter)
+    await load()
+  }
+  coverage.push('real-server-queue-predicates-and-identical-statistics-filters')
+
   phase = 'control-unknown-original-query'
   await page.goto(at(`policies/executions?device=${fixture.mdm}`))
   await load()
@@ -231,9 +255,9 @@ try {
   }
   await changeRule(fixture.rule.grants.filter((g) => g.operation !== 'device_control'))
   const revoked = await get(`/api/v1/devices/${fixture.mdm}/operations/${first.operationId}`)
-  // GET reports persisted authority; grant loss is enforced on admission and dispatch.
-  // The fixed producer's command admission test explicitly retains this snapshot.
-  assert.equal(revoked.authorization, 'authorized')
+  // Organization execution authority and the current reader's action permission are independent.
+  assert.deepEqual(revoked.authorization, { state: 'authorized' })
+  assert.deepEqual(revoked.reauthorization, { state: 'unavailable', reason: 'permission_denied' })
   const deniedReauthorization = await request(
     'post',
     `/api/v1/devices/${fixture.mdm}/operations/${first.operationId}/reauthorize`,
@@ -275,7 +299,8 @@ try {
   const authorizationSnapshot = await get(
     `/api/v1/devices/${fixture.mdm}/operations/${live.operationId}`,
   )
-  assert.equal(authorizationSnapshot.authorization, 'authorized')
+  assert.deepEqual(authorizationSnapshot.authorization, { state: 'authorized' })
+  assert.equal(authorizationSnapshot.reauthorization.state, 'available')
   assert.equal(authorizationSnapshot.revision, beforeAuthorization.revision + 1)
   await page.goto(at(`policies/executions/${live.operationId}?device=${fixture.mdm}`))
   await load()
@@ -465,6 +490,37 @@ try {
   coverage.push(
     'real-reauthorization-api-terminal-ui-permission-403-device-scope-and-anonymous-401',
   )
+  await changeRule(fixture.rule.grants)
+  const registration = (await get(`/api/v1/devices/${fixture.mdm}/registrations`)).items.find(
+    (r) => r.status === 'active' && r.source !== 'agent.builtin',
+  )
+  assert.ok(registration)
+  const revoke = await request(
+    'post',
+    `/api/v1/devices/${fixture.mdm}/registrations/${registration.registrationId}/revoke`,
+    { headers: { ...headers, 'Idempotency-Key': randomUUID() }, data: {} },
+  )
+  assert.equal(revoke.status(), 200)
+  const blockedFilter = "authorization.state=='blocked'"
+  const blocked = await get(
+    '/api/v1/operations?' + new URLSearchParams({ filter: blockedFilter, limit: '100' }),
+  )
+  assert.ok(blocked.items.some((row) => row.authorization.reason === 'registration_changed'))
+  assert.ok(
+    blocked.items.every(
+      (row) => row.authorization.state === 'blocked' && row.reauthorization.state === 'unavailable',
+    ),
+  )
+  const blockedStats = await get(
+    '/api/v1/operations/statistics?' + new URLSearchParams({ filter: blockedFilter }),
+  )
+  assert.equal(blockedStats.statistics.total, blocked.items.length)
+  await page.goto(at('policies/executions'))
+  await load()
+  await page.getByRole('button', { name: '待重新授权', exact: true }).click()
+  await load()
+  assert.ok((await page.locator('tbody').innerText()).includes('注册代次已变化'))
+  coverage.push('real-revoked-registration-blocked-queue-summary-and-filtered-statistics')
   result = 'passed'
 } catch (error) {
   console.log(

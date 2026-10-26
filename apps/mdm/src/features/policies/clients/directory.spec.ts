@@ -13,6 +13,8 @@ it('consumes the formal operation page and independent statistics with HTTP-owne
     origin: 'policy',
     policy: id,
     deadline: 100,
+    authorization: { state: 'not_applicable' },
+    reauthorization: { state: 'not_applicable' },
     status: 'running',
     detailUrl: `/api/v1/policies/${id}/runs/${id}`,
     evidence: {
@@ -159,6 +161,8 @@ it('decodes the HTTP native observation and rejects incomplete evidence', async 
           origin: 'direct',
           policy: null,
           deadline: 100,
+          authorization: { state: 'authorized' },
+          reauthorization: { state: 'unavailable', reason: 'already_received' },
           status: 'received',
           detailUrl: `/api/v1/devices/endpoint/operations/${id}`,
           evidence,

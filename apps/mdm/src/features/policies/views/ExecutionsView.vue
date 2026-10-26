@@ -9,6 +9,7 @@ import { useOperation } from '../../../services/useOperation'
 import PageFrame from '../../../components/PageFrame.vue'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import DeviceControlPanel from '../../devices/components/DeviceControlPanel.vue'
+import AuthorizationFacts from '../components/AuthorizationFacts.vue'
 import NativeTaskFacts from '../components/NativeTaskFacts.vue'
 import OperationStages from '../components/OperationStages.vue'
 import type { NativeOperation } from '../clients/native'
@@ -17,6 +18,10 @@ const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute()
 const activeFilter = ref<string>()
+type Queue = 'all' | 'waiting' | 'blocked' | 'unknown'
+const queue = ref<Queue>('all'),
+  authorizationState = ref(''),
+  authorizationReason = ref('')
 const { run, busy, failure } = useOperation(
   [],
   () => [...deviceBinding(runtime), activeFilter.value],
@@ -35,6 +40,9 @@ const applied = ref<{
   policy?: string | undefined
   kind?: 'command' | 'action_run' | undefined
   status?: string | undefined
+  queue?: string | undefined
+  authorizationState?: string | undefined
+  authorizationReason?: string | undefined
 }>({})
 const records = ref<Awaited<ReturnType<typeof runtime.policies.executions.directory>>>()
 const device = ref(''),
@@ -53,6 +61,10 @@ function beginRemote() {
 const utc = (at: number) =>
   new Date(at * 1000).toISOString().replace('T', ' ').replace('.000Z', ' UTC')
 const pinned = computed(() => typeof route.query['operation'] === 'string')
+function selectQueue(value: Queue) {
+  queue.value = value
+  load()
+}
 function load(cursor?: string) {
   if (busy.value) return
   records.value = undefined
@@ -63,13 +75,33 @@ function load(cursor?: string) {
         policy: policy.value || undefined,
         kind: kind.value || undefined,
         status: status.value || undefined,
+        queue: queue.value,
+        authorizationState: authorizationState.value || undefined,
+        authorizationReason: authorizationReason.value || undefined,
       }
   const filter = allOf(
-    ...Object.entries(selection).map(([key, value]) =>
-      value ? comparison(key, '==', value) : undefined,
+    ...(['device', 'policy', 'kind', 'status'] as const).map((key) =>
+      selection[key] ? comparison(key, '==', selection[key]!) : undefined,
     ),
+    selection.queue === 'waiting'
+      ? allOf(
+          comparison('kind', '==', 'command'),
+          `(${comparison('status', '==', 'queued')}),(${comparison('status', '==', 'published')})`,
+        )
+      : selection.queue === 'blocked'
+        ? comparison('authorization.state', '==', 'blocked')
+        : selection.queue === 'unknown'
+          ? comparison('status', '==', 'unknown')
+          : undefined,
+    selection.authorizationState
+      ? comparison('authorization.state', '==', selection.authorizationState)
+      : undefined,
+    selection.authorizationReason
+      ? comparison('authorization.reason', '==', selection.authorizationReason)
+      : undefined,
   )
   activeFilter.value = filter
+  commandDetails.value = {}
   const query = { filter, cursor }
   if (!cursor) {
     statistics.value = undefined
@@ -87,7 +119,9 @@ function load(cursor?: string) {
       applied.value = selection
       commandDetails.value = {}
     },
-  )
+  ).then((ok) => {
+    if (!ok && activeFilter.value === filter) statistics.value = undefined
+  })
 }
 function inspect(device: string, id: string) {
   void run(
@@ -146,6 +180,10 @@ watch(
     commandDetails.value = {}
     selected.value = undefined
     devices.value = undefined
+    statistics.value = undefined
+    queue.value = 'all'
+    authorizationState.value = ''
+    authorizationReason.value = ''
     device.value = typeof route.query['device'] === 'string' ? route.query['device'] : ''
     policy.value = typeof route.query['policy'] === 'string' ? route.query['policy'] : ''
     selectedDevice.value =
@@ -200,6 +238,16 @@ watch(
         <dd>{{ statistics.statistics.unknown }}</dd>
       </div>
     </dl>
+    <div class="console-toolbar" role="group" :aria-label="t('policies.queues.title')">
+      <UiButton
+        v-for="value in ['all', 'waiting', 'blocked', 'unknown'] as const"
+        :key="value"
+        :aria-pressed="queue === value"
+        :disabled="busy"
+        @click="selectQueue(value)"
+        >{{ t(`policies.queues.${value}`) }}</UiButton
+      >
+    </div>
     <form class="console-toolbar" @submit.prevent="load()">
       <label>{{ t('policies.device') }}<input v-model="device" class="ui-input" /></label>
       <label>{{ t('policies.policies') }}<input v-model="policy" class="ui-input" /></label>
@@ -215,6 +263,37 @@ watch(
         >{{ t('policies.execution')
         }}<input v-model="status" class="ui-input" :placeholder="t('policies.statusFilter')"
       /></label>
+      <label
+        >{{ t('policies.authorization.title')
+        }}<select v-model="authorizationState" class="ui-input">
+          <option value="">{{ t('devices.all') }}</option>
+          <option
+            v-for="value in ['authorized', 'blocked', 'not_applicable']"
+            :key="value"
+            :value="value"
+          >
+            {{ t(`policies.authorization.${value}`) }}
+          </option>
+        </select></label
+      >
+      <label
+        >{{ t('policies.authorization.reason')
+        }}<select v-model="authorizationReason" class="ui-input">
+          <option value="">{{ t('devices.all') }}</option>
+          <option
+            v-for="value in [
+              'lifecycle_blocked',
+              'registration_changed',
+              'input_mismatch',
+              'source_invalid',
+            ]"
+            :key="value"
+            :value="value"
+          >
+            {{ t(`policies.authorization.${value}`) }}
+          </option>
+        </select></label
+      >
       <UiButton :disabled="busy" type="submit">{{ t('policies.reload') }}</UiButton>
     </form>
     <p>{{ t('policies.statusFilterBoundary') }}</p>
@@ -280,6 +359,7 @@ watch(
           { key: 'operation', label: t('policies.operation') },
           { key: 'device', label: t('policies.device') },
           { key: 'status', label: t('policies.execution') },
+          { key: 'authorization', label: t('policies.authorization.title') },
           { key: 'evidence', label: t('devices.evidence') },
         ]"
       >
@@ -307,6 +387,11 @@ watch(
             row.status
           }}</UiBadge></template
         >
+        <template #cell-authorization="{ row }"
+          ><AuthorizationFacts
+            :authorization="row.authorization"
+            :reauthorization="row.reauthorization"
+        /></template>
         <template #cell-evidence="{ row: item }">
           <details class="operation-evidence">
             <summary>{{ t('devices.evidence') }}</summary>

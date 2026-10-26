@@ -2,7 +2,7 @@ import { closed, count, enumeration, identifier, nullable, uuid } from '../../..
 /** Current Inventory task contract shared by Group and Scope calculations. */
 export function calculationTask(
   value: unknown,
-  kind: 'group' | 'scope',
+  kind: 'group' | 'group_preview' | 'group_definition' | 'scope',
   target: string,
   task: string,
 ) {
@@ -21,6 +21,7 @@ export function calculationTask(
     throw new Error('Wrong calculation task')
   return {
     task,
+    kind,
     status: enumeration(v['status'], [
       'pending',
       'running',
