@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiButton, UiCombobox } from '@rss/core/components'
+import { VAutocomplete, VBtn, VAlert } from 'vuetify/components'
 import { ref, computed, watch } from 'vue'
 import { useIdentity } from '@rss/auth'
 import { useI18n } from 'vue-i18n'
@@ -25,7 +25,7 @@ function load(more = false) {
 }
 const options = computed(() => [
   ...(props.modelValue && !accounts.value.some((a) => a.principalId === props.modelValue)
-    ? [{ value: props.modelValue, label: t('devices.linkedPerson') }]
+    ? [{ value: props.modelValue, label: t('devices.linkedPerson'), disabled: false }]
     : []),
   ...accounts.value.map((a) => ({
     value: a.principalId,
@@ -44,26 +44,28 @@ watch(
 )
 </script>
 <template>
-  <UiCombobox
+  <v-autocomplete
     :model-value="modelValue"
     :label="t('registration.user')"
-    :options="options"
-    :empty-label="t('devices.empty')"
-    :invalid-label="t('devices.invalidRequest')"
+    :items="options"
+    item-title="label"
+    item-value="value"
+    :item-props="(item) => ({ disabled: item.disabled })"
+    :no-data-text="t('devices.empty')"
     :disabled="disabled || busy"
-    @update:model-value="emit('update:modelValue', $event)"
+    @update:model-value="emit('update:modelValue', $event ?? '')"
   />
-  <p class="ui-help">{{ t('devices.loadedPeopleOnly') }}</p>
-  <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
+  <p>{{ t('devices.loadedPeopleOnly') }}</p>
+  <v-alert v-if="failure" type="error" variant="tonal">{{ t('devices.' + failure) }}</v-alert>
   <div class="console-toolbar">
-    <UiButton type="button" :disabled="disabled || busy" @click="emit('update:modelValue', '')">{{
+    <v-btn type="button" :disabled="disabled || busy" @click="emit('update:modelValue', '')">{{
       t('registration.empty')
-    }}</UiButton
-    ><UiButton type="button" :disabled="disabled || busy" @click="load()">{{
+    }}</v-btn
+    ><v-btn type="button" :disabled="disabled || busy" @click="load()">{{
       t('devices.reload')
-    }}</UiButton
-    ><UiButton v-if="cursor" type="button" :disabled="disabled || busy" @click="load(true)">{{
+    }}</v-btn
+    ><v-btn v-if="cursor" type="button" :disabled="disabled || busy" @click="load(true)">{{
       t('registration.more')
-    }}</UiButton>
+    }}</v-btn>
   </div>
 </template>
