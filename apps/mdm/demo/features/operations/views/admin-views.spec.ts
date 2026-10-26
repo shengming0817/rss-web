@@ -1,6 +1,6 @@
 import { mdmKey } from '../../../../src/context'
 import { expect, it } from 'vitest'
-import type { Component } from 'vue'
+import { shallowRef, type Component } from 'vue'
 import { createSoftwareClients } from '../../../../src/features/software/client'
 import { createPolicyClients } from '../../policies/client'
 import AlertRulesView from './AlertRulesView.vue'
@@ -13,6 +13,7 @@ import { demoKey } from '../../../context'
 import { mdmI18n } from '../../../../src/i18n'
 import { createOperationsClients } from '../client'
 import { createScenario, TENANT } from '../../../scenario'
+import { ADMIN } from '../../../operations/authorization'
 import { createAutomationDemo } from '../../../policies/state'
 import { createDeviceDemo } from '../../../devices/state'
 import OrganizationView from '../../../../src/features/operations/views/OrganizationView.vue'
@@ -59,6 +60,14 @@ async function fixture(component: Component, realm: 'tenant' | 'platform' = 'ten
   const clients = createOperationsClients(transport, TENANT, true)
   const runtime = {
     tenant: TENANT,
+    session: {
+      state: shallowRef({
+        status: 'authenticated',
+        tenant: TENANT,
+        identity: { principalId: ADMIN },
+        session: { id: ADMIN },
+      }),
+    },
     realm,
     operations: clients,
     software: createSoftwareClients(transport),

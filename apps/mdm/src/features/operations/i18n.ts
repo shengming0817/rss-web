@@ -14,7 +14,7 @@ export const operationsZh = {
     caughtUp: '当前检查无可见未索引事实',
     partial: '当前仍有可见未索引事实',
     coverageHint:
-      '查询按记录时间与导航坐标排序，不保证跨页快照；新增或迟提交事实请刷新查看。当前检查无可见未索引事实，不代表全历史完整、未漏报或设备效果。',
+      '查询按记录时间与导航坐标排序，不保证跨页快照；新增或迟提交事实请刷新查看。当前检查无可见未索引事实，空结果不证明操作未发生，也不代表全历史完整、未漏报或设备效果。',
     expired: '查询上下文已失效。请重新读取，不复用原游标。',
     recorded: '记录时间（UTC）',
     writeOutcome: '请求写入结果',
@@ -337,7 +337,7 @@ export const operationsEn: typeof operationsZh = {
     caughtUp: 'No visible unindexed facts at this check',
     partial: 'Visible facts remain unindexed',
     coverageHint:
-      'Ordered by recording time and navigation position, without a cross-page snapshot. Refresh for new or late commits. No visible unindexed facts at this check does not prove complete history, absence of missing reports or device effects.',
+      'Ordered by recording time and navigation position, without a cross-page snapshot. Refresh for new or late commits. An empty result does not prove no operation occurred; no visible unindexed facts at this check does not prove complete history, absence of missing reports or device effects.',
     expired: 'Query context expired. Reload without reusing the old cursor.',
     recorded: 'Recorded at (UTC)',
     writeOutcome: 'Request write outcome',

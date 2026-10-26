@@ -136,7 +136,7 @@ it('keeps unlimited quantity null and rejects altered scope or secret-free pseud
 it('uses independent Apple organization configurations and immutable write receipts', async () => {
   const id = operation(),
     server = operation()
-  expect(await client.apple.organizations()).toEqual([])
+  expect(await client.apple.organizations()).toEqual({ items: [], nextCursor: null })
   expect(
     await client.apple.accountOrganization(id, operation(), {
       expectedRevision: 0,

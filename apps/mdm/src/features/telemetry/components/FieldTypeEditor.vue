@@ -32,6 +32,12 @@ function kind(event: Event) {
   else if (kind === 'boolean' || kind === 'time' || kind === 'integer' || kind === 'number')
     model.value = { kind }
 }
+function addMember() {
+  if (model.value.kind !== 'enum' || !member.value || model.value.values.includes(member.value))
+    return
+  model.value = { ...model.value, values: [...model.value.values, member.value] }
+  member.value = ''
+}
 function addProperty() {
   if (
     model.value.kind !== 'record' ||
@@ -111,10 +117,7 @@ function removeProperty(key: string) {
       ><UiButton
         type="button"
         :disabled="!member || model.values.includes(member)"
-        @click="
-          model.values.push(member)
-          member = ''
-        "
+        @click="addMember"
         >{{ t('telemetry.mappingUi.addCode') }}</UiButton
       ></template
     >

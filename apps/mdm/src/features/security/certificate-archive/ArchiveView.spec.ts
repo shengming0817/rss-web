@@ -541,13 +541,11 @@ it('discards a delayed archive list and vault observation after a principal chan
   const list = vi.fn(() => new Promise((resolve) => (complete = resolve)))
   const f = await setup({
     list,
-    state: vi
-      .fn()
-      .mockResolvedValue({
-        initialized: true,
-        generation: 1,
-        unlockedUntil: Math.floor(Date.now() / 1000) + 900,
-      }),
+    state: vi.fn().mockResolvedValue({
+      initialized: true,
+      generation: 1,
+      unlockedUntil: Math.floor(Date.now() / 1000) + 900,
+    }),
   })
   f.session.state.value = {
     ...f.session.state.value,
@@ -573,16 +571,14 @@ it('discards a delayed version history without restoring its old edit baseline a
     history = vi.fn(() => new Promise((resolve) => (complete = resolve)))
   const f = await setup({
     history,
-    list: vi
-      .fn()
-      .mockResolvedValue({
-        tenantId: tenant,
-        items: [entry],
-        nextCursor: null,
-        asOf: 100,
-        reminderDays: 30,
-        alerts: { expired: 0, expiring: 0, notYetValid: 0 },
-      }),
+    list: vi.fn().mockResolvedValue({
+      tenantId: tenant,
+      items: [entry],
+      nextCursor: null,
+      asOf: 100,
+      reminderDays: 30,
+      alerts: { expired: 0, expiring: 0, notYetValid: 0 },
+    }),
   })
   await f.wrapper.findAll('tbody button')[0]!.trigger('click')
   await flushPromises()

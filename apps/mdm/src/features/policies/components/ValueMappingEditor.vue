@@ -57,6 +57,8 @@ function addCode() {
   try {
     const c = model.value.conversion
     if (c.kind === 'enum') {
+      if (scalar.value === 'boolean' && !['true', 'false'].includes(literal.value))
+        throw new Error('Choose a boolean literal')
       const value =
         scalar.value === 'number'
           ? Number(literal.value)

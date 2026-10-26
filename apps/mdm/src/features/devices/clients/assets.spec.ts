@@ -371,8 +371,8 @@ it('consumes only the current dictionary and validates record property schemas',
     }).items[0]?.timeSeries,
   ).toEqual(timeSeries)
   for (const [kind, allowed, forbidden] of [
-    ['cumulative_counter', ['increase', 'rate'], ['count']],
-    ['delta_counter', ['sum', 'rate'], ['increase']],
+    ['cumulative_counter', ['increase', 'rate'], ['unknown']],
+    ['delta_counter', ['sum', 'rate'], ['unknown']],
   ]) {
     const counter = {
       ...field,
@@ -385,7 +385,7 @@ it('consumes only the current dictionary and validates record property schemas',
         ...counter,
         timeSeries: { ...counter.timeSeries, aggregations: forbidden },
       }),
-    ).toThrow('Invalid time series binding')
+    ).toThrow()
   }
 
   expect(

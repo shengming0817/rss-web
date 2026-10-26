@@ -249,6 +249,42 @@ try {
     }
     await write('PUT', `/api/v1/asset-fields/${definition.key}`, { action: 'put', definition })
   }
+  const invalidCounter = await page.request.put(
+    origin + '/api/v1/asset-fields/custom.browser.invalid_counter',
+    {
+      headers: { Origin: origin, 'X-Identity-Request': '1', 'X-CSRF-Token': csrf },
+      data: {
+        operationId: randomUUID(),
+        expectedRevision: 0,
+        input: {
+          action: 'put',
+          definition: {
+            key: 'custom.browser.invalid_counter',
+            version: 1,
+            valueType: { kind: 'integer' },
+            nullable: true,
+            manual: false,
+            sources: { 'agent.script': 0 },
+            platforms: ['macos'],
+            sensitivity: 'standard',
+            unit: 'byte',
+            searchable: false,
+            itemKey: null,
+            timeSeries: {
+              kind: 'cumulative_counter',
+              valuePath: [],
+              intervalStartPath: null,
+              dimensions: {},
+              aggregations: ['count'],
+              retention: { key: 'browser_telemetry', revision: 1 },
+              maxResources: 1,
+            },
+          },
+        },
+      },
+    },
+  )
+  assert.equal(invalidCounter.status(), 400, 'backend owns cross-field aggregation admission')
   const template = randomUUID(),
     scope = randomUUID(),
     content = Buffer.from('#!/bin/sh\n# Controlled synthetic telemetry fixture.\n')

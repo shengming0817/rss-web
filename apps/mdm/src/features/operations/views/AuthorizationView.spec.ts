@@ -358,7 +358,7 @@ it('restores the complete basis of an unknown deletion larger than 4096 bytes an
   expect(writes(f)).toHaveLength(1)
   expect(f.operations.records.get('authorization:tenant')?.queried).toBe(true)
 })
-it('uses the actual UUID after cursor for next and previous pages and presents tombstones without editing', async () => {
+it('uses opaque directory cursors for next and previous pages and presents tombstones without editing', async () => {
   const rows: Revision<Rule>[] = Array.from({ length: 101 }, (_, i) => ({
     id: `66666666-6666-4666-8666-${String(i).padStart(12, '0')}`,
     revision: 1,
@@ -366,13 +366,17 @@ it('uses the actual UUID after cursor for next and previous pages and presents t
   }))
   const f = await fixture({ rows })
   await click('下一页')
-  expect(f.calls.at(-1)?.query).toEqual({ after: rows[99]!.id })
+  expect(f.calls.at(-1)?.query).toEqual({
+    limit: 100,
+    fields: 'id,revision,value',
+    cursor: btoa(rows[99]!.id).replace(/=/g, ''),
+  })
   expect(f.wrapper.text()).toContain('已删除')
   await click(rows[100]!.id)
   expect(body().find('[data-testid=review-rule]').exists()).toBe(false)
   await click('关闭')
   await click('上一页')
-  expect(f.calls.at(-1)?.query).toEqual({ after: undefined })
+  expect(f.calls.at(-1)?.query).toEqual({ limit: 100, fields: 'id,revision,value' })
   expect(f.wrapper.text()).toContain('当前页 1')
 })
 it.each(['anonymous', 'principal', 'tenant', 'session'] as const)(

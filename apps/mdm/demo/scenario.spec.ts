@@ -280,7 +280,7 @@ it('injects automation events only into the explicit mock source after login', a
   expect(events).toHaveLength(1)
 })
 
-it('serves the current audit source and projection contract in normal and partial demos', async () => {
+it('serves current diagnostic components in normal and partial demos', async () => {
   const settings = createSettingsDemo(),
     server = createScenario([settings.handle])
   await server.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
@@ -294,7 +294,7 @@ it('serves the current audit source and projection contract in normal and partia
     const snapshot = runtimeSnapshot(response.body)
     expect(snapshot.components.some((c) => c.name === 'inventory')).toBe(true)
     expect(snapshot.components.map((c) => c.name)).toEqual(
-      expect.arrayContaining(['initialization', 'automation', 'execution_recovery']),
+      expect.arrayContaining(['inventory', 'automation', 'execution_recovery']),
     )
   }
 })
