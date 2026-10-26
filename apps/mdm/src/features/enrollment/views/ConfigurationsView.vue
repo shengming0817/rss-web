@@ -1,5 +1,16 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import {
+  VAlert,
+  VBtn,
+  VCard,
+  VCardText,
+  VCheckbox,
+  VExpansionPanel,
+  VExpansionPanelText,
+  VExpansionPanelTitle,
+  VExpansionPanels,
+  VTextField,
+} from 'vuetify/components'
 import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -11,7 +22,7 @@ import { useAttachment } from '../useAttachment'
 import { platforms, architectures } from '../clients/packages'
 import { configurationFilename, type configuration } from '../clients/configurations'
 import RegistrationStatus from '../../../components/RegistrationStatus.vue'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 const runtime = useMdm(),
   client = runtime.onboarding.configurations,
   route = useRoute(),
@@ -279,100 +290,117 @@ watch(
 )
 </script>
 <template>
-  <PageFrame :title="t('onboarding.configurations')" :busy="busy" :failure="failure">
+  <MdmPage :title="t('onboarding.configurations')" :busy="busy" :failure="failure">
     <RegistrationStatus channel="agent" />
     <p v-if="!canRead">{{ t('devices.denied') }}</p>
     <template v-else>
       <p>{{ t('onboarding.configurationNote') }}</p>
-      <UiButton type="button" :disabled="!!busy" @click="permission.refresh">
+      <v-btn type="button" :disabled="!!busy" @click="permission.refresh">
         {{ t('onboarding.refreshAccess') }}
-      </UiButton>
-      <section class="console-panel" :aria-busy="directoryOperation.busy.value">
-        <h2>{{ t('onboarding.configurations') }}</h2>
-        <UiButton :disabled="directoryOperation.busy.value" @click="loadDirectory()">{{
-          t('devices.reload')
-        }}</UiButton>
-        <p v-if="directoryOperation.failure.value" role="alert">
-          {{ t('devices.' + directoryOperation.failure.value) }}
-        </p>
-        <p v-if="directory && !directory.items.length">{{ t('devices.empty') }}</p>
-        <p v-for="item in directory?.items" :key="item.configurationId">
-          <UiButton
-            :disabled="busy || uncertain || !!pending"
-            @click="selectConfiguration(item.configurationId)"
-            >{{ item.configurationId }}</UiButton
+      </v-btn>
+      <v-card variant="outlined" class="console-panel" :aria-busy="directoryOperation.busy.value"
+        ><v-card-text>
+          <h2>{{ t('onboarding.configurations') }}</h2>
+          <v-btn :disabled="directoryOperation.busy.value" @click="loadDirectory()">{{
+            t('devices.reload')
+          }}</v-btn>
+          <v-alert
+            type="error"
+            variant="tonal"
+            v-if="directoryOperation.failure.value"
+            role="alert"
           >
-          {{ item.state }} · {{ item.createdBy }} ·
-          {{ item.targets.map((target) => target.platform + '/' + target.architecture).join(', ') }}
-          · {{ t('onboarding.remaining') }}: {{ item.remaining ?? t('onboarding.unlimited') }}
-        </p>
-        <UiButton
-          v-if="directory?.nextCursor"
-          :disabled="directoryOperation.busy.value"
-          @click="loadDirectory(directory.nextCursor)"
-          >{{ t('devices.next') }}</UiButton
-        >
-      </section>
-      <details
+            {{ t('devices.' + directoryOperation.failure.value) }}
+          </v-alert>
+          <p v-if="directory && !directory.items.length">{{ t('devices.empty') }}</p>
+          <p v-for="item in directory?.items" :key="item.configurationId">
+            <v-btn
+              :disabled="busy || uncertain || !!pending"
+              @click="selectConfiguration(item.configurationId)"
+              >{{ item.configurationId }}</v-btn
+            >
+            {{ item.state }} · {{ item.createdBy }} ·
+            {{
+              item.targets.map((target) => target.platform + '/' + target.architecture).join(', ')
+            }}
+            · {{ t('onboarding.remaining') }}: {{ item.remaining ?? t('onboarding.unlimited') }}
+          </p>
+          <v-btn
+            v-if="directory?.nextCursor"
+            :disabled="directoryOperation.busy.value"
+            @click="loadDirectory(directory.nextCursor)"
+            >{{ t('devices.next') }}</v-btn
+          >
+        </v-card-text></v-card
+      >
+      <v-expansion-panels
+        multiple
         v-if="canWrite && settings"
         class="console-panel console-task"
-        :open="uncertain || undefined"
+        :model-value="uncertain ? [0] : undefined"
+        ><v-expansion-panel eager
+          ><v-expansion-panel-title>{{ t('onboarding.createFile') }}</v-expansion-panel-title
+          ><v-expansion-panel-text>
+            <form @submit.prevent="create">
+              <fieldset :disabled="busy || uncertain">
+                <v-text-field
+                  v-model.number="lifetime"
+                  type="number"
+                  min="1"
+                  :max="settings.configurationMaxSeconds"
+                  :disabled="busy || uncertain"
+                  :label="t('onboarding.lifetime')"
+                />
+                <p>
+                  {{ t('onboarding.defaultLifetime') }}:
+                  {{ settings.values.configurationDefaultSeconds }} /
+                  {{ settings.configurationMaxSeconds }}
+                </p>
+                <v-checkbox
+                  v-model="finite"
+                  :disabled="busy || uncertain"
+                  :label="t('onboarding.finite')"
+                />
+                <v-text-field
+                  v-if="finite"
+                  v-model.number="amount"
+                  type="number"
+                  required
+                  min="1"
+                  max="4294967295"
+                  :disabled="busy || uncertain"
+                  :label="t('onboarding.quantity')"
+                />
+                <p v-else>{{ t('onboarding.unlimited') }}</p>
+                <fieldset>
+                  <legend>{{ t('onboarding.targets') }}</legend>
+                  <template v-for="p in platforms" :key="p"
+                    ><v-checkbox
+                      v-for="a in architectures"
+                      :key="a"
+                      v-model="selectedTargets"
+                      :value="`${p}/${a}`"
+                      :disabled="busy || uncertain || !settings.values.platforms.includes(p)"
+                      :label="p + '/' + a"
+                  /></template>
+                </fieldset>
+                <v-btn
+                  type="submit"
+                  :disabled="
+                    busy ||
+                    uncertain ||
+                    !!(!selectedTargets.length || !runtime.registrationChannels.allowed('agent'))
+                  "
+                >
+                  {{ t('onboarding.createFile') }}
+                </v-btn>
+              </fieldset>
+            </form>
+          </v-expansion-panel-text></v-expansion-panel
+        ></v-expansion-panels
       >
-        <summary>{{ t('onboarding.createFile') }}</summary>
-        <form @submit.prevent="create">
-          <fieldset :disabled="busy || uncertain">
-            <label
-              >{{ t('onboarding.lifetime')
-              }}<input
-                v-model.number="lifetime"
-                class="ui-input"
-                type="number"
-                min="1"
-                :max="settings.configurationMaxSeconds"
-            /></label>
-            <p>
-              {{ t('onboarding.defaultLifetime') }}:
-              {{ settings.values.configurationDefaultSeconds }} /
-              {{ settings.configurationMaxSeconds }}
-            </p>
-            <label><input v-model="finite" type="checkbox" />{{ t('onboarding.finite') }}</label>
-            <label v-if="finite"
-              >{{ t('onboarding.quantity')
-              }}<input
-                v-model.number="amount"
-                class="ui-input"
-                type="number"
-                required
-                min="1"
-                max="4294967295"
-            /></label>
-            <p v-else>{{ t('onboarding.unlimited') }}</p>
-            <fieldset>
-              <legend>{{ t('onboarding.targets') }}</legend>
-              <template v-for="p in platforms" :key="p"
-                ><label v-for="a in architectures" :key="a"
-                  ><input
-                    v-model="selectedTargets"
-                    type="checkbox"
-                    :value="`${p}/${a}`"
-                    :disabled="!settings.values.platforms.includes(p)"
-                  />{{ p }} / {{ a }}</label
-                ></template
-              >
-            </fieldset>
-            <UiButton
-              :disabled="
-                !!(!selectedTargets.length || !runtime.registrationChannels.allowed('agent'))
-              "
-              type="submit"
-            >
-              {{ t('onboarding.createFile') }}
-            </UiButton>
-          </fieldset>
-        </form>
-      </details>
-      <a v-if="url" :href="url" :download="filename"
-        >{{ t('onboarding.saveFile') }} · {{ configurationFilename }}</a
+      <v-btn variant="outlined" v-if="url" :href="url" :download="filename"
+        >{{ t('onboarding.saveFile') }} · {{ configurationFilename }}</v-btn
       >
       <p v-if="delivered && url">
         {{ t('settings.connections.service') }}
@@ -382,22 +410,22 @@ watch(
       <p>{{ t('onboarding.sameDirectory') }}</p>
       <p v-if="operationId">{{ t('devices.operation') }}: {{ operationId }}</p>
       <p v-if="uncertain">{{ t('onboarding.unknownConfiguration') }}</p>
-      <UiButton v-if="pending" type="button" :disabled="!!busy" @click="recover">
+      <v-btn v-if="pending" type="button" :disabled="!!busy" @click="recover">
         {{ t('onboarding.readOutcome') }}
-      </UiButton>
-      <section class="console-panel">
-        <h2>{{ t('onboarding.configurationId') }}</h2>
-        <form @submit.prevent="read">
-          <label
-            >{{ t('onboarding.configurationId')
-            }}<input
+      </v-btn>
+      <v-card variant="outlined" class="console-panel"
+        ><v-card-text>
+          <h2>{{ t('onboarding.configurationId') }}</h2>
+          <form @submit.prevent="read">
+            <v-text-field
               v-model="configurationId"
-              class="ui-input"
               required
-              :disabled="busy || uncertain" /></label
-          ><UiButton :disabled="!!busy" type="submit">{{ t('devices.reload') }}</UiButton>
-        </form>
-      </section>
+              :disabled="busy || uncertain"
+              :label="t('onboarding.configurationId')"
+            /><v-btn :disabled="!!busy" type="submit">{{ t('devices.reload') }}</v-btn>
+          </form>
+        </v-card-text></v-card
+      >
       <dl v-if="current">
         <dt>{{ t('settings.connections.service') }}</dt>
         <dd>{{ current.configuration.connections.configuration.serviceId }}</dd>
@@ -416,56 +444,67 @@ watch(
         <dt>{{ t('devices.expires') }}</dt>
         <dd>{{ current.configuration.expiresAt }}</dd>
       </dl>
-      <UiButton
+      <v-btn
         v-if="canWrite && current?.state === 'available'"
         type="button"
         :disabled="!!(busy || (!!pendingRevocation && !revocationRead))"
         @click="revoke"
       >
         {{ t(pendingRevocation ? 'onboarding.retryRevoke' : 'onboarding.revokeConfiguration') }}
-      </UiButton>
-      <UiButton
+      </v-btn>
+      <v-btn
         v-if="uncertain && (basisRead || (current && current.state !== 'available'))"
         type="button"
         :disabled="!!busy"
         @click="confirmRecovery"
       >
         {{ t('onboarding.confirmRecovery') }}
-      </UiButton>
-      <details
+      </v-btn>
+      <v-expansion-panels
+        multiple
         v-if="canWrite && settings"
         class="console-panel console-task"
-        :open="uncertain || undefined"
+        :model-value="uncertain ? [0] : undefined"
+        ><v-expansion-panel eager
+          ><v-expansion-panel-title>{{ t('onboarding.defaults') }}</v-expansion-panel-title
+          ><v-expansion-panel-text>
+            <form @submit.prevent="saveSettings">
+              <fieldset :disabled="busy || uncertain">
+                <legend>{{ t('onboarding.defaults') }}</legend>
+                <v-text-field
+                  v-model.number="defaultSeconds"
+                  type="number"
+                  min="1"
+                  :max="settings.configurationMaxSeconds"
+                  required
+                  :disabled="busy || uncertain"
+                  :label="t('onboarding.defaultLifetime')"
+                /><v-text-field
+                  v-model.number="grantSeconds"
+                  type="number"
+                  min="1"
+                  :max="settings.grantMaxSeconds"
+                  required
+                  :disabled="busy || uncertain"
+                  :label="t('onboarding.grantLifetime')"
+                /><v-checkbox
+                  v-for="p in platforms"
+                  :key="p"
+                  v-model="enabledPlatforms"
+                  :value="p"
+                  :disabled="busy || uncertain"
+                  :label="p"
+                /><v-btn type="submit" :disabled="busy || uncertain">{{
+                  t('registration.save')
+                }}</v-btn
+                ><v-btn type="button" @click="refresh" :disabled="busy || uncertain">{{
+                  t('devices.reload')
+                }}</v-btn>
+              </fieldset>
+            </form>
+          </v-expansion-panel-text></v-expansion-panel
+        ></v-expansion-panels
       >
-        <summary>{{ t('onboarding.defaults') }}</summary>
-        <form @submit.prevent="saveSettings">
-          <fieldset :disabled="busy || uncertain">
-            <legend>{{ t('onboarding.defaults') }}</legend>
-            <label
-              >{{ t('onboarding.defaultLifetime')
-              }}<input
-                v-model.number="defaultSeconds"
-                class="ui-input"
-                type="number"
-                min="1"
-                :max="settings.configurationMaxSeconds"
-                required /></label
-            ><label
-              >{{ t('onboarding.grantLifetime')
-              }}<input
-                v-model.number="grantSeconds"
-                class="ui-input"
-                type="number"
-                min="1"
-                :max="settings.grantMaxSeconds"
-                required /></label
-            ><label v-for="p in platforms" :key="p"
-              ><input v-model="enabledPlatforms" type="checkbox" :value="p" />{{ p }}</label
-            ><UiButton type="submit">{{ t('registration.save') }}</UiButton
-            ><UiButton type="button" @click="refresh">{{ t('devices.reload') }}</UiButton>
-          </fieldset>
-        </form>
-      </details>
     </template>
-  </PageFrame>
+  </MdmPage>
 </template>
