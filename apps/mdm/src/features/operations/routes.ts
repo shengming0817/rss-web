@@ -1,5 +1,8 @@
 import type { MdmFeature } from '../../features'
+import LoginView from './views/LoginView.vue'
+import ErrorView from './views/ErrorView.vue'
 export const operationsFeature: MdmFeature = {
+  identityPresentation: { login: LoginView, error: ErrorView, includeManagement: false },
   entry: {
     path: '/tenants/:tenant/operations',
     name: 'operations-organization',
@@ -7,6 +10,12 @@ export const operationsFeature: MdmFeature = {
     meta: { protected: true },
   },
   routes: [
+    {
+      path: '/tenants/:tenant/sessions',
+      name: 'sessions',
+      component: () => import('./views/AccountSecurityView.vue'),
+      meta: { protected: true },
+    },
     {
       path: '/tenants/:tenant/settings/providers',
       name: 'providers',

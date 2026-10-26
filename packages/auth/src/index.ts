@@ -14,3 +14,6 @@ export { useAccounts } from './useAccounts'
 export { useLocalProfile } from './useLocalProfile'
 
 export { useProviders } from './useProviders'
+
+export { useAccountSecurity } from './useAccountSecurity'
+export { useIdentityError } from './useIdentityError'

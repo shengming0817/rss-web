@@ -80,13 +80,10 @@ export async function authorizationJourney({
   await page.getByText('当前页 1', { exact: true }).waitFor()
   await page.getByRole('button', { name: '添加授权规则', exact: true }).click()
   await dialog().getByRole('button', { name: '读取已有管理账户', exact: true }).click()
-  await dialog()
-    .locator('#authorization-principal option')
-    .filter({ hasText: target.login })
-    .waitFor({ state: 'attached' })
-  await dialog().locator('#authorization-principal').selectOption(target.principalId)
+  await dialog().locator('#authorization-principal').click()
+  await page.getByRole('option', { name: target.login, exact: true }).click()
   assert.equal(await dialog().locator('.authorization-permissions input[type=checkbox]').count(), 8)
-  await dialog().locator('input[value=tenant_read]').check()
+  await dialog().getByRole('checkbox', { name: '查看租户', exact: true }).check()
   await review()
   const created = await save()
   await close()
@@ -95,7 +92,7 @@ export async function authorizationJourney({
   coverage.push('management-cursor-pagination-existing-account-eight-permissions-review-native-cas')
   // The supported locator opens the independent rule detail; list projections never supply the CAS baseline.
   await page.goto(url + '?id=' + created.id)
-  await dialog().locator('input[value=tenant_update]').check()
+  await dialog().getByRole('checkbox', { name: '修改租户', exact: true }).check()
   const concurrent = await api('PUT', prefix + '/rules/' + created.id, {
     operationId: randomUUID(),
     expectedRevision: 1,
@@ -111,7 +108,7 @@ export async function authorizationJourney({
   await close()
   coverage.push('real-management-409-compare-current-keep-local-draft-new-operation')
   await page.goto(url + '?id=' + created.id)
-  await dialog().locator('input[value=tenant_create]').check()
+  await dialog().getByRole('checkbox', { name: '创建租户', exact: true }).check()
   await review()
   let original,
     attempts = 0,
@@ -201,7 +198,7 @@ export async function authorizationJourney({
   assert.equal(denied.status(), 403)
   await dialog().getByText('按主体 UUID 定位（高级）', { exact: true }).click()
   await dialog().locator('#authorization-principal-id').fill(target.principalId)
-  await dialog().locator('input[value=tenant_read]').check()
+  await dialog().getByRole('checkbox', { name: '查看租户', exact: true }).check()
   await review()
   const delegated = await save()
   await close()
