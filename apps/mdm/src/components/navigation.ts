@@ -37,7 +37,6 @@ export const navigation: Navigation = [
       { name: 'policy-policies', label: 'policies.policies' },
       { name: 'policy-resources', label: 'policies.resources' },
       { name: 'policy-telemetry', label: 'telemetry.profiles' },
-      { name: 'policy-scripts', label: 'policies.scripts' },
       { name: 'policy-executions', label: 'policies.executions' },
       { name: 'security-rules', label: 'security.rules' },
       {
@@ -105,6 +104,8 @@ export const platformNavigation: Navigation = [
   },
 ]
 export function navigationTarget(item: NavigationItem, tenant: string): RouteLocationRaw {
+  if (item.name === 'self-enrollments' || item.name === 'agent-downloads')
+    return { name: item.name, ...(item.query ? { query: item.query } : {}) }
   return item.path
     ? { path: item.path.replace(':tenant', tenant), ...(item.query ? { query: item.query } : {}) }
     : { name: item.name, params: { tenant }, ...(item.query ? { query: item.query } : {}) }
