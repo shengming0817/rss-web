@@ -27,7 +27,8 @@ const {
 } = useSettingsAction(() => 'provision')
 const tenants = ref<Tenant[]>([]),
   provisionings = ref<Provisioning[]>([]),
-  nextAfter = ref<string | null>(null),
+  nextCursor = ref<string | null>(null),
+  tenantCursor = ref<string | null>(null),
   name = ref(''),
   login = ref(''),
   password = ref(''),
@@ -47,19 +48,30 @@ async function load() {
   return run(
     async () => ({ tenants: await client.tenants(), page: await client.provisionings() }),
     (v) => {
-      tenants.value = v.tenants
+      tenants.value = v.tenants.items
+      tenantCursor.value = v.tenants.nextCursor
       provisionings.value = v.page.items.map((v) => v.result)
-      nextAfter.value = v.page.nextAfter
+      nextCursor.value = v.page.nextCursor
     },
   )
 }
 async function more() {
-  if (!nextAfter.value) return
+  if (!nextCursor.value) return
   await run(
-    () => client.provisionings(nextAfter.value!),
+    () => client.provisionings({ cursor: nextCursor.value! }),
     (v) => {
       provisionings.value.push(...v.items.map((v) => v.result))
-      nextAfter.value = v.nextAfter
+      nextCursor.value = v.nextCursor
+    },
+  )
+}
+async function moreTenants() {
+  if (!tenantCursor.value) return
+  await run(
+    () => client.tenants({ cursor: tenantCursor.value! }),
+    (page) => {
+      tenants.value.push(...page.items)
+      tenantCursor.value = page.nextCursor
     },
   )
 }
@@ -105,7 +117,8 @@ onMounted(load)
 useSettingsFacts(() => {
   tenants.value = []
   provisionings.value = []
-  nextAfter.value = null
+  tenantCursor.value = null
+  nextCursor.value = null
 })
 </script>
 <template>
@@ -191,7 +204,10 @@ useSettingsFacts(() => {
           >{{ t('settings.businessEntry') }} · {{ p.origin }}</a
         >
       </article>
-      <UiButton v-if="nextAfter" :disabled="busy" @click="more">{{ t('settings.next') }}</UiButton
+      <UiButton v-if="nextCursor" :disabled="busy" @click="more">{{ t('settings.next') }}</UiButton
+      ><UiButton v-if="tenantCursor" :disabled="busy" @click="moreTenants">{{
+        t('settings.next')
+      }}</UiButton
       ><TenantEditor
         v-for="tenant in tenants"
         :key="tenant.tenantId"

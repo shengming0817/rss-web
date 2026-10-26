@@ -53,11 +53,11 @@ const entry = {
   invalidatedAt: null,
 }
 it('binds credential versions to the device and accepts escrow without claiming verified validity', async () => {
-  const f = transport([entry]),
+  const f = transport({ items: [entry], nextCursor: null }),
     client = createCredentialsClient(f.client)
-  const page = await client.list('mac', material(entry, 'mac'))
-  expect(page[0]).toMatchObject({ escrowed: true, validity: 'unknown', version: 3 })
-  expect(f.calls[0]?.query).toEqual({ afterId: a, afterVersion: 3 })
+  const page = await client.list('mac', { cursor: 'YQ' })
+  expect(page.items[0]).toMatchObject({ escrowed: true, validity: 'unknown', version: 3 })
+  expect(f.calls[0]?.query).toEqual({ limit: 100, cursor: 'YQ' })
   expect(() => material(entry, 'other')).toThrow()
   expect(() => material({ ...entry, grant: 'old-approval' }, 'mac')).toThrow()
 })

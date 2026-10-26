@@ -89,14 +89,16 @@ async function fixture(
               observation: null,
             })),
           }
+        if (o.method === 'GET' && o.pathParams?.['id'])
+          return rows.get(o.pathParams['id'] as string)
         if (o.method === 'GET') {
-          const after = o.query?.['after']
+          const after = o.query?.['cursor']
           const sorted = [...rows.values()]
             .sort((a, b) => a.id.localeCompare(b.id))
-            .filter((r) => !after || r.id > after)
+            .filter((r) => !after || r.id > atob(after as string))
           return {
             items: sorted.slice(0, 100),
-            nextCursor: sorted.length > 100 ? sorted[99]!.id : null,
+            nextCursor: sorted.length > 100 ? btoa(sorted[99]!.id).replace(/=/g, '') : null,
           }
         }
         const id = o.pathParams!['id'] as string,

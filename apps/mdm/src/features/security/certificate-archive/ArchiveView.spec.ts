@@ -12,7 +12,7 @@ async function setup(overrides: object = {}) {
     list: vi.fn().mockResolvedValue({
       tenantId: tenant,
       items: [],
-      nextAfter: null,
+      nextCursor: null,
       asOf: 100,
       reminderDays: 30,
       alerts: { expired: 0, expiring: 0, notYetValid: 0 },
@@ -193,10 +193,10 @@ it.each(['import', 'generate'] as const)(
   'blocks a lost second-page %s target after refresh and a successful append',
   async (mode) => {
     let revision = 1
-    const list = vi.fn(async (after?: string) => ({
+    const list = vi.fn(async (query: { cursor?: string } = {}) => ({
       tenantId: tenant,
-      items: [archiveEntry(after ? secondId : tenant, after ? revision : 1)],
-      nextAfter: after ? null : tenant,
+      items: [archiveEntry(query.cursor ? secondId : tenant, query.cursor ? revision : 1)],
+      nextCursor: query.cursor ? null : 'YQ',
       asOf: 100,
       reminderDays: 30,
       alerts: { expired: 0, expiring: 0, notYetValid: 0 },
@@ -373,12 +373,12 @@ it('edits certificate metadata, explicit issuance inputs, recommendation, export
     list: vi.fn().mockResolvedValue({
       tenantId: tenant,
       items: [entry],
-      nextAfter: null,
+      nextCursor: null,
       asOf: 100,
       reminderDays: 30,
       alerts: { expired: 0, expiring: 1, notYetValid: 0 },
     }),
-    history: vi.fn().mockResolvedValue([entry.latest, old]),
+    history: vi.fn().mockResolvedValue({ items: [entry.latest, old], nextCursor: null }),
     generate,
     saveMetadata,
     manage,
@@ -506,12 +506,12 @@ it('preserves unedited metadata keys and the loaded revision when saving', async
     list: vi.fn().mockResolvedValue({
       tenantId: tenant,
       items: [entry],
-      nextAfter: null,
+      nextCursor: null,
       asOf: 100,
       reminderDays: 30,
       alerts: { expired: 0, expiring: 0, notYetValid: 0 },
     }),
-    history: vi.fn().mockResolvedValue([entry.latest]),
+    history: vi.fn().mockResolvedValue({ items: [entry.latest], nextCursor: null }),
     saveMetadata,
   })
   await wrapper

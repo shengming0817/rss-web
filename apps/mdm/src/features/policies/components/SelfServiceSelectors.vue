@@ -35,7 +35,7 @@ function load(more = false) {
       if (selected === 'user_group')
         return {
           kind: selected,
-          value: await client.groups(more ? (cursor.value ?? undefined) : undefined),
+          value: await client.groups({ cursor: more ? (cursor.value ?? undefined) : undefined }),
         }
       if (selected === 'department') return { kind: selected, value: await client.departments() }
       return { kind: 'idp_group' as const, value: undefined }

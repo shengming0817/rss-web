@@ -1,3 +1,9 @@
+import {
+  queryParameters,
+  nextCursor,
+  windowPage,
+  type DirectoryQuery,
+} from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -297,25 +303,25 @@ export function createAuthorizationClient(
   function tenantOnly() {
     if (realm === 'platform') throw new Error('Directory is not available in the management realm')
   }
-  function list<T>(path: string, decode: (v: unknown) => T, after?: string) {
+  function list<T>(path: string, decode: (v: unknown) => T, query: DirectoryQuery = {}) {
     return transport.request({
       method: 'GET',
       path,
-      query: { after },
+      query: queryParameters({ limit: 100, ...query, fields: ['id', 'revision', 'value'] }),
+      successStatus: 200,
+      decode: (value) => windowPage(value, (v) => revision(v, decode)),
+    })
+  }
+  function detail<T>(kind: string, id: string, decode: (v: unknown) => T) {
+    return transport.request({
+      method: 'GET',
+      path: `${prefix}/${kind}/{id}`,
+      pathParams: { id: uuid(id) },
       successStatus: 200,
       decode(value) {
-        const v = closed(value, ['items', 'nextCursor'])
-        const items = unique(
-            array(v['items'], (x) => revision(x, decode)),
-            (x) => x.id,
-          ),
-          nextCursor = nullable(v['nextCursor'], uuid)
-        if (
-          items.length > 100 ||
-          (nextCursor !== null && (items.length !== 100 || items.at(-1)?.id !== nextCursor))
-        )
-          throw new Error('Invalid authorization page')
-        return { items, nextCursor }
+        const row = revision(value, decode)
+        if (row.id !== id) throw new Error('Wrong authorization object')
+        return row
       },
     })
   }
@@ -347,49 +353,32 @@ export function createAuthorizationClient(
       },
     })
   }
-  async function memberPage(id: string, offset = 0, expectedRevision?: number) {
+  function memberPage(id: string, query: DirectoryQuery = {}) {
     tenantOnly()
     return transport.request({
       method: 'GET',
       path: `${prefix}/user-groups/{id}/members`,
-      pathParams: { id },
-      query: { offset, expectedRevision },
+      pathParams: { id: uuid(id) },
+      query: queryParameters({
+        limit: 100,
+        ...query,
+        fields: ['principalId', 'tenantId', 'instanceId'],
+      }),
       successStatus: 200,
       decode(value) {
-        const v = closed(value, ['id', 'revision', 'items', 'nextOffset']),
-          revision = count(v['revision']),
-          items = unique(
+        const v = closed(value, ['id', 'revision', 'items', 'nextCursor'])
+        if (uuid(v['id']) !== id || !count(v['revision'])) throw new Error('Wrong member page')
+        return {
+          id,
+          revision: count(v['revision']),
+          items: unique(
             array(v['items'], (m) => user(m, tenant)),
             (m) => m.principalId,
           ),
-          nextOffset = nullable(v['nextOffset'], count)
-        if (
-          uuid(v['id']) !== id ||
-          !revision ||
-          (expectedRevision !== undefined && revision !== expectedRevision) ||
-          items.length > 100 ||
-          (nextOffset !== null &&
-            (nextOffset !== offset + 100 || nextOffset >= 10000 || items.length !== 100))
-        )
-          throw new Error('Invalid member page')
-        return { id, revision, items, nextOffset }
+          nextCursor: nextCursor(v['nextCursor']),
+        }
       },
     })
-  }
-  async function find<T>(path: string, decode: (value: unknown) => T, id: string) {
-    uuid(id)
-    let after: string | undefined
-    const seen = new Set<string>()
-    for (let pages = 0; pages < 100; pages++) {
-      const page = await list(path, decode, after),
-        value = page.items.find((v) => v.id === id)
-      if (value) return value
-      if (!page.nextCursor) return null
-      if (seen.has(page.nextCursor)) throw new Error('Repeated authorization cursor')
-      seen.add(page.nextCursor)
-      after = page.nextCursor
-    }
-    throw new Error('Authorization scan did not complete')
   }
   return {
     effective: () =>
@@ -442,15 +431,15 @@ export function createAuthorizationClient(
           }
         },
       }),
-    findRule: (id: string) => find(`${prefix}/rules`, decodeRule, id),
-    findGroup: (id: string) => {
+    rule: (id: string) => detail('rules', id, decodeRule),
+    group: (id: string) => {
       tenantOnly()
-      return find(`${prefix}/user-groups`, summary, id)
+      return detail('user-groups', id, (v) => groupDefinition(v, tenant))
     },
-    rules: (after?: string) => list(`${prefix}/rules`, decodeRule, after),
-    groups: (after?: string) => {
+    rules: (query: DirectoryQuery = {}) => list(`${prefix}/rules`, decodeRule, query),
+    groups: (query: DirectoryQuery = {}) => {
       tenantOnly()
-      return list(`${prefix}/user-groups`, summary, after)
+      return list(`${prefix}/user-groups`, summary, query)
     },
     departments: () => {
       tenantOnly()
@@ -462,18 +451,6 @@ export function createAuthorizationClient(
       })
     },
     members: memberPage,
-    async allMembers(id: string, revision: number) {
-      const items: User[] = []
-      let offset = 0
-      do {
-        const page = await memberPage(id, offset, revision)
-        items.push(...page.items)
-        if (page.nextOffset === null) break
-        offset = page.nextOffset
-      } while (offset < 10000)
-      if (items.length > 10000) throw new Error('Invalid members')
-      return unique(items, (m) => m.principalId)
-    },
     changeRule: (id: string, body: Change<Rule>) => {
       if (body.value !== null) decodeRule(body.value)
       return write('rules', id, body)

@@ -11,12 +11,18 @@ const id = ref('')
 const runtime = useMdm(),
   client = runtime.onboarding.apple,
   { t } = useI18n(),
-  { canRead, canWrite } = usePermission('authorization_read', 'authorization_write'),
+  { canRead, canWrite } = usePermission(
+    'registration_configuration_read',
+    'registration_configuration_write',
+  ),
   { run, runWrite, busy, uncertain, failure } = useOperation(['service_unavailable'], () => [
     runtime.session.state.value.session?.id,
     id.value,
   ])
-const organizations = ref<Awaited<ReturnType<typeof client.organizations>>>([]),
+const organizations = ref<Awaited<ReturnType<typeof client.organizations>>['items']>([]),
+  organizationCursor = ref<string | null>(null),
+  accounts = ref<Awaited<ReturnType<typeof client.accounts>>['items']>([]),
+  accountCursor = ref<string | null>(null),
   domain = ref(''),
   serverUuid = ref(''),
   signingKey = ref(''),
@@ -37,17 +43,22 @@ function confirmComparison() {
   uncertain.value = false
   freshRead.value = false
 }
-function refresh() {
+async function refresh(cursor?: string) {
   if (!canRead.value) return
-  void run(
-    () => client.organizations(),
+  await run(
+    () => client.organizations({ cursor }),
     (v) => {
-      organizations.value = v
+      organizations.value = cursor ? [...organizations.value, ...v.items] : v.items
+      organizationCursor.value = v.nextCursor
       freshRead.value = true
     },
   )
+  if (selected.value) await loadAccounts()
 }
 function load() {
+  accounts.value = []
+  accountCursor.value = null
+  if (selected.value) void loadAccounts()
   const v = selected.value
   domain.value = v?.domain ?? ''
   serverUuid.value = v?.serverUuid ?? ''
@@ -66,12 +77,12 @@ function saveOrganization() {
       enabled: enabled.value,
     }),
   ).then((ok) => {
-    if (ok) refresh()
+    if (ok) void refresh()
   })
 }
 function saveMapping() {
   if (!canWrite.value || uncertain.value) return
-  const old = selected.value?.accounts.find((a) => a.account === name.value)
+  const old = accounts.value.find((a) => a.account === name.value)
   freshRead.value = false
   void runWrite(() =>
     client.accountMapping(id.value, name.value, crypto.randomUUID(), {
@@ -81,21 +92,34 @@ function saveMapping() {
       enabled: accountEnabled.value,
     }),
   ).then((ok) => {
-    if (ok) refresh()
+    if (ok) void refresh()
   })
 }
 function chooseAccount(account: string) {
-  const value = selected.value?.accounts.find((a) => a.account === account)
+  const value = accounts.value.find((a) => a.account === account)
   name.value = account
   principalId.value = value?.principalId ?? ''
   instanceId.value = value?.instanceId ?? ''
   accountEnabled.value = value?.enabled ?? true
+}
+async function loadAccounts(cursor?: string) {
+  if (!id.value || !canRead.value) return
+  await run(
+    () => client.accounts(id.value, { cursor }),
+    (page) => {
+      accounts.value = cursor ? [...accounts.value, ...page.items] : page.items
+      accountCursor.value = page.nextCursor
+    },
+  )
 }
 watch(id, load)
 watch(
   canRead,
   (allowed) => {
     organizations.value = []
+    accounts.value = []
+    accountCursor.value = null
+    organizationCursor.value = null
     freshRead.value = false
     if (allowed) refresh()
   },
@@ -111,8 +135,11 @@ watch(
     }}</a>
     <p v-if="!canRead">{{ t('devices.denied') }}</p>
     <template v-else>
-      <UiButton type="button" :disabled="!!busy" @click="refresh">{{
+      <UiButton type="button" :disabled="!!busy" @click="refresh()">{{
         t('devices.reload')
+      }}</UiButton>
+      <UiButton v-if="organizationCursor" :disabled="busy" @click="refresh(organizationCursor)">{{
+        t('devices.next')
       }}</UiButton>
       <label
         >{{ t('onboarding.organization')
@@ -135,6 +162,9 @@ watch(
       >
         {{ t('onboarding.newOrganization') }}
       </UiButton>
+      <UiButton v-if="accountCursor" :disabled="busy" @click="loadAccounts(accountCursor)">{{
+        t('devices.next')
+      }}</UiButton>
       <dl v-if="selected">
         <dt>{{ t('devices.revision') }}</dt>
         <dd>{{ selected.revision }}</dd>
@@ -186,7 +216,7 @@ watch(
             </tr>
           </thead>
           <tbody>
-            <tr v-for="a in selected.accounts" :key="a.account">
+            <tr v-for="a in accounts" :key="a.account">
               <td>
                 <UiButton
                   type="button"

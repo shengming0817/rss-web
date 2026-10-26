@@ -452,7 +452,7 @@ it('preserves explicit ADE profile choices and records sync and assignment as in
       skip: ['AppleID', 'Privacy'],
     },
   })
-  expect((await runtime.onboarding.apple.profiles(id))[0]?.remoteUuid).toBeNull()
+  expect((await runtime.onboarding.apple.profiles(id)).items[0]?.remoteUuid).toBeNull()
   domain.tick()
   await click('查询原操作结果')
   await click('重新读取')

@@ -1,14 +1,13 @@
+import { queryParameters, windowPage, type DirectoryQuery } from '../../../services/directory-query'
 import { operationReceipt, origin, positive, sha256 } from './value'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
-  array,
   boolean,
   closed,
   count,
   enumeration,
   nullable,
   string,
-  unique,
   uuid,
 } from '../../../services/decode'
 
@@ -196,28 +195,38 @@ export function createPlatformClient(transport: HttpTransport) {
         },
       })
     },
-    async tenants() {
+    tenant(id: string) {
       return transport.request({
         method: 'GET',
-        path: base + '/tenants',
+        path: base + '/tenants/{id}',
+        pathParams: { id: uuid(id) },
         successStatus: 200,
         decode(value) {
-          return unique(array(closed(value, ['items'])['items'], tenant), (v) => v.tenantId)
+          const row = tenant(value)
+          if (row.tenantId !== id) throw new Error('Wrong tenant')
+          return row
         },
       })
     },
-    async provisionings(after?: string) {
+    async tenants(query: DirectoryQuery = {}) {
+      return transport.request({
+        method: 'GET',
+        path: base + '/tenants',
+        query: queryParameters({ limit: 100, ...query }),
+        successStatus: 200,
+        decode(value) {
+          return windowPage(value, tenant)
+        },
+      })
+    },
+    async provisionings(query: DirectoryQuery = {}) {
       return transport.request({
         method: 'GET',
         path: base + '/provisionings',
-        query: { after, limit: 100 },
+        query: queryParameters({ limit: 100, ...query }),
         successStatus: 200,
         decode(value) {
-          const v = closed(value, ['items', 'nextAfter'])
-          return {
-            items: unique(array(v['items'], provisionReceipt), (v) => v.operationId),
-            nextAfter: nullable(v['nextAfter'], uuid),
-          }
+          return windowPage(value, provisionReceipt)
         },
       })
     },

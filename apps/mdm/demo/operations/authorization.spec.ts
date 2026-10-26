@@ -76,18 +76,16 @@ it('pages native groups/members and rejects cross-instance members', async () =>
     value: { name: 'Large', enabled: true, members },
   }
   expect((await f.write(`/api/v1/authorization/user-groups/${id}`, body)).status).toBe(200)
-  expect(
-    (await f.server.handle('GET', `/api/v1/authorization/user-groups/${id}/members?offset=100`))
-      .status,
-  ).toBe(409)
-  expect(
-    (
-      await f.server.handle(
-        'GET',
-        `/api/v1/authorization/user-groups/${id}/members?offset=100&expectedRevision=1`,
-      )
-    ).body,
-  ).toMatchObject({ revision: 1, items: members.slice(100, 200), nextOffset: 200 })
+  const first = await f.server.handle(
+    'GET',
+    `/api/v1/authorization/user-groups/${id}/members?limit=100`,
+  )
+  const cursor = (first.body as { nextCursor: string }).nextCursor
+  const second = await f.server.handle(
+    'GET',
+    `/api/v1/authorization/user-groups/${id}/members?limit=100&cursor=${cursor}`,
+  )
+  expect(second.body).toMatchObject({ revision: 1, items: members.slice(100, 200) })
   expect(
     (
       await f.write(`/api/v1/authorization/user-groups/${uuid()}`, {

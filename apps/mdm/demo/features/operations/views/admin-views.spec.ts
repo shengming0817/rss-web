@@ -171,7 +171,7 @@ it('compares native membership without replacing drafts and only adopts revision
   f.wrapper.unmount()
 })
 
-it('discards incomplete membership after a second-page conflict and edits the fully reloaded revision', async () => {
+it('loads the complete detail after a concurrent group change without scanning member pages', async () => {
   const f = await fixture(OrganizationView),
     id = crypto.randomUUID(),
     effective = await f.clients.authorization.effective()
@@ -193,7 +193,12 @@ it('discards incomplete membership after a second-page conflict and edits the fu
   let changed = false
   const added = { ...members[0]!, principalId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }
   f.inspect(async (o) => {
-    if (!changed && o.path.endsWith('/members') && o.query?.['offset'] === 100) {
+    if (
+      !changed &&
+      o.method === 'GET' &&
+      o.path === '/api/v1/authorization/user-groups/{id}' &&
+      o.pathParams?.['id'] === id
+    ) {
       changed = true
       await f.clients.authorization.changeGroup(id, {
         operationId: crypto.randomUUID(),
@@ -212,7 +217,7 @@ it('discards incomplete membership after a second-page conflict and edits the fu
   await f.wrapper.get('[data-testid="group-name"]').setValue('Safely edited')
   await f.wrapper.get('[data-testid="save-group"]').trigger('click')
   await flushPromises()
-  expect(await f.clients.authorization.allMembers(id, 3)).toEqual([...members, added])
+  expect((await f.clients.authorization.group(id)).value?.members).toEqual([...members, added])
   f.wrapper.unmount()
 })
 it('reconciles completed reports after unknown accepted receipts are replayed', async () => {

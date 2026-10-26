@@ -1,3 +1,4 @@
+import { directoryPage } from '../directory'
 import { randomUUID } from 'node:crypto'
 import { TENANT, MANAGEMENT_TENANT, type DemoRequest, type DomainHandler } from '../scenario'
 import { createReceipts, error, ok, operation } from '../http'
@@ -368,33 +369,35 @@ export function createAuthorizationDemo(
           })
         }
         if (id) {
-          if (kind !== 'user-groups' || !members) return error('malformed_request', 400)
           uuid(id)
-          const value = groups.get(id)
-          if (!value?.value) return error('group_not_found', 404)
-          const offset = count(Number(request.query.get('offset') ?? 0)),
-            revision = request.query.has('expectedRevision')
-              ? count(Number(request.query.get('expectedRevision')))
-              : null
-          if (offset > 10000) return error('malformed_request', 400)
-          if (
-            (offset > 0 && revision === null) ||
-            (revision !== null && revision !== value.revision)
-          )
-            return error('operation_conflict')
+          const value = kind === 'rules' ? rules.get(id) : groups.get(id)
+          if (!value) return error('resource_not_found', 404)
+          if (!members) return ok(value)
+          if (kind !== 'user-groups') return error('malformed_request', 400)
+          const group = groups.get(id)
+          if (!group?.value) return error('group_not_found', 404)
           return ok({
             id,
-            revision: value.revision,
-            items: value.value.members.slice(offset, offset + 100),
-            nextOffset: offset + 100 < value.value.members.length ? offset + 100 : null,
+            revision: group.revision,
+            ...directoryPage(group.value.members, request, ['principalId'], {
+              defaultLimit: 100,
+              binding: String(group.revision),
+            }),
           })
         }
-        const after = request.query.has('after') ? uuid(request.query.get('after')) : null
-        const values =
+        const values: Record<string, unknown>[] =
           kind === 'rules'
-            ? [...rules.values()]
+            ? [...rules.values()].map((r) => ({
+                ...r,
+                deleted: r.value === null,
+                subjectKind: r.value?.subject.kind ?? null,
+              }))
             : [...groups.values()].map((r) => ({
                 ...r,
+                deleted: r.value === null,
+                name: r.value?.name ?? null,
+                enabled: r.value?.enabled ?? null,
+                memberCount: r.value?.members.length ?? null,
                 value: r.value
                   ? {
                       name: r.value.name,
@@ -403,14 +406,12 @@ export function createAuthorizationDemo(
                     }
                   : null,
               }))
-        const selected = (scenario === 'empty' ? [] : values)
-          .sort((a, b) => a.id.localeCompare(b.id))
-          .filter((r) => !after || r.id > after)
-          .slice(0, 101)
-        return ok({
-          items: selected.slice(0, 100),
-          nextCursor: selected.length > 100 ? selected[99]!.id : null,
-        })
+        return ok(
+          directoryPage(scenario === 'empty' ? [] : values, request, ['id'], {
+            defaultLimit: 100,
+            binding: JSON.stringify([...rules.values()].map((r) => [r.id, r.revision])),
+          }),
+        )
       }
       if (request.method !== 'PUT' || !id || members || kind === 'departments')
         return error('malformed_request', 400)

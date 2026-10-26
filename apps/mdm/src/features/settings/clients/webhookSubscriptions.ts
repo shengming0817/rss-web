@@ -1,3 +1,4 @@
+import { queryParameters, windowPage, type DirectoryQuery } from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -111,8 +112,7 @@ export type WebhookIntent =
   | { kind: 'replay' | 'redrive'; id: string; expectedVersion: number }
 export function createWebhookSubscriptions(transport: HttpTransport) {
   function page(value: unknown) {
-    const v = closed(value, ['items', 'nextCursor'])
-    return { items: array(v['items'], delivery), nextCursor: nullable(v['nextCursor'], uuid) }
+    return windowPage(value, delivery)
   }
   return {
     types: () =>
@@ -126,15 +126,14 @@ export function createWebhookSubscriptions(transport: HttpTransport) {
           return array(v['items'], (x) => enumeration(x, eventTypes))
         },
       }),
-    list: (after?: string) =>
+    list: (query: DirectoryQuery = {}) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/webhooks/subscriptions',
-        query: { after },
+        query: queryParameters({ limit: 32, ...query }),
         successStatus: 200,
         decode(value) {
-          const v = closed(value, ['items'])
-          return array(v['items'], subscription)
+          return windowPage(value, subscription)
         },
       }),
     read: (id: string) =>
@@ -149,11 +148,11 @@ export function createWebhookSubscriptions(transport: HttpTransport) {
           return s
         },
       }),
-    deliveries: (after?: string) =>
+    deliveries: (query: DirectoryQuery = {}) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/webhooks/deliveries',
-        query: { after },
+        query: queryParameters({ limit: 32, ...query }),
         successStatus: 200,
         decode: page,
       }),

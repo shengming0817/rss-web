@@ -45,10 +45,9 @@ async function lookup() {
 async function compare() {
   if (
     await run(
-      () => client.tenants(),
-      (items) => {
-        const current = items.find((v) => v.tenantId === props.tenant.tenantId)
-        if (!current) throw new Error('Tenant removed')
+      () => client.tenant(props.tenant.tenantId),
+      (current) => {
+        if (current.tenantId !== props.tenant.tenantId) throw new Error('Wrong tenant')
         emit('changed')
       },
     )

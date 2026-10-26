@@ -275,15 +275,36 @@ export function createOnboardingDemo(
         return ok({ revision: policy.revision })
       })
     }
-    if (path === '/api/v1/apple/organizations') return ok({ items: [...organizations.values()] })
+    if (path === '/api/v1/apple/organizations')
+      return ok(
+        directoryPage(
+          [...organizations.values()].map((v) => ({
+            ...v,
+            accountEnrollment: v.accountEnrollment
+              ? Object.fromEntries(
+                  Object.entries(v.accountEnrollment).filter(([key]) => key !== 'accounts'),
+                )
+              : null,
+          })),
+          request,
+          ['id'],
+          { defaultLimit: 100 },
+        ),
+      )
     const apple =
-      /^\/api\/v1\/apple\/organizations\/([^/]+)\/(account-enrollment|account-enrollment\/accounts\/([^/]+)|ade(?:\/(configuration|public-key|operations(?:\/([^/]+))?|profiles|devices))?)$/.exec(
+      /^\/api\/v1\/apple\/organizations\/([^/]+)\/(account-enrollment|account-enrollment\/accounts|account-enrollment\/accounts\/([^/]+)|ade(?:\/(configuration|public-key|operations(?:\/([^/]+))?|profiles|devices))?)$/.exec(
         path,
       )
     if (!apple) return error('malformed_request', 400)
     const id = uuid(apple[1]),
       organization = org(id),
       action = apple[2]!
+    if (action === 'account-enrollment/accounts' && request.method === 'GET')
+      return ok(
+        directoryPage(organization.accountEnrollment?.accounts ?? [], request, ['account'], {
+          defaultLimit: 100,
+        }),
+      )
     if (action === 'account-enrollment') {
       const v = closed(body, ['expectedRevision', 'domain', 'serverUuid', 'signingKey', 'enabled'])
       return receipts.write(request, uuid(request.headers['idempotency-key']), () => {
@@ -345,7 +366,8 @@ export function createOnboardingDemo(
     if (!organization.ade) return error('resource_not_found', 404)
     if (action === 'ade') return ok(organization.ade)
     if (action === 'ade/public-key') return error('action_not_supported', 501)
-    if (action === 'ade/profiles') return ok({ items: profiles.get(id) ?? [] })
+    if (action === 'ade/profiles')
+      return ok(directoryPage(profiles.get(id) ?? [], request, ['id'], { defaultLimit: 100 }))
     if (action === 'ade/devices') return ok({ items: [], nextCursor: null })
     if (apple[5]) {
       const value = operations.get(uuid(apple[5]))

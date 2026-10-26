@@ -1,3 +1,4 @@
+import { nextCursor } from '../../../services/directory-query'
 import { jsonObject } from '../../../services/json'
 import {
   array,
@@ -227,21 +228,20 @@ function alerts(value: unknown) {
   }
 }
 export function page(value: unknown, tenant: string) {
-  const v = closed(value, ['tenantId', 'items', 'nextAfter', 'asOf', 'reminderDays', 'alerts']),
+  const v = closed(value, ['tenantId', 'items', 'nextCursor', 'asOf', 'reminderDays', 'alerts']),
     result = {
       tenantId: uuid(v['tenantId']),
       items: unique(array(v['items'], entry), (v) => v.id),
-      nextAfter: nullable(v['nextAfter'], uuid),
+      nextCursor: nextCursor(v['nextCursor']),
       asOf: count(v['asOf']),
       reminderDays: count(v['reminderDays']),
       alerts: alerts(v['alerts']),
     }
   if (
     result.tenantId !== tenant ||
-    result.items.length > 50 ||
+    result.items.length > 200 ||
     result.reminderDays > 3650 ||
-    result.items.some((e) => e.latest.createdAt > result.asOf) ||
-    (result.nextAfter !== null && result.nextAfter !== result.items.at(-1)?.id)
+    result.items.some((e) => e.latest.createdAt > result.asOf)
   )
     throw new Error('Wrong archive page')
   return result

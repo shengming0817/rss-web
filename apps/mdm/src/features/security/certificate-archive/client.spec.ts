@@ -52,24 +52,24 @@ it.each([null, { entryId: id, version: 1 }])(
     sample = {
       tenantId: id,
       items: [{ id, revision: 2, retired: false, recommendedVersion: null, latest: wire }],
-      nextAfter: null,
+      nextCursor: null,
       asOf: 100,
       reminderDays: 30,
       alerts: { expired: 0, expiring: 0, notYetValid: 0 },
     }
     expect((await client.list()).items[0]!.latest.requestVersion).toEqual(requestVersion)
-    sample = [wire]
-    expect((await client.history(id))[0]!.requestVersion).toEqual(requestVersion)
+    sample = { items: [wire], nextCursor: null }
+    expect((await client.history(id)).items[0]!.requestVersion).toEqual(requestVersion)
     for (const invalid of [
       { entryId: 'invalid', version: 1 },
       { entryId: id, version: 0 },
       { entryId: id, version: 1, extra: true },
       undefined,
     ]) {
-      sample = [{ ...wire, requestVersion: invalid }]
+      sample = { items: [{ ...wire, requestVersion: invalid }], nextCursor: null }
       await expect(client.history(id)).rejects.toThrow()
     }
-    sample = [{ ...wire, extra: true }]
+    sample = { items: [{ ...wire, extra: true }], nextCursor: null }
     await expect(client.history(id)).rejects.toThrow()
   },
 )

@@ -13,18 +13,23 @@ const id = ref('')
 const runtime = useMdm(),
   client = runtime.onboarding.apple,
   { t } = useI18n(),
-  { canRead, canWrite } = usePermission('authorization_read', 'authorization_write'),
+  { canRead, canWrite } = usePermission(
+    'registration_configuration_read',
+    'registration_configuration_write',
+  ),
   { run, runWrite, busy, uncertain, failure } = useOperation(['service_unavailable'], () => [
     runtime.session.state.value.session?.id,
     id.value,
   ])
 const delivery = useAttachment(),
   { url, filename } = delivery
-const organizations = ref<Awaited<ReturnType<typeof client.organizations>>>([]),
+const organizations = ref<Awaited<ReturnType<typeof client.organizations>>['items']>([]),
   status = ref<Awaited<ReturnType<typeof client.ade>>>(),
-  profiles = ref<Awaited<ReturnType<typeof client.profiles>>>([]),
+  profiles = ref<Awaited<ReturnType<typeof client.profiles>>['items']>([]),
   devices = ref<Awaited<ReturnType<typeof client.devices>>['items']>([]),
   cursor = ref<string | null>(null),
+  organizationCursor = ref<string | null>(null),
+  profileCursor = ref<string | null>(null),
   operationId = ref(''),
   operation = ref<Awaited<ReturnType<typeof client.operation>>>()
 const serverUuid = ref(''),
@@ -58,7 +63,8 @@ function refresh() {
     }),
     (v) => {
       status.value = v.status
-      profiles.value = v.profiles
+      profiles.value = v.profiles.items
+      profileCursor.value = v.profiles.nextCursor
       devices.value = v.devices.items
       cursor.value = v.devices.nextCursor
       seenCursors.clear()
@@ -69,12 +75,13 @@ function refresh() {
     },
   )
 }
-function list() {
+function list(cursor?: string) {
   if (!canRead.value) return
   void run(
-    () => client.organizations(),
+    () => client.organizations({ cursor }),
     (v) => {
-      organizations.value = v
+      organizations.value = cursor ? [...organizations.value, ...v.items] : v.items
+      organizationCursor.value = v.nextCursor
     },
   )
 }
@@ -82,7 +89,7 @@ function next() {
   if (!cursor.value) return
   const after = cursor.value
   void run(
-    () => client.devices(id.value, after),
+    () => client.devices(id.value, { cursor: after }),
     (v) => {
       if (
         (v.nextCursor && seenCursors.has(v.nextCursor)) ||
@@ -94,6 +101,16 @@ function next() {
       devices.value.push(...v.items)
       cursor.value = v.nextCursor
       if (cursor.value) seenCursors.add(cursor.value)
+    },
+  )
+}
+function moreProfiles() {
+  if (!profileCursor.value) return
+  void run(
+    () => client.profiles(id.value, { cursor: profileCursor.value! }),
+    (page) => {
+      profiles.value.push(...page.items)
+      profileCursor.value = page.nextCursor
     },
   )
 }
@@ -210,6 +227,7 @@ watch(id, () => {
   profiles.value = []
   devices.value = []
   cursor.value = null
+  profileCursor.value = null
   operation.value = undefined
   operationId.value = ''
   token.value = ''
@@ -244,6 +262,9 @@ onBeforeUnmount(() => {
     <p>{{ t('onboarding.adeGuide') }}</p>
     <p v-if="!canRead">{{ t('devices.denied') }}</p>
     <template v-else>
+      <UiButton v-if="organizationCursor" :disabled="busy" @click="list(organizationCursor)">{{
+        t('devices.next')
+      }}</UiButton>
       <label
         >{{ t('onboarding.organization')
         }}<select v-model="id" class="ui-input" :disabled="busy || uncertain">
@@ -387,6 +408,9 @@ onBeforeUnmount(() => {
           </tbody>
         </table>
       </div>
+      <UiButton v-if="profileCursor" :disabled="busy" @click="moreProfiles">{{
+        t('devices.next')
+      }}</UiButton>
       <UiButton v-if="cursor" type="button" :disabled="!!busy" @click="next">
         {{ t('devices.next') }}
       </UiButton>
