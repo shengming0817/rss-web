@@ -318,7 +318,7 @@ onBeforeUnmount(() => {
         ><v-expansion-panel eager
           ><v-expansion-panel-title>{{ t('console.configure') }}</v-expansion-panel-title
           ><v-expansion-panel-text>
-            <v-form @submit.prevent="configure">
+            <v-form :novalidate="false" @submit.prevent="configure">
               <fieldset :disabled="blocked">
                 <legend>{{ t('onboarding.organizationConfiguration') }}</legend>
                 <v-text-field
@@ -361,7 +361,7 @@ onBeforeUnmount(() => {
         ><v-expansion-panel eager
           ><v-expansion-panel-title>{{ t('onboarding.importToken') }}</v-expansion-panel-title
           ><v-expansion-panel-text>
-            <v-form @submit.prevent="importToken">
+            <v-form :novalidate="false" @submit.prevent="importToken">
               <fieldset :disabled="blocked">
                 <legend>{{ t('onboarding.importToken') }}</legend>
                 <v-file-input
@@ -381,7 +381,7 @@ onBeforeUnmount(() => {
       <v-card v-if="canWrite && status" variant="outlined" class="console-panel"
         ><v-card-text>
           <h2>{{ t('onboarding.sync') }}</h2>
-          <v-form @submit.prevent="submit({ kind: 'sync', full: fullSync })">
+          <v-form :novalidate="false" @submit.prevent="submit({ kind: 'sync', full: fullSync })">
             <fieldset :disabled="blocked">
               <v-checkbox
                 v-model="fullSync"
@@ -400,7 +400,7 @@ onBeforeUnmount(() => {
         ><v-expansion-panel eager
           ><v-expansion-panel-title>{{ t('onboarding.setupProfile') }}</v-expansion-panel-title
           ><v-expansion-panel-text>
-            <v-form @submit.prevent="saveProfile">
+            <v-form :novalidate="false" @submit.prevent="saveProfile">
               <fieldset :disabled="blocked">
                 <legend>{{ t('onboarding.setupProfile') }}</legend>
                 <v-text-field
@@ -483,7 +483,7 @@ onBeforeUnmount(() => {
         ><v-expansion-panel eager
           ><v-expansion-panel-title>{{ t('console.targets') }}</v-expansion-panel-title
           ><v-expansion-panel-text>
-            <v-form @submit.prevent="assignment(false)">
+            <v-form :novalidate="false" @submit.prevent="assignment(false)">
               <fieldset :disabled="blocked">
                 <v-textarea
                   v-model="serials"
@@ -504,7 +504,7 @@ onBeforeUnmount(() => {
       <v-card variant="outlined" class="console-panel"
         ><v-card-text>
           <h2>{{ t('console.enrollmentProgress') }}</h2>
-          <v-form @submit.prevent="readOperation">
+          <v-form :novalidate="false" @submit.prevent="readOperation">
             <v-text-field
               v-model="operationId"
               required
@@ -518,6 +518,7 @@ onBeforeUnmount(() => {
       <pre v-if="operation?.result">{{ JSON.stringify(operation.result, null, 2) }}</pre>
       <p>{{ t('onboarding.registrationNotImplied') }}</p>
       <v-form
+        :novalidate="false"
         v-if="canWrite && operation?.state === 'unknown'"
         @submit.prevent="
           submit({ kind: 'reconcile', operation: recoveryId || operation!.operationId }, true)

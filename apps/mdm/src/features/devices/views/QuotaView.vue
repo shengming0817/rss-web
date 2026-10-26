@@ -134,7 +134,7 @@ watch(
       <v-card v-if="revision !== undefined" variant="outlined" class="console-panel"
         ><v-card-text>
           <h2>{{ t('registration.quotas') }}</h2>
-          <v-form @submit.prevent="save()">
+          <v-form :novalidate="false" @submit.prevent="save()">
             <fieldset :disabled="busy || uncertain || !canWrite">
               <div v-for="channel in channels" :key="channel" class="mb-4">
                 <v-text-field

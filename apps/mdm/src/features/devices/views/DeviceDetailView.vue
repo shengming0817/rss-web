@@ -32,11 +32,19 @@ import CredentialsPanel from '../../security/components/CredentialsPanel.vue'
 import ManagementQueries from '../components/ManagementQueries.vue'
 import RegistrationPanel from '../components/RegistrationPanel.vue'
 import NativeEnrollmentPanel from '../../enrollment/components/NativeEnrollmentPanel.vue'
+import SelfEnrollmentProgress from '../../enrollment/components/SelfEnrollmentProgress.vue'
 import DeviceRecoveryPanel from '../../security/pki/DeviceRecoveryPanel.vue'
 const runtime = useMdm(),
   route = useRoute(),
   router = useRouter(),
   { t, locale } = useI18n()
+const personalEnrollment = computed(() =>
+  route.query['mode'] === 'self-enrollment' &&
+  typeof route.params['device'] === 'string' &&
+  typeof route.query['enrollment'] === 'string'
+    ? { device: route.params['device'], enrollment: route.query['enrollment'] }
+    : undefined,
+)
 const reference = ref(
   objectRef(
     route.params['device']
@@ -220,11 +228,13 @@ watch(
       route.params['device'],
       route.params['kind'],
       route.params['view'],
+      personalEnrollment.value,
       ...deviceBinding(runtime),
     ]),
   () => {
     clear()
     target.value = ''
+    if (personalEnrollment.value) return
     if (!route.params['device'] && (!route.params['kind'] || !route.params['view'])) return
     reference.value = objectRef(
       route.params['device']
@@ -251,23 +261,33 @@ watch(target, () => {
 </script>
 <template>
   <MdmPage
-    :title="displayName"
+    :title="personalEnrollment ? t('registration.self') : displayName"
     :busy="busy || manualOperation.busy.value"
-    :failure="failure ?? manualOperation.failure.value"
+    :failure="personalEnrollment ? null : (failure ?? manualOperation.failure.value)"
   >
-    <template #breadcrumb
-      ><RouterLink
+    <template #breadcrumb>
+      <RouterLink v-if="personalEnrollment" :to="{ name: 'self-enrollments' }">{{
+        t('registration.self')
+      }}</RouterLink>
+      <RouterLink
+        v-else
         class="device-caption"
         :to="{ name: 'devices', params: { tenant: runtime.tenant }, query: directoryQuery }"
         >{{ t('devices.returnDirectory') }}</RouterLink
       ></template
     >
     <template #actions
-      ><v-btn variant="text" :disabled="busy" @click="load">{{
+      ><v-btn v-if="!personalEnrollment" variant="text" :disabled="busy" @click="load">{{
         t('devices.reload')
       }}</v-btn></template
     >
-    <template v-if="view">
+    <SelfEnrollmentProgress
+      v-if="personalEnrollment"
+      :key="personalEnrollment.device + '/' + personalEnrollment.enrollment"
+      :device-id="personalEnrollment.device"
+      :enrollment-id="personalEnrollment.enrollment"
+    />
+    <template v-else-if="view">
       <DeviceSummary :view="view" @invalidated="invalidated" />
       <v-tabs :model-value="section" class="device-tabs" :aria-label="t('devices.detail')">
         <v-tab

@@ -12,6 +12,7 @@ it('generates a fresh canonical 256-bit handoff password', () => {
 it('keeps pending authorization separate from registration and rejects invented completion', () => {
   const response = {
     enrollmentId: id,
+    deviceId: 'my-device',
     status: 'pending',
     expiresAt: 300,
     registrationId: null,
@@ -31,6 +32,8 @@ it('keeps pending authorization separate from registration and rejects invented 
     },
   }
   expect(decodeEnrollment(response, id)).toEqual(response)
+  const { deviceId: _device, ...unbound } = response
+  expect(() => decodeEnrollment(unbound, id)).toThrow()
   expect(() =>
     decodeEnrollment(
       { ...response, instructions: { ...response.instructions, enrollmentMethod: 'password' } },

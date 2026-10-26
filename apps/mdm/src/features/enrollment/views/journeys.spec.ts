@@ -531,6 +531,7 @@ it('authorizes macOS profile delivery, clears the submitted secret and withdraws
     decodeEnrollment(
       {
         enrollmentId: id,
+        deviceId: 'my-mac',
         status: 'pending',
         expiresAt: Math.floor(Date.now() / 1000) + 300,
         registrationId: null,
