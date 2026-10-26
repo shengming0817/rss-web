@@ -91,12 +91,22 @@ try {
     packages = await catalog.json()
   }
   assert.ok(Array.isArray(packages))
+  assert.equal(await page.locator('[data-download-target]').count(), 4)
+  assert.equal(await page.locator('select').count(), 0)
   let downloadedInstallers = 0
   for (const item of packages) {
-    await page.getByLabel('平台').selectOption(item.target.platform)
-    await page.getByLabel('原生架构').selectOption(item.target.architecture)
+    const target = page.locator(
+      `[data-download-target="${item.target.platform}/${item.target.architecture}"]`,
+    )
+    await target.waitFor()
     const link = page.locator(`a[href="/api/v1/agent/enroll/packages/${item.releaseId}/content"]`)
     const download = page.waitForEvent('download')
+    assert.equal(
+      await target
+        .locator(`a[href="/api/v1/agent/enroll/packages/${item.releaseId}/content"]`)
+        .count(),
+      1,
+    )
     await link.click()
     const file = await download
     assert.equal(file.suggestedFilename(), item.filename)
@@ -140,7 +150,7 @@ try {
     phase = 'ordinary-user'
     await login(fixture.reader)
     assert.equal(await page.getByRole('link', { name: 'Agent 安装配置', exact: true }).count(), 0)
-    await go(page, `${origin}/tenants/${fixture.tenant}/agent-configurations`)
+    await go(page, `${origin}/tenants/${fixture.tenant}/settings/agent-configurations`)
     await page.getByText('请求被拒绝', { exact: false }).waitFor()
     assert.equal(await page.locator('form').count(), 0)
     coverage.push('ordinary-user-no-configuration-form')
@@ -171,10 +181,13 @@ try {
         )
       } else {
         assert.ok(Array.isArray(facts.items))
-        assert.equal(
-          await page.locator('select').first().locator('option').count(),
-          facts.items.length + 1,
-        )
+        const organization = page.getByRole('combobox', { name: '组织', exact: true })
+        await organization.click()
+        const options = page.getByRole('option')
+        assert.equal(await options.count(), facts.items.length + 1)
+        for (const item of facts.items)
+          assert.equal(await options.filter({ hasText: item.id }).count(), 1)
+        await page.keyboard.press('Escape')
       }
       assert.equal(new URL(page.url()).pathname, `/tenants/${fixture.tenant}/operations/${route}`)
     }
@@ -223,9 +236,12 @@ try {
       assert.equal(agentFacts.availability, 'ready')
       assert.equal(agentFacts.admission, 'allowed')
       phase = 'configuration-lost-response'
-      await go(page, `${origin}/tenants/${fixture.tenant}/agent-configurations`)
-      await page.locator('summary').filter({ hasText: '生成完整 JSON' }).click()
-      await page.getByRole('button', { name: '生成完整 JSON', exact: true }).waitFor()
+      await go(page, `${origin}/tenants/${fixture.tenant}/settings/agent-configurations`)
+      await page.locator('.v-expansion-panel-title').filter({ hasText: '生成完整 JSON' }).click()
+      await page
+        .locator('form[data-configuration-create]')
+        .getByRole('button', { name: '生成完整 JSON', exact: true })
+        .waitFor()
       let commits = 0
       const created = Promise.withResolvers()
       await page.route('**/api/v1/agent-configurations', async (route) => {
@@ -247,7 +263,10 @@ try {
         await route.abort('failed')
       })
       active()
-      await page.getByRole('button', { name: '生成完整 JSON', exact: true }).click()
+      await page
+        .locator('form[data-configuration-create]')
+        .getByRole('button', { name: '生成完整 JSON', exact: true })
+        .click()
       assert.equal(await created.promise, 200)
       await page.getByText('提交结果未知', { exact: false }).first().waitFor()
       await page.unroute('**/api/v1/agent-configurations')
@@ -322,7 +341,7 @@ try {
     observe(employee)
     employee.setDefaultTimeout(10000)
     await login(fixture.reader, employee)
-    await go(employee, `${origin}/tenants/${fixture.tenant}/registration-quotas`)
+    await go(employee, `${origin}/tenants/${fixture.tenant}/settings/registration-quotas`)
     await employee.getByRole('heading', { name: '注册通道与准入', exact: true }).waitFor()
     assert.equal(await employee.getByRole('button', { name: '暂停新注册', exact: true }).count(), 0)
     coverage.push('ordinary-user-readonly-channels')
@@ -345,12 +364,12 @@ try {
         })
         .waitFor()
     }
-    await go(page, `${origin}/tenants/${fixture.tenant}/registration-quotas`)
+    await go(page, `${origin}/tenants/${fixture.tenant}/settings/registration-quotas`)
     await adminChannel('Windows MDM')
       .getByRole('button', { name: '暂停新注册', exact: true })
       .waitFor()
-    await go(employee, `${origin}/tenants/${fixture.tenant}/my-enrollments`)
-    const create = employee.getByRole('button', { name: '授权注册', exact: true })
+    await go(employee, `${origin}/enroll`)
+    const create = employee.getByRole('button', { name: '授权并开始注册', exact: true })
     async function prepare() {
       await employee.getByRole('button', { name: '生成一次性交付口令', exact: true }).click()
       await employee.locator('form').first().locator('input[type=checkbox]').check()
@@ -369,7 +388,7 @@ try {
     await employee.getByText('此通道已暂停新注册，请刷新通道状态。', { exact: true }).waitFor()
     await employee.waitForFunction(() =>
       [...document.querySelectorAll('button')].some(
-        (b) => b.textContent.trim() === '授权注册' && b.disabled,
+        (b) => b.textContent.trim() === '授权并开始注册' && b.disabled,
       ),
     )
     coverage.push('stale-page-real-admission-rejection-and-refresh')
@@ -378,18 +397,35 @@ try {
       `${origin}/api/v1/devices/${fixture.existingDevice}/registrations`,
     )
     assert.equal(existing.status(), 200)
-    assert.ok((await existing.json()).items.some((r) => r.status === 'active'))
+    const establishedRegistrations = (await existing.json()).items
+    assert.ok(establishedRegistrations.some((r) => r.status === 'active'))
+    const foreignEnrollment = establishedRegistrations.find(
+      (r) => r.status === 'active' && r.enrollmentId,
+    )
+    assert.ok(foreignEnrollment)
+    assert.equal(
+      (
+        await employeeContext.request.get(
+          `${origin}/api/v1/enrollments/${foreignEnrollment.enrollmentId}`,
+        )
+      ).status(),
+      403,
+    )
+    coverage.push('ordinary-user-cannot-read-another-registration-locator')
     coverage.push('established-device-management-reads-during-pause')
     // The Agent channel remains available while Windows admission is paused.
     const agent = page
-    await go(agent, `${origin}/tenants/${fixture.tenant}/agent-configurations`)
-    await agent.locator('summary').filter({ hasText: '生成完整 JSON' }).click()
+    await go(agent, `${origin}/tenants/${fixture.tenant}/settings/agent-configurations`)
+    await agent.locator('.v-expansion-panel-title').filter({ hasText: '生成完整 JSON' }).click()
     const issued = agent.waitForResponse(
       (r) =>
         r.request().method() === 'POST' &&
         new URL(r.url()).pathname === '/api/v1/agent-configurations',
     )
-    await agent.getByRole('button', { name: '生成完整 JSON', exact: true }).click()
+    await agent
+      .locator('form[data-configuration-create]')
+      .getByRole('button', { name: '生成完整 JSON', exact: true })
+      .click()
     assert.equal((await issued).status(), 200)
     const delivery = agent.locator('a[download="rss-agent-enrollment.json"]')
     await delivery.waitFor()
@@ -402,7 +438,7 @@ try {
     assert.ok(json.configuration && json.secret && json.signature)
     rmSync(filename)
     coverage.push('other-channel-continues-and-complete-JSON-download')
-    await go(page, `${origin}/tenants/${fixture.tenant}/registration-quotas`)
+    await go(page, `${origin}/tenants/${fixture.tenant}/settings/registration-quotas`)
     await admission('恢复新注册')
     await employee.getByRole('button', { name: '刷新状态与额度', exact: true }).click()
     await prepare()
@@ -425,6 +461,38 @@ try {
     assert.equal(read.status(), 200)
     const current = await read.json()
     assert.equal(current.expiresAt, receipt.expiresAt)
+    assert.equal(current.deviceId, receipt.deviceId)
+    assert.equal(current.instructions.platform, 'windows')
+    assert.equal(current.instructions.windowsProfile, 'Full')
+    const link = employee.getByRole('link', { name: '打开 Windows 企业 MDM 注册', exact: true })
+    const handoff = new URLSearchParams((await link.getAttribute('href')).split('?')[1])
+    assert.equal(handoff.get('mode'), 'mdm')
+    assert.equal(handoff.get('username'), current.instructions.username)
+    assert.equal(handoff.get('servername'), current.instructions.server)
+    assert.deepEqual([...handoff.keys()].sort(), ['mode', 'servername', 'username'])
+    const inventoryReads = []
+    const recordInventoryRead = (request) => {
+      const path = new URL(request.url()).pathname
+      if (
+        request.method() === 'GET' &&
+        (path.startsWith('/api/v1/device-views') ||
+          path === `/api/v1/devices/${encodeURIComponent(receipt.deviceId)}`)
+      )
+        inventoryReads.push(path)
+    }
+    employee.on('request', recordInventoryRead)
+    await employee.getByRole('link', { name: '在设备详情查看进展与恢复', exact: true }).click()
+    await employee.waitForURL(
+      (url) =>
+        url.pathname ===
+          `/tenants/${fixture.tenant}/devices/${encodeURIComponent(receipt.deviceId)}/management` &&
+        url.searchParams.get('mode') === 'self-enrollment',
+    )
+    await employee.locator('[data-self-enrollment-progress]').waitFor()
+    await employee.getByText(receipt.deviceId, { exact: false }).first().waitFor()
+    assert.deepEqual(inventoryReads, [])
+    employee.removeListener('request', recordInventoryRead)
+    coverage.push('ordinary-user-owned-device-detail-progress-without-inventory-grants')
     const cancelled = employee.waitForResponse(
       (r) =>
         r.request().method() === 'POST' &&
@@ -441,6 +509,21 @@ try {
     )
     assert.equal(confirmed.status(), 200)
     assert.equal((await confirmed.json()).status, 'cancelled')
+    await go(
+      employee,
+      `${origin}/tenants/${fixture.tenant}/devices/mismatched-self-device/management?${new URLSearchParams({ mode: 'self-enrollment', enrollment: receipt.enrollmentId })}`,
+    )
+    const mismatched = employee.locator('[data-self-enrollment-progress]')
+    await mismatched
+      .getByRole('alert')
+      .filter({ hasText: '输入或响应无效，操作未确认。' })
+      .waitFor()
+    assert.equal(await mismatched.getByRole('button', { name: '取消', exact: true }).count(), 0)
+    assert.equal(
+      await mismatched.getByRole('button', { name: '更新口令并继续', exact: true }).count(),
+      0,
+    )
+    coverage.push('self-progress-rejects-server-device-binding-mismatch')
     await admission('恢复新注册')
     coverage.push('admission-restored-create-original-expiry-and-confirmed-cancel-during-pause')
     gaps.push('established-device-native-protocol-contact')

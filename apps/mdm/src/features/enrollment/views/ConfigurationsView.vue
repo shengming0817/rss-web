@@ -342,7 +342,7 @@ watch(
         ><v-expansion-panel eager
           ><v-expansion-panel-title>{{ t('onboarding.createFile') }}</v-expansion-panel-title
           ><v-expansion-panel-text>
-            <v-form @submit.prevent="create">
+            <v-form :novalidate="false" data-configuration-create @submit.prevent="create">
               <fieldset :disabled="busy || uncertain">
                 <v-text-field
                   v-model.number="lifetime"
@@ -417,7 +417,7 @@ watch(
       <v-card variant="outlined" class="console-panel"
         ><v-card-text>
           <h2>{{ t('onboarding.configurationId') }}</h2>
-          <v-form @submit.prevent="read">
+          <v-form :novalidate="false" @submit.prevent="read">
             <v-text-field
               v-model="configurationId"
               required
@@ -469,7 +469,7 @@ watch(
         ><v-expansion-panel eager
           ><v-expansion-panel-title>{{ t('onboarding.defaults') }}</v-expansion-panel-title
           ><v-expansion-panel-text>
-            <v-form @submit.prevent="saveSettings">
+            <v-form :novalidate="false" @submit.prevent="saveSettings">
               <fieldset :disabled="busy || uncertain">
                 <legend>{{ t('onboarding.defaults') }}</legend>
                 <v-text-field

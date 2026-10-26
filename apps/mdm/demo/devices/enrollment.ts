@@ -69,6 +69,7 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
         return e && (!e.selfService || e.actor === request.actor.principalId)
           ? ok({
               ...view(e),
+              deviceId: e.device,
               status:
                 e.status === 'pending' && e.expiresAt <= Math.floor(Date.now() / 1000)
                   ? 'expired'

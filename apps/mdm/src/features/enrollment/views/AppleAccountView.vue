@@ -209,7 +209,7 @@ watch(
             t('onboarding.organizationConfiguration')
           }}</v-expansion-panel-title
           ><v-expansion-panel-text>
-            <v-form @submit.prevent="saveOrganization">
+            <v-form :novalidate="false" @submit.prevent="saveOrganization">
               <fieldset :disabled="busy || uncertain">
                 <legend>{{ t('onboarding.organizationConfiguration') }}</legend>
                 <v-text-field
@@ -277,7 +277,7 @@ watch(
         ><v-expansion-panel eager
           ><v-expansion-panel-title>{{ t('onboarding.accountMapping') }}</v-expansion-panel-title
           ><v-expansion-panel-text>
-            <v-form @submit.prevent="saveMapping">
+            <v-form :novalidate="false" @submit.prevent="saveMapping">
               <fieldset :disabled="busy || uncertain">
                 <legend>{{ t('onboarding.accountMapping') }}</legend>
                 <v-text-field

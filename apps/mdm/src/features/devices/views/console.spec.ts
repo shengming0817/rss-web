@@ -2586,3 +2586,47 @@ it('applies raw directory RSQL with basic filters and uses the same filter for c
     ],
   ).toBe(filter)
 })
+
+it('reads and cancels personal progress without calling inventory clients and rejects a mismatched route device', async () => {
+  const { wrapper, devices, click, router } = await setup('self-enrollments')
+  const enroll = vi.spyOn(devices.registration, 'enroll')
+  await click('生成一次性交付口令')
+  await wrapper.get('form input[type=checkbox]').setValue(true)
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
+  const receipt = await enroll.mock.results[0]!.value
+  const views = vi
+    .spyOn(devices.views, 'detail')
+    .mockRejectedValue(decodeMdmError(403, { code: 'permission_denied' }))
+  const inventory = vi
+    .spyOn(devices.directory, 'detail')
+    .mockRejectedValue(decodeMdmError(403, { code: 'permission_denied' }))
+  await wrapper.get('a[href*=management]').trigger('click', { button: 0 })
+  await vi.waitFor(() => expect(router.currentRoute.value.query['mode']).toBe('self-enrollment'))
+  await flushPromises()
+  const progress = wrapper.get('[data-self-enrollment-progress]')
+  expect(progress.text()).toContain(receipt.deviceId)
+  expect(views).not.toHaveBeenCalled()
+  expect(inventory).not.toHaveBeenCalled()
+  const cancel = vi.spyOn(devices.enrollment, 'cancel')
+  await progress
+    .findAll('button')
+    .find((button) => button.text() === '取消')!
+    .trigger('click')
+  await flushPromises()
+  expect(cancel.mock.calls[0]?.[0]).toBe(receipt.enrollmentId)
+  expect(progress.text()).toContain('已取消')
+  await router.push({
+    name: 'device-management',
+    params: { tenant: TENANT, device: 'different-device' },
+    query: { mode: 'self-enrollment', enrollment: receipt.enrollmentId },
+  })
+  await flushPromises()
+  const mismatch = wrapper.get('[data-self-enrollment-progress]')
+  expect(mismatch.text()).toContain('响应')
+  expect(
+    mismatch.findAll('button').some((button) => ['取消', '更新口令并继续'].includes(button.text())),
+  ).toBe(false)
+  expect(views).not.toHaveBeenCalled()
+  expect(inventory).not.toHaveBeenCalled()
+})

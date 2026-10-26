@@ -101,7 +101,7 @@ onBeforeUnmount(() => {
 </script>
 <template>
   <v-card variant="outlined" :aria-busy="busy">
-    <v-card-title>{{ t('onboarding.nativeSteps') }}</v-card-title>
+    <v-card-title tag="h2">{{ t('onboarding.nativeSteps') }}</v-card-title>
     <v-card-text>
       <template v-if="value.instructions.platform === 'windows'">
         <p>{{ t('onboarding.windowsSteps') }}</p>
@@ -142,7 +142,7 @@ onBeforeUnmount(() => {
           <v-timeline-item dot-color="primary" :title="t('onboarding.macDownload')">
             <h3>{{ t('onboarding.macDownload') }}</h3>
             <p>{{ t('onboarding.profileAuthority') }}</p>
-            <v-form @submit.prevent="profile">
+            <v-form :novalidate="false" @submit.prevent="profile">
               <v-text-field
                 v-model="password"
                 :label="t('devices.password')"

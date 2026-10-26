@@ -129,7 +129,7 @@ watch(current, (value) => {
         ><v-expansion-panel eager
           ><v-expansion-panel-title>{{ t('console.configure') }}</v-expansion-panel-title
           ><v-expansion-panel-text>
-            <v-form @submit.prevent="save">
+            <v-form :novalidate="false" @submit.prevent="save">
               <fieldset :disabled="busy || uncertain">
                 <legend>{{ t('onboarding.entraPolicy') }}</legend>
                 <v-checkbox

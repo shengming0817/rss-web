@@ -69,7 +69,12 @@ function recover(value = id.value) {
   void run(
     () => client.status(value),
     (v) => {
-      if (id.value === value) result.value = v
+      if (id.value !== value) return
+      if (v.deviceId !== props.endpoint.id) {
+        failure.value = 'invalidResponse'
+        return
+      }
+      result.value = v
     },
   )
 }
@@ -154,8 +159,8 @@ watch(
 onBeforeUnmount(clearSecret)
 </script>
 <template>
-  <v-card variant="outlined" :aria-busy="busy">
-    <v-card-title>{{ t('console.enrollmentProgress') }}</v-card-title>
+  <v-card data-native-enrollment variant="outlined" :aria-busy="busy">
+    <v-card-title tag="h2">{{ t('console.enrollmentProgress') }}</v-card-title>
     <v-card-text>
       <v-alert v-if="failure" type="error" variant="tonal" role="alert">{{
         t(`devices.${failure}`)
@@ -168,7 +173,7 @@ onBeforeUnmount(clearSecret)
         @click="recover(e.enrollmentId)"
         >{{ e.source }} · {{ t(`devices.${e.status}`) }}</v-btn
       >
-      <v-form class="mt-3" @submit.prevent="recover()">
+      <v-form :novalidate="false" class="mt-3" @submit.prevent="recover()">
         <v-text-field
           v-model="id"
           :label="t('devices.enrollmentId')"
@@ -194,7 +199,7 @@ onBeforeUnmount(clearSecret)
             <v-alert type="info" variant="tonal" class="my-4">{{
               t('onboarding.deviceAuthorization')
             }}</v-alert>
-            <v-form @submit.prevent="submit('create')">
+            <v-form :novalidate="false" @submit.prevent="submit('create')">
               <v-select
                 v-model="source"
                 :label="t('devices.platform')"
