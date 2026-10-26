@@ -534,7 +534,7 @@ watch(
         <div v-else class="telemetry-empty">
           <h3>{{ t('telemetry.unbound') }}</h3>
           <p>{{ t('telemetry.unboundHint') }}</p>
-          <RouterLink :to="{ name: 'settings-metrics', params: { tenant: runtime.tenant } }">{{
+          <RouterLink :to="{ name: 'policy-metrics', params: { tenant: runtime.tenant } }">{{
             t('telemetry.metricsSettings')
           }}</RouterLink>
         </div>
