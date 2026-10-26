@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import { VBtn } from 'vuetify/components'
+
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -63,20 +64,15 @@ async function load(next?: string) {
       {{ source.lastKnown.evidence.snapshotId }} · {{ source.lastKnown.evidence.observedAt }}
     </p>
     <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
-    <UiButton v-if="source.state.kind === 'known'" :disabled="!!busy" type="submit" @click="load()">
+    <v-btn v-if="source.state.kind === 'known'" :disabled="!!busy" type="submit" @click="load()">
       {{ t('devices.expandSource') }}
-    </UiButton>
+    </v-btn>
     <label v-if="page"
       >{{ t('devices.searchLoadedPage') }}<input v-model="search" class="ui-input" type="search"
     /></label>
     <AssetItems v-if="page" :items="visibleItems" :complete-empty="page.total === 0" />
-    <UiButton
-      v-if="page?.nextCursor"
-      :disabled="!!busy"
-      type="submit"
-      @click="load(page.nextCursor)"
-    >
+    <v-btn v-if="page?.nextCursor" :disabled="!!busy" type="submit" @click="load(page.nextCursor)">
       {{ t('devices.next') }}
-    </UiButton>
+    </v-btn>
   </section>
 </template>

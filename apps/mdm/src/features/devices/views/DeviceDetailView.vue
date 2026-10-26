@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { UiButton, UiDialog } from '@rss/core/components'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -17,10 +16,15 @@ import DeviceActivity from '../../telemetry/components/DeviceActivity.vue'
 import DevicePerformance from '../../telemetry/components/DevicePerformance.vue'
 import DeviceCollections from '../../telemetry/components/DeviceCollections.vue'
 import '../../telemetry/telemetry.css'
-import PageFrame from '../../../components/PageFrame.vue'
+import DevicePage from '../components/DevicePage.vue'
+import DeviceSummary from '../components/DeviceSummary.vue'
+import ChannelCard from '../components/ChannelCard.vue'
+import PersonDisplay from '../components/PersonDisplay.vue'
+import { scalarText } from '../presentation'
+import { assetLabel } from '../assetPresentation'
+import { useDialogFocus } from '../../../ui/dialog-focus'
 import ViewFacts from '../components/ViewFacts.vue'
 import PersonnelPanel from '../components/PersonnelPanel.vue'
-import ScopedInventory from '../components/ScopedInventory.vue'
 import ManualPanel from '../components/ManualPanel.vue'
 import AssociationPanel from '../components/AssociationPanel.vue'
 import DeviceControlPanel from '../components/DeviceControlPanel.vue'
@@ -30,7 +34,7 @@ import RegistrationPanel from '../components/RegistrationPanel.vue'
 const runtime = useMdm(),
   route = useRoute(),
   router = useRouter(),
-  { t } = useI18n()
+  { t, locale } = useI18n()
 const reference = ref(
   objectRef(
     route.params['device']
@@ -51,13 +55,16 @@ const section = computed(() =>
     ? 'management'
     : String(route.name).endsWith('-history')
       ? 'history'
-      : 'inventory',
+      : route.query['tab'] === 'inventory'
+        ? 'inventory'
+        : 'overview',
 )
 const historySection = computed(() => String(route.params['history'] ?? 'activity'))
 function destination(section: string, history?: string) {
   const name = route.params['device'] ? 'device' : 'device-view'
   return {
-    name: section === 'inventory' ? name + '-detail' : name + '-' + section,
+    name:
+      section === 'inventory' || section === 'overview' ? name + '-detail' : name + '-' + section,
     params: {
       tenant: runtime.tenant,
       ...(route.params['device']
@@ -65,12 +72,23 @@ function destination(section: string, history?: string) {
         : { kind: route.params['kind'], view: route.params['view'] }),
       ...(history ? { history } : {}),
     },
-    query: { ...route.query, endpoint: target.value },
+    query: {
+      ...route.query,
+      endpoint: target.value,
+      tab: section === 'inventory' ? 'inventory' : undefined,
+    },
   }
 }
 const target = ref(''),
   manualOpen = ref(false),
-  inventory = ref<Inventory>()
+  inventory = ref<Inventory>(),
+  manualGeneration = ref(0)
+const manualOperation = useOperation([], () => [
+  ...deviceBinding(runtime),
+  target.value,
+  String(manualGeneration.value),
+])
+const restoreManualFocus = useDialogFocus(manualOpen)
 const selected = computed(() => endpoints.value.find((e) => e.id === target.value))
 const directoryQuery = computed(() => {
   try {
@@ -99,14 +117,24 @@ const directoryQuery = computed(() => {
     return {}
   }
 })
-const displayName = computed(() => {
-  const state =
-    view.value?.endpoints[0]?.displayName?.state ?? view.value?.fields['device.name']?.state
-  return state?.kind === 'known' && state.value.kind === 'string'
-    ? state.value.value
-    : reference.value.id
+const displayName = computed(
+  () =>
+    view.value?.endpoints
+      .map((endpoint) => {
+        const state = endpoint.displayName?.state
+        return state?.kind === 'known' && state.value.kind === 'string'
+          ? state.value.value
+          : endpoint.id
+      })
+      .join(' / ') ?? reference.value.id,
+)
+const selectedName = computed(() => {
+  const state = view.value?.endpoints.find((endpoint) => endpoint.id === target.value)?.displayName
+    ?.state
+  return state?.kind === 'known' && state.value.kind === 'string' ? state.value.value : target.value
 })
 function clear() {
+  manualGeneration.value++
   view.value = undefined
   endpoints.value = []
   fields.value = []
@@ -127,6 +155,8 @@ function syncTarget() {
         : ''
 }
 async function load() {
+  // Rereading the same device withdraws reads, while ManualPanel keeps any original write intent.
+  manualGeneration.value++
   view.value = undefined
   endpoints.value = []
   await run(
@@ -145,19 +175,25 @@ async function load() {
   )
 }
 async function editManual() {
-  if (!target.value) return
-  if (inventory.value?.device === target.value) {
+  const endpoint = target.value
+  if (!endpoint) return
+  if (inventory.value?.device === endpoint) {
     manualOpen.value = true
     return
   }
-  await run(
+  await manualOperation.run(
     async () => ({
-      inventory: await runtime.devices.assets.inventory(target.value),
+      inventory: await runtime.devices.assets.inventory(endpoint),
       catalog: await runtime.devices.assets.catalog(),
     }),
-    (v) => {
-      inventory.value = v.inventory
-      fields.value = v.catalog.fields
+    (value) => {
+      if (!view.value || target.value !== endpoint) return
+      if (value.inventory.device !== endpoint) {
+        manualOperation.failure.value = 'invalidResponse'
+        return
+      }
+      inventory.value = value.inventory
+      fields.value = value.catalog.fields
       manualOpen.value = true
     },
   )
@@ -200,9 +236,9 @@ watch(
 watch(target, () => {
   inventory.value = undefined
 })
-function selectEndpoint(event: Event) {
+function selectEndpoint(value: string) {
   void router.replace({
-    query: { ...route.query, endpoint: (event.target as HTMLSelectElement).value },
+    query: { ...route.query, endpoint: value },
   })
 }
 watch(() => route.query['endpoint'], syncTarget, { flush: 'sync' })
@@ -212,71 +248,155 @@ watch(target, () => {
 })
 </script>
 <template>
-  <PageFrame :title="displayName" :busy="busy" :failure="failure">
-    <template #actions
+  <DevicePage
+    :title="displayName"
+    :busy="busy || manualOperation.busy.value"
+    :failure="failure ?? manualOperation.failure.value"
+  >
+    <template #breadcrumb
       ><RouterLink
+        class="device-caption"
         :to="{ name: 'devices', params: { tenant: runtime.tenant }, query: directoryQuery }"
         >{{ t('devices.returnDirectory') }}</RouterLink
-      ><UiButton :disabled="busy" @click="load">{{ t('devices.reload') }}</UiButton></template
+      ></template
+    >
+    <template #actions
+      ><v-btn variant="text" :disabled="busy" @click="load">{{
+        t('devices.reload')
+      }}</v-btn></template
     >
     <template v-if="view">
-      <nav class="telemetry-tabs" :aria-label="t('devices.detail')">
-        <RouterLink
-          v-for="item in ['inventory', 'management', 'history']"
+      <DeviceSummary :view="view" @invalidated="invalidated" />
+      <v-tabs :model-value="section" class="device-tabs" :aria-label="t('devices.detail')">
+        <v-tab
+          v-for="item in ['overview', 'inventory', 'management', 'history']"
           :key="item"
+          :value="item"
+          exact
           :to="destination(item, item === 'history' ? 'activity' : undefined)"
-          :aria-current="section === item ? 'page' : undefined"
-          >{{ t('devices.' + item) }}</RouterLink
+          >{{ t(item === 'inventory' ? 'devices.workspace.assets' : 'devices.' + item) }}</v-tab
         >
-      </nav>
-      <template v-if="section === 'inventory'"
-        ><ViewFacts :view="view" :endpoints="endpoints" @invalidated="invalidated" />
-        <ScopedInventory :endpoints="view.endpoints" @invalidated="invalidated" />
-        <PersonnelPanel
-          v-for="endpoint in view.endpoints"
-          :key="endpoint.id"
-          :endpoint="endpoint"
-          @changed="load"
-          @invalidated="invalidated"
-        />
-        <section class="console-panel">
-          <h2>{{ t('devices.manual') }}</h2>
-          <label v-if="endpoints.length > 1"
-            >{{ t('devices.originalEndpoint')
-            }}<select :value="target" class="ui-input" @change="selectEndpoint">
-              <option value="">{{ t('devices.select') }}</option>
-              <option v-for="e in endpoints" :key="e.id" :value="e.id">{{ e.id }}</option>
-            </select></label
-          >
-          <UiButton :disabled="busy || !target" @click="editManual">{{
+      </v-tabs>
+      <v-select
+        v-if="endpoints.length > 1"
+        class="device-endpoint-select"
+        :model-value="target"
+        :label="t('devices.originalEndpoint')"
+        :items="[
+          { value: '', title: t('devices.select') },
+          ...endpoints.map((e) => ({ value: e.id, title: e.id })),
+        ]"
+        @update:model-value="selectEndpoint"
+      />
+      <div v-if="section === 'overview'" class="device-overview">
+        <div>
+          <section class="device-section">
+            <div class="device-section-heading">
+              <h2>{{ t('devices.overview') }}</h2>
+              <v-btn variant="text" :to="destination('inventory')">{{
+                t('devices.workspace.assets')
+              }}</v-btn>
+            </div>
+            <dl class="device-facts">
+              <div
+                v-for="field in Object.values(view.fields).filter((f) =>
+                  [
+                    'device.model',
+                    'device.serial_number',
+                    'device.os.name',
+                    'device.os.version',
+                    'device.cpu.model',
+                    'device.memory.bytes',
+                    'device.disk_encryption.enabled',
+                    'device.security.macos.sip',
+                  ].includes(f.field),
+                )"
+                :key="field.field"
+              >
+                <dt>{{ assetLabel(field.field, locale) }}</dt>
+                <dd>
+                  {{
+                    field.state.kind === 'known'
+                      ? scalarText(field.state.value)
+                      : t('devices.state.' + field.state.kind)
+                  }}
+                </dd>
+              </div>
+            </dl>
+            <p>{{ t('devices.workspace.overviewNote') }}</p>
+          </section>
+          <PersonnelPanel
+            v-for="endpoint in view.endpoints"
+            :key="endpoint.id"
+            :endpoint="endpoint"
+            @changed="load"
+            @invalidated="invalidated"
+          />
+        </div>
+        <aside>
+          <section class="device-section">
+            <h2>{{ t('devices.channels') }}</h2>
+            <div v-for="endpoint in view.endpoints" :key="endpoint.id">
+              <h3>
+                {{
+                  endpoint.displayName?.state.kind === 'known'
+                    ? scalarText(endpoint.displayName.state.value)
+                    : endpoint.id
+                }}
+              </h3>
+              <p>{{ t('devices.endpointState.' + endpoint.status) }}</p>
+              <v-chip v-for="channel in endpoint.channels" :key="channel.registrationId"
+                >{{ channel.channel === 'mdm' ? 'MDM' : 'Agent' }} ·
+                {{ t('devices.endpointState.' + channel.status) }}</v-chip
+              >
+            </div>
+          </section>
+          <section class="device-section">
+            <h2>{{ t('devices.currentUser') }}</h2>
+            <p v-for="endpoint in view.endpoints" :key="endpoint.id">
+              <PersonDisplay :display="endpoint.currentUser?.display ?? null" />
+            </p>
+          </section>
+        </aside>
+      </div>
+      <template v-else-if="section === 'inventory'">
+        <div class="device-actions">
+          <v-btn variant="outlined" :disabled="busy || !target" @click="editManual">{{
             t('devices.editAssets')
-          }}</UiButton>
-        </section>
+          }}</v-btn>
+        </div>
+        <ViewFacts :view="view" :endpoints="endpoints" @invalidated="invalidated" />
       </template>
       <template v-else-if="section === 'management'">
-        <label v-if="endpoints.length > 1"
-          >{{ t('devices.originalEndpoint')
-          }}<select :value="target" class="ui-input" @change="selectEndpoint">
-            <option value="">{{ t('devices.select') }}</option>
-            <option v-for="e in endpoints" :key="e.id" :value="e.id">{{ e.id }}</option>
-          </select></label
-        >
+        <p class="device-caption">{{ t('devices.workspace.managementNote') }}</p>
         <DeviceControlPanel
           v-if="selected"
           :key="selected.id"
           :endpoint="selected"
-          :device-name="displayName"
+          :device-name="selectedName"
         />
-        <ManagementQueries v-if="selected" :key="selected.id" :device="selected.id" />
-        <CredentialsPanel v-if="selected" :key="selected.id" :endpoint="selected" />
-        <AssignedConfigurations v-if="selected" :key="selected.id" :device="selected.id" />
-        <AgentConnectionObservation v-if="selected" :key="selected.id" :device="selected.id" />
-        <RegistrationPanel
-          v-if="selected"
-          :key="selected.id"
-          :endpoint="selected"
-          @changed="load"
-        />
+        <p v-if="!selected">{{ t('devices.select') }}</p>
+        <details class="device-section" data-device-channels>
+          <summary>{{ t('devices.channels') }}</summary>
+          <ChannelCard
+            v-for="endpoint in view.endpoints"
+            :key="endpoint.id"
+            :endpoint="endpoint"
+            :detail="endpoints.find((e) => e.id === endpoint.id)"
+            :view="view"
+          />
+        </details>
+        <div v-if="selected" class="device-panel-grid">
+          <div>
+            <ManagementQueries :key="selected.id" :device="selected.id" />
+            <AssignedConfigurations :key="selected.id" :device="selected.id" />
+            <AgentConnectionObservation :key="selected.id" :device="selected.id" />
+          </div>
+          <div>
+            <CredentialsPanel :key="selected.id" :endpoint="selected" />
+            <RegistrationPanel :key="selected.id" :endpoint="selected" @changed="load" />
+          </div>
+        </div>
         <AssociationPanel
           v-if="view.association"
           :key="view.association.id"
@@ -291,58 +411,63 @@ watch(target, () => {
           @changed="changed"
           @denied="invalidated('denied')"
         />
-        <RouterLink :to="{ name: 'policy-resources', params: { tenant: runtime.tenant } }">{{
-          t('devices.collectionPackages')
-        }}</RouterLink>
+        <v-btn
+          variant="text"
+          :to="{ name: 'policy-resources', params: { tenant: runtime.tenant } }"
+          >{{ t('devices.collectionPackages') }}</v-btn
+        >
       </template>
       <template v-else>
-        <nav class="telemetry-tabs telemetry-tabs--secondary" :aria-label="t('devices.history')">
-          <RouterLink
+        <v-tabs :model-value="historySection" class="device-tabs" :aria-label="t('devices.history')"
+          ><v-tab
             v-for="item in ['activity', 'performance', 'collection']"
             :key="item"
+            :value="item"
             :to="destination('history', item)"
-            :aria-current="historySection === item ? 'page' : undefined"
-            >{{ t('telemetry.' + item) }}</RouterLink
-          >
-        </nav>
-        <label v-if="endpoints.length > 1"
-          >{{ t('devices.originalEndpoint')
-          }}<select :value="target" class="ui-input" @change="selectEndpoint">
-            <option value="">{{ t('devices.select') }}</option>
-            <option v-for="e in endpoints" :key="e.id" :value="e.id">{{ e.id }}</option>
-          </select></label
+            >{{ t('telemetry.' + item) }}</v-tab
+          ></v-tabs
         >
-        <RouterLink
+        <v-btn
           v-if="target"
+          variant="text"
           :to="{ name: 'device-activities', params: { tenant: runtime.tenant, device: target } }"
-          >{{ t('policies.entry.activities') }}</RouterLink
+          >{{ t('policies.entry.activities') }}</v-btn
         >
-        <template v-if="target">
-          <DeviceActivity v-if="historySection === 'activity'" :key="target" :device="target" />
-          <DevicePerformance
+        <template v-if="target"
+          ><DeviceActivity
+            v-if="historySection === 'activity'"
+            :key="target"
+            :device="target" /><DevicePerformance
             v-else-if="historySection === 'performance'"
             :key="target"
-            :device="target"
-          />
-          <DeviceCollections v-else :key="target" :device="target" />
-        </template>
-        <p v-else class="telemetry-empty">{{ t('devices.select') }}</p>
+            :device="target" /><DeviceCollections v-else :key="target" :device="target"
+        /></template>
+        <p v-else>{{ t('devices.select') }}</p>
       </template>
     </template>
-    <UiDialog
-      keep-mounted
-      :open="manualOpen"
-      :title="t('devices.editAssets')"
-      :close-label="t('console.cancel')"
-      placement="right"
-      @update:open="manualOpen = $event"
-      ><ManualPanel
-        v-if="inventory"
-        :key="target"
-        :device="target"
-        :inventory="inventory"
-        :fields="fields"
-        @updated="inventory = $event"
-    /></UiDialog>
-  </PageFrame>
+    <v-dialog
+      :model-value="manualOpen"
+      eager
+      :aria-label="t('devices.editAssets')"
+      :data-state="manualOpen ? 'open' : 'closed'"
+      @update:model-value="manualOpen = $event"
+      @after-leave="restoreManualFocus"
+    >
+      <v-card :title="t('devices.editAssets')"
+        ><v-card-text
+          ><ManualPanel
+            v-if="inventory && inventory.device === target"
+            :key="inventory.device"
+            :device="inventory.device"
+            :inventory="inventory"
+            :fields="fields"
+            @updated="inventory = $event" /></v-card-text
+        ><v-card-actions
+          ><v-spacer /><v-btn variant="text" @click="manualOpen = false">{{
+            t('console.cancel')
+          }}</v-btn></v-card-actions
+        ></v-card
+      >
+    </v-dialog>
+  </DevicePage>
 </template>

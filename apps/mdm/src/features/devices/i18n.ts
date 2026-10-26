@@ -1,4 +1,6 @@
+import { deviceWorkspaceZh, deviceWorkspaceEn } from './workspaceMessages'
 export const devicesZh = {
+  workspace: deviceWorkspaceZh,
   definitionTask: '群组定义保存任务',
   membersPending: '成员计算尚未发布新结果；已发布的完整结果仍可查看。',
   personLogin: '登录名',
@@ -503,6 +505,7 @@ export const devicesZh = {
   },
 }
 export const devicesEn: typeof devicesZh = {
+  workspace: deviceWorkspaceEn,
   definitionTask: 'Group definition save task',
   membersPending:
     'Membership calculation has not published a new result. Previously published complete results remain available.',

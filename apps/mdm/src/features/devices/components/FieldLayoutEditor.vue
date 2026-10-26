@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { VDialog, VCard, VBtn } from 'vuetify/components'
+import { useDialogFocus } from '../../../ui/dialog-focus'
 import { computed, ref, toRaw } from 'vue'
-import { UiButton, UiDialog } from '@rss/core/components'
+
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation, operation, type Operation } from '../../../services/useOperation'
@@ -97,104 +99,110 @@ async function save(replay = false) {
     )
   }
 }
+const restoreDialogFocus = useDialogFocus(open)
 </script>
 <template>
-  <UiButton v-if="layout.editable" data-action="manage-field-groups" @click="begin">{{
+  <v-btn v-if="layout.editable" data-action="manage-field-groups" @click="begin">{{
     t('devices.manageFieldGroups')
-  }}</UiButton>
-  <UiDialog
-    :open="open"
-    :title="t('devices.manageFieldGroups')"
-    :close-label="t('console.cancel')"
-    placement="right"
-    @update:open="open = $event"
-  >
-    <p>{{ t('devices.fieldGroupsNote') }}</p>
-    <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
-    <div class="field-layout-editor">
-      <div>
-        <UiButton :disabled="busy || uncertain" @click="add">{{
-          t('devices.addFieldGroup')
-        }}</UiButton>
-        <ol class="field-group-list">
-          <li v-for="(group, index) in groups" :key="group.id">
-            <UiButton :aria-pressed="active === group.id" @click="active = group.id"
-              >{{ group.name || t('devices.newFieldGroup') }} · {{ group.fields.length }}</UiButton
-            >
-            <UiButton
-              :disabled="busy || uncertain || index === 0"
-              :aria-label="t('devices.moveUp')"
-              @click="move(groups, index, -1)"
-              >↑</UiButton
-            >
-            <UiButton
-              :disabled="busy || uncertain || index === groups.length - 1"
-              :aria-label="t('devices.moveDown')"
-              @click="move(groups, index, 1)"
-              >↓</UiButton
-            >
-            <UiButton :disabled="busy || uncertain" @click="groups.splice(index, 1)">{{
-              t('devices.removeFieldGroup')
-            }}</UiButton>
-          </li>
-        </ol>
-      </div>
-      <fieldset
-        v-if="current"
-        :disabled="busy || uncertain || (failure === 'conflict' && !compared)"
-      >
-        <label
-          >{{ t('devices.fieldGroupName')
-          }}<input v-model="current.name" class="ui-input" maxlength="40"
-        /></label>
-        <label
-          >{{ t('devices.searchFields') }}<input v-model="search" class="ui-input" type="search"
-        /></label>
-        <div v-for="field in available" :key="field.key" class="field-choice">
-          <label
-            ><input
-              type="checkbox"
-              :checked="current.fields.includes(field.key)"
-              @change="toggle(field.key)"
-            />
-            {{ assetLabel(field.key, locale) }}
-            <small
-              >{{ field.manual ? t('devices.manualField') : t('devices.collectedField') }} ·
-              {{ field.sensitivity }}</small
-            ></label
+  }}</v-btn>
+  <v-dialog
+    :model-value="open"
+    :aria-label="t('devices.manageFieldGroups')"
+    :data-state="open ? 'open' : 'closed'"
+    @update:model-value="open = $event"
+    @after-leave="restoreDialogFocus"
+    ><v-card :title="t('devices.manageFieldGroups')"
+      ><div class="device-dialog-body">
+        <p>{{ t('devices.fieldGroupsNote') }}</p>
+        <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
+        <div class="field-layout-editor">
+          <div>
+            <v-btn :disabled="busy || uncertain" @click="add">{{
+              t('devices.addFieldGroup')
+            }}</v-btn>
+            <ol class="field-group-list">
+              <li v-for="(group, index) in groups" :key="group.id">
+                <v-btn :aria-pressed="active === group.id" @click="active = group.id"
+                  >{{ group.name || t('devices.newFieldGroup') }} · {{ group.fields.length }}</v-btn
+                >
+                <v-btn
+                  :disabled="busy || uncertain || index === 0"
+                  :aria-label="t('devices.moveUp')"
+                  @click="move(groups, index, -1)"
+                  >↑</v-btn
+                >
+                <v-btn
+                  :disabled="busy || uncertain || index === groups.length - 1"
+                  :aria-label="t('devices.moveDown')"
+                  @click="move(groups, index, 1)"
+                  >↓</v-btn
+                >
+                <v-btn :disabled="busy || uncertain" @click="groups.splice(index, 1)">{{
+                  t('devices.removeFieldGroup')
+                }}</v-btn>
+              </li>
+            </ol>
+          </div>
+          <fieldset
+            v-if="current"
+            :disabled="busy || uncertain || (failure === 'conflict' && !compared)"
           >
+            <label
+              >{{ t('devices.fieldGroupName')
+              }}<input v-model="current.name" class="ui-input" maxlength="40"
+            /></label>
+            <label
+              >{{ t('devices.searchFields')
+              }}<input v-model="search" class="ui-input" type="search"
+            /></label>
+            <div v-for="field in available" :key="field.key" class="field-choice">
+              <label
+                ><input
+                  type="checkbox"
+                  :checked="current.fields.includes(field.key)"
+                  @change="toggle(field.key)"
+                />
+                {{ assetLabel(field.key, locale) }}
+                <small
+                  >{{ field.manual ? t('devices.manualField') : t('devices.collectedField') }} ·
+                  {{ field.sensitivity }}</small
+                ></label
+              >
+            </div>
+            <ol>
+              <li v-for="(key, index) in current.fields" :key="key">
+                {{ assetLabel(key, locale)
+                }}<v-btn
+                  type="button"
+                  :aria-label="t('devices.moveUp')"
+                  :disabled="index === 0"
+                  @click="move(current.fields, index, -1)"
+                  >↑</v-btn
+                ><v-btn
+                  type="button"
+                  :aria-label="t('devices.moveDown')"
+                  :disabled="index === current.fields.length - 1"
+                  @click="move(current.fields, index, 1)"
+                  >↓</v-btn
+                >
+              </li>
+            </ol>
+            <p v-if="!current.fields.length">{{ t('devices.fieldGroupEmpty') }}</p>
+          </fieldset>
         </div>
-        <ol>
-          <li v-for="(key, index) in current.fields" :key="key">
-            {{ assetLabel(key, locale)
-            }}<UiButton
-              type="button"
-              :aria-label="t('devices.moveUp')"
-              :disabled="index === 0"
-              @click="move(current.fields, index, -1)"
-              >↑</UiButton
-            ><UiButton
-              type="button"
-              :aria-label="t('devices.moveDown')"
-              :disabled="index === current.fields.length - 1"
-              @click="move(current.fields, index, 1)"
-              >↓</UiButton
-            >
-          </li>
-        </ol>
-        <p v-if="!current.fields.length">{{ t('devices.fieldGroupEmpty') }}</p>
-      </fieldset>
-    </div>
-    <template #footer
-      ><template v-if="uncertain || failure === 'conflict'"
-        ><UiButton :disabled="busy" @click="compare">{{ t('devices.compare') }}</UiButton
-        ><UiButton v-if="compared && !uncertain" @click="reedit">{{ t('console.edit') }}</UiButton
-        ><UiButton v-if="compared && uncertain" :disabled="busy" @click="save(true)">{{
-          t('devices.replay')
-        }}</UiButton></template
-      ><UiButton v-else :disabled="busy || !valid" @click="save()">{{
-        t('devices.saveFieldGroups')
-      }}</UiButton></template
-    >
-  </UiDialog>
+      </div>
+      <template #actions
+        ><v-btn variant="text" @click="open = false">{{ t('console.cancel') }}</v-btn
+        ><template v-if="uncertain || failure === 'conflict'"
+          ><v-btn :disabled="busy" @click="compare">{{ t('devices.compare') }}</v-btn
+          ><v-btn v-if="compared && !uncertain" @click="reedit">{{ t('console.edit') }}</v-btn
+          ><v-btn v-if="compared && uncertain" :disabled="busy" @click="save(true)">{{
+            t('devices.replay')
+          }}</v-btn></template
+        ><v-btn v-else :disabled="busy || !valid" @click="save()">{{
+          t('devices.saveFieldGroups')
+        }}</v-btn></template
+      >
+    </v-card></v-dialog
+  >
 </template>

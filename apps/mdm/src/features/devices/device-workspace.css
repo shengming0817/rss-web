@@ -1,0 +1,312 @@
+.mdm-device-surface {
+  color: var(--fg);
+  min-width: 0;
+  font-size: 14px;
+  font-family: inherit;
+}
+.device-page-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+.device-page-heading h1 {
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+}
+.device-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.device-button {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 550;
+}
+.device-muted,
+.device-caption {
+  color: var(--fg-muted);
+}
+.device-caption {
+  font-size: 12px;
+}
+.device-notice {
+  margin: 16px 0;
+}
+.device-filters {
+  display: grid;
+  grid-template-columns: minmax(230px, 2fr) minmax(150px, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+.device-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  gap: 14px;
+  margin: 18px 0;
+}
+.device-statistics {
+  display: flex;
+  gap: 32px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 12px;
+}
+.device-statistics article {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.device-statistics h2 {
+  font-size: 13px;
+  font-weight: 450;
+}
+.device-statistics strong {
+  font-size: 22px;
+}
+.device-pagination {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin: 20px 0;
+}
+.device-directory td {
+  font-size: 13px;
+  padding-top: 16px;
+  padding-bottom: 16px;
+  vertical-align: top;
+}
+.device-directory th {
+  white-space: nowrap;
+}
+.device-directory .device-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+.device-directory small,
+.device-fact-table small {
+  display: block;
+  color: var(--fg-muted);
+  margin-top: 6px;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.device-directory p + p {
+  margin-top: 10px;
+}
+.device-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  padding: 16px 0;
+}
+.device-tabs {
+  border-bottom: 1px solid var(--line);
+  margin: 20px 0;
+}
+.device-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 18px 0;
+}
+.device-summary > div {
+  padding: 18px;
+  border-inline-end: 1px solid var(--line);
+  min-width: 0;
+}
+.device-summary > div:last-child {
+  border: 0;
+}
+.device-summary dt {
+  font-size: 12px;
+  color: var(--fg-muted);
+  margin-bottom: 10px;
+}
+.device-summary dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.device-summary small {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+.device-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 32px;
+}
+.device-section {
+  padding: 22px 0;
+  border-bottom: 1px solid var(--line);
+}
+.device-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.device-section-heading h2,
+.device-section > h2 {
+  font-size: 16px;
+  font-weight: 600;
+}
+.device-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px 32px;
+  margin: 20px 0;
+}
+.device-facts dt {
+  color: var(--fg-muted);
+  font-size: 12px;
+  margin-bottom: 7px;
+}
+.device-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.device-inventory-layout {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 28px;
+}
+.device-asset-nav {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding-top: 18px;
+}
+.device-asset-nav .device-button {
+  justify-content: flex-start;
+}
+.device-inventory-content {
+  min-width: 0;
+}
+.device-fact-table {
+  overflow-x: auto;
+}
+.device-fact-table td {
+  padding-top: 14px;
+  padding-bottom: 14px;
+  font-size: 13px;
+}
+.device-fact-table td:first-child {
+  min-width: 150px;
+}
+.device-fact-table .device-field-value {
+  max-width: 340px;
+  overflow-wrap: anywhere;
+}
+.device-json {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  padding: 16px;
+  border-radius: 6px;
+  background: rgba(var(--v-theme-on-surface), 0.04);
+}
+.device-panel-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.device-overlays .device-facts {
+  grid-template-columns: minmax(0, 1fr);
+}
+.device-endpoint-select {
+  max-width: 500px;
+  margin: 20px 0;
+}
+@media (max-width: 900px) {
+  .device-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .device-overview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .device-panel-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 650px) {
+  .device-page-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .device-filters,
+  .device-filter-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .device-inventory-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .device-asset-nav {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .device-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .device-statistics {
+    flex-wrap: wrap;
+  }
+}
+.device-filter-details {
+  grid-column: 1 / -1;
+}
+.device-filter-details summary {
+  cursor: pointer;
+  padding: 10px 0;
+  font-size: 13px;
+}
+.mdm-device-surface .console-panel {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  padding: 22px 0;
+  margin: 0;
+}
+.mdm-device-surface .console-panel > h2 {
+  font-size: 16px;
+  margin-bottom: 14px;
+}
+.mdm-device-surface .console-panel p {
+  margin-block: 10px;
+}
+.device-summary dd strong {
+  display: block;
+  margin-top: 6px;
+}
+.device-dialog-body {
+  padding: 20px 24px;
+}
+.device-panel-grid > div {
+  min-width: 0;
+}
+/* Core link/button inheritance is unlayered; retain Vuetify's public semantic color contrast. */
+.mdm-device-surface .device-button.text-primary {
+  color: rgb(var(--v-theme-primary));
+}
+.mdm-device-surface .device-button.text-error {
+  color: rgb(var(--v-theme-error));
+}
+.mdm-device-surface .device-button.bg-primary {
+  background-color: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-on-primary));
+}
+.mdm-device-surface .device-button.bg-error {
+  background-color: rgb(var(--v-theme-error));
+  color: rgb(var(--v-theme-on-error));
+}

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import { VBtn } from 'vuetify/components'
+
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -88,13 +89,13 @@ function submit() {
                 {{ t(`devices.${a}`) }}
               </option>
             </select></label
-          ><ScalarEditor v-if="action === 'set'" v-model="value" /><UiButton type="submit">
+          ><ScalarEditor v-if="action === 'set'" v-model="value" /><v-btn type="submit">
             {{ t('devices.save') }}
-          </UiButton></template
+          </v-btn></template
         >
       </fieldset>
     </form>
-    <UiButton
+    <v-btn
       :disabled="!!busy"
       type="submit"
       @click="
@@ -105,9 +106,9 @@ function submit() {
       "
     >
       {{ t('devices.compare') }}
-    </UiButton>
-    <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending!()">
+    </v-btn>
+    <v-btn v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending!()">
       {{ t('devices.replay') }}
-    </UiButton>
+    </v-btn>
   </section>
 </template>

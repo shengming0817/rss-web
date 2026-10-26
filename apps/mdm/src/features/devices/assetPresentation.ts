@@ -12,7 +12,7 @@ export const assetCategories = [
   'extensions',
 ] as const
 export function assetCategory(key: string): (typeof assetCategories)[number] {
-  if (key.startsWith('device.software.')) return 'software'
+  if (key === 'device.software' || key.startsWith('device.software.')) return 'software'
   if (key.startsWith('device.management.') || key.startsWith('channel.')) return 'management'
   if (key.startsWith('device.updates.')) return 'updates'
   if (key.startsWith('custom.')) return 'extensions'

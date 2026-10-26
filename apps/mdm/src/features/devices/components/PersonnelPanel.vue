@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { VDialog, VCard, VCardActions, VBtn } from 'vuetify/components'
+import { useDialogFocus } from '../../../ui/dialog-focus'
 import { computed, ref, watch } from 'vue'
-import { UiButton, UiDialog } from '@rss/core/components'
+
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
@@ -97,6 +99,7 @@ async function save(replay = false) {
   )
   if (failure.value === 'denied') emit('invalidated', 'denied')
 }
+const restoreDialogFocus = useDialogFocus(editing)
 </script>
 <template>
   <section class="console-panel" :data-personnel-device="endpoint.id" :aria-busy="busy">
@@ -130,47 +133,55 @@ async function save(replay = false) {
       >
     </dl>
     <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
-    <UiButton
+    <v-btn
       v-if="owner !== undefined && !editing"
       :disabled="busy || uncertain"
       data-action="edit-owner"
       @click="read"
-      >{{ t('devices.editOwner') }}</UiButton
+      >{{ t('devices.editOwner') }}</v-btn
     >
     <details v-if="owner?.user || endpoint.currentUser?.user">
       <summary>{{ t('devices.evidence') }}</summary>
       <p>{{ owner?.user?.principalId }}</p>
       <p>{{ endpoint.currentUser?.user?.principalId }}</p>
     </details>
-    <UiDialog
-      :open="editing"
-      :title="t('devices.editOwner')"
-      :close-label="t('console.cancel')"
-      placement="right"
-      @update:open="editing = $event"
+    <v-dialog
+      :model-value="editing"
+      :aria-label="t('devices.editOwner')"
+      :data-state="editing ? 'open' : 'closed'"
+      @update:model-value="editing = $event"
+      @after-leave="restoreDialogFocus"
+      ><v-card :title="t('devices.editOwner')"
+        ><div class="device-dialog-body">
+          <form @submit.prevent="save()">
+            <fieldset :disabled="busy || uncertain">
+              <TenantUserSelect v-model="principal" :disabled="busy || uncertain" /><v-btn
+                type="submit"
+                >{{ t('registration.save') }}</v-btn
+              >
+            </fieldset>
+          </form>
+        </div>
+        <v-card-actions
+          ><v-btn variant="text" @click="editing = false">{{
+            t('console.cancel')
+          }}</v-btn></v-card-actions
+        ></v-card
+      ></v-dialog
     >
-      <form @submit.prevent="save()">
-        <fieldset :disabled="busy || uncertain">
-          <TenantUserSelect v-model="principal" :disabled="busy || uncertain" /><UiButton
-            type="submit"
-            >{{ t('registration.save') }}</UiButton
-          >
-        </fieldset>
-      </form>
-    </UiDialog>
-    <UiButton
+    <v-btn
       v-if="failure === 'conflict' || uncertain"
       :disabled="busy"
       data-action="compare-owner"
       @click="read"
-      >{{ t('devices.compare') }}</UiButton
+      >{{ t('devices.compare') }}</v-btn
     >
-    <UiButton
+    <v-btn
       v-if="uncertain && pending && compared"
       :disabled="busy"
       data-action="replay-owner"
       @click="save(true)"
-      >{{ t('devices.replay') }}</UiButton
+      >{{ t('devices.replay') }}</v-btn
     >
     <p v-if="saved" role="status">{{ t('registration.saved') }}</p>
   </section>

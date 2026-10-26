@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { VBtn } from 'vuetify/components'
 import { ref, watch } from 'vue'
-import { UiButton } from '@rss/core/components'
+
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
@@ -75,7 +76,7 @@ watch(
 <template>
   <article class="console-panel" :data-collection-run="id" :aria-busy="busy">
     <h3>{{ t('devices.latestRun') }} · {{ id }}</h3>
-    <UiButton :disabled="busy" @click="load">{{ t('devices.reload') }}</UiButton>
+    <v-btn :disabled="busy" @click="load">{{ t('devices.reload') }}</v-btn>
     <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
     <template v-if="result">
       <p>{{ t('devices.runResult.' + result.quality.result) }} · {{ result.reason ?? '—' }}</p>
@@ -106,10 +107,10 @@ watch(
           {{ quality.reason ?? '—' }} · {{ quality.status ?? '—' }} · {{ quality.receivedAt ?? '—'
           }}<template v-if="quality.itemCount">
             · {{ t('devices.invalidItems') }} {{ quality.invalidItems }} / {{ quality.itemCount
-            }}<UiButton
+            }}<v-btn
               :disabled="busy || result.finishedAt === null"
               @click="loadItems(quality.field)"
-              >{{ t('devices.itemQuality') }}</UiButton
+              >{{ t('devices.itemQuality') }}</v-btn
             ></template
           >
         </li>
@@ -123,11 +124,11 @@ watch(
             <span v-if="item.value"> · {{ display(item.value) }}</span>
           </li>
         </ol>
-        <UiButton
+        <v-btn
           v-if="items.nextCursor !== null"
           :disabled="busy"
           @click="loadItems(field, items.nextCursor)"
-          >{{ t('devices.next') }}</UiButton
+          >{{ t('devices.next') }}</v-btn
         >
       </div>
     </template>

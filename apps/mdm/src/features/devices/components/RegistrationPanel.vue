@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { VBtn, VDialog, VCard, VCardText, VCardActions, VSpacer } from 'vuetify/components'
+import { computed, ref, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiDialog } from '@rss/core/components'
+import { useDialogFocus } from '../../../ui/dialog-focus'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../useDeviceBinding'
@@ -19,6 +20,10 @@ const page = ref<Awaited<ReturnType<typeof runtime.devices.enrollment.registrati
   target = ref<string>(),
   original = ref<{ id: string; registration: string }>(),
   compared = ref(false)
+const restoreFocus = useDialogFocus(computed(() => !!target.value))
+function dismiss() {
+  if (!busy.value && !uncertain.value) target.value = undefined
+}
 watch(
   () => JSON.stringify([...deviceBinding(runtime), props.endpoint.id]),
   () => {
@@ -61,38 +66,47 @@ onMounted(() => void load())
     <ul>
       <li v-for="r in page?.items" :key="r.registrationId">
         {{ r.source }} · {{ r.status }} · {{ r.generation
-        }}<UiButton
+        }}<v-btn
           :disabled="busy || uncertain || r.status !== 'active'"
           @click="target = r.registrationId"
-          >{{ t('devices.revoke') }}</UiButton
+          >{{ t('devices.revoke') }}</v-btn
         >
       </li>
     </ul>
-    <UiButton :disabled="busy" @click="load()">{{ t('devices.reload') }}</UiButton
-    ><UiButton v-if="page?.nextCursor" :disabled="busy" @click="load(page.nextCursor)">{{
+    <v-btn :disabled="busy" @click="load()">{{ t('devices.reload') }}</v-btn
+    ><v-btn v-if="page?.nextCursor" :disabled="busy" @click="load(page.nextCursor)">{{
       t('devices.next')
-    }}</UiButton>
-    <UiDialog
-      :open="!!target"
-      :title="t('devices.revoke')"
-      :close-label="t('console.cancel')"
-      :dismissible="!busy && !uncertain"
-      kind="alertdialog"
-      @update:open="!$event && (target = undefined)"
-      ><p>{{ t('devices.revokeNote') }}</p>
-      <code>{{ target }}</code>
-      <p v-if="uncertain">{{ t('devices.unknownWrite') }}</p>
-      <UiButton v-if="uncertain" :disabled="busy" @click="load()">{{
-        t('devices.compare')
-      }}</UiButton
-      ><UiButton v-if="uncertain && compared" :disabled="busy" @click="revoke(true)">{{
-        t('devices.replay')
-      }}</UiButton
-      ><template #footer
-        ><UiButton :disabled="busy || uncertain" variant="danger" @click="revoke()">{{
-          t('devices.confirmAction')
-        }}</UiButton></template
-      ></UiDialog
+    }}</v-btn>
+    <v-dialog
+      :model-value="!!target"
+      :data-state="target ? 'open' : 'closed'"
+      :aria-label="t('devices.revoke')"
+      role="alertdialog"
+      persistent
+      @keydown.esc="dismiss"
+      @update:model-value="!$event && dismiss()"
+      @after-leave="restoreFocus"
+      ><v-card :title="t('devices.revoke')"
+        ><v-card-text
+          ><p>{{ t('devices.revokeNote') }}</p>
+          <code>{{ target }}</code>
+          <p v-if="uncertain">{{ t('devices.unknownWrite') }}</p>
+          <v-btn v-if="uncertain" :disabled="busy" @click="load()">{{ t('devices.compare') }}</v-btn
+          ><v-btn v-if="uncertain && compared" :disabled="busy" @click="revoke(true)">{{
+            t('devices.replay')
+          }}</v-btn></v-card-text
+        ><v-card-actions
+          ><v-spacer /><v-btn
+            variant="text"
+            :aria-label="t('console.cancel')"
+            :disabled="busy || uncertain"
+            @click="dismiss"
+            >{{ t('console.cancel') }}</v-btn
+          ><v-btn :disabled="busy || uncertain" variant="flat" color="error" @click="revoke()">{{
+            t('devices.confirmAction')
+          }}</v-btn></v-card-actions
+        ></v-card
+      ></v-dialog
     >
   </details>
 </template>

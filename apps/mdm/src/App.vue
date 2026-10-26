@@ -87,8 +87,11 @@ function closeNavigation() {
 function shortcut(event: KeyboardEvent) {
   if (
     !commandOpen.value &&
-    document.querySelector(
-      '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]',
+    Array.from(
+      document.querySelectorAll<HTMLElement>('[role="dialog"], [role="alertdialog"]'),
+    ).some(
+      (dialog) =>
+        dialog.getAttribute('data-state') === 'open' || dialog.getClientRects().length > 0,
     )
   )
     return

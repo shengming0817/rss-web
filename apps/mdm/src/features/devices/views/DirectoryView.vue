@@ -1,20 +1,12 @@
 <script setup lang="ts">
 import { comparison, allOf } from '../../../services/directory-query'
-import {
-  UiButton,
-  UiTable,
-  UiPagination,
-  UiSelect,
-  UiCheckbox,
-  UiBadge,
-} from '@rss/core/components'
 import { ref, watch, computed } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../useDeviceBinding'
-import PageFrame from '../../../components/PageFrame.vue'
+import DevicePage from '../components/DevicePage.vue'
 import { endpointStatuses } from '../clients/endpoint-model'
 import PersonDisplay from '../components/PersonDisplay.vue'
 const { t } = useI18n(),
@@ -209,206 +201,240 @@ const sourceOptions = computed(() => [
 ])
 </script>
 <template>
-  <PageFrame :title="t('devices.directory')" :busy="busy" :failure="failure">
-    <template #actions
-      ><RouterLink
-        class="ui-button ui-button--secondary"
+  <DevicePage
+    :title="t('devices.directory')"
+    :description="t('devices.workspace.directoryNote')"
+    :busy="busy"
+    :failure="failure"
+  >
+    <template #actions>
+      <v-btn
+        variant="outlined"
         :to="{ name: 'device-search', params: { tenant: runtime.tenant } }"
-        >{{ t('devices.search') }}</RouterLink
-      ><RouterLink
-        class="ui-button ui-button--primary"
-        :to="{ name: 'device-enroll', params: { tenant: runtime.tenant } }"
-        >{{ t('devices.enroll') }}</RouterLink
-      ></template
-    >
-    <form class="console-toolbar" @submit.prevent="applyFilters">
-      <label
-        >{{ t('devices.directorySearch')
-        }}<input v-model="search" type="search" class="ui-input" maxlength="256" :disabled="busy"
-      /></label>
-      <label
-        >{{ t('devices.platform')
-        }}<select v-model="platform" class="ui-input" :disabled="busy">
-          <option value="">{{ t('devices.all') }}</option>
-          <option value="windows">Windows</option>
-          <option value="macos">macOS</option>
-        </select></label
+        >{{ t('devices.search') }}</v-btn
       >
-      <label
-        >{{ t('devices.assetStateLabel')
-        }}<select v-model="assetState" class="ui-input" :disabled="busy">
-          <option value="">{{ t('devices.all') }}</option>
-          <option v-for="value in ['active', 'archived', 'deleted']" :key="value" :value="value">
-            {{ t('devices.state.' + value) }}
-          </option>
-        </select></label
-      >
-      <label
-        >{{ t('devices.pageSize')
-        }}<select v-model="limit" class="ui-input" :disabled="busy">
-          <option v-for="n in ['20', '50', '100']" :key="n" :value="n">{{ n }}</option>
-        </select></label
-      >
-      <label
-        >{{ t('devices.status')
-        }}<UiSelect v-model="status" :options="statusOptions" :disabled="busy"
-      /></label>
-      <label
-        >{{ t('devices.channels')
-        }}<UiSelect v-model="channel" :options="channelOptions" :disabled="busy"
-      /></label>
-      <label
-        >{{ t('devices.source')
-        }}<UiSelect v-model="source" :options="sourceOptions" :disabled="busy"
-      /></label>
-      <UiCheckbox v-model="descending" :label="t('devices.descending')" :disabled="busy" />
-      <UiButton type="submit" :busy="busy">{{ t('devices.reload') }}</UiButton>
-    </form>
-    <p v-if="failure === 'cursorInvalidated'">
-      {{ t('devices.restartDirectory')
-      }}<UiButton :disabled="busy" @click="queryFirstPage(route.query, true)">{{
-        t('devices.reload')
-      }}</UiButton>
-    </p>
-    <details class="console-panel">
-      <summary>{{ t('devices.displayColumns') }}</summary>
-      <label
-        v-for="key in [
-          'platform',
-          'serialNumber',
-          'registrationUser',
-          'currentUser',
-          'status',
-          'channels',
-          'endpoints',
+      <v-btn color="primary" :to="{ name: 'device-enroll', params: { tenant: runtime.tenant } }">{{
+        t('devices.enroll')
+      }}</v-btn>
+    </template>
+    <form class="console-toolbar device-filters" @submit.prevent="applyFilters">
+      <v-text-field
+        v-model="search"
+        type="search"
+        :label="t('devices.directorySearch')"
+        maxlength="256"
+        :disabled="busy"
+      />
+      <v-select
+        v-model="platform"
+        data-testid="directory-platform"
+        :label="t('devices.platform')"
+        :items="[
+          { value: '', title: t('devices.all') },
+          { value: 'windows', title: 'Windows' },
+          { value: 'macos', title: 'macOS' },
         ]"
-        :key="key"
-        ><input v-model="visibleColumns" type="checkbox" :value="key" />{{
-          t('devices.' + (key === 'endpoints' ? 'originalEndpoint' : key))
-        }}</label
-      ><UiButton @click="applyFilters">{{ t('devices.save') }}</UiButton>
-    </details>
-    <p v-if="statisticsOperation.failure.value" role="alert">
-      {{ t('devices.' + statisticsOperation.failure.value) }}
+        :disabled="busy"
+      />
+      <v-btn type="submit" color="primary" :loading="busy">{{ t('devices.reload') }}</v-btn>
+      <details class="device-filter-details">
+        <summary>{{ t('devices.workspace.moreFilters') }}</summary>
+        <div class="device-filter-grid">
+          <v-select
+            v-model="assetState"
+            data-testid="directory-asset-state"
+            :label="t('devices.assetStateLabel')"
+            :items="[
+              { value: '', title: t('devices.all') },
+              ...['active', 'archived', 'deleted'].map((value) => ({
+                value,
+                title: t('devices.state.' + value),
+              })),
+            ]"
+            :disabled="busy"
+          />
+          <v-select
+            v-model="status"
+            data-testid="directory-status"
+            :label="t('devices.status')"
+            :items="statusOptions"
+            item-title="label"
+            :disabled="busy"
+          />
+          <v-select
+            v-model="channel"
+            data-testid="directory-channel"
+            :label="t('devices.channels')"
+            :items="channelOptions"
+            item-title="label"
+            :disabled="busy"
+          />
+          <v-select
+            v-model="source"
+            data-testid="directory-source"
+            :label="t('devices.source')"
+            :items="sourceOptions"
+            item-title="label"
+            :disabled="busy"
+          />
+          <v-select
+            v-model="limit"
+            data-testid="directory-limit"
+            :label="t('devices.pageSize')"
+            :items="['20', '50', '100']"
+            :disabled="busy"
+          />
+          <v-checkbox v-model="descending" :label="t('devices.descending')" :disabled="busy" />
+        </div>
+      </details>
+    </form>
+    <p v-if="failure === 'cursorInvalidated'" class="device-notice">
+      {{ t('devices.restartDirectory')
+      }}<v-btn :disabled="busy" variant="outlined" @click="queryFirstPage(route.query, true)">{{
+        t('devices.reload')
+      }}</v-btn>
     </p>
-    <div v-if="statistics" class="console-stat-grid" :aria-label="t('console.queryStatistics')">
-      <article
-        v-for="key in ['deviceViewCount', 'endpointCount'] as const"
-        :key="key"
-        class="console-stat"
-      >
+    <details class="device-section">
+      <summary>{{ t('devices.displayColumns') }}</summary>
+      <div class="device-columns">
+        <v-checkbox
+          v-for="key in [
+            'platform',
+            'serialNumber',
+            'registrationUser',
+            'currentUser',
+            'status',
+            'channels',
+            'endpoints',
+          ]"
+          :key="key"
+          v-model="visibleColumns"
+          :value="key"
+          :label="t('devices.' + (key === 'endpoints' ? 'originalEndpoint' : key))"
+        />
+        <v-btn variant="outlined" @click="applyFilters">{{ t('devices.save') }}</v-btn>
+      </div>
+    </details>
+    <v-alert v-if="statisticsOperation.failure.value" type="warning" variant="tonal" role="alert">{{
+      t('devices.' + statisticsOperation.failure.value)
+    }}</v-alert>
+    <div v-if="statistics" class="device-statistics" :aria-label="t('console.queryStatistics')">
+      <article v-for="key in ['deviceViewCount', 'endpointCount'] as const" :key="key">
         <h2>{{ t(`devices.${key}`) }}</h2>
         <strong>{{ statistics.statistics[key] }}</strong>
       </article>
     </div>
-    <div class="console-results">
-      <UiTable
-        v-if="page || busy"
-        :label="t('devices.directory')"
-        :rows="page?.items ?? []"
-        :columns="columns"
-        :row-key="rowKey"
-        :busy="busy"
-        :busy-label="t('devices.loading')"
-        :empty-label="t('devices.empty')"
-      >
-        <template #cell-reference="{ row }"
-          ><RouterLink :to="detail(row)"
-            >{{
-              t(
-                row.reference.kind === 'association'
-                  ? 'devices.unifiedView'
-                  : 'devices.originalEndpoint',
-              )
-            }}
-            ·
-            {{
-              row.endpoints
-                .map((e) =>
-                  e.displayName?.state.kind === 'known'
-                    ? e.displayName.state.value.value
-                    : t('devices.unnamedDevice'),
-                )
-                .join(' / ')
-            }}
-          </RouterLink>
-          <details>
-            <summary>{{ t('devices.evidence') }}</summary>
-            {{ row.reference.id }}
-          </details></template
-        >
-        <template #cell-platform="{ row }"
-          ><p v-for="e in row.endpoints" :key="e.id">
-            {{
-              e.platform.state === 'known'
-                ? e.platform.values[0]
-                : t('devices.state.' + (e.platform.state === 'unknown' ? 'missing' : 'conflict'))
-            }}
-          </p></template
-        >
-        <template #cell-serialNumber="{ row }"
-          ><p v-for="e in row.endpoints" :key="e.id">
-            {{
-              e.serialNumber?.state.kind === 'known'
-                ? e.serialNumber.state.value.value
-                : t('devices.notProvided')
-            }}
-          </p></template
-        >
-        <template #cell-registrationUser="{ row }"
-          ><p v-for="e in row.endpoints" :key="e.id">
-            <template v-if="e.registrationUser === undefined">{{
-              t('devices.notProvided')
-            }}</template>
-            <PersonDisplay
-              v-else-if="e.registrationUser.user"
-              :display="e.registrationUser.display"
-            />
-            <template v-else>{{ t('registration.empty') }}</template>
-          </p></template
-        >
-        <template #cell-currentUser="{ row }"
-          ><p v-for="e in row.endpoints" :key="e.id">
-            {{
-              e.currentUser === undefined
-                ? t('devices.notProvided')
-                : t('devices.currentUserState.' + e.currentUser.state)
-            }}<PersonDisplay v-if="e.currentUser?.user" :display="e.currentUser.display" /></p
-        ></template>
-        <template #cell-status="{ row }"
-          ><UiBadge>{{
-            row.association
-              ? t(`devices.associationState.${row.association.state}`)
-              : t(`devices.endpointState.${row.endpoints[0]?.status}`)
-          }}</UiBadge></template
-        >
-        <template #cell-channels="{ row }">{{
-          row.endpoints.flatMap((e) => e.channels.map((c) => c.channel)).join(' + ')
-        }}</template>
-        <template #cell-endpoints="{ row }"
-          ><ul>
-            <li v-for="endpoint in row.endpoints" :key="endpoint.id">
-              <RouterLink
-                :to="{
-                  name: 'device-detail',
-                  params: { tenant: runtime.tenant, device: endpoint.id },
-                  query: { directory: JSON.stringify(route.query) },
-                }"
-                >{{ endpoint.id }}</RouterLink
+    <div class="console-results device-directory">
+      <v-table v-if="page || busy" :aria-label="t('devices.directory')">
+        <thead>
+          <tr>
+            <th v-for="column in columns" :key="column.key" scope="col">{{ column.label }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in page?.items ?? []" :key="rowKey(row)">
+            <td v-for="column in columns" :key="column.key">
+              <template v-if="column.key === 'reference'">
+                <RouterLink class="device-name" :to="detail(row)">{{
+                  row.endpoints
+                    .map((e) =>
+                      e.displayName?.state.kind === 'known'
+                        ? e.displayName.state.value.value
+                        : `${t('devices.unnamedDevice')} · ${e.id}`,
+                    )
+                    .join(' / ')
+                }}</RouterLink>
+                <small>{{
+                  t(
+                    row.reference.kind === 'association'
+                      ? 'devices.unifiedView'
+                      : 'devices.originalEndpoint',
+                  )
+                }}</small>
+                <details>
+                  <summary>{{ t('devices.evidence') }}</summary>
+                  {{ row.reference.id }}
+                </details>
+              </template>
+              <template v-else-if="column.key === 'platform'"
+                ><p v-for="e in row.endpoints" :key="e.id">
+                  {{
+                    e.platform.state === 'known'
+                      ? e.platform.values[0]
+                      : t(
+                          'devices.state.' +
+                            (e.platform.state === 'unknown' ? 'missing' : 'conflict'),
+                        )
+                  }}
+                </p></template
               >
-            </li>
-          </ul></template
-        >
-      </UiTable>
+              <template v-else-if="column.key === 'serialNumber'"
+                ><p v-for="e in row.endpoints" :key="e.id">
+                  {{
+                    e.serialNumber?.state.kind === 'known'
+                      ? e.serialNumber.state.value.value
+                      : t('devices.notProvided')
+                  }}
+                </p></template
+              >
+              <template v-else-if="column.key === 'registrationUser'"
+                ><p v-for="e in row.endpoints" :key="e.id">
+                  <template v-if="e.registrationUser === undefined">{{
+                    t('devices.notProvided')
+                  }}</template
+                  ><PersonDisplay
+                    v-else-if="e.registrationUser.user"
+                    :display="e.registrationUser.display"
+                  /><template v-else>{{ t('registration.empty') }}</template>
+                </p></template
+              >
+              <template v-else-if="column.key === 'currentUser'"
+                ><p v-for="e in row.endpoints" :key="e.id">
+                  {{
+                    e.currentUser === undefined
+                      ? t('devices.notProvided')
+                      : t('devices.currentUserState.' + e.currentUser.state)
+                  }}<PersonDisplay v-if="e.currentUser?.user" :display="e.currentUser.display" /></p
+              ></template>
+              <v-chip v-else-if="column.key === 'status'">{{
+                row.association
+                  ? t(`devices.associationState.${row.association.state}`)
+                  : t(`devices.endpointState.${row.endpoints[0]?.status}`)
+              }}</v-chip>
+              <template v-else-if="column.key === 'channels'">{{
+                row.endpoints.flatMap((e) => e.channels.map((c) => c.channel)).join(' + ')
+              }}</template>
+              <template v-else-if="column.key === 'endpoints'"
+                ><p v-for="endpoint in row.endpoints" :key="endpoint.id">
+                  <RouterLink
+                    :to="{
+                      name: 'device-detail',
+                      params: { tenant: runtime.tenant, device: endpoint.id },
+                      query: { directory: JSON.stringify(route.query) },
+                    }"
+                    >{{ endpoint.id }}</RouterLink
+                  >
+                </p></template
+              >
+            </td>
+          </tr>
+          <tr v-if="page && !page.items.length">
+            <td :colspan="columns.length">{{ t('devices.empty') }}</td>
+          </tr>
+        </tbody>
+      </v-table>
     </div>
-    <UiPagination
+    <nav
       v-if="page && (page.nextCursor || trail.length)"
-      :state="{ kind: 'cursor', hasPrevious: trail.length > 0, hasNext: !!page?.nextCursor }"
-      :label="t('devices.directory')"
-      :previous-label="t('devices.previous')"
-      :next-label="t('devices.next')"
-      :busy="busy"
-      @navigate="navigate"
-    />
-  </PageFrame>
+      class="device-pagination"
+      :aria-label="t('devices.directory')"
+    >
+      <v-btn variant="outlined" :disabled="busy || !trail.length" @click="navigate('previous')">{{
+        t('devices.previous')
+      }}</v-btn>
+      <v-btn variant="outlined" :disabled="busy || !page.nextCursor" @click="navigate('next')">{{
+        t('devices.next')
+      }}</v-btn>
+    </nav>
+  </DevicePage>
 </template>
