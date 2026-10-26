@@ -257,6 +257,8 @@ function preview() {
   write(
     () => client.preview(group, body),
     (v) => {
+      definitionTask.value = undefined
+      definitionStatus.value = undefined
       task.value = v.task
       taskKind.value = 'group_preview'
       status.value = undefined
@@ -324,6 +326,7 @@ const observing = computed(
     (!!task.value && !status.value && !definitionTask.value) ||
     (!!status.value && ['pending', 'running'].includes(status.value.status)) ||
     (current.value?.freshness === 'pending' &&
+      (!status.value || ['pending', 'running', 'completed'].includes(status.value.status)) &&
       (!definitionStatus.value || definitionStatus.value.status === 'completed') &&
       taskKind.value !== 'group_preview'),
 )

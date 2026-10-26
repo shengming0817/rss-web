@@ -523,6 +523,32 @@ export const policiesZh = {
   cancel: '请求取消',
 }
 export const policiesEn: typeof policiesZh = {
+  queues: {
+    title: 'Execution queues',
+    all: 'All',
+    waiting: 'Waiting for device',
+    blocked: 'Needs reauthorization',
+    unknown: 'Unknown result',
+  },
+  authorization: {
+    title: 'Current execution authorization',
+    reason: 'Block reason',
+    reauthorization: 'Reauthorization eligibility',
+    authorized: 'Authorized',
+    blocked: 'Blocked',
+    not_applicable: 'Not applicable',
+    available: 'Available',
+    unavailable: 'Unavailable',
+    lifecycle_blocked: 'Device lifecycle blocked',
+    registration_changed: 'Registration changed',
+    input_mismatch: 'Original operation inputs do not match',
+    source_invalid: 'Source currently unavailable',
+    permission_denied: 'Current operator lacks action permission',
+    terminal: 'Operation is terminal',
+    already_received: 'Device already received the operation',
+    expired: 'Operation expired',
+    unsupported: 'Action unsupported on this device',
+  },
   ux: {
     planning: 'Configuration & deployment',
     groupsHint:

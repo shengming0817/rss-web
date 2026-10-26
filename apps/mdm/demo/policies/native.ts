@@ -25,6 +25,17 @@ export function createNativeDemo(
       }
     >(),
     receipts = createReceipts()
+  function currentAuthorization(
+    s: NonNullable<ReturnType<typeof operations.get>>,
+  ): NativeOperation['authorization'] {
+    const reg = devices
+      .facts()
+      .find((d) => d.summary.id === s.device)
+      ?.registrations.find((r) => r.status === 'active' && r.source !== 'agent.builtin')
+    return reg?.registrationId === s.registration && reg.generation === s.generation
+      ? { state: 'authorized' }
+      : { state: 'blocked', reason: 'registration_changed' }
+  }
   function eligibility(
     s: NonNullable<ReturnType<typeof operations.get>>,
     actor: string,
@@ -61,8 +72,9 @@ export function createNativeDemo(
       const device = decodeURIComponent(m[1]!),
         d = devices.facts().find((d) => d.summary.id === device),
         reg = d?.registrations.find((r) => r.status === 'active' && r.source !== 'agent.builtin')
-      if (!d || !reg) return error('management_device_not_found', 404)
+      if (!d || (!reg && !m[2])) return error('management_device_not_found', 404)
       if (!m[2] && request.method === 'POST') {
+        if (!reg) return error('management_device_not_found', 404)
         const b = closed(request.body, ['operationId', 'action', 'deadline']),
           id = uuid(b['operationId']),
           a = deviceControlAction(b['action']),
@@ -151,8 +163,7 @@ export function createNativeDemo(
       if (!can(request.actor.principalId, permission, device))
         return error('permission_denied', 403)
       if (request.method === 'GET' && !m[3]) {
-        if (s.registration !== reg.registrationId || s.generation !== reg.generation)
-          s.read.authorization = { state: 'blocked', reason: 'registration_changed' }
+        s.read.authorization = currentAuthorization(s)
         if (
           s.read.authorization.state === 'authorized' &&
           ['queued', 'published'].includes(s.read.commandStatus)
@@ -183,8 +194,8 @@ export function createNativeDemo(
         if (m[3] === 'cancel') s.read.commandStatus = 'cancelled'
         else {
           if (
-            s.registration !== reg.registrationId ||
-            s.generation !== reg.generation ||
+            s.registration !== reg?.registrationId ||
+            s.generation !== reg?.generation ||
             ['applied', 'received', 'rejected', 'timed_out', 'superseded'].includes(
               s.read.commandStatus,
             )
@@ -224,7 +235,7 @@ export function createNativeDemo(
         origin: 'direct',
         policy: null,
         deadline: s.read.deadline,
-        authorization: s.read.authorization,
+        authorization: currentAuthorization(s),
         reauthorization: eligibility(s, actor),
         status: s.read.commandStatus,
         detailUrl: `/api/v1/devices/${encodeURIComponent(s.device)}/operations/${s.read.operationId}`,

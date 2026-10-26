@@ -2124,3 +2124,32 @@ it('automatically observes a definition task before reading the separately publi
     vi.useRealTimers()
   }
 })
+
+it('stops automatic observation after a member task fails and permits preview after a completed definition', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    const h = await setup('device-groups')
+    const form = new DOMWrapper(document.body).get('[role=dialog] form')
+    await form.get('[data-testid=group-name]').setValue('Observe then preview')
+    await form.get('[data-testid=group-kind]').setValue('dynamic')
+    await form.trigger('submit')
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(6000)
+    await flushPromises()
+    await h.click('预览已保存版本')
+    await vi.advanceTimersByTimeAsync(4000)
+    await flushPromises()
+    await h.click('载入')
+    expect(h.wrapper.text()).toContain('当前已发布成员集: 否')
+    h.scenario.set('partial')
+    await h.click('重算并发布成员')
+    await vi.advanceTimersByTimeAsync(4000)
+    await flushPromises()
+    const count = h.requests.length
+    await vi.advanceTimersByTimeAsync(10000)
+    await flushPromises()
+    expect(h.requests).toHaveLength(count)
+  } finally {
+    vi.useRealTimers()
+  }
+})

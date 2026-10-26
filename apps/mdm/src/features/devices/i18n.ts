@@ -503,6 +503,9 @@ export const devicesZh = {
   },
 }
 export const devicesEn: typeof devicesZh = {
+  definitionTask: 'Group definition save task',
+  membersPending:
+    'Membership calculation has not published a new result. Previously published complete results remain available.',
   personLogin: 'Login',
   personLocal: 'Local profile',
   personIdp: 'Identity provider',
