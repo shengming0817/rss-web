@@ -406,7 +406,7 @@ export function createScenario(
         path,
       )
     const securityPath =
-      /^\/api\/v1\/(?:pki(?:\/|$)|agent-registrations(?:\/|$)|agent-issuances(?:\/|$)|compliance-rules(?:\/|$)|devices\/[^/]+\/compliance(?:\/|$))/.test(
+      /^\/api\/v1\/(?:pki(?:\/|$)|certificate-archive(?:\/|$)|agent-registrations(?:\/|$)|agent-issuances(?:\/|$)|compliance-rules(?:\/|$)|devices\/[^/]+\/compliance(?:\/|$))/.test(
         path,
       )
     const operationsPath =

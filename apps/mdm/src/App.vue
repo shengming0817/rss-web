@@ -13,6 +13,7 @@ import {
   useNavigation,
   platformNavigation,
   detailParents,
+  pageLabels,
   navigationTarget,
   type NavigationItem,
 } from './components/navigation'
@@ -55,16 +56,19 @@ const destinations = computed<NavigationItem[]>(() => [
 const parentName = computed(() => detailParents[String(route.name)] ?? String(route.name))
 const title = computed(() =>
   t(
-    [
-      ...sections.value.flatMap<NavigationItem>((group) => [...group.items]),
-      ...authDestinations,
-      ...destinations.value,
-    ].find(
-      (item) =>
-        item.name === parentName.value &&
-        (!item.query ||
-          Object.entries(item.query).every(([key, value]) => route.query[key] === value)),
-    )?.label ?? 'console.overview',
+    pageLabels[String(route.name)] ??
+      [
+        ...sections.value.flatMap<NavigationItem>((group) => [...group.items]),
+        ...authDestinations,
+        ...destinations.value,
+      ].find(
+        (item) =>
+          item.name === parentName.value &&
+          (!item.query ||
+            Object.entries(item.query).every(([key, value]) => route.query[key] === value)),
+      )?.label ??
+      sections.value.find((s) => s.items.some((item) => item.name === parentName.value))?.label ??
+      'console.overview',
   ),
 )
 const matches = computed(() =>
