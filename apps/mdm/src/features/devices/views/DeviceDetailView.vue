@@ -109,6 +109,7 @@ const directoryQuery = computed(() => {
         ([k, v]) =>
           [
             'search',
+            'filter',
             'platform',
             'assetState',
             'limit',
@@ -120,7 +121,8 @@ const directoryQuery = computed(() => {
             'columns',
             'trail',
           ].includes(k) &&
-          (typeof v === 'string' || (Array.isArray(v) && v.every((x) => typeof x === 'string'))),
+          (typeof v === 'string' ||
+            (k !== 'filter' && Array.isArray(v) && v.every((x) => typeof x === 'string'))),
       ),
     )
   } catch {

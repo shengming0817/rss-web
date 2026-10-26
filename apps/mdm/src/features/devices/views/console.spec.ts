@@ -1517,11 +1517,15 @@ it('allows a quota reader to select user queries while keeping edits and submiss
   expect(change).not.toHaveBeenCalled()
 })
 
-it('retains directory cursor and display columns when opening and returning from a detail', async () => {
-  const f = await setup()
+it('retains directory cursor, display columns and RSQL when opening and returning from a detail', async () => {
+  const filter = "search=icontains='device'"
+  const f = await setup('devices', {}, { filter, columns: 'platform' })
   await f.click('下一页')
   expect(f.wrapper.text()).toContain('device-21')
   const query = { ...f.router.currentRoute.value.query }
+  expect(query['filter']).toBe(filter)
+  expect(query['cursor']).toBeTruthy()
+  expect(query['columns']).toBe('platform')
   await f.wrapper.find('tbody a').trigger('click')
   await flushPromises()
   await vi.waitFor(() =>

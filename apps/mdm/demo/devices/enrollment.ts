@@ -1,6 +1,7 @@
 import { directoryPage } from '../directory'
 import { createRegistrationDemo } from './registration'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto'
+import { TENANT } from '../scenario'
 import type { DomainHandler, DemoEvent } from '../scenario'
 import { closed, enumeration, identifier, string, uuid } from '../../src/services/decode'
 import { nativeChannel } from '../../src/services/registrationChannels'
@@ -17,6 +18,10 @@ export interface Enrollment {
   registrationId: string | null
   source: EnrollmentSource
   windowsProfile?: 'Full' | 'Device'
+  tenantId?: string
+  sessionId?: string
+  passwordDigest?: string
+  profilePrepared?: boolean
 }
 export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
   const enrollments = new Map<string, Enrollment>(),
@@ -46,6 +51,10 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
     actor: _actor,
     selfService: _selfService,
     windowsProfile: _windowsProfile,
+    tenantId: _tenantId,
+    sessionId: _sessionId,
+    passwordDigest: _passwordDigest,
+    profilePrepared: _profilePrepared,
     ...value
   }: Enrollment) => value
   function password(value: unknown) {
@@ -58,6 +67,62 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
   }
   const handle: DomainHandler = (request) => {
     const { path, method } = request
+    const profilePath = /^\/api\/v1\/enrollments\/([^/]+)\/profile$/.exec(path)
+    if (profilePath) {
+      if (method !== 'POST') return error('malformed_request', 400)
+      const id = uuid(profilePath[1]),
+        body = closed(request.body, ['password'])
+      password(body['password'])
+      const enrollment = enrollments.get(id)
+      const digest = createHash('sha256').update(string(body['password'])).digest()
+      if (
+        !enrollment ||
+        enrollment.source !== 'mdm.apple' ||
+        enrollment.status === 'cancelled' ||
+        enrollment.expiresAt <= Math.floor(Date.now() / 1000) ||
+        enrollment.tenantId !== (request.actor.tenantId ?? TENANT) ||
+        enrollment.actor !== request.actor.principalId ||
+        enrollment.sessionId !== request.actor.sessionId ||
+        !enrollment.passwordDigest ||
+        !timingSafeEqual(Buffer.from(enrollment.passwordDigest, 'hex'), digest)
+      )
+        return error('invalid_identity', 403)
+      if (!registration.allowed('macos_mdm')) return error('enrollment_paused', 409)
+      if (
+        enrollment.registrationId &&
+        !devices()
+          .get(enrollment.device)
+          ?.registrations.some(
+            (r) => r.registrationId === enrollment.registrationId && r.status === 'active',
+          )
+      )
+        return error('invalid_identity', 403)
+      enrollment.profilePrepared = true
+      // Explicitly synthetic public attachment: no trust anchor, signing claim, device key or real MDM payload.
+      const bytes = Buffer.from(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>PayloadType</key><string>Configuration</string>
+<key>PayloadVersion</key><integer>1</integer>
+<key>PayloadIdentifier</key><string>com.rss.demo.enrollment.${id}</string>
+<key>PayloadUUID</key><string>${id}</string>
+<key>PayloadDisplayName</key><string>RSS MDM MOCK — Synthetic demonstration only</string>
+<key>PayloadDescription</key><string>Explicit Mock content. Not CMS signed. Does not enroll, trust a CA, install credentials or prove device management.</string>
+<key>PayloadContent</key><array/>
+</dict></plist>`,
+        'utf8',
+      )
+      return {
+        status: 200,
+        body: Uint8Array.from(bytes).buffer,
+        headers: {
+          'Content-Type': 'application/x-apple-aspen-config',
+          'Content-Disposition': 'attachment; filename="RSS-MDM.mobileconfig"',
+          'Cache-Control': 'no-store',
+        },
+      }
+    }
     const enrollmentPath = /^\/api\/v1\/enrollments(?:\/([^/]+)(?:\/(resume|cancel))?)?$/.exec(path)
     const registrations = /^\/api\/v1\/devices\/([^/]+)\/registrations(?:\/([^/]+)\/revoke)?$/.exec(
       path,
@@ -90,7 +155,7 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
                       enrollmentMethod: 'profile_based_device_enrollment',
                     },
               progress: {
-                profilePrepared: 'unknown',
+                profilePrepared: e.profilePrepared ? 'observed' : 'unknown',
                 certificateIssued: e.status === 'bound',
                 firstAuthenticatedCheckIn: false,
                 systemConfirmation: 'unknown',
@@ -203,6 +268,10 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
           expiresAt: Math.floor(Date.now() / 1000) + 300,
           registrationId: null,
           source,
+          tenantId: request.actor.tenantId ?? TENANT,
+          actor: request.actor.principalId,
+          sessionId: request.actor.sessionId,
+          passwordDigest: createHash('sha256').update(string(body['password'])).digest('hex'),
           ...(windowsProfile ? { windowsProfile } : {}),
         }
         enrollments.set(enrollmentId, enrollment)
@@ -237,6 +306,11 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
           )
         )
           return error('registration_limit', 429)
+        enrollment.passwordDigest = createHash('sha256')
+          .update(string(body['password']))
+          .digest('hex')
+        enrollment.profilePrepared = false
+        enrollment.sessionId = request.actor.sessionId
         enrollment.expiresAt = Math.floor(Date.now() / 1000) + 300
       } else if (action === 'cancel') {
         if (enrollment.status !== 'pending') return error('operation_conflict')
