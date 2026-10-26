@@ -69,7 +69,7 @@ const field = (w: VueWrapper, text: string) => {
     ...w.findAllComponents(VTextField),
     ...w.findAllComponents(VTextarea),
   ]
-  const control = controls.find((s) => String(s.props('label')).startsWith(text))
+  const control = controls.find((s) => String(s.props().label).startsWith(text))
   if (!control) throw new Error(`Missing software field: ${text}`)
   return control
 }
