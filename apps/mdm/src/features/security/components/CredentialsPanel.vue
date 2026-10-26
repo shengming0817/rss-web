@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { VBtn } from 'vuetify/components'
 import { computed, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton } from '@rss/core/components'
+
 import { useMdm } from '../../../context'
 import { useOriginalOperation } from '../../../services/useOriginalOperation'
 import { useSettingsSecrets } from '../../settings/useSettingsAction'
@@ -207,7 +208,7 @@ async function query() {
     <h2>{{ t('gap.credentials') }}</h2>
     <p>{{ t('gap.escrowHint') }}</p>
     <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
-    <UiButton :disabled="busy" @click="load()">{{ t('gap.load') }}</UiButton>
+    <v-btn :disabled="busy" @click="load()">{{ t('gap.load') }}</v-btn>
     <article v-for="entry in rows" :key="entry.id + ':' + entry.version">
       <h3>{{ entry.binding.subject.kind }} · {{ entry.id }} / {{ entry.version }}</h3>
       <p>
@@ -220,21 +221,21 @@ async function query() {
         <dt>{{ t('gap.protector') }}</dt>
         <dd>{{ entry.binding.subject.protector }}</dd>
       </dl>
-      <UiButton
+      <v-btn
         :disabled="busy || !entry.escrowed || ['superseded', 'revoked'].includes(entry.validity)"
         @click="reveal(entry)"
-        >{{ t('gap.reveal') }}</UiButton
+        >{{ t('gap.reveal') }}</v-btn
       >
-      <UiButton
+      <v-btn
         :disabled="locked || entry.validity === 'revoked' || !confirmation"
         @click="revoke(entry)"
-        >{{ t('gap.revoke') }}</UiButton
+        >{{ t('gap.revoke') }}</v-btn
       >
     </article>
-    <UiButton v-if="nextCursor" :disabled="busy" @click="load(true)">{{ t('gap.next') }}</UiButton>
+    <v-btn v-if="nextCursor" :disabled="busy" @click="load(true)">{{ t('gap.next') }}</v-btn>
     <template v-if="secret"
       ><output aria-live="polite">{{ secret }}</output
-      ><UiButton @click="clear">{{ t('gap.clear') }}</UiButton></template
+      ><v-btn @click="clear">{{ t('gap.clear') }}</v-btn></template
     >
     <p>{{ t('gap.revokedHint') }}</p>
     <p v-if="currentEndpoint?.primaryMdmRegistration">
@@ -273,23 +274,20 @@ async function query() {
       <label v-if="needsPassword"
         >{{ t('gap.password') }}<input v-model="password" type="password" autocomplete="off"
       /></label>
-      <UiButton type="submit" :disabled="locked || !confirmation">{{ t('gap.save') }}</UiButton>
+      <v-btn type="submit" :disabled="locked || !confirmation">{{ t('gap.save') }}</v-btn>
     </form>
     <p v-if="pending" role="alert">
       {{ t(pending.state === 'conflict' ? 'gap.compare' : 'gap.unknown') }} {{ pending.id }}
     </p>
-    <UiButton v-if="pending?.state === 'conflict'" :disabled="busy" @click="compare">{{
+    <v-btn v-if="pending?.state === 'conflict'" :disabled="busy" @click="compare">{{
       t('gap.compare')
-    }}</UiButton>
-    <UiButton
-      v-if="pending?.state === 'unknown'"
-      :disabled="busy || !confirmation"
-      @click="restore"
-      >{{ t('gap.replayOriginal') }}</UiButton
-    >
-    <UiButton v-if="resultId || nativePending" :disabled="busy" @click="query">{{
+    }}</v-btn>
+    <v-btn v-if="pending?.state === 'unknown'" :disabled="busy || !confirmation" @click="restore">{{
+      t('gap.replayOriginal')
+    }}</v-btn>
+    <v-btn v-if="resultId || nativePending" :disabled="busy" @click="query">{{
       t('gap.queryOriginal')
-    }}</UiButton>
+    }}</v-btn>
     <RouterLink
       v-if="resultId"
       :to="{

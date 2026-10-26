@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { UiDialog } from '@rss/core/components'
+import { VDialog } from 'vuetify/components'
 import { flushPromises, mount, DOMWrapper } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { expect, it, vi } from 'vitest'
@@ -76,7 +76,7 @@ it('clears a six-digit Lock PIN on an unknown submission and keeps only its orig
   await dialog.get('input').setValue('123456')
   await dialog.get('form').trigger('submit')
   await flushPromises()
-  expect(f.wrapper.getComponent(UiDialog).props('open')).toBe(false)
+  expect(f.wrapper.getComponent(VDialog).props('modelValue')).toBe(false)
   expect(f.wrapper.text()).toContain('提交结果未知')
   expect(f.button('查询原操作').exists()).toBe(true)
   expect(f.create.mock.calls[0]?.[1].action.pin).toBe('')
@@ -104,7 +104,7 @@ it('clears unsubmitted secrets when switching actions and when the selected endp
     endpoint: { ...f.wrapper.props('endpoint'), id: 'other' },
     deviceName: 'Other Mac',
   })
-  expect(f.wrapper.getComponent(UiDialog).props('open')).toBe(false)
+  expect(f.wrapper.getComponent(VDialog).props('modelValue')).toBe(false)
   await f.button('锁定').trigger('click')
   dialog = new DOMWrapper(document.body).get('[role=alertdialog]')
   expect((dialog.get('input').element as HTMLInputElement).value).toBe('')

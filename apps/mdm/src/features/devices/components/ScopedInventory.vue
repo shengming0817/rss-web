@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { VBtn } from 'vuetify/components'
 import { ref, watch, computed } from 'vue'
-import { UiButton } from '@rss/core/components'
+
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
@@ -132,9 +133,7 @@ watch(selected, () => {
         <option v-for="e in endpoints" :key="e.id" :value="e.id">{{ e.id }}</option>
       </select></label
     >
-    <UiButton :disabled="busy || !device" @click="directory()">{{
-      t('devices.reloadScopes')
-    }}</UiButton>
+    <v-btn :disabled="busy || !device" @click="directory()">{{ t('devices.reloadScopes') }}</v-btn>
     <label
       >{{ t('devices.assetContext')
       }}<select v-model="selected" class="ui-input" :disabled="busy">
@@ -144,13 +143,13 @@ watch(selected, () => {
         </option>
       </select></label
     >
-    <UiButton v-if="next" :disabled="busy" @click="directory(true)">{{
+    <v-btn v-if="next" :disabled="busy" @click="directory(true)">{{
       t('devices.nextScopes')
-    }}</UiButton>
+    }}</v-btn>
     <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
     <template v-if="inventory"
       ><h3>{{ scope ? label(scope) : '' }}</h3>
-      <UiButton :disabled="busy" @click="read">{{ t('devices.reload') }}</UiButton>
+      <v-btn :disabled="busy" @click="read">{{ t('devices.reload') }}</v-btn>
       <dl>
         <template v-for="field in inventory.fields" :key="field.field"
           ><dt>{{ field.field }}</dt>
@@ -164,30 +163,30 @@ watch(selected, () => {
             {{ source.evidence.source }} / {{ source.evidence.dataset }} ·
             {{ source.evidence.observedAt }} · {{ t('devices.state.' + source.state.kind) }}
           </p>
-          <UiButton
+          <v-btn
             v-if="source.state.kind === 'known'"
             :disabled="busy"
             @click="list(String(field), source.cursor)"
-            >{{ t('devices.expandSource') }}</UiButton
+            >{{ t('devices.expandSource') }}</v-btn
           >
         </div>
       </details>
       <div v-if="page">
         <h4>{{ activeList?.field }} · {{ page.total }}</h4>
-        <AssetItems :items="page.items" :complete-empty="page.total === 0" /><UiButton
+        <AssetItems :items="page.items" :complete-empty="page.total === 0" /><v-btn
           v-if="page.nextCursor"
           :disabled="busy"
           @click="list(activeList!.field, page.nextCursor)"
-          >{{ t('devices.next') }}</UiButton
+          >{{ t('devices.next') }}</v-btn
         >
       </div>
       <ul>
         <li v-for="quality in inventory.quality" :key="quality.runId">
           {{ quality.dataset }} / {{ quality.templateVersion }} ·
           {{ t('devices.runResult.' + quality.result)
-          }}<UiButton :disabled="busy" @click="runId = quality.runId">{{
+          }}<v-btn :disabled="busy" @click="runId = quality.runId">{{
             t('devices.evidence')
-          }}</UiButton>
+          }}</v-btn>
         </li>
       </ul>
       <CollectionQuality

@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { VBtn } from 'vuetify/components'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton } from '@rss/core/components'
+
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../useDeviceBinding'
@@ -32,7 +33,7 @@ watch(
   <section class="console-panel" :aria-busy="busy">
     <h2>{{ t('settings.connections.title') }}</h2>
     <p>{{ t('settings.connections.factsHint') }}</p>
-    <UiButton :disabled="busy" @click="load">{{ t('settings.reload') }}</UiButton>
+    <v-btn :disabled="busy" @click="load">{{ t('settings.reload') }}</v-btn>
     <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
     <dl v-if="observation" class="settings-facts">
       <dt>{{ t('settings.connections.target') }}</dt>

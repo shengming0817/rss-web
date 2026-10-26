@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { VBtn } from 'vuetify/components'
 import { ref, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiDialog } from '@rss/core/components'
+import { UiDialog } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../useDeviceBinding'
@@ -61,17 +62,17 @@ onMounted(() => void load())
     <ul>
       <li v-for="r in page?.items" :key="r.registrationId">
         {{ r.source }} · {{ r.status }} · {{ r.generation
-        }}<UiButton
+        }}<v-btn
           :disabled="busy || uncertain || r.status !== 'active'"
           @click="target = r.registrationId"
-          >{{ t('devices.revoke') }}</UiButton
+          >{{ t('devices.revoke') }}</v-btn
         >
       </li>
     </ul>
-    <UiButton :disabled="busy" @click="load()">{{ t('devices.reload') }}</UiButton
-    ><UiButton v-if="page?.nextCursor" :disabled="busy" @click="load(page.nextCursor)">{{
+    <v-btn :disabled="busy" @click="load()">{{ t('devices.reload') }}</v-btn
+    ><v-btn v-if="page?.nextCursor" :disabled="busy" @click="load(page.nextCursor)">{{
       t('devices.next')
-    }}</UiButton>
+    }}</v-btn>
     <UiDialog
       :open="!!target"
       :title="t('devices.revoke')"
@@ -82,16 +83,14 @@ onMounted(() => void load())
       ><p>{{ t('devices.revokeNote') }}</p>
       <code>{{ target }}</code>
       <p v-if="uncertain">{{ t('devices.unknownWrite') }}</p>
-      <UiButton v-if="uncertain" :disabled="busy" @click="load()">{{
-        t('devices.compare')
-      }}</UiButton
-      ><UiButton v-if="uncertain && compared" :disabled="busy" @click="revoke(true)">{{
+      <v-btn v-if="uncertain" :disabled="busy" @click="load()">{{ t('devices.compare') }}</v-btn
+      ><v-btn v-if="uncertain && compared" :disabled="busy" @click="revoke(true)">{{
         t('devices.replay')
-      }}</UiButton
+      }}</v-btn
       ><template #footer
-        ><UiButton :disabled="busy || uncertain" variant="danger" @click="revoke()">{{
+        ><v-btn :disabled="busy || uncertain" variant="flat" color="error" @click="revoke()">{{
           t('devices.confirmAction')
-        }}</UiButton></template
+        }}</v-btn></template
       ></UiDialog
     >
   </details>

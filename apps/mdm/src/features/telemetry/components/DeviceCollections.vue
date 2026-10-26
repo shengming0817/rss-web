@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { VBtn } from 'vuetify/components'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiMessage } from '@rss/core/components'
+import { UiMessage } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../../devices/useDeviceBinding'
@@ -81,7 +82,7 @@ watch([field, hours], () => void load(), { flush: 'post' })
         <h2>{{ t('telemetry.collection') }}</h2>
         <p>{{ t('telemetry.collectionHint') }}</p>
       </div>
-      <UiButton :disabled="busy || !field" @click="load">{{ t('devices.reload') }}</UiButton>
+      <v-btn :disabled="busy || !field" @click="load">{{ t('devices.reload') }}</v-btn>
     </header>
     <UiMessage v-if="failure" tone="danger" :title="t('devices.' + failure)" />
     <div class="telemetry-toolbar">
@@ -141,9 +142,7 @@ watch([field, hours], () => void load(), { flush: 'post' })
           </details>
         </article>
         <p v-if="gaps && !gaps.reports.length">{{ t('telemetry.empty') }}</p>
-        <UiButton v-if="gaps?.next" :disabled="busy" @click="more">{{
-          t('devices.next')
-        }}</UiButton>
+        <v-btn v-if="gaps?.next" :disabled="busy" @click="more">{{ t('devices.next') }}</v-btn>
       </section>
     </div>
     <AssignedConfigurations :device="device" />

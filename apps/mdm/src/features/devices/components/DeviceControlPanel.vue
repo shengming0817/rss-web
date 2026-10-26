@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { VBtn } from 'vuetify/components'
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { uuid } from '../../../services/decode'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiDialog } from '@rss/core/components'
+import { VDialog, VCard, VCardText, VCardActions, VSpacer, VTextField } from 'vuetify/components'
+import { useDialogFocus } from '../../../ui/dialog-focus'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../useDeviceBinding'
@@ -22,6 +24,8 @@ const runtime = useMdm(),
 const action = ref<'restart' | 'lock' | 'wipe'>(),
   pin = ref(''),
   confirmation = ref('')
+const dialogOpen = computed(() => !!action.value)
+const restoreFocus = useDialogFocus(dialogOpen)
 const original = ref<{ device: string; id: string }>(),
   result = ref<NativeOperation>()
 const primary = computed(() => props.endpoint.primaryMdmRegistration)
@@ -149,19 +153,17 @@ async function submit() {
     <p>{{ t('devices.controlAuthority') }}</p>
     <p v-if="!primary">{{ t('devices.not_registered') }}</p>
     <div class="console-inline-actions">
-      <UiButton
+      <v-btn
         v-for="kind in ['restart', 'lock', 'wipe'] as const"
         :key="kind"
         :disabled="locked || !primary || (kind === 'lock' && primary.source === 'mdm.windows')"
         @click="action = kind"
-        >{{ t('policies.control_' + kind) }}</UiButton
+        >{{ t('policies.control_' + kind) }}</v-btn
       >
     </div>
     <p v-if="primary?.source === 'mdm.windows'">{{ t('devices.windowsLockUnsupported') }}</p>
     <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
-    <UiButton v-if="original" :disabled="busy" @click="lookup">{{
-      t('devices.queryOriginal')
-    }}</UiButton>
+    <v-btn v-if="original" :disabled="busy" @click="lookup">{{ t('devices.queryOriginal') }}</v-btn>
     <article v-if="result">
       <h3>{{ t('devices.operationResult') }}</h3>
       <dl>
@@ -181,35 +183,49 @@ async function submit() {
         >{{ t('devices.evidence') }}</RouterLink
       >
     </article>
-    <UiDialog
-      :open="!!action"
-      :title="t('policies.control_' + (action ?? 'restart'))"
-      :close-label="t('console.cancel')"
-      kind="alertdialog"
-      @update:open="!$event && (action = undefined)"
-      ><p>{{ deviceName }}</p>
-      <p>{{ t('devices.controlConfirmation') }}</p>
-      <form @submit.prevent="submit">
-        <fieldset :disabled="locked">
-          <label v-if="action === 'lock'"
-            >{{ t('devices.lockPin')
-            }}<input
-              v-model="pin"
-              class="ui-input"
-              type="password"
-              inputmode="numeric"
-              pattern="[0-9]{6}"
-              maxlength="6"
-              autocomplete="new-password"
-              required /></label
-          ><label v-if="action === 'wipe'"
-            >{{ t('devices.confirmDeviceName')
-            }}<input v-model="confirmation" class="ui-input" autocomplete="off" required /></label
-          ><UiButton type="submit" variant="danger" :disabled="!canSubmit">{{
-            t('devices.confirmAction')
-          }}</UiButton>
-        </fieldset>
-      </form></UiDialog
+    <v-dialog
+      :model-value="!!action"
+      role="alertdialog"
+      :aria-label="t('policies.control_' + (action ?? 'restart'))"
+      :data-state="action ? 'open' : 'closed'"
+      @update:model-value="!$event && (action = undefined)"
+      @after-leave="restoreFocus"
     >
+      <v-card :title="t('policies.control_' + (action ?? 'restart'))"
+        ><v-card-text>
+          <p>{{ deviceName }}</p>
+          <p>{{ t('devices.controlConfirmation') }}</p>
+          <form @submit.prevent="submit">
+            <fieldset :disabled="locked">
+              <v-text-field
+                v-if="action === 'lock'"
+                v-model="pin"
+                :label="t('devices.lockPin')"
+                type="password"
+                inputmode="numeric"
+                pattern="[0-9]{6}"
+                maxlength="6"
+                autocomplete="new-password"
+                required
+              />
+              <v-text-field
+                v-if="action === 'wipe'"
+                v-model="confirmation"
+                :label="t('devices.confirmDeviceName')"
+                autocomplete="off"
+                required
+              />
+              <v-btn type="submit" color="error" :disabled="!canSubmit || locked">{{
+                t('devices.confirmAction')
+              }}</v-btn>
+            </fieldset>
+          </form> </v-card-text
+        ><v-card-actions
+          ><v-spacer /><v-btn variant="text" @click="action = undefined">{{
+            t('console.cancel')
+          }}</v-btn></v-card-actions
+        ></v-card
+      >
+    </v-dialog>
   </section>
 </template>

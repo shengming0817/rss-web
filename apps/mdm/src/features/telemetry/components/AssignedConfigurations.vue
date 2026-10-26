@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { VBtn } from 'vuetify/components'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiMessage } from '@rss/core/components'
+import { UiMessage } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../../devices/useDeviceBinding'
@@ -31,7 +32,7 @@ watch(
         <h2>{{ t('telemetry.assigned') }}</h2>
         <p>{{ t('telemetry.assignedHint') }}</p>
       </div>
-      <UiButton :disabled="busy" @click="load">{{ t('devices.reload') }}</UiButton>
+      <v-btn :disabled="busy" @click="load">{{ t('devices.reload') }}</v-btn>
     </header>
     <UiMessage v-if="failure" tone="danger" :title="t('devices.' + failure)" />
     <p v-if="result" class="telemetry-caption">

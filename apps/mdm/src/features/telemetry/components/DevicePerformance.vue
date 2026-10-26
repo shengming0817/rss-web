@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { VBtn } from 'vuetify/components'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiMessage } from '@rss/core/components'
+import { UiMessage } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../../devices/useDeviceBinding'
@@ -329,7 +330,7 @@ watch(
         <h2>{{ t('telemetry.performance') }}</h2>
         <p>{{ t('telemetry.performanceHint') }}</p>
       </div>
-      <UiButton :disabled="busy || !field" @click="reload">{{ t('devices.reload') }}</UiButton>
+      <v-btn :disabled="busy || !field" @click="reload">{{ t('devices.reload') }}</v-btn>
     </header>
     <UiMessage v-if="failure" tone="danger" :title="t('devices.' + failure)" />
     <div class="telemetry-toolbar">
@@ -388,9 +389,9 @@ watch(
               }}<select v-model="resource" :aria-label="t('telemetry.resource')" class="ui-input">
                 <option v-for="id in resources" :key="id" :value="id">{{ id }}</option>
               </select></label
-            ><UiButton v-if="resourceNext" :disabled="busy" @click="loadResources(resourceNext)">{{
+            ><v-btn v-if="resourceNext" :disabled="busy" @click="loadResources(resourceNext)">{{
               t('devices.next')
-            }}</UiButton
+            }}</v-btn
             ><label v-if="choices.length"
               >{{ t('telemetry.series')
               }}<select
@@ -405,9 +406,9 @@ watch(
                   {{ JSON.stringify(row.sample.series.dimensions) }}
                 </option>
               </select></label
-            ><UiButton v-if="step && discoveryNext" :disabled="busy" @click="discover">{{
+            ><v-btn v-if="step && discoveryNext" :disabled="busy" @click="discover">{{
               t('telemetry.moreSeries')
-            }}</UiButton
+            }}</v-btn
             ><label v-if="counter"
               >{{ t('telemetry.counterMode')
               }}<select
@@ -448,9 +449,9 @@ watch(
             {{ t('telemetry.' + entry.reason) }} · {{ utc(entry.window.start) }} —
             {{ utc(entry.window.end) }}
           </p>
-          <UiButton v-if="points.length" @click="table = !table">{{
+          <v-btn v-if="points.length" @click="table = !table">{{
             t('telemetry.dataDetails')
-          }}</UiButton>
+          }}</v-btn>
           <div v-if="table" class="telemetry-table-wrap">
             <table class="telemetry-table">
               <thead>
@@ -492,9 +493,7 @@ watch(
               </tbody>
             </table>
           </div>
-          <UiButton v-if="next" :disabled="busy" @click="load(next)">{{
-            t('devices.next')
-          }}</UiButton>
+          <v-btn v-if="next" :disabled="busy" @click="load(next)">{{ t('devices.next') }}</v-btn>
         </template>
         <div v-else class="telemetry-empty">
           <h3>{{ t('telemetry.unbound') }}</h3>

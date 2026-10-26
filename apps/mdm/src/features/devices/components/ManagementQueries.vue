@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { VBtn } from 'vuetify/components'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton } from '@rss/core/components'
+
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { useOriginalOperation } from '../../../services/useOriginalOperation'
@@ -78,7 +79,7 @@ function change(replay = false) {
   <section class="console-panel" data-panel="device-management-queries" :aria-busy="busy">
     <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
     <h2>{{ t('gap.memberships') }}</h2>
-    <UiButton :disabled="busy" @click="load('groups')">{{ t('gap.load') }}</UiButton>
+    <v-btn :disabled="busy" @click="load('groups')">{{ t('gap.load') }}</v-btn>
     <p v-if="groups">{{ t('devices.association') }}: {{ groups.associationCurrent }}</p>
     <article v-for="g in groups?.items" :key="g.id">
       <h3>{{ g.presentation.name ?? g.id }}</h3>
@@ -88,14 +89,11 @@ function change(replay = false) {
         <pre>{{ JSON.stringify(g, null, 2) }}</pre>
       </details>
     </article>
-    <UiButton
-      v-if="groups?.nextCursor"
-      :disabled="busy"
-      @click="load('groups', groups.nextCursor)"
-      >{{ t('gap.next') }}</UiButton
-    >
+    <v-btn v-if="groups?.nextCursor" :disabled="busy" @click="load('groups', groups.nextCursor)">{{
+      t('gap.next')
+    }}</v-btn>
     <h2>{{ t('gap.ddm') }}</h2>
-    <UiButton :disabled="busy" @click="load('ddm')">{{ t('gap.load') }}</UiButton>
+    <v-btn :disabled="busy" @click="load('ddm')">{{ t('gap.load') }}</v-btn>
     <p v-if="ddm">{{ ddm.availability }} · {{ ddm.effect }} · {{ ddm.compliance }}</p>
     <article v-for="entry in ddm?.items" :key="entry.operationId">
       <p>{{ entry.registrationId }} / {{ entry.generation }} · {{ entry.userKey }}</p>
@@ -112,9 +110,9 @@ function change(replay = false) {
         <pre>{{ JSON.stringify(entry.observation, null, 2) }}</pre>
       </details>
     </article>
-    <UiButton v-if="ddm?.nextCursor" :disabled="busy" @click="load('ddm', ddm.nextCursor)">{{
+    <v-btn v-if="ddm?.nextCursor" :disabled="busy" @click="load('ddm', ddm.nextCursor)">{{
       t('gap.next')
-    }}</UiButton>
+    }}</v-btn>
     <h2>{{ t('gap.assetState') }}</h2>
     <p v-if="asset.failure.value" role="alert">{{ t('devices.' + asset.failure.value) }}</p>
     <p v-if="currentAssetState">{{ t('gap.assetState') }}: {{ currentAssetState }}</p>
@@ -126,24 +124,24 @@ function change(replay = false) {
         </option>
       </select></label
     ><label><input v-model="confirmation" type="checkbox" />{{ t('gap.confirmation') }}</label
-    ><UiButton :disabled="asset.locked.value || !confirmation" @click="change()">{{
+    ><v-btn :disabled="asset.locked.value || !confirmation" @click="change()">{{
       t('gap.save')
-    }}</UiButton>
+    }}</v-btn>
     <template v-if="asset.pending.value"
       ><p role="alert">
         {{ t(asset.pending.value.state === 'conflict' ? 'gap.compare' : 'gap.unknown') }}
         {{ asset.pending.value.id }}
       </p>
-      <UiButton
+      <v-btn
         v-if="asset.pending.value.state === 'unknown'"
         :disabled="asset.busy.value || !confirmation"
         @click="change(true)"
-        >{{ t('gap.replayOriginal') }}</UiButton
-      ><UiButton
+        >{{ t('gap.replayOriginal') }}</v-btn
+      ><v-btn
         v-if="asset.pending.value.state === 'conflict'"
         :disabled="asset.busy.value"
         @click="compareAsset"
-        >{{ t('gap.compare') }}</UiButton
+        >{{ t('gap.compare') }}</v-btn
       ></template
     >
   </section>
