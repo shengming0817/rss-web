@@ -287,7 +287,9 @@ watch(
     >
       <fieldset :disabled="busy || uncertain">
         <PolicyIdentityEditor v-model:alias="alias" v-model:event="customEvent" />
-        <label>{{ t('policies.scope') }}<input v-model="scope" class="ui-input" required /></label
+        <label for="onboarding-scope"
+          >{{ t('policies.scope')
+          }}<input id="onboarding-scope" v-model="scope" class="ui-input" required /></label
         ><CatalogLocator
           v-model="scope"
           collection="scopes"
@@ -317,9 +319,13 @@ watch(
             </select></label
           >
           <p>{{ t('software.releaseRequired') }}</p></template
-        ><label v-else
+        ><label v-else for="onboarding-organization"
           >{{ t('software.organization')
-          }}<input v-model="organization" class="ui-input" required /></label
+          }}<input
+            id="onboarding-organization"
+            v-model="organization"
+            class="ui-input"
+            required /></label
         ><NativeScheduleEditor v-model="schedule" :disabled="busy || uncertain" /><label
           >{{ t('software.runLifetime')
           }}<input

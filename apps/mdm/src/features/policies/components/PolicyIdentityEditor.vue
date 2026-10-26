@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { useId } from 'vue'
 import { useI18n } from 'vue-i18n'
+defineProps<{ fixedParameters?: boolean }>()
 const alias = defineModel<string | null>('alias', { required: true })
 const event = defineModel<string | null>('event', { required: true })
-defineProps<{ fixedParameters?: boolean }>()
 const { t } = useI18n(),
   id = useId()
 </script>

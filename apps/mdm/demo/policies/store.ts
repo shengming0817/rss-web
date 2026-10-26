@@ -103,7 +103,12 @@ export function createPolicyStore() {
       if (request.path === '/api/v1/policies' && request.method === 'GET') {
         const rowsToRead = (scenario === 'empty' ? [] : [...rows.values()])
           .filter((p) => request.query.get('filter')?.includes('state') || p.state !== 'archived')
-          .map(wire)
+          .map((p) => ({
+            ...wire(p),
+            toolName: `policy_${p.id.replaceAll('-', '')}`,
+            alias: p.definition.alias,
+            customEvent: p.definition.customEvent,
+          }))
         return ok(
           directoryPage(rowsToRead, request, ['id'], {
             defaultLimit: 64,

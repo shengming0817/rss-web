@@ -1,8 +1,9 @@
+import { createFeatureRouter as createRouter } from '../../tests/feature-router'
 import { decodeRunEvidence } from './policies/clients/runs'
 import { afterEach, expect, it, vi } from 'vitest'
 import { defineComponent, shallowRef } from 'vue'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
-import { createMemoryHistory, createRouter } from 'vue-router'
+import { createMemoryHistory } from 'vue-router'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { decodeMdmError } from '@rss/api/mdm'
 import type { IdentitySession } from '@rss/auth'
@@ -1018,7 +1019,11 @@ it('creates and edits a credential Policy with the exact operation, then enables
     input: { enabled: false },
   })
   policy.definition.customEvent = 'refresh.credentials'
-  await button(w, '读取').trigger('click')
+  await w
+    .get('form')
+    .findAll('button')
+    .find((b) => b.text() === '读取')!
+    .trigger('click')
   await flushPromises()
   await confirm(w)
   await w.find('form').trigger('submit')

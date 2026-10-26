@@ -114,19 +114,17 @@ function fixture() {
     },
     devices: {
       views: {
-        detail: vi
-          .fn()
-          .mockResolvedValue({
-            endpoints: [
-              {
-                id: 'endpoint',
-                displayName: {
-                  state: { kind: 'known', value: { kind: 'string', value: 'Support workstation' } },
-                },
+        detail: vi.fn().mockResolvedValue({
+          endpoints: [
+            {
+              id: 'endpoint',
+              displayName: {
+                state: { kind: 'known', value: { kind: 'string', value: 'Support workstation' } },
               },
-            ],
-            fields: {},
-          }),
+            },
+          ],
+          fields: {},
+        }),
       },
     },
     policies: {
