@@ -345,15 +345,15 @@ try {
   const view = await api(`/api/v1/device-views/association/${id}`)
   assert.equal(view.fields['custom.asset_tag'].state.kind, 'conflict')
   assert.equal(view.fields['custom.asset_tag'].sources.length, 2)
-  await page.getByRole('button', { name: '通道', exact: true }).click()
+  await page.getByRole('tab', { name: '管理', exact: true }).click()
+  await page.locator('[data-device-channels] > summary').click()
   assert.equal(await page.locator('[data-endpoint]').count(), 2)
-  const lists = page
-    .locator('details')
-    .filter({ has: page.locator('summary').filter({ hasText: 'custom.browser_list' }) })
-  await lists.locator('summary').first().click()
-  const mdmList = lists
-    .locator('section')
-    .filter({ has: page.getByRole('heading', { name: new RegExp(fixture.mdm) }) })
+  await page.getByRole('tab', { name: '资产信息', exact: true }).click()
+  await page.getByRole('button', { name: '未分组扩展字段', exact: true }).click()
+  await page.locator('[data-asset-field="custom.browser_list"]').getByRole('button').click()
+  const mdmList = page
+    .getByRole('dialog', { name: '字段详情', exact: true })
+    .locator(`[data-list-endpoint="${fixture.mdm}"]`)
   await mdmList.getByRole('button', { name: '展开此来源', exact: true }).click()
   await mdmList.getByRole('button', { name: '下一页', exact: true }).waitFor()
   await page.waitForFunction(
@@ -366,6 +366,10 @@ try {
     fixture.mdm,
   )
   coverage.push('manual-conflict-two-endpoints-source-pagination')
+  await page
+    .getByRole('dialog', { name: '字段详情', exact: true })
+    .getByRole('button', { name: '关闭', exact: true })
+    .click()
   phase = 'cas'
   await page.getByRole('tab', { name: '管理', exact: true }).click()
   await page.getByRole('button', { name: '读取当前关系与主注册', exact: true }).click()

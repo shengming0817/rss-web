@@ -82,6 +82,7 @@ function destination(section: string, history?: string) {
 const target = ref(''),
   manualOpen = ref(false),
   inventory = ref<Inventory>()
+const manualOperation = useOperation([], () => [...deviceBinding(runtime), target.value])
 const restoreManualFocus = useDialogFocus(manualOpen)
 const selected = computed(() => endpoints.value.find((e) => e.id === target.value))
 const directoryQuery = computed(() => {
@@ -166,19 +167,25 @@ async function load() {
   )
 }
 async function editManual() {
-  if (!target.value) return
-  if (inventory.value?.device === target.value) {
+  const endpoint = target.value
+  if (!endpoint) return
+  if (inventory.value?.device === endpoint) {
     manualOpen.value = true
     return
   }
-  await run(
+  await manualOperation.run(
     async () => ({
-      inventory: await runtime.devices.assets.inventory(target.value),
+      inventory: await runtime.devices.assets.inventory(endpoint),
       catalog: await runtime.devices.assets.catalog(),
     }),
-    (v) => {
-      inventory.value = v.inventory
-      fields.value = v.catalog.fields
+    (value) => {
+      if (target.value !== endpoint) return
+      if (value.inventory.device !== endpoint) {
+        manualOperation.failure.value = 'invalidResponse'
+        return
+      }
+      inventory.value = value.inventory
+      fields.value = value.catalog.fields
       manualOpen.value = true
     },
   )
@@ -233,7 +240,11 @@ watch(target, () => {
 })
 </script>
 <template>
-  <DevicePage :title="displayName" :busy="busy" :failure="failure">
+  <DevicePage
+    :title="displayName"
+    :busy="busy || manualOperation.busy.value"
+    :failure="failure ?? manualOperation.failure.value"
+  >
     <template #breadcrumb
       ><RouterLink
         class="device-caption"
@@ -436,9 +447,9 @@ watch(target, () => {
       <v-card :title="t('devices.editAssets')"
         ><v-card-text
           ><ManualPanel
-            v-if="inventory"
-            :key="target"
-            :device="target"
+            v-if="inventory && inventory.device === target"
+            :key="inventory.device"
+            :device="inventory.device"
             :inventory="inventory"
             :fields="fields"
             @updated="inventory = $event" /></v-card-text

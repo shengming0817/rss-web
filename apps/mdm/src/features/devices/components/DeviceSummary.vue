@@ -12,56 +12,60 @@ const emit = defineEmits<{ invalidated: [reason: 'cursorInvalidated' | 'denied' 
 const { t } = useI18n(),
   runtime = useMdm()
 const ip = ref<Record<string, { source: string; addresses: string[]; observedAt: number }[]>>({})
-const { run, failure } = useOperation([], () => [
+const { run, failure, busy } = useOperation([], () => [
   ...deviceBinding(runtime),
   JSON.stringify(props.view.reference),
 ])
+async function readIps() {
+  ip.value = {}
+  failure.value = null
+  const view = props.view
+  const lists = ['device.network.interfaces', 'device.network.windows.identifiers'].flatMap(
+    (field) =>
+      (view.lists[field]?.sources ?? [])
+        .filter(
+          (source) =>
+            source.state.kind === 'known' &&
+            currentEvidence(view, source.endpoint, source.evidence),
+        )
+        .map((source) => ({ field, source })),
+  )
+  if (!lists.length) return
+  await run(
+    async () =>
+      Promise.all(
+        lists.map(async ({ field, source }) => ({
+          source,
+          result: await runtime.devices.views.items(view.reference, field, source),
+        })),
+      ),
+    (results) => {
+      ip.value = Object.fromEntries(
+        view.endpoints.map((e) => [
+          e.id,
+          results
+            .filter((r) => r.source.endpoint === e.id)
+            .map((r) => ({
+              source: r.source.evidence.source,
+              addresses: addresses(r.result.items),
+              observedAt: r.source.evidence.observedAt,
+            })),
+        ]),
+      )
+    },
+  ).then(() => {
+    if (
+      failure.value === 'denied' ||
+      failure.value === 'notFound' ||
+      failure.value === 'cursorInvalidated'
+    )
+      emit('invalidated', failure.value)
+  })
+}
 watch(
   () => JSON.stringify([props.view, ...deviceBinding(runtime)]),
   () => {
-    ip.value = {}
-    const view = props.view
-    const lists = ['device.network.interfaces', 'device.network.windows.identifiers'].flatMap(
-      (field) =>
-        (view.lists[field]?.sources ?? [])
-          .filter(
-            (source) =>
-              source.state.kind === 'known' &&
-              currentEvidence(view, source.endpoint, source.evidence),
-          )
-          .map((source) => ({ field, source })),
-    )
-    if (!lists.length) return
-    void run(
-      async () =>
-        Promise.all(
-          lists.map(async ({ field, source }) => ({
-            source,
-            result: await runtime.devices.views.items(view.reference, field, source),
-          })),
-        ),
-      (results) => {
-        ip.value = Object.fromEntries(
-          view.endpoints.map((e) => [
-            e.id,
-            results
-              .filter((r) => r.source.endpoint === e.id)
-              .map((r) => ({
-                source: r.source.evidence.source,
-                addresses: addresses(r.result.items),
-                observedAt: r.source.evidence.observedAt,
-              })),
-          ]),
-        )
-      },
-    ).then(() => {
-      if (
-        failure.value === 'denied' ||
-        failure.value === 'notFound' ||
-        failure.value === 'cursorInvalidated'
-      )
-        emit('invalidated', failure.value)
-    })
+    void readIps()
   },
   { immediate: true, flush: 'sync' },
 )
@@ -93,8 +97,13 @@ watch(
             >{{ view.endpoints.length > 1 ? endpoint.id + ' · ' : '' }}{{ source.source }} ·
             {{ utc(source.observedAt) }}</small
           ></template
-        ><span v-if="!ip[endpoint.id]?.length">{{ t('devices.workspace.noReport') }}</span>
+        ><span v-if="busy" role="status">{{ t('devices.loading') }}</span
+        ><span v-else-if="failure" role="alert">{{ t('devices.' + failure) }}</span
+        ><span v-else-if="!ip[endpoint.id]?.length">{{ t('devices.workspace.noReport') }}</span>
       </dd>
+      <v-btn v-if="failure" variant="text" :disabled="busy" @click="readIps">{{
+        t('devices.reload')
+      }}</v-btn>
       <small>{{ t('devices.workspace.observedIpNote') }}</small>
     </div>
     <div>

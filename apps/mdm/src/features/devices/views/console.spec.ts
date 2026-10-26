@@ -2147,3 +2147,57 @@ it('keeps inventory filters in all fields and opens category facts in a detail d
   await f.click('原始数据')
   expect(f.wrapper.get('.device-json').text()).toContain('ThinkPad T14')
 })
+
+it('does not apply a late manual inventory read after switching the selected associated endpoint', async () => {
+  const f = await setup('device-detail', { device: 'device-01' })
+  await chooseAssociation(f)
+  await f.click('确认关联')
+  await vi.waitFor(() => expect(f.router.currentRoute.value.name).toBe('device-view-detail'))
+  await f.click('资产信息')
+  const reference = {
+    kind: 'association' as const,
+    id: String(f.router.currentRoute.value.params['view']),
+  }
+  const value = await f.devices.views.detail(reference)
+  const [a, b] = value.endpoints.map((e) => e.id)
+  const inventoryA = await f.devices.assets.inventory(a!)
+  let finish!: (value: typeof inventoryA) => void
+  vi.spyOn(f.devices.assets, 'inventory').mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  const select = f.wrapper
+    .findAllComponents(VSelect)
+    .find((component) => component.props('label') === '原始端点')!
+  select.vm.$emit('update:modelValue', a)
+  await flushPromises()
+  await f.button('编辑人工资产信息').trigger('click')
+  await flushPromises()
+  select.vm.$emit('update:modelValue', b)
+  await flushPromises()
+  finish(inventoryA)
+  await flushPromises()
+  expect(f.wrapper.findComponent({ name: 'ManualPanel' }).exists()).toBe(false)
+  await f.click('编辑人工资产信息')
+  const manual = f.wrapper.getComponent({ name: 'ManualPanel' })
+  expect(manual.props('device')).toBe(b)
+  expect(manual.props('inventory').device).toBe(b)
+})
+
+it('keeps both original endpoint identities in the associated scalar field detail', async () => {
+  const f = await setup('device-detail', { device: 'device-01' })
+  await chooseAssociation(f)
+  await f.click('确认关联')
+  await vi.waitFor(() => expect(f.router.currentRoute.value.name).toBe('device-view-detail'))
+  await f.click('资产信息')
+  await f.click('未分组扩展字段')
+  await f.wrapper.get('[data-asset-field="custom.asset_tag"] button').trigger('click')
+  await flushPromises()
+  const dialog = new DOMWrapper(document.body).get('[role=dialog]')
+  const evidence = dialog.findAll('[data-source-endpoint]')
+  expect(new Set(evidence.map((section) => section.attributes('data-source-endpoint'))).size).toBe(
+    2,
+  )
+})

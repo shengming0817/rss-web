@@ -462,13 +462,18 @@ function summary(row: (typeof rows.value)[number]) {
     >
       <v-card v-if="detail" :title="assetLabel(detail.key, locale)"
         ><v-card-text
-          ><AssetValue
-            v-if="detail.field"
-            :field="{
-              field: detail.key,
-              state: detail.field.state,
-              sources: detail.field.sources.map((s) => s.fact),
-            }" />
+          ><template v-if="detail.field"
+            ><AssetValue :field="{ field: detail.key, state: detail.field.state, sources: [] }" />
+            <section
+              v-for="source in detail.field.sources"
+              :key="`${source.endpoint}:${source.fact.evidence.source}:${source.fact.evidence.dataset}`"
+              :data-source-endpoint="source.endpoint"
+            >
+              <h3>{{ source.endpoint }}</h3>
+              <AssetValue
+                :field="{ field: detail.key, state: source.fact.state, sources: [source.fact] }"
+              /></section
+          ></template>
           <p v-if="!detail.field && !detail.list">{{ t('devices.notProvided') }}</p>
           <SourceList
             v-for="source in detail.list?.sources"
