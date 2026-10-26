@@ -21,7 +21,8 @@ const read = {
   inputVersion: 'device-control-v1',
   deadline: 4102444800,
   dispatchFailure: null,
-  authorization: 'authorized',
+  authorization: { state: 'authorized' },
+  reauthorization: { state: 'unavailable', reason: 'already_received' },
   commandStatus: 'queued',
   agentInstallation: null,
   observation: {
@@ -34,7 +35,8 @@ const read = {
 }
 it('decodes current command facts without accepting retired authorization or task DTOs', () => {
   expect(decodeNativeOperation(read, id)).toMatchObject({
-    authorization: 'authorized',
+    authorization: { state: 'authorized' },
+    reauthorization: { state: 'unavailable', reason: 'already_received' },
     task: { platform: 'windows' },
   })
   for (const bad of [
@@ -114,4 +116,31 @@ it('identifies dangerous actions only from exact redacted task summaries, retain
       objects: ['./Device/Vendor/MSFT/Reboot/RebootNow', 'other'],
     }),
   ).toBeNull()
+})
+
+it('decodes current authorization and eligibility independently and rejects old or malformed summaries', () => {
+  const value = {
+    ...read,
+    authorization: { state: 'blocked', reason: 'registration_changed' },
+    reauthorization: { state: 'unavailable', reason: 'registration_changed' },
+  }
+  expect(decodeNativeOperation(value, id)).toMatchObject({
+    authorization: value.authorization,
+    reauthorization: value.reauthorization,
+  })
+  expect(
+    decodeNativeOperation(
+      { ...read, reauthorization: { state: 'available', confirmationRequired: false } },
+      id,
+    ).reauthorization,
+  ).toEqual({ state: 'available', confirmationRequired: false })
+  for (const patch of [
+    { authorization: 'authorized' },
+    { authorization: { state: 'blocked', reason: 'unknown_reason' } },
+    { authorization: { state: 'authorized', reason: 'source_invalid' } },
+    { reauthorization: { state: 'available' } },
+    { reauthorization: { state: 'unavailable', reason: 'unknown_reason' } },
+    { reauthorization: { state: 'not_applicable', confirmationRequired: false } },
+  ])
+    expect(() => decodeNativeOperation({ ...read, ...patch }, id)).toThrow()
 })

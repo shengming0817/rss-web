@@ -531,12 +531,6 @@ export function policyDefinition(value: unknown) {
     )
   )
     throw new Error('Self-service requires an eligible action')
-  if (
-    'selfService' in v &&
-    action.kind === 'software' &&
-    selfService(v['selfService']).riskLevel !== 2
-  )
-    throw new Error('Software self-service requires confirmation')
   return {
     customEvent,
     alias: nullable(v['alias'], policyName),

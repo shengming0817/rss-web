@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { defaultSchedule, policyAction } from '../../policies/clients/model'
+import { defaultSchedule, policyAction, policyDefinition } from '../../policies/clients/model'
 it('requires canonical response channels and preserves explicit channel selection', () => {
   const action = {
     kind: 'software',
@@ -20,6 +20,30 @@ it('requires canonical response channels and preserves explicit channel selectio
     },
   }
   expect(() => policyAction(action)).toThrow()
+  const available = { ...action, channel: 'agent', intent: 'available_install' }
+  const selfService = {
+    published: true,
+    access: { kind: 'device' },
+    allowAi: false,
+    riskLevel: 1,
+    presentation: {
+      displayName: 'App',
+      description: '',
+      prerequisites: '',
+      sideEffects: '',
+      category: 'Apps',
+      keywords: [],
+    },
+  }
+  expect(
+    policyDefinition({
+      customEvent: null,
+      alias: null,
+      scope: action.rollout.stages[0]!.scope,
+      action: available,
+      selfService,
+    }).selfService,
+  ).toMatchObject({ riskLevel: 1, allowAi: false })
   expect(policyAction({ ...action, channel: 'agent' })).toMatchObject({ channel: 'agent' })
   expect(policyAction({ ...action, channel: 'mdm' })).toMatchObject({ channel: 'mdm' })
   expect(() => policyAction({ ...action, channel: 'automatic' })).toThrow()
