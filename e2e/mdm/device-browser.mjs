@@ -901,18 +901,26 @@ try {
   )
   await editor.getByRole('button', { name: '保存并查看成员', exact: true }).click()
   const groupReceipt = await groupCreated
-  assert.equal(groupReceipt.status(), 200)
+  assert.equal(groupReceipt.status(), 202)
   const associated = await groupReceipt.json()
-  assert.equal(associated.group.assetContext, 'associated_device')
-  await settled(`/api/v1/groups/${associated.group.id}/tasks/${associated.task}`)
-  const associatedRead = await api(`/api/v1/groups/${associated.group.id}`)
+  assert.equal(associated.kind, 'group_definition')
+  await settled(associated.statusUrl)
+  let associatedRead
+  for (let attempt = 0; attempt < 60; attempt++) {
+    associatedRead = await api(`/api/v1/groups/${associated.target}`)
+    if (associatedRead.memberSet && associatedRead.freshness === 'current') break
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+  assert.equal(associatedRead.group.assetContext, 'associated_device')
+  assert.equal(associatedRead.freshness, 'current')
+  assert.ok(associatedRead.memberSet)
   assert.deepEqual(associatedRead.criteria.selector, { kind: 'device' })
   assert.equal(associatedRead.criteria.quantifier, 'one')
   const associatedMembers = await api(
-    `/api/v1/groups/${associated.group.id}/results/${associated.task}/members`,
+    `/api/v1/groups/${associated.target}/results/${associatedRead.memberSet}/members`,
   )
   const associatedDecisions = await api(
-    `/api/v1/groups/${associated.group.id}/results/${associated.task}/decisions`,
+    `/api/v1/groups/${associated.target}/results/${associatedRead.memberSet}/decisions`,
   )
   associatedDiagnostics = {
     conditionKind: associatedRead.criteria.criteria.kind,

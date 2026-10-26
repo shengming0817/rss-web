@@ -1,3 +1,4 @@
+import { authorization, reauthorizationEligibility } from './authorization'
 import {
   queryParameters,
   projectedPage,
@@ -28,6 +29,8 @@ const executionFields = {
   generation: count,
   origin: (v: unknown) => enumeration(v, ['direct', 'policy'] as const),
   deadline: integer,
+  authorization,
+  reauthorization: reauthorizationEligibility,
   status: identifier,
   detailUrl: (v: unknown) => {
     const path = string(v)

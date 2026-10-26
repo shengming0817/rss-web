@@ -1,3 +1,4 @@
+import { authorization, reauthorizationEligibility } from './authorization'
 import { jsonValue } from '../../../services/json'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
@@ -122,6 +123,7 @@ export function decodeNativeOperation(value: unknown, id: string) {
     'deadline',
     'dispatchFailure',
     'authorization',
+    'reauthorization',
     'commandStatus',
     'agentInstallation',
     'observation',
@@ -140,7 +142,8 @@ export function decodeNativeOperation(value: unknown, id: string) {
     inputVersion: identifier(v['inputVersion']),
     deadline: count(v['deadline']),
     dispatchFailure: nullable(v['dispatchFailure'], (v) => jsonValue(v, 16384)),
-    authorization: enumeration(v['authorization'], ['authorized', 'blocked'] as const),
+    authorization: authorization(v['authorization']),
+    reauthorization: reauthorizationEligibility(v['reauthorization']),
     commandStatus: enumeration(v['commandStatus'], [
       'queued',
       'published',

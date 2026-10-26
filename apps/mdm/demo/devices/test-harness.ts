@@ -55,3 +55,18 @@ export async function setup() {
     enrollment: createEnrollmentClient(transport),
   }
 }
+
+/** Follow the public definition task, then discover its independently published membership. */
+export async function publishGroupDefinition(
+  groups: ReturnType<typeof createGroupsClient>,
+  id: string,
+  task: string,
+) {
+  await groups.status(id, task, 'group_definition')
+  const definition = await groups.status(id, task, 'group_definition')
+  if (definition.status !== 'completed') throw new Error('Definition did not complete')
+  await groups.read(id)
+  const read = await groups.read(id)
+  if (!read.memberSet || read.freshness !== 'current') throw new Error('Membership did not publish')
+  return read.memberSet
+}

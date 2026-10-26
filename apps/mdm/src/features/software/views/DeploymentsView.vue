@@ -699,7 +699,7 @@ watch(
               </option>
             </select>
             <template v-if="draft.action.intent === 'available_install'">
-              <SelfServiceEditor v-model="draft.selfService" software />
+              <SelfServiceEditor v-model="draft.selfService" />
               <UiButton
                 v-if="draft.selfService"
                 type="button"

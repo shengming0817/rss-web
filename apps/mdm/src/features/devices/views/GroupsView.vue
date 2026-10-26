@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { comparison as queryComparison, allOf } from '../../../services/directory-query'
 import { UiButton, UiDialog, UiTable, UiTabs, UiBadge, UiSearchInput } from '@rss/core/components'
-import { ref, toRaw, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
@@ -10,6 +10,7 @@ import {
   type GroupChange,
   type GroupProjection,
   type GroupRead,
+  type GroupTaskKind,
   groupCondition,
   type GroupCondition,
 } from '../clients/groups'
@@ -34,6 +35,8 @@ let applied: { name?: string | undefined; kind?: 'static' | 'dynamic' | 'system'
 function closeDetail() {
   if (busy.value || uncertain.value) return
   current.value = undefined
+  definitionTask.value = undefined
+  definitionStatus.value = undefined
   task.value = undefined
   status.value = undefined
   result.value = undefined
@@ -48,6 +51,14 @@ const current = ref<GroupRead>(),
   criteria = ref<GroupCondition | null>(null),
   members = ref<string[]>([]),
   remove = ref(false)
+const definitionTask = ref<string>(),
+  definitionStatus = ref<Awaited<ReturnType<typeof client.status>>>(),
+  taskKind = ref<GroupTaskKind>('group')
+const definitionPending = computed(
+  () =>
+    !!definitionTask.value &&
+    (!definitionStatus.value || ['pending', 'running'].includes(definitionStatus.value.status)),
+)
 const task = ref<string>(),
   status = ref<Awaited<ReturnType<typeof client.status>>>(),
   projection = ref<GroupProjection>('members'),
@@ -128,7 +139,10 @@ function loadList(next?: string) {
   )
 }
 function open(group = id.value) {
-  if (busy.value || uncertain.value) return
+  if (busy.value || uncertain.value || definitionPending.value) return
+  definitionTask.value = undefined
+  definitionStatus.value = undefined
+  taskKind.value = 'group'
   void run(
     () => client.read(group),
     (v) => {
@@ -148,7 +162,10 @@ function open(group = id.value) {
   )
 }
 function create() {
-  if (busy.value || uncertain.value) return
+  if (busy.value || uncertain.value || definitionPending.value) return
+  definitionTask.value = undefined
+  definitionStatus.value = undefined
+  taskKind.value = 'group'
   current.value = undefined
   id.value = crypto.randomUUID()
   name.value = ''
@@ -161,7 +178,7 @@ function create() {
   status.value = undefined
 }
 function change(input: GroupChange) {
-  if (current.value?.group.kind === 'system') return
+  if (current.value?.group.kind === 'system' || definitionPending.value) return
   compared.value = false
   const group = current.value?.group.id ?? id.value,
     body = operation(input, current.value?.group.revision ?? 0)
@@ -170,22 +187,33 @@ function change(input: GroupChange) {
     const acknowledged = await runWrite(
       async () => client.change(group, body),
       (receipt) => {
-        editing.value = false
+        if ('kind' in receipt && receipt.kind === 'group_definition') {
+          definitionTask.value = receipt.task
+          definitionStatus.value = undefined
+          taskKind.value = 'group'
+          task.value = current.value?.memberSet ?? undefined
+        } else {
+          definitionTask.value = undefined
+          definitionStatus.value = undefined
+          task.value = receipt.task ?? undefined
+          taskKind.value = 'group'
+          editing.value = false
+        }
         membersEditing.value = false
         deleting.value = false
-        task.value = receipt.task ?? undefined
         status.value = undefined
         result.value = undefined
         list.value = undefined
         if (input.action === 'delete') current.value = undefined
       },
     )
-    if (acknowledged && input.action !== 'delete')
+    if (acknowledged && input.action !== 'delete' && !definitionTask.value)
       await run(
         () => client.read(group),
         (v) => {
           id.value = v.group.id
           current.value = v
+          if (!task.value) task.value = v.memberSet ?? undefined
           if (input.action === 'rule' || (input.action === 'create' && input.criteria))
             detailTab.value = 'members'
         },
@@ -223,13 +251,16 @@ function save() {
   }
 }
 function preview() {
-  if (!current.value) return
+  if (!current.value || definitionPending.value) return
   const group = id.value,
     body = operation({}, current.value.group.revision)
   write(
     () => client.preview(group, body),
     (v) => {
+      definitionTask.value = undefined
+      definitionStatus.value = undefined
       task.value = v.task
+      taskKind.value = 'group_preview'
       status.value = undefined
       result.value = undefined
     },
@@ -251,26 +282,86 @@ function saveRule(event: Event) {
     failure.value = 'invalidRequest'
   }
 }
+function completed(value: Awaited<ReturnType<typeof client.status>> | undefined) {
+  return value?.status === 'completed' && !value.failure
+}
 async function refresh() {
-  if (!task.value) return
-  const group = id.value,
-    taskId = task.value
-  const loaded = await run(
-    () => client.status(group, taskId),
-    (v) => {
-      status.value = v
-    },
-  )
-  if (loaded && status.value?.status === 'completed' && !status.value.failure)
-    await run(
-      () => client.read(group),
+  if (busy.value || uncertain.value) return
+  const group = id.value
+  if (definitionTask.value && !completed(definitionStatus.value)) {
+    const loaded = await run(
+      () => client.status(group, definitionTask.value!, 'group_definition'),
       (v) => {
-        current.value = v
+        definitionStatus.value = v
       },
     )
+    if (!loaded || !completed(definitionStatus.value)) return
+    editing.value = false
+    detailTab.value = 'members'
+  }
+  if (definitionStatus.value && definitionStatus.value.status !== 'completed') return
+  if (task.value && !definitionTask.value && !completed(status.value)) {
+    const loaded = await run(
+      () => client.status(group, task.value!, taskKind.value),
+      (v) => {
+        status.value = v
+      },
+    )
+    if (!loaded || !completed(status.value)) return
+    if (taskKind.value === 'group_preview') return
+  }
+  await run(
+    () => client.read(group),
+    (v) => {
+      current.value = v
+      if (taskKind.value !== 'group_preview' && task.value !== (v.memberSet ?? undefined)) {
+        task.value = v.memberSet ?? undefined
+        status.value = undefined
+        result.value = undefined
+      }
+    },
+  )
 }
+const observing = computed(
+  () =>
+    definitionPending.value ||
+    (!!task.value && !status.value && !definitionTask.value) ||
+    (!!status.value && ['pending', 'running'].includes(status.value.status)) ||
+    (current.value?.freshness === 'pending' &&
+      (!status.value || ['pending', 'running', 'completed'].includes(status.value.status)) &&
+      (!definitionStatus.value || definitionStatus.value.status === 'completed') &&
+      taskKind.value !== 'group_preview'),
+)
+let timer: ReturnType<typeof setTimeout> | undefined
+let disposed = false
+function scheduleObservation() {
+  clearTimeout(timer)
+  if (
+    disposed ||
+    !observing.value ||
+    failure.value ||
+    uncertain.value ||
+    document.visibilityState === 'hidden'
+  )
+    return
+  timer = setTimeout(async () => {
+    await refresh()
+    scheduleObservation()
+  }, 2000)
+}
+watch([observing, busy, failure, uncertain, id], scheduleObservation)
+document.addEventListener('visibilitychange', scheduleObservation)
+onBeforeUnmount(() => {
+  disposed = true
+  clearTimeout(timer)
+  document.removeEventListener('visibilitychange', scheduleObservation)
+})
 function page(next?: string) {
-  if (task.value)
+  if (
+    task.value &&
+    (current.value?.memberSet === task.value ||
+      (status.value?.status === 'completed' && !status.value.failure))
+  )
     void run(
       () => client.page(id.value, task.value!, projection.value, next),
       (v) => (result.value = v),
@@ -301,6 +392,9 @@ watch(projection, () => {
 watch(
   () => JSON.stringify(deviceBinding(runtime)),
   () => {
+    definitionTask.value = undefined
+    definitionStatus.value = undefined
+    taskKind.value = 'group'
     current.value = undefined
     list.value = undefined
     query.value = ''
@@ -347,10 +441,19 @@ function openGroup(group: string) {
   >
     <template #actions
       ><UiButton :disabled="busy" @click="loadList()">{{ t('devices.reload') }}</UiButton
-      ><UiButton :disabled="busy || uncertain" @click="beginCreate">{{
+      ><UiButton :disabled="busy || uncertain || definitionPending" @click="beginCreate">{{
         t('devices.create')
       }}</UiButton></template
     >
+    <section v-if="definitionTask" class="console-panel" data-testid="group-definition-task">
+      <p>
+        {{ t('devices.definitionTask') }} · {{ definitionTask }} ·
+        {{ t(`devices.${definitionStatus?.status ?? 'pending'}`) }}
+      </p>
+      <p v-if="definitionStatus?.failure" role="alert">{{ definitionStatus.failure }}</p>
+      <UiButton :disabled="busy" @click="refresh">{{ t('devices.refreshTask') }}</UiButton>
+    </section>
+    <p v-if="current?.freshness === 'pending'" role="status">{{ t('devices.membersPending') }}</p>
     <template v-if="!current">
       <div class="task-directory-summary">
         <strong>{{ t('policies.ux.loaded', { count: list?.items.length ?? 0 }) }}</strong
@@ -433,7 +536,7 @@ function openGroup(group: string) {
             query: { group: current.group.id },
           }"
           >{{ t('policies.scopes') }}</RouterLink
-        ><UiButton :disabled="busy || uncertain" @click="preview">{{
+        ><UiButton :disabled="busy || uncertain || definitionPending" @click="preview">{{
           t('devices.previewSaved')
         }}</UiButton
         ><UiButton
@@ -633,11 +736,19 @@ function openGroup(group: string) {
       :close-label="t('console.close')"
     >
       <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
+      <div v-if="definitionTask" role="status">
+        <p>
+          {{ t('devices.definitionTask') }} ·
+          {{ t(`devices.${definitionStatus?.status ?? 'pending'}`) }}
+        </p>
+        <p v-if="definitionStatus?.failure">{{ definitionStatus.failure }}</p>
+        <UiButton :disabled="busy" @click="refresh">{{ t('devices.refreshTask') }}</UiButton>
+      </div>
       <form
         class="group-form"
         @submit.prevent="current && editKind === 'rule' ? saveRule($event) : save()"
       >
-        <fieldset :disabled="busy || uncertain">
+        <fieldset :disabled="busy || uncertain || definitionPending">
           <label
             >{{ t('devices.name')
             }}<input
@@ -717,7 +828,7 @@ function openGroup(group: string) {
             v-model="id"
             class="ui-input"
             required
-            :readonly="!!current || busy || uncertain" /></label
+            :readonly="!!current || busy || uncertain || definitionPending" /></label
         ><UiButton :disabled="busy || uncertain" type="submit">{{ t('devices.open') }}</UiButton>
       </form>
       <p>{{ current?.group.id }} · {{ current?.group.revision }} · {{ task }}</p>

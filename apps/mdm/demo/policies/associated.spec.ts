@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { randomUUID } from 'node:crypto'
-import { setup } from '../devices/test-harness'
+import { setup, publishGroupDefinition } from '../devices/test-harness'
 import { currentMember } from '../../src/features/devices/clients/endpoint-model'
 import { deviceCondition } from '../../src/features/devices/clients/asset-model'
 import { createScopeDemo } from './scopes'
@@ -28,8 +28,7 @@ it('keeps canonical associations in assignments, channel endpoints in Scope page
         criteria: deviceCondition(),
       },
     })
-  await f.groups.status(group, created.task!)
-  await f.groups.status(group, created.task!)
+  const createdResult = await publishGroupDefinition(f.groups, group, created.task!)
   const scopes = createScopeDemo(f.domain),
     id = randomUUID(),
     task = randomUUID()
@@ -74,12 +73,12 @@ it('keeps canonical associations in assignments, channel endpoints in Scope page
     reason: 'channel_unavailable',
     target: null,
   })
-  const old = await f.groups.page(group, created.task!, 'decisions')
+  const old = await f.groups.page(group, createdResult, 'decisions')
   await f.enrollment.revoke(agent.device, agent.registrationId, randomUUID())
   expect(scopes.assignments(id, 'agent').find((r) => r.object.id === association.id)).toMatchObject(
     { availability: 'unavailable', reason: 'association_unverified' },
   )
-  const history = await f.groups.page(group, created.task!, 'decisions')
+  const history = await f.groups.page(group, createdResult, 'decisions')
   expect(history.page).toEqual(old.page)
   expect(history.current).toBe(false)
   const page = scopes.handle(req(`/api/v1/scopes/${id}/results/${task}/members`), 'normal')!
@@ -114,9 +113,8 @@ it('evaluates associated conditions only from evidence matching original registr
       }),
     },
   })
-  await f.groups.status(group, create.task!)
-  await f.groups.status(group, create.task!)
-  expect((await f.groups.page(group, create.task!, 'members')).page).toMatchObject({
+  const createResult = await publishGroupDefinition(f.groups, group, create.task!)
+  expect((await f.groups.page(group, createResult, 'members')).page).toMatchObject({
     items: expect.arrayContaining([{ kind: 'association', id: association.id }]),
   })
   const changed = await f.groups.change(group, {
@@ -132,9 +130,8 @@ it('evaluates associated conditions only from evidence matching original registr
       }),
     },
   })
-  await f.groups.status(group, changed.task!)
-  await f.groups.status(group, changed.task!)
-  const page = await f.groups.page(group, changed.task!, 'decisions')
+  const changedResult = await publishGroupDefinition(f.groups, group, changed.task!)
+  const page = await f.groups.page(group, changedResult, 'decisions')
   if (page.page.kind !== 'decisions') throw new Error('Wrong projection')
   expect(page.page.items.find((d) => d.object.id === association.id)?.decision).toBe('unknown')
   const scopes = createScopeDemo(f.domain),
@@ -205,8 +202,7 @@ it('evaluates associated conditions only from evidence matching original registr
       }),
     },
   })
-  await f.groups.status(group, recovered.task!)
-  await f.groups.status(group, recovered.task!)
+  await publishGroupDefinition(f.groups, group, recovered.task!)
   expect(
     scopes.assignments(id, 'agent').find((row) => row.object.id === association.id),
   ).toMatchObject({

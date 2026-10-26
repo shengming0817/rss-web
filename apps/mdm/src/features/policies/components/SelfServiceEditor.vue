@@ -2,7 +2,6 @@
 import { computed, useId } from 'vue'
 import SelfServiceSelectors from './SelfServiceSelectors.vue'
 import type { SelfServiceAccess } from '../clients/self-service-access'
-defineProps<{ software?: boolean }>()
 import { useI18n } from 'vue-i18n'
 import { initialSelfService, type SelfService } from '../clients/model'
 const model = defineModel<SelfService | undefined>()
@@ -117,7 +116,7 @@ function publish(event: Event) {
       />
       <label :for="`${id}-keywords`">{{ t('policies.selfService.keywords') }}</label
       ><textarea :id="`${id}-keywords`" v-model="keywords" class="ui-input" />
-      <template v-if="!software">
+      <template>
         <label :for="`${id}-ai`"
           ><input :id="`${id}-ai`" v-model="model.allowAi" data-field="allowAi" type="checkbox" />{{
             t('policies.selfService.allowAi')

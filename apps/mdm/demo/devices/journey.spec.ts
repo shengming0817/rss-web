@@ -1,6 +1,6 @@
 import { encodeAssetQuery } from '../../src/features/devices/clients/asset-query'
 import { expect, it } from 'vitest'
-import { setup } from './test-harness'
+import { setup, publishGroupDefinition } from './test-harness'
 import { generateEnrollmentPassword } from '../../src/features/devices/clients/enrollment'
 const operation = <T>(input: T, expectedRevision = 0) => ({
   operationId: crypto.randomUUID(),
@@ -79,10 +79,10 @@ it('keeps pending enrollment discoverable, cancellation readable, and reset remo
   scenario.reset()
   expect((await scenario.handle('GET', '/api/v1/devices/new-mac')).status).toBe(401)
 })
-it('previews do not publish membership and stale tasks do not overwrite a newer definition', async () => {
+it('previews do not publish membership and metadata edits preserve accepted member calculations', async () => {
   const { groups } = await setup()
   const id = crypto.randomUUID()
-  await groups.change(
+  const created = await groups.change(
     id,
     operation({
       action: 'create',
@@ -95,13 +95,14 @@ it('previews do not publish membership and stale tasks do not overwrite a newer 
       },
     }),
   )
+  const published = await publishGroupDefinition(groups, id, created.task!)
   const current = await groups.read(id)
   const preview = await groups.preview(id, operation({}, current.group.revision))
-  await groups.status(id, preview.task)
-  await groups.status(id, preview.task)
+  await groups.status(id, preview.task, 'group_preview')
+  await groups.status(id, preview.task, 'group_preview')
   const result = await groups.page(id, preview.task, 'members')
   expect(result.current).toBe(false)
-  expect((await groups.read(id)).group.memberCount).toBe(0)
+  expect((await groups.read(id)).memberSet).toBe(published)
   const recompute = await groups.change(
     id,
     operation({ action: 'recompute' }, current.group.revision),
@@ -115,7 +116,7 @@ it('previews do not publish membership and stale tasks do not overwrite a newer 
     ),
   )
   await groups.status(id, recompute.task!)
-  expect((await groups.status(id, recompute.task!)).status).toBe('superseded')
+  expect((await groups.status(id, recompute.task!)).status).toBe('completed')
   expect((await groups.read(id)).group.presentation.name).toBe('Renamed')
 })
 it('evaluates associated groups from both endpoint sources and withholds targets until the association is verified', async () => {
@@ -164,9 +165,8 @@ it('evaluates associated groups from both endpoint sources and withholds targets
       },
     }),
   )
-  await groups.status(id, created.task!)
-  await groups.status(id, created.task!)
-  const decisions = await groups.page(id, created.task!, 'decisions')
+  const memberSet = await publishGroupDefinition(groups, id, created.task!)
+  const decisions = await groups.page(id, memberSet, 'decisions')
   if (decisions.page.kind !== 'decisions') throw new Error('Wrong projection')
   expect(decisions.page.items.find((d) => d.object.id === association.id)).toMatchObject({
     decision: 'unknown',
