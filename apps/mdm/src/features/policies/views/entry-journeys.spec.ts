@@ -112,6 +112,23 @@ function fixture() {
         session: { id },
       }),
     },
+    devices: {
+      views: {
+        detail: vi
+          .fn()
+          .mockResolvedValue({
+            endpoints: [
+              {
+                id: 'endpoint',
+                displayName: {
+                  state: { kind: 'known', value: { kind: 'string', value: 'Support workstation' } },
+                },
+              },
+            ],
+            fields: {},
+          }),
+      },
+    },
     policies: {
       policies: {
         list: vi.fn().mockResolvedValue({
@@ -263,6 +280,7 @@ it('reads stable tool metadata explicitly and discards a late result after sessi
 })
 it('shows frozen admission separately, follows original owners, and pages batch members', async () => {
   const { wrapper, runtime } = await setup(EventBatchesView, `/endpoint/${id}`)
+  expect(wrapper.text()).toContain('Support workstation')
   expect(wrapper.text()).toContain('受理不代表设备完成')
   expect(wrapper.text()).toContain(other)
   expect(wrapper.find('a[href*="policy-execution"]').attributes('href')).toContain(other)
@@ -286,6 +304,9 @@ it('shows partial coverage and independent facts, then clears denied or stale re
   expect(wrapper.text()).toContain('效果')
   expect(wrapper.text()).toContain('未知')
   expect(wrapper.text()).toContain('部分覆盖')
+  expect(wrapper.text()).toContain('Support workstation')
+  expect(wrapper.text()).toContain('记录时间（UTC）')
+  expect(wrapper.text()).toContain('1970-01-01 00:00:02 UTC')
   await button(wrapper, '查看关联事实').trigger('click')
   await flushPromises()
   expect(runtime.operations.activities.read).toHaveBeenCalledWith('endpoint', fact.id)

@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { UiButton } from '@rss/core/components'
+import DeviceContext from '../../devices/components/DeviceContext.vue'
 import PageFrame from '../../../components/PageFrame.vue'
 import CopyDeepLink from '../../../components/CopyDeepLink.vue'
 import { useMdm } from '../../../context'
@@ -103,6 +104,7 @@ watch(
 </script>
 <template>
   <PageFrame :title="t('policies.entry.batches')" :busy="op.busy.value" :failure="op.failure.value">
+    <DeviceContext :device="device" />
     <RouterLink
       :to="{
         name: 'device-activities',

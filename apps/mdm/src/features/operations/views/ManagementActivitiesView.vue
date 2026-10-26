@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { UiButton, UiDialog } from '@rss/core/components'
+import DeviceContext from '../../devices/components/DeviceContext.vue'
 import PageFrame from '../../../components/PageFrame.vue'
 import ActivityFacts from '../components/ActivityFacts.vue'
 import { useMdm } from '../../../context'
@@ -108,6 +109,7 @@ watch(
     :busy="op.busy.value"
     :failure="op.failure.value"
   >
+    <DeviceContext :device="device" />
     <RouterLink
       :to="{
         name: 'device-history',

@@ -28,6 +28,10 @@ const dimensions = [
       {{ label(fact.kind) }} · {{ label(fact.phase) }}
     </p>
     <dl>
+      <dt>{{ t('operations.auditUi.recorded') }}</dt>
+      <dd>{{ auditTime(fact.recordedAt) }}</dd>
+      <dt>{{ t('telemetry.observedAt') }}</dt>
+      <dd>{{ auditTime(fact.observedAt) }}</dd>
       <dt>{{ t('policies.entry.source') }}</dt>
       <dd>{{ fact.source }}</dd>
       <template v-for="dimension in dimensions" :key="dimension"

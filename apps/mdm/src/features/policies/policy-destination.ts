@@ -6,7 +6,7 @@ export function policyDestination(policy: PolicyRead, tenant: string) {
       ? 'software-deployments'
       : kind === 'ensure_agent_installed' || kind === 'request_mdm_enrollment'
         ? 'software-bootstrap'
-        : kind === 'unmanage_device'
+        : kind === 'unmanage_device' || kind === 'credential'
           ? 'policy-lifecycle'
           : ['execution', 'configuration', 'native_collection', 'agent_collection'].includes(kind)
             ? 'policy-policies'

@@ -304,14 +304,32 @@ try {
   await page.goto(at(`devices/${fixture.mdm}/activities`))
   await load()
   await page.getByText('观察时间 · UTC', { exact: false }).waitFor()
-  const originalActivities = await get(activityPath + '?operation=' + original.operationId)
-  if (originalActivities.items.length) {
-    const fact = originalActivities.items[0]
-    const detail = await get(activityPath + '/' + encodeURIComponent(fact.id))
-    assert.equal(detail.activity.id, fact.id)
-    assert.ok(Array.isArray(detail.missing))
-    assert.ok(detail.activity.effect === null || typeof detail.activity.effect === 'string')
-  }
+  let originalActivities
+  const activityDeadline = Date.now() + 30000
+  do {
+    originalActivities = await get(activityPath + '?operation=' + original.operationId)
+    if (originalActivities.items.length) break
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  } while (Date.now() < activityDeadline)
+  assert.ok(
+    originalActivities.items.length > 0,
+    'original operation activity appears within the bounded window',
+  )
+  const fact = originalActivities.items[0]
+  assert.equal(fact.links.operation, original.operationId)
+  const detail = await get(activityPath + '/' + encodeURIComponent(fact.id))
+  assert.equal(detail.activity.id, fact.id)
+  assert.ok(Array.isArray(detail.missing))
+  await page.goto(at(`devices/${fixture.mdm}/activities`) + '?operation=' + original.operationId)
+  await load()
+  const detailRead = page.waitForResponse(
+    (r) => new URL(r.url()).pathname === `${activityPath}/${encodeURIComponent(fact.id)}`,
+  )
+  await page.getByRole('button', { name: '查看关联事实', exact: true }).first().click()
+  assert.equal((await detailRead).status(), 200)
+  const activityDialog = page.getByRole('dialog')
+  await activityDialog.getByText(fact.id, { exact: true }).waitFor()
+  await page.keyboard.press('Escape')
   await changeRule(fixture.rule.grants.filter((g) => g.operation !== 'audit_read'))
   assert.equal((await request('get', '/api/v1/audit-events')).status(), 403)
   assert.equal((await request('get', activityPath)).status(), 200)
