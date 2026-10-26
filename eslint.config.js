@@ -332,4 +332,141 @@ export default tseslint.config(
       'no-restricted-properties': ['error', ...NO_NETWORK_PROPERTIES],
     },
   },
+  {
+    files: ['apps/device-access/**/*.{ts,vue}', 'packages/device-access/**/*.{ts,vue}'],
+    plugins: {
+      'da-boundary': {
+        rules: {
+          contained: {
+            meta: {
+              type: 'problem',
+              schema: [],
+              messages: {
+                boundary:
+                  'DA imports must stay in their owner and use public exports; production cannot import demo.',
+              },
+            },
+            create(context) {
+              return {
+                ImportDeclaration: (node) => check(node.source),
+                ExportNamedDeclaration: (node) => {
+                  if (node.source) check(node.source)
+                },
+                ExportAllDeclaration: (node) => check(node.source),
+                ImportExpression: (node) => check(node.source),
+              }
+              function check(node) {
+                if (typeof node.value !== 'string' || !node.value.startsWith('.')) return
+                const filename = context.filename,
+                  marker = filename.includes(`${sep}apps${sep}device-access${sep}`)
+                    ? `${sep}apps${sep}device-access${sep}`
+                    : `${sep}packages${sep}device-access${sep}`
+                const root = filename.slice(0, filename.lastIndexOf(marker)) + marker,
+                  target = resolve(dirname(filename), node.value)
+                if (
+                  !target.startsWith(root) ||
+                  (filename.startsWith(root + 'src' + sep) &&
+                    !filename.endsWith('.spec.ts') &&
+                    (target === root + 'demo' || target.startsWith(root + 'demo' + sep)))
+                )
+                  context.report({ node, messageId: 'boundary' })
+              }
+            },
+          },
+        },
+      },
+    },
+    rules: {
+      'da-boundary/contained': 'error',
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex:
+              '^@rss/(?!auth(?:/|$)|device-access/(?:client|model|components)$|api/(?:identity|mdm|device-access)$)',
+            message: 'Use public DA and authentication boundaries.',
+          },
+        ],
+        [NO_AXIOS_PATH],
+      ),
+      'no-restricted-globals': ['error', ...NO_NETWORK],
+      'no-restricted-properties': ['error', ...NO_NETWORK_PROPERTIES],
+    },
+  },
+  {
+    files: ['packages/device-access/**/*.{ts,vue}'],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex: '^@rss/(?!api/(?:identity|mdm)$)',
+            message: 'The domain owns no session or application composition.',
+          },
+        ],
+        [NO_AXIOS_PATH],
+      ),
+    },
+  },
+  {
+    files: ['apps/device-access/src/**/*.{ts,vue}'],
+    ignores: [
+      'apps/device-access/src/main.ts',
+      'apps/device-access/src/bootstrap.ts',
+      '**/*.spec.ts',
+    ],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex:
+              '^@rss/(?!auth$|device-access/(?:client|model|components)$|api/(?:identity|mdm)$)',
+            message: 'Features consume injected clients.',
+          },
+        ],
+        [
+          NO_AXIOS_PATH,
+          {
+            name: '@rss/auth',
+            importNames: [
+              'createSession',
+              'createApi',
+              'createFlows',
+              'identityRouter',
+              'bindSession',
+            ],
+            message: 'Only bootstrap assembles authentication.',
+          },
+        ],
+      ),
+    },
+  },
+  {
+    files: ['apps/device-access/demo/**/*.{ts,vue}'],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex:
+              '^@rss/(?!auth$|device-access/(?:client|model)$|api/(?:identity|mdm|device-access-demo)$)',
+            message: 'Demo is explicit and uses the existing executor.',
+          },
+        ],
+        [NO_AXIOS_PATH],
+      ),
+    },
+  },
+  {
+    files: ['apps/device-access/**/*.spec.ts', 'packages/device-access/**/*.spec.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex:
+              '^@rss/(?!auth$|device-access/(?:client|model|components)$|api/(?:identity|mdm|testing)$)',
+            message: 'Tests use declared public boundaries.',
+          },
+        ],
+        [NO_AXIOS_PATH],
+      ),
+    },
+  },
 )

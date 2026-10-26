@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite build --watch",
-    "demo": "vite --mode demo --host 127.0.0.1 --port 4328 --strictPort",
-    "build": "vue-tsc --noEmit && vite build",
+    "dev": "vite build --configLoader runner --watch",
+    "demo": "vite --configLoader runner --mode demo --host 127.0.0.1 --port 4328 --strictPort",
+    "build": "vue-tsc --noEmit && vite build --configLoader runner",
     "typecheck": "vue-tsc --noEmit && vue-tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"

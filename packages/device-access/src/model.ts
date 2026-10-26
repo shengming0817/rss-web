@@ -134,8 +134,10 @@ export interface Capabilities {
   audit: Capability
 }
 export class CapabilityUnavailable extends Error {
-  constructor(public readonly capability: string) {
+  readonly capability: string
+  constructor(capability: string) {
     super('capability_unavailable')
+    this.capability = capability
     this.name = 'CapabilityUnavailable'
   }
 }

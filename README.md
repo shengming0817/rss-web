@@ -1,5 +1,7 @@
 # RSS Web
 
+独立 Device Access（`apps/device-access`）：`pnpm dev:device-access:demo` 启动明确标识的 mock HTTP 演示；`pnpm build:device-access` 构建生产包。真实接口范围、尚缺的接缝和 MDM 消费方式见 [DA 接入与开发](apps/device-access/README.md)。
+
 本仓维护独立部署的 MDM 控制台（`apps/mdm`）与 Identity 认证 UI（`apps/identity`）。`@rss/auth` 提供共享 cookie 会话与认证 UI，`@rss/core` 提供展示基础，`@rss/api` 拥有单一 HTTP 执行边界；每个应用独立装配唯一会话 owner，权限由后端决定。
 
 接入、部署及会话行为见[宿主认证 UI](docs/architecture/20260917-2368-embedded-identity.md)。
