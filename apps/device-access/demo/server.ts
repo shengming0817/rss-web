@@ -161,7 +161,9 @@ export function createDemoServer() {
             id,
             device,
             kind,
-            state: kind === 'assignment' ? 'completed' : 'accepted',
+            state: ['assignment', 'application', 'configuration'].includes(kind)
+              ? 'completed'
+              : 'accepted',
             observations: [],
           }
         data.operations.set(id, { principal: session!.principal, payload, result, operation })

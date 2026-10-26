@@ -19,16 +19,19 @@ const { data, busy, error, reload } = useRead((signal) => r.security.list(signal
 const registration = useMutation(() => '/security/register'),
   removal = useMutation(() => '/security/remove/' + selected.value?.id)
 let proofAbort: AbortController | undefined
+let epoch = 0
 onBeforeUnmount(() => {
+  epoch++
   proofAbort?.abort()
   void r.security.cancel().catch(() => undefined)
 })
 async function register() {
+  const version = epoch
   const label = name.value.trim()
   if (!label) return
   name.value = ''
   const value = await registration.run((_id, signal) => r.security.register(label, signal))
-  if (value) {
+  if (value && version === epoch && open.value) {
     open.value = false
     await reload()
   }
@@ -43,18 +46,29 @@ async function remove() {
   await reload()
 }
 async function prove() {
+  const version = epoch
   proofBusy.value = true
   proofAbort = new AbortController()
   try {
     await r.security.reauthenticate(proofAbort.signal)
-    message.value = '认证完成，请重新输入名称并明确注册。'
+    if (version === epoch) message.value = '认证完成，请重新输入名称并明确注册。'
   } catch (e) {
-    message.value = errorMessage(e)
+    if (version === epoch) message.value = errorMessage(e)
   } finally {
-    proofBusy.value = false
+    if (version === epoch) proofBusy.value = false
   }
 }
+function closeRemoval() {
+  selected.value = null
+  removal.cancel()
+  void r.security.cancel().catch(() => undefined)
+}
 function close() {
+  epoch++
+  proofBusy.value = false
+  message.value = ''
+  registration.cancel()
+  proofAbort?.abort()
   open.value = false
   name.value = ''
   void r.security.cancel().catch(() => undefined)
@@ -151,7 +165,7 @@ function close() {
     max-width="620"
     @update:model-value="
       (v) => {
-        if (!v) selected = null
+        if (!v) closeRemoval()
       }
     "
     ><v-card v-if="selected"
@@ -160,7 +174,7 @@ function close() {
         ><p>{{ $t('da.m96291912da') }}</p>
         <WriteState :state="removal.state.value" /></v-card-text
       ><v-card-actions
-        ><v-spacer /><v-btn @click="selected = null">{{ $t('da.m6c14bd7f6f') }}</v-btn
+        ><v-spacer /><v-btn @click="closeRemoval">{{ $t('da.m6c14bd7f6f') }}</v-btn
         ><v-btn color="error" :disabled="removal.locked.value" @click="remove">{{
           $t('da.m050ff5c725')
         }}</v-btn></v-card-actions

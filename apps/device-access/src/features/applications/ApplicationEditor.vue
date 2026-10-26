@@ -53,11 +53,20 @@ async function save() {
     (operationId, signal) => r.client.application(input(operationId), signal),
     false,
   )
-  if (result) emit('saved')
+  if (result) {
+    emit('saved')
+    emit('close')
+  }
 }
 async function query() {
-  const result = await op.query((id, signal) => r.client.operation(null, id, signal))
-  if (result) emit('saved')
+  const result = await op.query(
+    (id, signal) => r.client.operation(null, id, signal),
+    (value) => value.state === 'completed',
+  )
+  if (result) {
+    emit('saved')
+    emit('close')
+  }
 }
 async function prove() {
   if (proofBusy.value) return
@@ -126,9 +135,12 @@ async function prove() {
         <p v-if="proofMessage" role="status">{{ proofMessage }}</p></v-card-text
       ><v-card-actions class="modal-actions"
         ><v-spacer /><v-btn @click="emit('close')">{{ $t('da.m6c14bd7f6f') }}</v-btn
-        ><v-btn color="primary" :disabled="!valid || op.locked.value" @click="save">{{
-          $t('da.m706df2710a')
-        }}</v-btn></v-card-actions
+        ><v-btn
+          color="primary"
+          :disabled="!valid || op.locked.value || !r.client.capabilities.applicationWrite.available"
+          @click="save"
+          >{{ $t('da.m706df2710a') }}</v-btn
+        ></v-card-actions
       ></v-card
     ></v-dialog
   >

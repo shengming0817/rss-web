@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onBeforeUnmount } from 'vue'
 import type { Computer, Binding } from '@rss/device-access/model'
 import { AccountBindingSummary } from '@rss/device-access/components'
-import { useDa } from '../../../context'
+import { useDa, identityKey } from '../../../context'
 import { useRead } from '../../../services/read'
 import { useMutation } from '../../../services/mutation'
 import { errorMessage } from '../../../services/status'
@@ -51,12 +51,30 @@ async function query() {
   )
   if (result) selected.value = result
 }
+let proofController: AbortController | undefined,
+  proofEpoch = 0
+function cancelProof() {
+  proofEpoch++
+  proofController?.abort()
+  proofController = undefined
+  proofBusy.value = false
+  proofError.value = ''
+  void r.security.cancel().catch(() => undefined)
+}
+watch(
+  [() => selected.value?.id, () => props.device.id, () => identityKey(r.session)],
+  cancelProof,
+  { flush: 'sync' },
+)
+onBeforeUnmount(cancelProof)
 async function prove() {
   const b = selected.value
   if (!b || proofBusy.value) return
   proofBusy.value = true
   proofError.value = ''
+  const version = proofEpoch
   const control = new AbortController()
+  proofController = control
   try {
     const c = await r.client.bindingChallenge(
       props.device.id,
@@ -69,11 +87,12 @@ async function prove() {
       control.signal,
     )
     await r.security.prove(c, control.signal)
+    if (version !== proofEpoch || control.signal.aborted) return
     proofError.value = '认证完成，请再次明确提交。'
   } catch (e) {
-    proofError.value = errorMessage(e)
+    if (version === proofEpoch) proofError.value = errorMessage(e)
   } finally {
-    proofBusy.value = false
+    if (version === proofEpoch) proofBusy.value = false
   }
 }
 </script>

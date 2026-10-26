@@ -4,8 +4,10 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createSession } from '@rss/auth'
 import { decodeIdentityError, type HttpTransport, type RequestOptions } from '@rss/api/identity'
 import { decodeMdmError } from '@rss/api/mdm'
-import { CapabilityUnavailable } from '@rss/device-access/model'
+import { CapabilityUnavailable, CredentialWriteNotDispatched } from '@rss/device-access/model'
 import { daKey, identityKey, type DaRuntime } from '../context'
+import { useDirectory } from './directory'
+import { createSecurityClient } from '@rss/device-access/client'
 import { useRead } from './read'
 import { useMutation } from './mutation'
 import { errorMessage, uncertain, needsProof, utc, label } from './status'
@@ -182,4 +184,106 @@ it('validates host config and gives closed, non-secret error messages', () => {
   }
   expect(needsProof(decodeIdentityError(403, { code: 'reauthentication_required' }))).toBe(true)
   expect(errorMessage(new DOMException('SECRET', 'NotAllowedError'))).toContain('取消')
+})
+
+it('keeps complete directory pages and fences stale pages on identity loss', async () => {
+  const r = await runtime(),
+    load = vi
+      .fn()
+      .mockResolvedValueOnce({ items: [{ id: 'a' }], nextCursor: 'p2' })
+      .mockResolvedValueOnce({ items: [{ id: 'b' }], nextCursor: null })
+  const directory = use(r, () => useDirectory<{ id: string }>(load)).output
+  await flushPromises()
+  expect(directory.complete.value).toBe(false)
+  await directory.loadMore()
+  expect(directory.items.value).toEqual([{ id: 'a' }, { id: 'b' }])
+  expect(directory.complete.value).toBe(true)
+  expect(load.mock.calls[1]?.[0]).toBe('p2')
+  r.session.clear()
+  expect(directory.items.value).toEqual([])
+})
+it('allows explicit failed-page retry and stops repeated cursor loops', async () => {
+  const r = await runtime(),
+    load = vi
+      .fn()
+      .mockResolvedValueOnce({ items: [{ id: 'a' }], nextCursor: 'p2' })
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ items: [{ id: 'b' }], nextCursor: 'p2' })
+  const d = use(r, () => useDirectory<{ id: string }>(load)).output
+  await flushPromises()
+  await d.loadMore()
+  expect(d.items.value).toEqual([{ id: 'a' }])
+  expect(d.error.value).toBeTruthy()
+  await d.loadMore()
+  expect(d.blocked.value).toBe(true)
+  expect(d.complete.value).toBe(false)
+  await d.loadMore()
+  expect(load).toHaveBeenCalledTimes(3)
+})
+it('unlocks only confirmed synchronous operation completion for the next explicit edit', async () => {
+  const r = await runtime(),
+    op = use(r, () => useMutation(() => '/assignment/one')).output
+  await op.run(async () => {
+    throw new Error('lost')
+  })
+  const id = op.state.value.id
+  await op.query(
+    async () => ({ state: 'pending' }),
+    (v) => v.state === 'completed',
+  )
+  expect(op.locked.value).toBe(true)
+  await op.query(
+    async () => ({ state: 'completed' }),
+    (v) => v.state === 'completed',
+  )
+  expect(op.locked.value).toBe(false)
+  await op.run(async () => 42)
+  expect(op.state.value.id).not.toBe(id)
+})
+it('integrates cancelled WebAuthn with retryable state, but keeps lost finish results unknown', async () => {
+  const r = await runtime(),
+    op = use(r, () => useMutation(() => '/security/register')).output
+  vi.stubGlobal('PublicKeyCredential', {
+    parseCreationOptionsFromJSON: (v: unknown) => v,
+    parseRequestOptionsFromJSON: (v: unknown) => v,
+  })
+  const create = vi
+    .fn()
+    .mockRejectedValueOnce(new DOMException('cancelled', 'NotAllowedError'))
+    .mockResolvedValue({ toJSON: () => ({}) })
+  vi.stubGlobal('navigator', { credentials: { create } })
+  const calls: string[] = []
+  const transport = {
+    request: async (o: RequestOptions<unknown>) => {
+      calls.push(o.path)
+      if (o.path.endsWith('/finish')) throw new Error('lost')
+      return o.decode(
+        o.path.endsWith('/begin')
+          ? { id, options: { publicKey: {} }, expires_at: 4102444800 }
+          : { cancelled: true },
+      )
+    },
+  } as HttpTransport
+  const client = createSecurityClient(transport, tenant)
+  await op.run((_id, signal) => client.register('one', signal))
+  expect(op.state.value.state).toBe('idle')
+  await op.run((_id, signal) => client.register('two', signal))
+  expect(op.state.value.state).toBe('unknown')
+  await op.run((_id, signal) => client.register('three', signal))
+  expect(calls.filter((p) => p.endsWith('/finish'))).toHaveLength(1)
+  vi.unstubAllGlobals()
+  expect(uncertain(new DOMException('cancelled', 'AbortError'))).toBe(true)
+  for (const reason of ['busy', 'unsupported', 'cancelled', 'precondition'] as const) {
+    const e = new CredentialWriteNotDispatched(reason, new Error('SECRET'))
+    expect(uncertain(e)).toBe(false)
+    expect(errorMessage(e)).not.toContain('SECRET')
+  }
+  expect(
+    needsProof(
+      new CredentialWriteNotDispatched(
+        'precondition',
+        decodeIdentityError(403, { code: 'reauthentication_required' }),
+      ),
+    ),
+  ).toBe(true)
 })

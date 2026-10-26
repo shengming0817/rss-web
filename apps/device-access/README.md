@@ -31,7 +31,7 @@ pnpm build:device-access
 | --- | --- |
 | 计算机目录/详情 | 正式 device-views；将 association 中的真实 endpoint 分别保留，写入不使用 association ID |
 | Device Access 绑定、因子重置、原操作查询 | 正式设备级 device-access；读权限仍由后端 AccountWrite 等规则判断 |
-| 企业 RP 配置 | 正式 enterprise/configuration；只能配置宿主已登记的 RP，不创建任意 IdP client |
+| 企业 RP 目录 | 正式 enterprise/configuration 只读；写入候选先使用 mock，等待可恢复原操作的查询合同；不创建任意 IdP client |
 | 账户 WebAuthn | 正式 Identity begin/finish/cancel、凭据列表/移除；浏览器需支持 Level 3 JSON conversion |
 | 恢复元数据、RSS 材料查阅 | 正式 recovery-credentials 目录与 DA 专用 POST disclosure；必要时使用用途绑定 step-up |
 | 审计、设备时间线 | 正式公开目录，展示安全事实，不输出秘密 |

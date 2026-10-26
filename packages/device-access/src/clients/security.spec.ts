@@ -41,7 +41,10 @@ it('uses browser JSON conversion and current-account server ceremonies', async (
   f.replies.push([{ id, label: 'key' }], c(), { id, label: 'new' })
   expect(await f.client.list(signal)).toEqual([{ id, label: 'key' }])
   expect(await f.client.register('new', signal)).toEqual({ id, label: 'new' })
-  expect(b.create).toHaveBeenCalledWith({ publicKey: { challenge: 'AQID' }, signal })
+  expect(b.create).toHaveBeenCalledWith({
+    publicKey: { challenge: 'AQID' },
+    signal: expect.any(AbortSignal),
+  })
   expect(f.calls[2]?.body).toEqual({ id, response: { id: 'registration', type: 'public-key' } })
   await f.client.cancel()
   expect(f.calls).toHaveLength(3)
@@ -68,14 +71,16 @@ it('cancels pre-dispatch browser failures without replaying writes', async () =>
     b = browser()
   b.create.mockRejectedValueOnce(new DOMException('Cancelled', 'NotAllowedError'))
   f.replies.push(c(), { cancelled: true })
-  await expect(f.client.register('key', signal)).rejects.toMatchObject({ name: 'NotAllowedError' })
+  await expect(f.client.register('key', signal)).rejects.toMatchObject({ reason: 'cancelled' })
   expect(f.calls.map((x) => x.path)).toEqual([
     '/api/v1/identity/tenants/{tenant}/webauthn/register/begin',
     '/api/v1/identity/tenants/{tenant}/webauthn/{ceremony}/cancel',
   ])
   b.get.mockResolvedValueOnce(null)
   f.replies.push({ cancelled: true })
-  await expect(f.client.prove(challenge(c()), signal)).rejects.toThrow('cancelled')
+  await expect(f.client.prove(challenge(c()), signal)).rejects.toMatchObject({
+    reason: 'cancelled',
+  })
 })
 it('does not retry a finish whose result is unknown', async () => {
   const f = fixture()
@@ -88,13 +93,13 @@ it('does not retry a finish whose result is unknown', async () => {
 it('rejects missing browser support and expired or malformed challenges', async () => {
   const f = fixture()
   vi.stubGlobal('PublicKeyCredential', undefined)
-  await expect(f.client.register('key', signal)).rejects.toThrow('capability_unavailable')
+  await expect(f.client.register('key', signal)).rejects.toMatchObject({ reason: 'unsupported' })
   expect(f.calls).toHaveLength(0)
   browser()
   f.replies.push({ cancelled: true })
-  await expect(f.client.prove({ ...challenge(c()), expiresAt: 1 }, signal)).rejects.toThrow(
-    'expired',
-  )
+  await expect(f.client.prove({ ...challenge(c()), expiresAt: 1 }, signal)).rejects.toMatchObject({
+    reason: 'cancelled',
+  })
   expect(() => challenge({ id: 'bad', options: {} })).toThrow()
   expect(() => challenge({ id, options: null })).toThrow()
 })
@@ -112,10 +117,66 @@ it('serializes ceremonies and rejects missing JSON serialization', async () => {
   const pending = f.client.register('new', signal)
   await Promise.resolve()
   await Promise.resolve()
-  await expect(f.client.register('second', signal)).rejects.toThrow('busy')
+  await expect(f.client.register('second', signal)).rejects.toMatchObject({ reason: 'busy' })
   finish()
   await pending
   b.get.mockResolvedValueOnce({})
   f.replies.push({ cancelled: true })
-  await expect(f.client.prove(challenge(c()), signal)).rejects.toThrow('capability_unavailable')
+  await expect(f.client.prove(challenge(c()), signal)).rejects.toMatchObject({
+    reason: 'unsupported',
+  })
+})
+
+it('cancels a late begin response before touching the authenticator or finish', async () => {
+  const b = browser()
+  let resolve!: (v: unknown) => void
+  const calls: RequestOptions<unknown>[] = []
+  const transport = {
+    request: async (o: RequestOptions<unknown>) => {
+      calls.push(o)
+      return o.decode(
+        o.path.endsWith('/begin')
+          ? await new Promise((r) => {
+              resolve = r
+            })
+          : { cancelled: true },
+      )
+    },
+  } as HttpTransport
+  const client = createSecurityClient(transport, tenant)
+  const pending = client.register('key', signal)
+  await client.cancel()
+  resolve(c())
+  await expect(pending).rejects.toMatchObject({ reason: 'cancelled' })
+  expect(b.create).not.toHaveBeenCalled()
+  expect(calls.map((o) => o.path)).toEqual([
+    '/api/v1/identity/tenants/{tenant}/webauthn/register/begin',
+    '/api/v1/identity/tenants/{tenant}/webauthn/{ceremony}/cancel',
+  ])
+})
+it('cancels stale external challenges and prevents remove after a cancelled proof', async () => {
+  const f = fixture(),
+    b = browser(),
+    abort = new AbortController()
+  abort.abort()
+  f.replies.push({ cancelled: true })
+  await expect(f.client.prove(challenge(c()), abort.signal)).rejects.toMatchObject({
+    reason: 'cancelled',
+  })
+  expect(b.get).not.toHaveBeenCalled()
+  let resolve!: (v: unknown) => void
+  b.get.mockImplementationOnce(
+    () =>
+      new Promise((r) => {
+        resolve = r
+      }),
+  )
+  f.replies.push(c(), { cancelled: true })
+  const remove = f.client.remove(id, signal)
+  await Promise.resolve()
+  await Promise.resolve()
+  await f.client.cancel()
+  resolve({ toJSON: () => ({}) })
+  await expect(remove).rejects.toMatchObject({ reason: 'cancelled' })
+  expect(f.calls.some((o) => o.path.endsWith('/remove'))).toBe(false)
 })

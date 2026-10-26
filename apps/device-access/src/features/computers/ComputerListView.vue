@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useDa } from '../../context'
 import { useRead } from '../../services/read'
+import { readListLocation, listLocation } from './list-location'
 import { utc, label } from '../../services/status'
 import ReadState from '../../ui/ReadState.vue'
 import Icon from '../../ui/Icon.vue'
@@ -10,9 +11,10 @@ import ComputerWorkspace from './ComputerWorkspace.vue'
 const r = useDa(),
   router = useRouter(),
   route = useRoute(),
-  cursor = ref<string | null>(null),
-  search = ref(typeof route.query['q'] === 'string' ? route.query['q'] : ''),
-  platform = ref('all'),
+  initial = readListLocation(route.query),
+  cursor = ref<string | null>(initial.cursor),
+  search = ref(initial.search),
+  platform = ref(initial.platform),
   quick = ref<string | null>(null)
 const { data, busy, error, reload } = useRead(
   (signal) => r.client.computers(cursor.value, signal),
@@ -26,15 +28,19 @@ const rows = computed(
         c.name.toLowerCase().includes(search.value.toLowerCase()),
     ) ?? [],
 )
+watch([cursor, platform], persist)
 function open(id: string, tab = 'status') {
   void router.push({
     name: 'computer',
     params: { deviceId: id, tab },
-    query: search.value ? { q: search.value } : {},
+    query: listQuery(),
   })
 }
+function listQuery() {
+  return listLocation(search.value, platform.value, cursor.value)
+}
 function persist() {
-  void router.replace({ query: search.value ? { q: search.value } : {} })
+  void router.replace({ query: listQuery() })
 }
 </script>
 <template>

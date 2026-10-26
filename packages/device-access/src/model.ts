@@ -129,6 +129,7 @@ export interface Capabilities {
   bindings: Capability
   recovery: Capability
   rotation: Capability
+  applicationWrite: Capability
   applications: Capability
   security: Capability
   audit: Capability
@@ -142,3 +143,15 @@ export class CapabilityUnavailable extends Error {
   }
 }
 export * as viewDecoders from './model/views'
+
+/** Trusted client classification: no credential registration/removal commit was dispatched. */
+export class CredentialWriteNotDispatched extends Error {
+  readonly reason: 'cancelled' | 'unsupported' | 'precondition' | 'busy'
+  readonly original: unknown
+  constructor(reason: 'cancelled' | 'unsupported' | 'precondition' | 'busy', original?: unknown) {
+    super('credential_write_not_dispatched')
+    this.name = 'CredentialWriteNotDispatched'
+    this.reason = reason
+    this.original = original
+  }
+}

@@ -4,6 +4,7 @@ import type { Configuration, ConfigurationInput, Person, Platform } from '@rss/d
 import { useDa } from '../../context'
 import { useRead } from '../../services/read'
 import { useMutation } from '../../services/mutation'
+import { useDirectory } from '../../services/directory'
 import ReadState from '../../ui/ReadState.vue'
 import WriteState from '../../ui/WriteState.vue'
 const props = defineProps<{ existing: Configuration | null }>()
@@ -18,15 +19,11 @@ const r = useDa(),
   scope = ref<string | null>(props.existing?.scope.id ?? null),
   excluded = ref(props.existing?.exclusions.map((x) => x.id) ?? []),
   mode = ref(props.existing?.mode ?? 'platform_sso')
-const { data, busy, error, reload } = useRead(async (signal) => ({
-  scopes: await r.client.scopes(signal),
-  computers: await r.client.computers(null, signal),
-}))
-const op = useMutation(() => '/configuration/' + id)
-const targetScope = computed(() => data.value?.scopes.find((s) => s.id === scope.value)),
-  targets = computed(
-    () => data.value?.computers.items.filter((c) => c.platform === platform.value) ?? [],
-  )
+const { data, busy, error, reload } = useRead((signal) => r.client.scopes(signal))
+const directory = useDirectory((cursor, signal) => r.client.computers(cursor, signal))
+const op = useMutation(() => '/configuration/' + (props.existing?.id ?? 'new'))
+const targetScope = computed(() => data.value?.find((s) => s.id === scope.value)),
+  targets = computed(() => directory.items.value.filter((c) => c.platform === platform.value))
 const valid = computed(
   () => name.value.trim().length > 0 && !!targetScope.value && platform.value !== 'unknown',
 )
@@ -59,7 +56,7 @@ function input(operationId: string): ConfigurationInput {
   }
 }
 async function save() {
-  if (!valid.value) return
+  if (!valid.value || !directory.complete.value) return
   const result = await op.run(
     (operationId, signal) => r.client.configuration(input(operationId), signal),
     false,
@@ -70,7 +67,10 @@ async function save() {
   }
 }
 async function query() {
-  const result = await op.query((id, signal) => r.client.operation(null, id, signal))
+  const result = await op.query(
+    (id, signal) => r.client.operation(null, id, signal),
+    (value) => value.state === 'completed',
+  )
   if (result) {
     step.value = 4
     emit('saved')
@@ -153,7 +153,7 @@ async function query() {
         ><template v-else-if="step === 2"
           ><v-select
             v-model="scope"
-            :items="data?.scopes ?? []"
+            :items="data ?? []"
             item-title="label"
             item-value="id"
             :label="$t('da.m2d163c3dd9')"
@@ -170,9 +170,21 @@ async function query() {
             :disabled="op.locked.value"
           />
           <p class="small muted mt-5">{{ $t('da.mbd7d083988') }}</p>
-          <v-alert v-if="data?.computers.nextCursor" type="warning" :icon="false">{{
-            $t('da.mf40d9fa656')
-          }}</v-alert></template
+          <ReadState
+            :busy="directory.busy.value"
+            :error="directory.error.value"
+            @retry="directory.loadMore"
+          />
+          <v-alert v-if="!directory.complete.value" type="info" :icon="false"
+            >设备目录尚未读取完整，请加载后续页再核对影响。</v-alert
+          >
+          <v-btn
+            v-if="!directory.complete.value"
+            :loading="directory.busy.value"
+            :disabled="directory.blocked.value"
+            @click="directory.loadMore"
+            >加载下一页</v-btn
+          ></template
         ><template v-else-if="step === 3"
           ><h3>{{ $t('da.m8c97403b16') }}</h3>
           <dl class="detail-list mt-4">
@@ -219,10 +231,7 @@ async function query() {
           v-if="step < 3"
           color="primary"
           :disabled="
-            !!error ||
-            busy ||
-            !name.trim() ||
-            (step === 2 && (!valid || !!data?.computers.nextCursor))
+            !!error || busy || !name.trim() || (step === 2 && (!valid || !directory.complete.value))
           "
           @click="step++"
           >{{ step === 2 ? '核对影响' : '下一步' }}</v-btn

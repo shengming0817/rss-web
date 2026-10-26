@@ -24,6 +24,7 @@ const { data, busy, error, reload } = useRead(
     </div>
     <v-btn
       color="primary"
+      :disabled="!r.client.capabilities.applicationWrite.available"
       @click="
         editing = null
         open = true
@@ -31,6 +32,13 @@ const { data, busy, error, reload } = useRead(
       >{{ $t('da.m23008c2dff') }}</v-btn
     >
   </div>
+  <v-alert
+    v-if="!r.client.capabilities.applicationWrite.available"
+    type="info"
+    :icon="false"
+    class="mb-5"
+    >当前正式服务仅开放读取。原操作恢复合同未就绪前不提交配置写入；演示入口可体验候选编辑流程。</v-alert
+  >
   <ReadState :busy="busy" :error="error" @retry="reload" />
   <div v-if="data" class="application-grid">
     <section v-for="a in data.items" :key="a.id" class="panel application">

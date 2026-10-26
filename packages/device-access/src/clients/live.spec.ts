@@ -251,18 +251,16 @@ describe('native public DA adapters', () => {
       input = { ...rp(), operationId: id, expectedRevision: 1 }
     f.replies.push(
       { items: [{ id: 'rp:app', kind: 'relying_party', value: rp() }], nextCursor: null },
-      { kind: 'relying_party', value: rp() },
-      { id, options: {} },
       { id, options: {}, expires_at: 9999999999 },
       { id, options: {} },
     )
     expect((await f.client.applications(null, signal)).items[0]?.id).toBe('app')
-    await f.client.application(input, signal)
-    expect(f.requests[1]?.body).toMatchObject({
-      operationId: id,
-      configuration: { kind: 'relying_party', id: 'app' },
-    })
-    await f.client.applicationChallenge(input, signal)
+    await expect(f.client.application(input, signal)).rejects.toBeInstanceOf(CapabilityUnavailable)
+    await expect(f.client.applicationChallenge(input, signal)).rejects.toBeInstanceOf(
+      CapabilityUnavailable,
+    )
+    expect(f.client.capabilities.applicationWrite.available).toBe(false)
+    expect(f.requests).toHaveLength(1)
     await f.client.bindingChallenge(
       'pc',
       id,

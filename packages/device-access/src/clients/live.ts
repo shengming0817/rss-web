@@ -32,6 +32,7 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
       recovery: ready,
       rotation: missing('recovery_rotation'),
       applications: ready,
+      applicationWrite: missing('application_operation_query'),
       security: ready,
       audit: ready,
     },
@@ -134,25 +135,7 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
         successStatus: 200,
         decode: challenge,
       }),
-    applicationChallenge: (input, signal) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/device-access/enterprise/configuration/step-up',
-        body: {
-          operationId: uuid(input.operationId),
-          expectedRevision: input.expectedRevision,
-          configuration: {
-            kind: 'relying_party',
-            id: input.id,
-            enabled: input.enabled,
-            callback: input.callback,
-            capabilities: input.capabilities,
-          },
-        },
-        signal,
-        successStatus: 200,
-        decode: challenge,
-      }),
+    applicationChallenge: async () => unavailable('application_operation_query'),
     bindingChallenge: (device, id, input, signal) =>
       transport.request({
         method: 'POST',
@@ -220,32 +203,7 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
             return result
           }),
       }),
-    application: (input, signal) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/device-access/enterprise/configuration',
-        body: {
-          operationId: uuid(input.operationId),
-          expectedRevision: input.expectedRevision,
-          configuration: {
-            kind: 'relying_party',
-            id: input.id,
-            enabled: input.enabled,
-            callback: input.callback,
-            capabilities: input.capabilities,
-          },
-        },
-        signal,
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['kind', 'value'])
-          same(v['kind'], 'relying_party')
-          const result = application(v['value'])
-          same(result.id, input.id)
-          if (result.revision <= input.expectedRevision) throw new Error('Wrong revision')
-          return result
-        },
-      }),
+    application: async () => unavailable('application_operation_query'),
     audit: (device, cursor, signal) =>
       transport.request({
         method: 'GET',

@@ -1,6 +1,12 @@
 import { isRssApiError } from '@rss/api/identity'
-import { CapabilityUnavailable } from '@rss/device-access/model'
+import { CapabilityUnavailable, CredentialWriteNotDispatched } from '@rss/device-access/model'
 export function errorMessage(e: unknown): string {
+  if (e instanceof CredentialWriteNotDispatched) {
+    if (e.reason === 'cancelled') return '浏览器认证已取消，尚未提交凭据变更，可以重新发起。'
+    if (e.reason === 'unsupported') return '当前浏览器不支持所需的 WebAuthn 能力。'
+    if (e.reason === 'busy') return '另一个认证任务正在结束，请稍后明确重试。'
+    return errorMessage(e.original)
+  }
   if (e instanceof CapabilityUnavailable)
     return '当前能力尚未接入。演示入口提供明确标识的接口数据。'
   if (isRssApiError(e)) {
@@ -18,9 +24,11 @@ export function errorMessage(e: unknown): string {
   return '暂时无法确认结果。请重新读取；写操作不会自动重放。'
 }
 export function uncertain(e: unknown) {
+  if (e instanceof CredentialWriteNotDispatched) return false
   return !isRssApiError(e) || e.cause !== 'wire' || !e.status || e.status >= 500
 }
-export function needsProof(e: unknown) {
+export function needsProof(e: unknown): boolean {
+  if (e instanceof CredentialWriteNotDispatched) return needsProof(e.original)
   return (
     isRssApiError(e) && ['reauthentication_required', 'reauthentication_failed'].includes(e.code)
   )

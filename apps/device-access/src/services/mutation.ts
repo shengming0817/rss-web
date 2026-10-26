@@ -66,12 +66,13 @@ export function useMutation(key: () => string) {
         e.state = uncertain(error) ? 'unknown' : 'idle'
         e.message = errorMessage(error)
         e.proof = needsProof(error)
-      } else if (e.state === 'busy') e.state = 'unknown'
+      } else if (e.state === 'busy') e.state = uncertain(error) ? 'unknown' : 'idle'
       return undefined
     }
   }
   async function query<T>(
     work: (id: string, signal: AbortSignal) => Promise<T | null>,
+    settled: (value: T) => boolean = () => false,
   ): Promise<T | undefined> {
     const e = state.value
     if (!e.id || e.state === 'busy') return
@@ -84,13 +85,21 @@ export function useMutation(key: () => string) {
         e.message = '未查到原操作，结果仍未知。'
         return
       }
-      e.state = 'accepted'
-      e.message = '原操作已查到；请核对各阶段结果。'
+      e.state = settled(result) ? 'idle' : 'accepted'
+      e.message = settled(result)
+        ? '原操作已确认完成，可以开始新的明确编辑。'
+        : '原操作已查到；请核对各阶段结果。'
       return result
     } catch (error) {
       if (epoch === version) e.message = errorMessage(error)
       return undefined
     }
   }
-  return { state, run, query, locked: computed(() => state.value.state !== 'idle') }
+  return {
+    state,
+    run,
+    query,
+    cancel: () => controller?.abort(),
+    locked: computed(() => state.value.state !== 'idle'),
+  }
 }

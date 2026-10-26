@@ -53,6 +53,7 @@ export function createDemoClients(transport: HttpTransport): {
         recovery: ready,
         rotation: ready,
         applications: ready,
+        applicationWrite: ready,
         security: ready,
         audit: ready,
       },

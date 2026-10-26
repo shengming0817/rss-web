@@ -1,6 +1,6 @@
 import type { HttpTransport } from '@rss/api/identity'
 import type { Credential } from '../model'
-import { CapabilityUnavailable } from '../model'
+import { CapabilityUnavailable, CredentialWriteNotDispatched } from '../model'
 import { closed, object, text, count, uuid, list, same } from '../model/decode'
 import type { SecurityClient } from '../client'
 export interface Challenge {
@@ -23,12 +23,20 @@ interface BrowserCodec {
   parseCreationOptionsFromJSON(value: unknown): PublicKeyCredentialCreationOptions
   parseRequestOptionsFromJSON(value: unknown): PublicKeyCredentialRequestOptions
 }
-/** ref: W3C WebAuthn Level 3 §5.1.8/5.1.9/5.1.10; browser owns JSON/buffer conversion. */
+interface Task {
+  controller: AbortController
+  epoch: number
+  credentialWriteSent: boolean
+  proofFinishSent: boolean
+}
+/** ref: W3C WebAuthn Level 3 §5.1.8/5.1.9/5.1.10. One cancellable browser ceremony owner. */
 export function createSecurityClient(transport: HttpTransport, tenant: string): SecurityClient {
-  let active: string | null = null
-  let busy = false
-  const root = '/api/v1/identity/tenants/{tenant}/webauthn'
-  const params = { tenant: uuid(tenant) }
+  let task: Task | null = null,
+    active: string | null = null,
+    epoch = 0,
+    grantMayExist = false
+  const root = '/api/v1/identity/tenants/{tenant}/webauthn',
+    params = { tenant: uuid(tenant) }
   function codec() {
     if (typeof PublicKeyCredential === 'undefined' || !navigator.credentials)
       throw new CapabilityUnavailable('webauthn_browser')
@@ -40,75 +48,124 @@ export function createSecurityClient(transport: HttpTransport, tenant: string): 
       throw new CapabilityUnavailable('webauthn_browser')
     return api
   }
+  function check(t: Task) {
+    if (t.epoch !== epoch || t.controller.signal.aborted)
+      throw new DOMException('Ceremony cancelled', 'AbortError')
+  }
+  async function cancelCeremony(id: string) {
+    await transport.request({
+      method: 'POST',
+      path: root + '/{ceremony}/cancel',
+      pathParams: { ...params, ceremony: id },
+      successStatus: 200,
+      decode: (v) => {
+        same(closed(v, ['cancelled'])['cancelled'], true)
+      },
+    })
+  }
+  async function cancelGrant() {
+    await transport.request({
+      method: 'POST',
+      path: root + '/operation/cancel',
+      pathParams: params,
+      successStatus: 200,
+      decode: (v) => {
+        same(closed(v, ['cancelled'])['cancelled'], true)
+      },
+    })
+    grantMayExist = false
+  }
   async function cancel() {
-    const id = active
+    epoch++
+    task?.controller.abort()
+    const id = active,
+      grant = grantMayExist
     active = null
-    if (id)
-      await transport.request({
-        method: 'POST',
-        path: root + '/{ceremony}/cancel',
-        pathParams: { ...params, ceremony: id },
-        successStatus: 200,
-        decode: (v) => {
-          same(closed(v, ['cancelled'])['cancelled'], true)
-        },
-      })
-  }
-  async function serialize<T>(work: () => Promise<T>) {
-    if (busy) throw new Error('Ceremony busy')
-    busy = true
+    grantMayExist = false
     try {
-      return await work()
+      if (id) await cancelCeremony(id)
     } finally {
-      busy = false
+      if (grant) await cancelGrant()
     }
   }
-  async function prove(value: Challenge, signal: AbortSignal) {
-    codec()
-    active = value.id
-    let sent = false
-    try {
-      if (value.expiresAt !== null && value.expiresAt <= Date.now() / 1000)
-        throw new Error('Ceremony expired')
-      const cred = await navigator.credentials.get({
-        publicKey: codec().parseRequestOptionsFromJSON(value.options['publicKey']),
-        signal,
-      })
-      if (!cred || signal.aborted) throw new Error('Ceremony cancelled')
-      if (typeof (cred as JsonCredential).toJSON !== 'function')
-        throw new CapabilityUnavailable('webauthn_browser')
-      sent = true
-      await transport.request({
-        method: 'POST',
-        path: root + '/authenticate/finish',
-        pathParams: params,
-        body: { id: value.id, response: (cred as JsonCredential).toJSON() },
-        signal,
-        successStatus: 200,
-        decode: (v) => count(closed(v, ['expiresAt'])['expiresAt']),
-      })
-      active = null
-    } catch (error) {
-      if (!sent) await cancel().catch(() => undefined)
-      else active = null
-      throw error
+  async function run<T>(external: AbortSignal, work: (t: Task) => Promise<T>): Promise<T> {
+    if (task) throw new CredentialWriteNotDispatched('busy')
+    const t: Task = {
+      controller: new AbortController(),
+      epoch,
+      credentialWriteSent: false,
+      proofFinishSent: false,
     }
+    task = t
+    const abort = () => t.controller.abort()
+    external.addEventListener('abort', abort, { once: true })
+    if (external.aborted) abort()
+    try {
+      check(t)
+      codec()
+      return await work(t)
+    } catch (error) {
+      const pending = active
+      active = null
+      if (!t.credentialWriteSent) {
+        if (pending) await cancelCeremony(pending).catch(() => undefined)
+        if (t.proofFinishSent) await cancelGrant().catch(() => undefined)
+        throw new CredentialWriteNotDispatched(
+          error instanceof CapabilityUnavailable
+            ? 'unsupported'
+            : error instanceof DOMException
+              ? 'cancelled'
+              : 'precondition',
+          error,
+        )
+      }
+      throw error
+    } finally {
+      external.removeEventListener('abort', abort)
+      if (task === t) task = null
+    }
+  }
+  async function prove(value: Challenge, t: Task) {
+    active = value.id
+    check(t)
+    if (value.expiresAt !== null && value.expiresAt <= Date.now() / 1000)
+      throw new DOMException('Ceremony expired', 'NotAllowedError')
+    const cred = await navigator.credentials.get({
+      publicKey: codec().parseRequestOptionsFromJSON(value.options['publicKey']),
+      signal: t.controller.signal,
+    })
+    check(t)
+    if (!cred) throw new DOMException('Ceremony cancelled', 'NotAllowedError')
+    if (typeof (cred as JsonCredential).toJSON !== 'function')
+      throw new CapabilityUnavailable('webauthn_browser')
+    grantMayExist = true
+    t.proofFinishSent = true
+    await transport.request({
+      method: 'POST',
+      path: root + '/authenticate/finish',
+      pathParams: params,
+      body: { id: value.id, response: (cred as JsonCredential).toJSON() },
+      signal: t.controller.signal,
+      successStatus: 200,
+      decode: (v) => count(closed(v, ['expiresAt'])['expiresAt']),
+    })
+    check(t)
+    active = null
   }
   async function authenticate(
     operation: { kind: 'register' } | { kind: 'remove'; credential: string },
-    signal: AbortSignal,
+    t: Task,
   ) {
-    codec()
     const value = await transport.request({
       method: 'POST',
       path: root + '/authenticate/begin',
       pathParams: params,
       body: { operation },
-      signal,
+      signal: t.controller.signal,
       successStatus: 200,
       decode: challenge,
     })
-    await prove(value, signal)
+    await prove(value, t)
   }
   return {
     list: (signal) =>
@@ -125,66 +182,71 @@ export function createSecurityClient(transport: HttpTransport, tenant: string): 
           }),
       }),
     register: (label, signal) =>
-      serialize(async () => {
-        codec()
+      run(signal, async (t) => {
         const value = await transport.request({
           method: 'POST',
           path: root + '/register/begin',
           pathParams: params,
           body: { label: text(label, 128), recover: false },
-          signal,
+          signal: t.controller.signal,
           successStatus: 200,
           decode: challenge,
         })
         active = value.id
-        let sent = false
-        try {
-          if (value.expiresAt !== null && value.expiresAt <= Date.now() / 1000)
-            throw new Error('Ceremony expired')
-          const cred = await navigator.credentials.create({
-            publicKey: codec().parseCreationOptionsFromJSON(value.options['publicKey']),
-            signal,
-          })
-          if (!cred || signal.aborted) throw new Error('Ceremony cancelled')
-          if (typeof (cred as JsonCredential).toJSON !== 'function')
-            throw new CapabilityUnavailable('webauthn_browser')
-          sent = true
-          const result = await transport.request({
-            method: 'POST',
-            path: root + '/register/finish',
-            pathParams: params,
-            body: { id: value.id, response: (cred as JsonCredential).toJSON() },
-            signal,
-            successStatus: 200,
-            decode(v): Credential {
-              const r = closed(v, ['id', 'label'])
-              return { id: uuid(r['id']), label: text(r['label']) }
-            },
-          })
-          active = null
-          return result
-        } catch (error) {
-          if (!sent) await cancel().catch(() => undefined)
-          else active = null
-          throw error
-        }
+        check(t)
+        if (value.expiresAt !== null && value.expiresAt <= Date.now() / 1000)
+          throw new DOMException('Ceremony expired', 'NotAllowedError')
+        const cred = await navigator.credentials.create({
+          publicKey: codec().parseCreationOptionsFromJSON(value.options['publicKey']),
+          signal: t.controller.signal,
+        })
+        check(t)
+        if (!cred) throw new DOMException('Ceremony cancelled', 'NotAllowedError')
+        if (typeof (cred as JsonCredential).toJSON !== 'function')
+          throw new CapabilityUnavailable('webauthn_browser')
+        t.credentialWriteSent = true
+        const result = await transport.request({
+          method: 'POST',
+          path: root + '/register/finish',
+          pathParams: params,
+          body: { id: value.id, response: (cred as JsonCredential).toJSON() },
+          signal: t.controller.signal,
+          successStatus: 200,
+          decode(v): Credential {
+            const r = closed(v, ['id', 'label'])
+            return { id: uuid(r['id']), label: text(r['label']) }
+          },
+        })
+        check(t)
+        active = null
+        return result
       }),
     remove: (id, signal) =>
-      serialize(async () => {
-        await authenticate({ kind: 'remove', credential: uuid(id) }, signal)
+      run(signal, async (t) => {
+        await authenticate({ kind: 'remove', credential: uuid(id) }, t)
+        check(t)
+        t.credentialWriteSent = true
         await transport.request({
           method: 'POST',
           path: root + '/credentials/{credential}/remove',
           pathParams: { ...params, credential: id },
-          signal,
+          signal: t.controller.signal,
           successStatus: 200,
           decode: (v) => {
             same(closed(v, ['removed'])['removed'], true)
           },
         })
+        check(t)
+        grantMayExist = false
       }),
-    reauthenticate: (signal) => serialize(() => authenticate({ kind: 'register' }, signal)),
-    prove: (value, signal) => serialize(() => prove(value, signal)),
+    reauthenticate: (signal) => run(signal, (t) => authenticate({ kind: 'register' }, t)),
+    prove: async (value, signal) => {
+      if (signal.aborted) {
+        await cancelCeremony(value.id).catch(() => undefined)
+        throw new CredentialWriteNotDispatched('cancelled')
+      }
+      return run(signal, (t) => prove(value, t))
+    },
     cancel,
   }
 }

@@ -55,7 +55,10 @@ async function save() {
   if (result) data.value = { assignment: result, people: data.value!.people }
 }
 async function query() {
-  const found = await op.query((id, signal) => r.client.operation(props.device.id, id, signal))
+  const found = await op.query(
+    (id, signal) => r.client.operation(props.device.id, id, signal),
+    (value) => value.state === 'completed',
+  )
   if (found) await reload()
 }
 function changed(a: Assignment) {
