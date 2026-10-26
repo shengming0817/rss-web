@@ -212,28 +212,30 @@ export function windowsEnrollmentLink(instructions: {
   platform: string
   username?: string
   discoveryUrl?: string
+  server?: string
   windowsProfile?: string
 }): string | undefined {
   if (
     instructions.platform !== 'windows' ||
     instructions.windowsProfile !== 'Full' ||
     !instructions.username ||
-    !instructions.discoveryUrl
+    !instructions.server
   )
     return undefined
-  const server = new URL(instructions.discoveryUrl)
+  const server = new URL(instructions.server)
   if (
     server.protocol !== 'https:' ||
     server.username ||
     server.password ||
     server.search ||
-    server.hash
+    server.hash ||
+    server.pathname !== '/'
   )
     throw new Error('Invalid native URL')
   return `ms-device-enrollment:?${new URLSearchParams({
     mode: 'mdm',
     username: instructions.username,
-    servername: server.href,
+    servername: instructions.server,
   })}`
 }
 export function createEnrollmentClient(transport: HttpTransport) {

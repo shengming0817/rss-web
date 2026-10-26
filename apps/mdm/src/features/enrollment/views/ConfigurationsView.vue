@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  VForm,
   VAlert,
   VBtn,
   VCard,
@@ -305,9 +306,9 @@ watch(
             t('devices.reload')
           }}</v-btn>
           <v-alert
+            v-if="directoryOperation.failure.value"
             type="error"
             variant="tonal"
-            v-if="directoryOperation.failure.value"
             role="alert"
           >
             {{ t('devices.' + directoryOperation.failure.value) }}
@@ -334,14 +335,14 @@ watch(
         </v-card-text></v-card
       >
       <v-expansion-panels
-        multiple
         v-if="canWrite && settings"
+        multiple
         class="console-panel console-task"
         :model-value="uncertain ? [0] : undefined"
         ><v-expansion-panel eager
           ><v-expansion-panel-title>{{ t('onboarding.createFile') }}</v-expansion-panel-title
           ><v-expansion-panel-text>
-            <form @submit.prevent="create">
+            <v-form @submit.prevent="create">
               <fieldset :disabled="busy || uncertain">
                 <v-text-field
                   v-model.number="lifetime"
@@ -395,11 +396,11 @@ watch(
                   {{ t('onboarding.createFile') }}
                 </v-btn>
               </fieldset>
-            </form>
+            </v-form>
           </v-expansion-panel-text></v-expansion-panel
         ></v-expansion-panels
       >
-      <v-btn variant="outlined" v-if="url" :href="url" :download="filename"
+      <v-btn v-if="url" variant="outlined" :href="url" :download="filename"
         >{{ t('onboarding.saveFile') }} · {{ configurationFilename }}</v-btn
       >
       <p v-if="delivered && url">
@@ -416,14 +417,14 @@ watch(
       <v-card variant="outlined" class="console-panel"
         ><v-card-text>
           <h2>{{ t('onboarding.configurationId') }}</h2>
-          <form @submit.prevent="read">
+          <v-form @submit.prevent="read">
             <v-text-field
               v-model="configurationId"
               required
               :disabled="busy || uncertain"
               :label="t('onboarding.configurationId')"
             /><v-btn :disabled="!!busy" type="submit">{{ t('devices.reload') }}</v-btn>
-          </form>
+          </v-form>
         </v-card-text></v-card
       >
       <dl v-if="current">
@@ -461,14 +462,14 @@ watch(
         {{ t('onboarding.confirmRecovery') }}
       </v-btn>
       <v-expansion-panels
-        multiple
         v-if="canWrite && settings"
+        multiple
         class="console-panel console-task"
         :model-value="uncertain ? [0] : undefined"
         ><v-expansion-panel eager
           ><v-expansion-panel-title>{{ t('onboarding.defaults') }}</v-expansion-panel-title
           ><v-expansion-panel-text>
-            <form @submit.prevent="saveSettings">
+            <v-form @submit.prevent="saveSettings">
               <fieldset :disabled="busy || uncertain">
                 <legend>{{ t('onboarding.defaults') }}</legend>
                 <v-text-field
@@ -497,11 +498,11 @@ watch(
                 /><v-btn type="submit" :disabled="busy || uncertain">{{
                   t('registration.save')
                 }}</v-btn
-                ><v-btn type="button" @click="refresh" :disabled="busy || uncertain">{{
+                ><v-btn type="button" :disabled="busy || uncertain" @click="refresh">{{
                   t('devices.reload')
                 }}</v-btn>
               </fieldset>
-            </form>
+            </v-form>
           </v-expansion-panel-text></v-expansion-panel
         ></v-expansion-panels
       >

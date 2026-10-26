@@ -34,6 +34,7 @@ const usage = ref<Awaited<ReturnType<typeof client.me>>>(),
   channel = ref<'windows_mdm' | 'macos_mdm'>('windows_mdm')
 const channelState = runtime.registrationChannels
 const quota = computed(() => usage.value?.channels.find((c) => c.channel === channel.value))
+const quotaAvailable = computed(() => !!quota.value && quota.value.used < quota.value.limit)
 const canCreate = computed(
   () =>
     channelState.allowed(channel.value) && !!quota.value && quota.value.used < quota.value.limit,
@@ -197,7 +198,7 @@ refresh()
               t('devices.unknownWrite')
             }}</v-alert>
             <v-alert
-              v-if="usage && !canCreate && !enrollmentId"
+              v-if="usage && !quotaAvailable && !enrollmentId"
               type="warning"
               variant="tonal"
               class="mt-4"

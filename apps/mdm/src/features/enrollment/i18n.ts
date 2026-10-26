@@ -1,6 +1,8 @@
 export const onboardingZh = {
   enrollmentJourney: '为当前组织注册 Windows 或 macOS 企业设备，按系统引导完成管理授权。',
   enterpriseMdm: '企业完整 MDM',
+  deviceAuthorization:
+    '为当前组织中的此设备创建或更新短时原生注册授权。管理员注册不占个人额度。安全保存注册密码，提交后页面会清除；原注册的进展、继续与取消仍由服务器校验。',
   profileEnrollment: '配置描述文件注册',
   authorizeDevice: '授权并开始注册',
   enrollmentAuthorization:
@@ -60,7 +62,7 @@ export const onboardingZh = {
   username: 'UPN',
   localAdministrator: '此 Full 管理范围要求本地管理员确认。',
   macosSteps:
-    '企业 Mac（macOS 15+，优先 Apple Silicon；Intel 按产品验证范围使用）：输入已交付的注册口令下载签名 mobileconfig，在系统设置的设备管理中安装并确认。安装文件不代表管理已就绪。',
+    '打开已下载的 mobileconfig，然后进入系统设置 → 通用 → 设备管理，检查组织名称并安装描述文件。按系统提示使用本地管理员批准设备管理。',
   downloadProfile: '获取签名描述文件',
   saveProfile: '保存 mobileconfig',
   channelUnavailable: '原生通道未配置或不可用，请联系管理员。',
@@ -169,6 +171,8 @@ export const onboardingEn: typeof onboardingZh = {
   enrollmentJourney:
     'Enroll a corporate Windows or macOS device in the current organization and complete system management approval.',
   enterpriseMdm: 'Full enterprise MDM',
+  deviceAuthorization:
+    'Create or refresh short-lived native enrollment authorization for this device in the current organization. Administrator enrollment uses no personal quota. Save the enrollment password securely; it is cleared on submission. The server continues to verify progress, resume and cancellation against the original enrollment.',
   profileEnrollment: 'Profile-based enrollment',
   authorizeDevice: 'Authorize and start enrollment',
   enrollmentAuthorization:
@@ -221,14 +225,14 @@ export const onboardingEn: typeof onboardingZh = {
   grantLifetime: 'Machine grant lifetime (seconds)',
   nativeSteps: 'Native enrollment steps and current facts',
   windowsSteps:
-    'Windows 11: Settings → Accounts → Access work or school → Enroll only in device management. Use the UPN and discovery address below. Full manages user and device; Device manages the device only.',
+    'Full enterprise MDM includes device and user management. Open Windows enrollment and use the temporary UPN below with your saved enrollment password. Windows may require local administrator approval.',
   openSettings: 'Open Access work or school',
   discovery: 'Discovery address',
   server: 'Enrollment server',
   username: 'UPN',
   localAdministrator: 'Full management requires local administrator confirmation.',
   macosSteps:
-    'Enterprise Mac (macOS 15+, Apple Silicon first; Intel within validated product scope): enter the delivered password to download the signed mobileconfig, then install and confirm in System Settings device management. The file does not prove management readiness.',
+    'Open the downloaded mobileconfig, then go to System Settings → General → Device Management. Verify the organization and install the profile. Approve device management with the local administrator when prompted.',
   downloadProfile: 'Get signed profile',
   saveProfile: 'Save mobileconfig',
   channelUnavailable: 'Native channel is unconfigured or unavailable. Contact an administrator.',

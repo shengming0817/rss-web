@@ -24,7 +24,7 @@ function change(channel: RegistrationChannel, replay = false) {
 <template>
   <section :aria-label="t('registration.channels')">
     <h2>{{ t('registration.channels') }}</h2>
-    <v-alert type="error" variant="tonal" v-if="failure" role="alert">{{
+    <v-alert v-if="failure" type="error" variant="tonal" role="alert">{{
       t(`devices.${failure}`)
     }}</v-alert>
     <article v-for="channel in registrationChannels" :key="channel">

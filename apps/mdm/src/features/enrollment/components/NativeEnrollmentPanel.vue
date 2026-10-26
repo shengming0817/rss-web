@@ -44,7 +44,11 @@ type Command = {
   source: 'mdm.windows' | 'mdm.apple'
   enrollment: string
 }
-const pending = ref<Command>()
+const pending = ref<Command>(),
+  operationId = ref('')
+const admitted = new Set(
+  props.endpoint.enrollments.filter((e) => e.source !== 'agent.builtin').map((e) => e.enrollmentId),
+)
 function clearSecret() {
   password.value = ''
   handedOff.value = false
@@ -55,6 +59,11 @@ function generate() {
 }
 function recover(value = id.value) {
   if (!value || busy.value) return
+  if (!admitted.has(value)) {
+    result.value = undefined
+    failure.value = 'notFound'
+    return
+  }
   result.value = undefined
   id.value = value
   void run(
@@ -90,6 +99,7 @@ function submit(kind: Command['kind'], replay = false) {
   const secret = password.value
   clearSecret()
   pending.value = command
+  operationId.value = command.operation
   void runWrite(
     () =>
       command.kind === 'create'
@@ -103,6 +113,7 @@ function submit(kind: Command['kind'], replay = false) {
           ? client.resume(command.enrollment, command.operation, secret)
           : client.cancel(command.enrollment, command.operation),
     (v) => {
+      admitted.add(v.enrollmentId)
       id.value = v.enrollmentId
       pending.value = undefined
       result.value = undefined
@@ -113,9 +124,14 @@ function submit(kind: Command['kind'], replay = false) {
   })
 }
 watch(
-  () => JSON.stringify([...deviceBinding(runtime), props.endpoint.id]),
+  () => JSON.stringify([...deviceBinding(runtime), props.endpoint.id, route.query['enrollment']]),
   () => {
     clearSecret()
+    admitted.clear()
+    props.endpoint.enrollments
+      .filter((e) => e.source !== 'agent.builtin')
+      .forEach((e) => admitted.add(e.enrollmentId))
+    operationId.value = ''
     pending.value = undefined
     result.value = undefined
     const query = route.query['enrollment']
@@ -163,13 +179,20 @@ onBeforeUnmount(clearSecret)
           t('devices.recover')
         }}</v-btn>
       </v-form>
+      <p v-if="operationId" data-enrollment-operation>
+        {{ t('devices.operation') }}: {{ operationId }}
+      </p>
+      <p v-if="result">
+        {{ t('devices.status') }}: {{ t(`devices.${result.status}`) }} · {{ t('devices.expires') }}:
+        {{ result.expiresAt }}
+      </p>
       <NativeFacts v-if="result" :value="result" class="mt-4" />
       <v-expansion-panels class="mt-4" variant="accordion"
-        ><v-expansion-panel :title="t('onboarding.renewAuthorization')"
+        ><v-expansion-panel eager :title="t('onboarding.renewAuthorization')"
           ><template #text>
             <RegistrationStatus :channel="nativeChannel(source)" />
             <v-alert type="info" variant="tonal" class="my-4">{{
-              t('onboarding.enrollmentAuthorization')
+              t('onboarding.deviceAuthorization')
             }}</v-alert>
             <v-form @submit.prevent="submit('create')">
               <v-select

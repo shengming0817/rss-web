@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  VForm,
   VBtn,
   VCheckbox,
   VExpansionPanel,
@@ -121,14 +122,14 @@ watch(current, (value) => {
       </dl>
       <pre v-if="current" class="enrollment-terms">{{ current.policy.termsText }}</pre>
       <v-expansion-panels
-        multiple
         v-if="canWrite && current"
+        multiple
         class="console-panel console-task"
         :model-value="uncertain ? [0] : undefined"
         ><v-expansion-panel eager
           ><v-expansion-panel-title>{{ t('console.configure') }}</v-expansion-panel-title
           ><v-expansion-panel-text>
-            <form @submit.prevent="save">
+            <v-form @submit.prevent="save">
               <fieldset :disabled="busy || uncertain">
                 <legend>{{ t('onboarding.entraPolicy') }}</legend>
                 <v-checkbox
@@ -165,7 +166,7 @@ watch(current, (value) => {
                   t('registration.save')
                 }}</v-btn>
               </fieldset>
-            </form>
+            </v-form>
           </v-expansion-panel-text></v-expansion-panel
         ></v-expansion-panels
       >

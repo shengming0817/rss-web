@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  VForm,
   VSelect,
   VBtn,
   VCheckbox,
@@ -141,8 +142,8 @@ watch(
     <RegistrationStatus channel="macos_mdm" />
     <p>{{ t('onboarding.appleAccountGuide') }}</p>
     <v-btn
-      variant="text"
       v-if="runtime.registrationChannels.allowed('macos_mdm')"
+      variant="text"
       :href="client.bridge"
       >{{ t('onboarding.appleBridge') }}</v-btn
     >
@@ -167,6 +168,7 @@ watch(
       <v-text-field
         v-if="canWrite"
         v-model="id"
+        data-testid="organization-id"
         :disabled="busy || uncertain"
         :label="t('onboarding.organizationId')"
       />
@@ -198,8 +200,8 @@ watch(
         <dd>{{ t(`devices.${selected.enabled ? 'yes' : 'no'}`) }}</dd>
       </dl>
       <v-expansion-panels
-        multiple
         v-if="canWrite && id"
+        multiple
         class="console-panel console-task"
         :model-value="uncertain ? [0] : undefined"
         ><v-expansion-panel eager
@@ -207,7 +209,7 @@ watch(
             t('onboarding.organizationConfiguration')
           }}</v-expansion-panel-title
           ><v-expansion-panel-text>
-            <form @submit.prevent="saveOrganization">
+            <v-form @submit.prevent="saveOrganization">
               <fieldset :disabled="busy || uncertain">
                 <legend>{{ t('onboarding.organizationConfiguration') }}</legend>
                 <v-text-field
@@ -235,7 +237,7 @@ watch(
                   t('registration.save')
                 }}</v-btn>
               </fieldset>
-            </form>
+            </v-form>
           </v-expansion-panel-text></v-expansion-panel
         ></v-expansion-panels
       >
@@ -268,14 +270,14 @@ watch(
         </tbody>
       </v-table>
       <v-expansion-panels
-        multiple
         v-if="canWrite && selected"
+        multiple
         class="console-panel console-task"
         :model-value="uncertain ? [0] : undefined"
         ><v-expansion-panel eager
           ><v-expansion-panel-title>{{ t('onboarding.accountMapping') }}</v-expansion-panel-title
           ><v-expansion-panel-text>
-            <form @submit.prevent="saveMapping">
+            <v-form @submit.prevent="saveMapping">
               <fieldset :disabled="busy || uncertain">
                 <legend>{{ t('onboarding.accountMapping') }}</legend>
                 <v-text-field
@@ -302,7 +304,7 @@ watch(
                   t('registration.save')
                 }}</v-btn>
               </fieldset>
-            </form>
+            </v-form>
           </v-expansion-panel-text></v-expansion-panel
         ></v-expansion-panels
       >

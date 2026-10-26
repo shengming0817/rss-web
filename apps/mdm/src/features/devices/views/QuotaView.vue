@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { VSelect, VTextField, VBtn, VCard, VCardText, VTable } from 'vuetify/components'
+import { VForm, VSelect, VTextField, VBtn, VCard, VCardText, VTable } from 'vuetify/components'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -131,10 +131,10 @@ watch(
         />
       </fieldset>
       <p v-if="mode === 'override' && !principal">{{ t('registration.selectUser') }}</p>
-      <v-card variant="outlined" v-if="revision !== undefined" class="console-panel"
+      <v-card v-if="revision !== undefined" variant="outlined" class="console-panel"
         ><v-card-text>
           <h2>{{ t('registration.quotas') }}</h2>
-          <form @submit.prevent="save()">
+          <v-form @submit.prevent="save()">
             <fieldset :disabled="busy || uncertain || !canWrite">
               <div v-for="channel in channels" :key="channel" class="mb-4">
                 <v-text-field
@@ -161,7 +161,7 @@ watch(
                 t('registration.save')
               }}</v-btn>
             </fieldset>
-          </form>
+          </v-form>
         </v-card-text></v-card
       >
       <v-btn v-if="uncertain && pending" type="button" :disabled="!!busy" @click="save(true)">

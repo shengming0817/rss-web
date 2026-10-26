@@ -23,7 +23,15 @@ const { t } = useI18n(),
   runtime = useMdm(),
   delivery = useAttachment(),
   { url, filename } = delivery,
-  { run, busy, failure } = useOperation([], () => runtime.session.state.value.session?.id),
+  { run, busy, failure } = useOperation(
+    [],
+    () => [
+      runtime.session.state.value.tenant ?? undefined,
+      runtime.session.state.value.identity?.principalId,
+      runtime.session.state.value.session?.id,
+    ],
+    () => props.value.enrollmentId,
+  ),
   password = ref('')
 const windowsLink = computed(() => windowsEnrollmentLink(props.value.instructions))
 const progress = computed(() => [
@@ -78,6 +86,7 @@ watch(
   [
     () => props.value.enrollmentId,
     () => props.value.expiresAt,
+    () => props.value.status,
     () => runtime.session.state.value.session?.id,
   ],
   () => {

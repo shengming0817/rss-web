@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  VForm,
   VFileInput,
   VSelect,
   VBtn,
@@ -292,6 +293,7 @@ onBeforeUnmount(() => {
       <v-text-field
         v-if="canWrite"
         v-model="id"
+        data-testid="organization-id"
         :disabled="busy || uncertain"
         :label="t('onboarding.organizationId')"
       />
@@ -309,14 +311,14 @@ onBeforeUnmount(() => {
         <dd>{{ t('onboarding.notObserved') }}</dd>
       </dl>
       <v-expansion-panels
-        multiple
         v-if="canWrite && id"
+        multiple
         class="console-panel console-task"
         :model-value="uncertain ? [0] : undefined"
         ><v-expansion-panel eager
           ><v-expansion-panel-title>{{ t('console.configure') }}</v-expansion-panel-title
           ><v-expansion-panel-text>
-            <form @submit.prevent="configure">
+            <v-form @submit.prevent="configure">
               <fieldset :disabled="blocked">
                 <legend>{{ t('onboarding.organizationConfiguration') }}</legend>
                 <v-text-field
@@ -340,46 +342,46 @@ onBeforeUnmount(() => {
                   :label="t('onboarding.rotateKey')"
                 /><v-btn type="submit" :disabled="blocked">{{ t('registration.save') }}</v-btn>
               </fieldset>
-            </form>
+            </v-form>
           </v-expansion-panel-text></v-expansion-panel
         ></v-expansion-panels
       >
       <template v-if="status"
         ><v-btn type="button" :disabled="!!busy" @click="publicKey">
           {{ t('onboarding.exportPublicKey') }}</v-btn
-        ><v-btn variant="text" v-if="url" :href="url" :download="filename">{{
+        ><v-btn v-if="url" variant="text" :href="url" :download="filename">{{
           t('onboarding.download')
         }}</v-btn></template
       >
       <v-expansion-panels
-        multiple
         v-if="canWrite && status"
+        multiple
         class="console-panel console-task"
         :model-value="uncertain ? [0] : undefined"
         ><v-expansion-panel eager
           ><v-expansion-panel-title>{{ t('onboarding.importToken') }}</v-expansion-panel-title
           ><v-expansion-panel-text>
-            <form @submit.prevent="importToken">
+            <v-form @submit.prevent="importToken">
               <fieldset :disabled="blocked">
                 <legend>{{ t('onboarding.importToken') }}</legend>
                 <v-file-input
                   :model-value="[]"
                   accept=".p7m"
-                  @update:model-value="selectToken"
                   :disabled="blocked"
                   :label="t('onboarding.p7m')"
+                  @update:model-value="selectToken"
                 /><v-btn type="submit" :disabled="blocked || !!!token">{{
                   t('onboarding.importToken')
                 }}</v-btn>
               </fieldset>
-            </form>
+            </v-form>
           </v-expansion-panel-text></v-expansion-panel
         ></v-expansion-panels
       >
-      <v-card variant="outlined" v-if="canWrite && status" class="console-panel"
+      <v-card v-if="canWrite && status" variant="outlined" class="console-panel"
         ><v-card-text>
           <h2>{{ t('onboarding.sync') }}</h2>
-          <form @submit.prevent="submit({ kind: 'sync', full: fullSync })">
+          <v-form @submit.prevent="submit({ kind: 'sync', full: fullSync })">
             <fieldset :disabled="blocked">
               <v-checkbox
                 v-model="fullSync"
@@ -387,18 +389,18 @@ onBeforeUnmount(() => {
                 :label="t('onboarding.fullSync')"
               /><v-btn type="submit" :disabled="blocked">{{ t('onboarding.sync') }}</v-btn>
             </fieldset>
-          </form>
+          </v-form>
         </v-card-text></v-card
       >
       <v-expansion-panels
-        multiple
         v-if="canWrite && status"
+        multiple
         class="console-panel console-task"
         :model-value="uncertain ? [0] : undefined"
         ><v-expansion-panel eager
           ><v-expansion-panel-title>{{ t('onboarding.setupProfile') }}</v-expansion-panel-title
           ><v-expansion-panel-text>
-            <form @submit.prevent="saveProfile">
+            <v-form @submit.prevent="saveProfile">
               <fieldset :disabled="blocked">
                 <legend>{{ t('onboarding.setupProfile') }}</legend>
                 <v-text-field
@@ -435,7 +437,7 @@ onBeforeUnmount(() => {
                   t('registration.save')
                 }}</v-btn>
               </fieldset>
-            </form>
+            </v-form>
           </v-expansion-panel-text></v-expansion-panel
         ></v-expansion-panels
       >
@@ -474,14 +476,14 @@ onBeforeUnmount(() => {
         {{ t('devices.next') }}
       </v-btn>
       <v-expansion-panels
-        multiple
         v-if="canWrite && status"
+        multiple
         class="console-panel console-task"
         :model-value="uncertain ? [0] : undefined"
         ><v-expansion-panel eager
           ><v-expansion-panel-title>{{ t('console.targets') }}</v-expansion-panel-title
           ><v-expansion-panel-text>
-            <form @submit.prevent="assignment(false)">
+            <v-form @submit.prevent="assignment(false)">
               <fieldset :disabled="blocked">
                 <v-textarea
                   v-model="serials"
@@ -491,31 +493,31 @@ onBeforeUnmount(() => {
                 /><v-btn type="submit" :disabled="blocked">{{
                   t('onboarding.assignProfile')
                 }}</v-btn
-                ><v-btn type="button" @click="assignment(true)" :disabled="blocked">
+                ><v-btn type="button" :disabled="blocked" @click="assignment(true)">
                   {{ t('onboarding.clearAssignment') }}
                 </v-btn>
               </fieldset>
-            </form>
+            </v-form>
           </v-expansion-panel-text></v-expansion-panel
         ></v-expansion-panels
       >
       <v-card variant="outlined" class="console-panel"
         ><v-card-text>
           <h2>{{ t('console.enrollmentProgress') }}</h2>
-          <form @submit.prevent="readOperation">
+          <v-form @submit.prevent="readOperation">
             <v-text-field
               v-model="operationId"
               required
               :disabled="busy || uncertain"
               :label="t('devices.operation')"
             /><v-btn :disabled="!!busy" type="submit">{{ t('onboarding.readOutcome') }}</v-btn>
-          </form>
+          </v-form>
         </v-card-text></v-card
       >
       <p v-if="operation">{{ operation.kind }} · {{ t(`onboarding.ade_${operation.state}`) }}</p>
       <pre v-if="operation?.result">{{ JSON.stringify(operation.result, null, 2) }}</pre>
       <p>{{ t('onboarding.registrationNotImplied') }}</p>
-      <form
+      <v-form
         v-if="canWrite && operation?.state === 'unknown'"
         @submit.prevent="
           submit({ kind: 'reconcile', operation: recoveryId || operation!.operationId }, true)
@@ -541,18 +543,18 @@ onBeforeUnmount(() => {
           /><v-btn
             v-if="operation.kind === 'profile'"
             type="button"
+            :disabled="busy"
             @click="
               submit(
                 { kind: 'resolve', operation: recoveryId || operation!.operationId, remoteProfile },
                 true,
               )
             "
-            :disabled="busy"
           >
             {{ t('onboarding.resolve') }}
           </v-btn>
         </fieldset>
-      </form>
+      </v-form>
     </template>
   </MdmPage>
 </template>

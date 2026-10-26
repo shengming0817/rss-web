@@ -1,4 +1,4 @@
-import { defineComponent, shallowRef } from 'vue'
+import { defineComponent, h, shallowRef } from 'vue'
 import { afterEach, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
@@ -8,16 +8,15 @@ import { networkErrorForTest } from '@rss/api/testing'
 import { createRegistrationChannelsClient } from '../../../services/registrationChannels'
 import { createRegistrationChannels } from '../../../services/registrationChannelState'
 import { createDeviceDemo } from '../../../../demo/devices/state'
-import { generateEnrollmentPassword } from '../../devices/clients/enrollment'
+import { generateEnrollmentPassword, decodeEnrollment } from '../../devices/clients/enrollment'
 import { mdmKey, type MdmRuntime } from '../../../context'
 import { mdmI18n } from '../../../i18n'
 import { createOnboardingClients } from '../client'
 import { createOnboardingDemo } from '../../../../demo/enrollment'
 import { ADMIN, INSTANCE } from '../../../../demo/operations/authorization'
 import { TENANT } from '../../../../demo/scenario'
-import { operationsFeature } from '../../operations/routes'
-import { deviceFeature } from '../../devices/routes'
 import ConfigurationsView from './ConfigurationsView.vue'
+import NativeFacts from '../components/NativeFacts.vue'
 import TermsView from './TermsView.vue'
 import DownloadsView from './DownloadsView.vue'
 import AppleAccountView from './AppleAccountView.vue'
@@ -120,10 +119,6 @@ async function setup(view: unknown, allow = true) {
     routes: [
       { path: '/journey', component: view as never },
       { path: '/other', component: defineComponent({ template: '<p>other</p>' }) },
-      deviceFeature.entry,
-      ...(deviceFeature.routes ?? []),
-      operationsFeature.entry,
-      ...(operationsFeature.routes ?? []),
       { path: '/downloads/agent', name: 'agent-downloads', component: DownloadsView },
     ],
   })
@@ -150,10 +145,13 @@ it('keeps downloads anonymous and never requests or creates enrollment authority
   const { wrapper, calls } = await setup(DownloadsView, false)
   expect(wrapper.text()).toContain('无需登录')
   expect(wrapper.text()).toContain('没有已发布')
-  expect(wrapper.findAll('select')).toHaveLength(2)
+  expect(wrapper.findAll('select')).toHaveLength(0)
+  expect(
+    wrapper
+      .findAll('[data-download-target]')
+      .map((target) => target.attributes('data-download-target')),
+  ).toEqual(['windows/x86_64', 'windows/aarch64', 'macos/x86_64', 'macos/aarch64'])
   expect(calls).toEqual(['GET /api/v1/agent/enroll/packages'])
-  await wrapper.findAll('select')[0]!.setValue('macos')
-  expect(calls).toHaveLength(1)
 })
 it('downloads all current published formats without requesting enrollment authority', async () => {
   const { wrapper, runtime, calls } = await setup(DownloadsView, false)
@@ -179,9 +177,6 @@ it('downloads all current published formats without requesting enrollment author
     'agent.exe',
     'agent.msi',
     'agent.msix',
-  ])
-  await wrapper.findAll('select')[0]!.setValue('macos')
-  expect(wrapper.findAll('a[download]').map((link) => link.attributes('download'))).toEqual([
     'agent.pkg',
   ])
   expect(calls).toEqual(['GET /api/v1/agent/enroll/packages'])
@@ -299,8 +294,8 @@ it('reads MAA organizations and saves distinct account bindings without copying 
 it('shows ADE states independently and reads configuration operations', async () => {
   const { wrapper, click, runtime } = await setup(AppleAdeView),
     id = crypto.randomUUID()
-  const fields = wrapper.findAll('input')
-  await fields[0]!.setValue(id)
+  await wrapper.get('[data-testid=organization-id] input').setValue(id)
+  await flushPromises()
   const configuration = wrapper.find('form')
   await configuration.findAll('input')[0]!.setValue(crypto.randomUUID())
   await configuration.findAll('input')[1]!.setValue('ORG')
@@ -425,7 +420,8 @@ it('discards a rejected revocation before reading and revoking a different confi
 it('preserves explicit ADE profile choices and records sync and assignment as independent external operations', async () => {
   const { wrapper, runtime, domain, click } = await setup(AppleAdeView),
     id = crypto.randomUUID()
-  await wrapper.findAll('input')[0]!.setValue(id)
+  await wrapper.get('[data-testid=organization-id] input').setValue(id)
+  await flushPromises()
   const config = wrapper.find('form')
   await config.findAll('input')[0]!.setValue(crypto.randomUUID())
   await config.findAll('input')[1]!.setValue('ORG-EXAMPLE')
@@ -527,4 +523,55 @@ it('does not revoke the previous configuration after a directory selection fails
   expect(wrapper.findAll('button').some((button) => button.text() === '确认撤销配置')).toBe(false)
   expect(revoke).not.toHaveBeenCalled()
   new Uint8Array(replacement.file.bytes).fill(0)
+})
+
+it('authorizes macOS profile delivery, clears the submitted secret and withdraws the file after cancellation', async () => {
+  const id = crypto.randomUUID()
+  const current = shallowRef(
+    decodeEnrollment(
+      {
+        enrollmentId: id,
+        status: 'pending',
+        expiresAt: Math.floor(Date.now() / 1000) + 300,
+        registrationId: null,
+        source: 'mdm.apple',
+        instructions: {
+          platform: 'macos',
+          profileUrl: `/api/v1/enrollments/${id}/profile`,
+          enrollmentMethod: 'profile_based_device_enrollment',
+        },
+        progress: {
+          profilePrepared: 'unknown',
+          certificateIssued: false,
+          firstAuthenticatedCheckIn: false,
+          systemConfirmation: 'unknown',
+          managementReady: false,
+          diagnostic: 'awaiting_certificate',
+        },
+      },
+      id,
+    ),
+  )
+  const host = defineComponent({ setup: () => () => h(NativeFacts, { value: current.value }) })
+  const { wrapper, runtime, revoke } = await setup(host)
+  await runtime.registrationChannels.refresh()
+  const bytes = new Uint8Array([1, 2, 3])
+  const profile = vi.spyOn(runtime.onboarding.native, 'profile').mockResolvedValue({
+    bytes: bytes.buffer,
+    contentType: 'application/x-apple-aspen-config',
+    contentDisposition: 'attachment',
+  })
+  const password = wrapper.get('input[type=password]')
+  await password.setValue('A'.repeat(43))
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(profile).toHaveBeenCalledWith(id, 'A'.repeat(43))
+  expect((password.element as HTMLInputElement).value).toBe('')
+  expect(bytes.every((byte) => byte === 0)).toBe(true)
+  expect(wrapper.find('a[download="RSS-MDM.mobileconfig"]').exists()).toBe(true)
+  expect(wrapper.text()).toContain('等待证书')
+  current.value = { ...current.value, status: 'cancelled' }
+  await flushPromises()
+  expect(wrapper.find('a[download]').exists()).toBe(false)
+  expect(revoke).toHaveBeenCalledWith('blob:synthetic-delivery')
 })

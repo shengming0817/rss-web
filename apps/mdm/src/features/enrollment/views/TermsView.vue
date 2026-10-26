@@ -48,10 +48,10 @@ refresh()
 </script>
 <template>
   <MdmPage :title="t('onboarding.termsTitle')" :busy="busy">
-    <v-alert type="error" variant="tonal" v-if="failure" role="alert">{{
+    <v-alert v-if="failure" type="error" variant="tonal" role="alert">{{
       t('onboarding.termsUnavailable')
     }}</v-alert>
-    <v-alert type="error" variant="tonal" v-if="expired" role="alert">{{
+    <v-alert v-if="expired" type="error" variant="tonal" role="alert">{{
       t('onboarding.termsExpired')
     }}</v-alert>
     <template v-if="available && context">

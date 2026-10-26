@@ -32,6 +32,7 @@ import CredentialsPanel from '../../security/components/CredentialsPanel.vue'
 import ManagementQueries from '../components/ManagementQueries.vue'
 import RegistrationPanel from '../components/RegistrationPanel.vue'
 import NativeEnrollmentPanel from '../../enrollment/components/NativeEnrollmentPanel.vue'
+import DeviceRecoveryPanel from '../../security/pki/DeviceRecoveryPanel.vue'
 const runtime = useMdm(),
   route = useRoute(),
   router = useRouter(),
@@ -397,6 +398,7 @@ watch(target, () => {
             <CredentialsPanel :key="selected.id" :endpoint="selected" />
             <RegistrationPanel :key="selected.id" :endpoint="selected" @changed="load" />
             <NativeEnrollmentPanel :key="selected.id" :endpoint="selected" />
+            <DeviceRecoveryPanel :key="selected.id" :endpoint="selected" />
           </div>
         </div>
         <AssociationPanel

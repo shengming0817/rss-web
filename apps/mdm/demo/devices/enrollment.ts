@@ -16,6 +16,7 @@ export interface Enrollment {
   expiresAt: number
   registrationId: string | null
   source: EnrollmentSource
+  windowsProfile?: 'Full' | 'Device'
 }
 export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
   const enrollments = new Map<string, Enrollment>(),
@@ -33,6 +34,9 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
           expiresAt: 1780000300,
           registrationId: r.registrationId,
           source: r.source,
+          ...(r.source === 'mdm.windows'
+            ? { windowsProfile: r.userContextId ? ('Full' as const) : ('Device' as const) }
+            : {}),
         })
       }
   }
@@ -41,6 +45,7 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
     device: _device,
     actor: _actor,
     selfService: _selfService,
+    windowsProfile: _windowsProfile,
     ...value
   }: Enrollment) => value
   function password(value: unknown) {
@@ -72,11 +77,11 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
                 e.source === 'mdm.windows'
                   ? {
                       platform: 'windows',
-                      server: 'native.demo.invalid',
+                      server: 'https://native.demo.invalid',
                       discoveryUrl: 'https://native.demo.invalid/EnrollmentServer/Discovery.svc',
                       username: `${e.enrollmentId}@native.demo.invalid`,
-                      windowsProfile: 'Device',
-                      requiresLocalAdministrator: false,
+                      windowsProfile: e.windowsProfile ?? 'Device',
+                      requiresLocalAdministrator: true,
                     }
                   : {
                       platform: 'macos',
@@ -153,6 +158,12 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
         const body = closed(request.body, ['deviceId', 'password', 'source'], ['windowsProfile'])
         const deviceId = identifier(body['deviceId']),
           source = enumeration(body['source'], ['mdm.windows', 'mdm.apple'] as const)
+        const windowsProfile =
+          source === 'mdm.windows'
+            ? enumeration(body['windowsProfile'], ['Full', 'Device'] as const)
+            : undefined
+        if (source === 'mdm.apple' && body['windowsProfile'] !== undefined)
+          return error('malformed_request', 400)
         if (!registration.allowed(nativeChannel(source))) return error('enrollment_paused', 409)
         password(body['password'])
         const enrollmentId = randomUUID()
@@ -191,6 +202,7 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
           expiresAt: Math.floor(Date.now() / 1000) + 300,
           registrationId: null,
           source,
+          ...(windowsProfile ? { windowsProfile } : {}),
         }
         enrollments.set(enrollmentId, enrollment)
         device.enrollments.push(enrollmentId)
@@ -266,7 +278,8 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
         registrationId,
         enrollmentId: e.enrollmentId,
         agentGrantId: null,
-        userContextId: null,
+        userContextId:
+          e.source === 'mdm.windows' && e.windowsProfile === 'Full' ? registrationId : null,
         source: e.source,
         generation,
         lastCommunicationReceivedAt: null,
