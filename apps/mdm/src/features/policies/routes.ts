@@ -57,12 +57,6 @@ export const policyFeature: MdmFeature = {
       meta: { protected: true },
     },
     {
-      path: `${base}/scripts`,
-      name: 'policy-scripts',
-      component: () => import('./views/ScriptsView.vue'),
-      meta: { protected: true },
-    },
-    {
       path: `${base}/executions`,
       name: 'policy-executions',
       component: () => import('./views/ExecutionsView.vue'),

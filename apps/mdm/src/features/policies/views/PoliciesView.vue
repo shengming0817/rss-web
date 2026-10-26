@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PolicyFieldset from '../components/PolicyFieldset.vue'
 import { VBtn, VSelect, VTextField, VDataTable, VChip, VCheckbox } from 'vuetify/components'
 import { controlEvent } from '../control-event'
 
@@ -7,7 +8,7 @@ import type { PreviewInput } from '../clients/policies'
 import { jsonObject } from '../../../services/json'
 import { comparison as queryComparison, allOf } from '../../../services/directory-query'
 import type { Json } from '../../../services/json'
-import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -384,7 +385,7 @@ function select(target: string) {
   const destination = policy && policyDestination(policy, runtime.tenant)
   void router.push(destination ?? { query: { ...route.query, id: target } })
 }
-function create() {
+async function create() {
   if (busy.value || uncertain.value) return
   if (
     [
@@ -406,9 +407,12 @@ function create() {
       })
     return
   }
+  editing.value = false
+  if (route.query['id']) await router.push({ query: { ...route.query, id: undefined } })
+  await nextTick()
+  if (route.query['id']) return
+  resetDraft()
   editing.value = true
-  if (route.query['id']) void router.push({ query: { ...route.query, id: undefined } })
-  else resetDraft()
 }
 watch(
   () => route.query['id'],
@@ -417,7 +421,7 @@ watch(
     if (typeof target === 'string') void open(target)
     else resetDraft()
   },
-  { flush: 'sync' },
+  { flush: 'post' },
 )
 function bind() {
   const target = definition.value.action.resource.id
@@ -561,11 +565,13 @@ onMounted(async () => {
     resetDraft()
     const kind = route.query['kind']
     if (
-      ['native_collection', 'agent_collection', 'configuration'].includes(String(kind)) &&
+      ['execution', 'native_collection', 'agent_collection', 'configuration'].includes(
+        String(kind),
+      ) &&
       typeof route.query['resource'] === 'string' &&
       typeof route.query['version'] === 'string'
     ) {
-      definition.value = fresh(kind as 'native_collection' | 'agent_collection' | 'configuration')
+      definition.value = fresh(kind as Parameters<typeof fresh>[0])
       definition.value.action.resource.id = route.query['resource']
       definition.value.action.resource.version = route.query['version']
       editing.value = true
@@ -578,6 +584,13 @@ onMounted(async () => {
           architecture: variant.architecture,
           variant: variant.key,
         }
+      if (variant && definition.value.action.kind === 'execution')
+        definition.value.action.parameters = Object.fromEntries(
+          fields.value.map((field) => [
+            field.name,
+            { kind: 'fixed' as const, value: defaultValue(field.schema) },
+          ]),
+        )
     }
   }
 })
@@ -603,7 +616,7 @@ onMounted(async () => {
         { title: t('software.installAgent'), value: 'ensure_agent_installed' },
         { title: t('software.requestMdm'), value: 'request_mdm_enrollment' },
         { title: t('gap.lifecycle'), value: 'unmanage_device' },
-        { title: t('gap.credential'), value: 'credential' },
+        { title: t('policies.credentialAction'), value: 'credential' },
         { title: t('telemetry.profiles'), value: 'telemetry_profile' },
       ]"
       variant="outlined"
@@ -620,7 +633,6 @@ onMounted(async () => {
         >{{ t('gap.state')
         }}<VSelect
           v-model="queryState"
-          @update:model-value="list = undefined"
           :items="[
             { title: String(t('gap.allStates')), value: '' },
             ...['enabled', 'disabled', 'archived'].map((s) => ({
@@ -630,23 +642,24 @@ onMounted(async () => {
           ]"
           variant="outlined"
           density="comfortable"
-          hide-details="auto" /></label
+          hide-details="auto"
+          @update:model-value="list = undefined" /></label
       ><label
         >{{ t('gap.category')
         }}<VTextField
           v-model="queryCategory"
-          @input="list = undefined"
           variant="outlined"
           density="comfortable"
-          hide-details="auto" /></label
+          hide-details="auto"
+          @input="list = undefined" /></label
       ><label
         >{{ t('gap.queryScope')
         }}<VTextField
           v-model="queryScope"
-          @input="list = undefined"
           variant="outlined"
           density="comfortable"
-          hide-details="auto" /></label
+          hide-details="auto"
+          @input="list = undefined" /></label
       ><VBtn
         type="button"
         :disabled="busy"
@@ -675,12 +688,12 @@ onMounted(async () => {
       item-value="id"
       :loading-text="t('devices.loading')"
       :no-data-text="t('policies.empty')"
-      ><template #item.policy="{ item: row }"
+      ><template #[`item.policy`]="{ item: row }"
         ><VBtn variant="text" :disabled="busy || uncertain" @click="select(row.id)">{{
           row.definition.selfService?.presentation.displayName ??
           `${t('policies.policies')} · ${row.id.slice(0, 8)}`
         }}</VBtn></template
-      ><template #item.state="{ item: row }"
+      ><template #[`item.state`]="{ item: row }"
         ><VChip>{{
           t(
             row.state === 'archived'
@@ -690,7 +703,7 @@ onMounted(async () => {
                 : 'policies.state.paused',
           )
         }}</VChip></template
-      ><template #item.action="{ item: row }">{{
+      ><template #[`item.action`]="{ item: row }">{{
         row.definition.action.kind
       }}</template></VDataTable
     >
@@ -716,7 +729,7 @@ onMounted(async () => {
           t('console.close')
         }}</VBtn>
       </div>
-      <fieldset :disabled="busy || uncertain || !ready || !editing">
+      <PolicyFieldset :disabled="busy || uncertain || !ready || !editing">
         <PolicyIdentityEditor
           v-model:alias="definition.alias"
           v-model:event="definition.customEvent"
@@ -730,7 +743,6 @@ onMounted(async () => {
           id="policy-action"
           :disabled="!!current"
           :model-value="definition.action.kind"
-          @update:model-value="actionKind(controlEvent($event))"
           :items="[
             { title: String(t('policies.scripts')), value: 'execution' },
             { title: String(t('policies.configurations')), value: 'configuration' },
@@ -740,6 +752,7 @@ onMounted(async () => {
           variant="outlined"
           density="comfortable"
           hide-details="auto"
+          @update:model-value="actionKind(controlEvent($event))"
         />
         <label for="policy-id">{{ t('policies.id') }}</label
         ><VTextField
@@ -782,7 +795,6 @@ onMounted(async () => {
                 v.architecture === definition.action.resource.architecture,
             )
           "
-          @update:model-value="selectVariant(controlEvent($event))"
           :items="[
             {
               title: String(t('policies.selfService.chooseVariant')),
@@ -797,6 +809,7 @@ onMounted(async () => {
           variant="outlined"
           density="comfortable"
           hide-details="auto"
+          @update:model-value="selectVariant(controlEvent($event))"
         />
         <label for="policy-scope">{{ t('policies.selfService.deviceScope') }}</label
         ><VTextField
@@ -814,13 +827,12 @@ onMounted(async () => {
         <template v-if="definition.action.kind === 'execution'">
           <ResourceIdentity :binding="definition.action.resource" />
           <p>{{ t('policies.selfService.parameterHint') }}</p>
-          <fieldset v-for="f in fields" :key="f.name">
+          <PolicyFieldset v-for="f in fields" :key="f.name">
             <legend>{{ f.name }}</legend>
             <label :for="`source-${f.name}`">{{ t('policies.source') }}</label
             ><VSelect
               :id="`source-${f.name}`"
               :model-value="definition.action.parameters[f.name]?.kind"
-              @update:model-value="source(f.name, controlEvent($event))"
               :items="[
                 { title: String(t('policies.selfService.fixed')), value: 'fixed' },
                 { title: String(t('policies.selfService.input')), value: 'input' },
@@ -828,6 +840,7 @@ onMounted(async () => {
               variant="outlined"
               density="comfortable"
               hide-details="auto"
+              @update:model-value="source(f.name, controlEvent($event))"
             />
             <p v-if="typeof f.schema['description'] === 'string'">{{ f.schema['description'] }}</p>
             <p
@@ -844,7 +857,6 @@ onMounted(async () => {
                 :id="`value-${f.name}`"
                 required
                 :model-value="f.choices.findIndex((v) => v === fixedValue(f.name))"
-                @update:model-value="choice(f.name, controlEvent($event))"
                 :items="[
                   {
                     title: String(t('policies.selfService.requiredValue')),
@@ -859,6 +871,7 @@ onMounted(async () => {
                 variant="outlined"
                 density="comfortable"
                 hide-details="auto"
+                @update:model-value="choice(f.name, controlEvent($event))"
               />
               <VCheckbox
                 v-else-if="f.type === 'boolean'"
@@ -881,13 +894,13 @@ onMounted(async () => {
                 "
                 :placeholder="t('policies.selfService.requiredValue')"
                 :model-value="fixedValue(f.name)"
-                @input="parameter(f.name, $event)"
                 variant="outlined"
                 density="comfortable"
                 hide-details="auto"
+                @input="parameter(f.name, $event)"
               />
             </template>
-          </fieldset>
+          </PolicyFieldset>
           <NativeScheduleEditor v-model="definition.action.schedule" />
           <label for="policy-frequency">{{ t('policies.selfService.frequency') }}</label
           ><VSelect
@@ -954,7 +967,7 @@ onMounted(async () => {
         <VBtn v-if="editing" type="submit" :disabled="!!(!id || !selectedVariant)">{{
           t('policies.save')
         }}</VBtn>
-      </fieldset>
+      </PolicyFieldset>
     </form>
     <VBtn v-if="!current && route.query['id']" :disabled="!!busy" type="submit" @click="open()">
       {{ t('policies.reloadDefinition') }}
@@ -1030,11 +1043,11 @@ onMounted(async () => {
       item-value="id"
       :loading-text="t('devices.loading')"
       :no-data-text="t('policies.empty')"
-      ><template #item.object="{ item: row }"><AssignmentFacts :item="row" /></template
-      ><template #item.qualification="{ item: row }">{{
+      ><template #[`item.object`]="{ item: row }"><AssignmentFacts :item="row" /></template
+      ><template #[`item.qualification`]="{ item: row }">{{
         t(`policies.preview_${row.qualification.state}`)
       }}</template
-      ><template #item.operations="{ item: row }"
+      ><template #[`item.operations`]="{ item: row }"
         ><details v-if="row.operationIds.length">
           <summary>{{ row.operationIds.length }} {{ t('policies.operation') }}</summary>
           <p v-for="op in row.operationIds" :key="op" class="coordinate">{{ op }}</p>

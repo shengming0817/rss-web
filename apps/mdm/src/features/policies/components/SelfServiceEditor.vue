@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PolicyFieldset from './PolicyFieldset.vue'
 import { VCheckbox, VSelect, VTextField, VTextarea } from 'vuetify/components'
 import { controlEvent } from '../control-event'
 
@@ -45,15 +46,15 @@ function publish(event: Event) {
 }
 </script>
 <template>
-  <fieldset>
+  <PolicyFieldset>
     <legend>{{ t('policies.selfService.title') }}</legend>
     <label :for="`${id}-published`"
       ><VCheckbox
         :id="`${id}-published`"
         data-field="published"
         :model-value="model?.published ?? false"
-        @update:model-value="publish(controlEvent($event))"
         hide-details="auto"
+        @update:model-value="publish(controlEvent($event))"
       />{{ t('policies.selfService.publish') }}</label
     >
     <p>{{ t('policies.selfService.publishHint') }}</p>
@@ -139,32 +140,30 @@ function publish(event: Event) {
         density="comfortable"
         hide-details="auto"
       />
-      <template>
-        <label :for="`${id}-ai`"
-          ><VCheckbox
-            :id="`${id}-ai`"
-            v-model="model.allowAi"
-            data-field="allowAi"
-            hide-details="auto"
-          />{{ t('policies.selfService.allowAi') }}</label
-        >
-        <p>
-          {{ t(model.allowAi ? 'policies.selfService.aiHint' : 'policies.selfService.manualHint') }}
-        </p>
-        <label :for="`${id}-risk`">{{ t('policies.selfService.risk') }}</label
-        ><VSelect
-          :id="`${id}-risk`"
-          v-model.number="model.riskLevel"
-          data-field="riskLevel"
-          :items="[
-            { title: String(t('policies.selfService.risk1')), value: 1 },
-            { title: String(t('policies.selfService.risk2')), value: 2 },
-          ]"
-          variant="outlined"
-          density="comfortable"
+      <label :for="`${id}-ai`"
+        ><VCheckbox
+          :id="`${id}-ai`"
+          v-model="model.allowAi"
+          data-field="allowAi"
           hide-details="auto"
-        />
-      </template>
+        />{{ t('policies.selfService.allowAi') }}</label
+      >
+      <p>
+        {{ t(model.allowAi ? 'policies.selfService.aiHint' : 'policies.selfService.manualHint') }}
+      </p>
+      <label :for="`${id}-risk`">{{ t('policies.selfService.risk') }}</label
+      ><VSelect
+        :id="`${id}-risk`"
+        v-model.number="model.riskLevel"
+        data-field="riskLevel"
+        :items="[
+          { title: String(t('policies.selfService.risk1')), value: 1 },
+          { title: String(t('policies.selfService.risk2')), value: 2 },
+        ]"
+        variant="outlined"
+        density="comfortable"
+        hide-details="auto"
+      />
     </template>
-  </fieldset>
+  </PolicyFieldset>
 </template>

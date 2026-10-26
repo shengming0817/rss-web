@@ -40,7 +40,7 @@ function label(stage: 'dispatch' | 'receipt' | 'effect', value: string) {
     <div>
       <dt><span>04</span>{{ t('policies.effect') }}</dt>
       <dd>
-        <VChip :tone="['unknown', 'unverified'].includes(effect) ? 'warning' : 'neutral'">{{
+        <VChip :color="['unknown', 'unverified'].includes(effect) ? 'warning' : undefined">{{
           label('effect', effect)
         }}</VChip>
       </dd>

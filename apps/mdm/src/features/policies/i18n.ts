@@ -1,6 +1,16 @@
 export const policiesZh = {
+  credentialAction: '凭据维护',
+  configurationContentHint:
+    '上传受支持的原生配置 JSON，声明目标、应用动作及可选撤回动作。平台内容支持 macOS Profile / DDM 与 Windows CSP。',
   publishedSoftware: '已发布软件',
-  scopeEditor: { manage: '配置设备组与目标范围', use: '使用此范围', contract: '范围由目标并集、可选限制交集与排除构成。不限与空限制的含义不同；保存后需等待计算完成。设备组用于设备策略，用户组在自助服务访问配置中选择。' },
+  publicationHint: '仅显示已发布且未撤回的确切软件资源版本。发布不代表设备已安装，分配由策略控制。',
+  softwarePublished: '已发布',
+  scopeEditor: {
+    manage: '配置设备组与目标范围',
+    use: '使用此范围',
+    contract:
+      '目标并集与限制并集取交集，再减去排除并集。不限与空限制的含义不同；保存后需等待计算完成。设备组用于设备策略，用户组在自助服务访问配置中选择。',
+  },
   queues: {
     title: '执行队列',
     all: '全部',
@@ -622,8 +632,19 @@ export const policiesZh = {
   cancel: '请求取消',
 }
 export const policiesEn: typeof policiesZh = {
+  credentialAction: 'Credential maintenance',
+  configurationContentHint:
+    'Upload a supported native configuration JSON document with its target, apply action and optional removal action. Platform content supports macOS profiles, DDM and Windows CSP.',
   publishedSoftware: 'Published software',
-  scopeEditor: { manage: 'Configure device groups and targeting', use: 'Use this scope', contract: 'A scope combines the target union, optional limitations and exclusions. An unrestricted limitation differs from an empty one. Wait for calculation after saving. Device groups target device policies; user groups are selected in self-service access settings.' },
+  publicationHint:
+    'Shows exact software versions that are published and not withdrawn. Publication is separate from device installation; policies control assignment.',
+  softwarePublished: 'Published',
+  scopeEditor: {
+    manage: 'Configure device groups and targeting',
+    use: 'Use this scope',
+    contract:
+      'A scope combines the target union, optional limitations and exclusions. An unrestricted limitation differs from an empty one. Wait for calculation after saving. Device groups target device policies; user groups are selected in self-service access settings.',
+  },
   queues: {
     title: 'Execution queues',
     all: 'All',

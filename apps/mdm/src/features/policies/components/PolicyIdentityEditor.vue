@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PolicyFieldset from './PolicyFieldset.vue'
 import { VTextField } from 'vuetify/components'
 
 import { useId } from 'vue'
@@ -10,7 +11,7 @@ const { t } = useI18n(),
   id = useId()
 </script>
 <template>
-  <fieldset class="console-form-section" data-section="policy-identity">
+  <PolicyFieldset class="console-form-section" data-section="policy-identity">
     <legend>{{ t('policies.entry.configuration') }}</legend>
     <p>{{ t('policies.entry.identityHint') }}</p>
     <label :for="`${id}-alias`">{{ t('policies.entry.alias') }}</label>
@@ -20,10 +21,10 @@ const { t } = useI18n(),
       pattern="[A-Za-z0-9._\- ]{0,64}"
       data-field="policy-alias"
       :model-value="alias ?? ''"
-      @input="alias = ($event.target as HTMLInputElement).value || null"
       variant="outlined"
       density="comfortable"
       hide-details="auto"
+      @input="alias = ($event.target as HTMLInputElement).value || null"
     />
     <label :for="`${id}-event`">{{ t('policies.entry.event') }}</label>
     <VTextField
@@ -32,14 +33,14 @@ const { t } = useI18n(),
       pattern="[A-Za-z0-9._\- ]{0,64}"
       data-field="policy-event"
       :model-value="event ?? ''"
-      @input="event = ($event.target as HTMLInputElement).value || null"
       variant="outlined"
       density="comfortable"
       hide-details="auto"
+      @input="event = ($event.target as HTMLInputElement).value || null"
     />
     <p>{{ t('policies.entry.namesHint') }}</p>
     <p v-if="event && fixedParameters === false" role="alert">
       {{ t('policies.entry.fixedParameters') }}
     </p>
-  </fieldset>
+  </PolicyFieldset>
 </template>

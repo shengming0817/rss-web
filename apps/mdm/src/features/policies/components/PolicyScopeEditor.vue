@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PolicyFieldset from './PolicyFieldset.vue'
 import PolicyDialog from '../components/PolicyDialog.vue'
 import PolicyTabs from '../components/PolicyTabs.vue'
 
@@ -54,6 +55,11 @@ const task = ref<string>(),
   projection = ref<ScopeProjection>('members'),
   channel = ref<Channel>('mdm')
 let pending: (() => Promise<void>) | undefined
+function chooseScope() {
+  if (!current.value || busy.value || uncertain.value) return
+  selected.value = current.value.id
+  scopeOpen.value = false
+}
 function closeScope() {
   if (busy.value || uncertain.value) return
   current.value = undefined
@@ -227,11 +233,11 @@ if (route.query['device'] || route.query['group']) scopeOpen.value = true
         item-value="id"
         :loading-text="t('devices.loading')"
         :no-data-text="t('policies.empty')"
-        ><template #item.scope="{ item: row }"
+        ><template #[`item.scope`]="{ item: row }"
           ><VBtn variant="text" :disabled="busy || uncertain" @click="open(row.id)"
             >{{ t('policies.scopes') }} · {{ row.id.slice(0, 8) }}</VBtn
           ></template
-        ><template #item.resolution="{ item: row }"
+        ><template #[`item.resolution`]="{ item: row }"
           ><VChip>{{
             t(row.resolution ? 'policies.savedResult' : 'policies.awaitingResult')
           }}</VChip></template
@@ -251,10 +257,7 @@ if (route.query['device'] || route.query['group']) scopeOpen.value = true
       :disabled="
         busy || uncertain || current.resolutionRevision !== current.revision || !current.resolution
       "
-      @click="
-        selected = current.id
-        scopeOpen = false
-      "
+      @click="chooseScope"
       >{{ t('policies.scopeEditor.use') }}</VBtn
     >
     <section v-if="current && !editing" class="console-panel task-scope-definition">
@@ -290,7 +293,7 @@ if (route.query['device'] || route.query['group']) scopeOpen.value = true
       :close-label="t('console.close')"
       ><p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
       <form class="scope-form" @submit.prevent="save">
-        <fieldset :disabled="busy || uncertain">
+        <PolicyFieldset :disabled="busy || uncertain">
           <details class="task-technical">
             <summary>{{ t('policies.ux.technical') }}</summary>
             <label for="scope-id">{{ t('policies.id') }}</label
@@ -335,7 +338,7 @@ if (route.query['device'] || route.query['group']) scopeOpen.value = true
           ><VBtn v-if="current" type="button" @click="change({ action: 'delete' })">
             {{ t('policies.remove') }}
           </VBtn>
-        </fieldset>
+        </PolicyFieldset>
       </form>
       <section v-if="compared" data-testid="scope-comparison" class="console-panel">
         <h3>{{ t('devices.compare') }}</h3>

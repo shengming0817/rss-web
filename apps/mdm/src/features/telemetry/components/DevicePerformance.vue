@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { VAlert, VSelect, VTextField, VTable } from 'vuetify/components'
+import { VAlert, VSelect, VTextField, VTable, VBtn } from 'vuetify/components'
 import { controlEvent } from '../../policies/control-event'
 
-import { VBtn } from 'vuetify/components'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -414,7 +413,6 @@ watch(
               }}<VSelect
                 :aria-label="t('telemetry.series')"
                 :model-value="series"
-                @update:model-value="chooseSeries(controlEvent($event))"
                 :items="[
                   ...choices.map(([key, row]) => ({
                     title:
@@ -433,7 +431,8 @@ watch(
                 ]"
                 variant="outlined"
                 density="comfortable"
-                hide-details="auto" /></label
+                hide-details="auto"
+                @update:model-value="chooseSeries(controlEvent($event))" /></label
             ><v-btn v-if="step && discoveryNext" :disabled="busy" @click="discover">{{
               t('telemetry.moreSeries')
             }}</v-btn

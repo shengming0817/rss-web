@@ -1,8 +1,18 @@
 <script setup lang="ts">
+import PolicyFieldset from '../components/PolicyFieldset.vue'
 import PolicyDialog from '../components/PolicyDialog.vue'
 import PolicyTabs from '../components/PolicyTabs.vue'
 
-import { VBtn, VTextField, VSelect, VDataTable, VChip, VTextarea, VTable } from 'vuetify/components'
+import {
+  VFileInput,
+  VBtn,
+  VTextField,
+  VSelect,
+  VDataTable,
+  VChip,
+  VTextarea,
+  VTable,
+} from 'vuetify/components'
 
 import { comparison as queryComparison } from '../../../services/directory-query'
 import { computed, onBeforeUnmount, ref, shallowRef, toRaw, watch } from 'vue'
@@ -30,6 +40,7 @@ import { validateSoftwareTarget } from '../clients/software-definition'
 import SoftwareDefinitionEditor from '../../software/components/SoftwareDefinitionEditor.vue'
 import MdmPage from '../../../ui/MdmPage.vue'
 import ScriptDefinitionEditor from '../components/ScriptDefinitionEditor.vue'
+import PublishedSoftware from '../components/PublishedSoftware.vue'
 import CollectionVersionEditor from '../components/CollectionVersionEditor.vue'
 import { agentBytes, nativeBytes } from '../../../contracts/collection/canonical'
 const { t } = useI18n(),
@@ -209,11 +220,14 @@ function resetDraft() {
   uploadCommitted.value = false
   transfer?.abort()
   file.value = undefined
-  if (uploadInput.value) uploadInput.value.value = ''
+  if (uploadInput.value) {
+    const input = uploadInput.value.$el.querySelector('input[type=file]') as HTMLInputElement | null
+    if (input) input.value = ''
+  }
   pending = undefined
 }
 const file = shallowRef<File>(),
-  uploadInput = ref<HTMLInputElement>(),
+  uploadInput = ref<InstanceType<typeof VFileInput>>(),
   uploadPending = ref<{
     id: string
     upload: string
@@ -292,7 +306,10 @@ function change(input: ResourceChange, generated?: { file: File; target: UploadT
   const resource = current.value?.id ?? id.value,
     body = operation(input, current.value?.revision ?? 0)
   file.value = undefined
-  if (uploadInput.value) uploadInput.value.value = ''
+  if (uploadInput.value) {
+    const input = uploadInput.value.$el.querySelector('input[type=file]') as HTMLInputElement | null
+    if (input) input.value = ''
+  }
   pending = async () => {
     const acknowledged = await runWrite(() => client.change(resource, body))
     if (acknowledged)
@@ -475,7 +492,10 @@ async function upload() {
     return
   const selected = file.value
   file.value = undefined
-  if (uploadInput.value) uploadInput.value.value = ''
+  if (uploadInput.value) {
+    const input = uploadInput.value.$el.querySelector('input[type=file]') as HTMLInputElement | null
+    if (input) input.value = ''
+  }
   if (!validFile(selected)) return
   const original = uploadPending.value,
     resource = original?.id ?? current.value.id,
@@ -635,6 +655,7 @@ watch(
       ><VBtn :disabled="busy" @click="load()">{{ t('policies.reload') }}</VBtn></template
     >
     <template v-if="!current">
+      <PublishedSoftware />
       <div class="task-directory-summary">
         <strong>{{ t('policies.ux.loaded', { count: list?.items.length ?? 0 }) }}</strong
         ><span>{{ t('policies.ux.resourcesHint') }}</span>
@@ -649,7 +670,6 @@ watch(
           v-model="resourceFilter"
           :aria-label="t('policies.kind')"
           :disabled="busy"
-          @update:model-value="load()"
           :items="[
             { title: String(t('policies.ux.allTypes')), value: '' },
             ...(
@@ -666,6 +686,7 @@ watch(
           variant="outlined"
           density="comfortable"
           hide-details="auto"
+          @update:model-value="load()"
         />
       </div>
       <p class="ui-help">{{ t('policies.ux.pageOnly') }}</p>
@@ -687,7 +708,7 @@ watch(
           ].map((column) => ({ key: column.key, title: column.label, sortable: false }))
         "
       >
-        <template #item.name="{ item: row }"
+        <template #[`item.name`]="{ item: row }"
           ><VBtn variant="text" :disabled="busy || uncertain" @click="open(row.id)">{{
             typeof row.presentation['name'] === 'string' && row.presentation['name']
               ? row.presentation['name']
@@ -699,10 +720,10 @@ watch(
               : ''
           }}</small></template
         >
-        <template #item.kind="{ item: row }"
+        <template #[`item.kind`]="{ item: row }"
           ><VChip>{{ kindLabel(row.kind) }}</VChip></template
         >
-        <template #item.activeVersion="{ item: row }">{{
+        <template #[`item.activeVersion`]="{ item: row }">{{
           row.activeVersion ?? t('policies.ux.noActiveVersion')
         }}</template>
       </VDataTable>
@@ -736,7 +757,6 @@ watch(
             }}<VSelect
               v-model="category"
               :disabled="busy || uncertain"
-              @update:model-value="blueprint = ''"
               :items="[
                 { title: String(t('devices.all')), value: '' },
                 ...blueprints.categories.map((c) => ({
@@ -746,7 +766,8 @@ watch(
               ]"
               variant="outlined"
               density="comfortable"
-              hide-details="auto" /></label
+              hide-details="auto"
+              @update:model-value="blueprint = ''" /></label
           ><label
             >{{ t('policies.packageVersion')
             }}<VSelect
@@ -777,7 +798,7 @@ watch(
           ></template
         >
       </section>
-      <fieldset v-show="creating" class="console-panel" :disabled="busy || uncertain">
+      <PolicyFieldset v-show="creating" class="console-panel" :disabled="busy || uncertain">
         <details class="task-technical">
           <summary>{{ t('policies.ux.technical') }}</summary>
           <label for="resource-id">{{ t('policies.id') }}</label
@@ -819,7 +840,7 @@ watch(
             t('policies.ux.importSoftware')
           }}</RouterLink></template
         >
-      </fieldset>
+      </PolicyFieldset>
       <template #footer
         ><VBtn v-if="uncertain && pending" :disabled="busy" @click="pending()">{{
           t('policies.replay')
@@ -849,7 +870,7 @@ watch(
       >
         <template #metadata>
           <form data-testid="resource-presentation" @submit.prevent="savePresentation">
-            <fieldset :disabled="busy || uncertain">
+            <PolicyFieldset :disabled="busy || uncertain">
               <legend>{{ t('policies.resourcePresentation') }}</legend>
               <label for="resource-display-name">{{ t('devices.name') }}</label
               ><VTextField
@@ -868,7 +889,7 @@ watch(
                 hide-details="auto"
               />
               <VBtn type="submit">{{ t('devices.save') }}</VBtn>
-            </fieldset>
+            </PolicyFieldset>
           </form> </template
         ><template #versions>
           <div class="ui-table-scroll">
@@ -913,14 +934,23 @@ watch(
                     <RouterLink
                       v-if="
                         item.state === 'active' &&
-                        ['native_collection', 'agent_collection', 'configuration'].includes(
-                          current.kind,
-                        )
+                        [
+                          'script',
+                          'software',
+                          'native_collection',
+                          'agent_collection',
+                          'configuration',
+                        ].includes(current.kind)
                       "
                       :to="{
                         name: 'policy-policies',
                         params: { tenant: runtime.tenant },
-                        query: { kind: current.kind, resource: current.id, version: item.id },
+                        query: {
+                          kind: current.kind === 'script' ? 'execution' : current.kind,
+                          ...(current.kind === 'software' ? { action: 'software' } : {}),
+                          resource: current.id,
+                          version: item.id,
+                        },
                       }"
                       >{{ t('policies.assignPackage') }}</RouterLink
                     >
@@ -930,6 +960,9 @@ watch(
             </VTable>
           </div> </template
         ><template #content>
+          <p v-if="current.kind === 'configuration'">
+            {{ t('policies.configurationContentHint') }}
+          </p>
           <CollectionVersionEditor
             v-if="current.kind === 'native_collection' || current.kind === 'agent_collection'"
             :resource="current"
@@ -943,7 +976,7 @@ watch(
           >
             <summary>{{ t('policies.version') }}</summary>
             <form @submit.prevent="addVersion">
-              <fieldset :disabled="busy || uncertain">
+              <PolicyFieldset :disabled="busy || uncertain">
                 <label for="resource-version">{{ t('policies.version') }}</label
                 ><VTextField
                   id="resource-version"
@@ -983,9 +1016,13 @@ watch(
                   density="comfortable"
                   hide-details="auto"
                 /><label for="resource-metadata">{{ t('policies.metadata') }}</label
-                ><input id="resource-metadata" type="file" @change="metadata" /><label
-                  for="resource-reference"
-                  >{{ t('policies.reference') }}</label
+                ><VFileInput
+                  id="resource-metadata"
+                  :label="t('policies.metadata')"
+                  variant="outlined"
+                  hide-details="auto"
+                  @change="metadata"
+                /><label for="resource-reference">{{ t('policies.reference') }}</label
                 ><VTextField
                   id="resource-reference"
                   v-model="artifact.reference"
@@ -1027,7 +1064,7 @@ watch(
                 >
                   {{ t('policies.save') }}
                 </VBtn>
-              </fieldset>
+              </PolicyFieldset>
             </form>
           </details>
           <section class="console-panel">
@@ -1081,11 +1118,13 @@ watch(
               v-if="kind !== 'native_collection' && kind !== 'agent_collection'"
               for="resource-upload"
               >{{ t('policies.content') }}</label
-            ><input
+            ><VFileInput
               v-if="kind !== 'native_collection' && kind !== 'agent_collection'"
               id="resource-upload"
               ref="uploadInput"
-              type="file"
+              :label="t('policies.content')"
+              variant="outlined"
+              hide-details="auto"
               :disabled="busy"
               @change="select"
             /><VBtn

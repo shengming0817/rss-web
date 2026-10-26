@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PolicyFieldset from './PolicyFieldset.vue'
 import { VBtn, VSelect, VTextField } from 'vuetify/components'
 
 import { ref, useId, watch } from 'vue'
@@ -121,7 +122,7 @@ function label(s: SelfServiceSelector) {
 }
 </script>
 <template>
-  <fieldset>
+  <PolicyFieldset>
     <legend>{{ t('policies.selfService.users') }}</legend>
     <p>{{ t('policies.selfService.anySelector') }}</p>
     <ul>
@@ -256,5 +257,5 @@ function label(s: SelfServiceSelector) {
       {{ t('policies.reload') }}
     </VBtn>
     <p v-if="failure" role="alert">{{ t(`policies.${failure}`) }}</p>
-  </fieldset>
+  </PolicyFieldset>
 </template>

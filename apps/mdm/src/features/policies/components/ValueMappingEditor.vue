@@ -145,7 +145,6 @@ function removeColumn(name: string) {
       }}<VSelect
         :disabled="Object.keys(model.columns).length > 0"
         :model-value="model.conversion.kind"
-        @update:model-value="conversion(controlEvent($event))"
         :items="[
           ...[
             'identity',
@@ -161,6 +160,7 @@ function removeColumn(name: string) {
         variant="outlined"
         density="comfortable"
         hide-details="auto"
+        @update:model-value="conversion(controlEvent($event))"
     /></label>
     <template v-if="model.conversion.kind === 'scale'">
       <label
@@ -169,10 +169,10 @@ function removeColumn(name: string) {
           inputmode="numeric"
           required
           :model-value="model.conversion.numerator"
-          @input="number($event, 'numerator')"
           variant="outlined"
           density="comfortable"
           hide-details="auto"
+          @input="number($event, 'numerator')"
       /></label>
       <label
         >{{ t('telemetry.mappingUi.denominator')
@@ -180,10 +180,10 @@ function removeColumn(name: string) {
           inputmode="numeric"
           required
           :model-value="model.conversion.denominator"
-          @input="number($event, 'denominator')"
           variant="outlined"
           density="comfortable"
           hide-details="auto"
+          @input="number($event, 'denominator')"
       /></label>
     </template>
     <template v-if="model.conversion.kind === 'array_member'">
@@ -193,10 +193,10 @@ function removeColumn(name: string) {
           inputmode="numeric"
           required
           :model-value="model.conversion.member"
-          @input="number($event, 'member')"
           variant="outlined"
           density="comfortable"
           hide-details="auto"
+          @input="number($event, 'member')"
       /></label>
       <label
         >{{ t('telemetry.mappingUi.present')

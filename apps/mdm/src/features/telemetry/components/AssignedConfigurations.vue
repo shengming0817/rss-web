@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { VAlert } from 'vuetify/components'
+import { VAlert, VBtn } from 'vuetify/components'
 
-import { VBtn } from 'vuetify/components'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'

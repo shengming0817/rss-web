@@ -338,7 +338,6 @@ watch(
           }}<VSelect
             v-model="selectedDevice"
             :disabled="picker.busy.value || pinned"
-            @update:model-value="choose()"
             :items="[
               { title: String(t('devices.select')), value: '' },
               ...(selectedDevice && !devices.items.some((d) => d.id === selectedDevice)
@@ -348,7 +347,8 @@ watch(
             ]"
             variant="outlined"
             density="comfortable"
-            hide-details="auto" /></label
+            hide-details="auto"
+            @update:model-value="choose()" /></label
         ><VBtn
           v-if="devices.nextCursor"
           :disabled="picker.busy.value || pinned"
@@ -387,7 +387,7 @@ watch(
           ].map((column) => ({ key: column.key, title: column.label, sortable: false }))
         "
       >
-        <template #item.operation="{ item }"
+        <template #[`item.operation`]="{ item }"
           ><RouterLink
             :to="{
               name: 'policy-execution',
@@ -400,23 +400,23 @@ watch(
             >{{ item.registrationId }} / {{ item.generation }}</small
           ></template
         >
-        <template #item.device="{ item: row }"
+        <template #[`item.device`]="{ item: row }"
           ><RouterLink
             :to="{ name: 'device-detail', params: { tenant: runtime.tenant, device: row.device } }"
             >{{ row.device }}</RouterLink
           ></template
         >
-        <template #item.status="{ item: row }"
-          ><VChip :tone="row.status === 'unknown' ? 'warning' : 'neutral'">{{
+        <template #[`item.status`]="{ item: row }"
+          ><VChip :color="row.status === 'unknown' ? 'warning' : undefined">{{
             row.status
           }}</VChip></template
         >
-        <template #item.authorization="{ item: row }"
+        <template #[`item.authorization`]="{ item: row }"
           ><AuthorizationFacts
             :authorization="row.authorization"
             :reauthorization="row.reauthorization"
         /></template>
-        <template #item.evidence="{ item }">
+        <template #[`item.evidence`]="{ item }">
           <details class="operation-evidence">
             <summary>{{ t('devices.evidence') }}</summary>
             <OperationStages

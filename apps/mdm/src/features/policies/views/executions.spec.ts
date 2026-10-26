@@ -1,6 +1,7 @@
+import { selectControl } from '../vuetify-test-controls'
 import { createFeatureRouter as createRouter } from '../../../../tests/feature-router'
 import { ref } from 'vue'
-import { DOMWrapper, flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory } from 'vue-router'
 import { expect, it, vi } from 'vitest'
 import { mdmKey } from '../../../context'
@@ -23,6 +24,7 @@ it('keeps applied filters on opaque pagination and clears continuation after a f
   })
   await router.push('/?device=endpoint&policy=policy&batch=retired')
   const wrapper = mount(ExecutionsView, {
+    attachTo: document.body,
     global: {
       plugins: [router, mdmI18n()],
       provide: {
@@ -51,8 +53,8 @@ it('keeps applied filters on opaque pagination and clears continuation after a f
   })
   await flushPromises()
   const form = wrapper.get('form')
-  await form.get('select').setValue('command')
-  await form.findAll('input')[2]!.setValue('unknown')
+  await selectControl(form, 'select').setValue('command')
+  await form.findAll('input:not([type=hidden]):not([role=combobox])')[2]!.setValue('unknown')
   directory.mockResolvedValueOnce({ items: [], nextCursor: 'ZA' })
   await wrapper
     .findAll('button')
@@ -85,6 +87,7 @@ it('rejects missing or ambiguous formal detail coordinates without guessing or r
   })
   await router.push('/11111111-1111-4111-8111-111111111111')
   const wrapper = mount(ExecutionDetailView, {
+    attachTo: document.body,
     global: {
       plugins: [router, mdmI18n()],
       provide: {
@@ -140,6 +143,7 @@ it('queries an unknown cancellation, displays the observed revision, and explici
   })
   await router.push(`/${id}?device=endpoint`)
   const wrapper = mount(ExecutionDetailView, {
+    attachTo: document.body,
     global: {
       plugins: [router, mdmI18n()],
       stubs: { RouterLink: true },
@@ -177,6 +181,7 @@ it('removes the old control target when the device selection is cleared without 
   })
   await router.push('/')
   const wrapper = mount(ExecutionsView, {
+    attachTo: document.body,
     global: {
       plugins: [router, mdmI18n()],
       provide: {
@@ -202,7 +207,7 @@ it('removes the old control target when the device selection is cleared without 
     .find((b) => b.text() === '新建远程操作')!
     .trigger('click')
   await flushPromises()
-  const select = new DOMWrapper(document.body).get('[role=dialog] select')
+  const select = selectControl(wrapper, '[role=dialog] select')
   await select.setValue('endpoint')
   await flushPromises()
   expect(wrapper.findComponent(DeviceControlPanel).exists()).toBe(true)
@@ -211,7 +216,7 @@ it('removes the old control target when the device selection is cleared without 
     .find((b) => b.text() === '新建远程操作')!
     .trigger('click')
   await flushPromises()
-  await new DOMWrapper(document.body).get('[role=dialog] select').setValue('')
+  await selectControl(wrapper, '[role=dialog] select').setValue('')
   await flushPromises()
   expect(wrapper.findComponent(DeviceControlPanel).exists()).toBe(false)
   expect(detail.mock.calls).toEqual([['endpoint']])
@@ -231,6 +236,7 @@ it('uses the same server queue predicate for the directory and statistics withou
   })
   await router.push('/')
   const wrapper = mount(ExecutionsView, {
+    attachTo: document.body,
     global: {
       plugins: [router, mdmI18n()],
       provide: {
@@ -310,6 +316,7 @@ it('uses current reauthorization eligibility and replays a lost response with th
   })
   await router.push(`/${id}?device=endpoint`)
   const wrapper = mount(ExecutionDetailView, {
+    attachTo: document.body,
     global: {
       plugins: [router, mdmI18n()],
       stubs: { RouterLink: true },

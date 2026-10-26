@@ -32,7 +32,7 @@ const { t, te } = useI18n(),
     }}</span
     ><VChip
       v-if="item.availability"
-      :tone="item.availability === 'ready' ? 'success' : 'warning'"
+      :color="item.availability === 'ready' ? 'success' : 'warning'"
       >{{ t(`policies.availability_${item.availability}`) }}</VChip
     ><span v-if="item.reason">{{
       te(`policies.assignmentReason.${item.reason}`)

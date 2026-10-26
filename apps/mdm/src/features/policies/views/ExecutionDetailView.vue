@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PolicyFieldset from '../components/PolicyFieldset.vue'
 import { VBtn, VTextField, VCheckbox } from 'vuetify/components'
 
 import { ref, watch } from 'vue'
@@ -243,7 +244,7 @@ watch(
         :authorization="native.authorization"
         :reauthorization="native.reauthorization"
       />
-      <fieldset
+      <PolicyFieldset
         v-if="
           native.reauthorization.state === 'available' &&
           native.reauthorization.confirmationRequired
@@ -273,7 +274,7 @@ watch(
             t('policies.confirmControl')
           }}</label
         >
-      </fieldset>
+      </PolicyFieldset>
       <VBtn
         v-if="native.reauthorization.state === 'available'"
         :disabled="

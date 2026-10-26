@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PolicyFieldset from '../../policies/components/PolicyFieldset.vue'
 import PolicyDialog from '../../policies/components/PolicyDialog.vue'
 
 import { VBtn, VTextField, VTable, VAlert, VCheckbox, VSelect, VTextarea } from 'vuetify/components'
@@ -354,7 +355,7 @@ watch(
       @update:open="!pending && (open = $event)"
       ><section class="telemetry-form">
         <VAlert v-if="failure" type="error" variant="tonal" :title="t('devices.' + failure)" />
-        <fieldset :disabled="locked || !!pending">
+        <PolicyFieldset :disabled="locked || !!pending">
           <label
             >{{ t('telemetry.field')
             }}<VTextField
@@ -364,7 +365,7 @@ watch(
               density="comfortable"
               hide-details="auto"
           /></label>
-          <fieldset :disabled="!creating">
+          <PolicyFieldset :disabled="!creating">
             <FieldTypeEditor v-model="fieldType" />
             <label
               >{{ t('telemetry.unit')
@@ -416,27 +417,25 @@ watch(
                 density="comfortable"
                 hide-details="auto"
             /></label>
-            <fieldset>
+            <PolicyFieldset>
               <legend>{{ t('telemetry.fieldUi.platforms') }}</legend>
               <label v-for="platform in ['windows', 'macos']" :key="platform"
-                ><VCheckbox
-                  v-model="platforms"
-                  :value="platform"
-                  hide-details="auto"
-                />{{ platform }}</label
+                ><VCheckbox v-model="platforms" :value="platform" hide-details="auto" />{{
+                  platform
+                }}</label
               >
-            </fieldset>
-            <fieldset>
+            </PolicyFieldset>
+            <PolicyFieldset>
               <legend>{{ t('telemetry.fieldUi.sources') }}</legend>
               <label v-for="source in sourceIds" :key="source"
                 ><VCheckbox
                   :model-value="Object.hasOwn(sources, source)"
+                  hide-details="auto"
                   @update:model-value="
                     (controlEvent($event).target as HTMLInputElement).checked
                       ? (sources[source] = 0)
                       : delete sources[source]
-                  "
-                  hide-details="auto" />{{ source
+                  " />{{ source
                 }}<VTextField
                   v-if="Object.hasOwn(sources, source)"
                   v-model.number="sources[source]"
@@ -448,8 +447,8 @@ watch(
                   density="comfortable"
                   hide-details="auto"
               /></label>
-            </fieldset>
-          </fieldset>
+            </PolicyFieldset>
+          </PolicyFieldset>
           <p v-if="selected?.timeSeries" class="telemetry-notice">
             {{ t('telemetry.immutableBinding') }}
           </p>
@@ -457,7 +456,7 @@ watch(
             ><VCheckbox v-model="bindingEnabled" hide-details="auto" />
             {{ t('telemetry.bindHistory') }}</label
           >
-          <fieldset v-if="bindingEnabled" :disabled="!!selected?.timeSeries">
+          <PolicyFieldset v-if="bindingEnabled" :disabled="!!selected?.timeSeries">
             <label
               >{{ t('telemetry.metricKind')
               }}<VSelect
@@ -506,7 +505,7 @@ watch(
                 density="comfortable"
                 hide-details="auto"
             /></label>
-          </fieldset>
+          </PolicyFieldset>
           <div v-if="bindingEnabled" class="telemetry-toolbar">
             <label
               >{{ t('telemetry.retentionKey')
@@ -571,7 +570,7 @@ watch(
             ><VCheckbox v-model="confirmed" hide-details="auto" />
             {{ t('telemetry.confirmField') }}</label
           ><VBtn :disabled="!confirmed" @click="submit">{{ t('telemetry.saveVersion') }}</VBtn>
-        </fieldset>
+        </PolicyFieldset>
         <WriteRecovery
           v-if="pending && uncertain"
           :id="pending.body.operationId"
@@ -590,7 +589,7 @@ watch(
       @update:open="!pending && (retentionOpen = $event)"
       ><section class="telemetry-form">
         <p>{{ t('telemetry.retentionHint') }}</p>
-        <fieldset :disabled="locked || !!pending">
+        <PolicyFieldset :disabled="locked || !!pending">
           <label
             >{{ t('telemetry.retentionKey')
             }}<VTextField
@@ -620,7 +619,7 @@ watch(
               density="comfortable"
               hide-details="auto" /></label
           ><VBtn @click="saveRetention">{{ t('telemetry.saveVersion') }}</VBtn>
-        </fieldset>
+        </PolicyFieldset>
         <pre v-if="comparison !== undefined">{{ comparison }}</pre>
         <WriteRecovery
           v-if="pending && uncertain"

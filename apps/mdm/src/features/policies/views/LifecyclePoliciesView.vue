@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PolicyFieldset from '../components/PolicyFieldset.vue'
 import { VSelect, VBtn, VTextField, VCheckbox } from 'vuetify/components'
 
 import type { PreviewInput } from '../clients/policies'
@@ -310,9 +311,9 @@ watch(
   <MdmPage :title="t('gap.lifecycle')" :busy="busy" :failure="failure">
     <p>{{ t('gap.retirementHint') }}</p>
     <PolicyEntry v-if="current" :policy="current" />
-    <fieldset :disabled="locked || current?.state === 'archived'">
+    <PolicyFieldset :disabled="locked || current?.state === 'archived'">
       <PolicyIdentityEditor v-model:alias="alias" v-model:event="customEvent" />
-    </fieldset>
+    </PolicyFieldset>
     <RouterLink :to="{ name: 'policy-policies', params: { tenant: runtime.tenant } }">{{
       t('policies.policies')
     }}</RouterLink>
@@ -353,7 +354,7 @@ watch(
     </ul>
     <VBtn v-if="rows?.nextCursor" @click="load(rows.nextCursor)">{{ t('gap.next') }}</VBtn>
     <form @submit.prevent="save">
-      <fieldset :disabled="locked || current?.state === 'archived'">
+      <PolicyFieldset :disabled="locked || current?.state === 'archived'">
         <label
           >{{ t('gap.policy')
           }}<VTextField
@@ -482,7 +483,7 @@ watch(
             t('gap.trigger')
           }}</VBtn></template
         >
-      </fieldset>
+      </PolicyFieldset>
     </form>
     <template v-if="pending"
       ><p role="alert">

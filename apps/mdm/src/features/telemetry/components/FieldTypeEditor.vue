@@ -72,7 +72,6 @@ function removeProperty(key: string) {
       >{{ t('telemetry.valueType')
       }}<VSelect
         :model-value="model.kind"
-        @update:model-value="kind(controlEvent($event))"
         :items="[
           ...[
             'string',
@@ -88,6 +87,7 @@ function removeProperty(key: string) {
         variant="outlined"
         density="comfortable"
         hide-details="auto"
+        @update:model-value="kind(controlEvent($event))"
     /></label>
     <template v-if="model.kind === 'string'"
       ><label

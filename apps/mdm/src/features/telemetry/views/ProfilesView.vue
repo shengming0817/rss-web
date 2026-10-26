@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PolicyFieldset from '../../policies/components/PolicyFieldset.vue'
 import PolicyDialog from '../../policies/components/PolicyDialog.vue'
 
 import { VBtn, VAlert, VSelect, VTextarea, VCheckbox, VTextField, VTable } from 'vuetify/components'
@@ -744,26 +745,25 @@ watch(
           </li>
         </ol>
         <VAlert v-if="failure" type="error" variant="tonal" :title="t('devices.' + failure)" />
-        <fieldset v-if="step === 0" :disabled="locked">
+        <PolicyFieldset v-if="step === 0" :disabled="locked">
           <label
             >{{ t('telemetry.templateKind')
             }}<VSelect
               v-model="templateKind"
               :aria-label="t('telemetry.templateKind')"
-              @update:model-value="sources()"
               :items="[
                 { title: String(t('telemetry.nativeTemplate')), value: 'agent_collection' },
                 { title: String(t('telemetry.scriptTemplate')), value: 'script' },
               ]"
               variant="outlined"
               density="comfortable"
-              hide-details="auto" /></label
+              hide-details="auto"
+              @update:model-value="sources()" /></label
           ><label
             >{{ t('telemetry.template')
             }}<VSelect
               v-model="templateId"
               :aria-label="t('telemetry.template')"
-              @update:model-value="selectTemplate()"
               :items="[
                 { title: String(t('devices.select')), value: '' },
                 ...templates.map((item) => ({
@@ -773,14 +773,14 @@ watch(
               ]"
               variant="outlined"
               density="comfortable"
-              hide-details="auto" /></label
+              hide-details="auto"
+              @update:model-value="selectTemplate()" /></label
           ><VBtn v-if="templateAfter" @click="sources(templateAfter)">{{ t('devices.next') }}</VBtn
           ><label
             >{{ t('telemetry.variant')
             }}<VSelect
               v-model="variantKey"
               :aria-label="t('telemetry.variant')"
-              @update:model-value="chosen = []"
               :items="[
                 ...variants.map((v) => ({
                   title:
@@ -796,7 +796,8 @@ watch(
               ]"
               variant="outlined"
               density="comfortable"
-              hide-details="auto" /></label
+              hide-details="auto"
+              @update:model-value="chosen = []" /></label
           ><label
             >{{ t('telemetry.parameters')
             }}<VTextarea
@@ -818,8 +819,8 @@ watch(
           ><RouterLink :to="{ name: 'policy-resources', params: { tenant: runtime.tenant } }">{{
             t('telemetry.manageTemplates')
           }}</RouterLink>
-        </fieldset>
-        <fieldset v-if="step === 1" :disabled="locked">
+        </PolicyFieldset>
+        <PolicyFieldset v-if="step === 1" :disabled="locked">
           <label
             >{{ t('telemetry.version')
             }}<VTextField
@@ -931,7 +932,7 @@ watch(
                 hide-details="auto"
             /></label>
           </details>
-        </fieldset>
+        </PolicyFieldset>
         <section v-if="step === 2">
           <h3>{{ t('telemetry.reviewProfile') }}</h3>
           <p class="telemetry-notice">
@@ -968,7 +969,7 @@ watch(
             t('devices.next')
           }}</VBtn>
           <p v-if="!usageNext && !usages.length">{{ t('telemetry.empty') }}</p>
-          <fieldset :disabled="busy || !!pending || !canWrite">
+          <PolicyFieldset :disabled="busy || !!pending || !canWrite">
             <p v-if="policyAction !== 'put'" class="telemetry-notice">
               {{
                 t(policyAction === 'disable' ? 'telemetry.disablePolicy' : 'telemetry.enablePolicy')
@@ -979,7 +980,6 @@ watch(
               }}<VSelect
                 v-model="policyId"
                 :aria-label="t('telemetry.policy')"
-                @update:model-value="selectPolicy()"
                 :items="[
                   { title: String(t('telemetry.newPolicy')), value: '' },
                   ...usages
@@ -988,12 +988,13 @@ watch(
                 ]"
                 variant="outlined"
                 density="comfortable"
-                hide-details="auto" /></label
+                hide-details="auto"
+                @update:model-value="selectPolicy()" /></label
             ><VBtn v-if="!frozen?.activated" :disabled="!scope" @click="prepare">{{
               t('telemetry.prepareResource')
             }}</VBtn
             ><VBtn v-else @click="check()">{{ t('telemetry.previewTargets') }}</VBtn>
-          </fieldset>
+          </PolicyFieldset>
           <p v-if="frozen" class="telemetry-caption">
             {{ t('telemetry.saved') }} {{ frozen.created ? '✓' : '—' }} ·
             {{ t('telemetry.versioned') }} {{ frozen.versioned ? '✓' : '—' }} ·

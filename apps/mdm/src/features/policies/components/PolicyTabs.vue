@@ -9,9 +9,13 @@ const model = defineModel<string>({ required: true })
 </script>
 <template>
   <VTabs v-model="model" :aria-label="label" color="primary"
-    ><VTab v-for="item in items" :key="item.value" :value="item.value" :disabled="!!item.disabled">{{
-      item.label
-    }}</VTab></VTabs
+    ><VTab
+      v-for="item in items"
+      :key="item.value"
+      :value="item.value"
+      :disabled="!!item.disabled"
+      >{{ item.label }}</VTab
+    ></VTabs
   >
   <VTabsWindow v-model="model"
     ><VTabsWindowItem

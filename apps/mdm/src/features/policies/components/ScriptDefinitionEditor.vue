@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PolicyFieldset from './PolicyFieldset.vue'
 import { VBtn, VSelect, VTextField, VTextarea, VCheckbox } from 'vuetify/components'
 import { controlEvent } from '../control-event'
 
@@ -100,7 +101,7 @@ function collection(event: Event) {
 }
 </script>
 <template>
-  <fieldset ref="root">
+  <PolicyFieldset ref="root">
     <legend>{{ t('policies.scriptDefinition') }}</legend>
     <VBtn type="button" @click="osqueryTemplate">{{ t('policies.osqueryTemplate') }}</VBtn>
     <p v-if="model.profile === 'osquery'">{{ t('policies.osqueryHint') }}</p>
@@ -108,7 +109,6 @@ function collection(event: Event) {
     ><VSelect
       :id="`${id}-profile`"
       :model-value="model.profile"
-      @update:model-value="changeProfile(controlEvent($event))"
       :items="[
         ...['power_shell7', 'posix_sh', 'bash', 'osquery'].map((profile) => ({
           title: String(profile),
@@ -118,6 +118,7 @@ function collection(event: Event) {
       variant="outlined"
       density="comfortable"
       hide-details="auto"
+      @update:model-value="changeProfile(controlEvent($event))"
     /><label :for="`${id}-run-as`">{{ t('policies.runAs') }}</label
     ><VSelect
       :id="`${id}-run-as`"
@@ -169,38 +170,38 @@ function collection(event: Event) {
       :id="`${id}-parameters`"
       rows="5"
       :model-value="parameters"
-      @input="json($event, 'parameters')"
       variant="outlined"
       density="comfortable"
       hide-details="auto"
+      @input="json($event, 'parameters')"
     /><label :for="`${id}-output`">{{ t('policies.outputSchema') }}</label
     ><VTextarea
       :id="`${id}-output`"
       rows="5"
       :model-value="output"
-      @input="json($event, 'output')"
       variant="outlined"
       density="comfortable"
       hide-details="auto"
+      @input="json($event, 'output')"
     /><label :for="`${id}-bindings`">{{ t('policies.bindings') }}</label
     ><VTextarea
       :id="`${id}-bindings`"
       rows="3"
       :model-value="bindings"
-      @input="json($event, 'bindings')"
       variant="outlined"
       density="comfortable"
       hide-details="auto"
+      @input="json($event, 'bindings')"
     /><label
       ><VCheckbox
         :model-value="model.purpose.kind === 'collection'"
-        @update:model-value="collection(controlEvent($event))"
         hide-details="auto"
+        @update:model-value="collection(controlEvent($event))"
       />{{ t('policies.collection') }}</label
     ><CollectionMappings
       v-if="model.purpose.kind === 'collection'"
       v-model="mapped"
       :source="model.profile === 'osquery' ? 'agent.osquery' : 'agent.script'"
     />
-  </fieldset>
+  </PolicyFieldset>
 </template>

@@ -1,9 +1,11 @@
+import { VSelect } from 'vuetify/components'
+import { createFeatureRouter as createRouter } from '../../../../tests/feature-router'
 import { ref } from 'vue'
 import { createHash, webcrypto } from 'node:crypto'
 import { File as NodeFile } from 'node:buffer'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
-import { createRouter, createMemoryHistory } from 'vue-router'
+import { createMemoryHistory } from 'vue-router'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
 import SoftwareDefinitionEditor from '../../software/components/SoftwareDefinitionEditor.vue'
@@ -75,11 +77,12 @@ it('publishes all staged software variants in one immutable version at the curre
   })
   await router.push('/?resource=application')
   const wrapper = mount(ResourcesView, {
+    attachTo: document.body,
     global: {
       plugins: [router, mdmI18n()],
       stubs: {
         RouterLink: true,
-        UiDialog: {
+        PolicyDialog: {
           props: ['open'],
           template: '<section v-show="open" role="dialog"><slot /><slot name="footer" /></section>',
         },
@@ -185,11 +188,12 @@ it('resumes the same upload after a lost chunk response, rejects different bytes
   })
   await router.push('/?resource=app')
   const wrapper = mount(ResourcesView, {
+    attachTo: document.body,
     global: {
       plugins: [router, mdmI18n()],
       stubs: {
         RouterLink: true,
-        UiDialog: {
+        PolicyDialog: {
           props: ['open'],
           template: '<section v-show="open" role="dialog"><slot /><slot name="footer" /></section>',
         },
@@ -262,11 +266,12 @@ it('hashes metadata for a software artifact larger than one HTTP chunk without r
   })
   await router.push('/?resource=app')
   const wrapper = mount(ResourcesView, {
+    attachTo: document.body,
     global: {
       plugins: [router, mdmI18n()],
       stubs: {
         RouterLink: true,
-        UiDialog: {
+        PolicyDialog: {
           props: ['open'],
           template: '<section v-show="open" role="dialog"><slot /><slot name="footer" /></section>',
         },
@@ -322,11 +327,12 @@ it('clears the software definition and artifact draft when opening another resou
   })
   await router.push('/?resource=first')
   const wrapper = mount(ResourcesView, {
+    attachTo: document.body,
     global: {
       plugins: [router, mdmI18n()],
       stubs: {
         RouterLink: true,
-        UiDialog: {
+        PolicyDialog: {
           props: ['open'],
           template: '<section v-show="open" role="dialog"><slot /><slot name="footer" /></section>',
         },
@@ -434,11 +440,12 @@ it.each([false, true])(
     })
     await router.push('/?resource=app')
     const wrapper = mount(ResourcesView, {
+      attachTo: document.body,
       global: {
         plugins: [router, mdmI18n()],
         stubs: {
           RouterLink: true,
-          UiDialog: {
+          PolicyDialog: {
             props: ['open'],
             template:
               '<section v-show="open" role="dialog"><slot /><slot name="footer" /></section>',
@@ -530,11 +537,12 @@ it('edits Resource presentation through the current client without dropping unkn
   })
   await router.push('/?resource=app')
   const wrapper = mount(ResourcesView, {
+    attachTo: document.body,
     global: {
       plugins: [router, mdmI18n()],
       stubs: {
         RouterLink: true,
-        UiDialog: {
+        PolicyDialog: {
           props: ['open'],
           template: '<section v-show="open" role="dialog"><slot /><slot name="footer" /></section>',
         },
@@ -579,7 +587,7 @@ it('edits Resource presentation through the current client without dropping unkn
   await flushPromises()
   await wrapper
     .get('[data-testid=collection-blueprints]')
-    .findAll('select')
+    .findAllComponents(VSelect)
     .at(-1)!
     .setValue(JSON.stringify([blueprint.id, blueprint.version]))
   await wrapper.get('[data-action=instantiate-package]').trigger('click')

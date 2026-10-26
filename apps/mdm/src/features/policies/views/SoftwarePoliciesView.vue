@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PolicyFieldset from '../components/PolicyFieldset.vue'
 import {
   VBtn,
   VStepper,
@@ -561,8 +562,8 @@ watch(
         data-form="deployment"
         @submit.prevent="wizardStep === 3 ? save() : nextStep()"
       >
-        <fieldset :disabled="busy || uncertain" class="console-form-section">
-          <fieldset
+        <PolicyFieldset :disabled="busy || uncertain" class="console-form-section">
+          <PolicyFieldset
             v-show="wizardStep === 0"
             :disabled="wizardStep !== 0"
             data-wizard-step="0"
@@ -580,20 +581,20 @@ watch(
               id="deployment-resource"
               v-model="draft.action.resource.id"
               required
-              @input="resetBinding($event)"
               variant="outlined"
               density="comfortable"
               hide-details="auto"
+              @input="resetBinding()"
             />
             <label for="deployment-version">{{ t('software.resourceVersion') }}</label
             ><VTextField
               id="deployment-version"
               v-model="draft.action.resource.version"
               required
-              @input="resetBinding($event)"
               variant="outlined"
               density="comfortable"
               hide-details="auto"
+              @input="resetBinding()"
             />
             <VBtn data-action="bind-version" type="button" @click="bindVersion">
               {{ t('software.bindVersion') }}
@@ -605,7 +606,6 @@ watch(
                 ><VSelect
                   :id="`variant-${target}`"
                   :model-value="draft.action.resource.variants[target] ?? ''"
-                  @update:model-value="selectVariant(target, controlEvent($event))"
                   :items="[
                     { title: String(t('software.noVariant')), value: '' },
                     ...variants(target).map((v) => ({ title: String(v.key), value: v.key })),
@@ -613,6 +613,7 @@ watch(
                   variant="outlined"
                   density="comfortable"
                   hide-details="auto"
+                  @update:model-value="selectVariant(target, controlEvent($event))"
               /></template>
             </template>
             <p v-else class="console-wrap">
@@ -627,7 +628,6 @@ watch(
             <VSelect
               id="deployment-channel"
               :model-value="draft.action.channel"
-              @update:model-value="selectChannel(controlEvent($event))"
               :items="[
                 { title: 'Agent', value: 'agent' },
                 {
@@ -645,6 +645,7 @@ watch(
               variant="outlined"
               density="comfortable"
               hide-details="auto"
+              @update:model-value="selectChannel(controlEvent($event))"
             />
             <p v-if="!capabilities">{{ t('gap.capabilityUnknown') }}</p>
             <p v-else-if="!capabilities.mdmSoftwareDistributionEnabled">
@@ -656,7 +657,6 @@ watch(
             <VSelect
               id="deployment-delivery"
               :model-value="draft.action.delivery.kind"
-              @update:model-value="delivery(controlEvent($event))"
               :items="[
                 { title: String(t('software.deliveryDirect')), value: 'direct' },
                 {
@@ -668,6 +668,7 @@ watch(
               variant="outlined"
               density="comfortable"
               hide-details="auto"
+              @update:model-value="delivery(controlEvent($event))"
             />
             <section v-if="draft.action.delivery.kind === 'native'" class="console-panel">
               <p>{{ t('software.nativePublicationHint') }}</p>
@@ -687,8 +688,8 @@ watch(
                 <VRadio
                   name="native-publication"
                   :model-value="draft.action.delivery.target === item.target"
-                  @update:model-value="choosePublication(item)"
                   hide-details="auto"
+                  @update:model-value="choosePublication(item)"
                 />
                 {{ item.target }} · {{ item.resource }} / {{ item.version }}
               </label>
@@ -703,7 +704,6 @@ watch(
             ><VSelect
               id="deployment-intent"
               :model-value="draft.action.intent"
-              @update:model-value="intent(controlEvent($event))"
               :items="[
                 ...intents.map((optionIntent) => ({
                   title: String(t(`software.intent_${optionIntent}`)),
@@ -716,6 +716,7 @@ watch(
               variant="outlined"
               density="comfortable"
               hide-details="auto"
+              @update:model-value="intent(controlEvent($event))"
             />
             <template v-if="draft.action.intent === 'available_install'">
               <SelfServiceEditor v-model="draft.selfService" />
@@ -731,8 +732,8 @@ watch(
             <label
               ><VCheckbox v-model="enabled" hide-details="auto" />{{ t('software.enabled') }}</label
             >
-          </fieldset>
-          <fieldset
+          </PolicyFieldset>
+          <PolicyFieldset
             v-show="wizardStep === 1"
             :disabled="wizardStep !== 1"
             data-wizard-step="1"
@@ -752,8 +753,8 @@ watch(
               collection="scopes"
               :disabled="busy || uncertain"
             />
-          </fieldset>
-          <fieldset
+          </PolicyFieldset>
+          <PolicyFieldset
             v-show="wizardStep === 2"
             :disabled="wizardStep !== 2"
             data-wizard-step="2"
@@ -777,7 +778,6 @@ watch(
             <VSelect
               id="deployment-rollout-mode"
               :model-value="rolloutMode"
-              @update:model-value="changeRolloutMode(controlEvent($event))"
               :items="[
                 { title: String(t('software.fullDeployment')), value: 'full' },
                 { title: String(t('software.stagedDeployment')), value: 'staged' },
@@ -785,12 +785,13 @@ watch(
               variant="outlined"
               density="comfortable"
               hide-details="auto"
+              @update:model-value="changeRolloutMode(controlEvent($event))"
             />
             <p v-if="rolloutMode === 'full'">{{ t('software.fullDeploymentHint') }}</p>
-            <fieldset v-else>
+            <PolicyFieldset v-else>
               <legend>{{ t('software.stages') }}</legend>
               <p>{{ t('software.stageHint') }}</p>
-              <fieldset v-for="(stage, index) in draft.action.rollout.stages" :key="index">
+              <PolicyFieldset v-for="(stage, index) in draft.action.rollout.stages" :key="index">
                 <legend>{{ index + 1 }}</legend>
                 <label :for="`stage-${index}-scope`">{{ t('policies.scopes') }}</label
                 ><VTextField
@@ -822,21 +823,21 @@ watch(
                     min="0"
                     max="100"
                     :model-value="stage.minimumVerifiedPercent ?? ''"
+                    variant="outlined"
+                    density="comfortable"
+                    hide-details="auto"
                     @input="
                       stage.minimumVerifiedPercent =
                         ($event.target as HTMLInputElement).value === ''
                           ? null
                           : Number(($event.target as HTMLInputElement).value)
                     "
-                    variant="outlined"
-                    density="comfortable"
-                    hide-details="auto"
                   />
                   <VBtn type="button" @click="draft.action.rollout.stages.splice(index, 1)">
                     {{ t('policies.remove') }}
                   </VBtn></template
                 >
-              </fieldset>
+              </PolicyFieldset>
               <VBtn
                 type="button"
                 :disabled="!!(draft.action.rollout.stages.length >= 32)"
@@ -844,8 +845,8 @@ watch(
               >
                 {{ t('software.addStage') }}
               </VBtn>
-            </fieldset>
-          </fieldset>
+            </PolicyFieldset>
+          </PolicyFieldset>
           <section v-show="wizardStep === 3" class="console-panel" data-wizard-step="3">
             <h3>{{ t('console.review') }}</h3>
             <dl>
@@ -887,7 +888,7 @@ watch(
               t('policies.save')
             }}</VBtn>
           </div>
-        </fieldset>
+        </PolicyFieldset>
       </form>
     </section>
     <PolicyEntry v-if="current" :policy="current" />

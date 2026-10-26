@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PolicyFieldset from './PolicyFieldset.vue'
 import { VSelect, VTextField, VBtn } from 'vuetify/components'
 import { controlEvent } from '../control-event'
 
@@ -221,13 +222,12 @@ async function prepare(event: Event) {
   <form class="console-panel" data-testid="collection-version" @submit.prevent="prepare">
     <h3>{{ t('policies.collectionEditor.title') }}</h3>
     <p>{{ t('policies.collectionEditor.hint') }}</p>
-    <fieldset :disabled="locked || preparing">
+    <PolicyFieldset :disabled="locked || preparing">
       <label
         >{{ t('policies.collectionEditor.base')
         }}<VSelect
           v-model="base"
           required
-          @update:model-value="copy()"
           :items="[
             { title: String(t('devices.select')), value: '' },
             ...resource.versions
@@ -237,6 +237,7 @@ async function prepare(event: Event) {
           variant="outlined"
           density="comfortable"
           hide-details="auto"
+          @update:model-value="copy()"
       /></label>
       <label
         >{{ t('policies.collectionEditor.version')
@@ -291,7 +292,6 @@ async function prepare(event: Event) {
           }}<VSelect
             required
             :model-value="choices[bindingKey(key)] ?? ''"
-            @update:model-value="chooseQuery(key, controlEvent($event))"
             :items="[
               { title: String(t('devices.select')), value: '' },
               ...sourceQueries.map((q) => ({ title: String(q.label), value: q.key })),
@@ -299,12 +299,13 @@ async function prepare(event: Event) {
             variant="outlined"
             density="comfortable"
             hide-details="auto"
+            @update:model-value="chooseQuery(key, controlEvent($event))"
         /></label>
       </template>
       <p v-if="failure" role="alert">{{ t('policies.collectionEditor.invalid') }}</p>
       <VBtn type="submit" :disabled="!base || !version">{{
         t('policies.collectionEditor.prepare')
       }}</VBtn>
-    </fieldset>
+    </PolicyFieldset>
   </form>
 </template>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PolicyFieldset from './PolicyFieldset.vue'
 import { VSelect, VBtn, VTextField } from 'vuetify/components'
 
 import { ref, useId, watch } from 'vue'
@@ -54,7 +55,7 @@ function add() {
 }
 </script>
 <template>
-  <fieldset :disabled="!!disabled">
+  <PolicyFieldset :disabled="!!disabled">
     <legend>{{ label }}</legend>
     <label :for="`${prefix}-kind`">{{ t('policies.source') }}</label
     ><VSelect
@@ -114,5 +115,5 @@ function add() {
         </VBtn>
       </li>
     </ul>
-  </fieldset>
+  </PolicyFieldset>
 </template>

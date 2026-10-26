@@ -166,7 +166,7 @@ watch([mode, term], () => {
       :loading-text="t('devices.loading')"
       :no-data-text="t('policies.empty')"
     >
-      <template #item.toolName="{ item: row }"
+      <template #[`item.toolName`]="{ item: row }"
         ><VBtn
           type="button"
           variant="text"

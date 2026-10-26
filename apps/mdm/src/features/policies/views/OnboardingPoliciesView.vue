@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PolicyFieldset from '../components/PolicyFieldset.vue'
 import { VSelect, VBtn, VTextField, VCheckbox } from 'vuetify/components'
 
 import { comparison as queryComparison } from '../../../services/directory-query'
@@ -298,7 +299,7 @@ watch(
       class="console-panel"
       @submit.prevent="save"
     >
-      <fieldset :disabled="busy || uncertain">
+      <PolicyFieldset :disabled="busy || uncertain">
         <PolicyIdentityEditor v-model:alias="alias" v-model:event="customEvent" />
         <label for="onboarding-scope"
           >{{ t('policies.scope')
@@ -318,7 +319,7 @@ watch(
           ><label v-for="target in targets" :key="target"
             >{{ target
             }}<VSelect
-              :model-value="packages[target] ?? ''" @update:model-value="packages[target] = $event"
+              :model-value="packages[target] ?? ''"
               :items="[
                 { title: String(t('devices.select')), value: '' },
                 ...(packages[target] && !releases.some((r) => r.releaseId === packages[target])
@@ -339,6 +340,7 @@ watch(
               variant="outlined"
               density="comfortable"
               hide-details="auto"
+              @update:model-value="packages[target] = $event"
           /></label>
           <p>{{ t('software.releaseRequired') }}</p></template
         ><label v-else for="onboarding-organization"
@@ -364,7 +366,7 @@ watch(
         ><label
           ><VCheckbox v-model="enabled" hide-details="auto" />{{ t('policies.enabled') }}</label
         ><VBtn type="submit">{{ t('policies.save') }}</VBtn>
-      </fieldset>
+      </PolicyFieldset>
     </form>
     <section v-if="assignments" class="console-panel">
       <ul>
