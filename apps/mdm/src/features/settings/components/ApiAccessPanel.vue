@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { VBtn, VCard, VCheckbox, VForm, VTextField, VTextarea } from 'vuetify/components'
 import { ref, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { useOriginalOperation } from '../../../services/useOriginalOperation'
 import { usePermission } from '../../enrollment/usePermission'
@@ -168,16 +168,21 @@ async function compare() {
 }
 </script>
 <template>
-  <section class="console-panel" data-panel="api-access" :aria-busy="busy">
-    <h2>{{ t(runtime.realm === 'platform' ? 'gap.networks' : 'gap.apiKeys') }}</h2>
+  <VCard
+    class="console-panel"
+    data-panel="api-access"
+    :aria-busy="busy"
+    tag="section"
+    variant="outlined"
+    ><h2>{{ t(runtime.realm === 'platform' ? 'gap.networks' : 'gap.apiKeys') }}</h2>
     <p>{{ t(runtime.realm === 'platform' ? 'gap.networkHint' : 'gap.keyHint') }}</p>
     <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
-    <template v-if="runtime.realm === 'tenant'">
-      <UiButton :disabled="busy || !canRead" @click="load()">{{ t('gap.load') }}</UiButton
-      ><UiButton :disabled="locked || !canWrite" @click="fresh">{{ t('gap.newDraft') }}</UiButton>
+    <template v-if="runtime.realm === 'tenant'"
+      ><VBtn :disabled="busy || !canRead" @click="load()">{{ t('gap.load') }}</VBtn
+      ><VBtn :disabled="locked || !canWrite" @click="fresh">{{ t('gap.newDraft') }}</VBtn>
       <ul>
         <li v-for="key in rows?.items" :key="key.id">
-          <UiButton
+          <VBtn
             :disabled="locked"
             @click="
               () => {
@@ -185,69 +190,97 @@ async function compare() {
                 read()
               }
             "
-            >{{ key.metadata.name }} · {{ key.id }} · {{ key.revoked }}</UiButton
+            >{{ key.metadata.name }} · {{ key.id }} · {{ key.revoked }}</VBtn
           >
         </li>
       </ul>
-      <UiButton v-if="rows?.nextCursor" :disabled="busy" @click="load(rows.nextCursor)">{{
+      <VBtn v-if="rows?.nextCursor" :disabled="busy" @click="load(rows.nextCursor)">{{
         t('gap.next')
-      }}</UiButton>
-      <label
-        >{{ t('gap.apiKeys')
-        }}<input v-model="id" :disabled="locked" :readonly="!!current" /></label
-      ><UiButton :disabled="busy || !canRead" @click="read">{{ t('gap.load') }}</UiButton>
-      <form @submit.prevent="change(current ? 'update' : 'create')">
-        <fieldset :disabled="locked || !canWrite || current?.revoked">
-          <label>{{ t('gap.name') }}<input v-model="name" required /></label
-          ><label><input v-model="enabled" type="checkbox" />{{ t('gap.enabled') }}</label
-          ><label>{{ t('gap.expires') }}<input v-model="expires" type="number" min="1" /></label>
-          <PermissionChoices v-model="grants" realm="tenant" :operations="keyPermissions" />
-          <label><input v-model="confirmation" type="checkbox" />{{ t('gap.confirmation') }}</label
-          ><UiButton type="submit" :disabled="!confirmation">{{ t('gap.save') }}</UiButton
-          ><UiButton
+      }}</VBtn
+      ><VTextField
+        v-model="id"
+        :disabled="locked"
+        :readonly="!!current"
+        :label="t('gap.apiKeys')"
+      /><VBtn :disabled="busy || !canRead" @click="read">{{ t('gap.load') }}</VBtn
+      ><VForm @submit.prevent="change(current ? 'update' : 'create')"
+        ><fieldset :disabled="locked || !canWrite || !!current?.revoked">
+          <VTextField
+            v-model="name"
+            required
+            :label="t('gap.name')"
+            :disabled="locked || !canWrite || !!current?.revoked"
+          /><VCheckbox
+            v-model="enabled"
+            :label="t('gap.enabled')"
+            :disabled="locked || !canWrite || !!current?.revoked"
+          /><VTextField
+            v-model="expires"
+            type="number"
+            min="1"
+            :label="t('gap.expires')"
+            :disabled="locked || !canWrite || !!current?.revoked"
+          /><PermissionChoices
+            v-model="grants"
+            realm="tenant"
+            :operations="keyPermissions"
+          /><VCheckbox
+            v-model="confirmation"
+            :label="t('gap.confirmation')"
+            :disabled="locked || !canWrite || !!current?.revoked"
+          /><VBtn
+            type="submit"
+            :disabled="locked || !canWrite || !!current?.revoked || !confirmation"
+            >{{ t('gap.save') }}</VBtn
+          ><VBtn
             v-if="current"
             type="button"
-            :disabled="!confirmation"
+            :disabled="locked || !canWrite || !!current?.revoked || !confirmation"
             @click="change('rotate')"
-            >{{ t('gap.rotate') }}</UiButton
-          ><UiButton
+            >{{ t('gap.rotate') }}</VBtn
+          ><VBtn
             v-if="current"
             type="button"
-            :disabled="!confirmation"
+            :disabled="locked || !canWrite || !!current?.revoked || !confirmation"
             @click="change('revoke')"
-            >{{ t('gap.revoke') }}</UiButton
+            >{{ t('gap.revoke') }}</VBtn
           >
-        </fieldset>
-      </form>
+        </fieldset></VForm
+      >
       <p>{{ t('gap.firstSecret') }}</p>
       <template v-if="secret"
         ><output>{{ secret }}</output
-        ><UiButton @click="clearSecret">{{ t('gap.clear') }}</UiButton></template
-      >
-    </template>
-    <template v-else
-      ><UiButton :disabled="busy || !canRead" @click="readNetwork">{{ t('gap.load') }}</UiButton>
-      <form @submit.prevent="saveNetwork()">
-        <fieldset :disabled="locked || !canWrite || !network">
-          <label>{{ t('gap.networks') }}<textarea v-model="networks" /></label
-          ><label><input v-model="confirmation" type="checkbox" />{{ t('gap.confirmation') }}</label
-          ><UiButton type="submit" :disabled="!confirmation">{{ t('gap.save') }}</UiButton>
-        </fieldset>
-      </form></template
-    >
-    <template v-if="pending"
+        ><VBtn @click="clearSecret">{{ t('gap.clear') }}</VBtn></template
+      ></template
+    ><template v-else
+      ><VBtn :disabled="busy || !canRead" @click="readNetwork">{{ t('gap.load') }}</VBtn
+      ><VForm @submit.prevent="saveNetwork()"
+        ><fieldset :disabled="locked || !canWrite || !network">
+          <VTextarea
+            v-model="networks"
+            :label="t('gap.networks')"
+            :disabled="locked || !canWrite || !network"
+          /><VCheckbox
+            v-model="confirmation"
+            :label="t('gap.confirmation')"
+            :disabled="locked || !canWrite || !network"
+          /><VBtn type="submit" :disabled="locked || !canWrite || !network || !confirmation">{{
+            t('gap.save')
+          }}</VBtn>
+        </fieldset></VForm
+      ></template
+    ><template v-if="pending"
       ><p role="alert">
         {{ t(pending.state === 'conflict' ? 'gap.compare' : 'gap.unknown') }} {{ pending.id }}
       </p>
-      <label><input v-model="confirmation" type="checkbox" />{{ t('gap.confirmation') }}</label
-      ><UiButton
+      <VCheckbox v-model="confirmation" :label="t('gap.confirmation')" /><VBtn
         v-if="pending.state === 'unknown'"
         :disabled="busy || !confirmation"
         @click="restore"
-        >{{ t('gap.replayOriginal') }}</UiButton
-      ><UiButton v-if="pending.state === 'conflict'" :disabled="busy" @click="compare">{{
+        >{{ t('gap.replayOriginal') }}</VBtn
+      ><VBtn v-if="pending.state === 'conflict'" :disabled="busy" @click="compare">{{
         t('gap.compare')
-      }}</UiButton></template
-    >
-  </section>
+      }}</VBtn></template
+    ></VCard
+  >
 </template>

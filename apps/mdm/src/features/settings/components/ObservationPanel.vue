@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import '../settings.css'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { VAlert, VBtn, VCard, VCardText, VCardTitle, VForm, VTextField } from 'vuetify/components'
@@ -32,7 +33,7 @@ useSettingsFacts(() => {
   <VCard class="console-panel" variant="outlined">
     <VCardTitle tag="h2">{{ t('settings.deviceEffect') }}</VCardTitle>
     <VCardText>
-      <VForm class="settings-form" @submit.prevent="load">
+      <VForm class="settings-editor" @submit.prevent="load">
         <VTextField
           v-model="device"
           :label="t('settings.device')"

@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import '../settings.css'
+import { VAlert, VBtn, VCard, VCheckbox, VSelect, VTextField } from 'vuetify/components'
 import ChannelPanel from '../components/ChannelPanel.vue'
 import { computed, onMounted, ref, toRaw, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiMessage } from '@rss/core/components'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 import { useMdm } from '../../../context'
 import { closed, uuid } from '../../../services/decode'
 import { useSettingsAction, useSettingsFacts } from '../useSettingsAction'
@@ -105,15 +106,14 @@ function selectStep(id: string) {
   currentStep.value = id
   void router.replace({ query: { ...route.query, step: id } })
 }
-function decide(capability: Capability, event: Event) {
-  const kind = (event.target as HTMLSelectElement).value
+function decide(capability: Capability, kind: string | null) {
   if (kind === 'configure') draft.value.capabilities[capability] = { kind }
   else if (kind === 'skip') draft.value.capabilities[capability] = { kind, reason: '' }
   else delete draft.value.capabilities[capability]
 }
-function reason(capability: Capability, event: Event) {
+function reason(capability: Capability, value: string) {
   const decision = draft.value.capabilities[capability]
-  if (decision?.kind === 'skip') decision.reason = (event.target as HTMLInputElement).value
+  if (decision?.kind === 'skip') decision.reason = value
 }
 function skipReason(capability: Capability) {
   const decision = draft.value.capabilities[capability]
@@ -267,57 +267,65 @@ useSettingsFacts(() => {
 })
 </script>
 <template>
-  <PageFrame :title="t('settings.guide')" :busy="busy" :failure="failure">
-    <template #actions
-      ><UiButton :disabled="busy" @click="load">{{ t('settings.reload') }}</UiButton
-      ><RouterLink :to="{ name: 'settings-overview', params: { tenant: runtime.tenant } }">{{
-        t('settings.allEntries')
-      }}</RouterLink></template
-    >
-    <UiMessage v-if="finished" tone="info" :title="t('settings.guideFinished')">{{
+  <MdmPage :title="t('settings.guide')" :busy="busy" :failure="failure"
+    ><template #actions
+      ><VBtn :disabled="busy" @click="load">{{ t('settings.reload') }}</VBtn
+      ><VBtn
+        :to="{ name: 'settings-overview', params: { tenant: runtime.tenant } }"
+        variant="text"
+        >{{ t('settings.allEntries') }}</VBtn
+      ></template
+    ><VAlert v-if="finished" type="info" :title="t('settings.guideFinished')" variant="tonal">{{
       t('settings.guideDaily')
-    }}</UiMessage>
-    <UiMessage v-if="progress && !writable" tone="warning" :title="t('settings.guideReadonly')" />
-    <UiMessage v-if="invalidLocator" tone="warning" :title="t('settings.guideInvalidLocator')" />
+    }}</VAlert
+    ><VAlert
+      v-if="progress && !writable"
+      type="warning"
+      :title="t('settings.guideReadonly')"
+      variant="tonal" /><VAlert
+      v-if="invalidLocator"
+      type="warning"
+      :title="t('settings.guideInvalidLocator')"
+      variant="tonal" />
     <div v-if="progress" class="first-use-layout">
       <nav class="first-use-steps" :aria-label="t('settings.guide')">
-        <UiButton
+        <VBtn
           v-for="(step, index) in steps"
           :key="step.id"
           :aria-current="currentStep === step.id ? 'step' : undefined"
           @click="selectStep(step.id)"
-          >{{ index + 1 }}. {{ t('settings.' + step.label) }}</UiButton
+          >{{ index + 1 }}. {{ t('settings.' + step.label) }}</VBtn
         >
       </nav>
-      <section class="console-panel">
-        <template v-if="currentStep === 'channels'"
+      <VCard class="console-panel" tag="section" variant="outlined"
+        ><template v-if="currentStep === 'channels'"
           ><h2>{{ t('settings.chooseChannels') }}</h2>
           <fieldset :disabled="!writable || finished || blocked || busy">
             <legend>{{ t('settings.guideSelection') }}</legend>
-            <label v-for="channel in channels" :key="channel"
-              ><input v-model="draft.channels" type="checkbox" :value="channel" />{{
-                t('settings.firstUseNames.' + channel)
-              }}</label
-            >
+            <VCheckbox
+              v-for="channel in channels"
+              :key="channel"
+              v-model="draft.channels"
+              :value="channel"
+              :label="t('settings.firstUseNames.' + channel)"
+              :disabled="!writable || finished || blocked || busy"
+            />
           </fieldset>
-          <UiButton
+          <VBtn
             v-if="!finished && writable"
             :disabled="blocked || busy || !draft.channels.length"
             @click="save()"
-            >{{ t('settings.guideSave') }}</UiButton
+            >{{ t('settings.guideSave') }}</VBtn
           ></template
-        >
-        <template v-else-if="currentStep === 'storage'"
+        ><template v-else-if="currentStep === 'storage'"
           ><h2>{{ t('settings.storageStep') }}</h2>
           <p>{{ t('settings.storageRequired') }}</p>
-          <MaterialPanel material="storage"
-        /></template>
-        <template v-else-if="currentStep === 'trust'"
+          <MaterialPanel material="storage" /></template
+        ><template v-else-if="currentStep === 'trust'"
           ><h2>{{ t('settings.trustStep') }}</h2>
           <p>{{ t('settings.caOperationsBoundary') }}</p>
-          <MaterialPanel material="pki"
-        /></template>
-        <template v-else-if="channels.includes(currentStep as Channel)"
+          <MaterialPanel material="pki" /></template
+        ><template v-else-if="channels.includes(currentStep as Channel)"
           ><h2>{{ t('settings.firstUseNames.' + currentStep) }}</h2>
           <p v-if="currentStep === 'windows_mdm'">{{ t('settings.windowsIdentityBoundary') }}</p>
           <section v-for="(material, index) in channelMaterials" :key="material">
@@ -325,28 +333,31 @@ useSettingsFacts(() => {
             <MaterialPanel :material="material" />
           </section>
           <nav class="console-inline-actions">
-            <RouterLink :to="{ name: 'device-enroll', params: { tenant: runtime.tenant } }">{{
-              t('settings.manualEnrollment')
-            }}</RouterLink
-            ><RouterLink
+            <VBtn
+              :to="{ name: 'device-enroll', params: { tenant: runtime.tenant } }"
+              variant="text"
+              >{{ t('settings.manualEnrollment') }}</VBtn
+            ><VBtn
               v-if="currentStep === 'agent'"
               :to="{ name: 'agent-configurations', params: { tenant: runtime.tenant } }"
-              >{{ t('settings.channelAgent') }}</RouterLink
-            ><RouterLink
+              variant="text"
+              >{{ t('settings.channelAgent') }}</VBtn
+            ><VBtn
               v-if="currentStep === 'macos_mdm'"
               :to="settingsDestination('ade', runtime.tenant)!"
-              >{{ t('settings.adeEnrollment') }}</RouterLink
-            ><RouterLink
+              variant="text"
+              >{{ t('settings.adeEnrollment') }}</VBtn
+            ><VBtn
               v-if="currentStep === 'macos_mdm'"
               :to="settingsDestination('appleAccount', runtime.tenant)!"
-              >{{ t('settings.managedAppleEnrollment') }}</RouterLink
+              variant="text"
+              >{{ t('settings.managedAppleEnrollment') }}</VBtn
             >
-          </nav>
-        </template>
-        <template v-else-if="currentStep === 'options'"
+          </nav></template
+        ><template v-else-if="currentStep === 'options'"
           ><h2>{{ t('settings.optionsStep') }}</h2>
           <fieldset :disabled="!writable || finished || blocked || busy">
-            <label
+            <div
               v-for="capability in capabilities.filter((c) =>
                 [
                   'oidc',
@@ -360,40 +371,42 @@ useSettingsFacts(() => {
                 ].includes(c),
               )"
               :key="capability"
-              >{{ t('settings.firstUseNames.' + capability)
-              }}<select
-                :value="draft.capabilities[capability]?.kind ?? ''"
+            >
+              <VSelect
+                :model-value="draft.capabilities[capability]?.kind ?? ''"
                 :data-capability="capability"
-                class="ui-input"
-                @change="decide(capability, $event)"
-              >
-                <option value="">{{ t('settings.guideNotSelected') }}</option>
-                <option
-                  value="configure"
-                  :disabled="
-                    !!capabilityChannel[capability] &&
-                    !draft.channels.includes(capabilityChannel[capability]!)
-                  "
-                >
-                  {{ t('settings.guideConfigure') }}
-                </option>
-                <option value="skip">{{ t('settings.guideSkip') }}</option></select
-              ><input
+                :label="t('settings.firstUseNames.' + capability)"
+                :disabled="!writable || finished || blocked || busy"
+                :items="[
+                  { title: t('settings.guideNotSelected'), value: '', props: { disabled: false } },
+                  {
+                    title: t('settings.guideConfigure'),
+                    value: 'configure',
+                    props: {
+                      disabled:
+                        !!capabilityChannel[capability] &&
+                        !draft.channels.includes(capabilityChannel[capability]!),
+                    },
+                  },
+                  { title: t('settings.guideSkip'), value: 'skip', props: { disabled: false } },
+                ]"
+                @update:model-value="decide(capability, $event)"
+              /><VTextField
                 v-if="draft.capabilities[capability]?.kind === 'skip'"
-                :value="skipReason(capability)"
+                :model-value="skipReason(capability)"
                 :placeholder="t('settings.guideSkipReason')"
                 :aria-label="
                   t('settings.guideSkipReason') + ' · ' + t('settings.firstUseNames.' + capability)
                 "
-                class="ui-input"
-                @input="reason(capability, $event)"
-            /></label>
+                :disabled="!writable || finished || blocked || busy"
+                @update:model-value="reason(capability, $event)"
+              />
+            </div>
           </fieldset>
-          <UiButton v-if="!finished && writable" :disabled="blocked || busy" @click="save()">{{
+          <VBtn v-if="!finished && writable" :disabled="blocked || busy" @click="save()">{{
             t('settings.guideSave')
-          }}</UiButton></template
-        >
-        <template v-else-if="currentStep === 'review'"
+          }}</VBtn></template
+        ><template v-else-if="currentStep === 'review'"
           ><h2>{{ t('settings.reviewStep') }}</h2>
           <p v-if="!s3Ready">{{ t('settings.storageRequired') }}</p>
           <p v-if="draft.channels.includes('agent') && !packageKnown">
@@ -415,27 +428,25 @@ useSettingsFacts(() => {
                 {{ t('settings.requestedVersion') }} {{ item.desiredRevision ?? '—' }} ·
                 {{ t('settings.runtimeVersion') }} {{ item.appliedRevision ?? '—' }}
               </p>
-              <RouterLink
+              <VBtn
                 v-if="settingsDestination(entries[item.id].target, runtime.tenant)"
                 :to="settingsDestination(entries[item.id].target, runtime.tenant)!"
-                >{{ t('settings.open') }}</RouterLink
+                variant="text"
+                >{{ t('settings.open') }}</VBtn
               ><span v-else>{{ t('settings.notSupported') }}</span>
             </div>
           </article>
-          <UiButton
+          <VBtn
             v-if="!finished && writable"
             :disabled="blocked || busy || !draft.channels.length"
             @click="save()"
-            >{{ t('settings.guideSave') }}</UiButton
-          ><UiButton
-            v-if="!finished && writable"
-            :disabled="busy || !canFinish"
-            @click="save(true)"
-            >{{ t('settings.finish') }}</UiButton
-          >
-        </template>
-        <p v-if="dirty && !finished">{{ t('settings.guideUnsaved') }}</p>
-      </section>
+            >{{ t('settings.guideSave') }}</VBtn
+          ><VBtn v-if="!finished && writable" :disabled="busy || !canFinish" @click="save(true)">{{
+            t('settings.finish')
+          }}</VBtn></template
+        >
+        <p v-if="dirty && !finished">{{ t('settings.guideUnsaved') }}</p></VCard
+      >
     </div>
     <OperationNotice
       :operation="pending"
@@ -445,15 +456,18 @@ useSettingsFacts(() => {
       @query="lookup"
       @compare="compare"
       @edit="editAgain"
-      @retry="save(pending?.action === 'complete', true)"
-    />
-    <section v-if="originalOperation && !pending" class="console-panel">
-      <p>{{ t('settings.guideInputLost') }}</p>
-      <UiButton :busy="busy" @click="lookup">{{ t('settings.queryOperation') }}</UiButton>
-    </section>
-    <RouterLink v-if="finished" :to="{ name: 'workspace', params: { tenant: runtime.tenant } }">{{
-      t('settings.guideWorkspace')
-    }}</RouterLink>
-    <ChannelPanel v-if="runtime.realm === 'tenant'" />
-  </PageFrame>
+      @retry="save(pending?.action === 'complete', true)" /><VCard
+      v-if="originalOperation && !pending"
+      class="console-panel"
+      tag="section"
+      variant="outlined"
+      ><p>{{ t('settings.guideInputLost') }}</p>
+      <VBtn :loading="busy" @click="lookup">{{ t('settings.queryOperation') }}</VBtn></VCard
+    ><VBtn
+      v-if="finished"
+      :to="{ name: 'workspace', params: { tenant: runtime.tenant } }"
+      variant="text"
+      >{{ t('settings.guideWorkspace') }}</VBtn
+    ><ChannelPanel v-if="runtime.realm === 'tenant'"
+  /></MdmPage>
 </template>

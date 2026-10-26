@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { VTable } from 'vuetify/components'
 import { useI18n } from 'vue-i18n'
 defineProps<{
   revision: number
@@ -32,8 +33,8 @@ function time(value: number | null | undefined) {
     >
   </div>
   <div class="settings-table-wrap">
-    <table class="ui-table">
-      <thead>
+    <VTable
+      ><thead>
         <tr>
           <th>{{ t('settings.revision') }}</th>
           <th>{{ t('settings.state') }}</th>
@@ -63,7 +64,7 @@ function time(value: number | null | undefined) {
           <td>{{ time(version.qualifiedAt ?? version.acceptedAt) }}</td>
           <td>{{ time(version.expiresAt) }}</td>
         </tr>
-      </tbody>
-    </table>
+      </tbody></VTable
+    >
   </div>
 </template>

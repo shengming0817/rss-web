@@ -248,3 +248,20 @@ export const entries = {
 export type EntryId = keyof typeof entries
 export type SettingSection = (typeof entries)[EntryId]['section'] | 'overview'
 export const entryIds = Object.keys(entries) as EntryId[]
+
+/** Configuration owners remain in their feature; settings provides the common entry. */
+export const managedSettingsPages = [
+  { section: 'enrollment', target: 'registration', label: 'quotas' },
+  { section: 'enrollment', target: 'agent', label: 'agent' },
+  { section: 'enrollment', target: 'ade', label: 'ade' },
+  { section: 'enrollment', target: 'appleAccount', label: 'appleAccount' },
+  { section: 'enrollment', target: 'entra', label: 'entra' },
+  { section: 'software', target: 'sources', label: 'sources' },
+  { section: 'integrations', target: 'pki', label: 'trust' },
+  { section: 'integrations', target: 'archive', label: 'archive' },
+  { section: 'integrations', target: 'recovery', label: 'recovery' },
+  { section: 'access', target: 'providers', label: 'providers' },
+  { section: 'access', target: 'user-attributes', label: 'attributes' },
+  { section: 'operations', target: 'audit', label: 'audit' },
+  { section: 'operations', target: 'diagnostics', label: 'diagnostics' },
+] as const
