@@ -26,7 +26,7 @@ import { createSecurityClients } from './features/security/client'
 import { createOperationsClients } from './features/operations/client'
 import { createOnboardingClients } from './features/enrollment/client'
 import App from './App.vue'
-import { createDeviceVuetify } from './ui/vuetify'
+import { createMdmVuetify } from './ui/vuetify'
 import { createRegistrationChannelsClient } from './services/registrationChannels'
 import { createRegistrationChannels } from './services/registrationChannelState'
 import { settingsFeature } from './features/settings/routes'
@@ -171,7 +171,7 @@ export function createMdm(
     mdm,
     transport: business,
     mount() {
-      app.use(createPinia()).use(i18n).use(router).use(createDeviceVuetify()).mount('#app')
+      app.use(createPinia()).use(i18n).use(router).use(createMdmVuetify()).mount('#app')
     },
   }
 }
