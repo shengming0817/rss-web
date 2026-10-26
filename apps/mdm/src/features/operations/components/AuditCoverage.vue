@@ -10,8 +10,6 @@ const { t } = useI18n()
       <span>{{
         t(coverage.complete ? 'operations.auditUi.caughtUp' : 'operations.auditUi.partial')
       }}</span>
-      <span>{{ t('operations.auditUi.indexed') }} · {{ coverage.indexedThrough ?? '—' }}</span>
-      <span>{{ t('operations.auditUi.sourceHead') }} · {{ coverage.sourceThrough ?? '—' }}</span>
     </div>
     <p class="ui-help">{{ t('operations.auditUi.coverageHint') }}</p>
   </div>

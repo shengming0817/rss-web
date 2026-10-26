@@ -65,7 +65,7 @@ export function auditQuery(query: AuditQuery): AuditQuery {
 }
 export function timelinePage(value: unknown) {
   const v = closed(value, ['items', 'nextCursor', 'coverage']),
-    coverage = closed(v['coverage'], ['indexedThrough', 'sourceThrough', 'complete'])
+    coverage = closed(v['coverage'], ['complete'])
   const items = array(v['items'], (x) => {
     const e = closed(x, [
       'source',
@@ -123,8 +123,6 @@ export function timelinePage(value: unknown) {
     items,
     nextCursor: cursor(v['nextCursor']),
     coverage: {
-      indexedThrough: nullable(coverage['indexedThrough'], count),
-      sourceThrough: nullable(coverage['sourceThrough'], count),
       complete: boolean(coverage['complete']),
     },
   }

@@ -26,6 +26,8 @@ import { validateSoftwareTarget } from '../clients/software-definition'
 import SoftwareDefinitionEditor from '../../software/components/SoftwareDefinitionEditor.vue'
 import PageFrame from '../../../components/PageFrame.vue'
 import ScriptDefinitionEditor from '../components/ScriptDefinitionEditor.vue'
+import CollectionVersionEditor from '../components/CollectionVersionEditor.vue'
+import { agentBytes, nativeBytes } from '../../../contracts/collection/canonical'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -148,7 +150,7 @@ watch(current, readPresentation, { flush: 'sync' })
 const list = ref<Awaited<ReturnType<typeof client.list>>>(),
   artifact = ref<Artifact>({ reference: 'content', length: 0, sha256: Array(32).fill(0) })
 
-const spec = ref<ScriptSpec>({
+const freshScript = (): ScriptSpec => ({
   profile: 'power_shell7',
   sql: null,
   runAs: 'system',
@@ -161,13 +163,37 @@ const spec = ref<ScriptSpec>({
   outputBytes: 16384,
   maxRows: 1,
 })
+const spec = ref(freshScript())
 const scriptEditor = ref<InstanceType<typeof ScriptDefinitionEditor>>()
 const softwareEditor = ref<InstanceType<typeof SoftwareDefinitionEditor>>(),
   contentArtifact = ref('')
 const draftVariants = ref<Variant[]>([]),
   editorEpoch = ref(0)
+const generatedFiles = shallowRef<{ file: File; target: UploadTarget }[]>([])
+function stageGeneratedFile() {
+  const next = generatedFiles.value[0]
+  if (!next) {
+    file.value = undefined
+    return
+  }
+  uploadCommitted.value = false
+  uploadSession.value = undefined
+  file.value = next.file
+  target.value = { ...next.target }
+  version.value = next.target.version
+  contentArtifact.value = next.target.artifact ?? ''
+}
+function collectionPrepared(input: ResourceChange, files: { file: File; target: UploadTarget }[]) {
+  change(input, files)
+}
+function advanceGeneratedFile() {
+  generatedFiles.value = generatedFiles.value.slice(1)
+  stageGeneratedFile()
+}
 function resetDraft() {
+  spec.value = freshScript()
   draftVariants.value = []
+  generatedFiles.value = []
   editorEpoch.value++
   artifact.value = { reference: 'content', length: 0, sha256: Array(32).fill(0) }
   version.value = '1'
@@ -257,7 +283,7 @@ function create() {
   current.value = undefined
   resetDraft()
 }
-function change(input: ResourceChange) {
+function change(input: ResourceChange, generated?: { file: File; target: UploadTarget }[]) {
   if (busy.value || uncertain.value) return
   const resource = current.value?.id ?? id.value,
     body = operation(input, current.value?.revision ?? 0)
@@ -283,6 +309,10 @@ function change(input: ResourceChange) {
           kind.value = v.kind
           list.value = undefined
           if (input.action === 'version') draftVariants.value = []
+          if (generated) {
+            generatedFiles.value = generated
+            stageGeneratedFile()
+          }
         },
       )
   }
@@ -408,6 +438,21 @@ function rememberUpload(value: UploadSession) {
     hash: hashText(b.sha256),
     length: b.length,
   }
+  const variant = current.value?.versions
+    .find((v) => v.id === r.version)
+    ?.variants.find(
+      (v) => v.key === r.variant && v.platform === r.platform && v.architecture === r.architecture,
+    )
+  const declaration = variant?.declaration
+  if (declaration?.kind === 'native_collection' || declaration?.kind === 'agent_collection') {
+    const bytes =
+      declaration.kind === 'native_collection'
+        ? nativeBytes(declaration.definition)
+        : agentBytes(declaration.definition)
+    file.value = new File([bytes.buffer as ArrayBuffer], 'collection.json', {
+      type: 'application/json',
+    })
+  }
 }
 function readUpload() {
   if (!current.value || (uncertain.value && !uploadPending.value)) return
@@ -504,6 +549,7 @@ function completeUpload() {
       uploadCommitted.value = true
       uploadPending.value = undefined
       uploadId.value = ''
+      advanceGeneratedFile()
     },
   )
 }
@@ -525,6 +571,7 @@ function verifyUpload() {
       uploadCommitted.value = true
       uploadPending.value = undefined
       uploadId.value = ''
+      advanceGeneratedFile()
       uncertain.value = false
     },
   )
@@ -808,7 +855,7 @@ watch(
                             ? ['activate', 'archive']
                             : []) as ('activate' | 'deprecate' | 'archive')[]"
                       :key="action"
-                      :disabled="!!(busy || uncertain)"
+                      :disabled="!!(busy || uncertain || generatedFiles.length)"
                       type="submit"
                       @click="change({ action, version: item.id })"
                     >
@@ -834,6 +881,12 @@ watch(
             </table>
           </div> </template
         ><template #content>
+          <CollectionVersionEditor
+            v-if="current.kind === 'native_collection' || current.kind === 'agent_collection'"
+            :resource="current"
+            :locked="busy || uncertain || !!generatedFiles.length"
+            @prepare="collectionPrepared"
+          />
           <details
             v-if="kind !== 'native_collection' && kind !== 'agent_collection'"
             class="console-panel console-task"
@@ -908,10 +961,7 @@ watch(
               </fieldset>
             </form>
           </details>
-          <section
-            v-if="kind !== 'native_collection' && kind !== 'agent_collection'"
-            class="console-panel"
-          >
+          <section class="console-panel">
             <h2>{{ t('policies.upload') }}</h2>
             <p>{{ t('software.uploadSessionHint') }}</p>
             <p v-if="failure === 'unsupported'" role="alert">
@@ -948,8 +998,18 @@ watch(
                 class="ui-input"
                 :disabled="busy || uncertain"
             /></template>
-            <label for="resource-upload">{{ t('policies.content') }}</label
+            <p v-if="generatedFiles.length" data-testid="collection-upload-remaining">
+              {{ t('policies.collectionEditor.remaining', { count: generatedFiles.length })
+              }}<UiButton :disabled="busy" @click="stageGeneratedFile">{{
+                t('policies.collectionEditor.resume')
+              }}</UiButton>
+            </p>
+            <label
+              v-if="kind !== 'native_collection' && kind !== 'agent_collection'"
+              for="resource-upload"
+              >{{ t('policies.content') }}</label
             ><input
+              v-if="kind !== 'native_collection' && kind !== 'agent_collection'"
               id="resource-upload"
               ref="uploadInput"
               class="ui-input"

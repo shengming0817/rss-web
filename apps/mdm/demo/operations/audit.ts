@@ -160,8 +160,6 @@ export function createAuditDemo(now: () => number, authority: AuditAuthority) {
         items: page.items,
         nextCursor: page.nextCursor,
         coverage: {
-          indexedThrough: Number(page.snapshot) || null,
-          sourceThrough: position || null,
           complete: Number(page.snapshot) >= position,
         },
       })

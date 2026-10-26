@@ -170,3 +170,11 @@ it('accepts only continuing fixed intervals for standard collection actions', as
       expect(() => policyDefinition({ scope: id, action: invalid })).toThrow()
   }
 })
+
+it('preserves the current producer alias on complete Policy details and edits', () => {
+  for (const alias of [null, 'inventory.default']) {
+    const read = decodePolicy({ ...policy, definition: { ...definition, alias } }, id)
+    expect(policyDefinition(read.definition).alias).toBe(alias)
+  }
+  expect(() => policyDefinition({ ...definition, alias: 'unsafe alias' })).toThrow()
+})

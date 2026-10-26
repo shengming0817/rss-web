@@ -1,6 +1,6 @@
+import { queryParameters, windowPage, type DirectoryQuery } from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
-  array,
   boolean,
   closed,
   count,
@@ -123,14 +123,14 @@ export function createCredentialsClient(transport: HttpTransport) {
     return { device: identifier(device), id: entry.id, version: entry.version }
   }
   return {
-    list: (device: string, after?: Material) =>
+    list: (device: string, query: DirectoryQuery = {}) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/devices/{device}/recovery-credentials',
         pathParams: { device },
-        query: { afterId: after?.id, afterVersion: after?.version },
+        query: queryParameters({ limit: 100, ...query }),
         successStatus: 200,
-        decode: (v) => array(v, (x) => material(x, device)),
+        decode: (v) => windowPage(v, (x) => material(x, device)),
       }),
     reveal: (device: string, entry: Material) =>
       transport.request({

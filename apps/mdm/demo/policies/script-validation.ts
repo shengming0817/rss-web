@@ -23,7 +23,10 @@ export function validateScriptVariant(variant: Variant) {
     (['posix_sh', 'bash'].includes(spec.profile) && variant.platform !== 'macos')
   )
     invalid()
-  if (!validator.validateSchema(spec.parameters) || !validator.validateSchema(spec.output))
+  if (
+    !validator.validateSchema(record(spec.parameters)) ||
+    !validator.validateSchema(record(spec.output))
+  )
     invalid()
   const parameters = record(spec.parameters),
     props = record(parameters['properties']),
@@ -101,7 +104,7 @@ export function validateScriptParameters(spec: ScriptSpec, value: Json) {
           (typeof v === 'number' && Number.isSafeInteger(v))
         ),
     ) ||
-    !validator.validate(spec.parameters, parameters)
+    !validator.validate(record(spec.parameters), parameters)
   )
     invalid()
 }
@@ -111,7 +114,7 @@ export function validateParameterSources(
   spec: ScriptSpec,
   sources: ExecutionDefinition['action']['parameters'],
 ) {
-  const props = record(spec.parameters['properties'])
+  const props = record(record(spec.parameters)['properties'])
   if (
     Object.keys(props).length !== Object.keys(sources).length ||
     Object.keys(sources).some((k) => !(k in props))

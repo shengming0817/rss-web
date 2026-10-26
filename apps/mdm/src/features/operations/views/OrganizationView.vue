@@ -4,9 +4,9 @@ import { utc } from '../presentation'
 import { onMounted, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
-import { isRssApiError } from '@rss/api/mdm'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
+import { deviceBinding } from '../../devices/useDeviceBinding'
 import { user, type UserGroup } from '../clients/authorization'
 import PageFrame from '../../../components/PageFrame.vue'
 const confirmingAction = ref<'delete'>()
@@ -26,7 +26,7 @@ const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
   client = runtime.operations.authorization,
-  { run, runWrite, busy, failure, uncertain } = useOperation()
+  { run, runWrite, busy, failure, uncertain } = useOperation([], () => deviceBinding(runtime))
 const page = ref<Awaited<ReturnType<typeof client.groups>>>(),
   department = ref<Awaited<ReturnType<typeof client.departments>>>(),
   effective = ref<Awaited<ReturnType<typeof client.effective>>>()
@@ -43,32 +43,23 @@ const draft = ref(fresh()),
   conflict = ref(false)
 let pending: (() => Promise<boolean>) | undefined
 async function load(after?: string) {
+  page.value = undefined
   await run(
-    () => client.groups(after),
+    () => client.groups({ cursor: after }),
     (v) => (page.value = v),
   )
 }
 async function open(group: string, replace = true) {
-  if (replace) section.value = 'groups'
+  if (busy.value || uncertain.value) return
+  if (replace) {
+    section.value = 'groups'
+    editorOpen.value = false
+    draft.value = fresh()
+  }
   await run(
     async () => {
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const summary = await client.findGroup(group)
-        if (!summary) return null
-        if (!summary.value) return { definition: null, revision: summary.revision }
-        try {
-          const members = await client.allMembers(group, summary.revision)
-          if (members.length !== summary.value.memberCount) throw new Error('Incomplete membership')
-          return {
-            definition: { name: summary.value.name, enabled: summary.value.enabled, members },
-            revision: summary.revision,
-          }
-        } catch (error) {
-          if (attempt === 0 && isRssApiError(error) && error.status === 409) continue
-          throw error
-        }
-      }
-      throw new Error('Membership changed again')
+      const detail = await client.group(group)
+      return { definition: detail.value, revision: detail.revision }
     },
     (v) => {
       if (!v) {
@@ -172,6 +163,18 @@ async function routeTarget() {
     await open(route.query['id'])
 }
 
+watch(
+  () => JSON.stringify(deviceBinding(runtime)),
+  () => {
+    page.value = undefined
+    editorOpen.value = false
+    draft.value = fresh()
+    effective.value = undefined
+    remote.value = undefined
+    pending = undefined
+  },
+  { flush: 'sync' },
+)
 watch(
   () => route.fullPath,
   () => {

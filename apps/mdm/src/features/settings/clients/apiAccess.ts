@@ -1,3 +1,4 @@
+import { queryParameters, windowPage, type DirectoryQuery } from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -73,18 +74,27 @@ export function networkPolicy(value: unknown) {
 }
 export function createApiAccess(transport: HttpTransport, tenant: string) {
   return {
-    keys: (after?: string) =>
+    keys: (query: Omit<DirectoryQuery, 'fields'> = {}) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/api-keys',
-        query: { after },
+        query: queryParameters({
+          limit: 100,
+          ...query,
+          fields: [
+            'id',
+            'revision',
+            'authorityRevision',
+            'credentialRevision',
+            'metadata',
+            'createdBy',
+            'createdAt',
+            'revoked',
+          ],
+        }),
         successStatus: 200,
         decode(value) {
-          const v = closed(value, ['items', 'nextCursor'])
-          return {
-            items: array(v['items'], (x) => keyRecord(x, tenant)),
-            nextCursor: nullable(v['nextCursor'], uuid),
-          }
+          return windowPage(value, (x) => keyRecord(x, tenant))
         },
       }),
     key: (id: string) =>

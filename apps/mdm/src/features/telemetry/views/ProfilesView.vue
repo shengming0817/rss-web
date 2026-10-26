@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { telemetryBytes } from '../../../contracts/collection/canonical'
+
 import { comparison as queryComparison, allOf } from '../../../services/directory-query'
 import { computed, ref, shallowRef, watch, toRaw } from 'vue'
 import { useRoute } from 'vue-router'
@@ -10,11 +12,7 @@ import { operation, useOperation, type Operation } from '../../../services/useOp
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import { usePermission } from '../../enrollment/usePermission'
 import { record } from '../../../services/decode'
-import {
-  telemetryProfile,
-  profileBytes,
-  type TelemetryProfile,
-} from '../../policies/clients/telemetry-profile'
+import { telemetryProfile, type TelemetryProfile } from '../../policies/clients/telemetry-profile'
 import type { ResourceRead, ResourceChange, Variant } from '../../policies/clients/resources'
 import type { PolicyRead, PolicyChange, PolicyDefinition } from '../../policies/clients/model'
 import type { FieldDefinition } from '../../devices/clients/assets'
@@ -337,6 +335,7 @@ const definition = (): PolicyDefinition => {
   if (!p) throw new Error('Unpublished profile')
   return {
     scope: scope.value,
+    alias: policy.value?.definition.alias ?? null,
     action: {
       kind: 'telemetry_profile',
       resource: {
@@ -356,7 +355,7 @@ async function prepare() {
       const prepared = await run(
         async () => {
           const p = profile(),
-            bytes = profileBytes(p),
+            bytes = telemetryBytes(p),
             sha256 = [
               ...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes.buffer as ArrayBuffer)),
             ]
@@ -606,7 +605,7 @@ async function toggle(summary: { id: string }) {
       const spec = d.definition
       frozen.value = {
         profile: spec,
-        bytes: profileBytes(spec),
+        bytes: telemetryBytes(spec),
         sha256: [],
         created: true,
         versioned: true,

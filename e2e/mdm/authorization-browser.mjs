@@ -92,8 +92,8 @@ export async function authorizationJourney({
   await close()
   const current = await context.request.get(origin + prefix + '/rules')
   assert.equal(current.status(), 200)
-  coverage.push('management-uuid-pagination-existing-account-eight-permissions-review-native-cas')
-  // Known row through the supported query locator scans paginated rules; no rule GET is invented.
+  coverage.push('management-cursor-pagination-existing-account-eight-permissions-review-native-cas')
+  // The supported locator opens the independent rule detail; list projections never supply the CAS baseline.
   await page.goto(url + '?id=' + created.id)
   await dialog().locator('input[value=tenant_update]').check()
   const concurrent = await api('PUT', prefix + '/rules/' + created.id, {

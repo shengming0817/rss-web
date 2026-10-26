@@ -51,7 +51,11 @@ async function setup(view: unknown, allow = true) {
         method: o.method,
         path,
         body: o.body,
-        query: new URLSearchParams(),
+        query: new URLSearchParams(
+          Object.entries(o.query ?? {})
+            .filter(([, v]) => v !== undefined)
+            .map(([k, v]) => [k, String(v)]),
+        ),
         headers: Object.fromEntries(
           Object.entries(o.headers ?? {}).map(([k, v]) => [k.toLowerCase(), v]),
         ),
@@ -93,6 +97,7 @@ async function setup(view: unknown, allow = true) {
           instanceId: INSTANCE,
           grants: allow
             ? [
+                'registration_configuration_read',
                 'registration_configuration_write',
                 'agent_enrollment_read',
                 'agent_enrollment_write',
@@ -452,7 +457,7 @@ it('preserves explicit ADE profile choices and records sync and assignment as in
       skip: ['AppleID', 'Privacy'],
     },
   })
-  expect((await runtime.onboarding.apple.profiles(id))[0]?.remoteUuid).toBeNull()
+  expect((await runtime.onboarding.apple.profiles(id)).items[0]?.remoteUuid).toBeNull()
   domain.tick()
   await click('查询原操作结果')
   await click('重新读取')

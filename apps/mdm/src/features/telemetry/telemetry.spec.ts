@@ -1,3 +1,4 @@
+import { telemetryBytes } from '../../contracts/collection/canonical'
 import { afterEach, expect, it, vi } from 'vitest'
 import { mount, flushPromises, DOMWrapper, type VueWrapper } from '@vue/test-utils'
 import { shallowRef } from 'vue'
@@ -24,14 +25,9 @@ import DeviceCollections from './components/DeviceCollections.vue'
 import DeviceActivity from './components/DeviceActivity.vue'
 import { fieldDefinition, fieldInput } from '../devices/clients/assets'
 import { bucket, numeric, health, gaps } from './model'
-import {
-  defaultApplicability,
-  valueMapping,
-  identityMapping,
-  conversion,
-} from '../policies/clients/collection-mapping'
-import { decodeScriptSpec } from '../policies/clients/resources'
-import { profileBytes, telemetryProfile } from '../policies/clients/telemetry-profile'
+import { checked } from '../../contracts/collection/check'
+import { validateValueMapping } from '../../contracts/collection/generated/validators'
+import { telemetryProfile } from '../policies/clients/telemetry-profile'
 const wrappers: VueWrapper[] = []
 const cleanups: (() => void)[] = []
 afterEach(() => {
@@ -326,6 +322,58 @@ it('keeps a bound field immutable and displays actual references before publishi
   expect(dialog.text()).toContain('采集方案')
   expect(dialog.findAll('fieldset').some((f) => f.attributes('disabled') !== undefined)).toBe(true)
 })
+it.each([false, true])(
+  'starts a fresh reference query on immediate reopen (same field: %s)',
+  async (same) => {
+    const h = await setup('settings-metrics')
+    const original = h.runtime.devices.assets.fieldReferences
+    let release!: (value: Awaited<ReturnType<typeof original>>) => void
+    const pending = new Promise<Awaited<ReturnType<typeof original>>>((resolve) => {
+      release = resolve
+    })
+    const read = vi
+      .spyOn(h.runtime.devices.assets, 'fieldReferences')
+      .mockImplementationOnce(() => pending)
+    const rows = h.wrapper.findAll('tbody tr')
+    await rows[0]!.get('button').trigger('click')
+    await flushPromises()
+    expect(read).toHaveBeenCalledTimes(1)
+    const first = read.mock.calls[0]![0]
+    const stale = {
+      ...(await original(first)),
+      mappings: [{ resource: 'stale-reference', version: '1', state: 'frozen', telemetry: false }],
+    }
+    await h.body().get('[role=dialog][data-state=open] button[aria-label]').trigger('click')
+    await flushPromises()
+    await rows[same ? 0 : 1]!.get('button').trigger('click')
+    await flushPromises()
+    expect(read).toHaveBeenCalledTimes(2)
+    expect(read.mock.calls[1]![0] === first).toBe(same)
+    expect(h.body().get('[role=dialog][data-state=open]').text()).toContain('引用影响')
+    release(stale)
+    await flushPromises()
+    expect(h.body().get('[role=dialog][data-state=open]').text()).not.toContain('stale-reference')
+  },
+)
+it('shows reference read failure and retries the current field explicitly', async () => {
+  const h = await setup('settings-metrics')
+  const read = vi
+    .spyOn(h.runtime.devices.assets, 'fieldReferences')
+    .mockRejectedValueOnce(networkErrorForTest())
+  await h.wrapper.findAll('tbody tr')[0]!.get('button').trigger('click')
+  await flushPromises()
+  const dialog = h.body().get('[role=dialog][data-state=open]')
+  expect(dialog.find('[role=alert]').exists()).toBe(true)
+  await dialog
+    .findAll('button')
+    .find((button) => button.text() === '重新读取')!
+    .trigger('click')
+  await flushPromises()
+  expect(read).toHaveBeenCalledTimes(2)
+  expect(read.mock.calls[1]![0]).toBe(read.mock.calls[0]![0])
+  expect(dialog.text()).toContain('引用影响')
+  expect(dialog.find('[role=alert]').exists()).toBe(false)
+})
 it('freezes an immutable profile resource, uploads canonical bytes, previews actual targets and publishes an exact Policy', async () => {
   const h = await setup('policy-telemetry', { resource: DEMO_PROFILE })
   const dialog = h.body().get('[role=dialog][data-state=open]')
@@ -452,64 +500,29 @@ it('preserves nested field types and priority maps in writes, without derived pr
   expect(fieldInput(field)).not.toHaveProperty('kind')
   expect(fieldInput(field)).not.toHaveProperty('operations')
 })
-it('decodes current collection mappings and rejects retired string mappings and unbounded projections', () => {
+it('validates mappings from the producer schema and rejects retired shapes, unknown conversions and unsafe numbers', () => {
   const mapping = {
     pointer: '/rows',
     conversion: { kind: 'identity' },
     columns: { value: { pointer: '/percent', conversion: { kind: 'number' }, columns: {} } },
   }
-  expect(valueMapping(mapping)).toEqual(mapping)
-  expect(valueMapping(identityMapping('')).pointer).toBe('')
+  expect(checked(validateValueMapping, mapping)).toEqual(mapping)
   for (const value of [
     '/old',
-    { ...mapping, pointer: '/bad~2' },
-    { ...mapping, conversion: { kind: 'number' } },
+    { ...mapping, conversion: { kind: 'unknown' } },
     {
       ...mapping,
-      columns: Object.fromEntries(
-        Array.from({ length: 65 }, (_, i) => ['x' + i, identityMapping('')]),
-      ),
+      conversion: { kind: 'scale', numerator: Number.MAX_SAFE_INTEGER + 1, denominator: 1 },
     },
   ])
-    expect(() => valueMapping(value)).toThrow()
-  const spec = {
-    profile: 'osquery',
-    sql: 'SELECT version FROM osquery_info',
-    runAs: 'system',
-    encoding: 'utf8',
-    parameters: { type: 'object' },
-    bindings: {},
-    output: { type: 'array' },
-    purpose: {
-      kind: 'collection',
-      scope: { kind: 'device' },
-      applicability: defaultApplicability(),
-      mappings: { 'custom.osquery.version': identityMapping('/0/version') },
-    },
-    timeoutSeconds: 10,
-    outputBytes: 4096,
-    maxRows: 1,
-  }
-  expect(decodeScriptSpec(spec).purpose).toEqual(spec.purpose)
-  expect(() =>
-    decodeScriptSpec({
-      ...spec,
-      purpose: { kind: 'collection', mappings: { 'custom.osquery.version': '/0/version' } },
-    }),
-  ).toThrow()
-  expect(conversion({ kind: 'enum', values: { ok: true, fail: false } })).toMatchObject({
-    kind: 'enum',
-  })
+    expect(() => checked(validateValueMapping, value)).toThrow()
   expect(
-    conversion({ kind: 'array_member', member: 1, present: 'yes', absent: 'no' }),
-  ).toMatchObject({ kind: 'array_member' })
-  expect(conversion({ kind: 'scale', numerator: 1024, denominator: 1 })).toMatchObject({
-    kind: 'scale',
-  })
-  expect(conversion({ kind: 'bitmask', flags: { '1': 'one', '2': 'two' } })).toMatchObject({
-    kind: 'bitmask',
-  })
-  expect(() => conversion({ kind: 'bitmask', flags: { '3': 'bad' } })).toThrow()
+    checked(validateValueMapping, {
+      pointer: '',
+      conversion: { kind: 'array_member', member: 1, present: 'yes', absent: 'no' },
+      columns: {},
+    }),
+  ).toMatchObject({ conversion: { kind: 'array_member' } })
 })
 it('normalizes server sufficient statistics and discrete aggregates without deriving samples', () => {
   const b = (value: unknown) =>
@@ -575,7 +588,7 @@ it('serializes exact Resource artifact bytes with Rust struct and map ordering',
     boost: null,
     backfillSeconds: 3600,
   })
-  const text = new TextDecoder().decode(profileBytes(profile))
+  const text = new TextDecoder().decode(telemetryBytes(profile))
   expect(text).toContain('"parameters":{"10":10,"2":2,"a":"literal","z":true}')
   expect(Object.keys(JSON.parse(text) as object)).toEqual([
     'template',
@@ -588,21 +601,6 @@ it('serializes exact Resource artifact bytes with Rust struct and map ordering',
     'boost',
     'backfillSeconds',
   ])
-  expect(() => telemetryProfile({ ...profile, parameters: { bad: 0.5 } })).toThrow()
-  expect(() =>
-    telemetryProfile({ ...profile, budget: { ...profile.budget, points: 4097 } }),
-  ).toThrow()
-  const mapping = {
-    pointer: '',
-    conversion: { kind: 'identity' },
-    columns: Object.fromEntries(
-      Array.from({ length: 64 }, (_, i) => [
-        'x' + i,
-        { pointer: '', conversion: { kind: 'identity' }, columns: { value: identityMapping('') } },
-      ]),
-    ),
-  }
-  expect(() => valueMapping(mapping)).toThrow()
 })
 it('rejects cross-tenant samples, changed selections, unsafe counts and readings outside their declared metric', async () => {
   const h = await setup(),

@@ -153,9 +153,10 @@ async function fixture(
         }
       else if (handler) value = await handler(o)
       else if (o.path.includes('/settings/catalog')) value = { items: [], domains: [] }
-      else if (o.path === '/api/v1/tenant-administration/tenants') value = { items: [] }
+      else if (o.path === '/api/v1/tenant-administration/tenants')
+        value = { items: [], nextCursor: null }
       else if (o.path === '/api/v1/tenant-administration/provisionings')
-        value = { items: [], nextAfter: null }
+        value = { items: [], nextCursor: null }
       else if (o.path.startsWith('/api/v1/apple/materials/'))
         value = {
           revision: 0,
@@ -165,9 +166,22 @@ async function fixture(
           accountBindings: {},
         }
       else if (o.path === '/api/v1/smtp')
-        value = { revision: 0, selectedRevision: null, versions: [] }
+        value = {
+          revision: 0,
+          selectedRevision: null,
+          versionCount: 0,
+          current: null,
+          latest: null,
+        }
       else if (o.path === '/api/v1/windows/wns' || o.path === '/api/v1/storage/connections')
-        value = { revision: 0, desiredRevision: null, versions: [] }
+        value = {
+          revision: 0,
+          desiredRevision: null,
+          versionCount: 0,
+          current: null,
+          latest: null,
+          applied: null,
+        }
       else if (o.path === '/api/v1/webhooks/materials')
         value = { configurationSha256: digest, keys: { heads: [], materials: [] } }
       else if (o.path === '/api/v1/pki/{purpose}/trust') value = pkiValue()
@@ -361,8 +375,15 @@ it.each(['storage', 'smtp', 'wns'] as const)(
         }
       }
       return kind === 'smtp'
-        ? { revision: 1, selectedRevision: null, versions: [] }
-        : { revision: 1, desiredRevision: null, versions: [] }
+        ? { revision: 1, selectedRevision: null, versionCount: 0, current: null, latest: null }
+        : {
+            revision: 1,
+            desiredRevision: null,
+            versionCount: 0,
+            current: null,
+            latest: null,
+            applied: null,
+          }
     })
     await f.wrapper.get('form').trigger('submit')
     await flushPromises()
@@ -409,7 +430,7 @@ it('provisions with an immediately cleared password and displays capacity withou
   f.setHandler((o) => {
     if (o.method === 'POST') return provision(o.headers!['Idempotency-Key']!)
     if (o.path.endsWith('/tenants')) return { items: [] }
-    return { items: [], nextAfter: null }
+    return { items: [], nextCursor: null }
   })
   await f.wrapper.get('form').trigger('submit')
   await flushPromises()
@@ -562,7 +583,14 @@ it('requires reading the conflicting version and a separate explicit edit decisi
   const f = await fixture(ProviderPanel, { kind: 'storage' })
   f.setHandler((o) => {
     if (o.method === 'POST') throw decodeMdmError(409, { code: 'operation_conflict' })
-    return { revision: 2, desiredRevision: null, versions: [] }
+    return {
+      revision: 2,
+      desiredRevision: null,
+      versionCount: 0,
+      current: null,
+      latest: null,
+      applied: null,
+    }
   })
   await f.wrapper.get('form').trigger('submit')
   await flushPromises()
@@ -745,7 +773,14 @@ it('revokes a WNS version while clearing unrelated credentials in the same form'
     }
   f.setHandler((o) =>
     o.method === 'GET'
-      ? { revision: 1, desiredRevision: 1, versions: [version] }
+      ? {
+          revision: 1,
+          desiredRevision: 1,
+          versionCount: 1,
+          current: version,
+          latest: version,
+          applied: null,
+        }
       : {
           kind: 'revocation',
           receipt: { operationId: o.headers!['Idempotency-Key'], revision: 2, materialRevision: 1 },
@@ -2027,4 +2062,45 @@ it('rejects a different service PKI candidate before any administrative operatio
   expect(f.wrapper.text()).toContain('输入或响应无效，操作未确认。')
   expect(f.settings.operations.records.size).toBe(0)
   expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(0)
+})
+it('can revoke a loaded historical WNS material outside current/latest/applied', async () => {
+  const f = await fixture(ProviderPanel, { kind: 'wns' })
+  const material = (revision: number) => ({
+    operationId: id,
+    revision,
+    packageFamilyName: 'RSS',
+    qualifiedAt: 1,
+    attemptedAt: 1,
+    failureReason: null,
+    selected: revision === 5,
+    revoked: false,
+  })
+  f.setHandler((o) =>
+    o.method === 'GET'
+      ? o.path.endsWith('/versions')
+        ? { items: [material(1)], nextCursor: null }
+        : {
+            revision: 5,
+            desiredRevision: 5,
+            versionCount: 5,
+            current: material(5),
+            latest: material(5),
+            applied: null,
+          }
+      : {
+          kind: 'revocation',
+          receipt: { operationId: o.headers!['Idempotency-Key'], revision: 6, materialRevision: 1 },
+        },
+  )
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  await button(f.wrapper, '版本历史').trigger('click')
+  await flushPromises()
+  await f.wrapper.find('select').setValue('1')
+  await f.wrapper.findAll('form')[1]!.trigger('submit')
+  await flushPromises()
+  expect(f.calls.find((o) => o.method === 'POST')?.body).toEqual({
+    expectedRevision: 5,
+    materialRevision: 1,
+  })
 })

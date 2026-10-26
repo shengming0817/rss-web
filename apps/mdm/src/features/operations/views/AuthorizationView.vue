@@ -161,16 +161,23 @@ function create() {
   clearDraft()
   editorOpen.value = true
 }
-function select(row: Revision<Rule>) {
+async function select(row: Revision<Rule>) {
   if (busy.value || locked.value || !canRead.value) return
-  fill(row.value, row.id, row.revision)
-  editorOpen.value = true
+  clearDraft()
+  editorOpen.value = false
+  await run(
+    () => client.rule(row.id),
+    (detail) => {
+      fill(detail.value, detail.id, detail.revision)
+      editorOpen.value = true
+    },
+  )
 }
 async function load(after: string | undefined, index: number) {
   if (!bound.value || busy.value || !canRead.value) return false
   page.value = undefined
   return run(
-    () => client.rules(after),
+    () => client.rules({ cursor: after }),
     (v) => {
       page.value = v
       pageIndex.value = index
@@ -365,7 +372,14 @@ async function compare() {
     operation = pending.value?.id
   remote.value = undefined
   await run(
-    () => client.findRule(target),
+    async () => {
+      try {
+        return await client.rule(target)
+      } catch (error) {
+        if (isRssApiError(error) && error.status === 404) return null
+        throw error
+      }
+    },
     (v) => {
       remote.value = v
       markCompared()
@@ -409,7 +423,7 @@ async function routeTarget() {
   const target = route.query['id']
   if (typeof target !== 'string') return
   await run(
-    () => client.findRule(target),
+    () => client.rule(target),
     (v) => {
       if (v) {
         fill(v.value, v.id, v.revision)

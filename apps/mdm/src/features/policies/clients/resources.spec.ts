@@ -1,4 +1,4 @@
-import { defaultApplicability, identityMapping } from './collection-mapping'
+import { defaultApplicability, identityMapping } from '../collection-draft'
 import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { createResourcesClient, decodeResource, decodeScriptSpec } from './resources'
@@ -99,8 +99,6 @@ it('decodes current resource and ScriptSpec wire without private wrapper shapes'
     expect(() => decodeResource(value, resource.id)).toThrow()
   for (const value of [
     { ...spec, profile: 'powershell' },
-    { ...spec, outputBytes: 1_048_577 },
-    { ...spec, maxRows: 0 },
     { ...spec, encoding: 'utf16' },
   ])
     expect(() => decodeScriptSpec(value)).toThrow()

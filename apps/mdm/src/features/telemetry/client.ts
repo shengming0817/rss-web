@@ -1,8 +1,16 @@
 import type { HttpTransport } from '@rss/api/mdm'
-import { array, boolean, closed, count, enumeration, nullable, uuid } from '../../services/decode'
+import {
+  array,
+  boolean,
+  closed,
+  count,
+  enumeration,
+  nullable,
+  uuid,
+  positive,
+} from '../../services/decode'
 import { exactResource } from '../policies/clients/model'
 import { sourceIds } from '../devices/clients/asset-model'
-import { positive } from '../policies/clients/collection-mapping'
 import {
   telemetryId,
   bucket,

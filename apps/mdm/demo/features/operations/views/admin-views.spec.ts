@@ -1,6 +1,6 @@
 import { mdmKey } from '../../../../src/context'
 import { expect, it } from 'vitest'
-import type { Component } from 'vue'
+import { shallowRef, type Component } from 'vue'
 import { createSoftwareClients } from '../../../../src/features/software/client'
 import { createPolicyClients } from '../../policies/client'
 import AlertRulesView from './AlertRulesView.vue'
@@ -13,6 +13,7 @@ import { demoKey } from '../../../context'
 import { mdmI18n } from '../../../../src/i18n'
 import { createOperationsClients } from '../client'
 import { createScenario, TENANT } from '../../../scenario'
+import { ADMIN } from '../../../operations/authorization'
 import { createAutomationDemo } from '../../../policies/state'
 import { createDeviceDemo } from '../../../devices/state'
 import OrganizationView from '../../../../src/features/operations/views/OrganizationView.vue'
@@ -59,6 +60,14 @@ async function fixture(component: Component, realm: 'tenant' | 'platform' = 'ten
   const clients = createOperationsClients(transport, TENANT, true)
   const runtime = {
     tenant: TENANT,
+    session: {
+      state: shallowRef({
+        status: 'authenticated',
+        tenant: TENANT,
+        identity: { principalId: ADMIN },
+        session: { id: ADMIN },
+      }),
+    },
     realm,
     operations: clients,
     software: createSoftwareClients(transport),
@@ -171,7 +180,7 @@ it('compares native membership without replacing drafts and only adopts revision
   f.wrapper.unmount()
 })
 
-it('discards incomplete membership after a second-page conflict and edits the fully reloaded revision', async () => {
+it('loads the complete detail after a concurrent group change without scanning member pages', async () => {
   const f = await fixture(OrganizationView),
     id = crypto.randomUUID(),
     effective = await f.clients.authorization.effective()
@@ -193,7 +202,12 @@ it('discards incomplete membership after a second-page conflict and edits the fu
   let changed = false
   const added = { ...members[0]!, principalId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }
   f.inspect(async (o) => {
-    if (!changed && o.path.endsWith('/members') && o.query?.['offset'] === 100) {
+    if (
+      !changed &&
+      o.method === 'GET' &&
+      o.path === '/api/v1/authorization/user-groups/{id}' &&
+      o.pathParams?.['id'] === id
+    ) {
       changed = true
       await f.clients.authorization.changeGroup(id, {
         operationId: crypto.randomUUID(),
@@ -212,7 +226,7 @@ it('discards incomplete membership after a second-page conflict and edits the fu
   await f.wrapper.get('[data-testid="group-name"]').setValue('Safely edited')
   await f.wrapper.get('[data-testid="save-group"]').trigger('click')
   await flushPromises()
-  expect(await f.clients.authorization.allMembers(id, 3)).toEqual([...members, added])
+  expect((await f.clients.authorization.group(id)).value?.members).toEqual([...members, added])
   f.wrapper.unmount()
 })
 it('reconciles completed reports after unknown accepted receipts are replayed', async () => {

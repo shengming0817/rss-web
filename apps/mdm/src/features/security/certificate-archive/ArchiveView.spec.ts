@@ -12,7 +12,7 @@ async function setup(overrides: object = {}) {
     list: vi.fn().mockResolvedValue({
       tenantId: tenant,
       items: [],
-      nextAfter: null,
+      nextCursor: null,
       asOf: 100,
       reminderDays: 30,
       alerts: { expired: 0, expiring: 0, notYetValid: 0 },
@@ -193,15 +193,18 @@ it.each(['import', 'generate'] as const)(
   'blocks a lost second-page %s target after refresh and a successful append',
   async (mode) => {
     let revision = 1
-    const list = vi.fn(async (after?: string) => ({
+    const list = vi.fn(async (query: { cursor?: string } = {}) => ({
       tenantId: tenant,
-      items: [archiveEntry(after ? secondId : tenant, after ? revision : 1)],
-      nextAfter: after ? null : tenant,
+      items: [archiveEntry(query.cursor ? secondId : tenant, query.cursor ? revision : 1)],
+      nextCursor: query.cursor ? null : 'YQ',
       asOf: 100,
       reminderDays: 30,
       alerts: { expired: 0, expiring: 0, notYetValid: 0 },
     }))
-    const history = vi.fn(async (id: string) => [archiveEntry(id).latest])
+    const history = vi.fn(async (id: string) => ({
+      items: [archiveEntry(id).latest],
+      nextCursor: null,
+    }))
     const write = vi.fn(async () => {
       revision++
       return {}
@@ -373,12 +376,12 @@ it('edits certificate metadata, explicit issuance inputs, recommendation, export
     list: vi.fn().mockResolvedValue({
       tenantId: tenant,
       items: [entry],
-      nextAfter: null,
+      nextCursor: null,
       asOf: 100,
       reminderDays: 30,
       alerts: { expired: 0, expiring: 1, notYetValid: 0 },
     }),
-    history: vi.fn().mockResolvedValue([entry.latest, old]),
+    history: vi.fn().mockResolvedValue({ items: [entry.latest, old], nextCursor: null }),
     generate,
     saveMetadata,
     manage,
@@ -506,12 +509,12 @@ it('preserves unedited metadata keys and the loaded revision when saving', async
     list: vi.fn().mockResolvedValue({
       tenantId: tenant,
       items: [entry],
-      nextAfter: null,
+      nextCursor: null,
       asOf: 100,
       reminderDays: 30,
       alerts: { expired: 0, expiring: 0, notYetValid: 0 },
     }),
-    history: vi.fn().mockResolvedValue([entry.latest]),
+    history: vi.fn().mockResolvedValue({ items: [entry.latest], nextCursor: null }),
     saveMetadata,
   })
   await wrapper
@@ -531,4 +534,59 @@ it('preserves unedited metadata keys and the loaded revision when saving', async
     name: 'Edited',
   })
   wrapper.unmount()
+})
+it('discards a delayed archive list and vault observation after a principal changes', async () => {
+  let complete!: (value: unknown) => void
+  const entry = archiveEntry(tenant)
+  const list = vi.fn(() => new Promise((resolve) => (complete = resolve)))
+  const f = await setup({
+    list,
+    state: vi.fn().mockResolvedValue({
+      initialized: true,
+      generation: 1,
+      unlockedUntil: Math.floor(Date.now() / 1000) + 900,
+    }),
+  })
+  f.session.state.value = {
+    ...f.session.state.value,
+    identity: { principalId: secondId },
+    session: { id: secondId },
+  }
+  complete({
+    tenantId: tenant,
+    items: [entry],
+    nextCursor: 'YQ',
+    asOf: 100,
+    reminderDays: 30,
+    alerts: { expired: 0, expiring: 0, notYetValid: 0 },
+  })
+  await flushPromises()
+  expect(f.wrapper.find('tbody').exists()).toBe(false)
+  expect(f.wrapper.text()).not.toContain(entry.latest.metadata.name)
+  f.wrapper.unmount()
+})
+it('discards a delayed version history without restoring its old edit baseline after a session changes', async () => {
+  let complete!: (value: unknown) => void
+  const entry = archiveEntry(tenant),
+    history = vi.fn(() => new Promise((resolve) => (complete = resolve)))
+  const f = await setup({
+    history,
+    list: vi.fn().mockResolvedValue({
+      tenantId: tenant,
+      items: [entry],
+      nextCursor: null,
+      asOf: 100,
+      reminderDays: 30,
+      alerts: { expired: 0, expiring: 0, notYetValid: 0 },
+    }),
+  })
+  await f.wrapper.findAll('tbody button')[0]!.trigger('click')
+  await flushPromises()
+  expect(history).toHaveBeenCalledTimes(1)
+  f.session.state.value = { ...f.session.state.value, session: { id: secondId } }
+  complete({ items: [entry.latest], nextCursor: 'YQ' })
+  await flushPromises()
+  expect(f.wrapper.find('#archive-comparison').exists()).toBe(false)
+  expect(f.wrapper.text()).not.toContain(entry.latest.metadata.name)
+  f.wrapper.unmount()
 })

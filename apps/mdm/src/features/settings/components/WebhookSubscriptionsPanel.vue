@@ -23,7 +23,7 @@ const { run, submit, pending, locked, busy, failure, resolvedConflict } = useOri
   () => 'webhooks',
 )
 const rows = ref<Subscription[]>([]),
-  more = ref(false),
+  nextCursor = ref<string | null>(null),
   selected = ref<Subscription>(),
   id = ref(crypto.randomUUID() as string),
   name = ref(''),
@@ -45,7 +45,7 @@ function clear() {
   deliveries.value = undefined
   currentDelivery.value = undefined
   receipt.value = undefined
-  more.value = false
+  nextCursor.value = null
 }
 useSettingsFacts(clear)
 function apply(s: Subscription) {
@@ -61,10 +61,10 @@ function apply(s: Subscription) {
 }
 async function load(after?: string) {
   await run(
-    async () => ({ rows: await client.list(after), types: await client.types() }),
+    async () => ({ rows: await client.list({ cursor: after }), types: await client.types() }),
     (v) => {
-      rows.value = v.rows
-      more.value = v.rows.length === 32
+      rows.value = v.rows.items
+      nextCursor.value = v.rows.nextCursor
       availableEvents.value = v.types
     },
   )
@@ -142,7 +142,7 @@ function transition(kind: 'enabled' | 'delete') {
 async function loadDeliveries(after?: string) {
   deliveries.value = undefined
   await run(
-    () => client.deliveries(after),
+    () => client.deliveries({ cursor: after }),
     (v) => {
       deliveries.value = v
     },
@@ -200,7 +200,7 @@ function restore() {
         >
       </li>
     </ul>
-    <UiButton v-if="more" :disabled="busy" @click="load(rows.at(-1)?.id)">{{
+    <UiButton v-if="nextCursor" :disabled="busy" @click="load(nextCursor!)">{{
       t('gap.next')
     }}</UiButton>
     <form @submit.prevent="save">

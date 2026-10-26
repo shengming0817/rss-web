@@ -40,7 +40,9 @@
     "test:mdm:settings-browser": "node e2e/mdm/settings-run.mjs",
     "test:mdm:profiles-browser": "node e2e/mdm/profiles-run.mjs",
     "test:mdm:telemetry-browser": "node e2e/mdm/telemetry-run.mjs",
-    "test:mdm:console-browser": "node e2e/mdm/console-run.mjs"
+    "test:mdm:console-browser": "node e2e/mdm/console-run.mjs",
+    "generate:collection": "node scripts/generate-collection.mjs",
+    "check:collection": "node scripts/generate-collection.mjs --check"
   },
   "lint-staged": {
     "*.{ts,vue}": [
@@ -72,6 +74,9 @@
     "lint-staged": "catalog:",
     "@rss/auth": "workspace:*",
     "@rss/api": "workspace:*",
-    "playwright": "catalog:"
+    "playwright": "catalog:",
+    "ajv": "catalog:",
+    "json-schema-to-typescript": "catalog:",
+    "esbuild": "catalog:"
   }
 }

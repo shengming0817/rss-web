@@ -36,7 +36,7 @@ it('rejects foreign pages, fabricated unlock state and mismatched export version
   const result = {
     tenantId: id,
     items: [],
-    nextAfter: null,
+    nextCursor: null,
     asOf: 100,
     reminderDays: 30,
     alerts: { expired: 0, expiring: 0, notYetValid: 0 },

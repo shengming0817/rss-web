@@ -126,7 +126,11 @@ function save() {
     write({
       action: 'put',
       enabled: enabled.value,
-      definition: policyDefinition({ scope: scope.value, action: input }),
+      definition: policyDefinition({
+        scope: scope.value,
+        alias: current.value?.definition.alias ?? null,
+        action: input,
+      }),
     })
   } catch {
     failure.value = 'invalidRequest'

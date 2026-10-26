@@ -136,7 +136,7 @@ it('keeps unlimited quantity null and rejects altered scope or secret-free pseud
 it('uses independent Apple organization configurations and immutable write receipts', async () => {
   const id = operation(),
     server = operation()
-  expect(await client.apple.organizations()).toEqual([])
+  expect(await client.apple.organizations()).toEqual({ items: [], nextCursor: null })
   expect(
     await client.apple.accountOrganization(id, operation(), {
       expectedRevision: 0,
@@ -158,8 +158,8 @@ it('uses independent Apple organization configurations and immutable write recei
     `/api/v1/apple/organizations/${id}/account-enrollment/accounts/managed%40example.test`,
   )
   const organizations = await client.apple.organizations()
-  expect(organizations[0]?.accountEnrollment?.accounts[0]?.principalId).toBe(ADMIN)
-  expect(organizations[0]?.ade).toBeNull()
+  expect((await client.apple.accounts(id)).items[0]?.principalId).toBe(ADMIN)
+  expect(organizations.items[0]?.ade).toBeNull()
   await expect(
     client.apple.accountOrganization(id, operation(), {
       expectedRevision: 0,
@@ -169,7 +169,9 @@ it('uses independent Apple organization configurations and immutable write recei
       enabled: true,
     }),
   ).rejects.toMatchObject({ status: 409 })
-  expect(() => appleOrganizations({ items: [{ ...organizations[0], extra: true }] })).toThrow()
+  expect(() =>
+    appleOrganizations({ items: [{ ...organizations.items[0], extra: true }], nextCursor: null }),
+  ).toThrow()
   await client.apple.configure(id, operation(), {
     expectedRevision: 0,
     enabled: true,
@@ -195,7 +197,7 @@ it('uses independent Apple organization configurations and immutable write recei
   expect((await client.apple.operation(id, op)).state).toBe('pending')
   domain.tick()
   expect((await client.apple.operation(id, op)).result).toHaveProperty('remoteProfile')
-  const p = (await client.apple.profiles(id))[0]!
+  const p = (await client.apple.profiles(id)).items[0]!
   const assignment = operation()
   await client.apple.command(id, assignment, {
     kind: 'assign',
@@ -215,7 +217,7 @@ it('uses independent Apple organization configurations and immutable write recei
   await client.apple.command(id, operation(), { kind: 'sync', full: true })
   domain.tick()
   expect(() =>
-    adeStatus({ ...(organizations[0]?.ade ?? {}), organizationId: id }, server),
+    adeStatus({ ...(organizations.items[0]?.ade ?? {}), organizationId: id }, server),
   ).toThrow()
 })
 it('closes ADE status, result, Setup Assistant constraints and registration semantics', () => {

@@ -37,12 +37,14 @@ def exercise(path, policy, version):
     call('/api/v1/agent/runtime/tasks/claim', dict(wireVersion=1, operationId=str(uuid.uuid4()),
         profiles=['posix_sh'], environment=dict(edition=None, tools={}, nativeEngines={'macos.performance': 1}),
         executionContext=agent['executionContext']))
-    config = call('/api/v1/agent/runtime/telemetry/configurations/' + policy + '/' + version)['configuration']
-    now = int(time.time()) * 1_000_000
+    configuration = call('/api/v1/agent/runtime/telemetry/configurations/' + policy + '/' + version)
+    # Samples belong to this signed lease; synthetic history never predates its issue time.
+    time.sleep(.5)
+    now = time.time_ns() // 1000
     interval = now - 900_000_000
     observations = []
     for i in range(12):
-        observed = now - (12-i)*30_000_000
+        observed = now - (12-i)*10_000
         values = {}
         for key, value in [('custom.browser.gauge', dict(kind='number', value=-12.5+i*4)),
                            ('custom.browser.counter', dict(kind='integer', value=1000+i*100)),
@@ -52,7 +54,7 @@ def exercise(path, policy, version):
                 reading = dict(quality='missing' if i==4 else 'failed', intervalStart=interval if key.endswith('counter') else None)
             values[key] = reading
         observations.append(dict(id=str(uuid.uuid4()), sequence=i+1, observedAt=observed, values=values))
-    body = dict(batchId=str(uuid.uuid4()), policy=policy, policyVersion=version, binding=config['binding'], observations=observations)
+    body = dict(batchId=str(uuid.uuid4()), configuration=configuration, observations=observations)
     accepted = call('/api/v1/agent/runtime/telemetry/batches', body, 202)
     replayed = call('/api/v1/agent/runtime/telemetry/batches', body, 202)
     if accepted['replayed'] or not replayed['replayed']:

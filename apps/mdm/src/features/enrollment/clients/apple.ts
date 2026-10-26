@@ -1,3 +1,9 @@
+import {
+  queryParameters,
+  windowPage,
+  nextCursor,
+  type DirectoryQuery,
+} from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -98,59 +104,34 @@ export function adeStatus(value: unknown, id: string) {
   }
 }
 export function appleOrganizations(value: unknown) {
-  return unique(
-    array(closed(value, ['items'])['items'], (value) => {
-      const v = closed(value, ['id', 'accountEnrollment', 'ade']),
-        id = uuid(v['id'])
-      const accountEnrollment = nullable(v['accountEnrollment'], (value) => {
-        const a = closed(value, [
-          'domain',
-          'serverUuid',
-          'signingKey',
-          'enabled',
-          'revision',
-          'signingKeyConfigured',
-          'accounts',
-          'externalOrganizationVerification',
-        ])
-        if (a['externalOrganizationVerification'] !== 'not_observed')
-          throw new Error('Invalid verification')
-        const d = domain(a['domain'])
-        return {
-          domain: d,
-          serverUuid: uuid(a['serverUuid']),
-          signingKey: bounded(a['signingKey'], 128),
-          enabled: boolean(a['enabled']),
-          revision: count(a['revision']),
-          signingKeyConfigured: boolean(a['signingKeyConfigured']),
-          externalOrganizationVerification: 'not_observed' as const,
-          accounts: unique(
-            array(a['accounts'], (value) => {
-              const b = closed(value, [
-                  'account',
-                  'principalId',
-                  'instanceId',
-                  'revision',
-                  'enabled',
-                ]),
-                name = account(b['account'])
-              if (name.split('@')[1] !== d) throw new Error('Wrong organization domain')
-              return {
-                account: name,
-                principalId: uuid(b['principalId']),
-                instanceId: uuid(b['instanceId']),
-                revision: count(b['revision']),
-                enabled: boolean(b['enabled']),
-              }
-            }),
-            (v) => v.account,
-          ),
-        }
-      })
-      return { id, accountEnrollment, ade: nullable(v['ade'], (value) => adeStatus(value, id)) }
-    }),
-    (v) => v.id,
-  )
+  return windowPage(value, (value) => {
+    const v = closed(value, ['id', 'accountEnrollment', 'ade']),
+      id = uuid(v['id'])
+    const accountEnrollment = nullable(v['accountEnrollment'], (value) => {
+      const a = closed(value, [
+        'domain',
+        'serverUuid',
+        'signingKey',
+        'enabled',
+        'revision',
+        'signingKeyConfigured',
+        'externalOrganizationVerification',
+      ])
+      if (a['externalOrganizationVerification'] !== 'not_observed')
+        throw new Error('Invalid verification')
+      const d = domain(a['domain'])
+      return {
+        domain: d,
+        serverUuid: uuid(a['serverUuid']),
+        signingKey: bounded(a['signingKey'], 128),
+        enabled: boolean(a['enabled']),
+        revision: count(a['revision']),
+        signingKeyConfigured: boolean(a['signingKeyConfigured']),
+        externalOrganizationVerification: 'not_observed' as const,
+      }
+    })
+    return { id, accountEnrollment, ade: nullable(v['ade'], (value) => adeStatus(value, id)) }
+  })
 }
 export function setup(value: unknown) {
   const v = closed(value, ['name', 'mandatory', 'removable', 'skip']),
@@ -302,12 +283,32 @@ export function createAppleClient(transport: HttpTransport) {
     return result
   }
   return {
-    organizations: () =>
+    organizations: (query: DirectoryQuery = {}) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/apple/organizations',
+        query: queryParameters({ limit: 100, ...query }),
         successStatus: 200,
         decode: appleOrganizations,
+      }),
+    accounts: (id: string, query: DirectoryQuery = {}) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/apple/organizations/{id}/account-enrollment/accounts',
+        pathParams: params(id),
+        query: queryParameters({ limit: 100, ...query }),
+        successStatus: 200,
+        decode: (v) =>
+          windowPage(v, (value) => {
+            const a = closed(value, ['account', 'principalId', 'instanceId', 'revision', 'enabled'])
+            return {
+              account: account(a['account']),
+              principalId: uuid(a['principalId']),
+              instanceId: uuid(a['instanceId']),
+              revision: count(a['revision']),
+              enabled: boolean(a['enabled']),
+            }
+          }),
       }),
     accountOrganization: (id: string, operation: string, body: AccountOrganization) =>
       transport.request({
@@ -394,32 +395,30 @@ export function createAppleClient(transport: HttpTransport) {
         successStatus: 200,
         decode: (v) => adeOperation(v, operation),
       }),
-    profiles: (id: string) =>
+    profiles: (id: string, query: DirectoryQuery = {}) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/apple/organizations/{id}/ade/profiles',
         pathParams: params(id),
+        query: queryParameters({ limit: 100, ...query }),
         successStatus: 200,
         decode: (v) =>
-          unique(
-            array(closed(v, ['items'])['items'], (item) => {
-              const p = closed(item, ['id', 'revision', 'configuration', 'remoteUuid'])
-              return {
-                id: uuid(p['id']),
-                revision: count(p['revision']),
-                configuration: setup(p['configuration']),
-                remoteUuid: nullable(p['remoteUuid'], uuid),
-              }
-            }),
-            (v) => v.id,
-          ),
+          windowPage(v, (item) => {
+            const p = closed(item, ['id', 'revision', 'configuration', 'remoteUuid'])
+            return {
+              id: uuid(p['id']),
+              revision: count(p['revision']),
+              configuration: setup(p['configuration']),
+              remoteUuid: nullable(p['remoteUuid'], uuid),
+            }
+          }),
       }),
-    devices: (id: string, after?: string) =>
+    devices: (id: string, query: DirectoryQuery = {}) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/apple/organizations/{id}/ade/devices',
         pathParams: params(id),
-        query: { after },
+        query: queryParameters({ limit: 100, ...query }),
         successStatus: 200,
         decode: (v) => {
           const p = closed(v, ['items', 'nextCursor'])
@@ -444,7 +443,7 @@ export function createAppleClient(transport: HttpTransport) {
               }),
               (v) => v.serial,
             ),
-            nextCursor: nullable(p['nextCursor'], (v) => bounded(v, 128)),
+            nextCursor: nextCursor(p['nextCursor']),
           }
         },
       }),

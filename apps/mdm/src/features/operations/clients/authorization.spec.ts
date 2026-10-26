@@ -8,47 +8,36 @@ const members = Array.from({ length: 201 }, (_, i) => ({
   tenantId: tenant,
   principalId: `33333333-3333-4333-8333-${String(i + 1).padStart(12, '0')}`,
 }))
-it('loads every revision-bound member page before complete replacement and uses native wire', async () => {
-  const request = vi.fn(async (o: RequestOptions<unknown>) => {
-    if (o.method === 'PUT') return o.decode({ id: group, revision: 8, deleted: false })
-    const offset = Number(o.query?.['offset'] ?? 0)
-    return o.decode({
-      id: group,
-      revision: 7,
-      items: members.slice(offset, offset + 100),
-      nextOffset: offset + 100 < members.length ? offset + 100 : null,
-    })
-  })
+it('reads one complete group detail as the CAS baseline and pages members with an opaque cursor', async () => {
+  const request = vi.fn(async (o: RequestOptions<unknown>) =>
+    o.decode(
+      o.path.endsWith('/members')
+        ? { id: group, revision: 7, items: members.slice(0, 2), nextCursor: 'YQ' }
+        : { id: group, revision: 7, value: { name: 'Operators', enabled: true, members } },
+    ),
+  )
   const client = createAuthorizationClient({ request } as unknown as HttpTransport, tenant)
-  expect(await client.allMembers(group, 7)).toEqual(members)
-  expect(request.mock.calls.map(([o]) => o.query)).toEqual([
-    { offset: 0, expectedRevision: 7 },
-    { offset: 100, expectedRevision: 7 },
-    { offset: 200, expectedRevision: 7 },
-  ])
-  const body = {
-    operationId: group,
-    expectedRevision: 7,
-    value: { name: 'Operators', enabled: true, members },
-  }
-  await client.changeGroup(group, body)
+  expect((await client.group(group)).value?.members).toEqual(members)
   expect(request.mock.lastCall![0]).toMatchObject({
-    method: 'PUT',
     path: '/api/v1/authorization/user-groups/{id}',
-    body,
+    pathParams: { id: group },
+  })
+  expect((await client.members(group, { cursor: 'YQ', limit: 2 })).nextCursor).toBe('YQ')
+  expect(request.mock.lastCall![0].query).toEqual({
+    cursor: 'YQ',
+    limit: 2,
+    fields: 'principalId,tenantId,instanceId',
   })
 })
-it('rejects mixed revisions, duplicate members and repeated pagination', async () => {
-  let reply: unknown = { id: group, revision: 8, items: members.slice(0, 2), nextOffset: null }
+it('rejects mismatched group identities and duplicate members', async () => {
+  let reply: unknown = { id: tenant, revision: 7, value: { name: 'Wrong', enabled: true, members } }
   const client = createAuthorizationClient(
     { request: async (o: RequestOptions<unknown>) => o.decode(reply) } as HttpTransport,
     tenant,
   )
-  await expect(client.allMembers(group, 7)).rejects.toThrow()
-  reply = { id: group, revision: 7, items: [members[0], members[0]], nextOffset: null }
-  await expect(client.allMembers(group, 7)).rejects.toThrow()
-  reply = { id: group, revision: 7, items: [], nextOffset: 0 }
-  await expect(client.allMembers(group, 7)).rejects.toThrow()
+  await expect(client.group(group)).rejects.toThrow()
+  reply = { id: group, revision: 7, items: [members[0], members[0]], nextCursor: null }
+  await expect(client.members(group)).rejects.toThrow()
 })
 it('decodes current closed rules without legacy permissions or invented department write scopes', () => {
   const value = {
@@ -167,27 +156,23 @@ it('admits only management user subjects and its eight tenant permissions on eve
   ).toThrow()
   expect(request).toHaveBeenCalledTimes(1)
 })
-it('keeps rules pagination at the current endpoint and rejects oversized or repeated pages', async () => {
-  const subject = { kind: 'user_group', id: group },
-    definition = {
-      subject,
-      grants: [{ operation: 'authorization_read', scope: { kind: 'tenant' } }],
-    }
-  const items = Array.from({ length: 100 }, (_, i) => ({
-    id: `33333333-3333-4333-8333-${String(i + 1).padStart(12, '0')}`,
-    revision: 1,
-    value: definition,
-  }))
-  let reply: unknown = { items, nextCursor: items.at(-1)!.id }
+it('uses the directory query for rules, accepts short continuation pages and reads detail directly', async () => {
+  const value = {
+    subject: { kind: 'user_group', id: group },
+    grants: [{ operation: 'authorization_read', scope: { kind: 'tenant' } }],
+  }
+  let reply: unknown = { items: [{ id: group, revision: 1, value }], nextCursor: 'YQ' }
   const request = vi.fn(async (o: RequestOptions<unknown>) => o.decode(reply)),
     client = createAuthorizationClient({ request } as unknown as HttpTransport, tenant)
-  expect((await client.rules()).items).toHaveLength(100)
-  expect(request.mock.lastCall![0].query).toEqual({ after: undefined })
-  await expect(client.findRule(group)).rejects.toThrow('Repeated authorization cursor')
-  reply = { items: [...items, items[0]], nextCursor: null }
-  await expect(client.rules()).rejects.toThrow()
-  reply = { items: items.slice(0, 1), nextCursor: items[0]!.id }
-  await expect(client.rules()).rejects.toThrow()
+  expect((await client.rules({ cursor: 'YQ', limit: 1 })).nextCursor).toBe('YQ')
+  expect(request.mock.lastCall![0].query).toEqual({
+    limit: 1,
+    cursor: 'YQ',
+    fields: 'id,revision,value',
+  })
+  reply = { id: group, revision: 1, value }
+  expect((await client.rule(group)).value).toEqual(value)
+  expect(request.mock.lastCall![0].path).toBe('/api/v1/authorization/rules/{id}')
 })
 
 it('accepts current enterprise application grants without accepting device scopes', () => {

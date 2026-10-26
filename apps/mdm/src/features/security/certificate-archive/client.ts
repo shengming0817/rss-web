@@ -1,5 +1,11 @@
+import {
+  queryParameters,
+  windowParameters,
+  windowPage,
+  type DirectoryQuery,
+} from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
-import { array, boolean, closed } from '../../../services/decode'
+import { boolean, closed } from '../../../services/decode'
 import {
   page,
   vault,
@@ -62,27 +68,24 @@ export function createCertificateArchiveClient(transport: HttpTransport, tenant:
       write('/vault/password', operation, { oldPassword, newPassword }, (v) =>
         receipt(v, operation),
       ),
-    list: (after?: string) =>
+    list: (query: DirectoryQuery = {}) =>
       transport.request({
         method: 'GET',
         path: base + '/entries',
-        query: { after },
+        query: queryParameters({ limit: 50, ...query }),
         successStatus: 200,
         decode: (v) => page(v, tenant),
       }),
-    history: (entry: string, before?: number) =>
+    history: (entry: string, query: { limit?: number; cursor?: string } = {}) =>
       transport.request({
         method: 'GET',
         path: base + '/entries/{entry}/versions',
         pathParams: { entry },
-        query: { before },
+        query: windowParameters({ limit: 50, ...query }),
         successStatus: 200,
         decode: (v) => {
-          const result = array(v, version)
-          if (
-            result.some((r) => r.entryId !== entry || (before !== undefined && r.version >= before))
-          )
-            throw new Error('Wrong history')
+          const result = windowPage(v, version)
+          if (result.items.some((r) => r.entryId !== entry)) throw new Error('Wrong history')
           return result
         },
       }),

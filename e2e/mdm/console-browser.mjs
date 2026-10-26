@@ -216,12 +216,27 @@ try {
   await page.getByRole('button', { name: '保存', exact: true }).click()
   assert.equal((await saved).status(), 200)
   phase = 'lifecycle-preview'
-  const previewed = page.waitForResponse(
-    (r) =>
-      r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/v1/policies/previews',
-  )
-  await page.getByRole('button', { name: '预览', exact: true }).click()
-  assert.equal((await previewed).status(), 200)
+  await ready()
+  try {
+    const [previewed] = await Promise.all([
+      page.waitForResponse(
+        (r) =>
+          r.request().method() === 'POST' &&
+          new URL(r.url()).pathname === '/api/v1/policies/previews',
+      ),
+      page.getByRole('button', { name: '预览', exact: true }).click(),
+    ])
+    assert.equal(previewed.status(), 200)
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        phase,
+        alerts: await page.getByRole('alert').allTextContents(),
+        errors: [],
+      }),
+    )
+    throw error
+  }
   await page
     .locator('ul')
     .last()

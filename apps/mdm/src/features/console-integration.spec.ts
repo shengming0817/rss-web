@@ -53,11 +53,11 @@ const entry = {
   invalidatedAt: null,
 }
 it('binds credential versions to the device and accepts escrow without claiming verified validity', async () => {
-  const f = transport([entry]),
+  const f = transport({ items: [entry], nextCursor: null }),
     client = createCredentialsClient(f.client)
-  const page = await client.list('mac', material(entry, 'mac'))
-  expect(page[0]).toMatchObject({ escrowed: true, validity: 'unknown', version: 3 })
-  expect(f.calls[0]?.query).toEqual({ afterId: a, afterVersion: 3 })
+  const page = await client.list('mac', { cursor: 'YQ' })
+  expect(page.items[0]).toMatchObject({ escrowed: true, validity: 'unknown', version: 3 })
+  expect(f.calls[0]?.query).toEqual({ limit: 100, cursor: 'YQ' })
   expect(() => material(entry, 'other')).toThrow()
   expect(() => material({ ...entry, grant: 'old-approval' }, 'mac')).toThrow()
 })
@@ -392,7 +392,12 @@ it('clears disclosed secrets on hiding and refuses late disclosure responses', a
     {
       tenant: a,
       session: s,
-      security: { credentials: { list: async () => [material(entry, 'mac')], reveal } },
+      security: {
+        credentials: {
+          list: async () => ({ items: [material(entry, 'mac')], nextCursor: null }),
+          reveal,
+        },
+      },
     },
     { endpoint: { id: 'mac', channels: [], primaryMdmRegistration: null } },
   )
@@ -503,7 +508,9 @@ it('revokes an exact Windows credential through the shared confirmation without 
     {
       tenant: a,
       session: session(),
-      security: { credentials: { list: async () => [windows], revoke } },
+      security: {
+        credentials: { list: async () => ({ items: [windows], nextCursor: null }), revoke },
+      },
     },
     { endpoint: { id: 'win', channels: [], primaryMdmRegistration: null } },
   )
@@ -751,7 +758,7 @@ it('edits webhook metadata without losing extensions and consumes actual replay 
       if (body.change.kind === 'enabled') record.enabled = body.change.value as boolean
       if (body.change.kind === 'delete') record.deleted = true
     }
-    return o.path.endsWith('/subscriptions') ? { items: [record] } : record
+    return o.path.endsWith('/subscriptions') ? { items: [record], nextCursor: null } : record
   })
   const client = createWebhookSubscriptions(f.client)
   const w = await mountAt(WebhookSubscriptionsPanel, {

@@ -13,3 +13,7 @@ docs/
 specs/
 .claude/
 **/*.md
+
+# Reproducible upstream schema and generated binding output
+apps/mdm/src/contracts/collection/Collection.json
+apps/mdm/src/contracts/collection/generated/

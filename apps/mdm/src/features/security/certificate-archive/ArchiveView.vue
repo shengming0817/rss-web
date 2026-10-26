@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import { isRssApiError } from '@rss/api/mdm'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
+import { deviceBinding } from '../../devices/useDeviceBinding'
 import PageFrame from '../../../components/PageFrame.vue'
 import {
   formats,
@@ -25,7 +26,7 @@ const runtime = useMdm(),
   client = runtime.security.certificateArchive,
   { t } = useI18n(),
   route = useRoute(),
-  op = useOperation(),
+  op = useOperation([], () => deviceBinding(runtime)),
   { busy, failure, uncertain } = op
 const listingLoaded = ref(false)
 const confirmation = ref<
@@ -55,7 +56,8 @@ function clearImportOnClose(event: Event) {
 }
 const vault = ref<Vault>(),
   items = ref<Entry[]>([]),
-  nextAfter = ref<string | null>(null),
+  nextCursor = ref<string | null>(null),
+  historyCursor = ref<string | null>(null),
   asOf = ref(0),
   reminderDays = ref(30),
   categories = ref<string[]>([]),
@@ -159,6 +161,8 @@ watch(
     vault.value = undefined
     items.value = []
     history.value = []
+    nextCursor.value = null
+    historyCursor.value = null
     selected.value = undefined
     editorBase.value = undefined
     pending.value = undefined
@@ -199,11 +203,11 @@ async function load(after?: string) {
   if (busy.value) return
   diagnosis.value = ''
   await op.run(
-    () => Promise.all([client.state(), client.list(after), client.settings()]),
+    () => Promise.all([client.state(), client.list({ cursor: after }), client.settings()]),
     ([v, page, settings]) => {
       setVault(v)
       items.value = after ? [...items.value, ...page.items] : page.items
-      nextAfter.value = page.nextAfter
+      nextCursor.value = page.nextCursor
       asOf.value = page.asOf
       alertCounts.value = page.alerts
       listingLoaded.value = true
@@ -393,7 +397,8 @@ async function open(entry: Entry) {
     (versions) => {
       selected.value = entry
       editorBase.value = structuredClone(toRaw(entry))
-      history.value = versions
+      history.value = versions.items
+      historyCursor.value = versions.nextCursor
       comparison.value = undefined
       target.value = entry.id
       Object.assign(meta, {
@@ -406,11 +411,12 @@ async function open(entry: Entry) {
 }
 async function moreHistory() {
   const last = history.value.at(-1)
-  if (!selected.value || !last) return
+  if (!selected.value || !last || !historyCursor.value) return
   await op.run(
-    () => client.history(last.entryId, last.version),
+    () => client.history(last.entryId, { cursor: historyCursor.value! }),
     (v) => {
-      history.value.push(...v)
+      history.value.push(...v.items)
+      historyCursor.value = v.nextCursor
     },
   )
 }
@@ -578,7 +584,7 @@ onMounted(() => load())
         </tbody>
       </table>
     </div>
-    <UiButton v-if="nextAfter" type="button" :disabled="!!busy" @click="load(nextAfter)">
+    <UiButton v-if="nextCursor" type="button" :disabled="!!busy" @click="load(nextCursor)">
       {{ t('security.archive.more') }}
     </UiButton>
     <section v-if="selected" class="console-panel" :aria-label="t('security.archive.history')">
@@ -679,12 +685,7 @@ onMounted(() => load())
           {{ t('security.archive.recommend') }}
         </UiButton>
       </article>
-      <UiButton
-        v-if="history.length && history.length % 50 === 0"
-        type="button"
-        :disabled="!!busy"
-        @click="moreHistory"
-      >
+      <UiButton v-if="historyCursor" type="button" :disabled="!!busy" @click="moreHistory">
         {{ t('security.archive.more') }}
       </UiButton>
     </section>

@@ -4,6 +4,7 @@ Only fixture preparation uses SQL/CLI. Browser mutations use the formal product 
 No source changes, provider qualification forgery or installation-success assertions.
 """
 import copy
+import urllib.parse
 import json
 import os
 from pathlib import Path
@@ -22,7 +23,7 @@ sys.path.insert(0,str(BACKEND/'hack'))
 from t2_environment import Environment,private
 from candidate_fixture import INSTANCE,TENANTS,ADMIN,installation
 from build_run import lease_fds
-from runtime_fixture import storage, signer, readiness
+from runtime_fixture import storage, signer
 
 def cleanup_compose():
     import hashlib
@@ -234,7 +235,8 @@ def ready(origin, children, expected=200):
     while time.monotonic()<until:
         if any(child.poll() is not None for child in children):raise RuntimeError('fixture-process-exit')
         try:
-            if readiness(environment, origin)==expected:
+            from candidate_installation_driver import Browser
+            if Browser(origin,environment.root/'ca.crt',urlsplit(origin).port).call('GET','/readyz')[0]==expected:
                 print(json.dumps(dict(phase='readiness',status=expected)),flush=True)
                 return
         except (OSError,ssl.SSLError):pass
@@ -280,7 +282,7 @@ try:
         ready(initialized['origin'],start_host(binary,config_path,initialized['gateway'],log))
         # Disposable management accounts and legal grants prepare the existing HTTPS carrier.
         from candidate_installation_driver import Browser
-        manager=Browser(initialized['origin'],environment.root/'ca.crt')
+        manager=Browser(initialized['origin'],environment.root/'ca.crt',urllib.parse.urlsplit(initialized['origin']).port)
         manager.login(management,'admin',(environment.root/'account-password').read_text().strip())
         api='/api/v1/identity/tenants/'+management
         def expect_status(actual,expected):
@@ -303,7 +305,7 @@ try:
             document=json.dumps(managed_rule(prepared['authorization-target']['principalId'],['tenant_read'])).replace("'","''")
             pagination_rows.append(f"('{management}','{INSTANCE}','{identifier}',1,'{document}'::jsonb)")
         environment.sql(f"SET rss.tenant_id='{management}';INSERT INTO mdm_access.authorization_rules(tenant_id,instance,id,revision,document) VALUES "+','.join(pagination_rows),'mdm_dev')
-        status,initial_rules=manager.call('GET','/api/v1/tenant-administration/authorization/rules')
+        status,initial_rules=manager.call('GET','/api/v1/tenant-administration/authorization/rules?fields=id,revision,value')
         expect_status(status,200)
         initial_rule=None
         cursor=None
@@ -312,7 +314,7 @@ try:
                 if row['value'] and row['value']['subject']['user']['principalId']==ADMIN and any(g['operation']=='identity_accounts_manage' for g in row['value']['grants']):initial_rule=row
             cursor=initial_rules['nextCursor']
             if not cursor:break
-            status,initial_rules=manager.call('GET','/api/v1/tenant-administration/authorization/rules?after='+cursor)
+            status,initial_rules=manager.call('GET','/api/v1/tenant-administration/authorization/rules?fields=id,revision,value&cursor='+urllib.parse.quote(cursor,safe=''))
             expect_status(status,200)
         if not initial_rule:raise RuntimeError('initial-rule-not-found')
         authorization_fixture=dict(accounts=prepared,initialRule=initial_rule,instanceId=INSTANCE)
@@ -335,7 +337,7 @@ try:
                 # Verify the browser-created account/tenant exists through the original registry fact.
                 if environment.sql(f"SELECT count(*) FROM public.mdm_tenant_operations WHERE tenant_id='{tenant}' AND operation_id='{operation}' AND action='provision'",'mdm_dev').strip()!='1':raise RuntimeError('target-binding')
                 ports=target_ports.host_ports()
-                origin='https://localhost:'+str(ports['https'])
+                origin='https://target.localhost:'+str(ports['https'])
                 target=copy.deepcopy(config);target['identity']['tenant_id']=tenant;target['identity']['oidc']=None
                 target['product_origin']=origin;target['listen']='127.0.0.1:'+str(ports['backend'])
                 target['task_signing']=None
@@ -344,8 +346,8 @@ try:
                 public=command(binary,'public-host-config',target)
                 gateway_dir=environment.root/'target-gateway';gateway_dir.mkdir(mode=0o700)
                 for name in ('ui.json','mdm.json'):private(gateway_dir/name,public[name])
-                original=Path(initialized['gateway']);gateway=original.read_text().replace(str(original.parent),str(gateway_dir)).replace('listen '+str(urlsplit(initialized['origin']).port)+' ssl', 'listen '+str(ports['https'])+' ssl').replace(config['listen'],target['listen']).replace(urlsplit(initialized['origin']).netloc,urlsplit(origin).netloc)
-                for name in ('server.crt','server.key'):private(gateway_dir/name,(original.parent/name).read_text())
+                original=Path(initialized['gateway']);gateway=original.read_text().replace(str(original.parent),str(gateway_dir)).replace('listen '+str(urlsplit(initialized['origin']).port)+' ssl', 'listen '+str(ports['https'])+' ssl').replace(config['listen'],target['listen']).replace(urlsplit(initialized['origin']).netloc,urlsplit(origin).netloc).replace('server_name localhost;', 'server_name target.localhost;')
+                environment.issue_leaf(gateway_dir,['target.localhost'])
                 gateway_path=private(gateway_dir/'nginx.conf',gateway)
                 initial=start_host(binary,path,gateway_path,log);ready(origin,initial,expected=503)
                 target['task_signing']=dict(revision=signer(environment,origin,tenant,value['login'],value['password']))
@@ -358,7 +360,7 @@ try:
         if browser.returncode:raise RuntimeError('browser-failed')
         result='passed'
 except BaseException as error:
-    print(json.dumps(dict(phase=phase,result='failed',classification=type(error).__name__)),flush=True)
+    print(json.dumps(dict(phase=phase,result='failed',classification=type(error).__name__,location=__import__('traceback').extract_tb(error.__traceback__)[-1].lineno)),flush=True)
 finally:
     stop()
     for child in reversed(processes):

@@ -401,6 +401,7 @@ it('saves onboarding as the shared Policy and reads the formal execution directo
   await flushPromises()
   expect(change.mock.calls[0]?.[1].input.definition).toEqual({
     scope: id,
+    alias: null,
     action: {
       kind: 'request_mdm_enrollment',
       organization: id,

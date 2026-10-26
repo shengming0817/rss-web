@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { jsonObject } from '../../../services/json'
 import { comparison as queryComparison, allOf } from '../../../services/directory-query'
 import type { Json } from '../../../services/json'
 import { UiButton, UiTable, UiBadge } from '@rss/core/components'
@@ -195,8 +196,13 @@ function loadProgress(after?: string) {
     )
 }
 const fields = computed(() =>
-  Object.entries(spec.value?.parameters['properties'] ?? {}).map(([name, value]) => {
-    const schema = value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+  Object.entries(
+    (spec.value
+      ? (jsonObject(spec.value.parameters, 16384)['properties'] as Record<string, Json>)
+      : {}) ?? {},
+  ).map(([name, value]) => {
+    const schema: Record<string, Json> =
+      value && typeof value === 'object' && !Array.isArray(value) ? jsonObject(value, 16384) : {}
     const choices =
       'const' in schema
         ? [schema['const']]

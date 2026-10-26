@@ -63,7 +63,7 @@ async function load(after?: string) {
   clearSecret()
   rows.value = undefined
   await run(
-    () => client.keys(after),
+    () => client.keys({ cursor: after }),
     (v) => {
       rows.value = v
     },

@@ -20,7 +20,7 @@ const { run, submit, pending, locked, busy, failure, confirmOriginal, resolvedCo
   useOriginalOperation(() => 'credentials/' + props.endpoint.id)
 const currentEndpoint = ref<EndpointDetail>(),
   rows = ref<Material[]>([]),
-  more = ref(false),
+  nextCursor = ref<string | null>(null),
   secret = ref(''),
   action = ref<AppleAction>('collect_filevault'),
   revision = ref(0),
@@ -54,28 +54,31 @@ watch(
     clear()
     currentEndpoint.value = undefined
     rows.value = []
-    more.value = false
+    nextCursor.value = null
     resultId.value = ''
   },
 )
 async function load(next = false) {
   clear()
   await run(
-    () => client.list(props.endpoint.id, next ? rows.value.at(-1) : undefined),
+    () =>
+      client.list(props.endpoint.id, {
+        cursor: next ? (nextCursor.value ?? undefined) : undefined,
+      }),
     (value) => {
-      rows.value = next ? [...rows.value, ...value] : value
-      more.value = value.length === 100
+      rows.value = next ? [...rows.value, ...value.items] : value.items
+      nextCursor.value = value.nextCursor
     },
   )
   if (failure.value) {
     rows.value = []
-    more.value = false
+    nextCursor.value = null
   }
 }
 async function compare() {
   clear()
   rows.value = []
-  more.value = false
+  nextCursor.value = null
   const ok = await run(
     async () => ({
       endpoint: await runtime.devices.directory.detail(props.endpoint.id),
@@ -83,8 +86,8 @@ async function compare() {
     }),
     (value) => {
       currentEndpoint.value = value.endpoint
-      rows.value = value.materials
-      more.value = value.materials.length === 100
+      rows.value = value.materials.items
+      nextCursor.value = value.materials.nextCursor
     },
   )
   if (ok) {
@@ -228,7 +231,7 @@ async function query() {
         >{{ t('gap.revoke') }}</UiButton
       >
     </article>
-    <UiButton v-if="more" :disabled="busy" @click="load(true)">{{ t('gap.next') }}</UiButton>
+    <UiButton v-if="nextCursor" :disabled="busy" @click="load(true)">{{ t('gap.next') }}</UiButton>
     <template v-if="secret"
       ><output aria-live="polite">{{ secret }}</output
       ><UiButton @click="clear">{{ t('gap.clear') }}</UiButton></template

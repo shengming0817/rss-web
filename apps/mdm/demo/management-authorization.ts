@@ -1,3 +1,4 @@
+import { directoryPage } from './directory'
 /** Synthetic management rules use the same admitted DTO, CAS and idempotency contracts. */
 import { MANAGEMENT_TENANT, type DomainHandler } from './scenario'
 import { INSTANCE, ADMIN, REVIEWER } from './operations/authorization'
@@ -63,16 +64,32 @@ export function createManagementAuthorizationDemo() {
       })
     if (r.method === 'GET' && r.path.endsWith('/rules')) {
       if (!can('authorization_read')) return error('permission_denied', 403)
-      const after = r.query.get('after')
-      if (after) uuid(after)
-      const values = (scenario === 'empty' ? [] : [...rules.values()])
-        .sort((a, b) => a.id.localeCompare(b.id))
-        .filter((v) => !after || v.id > after)
-        .slice(0, 101)
-      return ok({
-        items: values.slice(0, 100),
-        nextCursor: values.length > 100 ? values[99]!.id : null,
-      })
+      try {
+        return ok(
+          directoryPage(
+            scenario === 'empty'
+              ? []
+              : [...rules.values()].map((v) => ({
+                  ...v,
+                  deleted: v.value === null,
+                  subjectKind: v.value?.subject.kind ?? null,
+                })),
+            r,
+            ['id'],
+            {
+              defaultLimit: 100,
+              binding: JSON.stringify([...rules.values()].map((v) => [v.id, v.revision])),
+            },
+          ),
+        )
+      } catch {
+        return error('malformed_request', 400)
+      }
+    }
+    if (r.method === 'GET' && match[1]) {
+      if (!can('authorization_read')) return error('permission_denied', 403)
+      const value = rules.get(match[1])
+      return value ? ok(value) : error('resource_not_found', 404)
     }
     if (r.method !== 'PUT' || !match[1]) return error('action_not_supported', 501)
     if (!can('authorization_write')) return error('permission_denied', 403)

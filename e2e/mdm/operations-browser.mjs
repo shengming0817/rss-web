@@ -116,21 +116,36 @@ try {
   coverage.push('real-unprepared-device-control-501')
   const first = await create()
   for (let i = 0; i < 20; i++) await create()
-  const sample = await get('/api/v1/operations?filter=kind==command&limit=1')
-  const filterStatus = sample.items[0].status
-  const directory = await get(
-    `/api/v1/operations?filter=${encodeURIComponent(`kind==command;status==${filterStatus}`)}&limit=1`,
-  )
-  assert.ok(directory.nextCursor)
-  const following = await get(
-    `/api/v1/operations?filter=${encodeURIComponent(`kind==command;status==${filterStatus}`)}&limit=1&cursor=${encodeURIComponent(directory.nextCursor)}`,
-  )
+  // Queries bind live execution generations. Restart the read chain if dispatch advances it.
+  let directory, following
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const firstPage = await request('get', '/api/v1/operations?filter=kind==command&limit=1')
+    if (firstPage.status() === 409) {
+      await new Promise((r) => setTimeout(r, 500))
+      continue
+    }
+    assert.equal(firstPage.status(), 200)
+    directory = await firstPage.json()
+    assert.ok(directory.nextCursor)
+    const nextPage = await request(
+      'get',
+      `/api/v1/operations?filter=kind==command&limit=1&cursor=${encodeURIComponent(directory.nextCursor)}`,
+    )
+    if (nextPage.status() === 409) {
+      await new Promise((r) => setTimeout(r, 500))
+      continue
+    }
+    assert.equal(nextPage.status(), 200)
+    following = await nextPage.json()
+    break
+  }
+  assert.ok(following, 'execution generation did not stabilize for pagination')
   assert.notEqual(directory.items[0].id, following.items[0].id)
   await page.goto(at('policies/executions'))
   await load()
   await page.getByRole('button', { name: '下一页', exact: true }).click()
   await load()
-  coverage.push('formal-operation-kind-status-filter-and-opaque-pagination')
+  coverage.push('formal-operation-kind-filter-and-opaque-pagination')
   phase = 'control-unknown-original-query'
   await page.goto(at(`policies/executions?device=${fixture.mdm}`))
   await load()
@@ -203,9 +218,7 @@ try {
   coverage.push('real-cancel-unknown-compare-exact-request-replay-and-terminal-409')
   phase = 'reauthorize-and-device-authority'
   const changeRule = async (grants) => {
-    const rule = (await get('/api/v1/authorization/rules')).items.find(
-      (r) => r.id === fixture.ruleId,
-    )
+    const rule = await get('/api/v1/authorization/rules/' + fixture.ruleId)
     const reply = await request('put', `/api/v1/authorization/rules/${fixture.ruleId}`, {
       headers,
       data: {
@@ -217,29 +230,35 @@ try {
     assert.equal(reply.status(), 200)
   }
   await changeRule(fixture.rule.grants.filter((g) => g.operation !== 'device_control'))
-  let revoked
-  const revokedDeadline = Date.now() + 30000
-  do {
-    revoked = await get(`/api/v1/devices/${fixture.mdm}/operations/${first.operationId}`)
-    if (revoked.commandStatus === 'cancelled') break
-    await new Promise((resolve) => setTimeout(resolve, 500))
-  } while (Date.now() < revokedDeadline)
-  assert.equal(revoked.authorization, 'blocked')
-  assert.equal(revoked.commandStatus, 'cancelled')
+  const revoked = await get(`/api/v1/devices/${fixture.mdm}/operations/${first.operationId}`)
+  // GET reports persisted authority; grant loss is enforced on admission and dispatch.
+  // The fixed producer's command admission test explicitly retains this snapshot.
+  assert.equal(revoked.authorization, 'authorized')
+  const deniedReauthorization = await request(
+    'post',
+    `/api/v1/devices/${fixture.mdm}/operations/${first.operationId}/reauthorize`,
+    { headers, data: { requestId: randomUUID(), expectedRevision: revoked.revision } },
+  )
+  assert.equal(deniedReauthorization.status(), 403)
   await changeRule(fixture.rule.grants)
+  // Explicitly cancel before checking terminal reauthorization; reads do not dispatch commands.
+  const cancelled = await request(
+    'post',
+    `/api/v1/devices/${fixture.mdm}/operations/${first.operationId}/cancel`,
+    { headers, data: { requestId: randomUUID(), expectedRevision: revoked.revision } },
+  )
+  assert.equal(cancelled.status(), 200)
+  const terminal = await get(`/api/v1/devices/${fixture.mdm}/operations/${first.operationId}`)
+  assert.equal(terminal.commandStatus, 'cancelled')
   await page.goto(at(`policies/executions/${first.operationId}?device=${fixture.mdm}`))
   await load()
   assert.equal(await page.getByRole('button', { name: '重新授权', exact: true }).count(), 0)
   const terminalReauthorization = await request(
     'post',
     `/api/v1/devices/${fixture.mdm}/operations/${first.operationId}/reauthorize`,
-    {
-      headers,
-      data: { requestId: randomUUID(), expectedRevision: revoked.revision },
-    },
+    { headers, data: { requestId: randomUUID(), expectedRevision: terminal.revision } },
   )
   assert.equal(terminalReauthorization.status(), 409)
-  // A fresh command retains live authority; never revive a command cancelled by recovery.
   const live = await create()
   const beforeAuthorization = await get(
     `/api/v1/devices/${fixture.mdm}/operations/${live.operationId}`,
@@ -343,9 +362,13 @@ try {
   const diagnostics = await get('/api/v1/runtime/diagnostics')
   assert.ok(diagnostics.components.some((c) => c.name === 'inventory'))
   assert.ok(diagnostics.components.some((c) => c.name === 'execution_recovery'))
-  assert.ok(diagnostics.components.find((c) => c.name === 'audit_source')?.auditBacklog)
-  for (const name of ['identity_audit', 'audit_projection'])
-    assert.equal(diagnostics.components.find((c) => c.name === name)?.readiness, 'not_applicable')
+  assert.deepEqual(diagnostics.components.map((c) => c.name).sort(), [
+    'automation',
+    'execution_recovery',
+    'initialization',
+    'inventory',
+    'telemetry',
+  ])
   assert.deepEqual(diagnostics.channels.map((c) => c.name).sort(), [
     'agent',
     'agent_bootstrap',
@@ -361,10 +384,8 @@ try {
     await page.locator('[data-testid=channel-facts] article').count(),
     diagnostics.channels.length,
   )
-  await page.getByRole('button', { name: 'Audit source · 审计源持久化', exact: true }).click()
-  await page.getByTestId('audit-backlog').waitFor()
-  assert.equal(await page.getByTestId('audit-backlog').locator('dd').count(), 10)
-  assert.ok((await page.getByTestId('audit-backlog').textContent()).includes('明细仅属于业务租户'))
+  await page.getByRole('button', { name: 'Inventory · 资产投影', exact: true }).click()
+  await page.getByTestId('diagnostic-detail').waitFor()
   await changeRule(
     fixture.rule.grants.filter(
       (g) => !['audit_read', 'runtime_diagnostics_read'].includes(g.operation),

@@ -119,3 +119,17 @@ export function allOf(...terms: (string | undefined)[]): string | undefined {
   const present = terms.filter((term): term is string => term !== undefined && term !== '')
   return present.length ? present.map((term) => `(${term})`).join(';') : undefined
 }
+
+/** Fact histories expose navigation only, never arbitrary projection or sorting. */
+export function windowParameters(
+  query: { limit?: number | undefined; cursor?: string | undefined } = {},
+  maximum = 200,
+) {
+  closed(query, [], ['limit', 'cursor'])
+  if (query.limit !== undefined && query.limit > maximum) throw new Error('Invalid page size')
+  return queryParameters(query)
+}
+export function windowPage<T>(value: unknown, decode: (value: unknown) => T) {
+  const page = closed(value, ['items', 'nextCursor'])
+  return { items: array(page['items'], decode), nextCursor: nextCursor(page['nextCursor']) }
+}
