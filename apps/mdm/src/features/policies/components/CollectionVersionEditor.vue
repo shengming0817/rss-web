@@ -9,6 +9,7 @@ import type {
   ValueMapping,
   Declaration,
 } from '../../../contracts/collection/generated/ResourceWrite'
+import { wireValue } from '../../../contracts/collection/check'
 import { agentBytes, nativeBytes } from '../../../contracts/collection/canonical'
 import CollectionMappings from './CollectionMappings.vue'
 const props = defineProps<{ resource: ResourceRead; locked: boolean }>()
@@ -24,6 +25,7 @@ const version = ref(''),
   preparing = ref(false),
   failure = ref(false)
 const choices = ref<Record<string, string>>({})
+const nativeGroups = ref<number[]>([])
 const selected = computed(() => variants.value[index.value])
 const declaration = computed(() => selected.value?.declaration)
 const native = (v: Declaration) => v.kind === 'native_collection' || v.kind === 'agent_collection'
@@ -39,7 +41,7 @@ const sourceQueries = computed(() => {
           const key = JSON.stringify(m.query),
             label =
               typeof m.query === 'string'
-                ? m.query
+                ? m.query || source.definition.adapter
                 : m.query.kind === 'scalar'
                   ? m.query.uri
                   : m.query.kind === 'inventory'
@@ -51,8 +53,8 @@ const sourceQueries = computed(() => {
     ]
   return []
 })
-function bindingKey(key: string) {
-  return `${index.value}/${key}`
+function bindingKey(key: string, variantIndex = index.value) {
+  return `${nativeGroups.value[variantIndex] ?? variantIndex}/${key}`
 }
 const mappings = computed<Record<string, ValueMapping>>({
   get: () => {
@@ -66,7 +68,7 @@ const mappings = computed<Record<string, ValueMapping>>({
   set(value) {
     for (const key of Object.keys(choices.value))
       if (
-        key.startsWith(index.value + '/') &&
+        key.startsWith((nativeGroups.value[index.value] ?? index.value) + '/') &&
         !Object.hasOwn(value, key.slice(key.indexOf('/') + 1))
       )
         delete choices.value[key]
@@ -108,11 +110,30 @@ function copy() {
   const source = props.resource.versions.find((v) => v.id === base.value)
   variants.value = structuredClone(toRaw(source?.variants ?? []))
   choices.value = {}
+  nativeGroups.value = []
+  const groups = new Map<string, number>()
+  variants.value.forEach((variant, i) => {
+    const d = variant.declaration
+    if (d.kind !== 'native_collection') return
+    const identity = JSON.stringify([
+      variant.platform,
+      d.artifact.reference,
+      d.artifact.length,
+      d.artifact.sha256,
+    ])
+    const leader = groups.get(identity)
+    nativeGroups.value[i] = leader ?? i
+    if (leader === undefined) groups.set(identity, i)
+    else {
+      const paired = variants.value[leader]!.declaration
+      if (paired.kind === 'native_collection') d.definition = paired.definition
+    }
+  })
   variants.value.forEach((variant, i) => {
     const d = variant.declaration
     if (d.kind === 'native_collection' || d.kind === 'agent_collection')
       for (const [key, binding] of Object.entries(d.definition.mappings))
-        choices.value[`${i}/${key}`] =
+        choices.value[bindingKey(key, i)] =
           typeof binding.query === 'string'
             ? d.kind === 'native_collection'
               ? JSON.stringify(binding.query)
@@ -132,6 +153,7 @@ watch(
     base.value = ''
     version.value = ''
     choices.value = {}
+    nativeGroups.value = []
   },
   { flush: 'sync' },
 )
@@ -149,7 +171,8 @@ async function prepare(event: Event) {
       !variants.value.length
     )
       throw new Error('Choose a new version')
-    const frozen = structuredClone(toRaw(variants.value)),
+    // Nested mapping edits may contain Vue proxies; freeze the actual, precision-checked wire value.
+    const frozen = wireValue(variants.value) as Variant[],
       files: { file: File; target: UploadTarget }[] = []
     for (const [i, variant] of frozen.entries()) {
       const d = variant.declaration
@@ -157,7 +180,7 @@ async function prepare(event: Event) {
         throw new Error('Wrong collection')
       if (
         !Object.keys(d.definition.mappings).length ||
-        Object.keys(d.definition.mappings).some((key) => !choices.value[`${i}/${key}`])
+        Object.keys(d.definition.mappings).some((key) => !choices.value[bindingKey(key, i)])
       )
         throw new Error('Choose a physical read for each field')
       const bytes =
@@ -222,6 +245,9 @@ async function prepare(event: Event) {
           </option>
         </select></label
       >
+      <p v-if="declaration?.kind === 'native_collection'">
+        {{ t('policies.collectionEditor.nativePair') }}
+      </p>
       <template
         v-if="declaration?.kind === 'native_collection' || declaration?.kind === 'agent_collection'"
       >

@@ -1,5 +1,5 @@
 /** Validate the actual JSON wire document, not a presentation extension's nesting budget. */
-export function checked<T>(validate: (value: unknown) => value is T, value: unknown): T {
+export function wireValue(value: unknown): unknown {
   const encoded = JSON.stringify(value, (_key, item: unknown) => {
     if (
       typeof item === 'number' &&
@@ -10,7 +10,10 @@ export function checked<T>(validate: (value: unknown) => value is T, value: unkn
   })
   if (encoded === undefined || new TextEncoder().encode(encoded).byteLength > 8 * 1024 * 1024)
     throw new Error('Invalid collection document budget')
-  const json: unknown = JSON.parse(encoded)
+  return JSON.parse(encoded) as unknown
+}
+export function checked<T>(validate: (value: unknown) => value is T, value: unknown): T {
+  const json = wireValue(value)
   if (!validate(json)) throw new Error('Unsupported collection contract')
   return json
 }

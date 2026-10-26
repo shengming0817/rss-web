@@ -98,7 +98,7 @@ it('edits declared conversions, safe integer ratios, exact codes and nested colu
     expect(wrapper.text()).toContain('running')
     await wrapper
       .findAll('button')
-      .find((b) => b.text() === '移除映射')!
+      .find((b) => b.text() === '移除字段映射')!
       .trigger('click')
   }
   await select().setValue('identity')
@@ -155,7 +155,9 @@ async function context() {
     routes: [{ path: '/', component: { template: '<p />' } }],
   })
   await router.push('/')
-  const catalog = vi.fn(async () => ({ fields: [field()] }))
+  const catalog = vi.fn(async () => ({
+    fields: [field(), { ...field('custom.secret'), sensitivity: 'secret' as const }],
+  }))
   return {
     catalog,
     global: {
@@ -193,16 +195,17 @@ it('selects available catalog fields and removes only the selected draft mapping
   })
   wrappers.push(wrapper)
   await flushPromises()
+  expect(wrapper.find('option[value="custom.secret"]').exists()).toBe(false)
   await wrapper.get('select').setValue('custom.extra')
   await wrapper
     .findAll('button')
-    .find((b) => b.text() === '添加映射')!
+    .find((b) => b.text() === '添加字段映射')!
     .trigger('click')
   expect(wrapper.props('modelValue')['custom.extra']).toEqual(identityMapping(''))
   expect(wrapper.text()).toContain('custom.extra')
   await wrapper
     .findAll('button')
-    .find((b) => b.text() === '移除映射')!
+    .find((b) => b.text() === '移除字段映射')!
     .trigger('click')
   expect(wrapper.props('modelValue')).toEqual({})
 })
@@ -248,6 +251,14 @@ it('preserves all variants and emits regenerated artifact bytes for a new collec
   await label(wrapper, '基准版本').get('select').setValue('1')
   await label(wrapper, '新版本').get('input').setValue('2')
   await flushPromises()
+  const picker = wrapper.findComponent(CollectionMappings)
+  await picker.get('select').setValue('custom.extra')
+  await picker
+    .findAll('button')
+    .find((b) => b.text() === '添加字段映射')!
+    .trigger('click')
+  const physical = label(wrapper, 'custom.extra · 物理读取来源').get('select')
+  await physical.setValue((physical.findAll('option')[1]!.element as HTMLOptionElement).value)
   await wrapper.get('[data-testid=value-mapping] input').setValue('/value')
   await wrapper.get('form').trigger('submit')
   await vi.waitFor(() => expect(wrapper.emitted('prepare')).toHaveLength(1))
@@ -260,14 +271,20 @@ it('preserves all variants and emits regenerated artifact bytes for a new collec
   expect(input.variants[0]!.declaration.artifact.sha256).not.toEqual(p.sha256)
   expect(files[0]!.file.size).toBe(input.variants[0]!.declaration.artifact.length)
   expect(files[1]!.target.version).toBe('2')
+  expect(input.variants[1]!.declaration).toEqual(input.variants[0]!.declaration)
 })
 it.each([
   blueprints.packages.find((p) => p.id === 'windows.identity')!,
-  blueprints.packages.find(
-    (p) =>
-      p.kind === 'native_collection' &&
-      JSON.parse(p.content).adapter === 'apple_installed_applications',
-  )!,
+  {
+    ...blueprints.packages.find((p) => p.id === 'windows.identity')!,
+    id: 'synthetic.apple-applications',
+    platform: 'macos',
+    content: JSON.stringify({
+      ...JSON.parse(blueprints.packages.find((p) => p.id === 'windows.identity')!.content),
+      adapter: 'apple_installed_applications',
+      mappings: { 'custom.existing': { query: '', mapping: identityMapping('') } },
+    }),
+  },
 ])('can add a new mapping after deleting all mappings from $id', async (p) => {
   const c = await context()
   const d = {

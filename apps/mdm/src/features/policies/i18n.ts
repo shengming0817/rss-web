@@ -43,6 +43,7 @@ export const policiesZh = {
     title: '基于固定版本创建采集版本',
     hint: '保留原版本全部平台变体与物理读取；为字段选择映射并核对，再生成内容、上传和激活。保存版本不代表采集成功。',
     base: '基准版本',
+    nativePair: '原生查询的配对架构共用同一声明；修改映射会同步到配对目标。',
     version: '新版本',
     scope: '采集命名空间',
     query: '物理读取来源',
@@ -549,6 +550,8 @@ export const policiesEn: typeof policiesZh = {
     title: 'Create a collection version from a fixed version',
     hint: 'Preserve all platform variants and physical reads. Map fields, review, then generate content, upload and activate. A saved version does not prove collection success.',
     base: 'Base version',
+    nativePair:
+      'Paired architectures share one native declaration; mapping edits apply to both targets.',
     version: 'New version',
     scope: 'Collection namespace',
     query: 'Physical read source',

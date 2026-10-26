@@ -150,61 +150,100 @@ try {
       timeSeries: null,
     },
   })
-  await write('POST', `/api/v1/resources/${nativeResource}`, {
-    action: 'instantiate',
-    blueprint: 'windows.identity',
-    version: '1',
+  const agentResource = randomUUID(),
+    customAgent = 'custom.browser.agent_bytes'
+  await write('PUT', `/api/v1/asset-fields/${customAgent}`, {
+    action: 'put',
+    definition: {
+      key: customAgent,
+      version: 1,
+      valueType: { kind: 'integer' },
+      nullable: true,
+      manual: false,
+      sources: { 'agent.native': 0 },
+      platforms: ['windows'],
+      sensitivity: 'standard',
+      unit: 'bytes',
+      searchable: false,
+      itemKey: null,
+      timeSeries: null,
+    },
   })
-  const nativeBase = await api('GET', `/api/v1/resources/${nativeResource}`)
-  await page.goto(path(`policies/resources?resource=${nativeResource}&tab=content`))
-  const nativeEditor = page.getByTestId('collection-version')
-  await nativeEditor.getByLabel('基准版本', { exact: true }).selectOption('1')
-  await nativeEditor.getByLabel('新版本', { exact: true }).fill('browser-v2')
-  const fieldPicker = nativeEditor.getByTestId('collection-mappings')
-  await fieldPicker.getByLabel('字段', { exact: true }).selectOption(customNative)
-  await fieldPicker.getByRole('button', { name: '添加映射', exact: true }).click()
-  const physical = nativeEditor.getByLabel(`${customNative} · 物理读取来源`, { exact: true })
-  const sourceValue = await physical.locator('option').nth(1).getAttribute('value')
-  await physical.selectOption(sourceValue)
-  const versionResponse = page.waitForResponse(
-    (r) =>
-      r.request().method() === 'POST' &&
-      new URL(r.url()).pathname === `/api/v1/resources/${nativeResource}` &&
-      r.request().postDataJSON()?.input?.action === 'version',
-  )
-  await nativeEditor.getByRole('button', { name: '生成并保存新版本', exact: true }).click()
-  assert.equal((await versionResponse).status(), 200)
-  await page.getByTestId('collection-upload-remaining').waitFor()
-  for (
-    let variantIndex = 0;
-    variantIndex < nativeBase.versions[0].variants.length;
-    variantIndex++
-  ) {
-    await page.getByRole('button', { name: '上传内容', exact: true }).click()
-    await page.locator('[data-action=complete-upload]').waitFor()
-    await page.locator('[data-action=complete-upload]').click()
-    await page.locator('[data-action=complete-upload]').waitFor({ state: 'hidden' })
+  async function editCollection(resource, blueprint, fieldKey, pointer = '') {
+    await write('POST', `/api/v1/resources/${resource}`, {
+      action: 'instantiate',
+      blueprint,
+      version: '1',
+    })
+    const nativeBase = await api('GET', `/api/v1/resources/${resource}`)
+    await page.goto(path(`policies/resources?resource=${resource}&tab=content`))
+    const nativeEditor = page.getByTestId('collection-version')
+    await nativeEditor.getByLabel(/^基准版本/).selectOption(nativeBase.versions[0].id)
+    await nativeEditor.getByLabel('新版本', { exact: true }).fill('browser-v2')
+    const fieldPicker = nativeEditor.getByTestId('collection-mappings')
+    await fieldPicker.getByLabel(/^字段/).selectOption(fieldKey)
+    await fieldPicker.getByRole('button', { name: '添加字段映射', exact: true }).click()
+    if (pointer) {
+      const row = fieldPicker
+        .locator('article')
+        .filter({ has: page.getByText(fieldKey, { exact: true }) })
+      await row.getByLabel('输出 JSON Pointer', { exact: true }).fill(pointer)
+      await row.getByLabel(/^类型转换/).selectOption('integer')
+    }
+    const physical = nativeEditor.getByLabel(new RegExp(`^${fieldKey} · 物理读取来源`))
+    const sourceValue = await physical.locator('option').nth(1).getAttribute('value')
+    await physical.selectOption(sourceValue)
+    const versionResponse = page.waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' &&
+        new URL(r.url()).pathname === `/api/v1/resources/${resource}` &&
+        r.request().postDataJSON()?.input?.action === 'version',
+    )
+    await nativeEditor.getByRole('button', { name: '生成并保存新版本', exact: true }).click()
+    assert.equal((await versionResponse).status(), 200)
+    await page.getByTestId('collection-upload-remaining').waitFor()
+    for (
+      let variantIndex = 0;
+      variantIndex < nativeBase.versions[0].variants.length;
+      variantIndex++
+    ) {
+      await page.getByRole('button', { name: '上传内容', exact: true }).click()
+      await page.locator('[data-action=complete-upload]').waitFor()
+      await page.locator('[data-action=complete-upload]').click()
+      await page.locator('[data-action=complete-upload]').waitFor({ state: 'hidden' })
+    }
+    await page.getByTestId('collection-upload-remaining').waitFor({ state: 'hidden' })
+    const nativeRead = await api('GET', `/api/v1/resources/${resource}`)
+    const nativeVersion = nativeRead.versions.find((v) => v.id === 'browser-v2')
+    assert.equal(nativeVersion.variants.length, nativeBase.versions[0].variants.length)
+    assert.ok(nativeVersion.variants.some((v) => v.declaration.definition.mappings[fieldKey]))
+    await write(
+      'POST',
+      `/api/v1/resources/${resource}`,
+      { action: 'activate', version: 'browser-v2' },
+      nativeRead.revision,
+    )
+    assert.equal(
+      (await api('GET', `/api/v1/resources/${resource}`)).versions.find(
+        (v) => v.id === 'browser-v2',
+      ).state,
+      'active',
+    )
   }
-  await page.getByTestId('collection-upload-remaining').waitFor({ state: 'hidden' })
-  const nativeRead = await api('GET', `/api/v1/resources/${nativeResource}`)
-  const nativeVersion = nativeRead.versions.find((v) => v.id === 'browser-v2')
-  assert.equal(nativeVersion.variants.length, nativeBase.versions[0].variants.length)
-  assert.ok(nativeVersion.variants.some((v) => v.declaration.definition.mappings[customNative]))
-  await write(
-    'POST',
-    `/api/v1/resources/${nativeResource}`,
-    { action: 'activate', version: 'browser-v2' },
-    nativeRead.revision,
-  )
-  const refs = await api('GET', '/api/v1/asset-fields/device.name/references?limit=1')
+  await editCollection(nativeResource, 'windows.identity', customNative)
+  phase = 'generic-mapping-agent-version-ui'
+  await editCollection(agentResource, 'windows.agent.memory', customAgent, '/TotalPhysicalMemory')
+  const refs = (await api('GET', '/api/v1/asset-fields/device.name/references?limit=1')).asset
   assert.ok(refs.nextCursor)
-  const continued = await api(
-    'GET',
-    `/api/v1/asset-fields/device.name/references?limit=1&cursor=${encodeURIComponent(refs.nextCursor)}`,
-  )
+  const continued = (
+    await api(
+      'GET',
+      `/api/v1/asset-fields/device.name/references?limit=1&cursor=${encodeURIComponent(refs.nextCursor)}`,
+    )
+  ).asset
   assert.notDeepEqual(continued.mappings[0], refs.mappings[0])
   coverage.push(
-    'generic-scalar-list-field-carriers-and-native-mapping-version-all-variants-canonical-upload-activation-reference-continuation',
+    'generic-scalar-list-field-carriers-native-and-agent-mapping-versions-all-variants-canonical-upload-activation-reference-continuation',
   )
   phase = 'formal-fields-and-template'
   await write('POST', '/api/v1/asset-retention-policies', {
@@ -409,7 +448,7 @@ try {
     `/api/v1/policies?filter=${encodeURIComponent("action=='telemetry_profile';resource=='" + profile + "'")}`,
   )
   assert.equal(policies.items.length, 1)
-  const policy = policies.items[0]
+  const policy = await api('GET', `/api/v1/policies/${policies.items[0].id}`)
   coverage.push(
     'formal-field-retention-script-mapping-and-immutable-profile-upload-activation-policy-ui',
   )
@@ -424,6 +463,8 @@ try {
     ],
     { encoding: 'utf8', timeout: 90000, stdio: ['ignore', 'pipe', 'pipe'] },
   )
+  if (collector.status !== 0)
+    console.error(JSON.stringify({ phase, collector: JSON.parse(collector.stdout) }))
   assert.equal(collector.status, 0, collector.stdout.trim())
   coverage.push('real-agent-mtls-ingress-and-exact-batch-replay')
   phase = 'history-and-health-ui'
@@ -504,7 +545,7 @@ try {
   await dialog.waitFor({ state: 'hidden' })
   assert.deepEqual(replay, operation)
   coverage.push('committed-response-loss-config-comparison-and-explicit-exact-replay')
-  phase = 'sensitive-and-device-revocation'
+  phase = 'device-history-revocation'
   await page.goto(path(`devices/${device}/history/performance`))
   await page.getByRole('button', { name: /custom.browser.counter/ }).click()
   await page.locator('.telemetry-chart svg').waitFor()
@@ -520,25 +561,14 @@ try {
       headers: { Origin: origin, 'X-Identity-Request': '1', 'X-CSRF-Token': csrf },
       data: body,
     })
-    assert.equal(response.status(), 403)
+    assert.equal(response.status(), 403, 'revoked authority is checked before continuation')
+    const fresh = await context.request.post(origin + '/api/v1/telemetry/history', {
+      headers: { Origin: origin, 'X-Identity-Request': '1', 'X-CSRF-Token': csrf },
+      data: { ...body, after: null },
+    })
+    assert.equal(fresh.status(), 403, 'fresh query repeats authoritative permission checks')
   }
-  const before = (await api('GET', '/api/v1/authorization/rules')).items.find(
-    (rule) => rule.id === fixture.ruleId,
-  )
-  assert.ok(before?.value, 'current fixture authorization rule')
-  const grants = before.value.grants.filter((g) => g.operation !== 'inventory_sensitive_read')
-  await api('PUT', '/api/v1/authorization/rules/' + fixture.ruleId, {
-    operationId: randomUUID(),
-    expectedRevision: before.revision,
-    value: { ...before.value, grants },
-  })
-  await deniedContinuation({ ...counterQuery, after: counterPage.next })
-  await page.getByRole('button', { name: '重新读取', exact: true }).last().click()
-  await page.getByRole('alert').first().waitFor()
-  assert.equal(await page.locator('.telemetry-chart').count(), 0)
-  const scoped = (await api('GET', '/api/v1/authorization/rules')).items.find(
-    (rule) => rule.id === fixture.ruleId,
-  )
+  const scoped = await api('GET', '/api/v1/authorization/rules/' + fixture.ruleId)
   assert.ok(scoped?.value, 'current scoped authorization rule')
   await api('PUT', '/api/v1/authorization/rules/' + fixture.ruleId, {
     operationId: randomUUID(),
@@ -548,11 +578,17 @@ try {
       grants: scoped.value.grants.filter((g) => g.operation !== 'inventory_read'),
     },
   })
+  await deniedContinuation({ ...counterQuery, after: counterPage.next })
   await deniedContinuation({ ...gaugeQuery, after: gaugePage.next })
+  await page.getByRole('button', { name: '重新读取', exact: true }).last().click()
+  await page.getByRole('alert').first().waitFor()
+  assert.equal(await page.locator('.telemetry-chart').count(), 0)
   await page.reload()
   await page.getByRole('alert').first().waitFor()
   assert.equal(await page.locator('.telemetry-chart').count(), 0)
-  coverage.push('sensitive-field-and-device-revocation-clear-returned-data')
+  coverage.push(
+    'device-authority-revocation-denies-continuations-and-fresh-queries-clears-returned-data',
+  )
   assert.deepEqual(pageErrors, [])
   result = 'passed'
 } catch (error) {

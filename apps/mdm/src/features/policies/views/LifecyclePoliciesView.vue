@@ -62,6 +62,7 @@ function definition(): PolicyDefinition {
           : { kind: credential.value, sid: sid.value }
   return policyDefinition({
     scope: scope.value,
+    alias: current.value?.definition.alias ?? null,
     action:
       kind.value === 'unmanage_device'
         ? { kind: kind.value, schedule: toRaw(schedule.value), runLifetimeSeconds: duration.value }

@@ -9,6 +9,7 @@ import {
   identifier,
   nullable,
   record,
+  string,
   unique,
   uuid,
 } from '../../../services/decode'
@@ -431,7 +432,7 @@ export function policyAction(value: unknown) {
   }
 }
 export function policyDefinition(value: unknown) {
-  const v = closed(value, ['scope', 'action'], ['selfService']),
+  const v = closed(value, ['scope', 'action'], ['alias', 'selfService']),
     action = policyAction(v['action'])
   if (
     'selfService' in v &&
@@ -447,6 +448,15 @@ export function policyDefinition(value: unknown) {
     throw new Error('Software self-service requires confirmation')
   return {
     scope: uuid(v['scope']),
+    ...('alias' in v
+      ? {
+          alias: nullable(v['alias'], (value) => {
+            const alias = string(value)
+            if (!/^[a-z0-9._-]{1,64}$/.test(alias)) throw new Error('Invalid policy alias')
+            return alias
+          }),
+        }
+      : {}),
     action,
     ...('selfService' in v ? { selfService: selfService(v['selfService']) } : {}),
   }

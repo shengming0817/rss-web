@@ -335,6 +335,7 @@ const definition = (): PolicyDefinition => {
   if (!p) throw new Error('Unpublished profile')
   return {
     scope: scope.value,
+    alias: policy.value?.definition.alias ?? null,
     action: {
       kind: 'telemetry_profile',
       resource: {
