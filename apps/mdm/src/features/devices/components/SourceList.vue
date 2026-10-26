@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { VBtn } from 'vuetify/components'
+import { VBtn, VTextField } from 'vuetify/components'
 
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -67,9 +67,12 @@ async function load(next?: string) {
     <v-btn v-if="source.state.kind === 'known'" :disabled="!!busy" type="submit" @click="load()">
       {{ t('devices.expandSource') }}
     </v-btn>
-    <label v-if="page"
-      >{{ t('devices.searchLoadedPage') }}<input v-model="search" class="ui-input" type="search"
-    /></label>
+    <v-text-field
+      v-if="page"
+      v-model="search"
+      :label="t('devices.searchLoadedPage')"
+      type="search"
+    />
     <AssetItems v-if="page" :items="visibleItems" :complete-empty="page.total === 0" />
     <v-btn v-if="page?.nextCursor" :disabled="!!busy" type="submit" @click="load(page.nextCursor)">
       {{ t('devices.next') }}

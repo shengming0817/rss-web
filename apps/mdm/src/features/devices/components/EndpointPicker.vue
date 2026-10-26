@@ -1,7 +1,15 @@
 <script setup lang="ts">
 import { comparison } from '../../../services/directory-query'
 import { computed, ref, watch } from 'vue'
-import { UiButton } from '@rss/core/components'
+import {
+  VBtn,
+  VTextField,
+  VCheckbox,
+  VExpansionPanels,
+  VExpansionPanel,
+  VExpansionPanelTitle,
+  VExpansionPanelText,
+} from 'vuetify/components'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
@@ -54,34 +62,30 @@ watch(
 </script>
 <template>
   <section class="endpoint-picker">
-    <label
-      >{{ t('devices.directorySearch')
-      }}<input
-        v-model="search"
-        class="ui-input"
-        type="search"
-        @keydown.enter.prevent="load()" /></label
-    ><UiButton type="button" :disabled="busy" @click="load()">{{
-      t('devices.searchGroups')
-    }}</UiButton>
+    <v-text-field
+      v-model="search"
+      :label="t('devices.directorySearch')"
+      type="search"
+      @keydown.enter.prevent="load()"
+    /><v-btn type="button" :disabled="busy" @click="load()">{{ t('devices.searchGroups') }}</v-btn>
     <p>{{ t('devices.selectedDevices') }}: {{ model.length }}</p>
     <div v-for="endpoint in choices" :key="endpoint.id" class="field-choice">
-      <label
-        ><input
-          type="checkbox"
-          :checked="model.includes(endpoint.id)"
-          @change="toggle(endpoint.id)"
-        />
-        {{ label(endpoint) }}</label
+      <v-checkbox
+        :model-value="model.includes(endpoint.id)"
+        :label="label(endpoint)"
+        :disabled="busy"
+        @update:model-value="toggle(endpoint.id)"
+      />
+      <v-expansion-panels
+        ><v-expansion-panel>
+          <v-expansion-panel-title>{{ t('devices.evidence') }}</v-expansion-panel-title>
+          <v-expansion-panel-text>{{ endpoint.id }}</v-expansion-panel-text>
+        </v-expansion-panel></v-expansion-panels
       >
-      <details>
-        <summary>{{ t('devices.evidence') }}</summary>
-        {{ endpoint.id }}
-      </details>
     </div>
     <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
-    <UiButton v-if="next" type="button" :disabled="busy" @click="load(true)">{{
+    <v-btn v-if="next" type="button" :disabled="busy" @click="load(true)">{{
       t('devices.next')
-    }}</UiButton>
+    }}</v-btn>
   </section>
 </template>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { VBtn } from 'vuetify/components'
+import { VBtn, VSelect } from 'vuetify/components'
 
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -71,25 +71,35 @@ function submit() {
     <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
     <form @submit.prevent="submit">
       <fieldset :disabled="busy || uncertain">
-        <label
-          >{{ t('devices.field')
-          }}<select v-model="key" class="ui-input" required @change="change">
-            <option value="">—</option>
-            <option v-for="f in manual" :key="f.key" :value="f.key">
-              {{ assetLabel(f.key, locale) }}
-            </option>
-          </select></label
-        >
+        <v-select
+          v-model="key"
+          :label="t('devices.field')"
+          :disabled="busy || uncertain"
+          :items="[
+            { title: '—', value: '' },
+            ...manual.map((f) => ({ title: assetLabel(f.key, locale), value: f.key })),
+          ]"
+          required
+          data-testid="manual-field"
+          @update:model-value="change"
+        />
         <template v-if="key"
           ><p>{{ t('devices.revision') }} {{ inventory.revisions[key] ?? 0 }}</p>
-          <AssetValue v-if="selected" :field="selected" /><label
-            >{{ t('devices.draft')
-            }}<select v-model="action" class="ui-input">
-              <option v-for="a in ['set', 'null', 'delete']" :key="a" :value="a">
-                {{ t(`devices.${a}`) }}
-              </option>
-            </select></label
-          ><ScalarEditor v-if="action === 'set'" v-model="value" /><v-btn type="submit">
+          <AssetValue v-if="selected" :field="selected" />
+          <v-select
+            v-model="action"
+            :label="t('devices.draft')"
+            :disabled="busy || uncertain"
+            :items="
+              (['set', 'null', 'delete'] as const).map((value) => ({
+                title: t(`devices.${value}`),
+                value,
+              }))
+            "
+            data-testid="manual-action"
+          />
+          <ScalarEditor v-if="action === 'set'" v-model="value" :disabled="busy || uncertain" />
+          <v-btn type="submit" :disabled="busy || uncertain">
             {{ t('devices.save') }}
           </v-btn></template
         >

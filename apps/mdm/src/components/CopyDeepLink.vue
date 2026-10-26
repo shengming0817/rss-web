@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton } from '@rss/core/components'
+import { VBtn, VTextField } from 'vuetify/components'
 import { deepLink, type DeepLink } from '../services/deep-link'
 import { useMdm } from '../context'
 import { deviceBinding } from '../features/devices/useDeviceBinding'
@@ -42,17 +42,16 @@ async function copy() {
 </script>
 <template>
   <span v-if="text" class="entry-copy">
-    <UiButton type="button" variant="ghost" data-action="copy-deep-link" @click="copy">{{
+    <v-btn type="button" variant="text" data-action="copy-deep-link" @click="copy">{{
       t('policies.entry.copy')
-    }}</UiButton>
+    }}</v-btn>
     <span v-if="status" role="status">{{ t(`policies.entry.${status}`) }}</span>
-    <label v-if="status === 'copyFailed'"
-      >{{ t('policies.entry.copyText')
-      }}<input
-        class="ui-input"
-        readonly
-        :value="text"
-        @focus="($event.target as HTMLInputElement).select()"
-    /></label>
+    <v-text-field
+      v-if="status === 'copyFailed'"
+      :label="t('policies.entry.copyText')"
+      readonly
+      :model-value="text"
+      @focus="($event.target as HTMLInputElement).select()"
+    />
   </span>
 </template>

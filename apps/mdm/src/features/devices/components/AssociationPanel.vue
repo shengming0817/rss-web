@@ -1,5 +1,16 @@
 <script setup lang="ts">
-import { VBtn } from 'vuetify/components'
+import {
+  VBtn,
+  VCheckbox,
+  VSelect,
+  VRadioGroup,
+  VRadio,
+  VTextarea,
+  VExpansionPanels,
+  VExpansionPanel,
+  VExpansionPanelTitle,
+  VExpansionPanelText,
+} from 'vuetify/components'
 
 import { computed, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -319,11 +330,11 @@ function replay() {
     <p v-if="uncertain && !failure" role="alert">{{ t('devices.associationUnknown') }}</p>
     <template v-if="uncertain && pending"
       ><p>{{ t('devices.operationId') }}: {{ pending.request.body.operationId }}</p>
-      <label
-        ><input v-model="replayConfirmed" type="checkbox" :disabled="busy" />{{
-          t('devices.confirmReplay')
-        }}</label
-      ><v-btn :disabled="!!(busy || !replayConfirmed)" type="submit" @click="replay">
+      <v-checkbox
+        v-model="replayConfirmed"
+        :label="t('devices.confirmReplay')"
+        :disabled="busy"
+      /><v-btn :disabled="!!(busy || !replayConfirmed)" type="submit" @click="replay">
         {{ t('devices.replayAssociation') }}
       </v-btn></template
     >
@@ -335,39 +346,45 @@ function replay() {
           {{ t(`devices.associationState.${currentAssociation.state}`) }} ·
           {{ currentAssociation.evidence }}
         </p>
-        <v-btn type="submit" @click="prepare">{{ t('devices.prepareVerification') }}</v-btn>
+        <v-btn type="submit" :disabled="busy || locked" @click="prepare">{{
+          t('devices.prepareVerification')
+        }}</v-btn>
         <p v-if="!prepared || confirmationMembers.length !== 2">
           {{ t('devices.currentRegistrationRequired') }}
         </p></template
       >
       <template v-else-if="endpoint"
-        ><label
-          >{{ t('devices.originChannel')
-          }}<select v-model="channel" class="ui-input">
-            <option
-              v-for="c in endpoint.channels.filter((c) => c.status === 'active')"
-              :key="c.channel"
-              :value="c.channel"
-            >
-              {{ c.channel }}
-            </option>
-          </select></label
-        ><v-btn type="submit" @click="candidates()">{{ t('devices.findCandidate') }}</v-btn>
+        ><v-select
+          v-model="channel"
+          :label="t('devices.originChannel')"
+          :items="endpoint.channels.filter((c) => c.status === 'active').map((c) => c.channel)"
+          :disabled="busy || locked"
+        /><v-btn type="submit" :disabled="busy || locked" @click="candidates()">{{
+          t('devices.findCandidate')
+        }}</v-btn>
         <p v-if="page">{{ t('devices.candidateNote') }}</p>
         <p v-if="page && !page.items.length">{{ t('devices.emptyCandidates') }}</p>
-        <fieldset v-if="page?.items.length">
-          <legend>{{ t('devices.chooseCandidate') }}</legend>
-          <label v-for="m in page.items" :key="m.device"
-            ><input
-              v-model="selected"
-              type="radio"
-              :value="m.device"
-              name="association-candidate"
-              @change="select"
-            />{{ m.channel }} · {{ m.device }} · {{ m.registrationId }} / {{ m.generation }}</label
-          >
-        </fieldset>
-        <v-btn v-if="page?.nextCursor" type="submit" @click="candidates(page.nextCursor)">
+        <v-radio-group
+          v-if="page?.items.length"
+          v-model="selected"
+          :label="t('devices.chooseCandidate')"
+          :disabled="busy || locked"
+          name="association-candidate"
+          @update:model-value="select"
+        >
+          <v-radio
+            v-for="m in page.items"
+            :key="m.device"
+            :value="m.device"
+            :label="`${m.channel} · ${m.device} · ${m.registrationId} / ${m.generation}`"
+          />
+        </v-radio-group>
+        <v-btn
+          v-if="page?.nextCursor"
+          type="submit"
+          :disabled="busy || locked"
+          @click="candidates(page.nextCursor)"
+        >
           {{ t('devices.next') }}
         </v-btn>
         <section v-if="candidateView">
@@ -387,14 +404,18 @@ function replay() {
                 }}<template v-if="field.state.kind === 'known'">
                   · {{ JSON.stringify(field.state.value.value) }}</template
                 >
-                <details>
-                  <summary>{{ t('devices.evidence') }}</summary>
-                  <pre
-                    v-for="s in field.sources"
-                    :key="`${s.endpoint}:${s.fact.evidence.source}:${s.fact.evidence.dataset}`"
-                    >{{ JSON.stringify(s, null, 2) }}</pre
-                  >
-                </details>
+                <v-expansion-panels
+                  ><v-expansion-panel>
+                    <v-expansion-panel-title>{{ t('devices.evidence') }}</v-expansion-panel-title>
+                    <v-expansion-panel-text>
+                      <pre
+                        v-for="s in field.sources"
+                        :key="`${s.endpoint}:${s.fact.evidence.source}:${s.fact.evidence.dataset}`"
+                        >{{ JSON.stringify(s, null, 2) }}</pre
+                      >
+                    </v-expansion-panel-text>
+                  </v-expansion-panel></v-expansion-panels
+                >
               </dd></template
             >
           </dl>
@@ -409,20 +430,27 @@ function replay() {
           </li>
         </ul>
       </section>
-      <label
-        >{{ t('devices.verificationEvidence')
-        }}<textarea v-model="evidence" class="ui-input" maxlength="2048" /></label
-      ><label
-        ><input v-model="verified" type="checkbox" />{{ t('devices.confirmSameInstance') }}</label
-      ><v-btn :disabled="!!!canSubmit" type="submit" @click="confirm">
+      <v-textarea
+        v-model="evidence"
+        :label="t('devices.verificationEvidence')"
+        :disabled="busy || locked"
+        maxlength="2048"
+      />
+      <v-checkbox
+        v-model="verified"
+        :label="t('devices.confirmSameInstance')"
+        :disabled="busy || locked"
+      /><v-btn :disabled="!!!canSubmit" type="submit" @click="confirm">
         {{ t(association ? 'devices.reverifyAssociation' : 'devices.confirmAssociation') }}
       </v-btn>
       <template v-if="association"
-        ><label
-          >{{ t('devices.revokeReason')
-          }}<textarea v-model="reason" class="ui-input" maxlength="2048" /></label
-        ><v-btn
-          :disabled="!!(!verified || !verificationText(reason) || stale)"
+        ><v-textarea
+          v-model="reason"
+          :label="t('devices.revokeReason')"
+          :disabled="busy || locked"
+          maxlength="2048"
+        /><v-btn
+          :disabled="!!(busy || locked || !verified || !verificationText(reason) || stale)"
           type="submit"
           @click="revoke"
         >
