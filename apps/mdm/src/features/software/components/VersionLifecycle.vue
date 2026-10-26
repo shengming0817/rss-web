@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import { VBtn, VCheckbox } from 'vuetify/components'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -79,26 +79,24 @@ watch(
         }}
       </p>
       <p v-if="current.lifecycle">{{ current.lifecycle.operation }}</p>
-      <UiButton
+      <VBtn
         :disabled="busy || uncertain || current.lifecycle?.state === 'enabled'"
         @click="change('enable')"
-        >{{ t('software.enable') }}</UiButton
-      ><UiButton
+        >{{ t('software.enable') }}</VBtn
+      ><VBtn
         :disabled="busy || uncertain || current.lifecycle?.state !== 'enabled'"
         @click="change('withdraw')"
-        >{{ t('software.withdraw') }}</UiButton
+        >{{ t('software.withdraw') }}</VBtn
       ></template
     >
     <section v-if="uncertain && pending" role="status">
       <p>{{ t('software.publicationUnknown') }} · {{ pending.operationId }}</p>
-      <label
-        ><input v-model="confirmedReplay" type="checkbox" />{{
-          t('software.ux.confirmReplay')
-        }}</label
-      ><UiButton :disabled="busy || !confirmedReplay" @click="replay">{{
-        t('policies.replay')
-      }}</UiButton>
+      <VCheckbox v-model="confirmedReplay" :label="t('software.ux.confirmReplay')" /><VBtn
+        :disabled="busy || !confirmedReplay"
+        @click="replay"
+        >{{ t('policies.replay') }}</VBtn
+      >
     </section>
-    <UiButton :disabled="busy" @click="load">{{ t('software.reconcile') }}</UiButton>
+    <VBtn :disabled="busy" @click="load">{{ t('software.reconcile') }}</VBtn>
   </section>
 </template>

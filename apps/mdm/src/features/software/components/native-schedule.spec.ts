@@ -1,3 +1,4 @@
+import { VSelect } from 'vuetify/components'
 import { mount } from '@vue/test-utils'
 import { expect, it } from 'vitest'
 import { mdmI18n } from '../../../i18n'
@@ -17,11 +18,11 @@ it('retains native nullable bounds and tagged misfire while explaining that manu
   })
   expect(wrapper.text()).toContain('不会自动创建运行')
   expect(schedule.until).toBeNull()
-  await wrapper.get('[data-field="misfire"]').setValue('skip')
+  await wrapper.findAllComponents(VSelect)[1]!.setValue('skip')
   expect(schedule.misfire).toEqual({ kind: 'skip', maxLatenessSeconds: 30 })
-  await wrapper.get('[data-field="until-enabled"]').setValue(true)
+  await wrapper.get('[data-field="until-enabled"] input').setValue(true)
   expect(schedule.until).toBeGreaterThan(schedule.notBefore)
-  await wrapper.get('[data-field="until-enabled"]').setValue(false)
+  await wrapper.get('[data-field="until-enabled"] input').setValue(false)
   expect(schedule.until).toBeNull()
   wrapper.unmount()
 })

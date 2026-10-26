@@ -1,13 +1,13 @@
 <script setup lang="ts">
+import { VBtn, VDataTable, VSelect, VTextField } from 'vuetify/components'
 import { comparison as queryComparison } from '../../../services/directory-query'
-import { UiButton, UiTable, UiSearchInput } from '@rss/core/components'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../../devices/useDeviceBinding'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 import { sha256 } from '@noble/hashes/sha2.js'
 import VersionLifecycle from '../components/VersionLifecycle.vue'
 const runtime = useMdm(),
@@ -26,7 +26,7 @@ const rows = computed(() =>
   (page.value?.items ?? []).filter((v) =>
     `${v.id} ${v.presentation['name'] ?? ''}`
       .toLocaleLowerCase()
-      .includes(query.value.toLocaleLowerCase()),
+      .includes((query.value ?? '').toLocaleLowerCase()),
   ),
 )
 const selectedVersion = computed(() => current.value?.versions.find((v) => v.id === version.value))
@@ -129,7 +129,12 @@ watch(
 )
 </script>
 <template>
-  <PageFrame :title="t('software.catalog')" :busy="busy" :failure="failure">
+  <MdmPage
+    :title="t('software.catalog')"
+    :description="t('software.catalogHint')"
+    :busy="busy"
+    :failure="failure"
+  >
     <p v-if="failure === 'unsupported'" role="alert">
       {{ t('software.ux.contentPrerequisite') }}
       <RouterLink
@@ -150,56 +155,63 @@ watch(
       >
     </template>
     <template v-if="!current">
-      <UiSearchInput
+      <VTextField
         v-model="query"
         :label="t('software.ux.search')"
-        :clear-label="t('console.clear')"
+        clearable
         :placeholder="t('software.ux.search')"
+        @click:clear="query = ''"
       />
-      <UiButton :disabled="busy" @click="list()">{{ t('policies.reload') }}</UiButton>
+      <VBtn :disabled="busy" @click="list()">{{ t('policies.reload') }}</VBtn>
       <p>{{ t('console.pageNotTotal') }}</p>
-      <UiTable
-        :columns="[
-          { key: 'name', label: t('software.package') },
-          { key: 'version', label: t('software.version') },
-          { key: 'action', label: t('policies.open') },
+      <VDataTable
+        :headers="[
+          { key: 'name', title: t('software.package') },
+          { key: 'version', title: t('software.version') },
+          { key: 'action', title: t('policies.open') },
         ]"
-        :rows="
+        :items="
           rows.map((v) => ({
             ...v,
             name: title(v.presentation, v.id),
             version: v.activeVersion ?? '—',
           }))
         "
-        :row-key="(v) => v.id"
-        :label="t('software.catalog')"
-        :busy-label="t('devices.loading')"
-        :empty-label="t('policies.empty')"
+        item-value="id"
+        :items-per-page="-1"
+        hide-default-footer
+        :loading="busy"
+        :aria-label="t('software.catalog')"
+        :loading-text="t('devices.loading')"
+        :no-data-text="t('policies.empty')"
       >
-        <template #cell-name="{ row }"
-          ><strong>{{ row.name }}</strong
-          ><small>{{ row.id }}</small></template
+        <template #[`item.name`]="{ item }"
+          ><strong>{{ item.name }}</strong
+          ><small>{{ item.id }}</small></template
         >
-        <template #cell-action="{ row }"
-          ><UiButton :disabled="busy" @click="open(String(row.id))">{{
+        <template #[`item.action`]="{ item }"
+          ><VBtn :disabled="busy" @click="open(String(item.id))">{{
             t('policies.open')
-          }}</UiButton></template
+          }}</VBtn></template
         >
-      </UiTable>
+      </VDataTable>
       <p v-if="page && !rows.length">{{ t('policies.empty') }}</p>
-      <UiButton v-if="page?.nextCursor" :disabled="busy" @click="list(page.nextCursor)">{{
+      <VBtn v-if="page?.nextCursor" :disabled="busy" @click="list(page.nextCursor)">{{
         t('devices.next')
-      }}</UiButton>
+      }}</VBtn>
       <details>
         <summary>{{ t('policies.ux.technical') }}</summary>
         <form @submit.prevent="open()">
-          <label>{{ t('software.resource') }}<input v-model="id" class="ui-input" required /></label
-          ><UiButton type="submit" :disabled="busy">{{ t('policies.open') }}</UiButton>
+          <VTextField v-model="id" :label="t('software.resource')" required /><VBtn
+            type="submit"
+            :disabled="busy"
+            >{{ t('policies.open') }}</VBtn
+          >
         </form>
       </details>
     </template>
     <section v-else class="console-panel">
-      <UiButton :disabled="busy || locked" @click="close">← {{ t('software.catalog') }}</UiButton>
+      <VBtn :disabled="busy || locked" @click="close">← {{ t('software.catalog') }}</VBtn>
       <h2>{{ title(current.presentation, current.id) }}</h2>
       <p v-if="typeof current.presentation['description'] === 'string'">
         {{ current.presentation['description'] }}
@@ -208,14 +220,17 @@ watch(
         {{ current.presentation['publisher'] }}
       </p>
       <p data-testid="resource-locator">{{ current.id }} · {{ current.revision }}</p>
-      <label
-        >{{ t('software.version')
-        }}<select v-model="version" class="ui-input" :disabled="busy || locked">
-          <option v-for="v in current.versions" :key="v.id" :value="v.id">
-            {{ v.id }} · {{ t(`policies.state.${v.state}`) }}
-          </option>
-        </select></label
-      >
+      <VSelect
+        v-model="version"
+        :label="t('software.version')"
+        :items="
+          current.versions.map((v) => ({
+            title: `${v.id} · ${t(`policies.state.${v.state}`)}`,
+            value: v.id,
+          }))
+        "
+        :disabled="busy || locked"
+      />
       <p>{{ t('software.ux.independentStages') }}</p>
       <section
         v-for="(variant, index) in selectedVersion?.variants"
@@ -240,9 +255,9 @@ watch(
               {{ artifact.sha256.map((n) => n.toString(16).padStart(2, '0')).join('') }}
             </dd>
           </dl>
-          <UiButton :disabled="busy || locked" @click="download(index)">{{
+          <VBtn :disabled="busy || locked" @click="download(index)">{{
             t('software.ux.download')
-          }}</UiButton>
+          }}</VBtn>
         </template>
       </section>
       <p v-if="downloaded" role="status">
@@ -266,11 +281,11 @@ watch(
         >
         <RouterLink
           :to="{
-            name: 'software-deployments',
+            name: 'policy-policies',
             params: { tenant: runtime.tenant },
-            query: { resource: current.id, version },
+            query: { resource: current.id, version, action: 'software' },
           }"
-          >{{ t('software.deliveryDirect') }}</RouterLink
+          >{{ t('software.assignPolicy') }}</RouterLink
         >
         <RouterLink
           :to="{
@@ -282,5 +297,5 @@ watch(
         >
       </nav>
     </section>
-  </PageFrame>
+  </MdmPage>
 </template>
