@@ -310,3 +310,27 @@
   background-color: rgb(var(--v-theme-error));
   color: rgb(var(--v-theme-on-error));
 }
+
+.mdm-sidebar {
+  border-inline-end: 1px solid var(--line);
+}
+.mdm-toolbar {
+  padding-inline: 18px;
+  border-bottom: 1px solid var(--line);
+}
+.mdm-brand {
+  min-height: 66px;
+  font-weight: 650;
+}
+.mdm-navigation-children {
+  padding-inline-start: 20px;
+}
+.mdm-navigation .v-list-item {
+  font-size: 13px;
+}
+.mdm-app .v-main {
+  min-width: 0;
+}
+.mdm-app .console-main {
+  min-width: 0;
+}

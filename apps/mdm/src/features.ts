@@ -1,4 +1,5 @@
 import type { RouteRecordRaw } from 'vue-router'
+import type { IdentityRoutePresentation } from '@rss/auth'
 import type { ModuleId } from './services/workspace'
 import { policyFeature } from './features/policies/routes'
 import { deviceFeature } from './features/devices/routes'
@@ -6,6 +7,7 @@ import { softwareFeature } from './features/software/routes'
 import { securityFeature } from './features/security/routes'
 import { operationsFeature } from './features/operations/routes'
 export interface MdmFeature {
+  identityPresentation?: IdentityRoutePresentation
   entry: RouteRecordRaw & { name: string }
   routes?: RouteRecordRaw[]
 }

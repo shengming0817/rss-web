@@ -6,7 +6,7 @@ import { createSecurityClients } from './features/security/client'
 import { createOperationsClients } from './features/operations/client'
 export function createDemo(...args: Parameters<typeof createMdm>) {
   const composition = createMdm(...args)
-  const { mdm, router, app, transport } = composition
+  const { mdm, app, transport } = composition
   mdm.workspace = createWorkspaceClient(transport, true)
   app.provide(demoKey, {
     ...mdm,
