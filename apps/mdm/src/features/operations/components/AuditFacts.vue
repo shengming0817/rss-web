@@ -1,4 +1,11 @@
 <script setup lang="ts">
+import {
+  VBtn,
+  VExpansionPanel,
+  VExpansionPanelText,
+  VExpansionPanelTitle,
+  VExpansionPanels,
+} from 'vuetify/components'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
@@ -23,10 +30,11 @@ const commands = computed(() =>
 <template>
   <div data-testid="audit-detail">
     <p>{{ t('operations.auditScope') }}</p>
-    <RouterLink
+    <VBtn
       v-if="device"
+      variant="text"
       :to="{ name: 'device-activities', params: { tenant: runtime.tenant, device } }"
-      >{{ t('policies.entry.activities') }}</RouterLink
+      >{{ t('policies.entry.activities') }}</VBtn
     >
     <dl class="settings-facts">
       <dt>{{ t('operations.auditUi.recorded') }}</dt>
@@ -60,45 +68,53 @@ const commands = computed(() =>
       <dd>{{ t(fact.supported ? 'devices.yes' : 'devices.no') }}</dd>
     </dl>
     <nav v-if="device" class="console-inline-actions">
-      <RouterLink :to="{ name: 'device-detail', params: { tenant: runtime.tenant, device } }">{{
-        t('devices.detail')
-      }}</RouterLink>
-      <RouterLink
+      <VBtn
+        variant="text"
+        :to="{ name: 'device-detail', params: { tenant: runtime.tenant, device } }"
+        >{{ t('devices.detail') }}</VBtn
+      >
+      <VBtn
+        variant="text"
         :to="{
           name: 'device-history',
           params: { tenant: runtime.tenant, device, history: 'activity' },
           query: { ...(fact.operationId ? { operationId: fact.operationId } : {}) },
         }"
-        >{{ t('operations.auditUi.timeline') }}</RouterLink
+        >{{ t('operations.auditUi.timeline') }}</VBtn
       >
-      <RouterLink
+      <VBtn
         v-for="id in commands"
         :key="id"
+        variant="text"
         :to="{
           name: 'policy-execution',
           params: { tenant: runtime.tenant, execution: id },
           query: { device },
         }"
-        >{{ t('operations.auditUi.command') }} · {{ id }}</RouterLink
+        >{{ t('operations.auditUi.command') }} · {{ id }}</VBtn
       >
     </nav>
     <p class="ui-help">{{ t('operations.auditUi.operationHint') }}</p>
-    <details>
-      <summary>{{ t('policies.ux.technical') }}</summary>
-      <dl class="settings-facts">
-        <dt>{{ t('operations.auditUi.source') }}</dt>
-        <dd>{{ fact.source }}</dd>
-        <dt>{{ t('operations.auditUi.event') }}</dt>
-        <dd>{{ fact.eventId }} · {{ fact.position }}</dd>
-        <dt>{{ t('operations.auditUi.request') }}</dt>
-        <dd>{{ fact.requestId ?? '—' }}</dd>
-        <dt>{{ t('telemetry.registration') }}</dt>
-        <dd>{{ fact.registrationId ?? '—' }}</dd>
-        <dt>{{ t('operations.auditUi.registrationRequest') }}</dt>
-        <dd>{{ fact.registrationRequestId ?? '—' }}</dd>
-        <dt>{{ t('operations.auditUi.instance') }}</dt>
-        <dd>{{ fact.instanceId ?? '—' }}</dd>
-      </dl>
-    </details>
+    <VExpansionPanels
+      ><VExpansionPanel>
+        <VExpansionPanelTitle>{{ t('policies.ux.technical') }}</VExpansionPanelTitle
+        ><VExpansionPanelText>
+          <dl class="settings-facts">
+            <dt>{{ t('operations.auditUi.source') }}</dt>
+            <dd>{{ fact.source }}</dd>
+            <dt>{{ t('operations.auditUi.event') }}</dt>
+            <dd>{{ fact.eventId }} · {{ fact.position }}</dd>
+            <dt>{{ t('operations.auditUi.request') }}</dt>
+            <dd>{{ fact.requestId ?? '—' }}</dd>
+            <dt>{{ t('telemetry.registration') }}</dt>
+            <dd>{{ fact.registrationId ?? '—' }}</dd>
+            <dt>{{ t('operations.auditUi.registrationRequest') }}</dt>
+            <dd>{{ fact.registrationRequestId ?? '—' }}</dd>
+            <dt>{{ t('operations.auditUi.instance') }}</dt>
+            <dd>{{ fact.instanceId ?? '—' }}</dd>
+          </dl>
+        </VExpansionPanelText></VExpansionPanel
+      ></VExpansionPanels
+    >
   </div>
 </template>

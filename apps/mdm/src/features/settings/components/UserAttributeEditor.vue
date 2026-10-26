@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { VAlert, VBtn, VCheckbox, VForm, VSelect, VTextField } from 'vuetify/components'
 import { ref, computed, watch, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiMessage } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { usePermission } from '../../enrollment/usePermission'
 import { useSettingsAction, useSettingsFacts } from '../useSettingsAction'
@@ -147,7 +147,7 @@ async function compare() {
 </script>
 <template>
   <section class="settings-stack">
-    <UiMessage v-if="failure" tone="warning" :title="t('devices.' + failure)" />
+    <VAlert v-if="failure" type="warning" :title="t('devices.' + failure)" />
     <OperationNotice
       :operation="pending"
       :busy="busy"
@@ -160,138 +160,133 @@ async function compare() {
     />
     <p v-if="!canWrite">{{ t('profiles.readOnly') }}</p>
     <p>{{ t('profiles.sourceHelp') }}</p>
-    <form class="auth-form" @submit.prevent="save()">
+    <VForm
+      :disabled="locked || !canWrite"
+      class="auth-form"
+      @submit.prevent="($event.target as HTMLFormElement).reportValidity() &amp;&amp; (save())"
+    >
       <fieldset class="profile-fields" :disabled="locked || !canWrite">
         <legend>{{ t('profiles.edit') }}</legend>
-        <label for="attribute-key">{{ t('profiles.key') }}</label
-        ><input
+        <VTextField
           id="attribute-key"
           v-model="form.key"
-          class="ui-input"
           required
           maxlength="64"
           pattern="[A-Za-z][A-Za-z0-9_]*"
+          :label="t('profiles.key')"
         />
-        <label for="attribute-name">{{ t('profiles.name') }}</label
-        ><input
+        <VTextField
           id="attribute-name"
           v-model="form.displayName"
-          class="ui-input"
           required
           maxlength="256"
+          :label="t('profiles.name')"
         />
-        <label for="attribute-source">{{ t('profiles.source') }}</label
-        ><select id="attribute-source" v-model="selectedSource" class="ui-input" required>
-          <option v-if="!available" :value="selectedSource">
-            {{ t('profiles.sourceUnavailable') }} · {{ selectedSource }}
-          </option>
-          <option
-            v-for="item in sources"
-            :key="sourceKey(item.source)"
-            :value="sourceKey(item.source)"
-          >
-            {{ item.source.kind === 'identity_local' ? t('profiles.local') : item.source.provider }}
-          </option>
-        </select>
+        <VSelect
+          id="attribute-source"
+          v-model="selectedSource"
+          required
+          :items="[
+            ...(!available
+              ? [
+                  {
+                    title: t('profiles.sourceUnavailable') + ' · ' + selectedSource,
+                    value: selectedSource,
+                  },
+                ]
+              : []),
+            ...sources.map((item) => ({
+              title:
+                item.source.kind === 'identity_local' ? t('profiles.local') : item.source.provider,
+              value: sourceKey(item.source),
+            })),
+          ]"
+          :label="t('profiles.source')"
+        />
         <p v-if="!available" role="alert">{{ t('profiles.sourceUnavailable') }}</p>
-        <label for="attribute-pointer">{{ t('profiles.pointer') }}</label
-        ><input
+        <VTextField
           id="attribute-pointer"
           v-model="form.pointer"
-          class="ui-input"
           maxlength="1024"
-          @input="form.useExistingObservation = false"
+          :label="t('profiles.pointer')"
+          @update:model-value="form.useExistingObservation = false"
         />
-        <label for="attribute-type">{{ t('profiles.type') }}</label
-        ><select
+        <VSelect
           id="attribute-type"
           v-model="form.valueType"
-          class="ui-input"
-          @change="typeChanged"
-        >
-          <option v-for="kind in types" :key="kind" :value="kind">
-            {{ t('profiles.' + kind) }}
-          </option>
-        </select>
+          :items="[...types.map((kind) => ({ title: t('profiles.' + kind), value: kind }))]"
+          :label="t('profiles.type')"
+          @update:model-value="typeChanged"
+        />
         <template v-if="form.valueType === 'string'"
-          ><label for="attribute-length">{{ t('profiles.maxLength') }}</label
-          ><input
+          ><VTextField
             id="attribute-length"
             v-model.number="form.maxLength"
-            class="ui-input"
             type="number"
             min="1"
             max="65536"
-            @input="form.useExistingObservation = false"
+            :label="t('profiles.maxLength')"
+            @update:model-value="form.useExistingObservation = false"
         /></template>
         <template v-if="form.valueType === 'array' || form.valueType === 'object'"
-          ><label for="attribute-items">{{ t('profiles.maxItems') }}</label
-          ><input
+          ><VTextField
             id="attribute-items"
             v-model.number="form.maxItems"
-            class="ui-input"
             type="number"
             min="1"
             :max="form.valueType === 'array' ? 128 : 256"
-            @input="form.useExistingObservation = false"
+            :label="t('profiles.maxItems')"
+            @update:model-value="form.useExistingObservation = false"
         /></template>
         <template v-if="form.valueType === 'number' || form.valueType === 'integer'"
-          ><label for="attribute-min">{{ t('profiles.minimum') }}</label
-          ><input
+          ><VTextField
             id="attribute-min"
             v-model.number="form.minimum"
-            class="ui-input"
             type="number"
             :step="form.valueType === 'integer' ? 1 : 'any'"
-            @input="form.useExistingObservation = false" /><label for="attribute-max">{{
-            t('profiles.maximum')
-          }}</label
-          ><input
+            :label="t('profiles.minimum')"
+            @update:model-value="form.useExistingObservation = false" /><VTextField
             id="attribute-max"
             v-model.number="form.maximum"
-            class="ui-input"
             type="number"
             :step="form.valueType === 'integer' ? 1 : 'any'"
-            @input="form.useExistingObservation = false"
+            :label="t('profiles.maximum')"
+            @update:model-value="form.useExistingObservation = false"
         /></template>
-        <label><input v-model="form.enabled" type="checkbox" />{{ t('profiles.enabled') }}</label
-        ><label
-          ><input v-model="form.sensitive" type="checkbox" @change="sensitivityChanged" />{{
-            t('profiles.sensitive')
-          }}</label
-        >
+        <VCheckbox v-model="form.enabled" :label="t('profiles.enabled')" /><VCheckbox
+          v-model="form.sensitive"
+          :label="t('profiles.sensitive')"
+          @update:model-value="sensitivityChanged"
+        />
         <p>{{ t('profiles.sensitiveHint') }}</p>
-        <label for="attribute-visibility">{{ t('profiles.visibility') }}</label
-        ><select id="attribute-visibility" v-model="form.visibility" class="ui-input">
-          <option v-for="option in visibility" :key="option" :value="option">
-            {{ t('profiles.' + option) }}
-          </option>
-        </select>
-        <label for="attribute-use">{{ t('profiles.displayUse') }}</label
-        ><select id="attribute-use" v-model="form.displayUse" class="ui-input">
-          <option v-for="option in uses" :key="option" :value="option">
-            {{ t('profiles.' + option) }}
-          </option>
-        </select>
-        <label><input v-model="form.required" type="checkbox" />{{ t('profiles.required') }}</label
-        ><label
-          ><input v-model="form.useExistingObservation" type="checkbox" />{{
-            t('profiles.reuse')
-          }}</label
-        >
+        <VSelect
+          id="attribute-visibility"
+          v-model="form.visibility"
+          :items="visibility.map((option) => ({ title: t('profiles.' + option), value: option }))"
+          :label="t('profiles.visibility')"
+        />
+        <VSelect
+          id="attribute-use"
+          v-model="form.displayUse"
+          :items="[...uses.map((option) => ({ title: t('profiles.' + option), value: option }))]"
+          :label="t('profiles.displayUse')"
+        />
+        <VCheckbox v-model="form.required" :label="t('profiles.required')" /><VCheckbox
+          v-model="form.useExistingObservation"
+          :label="t('profiles.reuse')"
+        />
         <p>{{ t('profiles.reuseHelp') }}</p>
-        <UiButton type="submit" :disabled="!available && form.enabled">{{
-          t('profiles.save')
-        }}</UiButton>
+        <VBtn type="submit" :disabled="!available && form.enabled">{{ t('profiles.save') }}</VBtn>
         <template v-if="current.revision > 0"
-          ><label
-            ><input v-model="confirmed" type="checkbox" />{{ t('profiles.confirmDelete') }}</label
-          ><UiButton type="button" :disabled="!confirmed" @click="save(true)">{{
-            t('profiles.remove')
-          }}</UiButton></template
+          ><VCheckbox v-model="confirmed" :label="t('profiles.confirmDelete')" /><VBtn
+            type="button"
+            :disabled="!confirmed"
+            @click="save(true)"
+            >{{ t('profiles.remove') }}</VBtn
+          ></template
         >
       </fieldset>
-    </form>
+    </VForm>
   </section>
 </template>
 

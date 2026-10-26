@@ -1,7 +1,15 @@
 <script setup lang="ts">
+import {
+  VBtn,
+  VExpansionPanel,
+  VExpansionPanelText,
+  VExpansionPanelTitle,
+  VExpansionPanels,
+  VSelect,
+  VTextField,
+} from 'vuetify/components'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton } from '@rss/core/components'
 import type { LocalAccount } from './authorization-presentation'
 const props = defineProps<{
     accounts: LocalAccount[]
@@ -31,30 +39,36 @@ function label(id: string) {
 </script>
 <template>
   <div class="settings-actions">
-    <UiButton v-if="canBrowse" :disabled="busy" @click="$emit('load')">{{
+    <VBtn v-if="canBrowse" :disabled="busy" @click="$emit('load')">{{
       t('operations.ruleUi.readAccounts')
-    }}</UiButton>
-    <UiButton v-if="more" :disabled="busy" @click="$emit('more')">{{
+    }}</VBtn>
+    <VBtn v-if="more" :disabled="busy" @click="$emit('more')">{{
       t('operations.ruleUi.moreAccounts')
-    }}</UiButton>
+    }}</VBtn>
   </div>
-  <label for="authorization-principal">{{ t('operations.ruleUi.existingPrincipal') }}</label>
-  <select id="authorization-principal" v-model="value">
-    <option value="">{{ t('operations.ruleUi.selectPrincipal') }}</option>
-    <option v-for="id in choices" :key="id" :value="id">{{ label(id) }}</option>
-  </select>
+  <VSelect
+    id="authorization-principal"
+    v-model="value"
+    :items="[
+      { title: t('operations.ruleUi.selectPrincipal'), value: '' },
+      ...choices.map((id) => ({ title: label(id), value: id })),
+    ]"
+    :label="t('operations.ruleUi.existingPrincipal')"
+  />
   <p v-if="denied" role="alert">{{ t('operations.ruleUi.directoryDenied') }}</p>
   <p class="ui-help">
     {{ t(loaded ? 'operations.ruleUi.directoryRead' : 'operations.ruleUi.directoryBoundary') }}
   </p>
-  <details>
-    <summary>{{ t('operations.ruleUi.advancedPrincipal') }}</summary>
-    <label for="authorization-principal-id">{{ t('operations.subjectId') }}</label
-    ><input
-      id="authorization-principal-id"
-      v-model="value"
-      data-testid="subject-id"
-      maxlength="36"
-    />
-  </details>
+  <VExpansionPanels
+    ><VExpansionPanel>
+      <VExpansionPanelTitle>{{ t('operations.ruleUi.advancedPrincipal') }}</VExpansionPanelTitle
+      ><VExpansionPanelText eager>
+        <VTextField
+          id="authorization-principal-id"
+          v-model="value"
+          data-testid="subject-id"
+          maxlength="36"
+          :label="t('operations.subjectId')"
+        /> </VExpansionPanelText></VExpansionPanel
+  ></VExpansionPanels>
 </template>
