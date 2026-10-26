@@ -2,8 +2,8 @@
 import { onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { UiButton } from '@rss/core/components'
-import PageFrame from '../components/PageFrame.vue'
+import { VBtn } from 'vuetify/components'
+import MdmPage from '../ui/MdmPage.vue'
 import { useMdm } from '../context'
 import { useOperation } from '../services/useOperation'
 const runtime = useMdm(),
@@ -38,8 +38,8 @@ async function enter() {
 onMounted(enter)
 </script>
 <template>
-  <PageFrame :title="t('settings.entryTitle')" :busy="busy" :failure="failure">
+  <MdmPage :title="t('settings.entryTitle')" :busy="busy" :failure="failure">
     <p>{{ t('settings.entryHint') }}</p>
-    <UiButton v-if="failure" :busy="busy" @click="enter">{{ t('settings.reload') }}</UiButton>
-  </PageFrame>
+    <VBtn v-if="failure" :loading="busy" @click="enter">{{ t('settings.reload') }}</VBtn>
+  </MdmPage>
 </template>
