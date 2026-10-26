@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import { VBtn, VForm, VSelect, VTextField } from 'vuetify/components'
+import OperationDialog from '../components/OperationDialog.vue'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiDialog } from '@rss/core/components'
 import DeviceContext from '../../devices/components/DeviceContext.vue'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 import ActivityFacts from '../components/ActivityFacts.vue'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
@@ -104,40 +105,46 @@ watch(
 )
 </script>
 <template>
-  <PageFrame
+  <MdmPage
     :title="t('policies.entry.activities')"
     :busy="op.busy.value"
     :failure="op.failure.value"
   >
     <DeviceContext :device="device" />
-    <RouterLink
+    <VBtn
+      variant="text"
       :to="{
         name: 'device-history',
         params: { tenant: runtime.tenant, device, history: 'activity' },
       }"
-      >{{ t('devices.history') }}</RouterLink
+      >{{ t('devices.history') }}</VBtn
     >
-    <RouterLink
+    <VBtn
+      variant="text"
       :to="{ name: 'policy-event-batches', params: { tenant: runtime.tenant, device } }"
-      >{{ t('policies.entry.batches') }}</RouterLink
+      >{{ t('policies.entry.batches') }}</VBtn
     >
-    <form class="console-toolbar" @submit.prevent="load()">
-      <label
-        >{{ t('policies.entry.kind')
-        }}<select v-model="kind">
-          <option value="">{{ t('gap.allStates') }}</option>
-          <option
-            v-for="value in ['policy', 'assignment', 'batch', 'execution', 'configuration']"
-            :key="value"
-          >
-            {{ value }}
-          </option>
-        </select></label
-      >
-      <label>{{ t('policies.entry.source') }}<input v-model="source" /></label
-      ><label>{{ t('gap.state') }}<input v-model="status" /></label>
-      <UiButton type="submit" :disabled="op.busy.value">{{ t('devices.reload') }}</UiButton>
-    </form>
+    <VForm
+      class="console-toolbar"
+      @submit.prevent="($event.target as HTMLFormElement).reportValidity() &amp;&amp; (load())"
+    >
+      <VSelect
+        v-model="kind"
+        :items="[
+          { title: t('gap.allStates'), value: '' },
+          ...['policy', 'assignment', 'batch', 'execution', 'configuration'].map((value) => ({
+            title: value,
+            value: value,
+          })),
+        ]"
+        :label="t('policies.entry.kind')"
+      />
+      <VTextField v-model="source" :label="t('policies.entry.source')" /><VTextField
+        v-model="status"
+        :label="t('gap.state')"
+      />
+      <VBtn type="submit" :disabled="op.busy.value">{{ t('devices.reload') }}</VBtn>
+    </VForm>
     <p>{{ t('policies.entry.activitiesHint') }}</p>
     <template v-if="page">
       <p>{{ t('policies.entry.asOf') }} · {{ auditTime(page.asOf) }}</p>
@@ -151,17 +158,17 @@ watch(
       </p>
       <p v-if="!page.items.length">{{ t('policies.empty') }}</p>
       <div v-for="fact in page.items" :key="fact.id">
-        <ActivityFacts :fact="fact" :device="device" /><UiButton
+        <ActivityFacts :fact="fact" :device="device" /><VBtn
           :disabled="op.busy.value"
           @click="inspect(fact.id)"
-          >{{ t('policies.entry.related') }}</UiButton
+          >{{ t('policies.entry.related') }}</VBtn
         >
       </div>
-      <UiButton v-if="page.nextCursor" :disabled="op.busy.value" @click="load(page.nextCursor)">{{
+      <VBtn v-if="page.nextCursor" :disabled="op.busy.value" @click="load(page.nextCursor)">{{
         t('devices.next')
-      }}</UiButton>
+      }}</VBtn>
     </template>
-    <UiDialog
+    <OperationDialog
       :open="!!detail"
       placement="right"
       :title="t('policies.entry.related')"
@@ -176,13 +183,13 @@ watch(
           :key="fact.id"
           :fact="fact"
           :device="device"
-        /><UiButton
+        /><VBtn
           v-if="related ? related.nextCursor : detail.relatedCursor"
           :disabled="op.busy.value"
           @click="moreRelated"
-          >{{ t('devices.next') }}</UiButton
+          >{{ t('devices.next') }}</VBtn
         ></template
       >
-    </UiDialog>
-  </PageFrame>
+    </OperationDialog>
+  </MdmPage>
 </template>

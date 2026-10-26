@@ -8,31 +8,37 @@ export const operationsFeature: MdmFeature = {
   },
   routes: [
     {
-      path: '/tenants/:tenant/operations/audit',
+      path: '/tenants/:tenant/settings/providers',
+      name: 'providers',
+      component: () => import('./views/ProvidersView.vue'),
+      meta: { protected: true, oidc: true },
+    },
+    {
+      path: '/tenants/:tenant/settings/audit',
       name: 'operations-audit',
       component: () => import('./views/AuditView.vue'),
       meta: { protected: true },
     },
     {
-      path: '/tenants/:tenant/operations/diagnostics',
+      path: '/tenants/:tenant/settings/diagnostics',
       name: 'operations-diagnostics',
       component: () => import('./views/DiagnosticsView.vue'),
       meta: { protected: true },
     },
     {
-      path: '/tenants/:tenant/operations/windows-entra',
+      path: '/tenants/:tenant/settings/windows-entra',
       name: 'operations-windowsEntra',
       component: () => import('../enrollment/views/WindowsEntraView.vue'),
       meta: { protected: true },
     },
     {
-      path: '/tenants/:tenant/operations/apple-account',
+      path: '/tenants/:tenant/settings/apple-account',
       name: 'operations-appleAccount',
       component: () => import('../enrollment/views/AppleAccountView.vue'),
       meta: { protected: true },
     },
     {
-      path: '/tenants/:tenant/operations/apple-ade',
+      path: '/tenants/:tenant/settings/apple-ade',
       name: 'operations-appleAde',
       component: () => import('../enrollment/views/AppleAdeView.vue'),
       meta: { protected: true },

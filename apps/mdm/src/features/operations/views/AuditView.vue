@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { UiButton, UiTable, UiDialog } from '@rss/core/components'
+import { VBtn, VDataTable } from 'vuetify/components'
+import OperationDialog from '../components/OperationDialog.vue'
 import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -9,7 +10,7 @@ import { deviceBinding } from '../../devices/useDeviceBinding'
 import { type AuditPage, type AuditFact, type AuditQuery } from '../clients/audit'
 import { auditDraft, auditFilter } from '../components/audit-filter'
 import { auditTime, auditOutcome } from '../format'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 import AuditFilters from '../components/AuditFilters.vue'
 import AuditCoverage from '../components/AuditCoverage.vue'
 import AuditFacts from '../components/AuditFacts.vue'
@@ -53,7 +54,7 @@ watch(
 )
 </script>
 <template>
-  <PageFrame :title="t('operations.audit')" :busy="busy" :failure="failure">
+  <MdmPage :title="t('operations.audit')" :busy="busy" :failure="failure">
     <p>{{ t('operations.auditHint') }}</p>
     <AuditFilters v-model="draft" :busy="busy" @submit="load()" />
     <p v-if="failure === 'conflict'" role="alert">{{ t('operations.auditUi.expired') }}</p>
@@ -63,40 +64,47 @@ watch(
         {{ applied?.action || t('devices.all') }} · {{ applied?.device || t('devices.all') }}
       </p>
       <AuditCoverage :coverage="page.coverage" />
-      <UiTable
-        :label="t('operations.audit')"
-        :rows="page.items"
-        :row-key="(v) => `${v.source}/${v.eventId}`"
-        :busy="busy"
-        :busy-label="t('devices.loading')"
-        :empty-label="t('operations.emptyAudit')"
-        :columns="[
-          { key: 'recordedAt', label: t('operations.auditUi.recorded') },
-          { key: 'actor', label: t('operations.actor') },
-          { key: 'action', label: t('operations.action') },
-          { key: 'target', label: t('operations.object') },
-          { key: 'auditOutcome', label: t('operations.outcome') },
+      <VDataTable
+        disable-sort
+        hide-default-footer
+        :items-per-page="-1"
+        :aria-label="t('operations.audit')"
+        :items="page.items"
+        :item-value="(v) => `${v.source}/${v.eventId}`"
+        :loading="busy"
+        :loading-text="t('devices.loading')"
+        :no-data-text="t('operations.emptyAudit')"
+        :headers="[
+          { key: 'recordedAt', title: t('operations.auditUi.recorded') },
+          { key: 'actor', title: t('operations.actor') },
+          { key: 'action', title: t('operations.action') },
+          { key: 'target', title: t('operations.object') },
+          { key: 'auditOutcome', title: t('operations.outcome') },
         ]"
       >
-        <template #cell-recordedAt="{ row }"
-          ><UiButton variant="ghost" @click="selected = row">{{
+        <template #[`item.recordedAt`]="{ item: row }"
+          ><VBtn variant="text" @click="selected = row">{{
             auditTime(row.recordedAt)
-          }}</UiButton></template
+          }}</VBtn></template
         >
-        <template #cell-target="{ row }">{{ row.target.type }} / {{ row.target.id }}</template>
-        <template #cell-auditOutcome="{ row }">{{ auditOutcome(row.auditOutcome, t) }}</template>
-      </UiTable>
-      <UiButton v-if="page.nextCursor" :disabled="busy" @click="load(page.nextCursor)">{{
+        <template #[`item.target`]="{ item: row }"
+          >{{ row.target.type }} / {{ row.target.id }}</template
+        >
+        <template #[`item.auditOutcome`]="{ item: row }">{{
+          auditOutcome(row.auditOutcome, t)
+        }}</template>
+      </VDataTable>
+      <VBtn v-if="page.nextCursor" :disabled="busy" @click="load(page.nextCursor)">{{
         t('devices.next')
-      }}</UiButton>
+      }}</VBtn>
     </template>
-    <UiDialog
+    <OperationDialog
       :open="!!selected"
       placement="right"
       :title="t('operations.auditDetail')"
       :close-label="t('console.close')"
       @update:open="selected = undefined"
       ><AuditFacts v-if="selected" :fact="selected" :device="applied?.device"
-    /></UiDialog>
-  </PageFrame>
+    /></OperationDialog>
+  </MdmPage>
 </template>

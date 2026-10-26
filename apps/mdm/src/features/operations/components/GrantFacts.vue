@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { VBtn } from 'vuetify/components'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import type { Grant } from '../clients/authorization'
@@ -16,10 +17,11 @@ const { t } = useI18n(),
           : g.operation
       }}
       <span class="ui-help"> · {{ t('operations.ruleUi.scopes.' + g.scope.kind) }}</span>
-      <RouterLink
+      <VBtn
         v-if="g.scope.kind === 'device' && runtime.realm === 'tenant'"
+        variant="text"
         :to="{ name: 'device-detail', params: { tenant: runtime.tenant, device: g.scope.id } }"
-        >{{ g.scope.id }}</RouterLink
+        >{{ g.scope.id }}</VBtn
       >
     </li>
   </ul>
