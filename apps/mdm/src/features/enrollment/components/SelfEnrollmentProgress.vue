@@ -7,6 +7,8 @@ import {
   VCardTitle,
   VCheckbox,
   VForm,
+  VExpansionPanels,
+  VExpansionPanel,
   VTextField,
 } from 'vuetify/components'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
@@ -32,6 +34,13 @@ const password = ref(''),
   handedOff = ref(false)
 type Command = { kind: 'resume' | 'cancel'; id: string; operation: string }
 const pending = ref<Command>()
+const needsRecovery = computed(
+  () =>
+    uncertain.value ||
+    ['expired', 'reauthentication_required', 'credential_unavailable'].includes(
+      current.value?.progress.diagnostic ?? '',
+    ),
+)
 const canResume = computed(
   () => !!current.value && runtime.registrationChannels.canContinue(current.value),
 )
@@ -45,6 +54,7 @@ function generate() {
 }
 function refresh() {
   if (busy.value) return
+  void runtime.registrationChannels.refresh()
   current.value = undefined
   void run(
     () => client.status(props.enrollmentId),
@@ -109,45 +119,54 @@ onBeforeUnmount(clearSecret)
         t('devices.reload')
       }}</v-btn>
       <template v-if="current">
-        <p>{{ t('devices.deviceId') }}: {{ current.deviceId }}</p>
-        <p>{{ t('devices.enrollmentId') }}: {{ current.enrollmentId }}</p>
         <p>{{ t('devices.status') }}: {{ t(`devices.${current.status}`) }}</p>
-        <RegistrationStatus :channel="nativeChannel(current.source)" class="my-4" />
-        <NativeFacts :value="current" />
-        <v-form
+        <NativeFacts :value="current" refreshable @refresh="refresh" />
+        <v-expansion-panels
           v-if="['pending', 'bound', 'expired'].includes(current.status)"
-          :novalidate="false"
+          :model-value="needsRecovery ? [0] : undefined"
+          multiple
           class="mt-4"
-          @submit.prevent="submit('resume')"
+          ><v-expansion-panel :title="t('onboarding.selfRecovery')"
+            ><template #text>
+              <RegistrationStatus :channel="nativeChannel(current.source)" class="mb-4" />
+              <v-form :novalidate="false" class="mt-4" @submit.prevent="submit('resume')">
+                <v-btn variant="outlined" :disabled="busy || uncertain" @click="generate">{{
+                  t('devices.generate')
+                }}</v-btn>
+                <v-text-field
+                  v-model="password"
+                  class="mt-4"
+                  :label="t('devices.password')"
+                  pattern="[A-Za-z0-9_\-]{43}"
+                  autocomplete="off"
+                  :disabled="busy"
+                  required
+                />
+                <v-checkbox
+                  v-model="handedOff"
+                  :label="t('devices.handoff')"
+                  :disabled="busy"
+                  required
+                />
+                <v-btn
+                  type="submit"
+                  color="primary"
+                  :disabled="busy || uncertain || !password || !handedOff || !canResume"
+                  >{{ t('devices.resume') }}</v-btn
+                >
+              </v-form>
+            </template></v-expansion-panel
+          ></v-expansion-panels
         >
-          <v-btn variant="outlined" :disabled="busy || uncertain" @click="generate">{{
-            t('devices.generate')
-          }}</v-btn>
-          <v-text-field
-            v-model="password"
-            class="mt-4"
-            :label="t('devices.password')"
-            pattern="[A-Za-z0-9_\-]{43}"
-            autocomplete="off"
-            :disabled="busy"
-            required
-          />
-          <v-checkbox v-model="handedOff" :label="t('devices.handoff')" :disabled="busy" required />
-          <v-btn
-            type="submit"
-            color="primary"
-            :disabled="busy || uncertain || !password || !handedOff || !canResume"
-            >{{ t('devices.resume') }}</v-btn
-          >
-          <v-btn
-            v-if="current.status === 'pending'"
-            variant="text"
-            color="error"
-            :disabled="busy || uncertain"
-            @click="submit('cancel')"
-            >{{ t('devices.cancel') }}</v-btn
-          >
-        </v-form>
+        <v-btn
+          v-if="current.status === 'pending'"
+          variant="text"
+          color="error"
+          :disabled="busy || uncertain"
+          class="mt-3"
+          @click="submit('cancel')"
+          >{{ t('devices.cancel') }}</v-btn
+        >
       </template>
       <template v-if="uncertain && pending">
         <v-alert type="warning" variant="tonal" class="my-4">{{

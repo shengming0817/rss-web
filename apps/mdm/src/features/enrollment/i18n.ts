@@ -34,8 +34,9 @@ export const onboardingZh = {
   enrollmentJourney: '为当前组织注册 Windows 或 macOS 企业设备，按系统引导完成管理授权。',
   enterpriseMdm: '企业完整 MDM',
   selfProgress: '我的设备注册进展',
+  selfRecovery: '无法继续？恢复原注册',
   selfProgressNote:
-    '此处仅查询和继续当前账号获准的原注册请求。服务器同时核对用户、租户和设备绑定；设备资产与管理员管理功能继续受独立权限保护。',
+    '此处显示本次注册在设备端的实际进展。完成系统操作后重新验证；注册中断时可在下方恢复原注册。',
   deviceAuthorization:
     '为当前组织中的此设备创建或更新短时原生注册授权。管理员注册不占个人额度。安全保存注册密码，提交后页面会清除；原注册的进展、继续与取消仍由服务器校验。',
   profileEnrollment: '配置描述文件注册',
@@ -244,8 +245,9 @@ export const onboardingEn: typeof onboardingZh = {
     'Enroll a corporate Windows or macOS device in the current organization and complete system management approval.',
   enterpriseMdm: 'Full enterprise MDM',
   selfProgress: 'My device enrollment progress',
+  selfRecovery: 'Cannot continue? Recover this enrollment',
   selfProgressNote:
-    'Read and continue only the original enrollment authorized for this account. The server checks the user, tenant and device binding. Device inventory and administrator management remain separately protected.',
+    'This page shows actual device enrollment progress. Verify after completing the system steps. If enrollment is interrupted, recover the original enrollment below.',
   deviceAuthorization:
     'Create or refresh short-lived native enrollment authorization for this device in the current organization. Administrator enrollment uses no personal quota. Save the enrollment password securely; it is cleared on submission. The server continues to verify progress, resume and cancellation against the original enrollment.',
   profileEnrollment: 'Profile-based enrollment',

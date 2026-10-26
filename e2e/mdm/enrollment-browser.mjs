@@ -496,6 +496,7 @@ try {
         url.searchParams.get('mode') === 'self-enrollment',
     )
     await employee.locator('[data-self-enrollment-progress]').waitFor()
+    await employee.getByRole('button', { name: '技术详情与手工设置', exact: true }).click()
     await employee.getByText(receipt.deviceId, { exact: false }).first().waitFor()
     assert.deepEqual(inventoryReads, [])
     employee.removeListener('request', recordInventoryRead)

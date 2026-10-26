@@ -2522,7 +2522,14 @@ it('reads and cancels personal progress without calling inventory clients and re
   await vi.waitFor(() => expect(router.currentRoute.value.query['mode']).toBe('self-enrollment'))
   await flushPromises()
   const progress = wrapper.get('[data-self-enrollment-progress]')
+  expect(progress.find('input[autocomplete=off]').exists()).toBe(false)
+  await progress
+    .findAll('button')
+    .find((button) => button.text() === '技术详情与手工设置')!
+    .trigger('click')
+  await flushPromises()
   expect(progress.text()).toContain(receipt.deviceId)
+  expect(progress.text()).toContain(receipt.enrollmentId)
   expect(views).not.toHaveBeenCalled()
   expect(inventory).not.toHaveBeenCalled()
   const cancel = vi.spyOn(devices.enrollment, 'cancel')
