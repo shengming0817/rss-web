@@ -126,12 +126,14 @@ async function prove() {
         ><AccountBindingSummary :binding="selected" />
         <p class="small muted mt-4">{{ $t('da.m619a1a1143') }}</p>
         <WriteState :state="op.state.value" queryable @query="query" /><v-btn
-          v-if="op.state.value.proof"
+          v-if="op.state.value.state === 'accepted'"
           class="mt-4"
-          :loading="proofBusy"
-          @click="prove"
-          >{{ $t('da.mc5058461b8') }}</v-btn
-        >
+          variant="outlined"
+          @click="query"
+          >重新读取原操作</v-btn
+        ><v-btn v-if="op.state.value.proof" class="mt-4" :loading="proofBusy" @click="prove">{{
+          $t('da.mc5058461b8')
+        }}</v-btn>
         <p v-if="proofError" role="status">{{ proofError }}</p></v-card-text
       ><v-card-actions
         ><v-spacer /><v-btn @click="selected = null">{{ $t('da.m6c14bd7f6f') }}</v-btn

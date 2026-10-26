@@ -3,6 +3,7 @@ import { computed, ref, onBeforeUnmount } from 'vue'
 import type { Application, ApplicationInput } from '@rss/device-access/model'
 import { useDa } from '../../context'
 import { useMutation } from '../../services/mutation'
+import { useRevisionReview } from '../../services/revision-review'
 import { errorMessage } from '../../services/status'
 import WriteState from '../../ui/WriteState.vue'
 const props = defineProps<{ existing: Application | null }>()
@@ -14,6 +15,9 @@ const r = useDa(),
   capabilities = ref<Application['capabilities']>(props.existing?.capabilities ?? ['native_key']),
   proofBusy = ref(false),
   proofMessage = ref('')
+const baseline = useRevisionReview(props.existing, (cursor, signal) =>
+  r.client.applications(cursor, signal),
+)
 const op = useMutation(() => '/application/' + (props.existing?.id ?? 'new'))
 let active = true,
   proofAbort: AbortController | undefined
@@ -41,14 +45,14 @@ function input(operationId: string): ApplicationInput {
   return {
     id: id.value,
     operationId,
-    expectedRevision: props.existing?.revision ?? 0,
+    expectedRevision: baseline.revision.value,
     callback: callback.value,
     enabled: enabled.value,
     capabilities: [...capabilities.value],
   }
 }
 async function save() {
-  if (!valid.value) return
+  if (baseline.busy.value || baseline.current.value || !valid.value) return
   const result = await op.run(
     (operationId, signal) => r.client.application(input(operationId), signal),
     false,
@@ -80,6 +84,11 @@ async function prove() {
     if (active) proofMessage.value = errorMessage(e)
   } finally {
     proofBusy.value = false
+  }
+}
+function acceptBaseline() {
+  if (baseline.accept()) {
+    op.state.value.message = '已核对当前版本；草稿保持不变，请重新核对并明确提交。'
   }
 }
 </script>
@@ -125,7 +134,27 @@ async function prove() {
           :disabled="op.locked.value || op.state.value.proof"
           color="primary"
           hide-details
-        /><WriteState :state="op.state.value" queryable @query="query" /><v-btn
+        />
+        <section v-if="existing" class="mt-5">
+          <v-btn
+            variant="outlined"
+            :disabled="op.locked.value"
+            :loading="baseline.busy.value"
+            @click="baseline.refresh"
+            >读取当前已保存版本（保留草稿）</v-btn
+          >
+          <p v-if="baseline.error.value" role="alert">{{ baseline.error.value }}</p>
+          <v-alert v-if="baseline.current.value" class="mt-4" type="info" :icon="false"
+            ><p>当前已保存内容如下；上方是你的草稿。</p>
+            <p>已保存回跳：{{ baseline.current.value.callback }}</p>
+            <p>已保存状态：{{ baseline.current.value.enabled ? '启用' : '未启用' }}</p>
+            <p>已保存证明方式：{{ baseline.current.value.capabilities.join(' / ') }}</p>
+            <v-btn class="mt-3" @click="acceptBaseline"
+              >已核对，基于当前版本继续编辑</v-btn
+            ></v-alert
+          >
+        </section>
+        <WriteState :state="op.state.value" queryable @query="query" /><v-btn
           v-if="op.state.value.proof"
           class="mt-4"
           :loading="proofBusy"
@@ -137,7 +166,13 @@ async function prove() {
         ><v-spacer /><v-btn @click="emit('close')">{{ $t('da.m6c14bd7f6f') }}</v-btn
         ><v-btn
           color="primary"
-          :disabled="!valid || op.locked.value || !r.client.capabilities.applicationWrite.available"
+          :disabled="
+            baseline.busy.value ||
+            !!baseline.current.value ||
+            !valid ||
+            op.locked.value ||
+            !r.client.capabilities.applicationWrite.available
+          "
           @click="save"
           >{{ $t('da.m706df2710a') }}</v-btn
         ></v-card-actions

@@ -4,6 +4,7 @@ import type { Configuration, ConfigurationInput, Person, Platform } from '@rss/d
 import { useDa } from '../../context'
 import { useRead } from '../../services/read'
 import { useMutation } from '../../services/mutation'
+import { useRevisionReview } from '../../services/revision-review'
 import { useDirectory } from '../../services/directory'
 import ReadState from '../../ui/ReadState.vue'
 import WriteState from '../../ui/WriteState.vue'
@@ -21,6 +22,9 @@ const r = useDa(),
   mode = ref(props.existing?.mode ?? 'platform_sso')
 const { data, busy, error, reload } = useRead((signal) => r.client.scopes(signal))
 const directory = useDirectory((cursor, signal) => r.client.computers(cursor, signal))
+const baseline = useRevisionReview(props.existing, (cursor, signal) =>
+  r.client.configurations(cursor, signal),
+)
 const op = useMutation(() => '/configuration/' + (props.existing?.id ?? 'new'))
 const targetScope = computed(() => data.value?.find((s) => s.id === scope.value)),
   targets = computed(() => directory.items.value.filter((c) => c.platform === platform.value))
@@ -45,7 +49,7 @@ function input(operationId: string): ConfigurationInput {
   return {
     id,
     operationId,
-    expectedRevision: props.existing?.revision ?? 0,
+    expectedRevision: baseline.revision.value,
     name: name.value.trim(),
     platform: platform.value,
     role: role.value,
@@ -56,7 +60,8 @@ function input(operationId: string): ConfigurationInput {
   }
 }
 async function save() {
-  if (!valid.value || !directory.complete.value) return
+  if (baseline.busy.value || baseline.current.value || !valid.value || !directory.complete.value)
+    return
   const result = await op.run(
     (operationId, signal) => r.client.configuration(input(operationId), signal),
     false,
@@ -74,6 +79,12 @@ async function query() {
   if (result) {
     step.value = 4
     emit('saved')
+  }
+}
+function acceptBaseline() {
+  if (baseline.accept()) {
+    op.state.value.message = '已核对当前版本；草稿保持不变，请重新核对并明确提交。'
+    step.value = 2
   }
 }
 </script>
@@ -222,7 +233,40 @@ async function query() {
         ><template v-else
           ><h3>{{ $t('da.m17cad0d2c6') }}</h3>
           <p>{{ $t('da.m5b9535a8ac') }}</p></template
-        ><WriteState :state="op.state.value" queryable @query="query" /></v-card-text
+        >
+        <section v-if="existing" class="mt-5">
+          <v-btn
+            variant="outlined"
+            :disabled="op.locked.value"
+            :loading="baseline.busy.value"
+            @click="baseline.refresh"
+            >读取当前已保存版本（保留草稿）</v-btn
+          >
+          <p v-if="baseline.error.value" role="alert">{{ baseline.error.value }}</p>
+          <v-alert v-if="baseline.current.value" class="mt-4" type="info" :icon="false"
+            ><p>当前已保存内容如下；上方是你的草稿。</p>
+            <p>已保存名称：{{ baseline.current.value.name }}</p>
+            <p>已保存范围：{{ baseline.current.value.scope.label }}</p>
+            <p>
+              已保存平台 / 登录：{{ baseline.current.value.platform }} /
+              {{ baseline.current.value.mode }}
+            </p>
+            <p>
+              已保存权限：{{ baseline.current.value.role }}；首次开通：{{
+                baseline.current.value.selfEnrollment ? '允许' : '不允许'
+              }}
+            </p>
+            <p>
+              已保存排除：{{
+                baseline.current.value.exclusions.map((x) => x.label).join('、') || '无'
+              }}
+            </p>
+            <v-btn class="mt-3" @click="acceptBaseline"
+              >已核对，基于当前版本继续编辑</v-btn
+            ></v-alert
+          >
+        </section>
+        <WriteState :state="op.state.value" queryable @query="query" /></v-card-text
       ><v-card-actions class="modal-actions"
         ><v-btn v-if="step > 1 && step < 4" :disabled="op.locked.value" @click="step--">{{
           $t('da.m75ef1241c0')
@@ -238,7 +282,7 @@ async function query() {
         ><v-btn
           v-if="step === 3"
           color="primary"
-          :disabled="!valid || op.locked.value"
+          :disabled="baseline.busy.value || !!baseline.current.value || !valid || op.locked.value"
           @click="save"
           >{{ $t('da.m13bf67032d') }}</v-btn
         ><v-btn v-if="step === 4" @click="emit('close')">{{

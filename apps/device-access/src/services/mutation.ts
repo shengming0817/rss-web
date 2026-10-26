@@ -10,7 +10,8 @@ export interface WriteState {
 /** Registry stores only non-secret operation locators, scoped to the app session. */
 export function useMutation(key: () => string) {
   const r = useDa(),
-    local = ref(0)
+    local = ref(0),
+    querying = ref(false)
   let controller: AbortController | undefined,
     epoch = 0
   function entry() {
@@ -31,6 +32,7 @@ export function useMutation(key: () => string) {
     () => {
       epoch++
       controller?.abort()
+      querying.value = false
       local.value++
     },
     { flush: 'sync' },
@@ -43,7 +45,11 @@ export function useMutation(key: () => string) {
     work: (id: string, signal: AbortSignal) => Promise<T>,
     retain = false,
   ): Promise<T | undefined> {
-    if (!identityKey(r.session) || ['busy', 'unknown', 'accepted'].includes(state.value.state))
+    if (
+      querying.value ||
+      !identityKey(r.session) ||
+      ['busy', 'unknown', 'accepted'].includes(state.value.state)
+    )
       return
     const e = state.value,
       version = epoch
@@ -75,12 +81,14 @@ export function useMutation(key: () => string) {
     settled: (value: T) => boolean = () => false,
   ): Promise<T | undefined> {
     const e = state.value
-    if (!e.id || e.state === 'busy') return
-    const version = epoch
+    if (querying.value || !e.id || e.state === 'busy') return
+    const version = epoch,
+      originalId = e.id
+    querying.value = true
     controller = new AbortController()
     try {
-      const result = await work(e.id, controller.signal)
-      if (epoch !== version) return
+      const result = await work(originalId, controller.signal)
+      if (epoch !== version || e.id !== originalId) return
       if (result === null) {
         e.message = '未查到原操作，结果仍未知。'
         return
@@ -91,8 +99,10 @@ export function useMutation(key: () => string) {
         : '原操作已查到；请核对各阶段结果。'
       return result
     } catch (error) {
-      if (epoch === version) e.message = errorMessage(error)
+      if (epoch === version && e.id === originalId) e.message = errorMessage(error)
       return undefined
+    } finally {
+      if (epoch === version) querying.value = false
     }
   }
   return {
@@ -100,6 +110,6 @@ export function useMutation(key: () => string) {
     run,
     query,
     cancel: () => controller?.abort(),
-    locked: computed(() => state.value.state !== 'idle'),
+    locked: computed(() => querying.value || state.value.state !== 'idle'),
   }
 }

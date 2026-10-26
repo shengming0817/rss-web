@@ -6,6 +6,7 @@ import { decodeIdentityError, type HttpTransport, type RequestOptions } from '@r
 import { decodeMdmError } from '@rss/api/mdm'
 import { CapabilityUnavailable, CredentialWriteNotDispatched } from '@rss/device-access/model'
 import { daKey, identityKey, type DaRuntime } from '../context'
+import { useRevisionReview } from './revision-review'
 import { useDirectory } from './directory'
 import { createSecurityClient } from '@rss/device-access/client'
 import { useRead } from './read'
@@ -286,4 +287,94 @@ it('integrates cancelled WebAuthn with retryable state, but keeps lost finish re
       ),
     ),
   ).toBe(true)
+})
+it('serializes original-operation queries and fences a cancelled query from a new target', async () => {
+  const r = await runtime(),
+    key = ref('one'),
+    op = use(r, () => useMutation(() => key.value)).output
+  await op.run(async () => {
+    throw new Error('lost')
+  })
+  let finish!: (v: { state: string }) => void
+  const query = vi.fn(
+    () =>
+      new Promise<{ state: string }>((resolve) => {
+        finish = resolve
+      }),
+  )
+  const first = op.query(query, (v) => v.state === 'completed')
+  await op.query(query, (v) => v.state === 'completed')
+  expect(query).toHaveBeenCalledTimes(1)
+  expect(op.locked.value).toBe(true)
+  key.value = 'two'
+  let finishWrite!: (v: number) => void
+  const write = op.run(
+    () =>
+      new Promise<number>((resolve) => {
+        finishWrite = resolve
+      }),
+  )
+  finish({ state: 'completed' })
+  await first
+  expect(op.state.value.state).toBe('busy')
+  finishWrite(42)
+  await write
+  expect(op.state.value.state).toBe('idle')
+})
+it('requires explicit acceptance of a freshly read revision without owning or replacing the draft', async () => {
+  const r = await runtime(),
+    initial = { id: 'a', revision: 1, name: 'Original' },
+    draft = { name: 'My draft' }
+  const load = vi
+    .fn()
+    .mockResolvedValueOnce({
+      items: [{ id: 'other', revision: 3, name: 'Other' }],
+      nextCursor: 'next',
+    })
+    .mockResolvedValueOnce({
+      items: [{ id: 'a', revision: 2, name: 'Changed by another user' }],
+      nextCursor: null,
+    })
+  const baseline = use(r, () => useRevisionReview(initial, load)).output
+  expect(baseline.accept()).toBe(false)
+  await baseline.refresh()
+  expect(baseline.revision.value).toBe(1)
+  expect(baseline.current.value?.name).toBe('Changed by another user')
+  expect(draft.name).toBe('My draft')
+  expect(baseline.accept()).toBe(true)
+  expect(baseline.revision.value).toBe(2)
+  expect(baseline.current.value).toBeUndefined()
+})
+it('does not adopt absent, failed or stale revision reads', async () => {
+  const r = await runtime(),
+    initial = { id: 'a', revision: 1 }
+  const load = vi
+    .fn()
+    .mockResolvedValueOnce({ items: [], nextCursor: null })
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockResolvedValue({ items: [], nextCursor: 'same' })
+  const baseline = use(r, () => useRevisionReview(initial, load)).output
+  await baseline.refresh()
+  expect(baseline.error.value).toContain('未找到')
+  await baseline.refresh()
+  expect(baseline.error.value).toBeTruthy()
+  await baseline.refresh()
+  expect(baseline.error.value).toContain('尚未完整')
+  expect(baseline.revision.value).toBe(1)
+  let finish!: (v: { items: { id: string; revision: number }[]; nextCursor: null }) => void
+  const pending = use(r, () =>
+    useRevisionReview(
+      initial,
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    ),
+  ).output
+  const reading = pending.refresh()
+  r.session.clear()
+  finish({ items: [{ id: 'a', revision: 4 }], nextCursor: null })
+  await reading
+  expect(pending.current.value).toBeUndefined()
+  expect(pending.busy.value).toBe(false)
 })
