@@ -125,6 +125,7 @@ watch(
     pending.value = undefined
     ready.value = false
     current.value = undefined
+    list.value = undefined
     resource.value = undefined
     progress.value = undefined
     preview.value = undefined
@@ -191,7 +192,7 @@ watch(
   { flush: 'sync' },
 )
 async function check(cursor?: string) {
-  if (!(ready.value && !busy.value && !uncertain.value)) return
+  if (!ready.value || busy.value || uncertain.value) return
   const previous = cursor ? preview.value : undefined
   preview.value = undefined
   try {

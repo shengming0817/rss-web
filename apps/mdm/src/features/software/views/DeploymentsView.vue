@@ -399,7 +399,7 @@ watch(
   { flush: 'sync' },
 )
 async function check(cursor?: string) {
-  if (!(!busy.value && !uncertain.value)) return
+  if (busy.value || uncertain.value) return
   const previous = cursor ? preview.value : undefined
   preview.value = undefined
   try {

@@ -6,6 +6,7 @@ import { ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { UiButton } from '@rss/core/components'
 import { useMdm } from '../../../context'
+import { deviceBinding } from '../../devices/useDeviceBinding'
 import { useOriginalOperation } from '../../../services/useOriginalOperation'
 import {
   policyDefinition,
@@ -222,7 +223,7 @@ watch(
   { flush: 'sync' },
 )
 async function check(cursor?: string) {
-  if (!(!busy.value && !locked.value)) return
+  if (busy.value || locked.value) return
   const previous = cursor ? preview.value : undefined
   preview.value = undefined
   try {
@@ -254,10 +255,23 @@ async function check(cursor?: string) {
 }
 
 watch(
-  () => JSON.stringify([runtime.session.state.value, current.value?.id]),
+  () => JSON.stringify(deviceBinding(runtime)),
   () => {
+    current.value = undefined
+    rows.value = undefined
     assignments.value = undefined
     preview.value = undefined
+    previewInput = undefined
+    id.value = crypto.randomUUID()
+    scope.value = ''
+    confirmation.value = false
+  },
+  { flush: 'sync' },
+)
+watch(
+  () => current.value?.id,
+  () => {
+    assignments.value = undefined
   },
   { flush: 'sync' },
 )
