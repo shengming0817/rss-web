@@ -104,6 +104,8 @@ export const platformNavigation: Navigation = [
   },
 ]
 export function navigationTarget(item: NavigationItem, tenant: string): RouteLocationRaw {
+  if (item.name === 'self-enrollments' || item.name === 'agent-downloads')
+    return { name: item.name, ...(item.query ? { query: item.query } : {}) }
   return item.path
     ? { path: item.path.replace(':tenant', tenant), ...(item.query ? { query: item.query } : {}) }
     : { name: item.name, params: { tenant }, ...(item.query ? { query: item.query } : {}) }
