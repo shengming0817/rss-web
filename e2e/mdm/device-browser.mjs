@@ -249,6 +249,7 @@ try {
   }
   await page.goto(path(`devices/${fixture.mdm}`))
   await loaded()
+  assert.equal(await page.locator('#vuetify-theme-stylesheet').count(), 0)
   const ownerDisplay = page.locator(`[data-personnel-device="${fixture.mdm}"]`)
   assert.ok((await ownerDisplay.textContent()).includes('Device Browser Person'))
   assert.ok((await ownerDisplay.textContent()).includes('person-source-alias'))
@@ -260,14 +261,14 @@ try {
   assert.ok((await ownerDisplay.textContent()).includes('未提供人员展示资料'))
   await page.goto(path('devices') + '?search=Device%20Browser%20Person')
   await loaded()
-  assert.equal(await page.locator('tbody .ui-table-empty').count(), 1)
+  assert.equal(await page.getByText('当前没有结果', { exact: true }).count(), 1)
   await writeRule(fixture.rule.grants)
   page.off('request', observePersonnel)
   assert.equal(directoryLookups, 0)
   coverage.push('real-personnel-name-login-full-directory-search-and-sensitive-revocation')
   phase = 'unknown-create'
   await page.goto(path(`devices/${fixture.mdm}`))
-  await page.getByRole('link', { name: '管理', exact: true }).click()
+  await page.getByRole('tab', { name: '管理', exact: true }).click()
   await panel().waitFor()
   const oldMdm = await api(`/api/v1/devices/${fixture.mdm}`)
   advanceGeneration('mdm')
@@ -326,7 +327,7 @@ try {
   await page.getByRole('link', { name: '设备目录', exact: true }).click()
   await loaded()
   await page.getByRole('link', { name: fixture.mdm, exact: true }).first().click()
-  await page.getByRole('link', { name: '管理', exact: true }).click()
+  await page.getByRole('tab', { name: '管理', exact: true }).click()
   await panel().waitFor()
   await page.getByLabel('我确认使用相同操作标识、身份及完整原正文幂等重放', { exact: true }).check()
   await page.getByRole('button', { name: '幂等重放原关联操作', exact: true }).click()
@@ -366,7 +367,7 @@ try {
   )
   coverage.push('manual-conflict-two-endpoints-source-pagination')
   phase = 'cas'
-  await page.getByRole('link', { name: '管理', exact: true }).click()
+  await page.getByRole('tab', { name: '管理', exact: true }).click()
   await page.getByRole('button', { name: '读取当前关系与主注册', exact: true }).click()
   await panel().locator('[aria-busy=false]').count()
   await panel().getByLabel('核实说明与依据', { exact: true }).fill('UI verification')
@@ -407,7 +408,7 @@ try {
       .find((e) => e.id === fixture.agent)
       .channels.some((c) => c.generation === 2),
   )
-  await page.getByRole('link', { name: '管理', exact: true }).click()
+  await page.getByRole('tab', { name: '管理', exact: true }).click()
   await page.getByRole('button', { name: '读取当前关系与主注册', exact: true }).click()
   await panel().getByLabel('核实说明与依据', { exact: true }).fill('Verified current generation')
   await panel()
@@ -1314,6 +1315,8 @@ try {
     directory.asset.items.some((i) => i.scope.kind === 'macos_applications' && i.scope.uid === 501),
   )
   await page.goto(path(`devices/${collectorDevice}`))
+  await page.getByRole('tab', { name: '资产信息', exact: true }).click()
+  await page.getByRole('button', { name: '用户与安装范围资产', exact: true }).click()
   const scopedInventory = page.locator('[data-testid=scope-inventory]')
   await scopedInventory
     .locator('select')
@@ -1429,7 +1432,7 @@ try {
   phase = 'revoke'
   await writeRule(fixture.rule.grants)
   await page.reload()
-  await page.getByRole('link', { name: '管理', exact: true }).click()
+  await page.getByRole('tab', { name: '管理', exact: true }).click()
   await panel().waitFor()
   const registrations = await api(`/api/v1/devices/${fixture.agent}/registrations`)
   await panel()

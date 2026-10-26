@@ -152,6 +152,10 @@ function restoreFocus() {
 }
 async function readReferences(cursor?: string) {
   if (!detailKey.value) return
+  if (!cursor) {
+    refs.value = undefined
+    definitions.value = {}
+  }
   await mappingOperation.run(
     () => runtime.devices.assets.fieldReferences(detailKey.value, cursor),
     (value) => {
@@ -163,46 +167,52 @@ async function readReferences(cursor?: string) {
   )
 }
 async function readDefinition(reference: FieldMappingReference) {
+  delete definitions.value[reference.resource + ':' + reference.version]
   await mappingOperation.run(
     () => runtime.policies.resources.read(reference.resource),
     (resource) => {
       const version = resource.versions.find((v) => v.id === reference.version)
       definitions.value[reference.resource + ':' + reference.version] = version
-        ? version.variants.flatMap<{variant: string; platform: string; mapping: unknown}>((variant) => {
-            const declaration = variant.declaration
-            if (declaration.kind === 'agent_collection' || declaration.kind === 'native_collection')
-              return [
-                {
-                  variant: variant.key,
-                  platform: variant.platform,
-                  mapping: declaration.definition.mappings[detailKey.value] ?? null,
-                },
-              ]
-            if (
-              declaration.kind === 'script' &&
-              declaration.definition.purpose.kind === 'collection'
-            )
-              return [
-                {
-                  variant: variant.key,
-                  platform: variant.platform,
-                  mapping: declaration.definition.purpose.mappings[detailKey.value] ?? null,
-                },
-              ]
-            if (declaration.kind === 'telemetry_profile')
-              return [
-                {
-                  variant: variant.key,
-                  platform: variant.platform,
-                  mapping: {
-                    fields: declaration.definition.fields,
-                    template: declaration.definition.template,
-                    projection: declaration.definition.projection,
+        ? version.variants.flatMap<{ variant: string; platform: string; mapping: unknown }>(
+            (variant) => {
+              const declaration = variant.declaration
+              if (
+                declaration.kind === 'agent_collection' ||
+                declaration.kind === 'native_collection'
+              )
+                return [
+                  {
+                    variant: variant.key,
+                    platform: variant.platform,
+                    mapping: declaration.definition.mappings[detailKey.value] ?? null,
                   },
-                },
-              ]
-            return []
-          })
+                ]
+              if (
+                declaration.kind === 'script' &&
+                declaration.definition.purpose.kind === 'collection'
+              )
+                return [
+                  {
+                    variant: variant.key,
+                    platform: variant.platform,
+                    mapping: declaration.definition.purpose.mappings[detailKey.value] ?? null,
+                  },
+                ]
+              if (declaration.kind === 'telemetry_profile')
+                return [
+                  {
+                    variant: variant.key,
+                    platform: variant.platform,
+                    mapping: {
+                      fields: declaration.definition.fields,
+                      template: declaration.definition.template,
+                      projection: declaration.definition.projection,
+                    },
+                  },
+                ]
+              return []
+            },
+          )
         : t('devices.workspace.noVersion')
     },
   )

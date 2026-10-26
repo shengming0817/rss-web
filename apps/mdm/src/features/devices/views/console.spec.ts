@@ -1,3 +1,4 @@
+import { VSelect } from 'vuetify/components'
 import { encodeAssetQuery } from '../clients/asset-query'
 import GroupDependencies from '../components/GroupDependencies.vue'
 import { createSecurityClients as createFormalSecurityClients } from '../../security/client'
@@ -33,10 +34,8 @@ it('shows channel communication separately and clears the MDM receipt after regi
   expect(before.channels.map((c) => c.channel).sort()).toEqual(['agent', 'mdm'])
   const card = () => h.wrapper.find('[data-endpoint="device-01"]')
   async function openChannels() {
-    const disclosure = h.wrapper
-      .findAllComponents({ name: 'UiDisclosure' })
-      .find((d) => d.props('label') === '通道')!
-    await disclosure.get('button').trigger('click')
+    await h.click('管理')
+    h.wrapper.get('[data-device-channels]').element.setAttribute('open', '')
     await flushPromises()
   }
   await openChannels()
@@ -140,7 +139,14 @@ async function setup(
       ...(settingsFeature.routes ?? []),
     ],
   })
-  await router.push({ name, params: { tenant: TENANT, ...params }, query })
+  await router.push({
+    name,
+    params: { tenant: TENANT, ...params },
+    query:
+      name === 'device-detail' || name === 'device-view-detail'
+        ? { tab: 'inventory', ...query }
+        : query,
+  })
   await router.isReady()
   const sessionState = shallowRef({
     status: 'authenticated',
@@ -203,10 +209,13 @@ async function setup(
   }
   const click = async (text: string) => {
     const target = button(text)
-    await target.trigger(target.attributes('role') === 'tab' ? 'mousedown' : 'click', {
-      button: 0,
-      ctrlKey: false,
-    })
+    await target.trigger(
+      target.attributes('role') === 'tab' && !target.attributes('href') ? 'mousedown' : 'click',
+      {
+        button: 0,
+        ctrlKey: false,
+      },
+    )
     await flushPromises()
   }
   if (name === 'device-search') {
@@ -295,22 +304,28 @@ it('renders asset categories, edits manual fields and keeps ownership blocked', 
   await manual.find('form').trigger('submit')
   await flushPromises()
   expect(manual.text()).toContain('显式空值')
-  await new DOMWrapper(document.body).get('[role=dialog] button[aria-label=取消]').trigger('click')
+  await new DOMWrapper(document.body)
+    .findAll('[role=dialog] button')
+    .find((b) => b.text() === '取消')!
+    .trigger('click')
   await flushPromises()
   expect(wrapper.text()).toContain('设备型号')
-  const list = wrapper
-    .findAll('details')
-    .find((d) => d.find('summary').text().includes('device.software'))!
-  await list.element.setAttribute('open', '')
+  await click('软件')
+  await wrapper.get('[data-asset-field="device.software"] button').trigger('click')
+  await flushPromises()
   await click('展开此来源')
   expect(wrapper.text()).toContain('旧分页失效')
   await click('重新读取')
-  const refreshed = wrapper
-    .findAll('details')
-    .find((d) => d.find('summary').text().includes('device.software'))!
-  refreshed.element.setAttribute('open', '')
+  await click('软件')
+  await wrapper.get('[data-asset-field="device.software"] button').trigger('click')
+  await flushPromises()
   await click('展开此来源')
-  expect(wrapper.text()).toContain('Enterprise Browser')
+  expect(new DOMWrapper(document.body).text()).toContain('Enterprise Browser')
+  await new DOMWrapper(document.body)
+    .findAll('[role=dialog] button')
+    .find((b) => b.text() === '关闭')!
+    .trigger('click')
+  await flushPromises()
   await click('历史')
   expect(wrapper.text()).toContain('registration_bound')
   await click('管理')
@@ -678,7 +693,10 @@ it('keeps an uncertain manual operation across tabs and replays the same request
   await flushPromises()
   const original = requests.find((r) => r.method === 'PUT')!.body
   scenario.set('normal')
-  await new DOMWrapper(document.body).get('[role=dialog] button[aria-label=取消]').trigger('click')
+  await new DOMWrapper(document.body)
+    .findAll('[role=dialog] button')
+    .find((b) => b.text() === '取消')!
+    .trigger('click')
   await flushPromises()
   await click('管理')
   await click('重启')
@@ -750,7 +768,10 @@ it('retains an in-flight manual write when tabs change before its unknown result
     throw networkErrorForTest()
   }
   await manual.find('form').trigger('submit')
-  await new DOMWrapper(document.body).get('[role=dialog] button[aria-label=取消]').trigger('click')
+  await new DOMWrapper(document.body)
+    .findAll('[role=dialog] button')
+    .find((b) => b.text() === '取消')!
+    .trigger('click')
   await flushPromises()
   await click('管理')
   await click('重启')
@@ -1147,7 +1168,11 @@ it('locks an unknown association, survives navigation, and requires explicit exa
   const original = h.requests.find((r) => r.method === 'POST')!.body
   await h.router.push({ name: 'devices', params: { tenant: TENANT } })
   await flushPromises()
-  await h.router.push({ name: 'device-detail', params: { tenant: TENANT, device: 'device-01' } })
+  await h.router.push({
+    name: 'device-detail',
+    params: { tenant: TENANT, device: 'device-01' },
+    query: { tab: 'inventory' },
+  })
   await flushPromises()
   await h.click('管理')
   const panel = h.wrapper.find('[data-testid=association-panel]')
@@ -1180,6 +1205,10 @@ it.each([403, 404])(
     await chooseAssociation(h)
     await h.click('确认关联')
     await vi.waitFor(() => expect(h.router.currentRoute.value.name).toBe('device-view-detail'))
+    await flushPromises()
+    await h.click('资产信息')
+    await h.click('软件')
+    await h.wrapper.get('[data-asset-field="device.software"] button').trigger('click')
     await flushPromises()
     expect(h.wrapper.findComponent({ name: 'ViewFacts' }).exists()).toBe(true)
     vi.spyOn(h.devices.views, 'items').mockRejectedValueOnce(
@@ -1305,10 +1334,10 @@ it.each(['zh-CN', 'en-US'] as const)(
     await flushPromises()
     expect(
       h.wrapper
-        .findAll('select')
-        .find((select) => select.find('option[value="mdm.windows"]').exists())!
-        .findAll('option')
-        .map((o) => o.text()),
+        .findAllComponents(VSelect)
+        .find((select) => select.attributes('data-testid') === 'directory-source')!
+        .props('items')
+        ?.map((item) => item.label),
     ).toEqual([locale === 'zh-CN' ? '全部' : 'All', 'Windows MDM', 'Apple MDM', 'Agent'])
   },
 )
@@ -1640,8 +1669,13 @@ it.each([
       ],
       nextCursor: null,
     })
-    await h.router.push({ name: 'device-detail', params: { tenant: TENANT, device: 'device-01' } })
+    await h.router.push({
+      name: 'device-detail',
+      params: { tenant: TENANT, device: 'device-01' },
+      query: { tab: 'inventory' },
+    })
     await flushPromises()
+    await h.click('用户与安装范围资产')
     const scoped = h.wrapper.get('[data-testid=scope-inventory]')
     await scoped.findAll('select')[1]!.setValue(JSON.stringify(scope))
     await flushPromises()
@@ -1756,8 +1790,13 @@ it.each([
       watermark: 21,
       nextCursor: 'next',
     })
-    await h.router.push({ name: 'device-detail', params: { tenant: TENANT, device: 'device-01' } })
+    await h.router.push({
+      name: 'device-detail',
+      params: { tenant: TENANT, device: 'device-01' },
+      query: { tab: 'inventory' },
+    })
     await flushPromises()
+    await h.click('用户与安装范围资产')
     const scoped = h.wrapper.get('[data-testid=scope-inventory]')
     await scoped.findAll('select')[1]!.setValue(JSON.stringify(scope))
     await flushPromises()
@@ -1826,11 +1865,15 @@ it('renders shared fields in saved layout order after reloading the detail', asy
     },
   })
   await f.router.push({ name: 'devices', params: { tenant: TENANT } })
-  await f.router.push({ name: 'device-detail', params: { tenant: TENANT, device: 'device-01' } })
+  await f.router.push({
+    name: 'device-detail',
+    params: { tenant: TENANT, device: 'device-01' },
+    query: { tab: 'inventory' },
+  })
   await flushPromises()
   await f.click('Ordered assets')
   const labels = f.wrapper
-    .findAll('.asset-detail-layout .console-panel > dl > dt')
+    .findAll('[data-asset-field] td:first-child strong')
     .map((label) => label.text())
   expect(labels).toEqual(['借用设备', '资产编号'])
 })
@@ -2048,7 +2091,7 @@ it('clears directory statistics when the principal changes on a continuation pag
   const f = await setup()
   await f.click('下一页')
   expect(f.router.currentRoute.value.query['cursor']).toBeTruthy()
-  expect(f.wrapper.find('.console-stat-grid').exists()).toBe(true)
+  expect(f.wrapper.find('.device-statistics').exists()).toBe(true)
   const stats = vi
     .spyOn(f.devices.views, 'statistics')
     .mockRejectedValueOnce(decodeMdmError(403, { code: 'permission_denied' }))
@@ -2061,17 +2104,46 @@ it('clears directory statistics when the principal changes on a continuation pag
   }
   await flushPromises()
   expect(stats).toHaveBeenCalledTimes(1)
-  expect(f.wrapper.find('.console-stat-grid').exists()).toBe(false)
+  expect(f.wrapper.find('.device-statistics').exists()).toBe(false)
   expect(f.wrapper.find('tbody').exists()).toBe(false)
 })
 
 it('withdraws cached directory counts when a continuation loses its authority', async () => {
   const f = await setup()
-  expect(f.wrapper.find('.console-stat-grid').exists()).toBe(true)
+  expect(f.wrapper.find('.device-statistics').exists()).toBe(true)
   vi.spyOn(f.devices.views, 'list').mockRejectedValueOnce(
     decodeMdmError(403, { code: 'permission_denied' }),
   )
   await f.click('下一页')
-  expect(f.wrapper.find('.console-stat-grid').exists()).toBe(false)
+  expect(f.wrapper.find('.device-statistics').exists()).toBe(false)
   expect(f.wrapper.find('tbody').exists()).toBe(false)
+})
+
+it('keeps inventory filters in all fields and opens category facts in a detail dialog', async () => {
+  const f = await setup('device-detail', { device: 'device-01' })
+  expect(f.wrapper.find('input[aria-label="筛选字段、值或来源"]').exists()).toBe(false)
+  await f.click('硬件')
+  const row = f.wrapper.get('[data-asset-field="device.model"]')
+  await row.get('button').trigger('click')
+  await flushPromises()
+  const dialog = new DOMWrapper(document.body).get('[role=dialog]')
+  expect(dialog.text()).toContain('ThinkPad T14')
+  await dialog
+    .findAll('button')
+    .find((b) => b.text() === '关闭')!
+    .trigger('click')
+  await f.click('全部字段与映射')
+  await f.wrapper.get('input[type=search]').setValue('nothing-matches')
+  expect(f.wrapper.findAll('[data-asset-field]')).toHaveLength(0)
+  await f.click('硬件')
+  expect(f.wrapper.get('[data-asset-field="device.model"]').text()).toContain('ThinkPad T14')
+  await f.click('全部字段与映射')
+  expect(f.wrapper.findAll('[data-asset-field]')).toHaveLength(0)
+  await f.wrapper.get('input[type=search]').setValue('device.model')
+  await f.click('映射与来源')
+  await f.click('读取映射引用')
+  expect(f.requests.some((r) => r.path === '/api/v1/asset-fields/{field}/references')).toBe(true)
+  expect(f.wrapper.text()).toContain('当前没有映射引用')
+  await f.click('原始数据')
+  expect(f.wrapper.get('.device-json').text()).toContain('ThinkPad T14')
 })

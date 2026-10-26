@@ -9,13 +9,14 @@ export default defineConfig({
     root: fileURLToPath(new URL('.', import.meta.url)),
     environment: 'jsdom',
     setupFiles: ['./src/test-setup.ts'],
-    include: ['src/**/*.spec.ts', 'demo/**/*.spec.ts'],
+    include: ['src/**/*.spec.ts', 'src/test-setup.ts', 'demo/**/*.spec.ts'],
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts', 'src/**/*.vue'],
       exclude: [
         'src/contracts/collection/generated/**',
         'src/**/*.spec.ts',
+        'src/test-setup.ts',
         'src/main.ts',
         'src/router.ts',
         'src/App.vue',
