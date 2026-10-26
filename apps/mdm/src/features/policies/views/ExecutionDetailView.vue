@@ -31,6 +31,9 @@ watch(
   { flush: 'sync' },
 )
 async function load() {
+  native.value = undefined
+  software.value = undefined
+  compared.value = false
   let id: string
   try {
     id = uuid(String(route.params['execution']))

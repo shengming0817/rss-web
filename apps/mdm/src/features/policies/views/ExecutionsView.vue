@@ -18,7 +18,8 @@ const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute()
 const activeFilter = ref<string>()
-const queue = ref<'all' | 'waiting' | 'blocked' | 'unknown'>('all'),
+type Queue = 'all' | 'waiting' | 'blocked' | 'unknown'
+const queue = ref<Queue>('all'),
   authorizationState = ref(''),
   authorizationReason = ref('')
 const { run, busy, failure } = useOperation(
@@ -60,6 +61,10 @@ function beginRemote() {
 const utc = (at: number) =>
   new Date(at * 1000).toISOString().replace('T', ' ').replace('.000Z', ' UTC')
 const pinned = computed(() => typeof route.query['operation'] === 'string')
+function selectQueue(value: Queue) {
+  queue.value = value
+  load()
+}
 function load(cursor?: string) {
   if (busy.value) return
   records.value = undefined
@@ -239,10 +244,7 @@ watch(
         :key="value"
         :aria-pressed="queue === value"
         :disabled="busy"
-        @click="
-          queue = value
-          load()
-        "
+        @click="selectQueue(value)"
         >{{ t(`policies.queues.${value}`) }}</UiButton
       >
     </div>

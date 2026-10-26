@@ -338,6 +338,11 @@ it('uses current reauthorization eligibility and replays a lost response with th
     await flushPromises()
     const original = reauthorize.mock.calls[0]?.[2]
     expect(original).not.toHaveProperty('confirmation')
+    read.mockRejectedValueOnce(new Error('permission revoked'))
+    await button('核实状态').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.authorization-facts').exists()).toBe(false)
+    expect(button('重放同一操作').attributes('disabled')).toBeDefined()
     value = { ...value, revision: 2 }
     await button('核实状态').trigger('click')
     await flushPromises()

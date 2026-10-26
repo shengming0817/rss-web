@@ -140,6 +140,8 @@ it('blocks current Scope consumers while a changed dynamic group is pending and 
   )
   devices.handle(request(`/api/v1/groups/${group}/tasks/${first}`), 'normal')
   devices.handle(request(`/api/v1/groups/${group}/tasks/${first}`), 'normal')
+  devices.handle(request(`/api/v1/groups/${group}`), 'normal')
+  devices.handle(request(`/api/v1/groups/${group}`), 'normal')
   expect(devices.publishedGroup(group)?.ready).toBe(true)
   scopes.handle(
     request(`/api/v1/scopes/${id}`, {
@@ -165,6 +167,9 @@ it('blocks current Scope consumers while a changed dynamic group is pending and 
     }),
     'normal',
   )
+  expect(devices.publishedGroup(group)?.ready).toBe(true)
+  devices.handle(request(`/api/v1/groups/${group}/tasks/${changed}`), 'normal')
+  devices.handle(request(`/api/v1/groups/${group}/tasks/${changed}`), 'normal')
   expect(devices.publishedGroup(group)?.ready).toBe(false)
   expect(scopes.freeze(id)).toBeNull()
   expect(scopes.snapshot(id)?.result).toBe(task)
@@ -179,8 +184,8 @@ it('blocks current Scope consumers while a changed dynamic group is pending and 
       ),
   ).toBe(true)
   expect(scopes.handle(request(path), 'normal')?.body).toEqual(history)
-  devices.handle(request(`/api/v1/groups/${group}/tasks/${changed}`), 'normal')
-  devices.handle(request(`/api/v1/groups/${group}/tasks/${changed}`), 'normal')
+  devices.handle(request(`/api/v1/groups/${group}`), 'normal')
+  devices.handle(request(`/api/v1/groups/${group}`), 'normal')
   expect(scopes.snapshot(id)).not.toBeNull()
   expect(scopes.freeze(id)).not.toBeNull()
 })
@@ -215,6 +220,8 @@ it.each(['limitations', 'exclusions'] as const)(
     )
     devices.handle(request(`/api/v1/groups/${group}/tasks/${op}`), 'normal')
     devices.handle(request(`/api/v1/groups/${group}/tasks/${op}`), 'normal')
+    devices.handle(request(`/api/v1/groups/${group}`), 'normal')
+    devices.handle(request(`/api/v1/groups/${group}`), 'normal')
     const ref = { kind: 'group', id: group },
       known = { kind: 'device', id: device }
     const put = (operationId: string, expectedRevision: number, definition: unknown) =>

@@ -282,30 +282,32 @@ function saveRule(event: Event) {
     failure.value = 'invalidRequest'
   }
 }
+function completed(value: Awaited<ReturnType<typeof client.status>> | undefined) {
+  return value?.status === 'completed' && !value.failure
+}
 async function refresh() {
   if (busy.value || uncertain.value) return
   const group = id.value
-  if (definitionTask.value && definitionStatus.value?.status !== 'completed') {
+  if (definitionTask.value && !completed(definitionStatus.value)) {
     const loaded = await run(
       () => client.status(group, definitionTask.value!, 'group_definition'),
       (v) => {
         definitionStatus.value = v
       },
     )
-    if (!loaded || definitionStatus.value?.status !== 'completed' || definitionStatus.value.failure)
-      return
+    if (!loaded || !completed(definitionStatus.value)) return
     editing.value = false
     detailTab.value = 'members'
   }
   if (definitionStatus.value && definitionStatus.value.status !== 'completed') return
-  if (task.value && !definitionTask.value && status.value?.status !== 'completed') {
+  if (task.value && !definitionTask.value && !completed(status.value)) {
     const loaded = await run(
       () => client.status(group, task.value!, taskKind.value),
       (v) => {
         status.value = v
       },
     )
-    if (!loaded || status.value?.status !== 'completed' || status.value.failure) return
+    if (!loaded || !completed(status.value)) return
     if (taskKind.value === 'group_preview') return
   }
   await run(

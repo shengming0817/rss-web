@@ -2094,7 +2094,7 @@ it('automatically observes a definition task before reading the separately publi
     const write = h.requests
       .filter((r) => r.method === 'POST' && r.path === '/api/v1/groups/{id}')
       .at(-1)!
-    const group = write.pathParams!['id']!,
+    const group = String(write.pathParams!['id']!),
       definition = (write.body as { operationId: string }).operationId
     expect(
       h.requests.some(

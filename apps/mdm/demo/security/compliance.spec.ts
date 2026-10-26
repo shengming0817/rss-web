@@ -325,9 +325,11 @@ it('invalidates dynamic group inputs after fact changes even when the compliance
     presentation: { name: 'Office members', description: '' },
     criteria: definition.criteria,
   })
-  expect((await f.write('POST', groupPath, groupWrite)).status).toBe(200)
+  expect((await f.write('POST', groupPath, groupWrite)).status).toBe(202)
   await f.server.handle('GET', `${groupPath}/tasks/${groupWrite.operationId}`)
   await f.server.handle('GET', `${groupPath}/tasks/${groupWrite.operationId}`)
+  await f.server.handle('GET', groupPath)
+  await f.server.handle('GET', groupPath)
   const rule = crypto.randomUUID(),
     path = `/api/v1/compliance-rules/${rule}`
   const { task } = (
