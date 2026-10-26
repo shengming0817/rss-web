@@ -138,11 +138,25 @@ function save() {
     },
   })
 }
-function refresh() {
-  if (task.value)
-    void run(
-      () => client.status(id.value, task.value!),
-      (v) => (status.value = v),
+async function refresh() {
+  const target = id.value,
+    pendingTask = task.value
+  if (!pendingTask) return
+  result.value = undefined
+  let completed = false
+  const ok = await run(
+    () => client.status(target, pendingTask),
+    (value) => {
+      status.value = value
+      completed = value.status === 'completed'
+    },
+  )
+  if (ok && completed && id.value === target)
+    await run(
+      () => client.read(target),
+      (value) => {
+        if (id.value === target) apply(value)
+      },
     )
 }
 function page(cursor?: string) {

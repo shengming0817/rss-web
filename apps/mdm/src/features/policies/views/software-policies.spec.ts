@@ -303,7 +303,9 @@ it.each([false, true])(
       expect(assignments).toHaveBeenCalledWith(change.mock.calls[0]![0], { cursor: undefined })
       await click('分批进度')
       expect(rollout).toHaveBeenCalledWith(change.mock.calls[0]![0])
-      expect(wrapper.get('[role=progressbar]').attributes('aria-valuenow')).toBe('50')
+      expect(wrapper.get('[role=progressbar][aria-valuenow]').attributes('aria-valuenow')).toBe(
+        '50',
+      )
       await click('运行历史')
       expect(runs.list).toHaveBeenCalledWith(change.mock.calls[0]![0], { cursor: undefined })
       await click('读取运行证据')

@@ -381,9 +381,11 @@ watch(
     </div>
     <div class="telemetry-history-layout">
       <nav class="telemetry-metrics" :aria-label="t('telemetry.metrics')">
-        <button
+        <VBtn
           v-for="f in fields"
           :key="f.key"
+          variant="text"
+          height="auto"
           type="button"
           :aria-current="field === f.key ? 'page' : undefined"
           @click="field = f.key"
@@ -391,7 +393,7 @@ watch(
           <strong>{{ metricName(f.key) }}</strong
           ><small v-if="metricName(f.key) !== f.key">{{ f.key }}</small
           ><small>{{ f.unit ?? '—' }} · {{ f.timeSeries?.kind ?? t('telemetry.unbound') }}</small>
-        </button>
+        </VBtn>
       </nav>
       <div class="telemetry-series">
         <template v-if="selectedField?.timeSeries"

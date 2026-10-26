@@ -23,7 +23,7 @@ const defaults = computed(() =>
 )
 </script>
 <template>
-  <VDefaultsProvider :defaults="defaults"
-    ><fieldset v-bind="$attrs" :disabled="disabled"><slot /></fieldset
-  ></VDefaultsProvider>
+  <fieldset v-bind="$attrs" :disabled="disabled">
+    <VDefaultsProvider :defaults="defaults"><slot /></VDefaultsProvider>
+  </fieldset>
 </template>

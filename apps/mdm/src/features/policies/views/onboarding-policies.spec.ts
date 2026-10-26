@@ -178,12 +178,10 @@ it('instantiates the selected update blueprint through the unified Resource libr
     platform: 'windows',
     definition: { kind: 'native_collection' },
   }
-  const blueprints = vi
-    .fn()
-    .mockResolvedValue({
-      categories: ['updates', 'hardware'],
-      items: [blueprint, { ...blueprint, id: 'hardware', category: 'hardware' }],
-    })
+  const blueprints = vi.fn().mockResolvedValue({
+    categories: ['updates', 'hardware'],
+    items: [blueprint, { ...blueprint, id: 'hardware', category: 'hardware' }],
+  })
   const change = vi.fn().mockResolvedValue({}),
     read = vi.fn(async (id: string) => ({
       id,
@@ -198,7 +196,7 @@ it('instantiates the selected update blueprint through the unified Resource libr
     },
   })
   await button(wrapper, '新建').trigger('click')
-  await button(wrapper, '选择标准采集包').trigger('click')
+  await button(wrapper, '选择标准包').trigger('click')
   await flushPromises()
   const selectors = wrapper.findAllComponents({ name: 'VSelect' })
   await selectors.find((control: VueWrapper) => hasChoice(control, 'updates'))!.setValue('updates')
@@ -207,7 +205,7 @@ it('instantiates the selected update blueprint through the unified Resource libr
   )!
   expect(hasChoice(choice, JSON.stringify(['hardware', '1']))).toBe(false)
   await choice.setValue(JSON.stringify(['update-state', '1']))
-  await button(wrapper, '创建标准采集资源').trigger('click')
+  await button(wrapper, '实例化标准包').trigger('click')
   await flushPromises()
   expect(change.mock.calls[0]?.[1]).toMatchObject({
     expectedRevision: 0,
