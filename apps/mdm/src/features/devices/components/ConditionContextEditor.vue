@@ -1,4 +1,11 @@
 <script setup lang="ts">
+import {
+  VExpansionPanels,
+  VExpansionPanel,
+  VExpansionPanelText,
+  VSelect,
+  VTextField,
+} from 'vuetify/components'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { type ConditionContext, type CollectionScope } from '../clients/asset-model'
@@ -40,72 +47,56 @@ function quantifier(value: string) {
 }
 </script>
 <template>
-  <section class="inventory-condition">
-    <details :open="!!model && model.selector.kind !== 'device'">
-      <summary>{{ t('devices.conditionContext') }}</summary>
-      <label
-        >{{ t('devices.conditionScope')
-        }}<select
-          class="ui-input"
-          :value="selection"
-          @change="select(($event.target as HTMLSelectElement).value)"
-        >
-          <option value="unfiltered">{{ t('devices.all') }}</option>
-          <option
-            v-for="kind in ['device', 'exact', 'local_user', 'all_authorized']"
-            :key="kind"
-            :value="kind"
-          >
-            {{ t(`devices.selectorKind.${kind}`) }}
-          </option>
-        </select></label
-      >
-      <template v-if="model">
-        <ScopeEditor
-          v-if="model.selector.kind === 'exact'"
-          :model-value="model.selector.scope"
-          @update:model-value="exactScope"
+  <v-expansion-panels :model-value="model && model.selector.kind !== 'device' ? 0 : undefined"
+    ><v-expansion-panel :title="t('devices.conditionContext')"
+      ><v-expansion-panel-text eager>
+        <v-select
+          :model-value="selection"
+          :label="t('devices.conditionScope')"
+          :items="[
+            { value: 'unfiltered', title: t('devices.all') },
+            ...['device', 'exact', 'local_user', 'all_authorized'].map((value) => ({
+              value,
+              title: t('devices.selectorKind.' + value),
+            })),
+          ]"
+          @update:model-value="select"
         />
-        <template v-if="model.selector.kind === 'local_user'"
-          ><label
-            >{{ t('devices.scopeField.platform')
-            }}<select
-              :value="model.selector.platform"
-              class="ui-input"
-              @change="localUser('platform', ($event.target as HTMLSelectElement).value)"
-            >
-              <option value="windows">Windows</option>
-              <option value="macos">macOS</option>
-            </select></label
-          ><label
-            >{{ model.selector.platform === 'windows' ? 'SID' : 'UID'
-            }}<input
-              :value="model.selector.identity"
-              class="ui-input"
+        <template v-if="model">
+          <ScopeEditor
+            v-if="model.selector.kind === 'exact'"
+            :model-value="model.selector.scope"
+            @update:model-value="exactScope"
+          />
+          <template v-if="model.selector.kind === 'local_user'">
+            <v-select
+              :model-value="model.selector.platform"
+              :label="t('devices.scopeField.platform')"
+              :items="[
+                { value: 'windows', title: 'Windows' },
+                { value: 'macos', title: 'macOS' },
+              ]"
+              @update:model-value="localUser('platform', $event)"
+            />
+            <v-text-field
+              :model-value="model.selector.identity"
+              :label="model.selector.platform === 'windows' ? 'SID' : 'UID'"
               required
-              @input="localUser('identity', ($event.target as HTMLInputElement).value)" /></label
-        ></template>
-        <label
-          >{{ t('devices.conditionQuantifier')
-          }}<select
-            :value="model.quantifier"
-            class="ui-input"
+              @update:model-value="localUser('identity', $event)"
+            />
+          </template>
+          <v-select
+            :model-value="model.quantifier"
+            :label="t('devices.conditionQuantifier')"
             :disabled="model.selector.kind === 'device' || model.selector.kind === 'exact'"
-            @change="quantifier(($event.target as HTMLSelectElement).value)"
-          >
-            <option
-              v-if="model.selector.kind === 'device' || model.selector.kind === 'exact'"
-              value="one"
-            >
-              {{ t('devices.quantifier.one') }}
-            </option>
-            <template v-else
-              ><option value="any">{{ t('devices.quantifier.any') }}</option>
-              <option value="all">{{ t('devices.quantifier.all') }}</option></template
-            >
-          </select></label
-        >
-      </template>
-    </details>
-  </section>
+            :items="
+              (model.selector.kind === 'device' || model.selector.kind === 'exact'
+                ? ['one']
+                : ['any', 'all']
+              ).map((value) => ({ value, title: t('devices.quantifier.' + value) }))
+            "
+            @update:model-value="quantifier"
+          />
+        </template> </v-expansion-panel-text></v-expansion-panel
+  ></v-expansion-panels>
 </template>

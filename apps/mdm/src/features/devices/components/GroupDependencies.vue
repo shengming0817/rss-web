@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { VBtn, VSelect, VAlert, VList, VListItem, VChip } from 'vuetify/components'
 import { ref, watch } from 'vue'
-import { UiButton, UiBadge } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
@@ -43,43 +43,48 @@ watch(
 <template>
   <section class="group-dependencies" :aria-busy="busy">
     <div class="console-toolbar">
-      <select
+      <v-select
         v-model="kind"
         :disabled="busy"
-        class="ui-input"
-        :aria-label="t('devices.dependencyKind')"
-        @change="load()"
-      >
-        <option value="">{{ t('devices.all') }}</option>
-        <option
-          v-for="value in ['group', 'scope', 'policy', 'compliance_rule'] as const"
-          :key="value"
-          :value="value"
-        >
-          {{ t('devices.dependencyKinds.' + value) }}
-        </option></select
-      ><select
+        :label="t('devices.dependencyKind')"
+        :items="[
+          { value: '', title: t('devices.all') },
+          ...['group', 'scope', 'policy', 'compliance_rule'].map((value) => ({
+            value,
+            title: t('devices.dependencyKinds.' + value),
+          })),
+        ]"
+        @update:model-value="load()"
+      />
+      <v-select
         v-model="relation"
         :disabled="busy"
-        class="ui-input"
-        :aria-label="t('devices.dependencies')"
-        @change="load()"
-      >
-        <option value="all">{{ t('devices.all') }}</option>
-        <option value="direct">{{ t('devices.directDependency') }}</option>
-        <option value="indirect">{{ t('devices.indirectDependency') }}</option></select
-      ><UiButton :disabled="busy" @click="load()">{{ t('devices.reload') }}</UiButton>
+        :label="t('devices.dependencies')"
+        :items="[
+          { value: 'all', title: t('devices.all') },
+          { value: 'direct', title: t('devices.directDependency') },
+          { value: 'indirect', title: t('devices.indirectDependency') },
+        ]"
+        @update:model-value="load()"
+      />
+      <v-btn :disabled="busy" @click="load()">{{ t('devices.reload') }}</v-btn>
     </div>
-    <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
-    <p v-if="page?.deletionBlocked" role="status">{{ t('devices.deletionBlocked') }}</p>
+    <v-alert v-if="failure" type="error" variant="tonal">{{ t('devices.' + failure) }}</v-alert>
+    <v-alert v-if="page?.deletionBlocked" type="warning" variant="tonal">{{
+      t('devices.deletionBlocked')
+    }}</v-alert>
     <p v-else-if="page && !page.items.length">{{ t('devices.noDependencies') }}</p>
-    <ul>
-      <li v-for="(item, index) in page?.items" :key="index">
-        <strong>{{ t('devices.dependencyKinds.' + item.source.kind) }}</strong>
-        <UiBadge>{{
+    <v-list
+      ><v-list-item
+        v-for="(item, index) in page?.items"
+        :key="index"
+        :title="t('devices.dependencyKinds.' + item.source.kind)"
+        :subtitle="item.source.id"
+      >
+        <v-chip>{{
           t(item.relation === 'direct' ? 'devices.directDependency' : 'devices.indirectDependency')
-        }}</UiBadge>
-        · {{ item.roles.join(', ') }} · {{ item.lifecycleState }} · {{ item.freshness }}
+        }}</v-chip>
+        <p>{{ item.roles.join(', ') }} · {{ item.lifecycleState }} · {{ item.freshness }}</p>
         <details>
           <summary>{{ t('devices.evidence') }}</summary>
           <p>{{ item.source.id }} · {{ item.revision }} · {{ item.effective }}</p>
@@ -87,10 +92,10 @@ watch(
             <li v-for="(source, i) in item.via" :key="i">{{ source.kind }} · {{ source.id }}</li>
           </ol>
         </details>
-      </li>
-    </ul>
-    <UiButton v-if="page?.nextCursor" :disabled="busy" @click="load(page.nextCursor)">{{
+      </v-list-item></v-list
+    >
+    <v-btn v-if="page?.nextCursor" :disabled="busy" @click="load(page.nextCursor)">{{
       t('devices.next')
-    }}</UiButton>
+    }}</v-btn>
   </section>
 </template>
