@@ -69,7 +69,12 @@ function recover(value = id.value) {
   void run(
     () => client.status(value),
     (v) => {
-      if (id.value === value) result.value = v
+      if (id.value !== value) return
+      if (v.deviceId !== props.endpoint.id) {
+        failure.value = 'invalidResponse'
+        return
+      }
+      result.value = v
     },
   )
 }

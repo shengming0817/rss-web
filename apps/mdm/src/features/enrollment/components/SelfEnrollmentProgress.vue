@@ -115,8 +115,8 @@ onBeforeUnmount(clearSecret)
         <RegistrationStatus :channel="nativeChannel(current.source)" class="my-4" />
         <NativeFacts :value="current" />
         <v-form
-          :novalidate="false"
           v-if="['pending', 'bound', 'expired'].includes(current.status)"
+          :novalidate="false"
           class="mt-4"
           @submit.prevent="submit('resume')"
         >

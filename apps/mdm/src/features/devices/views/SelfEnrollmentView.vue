@@ -65,7 +65,10 @@ function refresh(rejection?: string) {
     (v) => {
       usage.value = v.usage
       if (rejection) failure.value = rejection
-      if (id === enrollmentId.value && v.native) native.value = v.native
+      if (id === enrollmentId.value && v.native) {
+        if (v.native.deviceId !== deviceId.value) failure.value = 'invalidResponse'
+        else native.value = v.native
+      }
     },
   )
 }

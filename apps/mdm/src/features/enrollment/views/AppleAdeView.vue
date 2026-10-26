@@ -518,8 +518,8 @@ onBeforeUnmount(() => {
       <pre v-if="operation?.result">{{ JSON.stringify(operation.result, null, 2) }}</pre>
       <p>{{ t('onboarding.registrationNotImplied') }}</p>
       <v-form
-        :novalidate="false"
         v-if="canWrite && operation?.state === 'unknown'"
+        :novalidate="false"
         @submit.prevent="
           submit({ kind: 'reconcile', operation: recoveryId || operation!.operationId }, true)
         "
