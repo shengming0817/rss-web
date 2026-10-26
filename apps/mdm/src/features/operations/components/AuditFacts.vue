@@ -23,6 +23,11 @@ const commands = computed(() =>
 <template>
   <div data-testid="audit-detail">
     <p>{{ t('operations.auditScope') }}</p>
+    <RouterLink
+      v-if="device"
+      :to="{ name: 'device-activities', params: { tenant: runtime.tenant, device } }"
+      >{{ t('policies.entry.activities') }}</RouterLink
+    >
     <dl class="settings-facts">
       <dt>{{ t('operations.auditUi.recorded') }}</dt>
       <dd>{{ auditTime(fact.recordedAt) }}</dd>

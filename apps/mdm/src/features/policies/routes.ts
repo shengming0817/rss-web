@@ -9,6 +9,30 @@ export const policyFeature: MdmFeature = {
   },
   routes: [
     {
+      path: `${base}/tools`,
+      name: 'policy-tools',
+      component: () => import('./views/ToolsView.vue'),
+      meta: { protected: true },
+    },
+    {
+      path: `${base}/events`,
+      name: 'policy-events',
+      component: () => import('./views/ToolsView.vue'),
+      meta: { protected: true },
+    },
+    {
+      path: '/tenants/:tenant/devices/:device/policy-event-batches',
+      name: 'policy-event-batches',
+      component: () => import('./views/EventBatchesView.vue'),
+      meta: { protected: true },
+    },
+    {
+      path: '/tenants/:tenant/devices/:device/policy-event-batches/:batch',
+      name: 'policy-event-batch',
+      component: () => import('./views/EventBatchesView.vue'),
+      meta: { protected: true },
+    },
+    {
       path: `${base}/assignments/lifecycle`,
       name: 'policy-lifecycle',
       component: () => import('./views/LifecyclePoliciesView.vue'),

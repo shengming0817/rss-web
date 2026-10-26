@@ -10,6 +10,8 @@ import {
   UiUtcDateTimeInput,
 } from '@rss/core/components'
 import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
+import PolicyIdentityEditor from '../../policies/components/PolicyIdentityEditor.vue'
+import PolicyEntry from '../../policies/components/PolicyEntry.vue'
 import SelfServiceEditor from '../../policies/components/SelfServiceEditor.vue'
 import ResourceIdentity from '../../policies/components/ResourceIdentity.vue'
 import { useRoute } from 'vue-router'
@@ -566,6 +568,7 @@ watch(
             class="console-form-section"
           >
             <legend>{{ t('console.content') }}</legend>
+            <PolicyIdentityEditor v-model:alias="draft.alias" v-model:event="draft.customEvent" />
             <SoftwareResourceSelect
               v-model:resource="draft.action.resource.id"
               v-model:version="draft.action.resource.version"
@@ -855,6 +858,7 @@ watch(
         </fieldset>
       </form>
     </section>
+    <PolicyEntry v-if="current" :policy="current" />
     <section v-if="preview" class="console-panel">
       <h2>{{ t('software.preview') }}</h2>
       <p>{{ t('software.previewHint') }}</p>

@@ -18,12 +18,16 @@ import AssignmentFacts from '../../policies/components/AssignmentFacts.vue'
 import { objectKey } from '../../devices/clients/objects'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import PageFrame from '../../../components/PageFrame.vue'
+import PolicyIdentityEditor from '../../policies/components/PolicyIdentityEditor.vue'
+import PolicyEntry from '../../policies/components/PolicyEntry.vue'
 import PolicyDelete from '../../policies/components/PolicyDelete.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
   client = runtime.policies.policies,
   { run, runWrite, busy, failure, uncertain } = useOperation([], () => deviceBinding(runtime))
+const alias = ref<string | null>(null),
+  customEvent = ref<string | null>(null)
 const action = ref<'ensure_agent_installed' | 'request_mdm_enrollment'>('ensure_agent_installed'),
   id = ref(''),
   scope = ref(''),
@@ -47,6 +51,8 @@ function apply(p: PolicyRead) {
   const a = p.definition.action
   if (a.kind !== 'ensure_agent_installed' && a.kind !== 'request_mdm_enrollment')
     throw new Error('Wrong onboarding action')
+  alias.value = p.definition.alias
+  customEvent.value = p.definition.customEvent
   current.value = p
   id.value = p.id
   action.value = a.kind
@@ -77,6 +83,8 @@ function create() {
   current.value = undefined
   id.value = crypto.randomUUID()
   scope.value = ''
+  alias.value = null
+  customEvent.value = null
   packages.value = {}
   organization.value = ''
   schedule.value = defaultSchedule()
@@ -128,9 +136,9 @@ function save() {
       enabled: enabled.value,
       definition: policyDefinition({
         ...current.value?.definition,
-        customEvent: current.value?.definition.customEvent ?? null,
+        customEvent: customEvent.value,
         scope: scope.value,
-        alias: current.value?.definition.alias ?? null,
+        alias: alias.value,
         action: input,
       }),
     })
@@ -259,6 +267,7 @@ watch(
       ><UiButton :disabled="busy" @click="progress()">{{ t('policies.refreshProgress') }}</UiButton>
       <UiButton :disabled="busy" @click="executions()">{{ t('policies.executions') }}</UiButton>
     </section>
+    <PolicyEntry v-if="current" :policy="current" />
     <p v-if="uncertain && pending" role="alert">
       {{ t('policies.selfService.unknown', { id: pending.body.operationId }) }}
     </p>
@@ -277,6 +286,7 @@ watch(
       @submit.prevent="save"
     >
       <fieldset :disabled="busy || uncertain">
+        <PolicyIdentityEditor v-model:alias="alias" v-model:event="customEvent" />
         <label>{{ t('policies.scope') }}<input v-model="scope" class="ui-input" required /></label
         ><CatalogLocator
           v-model="scope"

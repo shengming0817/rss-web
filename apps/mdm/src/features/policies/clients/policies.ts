@@ -1,4 +1,4 @@
-import { decodeCapability, decodeSelector, type CapabilitySelector } from './addressing'
+import { decodeCapability, decodeSelector, toolName, type CapabilitySelector } from './addressing'
 import {
   queryParameters,
   windowParameters,
@@ -38,7 +38,7 @@ import {
 
 const policyFields = {
   id: uuid,
-  toolName: string,
+  toolName,
   alias: (v: unknown) => nullable(v, policyName),
   customEvent: (v: unknown) => nullable(v, policyName),
   revision: count,
@@ -196,6 +196,13 @@ export function createPoliciesClient(transport: HttpTransport) {
         successStatus: 200,
         decode(value) {
           const page = projectedPage(value, policyFields, query.fields, ['id'])
+          for (const row of page.items)
+            if (
+              'id' in row &&
+              'toolName' in row &&
+              row.toolName !== `policy_${String(row.id).replaceAll('-', '')}`
+            )
+              throw new Error('Wrong tool identity')
           return page
         },
       }),

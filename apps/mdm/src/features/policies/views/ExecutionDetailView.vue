@@ -11,6 +11,7 @@ import PageFrame from '../../../components/PageFrame.vue'
 import NativeTaskFacts from '../components/NativeTaskFacts.vue'
 import PolicyRunFacts from '../components/PolicyRunFacts.vue'
 import OperationStages from '../components/OperationStages.vue'
+import CopyDeepLink from '../../../components/CopyDeepLink.vue'
 import { uuid } from '../../../services/decode'
 import type { PolicyRun } from '../clients/runs'
 const { t } = useI18n(),
@@ -131,6 +132,33 @@ watch(
     :busy="busy"
     :failure="failure"
   >
+    <RouterLink
+      v-if="typeof route.query['device'] === 'string'"
+      :to="{
+        name: 'device-activities',
+        params: { tenant: runtime.tenant, device: route.query['device'] },
+        query: { operation: route.params['execution'] },
+      }"
+      >{{ t('policies.entry.activities') }}</RouterLink
+    >
+    <template v-if="software"
+      ><RouterLink
+        :to="{
+          name: 'device-activities',
+          params: { tenant: runtime.tenant, device: software.device },
+          query: { task: software.taskId },
+        }"
+        >{{ t('policies.entry.activities') }}</RouterLink
+      ><CopyDeepLink
+        :target="{
+          kind: 'task',
+          instance: runtime.serviceId,
+          tenant: runtime.tenant,
+          device: software.device,
+          task: software.taskId,
+        }"
+    /></template>
+
     <template #actions
       ><UiButton :disabled="!!busy" type="submit" @click="load">{{
         t('policies.verify')

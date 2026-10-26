@@ -30,6 +30,8 @@ import AssignmentFacts from '../components/AssignmentFacts.vue'
 import { objectKey } from '../../devices/clients/objects'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import PageFrame from '../../../components/PageFrame.vue'
+import PolicyIdentityEditor from '../components/PolicyIdentityEditor.vue'
+import PolicyEntry from '../components/PolicyEntry.vue'
 import PolicyDelete from '../components/PolicyDelete.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
@@ -547,6 +549,9 @@ onMounted(async () => {
 <template>
   <PageFrame :title="t('policies.policies')" :busy="busy" :failure="failure">
     <p>{{ t('policies.policyHint') }}</p>
+    <RouterLink :to="{ name: 'policy-tools', params: { tenant: runtime.tenant } }">{{
+      t('policies.entry.title')
+    }}</RouterLink>
     <RouterLink :to="{ name: 'policy-lifecycle', params: { tenant: runtime.tenant } }">{{
       t('gap.lifecycle')
     }}</RouterLink>
@@ -622,6 +627,7 @@ onMounted(async () => {
         t('console.edit')
       }}</UiButton>
     </div>
+    <PolicyEntry v-if="current" :policy="current" />
     <form v-show="editing" class="console-panel" data-form="policy" @submit.prevent="save">
       <div class="console-page-header">
         <h2>{{ t(current ? 'console.edit' : 'console.create') }}</h2>
@@ -634,6 +640,14 @@ onMounted(async () => {
         >
       </div>
       <fieldset :disabled="busy || uncertain || !ready">
+        <PolicyIdentityEditor
+          v-model:alias="definition.alias"
+          v-model:event="definition.customEvent"
+          :fixed-parameters="
+            definition.action.kind !== 'execution' ||
+            !Object.values(definition.action.parameters).some((p) => p.kind === 'input')
+          "
+        />
         <label for="policy-action">{{ t('policies.actionKind') }}</label
         ><select
           id="policy-action"
