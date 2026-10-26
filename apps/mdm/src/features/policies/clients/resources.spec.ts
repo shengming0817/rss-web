@@ -1,4 +1,4 @@
-import { defaultApplicability, identityMapping } from './collection-mapping'
+import { defaultApplicability, identityMapping } from '../collection-draft'
 import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { createResourcesClient, decodeResource, decodeScriptSpec } from './resources'

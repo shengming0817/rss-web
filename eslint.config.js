@@ -41,6 +41,7 @@ export default tseslint.config(
       '.specify/**',
       'docs/design/**', // Approved standalone design references are not product source
       '**/node_modules/**',
+      'apps/mdm/src/contracts/collection/generated/**',
     ],
   },
 

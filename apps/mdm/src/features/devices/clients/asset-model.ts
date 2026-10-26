@@ -1,3 +1,5 @@
+import { checked } from '../../../contracts/collection/check'
+import { validateFieldView } from '../../../contracts/collection/generated/validators'
 import { parseFilter } from '../../../services/query-filter'
 import {
   array,
@@ -225,191 +227,14 @@ export function inventory(value: unknown) {
 export type Inventory = ReturnType<typeof inventory>
 export type ResolvedField = ReturnType<typeof resolvedField>
 export function fieldDefinition(value: unknown) {
-  const v = closed(value, [
-    'key',
-    'timeSeries',
-    'version',
-    'valueType',
-    'nullable',
-    'manual',
-    'sources',
-    'platforms',
-    'sensitivity',
-    'unit',
-    'searchable',
-    'itemKey',
-    'operations',
-  ])
-  const definitionType = valueType(v['valueType'])
-  const sources = Object.fromEntries(
-    Object.entries(record(v['sources'])).map(([k, n]) => {
-      enumeration(k, sourceIds)
-      if (count(n) > 65535) throw new Error('Invalid priority')
-      return [k, count(n)]
-    }),
-  ) as Partial<Record<(typeof sourceIds)[number], number>>
+  const definition = checked(validateFieldView, value)
+  const kind = definition.valueType.kind
   return {
-    key: fieldKey(v['key']),
-    timeSeries: nullable(v['timeSeries'], timeSeries),
-    version: count(v['version']),
-    platforms: array(v['platforms'], (x) => enumeration(x, ['windows', 'macos'] as const)),
-    sensitivity: enumeration(v['sensitivity'], ['standard', 'sensitive'] as const),
-    unit: nullable(v['unit'], string),
-    searchable: boolean(v['searchable']),
-    itemKey: nullable(v['itemKey'], identifier),
-    valueType: definitionType,
-    get kind() {
-      const kind = this.valueType.kind
-      return kind === 'enum' ? 'string' : kind === 'record' ? 'object' : kind
-    },
-    nullable: boolean(v['nullable']),
-    manual: boolean(v['manual']),
-    sources,
-    operations: unique(
-      array(v['operations'], (x) => enumeration(x, operators)),
-      (x) => x,
-    ),
+    ...definition,
+    kind: kind === 'enum' ? ('string' as const) : kind === 'record' ? ('object' as const) : kind,
   }
 }
-function vocabulary(value: unknown) {
-  const v = string(value)
-  if (!v || new TextEncoder().encode(v).byteLength > 256 || /\p{Cc}/u.test(v))
-    throw new Error('Invalid vocabulary')
-  return v
-}
-function timeSeries(value: unknown) {
-  const v = closed(value, [
-    'kind',
-    'valuePath',
-    'intervalStartPath',
-    'dimensions',
-    'aggregations',
-    'retention',
-    'maxResources',
-  ])
-  const path = (value: unknown) => array(value, identifier)
-  const retention = closed(v['retention'], ['key', 'revision'])
-  const result = {
-    kind: enumeration(v['kind'], [
-      'gauge',
-      'cumulative_counter',
-      'delta_counter',
-      'state',
-    ] as const),
-    valuePath: path(v['valuePath']),
-    intervalStartPath: nullable(v['intervalStartPath'], path),
-    dimensions: Object.fromEntries(
-      Object.entries(record(v['dimensions'])).map(([key, value]) => {
-        const dimension = closed(value, ['path', 'values'])
-        return [
-          identifier(key),
-          { path: path(dimension['path']), values: array(dimension['values'], vocabulary) },
-        ]
-      }),
-    ),
-    aggregations: array(v['aggregations'], (x) =>
-      enumeration(x, [
-        'min',
-        'max',
-        'sum',
-        'count',
-        'mean',
-        'increase',
-        'rate',
-        'timeline',
-        'transitions',
-        'coverage',
-      ] as const),
-    ),
-    retention: { key: retentionKey(retention['key']), revision: count(retention['revision']) },
-    maxResources: count(v['maxResources']),
-  }
-  const allowed = {
-    gauge: ['min', 'max', 'sum', 'count', 'mean'],
-    cumulative_counter: ['increase', 'rate'],
-    delta_counter: ['sum', 'rate'],
-    state: ['timeline', 'transitions', 'coverage'],
-  }[result.kind]
-  if (
-    !result.aggregations.length ||
-    result.aggregations.some((a) => !allowed.includes(a)) ||
-    !result.retention.revision ||
-    result.maxResources < 1 ||
-    result.maxResources > 4096
-  )
-    throw new Error('Invalid time series binding')
-  return result
-}
-export type ValueType =
-  | { kind: 'integer' | 'number' | 'boolean' | 'time' }
-  | { kind: 'string'; maxLength: number; allowEmpty: boolean }
-  | { kind: 'enum'; values: string[] }
-  | { kind: 'array'; items: ValueType; maxItems: number }
-  | { kind: 'record'; properties: Record<string, { valueType: ValueType; required: boolean }> }
-  | { kind: 'object'; properties: Record<string, ValueType> }
-export function valueType(value: unknown, depth = 0): ValueType {
-  if (depth > 6) throw new Error('Field type exceeds bounds')
-  const v = record(value),
-    kind = enumeration(v['kind'], [
-      'string',
-      'enum',
-      'record',
-      'integer',
-      'number',
-      'boolean',
-      'time',
-      'array',
-      'object',
-    ] as const)
-  if (kind === 'string') {
-    closed(v, ['kind', 'maxLength', 'allowEmpty'])
-    const maxLength = count(v['maxLength'])
-    if (maxLength < 1 || maxLength > 65536) throw new Error('Invalid text bounds')
-    return { kind, maxLength, allowEmpty: boolean(v['allowEmpty']) }
-  }
-  if (kind === 'enum') {
-    closed(v, ['kind', 'values'])
-    const values = unique(array(v['values'], vocabulary), (x) => x)
-    if (!values.length) throw new Error('Empty enum')
-    return { kind, values }
-  }
-  if (kind === 'array') {
-    closed(v, ['kind', 'items', 'maxItems'])
-    return { kind, items: valueType(v['items'], depth + 1), maxItems: count(v['maxItems']) }
-  }
-  if (kind === 'record') {
-    closed(v, ['kind', 'properties'])
-    return {
-      kind,
-      properties: Object.fromEntries(
-        Object.entries(record(v['properties'])).map(([k, x]) => {
-          const property = closed(x, ['valueType', 'required'])
-          return [
-            identifier(k),
-            {
-              valueType: valueType(property['valueType'], depth + 1),
-              required: boolean(property['required']),
-            },
-          ]
-        }),
-      ),
-    }
-  }
-  if (kind === 'object') {
-    closed(v, ['kind', 'properties'])
-    return {
-      kind,
-      properties: Object.fromEntries(
-        Object.entries(record(v['properties'])).map(([k, x]) => [
-          identifier(k),
-          valueType(x, depth + 1),
-        ]),
-      ),
-    }
-  }
-  closed(v, ['kind'])
-  return { kind }
-}
+export type { ValueType } from '../../../contracts/collection/generated/FieldWrite'
 /** Write only the canonical definition; server-computed presentation never enters a mutation. */
 export function fieldInput(field: FieldDefinition): Omit<FieldDefinition, 'kind' | 'operations'> {
   return {

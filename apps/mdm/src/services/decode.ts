@@ -76,3 +76,13 @@ export function digest(value: unknown) {
   if (result.length !== 32) throw new Error('Invalid digest')
   return result
 }
+
+export function positive(value: unknown): number {
+  const n = integer(value)
+  if (n <= 0) throw new Error('Expected positive number')
+  return n
+}
+export function finite(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error('Invalid number')
+  return value
+}

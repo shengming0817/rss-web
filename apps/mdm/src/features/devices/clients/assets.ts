@@ -1,3 +1,11 @@
+import { checked } from '../../../contracts/collection/check'
+import {
+  validateFieldWrite,
+  validateFieldImpact,
+  validateFieldMappingReference,
+  validateFieldReferenceQuery,
+} from '../../../contracts/collection/generated/validators'
+import type { FieldWrite } from '../../../contracts/collection/generated/FieldWrite'
 import {
   queryParameters,
   nextCursor,
@@ -26,7 +34,6 @@ import {
   cursor,
   fieldDefinition,
   fieldKey,
-  type fieldInput,
   inventory,
   savedQuery,
   savedDefinition,
@@ -222,15 +229,12 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
       } while (cursor)
       return { dictionary: 'assets-v1', fields: unique(fields, (field) => field.key) }
     },
-    writeField: (
-      field: string,
-      body: Operation<{ action: 'put'; definition: ReturnType<typeof fieldInput> }>,
-    ) =>
+    writeField: (field: string, body: FieldWrite) =>
       transport.request({
         method: 'PUT',
         path: '/api/v1/asset-fields/{field}',
         pathParams: { field },
-        body,
+        body: checked(validateFieldWrite, body),
         successStatus: 200,
         decode(value) {
           const v = assetEnvelope(value, tenant, 'field', ['field', 'version', 'definition'])
@@ -246,7 +250,10 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
         method: 'GET',
         path: '/api/v1/asset-fields/{field}/references',
         pathParams: { field },
-        query: { cursor, limit: 64 },
+        query: {
+          ...checked(validateFieldReferenceQuery, { cursor: cursor ?? null, limit: 64 }),
+          cursor,
+        },
         successStatus: 200,
         decode(value) {
           const v = assetEnvelope(value, tenant, 'field_references', [
@@ -256,30 +263,11 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
             'nextCursor',
           ])
           if (v['field'] !== field) throw new Error('Wrong reference field')
-          const i = closed(v['impact'], [
-            'groups',
-            'templates',
-            'telemetryProfiles',
-            'archivedResourceVersions',
-            'compliance',
-            'savedQueries',
-          ])
           return {
-            impact: Object.fromEntries(Object.entries(i).map(([k, v]) => [k, count(v)])),
-            mappings: array(v['mappings'], (value) => {
-              const mapping = closed(value, ['resource', 'version', 'state', 'telemetry'])
-              return {
-                resource: identifier(mapping['resource']),
-                version: identifier(mapping['version']),
-                state: enumeration(mapping['state'], [
-                  'frozen',
-                  'active',
-                  'deprecated',
-                  'archived',
-                ] as const),
-                telemetry: boolean(mapping['telemetry']),
-              }
-            }),
+            impact: checked(validateFieldImpact, v['impact']),
+            mappings: array(v['mappings'], (mapping) =>
+              checked(validateFieldMappingReference, mapping),
+            ),
             nextCursor: nextCursor(v['nextCursor']),
           }
         },
