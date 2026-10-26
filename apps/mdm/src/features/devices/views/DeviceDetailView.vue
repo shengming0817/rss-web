@@ -81,8 +81,13 @@ function destination(section: string, history?: string) {
 }
 const target = ref(''),
   manualOpen = ref(false),
-  inventory = ref<Inventory>()
-const manualOperation = useOperation([], () => [...deviceBinding(runtime), target.value])
+  inventory = ref<Inventory>(),
+  manualGeneration = ref(0)
+const manualOperation = useOperation([], () => [
+  ...deviceBinding(runtime),
+  target.value,
+  String(manualGeneration.value),
+])
 const restoreManualFocus = useDialogFocus(manualOpen)
 const selected = computed(() => endpoints.value.find((e) => e.id === target.value))
 const directoryQuery = computed(() => {
@@ -129,6 +134,7 @@ const selectedName = computed(() => {
   return state?.kind === 'known' && state.value.kind === 'string' ? state.value.value : target.value
 })
 function clear() {
+  manualGeneration.value++
   view.value = undefined
   endpoints.value = []
   fields.value = []
@@ -149,8 +155,7 @@ function syncTarget() {
         : ''
 }
 async function load() {
-  view.value = undefined
-  endpoints.value = []
+  clear()
   await run(
     async () => {
       const value = await runtime.devices.views.detail(reference.value)
@@ -179,7 +184,7 @@ async function editManual() {
       catalog: await runtime.devices.assets.catalog(),
     }),
     (value) => {
-      if (target.value !== endpoint) return
+      if (!view.value || target.value !== endpoint) return
       if (value.inventory.device !== endpoint) {
         manualOperation.failure.value = 'invalidResponse'
         return

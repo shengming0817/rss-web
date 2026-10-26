@@ -12,10 +12,11 @@ const emit = defineEmits<{ invalidated: [reason: 'cursorInvalidated' | 'denied' 
 const { t } = useI18n(),
   runtime = useMdm()
 const ip = ref<Record<string, { source: string; addresses: string[]; observedAt: number }[]>>({})
-const { run, failure, busy } = useOperation([], () => [
-  ...deviceBinding(runtime),
-  JSON.stringify(props.view.reference),
-])
+const { run, failure, busy } = useOperation(
+  [],
+  () => [...deviceBinding(runtime), JSON.stringify(props.view)],
+  () => JSON.stringify(props.view.reference),
+)
 async function readIps() {
   ip.value = {}
   failure.value = null

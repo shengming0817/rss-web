@@ -303,8 +303,10 @@
   color: rgb(var(--v-theme-error));
 }
 .mdm-device-surface .device-button.bg-primary {
+  background-color: rgb(var(--v-theme-primary));
   color: rgb(var(--v-theme-on-primary));
 }
 .mdm-device-surface .device-button.bg-error {
+  background-color: rgb(var(--v-theme-error));
   color: rgb(var(--v-theme-on-error));
 }

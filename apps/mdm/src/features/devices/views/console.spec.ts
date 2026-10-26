@@ -822,6 +822,7 @@ it('retains pending revoke confirmation across query updates and dismissal attem
     .element.setAttribute('open', '')
   await click('撤销凭据')
   const dialog = new DOMWrapper(document.body).get('[role=alertdialog]')
+  expect(dialog.element.closest('.mdm-device-surface')).not.toBeNull()
   const revoke = devices.enrollment.revoke
   let release!: () => void
   const gate = new Promise<void>((done) => {
@@ -838,7 +839,7 @@ it('retains pending revoke confirmation across query updates and dismissal attem
   await dialog.trigger('keydown', { key: 'Escape' })
   await router.replace({ query: { operation: crypto.randomUUID(), operationDevice: 'device-01' } })
   await flushPromises()
-  expect(document.querySelector('[role=alertdialog]')).not.toBeNull()
+  expect(document.querySelector('[role=alertdialog][data-state=open]')).not.toBeNull()
   expect(dialog.get('button[aria-label=取消]').attributes('disabled')).toBeDefined()
   release()
   await flushPromises()
@@ -846,7 +847,7 @@ it('retains pending revoke confirmation across query updates and dismissal attem
   await dialog.trigger('keydown', { key: 'Escape' })
   await dialog.get('button[aria-label=取消]').trigger('click')
   await flushPromises()
-  expect(document.querySelector('[role=alertdialog]')).not.toBeNull()
+  expect(document.querySelector('[role=alertdialog][data-state=open]')).not.toBeNull()
   await router.replace({ query: {} })
   await flushPromises()
   expect(dialog.text()).toContain('结果未知')
@@ -854,7 +855,7 @@ it('retains pending revoke confirmation across query updates and dismissal attem
   await click('重读服务器值并比较')
   await click('明确重放原操作')
   expect(write.mock.calls).toEqual([original, original])
-  expect(document.querySelector('[role=alertdialog]')).toBeNull()
+  expect(document.querySelector('[role=alertdialog][data-state=open]')).toBeNull()
 })
 it('marks credential details stale after an acknowledged revoke with a failed refresh', async () => {
   const { wrapper, click, devices } = await setup('device-detail', { device: 'device-01' })
@@ -2408,7 +2409,21 @@ it('shows a network-source failure and retries rather than reporting missing IP 
   const summary = f.wrapper.getComponent({ name: 'DeviceSummary' })
   expect(summary.text()).toContain(f.i18n.global.t('devices.unavailable'))
   expect(summary.text()).not.toContain('未上报')
-  items.mockResolvedValue({
+  await f.click('资产信息')
+  expect(summary.text()).toContain(f.i18n.global.t('devices.unavailable'))
+  expect(summary.text()).not.toContain('未上报')
+  let finish!: (value: Awaited<ReturnType<typeof f.devices.views.items>>) => void
+  items.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  await summary.get('button').trigger('click')
+  await flushPromises()
+  await f.click('概览')
+  expect(summary.text()).toContain(f.i18n.global.t('devices.loading'))
+  finish({
     reference: view.reference,
     field: 'device.network.interfaces',
     source: evidence,
@@ -2422,8 +2437,30 @@ it('shows a network-source failure and retries rather than reporting missing IP 
       },
     ],
   })
-  await summary.get('button').trigger('click')
   await flushPromises()
   expect(summary.text()).toContain('10.0.0.8')
   expect(summary.find('[role=alert]').exists()).toBe(false)
+})
+
+it('does not restore manual inventory when detail authority is withdrawn during the read', async () => {
+  const f = await setup('device-detail', { device: 'device-01' })
+  await f.click('资产信息')
+  const inventory = await f.devices.assets.inventory('device-01')
+  let finish!: (value: typeof inventory) => void
+  vi.spyOn(f.devices.assets, 'inventory').mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  await f.button('编辑人工资产信息').trigger('click')
+  await flushPromises()
+  expect(typeof finish).toBe('function')
+  f.wrapper.getComponent({ name: 'DeviceSummary' }).vm.$emit('invalidated', 'denied')
+  await flushPromises()
+  finish(inventory)
+  await flushPromises()
+  expect(f.wrapper.text()).toContain(f.i18n.global.t('devices.denied'))
+  expect(f.wrapper.findComponent({ name: 'ManualPanel' }).exists()).toBe(false)
+  expect(document.querySelector('[role=dialog][data-state=open]')).toBeNull()
 })
