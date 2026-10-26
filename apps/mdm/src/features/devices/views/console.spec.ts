@@ -1,6 +1,7 @@
+import GroupsView from './GroupsView.vue'
 import InventoryQuery from '../components/InventoryQuery.vue'
 import DeviceGroupsPanel from '../components/DeviceGroupsPanel.vue'
-import { VSelect, VAutocomplete } from 'vuetify/components'
+import { VSelect, VAutocomplete, VTextField, VAlert } from 'vuetify/components'
 import { encodeAssetQuery } from '../clients/asset-query'
 import GroupDependencies from '../components/GroupDependencies.vue'
 import { createSecurityClients as createFormalSecurityClients } from '../../security/client'
@@ -130,10 +131,17 @@ async function setup(
     routes: [
       { path: '/downloads/agent', name: 'agent-downloads', component: { template: '<div />' } },
       deviceFeature.entry,
+      { path: '/tenants/:tenant/test/groups-hub', name: 'groups-hub', component: GroupsView },
       ...(deviceFeature.routes ?? []).map((route) =>
-        route.name === 'device-groups' ? { ...route, component: DeviceGroupsPanel } : route,
+        route.name === 'device-groups'
+          ? { path: route.path, name: route.name, component: DeviceGroupsPanel }
+          : route,
       ),
-      { path: '/test/inventory-query', name: 'inventory-query', component: InventoryQuery },
+      {
+        path: '/tenants/:tenant/test/inventory-query',
+        name: 'inventory-query',
+        component: InventoryQuery,
+      },
       policyFeature.entry,
       ...(policyFeature.routes ?? []),
       securityFeature.entry,
@@ -550,7 +558,12 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
   await click('读取任务状态')
   await click('读取任务状态')
   await click('读取任务状态')
-  expect(wrapper.findAll('[role=alert]').map((v) => v.text())).toEqual([])
+  expect(
+    wrapper
+      .findAllComponents(VAlert)
+      .filter((v) => v.props('type') === 'error')
+      .map((v) => v.text()),
+  ).toEqual([])
   await click('规则')
   await wrapper
     .findAll('button')
@@ -1567,14 +1580,12 @@ it('rejects an invalid condition locally without entering unknown-write recovery
   const form = new DOMWrapper(document.body).get('[role=dialog] form')
   await form.get('[data-testid=group-name] input').setValue('Invalid identity')
   await setSelect(wrapperFor(form), form.get('[data-testid=group-kind]'), 'dynamic')
-  await setSelect(
-    wrapper,
-    form.get('.inventory-condition .v-expansion-panel .v-select'),
-    'local_user',
-  )
-  await form
-    .get('.inventory-condition .v-expansion-panel input[type=text]:not([readonly])')
-    .setValue('invalid-sid')
+  await setSelect(wrapper, form.get('.v-expansion-panel .v-select'), 'local_user')
+  wrapper
+    .findAllComponents(VTextField)
+    .find((component) => component.props('label') === 'SID')!
+    .vm.$emit('update:modelValue', 'invalid-sid')
+  await flushPromises()
   await form.trigger('submit')
   await flushPromises()
   expect(requests.filter((r) => r.method === 'POST')).toHaveLength(0)
@@ -1589,12 +1600,12 @@ it('keeps Group save errors and exact unknown-write recovery inside its dialog',
   scenario.set('denied')
   await dialog.get('form').trigger('submit')
   await flushPromises()
-  expect(dialog.get('[role=alert]').text()).toContain('权限')
+  expect(dialog.get('.v-alert[role=alert]').text()).toContain('权限')
   scenario.set('normal')
   loseReply.path = '/api/v1/groups/{id}'
   await dialog.get('form').trigger('submit')
   await flushPromises()
-  expect(dialog.get('[role=alert]').text()).toContain('提交结果未知')
+  expect(dialog.get('.v-alert[role=alert]').text()).toContain('提交结果未知')
   const original = requests.filter((r) => r.method === 'POST').at(-1)!.body
   expect(dialog.get('fieldset').attributes('disabled')).toBeDefined()
   loseReply.path = ''
@@ -1611,7 +1622,7 @@ it('keeps Group save errors and exact unknown-write recovery inside its dialog',
   const writes = requests.filter((r) => r.method === 'POST')
   expect(writes).toHaveLength(3)
   expect(writes[2]!.body).toEqual(original)
-  expect(new DOMWrapper(document.body).find('[role=dialog]').exists()).toBe(false)
+  expect(new DOMWrapper(document.body).find('[role=dialog][data-state=open]').exists()).toBe(false)
   expect(wrapper.text()).toContain('Recover in current drawer')
 })
 
@@ -2477,14 +2488,14 @@ it('does not restore manual inventory when detail authority is withdrawn during 
   expect(document.querySelector('[role=dialog][data-state=open]')).toBeNull()
 })
 
-function wrapperFor(target: DOMWrapper<Element>) {
+function wrapperFor(target: { element: Element }) {
   const wrapper = wrappers.find((wrapper) =>
     wrapper.findAllComponents(VSelect).some((select) => target.element.contains(select.element)),
   )
   if (!wrapper) throw new Error('Select owner is not mounted')
   return wrapper
 }
-async function setSelect(root: VueWrapper, target: DOMWrapper<Element>, value: unknown) {
+async function setSelect(root: VueWrapper, target: { element: Element }, value: unknown) {
   const component = [
     ...root.findAllComponents(VSelect),
     ...root.findAllComponents(VAutocomplete),
@@ -2496,3 +2507,75 @@ async function setSelect(root: VueWrapper, target: DOMWrapper<Element>, value: u
   component.vm.$emit('update:modelValue', value)
   await flushPromises()
 }
+
+it('keeps device group categories separate and exposes formal static user group writes with exact recovery', async () => {
+  const h = await setup('groups-hub', {}, { category: 'device-dynamic' })
+  expect(h.requests.filter((r) => r.path === '/api/v1/groups').at(-1)?.query).toMatchObject({
+    filter: "(kind=='dynamic')",
+  })
+  expect(h.button('设备静态组').attributes('disabled')).toBeUndefined()
+  await h.click('设备静态组')
+  await vi.waitFor(() =>
+    expect(h.router.currentRoute.value.query['category']).toBe('device-static'),
+  )
+  expect(h.requests.filter((r) => r.path === '/api/v1/groups').at(-1)?.query).toMatchObject({
+    filter: "(kind=='static')",
+  })
+  await h.click('用户静态组')
+  await vi.waitFor(() => expect(h.router.currentRoute.value.query['category']).toBe('user-static'))
+  expect(h.requests.some((r) => r.path === '/api/v1/authorization/user-groups')).toBe(true)
+  await h.click('新建用户组')
+  const dialog = new DOMWrapper(document.body).get('[role=dialog]')
+  await dialog.get('[data-testid=group-name] input').setValue('Self service operators')
+  const selector = h.wrapper.findComponent(TenantUserSelect).findComponent(VAutocomplete)
+  selector.vm.$emit('update:modelValue', '33333333-3333-4333-8333-333333333333')
+  await flushPromises()
+  await h.click('添加成员')
+  h.scenario.set('unknown')
+  await dialog.get('form').trigger('submit')
+  await flushPromises()
+  const original = h.requests
+    .filter((r) => r.method === 'PUT' && r.path === '/api/v1/authorization/user-groups/{id}')
+    .at(-1)!.body
+  expect(original).toMatchObject({
+    expectedRevision: 0,
+    value: {
+      name: 'Self service operators',
+      enabled: true,
+      members: [{ tenantId: TENANT, principalId: '33333333-3333-4333-8333-333333333333' }],
+    },
+  })
+  expect(h.button('设备动态组').attributes('disabled')).toBeDefined()
+  h.scenario.set('normal')
+  await h.click('重放同一操作')
+  const writes = h.requests.filter(
+    (r) => r.method === 'PUT' && r.path === '/api/v1/authorization/user-groups/{id}',
+  )
+  expect(writes).toHaveLength(2)
+  expect(writes[1]!.body).toEqual(original)
+  expect(
+    (await h.operations.authorization.groups()).items.some(
+      (item) => item.value?.name === 'Self service operators',
+    ),
+  ).toBe(true)
+})
+
+it('applies raw directory RSQL with basic filters and uses the same filter for counts and results', async () => {
+  const h = await setup('devices')
+  await h.wrapper.get('[data-testid=directory-rsql] input').setValue("platform=='windows'")
+  await h.wrapper.get('input[type=search]').setValue('device')
+  await h.wrapper.find('form').trigger('submit')
+  await flushPromises()
+  await vi.waitFor(() =>
+    expect(h.router.currentRoute.value.query['filter']).toBe("platform=='windows'"),
+  )
+  const filter = "(platform=='windows');(search=icontains='device')"
+  expect(
+    h.requests.filter((r) => r.path === '/api/v1/device-views').at(-1)?.query?.['filter'],
+  ).toBe(filter)
+  expect(
+    h.requests.filter((r) => r.path === '/api/v1/device-views/statistics').at(-1)?.query?.[
+      'filter'
+    ],
+  ).toBe(filter)
+})

@@ -422,7 +422,7 @@ watch(
     list.value = undefined
     query.value = ''
     filter.value = ''
-    applied = {}
+    applied = { kind: props.groupKind }
     result.value = undefined
     fields.value = []
     task.value = undefined
@@ -437,7 +437,9 @@ watch(
     void run(
       async () => ({
         list: await runtime.devices.groups.list({
-          filter: props.groupKind ? queryComparison('kind', '==', props.groupKind) : undefined,
+          filter: allOf(
+            props.groupKind ? queryComparison('kind', '==', props.groupKind) : undefined,
+          ),
         }),
         fields: (await runtime.devices.assets.catalog()).fields,
       }),
@@ -475,7 +477,12 @@ function openGroup(group: string) {
         >{{ t('devices.create') }}</v-btn
       ></template
     >
-    <v-alert v-if="definitionTask" type="info" variant="tonal" data-testid="group-definition-task"
+    <v-alert
+      v-if="definitionTask"
+      type="info"
+      variant="tonal"
+      data-testid="group-definition-task"
+      role="status"
       >{{ t('devices.definitionTask') }} · {{ definitionTask }} ·
       {{ t(`devices.${definitionStatus?.status ?? 'pending'}`) }}
       <p v-if="definitionStatus?.failure">{{ definitionStatus.failure }}</p>
@@ -851,8 +858,15 @@ function openGroup(group: string) {
             ><v-btn :disabled="busy || !compared" @click="pending!()">{{
               t('devices.replay')
             }}</v-btn></template
-          >
-        </v-card-text></v-card
+          > </v-card-text
+        ><v-card-actions
+          ><v-btn
+            :aria-label="t('console.close')"
+            :disabled="busy || uncertain"
+            @click="editing = false"
+            >{{ t('console.close') }}</v-btn
+          ></v-card-actions
+        ></v-card
       ></v-dialog
     >
     <details>

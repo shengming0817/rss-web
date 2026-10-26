@@ -883,10 +883,26 @@ try {
   await page.getByRole('button', { name: '创建', exact: true }).click()
   const editor = page.getByRole('dialog')
   await editor.getByTestId('group-name').locator('input').fill('Browser associated group')
-  await chooseGroupOption(page,editor.getByTestId('group-context').getByRole('combobox'),'关联设备')
-  await chooseGroupOption(page,editor.locator('.group-criteria > .v-select').getByRole('combobox'),'字段条件')
-  await chooseGroupOption(page,editor.locator('.condition-editor').getByRole('combobox',{name:'类型',exact:true}),'字段条件')
-  await chooseGroupOption(page,editor.getByRole('combobox', {name:'字段',exact:true}),'device.model (string)')
+  await chooseGroupOption(
+    page,
+    editor.getByTestId('group-context').getByRole('combobox'),
+    '统一设备视图',
+  )
+  await chooseGroupOption(
+    page,
+    editor.locator('.group-criteria > .v-select').getByRole('combobox'),
+    '字段条件',
+  )
+  await chooseGroupOption(
+    page,
+    editor.locator('.condition-editor').getByRole('combobox', { name: '类型', exact: true }),
+    '字段条件',
+  )
+  await chooseGroupOption(
+    page,
+    editor.getByRole('combobox', { name: '字段', exact: true }),
+    'device.model (string)',
+  )
   await editor.locator('.condition-editor input').last().fill('browser-associated-model')
   const groupCreated = page.waitForResponse(
     (r) =>

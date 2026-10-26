@@ -95,9 +95,9 @@ watch(
           }}</v-btn>
           <v-list :aria-label="t('devices.findGroup')"
             ><v-list-item
-              tag="button"
               v-for="group in rows"
               :key="group.id"
+              tag="button"
               :disabled="disabled || busy"
               :active="modelValue === group.id"
               :title="group.presentation.name"
