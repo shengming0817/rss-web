@@ -1,12 +1,14 @@
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
+import { deviceStyles } from './device-styles'
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [deviceStyles(), vue()],
   test: {
     name: 'mdm',
     root: fileURLToPath(new URL('.', import.meta.url)),
     environment: 'jsdom',
+    setupFiles: ['./src/test-setup.ts'],
     include: ['src/**/*.spec.ts', 'demo/**/*.spec.ts'],
     coverage: {
       provider: 'v8',

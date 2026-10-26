@@ -1,4 +1,6 @@
+import { deviceWorkspaceZh, deviceWorkspaceEn } from './workspaceMessages'
 export const devicesZh = {
+  workspace: deviceWorkspaceZh,
   personLogin: '登录名',
   personLocal: '本地资料',
   personIdp: '身份源',
