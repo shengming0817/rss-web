@@ -139,6 +139,8 @@ export const pkiEn = {
 }
 
 export const recoveryZh = {
+  noAgentRegistration:
+    '此设备没有可关联的 Agent 注册。注册恢复需要明确的原注册 ID；签发恢复仍可使用受控运维提供的原尝试。',
   conflictHandoff:
     '原恢复请求冲突，已保持锁定。当前合同没有恢复状态读取接口，请由受控运维核对原操作、登记和 CA 材料；此处不新建恢复或自动重签。',
   registration: 'Agent 登记恢复',
@@ -165,13 +167,15 @@ export const recoveryZh = {
   hint: '管理员核对原登记或签发尝试，继续已有过程。不会自动重签、重新授权或推测设备已激活。',
   windows: 'Windows 原 CA 响应关联',
   noQueue:
-    '当前没有恢复事项目录或原操作状态读取接口。使用受控运维提供的原 ID 与材料，不猜测设备、代次或签发结果。',
+    '使用受控运维提供的原 ID 与 CA 材料。当前没有恢复事项目录；Agent 原签发支持按原操作查询，注册恢复和 Windows 结果关联不提供状态查询。',
   publicChain: '原 CA 公共证书链（PEM 或 JSON 数组）',
   confirm: '确认关联此原尝试',
   attach: '核验并关联原结果',
   fingerprint: '已关联证书指纹',
 }
 export const recoveryEn = {
+  noAgentRegistration:
+    'This device has no associated Agent registration. Registration recovery requires the exact original registration ID. Original issuance attempts from controlled operations remain available below.',
   conflictHandoff:
     'The original recovery request conflicted and remains locked. No recovery status read API is available. Controlled operations must verify the original operation, registration and CA material. This page creates no replacement recovery or automatic signing.',
   registration: 'Agent registration recovery',
@@ -199,7 +203,7 @@ export const recoveryEn = {
   hint: 'Administrators verify an original registration or signing attempt to continue the existing process. No automatic signing, authorization or inferred activation.',
   windows: 'Attach original Windows CA response',
   noQueue:
-    'There is no recovery queue or original-operation status read API. Use original IDs and material from controlled operations; device, generation and signing outcomes are not guessed.',
+    'Use original IDs and CA material from controlled operations. There is no recovery directory. Agent issuance supports exact-operation lookup; registration recovery and Windows response attachment have no status query.',
   publicChain: 'Original CA public chain (PEM or JSON array)',
   confirm: 'Confirm attachment to this original attempt',
   attach: 'Verify and attach original result',

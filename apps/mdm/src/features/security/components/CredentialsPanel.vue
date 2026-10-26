@@ -1,5 +1,16 @@
 <script setup lang="ts">
-import { VBtn } from 'vuetify/components'
+import {
+  VAlert,
+  VBtn,
+  VCard,
+  VCardText,
+  VCheckbox,
+  VCol,
+  VRow,
+  VSelect,
+  VTable,
+  VTextField,
+} from 'vuetify/components'
 import { computed, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -204,101 +215,155 @@ async function query() {
 }
 </script>
 <template>
-  <section class="console-panel" data-panel="recovery-credentials" :aria-busy="busy">
-    <h2>{{ t('gap.credentials') }}</h2>
-    <p>{{ t('gap.escrowHint') }}</p>
-    <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
-    <v-btn :disabled="busy" @click="load()">{{ t('gap.load') }}</v-btn>
-    <article v-for="entry in rows" :key="entry.id + ':' + entry.version">
-      <h3>{{ entry.binding.subject.kind }} · {{ entry.id }} / {{ entry.version }}</h3>
-      <p>
-        {{ entry.binding.registration }} / {{ entry.binding.generation }} · {{ entry.validity }} ·
-        {{ t('gap.metadata') }}: {{ entry.escrowed }}
+  <v-card :title="t('gap.credentials')" data-panel="recovery-credentials" :aria-busy="busy"
+    ><v-card-text>
+      <p class="mb-4">{{ t('gap.escrowHint') }}</p>
+      <v-alert v-if="failure" type="error" variant="tonal" class="mb-4">{{
+        t('devices.' + failure)
+      }}</v-alert
+      ><v-btn variant="tonal" :disabled="busy" class="mb-4" @click="load()">{{
+        t('gap.load')
+      }}</v-btn>
+      <v-card
+        v-for="entry in rows"
+        :key="entry.id + ':' + entry.version"
+        variant="tonal"
+        :title="entry.binding.subject.kind + ' · ' + entry.id + ' / ' + entry.version"
+        class="mb-4"
+        ><v-card-text
+          ><p class="mb-3">
+            {{ entry.binding.registration }} / {{ entry.binding.generation }} ·
+            {{ entry.validity }} · {{ t('gap.metadata') }}: {{ entry.escrowed }}
+          </p>
+          <v-table v-if="entry.binding.subject.kind === 'bitlocker'" class="mb-3"
+            ><tbody>
+              <tr>
+                <th>{{ t('gap.volume') }}</th>
+                <td>{{ entry.binding.subject.volume }}</td>
+              </tr>
+              <tr>
+                <th>{{ t('gap.protector') }}</th>
+                <td>{{ entry.binding.subject.protector }}</td>
+              </tr>
+            </tbody></v-table
+          >
+          <div class="d-flex flex-wrap ga-3">
+            <v-btn
+              :disabled="
+                busy || !entry.escrowed || ['superseded', 'revoked'].includes(entry.validity)
+              "
+              @click="reveal(entry)"
+              >{{ t('gap.reveal') }}</v-btn
+            ><v-btn
+              variant="outlined"
+              :disabled="locked || entry.validity === 'revoked' || !confirmation"
+              @click="revoke(entry)"
+              >{{ t('gap.revoke') }}</v-btn
+            >
+          </div></v-card-text
+        ></v-card
+      >
+      <v-btn v-if="nextCursor" variant="text" :disabled="busy" @click="load(true)">{{
+        t('gap.next')
+      }}</v-btn>
+      <v-alert v-if="secret" type="warning" variant="tonal" class="my-4"
+        ><output aria-live="polite">{{ secret }}</output
+        ><v-btn variant="text" @click="clear">{{ t('gap.clear') }}</v-btn></v-alert
+      >
+      <p class="my-3">{{ t('gap.revokedHint') }}</p>
+      <p v-if="currentEndpoint?.primaryMdmRegistration" class="mb-3">
+        {{ t('gap.registration') }}: {{ currentEndpoint.primaryMdmRegistration.registrationId }} ·
+        {{ t('gap.generation') }}: {{ currentEndpoint.primaryMdmRegistration.generation }}
       </p>
-      <dl v-if="entry.binding.subject.kind === 'bitlocker'">
-        <dt>{{ t('gap.volume') }}</dt>
-        <dd>{{ entry.binding.subject.volume }}</dd>
-        <dt>{{ t('gap.protector') }}</dt>
-        <dd>{{ entry.binding.subject.protector }}</dd>
-      </dl>
-      <v-btn
-        :disabled="busy || !entry.escrowed || ['superseded', 'revoked'].includes(entry.validity)"
-        @click="reveal(entry)"
-        >{{ t('gap.reveal') }}</v-btn
+      <v-checkbox v-model="confirmation" :label="t('gap.confirmation')" :disabled="busy" />
+      <form
+        v-if="(currentEndpoint ?? endpoint).primaryMdmRegistration?.source === 'mdm.apple'"
+        @submit.prevent="execute()"
       >
-      <v-btn
-        :disabled="locked || entry.validity === 'revoked' || !confirmation"
-        @click="revoke(entry)"
-        >{{ t('gap.revoke') }}</v-btn
+        <v-select
+          v-model="action"
+          :label="t('gap.action')"
+          :items="appleCredentialActions.map((kind) => ({ value: kind, title: t('gap.' + kind) }))"
+          :disabled="locked"
+        />
+        <v-row
+          ><v-col cols="12" md="6"
+            ><v-text-field
+              v-model.number="revision"
+              :label="t('gap.revision')"
+              type="number"
+              min="0"
+              required
+              :disabled="locked" /></v-col
+          ><v-col cols="12" md="6"
+            ><v-text-field
+              v-model="recipient"
+              :label="t('gap.recipient')"
+              :disabled="locked" /></v-col
+          ><v-col cols="12" md="6"
+            ><v-text-field
+              v-model="materialId"
+              :label="t('gap.material')"
+              :disabled="locked" /></v-col
+          ><v-col cols="12" md="6"
+            ><v-text-field
+              v-model.number="materialVersion"
+              :label="t('gap.version')"
+              type="number"
+              min="1"
+              :disabled="locked" /></v-col
+        ></v-row>
+        <v-text-field
+          v-if="action === 'reconcile_recovery_lock'"
+          v-model="sourceOperation"
+          :label="t('gap.operation')"
+          required
+          :disabled="locked"
+        /><v-checkbox
+          v-if="action === 'set_recovery_lock'"
+          v-model="clearLock"
+          :label="t('gap.clear')"
+          :disabled="locked"
+        /><v-text-field
+          v-if="needsPassword"
+          v-model="password"
+          :label="t('gap.password')"
+          type="password"
+          autocomplete="off"
+          :disabled="busy"
+        /><v-btn type="submit" :disabled="locked || !confirmation">{{ t('gap.save') }}</v-btn>
+      </form>
+      <v-alert v-if="pending" type="warning" variant="tonal" class="my-4"
+        >{{ t(pending.state === 'conflict' ? 'gap.compare' : 'gap.unknown') }}
+        {{ pending.id }}</v-alert
       >
-    </article>
-    <v-btn v-if="nextCursor" :disabled="busy" @click="load(true)">{{ t('gap.next') }}</v-btn>
-    <template v-if="secret"
-      ><output aria-live="polite">{{ secret }}</output
-      ><v-btn @click="clear">{{ t('gap.clear') }}</v-btn></template
-    >
-    <p>{{ t('gap.revokedHint') }}</p>
-    <p v-if="currentEndpoint?.primaryMdmRegistration">
-      {{ t('gap.registration') }}: {{ currentEndpoint.primaryMdmRegistration.registrationId }} ·
-      {{ t('gap.generation') }}: {{ currentEndpoint.primaryMdmRegistration.generation }}
-    </p>
-    <label><input v-model="confirmation" type="checkbox" />{{ t('gap.confirmation') }}</label>
-    <form
-      v-if="(currentEndpoint ?? endpoint).primaryMdmRegistration?.source === 'mdm.apple'"
-      @submit.prevent="execute()"
-    >
-      <fieldset :disabled="locked">
-        <label
-          >{{ t('gap.action')
-          }}<select v-model="action" :aria-label="t('gap.action')">
-            <option v-for="kind in appleCredentialActions" :key="kind" :value="kind">
-              {{ t('gap.' + kind) }}
-            </option>
-          </select></label
+      <div class="d-flex flex-wrap ga-3 my-3">
+        <v-btn v-if="pending?.state === 'conflict'" :disabled="busy" @click="compare">{{
+          t('gap.compare')
+        }}</v-btn
+        ><v-btn
+          v-if="pending?.state === 'unknown'"
+          :disabled="busy || !confirmation"
+          @click="restore"
+          >{{ t('gap.replayOriginal') }}</v-btn
+        ><v-btn v-if="resultId || nativePending" :disabled="busy" @click="query">{{
+          t('gap.queryOriginal')
+        }}</v-btn
+        ><v-btn
+          v-if="resultId"
+          variant="text"
+          :to="{
+            name: 'policy-execution',
+            params: { tenant: runtime.tenant, execution: resultId },
+            query: { device: endpoint.id },
+          }"
+          >{{ t('gap.result') }}</v-btn
+        ><v-btn
+          variant="text"
+          :to="{ name: 'policy-lifecycle', params: { tenant: runtime.tenant } }"
+          >{{ t('gap.lifecycle') }}</v-btn
         >
-        <label
-          >{{ t('gap.revision') }}<input v-model.number="revision" type="number" min="0" required
-        /></label>
-        <label>{{ t('gap.recipient') }}<input v-model="recipient" /></label>
-        <label>{{ t('gap.material') }}<input v-model="materialId" /></label
-        ><label
-          >{{ t('gap.version') }}<input v-model.number="materialVersion" type="number" min="1"
-        /></label>
-        <label v-if="action === 'reconcile_recovery_lock'"
-          >{{ t('gap.operation') }}<input v-model="sourceOperation" required
-        /></label>
-        <label v-if="action === 'set_recovery_lock'"
-          ><input v-model="clearLock" type="checkbox" />{{ t('gap.clear') }}</label
-        >
-      </fieldset>
-      <label v-if="needsPassword"
-        >{{ t('gap.password') }}<input v-model="password" type="password" autocomplete="off"
-      /></label>
-      <v-btn type="submit" :disabled="locked || !confirmation">{{ t('gap.save') }}</v-btn>
-    </form>
-    <p v-if="pending" role="alert">
-      {{ t(pending.state === 'conflict' ? 'gap.compare' : 'gap.unknown') }} {{ pending.id }}
-    </p>
-    <v-btn v-if="pending?.state === 'conflict'" :disabled="busy" @click="compare">{{
-      t('gap.compare')
-    }}</v-btn>
-    <v-btn v-if="pending?.state === 'unknown'" :disabled="busy || !confirmation" @click="restore">{{
-      t('gap.replayOriginal')
-    }}</v-btn>
-    <v-btn v-if="resultId || nativePending" :disabled="busy" @click="query">{{
-      t('gap.queryOriginal')
-    }}</v-btn>
-    <RouterLink
-      v-if="resultId"
-      :to="{
-        name: 'policy-execution',
-        params: { tenant: runtime.tenant, execution: resultId },
-        query: { device: endpoint.id },
-      }"
-      >{{ t('gap.result') }}</RouterLink
-    >
-    <RouterLink :to="{ name: 'policy-lifecycle', params: { tenant: runtime.tenant } }">{{
-      t('gap.lifecycle')
-    }}</RouterLink>
-  </section>
+      </div>
+    </v-card-text></v-card
+  >
 </template>
