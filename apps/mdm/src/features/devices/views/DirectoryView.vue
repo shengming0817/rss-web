@@ -6,7 +6,7 @@ import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../useDeviceBinding'
-import DevicePage from '../components/DevicePage.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 import { endpointStatuses } from '../clients/endpoint-model'
 import PersonDisplay from '../components/PersonDisplay.vue'
 const { t } = useI18n(),
@@ -201,7 +201,7 @@ const sourceOptions = computed(() => [
 ])
 </script>
 <template>
-  <DevicePage
+  <MdmPage
     :title="t('devices.directory')"
     :description="t('devices.workspace.directoryNote')"
     :busy="busy"
@@ -436,5 +436,5 @@ const sourceOptions = computed(() => [
         t('devices.next')
       }}</v-btn>
     </nav>
-  </DevicePage>
+  </MdmPage>
 </template>
