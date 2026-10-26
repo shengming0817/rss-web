@@ -1,5 +1,5 @@
 import { closed, count, nullable, uuid } from '../../../../src/services/decode'
-import { executionSummary } from '../../../../src/features/policies/clients/executions'
+import { executionSummary } from '../../../policies/execution-model'
 import { positive } from '../../../../src/features/security/clients/compliance-model'
 import { requestTarget } from './requests-model'
 import { isSupportTarget } from './support-model'

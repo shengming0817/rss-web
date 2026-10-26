@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import type { ExecutionSummary } from '../clients/executions'
+import type { ExecutionSummary } from '../../../policies/execution-model'
 defineProps<{ execution: ExecutionSummary }>()
 const { t } = useI18n()
 const facts = ['admission', 'dispatch', 'receipt', 'execution', 'effect', 'compliance'] as const

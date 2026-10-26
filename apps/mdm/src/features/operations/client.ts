@@ -1,3 +1,4 @@
+import { createActivitiesClient } from './clients/activities'
 import type { HttpTransport } from '@rss/api/mdm'
 import { createAuditClient } from './clients/audit'
 import { createAuthorizationClient } from './clients/authorization'
@@ -8,6 +9,7 @@ export function createOperationsClients(
 ) {
   return {
     authorization: createAuthorizationClient(transport, tenant, realm),
+    activities: createActivitiesClient(transport),
     audit: createAuditClient(transport),
   }
 }
