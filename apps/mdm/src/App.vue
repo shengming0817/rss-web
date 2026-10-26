@@ -218,11 +218,11 @@ onBeforeUnmount(() => document.removeEventListener('keydown', shortcut))
           ><v-card-text
             ><v-text-field
               :model-value="query"
-              @update:model-value="query = typeof $event === 'string' ? $event : ''"
               type="search"
               clearable
               :label="t('console.searchNavigation')"
               :placeholder="t('console.searchNavigation')"
+              @update:model-value="query = typeof $event === 'string' ? $event : ''"
               @click:clear="query = ''" /><v-list
               density="compact"
               :aria-label="t('console.navigation')"
