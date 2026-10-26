@@ -155,7 +155,10 @@ function syncTarget() {
         : ''
 }
 async function load() {
-  clear()
+  // Rereading the same device withdraws reads, while ManualPanel keeps any original write intent.
+  manualGeneration.value++
+  view.value = undefined
+  endpoints.value = []
   await run(
     async () => {
       const value = await runtime.devices.views.detail(reference.value)

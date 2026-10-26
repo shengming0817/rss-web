@@ -704,7 +704,7 @@ it('does not switch saved-query targets while the original write is unresolved',
   await flushPromises()
   expect((await devices.assets.readSaved(other)).definition?.name).toBe('Other query')
 })
-it('keeps an uncertain manual operation across tabs and replays the same request', async () => {
+it('keeps an uncertain manual operation across rereads and tabs and replays the same request', async () => {
   const { wrapper, click, scenario, requests } = await setup('device-detail', {
     device: 'device-01',
   })
@@ -722,6 +722,7 @@ it('keeps an uncertain manual operation across tabs and replays the same request
     .find((b) => b.text() === '取消')!
     .trigger('click')
   await flushPromises()
+  await click('重新读取')
   await click('管理')
   await click('重启')
   await new DOMWrapper(document.body).get('[role=alertdialog] form').trigger('submit')
