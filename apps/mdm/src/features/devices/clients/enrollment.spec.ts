@@ -32,7 +32,8 @@ it('keeps pending authorization separate from registration and rejects invented 
     },
   }
   expect(decodeEnrollment(response, id)).toEqual(response)
-  const { deviceId: _device, ...unbound } = response
+  const unbound: Record<string, unknown> = { ...response }
+  delete unbound['deviceId']
   expect(() => decodeEnrollment(unbound, id)).toThrow()
   expect(() =>
     decodeEnrollment(
