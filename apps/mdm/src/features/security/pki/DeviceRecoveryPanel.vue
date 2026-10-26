@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { VAlert, VTab, VTabs, VWindow, VWindowItem } from 'vuetify/components'
 import type { EndpointDetail } from '../../devices/clients/endpoint-model'
@@ -12,6 +12,13 @@ const agent = computed(() =>
   props.endpoint?.channels.find((channel) => channel.channel === 'agent'),
 )
 const choices = ['registration', 'issuance', 'windows'] as const
+watch(
+  agent,
+  (value) => {
+    if (props.endpoint && !value && kind.value === 'registration') kind.value = 'issuance'
+  },
+  { immediate: true },
+)
 </script>
 <template>
   <section :key="endpoint?.id" :aria-label="t('security.pki.recover')" class="my-4">
@@ -32,12 +39,13 @@ const choices = ['registration', 'issuance', 'windows'] as const
     <v-window v-model="kind" class="mt-4"
       ><v-window-item value="registration"
         ><AgentRecovery
-          v-if="!endpoint || agent"
+          v-if="kind === 'registration' && (!endpoint || agent)"
           kind="registration"
           :registration="agent?.registrationId"
           :platform="agent?.platform ?? undefined" /></v-window-item
-      ><v-window-item value="issuance"><AgentRecovery kind="issuance" /></v-window-item
-      ><v-window-item value="windows"><WindowsRecovery /></v-window-item
+      ><v-window-item value="issuance"
+        ><AgentRecovery v-if="kind === 'issuance'" kind="issuance" /></v-window-item
+      ><v-window-item value="windows"><WindowsRecovery v-if="kind === 'windows'" /></v-window-item
     ></v-window>
   </section>
 </template>

@@ -38,7 +38,7 @@ const runtime = useMdm(),
   { t } = useI18n(),
   client = runtime.onboarding.recovery,
   { busy, failure, pending, locked, submit, query } = useSettingsAction(
-    () => `agent-recovery:${props.kind}:${props.registration ?? ''}`,
+    () => `agent-recovery:${props.kind}${props.registration ? ':' + props.registration : ''}`,
   )
 const { canWrite } = usePermission('credentials', 'credentials')
 const locator = ref(''),
@@ -222,81 +222,83 @@ watch(failure, (value) => {
         t('security.recovery.conflictHandoff')
       }}</v-alert>
       <form @submit.prevent="recover()">
-        <v-text-field
-          :id="'agent-' + kind"
-          v-model="locator"
-          :label="
-            t(
-              kind === 'registration'
-                ? 'security.recovery.registrationId'
-                : 'security.recovery.issuanceId',
-            )
-          "
-          required
-          maxlength="36"
-          :readonly="kind === 'registration' && !!registration"
-          :disabled="busy || !canWrite || locked"
-          @update:model-value="reviewed = false"
-        />
-        <v-text-field
-          :id="'agent-' + kind + '-operation'"
-          v-model="originalOperation"
-          :label="t('security.recovery.administrativeOperation')"
-          required
-          maxlength="36"
-          :disabled="busy || !canWrite || locked"
-          @update:model-value="reviewed = false"
-        />
-        <template v-if="kind === 'registration'">
-          <v-select
-            v-model="platform"
-            :label="t('security.recovery.platform')"
-            :items="[
-              { value: 'windows', title: 'Windows' },
-              { value: 'macos', title: 'macOS' },
-            ]"
-            :disabled="busy || !canWrite || locked || !!props.platform"
-            @update:model-value="reviewed = false"
-          />
+        <fieldset :disabled="busy || !canWrite || locked" class="security-fieldset">
           <v-text-field
-            id="agent-recovery-secret"
-            v-model="secret"
-            :label="t('security.recovery.secret')"
-            type="password"
+            :id="'agent-' + kind"
+            v-model="locator"
+            :label="
+              t(
+                kind === 'registration'
+                  ? 'security.recovery.registrationId'
+                  : 'security.recovery.issuanceId',
+              )
+            "
             required
-            maxlength="43"
-            autocomplete="off"
+            maxlength="36"
+            :readonly="kind === 'registration' && !!registration"
             :disabled="busy || !canWrite || locked"
             @update:model-value="reviewed = false"
           />
-          <v-textarea
-            id="agent-recovery-csr"
-            v-model="csr"
-            :label="t('security.recovery.csr')"
+          <v-text-field
+            id="agent-recovery-operation"
+            v-model="originalOperation"
+            :label="t('security.recovery.administrativeOperation')"
             required
-            maxlength="43692"
+            maxlength="36"
+            :disabled="busy || !canWrite || locked"
+            @update:model-value="reviewed = false"
+          />
+          <template v-if="kind === 'registration'">
+            <v-select
+              v-model="platform"
+              :label="t('security.recovery.platform')"
+              :items="[
+                { value: 'windows', title: 'Windows' },
+                { value: 'macos', title: 'macOS' },
+              ]"
+              :disabled="busy || !canWrite || locked || !!props.platform"
+              @update:model-value="reviewed = false"
+            />
+            <v-text-field
+              id="agent-recovery-secret"
+              v-model="secret"
+              :label="t('security.recovery.secret')"
+              type="password"
+              required
+              maxlength="43"
+              autocomplete="off"
+              :disabled="busy || !canWrite || locked"
+              @update:model-value="reviewed = false"
+            />
+            <v-textarea
+              id="agent-recovery-csr"
+              v-model="csr"
+              :label="t('security.recovery.csr')"
+              required
+              maxlength="43692"
+              spellcheck="false"
+              :disabled="busy || !canWrite || locked"
+              @update:model-value="reviewed = false"
+            />
+          </template>
+          <v-textarea
+            v-else
+            id="agent-recovery-chain"
+            v-model="chain"
+            :label="t('security.recovery.publicChain')"
+            required
+            maxlength="180000"
             spellcheck="false"
             :disabled="busy || !canWrite || locked"
             @update:model-value="reviewed = false"
           />
-        </template>
-        <v-textarea
-          v-else
-          id="agent-recovery-chain"
-          v-model="chain"
-          :label="t('security.recovery.publicChain')"
-          required
-          maxlength="180000"
-          spellcheck="false"
-          :disabled="busy || !canWrite || locked"
-          @update:model-value="reviewed = false"
-        />
-        <v-alert v-if="reviewed" type="warning" variant="tonal" class="mb-4"
-          >{{ t('security.recovery.confirm') }} · {{ locator }} · {{ originalOperation }}</v-alert
-        >
-        <v-btn type="submit" :disabled="locked || !canWrite">{{
-          t(reviewed ? 'security.recovery.continue' : 'security.pki.review')
-        }}</v-btn>
+          <v-alert v-if="reviewed" type="warning" variant="tonal" class="mb-4"
+            >{{ t('security.recovery.confirm') }} · {{ locator }} · {{ originalOperation }}</v-alert
+          >
+          <v-btn type="submit" :disabled="locked || !canWrite">{{
+            t(reviewed ? 'security.recovery.continue' : 'security.pki.review')
+          }}</v-btn>
+        </fieldset>
       </form>
       <v-btn
         v-if="kind === 'issuance'"
@@ -356,3 +358,11 @@ watch(failure, (value) => {
     </v-card-text></v-card
   >
 </template>
+
+<style scoped>
+.security-fieldset {
+  border: 0;
+  min-width: 0;
+  padding: 0;
+}
+</style>

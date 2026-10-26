@@ -88,6 +88,7 @@ function clearTask() {
 }
 function create() {
   if (busy.value || uncertain.value) return
+  editorOpen.value = false
   current.value = undefined
   id.value = crypto.randomUUID()
   name.value = ''
@@ -281,7 +282,7 @@ onMounted(async () => {
       ></v-card
     >
     <v-expansion-panels class="mb-4"
-      ><v-expansion-panel :title="t('console.advanced')"
+      ><v-expansion-panel :title="t('console.advanced')" eager
         ><template #text
           ><form data-testid="open-rule" @submit.prevent="open()">
             <v-text-field

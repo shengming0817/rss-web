@@ -171,7 +171,7 @@ onMounted(routeDevice)
       ></template
     >
     <v-alert type="info" variant="tonal" class="mb-4">{{ t('security.dashboardScope') }}</v-alert>
-    <v-row class="mb-4">
+    <v-row v-if="directory" class="mb-4">
       <v-col v-for="item in counts" :key="item.value" cols="6" md="auto"
         ><v-card variant="tonal" :color="tone(item.value)"
           ><v-card-text
@@ -181,7 +181,7 @@ onMounted(routeDevice)
         ></v-col
       >
     </v-row>
-    <v-card :title="t('security.assessmentDirectory')" class="mb-4">
+    <v-card v-if="directory" :title="t('security.assessmentDirectory')" class="mb-4">
       <v-card-text>
         <v-select
           v-model="status"
