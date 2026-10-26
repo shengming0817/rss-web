@@ -294,6 +294,54 @@ try {
     403,
   )
   assert.equal((await get('/api/v1/operations')).items.length, 0)
+  phase = 'management-activities-and-independent-audit'
+  await changeRule(fixture.rule.grants)
+  const activityPath = `/api/v1/devices/${fixture.mdm}/management-activities`
+  const activities = await get(activityPath)
+  assert.ok(Array.isArray(activities.coverage))
+  assert.ok(Number.isSafeInteger(activities.asOf))
+  assert.ok(typeof activities.syncCursor === 'string')
+  await page.goto(at(`devices/${fixture.mdm}/activities`))
+  await load()
+  await page.getByText('观察时间 · UTC', { exact: false }).waitFor()
+  let originalActivities
+  const activityDeadline = Date.now() + 30000
+  do {
+    originalActivities = await get(activityPath + '?operation=' + original.operationId)
+    if (originalActivities.items.length) break
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  } while (Date.now() < activityDeadline)
+  assert.ok(
+    originalActivities.items.length > 0,
+    'original operation activity appears within the bounded window',
+  )
+  const fact = originalActivities.items[0]
+  assert.equal(fact.links.operation, original.operationId)
+  const detail = await get(activityPath + '/' + encodeURIComponent(fact.id))
+  assert.equal(detail.activity.id, fact.id)
+  assert.ok(Array.isArray(detail.missing))
+  await page.goto(at(`devices/${fixture.mdm}/activities`) + '?operation=' + original.operationId)
+  await load()
+  const detailRead = page.waitForResponse(
+    (r) => new URL(r.url()).pathname === `${activityPath}/${encodeURIComponent(fact.id)}`,
+  )
+  await page.getByRole('button', { name: '查看关联事实', exact: true }).first().click()
+  assert.equal((await detailRead).status(), 200)
+  const activityDialog = page.getByRole('dialog')
+  const activityCard = activityDialog
+    .locator('[data-section="management-activity"]')
+    .filter({
+      has: page.getByText(fact.id, { exact: true }),
+    })
+    .first()
+  await activityCard.locator('details > summary').click()
+  await activityCard.getByText(fact.id, { exact: true }).waitFor()
+  await page.keyboard.press('Escape')
+  await changeRule(fixture.rule.grants.filter((g) => g.operation !== 'audit_read'))
+  assert.equal((await request('get', '/api/v1/audit-events')).status(), 403)
+  assert.equal((await request('get', activityPath)).status(), 200)
+  await changeRule(fixture.rule.grants)
+  coverage.push('formal-management-activities-coverage-and-independent-audit-authority')
   phase = 'formal-audit-timeline-diagnostics'
   // AuditRead is independent of the operation/device scope narrowed above.
   const auditQuery = `/api/v1/audit-events?action=command_cancel&operationId=${original.operationId}`

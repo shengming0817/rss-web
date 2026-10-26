@@ -8,6 +8,12 @@ export const deviceFeature: MdmFeature = {
     meta: { protected: true },
   },
   routes: [
+    {
+      path: `${base}/:device/activities`,
+      name: 'device-activities',
+      component: () => import('../operations/views/ManagementActivitiesView.vue'),
+      meta: { protected: true },
+    },
     ...[
       { path: `${base}/:device`, name: 'device' },
       { path: '/tenants/:tenant/device-views/:kind/:view', name: 'device-view' },

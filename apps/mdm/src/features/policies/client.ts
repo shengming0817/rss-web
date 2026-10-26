@@ -1,3 +1,4 @@
+import { createEventsClient } from './clients/events'
 import { createRunsClient } from './clients/runs'
 import type { HttpTransport } from '@rss/api/mdm'
 import { createScopesClient } from './clients/scopes'
@@ -7,6 +8,7 @@ import { createNativeClient } from './clients/native'
 import { createExecutionsClient } from './clients/executions'
 export function createPolicyClients(transport: HttpTransport) {
   return {
+    events: createEventsClient(transport),
     runs: createRunsClient(transport),
     scopes: createScopesClient(transport),
     resources: createResourcesClient(transport),

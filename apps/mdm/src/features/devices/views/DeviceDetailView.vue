@@ -312,6 +312,11 @@ watch(target, () => {
             <option v-for="e in endpoints" :key="e.id" :value="e.id">{{ e.id }}</option>
           </select></label
         >
+        <RouterLink
+          v-if="target"
+          :to="{ name: 'device-activities', params: { tenant: runtime.tenant, device: target } }"
+          >{{ t('policies.entry.activities') }}</RouterLink
+        >
         <template v-if="target">
           <DeviceActivity v-if="historySection === 'activity'" :key="target" :device="target" />
           <DevicePerformance

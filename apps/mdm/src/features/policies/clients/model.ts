@@ -314,7 +314,7 @@ function loginConfiguration(value: unknown) {
     throw new Error('Invalid login configuration')
   return c
 }
-function policyName(value: unknown) {
+export function policyName(value: unknown) {
   const name = string(value)
     .trim()
     .replace(/[A-Z]/g, (c) => c.toLowerCase())
