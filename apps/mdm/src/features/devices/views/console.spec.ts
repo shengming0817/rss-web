@@ -2328,3 +2328,53 @@ it('retains the running rule definition when its drawer is closed and preview is
     vi.useRealTimers()
   }
 })
+
+it('shows a network-source failure and retries rather than reporting missing IP data', async () => {
+  const f = await setup('device-detail', { device: 'device-01' })
+  const view = await f.devices.views.detail({ kind: 'endpoint', id: 'device-01' })
+  const channel = view.endpoints[0]!.channels.find((c) => c.channel === 'agent')!
+  const evidence = {
+    ...Object.values(view.fields)[0]!.sources[0]!.fact.evidence,
+    source: 'agent.builtin' as const,
+    registration: channel.registrationId,
+    registrationGeneration: channel.generation,
+  }
+  const source = {
+    endpoint: 'device-01',
+    evidence,
+    state: { kind: 'known' as const, count: 1, digest: 'network' },
+    lastKnown: null,
+    cursor: 'network-cursor',
+  }
+  view.lists['device.network.interfaces'] = {
+    state: source.state,
+    sources: [source],
+    itemKey: 'id',
+  }
+  vi.spyOn(f.devices.views, 'detail').mockResolvedValue(view)
+  const items = vi
+    .spyOn(f.devices.views, 'items')
+    .mockRejectedValueOnce(decodeMdmError(503, { code: 'service_unavailable' }))
+  await f.click('重新读取')
+  const summary = f.wrapper.getComponent({ name: 'DeviceSummary' })
+  expect(summary.text()).toContain(f.i18n.global.t('devices.unavailable'))
+  expect(summary.text()).not.toContain('未上报')
+  items.mockResolvedValue({
+    reference: view.reference,
+    field: 'device.network.interfaces',
+    source: evidence,
+    endpoint: 'device-01',
+    total: 1,
+    nextCursor: null,
+    items: [
+      {
+        kind: 'object',
+        value: { addresses: { kind: 'array', value: [{ kind: 'string', value: '10.0.0.8' }] } },
+      },
+    ],
+  })
+  await summary.get('button').trigger('click')
+  await flushPromises()
+  expect(summary.text()).toContain('10.0.0.8')
+  expect(summary.find('[role=alert]').exists()).toBe(false)
+})
