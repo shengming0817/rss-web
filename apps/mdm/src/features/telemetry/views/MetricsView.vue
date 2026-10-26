@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, shallowRef, watch } from 'vue'
+import { computed, ref, shallowRef, watch, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { UiButton, UiDialog, UiMessage } from '@rss/core/components'
 import PageFrame from '../../../components/PageFrame.vue'
@@ -15,11 +15,25 @@ import {
 } from '../../devices/clients/assets'
 import WriteRecovery from '../components/WriteRecovery.vue'
 import '../telemetry.css'
+import FieldTypeEditor from '../components/FieldTypeEditor.vue'
+import { sourceIds } from '../../devices/clients/asset-model'
+import type {
+  FieldDefinition as Definition,
+  FieldWrite,
+} from '../../../contracts/collection/generated/FieldWrite'
 const runtime = useMdm(),
   { t } = useI18n(),
   client = runtime.devices.assets
 const { run, runWrite, busy, failure, uncertain } = useOperation([], () => deviceBinding(runtime))
-const { canWrite } = usePermission('inventory_read', 'inventory_fields_write')
+const permission = usePermission('inventory_read', 'inventory_fields_write'),
+  { canWrite } = permission
+const canReadReferences = computed(() => canWrite.value && permission.allows('resource_read'))
+const {
+  run: runReferences,
+  busy: referencesBusy,
+  failure: referenceFailure,
+} = useOperation([], () => deviceBinding(runtime))
+let referenceGeneration = 0
 const fields = ref<FieldDefinition[]>([]),
   search = ref(''),
   selected = ref<FieldDefinition>(),
@@ -27,8 +41,18 @@ const fields = ref<FieldDefinition[]>([]),
   creating = ref(false)
 const key = ref(''),
   unit = ref(''),
-  type = ref('number'),
-  members = ref('running\nstopped'),
+  fieldType = ref<Definition['valueType']>({ kind: 'number' }),
+  manual = ref(false),
+  nullable = ref(true),
+  sources = ref<Record<string, number>>({
+    'agent.native': 0,
+    'agent.script': 1,
+    'agent.osquery': 2,
+  }),
+  platforms = ref<Definition['platforms']>(['windows', 'macos']),
+  sensitivity = ref<'standard' | 'sensitive'>('standard'),
+  itemKey = ref(''),
+  searchable = ref(false),
   kind = ref<'gauge' | 'cumulative_counter' | 'delta_counter' | 'state'>('gauge')
 const valuePath = ref('[]'),
   intervalPath = ref('null'),
@@ -37,7 +61,6 @@ const valuePath = ref('[]'),
   retentionKey = ref(''),
   retentionRevision = ref(1)
 const bindingEnabled = ref(true),
-  advanced = ref(''),
   references = ref<Awaited<ReturnType<typeof client.fieldReferences>>>(),
   confirmed = ref(false)
 const retention = ref({
@@ -50,7 +73,6 @@ const retention = ref({
   retentionOpen = ref(false),
   retentionBase = ref(0)
 const comparison = ref<unknown>()
-type FieldWrite = Operation<{ action: 'put'; definition: ReturnType<typeof fieldInput> }>
 type Pending =
   | { kind: 'field'; field: string; body: FieldWrite }
   | { kind: 'retention'; body: Operation<ReturnType<typeof retentionPolicy>> }
@@ -67,23 +89,42 @@ async function load() {
   )
 }
 async function loadReferences(cursor?: string) {
-  const field = selected.value?.key
-  if (!field) return
-  await run(
+  const field = selected.value?.key,
+    generation = ++referenceGeneration
+  references.value = undefined
+  if (!field || !canReadReferences.value) return
+  await runReferences(
     () => client.fieldReferences(field, cursor),
     (value) => {
-      if (field === selected.value?.key) references.value = value
+      if (generation === referenceGeneration && open.value && field === selected.value?.key)
+        references.value = value
     },
   )
 }
+watch(
+  open,
+  () => {
+    referenceGeneration++
+    references.value = undefined
+  },
+  { flush: 'sync' },
+)
 async function edit(field?: FieldDefinition) {
   if (pending.value) return
   selected.value = field
   creating.value = !field
   key.value = field?.key ?? 'custom.'
   unit.value = field?.unit ?? ''
-  type.value = field?.valueType.kind ?? 'number'
-  advanced.value = field ? JSON.stringify(field.valueType, null, 2) : ''
+  fieldType.value = field ? structuredClone(toRaw(field.valueType)) : { kind: 'number' }
+  manual.value = field?.manual ?? false
+  nullable.value = field?.nullable ?? true
+  sources.value = {
+    ...(field?.sources ?? { 'agent.native': 0, 'agent.script': 1, 'agent.osquery': 2 }),
+  }
+  platforms.value = field ? [...field.platforms] : ['windows', 'macos']
+  sensitivity.value = field?.sensitivity === 'sensitive' ? 'sensitive' : 'standard'
+  itemKey.value = field?.itemKey ?? ''
+  searchable.value = field?.searchable ?? false
   const b = field?.timeSeries
   bindingEnabled.value = !!b || !field
   kind.value = b?.kind ?? 'gauge'
@@ -105,18 +146,15 @@ function definition() {
     : {
         key: key.value,
         version: 0,
-        valueType:
-          type.value === 'enum'
-            ? { kind: 'enum', values: members.value.split('\n').filter(Boolean) }
-            : { kind: type.value },
-        nullable: true,
-        manual: false,
-        sources: { 'agent.native': 0, 'agent.script': 1, 'agent.osquery': 2 },
-        platforms: ['windows', 'macos'],
-        sensitivity: 'standard',
+        valueType: fieldType.value,
+        nullable: nullable.value,
+        manual: manual.value,
+        sources: sources.value,
+        platforms: platforms.value,
+        sensitivity: sensitivity.value,
         unit: unit.value || null,
-        searchable: false,
-        itemKey: null,
+        searchable: searchable.value,
+        itemKey: itemKey.value || null,
         timeSeries: null,
       }
   const b = selected.value?.timeSeries
@@ -143,7 +181,6 @@ function definition() {
   return fieldInput(
     fieldDefinition({
       ...base,
-      ...(!selected.value && advanced.value ? { valueType: JSON.parse(advanced.value) } : {}),
       version: base.version + 1,
       timeSeries,
       operations: [],
@@ -308,36 +345,74 @@ watch(
           <label
             >{{ t('telemetry.field') }}<input v-model="key" class="ui-input" :readonly="!creating"
           /></label>
-          <div v-if="creating" class="telemetry-toolbar">
+          <fieldset :disabled="!creating">
+            <FieldTypeEditor v-model="fieldType" />
+            <label>{{ t('telemetry.unit') }}<input v-model="unit" class="ui-input" /></label>
             <label
-              >{{ t('telemetry.valueType')
-              }}<select
-                v-model="type"
-                :aria-label="t('telemetry.valueType')"
-                class="ui-input"
-                @change="advanced = ''"
-              >
-                <option value="number">number</option>
-                <option value="integer">integer</option>
-                <option value="boolean">boolean</option>
-                <option value="enum">enum</option>
+              ><input v-model="manual" type="checkbox" />{{ t('telemetry.fieldUi.manual') }}</label
+            >
+            <label
+              ><input v-model="nullable" type="checkbox" />{{
+                t('telemetry.fieldUi.nullable')
+              }}</label
+            >
+            <label
+              ><input v-model="searchable" type="checkbox" />{{
+                t('telemetry.fieldUi.searchable')
+              }}</label
+            >
+            <label
+              >{{ t('telemetry.fieldUi.sensitivity')
+              }}<select v-model="sensitivity" class="ui-input">
+                <option>standard</option>
+                <option>sensitive</option>
               </select></label
-            ><label>{{ t('telemetry.unit') }}<input v-model="unit" class="ui-input" /></label>
-          </div>
-          <label v-if="creating && type === 'enum'"
-            >{{ t('telemetry.stateMembers') }}<textarea v-model="members" class="ui-input" />
-          </label>
-          <details>
-            <summary>{{ t('telemetry.valueType') }}</summary>
-            <label
-              >{{ t('telemetry.canonicalDefinition')
-              }}<textarea
-                v-model="advanced"
-                class="ui-input telemetry-code"
-                :readonly="!creating"
-              />
-            </label>
-          </details>
+            >
+            <label v-if="fieldType.kind === 'array'"
+              >{{ t('telemetry.mappingUi.itemKey')
+              }}<select v-model="itemKey" class="ui-input">
+                <option value="">—</option>
+                <option
+                  v-for="name in fieldType.items.kind === 'record' ||
+                  fieldType.items.kind === 'object'
+                    ? Object.keys(fieldType.items.properties)
+                    : []"
+                  :key="name"
+                >
+                  {{ name }}
+                </option>
+              </select></label
+            >
+            <fieldset>
+              <legend>{{ t('telemetry.fieldUi.platforms') }}</legend>
+              <label v-for="platform in ['windows', 'macos']" :key="platform"
+                ><input v-model="platforms" :value="platform" type="checkbox" />{{
+                  platform
+                }}</label
+              >
+            </fieldset>
+            <fieldset>
+              <legend>{{ t('telemetry.fieldUi.sources') }}</legend>
+              <label v-for="source in sourceIds" :key="source"
+                ><input
+                  :checked="Object.hasOwn(sources, source)"
+                  type="checkbox"
+                  @change="
+                    ($event.target as HTMLInputElement).checked
+                      ? (sources[source] = 0)
+                      : delete sources[source]
+                  " />{{ source
+                }}<input
+                  v-if="Object.hasOwn(sources, source)"
+                  v-model.number="sources[source]"
+                  class="ui-input"
+                  type="number"
+                  min="0"
+                  max="65535"
+                  :aria-label="source + ' ' + t('telemetry.fieldUi.priority')"
+              /></label>
+            </fieldset>
+          </fieldset>
           <p v-if="selected?.timeSeries" class="telemetry-notice">
             {{ t('telemetry.immutableBinding') }}
           </p>
@@ -380,6 +455,14 @@ watch(
               }}<input v-model.number="retentionRevision" type="number" min="1" class="ui-input"
             /></label>
           </div>
+          <p v-if="!canReadReferences">{{ t('telemetry.fieldUi.referencePermission') }}</p>
+          <p v-if="referenceFailure" role="alert">
+            {{ t('devices.' + referenceFailure) }}
+            <UiButton :disabled="referencesBusy" @click="loadReferences()">{{
+              t('devices.reload')
+            }}</UiButton>
+          </p>
+          <p>{{ t('telemetry.fieldUi.configurationOnly') }}</p>
           <section v-if="references">
             <h3>{{ t('telemetry.references') }}</h3>
             <ul>
@@ -400,7 +483,7 @@ watch(
             </ul>
             <UiButton
               v-if="references.nextCursor"
-              :disabled="busy"
+              :disabled="referencesBusy"
               @click="loadReferences(references.nextCursor)"
               >{{ t('devices.next') }}</UiButton
             >

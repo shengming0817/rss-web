@@ -39,6 +39,18 @@ export const policiesZh = {
     noActiveVersion: '尚无激活版本',
   },
 
+  collectionEditor: {
+    title: '基于固定版本创建采集版本',
+    hint: '保留原版本全部平台变体与物理读取；为字段选择映射并核对，再生成内容、上传和激活。保存版本不代表采集成功。',
+    base: '基准版本',
+    version: '新版本',
+    scope: '采集命名空间',
+    query: '物理读取来源',
+    invalid: '请补齐合法字段映射、物理来源与未使用的新版本。',
+    prepare: '生成并保存新版本',
+    remaining: '还有 {count} 个变体内容需要上传并核验完成回执。',
+    resume: '恢复当前生成内容',
+  },
   resourcePresentation: '资源展示信息',
   collectionPeriod: '采集周期（秒）',
   collectionPeriodNote:
@@ -533,6 +545,18 @@ export const policiesEn: typeof policiesZh = {
     noActiveVersion: 'No active version',
   },
 
+  collectionEditor: {
+    title: 'Create a collection version from a fixed version',
+    hint: 'Preserve all platform variants and physical reads. Map fields, review, then generate content, upload and activate. A saved version does not prove collection success.',
+    base: 'Base version',
+    version: 'New version',
+    scope: 'Collection namespace',
+    query: 'Physical read source',
+    invalid: 'Complete valid mappings, physical sources and an unused version.',
+    prepare: 'Generate and save new version',
+    remaining: '{count} variant artifacts still need upload and completion receipts.',
+    resume: 'Restore generated content',
+  },
   resourcePresentation: 'Resource presentation',
   collectionPeriod: 'Collection interval (seconds)',
   collectionPeriodNote:
