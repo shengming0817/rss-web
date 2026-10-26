@@ -18,12 +18,6 @@ export const settingsFeature: MdmFeature = {
   },
   routes: [
     {
-      path: '/tenants/:tenant/settings/data-collection/metrics',
-      name: 'settings-metrics',
-      component: () => import('../telemetry/views/MetricsView.vue'),
-      meta: { protected: true },
-    },
-    {
       path: '/tenants/:tenant/settings/user-attributes',
       name: 'settings-user-attributes',
       component: () => import('./views/UserAttributesView.vue'),

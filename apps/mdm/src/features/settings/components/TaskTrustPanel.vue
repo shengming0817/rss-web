@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import '../settings.css'
+import { VAlert, VBtn, VCard, VForm, VSelect, VTextField } from 'vuetify/components'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiMessage } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { usePermission } from '../../enrollment/usePermission'
 import { useSettingsFacts, useSettingsAction } from '../useSettingsAction'
@@ -76,10 +77,10 @@ useSettingsFacts(() => {
 })
 </script>
 <template>
-  <UiMessage tone="info" :title="t('settings.trustHint')" />
+  <VAlert type="info" :title="t('settings.trustHint')" variant="tonal" />
   <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
-  <UiButton :disabled="busy || !canRead" @click="load">{{ t('settings.reload') }}</UiButton>
-  <OperationNotice
+  <VBtn :disabled="busy || !canRead" @click="load">{{ t('settings.reload') }}</VBtn
+  ><OperationNotice
     :operation="pending"
     :busy="busy"
     :can-write="canWrite"
@@ -88,52 +89,66 @@ useSettingsFacts(() => {
     @retry="change(pending!.action as TaskChange['action'], true)"
     @compare="compare"
     @edit="resolveConflict"
-  />
-  <div v-if="trust" class="console-panel">
-    <p>{{ t('settings.savedVersion') }} {{ trust.revision }}</p>
+  /><VCard v-if="trust" class="console-panel" tag="div" variant="outlined"
+    ><p>{{ t('settings.savedVersion') }} {{ trust.revision }}</p>
     <p>
       {{ t('settings.connections.service') }} <code>{{ trust.service_id }}</code>
     </p>
-    <RouterLink :to="{ name: 'settings-deployment', params: { tenant: runtime.tenant } }">{{
-      t('settings.connections.title')
-    }}</RouterLink>
+    <VBtn
+      :to="{ name: 'settings-deployment', params: { tenant: runtime.tenant } }"
+      variant="text"
+      >{{ t('settings.connections.title') }}</VBtn
+    >
     <ul>
       <li v-for="key in trust.keys" :key="key.id">
         <code>{{ key.id }}</code> · {{ key.state }}
       </li>
     </ul>
-    <UiButton @click="downloadPublic('task-trust.json', JSON.stringify(trust))">{{
+    <VBtn @click="downloadPublic('task-trust.json', JSON.stringify(trust))">{{
       t('settings.publicTrustFile')
-    }}</UiButton>
-  </div>
-  <form class="settings-form" @submit.prevent="change('prepare')">
-    <fieldset :disabled="busy || !canWrite">
+    }}</VBtn></VCard
+  ><VForm class="settings-editor" @submit.prevent="change('prepare')"
+    ><fieldset :disabled="busy || !canWrite">
       <legend>{{ t('settings.generate') }}</legend>
-      <label
-        >{{ t('settings.revision')
-        }}<input v-model.number="revision" type="number" min="0" step="1" required /></label
-      ><UiButton type="submit" :disabled="locked">{{ t('settings.generate') }}</UiButton>
-    </fieldset>
-  </form>
-  <form class="settings-form" @submit.prevent="change('activate')">
-    <fieldset :disabled="busy || !canWrite || !trust">
+      <VTextField
+        v-model.number="revision"
+        type="number"
+        min="0"
+        step="1"
+        required
+        :label="t('settings.revision')"
+        :disabled="busy || !canWrite"
+      /><VBtn type="submit" :disabled="busy || !canWrite || locked">{{
+        t('settings.generate')
+      }}</VBtn>
+    </fieldset></VForm
+  ><VForm class="settings-editor" @submit.prevent="change('activate')"
+    ><fieldset :disabled="busy || !canWrite || !trust">
       <legend>{{ t('settings.activate') }}</legend>
-      <label
-        >{{ t('settings.keyId')
-        }}<select v-model="keyId" required>
-          <option value="" disabled>{{ t('settings.select') }}</option>
-          <option v-for="key in trust?.keys" :key="key.id" :value="key.id">
-            {{ key.id }} · {{ key.state }}
-          </option>
-        </select></label
-      >
+      <VSelect
+        v-model="keyId"
+        required
+        :label="t('settings.keyId')"
+        :disabled="busy || !canWrite || !trust"
+        :items="[
+          { title: t('settings.select'), value: '', props: { disabled: true } },
+          ...(trust?.keys ?? []).map((key) => ({
+            title: key.id + ' · ' + key.state,
+            value: key.id,
+            props: { disabled: false },
+          })),
+        ]"
+      />
       <div class="settings-actions">
-        <UiButton type="submit" :disabled="locked">{{ t('settings.activate') }}</UiButton
-        ><UiButton :disabled="locked || !keyId" @click="change('retire')">{{
-          t('settings.retire')
-        }}</UiButton>
+        <VBtn type="submit" :disabled="busy || !canWrite || !trust || locked">{{
+          t('settings.activate')
+        }}</VBtn
+        ><VBtn
+          :disabled="busy || !canWrite || !trust || locked || !keyId"
+          @click="change('retire')"
+          >{{ t('settings.retire') }}</VBtn
+        >
       </div>
-    </fieldset>
-  </form>
-  <ObservationPanel kind="task" />
+    </fieldset></VForm
+  ><ObservationPanel kind="task" />
 </template>

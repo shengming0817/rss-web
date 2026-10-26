@@ -1,12 +1,13 @@
 <script setup lang="ts">
+import '../settings.css'
+import { VAlert, VBtn, VCard, VCheckbox, VForm, VTextField } from 'vuetify/components'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiMessage } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { usePermission } from '../../enrollment/usePermission'
 import { useSettingsFacts, useSettingsAction, useSettingsSecrets } from '../useSettingsAction'
 import type { Tenant, Provisioning } from '../clients/platform'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 import TenantEditor from '../components/TenantEditor.vue'
 import OperationNotice from '../components/OperationNotice.vue'
 const runtime = useMdm(),
@@ -122,13 +123,13 @@ useSettingsFacts(() => {
 })
 </script>
 <template>
-  <PageFrame :title="t('settings.tenants')" :busy="busy" :failure="failure"
-    ><template v-if="runtime.realm === 'platform'">
-      <UiMessage tone="info" :title="t('settings.scopeHint')">{{
+  <MdmPage :title="t('settings.tenants')" :busy="busy" :failure="failure"
+    ><template v-if="runtime.realm === 'platform'"
+      ><VAlert type="info" :title="t('settings.scopeHint')" variant="tonal">{{
         t('settings.capacityHint')
-      }}</UiMessage
-      ><UiButton :disabled="busy || !canRead" @click="load">{{ t('settings.reload') }}</UiButton>
-      <OperationNotice
+      }}</VAlert
+      ><VBtn :disabled="busy || !canRead" @click="load">{{ t('settings.reload') }}</VBtn
+      ><OperationNotice
         :operation="pending"
         :busy="busy"
         :can-write="canWrite"
@@ -136,45 +137,62 @@ useSettingsFacts(() => {
         @query="lookup()"
         @retry="create(true)"
         @compare="compare"
-        @edit="resolveConflict"
-      />
-      <form class="settings-form" @submit.prevent="create()">
-        <fieldset :disabled="busy || !canWrite">
+        @edit="resolveConflict" /><VForm class="settings-editor" @submit.prevent="create()"
+        ><fieldset :disabled="busy || !canWrite">
           <legend>{{ t('settings.createTenant') }}</legend>
           <p>{{ t('settings.createHint') }}</p>
-          <label>{{ t('settings.name') }}<input v-model="name" required maxlength="256" /></label
-          ><label
-            >{{ t('settings.administratorLogin')
-            }}<input v-model="login" autocomplete="off" required maxlength="256" /></label
-          ><label
-            >{{ t('settings.administratorPassword')
-            }}<input
-              v-model="password"
-              :type="showPassword ? 'text' : 'password'"
-              autocomplete="new-password"
-              required
-              maxlength="1024"
-          /></label>
+          <VTextField
+            v-model="name"
+            required
+            maxlength="256"
+            :label="t('settings.name')"
+            :disabled="busy || !canWrite"
+          /><VTextField
+            v-model="login"
+            autocomplete="off"
+            required
+            maxlength="256"
+            :label="t('settings.administratorLogin')"
+            :disabled="busy || !canWrite"
+          /><VTextField
+            v-model="password"
+            :type="showPassword ? 'text' : 'password'"
+            autocomplete="new-password"
+            required
+            maxlength="1024"
+            :label="t('settings.administratorPassword')"
+            :disabled="busy || !canWrite"
+          />
           <div class="settings-actions">
-            <UiButton @click="generate">{{ t('settings.generatePassword') }}</UiButton
-            ><label
-              ><input v-model="showPassword" type="checkbox" />{{
-                t('settings.showPassword')
-              }}</label
-            >
+            <VBtn :disabled="busy || !canWrite" @click="generate">{{
+              t('settings.generatePassword')
+            }}</VBtn
+            ><VCheckbox
+              v-model="showPassword"
+              :label="t('settings.showPassword')"
+              :disabled="busy || !canWrite"
+            />
           </div>
-          <UiButton type="submit" :disabled="locked">{{ t('settings.createTenant') }}</UiButton>
-        </fieldset>
-      </form>
-      <form class="settings-form" @submit.prevent="lookup(original)">
-        <label
-          >{{ t('settings.queryId') }}<input v-model="original" required maxlength="36" /></label
-        ><UiButton type="submit" :disabled="busy || !canRead">{{
+          <VBtn type="submit" :disabled="busy || !canWrite || locked">{{
+            t('settings.createTenant')
+          }}</VBtn>
+        </fieldset></VForm
+      ><VForm class="settings-editor" @submit.prevent="lookup(original)"
+        ><VTextField
+          v-model="original"
+          required
+          maxlength="36"
+          :label="t('settings.queryId')"
+        /><VBtn type="submit" :disabled="busy || !canRead">{{
           t('settings.queryOperation')
-        }}</UiButton>
-      </form>
-      <article v-for="p in provisionings" :key="p.operationId" class="console-panel">
-        <h2>{{ p.tenantId }}</h2>
+        }}</VBtn></VForm
+      ><VCard
+        v-for="p in provisionings"
+        :key="p.operationId"
+        class="console-panel"
+        tag="article"
+        variant="outlined"
+        ><h2>{{ p.tenantId }}</h2>
         <dl class="settings-facts">
           <dt>{{ t('settings.operationId') }}</dt>
           <dd>
@@ -197,23 +215,21 @@ useSettingsFacts(() => {
           <dt>{{ t('settings.observedAt') }}</dt>
           <dd>{{ p.application?.observation?.observedAt ?? '—' }}</dd>
         </dl>
-        <UiButton :disabled="busy" @click="lookup(p.operationId)">{{
+        <VBtn :disabled="busy" @click="lookup(p.operationId)">{{
           t('settings.queryOperation')
-        }}</UiButton
-        ><a v-if="p.phase === 'enabled' && p.origin" class="ui-button" :href="p.origin"
-          >{{ t('settings.businessEntry') }} · {{ p.origin }}</a
-        >
-      </article>
-      <UiButton v-if="nextCursor" :disabled="busy" @click="more">{{ t('settings.next') }}</UiButton
-      ><UiButton v-if="tenantCursor" :disabled="busy" @click="moreTenants">{{
+        }}</VBtn
+        ><VBtn v-if="p.phase === 'enabled' && p.origin" :href="p.origin"
+          >{{ t('settings.businessEntry') }} · {{ p.origin }}</VBtn
+        ></VCard
+      ><VBtn v-if="nextCursor" :disabled="busy" @click="more">{{ t('settings.next') }}</VBtn
+      ><VBtn v-if="tenantCursor" :disabled="busy" @click="moreTenants">{{
         t('settings.next')
-      }}</UiButton
+      }}</VBtn
       ><TenantEditor
         v-for="tenant in tenants"
         :key="tenant.tenantId"
         :tenant="tenant"
-        @changed="load"
-      /> </template
-    ><UiMessage v-else tone="warning" :title="t('settings.scopeHint')"
-  /></PageFrame>
+        @changed="load" /></template
+    ><VAlert v-else type="warning" :title="t('settings.scopeHint')" variant="tonal"
+  /></MdmPage>
 </template>

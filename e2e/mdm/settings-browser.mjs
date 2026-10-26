@@ -95,7 +95,8 @@ try {
     await page.locator('input[value="agent"]').uncheck()
     await page.locator('input[value="windows_mdm"]').check()
     await step('通知与其他集成')
-    await page.locator('[data-capability=smtp]').selectOption('skip')
+    await page.locator('[data-capability=smtp]').getByRole('combobox').click()
+    await page.getByRole('option', { name: '明确跳过', exact: true }).click()
     await page
       .getByPlaceholder('跳过理由', { exact: true })
       .fill('This installation does not need email')
@@ -153,14 +154,14 @@ try {
       page
         .locator('article')
         .filter({ has: page.getByRole('heading', { name: 'Windows MDM', exact: true }) })
-    await page.goto(`${origin}/tenants/${f.tenant}/registration-quotas`)
+    await page.goto(`${origin}/tenants/${f.tenant}/settings/registration-quotas`)
     await channel().getByRole('button', { name: '暂停新注册', exact: true }).click()
     await channel().getByRole('button', { name: '恢复新注册', exact: true }).waitFor()
     await page.goto(`${origin}/tenants/${f.tenant}/settings/guide`)
     await step('注册就绪检查')
     await page.locator('[data-first-use-step=windows_mdm]').waitFor()
     assert.equal(await page.getByRole('button', { name: '完成', exact: true }).isDisabled(), true)
-    await page.goto(`${origin}/tenants/${f.tenant}/registration-quotas`)
+    await page.goto(`${origin}/tenants/${f.tenant}/settings/registration-quotas`)
     await channel().getByRole('button', { name: '恢复新注册', exact: true }).click()
     await channel().getByRole('button', { name: '暂停新注册', exact: true }).waitFor()
     await page.goto(`${origin}/tenants/${f.tenant}/settings/guide`)
@@ -184,7 +185,7 @@ try {
         'backend-confirmed-completion',
       )
       phase = 'first-use-daily-reentry'
-      await page.goto(`${origin}/tenants/${f.tenant}/registration-quotas`)
+      await page.goto(`${origin}/tenants/${f.tenant}/settings/registration-quotas`)
       await channel().getByRole('button', { name: '暂停新注册', exact: true }).click()
       await channel().getByRole('button', { name: '恢复新注册', exact: true }).waitFor()
       await page.goto(`${origin}/tenants/${f.tenant}/sessions`)
@@ -196,7 +197,10 @@ try {
       await page.getByText('首次配置已完成', { exact: true }).waitFor()
       assert.equal(await page.locator('input[value="windows_mdm"]').isDisabled(), true)
       await step('通知与其他集成')
-      assert.equal(await page.locator('[data-capability=smtp]').isDisabled(), true)
+      assert.equal(
+        await page.locator('[data-capability=smtp]').getByRole('combobox').isDisabled(),
+        true,
+      )
       coverage.push('relogin-resumes-daily-work-despite-later-degradation')
     }
     phase = 'formal-platform-and-reader'

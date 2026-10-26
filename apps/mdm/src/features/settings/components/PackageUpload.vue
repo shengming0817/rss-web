@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { VBtn, VFileInput, VProgressLinear, VTextField } from 'vuetify/components'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { UiButton, UiProgress } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useSettingsAction, useSettingsFacts } from '../useSettingsAction'
@@ -88,11 +88,8 @@ useSettingsFacts(clear)
 onBeforeUnmount(() => {
   clear()
 })
-function choose(event: Event) {
-  const input = event.target as HTMLInputElement,
-    selected = input.files?.[0]
-  input.value = ''
-  void chooseFile(selected)
+function choose(selected: File | File[]) {
+  void chooseFile(Array.isArray(selected) ? selected[0] : selected)
 }
 function drop(event: DragEvent) {
   const files = event.dataTransfer?.files
@@ -281,74 +278,67 @@ async function check() {
 <template>
   <section class="package-upload-task" :aria-busy="uploading || busy">
     <p>{{ t('settings.packageTaskNote') }}</p>
-    <label
+    <VFileInput
       v-if="stage === 'choose' && !pending"
+      :accept="target.platform === 'windows' ? '.exe,.msi,.msix' : '.pkg'"
+      :disabled="!canUpload"
       class="package-dropzone"
+      :label="t('settings.chooseInstaller')"
+      @update:model-value="choose"
       @dragover.prevent
       @drop.prevent="drop"
-      >{{ t('settings.chooseInstaller')
-      }}<input
-        type="file"
-        :accept="target.platform === 'windows' ? '.exe,.msi,.msix' : '.pkg'"
-        :disabled="!canUpload"
-        @change="choose"
-    /></label>
+    />
     <p v-if="filename || restored">
       <strong v-if="filename">{{ filename }}</strong>
       {{ t('settings.packageStage.' + displayStage) }}
     </p>
-    <UiProgress
+    <VProgressLinear
       v-if="uploading && !inspected"
-      :label="t('settings.uploadProgress')"
-      :value="progress"
+      :aria-label="t('settings.uploadProgress')"
+      :model-value="progress"
     />
     <p v-if="upload.failure.value || failure" role="alert">
       {{ t('devices.' + (upload.failure.value ?? failure)) }}
     </p>
-    <UiButton
+    <VBtn
       v-if="upload.failure.value && file && !inspected"
       :disabled="uploading || !canUpload"
       @click="resume"
-      >{{ t('settings.resumeUpload') }}</UiButton
-    >
-    <template v-if="inspected || saved || restored"
+      >{{ t('settings.resumeUpload') }}</VBtn
+    ><template v-if="inspected || saved || restored"
       ><p>
         {{ inspected?.format.toUpperCase() ?? '' }} · {{ selection.platform }} ·
         {{ selection.architecture }}
       </p>
       <p v-if="inspected">{{ t('settings.packageInspection.' + inspected.inspection.status) }}</p>
-      <UiButton
+      <VBtn
         v-if="parseable && !saved && !locked"
         :disabled="uploading || busy || !canUpload"
         @click="parse"
-        >{{ t('settings.parseInstaller') }}</UiButton
-      >
-      <label
-        >{{ t('settings.packageVersion')
-        }}<input v-model="version" class="ui-input" :readonly="saved" :disabled="locked"
-      /></label>
-      <UiButton
+        >{{ t('settings.parseInstaller') }}</VBtn
+      ><VTextField
+        id="package-version"
+        v-model="version"
+        :readonly="saved"
+        :disabled="locked"
+        :label="t('settings.packageVersion')"
+      /><VBtn
         v-if="!locked"
         :disabled="!ready || !canPublish || (!saved && !canUpload)"
         @click="publish()"
-        >{{ t(saved ? 'settings.publishSavedPackage' : 'settings.publishInstaller') }}</UiButton
-      >
-    </template>
-    <template v-if="pending?.state === 'unknown' || pending?.state === 'conflict'">
-      <p>{{ t('settings.packageUnknown') }}</p>
-      <UiButton :disabled="busy || !canQuery" @click="check">{{
-        t('settings.queryOperation')
-      }}</UiButton>
-      <UiButton
+        >{{ t(saved ? 'settings.publishSavedPackage' : 'settings.publishInstaller') }}</VBtn
+      ></template
+    ><template v-if="pending?.state === 'unknown' || pending?.state === 'conflict'"
+      ><p>{{ t('settings.packageUnknown') }}</p>
+      <VBtn :disabled="busy || !canQuery" @click="check">{{ t('settings.queryOperation') }}</VBtn
+      ><VBtn
         v-if="compared && pending.state === 'unknown'"
         :disabled="busy || !packageId"
         @click="publish(true)"
-        >{{ t('devices.replay') }}</UiButton
-      >
-      <UiButton v-if="compared && pending.state === 'conflict'" @click="resolveConflict">{{
+        >{{ t('devices.replay') }}</VBtn
+      ><VBtn v-if="compared && pending.state === 'conflict'" @click="resolveConflict">{{
         t('console.edit')
-      }}</UiButton>
-    </template>
-    <UiButton :disabled="locked" @click="emit('close')">{{ t('console.cancel') }}</UiButton>
+      }}</VBtn></template
+    ><VBtn :disabled="locked" @click="emit('close')">{{ t('console.cancel') }}</VBtn>
   </section>
 </template>

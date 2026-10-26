@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import { VBtn, VCard } from 'vuetify/components'
 import ConnectionsPanel from './ConnectionsPanel.vue'
 import ChannelPanel from './ChannelPanel.vue'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { useSettingsFacts, useSettingsAction } from '../useSettingsAction'
 const maintenanceCommand =
@@ -28,11 +28,11 @@ useSettingsFacts(() => {
 })
 </script>
 <template>
-  <section class="console-panel">
-    <h2>{{ t('settings.maintenance') }}</h2>
+  <VCard class="console-panel" tag="section" variant="outlined"
+    ><h2>{{ t('settings.maintenance') }}</h2>
     <p>{{ t('settings.operatorHint') }}</p>
     <p>{{ t('settings.readinessHint') }}</p>
-    <UiButton :disabled="busy" @click="load">{{ t('settings.reload') }}</UiButton>
+    <VBtn :disabled="busy" @click="load">{{ t('settings.reload') }}</VBtn>
     <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
     <dl v-if="readiness" class="settings-facts">
       <dt>{{ t('settings.state') }}</dt>
@@ -53,14 +53,14 @@ useSettingsFacts(() => {
       >
     </dl>
     <p v-else>{{ t('settings.notObserved') }}</p>
-    <RouterLink
+    <VBtn
       v-if="runtime.realm === 'tenant'"
       :to="{ name: 'operations-diagnostics', params: { tenant: runtime.tenant } }"
-      >{{ t('operations.diagnostics') }}</RouterLink
-    >
-  </section>
-  <section class="console-panel">
-    <h2>{{ t('settings.operatorOnly') }}</h2>
+      variant="text"
+      >{{ t('operations.diagnostics') }}</VBtn
+    ></VCard
+  ><VCard class="console-panel" tag="section" variant="outlined"
+    ><h2>{{ t('settings.operatorOnly') }}</h2>
     <p>{{ t('settings.configureHostHint') }}</p>
     <code
       >{{ maintenanceCommand }} configure-host --config
@@ -89,10 +89,9 @@ useSettingsFacts(() => {
     <code
       >{{ maintenanceCommand }} export-webhook-key --config
       /var/lib/rss-mdm/private-webhook-delivery.json</code
-    >
-  </section>
-  <section class="console-panel">
-    <h2>{{ t('settings.backup') }}</h2>
+    ></VCard
+  ><VCard class="console-panel" tag="section" variant="outlined"
+    ><h2>{{ t('settings.backup') }}</h2>
     <p>{{ t('settings.noSecretExport') }}</p>
     <p>{{ t('settings.backupHint') }}</p>
     <code
@@ -104,8 +103,8 @@ useSettingsFacts(() => {
       >{{ maintenanceCommand }} restore-installation --config
       /var/lib/rss-mdm/private-restore.json</code
     >
-    <p>{{ t('settings.backupLimit') }}</p>
-  </section>
-  <ConnectionsPanel v-if="runtime.realm === 'tenant'" />
-  <ChannelPanel v-if="runtime.realm === 'tenant'" />
+    <p>{{ t('settings.backupLimit') }}</p></VCard
+  ><ConnectionsPanel v-if="runtime.realm === 'tenant'" /><ChannelPanel
+    v-if="runtime.realm === 'tenant'"
+  />
 </template>

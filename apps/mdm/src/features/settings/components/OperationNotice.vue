@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiMessage } from '@rss/core/components'
+import { VAlert, VBtn } from 'vuetify/components'
 import type { SettingsOperation } from '../operations'
 withDefaults(
   defineProps<{
@@ -17,9 +17,11 @@ defineEmits<{ query: []; retry: []; compare: []; edit: [] }>()
 const { t } = useI18n()
 </script>
 <template>
-  <UiMessage
+  <VAlert
     v-if="operation"
-    :tone="operation.state === 'received' ? 'info' : 'warning'"
+    :type="operation.state === 'received' ? 'info' : 'warning'"
+    variant="tonal"
+    role="status"
     :title="
       t(
         operation.state === 'unknown'
@@ -42,27 +44,27 @@ const { t } = useI18n()
       {{ t(querySupported === false ? 'settings.noOperationQuery' : 'settings.retryHint') }}
     </p>
     <div class="settings-actions">
-      <UiButton v-if="querySupported !== false" :disabled="!!busy" @click="$emit('query')">{{
+      <VBtn v-if="querySupported !== false" :disabled="!!busy" @click="$emit('query')">{{
         t('settings.queryOperation')
-      }}</UiButton>
-      <UiButton
+      }}</VBtn>
+      <VBtn
         v-if="operation.state === 'unknown' && querySupported !== false"
         :disabled="!!busy || !canWrite || !operation.queried"
         @click="$emit('retry')"
-        >{{ t('settings.retryOriginal') }}</UiButton
+        >{{ t('settings.retryOriginal') }}</VBtn
       >
-      <UiButton
+      <VBtn
         v-if="operation.state === 'conflict' && compareSupported !== false"
         :disabled="!!busy || !canWrite"
         @click="$emit('compare')"
-        >{{ t('settings.readComparison') }}</UiButton
+        >{{ t('settings.readComparison') }}</VBtn
       >
-      <UiButton
+      <VBtn
         v-if="operation.state === 'conflict' && compared"
         :disabled="!!busy || !canWrite"
         @click="$emit('edit')"
-        >{{ t('settings.newAfterConflict') }}</UiButton
+        >{{ t('settings.newAfterConflict') }}</VBtn
       >
     </div>
-  </UiMessage>
+  </VAlert>
 </template>

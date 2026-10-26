@@ -9,13 +9,20 @@ export function settingsDestination(target: string, tenant: string): RouteLocati
     connections: 'settings-deployment',
     operations: 'settings-operations',
     tenants: 'settings-tenants',
-    accounts: 'accounts',
+    accounts: 'operations-organization',
     'user-attributes': 'settings-user-attributes',
     providers: 'providers',
     ade: 'operations-appleAde',
     appleAccount: 'operations-appleAccount',
     registration: 'registration-quotas',
     organization: 'operations-organization',
+    agent: 'agent-configurations',
+    sources: 'software-sources',
+    archive: 'security-certificate-archive',
+    recovery: 'devices',
+    entra: 'operations-windowsEntra',
+    audit: 'operations-audit',
+    diagnostics: 'operations-diagnostics',
   }
   const name = routes[target]
   return name

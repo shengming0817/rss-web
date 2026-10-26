@@ -1,3 +1,7 @@
+import { VSelect } from 'vuetify/components'
+import { settingsSections } from '../routes'
+import { managedSettingsPages } from '../entries'
+import { settingsDestination } from '../destinations'
 import { sha256 } from '@noble/hashes/sha2.js'
 import ConnectionsPanel from '../components/ConnectionsPanel.vue'
 import AgentConnectionObservation from '../../devices/components/AgentConnectionObservation.vue'
@@ -34,6 +38,7 @@ import TenantEditor from '../components/TenantEditor.vue'
 import FirstUseView from './FirstUseView.vue'
 import type { FirstUseIntent } from '../clients/firstUse'
 import TenantsView from './TenantsView.vue'
+import SettingsView from './SettingsView.vue'
 import OperationsPanel from '../components/OperationsPanel.vue'
 import DeploymentPanel from '../components/DeploymentPanel.vue'
 const tenant = '11111111-1111-4111-8111-111111111111',
@@ -215,6 +220,24 @@ async function fixture(
       { path: '/', name, component },
       { path: '/workspace', name: 'workspace', component: { template: '<p>Workspace</p>' } },
       { path: '/next', name: 'next', component: { template: '<p>Next</p>' } },
+      ...[
+        ...settingsSections.map((section) => 'settings-' + section),
+        'settings-guide',
+        'settings-tenants',
+        'device-enroll',
+        'operations-authorization',
+        'operations-organization',
+        'device-management',
+        ...managedSettingsPages.map(
+          (page) => (settingsDestination(page.target, tenant) as { name: string }).name,
+        ),
+      ]
+        .filter((routeName, index, all) => routeName !== name && all.indexOf(routeName) === index)
+        .map((routeName) => ({
+          path: '/fixture/' + routeName,
+          name: routeName,
+          component: { template: '<p>Destination</p>' },
+        })),
     ],
   })
   await router.push('/')
@@ -261,7 +284,7 @@ function button(w: VueWrapper | DOMWrapper<Node>, label: string) {
 }
 it('clears imported private keys immediately, keeps unknown writes across remount and queries before exact replay', async () => {
   const f = await fixture(ApplePanel, { purpose: 'apns' })
-  await f.wrapper.get('select').setValue('import')
+  await f.wrapper.getComponent(VSelect).setValue('import')
   await f.wrapper.get('textarea').setValue('PRIVATE INPUT')
   let original = ''
   f.setHandler((o) => {
@@ -288,7 +311,7 @@ it('clears imported private keys immediately, keeps unknown writes across remoun
   await flushPromises()
   expect(f.settings.operations.records.get('apns')?.state).toBe('unknown')
   await f.remount()
-  await f.wrapper.get('select').setValue('import')
+  await f.wrapper.getComponent(VSelect).setValue('import')
   await button(f.wrapper, '查询原操作').trigger('click')
   await flushPromises()
   expect(button(f.wrapper, '按原输入显式重试').attributes('disabled')).toBeUndefined()
@@ -325,7 +348,9 @@ it.each(['storage', 'smtp', 'wns'] as const)(
   'submits typed %s credentials without retaining secrets and separates qualification from application',
   async (kind) => {
     const f = await fixture(ProviderPanel, { kind })
-    for (const input of f.wrapper.findAll('input'))
+    for (const input of f.wrapper.findAll(
+      'input:not([type=hidden]):not([role=combobox]):not([readonly])',
+    ))
       await input.setValue(
         input.attributes('type') === 'email'
           ? 'fixture@example.test'
@@ -398,7 +423,7 @@ it.each(['storage', 'smtp', 'wns'] as const)(
 )
 it('clears credentials on tab hiding and prevents changed intent from replaying an unresolved operation', async () => {
   const f = await fixture(ProviderPanel, { kind: 'smtp' })
-  const inputs = f.wrapper.findAll('input')
+  const inputs = f.wrapper.findAll('input:not([type=hidden]):not([role=combobox]):not([readonly])')
   for (const input of inputs) await input.setValue('a@example.test')
   Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
   document.dispatchEvent(new Event('visibilitychange'))
@@ -425,7 +450,7 @@ it('clears credentials on tab hiding and prevents changed intent from replaying 
 })
 it('provisions with an immediately cleared password and displays capacity without creating a target session', async () => {
   const f = await fixture(TenantsView, {}, 'platform')
-  const inputs = f.wrapper.findAll('input')
+  const inputs = f.wrapper.findAll('input:not([type=hidden]):not([role=combobox]):not([readonly])')
   for (const input of inputs.slice(0, 3)) await input.setValue('secure-fixture-value')
   f.setHandler((o) => {
     if (o.method === 'POST') return provision(o.headers!['Idempotency-Key']!)
@@ -480,7 +505,10 @@ it('prepares task trust with an explicit version and reads a null device observa
   await flushPromises()
   expect(f.settings.operations.records.get('task')?.state).toBe('received')
   const forms = f.wrapper.findAll('form')
-  await forms.at(-1)!.get('input').setValue('device-a')
+  await forms
+    .at(-1)!
+    .get('input:not([type=hidden]):not([role=combobox]):not([readonly])')
+    .setValue('device-a')
   await forms.at(-1)!.trigger('submit')
   await flushPromises()
   expect(f.wrapper.text()).toContain('仍需核对运行应用及设备观察')
@@ -490,7 +518,7 @@ it('submits Webhook preparation against the read configuration identity and neve
   await f.wrapper.get('input[maxlength="128"]').setValue('events')
   await f.wrapper.get('input[type=url]').setValue('https://receiver.test/hook')
   await f.wrapper.findAll('input[maxlength="128"]')[1]!.setValue('approved')
-  await f.wrapper.get('select').setValue('import')
+  await f.wrapper.getComponent(VSelect).setValue('import')
   await f.wrapper.get('input[type=password]').setValue('whsec_secret')
   f.setHandler((o) =>
     o.method === 'POST'
@@ -522,8 +550,8 @@ it('submits Webhook preparation against the read configuration identity and neve
 })
 it('queries original operations through explicit domain clients and keeps PKI out of fake query choices', async () => {
   const f = await fixture(OperationsPanel)
-  await f.wrapper.get('select').setValue('smtp')
-  await f.wrapper.get('input').setValue(id)
+  await f.wrapper.getComponent(VSelect).setValue('smtp')
+  await f.wrapper.get('input:not([type=hidden]):not([role=combobox]):not([readonly])').setValue(id)
   f.setHandler(() => ({
     operationId: id,
     revision: 1,
@@ -536,7 +564,12 @@ it('queries original operations through explicit domain clients and keeps PKI ou
   await f.wrapper.get('form').trigger('submit')
   await flushPromises()
   expect(f.calls.at(-1)?.path).toBe('/api/v1/smtp/operations/{id}')
-  expect(f.wrapper.find('option[value=pki]').exists()).toBe(false)
+  expect(
+    f.wrapper
+      .getComponent(VSelect)
+      .props('items')
+      ?.some((item: { value: string }) => item.value === 'pki'),
+  ).toBe(false)
 })
 it('offers platform package tasks without technical publication forms', async () => {
   const f = await fixture(PackagesPanel)
@@ -561,7 +594,10 @@ it('edits tenant metadata with explicit CAS and clears an added administrator pa
         }
       : row,
   }))
-  await f.wrapper.findAll('form')[0]!.get('input').setValue('Updated')
+  await f.wrapper
+    .findAll('form')[0]!
+    .get('input:not([type=hidden]):not([role=combobox]):not([readonly])')
+    .setValue('Updated')
   await f.wrapper.findAll('form')[0]!.trigger('submit')
   await flushPromises()
   expect(f.calls.find((o) => o.method === 'PUT')?.body).toMatchObject({
@@ -569,7 +605,9 @@ it('edits tenant metadata with explicit CAS and clears an added administrator pa
     name: 'Updated',
   })
   const admin = f.wrapper.findAll('form')[1]!
-  await admin.findAll('input')[0]!.setValue('new-admin')
+  await admin
+    .findAll('input:not([type=hidden]):not([role=combobox]):not([readonly])')[0]!
+    .setValue('new-admin')
   await admin.get('input[type=password]').setValue('private-password')
   await admin.trigger('submit')
   await flushPromises()
@@ -704,7 +742,7 @@ it('fences delayed public file reads before they can repopulate a new session', 
 })
 it('clears an unused imported Apple key when submitting a different material action', async () => {
   const f = await fixture(ApplePanel, { purpose: 'apns' })
-  await f.wrapper.get('select').setValue('import')
+  await f.wrapper.getComponent(VSelect).setValue('import')
   await f.wrapper.get('textarea').setValue('UNUSED PRIVATE KEY')
   f.setHandler((o) =>
     o.method === 'POST'
@@ -789,7 +827,7 @@ it('revokes a WNS version while clearing unrelated credentials in the same form'
   await button(f.wrapper, '重新读取').trigger('click')
   await flushPromises()
   await f.wrapper.get('input[type=password]').setValue('UNUSED WNS SECRET')
-  await f.wrapper.get('select').setValue('1')
+  await f.wrapper.getComponent(VSelect).setValue('1')
   await f.wrapper.findAll('form')[1]!.trigger('submit')
   await flushPromises()
   expect(f.calls.find((o) => o.method === 'POST')?.body).toEqual({
@@ -824,9 +862,9 @@ it('activates an existing Webhook revision without retaining an unrelated import
   await button(f.wrapper, '重新读取').trigger('click')
   await flushPromises()
   await f.wrapper.get('input[maxlength="128"]').setValue('events')
-  await f.wrapper.findAll('select')[0]!.setValue('import')
+  await f.wrapper.findAllComponents(VSelect)[0]!.setValue('import')
   await f.wrapper.get('input[type=password]').setValue('UNUSED WEBHOOK SECRET')
-  await f.wrapper.findAll('select')[1]!.setValue('1')
+  await f.wrapper.findAllComponents(VSelect)[1]!.setValue('1')
   await f.wrapper.findAll('form')[1]!.trigger('submit')
   await flushPromises()
   expect((f.wrapper.get('input[type=password]').element as HTMLInputElement).value).toBe('')
@@ -965,7 +1003,10 @@ it('saves first-use choices, restores backend facts, and finishes only through a
   await f.wrapper.get('input[value=agent]').setValue(false)
   await f.wrapper.get('input[value=windows_mdm]').setValue(true)
   await guideStep(f.wrapper, '通知与其他集成')
-  await f.wrapper.get('[data-capability=smtp]').setValue('skip')
+  await f.wrapper
+    .findAllComponents(VSelect)
+    .find((select) => select.attributes('data-capability') === 'smtp')!
+    .setValue('skip')
   await f.wrapper.get('input[placeholder="跳过理由"]').setValue('Not needed')
   await button(f.wrapper, '保存本次选择').trigger('click')
   await flushPromises()
@@ -1294,7 +1335,7 @@ it('keeps metadata optional while resuming upload and retrying publication', asy
     .find((b) => b.text() === '核对并继续上传')!
     .trigger('click')
   await flushPromises()
-  await f.wrapper.get('input.ui-input').setValue('1.2')
+  await f.wrapper.get('#package-version').setValue('1.2')
   expect(f.wrapper.text()).toContain('默认跳过元数据解析')
   expect(
     f.wrapper
@@ -1307,8 +1348,8 @@ it('keeps metadata optional while resuming upload and retrying publication', asy
     .find((b) => b.text() === '读取安装元数据')!
     .trigger('click')
   await flushPromises()
-  expect(f.wrapper.get('input.ui-input').element).toHaveProperty('value', '1.2')
-  expect(f.wrapper.get('input.ui-input').attributes('readonly')).toBeUndefined()
+  expect(f.wrapper.get('#package-version').element).toHaveProperty('value', '1.2')
+  expect(f.wrapper.get('#package-version').attributes('readonly')).toBeUndefined()
   expect(f.wrapper.text()).toContain('已读取元数据')
   await f.wrapper
     .findAll('button')
@@ -1414,9 +1455,7 @@ it.each([false, true])(
     dialogButton('查询原操作').click()
     await flushPromises()
     expect(f.settings.operations.records.get('packages')?.state).toBe('unknown')
-    document
-      .querySelector<HTMLButtonElement>('[role=alertdialog] button[aria-label="取消"]')!
-      .click()
+    dialogButton('取消').click()
     await flushPromises()
     if (remount) await f.remount()
     await button(f.wrapper, '查询原操作').trigger('click')
@@ -2096,11 +2135,27 @@ it('can revoke a loaded historical WNS material outside current/latest/applied',
   await flushPromises()
   await button(f.wrapper, '版本历史').trigger('click')
   await flushPromises()
-  await f.wrapper.find('select').setValue('1')
+  await f.wrapper.getComponent(VSelect).setValue('1')
   await f.wrapper.findAll('form')[1]!.trigger('submit')
   await flushPromises()
   expect(f.calls.find((o) => o.method === 'POST')?.body).toEqual({
     expectedRevision: 5,
     materialRevision: 1,
+  })
+})
+
+it('keeps enrollment, trust, sources, identity and diagnostics reachable from the common settings directory', async () => {
+  const f = await fixture(SettingsView, {}, 'tenant', 'settings-overview')
+  for (const page of managedSettingsPages) {
+    const destination = settingsDestination(page.target, tenant)!
+    expect(f.wrapper.get('[data-settings-page=' + page.target + ']').attributes('href')).toBe(
+      f.router.resolve(destination).href,
+    )
+  }
+  expect(f.wrapper.find('a[href*=metrics]').exists()).toBe(false)
+  expect(f.calls.some((call) => call.path === '/api/v1/settings/catalog')).toBe(true)
+  expect(settingsDestination('accounts', tenant)).toEqual({
+    name: 'operations-organization',
+    params: { tenant },
   })
 })

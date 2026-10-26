@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import '../settings.css'
+import { VBtn, VCard, VCheckbox, VForm, VTextField, VTextarea } from 'vuetify/components'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { usePermission } from '../../enrollment/usePermission'
 import { useSettingsAction, useSettingsFacts } from '../useSettingsAction'
@@ -187,10 +188,10 @@ watch(failure, (value) => {
 useSettingsFacts(clear)
 </script>
 <template>
-  <section class="console-panel" :aria-busy="busy">
-    <h2>{{ t('settings.connections.title') }}</h2>
+  <VCard class="console-panel" :aria-busy="busy" tag="section" variant="outlined"
+    ><h2>{{ t('settings.connections.title') }}</h2>
     <p>{{ t('settings.connections.boundary') }}</p>
-    <UiButton :disabled="busy || !canRead" @click="load">{{ t('settings.reload') }}</UiButton>
+    <VBtn :disabled="busy || !canRead" @click="load">{{ t('settings.reload') }}</VBtn>
     <p v-if="!canWrite">{{ t('settings.readOnly') }}</p>
     <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
     <OperationNotice
@@ -202,9 +203,8 @@ useSettingsFacts(clear)
       @retry="pending?.action === 'save' ? save(true) : publish(true)"
       @compare="compare"
       @edit="resolveConflict"
-    />
-    <template v-if="state">
-      <p>
+    /><template v-if="state"
+      ><p>
         {{ t('settings.connections.service') }} <code>{{ state.serviceId }}</code>
       </p>
       <dl v-if="runtime.registrationChannels.publicEndpoints.value" class="settings-facts">
@@ -227,26 +227,31 @@ useSettingsFacts(clear)
         {{ t('settings.connections.endpointsFailed') }}
       </p>
       <p v-else>{{ t('settings.notObserved') }}</p>
-      <form class="settings-form" @submit.prevent="save()">
-        <fieldset :disabled="!editable">
+      <VForm class="settings-editor" @submit.prevent="save()"
+        ><fieldset :disabled="!editable">
           <legend>{{ t('settings.connections.desired') }} · {{ draft?.revision ?? '—' }}</legend>
           <label for="connection-preferred">{{ t('settings.connections.preferred') }}</label
-          ><input id="connection-preferred" v-model="preferred" type="url" required />
-          <label for="connection-origins">{{ t('settings.connections.origins') }}</label
-          ><textarea
+          ><VTextField
+            id="connection-preferred"
+            v-model="preferred"
+            type="url"
+            required
+            :disabled="!editable"
+          /><label for="connection-origins">{{ t('settings.connections.origins') }}</label
+          ><VTextarea
             id="connection-origins"
             v-model="candidates"
             required
             rows="4"
             maxlength="32768"
-          />
-          <UiButton type="submit">{{ t('settings.save') }}</UiButton>
-        </fieldset>
-      </form>
+            :disabled="!editable"
+          /><VBtn type="submit" :disabled="!editable">{{ t('settings.save') }}</VBtn>
+        </fieldset></VForm
+      >
       <p>{{ t('settings.connections.published') }} {{ published?.revision ?? '—' }}</p>
       <p>{{ t('settings.connections.savedHint') }}</p>
-      <template v-if="draft">
-        <h3>{{ t('settings.connections.diff') }}</h3>
+      <template v-if="draft"
+        ><h3>{{ t('settings.connections.diff') }}</h3>
         <dl class="settings-facts">
           <dt>{{ t('settings.connections.preferred') }}</dt>
           <dd>{{ published?.preferredOrigin ?? '—' }} → {{ draft.preferredOrigin }}</dd>
@@ -266,17 +271,16 @@ useSettingsFacts(clear)
           </li>
         </ul>
         <p v-if="!state.deployments.length">{{ t('settings.notObserved') }}</p>
-        <label
-          ><input v-model="reviewed" type="checkbox" :disabled="!editable" />{{
-            t('settings.connections.review')
-          }}</label
-        >
-        <UiButton
+        <VCheckbox
+          v-model="reviewed"
+          :disabled="!editable"
+          :label="t('settings.connections.review')"
+        /><VBtn
           :disabled="!editable || !reviewed || draft.revision === published?.revision"
           @click="publish()"
-          >{{ t('settings.connections.publish') }}</UiButton
-        >
-      </template>
+          >{{ t('settings.connections.publish') }}</VBtn
+        ></template
+      >
       <h3>{{ t('settings.connections.convergence') }}</h3>
       <p>
         {{
@@ -286,30 +290,31 @@ useSettingsFacts(clear)
           })
         }}
       </p>
-      <UiButton :disabled="busy || !published || !canRead" @click="readDevices()">{{
+      <VBtn :disabled="busy || !published || !canRead" @click="readDevices()">{{
         t('settings.connections.unconfirmed')
-      }}</UiButton>
+      }}</VBtn>
       <ul>
         <li v-for="device in devices?.items" :key="device.registration">
-          <RouterLink
+          <VBtn
             :to="{
               name: 'device-management',
               params: { tenant: runtime.tenant, device: device.device },
             }"
-            >{{ device.device }}</RouterLink
+            variant="text"
+            >{{ device.device }}</VBtn
           >
           · {{ t('settings.connections.installed') }} {{ device.installedRevision ?? '—' }} ·
           {{ device.origin ?? '—' }} ·
           {{ device.receivedAt === null ? '—' : auditTime(device.receivedAt) }}
         </li>
       </ul>
-      <UiButton v-if="devices?.next" :disabled="busy" @click="readDevices(true)">{{
+      <VBtn v-if="devices?.next" :disabled="busy" @click="readDevices(true)">{{
         t('settings.connections.more')
-      }}</UiButton>
-      <UiButton :disabled="busy || !published || !canRead" @click="download">{{
+      }}</VBtn
+      ><VBtn :disabled="busy || !published || !canRead" @click="download">{{
         t('settings.connections.download')
-      }}</UiButton>
-      <p>{{ t('settings.connections.offline') }}</p>
-    </template>
-  </section>
+      }}</VBtn>
+      <p>{{ t('settings.connections.offline') }}</p></template
+    ></VCard
+  >
 </template>
