@@ -576,13 +576,15 @@ onMounted(() => load())
               (value) => ({ value, title: t(`security.archive.states.${value}`) }),
             ),
           ]"
-        /><v-alert v-if="!listingLoaded" type="info" variant="tonal">{{
+        /><v-alert v-if="!listingLoaded && busy && !failure" type="info" variant="tonal">{{
           t('console.reading')
         }}</v-alert
-        ><v-alert v-else-if="!displayed.length" type="info" variant="tonal">{{
+        ><v-alert v-else-if="listingLoaded && !displayed.length" type="info" variant="tonal">{{
           t('security.archive.empty')
         }}</v-alert>
-        <v-table v-else :aria-label="t('security.certificate-archive')"
+        <v-table
+          v-if="listingLoaded && displayed.length"
+          :aria-label="t('security.certificate-archive')"
           ><thead>
             <tr>
               <th>{{ t('security.archive.name') }}</th>

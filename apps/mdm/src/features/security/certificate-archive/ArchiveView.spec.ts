@@ -601,3 +601,34 @@ it('discards a delayed version history without restoring its old edit baseline a
   expect(f.wrapper.text()).not.toContain(entry.latest.metadata.name)
   f.wrapper.unmount()
 })
+
+it('ends the initial loading notice after a failed read and recovers on an explicit refresh', async () => {
+  const list = vi
+    .fn()
+    .mockRejectedValueOnce(new Error('read unavailable'))
+    .mockResolvedValue({
+      tenantId: tenant,
+      items: [],
+      nextCursor: null,
+      asOf: 100,
+      reminderDays: 30,
+      alerts: { expired: 0, expiring: 0, notYetValid: 0 },
+    })
+  const { wrapper } = await setup({ list })
+  const initialFailure = wrapper.get('[role="alert"]').text(),
+    emptyLabel = mdmI18n().global.t('security.archive.empty')
+  expect(wrapper.text()).not.toContain('正在读取')
+  expect(wrapper.text()).not.toContain(emptyLabel)
+  expect(wrapper.find('tbody').exists()).toBe(false)
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text() === '刷新')!
+    .trigger('click')
+  await flushPromises()
+  expect(list).toHaveBeenCalledTimes(2)
+  expect(wrapper.text()).not.toContain('正在读取')
+  expect(wrapper.text()).not.toContain(initialFailure)
+  expect(wrapper.text()).toContain(emptyLabel)
+  expect(wrapper.find('#archive-password').exists()).toBe(true)
+  wrapper.unmount()
+})
