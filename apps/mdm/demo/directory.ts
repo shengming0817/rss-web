@@ -150,3 +150,65 @@ export function directoryPage<T extends Row>(
         : null,
   }
 }
+
+/** Fixed-order keyset windows for the current Policy subcollections. */
+export function windowPage<T>(
+  rows: T[],
+  request: DemoRequest,
+  position: (row: T) => readonly (string | number)[],
+  context: unknown,
+  descending = false,
+) {
+  for (const key of request.query.keys())
+    if (
+      !['limit', 'cursor'].includes(key) ||
+      request.query.getAll(key).length !== 1 ||
+      !request.query.get(key)
+    )
+      throw new Error('Invalid window parameter')
+  const limit = Number(request.query.get('limit') ?? 1000)
+  if (!Number.isInteger(limit) || limit < 1 || limit > 1000) throw new Error('Invalid page size')
+  const binding = createHash('sha256')
+    .update(JSON.stringify([request.path, request.actor, request.authorization, context]))
+    .digest('hex')
+  const order = (a: readonly (string | number)[], b: readonly (string | number)[]) => {
+    for (let i = 0; i < a.length; i++) {
+      const n = compare(a[i], b[i])
+      if (n) return descending ? -n : n
+    }
+    return 0
+  }
+  let after: (string | number)[] | undefined
+  if (request.query.has('cursor')) {
+    const cursor = pageCursor(request.query.get('cursor'))
+    try {
+      const token = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as {
+        binding: string
+        position: (string | number)[]
+      }
+      if (
+        token.binding !== binding ||
+        !Array.isArray(token.position) ||
+        !token.position.length ||
+        token.position.some((v) => typeof v !== 'string' && typeof v !== 'number')
+      )
+        throw new Error('Invalidated cursor')
+      after = token.position
+    } catch {
+      throw new Error('Invalidated cursor')
+    }
+  }
+  const sorted = rows
+    .filter((row) => !after || order(position(row), after) > 0)
+    .sort((a, b) => order(position(a), position(b)))
+  const items = sorted.slice(0, limit)
+  return {
+    items,
+    nextCursor:
+      sorted.length > limit
+        ? Buffer.from(JSON.stringify({ binding, position: position(items.at(-1)!) })).toString(
+            'base64url',
+          )
+        : null,
+  }
+}

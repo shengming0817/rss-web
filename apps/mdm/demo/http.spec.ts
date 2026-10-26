@@ -44,3 +44,43 @@ it('ends pages without an empty tail and bounds retained replay cursors', async 
   for (let i = 0; i < 257; i++) pages.page('items', [1, 2], query)
   expect(() => pages.page('items', [], next)).toThrow('Invalid cursor')
 })
+
+it('continues fixed keyset windows without a snapshot cache and rejects a changed basis', async () => {
+  const { windowPage } = await import('./directory')
+  const request: DemoRequest = {
+    method: 'POST',
+    path: '/api/v1/policies/previews',
+    actor: { principalId: author, sessionId: author },
+    headers: {},
+    body: {},
+    query: new URLSearchParams({ limit: '1' }),
+  }
+  const position = (n: number) => [n]
+  const first = windowPage([3, 1, 2], request, position, ['draft', null])
+  expect(first.items).toEqual([1])
+  const next = { ...request, query: new URLSearchParams({ limit: '1', cursor: first.nextCursor! }) }
+  // Removal of the preceding row does not turn a keyset into an offset.
+  const second = windowPage([2, 3], next, position, ['draft', null])
+  expect(second.items).toEqual([2])
+  expect(() => windowPage([2, 3], next, position, ['draft', 'returned-scope-result'])).toThrow(
+    'Invalidated cursor',
+  )
+  expect(() =>
+    windowPage([2, 3], { ...next, actor: { principalId: reviewer, sessionId: author } }, position, [
+      'draft',
+      null,
+    ]),
+  ).toThrow('Invalidated cursor')
+  const last = windowPage(
+    [2, 3],
+    { ...next, query: new URLSearchParams({ cursor: second.nextCursor! }) },
+    position,
+    ['draft', null],
+  )
+  expect(last).toEqual({ items: [3], nextCursor: null })
+  expect(windowPage([], request, position, []).nextCursor).toBeNull()
+  expect(windowPage([1, 2, 3], request, position, [], true).items).toEqual([3])
+  expect(() =>
+    windowPage([], { ...request, query: new URLSearchParams({ after: 'old' }) }, position, []),
+  ).toThrow()
+})

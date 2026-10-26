@@ -74,7 +74,7 @@ async function fixture(
     versionId: id,
     state,
     enabled: state === 'enabled',
-    definition: { scope: id, action },
+    definition: { customEvent: 'refresh.policy', alias: null, scope: id, action },
   } as PolicyRead
   const read = vi.fn(async () => initialRead ?? structuredClone(policy))
   const change = vi.fn(async (_id: string, body: Operation<PolicyChange>) => {
@@ -212,7 +212,7 @@ for (const scenario of scenarios) {
       versionId: id,
       state: 'disabled',
       enabled: false,
-      definition: { scope: id, action: scenario.action },
+      definition: { customEvent: null, alias: null, scope: id, action: scenario.action },
     } as PolicyRead)
     await flushPromises()
     expect(f.wrapper.findComponent(PolicyDelete).exists()).toBe(false)
@@ -263,6 +263,8 @@ it.each(['remove', 'retain'] as const)(
       state: 'disabled',
       enabled: false,
       definition: {
+        customEvent: null,
+        alias: null,
         scope: id,
         action: {
           kind: 'configuration',
@@ -288,3 +290,16 @@ it.each(['remove', 'retain'] as const)(
     wrapper.unmount()
   },
 )
+
+it('preserves an existing enrollment custom event while saving an ordinary schedule edit', async () => {
+  const scenario = scenarios[2]!
+  const f = await fixture(BootstrapView, scenario.action)
+  await f.button('编辑').trigger('click')
+  await f.wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(f.change.mock.calls[0]?.[1].input).toMatchObject({
+    action: 'put',
+    definition: { customEvent: 'refresh.policy' },
+  })
+  f.wrapper.unmount()
+})

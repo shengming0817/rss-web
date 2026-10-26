@@ -96,13 +96,13 @@ it('keeps lifecycle actions resource-free and rejects illegal automatic retireme
     }),
   ).toMatchObject({ operation: { protector: a } })
 })
-it('decodes lifecycle preview and retained assignments without loosening ordinary assignment channels', async () => {
+it('decodes the current nullable preview and retained assignment facts', async () => {
   const action = {
       kind: 'unmanage_device' as const,
       schedule: defaultSchedule(),
       runLifetimeSeconds: 3600,
     },
-    definition = { scope: a, action }
+    definition = { customEvent: null, alias: null, scope: a, action }
   const row = {
     object: { kind: 'endpoint', id: 'mac' },
     channel: null,
@@ -126,14 +126,15 @@ it('decodes lifecycle preview and retained assignments without loosening ordinar
     taskAdmission: null,
   }
   const f = transport({ action, scopeResult: a, items: [previewRow], nextCursor: null })
-  expect((await createPoliciesClient(f.client).preview(definition)).items[0]?.channel).toBeNull()
+  expect(
+    (await createPoliciesClient(f.client).preview({ definition })).items[0]?.channel,
+  ).toBeNull()
   const retained = Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'eligibility'))
   const normal = transport({ items: [retained], nextCursor: null })
   expect(
-    (await createPoliciesClient(normal.client).assignments(a, undefined, true)).items[0]
-      ?.scopeResult,
+    (await createPoliciesClient(normal.client).assignments(a)).items[0]?.scopeResult,
   ).toBeNull()
-  await expect(createPoliciesClient(normal.client).assignments(a)).rejects.toThrow()
+  expect((await createPoliciesClient(normal.client).assignments(a)).items[0]?.channel).toBeNull()
 })
 it('queries capabilities and preserves the server-owned MDM disabled error as a known rejection', async () => {
   const f = transport({ defaultSoftwareChannel: 'agent', mdmSoftwareDistributionEnabled: false })
@@ -569,6 +570,8 @@ it.each(['change', 'trigger'] as const)(
   'restores lifecycle %s after SPA remount without requiring a new locator or current form',
   async (type) => {
     const definition = {
+      customEvent: null,
+      alias: null,
       scope: a,
       action: { kind: 'unmanage_device', schedule: defaultSchedule(), runLifetimeSeconds: 3600 },
     }
@@ -937,6 +940,8 @@ it('creates and edits a credential Policy with the exact operation, then enables
     enabled: false,
     state: 'disabled',
     definition: {
+      customEvent: null as string | null,
+      alias: null,
       scope: a,
       action: {
         kind: 'credential',
@@ -996,13 +1001,14 @@ it('creates and edits a credential Policy with the exact operation, then enables
   await flushPromises()
   expect(preview).toHaveBeenCalledWith(
     expect.objectContaining({
-      action: expect.objectContaining({
-        operation: { kind: 'rotate_bitlocker', volume: 'volume', protector: b },
-        architecture: 'aarch64',
+      definition: expect.objectContaining({
+        action: expect.objectContaining({
+          operation: { kind: 'rotate_bitlocker', volume: 'volume', protector: b },
+          architecture: 'aarch64',
+        }),
       }),
     }),
-    undefined,
-    undefined,
+    { cursor: undefined },
   )
   await confirm(w)
   await w.find('form').trigger('submit')
@@ -1011,6 +1017,13 @@ it('creates and edits a credential Policy with the exact operation, then enables
     expectedRevision: 0,
     input: { enabled: false },
   })
+  policy.definition.customEvent = 'refresh.credentials'
+  await button(w, '读取').trigger('click')
+  await flushPromises()
+  await confirm(w)
+  await w.find('form').trigger('submit')
+  await flushPromises()
+  expect(change.mock.calls.at(-1)?.[1].input.definition.customEvent).toBe('refresh.credentials')
   await confirm(w)
   await button(w, '启用整个 Policy').trigger('click')
   await flushPromises()
@@ -1019,7 +1032,7 @@ it('creates and edits a credential Policy with the exact operation, then enables
   await button(w, '显式触发').trigger('click')
   await flushPromises()
   expect(rerun).toHaveBeenCalledWith(a, expect.any(String), expect.any(Number), 5000)
-  expect(assignments).toHaveBeenCalledWith(a, undefined, false)
+  expect(assignments).toHaveBeenCalledWith(a, { cursor: undefined })
   await confirm(w)
   await button(w, '禁用整个 Policy').trigger('click')
   await flushPromises()
@@ -1285,6 +1298,8 @@ it('keeps a Key conflict after a disposed comparison and reads its frozen ID on 
 
 it('does not resolve a Policy conflict when its authoritative comparison is disposed', async () => {
   const definition = {
+    customEvent: null,
+    alias: null,
     scope: b,
     action: { kind: 'unmanage_device', schedule: defaultSchedule(), runLifetimeSeconds: 3600 },
   }

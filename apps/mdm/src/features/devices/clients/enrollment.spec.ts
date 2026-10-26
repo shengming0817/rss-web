@@ -72,3 +72,19 @@ it('uses the exact enrollment idempotency header and the snake-case revocation r
   })
   expect(request).toHaveBeenCalledTimes(2)
 })
+
+it('uses the current registration window and preserves a non-UUID opaque cursor', async () => {
+  const token = 'b3BhcXVl'
+  const request = vi.fn(async (o: RequestOptions<unknown>) =>
+    o.decode({ items: [], nextCursor: token }),
+  )
+  const client = createEnrollmentClient({ request } as unknown as HttpTransport)
+  expect((await client.registrations('device', { limit: 1 })).nextCursor).toBe(token)
+  await client.registrations('device', { limit: 1, cursor: token })
+  expect(request.mock.calls[1]![0].query).toEqual({ limit: 1, cursor: token })
+  request.mockImplementation(async (o) => o.decode({ items: [], nextCursor: null }))
+  expect(await client.registrations('device', { cursor: token })).toEqual({
+    items: [],
+    nextCursor: null,
+  })
+})

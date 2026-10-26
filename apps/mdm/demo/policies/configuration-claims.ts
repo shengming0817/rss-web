@@ -1,3 +1,4 @@
+import { windowPage } from '../directory'
 import { objectKey } from '../../src/features/devices/clients/objects'
 import { endpointObject } from '../devices/objects'
 import { targetFacts } from './targets'
@@ -258,7 +259,7 @@ export function createConfigurationPolicies(
       record(record(request.body)['definition'])['action'] &&
       record(record(record(request.body)['definition'])['action'])['kind'] === 'configuration'
     ) {
-      const input = closed(request.body, ['definition'], ['after', 'scopeResult'])
+      const input = closed(request.body, ['definition'], ['scopeResult'])
       const d = record(input['definition'])
       // The store's decoder/validator remains the only authoring owner; preview never publishes.
       const definition = configurationDefinition(d)
@@ -267,20 +268,23 @@ export function createConfigurationPolicies(
       if (!snapshot) return error('scope_not_found', 404)
       if ('scopeResult' in input && input['scopeResult'] !== snapshot.result)
         return error('operation_conflict')
-      const rows = scopes
-        .assignments(definition.scope, 'mdm')
-        .filter((row) => !('after' in input) || objectKey(row.object) > identifier(input['after']))
+      const page = windowPage(
+        scopes.assignments(definition.scope, 'mdm'),
+        request,
+        (row) => [objectKey(row.object)],
+        [input, snapshot],
+      )
       return ok({
         action: definition.action,
         scopeResult: snapshot.result,
-        items: rows
-          .slice(0, 64)
-          .map(({ sources: _sources, scopeResult: _scopeResult, qualification, ...row }) => ({
+        items: page.items.map(
+          ({ sources: _sources, scopeResult: _scopeResult, qualification, ...row }) => ({
             ...row,
             eligibility: qualification,
             taskAdmission: null,
-          })),
-        nextCursor: rows.length > 64 ? objectKey(rows[63]!.object) : null,
+          }),
+        ),
+        nextCursor: page.nextCursor,
       })
     }
     const match = /^\/api\/v1\/policies\/([^/]+)\/assignments$/.exec(request.path),
@@ -306,12 +310,14 @@ export function createConfigurationPolicies(
           qualification: { state: 'excluded' },
         })
     }
-    const after = request.query.get('after'),
-      rows = candidates
-        .filter((row) => after === null || objectKey(row.object) > after)
-        .sort((a, b) => objectKey(a.object).localeCompare(objectKey(b.object)))
+    const page = windowPage(candidates, request, (row) => [objectKey(row.object)], [
+      p.id,
+      p.revision,
+      p.version,
+      snapshot,
+    ])
     return ok({
-      items: rows.slice(0, 64).map((row) => {
+      items: page.items.map((row) => {
         const device = row.target?.device,
           c = all.find((c) => c.p.id === p.id && c.device === device)
         const reason =
@@ -332,7 +338,7 @@ export function createConfigurationPolicies(
           operationIds,
         }
       }),
-      nextCursor: rows.length > 64 ? objectKey(rows[63]!.object) : null,
+      nextCursor: page.nextCursor,
     })
   }
   return {

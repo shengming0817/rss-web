@@ -4,6 +4,8 @@ import { createPoliciesClient } from './policies'
 import { decodePolicy, defaultSchedule, policyDefinition, selfService } from './model'
 const id = '11111111-1111-4111-8111-111111111111'
 const definition = {
+  customEvent: null,
+  alias: null,
   scope: id,
   action: {
     kind: 'execution' as const,
@@ -154,7 +156,9 @@ it('accepts only continuing fixed intervals for standard collection actions', as
       frequency: 'every_trigger',
       runLifetimeSeconds: 3600,
     }
-    expect(policyDefinition({ scope: id, action }).action).toMatchObject({
+    expect(
+      policyDefinition({ customEvent: null, alias: null, scope: id, action }).action,
+    ).toMatchObject({
       schedule: { trigger: { kind: 'interval', seconds: 3600 } },
       frequency: 'every_trigger',
     })
@@ -167,7 +171,9 @@ it('accepts only continuing fixed intervals for standard collection actions', as
         schedule: { ...action.schedule, misfire: { kind: 'skip', maxLatenessSeconds: 60 } },
       },
     ])
-      expect(() => policyDefinition({ scope: id, action: invalid })).toThrow()
+      expect(() =>
+        policyDefinition({ customEvent: null, alias: null, scope: id, action: invalid }),
+      ).toThrow()
   }
 })
 
@@ -177,4 +183,88 @@ it('preserves the current producer alias on complete Policy details and edits', 
     expect(policyDefinition(read.definition).alias).toBe(alias)
   }
   expect(() => policyDefinition({ ...definition, alias: 'unsafe alias' })).toThrow()
+})
+
+it('round-trips the complete current Definition and rejects missing core fields', () => {
+  for (const customEvent of [null, 'refresh.inventory']) {
+    const current = { ...definition, alias: 'diagnostics', customEvent }
+    expect(policyDefinition(current)).toEqual(current)
+    expect(decodePolicy({ ...policy, definition: current }).definition).toEqual(current)
+  }
+  expect(policyDefinition({ ...definition, customEvent: ' Refresh.Inventory ' }).customEvent).toBe(
+    'refresh.inventory',
+  )
+  for (const customEvent of ['', 'not an event', 'x'.repeat(65), 1, {}])
+    expect(() => policyDefinition({ ...definition, customEvent })).toThrow()
+  for (const field of ['customEvent', 'alias']) {
+    const incomplete: Record<string, unknown> = { ...definition }
+    delete incomplete[field]
+    expect(() => policyDefinition(incomplete)).toThrow()
+  }
+  expect(() =>
+    policyDefinition({
+      ...definition,
+      customEvent: 'refresh',
+      action: { ...definition.action, parameters: { value: { kind: 'input' } } },
+    }),
+  ).toThrow()
+})
+
+it('decodes current resource-free Device Access and enrollment self-service without accepting unknown actions', () => {
+  const current = {
+    ...definition,
+    action: {
+      kind: 'device_access',
+      mac: null,
+      windows: { kind: 'rss_factor', accounts: ['local', 'entra'] },
+      selfEnrollment: false,
+      role: null,
+    },
+  }
+  expect(policyDefinition(current)).toEqual(current)
+  expect(() =>
+    policyDefinition({
+      ...current,
+      action: { ...current.action, windows: { kind: 'rss_factor', accounts: ['local', 'local'] } },
+    }),
+  ).toThrow()
+  expect(() =>
+    policyDefinition({ ...current, action: { ...current.action, kind: 'unknown' } }),
+  ).toThrow()
+  expect(
+    policyDefinition({
+      ...definition,
+      selfService: metadata,
+      action: {
+        kind: 'request_mdm_enrollment',
+        organization: id,
+        schedule: defaultSchedule(),
+        runLifetimeSeconds: 3600,
+      },
+    }).selfService,
+  ).toEqual(metadata)
+})
+
+it('uses URL window parameters and retains exactly the original preview body across pages', async () => {
+  const input = { definition },
+    token = 'b3BhcXVl'
+  const request = vi.fn(async (o: RequestOptions<unknown>) =>
+    o.decode({ action: definition.action, scopeResult: id, items: [], nextCursor: token }),
+  )
+  const client = createPoliciesClient({ request } as unknown as HttpTransport)
+  await client.preview(input, { limit: 1 })
+  await client.preview(input, { limit: 1, cursor: token })
+  expect(request.mock.calls.map(([o]) => o.body)).toEqual([input, input])
+  expect(request.mock.calls[1]![0].query).toEqual({ limit: 1, cursor: token })
+  expect(request.mock.calls[1]![0].body).not.toHaveProperty('scopeResult')
+  await expect(client.preview({ ...input, scopeResult: crypto.randomUUID() })).rejects.toThrow(
+    'Wrong preview basis',
+  )
+  request.mockImplementation(async (o) => o.decode({ items: [], nextCursor: null }))
+  expect(await client.assignments(id, { limit: 1, cursor: token })).toEqual({
+    items: [],
+    nextCursor: null,
+  })
+  expect(request.mock.calls.at(-1)![0].query).toEqual({ limit: 1, cursor: token })
+  for (const limit of [0, 1001]) expect(() => client.assignments(id, { limit })).toThrow()
 })

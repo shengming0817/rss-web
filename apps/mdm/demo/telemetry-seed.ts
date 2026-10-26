@@ -133,6 +133,8 @@ export function seedTelemetry(automation: ReturnType<typeof createAutomationDemo
     action: 'put',
     enabled: true,
     definition: {
+      customEvent: null,
+      alias: null,
       scope,
       action: {
         kind: 'telemetry_profile',

@@ -55,6 +55,8 @@ function setup() {
     { binding: () => null },
   )
   const definition: SoftwarePolicyDefinition = {
+    customEvent: null,
+    alias: null,
     scope: scope.id,
     action: {
       channel: 'agent',

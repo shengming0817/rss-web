@@ -1,7 +1,8 @@
+import { windowPage } from './directory'
 import { randomUUID } from 'node:crypto'
 import type { DomainHandler } from './scenario'
 import { TENANT } from './scenario'
-import { count, identifier, record } from '../src/services/decode'
+import { closed, count, identifier, record } from '../src/services/decode'
 import { catalog } from './devices/fixtures'
 import { error, ok } from './http'
 import type { createDeviceDemo } from './devices/state'
@@ -36,7 +37,7 @@ export function createTelemetryDemo(
   const handle: DomainHandler = (request, scenario) => {
     const { path, method } = request
     if (path === '/api/v1/policies/previews' && method === 'POST') {
-      const body = record(request.body),
+      const body = closed(request.body, ['definition'], ['scopeResult']),
         raw = record(body['definition'])
       if (record(raw['action'])['kind'] !== 'telemetry_profile') return
       const d = policyDefinition(raw),
@@ -44,20 +45,23 @@ export function createTelemetryDemo(
       if (!snapshot) return error('scope_not_found', 404)
       if (body['scopeResult'] && body['scopeResult'] !== snapshot.result)
         return error('operation_conflict')
-      const rows = scopes
-        .assignments(d.scope, 'agent')
-        .filter((x) => objectKey(x.object) > String(body['after'] ?? ''))
+      const page = windowPage(
+        scopes.assignments(d.scope, 'agent'),
+        request,
+        (row) => [objectKey(row.object)],
+        [body, snapshot],
+      )
       return ok({
         action: d.action,
         scopeResult: snapshot.result,
-        items: rows
-          .slice(0, 64)
-          .map(({ sources: _sources, scopeResult: _result, qualification, ...facts }) => ({
+        items: page.items.map(
+          ({ sources: _sources, scopeResult: _result, qualification, ...facts }) => ({
             ...facts,
             eligibility: qualification,
-            collectionSupported: facts.target !== null,
-          })),
-        nextCursor: rows.length > 64 ? objectKey(rows[63]!.object) : null,
+            taskAdmission: null,
+          }),
+        ),
+        nextCursor: page.nextCursor,
       })
     }
     const configuration = /^\/api\/v1\/devices\/([^/]+)\/telemetry-configurations$/.exec(path)

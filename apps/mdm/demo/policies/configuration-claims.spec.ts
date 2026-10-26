@@ -142,6 +142,8 @@ function fixture() {
     revision = 0,
   ) {
     const definition: ConfigurationDefinition = {
+      customEvent: null,
+      alias: null,
       scope,
       action: { kind: 'configuration', resource, exit },
     }
@@ -157,10 +159,12 @@ it('publishes exact immutable native bindings, previews without admission, and s
     scope = f.scope(),
     binding = f.resource(),
     definition: ConfigurationDefinition = {
+      customEvent: null,
+      alias: null,
       scope,
       action: { kind: 'configuration', resource: binding, exit: 'retain' },
     }
-  expect((await f.policies.preview(definition)).items).toContainEqual({
+  expect((await f.policies.preview({ definition })).items).toContainEqual({
     object: { kind: 'endpoint', id: 'device-01' },
     channel: 'mdm',
     availability: 'ready',

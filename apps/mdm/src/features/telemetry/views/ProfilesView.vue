@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { PreviewInput } from '../../policies/clients/policies'
+
 import { telemetryBytes } from '../../../contracts/collection/canonical'
 
 import { comparison as queryComparison, allOf } from '../../../services/directory-query'
@@ -334,6 +336,8 @@ const definition = (): PolicyDefinition => {
   const p = frozen.value?.profile
   if (!p) throw new Error('Unpublished profile')
   return {
+    ...policy.value?.definition,
+    customEvent: policy.value?.definition.customEvent ?? null,
     scope: scope.value,
     alias: policy.value?.definition.alias ?? null,
     action: {
@@ -533,19 +537,49 @@ async function compare() {
       },
     )
 }
-function collectionSupported(item: NonNullable<typeof preview.value>['items'][number]) {
-  return 'collectionSupported' in item ? item.collectionSupported : null
-}
-async function check(after?: string) {
-  if (!frozen.value?.activated || !scope.value || pending.value) return
-  confirmed.value = false
-  const previous = after ? preview.value : undefined
+let previewInput: PreviewInput | undefined
+watch(
+  () =>
+    JSON.stringify([deviceBinding(runtime), scope.value, frozen.value?.profile, policy.value?.id]),
+  () => {
+    previewInput = undefined
+    preview.value = undefined
+  },
+  { flush: 'sync' },
+)
+async function check(cursor?: string) {
+  if (!(!!frozen.value?.activated && !!scope.value && !pending.value && !busy.value)) return
+  const previous = cursor ? preview.value : undefined
   preview.value = undefined
-  await run(
-    () => pc.preview(definition(), after, previous?.scopeResult),
-    (v) => (preview.value = { ...v, items: [...(previous?.items ?? []), ...v.items] }),
-  )
+  try {
+    const d = structuredClone(toRaw(definition()))
+    if (
+      cursor &&
+      (!previous || !previewInput || JSON.stringify(d) !== JSON.stringify(previewInput.definition))
+    ) {
+      previewInput = undefined
+      return
+    }
+    const input = cursor ? previewInput! : { definition: d }
+    previewInput = input
+    await run(
+      async () => {
+        const page = await pc.preview(input, { cursor })
+        if (previous && previous.scopeResult !== page.scopeResult)
+          throw new Error('Wrong preview scope result')
+        return page
+      },
+      (v) => {
+        if (previewInput !== input) return
+        preview.value = { ...v, items: [...(previous?.items ?? []), ...v.items] }
+        confirmed.value = false
+      },
+    )
+  } catch {
+    failure.value = 'invalidRequest'
+  }
 }
+
 async function publish() {
   if (
     !confirmed.value ||
@@ -919,13 +953,9 @@ watch(
                     </td>
                     <td>
                       {{
-                        collectionSupported(item) === null
-                          ? '—'
-                          : t(
-                              collectionSupported(item)
-                                ? 'telemetry.supported'
-                                : 'telemetry.unsupported',
-                            )
+                        item.taskAdmission
+                          ? t(`software.admission_${item.taskAdmission.state}`)
+                          : '—'
                       }}
                     </td>
                   </tr>

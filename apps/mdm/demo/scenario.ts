@@ -53,6 +53,7 @@ export interface Reply {
   headers?: Record<string, string>
 }
 export interface DemoRequest {
+  authorization?: unknown
   actor: { principalId: string; sessionId: string; tenantId?: string }
   method: string
   path: string

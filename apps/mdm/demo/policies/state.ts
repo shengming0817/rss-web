@@ -1,4 +1,4 @@
-import { directoryPage, filterRows } from '../directory'
+import { directoryPage, filterRows, windowPage } from '../directory'
 import { createTelemetryDemo } from '../telemetry'
 import type { DomainHandler, Scenario, DemoObservation, DemoEvent } from '../scenario'
 import type { createDeviceDemo } from '../devices/state'
@@ -101,6 +101,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       const denied = authorization.guard(request)
       if (denied) return denied
       security.settle()
+      request = { ...request, authorization: authorization.effective(request.actor.principalId) }
       const onboarding = /^\/api\/v1\/policies\/([^/]+)\/(assignments|runs)$/.exec(request.path)
       if (onboarding && request.method === 'GET') {
         const p = policyStore.get(onboarding[1]!)
@@ -109,24 +110,26 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
           !['configuration', 'software'].includes(p.definition.action.kind) &&
           (onboarding[2] === 'assignments' || p.definition.action.kind === 'request_mdm_enrollment')
         ) {
-          if (onboarding[2] === 'runs') return ok({ items: [], nextCursor: null })
+          if (onboarding[2] === 'runs') return ok(windowPage([], request, () => [], p.id))
           const channel =
             p.definition.action.kind === 'native_collection' ||
             p.definition.action.kind === 'ensure_agent_installed'
               ? 'mdm'
               : 'agent'
-          const all = scopes
-            .assignments(p.definition.scope, channel)
-            .filter((row) => objectKey(row.object) > (request.query.get('after') ?? ''))
-            .sort((a, b) => objectKey(a.object).localeCompare(objectKey(b.object)))
+          const page = windowPage(
+            scopes.assignments(p.definition.scope, channel),
+            request,
+            (row) => [objectKey(row.object)],
+            [p.id, p.revision, p.version, scopes.snapshot(p.definition.scope)],
+          )
           return ok({
-            items: all.slice(0, 64).map((row) => ({
+            ...page,
+            items: page.items.map((row) => ({
               ...row,
               ...(!p.enabled ? { availability: 'unavailable', reason: 'policy_disabled' } : {}),
               taskAdmission: null,
               operationIds: [],
             })),
-            nextCursor: all.length > 64 ? objectKey(all[63]!.object) : null,
           })
         }
       }
@@ -224,8 +227,13 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
           }),
         )
       }
-    } catch {
-      return error('malformed_request', 400)
+    } catch (e) {
+      return error(
+        e instanceof Error && e.message === 'Invalidated cursor'
+          ? 'operation_conflict'
+          : 'malformed_request',
+        e instanceof Error && e.message === 'Invalidated cursor' ? 409 : 400,
+      )
     }
   }
   return {

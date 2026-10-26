@@ -137,7 +137,7 @@ it('decodes software evidence without conflating a zero exit with verified effec
     policyRun({ ...run, state: { ...run.state, execution: 'compliant' } }, true),
   ).toThrow()
 })
-it('keeps summary diagnostics redacted and uses both fields of the native run cursor', async () => {
+it('keeps summary diagnostics redacted and uses the opaque run continuation', async () => {
   const summary: Record<string, unknown> = { ...run }
   delete summary['policyId']
   const diagnostics: Record<string, unknown> = { ...run.result.evidence.steps[0]!.diagnostics }
@@ -158,14 +158,13 @@ it('keeps summary diagnostics redacted and uses both fields of the native run cu
           },
         },
       ],
-      nextCursor: { availableAt: 10, taskId: task },
+      nextCursor: 'b3BhcXVl',
     }),
   )
   const result = await createRunsClient({ request } as unknown as HttpTransport).list(id, {
-    availableAt: 20,
-    taskId: task,
+    cursor: 'b3BhcXVl',
   })
-  expect(request.mock.calls[0]![0].query).toEqual({ afterAt: 20, afterId: task })
+  expect(request.mock.calls[0]![0].query).toEqual({ limit: 20, cursor: 'b3BhcXVl' })
   const current = result.items[0]!.result!
   if (current.kind !== 'software') throw new Error('Wrong result')
   expect(current.evidence.steps[0]!.diagnostics).not.toHaveProperty('stdout')

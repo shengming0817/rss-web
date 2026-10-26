@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { PreviewInput } from '../clients/policies'
+
 import { comparison as queryComparison, allOf } from '../../../services/directory-query'
 import { ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -61,6 +63,8 @@ function definition(): PolicyDefinition {
           ? { kind: credential.value, volume: volume.value, protector: protector.value }
           : { kind: credential.value, sid: sid.value }
   return policyDefinition({
+    ...current.value?.definition,
+    customEvent: current.value?.definition.customEvent ?? null,
     scope: scope.value,
     alias: current.value?.definition.alias ?? null,
     action:
@@ -183,25 +187,64 @@ function restore() {
   else if (original?.input) change(original.input, true)
 }
 async function progress(after?: string) {
+  assignments.value = undefined
   if (!current.value) return
+  const target = current.value.id
   await run(
-    () =>
-      client.assignments(
-        current.value!.id,
-        after,
-        current.value!.definition.action.kind === 'unmanage_device',
-      ),
+    () => client.assignments(target, { cursor: after }),
     (v) => {
-      assignments.value = v
+      if (current.value?.id === target) assignments.value = v
     },
   )
 }
-async function check(after?: string, scopeResult?: string) {
+let previewInput: PreviewInput | undefined
+watch(
+  () =>
+    JSON.stringify([
+      runtime.session.state.value,
+      current.value?.definition,
+      id.value,
+      scope.value,
+      kind.value,
+      schedule.value,
+      duration.value,
+      credential.value,
+      architecture.value,
+      frequency.value,
+      volume.value,
+      protector.value,
+      sid.value,
+    ]),
+  () => {
+    previewInput = undefined
+    preview.value = undefined
+  },
+  { flush: 'sync' },
+)
+async function check(cursor?: string) {
+  if (!(!busy.value && !locked.value)) return
+  const previous = cursor ? preview.value : undefined
+  preview.value = undefined
   try {
     const d = definition()
+    if (
+      cursor &&
+      (!previous || !previewInput || JSON.stringify(d) !== JSON.stringify(previewInput.definition))
+    ) {
+      previewInput = undefined
+      return
+    }
+    const input = cursor ? previewInput! : { definition: d }
+    previewInput = input
     await run(
-      () => client.preview(d, after, scopeResult),
+      async () => {
+        const page = await client.preview(input, { cursor })
+        if (previous && previous.scopeResult !== page.scopeResult)
+          throw new Error('Wrong preview scope result')
+        return page
+      },
       (v) => {
+        if (previewInput !== input) return
         preview.value = v
       },
     )
@@ -209,6 +252,15 @@ async function check(after?: string, scopeResult?: string) {
     failure.value = 'invalidRequest'
   }
 }
+
+watch(
+  () => JSON.stringify([runtime.session.state.value, current.value?.id]),
+  () => {
+    assignments.value = undefined
+    preview.value = undefined
+  },
+  { flush: 'sync' },
+)
 watch(
   [kind, state],
   () => {
@@ -341,7 +393,7 @@ watch(
     <ul v-if="preview">
       <li v-for="(row, index) in preview.items" :key="index"><AssignmentFacts :item="row" /></li>
     </ul>
-    <UiButton v-if="preview?.nextCursor" @click="check(preview.nextCursor, preview.scopeResult)">{{
+    <UiButton v-if="preview?.nextCursor" @click="check(preview.nextCursor)">{{
       t('gap.next')
     }}</UiButton>
     <UiButton v-if="current" :disabled="busy" @click="progress()">{{

@@ -87,6 +87,8 @@ export function seedScriptPolicies(automation: ReturnType<typeof createAutomatio
   )
   write(`/api/v1/resources/${resource}`, { action: 'activate', version: '1' }, 2)
   const definition: ExecutionDefinition = {
+    customEvent: null,
+    alias: null,
     scope,
     action: {
       kind: 'execution',

@@ -449,6 +449,8 @@ try {
   )
   assert.equal(policies.items.length, 1)
   const policy = await api('GET', `/api/v1/policies/${policies.items[0].id}`)
+  assert.equal(policy.definition.customEvent, null)
+  assert.equal(policy.definition.alias, null)
   coverage.push(
     'formal-field-retention-script-mapping-and-immutable-profile-upload-activation-policy-ui',
   )

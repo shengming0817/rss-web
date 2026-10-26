@@ -1,5 +1,8 @@
 import {
   queryParameters,
+  windowParameters,
+  nextCursor,
+  type WindowQuery,
   projectedPage,
   type DirectoryQuery,
 } from '../../../services/directory-query'
@@ -41,23 +44,19 @@ const policyFields = {
 }
 export type PolicyDirectoryQuery<F extends keyof typeof policyFields = keyof typeof policyFields> =
   DirectoryQuery<F>
-function baseTargetFacts(v: Record<string, unknown>, lifecycle = false) {
+export interface PreviewInput {
+  definition: PolicyDefinition
+  scopeResult?: string
+}
+function baseTargetFacts(v: Record<string, unknown>) {
   return {
     object: objectRef(v['object']),
-    channel: lifecycle
-      ? v['channel'] === null
-        ? null
-        : (() => {
-            throw new Error('Lifecycle channel must be null')
-          })()
-      : enumeration(v['channel'], channels),
+    channel: nullable(v['channel'], (v) => enumeration(v, channels)),
     availability: enumeration(v['availability'], ['ready', 'unavailable'] as const),
     reason: nullable(v['reason'], string),
     target: nullable(v['target'], primaryRegistration),
+    taskAdmission: nullable(v['taskAdmission'], taskAdmission),
   }
-}
-function targetFacts(v: Record<string, unknown>) {
-  return { ...baseTargetFacts(v), taskAdmission: nullable(v['taskAdmission'], taskAdmission) }
 }
 export function createPoliciesClient(transport: HttpTransport) {
   return {
@@ -97,11 +96,12 @@ export function createPoliciesClient(transport: HttpTransport) {
           }
         },
       }),
-    preview: (definition: PolicyDefinition, after?: string, scopeResult?: string) =>
+    preview: (input: PreviewInput, page: WindowQuery = {}) =>
       transport.request({
         method: 'POST',
         path: '/api/v1/policies/previews',
-        body: { definition, ...(after ? { after } : {}), ...(scopeResult ? { scopeResult } : {}) },
+        body: input,
+        query: windowParameters({ limit: 20, ...page }, 1000),
         successStatus: 200,
         decode(value) {
           const v = closed(value, ['action', 'scopeResult', 'items', 'nextCursor']),
@@ -114,8 +114,8 @@ export function createPoliciesClient(transport: HttpTransport) {
                 : v,
             )
           if (
-            basis(action) !== basis(policyAction(definition.action)) ||
-            (scopeResult && result !== scopeResult)
+            basis(action) !== basis(policyAction(input.definition.action)) ||
+            (input.scopeResult && result !== input.scopeResult)
           )
             throw new Error('Wrong preview basis')
           return {
@@ -129,42 +129,25 @@ export function createPoliciesClient(transport: HttpTransport) {
                 'reason',
                 'target',
                 'eligibility',
-                ...(action.kind === 'telemetry_profile'
-                  ? ['collectionSupported']
-                  : ['taskAdmission']),
+                'taskAdmission',
               ])
-              if (action.kind === 'unmanage_device') {
-                if (d['target'] !== null || d['taskAdmission'] !== null)
-                  throw new Error('Invalid lifecycle target')
-                return {
-                  ...baseTargetFacts(d, true),
-                  taskAdmission: null,
-                  eligibility: eligibility(d['eligibility']),
-                }
-              }
-              return action.kind === 'telemetry_profile'
-                ? {
-                    ...baseTargetFacts(d),
-                    taskAdmission: null,
-                    collectionSupported: nullable(d['collectionSupported'], boolean),
-                    eligibility: eligibility(d['eligibility']),
-                  }
-                : {
-                    ...targetFacts(d),
-
-                    eligibility: eligibility(d['eligibility']),
-                  }
+              if (
+                action.kind === 'unmanage_device' &&
+                (d['channel'] !== null || d['target'] !== null || d['taskAdmission'] !== null)
+              )
+                throw new Error('Invalid lifecycle target')
+              return { ...baseTargetFacts(d), eligibility: eligibility(d['eligibility']) }
             }),
-            nextCursor: nullable(v['nextCursor'], string),
+            nextCursor: nextCursor(v['nextCursor']),
           }
         },
       }),
-    assignments: (id: string, after?: string, lifecycle = false) =>
+    assignments: (id: string, page: WindowQuery = {}) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/policies/{id}/assignments',
         pathParams: { id },
-        query: { after },
+        query: windowParameters({ limit: 20, ...page }, 1000),
         successStatus: 200,
         decode(value) {
           const v = closed(value, ['items', 'nextCursor'])
@@ -183,16 +166,14 @@ export function createPoliciesClient(transport: HttpTransport) {
                 'operationIds',
               ])
               return {
-                ...(lifecycle
-                  ? { ...baseTargetFacts(d, true), taskAdmission: null }
-                  : targetFacts(d)),
+                ...baseTargetFacts(d),
                 qualification: eligibility(d['qualification']),
                 sources: array(d['sources'], deviceObject),
-                scopeResult: lifecycle ? nullable(d['scopeResult'], uuid) : uuid(d['scopeResult']),
+                scopeResult: nullable(d['scopeResult'], uuid),
                 operationIds: array(d['operationIds'], uuid),
               }
             }),
-            nextCursor: nullable(v['nextCursor'], string),
+            nextCursor: nextCursor(v['nextCursor']),
           }
         },
       }),

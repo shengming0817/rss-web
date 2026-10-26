@@ -1,6 +1,6 @@
+import { windowParameters, windowPage, type WindowQuery } from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
-  array,
   closed,
   count,
   boolean,
@@ -250,19 +250,16 @@ export function createEnrollmentClient(transport: HttpTransport) {
         successStatus: 200,
         decode: (v) => receipt(v, operation, id),
       }),
-    registrations: (device: string, after?: string) =>
+    registrations: (device: string, page: WindowQuery = {}) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/devices/{device}/registrations',
         pathParams: { device },
-        query: { after },
+        query: windowParameters({ limit: 20, ...page }, 1000),
         successStatus: 200,
         decode: (value) => {
-          const v = closed(value, ['items', 'nextCursor'])
-          return {
-            items: unique(array(v['items'], registration), (r) => r.registrationId),
-            nextCursor: nullable(v['nextCursor'], uuid),
-          }
+          const page = windowPage(value, registration)
+          return { ...page, items: unique(page.items, (r) => r.registrationId) }
         },
       }),
     revoke: (device: string, registration: string, operation: string) =>

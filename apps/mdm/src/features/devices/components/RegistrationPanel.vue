@@ -30,8 +30,9 @@ watch(
   { flush: 'sync' },
 )
 async function load(next?: string) {
+  page.value = undefined
   await run(
-    () => runtime.devices.enrollment.registrations(props.endpoint.id, next),
+    () => runtime.devices.enrollment.registrations(props.endpoint.id, { cursor: next }),
     (v) => {
       page.value = v
       if (original.value) compared.value = true

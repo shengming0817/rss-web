@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { PreviewInput } from '../clients/policies'
+
 import { jsonObject } from '../../../services/json'
 import { comparison as queryComparison, allOf } from '../../../services/directory-query'
 import type { Json } from '../../../services/json'
@@ -56,6 +58,8 @@ function fresh(
     }) {
   if (kind === 'configuration')
     return {
+      customEvent: null,
+      alias: null,
       scope: '',
       action: {
         kind,
@@ -71,6 +75,8 @@ function fresh(
     }
   if (kind === 'native_collection' || kind === 'agent_collection')
     return {
+      customEvent: null,
+      alias: null,
       scope: '',
       action: {
         kind,
@@ -87,6 +93,8 @@ function fresh(
       },
     }
   return {
+    customEvent: null,
+    alias: null,
     scope: '',
     action: {
       kind: 'execution',
@@ -118,6 +126,8 @@ watch(
     ready.value = false
     current.value = undefined
     resource.value = undefined
+    progress.value = undefined
+    preview.value = undefined
   },
   { flush: 'sync' },
 )
@@ -171,13 +181,39 @@ function actionKind(event: Event) {
 }
 const preview = ref<Awaited<ReturnType<typeof client.preview>>>(),
   progress = ref<Awaited<ReturnType<typeof client.assignments>>>()
-function check(after?: string, scopeResult?: string) {
-  if (!ready.value || busy.value || uncertain.value) return
+let previewInput: PreviewInput | undefined
+watch(
+  () => JSON.stringify([requester(), definition.value]),
+  () => {
+    previewInput = undefined
+    preview.value = undefined
+  },
+  { flush: 'sync' },
+)
+async function check(cursor?: string) {
+  if (!(ready.value && !busy.value && !uncertain.value)) return
+  const previous = cursor ? preview.value : undefined
+  preview.value = undefined
   try {
     const d = policyDefinition(structuredClone(toRaw(definition.value)))
-    void run(
-      () => client.preview(d, after, scopeResult),
+    if (
+      cursor &&
+      (!previous || !previewInput || JSON.stringify(d) !== JSON.stringify(previewInput.definition))
+    ) {
+      previewInput = undefined
+      return
+    }
+    const input = cursor ? previewInput! : { definition: d }
+    previewInput = input
+    await run(
+      async () => {
+        const page = await client.preview(input, { cursor })
+        if (previous && previous.scopeResult !== page.scopeResult)
+          throw new Error('Wrong preview scope result')
+        return page
+      },
       (v) => {
+        if (previewInput !== input) return
         preview.value = v
       },
     )
@@ -185,13 +221,15 @@ function check(after?: string, scopeResult?: string) {
     failure.value = 'invalidRequest'
   }
 }
+
 function loadProgress(after?: string) {
+  progress.value = undefined
   const p = current.value
   if (p)
     void run(
-      () => client.assignments(p.id, after),
+      () => client.assignments(p.id, { cursor: after }),
       (v) => {
-        progress.value = v
+        if (current.value?.id === p.id) progress.value = v
       },
     )
 }
@@ -821,7 +859,7 @@ onMounted(async () => {
       v-if="preview?.nextCursor"
       :disabled="!!busy"
       type="submit"
-      @click="check(preview.nextCursor, preview.scopeResult)"
+      @click="check(preview.nextCursor)"
     >
       {{ t('policies.next') }}
     </UiButton>
