@@ -161,3 +161,61 @@ it.each([
     wrapper.unmount()
   },
 )
+
+it('adopts the current calculated scope only after its completed task is read back', async () => {
+  const id = '11111111-1111-4111-8111-111111111111'
+  const scope = {
+    id,
+    revision: 2,
+    definition: { targets: [{ kind: 'group', id }], limitations: null, exclusions: [] },
+    resolution: id,
+    resolutionRevision: 1,
+  }
+  const read = vi
+    .fn()
+    .mockResolvedValueOnce(scope)
+    .mockResolvedValueOnce({ ...scope, resolutionRevision: 2 })
+  const status = vi.fn().mockResolvedValue({ status: 'completed' })
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/', component: ScopesView }],
+  })
+  await router.push('/')
+  const wrapper = mount(ScopesView, {
+    attachTo: document.body,
+    global: {
+      plugins: [router, mdmI18n()],
+      stubs: { RouterLink: true },
+      provide: {
+        [mdmKey as symbol]: {
+          tenant: 'tenant',
+          session: { state: ref({ status: 'authenticated' }) },
+          policies: {
+            scopes: {
+              list: async () => ({
+                items: [{ id, revision: 2, resolution: id }],
+                nextCursor: null,
+              }),
+              read,
+              status,
+            },
+          },
+        },
+      },
+    },
+  })
+  const button = (label: string) =>
+    wrapper.findAll('button').find((button) => button.text() === label)!
+  await button('配置设备组与目标范围').trigger('click')
+  await flushPromises()
+  await wrapper.get('tbody button').trigger('click')
+  await flushPromises()
+  expect(button('使用此范围').attributes('disabled')).toBeDefined()
+  await button('读取任务状态').trigger('click')
+  await flushPromises()
+  expect(read).toHaveBeenCalledTimes(2)
+  expect(button('使用此范围').attributes('disabled')).toBeUndefined()
+  await button('使用此范围').trigger('click')
+  expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([id])
+  wrapper.unmount()
+})

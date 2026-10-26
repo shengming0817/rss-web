@@ -16,7 +16,6 @@ import PolicyUtcDateTimeInput from '../components/PolicyUtcDateTimeInput.vue'
 import type { PreviewInput } from '../../policies/clients/policies'
 
 import { comparison as queryComparison, allOf } from '../../../services/directory-query'
-import {} from '@rss/core/components'
 import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
 import PolicyIdentityEditor from '../../policies/components/PolicyIdentityEditor.vue'
 import PolicyEntry from '../../policies/components/PolicyEntry.vue'
@@ -553,6 +552,7 @@ watch(
         <VBtn :disabled="busy || uncertain" @click="cancelEdit">{{ t('console.cancel') }}</VBtn>
       </header>
       <VStepper
+        hide-actions
         :items="wizardLabels.map((label) => t(`console.${label}`))"
         :model-value="wizardStep + 1"
         :label="t('policies.software')"
@@ -1012,7 +1012,7 @@ watch(
           <VProgressLinear
             v-if="stage.totalTargets > 0"
             :model-value="(stage.verifiedSuccess / stage.totalTargets) * 100"
-            :label="t('software.verifiedSuccess')"
+            :aria-label="t('software.verifiedSuccess')"
           />
           <dl>
             <template
