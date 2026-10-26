@@ -37,7 +37,6 @@ export const navigation: Navigation = [
       { name: 'policy-policies', label: 'policies.policies' },
       { name: 'policy-resources', label: 'policies.resources' },
       { name: 'policy-telemetry', label: 'telemetry.profiles' },
-      { name: 'policy-scripts', label: 'policies.scripts' },
       { name: 'policy-executions', label: 'policies.executions' },
       { name: 'security-rules', label: 'security.rules' },
       {
