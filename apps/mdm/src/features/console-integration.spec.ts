@@ -1388,17 +1388,21 @@ it('clears lifecycle alias and event on same-route principal and session replace
     .find((b) => b.text() === '读取')!
     .trigger('click')
   await flushPromises()
-  expect((field(w, '唯一别名').element as HTMLInputElement).value).toBe('previous.actor')
-  expect((field(w, '自定义事件').element as HTMLInputElement).value).toBe('previous.event')
-  actor.state.value = {
+  expect((w.get('[data-field=policy-alias]').element as HTMLInputElement).value).toBe(
+    'previous.actor',
+  )
+  expect((w.get('[data-field=policy-event]').element as HTMLInputElement).value).toBe(
+    'previous.event',
+  )
+  ;(actor.state as ReturnType<typeof shallowRef>).value = {
     status: 'authenticated',
     tenant: a,
     identity: { principalId: c },
     session: { id: b },
   } as typeof actor.state.value
   await flushPromises()
-  expect((field(w, '唯一别名').element as HTMLInputElement).value).toBe('')
-  expect((field(w, '自定义事件').element as HTMLInputElement).value).toBe('')
+  expect((w.get('[data-field=policy-alias]').element as HTMLInputElement).value).toBe('')
+  expect((w.get('[data-field=policy-event]').element as HTMLInputElement).value).toBe('')
   await field(w, '设备范围 ID').setValue(a)
   await confirm(w)
   await w.get('form').trigger('submit')
