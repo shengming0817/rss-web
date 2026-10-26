@@ -1,0 +1,34 @@
+{
+  "name": "@rss/device-access-app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --configLoader runner --watch",
+    "demo": "vite --configLoader runner --mode demo --host 127.0.0.1 --port 4328 --strictPort",
+    "build": "vue-tsc --noEmit && vite build --configLoader runner",
+    "typecheck": "vue-tsc --noEmit && vue-tsc --noEmit -p tsconfig.node.json",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "vue": "catalog:",
+    "vue-router": "catalog:",
+    "vue-i18n": "catalog:",
+    "vuetify": "catalog:",
+    "@rss/auth": "workspace:*",
+    "@rss/api": "workspace:*",
+    "@rss/device-access": "workspace:*"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "catalog:",
+    "@types/node": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "vue-tsc": "catalog:",
+    "typescript": "catalog:",
+    "@vue/test-utils": "catalog:",
+    "jsdom": "catalog:",
+    "@vitest/coverage-v8": "catalog:"
+  }
+}

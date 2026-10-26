@@ -184,3 +184,30 @@ it('blocks production MDM imports of demo modules for static and lazy dependenci
     ),
   ).not.toContain('identity-boundary/contained')
 })
+
+it('keeps the standalone DA and its HTTP demo separate', async () => {
+  const file = 'apps/device-access/src/config.ts'
+  for (const value of [
+    '../demo/client',
+    '../../mdm/src/context',
+    '@rss/api/device-access-demo',
+    '@rss/device-access/src/client',
+  ]) {
+    const errors = await ruleIds(`import { x } from '${value}'\nexport const y=x`, file)
+    expect(errors.some((e) => e === 'da-boundary/contained' || e === 'no-restricted-imports')).toBe(
+      true,
+    )
+  }
+  expect(
+    await ruleIds("import {createSession} from '@rss/auth'\nexport const x=createSession", file),
+  ).toContain('no-restricted-imports')
+  expect(await ruleIds("export const x=fetch('/api/v1/devices')", file)).toContain(
+    'no-restricted-globals',
+  )
+  expect(await ruleIds("export const x=import('../demo/client')", file)).toContain(
+    'da-boundary/contained',
+  )
+  expect(
+    await ruleIds("import {useDa} from './context'\nexport const x=useDa", file),
+  ).not.toContain('da-boundary/contained')
+})

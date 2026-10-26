@@ -13,6 +13,7 @@ catalog:
   # —— 运行时核心 ——
   '@noble/hashes': 2.4.0
   reka-ui: 2.11.0
+  vuetify: 4.3.0
   vue: ^3.5.13
   vue-router: ^4.5.0
   pinia: ^3.0.1

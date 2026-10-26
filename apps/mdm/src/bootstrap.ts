@@ -14,7 +14,7 @@ import {
 } from '@rss/auth'
 import type { HttpTransport } from '@rss/api/identity'
 import { createMdmTransport } from '@rss/api/mdm'
-import { bindSession } from './services/request'
+import { bindSession } from '@rss/auth'
 import { createWorkspaceClient } from './services/workspace'
 import { mdmKey, type MdmRuntime } from './context'
 import { mdmI18n } from './i18n'

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createSession } from '@rss/auth'
-import type { HttpTransport, NoContentRequest, RequestOptions } from '@rss/api/mdm'
-import { bindSession } from './request'
+import type { HttpTransport, NoContentRequest, RequestOptions } from '@rss/api/identity'
+import { bindSession } from './bindSession'
 const tenant = '11111111-1111-4111-8111-111111111111'
 const id = '22222222-2222-4222-8222-222222222222'
 function setup() {
@@ -30,7 +30,7 @@ function setup() {
   } as HttpTransport
   return createSession(auth, { canonicalOrigin: 'https://mdm.example.test', oidcEnabled: false })
 }
-describe('MDM session binding', () => {
+describe('Shared product session binding', () => {
   it('uses the same CSRF owner and dispatches each write only once', async () => {
     const session = setup()
     await session.login(tenant, 'user', 'secret')
@@ -104,14 +104,14 @@ describe('MDM session binding', () => {
 })
 
 it('clears authority only on a same-session 401 and preserves caller idempotency keys', async () => {
-  const { decodeMdmError } = await import('@rss/api/mdm')
+  const { decodeIdentityError: decodeMdmError } = await import('@rss/api/identity')
   const session = setup()
   await session.login(tenant, 'user', 'secret')
   const business = bindSession(
     {
       async request(options: NoContentRequest | RequestOptions<unknown>) {
         expect(options.headers?.['Idempotency-Key']).toBe('stable-operation')
-        throw decodeMdmError(401, { code: 'invalid_identity' })
+        throw decodeMdmError(401, { code: 'invalid_credential' })
       },
     } as HttpTransport,
     session,
@@ -128,7 +128,7 @@ it('clears authority only on a same-session 401 and preserves caller idempotency
 })
 
 it('does not let an old unauthorized response clear a newly accepted session', async () => {
-  const { decodeMdmError } = await import('@rss/api/mdm')
+  const { decodeIdentityError: decodeMdmError } = await import('@rss/api/identity')
   const session = setup()
   await session.login(tenant, 'user', 'secret')
   let reject: ((error: Error) => void) | undefined
@@ -157,7 +157,7 @@ it('does not let an old unauthorized response clear a newly accepted session', a
   await dispatched
   session.clear()
   const login = session.login(tenant, 'other', 'secret')
-  reject?.(decodeMdmError(401, { code: 'invalid_identity' }))
+  reject?.(decodeMdmError(401, { code: 'invalid_credential' }))
   await expect(response).rejects.toMatchObject({ status: 401 })
   await login
   expect(session.state.value.status).toBe('authenticated')
@@ -169,7 +169,7 @@ it.each([
   [409, 'operation_conflict'],
   [503, 'operation_unknown'],
 ] as const)('preserves authentication for business failure %s', async (status, code) => {
-  const { decodeMdmError } = await import('@rss/api/mdm')
+  const { decodeIdentityError: decodeMdmError } = await import('@rss/api/identity')
   const session = setup()
   await session.login(tenant, 'user', 'secret')
   const business = bindSession(

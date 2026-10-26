@@ -1,0 +1,32 @@
+{
+  "name": "@rss/device-access",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "vue": "catalog:",
+    "vuetify": "catalog:",
+    "@rss/api": "workspace:*"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "catalog:",
+    "@types/node": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "vue-tsc": "catalog:",
+    "typescript": "catalog:",
+    "@vue/test-utils": "catalog:",
+    "jsdom": "catalog:",
+    "@vitest/coverage-v8": "catalog:"
+  },
+  "exports": {
+    "./client": "./src/client.ts",
+    "./model": "./src/model.ts",
+    "./components": "./src/components.ts"
+  }
+}

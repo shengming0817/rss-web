@@ -7,7 +7,9 @@
     "./testing": "./src/testing.ts",
     "./identity": "./src/identity.ts",
     "./mdm": "./src/mdm.ts",
-    "./mdm-limits": "./src/mdm-limits.ts"
+    "./mdm-limits": "./src/mdm-limits.ts",
+    "./device-access": "./src/device-access.ts",
+    "./device-access-demo": "./src/device-access-demo.ts"
   },
   "files": [
     "src"

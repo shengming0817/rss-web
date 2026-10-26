@@ -1,45 +1,74 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import type { Component } from 'vue'
 import type { IdentitySession } from './services/session'
 import { loginTarget, type HostLogin } from './context'
 import { uuid } from './services/decode'
+export interface IdentityRoutePresentation {
+  login?: Component
+  error?: Component
+  /** Product owns its own account-security page. Default Identity/MDM routes are retained. */
+  includeManagement?: boolean
+}
 export function identityRouter(
   session: IdentitySession,
   features: RouteRecordRaw[] = [],
   host?: HostLogin,
+  presentation: IdentityRoutePresentation = {},
 ) {
   const router = createRouter({
     history: createWebHistory(),
     routes: [
       ...(features.some((route) => route.path === '/')
         ? []
-        : [{ path: '/', name: 'entry', component: () => import('./views/ErrorView.vue') }]),
-      { path: '/auth/resume', name: 'resume', component: () => import('./views/LoginView.vue') },
-      { path: '/auth/error', name: 'error', component: () => import('./views/ErrorView.vue') },
+        : [
+            {
+              path: '/',
+              name: 'entry',
+              component: presentation.error ?? (() => import('./views/ErrorView.vue')),
+            },
+          ]),
+      {
+        path: '/auth/resume',
+        name: 'resume',
+        component: presentation.login ?? (() => import('./views/LoginView.vue')),
+      },
+      {
+        path: '/auth/error',
+        name: 'error',
+        component: presentation.error ?? (() => import('./views/ErrorView.vue')),
+      },
       {
         path: host?.path ?? '/tenants/:tenant/login',
         name: 'login',
-        component: () => import('./views/LoginView.vue'),
+        component: presentation.login ?? (() => import('./views/LoginView.vue')),
       },
-      {
-        path: '/tenants/:tenant/sessions',
-        name: 'sessions',
-        component: () => import('./views/SessionsView.vue'),
-        meta: { protected: true },
-      },
-      {
-        path: '/tenants/:tenant/accounts',
-        name: 'accounts',
-        component: () => import('./views/AccountsView.vue'),
-        meta: { protected: true },
-      },
-      {
-        path: '/tenants/:tenant/providers',
-        name: 'providers',
-        component: () => import('./views/ProvidersView.vue'),
-        meta: { protected: true, oidc: true },
-      },
+      ...(presentation.includeManagement === false
+        ? []
+        : [
+            {
+              path: '/tenants/:tenant/sessions',
+              name: 'sessions',
+              component: () => import('./views/SessionsView.vue'),
+              meta: { protected: true },
+            },
+            {
+              path: '/tenants/:tenant/accounts',
+              name: 'accounts',
+              component: () => import('./views/AccountsView.vue'),
+              meta: { protected: true },
+            },
+            {
+              path: '/tenants/:tenant/providers',
+              name: 'providers',
+              component: () => import('./views/ProvidersView.vue'),
+              meta: { protected: true, oidc: true },
+            },
+          ]),
       ...features,
-      { path: '/:pathMatch(.*)*', component: () => import('./views/ErrorView.vue') },
+      {
+        path: '/:pathMatch(.*)*',
+        component: presentation.error ?? (() => import('./views/ErrorView.vue')),
+      },
     ],
   })
   router.beforeEach(async (to) => {
