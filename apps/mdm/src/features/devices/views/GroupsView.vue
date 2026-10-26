@@ -251,7 +251,7 @@ function save() {
   }
 }
 function preview() {
-  if (!current.value) return
+  if (!current.value || definitionPending.value) return
   const group = id.value,
     body = operation({}, current.value.group.revision)
   write(
@@ -536,7 +536,7 @@ function openGroup(group: string) {
             query: { group: current.group.id },
           }"
           >{{ t('policies.scopes') }}</RouterLink
-        ><UiButton :disabled="busy || uncertain" @click="preview">{{
+        ><UiButton :disabled="busy || uncertain || definitionPending" @click="preview">{{
           t('devices.previewSaved')
         }}</UiButton
         ><UiButton

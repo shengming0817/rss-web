@@ -2153,3 +2153,52 @@ it('stops automatic observation after a member task fails and permits preview af
     vi.useRealTimers()
   }
 })
+
+it('retains the running rule definition when its drawer is closed and preview is attempted', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    const h = await setup('device-groups')
+    let dialog = new DOMWrapper(document.body).get('[role=dialog]')
+    await dialog.get('[data-testid=group-name]').setValue('Pending rule owner')
+    await dialog.get('[data-testid=group-kind]').setValue('dynamic')
+    await dialog.get('form').trigger('submit')
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(6000)
+    await flushPromises()
+    await h.click('规则')
+    await h.wrapper
+      .findAll('button')
+      .filter((b) => b.isVisible() && b.text() === '编辑')
+      .at(-1)!
+      .trigger('click')
+    await flushPromises()
+    dialog = new DOMWrapper(document.body).get('[role=dialog][data-state=open]')
+    await dialog.get('form').trigger('submit')
+    await flushPromises()
+    const definition = (
+      h.requests.filter((r) => r.method === 'POST' && r.path === '/api/v1/groups/{id}').at(-1)!
+        .body as { operationId: string }
+    ).operationId
+    await dialog.get('button[aria-label="关闭"]').trigger('click')
+    await flushPromises()
+    const preview = h.wrapper.findAll('button').find((b) => b.text() === '预览已保存版本')!
+    expect(preview.attributes('disabled')).toBeDefined()
+    await preview.trigger('click')
+    expect(h.requests.some((r) => r.method === 'POST' && r.path.endsWith('/previews'))).toBe(false)
+    expect(h.wrapper.get('[data-testid=group-definition-task]').text()).toContain(definition)
+    await vi.advanceTimersByTimeAsync(4000)
+    await flushPromises()
+    expect(
+      h.requests.some((r) => r.path.includes('/tasks/') && r.pathParams?.['task'] === definition),
+    ).toBe(true)
+    expect(
+      h.wrapper
+        .findAll('button')
+        .find((b) => b.text() === '预览已保存版本')!
+        .attributes('disabled'),
+    ).toBeUndefined()
+    h.wrapper.unmount()
+  } finally {
+    vi.useRealTimers()
+  }
+})
