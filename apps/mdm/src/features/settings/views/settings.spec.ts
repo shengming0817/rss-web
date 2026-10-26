@@ -2063,3 +2063,44 @@ it('rejects a different service PKI candidate before any administrative operatio
   expect(f.settings.operations.records.size).toBe(0)
   expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(0)
 })
+it('can revoke a loaded historical WNS material outside current/latest/applied', async () => {
+  const f = await fixture(ProviderPanel, { kind: 'wns' })
+  const material = (revision: number) => ({
+    operationId: id,
+    revision,
+    packageFamilyName: 'RSS',
+    qualifiedAt: 1,
+    attemptedAt: 1,
+    failureReason: null,
+    selected: revision === 5,
+    revoked: false,
+  })
+  f.setHandler((o) =>
+    o.method === 'GET'
+      ? o.path.endsWith('/versions')
+        ? { items: [material(1)], nextCursor: null }
+        : {
+            revision: 5,
+            desiredRevision: 5,
+            versionCount: 5,
+            current: material(5),
+            latest: material(5),
+            applied: null,
+          }
+      : {
+          kind: 'revocation',
+          receipt: { operationId: o.headers!['Idempotency-Key'], revision: 6, materialRevision: 1 },
+        },
+  )
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  await button(f.wrapper, '版本历史').trigger('click')
+  await flushPromises()
+  await f.wrapper.find('select').setValue('1')
+  await f.wrapper.findAll('form')[1]!.trigger('submit')
+  await flushPromises()
+  expect(f.calls.find((o) => o.method === 'POST')?.body).toEqual({
+    expectedRevision: 5,
+    materialRevision: 1,
+  })
+})

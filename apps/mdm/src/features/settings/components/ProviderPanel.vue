@@ -63,6 +63,11 @@ const currentVersions = computed(() => [
     ),
   ).values(),
 ])
+const revocableVersions = computed(() =>
+  [
+    ...new Map([...history.value, ...currentVersions.value].map((v) => [v.revision, v])).values(),
+  ].filter((v) => 'revoked' in v && !v.revoked),
+)
 async function loadHistory(cursor?: string) {
   await run<{ items: Version[]; nextCursor: string | null }>(
     () => client.value.history({ cursor }),
@@ -329,11 +334,7 @@ useSettingsFacts(() => {
         >{{ t('settings.materialRevision')
         }}<select v-model.number="materialRevision" required>
           <option :value="0" disabled>{{ t('settings.select') }}</option>
-          <option
-            v-for="v in currentVersions.filter((v) => !('revoked' in v && v.revoked))"
-            :key="v.revision"
-            :value="v.revision"
-          >
+          <option v-for="v in revocableVersions" :key="v.revision" :value="v.revision">
             {{ v.revision }}
           </option>
         </select></label

@@ -6,6 +6,7 @@ import {
   validateAgentCollectionDefinition,
   validateNativeCollectionDefinition,
   validateResourceWrite,
+  validateResourceResponse,
   validateFieldWrite,
 } from './generated/validators'
 // Existing producer canonical contents are real format vectors; reorder every JSON object on read.
@@ -70,4 +71,66 @@ it('serializes telemetry structs independently of HTTP key insertion order', () 
   expect(new TextDecoder().decode(telemetryBytes(profile))).toBe(
     '{"template":{"resource":"source","version":"1","variant":"main","platform":"windows","architecture":"x86_64"},"parameters":{"10":10,"2":2},"fields":[{"key":"custom.cpu","version":1}],"projection":"both","sampleMillis":60000,"uploadMillis":60000,"budget":{"points":10,"bytes":1024,"resources":1,"executionMillis":1000,"outputBytes":1024},"boost":{"sampleMillis":10000,"expiresAt":1900000000},"backfillSeconds":3600}',
   )
+})
+it('accepts valid deep WMI predicates inside complete read and write carriers', () => {
+  let filter: object = { kind: 'compare', property: 'Name', operator: 'eq', value: 'Example' }
+  for (let depth = 0; depth < 3; depth++) filter = { kind: 'and', terms: [filter] }
+  const budget = { timeoutSeconds: 1, outputBytes: 4096, maxRows: 1 }
+  const declaration = {
+    kind: 'agent_collection',
+    artifact: { reference: 'collection.json', length: 1, sha256: Array(32).fill(0) },
+    definition: {
+      applicability: {
+        minimumOsVersion: null,
+        minimumBuild: null,
+        editions: [],
+        enrollments: [],
+        tools: {},
+        capabilities: [],
+      },
+      plan: {
+        version: 1,
+        scope: { kind: 'device' },
+        queries: {
+          q: {
+            version: 1,
+            definition: {
+              kind: 'windows_wmi',
+              namespace: 'root\\cimv2',
+              class: 'Win32_OperatingSystem',
+              properties: { Name: { cimType: 'string', array: false } },
+              filter,
+            },
+            cardinality: 'exactly_one',
+            instanceKeys: [],
+            budget,
+          },
+        },
+        budget,
+      },
+      mappings: {
+        'custom.name': {
+          query: 'q',
+          mapping: { pointer: '/Name', conversion: { kind: 'identity' }, columns: {} },
+          missing: 'missing',
+        },
+      },
+    },
+  }
+  const variants = [{ platform: 'windows', architecture: 'x86_64', key: 'main', declaration }]
+  const body = {
+    operationId: '11111111-1111-4111-8111-111111111111',
+    expectedRevision: 1,
+    input: { action: 'version', kind: 'agent_collection', version: '2', variants },
+  }
+  expect(checked(validateResourceWrite, body)).toEqual(body)
+  const response = {
+    id: 'resource',
+    revision: 2,
+    kind: 'agent_collection',
+    presentation: {},
+    origin: null,
+    versions: [{ id: '2', state: 'frozen', digest: Array(32).fill(0), variants }],
+  }
+  expect(checked(validateResourceResponse, response)).toEqual(response)
 })

@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import { isRssApiError } from '@rss/api/mdm'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
+import { deviceBinding } from '../../devices/useDeviceBinding'
 import PageFrame from '../../../components/PageFrame.vue'
 import {
   formats,
@@ -25,7 +26,7 @@ const runtime = useMdm(),
   client = runtime.security.certificateArchive,
   { t } = useI18n(),
   route = useRoute(),
-  op = useOperation(),
+  op = useOperation([], () => deviceBinding(runtime)),
   { busy, failure, uncertain } = op
 const listingLoaded = ref(false)
 const confirmation = ref<
@@ -160,6 +161,8 @@ watch(
     vault.value = undefined
     items.value = []
     history.value = []
+    nextCursor.value = null
+    historyCursor.value = null
     selected.value = undefined
     editorBase.value = undefined
     pending.value = undefined

@@ -209,6 +209,7 @@ it('renders diagnostic uncertainty and independent health, then clears the snaps
   await f.wrapper.findAll('tbody button')[0]!.trigger('click')
   await flushPromises()
   expect(f.body().get('[data-testid=diagnostic-detail]').text()).toContain('未观察')
+  expect(f.body().get('[data-testid=diagnostic-detail]').text()).toContain('来源水位')
   denied = true
   await f.wrapper
     .findAll('button')

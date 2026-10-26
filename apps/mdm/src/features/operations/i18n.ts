@@ -63,6 +63,7 @@ export const operationsZh = {
     truncationUnknown: '未确认是否截断',
     progress: '投影进度',
     confirmedPosition: '已确认位置',
+    sourceHead: '来源水位',
     progressHint: '位置不是时间或事件数量；进度追平不证明设备历史、关联或效果完整。',
     lagging: '是否落后',
     invocationAge: '距本次调用（毫秒）',
@@ -386,6 +387,7 @@ export const operationsEn: typeof operationsZh = {
     truncationUnknown: 'Truncation unobserved',
     progress: 'Projection progress',
     confirmedPosition: 'Confirmed position',
+    sourceHead: 'Source watermark',
     progressHint:
       'Positions are neither times nor event counts. Catching up does not prove complete device history, associations or effects.',
     lagging: 'Lagging',

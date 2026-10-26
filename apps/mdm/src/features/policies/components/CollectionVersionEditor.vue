@@ -64,6 +64,12 @@ const mappings = computed<Record<string, ValueMapping>>({
       : {}
   },
   set(value) {
+    for (const key of Object.keys(choices.value))
+      if (
+        key.startsWith(index.value + '/') &&
+        !Object.hasOwn(value, key.slice(key.indexOf('/') + 1))
+      )
+        delete choices.value[key]
     const d = declaration.value
     if (d?.kind === 'agent_collection')
       d.definition.mappings = Object.fromEntries(
@@ -76,8 +82,9 @@ const mappings = computed<Record<string, ValueMapping>>({
         ]),
       )
     if (d?.kind === 'native_collection') {
-      const fallback = Object.values(d.definition.mappings)[0]?.query
-      if (!fallback) return
+      const source = sourceQueries.value[0]
+      if (!source) return
+      const fallback = JSON.parse(source.key)
       d.definition.mappings = Object.fromEntries(
         Object.entries(value).map(([key, mapping]) => [
           key,

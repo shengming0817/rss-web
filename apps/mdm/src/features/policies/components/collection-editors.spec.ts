@@ -261,3 +261,63 @@ it('preserves all variants and emits regenerated artifact bytes for a new collec
   expect(files[0]!.file.size).toBe(input.variants[0]!.declaration.artifact.length)
   expect(files[1]!.target.version).toBe('2')
 })
+it.each([
+  blueprints.packages.find((p) => p.id === 'windows.identity')!,
+  blueprints.packages.find(
+    (p) =>
+      p.kind === 'native_collection' &&
+      JSON.parse(p.content).adapter === 'apple_installed_applications',
+  )!,
+])('can add a new mapping after deleting all mappings from $id', async (p) => {
+  const c = await context()
+  const d = {
+    kind: 'native_collection',
+    definition: JSON.parse(p.content),
+    artifact: {
+      reference: p.reference,
+      length: new TextEncoder().encode(p.content).length,
+      sha256: p.sha256,
+    },
+  }
+  const resource = decodeResource(
+    {
+      id: 'resource',
+      revision: 1,
+      kind: 'native_collection',
+      presentation: {},
+      origin: null,
+      versions: [
+        {
+          id: '1',
+          state: 'active',
+          digest: p.versionDigest,
+          variants: [{ platform: p.platform, architecture: 'x86_64', key: 'main', declaration: d }],
+        },
+      ],
+    },
+    'resource',
+  )
+  const wrapper = mount(CollectionVersionEditor, {
+    props: { resource, locked: false },
+    global: c.global,
+  })
+  wrappers.push(wrapper)
+  await label(wrapper, '基准版本').get('select').setValue('1')
+  await flushPromises()
+  const mapper = wrapper.findComponent(CollectionMappings)
+  mapper.vm.$emit('update:modelValue', {})
+  await flushPromises()
+  mapper.vm.$emit('update:modelValue', { 'custom.extra': identityMapping('') })
+  await flushPromises()
+  expect(wrapper.findAllComponents(ValueMappingEditor)).toHaveLength(1)
+  const query = label(wrapper, 'custom.extra · 物理读取来源').get('select')
+  expect((query.element as HTMLSelectElement).value).toBe('')
+  expect(query.findAll('option')).toHaveLength(
+    1 +
+      new Set(
+        Object.values(d.definition.mappings).map((m: unknown) =>
+          JSON.stringify((m as { query: unknown }).query),
+        ),
+      ).size,
+  )
+})
