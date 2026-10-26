@@ -25,6 +25,31 @@ export function createNativeDemo(
       }
     >(),
     receipts = createReceipts()
+  function eligibility(
+    s: NonNullable<ReturnType<typeof operations.get>>,
+    actor: string,
+  ): NativeOperation['reauthorization'] {
+    const reg = devices
+      .facts()
+      .find((d) => d.summary.id === s.device)
+      ?.registrations.find((r) => r.status === 'active' && r.source !== 'agent.builtin')
+    const reason = !can(actor, s.permission, s.device)
+      ? 'permission_denied'
+      : ['cancelled', 'applied', 'rejected', 'timed_out', 'superseded'].includes(
+            s.read.commandStatus,
+          )
+        ? 'terminal'
+        : s.read.commandStatus === 'received'
+          ? 'already_received'
+          : Math.floor(Date.now() / 1000) >= s.read.deadline
+            ? 'expired'
+            : reg?.registrationId !== s.registration || reg?.generation !== s.generation
+              ? 'registration_changed'
+              : null
+    return reason
+      ? { state: 'unavailable', reason }
+      : { state: 'available', confirmationRequired: s.dangerous }
+  }
   const handle: DomainHandler = (request, scenario) => {
     const m =
       /^\/api\/v1\/devices\/([^/]+)\/operations(?:\/([^/]+)(?:\/(reauthorize|cancel))?)?$/.exec(
@@ -87,7 +112,8 @@ export function createNativeDemo(
               inputVersion: 'device-control-v1',
               deadline,
               dispatchFailure: null,
-              authorization: 'authorized',
+              authorization: { state: 'authorized' },
+              reauthorization: { state: 'available', confirmationRequired: a.kind !== 'restart' },
               commandStatus: 'queued',
               agentInstallation: null,
               observation: {
@@ -126,15 +152,16 @@ export function createNativeDemo(
         return error('permission_denied', 403)
       if (request.method === 'GET' && !m[3]) {
         if (s.registration !== reg.registrationId || s.generation !== reg.generation)
-          s.read.authorization = 'blocked'
+          s.read.authorization = { state: 'blocked', reason: 'registration_changed' }
         if (
-          s.read.authorization === 'authorized' &&
+          s.read.authorization.state === 'authorized' &&
           ['queued', 'published'].includes(s.read.commandStatus)
         ) {
           s.read.commandStatus = s.reads++ === 0 ? 'published' : 'received'
           if (s.read.commandStatus === 'received')
             s.read.observation.progress = scenario === 'partial' ? 'failed' : 'succeeded'
         }
+        s.read.reauthorization = eligibility(s, request.actor.principalId)
         return ok(structuredClone(s.read))
       }
       if (request.method !== 'POST' || !m[3]) return
@@ -176,7 +203,7 @@ export function createNativeDemo(
             )
               return error('operation_conflict')
           }
-          s.read.authorization = 'authorized'
+          s.read.authorization = { state: 'authorized' }
         }
         s.read.revision++
         return ok({ operationId: id, revision: s.read.revision })
@@ -187,7 +214,7 @@ export function createNativeDemo(
   }
   return {
     handle,
-    directory() {
+    directory(actor: string) {
       return [...operations.values()].map((s) => ({
         id: s.read.operationId,
         kind: 'command' as const,
@@ -197,6 +224,8 @@ export function createNativeDemo(
         origin: 'direct',
         policy: null,
         deadline: s.read.deadline,
+        authorization: s.read.authorization,
+        reauthorization: eligibility(s, actor),
         status: s.read.commandStatus,
         detailUrl: `/api/v1/devices/${encodeURIComponent(s.device)}/operations/${s.read.operationId}`,
         evidence: {

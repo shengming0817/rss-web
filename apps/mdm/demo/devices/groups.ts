@@ -47,6 +47,15 @@ export function createGroupDemo(
 ) {
   const groups = new Map<string, GroupState>(),
     jobs = new Map<string, Job>()
+  const definitions = new Map<
+    string,
+    {
+      group: string
+      reads: number
+      status: 'running' | 'completed' | 'failed'
+      apply: () => boolean
+    }
+  >()
   const pages = createPages(),
     receipts = createReceipts()
   function fields(node: GroupCriteria): string[] {
@@ -138,6 +147,7 @@ export function createGroupDemo(
   function reset() {
     groups.clear()
     jobs.clear()
+    definitions.clear()
     pages.reset()
     receipts.reset()
     const id = '33333333-3333-4333-8333-333333333333'
@@ -260,7 +270,7 @@ export function createGroupDemo(
     const members = decisions.filter((d) => d.decision === 'match').map((d) => d.device)
     jobs.set(task, {
       group: id,
-      revision: state.read.group.revision,
+      revision: state.read.group.calculationRevision,
       publish,
       reads: 0,
       status: 'running',
@@ -278,9 +288,44 @@ export function createGroupDemo(
       ),
     })
     return ok(
-      { task, kind: 'group', target: id, statusUrl: `/api/v1/groups/${id}/tasks/${task}` },
+      {
+        task,
+        kind: publish ? 'group' : 'group_preview',
+        target: id,
+        statusUrl: `/api/v1/groups/${id}/tasks/${task}`,
+      },
       202,
     )
+  }
+  function definition(id: string, task: string, apply: () => boolean) {
+    definitions.set(task, { group: id, reads: 0, status: 'running', apply })
+    return ok(
+      {
+        task,
+        kind: 'group_definition',
+        target: id,
+        statusUrl: `/api/v1/groups/${id}/tasks/${task}`,
+      },
+      202,
+    )
+  }
+  function advance(job: Job, state: GroupState, scenario: string) {
+    if (job.status !== 'running' || job.reads++ === 0) return
+    job.status =
+      scenario === 'partial'
+        ? 'failed'
+        : state.read.group.calculationRevision === job.revision &&
+            state.read.group.ruleVersion === job.ruleVersion
+          ? 'completed'
+          : 'superseded'
+    if (job.status === 'completed' && job.publish) {
+      state.read.group.calculationRevision++
+      if (job.added.length || job.removed.length) state.read.group.memberVersion++
+      state.read.group.memberCount = job.members.length
+      state.read.memberSet = [...jobs].find(([, candidate]) => candidate === job)![0]
+      state.read.freshness = 'current'
+      state.members = job.members
+    }
   }
   const handle: DomainHandler = (request, scenario) => {
     const { path, method, query } = request
@@ -347,27 +392,28 @@ export function createGroupDemo(
       state = groups.get(id)
     if (match[2] === 'tasks' && method === 'GET') {
       const task = uuid(match[3]),
+        definition = definitions.get(task),
         job = jobs.get(task)
-      if (!job || job.group !== id || !state) return error('group_not_found', 404)
-      if (job.status === 'running' && job.reads++ > 0) {
-        job.status =
-          scenario === 'partial'
-            ? 'failed'
-            : state.read.group.revision === job.revision
-              ? 'completed'
-              : 'superseded'
-        if (job.status === 'completed' && job.publish) {
-          state.read.group.calculationRevision++
-          if (job.added.length || job.removed.length) state.read.group.memberVersion++
-          state.read.group.memberCount = job.members.length
-          state.read.memberSet = task
-          state.read.freshness = 'current'
-          state.members = job.members
-        }
+      if (definition && definition.group === id) {
+        if (definition.status === 'running' && definition.reads++ > 0)
+          definition.status = scenario === 'partial' || !definition.apply() ? 'failed' : 'completed'
+        return ok({
+          task,
+          kind: 'group_definition',
+          target: id,
+          status: definition.status,
+          processed: 0,
+          members: 0,
+          failure: definition.status === 'failed' ? 'owner_conflict' : null,
+          failureDetail: null,
+          replacementTask: null,
+        })
       }
+      if (!job || job.group !== id || !state) return error('group_not_found', 404)
+      advance(job, state, scenario)
       return ok({
         task,
-        kind: 'group',
+        kind: job.publish ? 'group' : 'group_preview',
         target: id,
         status: job.status,
         processed: job.status === 'running' ? 0 : job.decisions.length,
@@ -441,8 +487,12 @@ export function createGroupDemo(
         nextCursor: page.nextCursor,
       })
     }
-    if (method === 'GET')
+    if (method === 'GET') {
+      if (state)
+        for (const job of jobs.values())
+          if (job.group === id && job.publish) advance(job, state, scenario)
       return state && !state.read.group.deleted ? ok(state.read) : error('group_not_found', 404)
+    }
     if (method !== 'POST') return
     const op = operation(request.body)
     return receipts.write(request, op.operationId, () => {
@@ -489,14 +539,20 @@ export function createGroupDemo(
           memberSet: null,
           freshness: 'pending',
         }
+        if (rule)
+          return definition(id, op.operationId, () => {
+            if (groups.has(id)) return false
+            groups.set(id, { read, members: [] })
+            start(id, randomUUID(), true)
+            return true
+          })
         groups.set(id, { read, members: [] })
-        if (rule) start(id, op.operationId, true)
         return ok({
           operation: op.operationId,
           group: read.group,
           added: 0,
           removed: 0,
-          task: rule ? op.operationId : null,
+          task: null,
         })
       }
       if (!state || state.read.group.deleted) return error('group_not_found', 404)
@@ -529,20 +585,26 @@ export function createGroupDemo(
         if (state.read.group.kind !== 'dynamic') return error('operation_conflict')
         const condition = groupCondition(input['criteria'])
         if (!valid(condition, id, state.read.group.assetContext)) return error('operation_conflict')
-        state.read.criteria = condition
-        state.read.group.ruleVersion = randomUUID()
+        return definition(id, op.operationId, () => {
+          if (state.read.group.revision !== op.expectedRevision || state.read.group.deleted)
+            return false
+          state.read.criteria = condition
+          state.read.group.ruleVersion = randomUUID()
+          state.read.group.revision++
+          start(id, randomUUID(), true)
+          return true
+        })
       } else if (action === 'edit') {
         closed(input, ['action', 'presentation'])
         state.read.group.presentation = groupPresentation(input['presentation'])
       } else state.read.group.deleted = true
       state.read.group.revision++
-      if (action === 'rule') start(id, op.operationId, true)
       return ok({
         operation: op.operationId,
         group: state.read.group,
         added: 0,
         removed: 0,
-        task: action === 'rule' ? op.operationId : null,
+        task: null,
       })
     })
   }

@@ -177,10 +177,12 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         request.method === 'GET'
       ) {
         const all = [
-          ...native.directory(),
+          ...native.directory(request.actor.principalId),
           ...policies.rows().map((r) => ({
             id: r.taskId,
             kind: 'action_run' as const,
+            authorization: { state: 'not_applicable' },
+            reauthorization: { state: 'not_applicable' },
             device: r.device,
             registrationId: r.registrationId,
             generation: r.generation,
@@ -194,6 +196,8 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
           ...software.runs.rows().map((r) => ({
             id: r.value.taskId,
             kind: 'action_run' as const,
+            authorization: { state: 'not_applicable' },
+            reauthorization: { state: 'not_applicable' },
             device: r.value.device,
             registrationId: r.value.registrationId,
             generation: r.value.generation,
@@ -209,8 +213,16 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
             authorization.can(request.actor.principalId, 'operation_read', i.device) &&
             scenario !== 'empty',
         )
+        const lookup = (row: (typeof all)[number], field: string): unknown =>
+          field
+            .split('.')
+            .reduce<unknown>(
+              (value, key) =>
+                value && typeof value === 'object' ? (Reflect.get(value, key) ?? null) : null,
+              row,
+            )
         if (request.path.endsWith('/statistics')) {
-          const items = filterRows(all, request.query.get('filter'))
+          const items = filterRows(all, request.query.get('filter'), lookup)
           return ok({
             statistics: {
               total: items.length,
@@ -223,6 +235,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         }
         return ok(
           directoryPage(all, request, ['id', 'kind'], {
+            lookup,
             binding: JSON.stringify(authorization.effective(request.actor.principalId)),
           }),
         )
