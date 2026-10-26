@@ -1348,3 +1348,64 @@ it('does not resolve a Policy conflict when its authoritative comparison is disp
   expect(current.text()).not.toContain(original)
   expect(field(current, '策略 ID').element).toHaveProperty('value', a)
 })
+
+it('clears lifecycle alias and event on same-route principal and session replacement before a new write', async () => {
+  const actor = session()
+  const policy = {
+    id: a,
+    revision: 1,
+    version: 1,
+    versionId: a,
+    state: 'disabled',
+    enabled: false,
+    definition: {
+      alias: 'previous.actor',
+      customEvent: 'previous.event',
+      scope: a,
+      action: { kind: 'unmanage_device', schedule: defaultSchedule(), runLifetimeSeconds: 3600 },
+    },
+  }
+  const change = vi.fn(async (id, operation) => ({
+    ...policy,
+    id,
+    definition: operation.input.definition,
+  }))
+  const w = await mountAt(LifecyclePoliciesView, {
+    tenant: a,
+    session: actor,
+    policies: {
+      policies: {
+        read: vi.fn().mockResolvedValue(policy),
+        list: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
+        change,
+      },
+    },
+  })
+  await field(w, '策略 ID').setValue(a)
+  await w
+    .get('form')
+    .findAll('button')
+    .find((b) => b.text() === '读取')!
+    .trigger('click')
+  await flushPromises()
+  expect((field(w, '唯一别名').element as HTMLInputElement).value).toBe('previous.actor')
+  expect((field(w, '自定义事件').element as HTMLInputElement).value).toBe('previous.event')
+  actor.state.value = {
+    status: 'authenticated',
+    tenant: a,
+    identity: { principalId: c },
+    session: { id: b },
+  } as typeof actor.state.value
+  await flushPromises()
+  expect((field(w, '唯一别名').element as HTMLInputElement).value).toBe('')
+  expect((field(w, '自定义事件').element as HTMLInputElement).value).toBe('')
+  await field(w, '设备范围 ID').setValue(a)
+  await confirm(w)
+  await w.get('form').trigger('submit')
+  await flushPromises()
+  expect(change).toHaveBeenCalledOnce()
+  expect(change.mock.calls[0]?.[1].input.definition).toMatchObject({
+    alias: null,
+    customEvent: null,
+  })
+})

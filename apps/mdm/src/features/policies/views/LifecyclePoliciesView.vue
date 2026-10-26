@@ -267,6 +267,8 @@ async function check(cursor?: string) {
 watch(
   () => JSON.stringify(deviceBinding(runtime)),
   () => {
+    alias.value = null
+    customEvent.value = null
     current.value = undefined
     rows.value = undefined
     assignments.value = undefined

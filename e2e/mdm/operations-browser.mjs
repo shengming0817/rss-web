@@ -328,7 +328,14 @@ try {
   await page.getByRole('button', { name: '查看关联事实', exact: true }).first().click()
   assert.equal((await detailRead).status(), 200)
   const activityDialog = page.getByRole('dialog')
-  await activityDialog.getByText(fact.id, { exact: true }).waitFor()
+  const activityCard = activityDialog
+    .locator('[data-section="management-activity"]')
+    .filter({
+      has: page.getByText(fact.id, { exact: true }),
+    })
+    .first()
+  await activityCard.locator('details > summary').click()
+  await activityCard.getByText(fact.id, { exact: true }).waitFor()
   await page.keyboard.press('Escape')
   await changeRule(fixture.rule.grants.filter((g) => g.operation !== 'audit_read'))
   assert.equal((await request('get', '/api/v1/audit-events')).status(), 403)
