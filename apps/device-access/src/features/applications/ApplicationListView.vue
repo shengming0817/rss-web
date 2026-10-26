@@ -14,6 +14,10 @@ const { data, busy, error, reload } = useRead(
   (signal) => r.client.applications(cursor.value, signal),
   () => cursor.value,
 )
+function edit(value: Application | null) {
+  editing.value = value
+  open.value = true
+}
 </script>
 <template>
   <div class="page-heading">
@@ -25,10 +29,7 @@ const { data, busy, error, reload } = useRead(
     <v-btn
       color="primary"
       :disabled="!r.client.capabilities.applicationWrite.available"
-      @click="
-        editing = null
-        open = true
-      "
+      @click="edit(null)"
       >{{ $t('da.m23008c2dff') }}</v-btn
     >
   </div>
@@ -53,16 +54,9 @@ const { data, busy, error, reload } = useRead(
       <p class="small muted mt-5">
         {{ a.capabilities.map((c) => (c === 'native_key' ? '平台密钥' : '密码')).join(' / ') }}
       </p>
-      <v-btn
-        variant="outlined"
-        block
-        class="mt-6"
-        @click="
-          editing = a
-          open = true
-        "
-        >{{ $t('da.mfa96692279') }}</v-btn
-      >
+      <v-btn variant="outlined" block class="mt-6" @click="edit(a)">{{
+        $t('da.mfa96692279')
+      }}</v-btn>
     </section>
     <p v-if="!data.items.length" class="empty">{{ $t('da.m140314fdb4') }}</p>
   </div>

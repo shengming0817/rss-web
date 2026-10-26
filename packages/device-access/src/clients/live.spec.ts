@@ -64,7 +64,7 @@ function rp() {
     enabled: false,
     callback: 'https://app.example.test/callback',
     targetFingerprint: 'fixed',
-    capabilities: ['native_key'],
+    capabilities: ['native_key' as const],
   }
 }
 function setup() {
@@ -359,7 +359,7 @@ it('bounds candidate view models and rejects cross-device data and personal reco
       revision: 1,
       enabled: false,
       callback: 'https://app.test',
-      capabilities: ['native_key'],
+      capabilities: ['native_key' as const],
     }),
   ).toHaveProperty('id', 'app')
   expect(

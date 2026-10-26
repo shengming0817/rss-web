@@ -14,6 +14,10 @@ const { data, busy, error, reload } = useRead(
   (signal) => r.client.configurations(cursor.value, signal),
   () => cursor.value,
 )
+function edit(value: Configuration | null) {
+  editing.value = value
+  open.value = true
+}
 </script>
 <template>
   <div class="page-heading">
@@ -25,10 +29,7 @@ const { data, busy, error, reload } = useRead(
     <v-btn
       color="primary"
       :disabled="!r.client.capabilities.configuration.available"
-      @click="
-        editing = null
-        open = true
-      "
+      @click="edit(null)"
       >{{ $t('da.mae2987c647') }}</v-btn
     >
   </div>
@@ -51,15 +52,7 @@ const { data, busy, error, reload } = useRead(
           <td>{{ c.scope.label }}</td>
           <td>{{ label(c.state) }}</td>
           <td>
-            <v-btn
-              variant="text"
-              size="small"
-              @click="
-                editing = c
-                open = true
-              "
-              >{{ $t('da.mfa96692279') }}</v-btn
-            >
+            <v-btn variant="text" size="small" @click="edit(c)">{{ $t('da.mfa96692279') }}</v-btn>
           </td>
         </tr>
       </tbody></v-table
