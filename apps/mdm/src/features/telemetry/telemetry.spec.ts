@@ -791,6 +791,16 @@ it('preserves the original boost expiration and the newly chosen scope when upda
             variant.declaration.definition.boost = { sampleMillis: 30000, expiresAt }
     return resource
   })
+  const existing = await h.runtime.policies.policies.read('99999999-9999-4999-8999-999999999999')
+  await h.runtime.policies.policies.change(existing.id, {
+    operationId: crypto.randomUUID(),
+    expectedRevision: existing.revision,
+    input: {
+      action: 'put',
+      enabled: existing.enabled,
+      definition: { ...existing.definition, customEvent: 'refresh.telemetry' },
+    },
+  })
   const body = {
       operationId: crypto.randomUUID(),
       expectedRevision: 0,
@@ -844,7 +854,10 @@ it('preserves the original boost expiration and the newly chosen scope when upda
   expect(
     h.requests.filter((r) => r.path === '/api/v1/policies/{id}' && r.method === 'POST').at(-1)!
       .body,
-  ).toMatchObject({ expectedRevision: 1, input: { definition: { scope: newScope } } })
+  ).toMatchObject({
+    expectedRevision: 2,
+    input: { definition: { scope: newScope, customEvent: 'refresh.telemetry' } },
+  })
 })
 it('does not publish a profile prepared under a session that changes during artifact hashing', async () => {
   const h = await setup('policy-telemetry', { resource: DEMO_PROFILE })

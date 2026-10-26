@@ -22,6 +22,8 @@ for (const screen of [
       version: 1,
       versionId: id,
       definition: {
+        customEvent: null,
+        alias: null,
         scope: first,
         action: {
           kind: 'request_mdm_enrollment',

@@ -1,3 +1,4 @@
+import { windowPage } from '../directory'
 import { createHash, randomUUID } from 'node:crypto'
 import type { DomainHandler, Scenario, DemoEvent } from '../scenario'
 import type { createDeviceDemo } from '../devices/state'
@@ -261,24 +262,7 @@ export function createPolicyDemo(
         void _occurrence
         return ok(detail)
       }
-      const at = request.query.get('afterAt'),
-        id = request.query.get('afterId')
-      const visible = items
-        .filter(
-          (r) =>
-            !at ||
-            r.availableAt > Number(at) ||
-            (r.availableAt === Number(at) && r.taskId > (id ?? '')),
-        )
-        .sort((a, b) => a.availableAt - b.availableAt || a.taskId.localeCompare(b.taskId))
-      const last = visible[63]
-      return ok({
-        items: visible.slice(0, 64),
-        nextCursor:
-          visible.length > 64 && last
-            ? { availableAt: last.availableAt, taskId: last.taskId }
-            : null,
-      })
+      return ok(windowPage(items, request, (row) => [row.availableAt, row.taskId], match[1], true))
     }
     return store.handle(request, scenario)
   }

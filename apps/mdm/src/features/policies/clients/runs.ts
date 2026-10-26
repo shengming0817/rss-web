@@ -1,3 +1,4 @@
+import { windowParameters, windowPage, type WindowQuery } from '../../../services/directory-query'
 import { subject } from '../../security/clients/credentials'
 import { jsonValue } from '../../../services/json'
 import type { HttpTransport } from '@rss/api/mdm'
@@ -483,29 +484,16 @@ export function policyRun(value: unknown, detail: boolean) {
   }
 }
 export type PolicyRun = ReturnType<typeof policyRun>
-export interface RunCursor {
-  availableAt: number
-  taskId: string
-}
 export function createRunsClient(transport: HttpTransport) {
   return {
-    list: (id: string, cursor?: RunCursor) =>
+    list: (id: string, page: WindowQuery = {}) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/policies/{id}/runs',
         pathParams: { id },
-        query: { afterAt: cursor?.availableAt, afterId: cursor?.taskId },
+        query: windowParameters({ limit: 20, ...page }, 1000),
         successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['items', 'nextCursor'])
-          return {
-            items: array(v['items'], (v) => policyRun(v, false)),
-            nextCursor: nullable(v['nextCursor'], (value) => {
-              const c = closed(value, ['availableAt', 'taskId'])
-              return { availableAt: integer(c['availableAt']), taskId: uuid(c['taskId']) }
-            }),
-          }
-        },
+        decode: (value) => windowPage(value, (v) => policyRun(v, false)),
       }),
     read: (id: string, task: string) =>
       transport.request({

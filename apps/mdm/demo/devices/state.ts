@@ -93,8 +93,13 @@ export function createDeviceDemo() {
           return structuredClone(reply)
         }
       }
-    } catch {
-      return error('malformed_request', 400)
+    } catch (e) {
+      return error(
+        e instanceof Error && e.message === 'Invalidated cursor'
+          ? 'operation_conflict'
+          : 'malformed_request',
+        e instanceof Error && e.message === 'Invalidated cursor' ? 409 : 400,
+      )
     }
   }
   return {

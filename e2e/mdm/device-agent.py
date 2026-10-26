@@ -139,6 +139,33 @@ def collect(fixture, action, resource, cycle):
     return record
 
 
+def claim_policy(fixture, policy):
+    # Admit signed tasks through the actual Agent mTLS seam; no device effect is executed.
+    agent = fixture['collector']
+    deadline = time.monotonic() + 30
+    while True:
+        response = call(agent['origin'], agent['ca'], '/api/v1/agent/runtime/tasks/claim',
+                        dict(wireVersion=1, operationId=str(uuid.uuid4()), profiles=['posix_sh'],
+                             environment=dict(edition=None, tools={}, nativeEngines={'macos.hardware':1,'macos.applications':1}),
+                             executionContext=agent['executionContext']), agent['cert'], agent['key'])
+        if response['task'] is not None:
+            payload = response['task']['payload']
+            check(payload['kind'] == 'script', 'policy-task-family')
+            task = payload['task']
+            check(task['authorization']['policyId'] == policy, 'policy-task-authority')
+            prior = agent.setdefault('policyTasks', [])
+            check(task['taskId'] not in prior, 'policy-distinct-task')
+            for kind in ['received', 'cancelled']:
+                receipt = call(agent['origin'], agent['ca'], '/api/v1/agent/runtime/tasks/'+task['taskId']+'/events',
+                               dict(wireVersion=1, operationId=str(uuid.uuid4()), attemptId=task['attemptId'],
+                                    executionContext=agent['executionContext'], event=dict(kind=kind)), agent['cert'], agent['key'])
+                check(receipt['accepted'], 'policy-terminal-'+kind)
+            prior.append(task['taskId'])
+            return dict(result='passed')
+        check(time.monotonic() < deadline, 'policy-task-deadline')
+        time.sleep(.5)
+
+
 def acknowledge_pki(path):
     file = Path(path)
     check(file.stat().st_mode & 0o077 == 0, 'collector-private-fixture')
@@ -169,7 +196,7 @@ if __name__ == '__main__':
         file = Path(path)
         check(file.stat().st_mode & 0o077 == 0, 'collector-private-fixture')
         fixture = json.loads(file.read_text())
-        result = collect(fixture, action, resource, int(cycle))
+        result = claim_policy(fixture, resource) if action == 'policy_claim' else collect(fixture, action, resource, int(cycle))
         file.write_text(json.dumps(fixture))
         print(json.dumps(result))
     except Exception as error:

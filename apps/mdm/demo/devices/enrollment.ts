@@ -1,3 +1,4 @@
+import { directoryPage } from '../directory'
 import { createRegistrationDemo } from './registration'
 import { randomUUID } from 'node:crypto'
 import type { DomainHandler, DemoEvent } from '../scenario'
@@ -51,7 +52,7 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
       throw new Error('Invalid password')
   }
   const handle: DomainHandler = (request) => {
-    const { path, method, query } = request
+    const { path, method } = request
     const enrollmentPath = /^\/api\/v1\/enrollments(?:\/([^/]+)(?:\/(resume|cancel))?)?$/.exec(path)
     const registrations = /^\/api\/v1\/devices\/([^/]+)\/registrations(?:\/([^/]+)\/revoke)?$/.exec(
       path,
@@ -103,18 +104,18 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
       if (registrations) {
         const device = devices().get(decodeURIComponent(registrations[1]!))
         if (!device) return error('permission_denied', 403)
-        const after = query.get('after')
-        const items = device.registrations
-          .filter((r) => !after || r.registrationId > after)
-          .sort((a, b) => a.registrationId.localeCompare(b.registrationId))
-        return ok({
-          items: items
-            .slice(0, 100)
-            .map(({ userContextId, lastCommunicationReceivedAt: _communication, ...r }) =>
-              userContextId ? { ...r, userContextId } : r,
-            ),
-          nextCursor: items.length > 100 ? items[99]!.registrationId : null,
-        })
+        const page = directoryPage(
+          device.registrations.map(
+            ({ userContextId, lastCommunicationReceivedAt: _communication, ...r }) => ({
+              ...r,
+              userContextId: userContextId ?? null,
+            }),
+          ),
+          request,
+          ['registrationId'],
+          { defaultLimit: 1000 },
+        )
+        return ok(page)
       }
       return error('malformed_request', 400)
     }

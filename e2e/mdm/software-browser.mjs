@@ -437,6 +437,16 @@ try {
   assert.equal(current.definition.action.rollout.stages[0].scope, scopes[0])
   assert.equal(current.definition.action.intent, 'available_install')
   coverage.push('default-full-deployment-selects-scope-once')
+  assert.equal(current.definition.customEvent, null)
+  current = await write(
+    `/api/v1/policies/${policy}`,
+    {
+      action: 'put',
+      enabled: current.state === 'enabled',
+      definition: { ...current.definition, customEvent: 'refresh.software' },
+    },
+    current.revision,
+  )
   phase = 'version-isolation'
   await publish('v2')
   current = await api(`/api/v1/policies/${policy}`)
@@ -468,6 +478,7 @@ try {
   current = await api(`/api/v1/policies/${policy}`)
   assert.equal(current.definition.action.resource.version, 'v2')
   assert.equal(current.definition.action.intent, 'available_install')
+  assert.equal(current.definition.customEvent, 'refresh.software')
   assert.deepEqual(current.definition.action.delivery, { kind: 'native', target: f.target })
   assert.notEqual(current.versionId, initial.versionId)
   assert.equal(current.definition.action.rollout.stages.length, 2)

@@ -127,6 +127,8 @@ function save() {
       action: 'put',
       enabled: enabled.value,
       definition: policyDefinition({
+        ...current.value?.definition,
+        customEvent: current.value?.definition.customEvent ?? null,
         scope: scope.value,
         alias: current.value?.definition.alias ?? null,
         action: input,
@@ -137,11 +139,13 @@ function save() {
   }
 }
 function progress(after?: string) {
-  if (current.value)
+  assignments.value = undefined
+  const target = current.value?.id
+  if (target)
     void run(
-      () => client.assignments(current.value!.id, after),
+      () => client.assignments(target, { cursor: after }),
       (v) => {
-        assignments.value = v
+        if (current.value?.id === target) assignments.value = v
       },
     )
 }

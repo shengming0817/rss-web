@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { PreviewInput } from '../../policies/clients/policies'
+
 import { comparison as queryComparison, allOf } from '../../../services/directory-query'
 import {
   UiButton,
@@ -21,7 +23,7 @@ import {
 } from '../clients/assignment-model'
 import { intents, targets } from '../../policies/clients/model'
 import type { PolicyChange, PolicyRead } from '../../policies/clients/model'
-import type { RunCursor, PolicyRun } from '../../policies/clients/runs'
+import type { PolicyRun } from '../../policies/clients/runs'
 import type { ResourceRead } from '../../policies/clients/resources'
 import SoftwareResourceSelect from '../components/SoftwareResourceSelect.vue'
 import CatalogLocator from '../../policies/components/CatalogLocator.vue'
@@ -74,6 +76,8 @@ const current = ref<SoftwarePolicy>(),
 function fresh(): SoftwarePolicyDefinition {
   const now = Math.floor(Date.now() / 1000)
   return {
+    customEvent: null,
+    alias: null,
     scope: '',
     action: {
       delivery: { kind: 'direct' },
@@ -385,31 +389,56 @@ function save() {
     failure.value = 'invalidRequest'
   }
 }
-function check(after?: string, scopeResult?: string) {
+let previewInput: PreviewInput | undefined
+watch(
+  () => JSON.stringify([requester(), draft.value]),
+  () => {
+    previewInput = undefined
+    preview.value = undefined
+  },
+  { flush: 'sync' },
+)
+async function check(cursor?: string) {
   if (busy.value || uncertain.value) return
-  previewBasis.value = ''
-  const basis = draftBasis()
+  const previous = cursor ? preview.value : undefined
+  preview.value = undefined
   try {
-    const d = softwarePolicyDefinition(toRaw(draft.value))
-    void run(
-      () => client.preview(d, after, scopeResult),
+    const d = softwarePolicyDefinition(structuredClone(toRaw(draft.value)))
+    if (
+      cursor &&
+      (!previous || !previewInput || JSON.stringify(d) !== JSON.stringify(previewInput.definition))
+    ) {
+      previewInput = undefined
+      return
+    }
+    const input = cursor ? previewInput! : { definition: d }
+    previewInput = input
+    await run(
+      async () => {
+        const page = await client.preview(input, { cursor })
+        if (previous && previous.scopeResult !== page.scopeResult)
+          throw new Error('Wrong preview scope result')
+        return page
+      },
       (v) => {
-        if (basis !== draftBasis()) return
+        if (previewInput !== input) return
         preview.value = v
-        previewBasis.value = basis
+        previewBasis.value = draftBasis()
       },
     )
   } catch {
     failure.value = 'invalidRequest'
   }
 }
+
 function loadDevices(after?: string) {
+  devices.value = undefined
   if (current.value) {
     const id = current.value.id
     void run(
-      () => client.assignments(id, after),
+      () => client.assignments(id, { cursor: after }),
       (v) => {
-        devices.value = v
+        if (current.value?.id === id) devices.value = v
       },
     )
   }
@@ -425,12 +454,15 @@ function loadRollout() {
     )
   }
 }
-function loadRuns(cursor?: RunCursor) {
+function loadRuns(cursor?: string) {
+  history.value = undefined
+  detail.value = undefined
   if (current.value) {
     const id = current.value.id
     void run(
-      () => runtime.policies.runs.list(id, cursor),
+      () => runtime.policies.runs.list(id, { cursor }),
       (v) => {
+        if (current.value?.id !== id) return
         history.value = v
         detail.value = undefined
       },
@@ -838,7 +870,7 @@ watch(
         v-if="preview.nextCursor"
         :disabled="!!(busy || uncertain)"
         type="submit"
-        @click="check(preview.nextCursor, preview.scopeResult)"
+        @click="check(preview.nextCursor)"
       >
         {{ t('policies.next') }}
       </UiButton>

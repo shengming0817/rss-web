@@ -400,6 +400,7 @@ it('saves onboarding as the shared Policy and reads the formal execution directo
   await wrapper.get('form').trigger('submit')
   await flushPromises()
   expect(change.mock.calls[0]?.[1].input.definition).toEqual({
+    customEvent: null,
     scope: id,
     alias: null,
     action: {

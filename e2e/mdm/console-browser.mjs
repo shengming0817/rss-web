@@ -1,4 +1,6 @@
 // Production UI against the actual product, Identity, PostgreSQL and HTTPS gateway.
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { readFileSync } from 'node:fs'
 import { randomUUID, createHash } from 'node:crypto'
@@ -422,6 +424,166 @@ try {
   assert.deepEqual(readFileSync(await savedDownload.path()), bytes)
   await savedDownload.delete()
   coverage.push('exact-script-version-download')
+  phase = 'policy-subcollection-contracts'
+  const windowScope = randomUUID(),
+    windowPolicy = randomUUID()
+  await mutation(`/api/v1/scopes/${windowScope}`, {
+    action: 'put',
+    definition: {
+      targets: [
+        { kind: 'device', id: f.mdm },
+        { kind: 'device', id: f.collector.runtime.deviceId },
+      ],
+      limitations: null,
+      exclusions: [],
+    },
+  })
+  await until(
+    () => api(`/api/v1/scopes/${windowScope}`),
+    (v) => v.resolution !== null,
+  )
+  const windowDefinition = {
+    customEvent: null,
+    alias: null,
+    scope: windowScope,
+    action: {
+      kind: 'execution',
+      resource: {
+        id: resource,
+        version: '1',
+        platform: 'macos',
+        architecture: 'aarch64',
+        variant: 'default',
+      },
+      parameters: {},
+      schedule: {
+        trigger: { kind: 'manual' },
+        misfire: { kind: 'coalesce_one' },
+        notBefore: 0,
+        until: null,
+        jitterSeconds: 0,
+        window: null,
+      },
+      frequency: 'every_trigger',
+      runLifetimeSeconds: 3600,
+    },
+  }
+  await mutation(`/api/v1/policies/${windowPolicy}`, {
+    action: 'put',
+    enabled: true,
+    definition: windowDefinition,
+  })
+  const input = { definition: windowDefinition }
+  const first = await api('/api/v1/policies/previews?limit=1', 'POST', input)
+  assert.ok(first.nextCursor && typeof first.nextCursor === 'string')
+  const second = await api(
+    '/api/v1/policies/previews?limit=1&cursor=' + encodeURIComponent(first.nextCursor),
+    'POST',
+    input,
+  )
+  assert.equal(second.scopeResult, first.scopeResult)
+  assert.equal(second.nextCursor, null)
+  assert.notDeepEqual(first.items[0].object, second.items[0].object)
+  await api(
+    '/api/v1/policies/previews?limit=1&cursor=' + encodeURIComponent(first.nextCursor),
+    'POST',
+    { ...input, scopeResult: first.scopeResult },
+    409,
+  )
+  const explicit = { ...input, scopeResult: first.scopeResult }
+  const explicitFirst = await api('/api/v1/policies/previews?limit=1', 'POST', explicit)
+  assert.equal(
+    (
+      await api(
+        '/api/v1/policies/previews?limit=1&cursor=' + encodeURIComponent(explicitFirst.nextCursor),
+        'POST',
+        explicit,
+      )
+    ).nextCursor,
+    null,
+  )
+  async function walk(path, key) {
+    const rows = [],
+      seen = new Set()
+    let cursor
+    do {
+      const page = await api(
+        path + '?limit=1' + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''),
+      )
+      for (const row of page.items) {
+        assert.ok(!seen.has(key(row)))
+        seen.add(key(row))
+        rows.push(row)
+      }
+      cursor = page.nextCursor
+      assert.ok(cursor === null || typeof cursor === 'string')
+      assert.ok(rows.length <= 20)
+    } while (cursor)
+    return rows
+  }
+  assert.equal(
+    (await walk(`/api/v1/policies/${windowPolicy}/assignments`, (r) => JSON.stringify(r.object)))
+      .length,
+    2,
+  )
+  assert.ok(
+    (await walk(`/api/v1/devices/${f.mdm}/registrations`, (r) => r.registrationId)).length >= 2,
+  )
+  assert.equal((await walk(`/api/v1/policies/${windowPolicy}/runs`, (r) => r.taskId)).length, 0)
+  for (let i = 0; i < 2; i++) {
+    await api(`/api/v1/policies/${windowPolicy}/reruns`, 'POST', {
+      operationId: randomUUID(),
+      expectedRevision: 1,
+      input: { deadline: Math.floor(Date.now() / 1000) + 3500 },
+    })
+    const claimed = spawnSync(
+      'python3',
+      [
+        fileURLToPath(new URL('./device-agent.py', import.meta.url)),
+        process.env.MDM_DEVICE_BROWSER_FIXTURE,
+        'policy_claim',
+        windowPolicy,
+        '0',
+      ],
+      { timeout: 45000, stdio: 'pipe' },
+    )
+    assert.equal(claimed.status, 0, 'actual Agent mTLS claim')
+  }
+  const history = await until(
+    () => walk(`/api/v1/policies/${windowPolicy}/runs`, (r) => r.taskId),
+    (rows) => rows.length >= 2,
+  )
+  for (let i = 1; i < history.length; i++)
+    assert.ok(
+      history[i - 1].availableAt > history[i].availableAt ||
+        (history[i - 1].availableAt === history[i].availableAt &&
+          history[i - 1].taskId > history[i].taskId),
+    )
+  const edited = await mutation(
+    `/api/v1/policies/${windowPolicy}`,
+    {
+      action: 'put',
+      enabled: false,
+      definition: { ...windowDefinition, customEvent: 'refresh.contract' },
+    },
+    1,
+  )
+  await page.goto(at('policies/assignments') + '?id=' + windowPolicy)
+  await ready()
+  await page.getByRole('button', { name: '编辑', exact: true }).click()
+  await page.getByRole('button', { name: '加载资源版本', exact: true }).click()
+  await page.locator('#policy-lifetime').fill('3400')
+  const updated = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      new URL(r.url()).pathname === `/api/v1/policies/${windowPolicy}`,
+  )
+  await page.locator('form').evaluate((form) => form.requestSubmit())
+  assert.equal((await updated).status(), 200)
+  const reread = await api(`/api/v1/policies/${windowPolicy}`)
+  assert.equal(reread.definition.customEvent, 'refresh.contract')
+  assert.ok(reread.revision > edited.revision)
+  coverage.push('fixed-producer-four-opaque-windows-and-policy-event-roundtrip')
   phase = 'software-channel-default'
   const capabilities = await api('/api/v1/policies/capabilities')
   assert.deepEqual(capabilities, {

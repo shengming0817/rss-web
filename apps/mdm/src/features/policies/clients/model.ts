@@ -267,8 +267,63 @@ function delivery(value: unknown) {
     target: coordinate(v['target']),
   }
 }
+// Current producer: agent-wire/platform_sso.rs::LoginConfiguration.
+function loginConfiguration(value: unknown) {
+  const v = closed(value, [
+    'authentication',
+    'passwordProvider',
+    'login',
+    'unlock',
+    'filevault',
+    'offlineGraceSeconds',
+    'registrationGraceSeconds',
+    'maintenanceAccounts',
+  ])
+  const policy = (v: unknown) => enumeration(v, ['local', 'attempt', 'require'] as const)
+  const grace = (v: unknown) => {
+    const n = count(v)
+    if (!n || n > 4294967295) throw new Error('Invalid grace period')
+    return n
+  }
+  const c = {
+    authentication: enumeration(v['authentication'], ['secure_enclave', 'password'] as const),
+    passwordProvider: nullable(v['passwordProvider'], uuid),
+    login: policy(v['login']),
+    unlock: policy(v['unlock']),
+    filevault: policy(v['filevault']),
+    offlineGraceSeconds: nullable(v['offlineGraceSeconds'], grace),
+    registrationGraceSeconds: nullable(v['registrationGraceSeconds'], grace),
+    maintenanceAccounts: unique(
+      array(v['maintenanceAccounts'], (v) => {
+        const name = string(v)
+        if (!/^[A-Za-z0-9_-]{1,64}$/.test(name)) throw new Error('Invalid maintenance account')
+        return name
+      }),
+      (v) => v,
+    ),
+  }
+  const policies = [c.login, c.unlock, c.filevault]
+  const enforcing = policies.includes('require')
+  if (
+    (c.authentication === 'password') !== (c.passwordProvider !== null) ||
+    (c.authentication !== 'password' && policies.some((p) => p !== 'local')) ||
+    (!enforcing && (c.offlineGraceSeconds !== null || c.registrationGraceSeconds !== null)) ||
+    (enforcing && !c.maintenanceAccounts.length) ||
+    c.maintenanceAccounts.length > 16
+  )
+    throw new Error('Invalid login configuration')
+  return c
+}
+function policyName(value: unknown) {
+  const name = string(value)
+    .trim()
+    .replace(/[A-Z]/g, (c) => c.toLowerCase())
+  if (!/^[a-z0-9._-]{1,64}$/.test(name)) throw new Error('Invalid policy name')
+  return name
+}
 export function policyAction(value: unknown) {
   const kind = enumeration(record(value)['kind'], [
+    'device_access',
     'execution',
     'credential',
     'unmanage_device',
@@ -280,6 +335,30 @@ export function policyAction(value: unknown) {
     'ensure_agent_installed',
     'request_mdm_enrollment',
   ] as const)
+  if (kind === 'device_access') {
+    const v = closed(value, ['kind', 'mac', 'windows', 'selfEnrollment', 'role'])
+    const windows = record(v['windows'])
+    const mode = enumeration(windows['kind'], ['disabled', 'rss_factor', 'whfb'] as const)
+    closed(windows, mode === 'rss_factor' ? ['kind', 'accounts'] : ['kind'])
+    const accounts =
+      mode === 'rss_factor'
+        ? unique(
+            array(windows['accounts'], (v) =>
+              enumeration(v, ['local', 'active_directory', 'entra'] as const),
+            ),
+            (v) => v,
+          )
+        : undefined
+    if (accounts && (!accounts.length || accounts.length > 3))
+      throw new Error('Invalid Windows accounts')
+    return {
+      kind,
+      mac: nullable(v['mac'], loginConfiguration),
+      windows: mode === 'rss_factor' ? { kind: mode, accounts: accounts! } : { kind: mode },
+      selfEnrollment: boolean(v['selfEnrollment']),
+      role: nullable(v['role'], (v) => enumeration(v, ['standard', 'administrator'] as const)),
+    }
+  }
   if (kind === 'unmanage_device') {
     const v = closed(value, ['kind', 'schedule', 'runLifetimeSeconds'])
     const schedule = nativeSchedule(v['schedule'])
@@ -432,14 +511,26 @@ export function policyAction(value: unknown) {
   }
 }
 export function policyDefinition(value: unknown) {
-  const v = closed(value, ['scope', 'action'], ['alias', 'selfService']),
-    action = policyAction(v['action'])
+  const v = closed(value, ['customEvent', 'alias', 'scope', 'action'], ['selfService']),
+    action = policyAction(v['action']),
+    customEvent = nullable(v['customEvent'], policyName)
+  if (
+    customEvent !== null &&
+    action.kind === 'execution' &&
+    Object.values(action.parameters).some((p) => p.kind === 'input')
+  )
+    throw new Error('Custom events require fixed parameters')
   if (
     'selfService' in v &&
     action.kind !== 'execution' &&
-    !(action.kind === 'software' && action.intent === 'available_install')
+    action.kind !== 'request_mdm_enrollment' &&
+    !(
+      action.kind === 'software' &&
+      action.channel === 'agent' &&
+      action.intent === 'available_install'
+    )
   )
-    throw new Error('Self-service requires Execution or AvailableInstall')
+    throw new Error('Self-service requires an eligible action')
   if (
     'selfService' in v &&
     action.kind === 'software' &&
@@ -447,16 +538,9 @@ export function policyDefinition(value: unknown) {
   )
     throw new Error('Software self-service requires confirmation')
   return {
+    customEvent,
+    alias: nullable(v['alias'], policyName),
     scope: uuid(v['scope']),
-    ...('alias' in v
-      ? {
-          alias: nullable(v['alias'], (value) => {
-            const alias = string(value)
-            if (!/^[a-z0-9._-]{1,64}$/.test(alias)) throw new Error('Invalid policy alias')
-            return alias
-          }),
-        }
-      : {}),
     action,
     ...('selfService' in v ? { selfService: selfService(v['selfService']) } : {}),
   }

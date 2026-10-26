@@ -56,6 +56,8 @@ async function fixture(unknown = false, configuration = false) {
     ? {
         ...original,
         definition: {
+          customEvent: 'refresh.configuration',
+          alias: null,
           scope: original.definition.scope,
           action: {
             kind: 'configuration',
@@ -328,7 +330,7 @@ it('shows the current configuration preview and all progress operations and diag
   await f.button('预览').trigger('click')
   await flushPromises()
   expect(f.preview).toHaveBeenCalledTimes(1)
-  expect(f.preview.mock.calls[0]![0].action.kind).toBe('configuration')
+  expect(f.preview.mock.calls[0]![0].definition.action.kind).toBe('configuration')
   await f.button('刷新进度（保留编辑）').trigger('click')
   await flushPromises()
   expect(f.devices).toHaveBeenCalledTimes(1)
@@ -451,5 +453,28 @@ it('authors fixed parameter values and an explicit execution schedule before pau
   expect(f.change.mock.calls.at(-1)?.[1]).toMatchObject({ input: { action: 'disable' } })
   await f.button('重新载入配置（替换编辑）').trigger('click')
   await flushPromises()
+  f.wrapper.unmount()
+})
+
+it('keeps a preview body unchanged across opaque continuations and clears it on draft edits', async () => {
+  const f = await fixture(false, true)
+  f.preview.mockResolvedValue({
+    action: { kind: 'configuration' },
+    scopeResult: '11111111-1111-4111-8111-111111111111',
+    items: [],
+    nextCursor: 'b3BhcXVl',
+  })
+  await f.button('预览').trigger('click')
+  await flushPromises()
+  await f.wrapper
+    .findAll('button')
+    .find((b) => b.text() === '下一页')!
+    .trigger('click')
+  await flushPromises()
+  expect(f.preview.mock.calls[1]![0]).toEqual(f.preview.mock.calls[0]![0])
+  expect(f.preview.mock.calls[1]![0]).not.toHaveProperty('scopeResult')
+  expect(f.preview.mock.calls[1]![1]).toEqual({ cursor: 'b3BhcXVl' })
+  await f.wrapper.get('#policy-scope').setValue(crypto.randomUUID())
+  expect(f.wrapper.text()).not.toContain('下一页')
   f.wrapper.unmount()
 })

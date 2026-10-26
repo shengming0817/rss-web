@@ -1,3 +1,4 @@
+import { windowPage } from '../directory'
 import { objectKey } from '../../src/features/devices/clients/objects'
 import { supportsSoftwareRemoval } from '../../src/features/policies/clients/software-definition'
 import { createHash } from 'node:crypto'
@@ -9,7 +10,7 @@ import type { createResourceDemo } from '../policies/resources'
 import type { createScopeDemo } from '../policies/scopes'
 import type { createPublicationDemo } from './publication'
 import type { createLifecycleDemo } from './lifecycle'
-import { closed, identifier, uuid } from '../../src/services/decode'
+import { closed, uuid } from '../../src/services/decode'
 import {
   softwarePolicyDefinition,
   type SoftwarePolicyDefinition,
@@ -190,15 +191,6 @@ export function createSoftwarePolicyDemo(
       return { state: 'authorization_withdrawn', stage }
     return { state: 'eligible', stage }
   }
-  function page<T>(items: T[], after: string | null, key: (v: T) => string, size = 64) {
-    const sorted = items
-      .filter((v) => !after || key(v) > after)
-      .sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0))
-    return {
-      items: sorted.slice(0, size),
-      nextCursor: sorted.length > size ? key(sorted[size - 1]!) : null,
-    }
-  }
   const handle: DomainHandler = (request, scenario) => {
     const authored = store.handle(request, scenario)
     if (authored) {
@@ -214,27 +206,30 @@ export function createSoftwarePolicyDemo(
     if (scenario === 'denied') return error('permission_denied', 403)
     try {
       if (request.path === '/api/v1/policies/previews' && request.method === 'POST') {
-        const input = closed(request.body, ['definition'], ['after', 'scopeResult']),
+        const input = closed(request.body, ['definition'], ['scopeResult']),
           d = softwarePolicyDefinition(input['definition'])
         const failure = admissionFailure(d)
         if (failure) return failure
         const snapshot = scopes.snapshot(d.scope)
         if (!snapshot || ('scopeResult' in input && uuid(input['scopeResult']) !== snapshot.result))
           return error('operation_conflict')
-        const result = page(
+        const result = windowPage(
           scenario === 'empty' ? [] : scopes.assignments(d.scope, d.action.channel),
-          'after' in input ? identifier(input['after']) : null,
-          (row) => objectKey(row.object),
+          request,
+          (row) => [objectKey(row.object)],
+          [input, snapshot],
         )
         return ok({
           action: d.action,
           scopeResult: snapshot.result,
           nextCursor: result.nextCursor,
-          items: result.items.map(({ sources: _sources, qualification, ...row }) => ({
-            ...row,
-            eligibility: qualification,
-            taskAdmission: row.target ? management(d, true, '', row.target.device) : null,
-          })),
+          items: result.items.map(
+            ({ sources: _sources, scopeResult: _scopeResult, qualification, ...row }) => ({
+              ...row,
+              eligibility: qualification,
+              taskAdmission: row.target ? management(d, true, '', row.target.device) : null,
+            }),
+          ),
         })
       }
       const match =
@@ -252,34 +247,14 @@ export function createSoftwarePolicyDemo(
           const r = all.find((r) => r.value.taskId === uuid(match[3]))
           return r ? ok(runs.wire(r, now, true)) : error('task_not_found', 404)
         }
-        const at = request.query.get('afterAt'),
-          after = request.query.get('afterId')
-        if (
-          (at === null) !== (after === null) ||
-          (at !== null && (!Number.isSafeInteger(Number(at)) || Number(at) < 0))
+        const page = windowPage(
+          scenario === 'empty' ? [] : all,
+          request,
+          (r) => [r.value.availableAt, r.value.taskId],
+          id,
+          true,
         )
-          throw new Error('Invalid cursor')
-        if (after) uuid(after)
-        const items = all
-          .filter(
-            (r) =>
-              at === null ||
-              r.value.availableAt < Number(at) ||
-              (r.value.availableAt === Number(at) && r.value.taskId < after!),
-          )
-          .sort(
-            (a, b) =>
-              b.value.availableAt - a.value.availableAt ||
-              (a.value.taskId < b.value.taskId ? 1 : -1),
-          )
-        const last = items[19]
-        return ok({
-          items: (scenario === 'empty' ? [] : items.slice(0, 20)).map((r) => runs.wire(r, now)),
-          nextCursor:
-            scenario !== 'empty' && items.length > 20 && last
-              ? { availableAt: last.value.availableAt, taskId: last.value.taskId }
-              : null,
-        })
+        return ok({ ...page, items: page.items.map((r) => runs.wire(r, now)) })
       }
       if (request.method === 'GET') {
         if (!p) return error('policy_not_found', 404)
@@ -298,12 +273,13 @@ export function createSoftwarePolicyDemo(
             })),
           })
         if (suffix === 'assignments') {
-          const result = page(
+          const result = windowPage(
             scenario === 'empty'
               ? []
               : scopes.assignments(p.definition.scope, p.definition.action.channel),
-            request.query.get('after'),
-            (row) => objectKey(row.object),
+            request,
+            (row) => [objectKey(row.object)],
+            [p.id, p.revision, p.version, scopes.snapshot(p.definition.scope)],
           )
           return ok({
             ...result,
@@ -322,8 +298,13 @@ export function createSoftwarePolicyDemo(
         }
         return ok(structuredClone(p))
       }
-    } catch {
-      return error('malformed_request', 400)
+    } catch (e) {
+      return error(
+        e instanceof Error && e.message === 'Invalidated cursor'
+          ? 'operation_conflict'
+          : 'malformed_request',
+        e instanceof Error && e.message === 'Invalidated cursor' ? 409 : 400,
+      )
     }
   }
   return {

@@ -23,7 +23,7 @@ export function createPolicyStore() {
     >(),
     semantics = new Map<string, string>()
   function normalized(value: unknown, old?: PolicyRead) {
-    const d = closed(value, ['scope', 'action'], ['selfService'])
+    const d = closed(value, ['customEvent', 'alias', 'scope', 'action'], ['selfService'])
     if ('selfService' in d) {
       const c = closed(
         d['selfService'],
@@ -52,7 +52,11 @@ export function createPolicyStore() {
         ? { ...definition.action, rollout: undefined }
         : definition.action
     return JSON.stringify(
-      { action, binding: bindings.get(definition.action.kind)?.(definition) ?? null },
+      {
+        customEvent: definition.customEvent,
+        action,
+        binding: bindings.get(definition.action.kind)?.(definition) ?? null,
+      },
       (_key, value: unknown) =>
         value && typeof value === 'object' && !Array.isArray(value)
           ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)))

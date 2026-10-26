@@ -120,11 +120,10 @@ export function allOf(...terms: (string | undefined)[]): string | undefined {
   return present.length ? present.map((term) => `(${term})`).join(';') : undefined
 }
 
+export type WindowQuery = Pick<DirectoryQuery, 'limit' | 'cursor'>
+
 /** Fact histories expose navigation only, never arbitrary projection or sorting. */
-export function windowParameters(
-  query: { limit?: number | undefined; cursor?: string | undefined } = {},
-  maximum = 200,
-) {
+export function windowParameters(query: WindowQuery = {}, maximum = 200) {
   closed(query, [], ['limit', 'cursor'])
   if (query.limit !== undefined && query.limit > maximum) throw new Error('Invalid page size')
   return queryParameters(query)

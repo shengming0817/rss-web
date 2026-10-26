@@ -297,12 +297,12 @@ it.each([false, true])(
       await flushPromises()
       expect(change.mock.calls.at(-1)?.[1].input).toEqual({ action: 'enable' })
       await click('设备准入')
-      expect(assignments).toHaveBeenCalledWith(change.mock.calls[0]![0], undefined)
+      expect(assignments).toHaveBeenCalledWith(change.mock.calls[0]![0], { cursor: undefined })
       await click('分批进度')
       expect(rollout).toHaveBeenCalledWith(change.mock.calls[0]![0])
       expect(wrapper.get('progress').attributes('value')).toBe('50')
       await click('运行历史')
-      expect(runs.list).toHaveBeenCalledWith(change.mock.calls[0]![0], undefined)
+      expect(runs.list).toHaveBeenCalledWith(change.mock.calls[0]![0], { cursor: undefined })
       await click('读取运行证据')
       expect(runs.read).toHaveBeenCalledWith(change.mock.calls[0]![0], admission)
       await click('编辑')
@@ -314,6 +314,8 @@ it.each([false, true])(
       return
     }
     expect(change.mock.calls[0]![1].input.definition).toMatchObject({
+      customEvent: null,
+      alias: null,
       scope,
       action: {
         rollout: { stages: [{ scope, opensAt: expect.any(Number), minimumVerifiedPercent: null }] },
