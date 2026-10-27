@@ -6,7 +6,7 @@ import {
   createPublicationClient,
   decodePublication,
 } from '../../src/features/software/clients/publication'
-import type { HttpTransport } from '@rss/api/mdm'
+import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 it('publishes one exact version, exposes strict directory projections and retains detailed export documents across recovery', async () => {
   const { resources } = softwareResource('Example.App', true),
     lifecycle = createLifecycleDemo(resources),
@@ -61,8 +61,8 @@ it('publishes one exact version, exposes strict directory projections and retain
     'normal',
   )!
   expect(lookup.body).toMatchObject({ items: [{ id: pending.id }] })
-  const transport: HttpTransport = {
-    request: async (options) => {
+  const transport = {
+    request: async <T>(options: RequestOptions<T>) => {
       const path = options.path.replace(/\{([^}]+)\}/g, (_, key: string) =>
         encodeURIComponent(String(options.pathParams?.[key])),
       )
@@ -73,7 +73,7 @@ it('publishes one exact version, exposes strict directory projections and retain
       expect(reply.status).toBe(options.successStatus)
       return options.decode(reply.body)
     },
-  }
+  } as HttpTransport
   const client = createPublicationClient(transport)
   const directory = await client.list({ filter: "outcome=='published';withdrawn=='false'" })
   expect(directory.items).toHaveLength(1)
