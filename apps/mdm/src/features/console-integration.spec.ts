@@ -2,6 +2,7 @@ import { createFeatureRouter as createRouter } from '../../tests/feature-router'
 import { decodeRunEvidence } from './policies/clients/runs'
 import { afterEach, expect, it, vi } from 'vitest'
 import { defineComponent, shallowRef } from 'vue'
+import { VTextField } from 'vuetify/components'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createMemoryHistory } from 'vue-router'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
@@ -718,10 +719,13 @@ function authority(operations: string[]) {
   }
 }
 function field(w: VueWrapper, label: string) {
+  const textField = w.findAllComponents(VTextField).find((item) => item.props('label') === label)
+  if (textField) return textField.get('input')
   const container =
     w.findAll('label').find((l) => l.text() === label) ??
     w.findAll('label').find((l) => l.text().startsWith(label))!
-  return container.find('input, textarea, select')
+  const control = container.attributes('for')
+  return control ? w.find(`[id="${control}"]`) : container.find('input, textarea, select')
 }
 it('edits webhook metadata without losing extensions and consumes actual replay and redrive receipts', async () => {
   let record = { id: a, revision: 1, targetVersion: 1, enabled: false, deleted: false, settings }

@@ -227,7 +227,10 @@ watch(failure, (value) => {
         t('security.recovery.conflictHandoff')
       }}</v-alert>
       <form @submit.prevent="recover()">
-        <fieldset :disabled="busy || !canWrite" class="security-fieldset">
+        <fieldset
+          :disabled="busy || !canWrite || (locked && pending?.state !== 'unknown')"
+          class="security-fieldset"
+        >
           <v-text-field
             :id="'agent-' + kind"
             v-model="locator"
