@@ -785,7 +785,10 @@ it('keeps unknown resume inputs usable after a failed status refresh and explici
   )
   id.value = receipt.enrollmentId
   await flushPromises()
-  await wrapper.get('.v-expansion-panel-title').trigger('click')
+  await wrapper
+    .findAll('.v-expansion-panel-title')
+    .find((button) => button.text().includes('无法继续？恢复原注册'))!
+    .trigger('click')
   await flushPromises()
   await click('生成一次性交付口令')
   const secret = wrapper.get<HTMLInputElement>('input[autocomplete=off]').element.value
@@ -816,6 +819,7 @@ it('revokes an automatically delivered macOS profile when its password is rotate
   const profile = vi.spyOn(runtime.onboarding.native, 'profile').mockImplementation(async () => ({
     bytes: new Uint8Array([1, 2, 3]).buffer,
     contentType: 'application/x-apple-aspen-config',
+    contentDisposition: 'attachment',
   }))
   await click('复制口令并继续')
   expect(wrapper.find('a[download="RSS-MDM.mobileconfig"]').exists()).toBe(true)

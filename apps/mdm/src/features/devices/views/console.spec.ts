@@ -1508,9 +1508,10 @@ it('allows a quota reader to select user queries while keeping edits and submiss
   })
   await router.push({ name: 'registration-quotas', params: { tenant: TENANT } })
   await flushPromises()
-  const mode = wrapper.find('select')
-  expect((mode.element as HTMLSelectElement).disabled).toBe(false)
-  await mode.setValue('override')
+  const mode = wrapper.findComponent(VSelect)
+  expect(mode.props('disabled')).toBe(false)
+  mode.vm.$emit('update:modelValue', 'override')
+  await flushPromises()
   wrapper
     .findComponent(TenantUserSelect)
     .vm.$emit('update:modelValue', '33333333-3333-4333-8333-333333333333')
@@ -2531,9 +2532,10 @@ it('reads and cancels personal progress without calling inventory clients and re
   await flushPromises()
   const progress = wrapper.get('[data-self-enrollment-progress]')
   expect(progress.find('input[autocomplete=off]').exists()).toBe(false)
+  await vi.waitFor(() => expect(progress.text()).toContain('技术详情与手工设置'))
   await progress
     .findAll('button')
-    .find((button) => button.text() === '技术详情与手工设置')!
+    .find((button) => button.text().includes('技术详情与手工设置'))!
     .trigger('click')
   await flushPromises()
   expect(progress.text()).toContain(receipt.deviceId)

@@ -21,7 +21,10 @@ import NativeFacts from './NativeFacts.vue'
 import RegistrationStatus from '../../../components/RegistrationStatus.vue'
 import { nativeChannel } from '../../../services/registrationChannels'
 import { enrollmentTargetKey } from '../target'
-const props = defineProps<{ deviceId?: string; enrollmentId: string; showInstructions?: boolean }>()
+const props = withDefaults(
+  defineProps<{ deviceId?: string; enrollmentId: string; showInstructions?: boolean }>(),
+  { showInstructions: true },
+)
 const emit = defineEmits<{
   updated: [value: ReturnType<typeof decodeEnrollment>]
   invalidated: []
