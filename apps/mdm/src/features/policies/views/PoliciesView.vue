@@ -284,6 +284,11 @@ function numeric(schema: Record<string, Json>, name: string) {
   return typeof schema[name] === 'number' ? schema[name] : undefined
 }
 function apply(p: PolicyRead) {
+  if (p.definition.action.kind === 'device_access') {
+    editing.value = false
+    failure.value = 'unsupported'
+    return
+  }
   if (
     !['execution', 'configuration', 'native_collection', 'agent_collection'].includes(
       p.definition.action.kind,
@@ -564,6 +569,8 @@ onMounted(async () => {
   if (id.value && !current.value) await open()
   else if (!id.value) {
     resetDraft()
+    if (typeof route.query['device'] === 'string' || typeof route.query['group'] === 'string')
+      editing.value = true
     const kind = route.query['kind']
     if (
       ['execution', 'native_collection', 'agent_collection', 'configuration'].includes(

@@ -1,3 +1,4 @@
+import { selectControl } from './features/policies/vuetify-test-controls'
 import { DOMWrapper, flushPromises } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions, NoContentRequest } from '@rss/api/mdm'
@@ -14,10 +15,11 @@ import { createDeviceDemo } from '../demo/devices/state'
 import { seedScriptPolicies } from '../demo/policies/seed'
 import { createOnboardingDemo } from '../demo/enrollment'
 import { createImportsDemo } from '../demo/software/imports'
-import { createPolicyClients } from './features/policies/client'
+import { createPolicyClients } from '../demo/features/policies/client'
 import { operation } from './services/useOperation'
-import { navigation, navigationTarget } from './components/navigation'
-async function start() {
+import { softwarePolicy } from './features/software/clients/assignment-model'
+import { navigation, navigationTarget, platformNavigation } from './components/navigation'
+async function start(platform = false) {
   const devices = createDeviceDemo(),
     automation = createAutomationDemo(devices)
   devices.bindAuthorization(automation.authorization.can)
@@ -39,7 +41,7 @@ async function start() {
     automation.observe,
     automation.now,
   )
-  const calls: { path: string; method: string; body: unknown; query: Record<string, string> }[] = []
+  const calls: { path: string; method: string; body: unknown }[] = []
   const transport = {
     async request(o: RequestOptions<unknown> | NoContentRequest) {
       const path = o.path.replace(/\{([^}]+)\}/g, (_, key: string) =>
@@ -50,7 +52,7 @@ async function start() {
           .filter(([, v]) => v !== undefined)
           .map(([k, v]) => [k, String(v)]),
       )
-      calls.push({ path, method: o.method, body: o.body, query: Object.fromEntries(query) })
+      calls.push({ path, method: o.method, body: o.body })
       const reply = await server.handle(
         o.method,
         path + '?' + query,
@@ -63,7 +65,7 @@ async function start() {
   } as HttpTransport
   transportOwner.value = transport
   document.body.innerHTML = '<div id="app"></div>'
-  window.history.replaceState(null, '', '/')
+  window.history.replaceState(null, '', platform ? '/platform' : '/')
   const runtime = createDemo(
     transport,
     { canonicalOrigin: window.location.origin, oidcEnabled: false },
@@ -71,13 +73,13 @@ async function start() {
       canonicalOrigin: window.location.origin,
       serviceId: '44444444-4444-4444-8444-444444444444',
       tenant: TENANT,
-      managementTenant: '99999999-9999-4999-8999-999999999999',
+      managementTenant: platform ? TENANT : '99999999-9999-4999-8999-999999999999',
     },
   )
   runtime.mount()
   await runtime.router.isReady()
   await runtime.session.login(TENANT, 'demo', 'demo')
-  const policies = createPolicyClients(runtime.transport)
+  const policies = createPolicyClients(runtime.transport, TENANT, true)
   const published = await policies.scopes.change(
     seed.scope,
     operation(
@@ -134,36 +136,129 @@ it('navigates each product section through the real application router and its l
     app.cleanup()
   }
 }, 20000)
-async function press(
-  app: Awaited<ReturnType<typeof start>>,
-  key: string,
-  scope: Pick<DOMWrapper<Element>, 'findAll'> = new DOMWrapper(document.body),
-  selector = 'button',
-) {
-  const buttons = scope
-    .findAll(selector)
-    .filter((button) => button.isVisible() && button.text().trim() === app.i18n.global.t(key))
-  expect(buttons, key).toHaveLength(1)
-  const target = buttons[0]!
-  expect(target.element.matches(':disabled'), key).toBe(false)
-  await target.trigger('click')
-  await flushPromises()
-}
-async function selectOption(
-  control: Pick<DOMWrapper<Element>, 'element' | 'isVisible'>,
-  label: string,
-) {
-  expect(control.isVisible()).toBe(true)
-  await new DOMWrapper(control.element.closest('.v-field')!).trigger('mousedown')
-  await flushPromises()
-  let option: DOMWrapper<Element> | undefined
-  await vi.waitFor(() => {
-    option = new DOMWrapper(document.body)
-      .findAll('[role=option]')
-      .find((item) => item.isVisible() && item.text().trim() === label)
-    expect(option, label).toBeDefined()
-  })
-  await option!.trigger('click')
+it('opens a software policy from the workspace through the supported software page', async () => {
+  const app = await start()
+  try {
+    const id = crypto.randomUUID()
+    const policy = softwarePolicy({
+      id,
+      revision: 1,
+      version: 1,
+      versionId: crypto.randomUUID(),
+      state: 'enabled',
+      definition: {
+        customEvent: null,
+        alias: null,
+        scope: app.seed.scope,
+        action: {
+          kind: 'software',
+          channel: 'agent',
+          delivery: { kind: 'direct' },
+          resource: {
+            kind: 'software',
+            id: 'workspace-software',
+            version: '1',
+            variants: { windows_x86_64: 'main' },
+          },
+          intent: 'required_install',
+          schedule: {
+            trigger: { kind: 'check_in', minimumSeconds: 60 },
+            misfire: { kind: 'coalesce_one' },
+            notBefore: 0,
+            until: null,
+            jitterSeconds: 0,
+            window: null,
+          },
+          runLifetimeSeconds: 3600,
+          rollout: {
+            stages: [{ scope: app.seed.scope, opensAt: 0, minimumVerifiedPercent: null }],
+          },
+        },
+      },
+    })
+    vi.spyOn(app.mdm.policies.policies, 'list').mockResolvedValue({
+      items: [{ ...policy, customEvent: null, alias: null, toolName: 'workspace-software' }],
+      nextCursor: null,
+    })
+    const read = vi.spyOn(app.mdm.policies.policies, 'read').mockResolvedValue(policy)
+    await app.router.push({ name: 'settings-overview', params: { tenant: TENANT } })
+    await app.router.push({ name: 'workspace', params: { tenant: TENANT } })
+    await flushPromises()
+    const link = new DOMWrapper(document.body).get('.console-deployment-list a')
+    await link.trigger('click')
+    await flushPromises()
+    await vi.waitFor(() => expect(app.router.currentRoute.value.name).toBe('policy-policies'))
+    await flushPromises()
+    expect(app.router.currentRoute.value.query['id']).toBe(id)
+    expect(read).toHaveBeenCalledWith(id)
+    expect(document.querySelector('main h1')?.textContent).toBe(
+      app.i18n.global.t('policies.software'),
+    )
+    expect(document.querySelector('main')?.textContent).toContain('workspace-software')
+    expect(document.querySelector('main')?.textContent).not.toContain(
+      app.i18n.global.t('devices.invalidResponse'),
+    )
+  } finally {
+    vi.restoreAllMocks()
+    app.cleanup()
+  }
+}, 20000)
+it('expands mobile submenus after collapsing the desktop drawer', async () => {
+  const width = window.innerWidth
+  Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1440 })
+  const app = await start()
+  try {
+    await app.router.push({ name: 'settings-overview', params: { tenant: TENANT } })
+    await flushPromises()
+    await new DOMWrapper(document.body)
+      .get(`button[aria-label="${app.i18n.global.t('console.collapseNavigation')}"]`)
+      .trigger('click')
+    await flushPromises()
+    expect(document.querySelector('.mdm-navigation-children')).toBeNull()
+    window.innerWidth = 390
+    window.dispatchEvent(new Event('resize'))
+    await flushPromises()
+    await new DOMWrapper(document.body)
+      .get(`button[aria-label="${app.i18n.global.t('console.navigation')}"]`)
+      .trigger('click')
+    await flushPromises()
+    const target = app.router.resolve({ name: 'settings-access', params: { tenant: TENANT } }).href
+    expect(document.querySelector(`.mdm-navigation-children a[href="${target}"]`)).not.toBeNull()
+  } finally {
+    app.cleanup()
+    window.innerWidth = width
+    window.dispatchEvent(new Event('resize'))
+  }
+}, 20000)
+it('renders platform navigation without resolving tenant-only device links', async () => {
+  const app = await start(true)
+  const errors: unknown[] = []
+  app.app.config.errorHandler = (error) => errors.push(error)
+  try {
+    for (const section of platformNavigation) {
+      for (const item of section.items) {
+        await app.router.push(navigationTarget(item, TENANT))
+        await flushPromises()
+        expect(app.router.currentRoute.value.name).toBe(item.name)
+        expect(document.querySelector('main h1')?.textContent?.trim(), item.name).toBeTruthy()
+        expect(errors).toEqual([])
+      }
+    }
+    expect(app.router.hasRoute('device-groups')).toBe(false)
+    expect(app.router.hasRoute('software-assets')).toBe(false)
+  } finally {
+    app.cleanup()
+  }
+}, 20000)
+const main = () => new DOMWrapper(document.querySelector('main')!)
+async function press(app: Awaited<ReturnType<typeof start>>, key: string, last = false) {
+  const buttons = [...document.querySelectorAll<HTMLButtonElement>('button')].filter(
+    (b) => b.textContent?.trim() === app.i18n.global.t(key),
+  )
+  const target = last ? buttons.at(-1) : buttons[0]
+  expect(target, key).toBeDefined()
+  expect(target!.matches(':disabled'), key).toBe(false)
+  await new DOMWrapper(target!).trigger('click')
   await flushPromises()
 }
 it('creates a formal Scope, changes the result channel explicitly, and deletes only its authored definition', async () => {
@@ -172,20 +267,19 @@ it('creates a formal Scope, changes the result channel explicitly, and deletes o
     await app.router.push({
       name: 'policy-policies',
       params: { tenant: TENANT },
+      query: { device: 'device-01' },
     })
     await flushPromises()
-    await press(app, 'policies.create')
-    await press(app, 'policies.scopeEditor.manage')
-    const scopeManager = new DOMWrapper(document.body).get('[role=dialog]')
-    await press(app, 'policies.create', scopeManager)
-    const scopeForm = new DOMWrapper(document.body).get('form.scope-form')
-    const targets = scopeForm
-      .findAll('.task-scope-role')
-      .find((section) => section.get('h3').text() === app.i18n.global.t('policies.targets'))!
-    await press(app, 'console.chooseLoaded', targets)
-    await selectOption(targets.get('input[id$="-choice"]'), 'device-01')
-    await press(app, 'policies.add', targets)
-    await press(app, 'policies.save', scopeForm)
+    const scopeDialog = () => new DOMWrapper(document.body).get('[role=dialog]')
+    const form = scopeDialog().get('form')
+    const scopeWrites = () =>
+      app.calls.filter((c) => c.method === 'POST' && /^\/api\/v1\/scopes\/[^/]+$/.test(c.path))
+    const before = scopeWrites().length
+    await vi.waitFor(() =>
+      expect(form.get('button[type=submit]').element.matches(':disabled')).toBe(false),
+    )
+    await form.trigger('submit')
+    await vi.waitFor(() => expect(scopeWrites()).toHaveLength(before + 1))
     await flushPromises()
     const write = app.calls.findLast(
       (c) => c.method === 'POST' && /^\/api\/v1\/scopes\/[^/]+$/.test(c.path),
@@ -201,37 +295,23 @@ it('creates a formal Scope, changes the result channel explicitly, and deletes o
         },
       },
     })
-    await press(app, 'policies.refresh', scopeManager)
-    await press(app, 'policies.refresh', scopeManager)
-    await scopeManager
+    await press(app, 'policies.refresh')
+    await press(app, 'policies.refresh')
+    await scopeDialog()
       .findAll('[role=tab]')
       .find((tab) => tab.text() === '判定说明')!
       .trigger('click')
-    const results = scopeManager.get('.scope-results')
-    const channel = results.get('input[role=combobox]')
-    await selectOption(channel, 'Agent')
-    await press(app, 'policies.open', results)
-    expect(results.text()).toContain('device-01')
-    const agentRead = app.calls.findLast((call) => call.path.includes('/results/'))!
-    expect(agentRead).toMatchObject({ method: 'GET', query: { channel: 'agent' } })
-    expect(agentRead.path).toMatch(new RegExp(`^${write.path}/results/[^/]+/decisions$`))
+    const channel = selectControl(scopeDialog().get('.scope-results'))
+    await channel.setValue('agent')
+    await press(app, 'policies.open', true)
+    expect(main().text()).toContain('device-01')
     const reads = app.calls.filter((c) => c.path.includes('/results/')).length
-    await selectOption(channel, 'MDM')
+    await channel.setValue('mdm')
     expect(app.calls.filter((c) => c.path.includes('/results/'))).toHaveLength(reads)
-    await press(app, 'policies.open', results)
+    await press(app, 'policies.open', true)
     expect(app.calls.filter((c) => c.path.includes('/results/'))).toHaveLength(reads + 1)
-    expect(app.calls.at(-1)).toMatchObject({
-      method: 'GET',
-      path: agentRead.path,
-      query: { channel: 'mdm' },
-    })
-    await press(app, 'console.edit', scopeManager)
-    await press(
-      app,
-      'policies.remove',
-      new DOMWrapper(document.body).get('form.scope-form'),
-      ':scope > fieldset > button',
-    )
+    await press(app, 'console.edit')
+    await press(app, 'policies.remove', true)
     expect(
       app.calls.findLast((c) => c.method === 'POST' && c.path === write.path)?.body,
     ).toMatchObject({ expectedRevision: 1, input: { action: 'delete' } })

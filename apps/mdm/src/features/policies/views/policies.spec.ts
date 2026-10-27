@@ -510,3 +510,35 @@ it('opens the real Vuetify action menu after creating a draft and keeps the chos
   expect(f.wrapper.get('form').isVisible()).toBe(true)
   f.wrapper.unmount()
 })
+
+it('shows an unsupported action explicitly without redirecting a Device Access policy back to itself', async () => {
+  const f = await fixture()
+  try {
+    const original = await f.read.mock.results[0]!.value
+    const target = crypto.randomUUID()
+    f.read.mockResolvedValueOnce({
+      ...original,
+      id: target,
+      definition: {
+        ...original.definition,
+        action: {
+          kind: 'device_access',
+          mac: null,
+          windows: { kind: 'disabled' },
+          selfEnrollment: false,
+          role: null,
+        },
+      },
+    })
+    const replace = vi.spyOn(f.router, 'replace')
+    await f.router.push({ path: '/', query: { id: target, action: 'device_access' } })
+    await flushPromises()
+    expect(f.read).toHaveBeenLastCalledWith(target)
+    expect(f.wrapper.text()).toContain('当前平台或服务不支持此操作')
+    expect(replace).not.toHaveBeenCalled()
+    expect(f.wrapper.get('[data-form=policy]').isVisible()).toBe(false)
+    expect(f.change).not.toHaveBeenCalled()
+  } finally {
+    f.wrapper.unmount()
+  }
+})

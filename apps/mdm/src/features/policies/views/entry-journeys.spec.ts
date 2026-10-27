@@ -208,7 +208,7 @@ async function setup(
   await flushPromises()
   return { wrapper, runtime, router }
 }
-function button(wrapper: VueWrapper, text: string) {
+function button(wrapper: Pick<VueWrapper, 'findAll'>, text: string) {
   const target = wrapper.findAll('button').find((b) => b.text() === text)
   if (!target) throw new Error(`Missing button ${text}`)
   return target

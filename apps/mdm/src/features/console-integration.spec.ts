@@ -1093,9 +1093,12 @@ it('compares current Apple registration and material facts before unlocking a re
     .fn()
     .mockRejectedValueOnce(decodeMdmError(503, { code: 'unavailable' }))
     .mockResolvedValue(current)
-  const list = vi.fn(async () => [
-    material({ ...entry, binding: { ...entry.binding, registration: c, generation: 3 } }, 'mac'),
-  ])
+  const list = vi.fn(async () => ({
+    items: [
+      material({ ...entry, binding: { ...entry.binding, registration: c, generation: 3 } }, 'mac'),
+    ],
+    nextCursor: null,
+  }))
   const create = vi
     .fn()
     .mockRejectedValueOnce(decodeMdmError(409, { code: 'operation_conflict' }))

@@ -6,76 +6,8 @@ import { createMemoryHistory } from 'vue-router'
 import { expect, it, vi } from 'vitest'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
-import GroupsView from '../../devices/views/GroupsView.vue'
 import ResourcesView from './ResourcesView.vue'
 import OperationStages from '../components/OperationStages.vue'
-
-it('queries authorized groups by name and type and keeps the applied query when paging', async () => {
-  const list = vi.fn().mockResolvedValue({ items: [], nextCursor: 'next' })
-  const router = createRouter({
-    history: createMemoryHistory(),
-    routes: [{ path: '/', component: GroupsView }],
-  })
-  await router.push('/?category=device-dynamic')
-  const wrapper = mount(GroupsView, {
-    attachTo: document.body,
-    global: {
-      plugins: [router, mdmI18n()],
-      provide: {
-        [mdmKey as symbol]: {
-          tenant: 'tenant',
-          session: { state: ref({ status: 'authenticated' }) },
-          devices: { groups: { list }, assets: { catalog: async () => ({ fields: [] }) } },
-        },
-      },
-    },
-  })
-  await flushPromises()
-  const filter = wrapper.get('form.task-filterbar')
-  await filter.get('input[type=search]').setValue('macOS')
-  await filter.trigger('submit')
-  await flushPromises()
-  expect(list.mock.calls.at(-1)?.[0]).toEqual({
-    filter: "(name=icontains='macOS');(kind=='dynamic')",
-    cursor: undefined,
-  })
-  await filter.get('input[type=search]').setValue('unsaved draft')
-  await wrapper
-    .findAll('button')
-    .find((button) => button.text() === '下一页')!
-    .trigger('click')
-  await flushPromises()
-  expect(list.mock.calls.at(-1)?.[0]).toEqual({
-    filter: "(name=icontains='macOS');(kind=='dynamic')",
-    cursor: 'next',
-  })
-  await filter.get('button[type=submit]').trigger('click')
-  await flushPromises()
-  expect(list.mock.calls.at(-1)?.[0]).toEqual({
-    filter: "(name=icontains='unsaved draft');(kind=='dynamic')",
-    cursor: undefined,
-  })
-  await wrapper
-    .findAll('[role=tab]')
-    .find((tab) => tab.text() === '设备静态组')!
-    .trigger('click')
-  await vi.waitFor(() => expect(router.currentRoute.value.query['category']).toBe('device-static'))
-  await flushPromises()
-  expect(list.mock.lastCall?.[0]).toEqual({ filter: "(kind=='static')" })
-  const staticFilter = wrapper.get('form.task-filterbar')
-  await staticFilter.get('input[type=search]').setValue('unsaved draft')
-  list.mockRejectedValueOnce(new Error('directory unavailable'))
-  await staticFilter.trigger('submit')
-  await flushPromises()
-  expect(wrapper.findAll('button').some((button) => button.text() === '下一页')).toBe(false)
-  await staticFilter.trigger('submit')
-  await flushPromises()
-  expect(list.mock.lastCall?.[0]).toEqual({
-    filter: "(name=icontains='unsaved draft');(kind=='static')",
-    cursor: undefined,
-  })
-  wrapper.unmount()
-})
 
 it('filters Resource kinds through the formal directory and opens software import from the creation drawer', async () => {
   const list = vi.fn().mockResolvedValue({

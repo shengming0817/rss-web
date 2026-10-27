@@ -146,7 +146,7 @@ function loadList(next?: string) {
   if (busy.value) return
   const selection = next
     ? applied
-    : { name: query.value || undefined, kind: props.groupKind ?? (filter.value || undefined) }
+    : { name: query.value || undefined, kind: filter.value || undefined }
   void run(
     () =>
       runtime.devices.groups.list({
@@ -422,7 +422,7 @@ watch(
     current.value = undefined
     list.value = undefined
     query.value = ''
-    filter.value = ''
+    filter.value = props.groupKind ?? ''
     applied = { kind: props.groupKind }
     result.value = undefined
     fields.value = []
@@ -506,15 +506,16 @@ function openGroup(group: string) {
           clearable
           @click:clear="query = ''"
         /><v-select
-          v-if="!groupKind"
           v-model="filter"
           :label="t('devices.kind')"
           :items="[
-            { value: '', title: t('policies.ux.allTypes') },
-            ...['static', 'dynamic', 'system'].map((value) => ({
-              value,
-              title: t('devices.' + value),
-            })),
+            ...(!groupKind ? [{ value: '', title: t('policies.ux.allTypes') }] : []),
+            ...(groupKind ? [groupKind, 'system'] : ['static', 'dynamic', 'system']).map(
+              (value) => ({
+                value,
+                title: t('devices.' + value),
+              }),
+            ),
           ]"
         /><v-btn type="submit" :disabled="busy">{{ t('devices.searchGroups') }}</v-btn>
       </form>

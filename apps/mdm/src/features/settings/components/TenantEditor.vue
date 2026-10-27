@@ -108,7 +108,7 @@ async function change(action: string, replay = false) {
       @retry="change(pending!.action, true)"
       @compare="compare"
       @edit="resolveConflict"
-    /><VForm class="settings-editor" @submit.prevent="change('update')"
+    /><VForm :novalidate="false" class="settings-editor" @submit.prevent="change('update')"
       ><fieldset :disabled="busy || !canUpdate">
         <legend>{{ t('settings.name') }}</legend>
         <VTextField
@@ -125,7 +125,7 @@ async function change(action: string, replay = false) {
           t('settings.save')
         }}</VBtn>
       </fieldset></VForm
-    ><VForm class="settings-editor" @submit.prevent="change('administrator')"
+    ><VForm :novalidate="false" class="settings-editor" @submit.prevent="change('administrator')"
       ><fieldset :disabled="busy || !canAdd">
         <legend>{{ t('settings.addAdministrator') }}</legend>
         <VTextField
@@ -149,7 +149,11 @@ async function change(action: string, replay = false) {
           t('settings.addAdministrator')
         }}</VBtn>
       </fieldset></VForm
-    ><VForm v-if="tenant.deletable" class="settings-editor" @submit.prevent="change('delete')"
+    ><VForm
+      v-if="tenant.deletable"
+      :novalidate="false"
+      class="settings-editor"
+      @submit.prevent="change('delete')"
       ><fieldset :disabled="busy || !canDelete">
         <legend>{{ t('settings.deleteTenant') }}</legend>
         <VCheckbox

@@ -794,7 +794,6 @@
   gap: var(--space-3);
 }
 
-.settings-tabs,
 .settings-actions {
   display: flex;
   flex-wrap: wrap;
@@ -802,49 +801,11 @@
   gap: var(--space-3, 0.75rem);
   margin-block: 1rem;
 }
-.settings-tabs {
-  border-bottom: 1px solid var(--color-border);
-  padding-bottom: 0.75rem;
-}
-.settings-tabs a {
-  padding: 0.5rem;
-  text-decoration: none;
-}
-.settings-tabs .router-link-exact-active {
-  font-weight: 700;
-  border-bottom: 2px solid currentColor;
-}
 .settings-overview-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
   gap: 1rem;
   margin-block: 1rem;
-}
-.settings-catalog {
-  display: grid;
-  gap: 0.75rem;
-  margin-block: 1rem;
-}
-.settings-catalog-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-}
-.settings-catalog-row h2 {
-  font-size: 1rem;
-  margin-top: 0;
-}
-.settings-catalog-row p {
-  font-size: 0.875rem;
-  overflow-wrap: anywhere;
-}
-.settings-catalog-state {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 0.75rem;
-  flex-shrink: 0;
 }
 .settings-form {
   display: grid;
@@ -895,18 +856,10 @@
   max-height: 16rem;
   overflow: auto;
 }
-.settings-scope code,
-.settings-catalog code {
+.settings-scope code {
   overflow-wrap: anywhere;
 }
 @media (max-width: 640px) {
-  .settings-catalog-row {
-    flex-direction: column;
-  }
-  .settings-catalog-state {
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
   .settings-facts {
     grid-template-columns: 1fr;
   }

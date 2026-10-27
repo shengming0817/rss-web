@@ -7,6 +7,7 @@ import { randomUUID, createHash } from 'node:crypto'
 import { Buffer } from 'node:buffer'
 import assert from 'node:assert/strict'
 import process from 'node:process'
+import { assertSoftwareOption } from './vuetify-software-controls.mjs'
 let browser,
   phase = 'setup',
   result = 'failed'
@@ -104,7 +105,8 @@ try {
   await ready()
   const materials = page.locator('[data-panel="recovery-credentials"]')
   phase = 'credential-action'
-  await materials.getByLabel('操作类型', { exact: true }).selectOption('set_recovery_lock')
+  await materials.getByRole('combobox', { name: '操作类型', exact: true }).click()
+  await page.getByRole('option', { name: '设置或清除 Recovery Lock', exact: true }).click()
   await materials.getByLabel('确认对当前目标执行此操作', { exact: true }).check()
   const accepted = page.waitForResponse(
     (r) => r.request().method() === 'POST' && r.url().endsWith('/recovery-credentials/operations'),
@@ -695,12 +697,21 @@ try {
     defaultSoftwareChannel: 'agent',
     mdmSoftwareDistributionEnabled: false,
   })
-  await page.goto(at('software/deployments'))
+  await page.goto(at('policies?action=software'))
   await ready()
   await page.getByRole('button', { name: '新建', exact: true }).first().click()
-  await page.locator('#deployment-channel').waitFor()
-  assert.equal(await page.locator('#deployment-channel').inputValue(), 'agent')
-  assert.equal(await page.locator('#deployment-channel option[value="mdm"]').isDisabled(), true)
+  const channel = page.getByRole('combobox', { name: '软件写通道', exact: true })
+  await assertSoftwareOption(page, channel, 'Agent')
+  await channel.press('ArrowDown')
+  const channelListId = await channel.getAttribute('aria-controls')
+  const channelList = page.locator(`[id=${JSON.stringify(channelListId)}]`)
+  assert.equal(
+    await channelList
+      .getByRole('option', { name: 'MDM', exact: true })
+      .getAttribute('aria-disabled'),
+    'true',
+  )
+  await channel.press('Escape')
   coverage.push('server-owned-disabled-mdm-and-agent-default')
   phase = 'webhook-original-operation'
   console.log(JSON.stringify({ phase }))
@@ -735,13 +746,13 @@ try {
   await hooks.getByRole('button', { name: '重送原请求', exact: true }).waitFor()
   phase = 'webhook-spa-remount'
   await page
-    .locator('.settings-tabs')
-    .getByRole('link', { name: '组织与访问', exact: true })
+    .getByRole('tablist', { name: '设置', exact: true })
+    .getByRole('tab', { name: '组织与访问', exact: true })
     .click()
   await ready()
   await page
-    .locator('.settings-tabs')
-    .getByRole('link', { name: '集成与运行凭据', exact: true })
+    .getByRole('tablist', { name: '设置', exact: true })
+    .getByRole('tab', { name: '集成与运行凭据', exact: true })
     .click()
   await ready()
   await hooks.getByRole('button', { name: '重送原请求', exact: true }).waitFor()

@@ -251,7 +251,7 @@ useSettingsFacts(() => {
     /><VBtn v-if="historyCursor" :disabled="busy" @click="loadHistory(historyCursor)">{{
       t('settings.next')
     }}</VBtn></VCard
-  ><VForm class="settings-editor" @submit.prevent="save()"
+  ><VForm :novalidate="false" class="settings-editor" @submit.prevent="save()"
     ><fieldset :disabled="busy || !canWrite || !directory">
       <legend>{{ t('settings.save') }}</legend>
       <VTextField
@@ -347,7 +347,11 @@ useSettingsFacts(() => {
         t('settings.save')
       }}</VBtn>
     </fieldset></VForm
-  ><VForm v-if="kind === 'wns'" class="settings-editor" @submit.prevent="revoke()"
+  ><VForm
+    v-if="kind === 'wns'"
+    :novalidate="false"
+    class="settings-editor"
+    @submit.prevent="revoke()"
     ><fieldset :disabled="busy || !canWrite || !directory">
       <legend>{{ t('settings.revoke') }}</legend>
       <VSelect

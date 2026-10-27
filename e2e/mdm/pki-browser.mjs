@@ -203,6 +203,7 @@ export async function exercisePki({
   await page.getByRole('button', { name: '核验并关联原结果', exact: true }).click()
   assert.equal((await missing).status(), 503)
   const windowsRecovery = page.locator('.v-card').filter({ has: page.locator('#pki-attempt') })
+  await windowsRecovery.getByRole('alert').filter({ hasText: '服务暂不可用' }).waitFor()
   assert.equal(await windowsRecovery.locator('table').count(), 0)
   coverage.push('windows-original-attempt-unavailable-does-not-imply-signing-or-installation')
   await context.clearCookies()

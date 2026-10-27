@@ -97,7 +97,7 @@ useSettingsFacts(() => {
   <VCard class="console-panel" tag="section" variant="outlined"
     ><h2>{{ t('settings.queryOperation') }}</h2>
     <p>{{ t('settings.retryHint') }}</p>
-    <VForm class="settings-editor" @submit.prevent="lookup"
+    <VForm :novalidate="false" class="settings-editor" @submit.prevent="lookup"
       ><VSelect
         v-model="domain"
         :label="t('settings.domain')"

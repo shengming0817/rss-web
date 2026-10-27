@@ -180,7 +180,7 @@ useSettingsFacts(() => {
     :revision="directory.revision"
     :desired-revision="directory.desiredRevision"
     :versions="directory.versions"
-  /><VForm class="settings-editor" @submit.prevent="change('key')"
+  /><VForm :novalidate="false" class="settings-editor" @submit.prevent="change('key')"
     ><fieldset :disabled="busy || !canWrite || !directory">
       <legend>{{ t('settings.generate') }}</legend>
       <VSelect
@@ -204,7 +204,7 @@ useSettingsFacts(() => {
         t(source === 'generate' ? 'settings.generate' : 'settings.import')
       }}</VBtn>
     </fieldset></VForm
-  ><VForm class="settings-editor" @submit.prevent="change('certificate')"
+  ><VForm :novalidate="false" class="settings-editor" @submit.prevent="change('certificate')"
     ><fieldset :disabled="busy || !canWrite || !directory">
       <legend>{{ t('settings.import') }}</legend>
       <VSelect
@@ -231,7 +231,7 @@ useSettingsFacts(() => {
         t('settings.import')
       }}</VBtn>
     </fieldset></VForm
-  ><VForm class="settings-editor" @submit.prevent="change('apply')"
+  ><VForm :novalidate="false" class="settings-editor" @submit.prevent="change('apply')"
     ><fieldset :disabled="busy || !canWrite || !directory">
       <legend>{{ t('settings.apply') }}</legend>
       <VSelect

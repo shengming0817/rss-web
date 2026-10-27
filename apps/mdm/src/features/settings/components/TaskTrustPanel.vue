@@ -57,6 +57,8 @@ async function lookup() {
 }
 async function change(action: TaskChange['action'], replay = false) {
   if (!canWrite.value) return
+  if (action !== 'prepare' && !replay && !trust.value?.keys.some((key) => key.id === keyId.value))
+    return
   const expectedRevision = replay ? pending.value!.expectedRevision : revision.value
   const input: TaskChange =
     action === 'prepare'
@@ -107,7 +109,7 @@ useSettingsFacts(() => {
     <VBtn @click="downloadPublic('task-trust.json', JSON.stringify(trust))">{{
       t('settings.publicTrustFile')
     }}</VBtn></VCard
-  ><VForm class="settings-editor" @submit.prevent="change('prepare')"
+  ><VForm :novalidate="false" class="settings-editor" @submit.prevent="change('prepare')"
     ><fieldset :disabled="busy || !canWrite">
       <legend>{{ t('settings.generate') }}</legend>
       <VTextField
@@ -122,7 +124,7 @@ useSettingsFacts(() => {
         t('settings.generate')
       }}</VBtn>
     </fieldset></VForm
-  ><VForm class="settings-editor" @submit.prevent="change('activate')"
+  ><VForm :novalidate="false" class="settings-editor" @submit.prevent="change('activate')"
     ><fieldset :disabled="busy || !canWrite || !trust">
       <legend>{{ t('settings.activate') }}</legend>
       <VSelect
@@ -140,7 +142,7 @@ useSettingsFacts(() => {
         ]"
       />
       <div class="settings-actions">
-        <VBtn type="submit" :disabled="busy || !canWrite || !trust || locked">{{
+        <VBtn type="submit" :disabled="busy || !canWrite || !trust || locked || !keyId">{{
           t('settings.activate')
         }}</VBtn
         ><VBtn

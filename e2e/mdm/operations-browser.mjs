@@ -447,7 +447,13 @@ try {
   ])
   await page.goto(at('settings/diagnostics'))
   await load()
-  assert.equal(await page.locator('tbody tr').count(), diagnostics.components.length)
+  assert.equal(
+    await page
+      .getByRole('table', { name: '依赖与运行诊断', exact: true })
+      .locator('tbody tr')
+      .count(),
+    diagnostics.components.length,
+  )
   assert.equal(
     await page.locator('[data-testid=channel-facts] article').count(),
     diagnostics.channels.length,

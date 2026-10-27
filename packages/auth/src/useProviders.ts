@@ -64,11 +64,11 @@ export function useProviders() {
     report.value = ''
   }
   watch(
-    () => [
-      session.state.value.status,
-      session.state.value.tenant,
-      session.state.value.identity?.principalId,
-      session.state.value.session?.id,
+    [
+      () => session.state.value.status,
+      () => session.state.value.tenant,
+      () => session.state.value.identity?.principalId,
+      () => session.state.value.session?.id,
     ],
     () => {
       clear()

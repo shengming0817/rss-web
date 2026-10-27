@@ -227,7 +227,7 @@ useSettingsFacts(clear)
         {{ t('settings.connections.endpointsFailed') }}
       </p>
       <p v-else>{{ t('settings.notObserved') }}</p>
-      <VForm class="settings-editor" @submit.prevent="save()"
+      <VForm :novalidate="false" class="settings-editor" @submit.prevent="save()"
         ><fieldset :disabled="!editable">
           <legend>{{ t('settings.connections.desired') }} · {{ draft?.revision ?? '—' }}</legend>
           <label for="connection-preferred">{{ t('settings.connections.preferred') }}</label

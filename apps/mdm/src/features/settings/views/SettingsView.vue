@@ -39,7 +39,12 @@ const runtime = useMdm(),
   { run, busy, failure } = useSettingsAction(() => 'catalog')
 const catalog = ref<SettingsCatalog>(),
   search = ref(''),
-  material = ref('')
+  material = ref(''),
+  materialActivator = ref<HTMLElement>()
+function openMaterial(target: string, event: MouseEvent) {
+  materialActivator.value = event.currentTarget as HTMLElement
+  material.value = target
+}
 const materials = [
   'apns',
   'profile',
@@ -128,6 +133,19 @@ useSettingsFacts(() => (catalog.value = undefined))
         >{{ t('settings.tenants') }}</VTab
       >
     </VTabs>
+    <VCard
+      v-if="section === 'overview' && runtime.realm === 'tenant'"
+      class="my-4"
+      variant="outlined"
+    >
+      <VCardTitle tag="h2">{{ t('telemetry.dataCollection') }}</VCardTitle>
+      <VCardText>
+        <p>{{ t('telemetry.metricsHint') }}</p>
+        <VBtn :to="{ name: 'policy-metrics', params: { tenant: runtime.tenant } }" variant="text">{{
+          t('telemetry.metricsSettings')
+        }}</VBtn>
+      </VCardText>
+    </VCard>
     <div v-if="section === 'overview'" class="settings-overview-grid">
       <VCard class="console-panel" tag="article" variant="outlined"
         ><h2>{{ t('settings.currentTenant') }}</h2>
@@ -210,7 +228,7 @@ useSettingsFacts(() => (catalog.value = undefined))
           <td>
             <VBtn
               v-if="materials.includes(entries[item.id].target)"
-              @click="material = entries[item.id].target"
+              @click="openMaterial(entries[item.id].target, $event)"
               >{{ t('settings.open') }}</VBtn
             >
             <VBtn
@@ -245,6 +263,8 @@ useSettingsFacts(() => (catalog.value = undefined))
       >
     </div>
     <VDialog
+      :activator="materialActivator"
+      :open-on-click="false"
       :model-value="!!material"
       max-width="1100"
       :aria-label="t('settings.title')"

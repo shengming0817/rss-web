@@ -207,6 +207,7 @@ async function change(value: Change) {
   await write.submit(value, (id, input) => client.change(id, input), saved)
   // Recovery stays reachable outside the modal while the original intent remains locked.
   if (pending.value) {
+    closeDetail()
     editing.value = null
     deletion.value = null
   }
