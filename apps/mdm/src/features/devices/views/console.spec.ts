@@ -1,4 +1,6 @@
 import GroupsView from './GroupsView.vue'
+import { createSettingsOperations } from '../../settings/operations'
+import { createRecoveryClient } from '../../enrollment/clients/recovery'
 import InventoryQuery from '../components/InventoryQuery.vue'
 import DeviceGroupsPanel from '../components/DeviceGroupsPanel.vue'
 import { VSelect, VAutocomplete, VTextField, VAlert } from 'vuetify/components'
@@ -174,6 +176,7 @@ async function setup(
     operations.authorization,
     TENANT,
   )
+  const settingsOperations = createSettingsOperations(session)
   const i18n = mdmI18n()
   i18n.global.locale.value = 'zh-CN'
   const wrapper = mount(RouterView, {
@@ -191,6 +194,8 @@ async function setup(
           demo: true,
           session,
           registrationChannels,
+          settings: { operations: settingsOperations },
+          onboarding: { recovery: createRecoveryClient(transport) },
         },
         [runtimeKey as symbol]: {
           api: {
@@ -210,7 +215,10 @@ async function setup(
       },
     },
   })
-  wrapper.vm.$.appContext.app.onUnmount(() => registrationChannels.dispose())
+  wrapper.vm.$.appContext.app.onUnmount(() => {
+    registrationChannels.dispose()
+    settingsOperations.dispose()
+  })
   wrappers.push(wrapper)
   await flushPromises()
   const button = (text: string) => {
@@ -2680,4 +2688,17 @@ it('applies raw directory RSQL with basic filters and uses the same filter for c
       'filter'
     ],
   ).toBe(filter)
+})
+
+it('embeds original certificate recovery on the selected device management page', async () => {
+  const f = await setup('device-management', { device: 'device-01' })
+  const endpoint = await f.devices.directory.detail('device-01')
+  const agent = endpoint.channels.find((channel) => channel.channel === 'agent')!
+  expect(f.wrapper.get('#agent-registration').element).toHaveProperty('value', agent.registrationId)
+  expect(f.wrapper.get('#agent-registration').attributes('readonly')).toBeDefined()
+  await f.click('Agent 原签发恢复')
+  expect(f.wrapper.find('#agent-issuance').exists()).toBe(true)
+  await f.click('Windows 原 CA 响应关联')
+  expect(f.wrapper.find('#pki-attempt').exists()).toBe(true)
+  expect(f.requests.filter((r) => r.method === 'POST')).toHaveLength(0)
 })

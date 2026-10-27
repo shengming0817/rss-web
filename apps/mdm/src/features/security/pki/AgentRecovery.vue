@@ -1,7 +1,16 @@
 <script setup lang="ts">
 import { ref, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton } from '@rss/core/components'
+import {
+  VAlert,
+  VBtn,
+  VCard,
+  VCardText,
+  VSelect,
+  VTable,
+  VTextarea,
+  VTextField,
+} from 'vuetify/components'
 import { isRssApiError } from '@rss/api/mdm'
 import { useMdm } from '../../../context'
 import {
@@ -20,12 +29,16 @@ import { inputDigest } from '../../settings/clients/value'
 import { auditTime } from '../../operations/format'
 import { readPublicChain } from './public-chain'
 import OperationNotice from '../../settings/components/OperationNotice.vue'
-const props = defineProps<{ kind: 'registration' | 'issuance' }>()
+const props = defineProps<{
+  kind: 'registration' | 'issuance'
+  registration?: string | undefined
+  platform?: 'windows' | 'macos' | undefined
+}>()
 const runtime = useMdm(),
   { t } = useI18n(),
   client = runtime.onboarding.recovery,
   { busy, failure, pending, locked, submit, query } = useSettingsAction(
-    () => `agent-recovery:${props.kind}`,
+    () => `agent-recovery:${props.kind}${props.registration ? ':' + props.registration : ''}`,
   )
 const { canWrite } = usePermission('credentials', 'credentials')
 const locator = ref(''),
@@ -59,6 +72,20 @@ useSettingsSecrets(() => {
   reviewed.value = false
 })
 useSettingsFacts(clear)
+watch(
+  () => [props.registration, props.platform],
+  () => {
+    clear()
+    locator.value = props.kind === 'registration' ? (props.registration ?? '') : ''
+    platform.value = props.platform ?? 'windows'
+    if (props.kind === 'issuance' && pending.value) {
+      const input = JSON.parse(pending.value.publicInput) as { issuance: string }
+      locator.value = input.issuance
+      originalOperation.value = pending.value.id
+    }
+  },
+  { immediate: true, flush: 'sync' },
+)
 async function capture<T>(request: () => Promise<T>) {
   const own = generation
   try {
@@ -179,124 +206,171 @@ watch(failure, (value) => {
 })
 </script>
 <template>
-  <section class="console-panel">
-    <h2>{{ t(`security.recovery.${kind}`) }}</h2>
-    <p>{{ t('security.recovery.noQueue') }}</p>
-    <p>
-      {{ t(kind === 'registration' ? 'security.recovery.grantHint' : 'security.pki.issuedHint') }}
-    </p>
-    <OperationNotice
-      :operation="pending"
-      :busy="busy"
-      :can-write="canWrite"
-      :query-supported="kind === 'issuance'"
-      :compare-supported="false"
-      @query="lookup"
-      @retry="recover(true)"
-    />
-    <p v-if="pending?.state === 'conflict'" role="alert">
-      {{ t('security.recovery.conflictHandoff') }}
-    </p>
-    <form class="settings-form" @submit.prevent="recover()">
-      <fieldset
-        :disabled="busy || !canWrite || (!!pending && pending.state !== 'unknown' && locked)"
-      >
-        <label :for="'agent-' + kind">{{
-          t(
-            kind === 'registration'
-              ? 'security.recovery.registrationId'
-              : 'security.recovery.issuanceId',
-          )
-        }}</label
-        ><input
-          :id="'agent-' + kind"
-          v-model="locator"
-          required
-          maxlength="36"
-          @input="reviewed = false"
-        />
-        <label for="agent-recovery-operation">{{
-          t('security.recovery.administrativeOperation')
-        }}</label
-        ><input
-          id="agent-recovery-operation"
-          v-model="originalOperation"
-          required
-          maxlength="36"
-          @input="reviewed = false"
-        />
-        <template v-if="kind === 'registration'">
-          <label for="agent-recovery-platform">{{ t('security.recovery.platform') }}</label
-          ><select id="agent-recovery-platform" v-model="platform" @change="reviewed = false">
-            <option value="windows">Windows</option>
-            <option value="macos">macOS</option>
-          </select>
-          <label for="agent-recovery-secret">{{ t('security.recovery.secret') }}</label
-          ><input
-            id="agent-recovery-secret"
-            v-model="secret"
-            type="password"
+  <v-card :title="t(`security.recovery.${kind}`)"
+    ><v-card-text>
+      <v-alert type="info" variant="tonal" class="mb-4">{{
+        t('security.recovery.noQueue')
+      }}</v-alert>
+      <p class="mb-4">
+        {{ t(kind === 'registration' ? 'security.recovery.grantHint' : 'security.pki.issuedHint') }}
+      </p>
+      <OperationNotice
+        :operation="pending"
+        :busy="busy"
+        :can-write="canWrite"
+        :query-supported="kind === 'issuance'"
+        :compare-supported="false"
+        @query="lookup"
+        @retry="recover(true)"
+      />
+      <v-alert v-if="pending?.state === 'conflict'" type="warning" variant="tonal" class="my-3">{{
+        t('security.recovery.conflictHandoff')
+      }}</v-alert>
+      <form @submit.prevent="recover()">
+        <fieldset
+          :disabled="busy || !canWrite || (locked && pending?.state !== 'unknown')"
+          class="security-fieldset"
+        >
+          <v-text-field
+            :id="'agent-' + kind"
+            v-model="locator"
+            :label="
+              t(
+                kind === 'registration'
+                  ? 'security.recovery.registrationId'
+                  : 'security.recovery.issuanceId',
+              )
+            "
             required
-            maxlength="43"
-            autocomplete="off"
-            @input="reviewed = false"
+            maxlength="36"
+            :readonly="kind === 'registration' && !!registration"
+            :disabled="busy || !canWrite || locked"
+            @update:model-value="reviewed = false"
           />
-          <label for="agent-recovery-csr">{{ t('security.recovery.csr') }}</label
-          ><textarea
-            id="agent-recovery-csr"
-            v-model="csr"
+          <v-text-field
+            id="agent-recovery-operation"
+            v-model="originalOperation"
+            :label="t('security.recovery.administrativeOperation')"
             required
-            maxlength="43692"
-            spellcheck="false"
-            @input="reviewed = false"
+            maxlength="36"
+            :disabled="busy || !canWrite || locked"
+            @update:model-value="reviewed = false"
           />
-        </template>
-        <template v-else
-          ><label for="agent-recovery-chain">{{ t('security.recovery.publicChain') }}</label
-          ><textarea
+          <template v-if="kind === 'registration'">
+            <v-select
+              v-model="platform"
+              :label="t('security.recovery.platform')"
+              :items="[
+                { value: 'windows', title: 'Windows' },
+                { value: 'macos', title: 'macOS' },
+              ]"
+              :disabled="busy || !canWrite || locked || !!props.platform"
+              @update:model-value="reviewed = false"
+            />
+            <v-text-field
+              id="agent-recovery-secret"
+              v-model="secret"
+              :label="t('security.recovery.secret')"
+              type="password"
+              required
+              maxlength="43"
+              autocomplete="off"
+              :disabled="busy || !canWrite || locked"
+              @update:model-value="reviewed = false"
+            />
+            <v-textarea
+              id="agent-recovery-csr"
+              v-model="csr"
+              :label="t('security.recovery.csr')"
+              required
+              maxlength="43692"
+              spellcheck="false"
+              :disabled="busy || !canWrite || locked"
+              @update:model-value="reviewed = false"
+            />
+          </template>
+          <v-textarea
+            v-else
             id="agent-recovery-chain"
             v-model="chain"
+            :label="t('security.recovery.publicChain')"
             required
             maxlength="180000"
             spellcheck="false"
-            @input="reviewed = false"
+            :disabled="busy || !canWrite || (locked && pending?.state !== 'unknown')"
+            @update:model-value="reviewed = false"
           />
-        </template>
-        <p v-if="reviewed">
-          {{ t('security.recovery.confirm') }} · {{ locator }} · {{ originalOperation }}
-        </p>
-        <UiButton type="submit" :disabled="locked">{{
-          t(reviewed ? 'security.recovery.continue' : 'security.pki.review')
-        }}</UiButton>
-      </fieldset>
-    </form>
-    <UiButton v-if="kind === 'issuance'" :disabled="busy" @click="lookup">{{
-      t('settings.queryOperation')
-    }}</UiButton>
-    <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
-    <p v-if="returnedIssuance" class="console-locator">
-      {{ t('security.recovery.issuanceId') }} · {{ returnedIssuance }}
-    </p>
-    <dl v-if="grant" class="settings-facts">
-      <dt>{{ t('security.recovery.grant') }}</dt>
-      <dd>{{ grant.grantId }}</dd>
-      <dt>{{ t('settings.state') }}</dt>
-      <dd>{{ t(`security.recovery.${grant.state}`) }}</dd>
-      <dt>{{ t('security.recovery.deadline') }}</dt>
-      <dd>{{ auditTime(grant.expiresAt) }}</dd>
-      <dt>{{ t('security.recovery.platform') }}</dt>
-      <dd>{{ grant.platform }}</dd>
-    </dl>
-    <template v-if="candidate"
-      ><p>{{ t('security.recovery.candidateHint') }}</p>
-      <dl class="settings-facts">
-        <dt>{{ t('security.recovery.issuanceId') }}</dt>
-        <dd>{{ candidate.issuanceId }}</dd>
-        <dt>{{ t('security.recovery.originalSigningOperation') }}</dt>
-        <dd>{{ candidate.operationId }}</dd>
-        <dt>{{ t('security.recovery.deadline') }}</dt>
-        <dd>{{ auditTime(candidate.activateBefore) }}</dd>
-      </dl></template
-    >
-  </section>
+          <v-alert v-if="reviewed" type="warning" variant="tonal" class="mb-4"
+            >{{ t('security.recovery.confirm') }} · {{ locator }} · {{ originalOperation }}</v-alert
+          >
+          <v-btn type="submit" :disabled="locked || !canWrite">{{
+            t(reviewed ? 'security.recovery.continue' : 'security.pki.review')
+          }}</v-btn>
+        </fieldset>
+      </form>
+      <v-btn
+        v-if="kind === 'issuance'"
+        variant="tonal"
+        class="mt-3"
+        :disabled="busy"
+        @click="lookup"
+        >{{ t('settings.queryOperation') }}</v-btn
+      >
+      <v-alert v-if="failure" type="error" variant="tonal" class="mt-3">{{
+        t('devices.' + failure)
+      }}</v-alert>
+      <v-alert v-if="returnedIssuance" type="info" variant="tonal" class="mt-3"
+        >{{ t('security.recovery.issuanceId') }} · {{ returnedIssuance }}</v-alert
+      >
+      <v-table v-if="grant" class="mt-4"
+        ><tbody>
+          <tr>
+            <th>{{ t('security.recovery.grant') }}</th>
+            <td>{{ grant.grantId }}</td>
+          </tr>
+          <tr>
+            <th>{{ t('settings.state') }}</th>
+            <td>{{ t(`security.recovery.${grant.state}`) }}</td>
+          </tr>
+          <tr>
+            <th>{{ t('security.recovery.deadline') }}</th>
+            <td>{{ auditTime(grant.expiresAt) }}</td>
+          </tr>
+          <tr>
+            <th>{{ t('security.recovery.platform') }}</th>
+            <td>{{ grant.platform }}</td>
+          </tr>
+        </tbody></v-table
+      >
+      <template v-if="candidate"
+        ><v-alert type="info" variant="tonal" class="mt-4">{{
+          t('security.recovery.candidateHint')
+        }}</v-alert
+        ><v-table
+          ><tbody>
+            <tr>
+              <th>{{ t('security.recovery.issuanceId') }}</th>
+              <td>{{ candidate.issuanceId }}</td>
+            </tr>
+            <tr>
+              <th>{{ t('security.recovery.originalSigningOperation') }}</th>
+              <td>{{ candidate.operationId }}</td>
+            </tr>
+            <tr>
+              <th>{{ t('security.recovery.deadline') }}</th>
+              <td>{{ auditTime(candidate.activateBefore) }}</td>
+            </tr>
+          </tbody></v-table
+        ></template
+      >
+    </v-card-text></v-card
+  >
 </template>
+
+<style scoped>
+.security-fieldset {
+  border: 0;
+  min-width: 0;
+  padding: 0;
+}
+</style>

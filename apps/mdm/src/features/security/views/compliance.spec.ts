@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { VSwitch } from 'vuetify/components'
 import { flushPromises, mount } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -40,10 +41,18 @@ async function setup(
   component: typeof ComplianceView | typeof ComplianceRulesView,
   compliance: object,
   query = {},
+  directory: object = { list: async () => empty, groups: async () => empty },
 ) {
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/', component }],
+    routes: [
+      { path: '/', component },
+      ...['security-rules', 'device-detail', 'policy-executions'].map((name) => ({
+        path: '/target/' + name + '/:tenant/:device?',
+        name,
+        component: { template: '<p>Linked page</p>' },
+      })),
+    ],
   })
   await router.push({ path: '/', query })
   const wrapper = mount(component, {
@@ -58,7 +67,7 @@ async function setup(
           security: { compliance },
           devices: {
             assets: { catalog: async () => ({ fields: [] }) },
-            directory: { list: async () => empty, groups: async () => empty },
+            directory,
           },
         },
       },
@@ -75,8 +84,9 @@ it('locks rule edits after an unknown write and replays the original rule, revis
     read = vi.fn().mockResolvedValue({ id, revision: 1, definition })
   const { wrapper } = await setup(ComplianceRulesView, { list: async () => empty, put, read })
   const button = (text: string) => wrapper.findAll('button').find((v) => v.text() === text)!
+  await wrapper.get('[data-testid="new-rule"]').trigger('click')
   expect(wrapper.get('[data-testid="save-rule"]').attributes('disabled')).toBeDefined()
-  await wrapper.get('[data-testid="rule-name"]').setValue('Office baseline')
+  await wrapper.get('[data-testid="rule-name"] input').setValue('Office baseline')
   wrapper.getComponent(ConditionEditor).vm.$emit('update:modelValue', definition.criteria)
   await flushPromises()
   await wrapper.get('[data-testid="edit-rule"]').trigger('submit')
@@ -116,22 +126,22 @@ it('clears a selected rule on query changes and fences late rule reads, includin
     { list: async () => empty, read, task },
     { rule: id },
   )
-  expect(wrapper.get('[data-testid="rule-name"]').element).toHaveProperty('value', id)
+  expect(wrapper.get('[data-testid="rule-name"] input').element).toHaveProperty('value', id)
   let finish!: (v: ReturnType<typeof value>) => void
   read.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)))
   await router.push({ path: '/', query: { rule: nextId } })
   await flushPromises()
-  expect(wrapper.get('[data-testid="rule-name"]').element).toHaveProperty('value', '')
+  expect(wrapper.find('[data-testid="rule-name"] input').exists()).toBe(false)
   await router.push({ path: '/', query: { rule: id, task: nextId } })
   await flushPromises()
   expect(task).toHaveBeenCalledWith(id, nextId)
   finish(value(nextId))
   await flushPromises()
-  expect(wrapper.get('[data-testid="rule-name"]').element).toHaveProperty('value', id)
+  expect(wrapper.get('[data-testid="rule-name"] input').element).toHaveProperty('value', id)
   read.mockRejectedValueOnce(new Error('unavailable'))
   await router.push({ path: '/', query: { rule: nextId } })
   await flushPromises()
-  expect(wrapper.get('[data-testid="rule-name"]').element).toHaveProperty('value', '')
+  expect(wrapper.find('[data-testid="rule-name"] input').exists()).toBe(false)
   wrapper.unmount()
 })
 it('labels previous evidence as historical and pins history pagination to the submitted window', async () => {
@@ -152,10 +162,11 @@ it('labels previous evidence as historical and pins history pagination to the su
       .mockResolvedValue(empty)
   const { wrapper } = await setup(ComplianceView, { current, history }, { device: 'device-01' })
   expect(wrapper.get('[data-testid="current-compliance"] > h2').text()).toContain('待评估')
-  expect(wrapper.get('[data-testid="previous-assessment"] summary').text()).toBe(
+  expect(wrapper.get('[data-testid="previous-assessment"] .v-expansion-panel-title').text()).toBe(
     '上一轮证据（非当前结论）',
   )
-  await wrapper.get('[data-testid="bounded-history"]').setValue(true)
+  wrapper.getComponent(VSwitch).vm.$emit('update:modelValue', true)
+  await flushPromises()
   await wrapper.get('#compliance-from').setValue('2026-01-01T00:00:00')
   await wrapper.get('#compliance-until').setValue('2026-02-01T00:00:00')
   await wrapper.get('[data-testid="history-filter"]').trigger('submit')
@@ -194,7 +205,7 @@ it('keeps unedited presentation keys on a rule edit without merging them into co
     { list: async () => empty, read: async () => rule, put },
     { rule: id },
   )
-  await wrapper.get('[data-testid="rule-name"]').setValue('Edited')
+  await wrapper.get('[data-testid="rule-name"] input').setValue('Edited')
   await wrapper.get('[data-testid="edit-rule"]').trigger('submit')
   await flushPromises()
   expect(put).toHaveBeenCalledWith(
@@ -204,5 +215,41 @@ it('keeps unedited presentation keys on a rule edit without merging them into co
       input: { ...definition, presentation: { ...presentation, name: 'Edited' } },
     }),
   )
+  wrapper.unmount()
+})
+
+it('counts only the current directory page and exposes failed device assessments without inferring a conclusion', async () => {
+  const list = vi.fn(async ({ cursor }: { cursor?: string } = {}) => ({
+    items: cursor ? [{ id: 'device-03' }] : [{ id: 'device-01' }, { id: 'device-02' }],
+    nextCursor: cursor ? null : 'page-2',
+  }))
+  const current = vi.fn(async (device: string) => {
+    if (device === 'device-02') throw new Error('unavailable')
+    const compliant = device === 'device-01'
+    const value = {
+      ...assessment,
+      status: compliant ? 'compliant' : 'non_compliant',
+      reason: compliant ? 'rule_satisfied' : 'rule_failed',
+      condition: compliant ? 'match' : 'no_match',
+    }
+    return {
+      device,
+      status: value.status,
+      reason: null,
+      rules: [{ ruleId: id, ruleVersion: 1, status: value.status, current: value, previous: null }],
+    }
+  })
+  const { wrapper } = await setup(ComplianceView, { current }, {}, { list })
+  expect(wrapper.text()).toContain('不代表全租户统计')
+  expect(wrapper.findAll('.text-h4').map((item) => item.text())).toEqual(['1', '0', '0', '0', '0'])
+  expect(wrapper.text()).toContain('评估读取失败')
+  await wrapper
+    .findAll('button')
+    .find((item) => item.text() === '下一页')!
+    .trigger('click')
+  await flushPromises()
+  expect(list).toHaveBeenLastCalledWith({ cursor: 'page-2' })
+  expect(wrapper.findAll('.text-h4').map((item) => item.text())).toEqual(['0', '1', '0', '0', '0'])
+  expect(wrapper.text()).not.toContain('device-01')
   wrapper.unmount()
 })
