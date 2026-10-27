@@ -17,7 +17,7 @@ import {
 import { ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAccountSecurity } from '../useAccountSecurity'
-const dialogId = useId()
+const pageId = useId()
 const dialogActivator = ref<HTMLElement>()
 function rememberActivator(event: MouseEvent) {
   dialogActivator.value = event.currentTarget as HTMLElement
@@ -62,10 +62,24 @@ const {
     <p v-else-if="error" role="alert">{{ errorMessage }}</p>
     <p class="auth-muted">{{ t('identity.logoutHelp') }}</p>
     <VTabs v-model="tab" :aria-label="t('identity.sessions')"
-      ><VTab value="sessions">{{ t('identity.sessions') }}</VTab
-      ><VTab value="security">{{ t('identity.authentication') }}</VTab></VTabs
+      ><VTab
+        :id="`${pageId}-tab-sessions`"
+        :aria-controls="`${pageId}-panel-sessions`"
+        value="sessions"
+        >{{ t('identity.sessions') }}</VTab
+      ><VTab
+        :id="`${pageId}-tab-security`"
+        :aria-controls="`${pageId}-panel-security`"
+        value="security"
+        >{{ t('identity.authentication') }}</VTab
+      ></VTabs
     ><VWindow v-model="tab"
-      ><VWindowItem value="sessions" eager
+      ><VWindowItem
+        :id="`${pageId}-panel-sessions`"
+        role="tabpanel"
+        :aria-labelledby="`${pageId}-tab-sessions`"
+        value="sessions"
+        eager
         ><div class="auth-actions">
           <VBtn :disabled="!!busy" type="submit" @click="run(reloadSessions)">{{
             t('identity.reload')
@@ -121,7 +135,12 @@ const {
         >
           {{ t('identity.more') }}
         </VBtn></VWindowItem
-      ><VWindowItem value="security" eager
+      ><VWindowItem
+        :id="`${pageId}-panel-security`"
+        role="tabpanel"
+        :aria-labelledby="`${pageId}-tab-security`"
+        value="security"
+        eager
         ><section v-if="session.config.oidcEnabled" aria-labelledby="security-title">
           <h2 id="security-title">{{ t('identity.authentication') }}</h2>
           <template v-if="session.state.value.security">
@@ -257,7 +276,7 @@ const {
       :open-on-click="false"
       :persistent="true"
       :aria-label="t('identity.logoutAll')"
-      :aria-describedby="`${dialogId}-1`"
+      :aria-describedby="`${pageId}-1`"
       role="alertdialog"
       @update:model-value="confirmAll = $event"
       @keydown.esc.stop="!busy && (confirmAll = false)"
@@ -272,7 +291,7 @@ const {
             >{{ t('identity.cancel') }}</VBtn
           ></VCardTitle
         ><VCardText
-          ><p :id="`${dialogId}-1`">{{ t('identity.logoutHelp') }}</p></VCardText
+          ><p :id="`${pageId}-1`">{{ t('identity.logoutHelp') }}</p></VCardText
         ><VCardActions class="auth-actions"
           ><VBtn :disabled="busy || !owner" @click="submitConfirmed">{{
             t('identity.confirm')

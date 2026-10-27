@@ -213,17 +213,31 @@ const defaults = {
               ><VCardTitle>{{ text('导航与弹层', 'Navigation and overlays') }}</VCardTitle
               ><VCardText class="preview-stack">
                 <VTabs v-model="tab" :aria-label="text('示例页签', 'Example tabs')"
-                  ><VTab v-for="item in options" :key="item.value" :value="item.value">{{
-                    item.title
-                  }}</VTab></VTabs
+                  ><VTab
+                    v-for="item in options"
+                    :id="`preview-tab-${item.value}`"
+                    :key="item.value"
+                    :aria-controls="`preview-panel-${item.value}`"
+                    :value="item.value"
+                    >{{ item.title }}</VTab
+                  ></VTabs
                 >
                 <VWindow v-model="tab"
-                  ><VWindowItem value="first" eager>{{
-                    text('第一个面板', 'First panel')
-                  }}</VWindowItem
-                  ><VWindowItem value="second" eager>{{
-                    text('第二个面板', 'Second panel')
-                  }}</VWindowItem></VWindow
+                  ><VWindowItem
+                    id="preview-panel-first"
+                    role="tabpanel"
+                    aria-labelledby="preview-tab-first"
+                    value="first"
+                    eager
+                    >{{ text('第一个面板', 'First panel') }}</VWindowItem
+                  ><VWindowItem
+                    id="preview-panel-second"
+                    role="tabpanel"
+                    aria-labelledby="preview-tab-second"
+                    value="second"
+                    eager
+                    >{{ text('第二个面板', 'Second panel') }}</VWindowItem
+                  ></VWindow
                 >
                 <VExpansionPanels
                   ><VExpansionPanel
@@ -251,7 +265,7 @@ const defaults = {
                       ><VBtn v-bind="props">{{ text('提示', 'Tooltip') }}</VBtn></template
                     ></VTooltip
                   >
-                  <VDialog v-model="dialog" max-width="680"
+                  <VDialog v-model="dialog" max-width="680" :aria-label="text('对话框', 'Dialog')"
                     ><template #activator="{ props }"
                       ><VBtn v-bind="props">{{ text('打开对话框', 'Open dialog') }}</VBtn></template
                     ><VCard

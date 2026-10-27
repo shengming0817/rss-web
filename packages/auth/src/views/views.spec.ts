@@ -987,3 +987,34 @@ it('shows the server recovery time in each locale, clears passwords and waits fo
     }
   }
 })
+
+it('associates session tabs with retained panels and clears passwords when leaving security', async () => {
+  const f = fixture(false)
+  await f.login()
+  f.replies.push({ sessions: [sessionValue().session], nextCursor: null })
+  const { wrapper } = await view(SessionsView, f)
+  const tabs = wrapper.findAll('[role=tab]')
+  const panels = wrapper.findAll('[role=tabpanel]')
+  expect(tabs).toHaveLength(2)
+  expect(panels).toHaveLength(2)
+  for (let index = 0; index < tabs.length; index++) {
+    expect(tabs[index]!.attributes('aria-controls')).toBe(panels[index]!.attributes('id'))
+    expect(panels[index]!.attributes('aria-labelledby')).toBe(tabs[index]!.attributes('id'))
+  }
+  const requests = f.request.mock.calls.length
+  await tabs[1]!.trigger('click')
+  await flushPromises()
+  expect(tabs[1]!.attributes('aria-selected')).toBe('true')
+  expect(panels[0]!.isVisible()).toBe(false)
+  expect(panels[1]!.isVisible()).toBe(true)
+  const password = wrapper.get('#new-password').element
+  await wrapper.get('#new-password').setValue('sensitive draft')
+  await tabs[0]!.trigger('click')
+  await flushPromises()
+  expect(wrapper.get('#new-password').element).toBe(password)
+  expect((password as HTMLInputElement).value).toBe('')
+  expect(panels[0]!.text()).toContain(ID)
+  expect(f.request).toHaveBeenCalledTimes(requests)
+  wrapper.unmount()
+  f.session.clear()
+})
