@@ -72,7 +72,7 @@ it('filters Resource kinds through the formal directory and opens software impor
     .trigger('click')
   await flushPromises()
   const dialog = new DOMWrapper(document.body).get('[role=dialog]')
-  await dialog.get('#resource-kind').setValue('software')
+  await selectControl(wrapper, '#resource-kind').setValue('software')
   expect(dialog.get('a').attributes('href')).toBe('/imports/tenant')
   expect(dialog.findAll('button').some((button) => button.text() === '保存')).toBe(false)
   wrapper.unmount()

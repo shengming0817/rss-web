@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import { VAlert, VBtn } from 'vuetify/components'
 
 import { ref, watch } from 'vue'
@@ -56,10 +57,10 @@ watch(
           {{ t('telemetry.boost') }} {{ utc(config.boostExpiresAt * 1_000_000) }} ·
           {{ t('telemetry.normalCadence') }} {{ config.normalSampleMillis / 1000 }}s
         </p>
-        <details>
-          <summary>{{ t('devices.evidence') }}</summary>
+        <MdmDisclosure>
+          <template #title>{{ t('devices.evidence') }}</template>
           <pre>{{ config }}</pre>
-        </details>
+        </MdmDisclosure>
       </div>
       <RouterLink
         :to="{

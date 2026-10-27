@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import PolicyFieldset from './PolicyFieldset.vue'
 import { VSelect, VBtn, VTextField } from 'vuetify/components'
 
@@ -88,8 +89,8 @@ function add() {
         hide-details="auto"
       />
     </template>
-    <details class="task-technical">
-      <summary>{{ t('policies.ux.technical') }}</summary>
+    <MdmDisclosure class="task-technical">
+      <template #title>{{ t('policies.ux.technical') }}</template>
       <label :for="`${prefix}-id`">{{ t('policies.id') }}</label
       ><VTextField
         :id="`${prefix}-id`"
@@ -99,7 +100,7 @@ function add() {
         density="comfortable"
         hide-details="auto"
       />
-    </details>
+    </MdmDisclosure>
     <VBtn type="button" :disabled="!id || busy" @click="add">{{ t('policies.add') }}</VBtn>
     <p v-if="page">{{ t('console.pageNotTotal') }}</p>
     <VBtn v-if="page?.nextCursor" type="button" :disabled="busy" @click="load(page.nextCursor)">{{

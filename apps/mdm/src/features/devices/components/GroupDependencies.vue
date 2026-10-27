@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import { VBtn, VSelect, VAlert, VList, VListItem, VChip } from 'vuetify/components'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -85,13 +86,13 @@ watch(
           t(item.relation === 'direct' ? 'devices.directDependency' : 'devices.indirectDependency')
         }}</v-chip>
         <p>{{ item.roles.join(', ') }} · {{ item.lifecycleState }} · {{ item.freshness }}</p>
-        <details>
-          <summary>{{ t('devices.evidence') }}</summary>
+        <MdmDisclosure>
+          <template #title>{{ t('devices.evidence') }}</template>
           <p>{{ item.source.id }} · {{ item.revision }} · {{ item.effective }}</p>
           <ol>
             <li v-for="(source, i) in item.via" :key="i">{{ source.kind }} · {{ source.id }}</li>
           </ol>
-        </details>
+        </MdmDisclosure>
       </v-list-item></v-list
     >
     <v-btn v-if="page?.nextCursor" :disabled="busy" @click="load(page.nextCursor)">{{

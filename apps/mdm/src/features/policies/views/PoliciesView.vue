@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import PolicyFieldset from '../components/PolicyFieldset.vue'
 import { VBtn, VSelect, VTextField, VDataTable, VChip, VCheckbox } from 'vuetify/components'
 import { controlEvent } from '../control-event'
@@ -1055,10 +1056,10 @@ onMounted(async () => {
         t(`policies.preview_${row.qualification.state}`)
       }}</template
       ><template #[`item.operations`]="{ item: row }"
-        ><details v-if="row.operationIds.length">
-          <summary>{{ row.operationIds.length }} {{ t('policies.operation') }}</summary>
+        ><MdmDisclosure v-if="row.operationIds.length">
+          <template #title>{{ row.operationIds.length }} {{ t('policies.operation') }}</template>
           <p v-for="op in row.operationIds" :key="op" class="coordinate">{{ op }}</p>
-        </details>
+        </MdmDisclosure>
         <span v-else>—</span></template
       ></VDataTable
     >

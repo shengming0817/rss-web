@@ -1,6 +1,5 @@
 import type { DemoDevice } from '../devices/fixtures'
-import type { Configuration, Setting } from '../features/policies/clients/configurations'
-import type { ResourceRead } from '../../src/features/policies/clients/resources'
+import type { ResourceRead, Platform } from '../../src/features/policies/clients/resources'
 export type Applicability =
   | 'applicable'
   | 'authorization'
@@ -9,52 +8,8 @@ export type Applicability =
   | 'resource_unavailable'
 export interface ConfigurationEffects {
   id: string
-  platform: Configuration['platform']
-  settings: Setting[]
-}
-export function configurationConflicts(
-  configuration: Configuration,
-  version: number,
-  assigned: ConfigurationEffects[],
-): string[] {
-  const selected = configuration.versions.find(
-    (v) => v.version === version && v.status === 'published',
-  )
-  if (!selected) return []
-  return [
-    ...new Set(
-      assigned
-        .filter(
-          (c) =>
-            c.platform === configuration.platform &&
-            c.settings.some((s) =>
-              selected.settings.some((next) => next.key === s.key && next.value !== s.value),
-            ),
-        )
-        .map((c) => c.id),
-    ),
-  ]
-}
-export function configurationApplicability(
-  configuration: Configuration,
-  version: number,
-  device: DemoDevice | undefined,
-  assigned: ConfigurationEffects[],
-): Applicability {
-  const v = configuration.versions.find((v) => v.version === version && v.status === 'published')
-  if (!v) return 'resource_unavailable'
-  if (
-    !device ||
-    !device.registrations.some((r) => r.status === 'active' && r.source.startsWith('mdm.'))
-  )
-    return 'authorization'
-  if (
-    device.summary.platform !== configuration.platform ||
-    !device.summary.channels.includes('mdm')
-  )
-    return 'unsupported'
-  if (configurationConflicts(configuration, version, assigned).length) return 'conflict'
-  return 'applicable'
+  platform: Platform
+  settings: { key: string; value: string | number | boolean }[]
 }
 export function resourceApplicability(
   resource: ResourceRead,

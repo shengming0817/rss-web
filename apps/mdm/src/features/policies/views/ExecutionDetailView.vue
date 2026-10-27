@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import PolicyFieldset from '../components/PolicyFieldset.vue'
 import { VBtn, VTextField, VCheckbox } from 'vuetify/components'
 
@@ -218,23 +219,23 @@ watch(
       <p class="ui-help">{{ t('policies.ux.stagesHint') }}</p>
       <h2>{{ native.observation.protocol }}</h2>
       <NativeTaskFacts :operation="native" :device="String(route.query['device'])" />
-      <details v-if="native.dispatchFailure" open>
-        <summary>{{ t('policies.dispatchFailure') }}</summary>
+      <MdmDisclosure v-if="native.dispatchFailure" open>
+        <template #title>{{ t('policies.dispatchFailure') }}</template>
         <pre>{{ JSON.stringify(native.dispatchFailure, null, 2) }}</pre>
-      </details>
-      <details v-if="native.agentInstallation">
-        <summary>{{ t('software.installAgent') }}</summary>
+      </MdmDisclosure>
+      <MdmDisclosure v-if="native.agentInstallation">
+        <template #title>{{ t('software.installAgent') }}</template>
         <pre>{{ JSON.stringify(native.agentInstallation, null, 2) }}</pre>
-      </details>
-      <details class="task-technical">
-        <summary>{{ t('policies.ux.technical') }}</summary>
+      </MdmDisclosure>
+      <MdmDisclosure class="task-technical">
+        <template #title>{{ t('policies.ux.technical') }}</template>
         <dl>
           <template v-for="(value, key) in native.observation" :key="key"
             ><dt>{{ t(`policies.observation.${key}`) }}</dt>
             <dd>{{ value === null ? '—' : value }}</dd></template
           >
         </dl>
-      </details>
+      </MdmDisclosure>
       <p>
         {{ t('policies.revision') }} {{ native.revision }} ·
         {{ t(`policies.state.${native.task.platform}`) }} ·

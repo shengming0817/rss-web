@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import PolicyFieldset from './PolicyFieldset.vue'
 import PolicyDialog from '../components/PolicyDialog.vue'
 import PolicyTabs from '../components/PolicyTabs.vue'
@@ -308,8 +309,8 @@ if (route.query['device'] || route.query['group']) scopeOpen.value = true
       ><p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
       <form class="scope-form" @submit.prevent="save">
         <PolicyFieldset :disabled="busy || uncertain">
-          <details class="task-technical">
-            <summary>{{ t('policies.ux.technical') }}</summary>
+          <MdmDisclosure class="task-technical">
+            <template #title>{{ t('policies.ux.technical') }}</template>
             <label for="scope-id">{{ t('policies.id') }}</label
             ><VTextField
               id="scope-id"
@@ -322,7 +323,7 @@ if (route.query['device'] || route.query['group']) scopeOpen.value = true
             /><VBtn type="button" @click="open()">
               {{ t('policies.open') }}
             </VBtn>
-          </details>
+          </MdmDisclosure>
           <section class="task-scope-role">
             <h3>{{ t('policies.targets') }}</h3>
             <p>{{ t('policies.ux.scopeTargets') }}</p>

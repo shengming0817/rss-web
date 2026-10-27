@@ -10,7 +10,6 @@ import { createNativeDemo } from './native'
 import { createConfigurationPolicies } from './configuration-claims'
 import { createPolicyDemo } from './policies'
 import { createPolicyStore } from './store'
-import { createConfigurationDemo } from './configurations'
 import { createLifecycleDemo } from '../software/lifecycle'
 import { createPublicationDemo } from '../software/publication'
 import { createSoftwarePolicyDemo } from '../software/assignments'
@@ -93,7 +92,6 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
       policyStore,
     )
   const configurationPolicies = createConfigurationPolicies(devices, scopes, resources, policyStore)
-  const configurations = createConfigurationDemo(devices, scopes, configurationPolicies.assigned)
   const policies = createPolicyDemo(devices, scopes, resources, policyStore)
   const telemetry = createTelemetryDemo(devices, resources, policyStore, scopes)
   const handle: DomainHandler = (request, scenario) => {
@@ -145,7 +143,6 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         policyStore,
         policies,
         configurationPolicies,
-        configurations,
         lifecycle,
         publication,
         software,
@@ -302,7 +299,6 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
         policyStore,
         policies,
         configurationPolicies,
-        configurations,
         lifecycle,
         publication,
         software,

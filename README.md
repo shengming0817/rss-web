@@ -61,7 +61,7 @@ fixture 由隔离宿主准备，包含 `origin`（https://localhost:端口）、
 
 设备视图与关联的真实 HTTPS Chromium 验证：`MDM_DEVICE_BACKEND=/absolute/rss-mdm pnpm test:mdm:device-browser`。入口构建当前 UI，使用后端隔离开发环境与构建租约，退出清理 PG、产品进程与 TLS 网关；详见 [设备关联接入与验收](docs/architecture/20260926-2544-mdm-web.md#正式设备视图与关联2713)。
 
-软件直接发布与设备分批部署消费当前正式 HTTP V1 合同。来源、目标与发布记录来自正式目录；Direct 无需发布目标，Native 选择确切版本的发布目标。部署默认全量，分批配置为可选。接口、更新与恢复行为见 [软件来源与发布](docs/architecture/20260926-2544-mdm-web.md#软件来源resource导入与发布)。
+企业软件目录展示可用资源，来源、目标与发布记录继续消费当前正式 HTTP V1 合同；设备分配与分批配置统一在策略编辑器维护。Direct 无需发布目标，Native 选择确切版本的发布目标。独立部署、引导策略与更新页面已退出。接口、更新与恢复行为见 [软件来源与发布](docs/architecture/20260926-2544-mdm-web.md#软件来源resource导入与发布)。
 
 正式软件发布、版本更新与分批部署的 HTTPS Chromium 验证：
 

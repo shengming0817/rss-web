@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import PolicyFieldset from '../components/PolicyFieldset.vue'
 import {
   VBtn,
@@ -867,11 +868,11 @@ watch(
               <dt>{{ t('software.enabled') }}</dt>
               <dd>{{ enabled ? t('software.enabled') : t('software.paused') }}</dd>
             </dl>
-            <details class="console-evidence">
-              <summary>{{ t('console.advanced') }}</summary>
+            <MdmDisclosure class="console-evidence">
+              <template #title>{{ t('console.advanced') }}</template>
               <ResourceIdentity :binding="draft.action.resource" />
               <pre>{{ JSON.stringify(draft, null, 2) }}</pre>
-            </details>
+            </MdmDisclosure>
             <p role="status">
               {{ t(previewReady ? 'console.previewReady' : 'console.previewRequired') }}
             </p>

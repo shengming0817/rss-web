@@ -1,8 +1,8 @@
-import NativeEnrollmentPanel from '../../enrollment/components/NativeEnrollmentPanel.vue'
 import GroupsView from './GroupsView.vue'
 import InventoryQuery from '../components/InventoryQuery.vue'
 import DeviceGroupsPanel from '../components/DeviceGroupsPanel.vue'
 import { VSelect, VAutocomplete, VTextField, VAlert } from 'vuetify/components'
+import NativeEnrollmentPanel from '../../enrollment/components/NativeEnrollmentPanel.vue'
 import { encodeAssetQuery } from '../clients/asset-query'
 import GroupDependencies from '../components/GroupDependencies.vue'
 import { createSecurityClients as createFormalSecurityClients } from '../../security/client'
@@ -31,7 +31,7 @@ import { securityFeature } from '../../security/routes'
 import { operationsFeature } from '../../operations/routes'
 import { settingsFeature } from '../../settings/routes'
 import { deviceFeature } from '../routes'
-import { createPolicyClients } from '../../../../demo/features/policies/client'
+import { createPolicyClients } from '../../policies/client'
 import { createDeviceClients } from '../client'
 import { createOnboardingClients } from '../../enrollment/client'
 import { createSettingsOperations } from '../../settings/operations'
@@ -69,7 +69,8 @@ it('shows channel communication separately and clears the MDM receipt after regi
   const card = () => h.wrapper.find('[data-endpoint="device-01"]')
   async function openChannels() {
     await h.click('管理')
-    h.wrapper.get('[data-device-channels]').element.setAttribute('open', '')
+    const toggle = h.wrapper.get('[data-device-channels] .v-expansion-panel-title')
+    if (toggle.attributes('aria-expanded') !== 'true') await toggle.trigger('click')
     await flushPromises()
   }
   await openChannels()
@@ -211,20 +212,19 @@ async function setup(
   const settingsOperations = createSettingsOperations(session)
   const i18n = mdmI18n()
   i18n.global.locale.value = 'zh-CN'
+  const resolveTarget = targetEvidence ? createDemoEnrollmentTargetResolver(transport) : undefined
   const wrapper = mount(RouterView, {
     attachTo: document.body,
     global: {
       plugins: [router, i18n],
       provide: {
-        ...(targetEvidence
-          ? { [enrollmentTargetKey as symbol]: createDemoEnrollmentTargetResolver(transport) }
-          : {}),
+        ...(resolveTarget ? { [enrollmentTargetKey as symbol]: resolveTarget } : {}),
         [mdmKey as symbol]: {
           devices,
           onboarding: createOnboardingClients(transport, transport, TENANT, 'demo-instance'),
           settings: { operations: settingsOperations },
           security: createFormalSecurityClients(transport, TENANT),
-          policies: createPolicyClients(transport, TENANT, true),
+          policies: createPolicyClients(transport),
           transport,
           operations,
           tenant: TENANT,
@@ -316,6 +316,7 @@ async function setup(
     transport,
     session,
     sessionState,
+    resolveTarget,
   }
 }
 async function confirmCredential() {
@@ -404,10 +405,7 @@ it('renders asset categories, edits manual fields and keeps ownership blocked', 
   expect(wrapper.text()).toContain('registration_bound')
   await click('管理')
   expect(wrapper.text()).toContain('撤销服务端凭据不会擦除设备')
-  wrapper
-    .findAll('details')
-    .find((d) => d.find('summary').text() === '注册凭据')!
-    .element.setAttribute('open', '')
+  await click('注册凭据')
   await click('撤销凭据')
   await confirmCredential()
   expect(wrapper.text()).not.toContain('擦除成功')
@@ -622,9 +620,16 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
   await click('载入')
   expect(wrapper.text()).toContain('当前已发布成员集: 否')
   expect(wrapper.text()).toContain('未采集')
-  expect(
-    wrapper.findAll('details').find((detail) => detail.text().includes('manual')),
-  ).toBeDefined()
+  const explanation = wrapper
+    .findAll('.mdm-disclosure')
+    .find((disclosure) => disclosure.text().includes('manual'))
+  expect(explanation).toBeDefined()
+  const explainToggle = explanation!.get('.v-expansion-panel-title')
+  expect(explainToggle.text()).toBe('判断依据')
+  await explainToggle.trigger('click')
+  await flushPromises()
+  expect(explainToggle.attributes('aria-expanded')).toBe('true')
+  expect(explanation!.text()).toContain('manual')
   await click('重算并发布成员')
   await click('读取任务状态')
   await click('读取任务状态')
@@ -866,12 +871,9 @@ it('retains an in-flight manual write when tabs change before its unknown result
   expect(writes[1]!.body).toEqual(writes[0]!.body)
 })
 it('retains pending revoke confirmation across query updates and dismissal attempts until exact replay', async () => {
-  const { wrapper, click, devices, router } = await setup('device-detail', { device: 'device-01' })
+  const { click, devices, router } = await setup('device-detail', { device: 'device-01' })
   await click('管理')
-  wrapper
-    .findAll('details')
-    .find((d) => d.find('summary').text() === '注册凭据')!
-    .element.setAttribute('open', '')
+  await click('注册凭据')
   await click('撤销凭据')
   const dialog = new DOMWrapper(document.body).get('[role=alertdialog]')
   expect(dialog.element.closest('.mdm-device-surface')).not.toBeNull()
@@ -916,10 +918,7 @@ it('marks credential details stale after an acknowledged revoke with a failed re
   devices.directory.detail = async () => {
     throw decodeMdmError(503, { code: 'service_unavailable' })
   }
-  wrapper
-    .findAll('details')
-    .find((d) => d.find('summary').text() === '注册凭据')!
-    .element.setAttribute('open', '')
+  await click('注册凭据')
   await click('撤销凭据')
   await confirmCredential()
   expect(wrapper.text()).toContain('暂不可用')
@@ -2518,12 +2517,14 @@ it('does not restore manual inventory when detail authority is withdrawn during 
 })
 
 it('reads and cancels personal progress without calling inventory clients and rejects a mismatched route device', async () => {
-  const { wrapper, devices, click, router } = await setup('self-enrollments')
+  const { wrapper, devices, click, router, resolveTarget } = await setup('self-enrollments')
   const enroll = vi.spyOn(devices.registration, 'enroll')
   await preparePersonal(wrapper, click)
   await click('复制口令并继续')
   await flushPromises()
   const receipt = await enroll.mock.results[0]!.value
+  const target = await resolveTarget!(receipt.enrollmentId)
+  expect(target).toEqual({ enrollmentId: receipt.enrollmentId, deviceId: receipt.deviceId })
   const views = vi
     .spyOn(devices.views, 'detail')
     .mockRejectedValue(decodeMdmError(403, { code: 'permission_denied' }))
@@ -2534,14 +2535,10 @@ it('reads and cancels personal progress without calling inventory clients and re
   await vi.waitFor(() => expect(router.currentRoute.value.query['mode']).toBe('self-enrollment'))
   await flushPromises()
   const progress = wrapper.get('[data-self-enrollment-progress]')
+  await vi.waitFor(() => expect(progress.attributes('aria-busy')).toBe('false'))
   expect(progress.find('input[autocomplete=off]').exists()).toBe(false)
-  await vi.waitFor(() => expect(progress.text()).toContain('技术详情与手工设置'))
-  await progress
-    .findAll('button')
-    .find((button) => button.text().includes('技术详情与手工设置'))!
-    .trigger('click')
-  await flushPromises()
-  expect(progress.text()).toContain(receipt.deviceId)
+  await click('技术详情与手工设置')
+  expect(progress.text()).toContain(target.deviceId)
   expect(progress.text()).toContain(receipt.enrollmentId)
   expect(views).not.toHaveBeenCalled()
   expect(inventory).not.toHaveBeenCalled()

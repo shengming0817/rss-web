@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import { VBtn, VDataTable, VSelect, VTextField } from 'vuetify/components'
 import { comparison as queryComparison } from '../../../services/directory-query'
 import { computed, ref, watch } from 'vue'
@@ -199,8 +200,8 @@ watch(
       <VBtn v-if="page?.nextCursor" :disabled="busy" @click="list(page.nextCursor)">{{
         t('devices.next')
       }}</VBtn>
-      <details>
-        <summary>{{ t('policies.ux.technical') }}</summary>
+      <MdmDisclosure>
+        <template #title>{{ t('policies.ux.technical') }}</template>
         <form @submit.prevent="open()">
           <VTextField v-model="id" :label="t('software.resource')" required /><VBtn
             type="submit"
@@ -208,7 +209,7 @@ watch(
             >{{ t('policies.open') }}</VBtn
           >
         </form>
-      </details>
+      </MdmDisclosure>
     </template>
     <section v-else class="console-panel">
       <VBtn :disabled="busy || locked" @click="close">← {{ t('software.catalog') }}</VBtn>

@@ -15,7 +15,7 @@ import { createDeviceDemo } from '../demo/devices/state'
 import { seedScriptPolicies } from '../demo/policies/seed'
 import { createOnboardingDemo } from '../demo/enrollment'
 import { createImportsDemo } from '../demo/software/imports'
-import { createPolicyClients } from '../demo/features/policies/client'
+import { createPolicyClients } from './features/policies/client'
 import { operation } from './services/useOperation'
 import { softwarePolicy } from './features/software/clients/assignment-model'
 import { navigation, navigationTarget, platformNavigation } from './components/navigation'
@@ -79,7 +79,7 @@ async function start(platform = false) {
   runtime.mount()
   await runtime.router.isReady()
   await runtime.session.login(TENANT, 'demo', 'demo')
-  const policies = createPolicyClients(runtime.transport, TENANT, true)
+  const policies = createPolicyClients(runtime.transport)
   const published = await policies.scopes.change(
     seed.scope,
     operation(
@@ -245,6 +245,7 @@ it('renders platform navigation without resolving tenant-only device links', asy
       }
     }
     expect(app.router.hasRoute('device-groups')).toBe(false)
+    expect(app.router.hasRoute('software-assets')).toBe(false)
   } finally {
     app.cleanup()
   }
@@ -314,40 +315,6 @@ it('creates a formal Scope, changes the result channel explicitly, and deletes o
     expect(
       app.calls.findLast((c) => c.method === 'POST' && c.path === write.path)?.body,
     ).toMatchObject({ expectedRevision: 1, input: { action: 'delete' } })
-  } finally {
-    app.cleanup()
-  }
-}, 20000)
-it('versions, compares and preflights a platform configuration without treating preview as an applied effect', async () => {
-  const app = await start()
-  try {
-    await app.router.push({ name: 'policy-configurations', params: { tenant: TENANT } })
-    await flushPromises()
-    await press(app, 'policies.create')
-    await main().get('#configuration-name').setValue('Firewall preview')
-    await main().get('form').trigger('submit')
-    await flushPromises()
-    await press(app, 'console.edit')
-    await press(app, 'policies.loadTemplate')
-    await main().get('form').trigger('submit')
-    await flushPromises()
-    await press(app, 'policies.publish')
-    await press(app, 'policies.copySettings')
-    await main().get('#setting-type-0').setValue('number')
-    await main().get('#setting-value-0').setValue(1)
-    await main().get('form').trigger('submit')
-    await flushPromises()
-    await main().get('#configuration-from').setValue(1)
-    await main().get('#configuration-to').setValue(2)
-    await press(app, 'policies.open', true)
-    expect(main().text()).toContain('./Vendor/MSFT/Firewall/MdmStore/DomainProfile/EnableFirewall')
-    await main().get('#configuration-scope').setValue(app.seed.scope)
-    await main().get('#configuration-version').setValue(1)
-    await press(app, 'policies.preview')
-    await press(app, 'policies.refresh')
-    await press(app, 'policies.refresh')
-    expect(app.calls.some((c) => c.method === 'POST' && c.path.endsWith('/previews'))).toBe(true)
-    expect(main().text()).toContain(app.i18n.global.t('policies.state.unknown'))
   } finally {
     app.cleanup()
   }

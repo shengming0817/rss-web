@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import { VSelect, VTextField } from 'vuetify/components'
-import type { VueWrapper } from '@vue/test-utils'
+import type { DOMWrapper, VueWrapper } from '@vue/test-utils'
 import {
   createMdmTransport,
   type HttpTransport,
@@ -145,30 +145,67 @@ it('labels consent targets as request IDs, refreshes automatic time on submit an
   wrapper.unmount()
 })
 
-it('keeps dialog and selectable menus inside the demo theme surface', async () => {
+async function pointerClick(target: Pick<DOMWrapper<Element>, 'trigger' | 'isVisible'>) {
+  await target.trigger('mousedown', { button: 0 })
+  expect(target.isVisible()).toBe(true)
+  await target.trigger('mouseup', { button: 0 })
+  await target.trigger('click', { button: 0 })
+  await flushPromises()
+}
+
+it('selects scenario, module and source with pointer events and submits their exact values', async () => {
+  const request = vi.fn(async (options: RequestOptions<unknown> | NoContentRequest) => {
+    if (options.method === 'POST') throw new Error('operation_conflict')
+    const body = {
+      scenario: 'normal',
+      sources: {
+        devices: 'mock',
+        policies: 'mock',
+        software: 'mock',
+        security: 'mock',
+        operations: 'mock',
+      },
+    }
+    return 'decode' in options ? options.decode(body) : undefined
+  })
   const i18n = mdmI18n()
   i18n.global.locale.value = 'en-US'
   const host = document.createElement('div')
   document.body.append(host)
   const wrapper = mount(DemoControls, {
     attachTo: host,
-    props: { transport: createMdmTransport(), authenticated: ref(true) },
+    props: { transport: { request } as HttpTransport, authenticated: ref(true) },
     global: { plugins: [i18n] },
   })
   try {
-    await wrapper.get('button').trigger('click')
-    await flushPromises()
+    await pointerClick(wrapper.get('button'))
     const surface = wrapper.get('.mdm-device-surface')
     expect(surface.find('.v-dialog').exists()).toBe(true)
-    await select(wrapper, 'demo-scenario').get('input').trigger('keydown', { key: 'ArrowDown' })
-    await flushPromises()
-    expect(surface.get('.v-dialog').find('[role="listbox"]').exists()).toBe(true)
-    const option = surface
-      .findAll('[role="option"]')
-      .find((option) => option.text() === itemTitle(wrapper, 'demo-scenario', 'conflict'))!
-    await option.trigger('click')
-    await flushPromises()
-    expect(select(wrapper, 'demo-scenario').props('modelValue')).toBe('conflict')
+    const pointerChoose = async (id: string, value: string) => {
+      await pointerClick(select(wrapper, id).get('.v-field'))
+      const menu = surface.findAll('[role="listbox"]').find((menu) => menu.isVisible())!
+      expect(menu).toBeDefined()
+      const option = menu
+        .findAll('[role="option"]')
+        .find((option) => option.text() === itemTitle(wrapper, id, value))!
+      expect(option).toBeDefined()
+      expect(option.element.closest('.mdm-device-surface')).toBe(surface.element)
+      await pointerClick(option)
+      expect(select(wrapper, id).props('modelValue')).toBe(value)
+      expect(select(wrapper, id).text()).toContain(itemTitle(wrapper, id, value))
+    }
+    await pointerChoose('demo-scenario', 'conflict')
+    await pointerChoose('demo-module', 'software')
+    await pointerChoose('demo-source', 'real')
+    await pointerClick(wrapper.findAll('button').find((button) => button.text() === 'Apply')!)
+    expect(request).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        method: 'POST',
+        path: '/api/v1/mdm-candidate/workspace/scenario',
+        body: { reset: false, scenario: 'conflict', module: 'software', source: 'real' },
+        successStatus: 204,
+      }),
+    )
   } finally {
     wrapper.unmount()
     host.remove()

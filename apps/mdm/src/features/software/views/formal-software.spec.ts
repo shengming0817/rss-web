@@ -4,7 +4,7 @@ import { decodeMdmError } from '@rss/api/mdm'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { defineComponent, h, ref, type Component } from 'vue'
 import { createMemoryHistory } from 'vue-router'
-import { expect, it, vi } from 'vitest'
+import { expect, it, onTestFinished, vi } from 'vitest'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
 import SourcesView from './SourcesView.vue'
@@ -13,7 +13,7 @@ import ImportsView from './ImportsView.vue'
 import CatalogView from './CatalogView.vue'
 import VersionLifecycle from '../components/VersionLifecycle.vue'
 import SoftwareResourceSelect from '../components/SoftwareResourceSelect.vue'
-import { softwareResource } from '../../../../demo/software/fixtures'
+import { operation, request, softwareResource } from '../../../../demo/software/fixtures'
 const id = '11111111-1111-4111-8111-111111111111',
   sha = Array<number>(32).fill(1)
 const life = { revision: 1, state: 'enabled', operation: id, actor: 'operator', at: 1, digest: sha }
@@ -311,6 +311,130 @@ it('uses Resource pages and reads versions only after selection without inventin
   await flushPromises()
   expect(wrapper.find('[data-testid=resource-locator]').exists()).toBe(false)
   wrapper.unmount()
+})
+it('filters and clears the current Resource page without detail requests, then explicitly reloads the directory', async () => {
+  const app = {
+      id: 'app',
+      presentation: { name: 'Example Editor' },
+      revision: 2,
+      kind: 'software',
+      activeVersion: '1',
+    },
+    tools = { ...app, id: 'tools', presentation: { name: 'Enterprise Tools' } },
+    list = vi
+      .fn()
+      .mockResolvedValueOnce({ items: [app, tools], nextCursor: null })
+      .mockResolvedValue({ items: [tools], nextCursor: null }),
+    read = vi.fn()
+  const { wrapper } = await fixture(CatalogView, {
+    policies: { resources: { list, read } },
+  })
+  onTestFinished(() => wrapper.unmount())
+  const search = field(wrapper, '搜索本页名称或标识')
+  await search.setValue('EXAMPLE')
+  await flushPromises()
+  expect(wrapper.get('tbody').text()).toContain('Example Editor')
+  expect(wrapper.get('tbody').text()).not.toContain('Enterprise Tools')
+  expect(list).toHaveBeenCalledTimes(1)
+  expect(read).not.toHaveBeenCalled()
+
+  await search.get('[role="button"][aria-label="清除 搜索本页名称或标识"]').trigger('click')
+  await flushPromises()
+  expect(wrapper.get('tbody').text()).toContain('Example Editor')
+  expect(wrapper.get('tbody').text()).toContain('Enterprise Tools')
+  expect(list).toHaveBeenCalledTimes(1)
+  expect(read).not.toHaveBeenCalled()
+
+  await button(wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  expect(list.mock.calls).toEqual([
+    [{ cursor: undefined, filter: "kind=='software'" }],
+    [{ cursor: undefined, filter: "kind=='software'" }],
+  ])
+  expect(wrapper.get('tbody').text()).not.toContain('Example Editor')
+  expect(wrapper.get('tbody').text()).toContain('Enterprise Tools')
+  expect(read).not.toHaveBeenCalled()
+})
+it('opens an explicit Resource ID and binds admission to the newly selected exact version', async () => {
+  const { resources, definition } = softwareResource(),
+    original = resources.read('app')!
+  expect(
+    resources.handle(
+      request(
+        '/api/v1/resources/app',
+        operation(
+          {
+            action: 'version',
+            version: '2',
+            kind: 'software',
+            variants: original.versions[0]!.variants.map((variant) => ({
+              ...variant,
+              declaration: {
+                kind: 'software',
+                definition: { ...definition, version: '2.0' },
+              },
+            })),
+          },
+          original.revision,
+        ),
+      ),
+      'normal',
+    )?.status,
+  ).toBe(200)
+  const resource = resources.read('app')!,
+    read = vi.fn(async () => resource),
+    versionRead = vi.fn(async (resource: string, version: string) => ({
+      resource,
+      version,
+      resourceDigest: sha,
+      lifecycle: version === '1' ? life : null,
+    })),
+    changeVersion = vi.fn(
+      async (
+        _resource: string,
+        _version: string,
+        body: { operationId: string; expectedRevision: number; input: { action: string } },
+      ) => ({ lifecycle: { ...life, operation: body.operationId } }),
+    )
+  const { wrapper } = await fixture(CatalogView, {
+    policies: {
+      resources: { list: vi.fn(async () => ({ items: [], nextCursor: null })), read },
+    },
+    software: { lifecycle: { version: versionRead, changeVersion } },
+  })
+  onTestFinished(() => wrapper.unmount())
+  await button(wrapper, '原始标识与技术信息').trigger('click')
+  await field(wrapper, '软件资源').setValue('app')
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(read.mock.calls).toEqual([['app']])
+  expect(versionRead.mock.calls).toEqual([['app', '1']])
+  expect(wrapper.get('[data-testid=resource-locator]').text()).toBe(`app · ${resource.revision}`)
+
+  await field(wrapper, '精确包版本').setValue('2')
+  await flushPromises()
+  expect(versionRead.mock.calls).toEqual([
+    ['app', '1'],
+    ['app', '2'],
+  ])
+  expect(wrapper.findAll('h3').map((heading) => heading.text())).toContain('版本准入 · 2')
+  expect(wrapper.text().replace(/\s+/g, ' ')).toContain('Example.App / 2.0')
+  expect(read).toHaveBeenCalledOnce()
+  expect(changeVersion).not.toHaveBeenCalled()
+  await button(wrapper, '启用').trigger('click')
+  await flushPromises()
+  expect(changeVersion).toHaveBeenCalledWith('app', '2', {
+    operationId: expect.any(String),
+    expectedRevision: 0,
+    input: { action: 'enable' },
+  })
+
+  await field(wrapper, '精确包版本').setValue('1')
+  await flushPromises()
+  expect(versionRead).toHaveBeenLastCalledWith('app', '1')
+  expect(wrapper.findAll('h3').map((heading) => heading.text())).toContain('版本准入 · 1')
+  expect(changeVersion).toHaveBeenCalledOnce()
+  expect(read).toHaveBeenCalledOnce()
 })
 it('selects a Resource header before reading real versions and clears the previous version', async () => {
   const list = vi.fn().mockResolvedValue({

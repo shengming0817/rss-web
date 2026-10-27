@@ -26,11 +26,11 @@ const platformIds = [
   'oidc-state',
   'host-config',
 ]
-export function createSettingsDemo() {
+export function createSettingsDemo(options: { seedDownloads?: boolean } = {}) {
   const connections = createConnectionsDemo()
   const managementAuthorization = createManagementAuthorizationDemo()
   const pki = createPkiDemo()
-  const packages = createPackageDemo()
+  const packages = createPackageDemo(options)
   const profiles = createProfilesDemo()
   const operations = new Map<string, { input: string; receipt: unknown }>()
   const tenants = [

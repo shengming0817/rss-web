@@ -281,7 +281,10 @@ export function createScenario(
     }
     if (
       method === 'GET' &&
-      ['/api/v1/agent/enroll/packages', '/api/v1/windows/entra/terms/context'].includes(path)
+      (['/api/v1/agent/enroll/packages', '/api/v1/windows/entra/terms/context'].includes(path) ||
+        /^\/api\/v1\/agent\/enroll\/packages\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\/content)?$/.test(
+          path,
+        ))
     ) {
       for (const handler of handlers) {
         const reply = handler(
@@ -291,7 +294,7 @@ export function createScenario(
             body,
             query: parsed.searchParams,
             headers: {},
-            actor: { principalId, sessionId, tenantId: sessionTenant },
+            actor: { principalId: 'anonymous', sessionId: 'anonymous' },
           },
           active,
         )
@@ -413,23 +416,25 @@ export function createScenario(
       /^\/api\/(?:v1\/(?:audit-events|runtime\/diagnostics|authorization|tenant-administration\/authorization|apple\/organizations|windows\/entra-policy|agent-configurations|agent-configuration-operations|agent-enrollment-settings)(?:\/|$)|v1\/mdm-candidate\/(?:authorization|audit|operations|integrations)(?:\/|$))/.test(
         path,
       )
-    const module = operationsPath
-      ? 'operations'
-      : securityPath
-        ? 'security'
-        : softwarePath
-          ? 'software'
-          : policyPath
-            ? 'policies'
-            : /^\/api\/(?:v1\/(?:asset-fields|asset-retention-policies|asset-field-layout|device-queries|devices|saved-queries|groups)|v1\/(?:enrollments|devices|self-enrollments|registration-quotas))(?:\/|$)/.test(
-                  path,
-                )
-              ? 'devices'
-              : path.startsWith('/api/v1/device-views') ||
-                  path.startsWith('/api/v1/device-associations') ||
-                  path.startsWith('/api/v1/groups')
+    const module = path.startsWith('/api/v1/mdm-candidate/groups')
+      ? 'devices'
+      : operationsPath
+        ? 'operations'
+        : securityPath
+          ? 'security'
+          : softwarePath
+            ? 'software'
+            : policyPath
+              ? 'policies'
+              : /^\/api\/(?:v1\/(?:asset-fields|asset-retention-policies|asset-field-layout|device-queries|devices|saved-queries|groups)|v1\/(?:enrollments|devices|self-enrollments|registration-quotas))(?:\/|$)/.test(
+                    path,
+                  )
                 ? 'devices'
-                : path.split('/')[4]
+                : path.startsWith('/api/v1/device-views') ||
+                    path.startsWith('/api/v1/device-associations') ||
+                    path.startsWith('/api/v1/groups')
+                  ? 'devices'
+                  : path.split('/')[4]
     if (module && sources[module] === 'real')
       return { status: 503, body: { code: 'service_unavailable' } }
     const failure = fault()

@@ -308,11 +308,14 @@ it('shows partial coverage and independent facts, then clears denied or stale re
   await button(wrapper, '查看关联事实').trigger('click')
   await flushPromises()
   expect(runtime.operations.activities.read).toHaveBeenCalledWith('endpoint', fact.id)
-  expect(document.body.textContent).toContain('policy_fact_unavailable')
-  // Dialog output is teleported; the associated page still owns its lifecycle.
   const dialog = new DOMWrapper(document.body).get('[role=dialog]')
-  await button(dialog, '关闭').trigger('click')
+  expect(dialog.text()).toContain('policy_fact_unavailable')
+  await dialog
+    .findAll('button')
+    .find((control) => control.text() === '关闭')!
+    .trigger('click')
   await flushPromises()
+  expect(new DOMWrapper(document.body).find('[role=dialog]').exists()).toBe(false)
   runtime.operations.activities.list.mockRejectedValueOnce(new Error('offline'))
   await wrapper.get('form').trigger('submit')
   await flushPromises()

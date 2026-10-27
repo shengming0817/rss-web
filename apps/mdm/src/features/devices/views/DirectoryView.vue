@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import { comparison, allOf } from '../../../services/directory-query'
 import { ref, watch, computed } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
@@ -252,8 +253,8 @@ const sourceOptions = computed(() => [
         :disabled="busy"
       />
       <v-btn type="submit" color="primary" :loading="busy">{{ t('devices.reload') }}</v-btn>
-      <details class="device-filter-details">
-        <summary>{{ t('devices.workspace.moreFilters') }}</summary>
+      <MdmDisclosure class="device-filter-details">
+        <template #title>{{ t('devices.workspace.moreFilters') }}</template>
         <div class="device-filter-grid">
           <v-text-field
             v-model="rsql"
@@ -310,7 +311,7 @@ const sourceOptions = computed(() => [
           />
           <v-checkbox v-model="descending" :label="t('devices.descending')" :disabled="busy" />
         </div>
-      </details>
+      </MdmDisclosure>
     </form>
     <v-expansion-panels
       ><v-expansion-panel :title="t('groupModule.advanced')"
@@ -323,8 +324,8 @@ const sourceOptions = computed(() => [
         t('devices.reload')
       }}</v-btn>
     </p>
-    <details class="device-section">
-      <summary>{{ t('devices.displayColumns') }}</summary>
+    <MdmDisclosure class="device-section">
+      <template #title>{{ t('devices.displayColumns') }}</template>
       <div class="device-columns">
         <v-checkbox
           v-for="key in [
@@ -343,7 +344,7 @@ const sourceOptions = computed(() => [
         />
         <v-btn variant="outlined" @click="applyFilters">{{ t('devices.save') }}</v-btn>
       </div>
-    </details>
+    </MdmDisclosure>
     <v-alert v-if="statisticsOperation.failure.value" type="warning" variant="tonal" role="alert">{{
       t('devices.' + statisticsOperation.failure.value)
     }}</v-alert>
@@ -380,10 +381,10 @@ const sourceOptions = computed(() => [
                       : 'devices.originalEndpoint',
                   )
                 }}</small>
-                <details>
-                  <summary>{{ t('devices.evidence') }}</summary>
+                <MdmDisclosure>
+                  <template #title>{{ t('devices.evidence') }}</template>
                   {{ row.reference.id }}
-                </details>
+                </MdmDisclosure>
               </template>
               <template v-else-if="column.key === 'platform'"
                 ><p v-for="e in row.endpoints" :key="e.id">

@@ -6,7 +6,7 @@ import { createAutomationDemo } from '../policies/state'
 import type { DemoEvent } from '../scenario'
 import { createSecurityClients } from '../features/security/client'
 import { createOperationsClients } from '../features/operations/client'
-import { createPolicyClients } from '../features/policies/client'
+import { createPolicyClients } from '../../src/features/policies/client'
 import { operation } from '../../src/services/useOperation'
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
@@ -60,7 +60,7 @@ async function setup() {
     } as unknown as HttpTransport,
     security = createSecurityClients(transport, TENANT, true),
     operations = createOperationsClients(transport, TENANT, true),
-    policies = createPolicyClients(transport, TENANT, true)
+    policies = createPolicyClients(transport)
   async function control(body: unknown) {
     expect(
       (await server.handle('POST', '/api/v1/mdm-candidate/workspace/scenario', body, headers))

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import { VBtn, VCard, VCheckbox, VForm, VSelect, VTextField, VTextarea } from 'vuetify/components'
 import { ref, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -363,9 +364,9 @@ function restore() {
         t('gap.compare')
       }}</VBtn></template
     >
-    <details v-if="receipt">
-      <summary>{{ t('gap.result') }}</summary>
+    <MdmDisclosure v-if="receipt">
+      <template #title>{{ t('gap.result') }}</template>
       <pre>{{ JSON.stringify(receipt, null, 2) }}</pre>
-    </details></VCard
+    </MdmDisclosure></VCard
   >
 </template>

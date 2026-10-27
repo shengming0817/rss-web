@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import { comparison as queryComparison, allOf } from '../../../services/directory-query'
 import {
   VBtn,
@@ -707,8 +708,8 @@ function openGroup(group: string) {
                             sources: row.sourceObjects,
                           }"
                         />
-                        <details>
-                          <summary>{{ t('devices.explanations') }}</summary>
+                        <MdmDisclosure>
+                          <template #title>{{ t('devices.explanations') }}</template>
                           <p v-for="(e, i) in row.explanations" :key="i">
                             {{ e.path.join('.') }} ·
                             {{
@@ -721,7 +722,7 @@ function openGroup(group: string) {
                             {{ e.field }} · {{ e.source }} · {{ e.snapshot_id }} ·
                             {{ e.observed_at }}
                           </p>
-                        </details>
+                        </MdmDisclosure>
                       </td>
                     </tr>
                   </tbody></v-table
@@ -870,8 +871,8 @@ function openGroup(group: string) {
         ></v-card
       ></v-dialog
     >
-    <details>
-      <summary>{{ t('console.advanced') }}</summary>
+    <MdmDisclosure>
+      <template #title>{{ t('console.advanced') }}</template>
       <form @submit.prevent="open()">
         <v-text-field
           v-model="id"
@@ -881,7 +882,7 @@ function openGroup(group: string) {
         /><v-btn :disabled="busy || uncertain" type="submit">{{ t('devices.open') }}</v-btn>
       </form>
       <p>{{ current?.group.id }} · {{ current?.group.revision }} · {{ task }}</p>
-    </details>
+    </MdmDisclosure>
     <v-dialog
       v-model="deleting"
       :data-state="deleting ? 'open' : 'closed'"

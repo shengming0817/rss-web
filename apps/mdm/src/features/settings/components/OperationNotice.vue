@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import { useI18n } from 'vue-i18n'
 import { VAlert, VBtn } from 'vuetify/components'
 import type { SettingsOperation } from '../operations'
@@ -36,10 +37,10 @@ const { t } = useI18n()
       {{ t('settings.operationId') }} <code>{{ operation.id }}</code> · {{ t('settings.revision') }}
       {{ operation.expectedRevision }}
     </p>
-    <details v-if="operation.state === 'unknown'">
-      <summary>{{ t('settings.publicInputs') }}</summary>
+    <MdmDisclosure v-if="operation.state === 'unknown'">
+      <template #title>{{ t('settings.publicInputs') }}</template>
       <pre class="settings-public-input">{{ operation.publicInput }}</pre>
-    </details>
+    </MdmDisclosure>
     <p v-if="operation.state === 'unknown'">
       {{ t(querySupported === false ? 'settings.noOperationQuery' : 'settings.retryHint') }}
     </p>

@@ -283,6 +283,16 @@ async function fixture(
 function button(w: VueWrapper | DOMWrapper<Node>, label: string) {
   return w.findAll('button').find((b) => b.text() === label)!
 }
+function checkboxForLabel(wrapper: VueWrapper, text: string | RegExp) {
+  const label = wrapper
+    .findAll('label')
+    .find((item) => (typeof text === 'string' ? item.text() === text : text.test(item.text())))
+  expect(label).toBeDefined()
+  const control = (label!.element as HTMLLabelElement).control
+  expect(control).toBeInstanceOf(HTMLInputElement)
+  expect((control as HTMLInputElement).type).toBe('checkbox')
+  return new DOMWrapper(control as HTMLInputElement)
+}
 it('clears imported private keys immediately, keeps unknown writes across remount and queries before exact replay', async () => {
   const f = await fixture(ApplePanel, { purpose: 'apns' })
   await f.wrapper.getComponent(VSelect).setValue('import')
@@ -1680,6 +1690,11 @@ it('keeps display edits on the existing observation gate and resets it for mappi
       },
     ],
   })
+  const attributeSelect = (id: string) => {
+    const select = f.wrapper.findAllComponents(VSelect).find((item) => item.props('id') === id)
+    expect(select).toBeDefined()
+    return select!
+  }
   let written: typeof value
   f.setHandler((o) => {
     written = (o.body as { value: typeof value }).value
@@ -1692,21 +1707,7 @@ it('keeps display edits on the existing observation gate and resets it for mappi
   await f.wrapper.get('form').trigger('submit')
   await flushPromises()
   expect(written!.useExistingObservation).toBe(true)
-  async function selectOption(selector: string, title: string) {
-    await new DOMWrapper(f.wrapper.get(selector).element.closest('.v-field')!).trigger('mousedown')
-    await flushPromises()
-    const option = body()
-      .findAll('[role=option]')
-      .find((item) => item.text().trim() === title)
-    expect(option, title).toBeDefined()
-    await option!.trigger('click')
-    await flushPromises()
-  }
-  function checkbox(title: string) {
-    const label = f.wrapper.findAll('label').find((item) => item.text().includes(title))!
-    return f.wrapper.get(`#${label.attributes('for')}`)
-  }
-  await selectOption('#attribute-type', '安全整数')
+  await attributeSelect('attribute-type').setValue('integer')
   await f.wrapper.get('#attribute-min').setValue('0')
   await f.wrapper.get('form').trigger('submit')
   await flushPromises()
@@ -1716,12 +1717,11 @@ it('keeps display edits on the existing observation gate and resets it for mappi
     minimum: 0,
     maxLength: null,
   })
-  await checkbox('敏感字段').setValue(true)
-  expect((f.wrapper.get('#attribute-visibility').element as HTMLInputElement).value).toBe(
-    '资料管理员',
-  )
-  await selectOption('#attribute-visibility', '本人及资料管理员')
-  await selectOption('#attribute-type', '对象')
+  const sensitive = checkboxForLabel(f.wrapper, '敏感字段')
+  await sensitive.setValue(true)
+  expect(attributeSelect('attribute-visibility').props('modelValue')).toBe('profiles_read')
+  await attributeSelect('attribute-visibility').setValue('both')
+  await attributeSelect('attribute-type').setValue('object')
   await f.wrapper.get('form').trigger('submit')
   await flushPromises()
   expect(written!).toMatchObject({
@@ -1730,7 +1730,7 @@ it('keeps display edits on the existing observation gate and resets it for mappi
     sensitive: true,
     visibility: 'both',
   })
-  await checkbox('确认删除此字段').setValue(true)
+  await checkboxForLabel(f.wrapper, /确认删除此字段/).setValue(true)
   await button(f.wrapper, '删除字段').trigger('click')
   await flushPromises()
   expect(written!).toBe(null)
@@ -2120,8 +2120,8 @@ it('clears a previously queried issuance candidate when the same session loses C
   }))
   await button(f.wrapper, '查询原操作').trigger('click')
   await flushPromises()
-  expect(f.wrapper.text()).toContain(principal)
-  expect(f.wrapper.find('table').exists()).toBe(true)
+  expect(f.wrapper.get('table').text()).toContain(principal)
+  expect(f.wrapper.get('table').text()).toContain(tenant)
   f.setHandler(() => {
     throw decodeAgentError(403, { code: 'permission_denied', issuanceId: null })
   })

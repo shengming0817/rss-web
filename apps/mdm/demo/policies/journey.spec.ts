@@ -4,7 +4,7 @@ import { createScenario, TENANT } from '../scenario'
 import { createDeviceDemo } from '../devices/state'
 import { createAutomationDemo } from './state'
 import { seedScriptPolicies } from './seed'
-import { createPolicyClients } from '../features/policies/client'
+import { createPolicyClients } from '../../src/features/policies/client'
 const operation = <T>(input: T, expectedRevision = 0) => ({
   operationId: crypto.randomUUID(),
   expectedRevision,
@@ -47,7 +47,7 @@ it('carries the shared formal Policy through the HTTP session, preserves existin
       return o.decode(r.body)
     },
   } as unknown as HttpTransport
-  const clients = createPolicyClients(transport, TENANT, true),
+  const clients = createPolicyClients(transport),
     policies = clients.policies
   expect((await policies.list()).items).toHaveLength(4)
   const old = await policies.read(seed.ids[1]!)
@@ -77,10 +77,7 @@ it('carries the shared formal Policy through the HTTP session, preserves existin
   expect(disabled.versionId).toBe(saved.versionId)
   expect(disabled.definition.selfService?.published).toBe(true)
   expect((await clients.executions.directory()).items).toEqual([])
-  // Formal browser clients also consume these endpoints outside demo mode.
-  expect(await createPolicyClients(transport, TENANT, false).policies.read(old.id)).toEqual(
-    disabled,
-  )
+  expect(await policies.read(old.id)).toEqual(disabled)
   scenario.set('denied')
   await expect(policies.read(old.id)).rejects.toMatchObject({ status: 403 })
 })

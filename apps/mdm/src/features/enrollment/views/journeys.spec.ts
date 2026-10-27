@@ -17,6 +17,7 @@ import { mdmKey, type MdmRuntime } from '../../../context'
 import { mdmI18n } from '../../../i18n'
 import { createOnboardingClients } from '../client'
 import { createOnboardingDemo } from '../../../../demo/enrollment'
+import { createSettingsDemo } from '../../../../demo/settings'
 import { ADMIN, INSTANCE } from '../../../../demo/operations/authorization'
 import { TENANT } from '../../../../demo/scenario'
 import ConfigurationsView from './ConfigurationsView.vue'
@@ -40,7 +41,8 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 async function setup(view: unknown, allow = true, targetEvidence = false) {
-  const devices = createDeviceDemo()
+  const devices = createDeviceDemo(),
+    settings = createSettingsDemo()
   const domain = createOnboardingDemo(() => allow, devices.registrationAllowed),
     calls: string[] = [],
     lost = { path: '' },
@@ -70,7 +72,9 @@ async function setup(view: unknown, allow = true, targetEvidence = false) {
         ),
         actor: { principalId: ADMIN, sessionId: state.value.session.id },
       }
-      const reply = (domain.handle(request, 'normal') ?? devices.handle(request, 'normal'))!
+      const reply = (settings.handle(request, 'normal') ??
+        domain.handle(request, 'normal') ??
+        devices.handle(request, 'normal'))!
       if (lost.path === o.path) {
         lost.path = ''
         throw networkErrorForTest()
@@ -166,16 +170,8 @@ async function setup(view: unknown, allow = true, targetEvidence = false) {
   return { wrapper, runtime, domain, router, state, calls, lost, click, create, revoke }
 }
 it('keeps downloads anonymous and never requests or creates enrollment authority', async () => {
-  const { wrapper, calls, runtime, click } = await setup(DownloadsView, false)
+  const { wrapper, calls } = await setup(DownloadsView, false)
   expect(wrapper.text()).toContain('无需登录')
-  expect(wrapper.findAll('a[download]')).toHaveLength(4)
-  expect(
-    wrapper
-      .findAll('a[download]')
-      .every((link) => link.attributes('download')?.startsWith('MOCK-NOT-AN-INSTALLER')),
-  ).toBe(true)
-  vi.spyOn(runtime.onboarding.packages, 'list').mockResolvedValue([])
-  await click('重新读取')
   expect(wrapper.text()).toContain('没有已发布')
   expect(wrapper.findAll('a[download]')).toHaveLength(0)
   expect(wrapper.findAll('select')).toHaveLength(0)

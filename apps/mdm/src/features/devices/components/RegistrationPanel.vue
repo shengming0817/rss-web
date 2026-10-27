@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import { VBtn, VDialog, VCard, VCardText, VCardActions, VSpacer } from 'vuetify/components'
 import { computed, ref, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -59,8 +60,8 @@ async function revoke(replay = false) {
 onMounted(() => void load())
 </script>
 <template>
-  <details class="console-panel">
-    <summary>{{ t('devices.credentials') }}</summary>
+  <MdmDisclosure class="console-panel">
+    <template #title>{{ t('devices.credentials') }}</template>
     <p>{{ t('devices.revokeNote') }}</p>
     <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
     <ul>
@@ -108,5 +109,5 @@ onMounted(() => void load())
         ></v-card
       ></v-dialog
     >
-  </details>
+  </MdmDisclosure>
 </template>
