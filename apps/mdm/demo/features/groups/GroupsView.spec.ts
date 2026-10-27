@@ -19,7 +19,11 @@ afterEach(() => {
   document.body.innerHTML = ''
   vi.restoreAllMocks()
 })
-async function setup(category = 'user-dynamic', loginName: 'demo' | 'reviewer' = 'demo') {
+async function setup(
+  category = 'user-dynamic',
+  loginName: 'demo' | 'reviewer' = 'demo',
+  intercept?: (f: Awaited<ReturnType<typeof setupGroups>>) => void,
+) {
   const f = await setupGroups(loginName),
     router = createRouter({
       history: createMemoryHistory(),
@@ -52,6 +56,7 @@ async function setup(category = 'user-dynamic', loginName: 'demo' | 'reviewer' =
     },
     transport: f.transport,
   }
+  intercept?.(f)
   const wrapper = mount(GroupsView, {
     attachTo: document.body,
     global: {
@@ -224,4 +229,81 @@ it('keeps the reviewer read only in both Vuetify controls and the Mock HTTP hand
       },
     }),
   ).rejects.toMatchObject({ status: 403 })
+})
+
+it('retains a failed preview result and retries it without publishing or repeating the write', async () => {
+  let failResult = false
+  const f = await setup('user-dynamic', 'demo', (fixture) => {
+    const request = fixture.transport.request.bind(fixture.transport)
+    vi.spyOn(fixture.transport, 'request').mockImplementation((options) => {
+      if (failResult && options.path.includes('/results/'))
+        return Promise.reject(new Error('result unavailable'))
+      return request(options)
+    })
+  })
+  await f.click('Mock user-dynamic')
+  failResult = true
+  await f.click('预览已保存规则')
+  await vi.waitFor(
+    () => {
+      expect(f.wrapper.text()).toContain('计算完成')
+      expect(f.wrapper.text()).toContain('输入或响应无效')
+    },
+    { timeout: 3000 },
+  )
+  const lists = f.requests.filter((r) => r.path === '/api/v1/mdm-candidate/groups').length
+  const writes = f.requests.filter((r) => r.method !== 'GET').length
+  expect(f.wrapper.text()).not.toContain('预览结果 · 未发布成员')
+  failResult = false
+  await f.click('刷新计算状态')
+  expect(f.wrapper.text()).toContain('预览结果 · 未发布成员')
+  expect(f.wrapper.text()).not.toContain('输入或响应无效')
+  expect(f.requests.filter((r) => r.path === '/api/v1/mdm-candidate/groups')).toHaveLength(
+    lists + 1,
+  )
+  expect(f.requests.filter((r) => r.method !== 'GET')).toHaveLength(writes)
+})
+
+it('retains catalog initialization failures and retries the complete directory read', async () => {
+  let failCatalog = true
+  const f = await setup('user-static', 'demo', (fixture) => {
+    const request = fixture.transport.request.bind(fixture.transport)
+    vi.spyOn(fixture.transport, 'request').mockImplementation((options) => {
+      if (failCatalog && options.path.endsWith('/catalog'))
+        return Promise.reject(new Error('catalog unavailable'))
+      return request(options)
+    })
+  })
+  expect(f.wrapper.text()).toContain('输入或响应无效')
+  expect(f.requests.some((r) => r.path === '/api/v1/mdm-candidate/groups')).toBe(false)
+  failCatalog = false
+  await f.click('刷新')
+  expect(f.wrapper.text()).toContain('Mock user-static')
+  expect(f.wrapper.text()).not.toContain('输入或响应无效')
+})
+
+it('retains the acknowledged-save detail failure without a later list clearing it', async () => {
+  let failRead = false
+  const f = await setup('user-static', 'demo', (fixture) => {
+    const request = fixture.transport.request.bind(fixture.transport)
+    vi.spyOn(fixture.transport, 'request').mockImplementation((options) => {
+      if (failRead && options.method === 'GET' && options.path.endsWith('/{id}'))
+        return Promise.reject(new Error('detail unavailable'))
+      return request(options)
+    })
+  })
+  await f.click('新建组')
+  const dialog = new DOMWrapper(document.body).get('[role=dialog]')
+  await dialog.get('[data-testid=mock-group-name] input').setValue('Saved but unread')
+  const lists = f.requests.filter((r) => r.path === '/api/v1/mdm-candidate/groups').length
+  failRead = true
+  await dialog.get('[data-testid=mock-group-save]').trigger('click')
+  await flushPromises()
+  expect(f.wrapper.text()).toContain('输入或响应无效')
+  expect(f.requests.filter((r) => r.path === '/api/v1/mdm-candidate/groups')).toHaveLength(lists)
+  failRead = false
+  await f.click('刷新')
+  await f.click('Saved but unread')
+  expect(f.wrapper.get('[data-testid=mock-group-detail]').text()).toContain('Saved but unread')
+  expect(f.requests.filter((r) => r.method === 'PUT')).toHaveLength(1)
 })
