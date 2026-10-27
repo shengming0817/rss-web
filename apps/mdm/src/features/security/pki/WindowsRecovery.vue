@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton } from '@rss/core/components'
+import { VAlert, VBtn, VCard, VCardText, VTable, VTextarea, VTextField } from 'vuetify/components'
 import { useMdm } from '../../../context'
 import { usePermission } from '../../enrollment/usePermission'
 import { useSettingsAction, useSettingsFacts } from '../../settings/useSettingsAction'
@@ -53,52 +53,63 @@ async function recover() {
 useSettingsFacts(clear)
 </script>
 <template>
-  <section class="console-panel">
-    <h2>{{ t('security.recovery.windows') }}</h2>
-    <p>{{ t('security.pki.issuedHint') }}</p>
-    <p>{{ t('security.recovery.noQueue') }}</p>
-    <OperationNotice
-      :operation="pending"
-      :busy="busy"
-      :can-write="canWrite"
-      :query-supported="false"
-      :compare-supported="false"
-    />
-    <p v-if="pending?.state === 'conflict'" role="alert">
-      {{ t('security.recovery.conflictHandoff') }}
-    </p>
-    <form class="settings-form" @submit.prevent="recover">
-      <fieldset :disabled="locked || !canWrite">
-        <label for="pki-attempt">{{ t('settings.signingAttempt') }}</label
-        ><input
+  <v-card :title="t('security.recovery.windows')"
+    ><v-card-text>
+      <p class="mb-3">{{ t('security.pki.issuedHint') }}</p>
+      <v-alert type="info" variant="tonal" class="mb-4">{{
+        t('security.recovery.noQueue')
+      }}</v-alert>
+      <OperationNotice
+        :operation="pending"
+        :busy="busy"
+        :can-write="canWrite"
+        :query-supported="false"
+        :compare-supported="false"
+      />
+      <v-alert v-if="pending?.state === 'conflict'" type="warning" variant="tonal">{{
+        t('security.recovery.conflictHandoff')
+      }}</v-alert>
+      <form @submit.prevent="recover">
+        <v-text-field
           id="pki-attempt"
           v-model="attempt"
+          :label="t('settings.signingAttempt')"
           required
           maxlength="36"
-          @input="reviewed = false"
-        />
-        <label for="pki-chain">{{ t('security.recovery.publicChain') }}</label
-        ><textarea
+          :disabled="locked || !canWrite"
+          @update:model-value="reviewed = false"
+        /><v-textarea
           id="pki-chain"
           v-model="chain"
+          :label="t('security.recovery.publicChain')"
           required
           maxlength="180000"
           spellcheck="false"
-          @input="reviewed = false"
+          :disabled="locked || !canWrite"
+          @update:model-value="reviewed = false"
         />
-        <p>{{ t('security.pki.publicHint') }}</p>
-        <p v-if="reviewed">{{ t('security.recovery.confirm') }} · {{ attempt }}</p>
-        <UiButton type="submit">{{
+        <p class="mb-3">{{ t('security.pki.publicHint') }}</p>
+        <v-alert v-if="reviewed" type="warning" variant="tonal" class="mb-3"
+          >{{ t('security.recovery.confirm') }} · {{ attempt }}</v-alert
+        ><v-btn type="submit" :disabled="locked || !canWrite">{{
           t(reviewed ? 'security.recovery.attach' : 'security.pki.review')
-        }}</UiButton>
-      </fieldset>
-    </form>
-    <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
-    <dl v-if="result" class="settings-facts">
-      <dt>{{ t('settings.signingAttempt') }}</dt>
-      <dd>{{ result.attempt }}</dd>
-      <dt>{{ t('security.recovery.fingerprint') }}</dt>
-      <dd class="console-locator">{{ result.fingerprint }}</dd>
-    </dl>
-  </section>
+        }}</v-btn>
+      </form>
+      <v-alert v-if="failure" type="error" variant="tonal" class="mt-3">{{
+        t('devices.' + failure)
+      }}</v-alert
+      ><v-table v-if="result" class="mt-3"
+        ><tbody>
+          <tr>
+            <th>{{ t('settings.signingAttempt') }}</th>
+            <td>{{ result.attempt }}</td>
+          </tr>
+          <tr>
+            <th>{{ t('security.recovery.fingerprint') }}</th>
+            <td>{{ result.fingerprint }}</td>
+          </tr>
+        </tbody></v-table
+      >
+    </v-card-text></v-card
+  >
 </template>

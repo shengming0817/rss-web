@@ -1,7 +1,22 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiTable, UiBadge, UiDialog, UiStepIndicator } from '@rss/core/components'
+import {
+  VAlert,
+  VBtn,
+  VCard,
+  VCardActions,
+  VCardText,
+  VCardTitle,
+  VChip,
+  VDialog,
+  VFileInput,
+  VList,
+  VListItem,
+  VStepper,
+  VTable,
+  VTextField,
+} from 'vuetify/components'
 import { useMdm } from '../../../context'
 import { usePermission } from '../../enrollment/usePermission'
 import { useSettingsAction, useSettingsFacts } from '../../settings/useSettingsAction'
@@ -147,10 +162,8 @@ async function load() {
 async function compare() {
   if (await load()) markCompared()
 }
-async function file(event: Event) {
-  const input = event.target as HTMLInputElement,
-    selectedFile = input.files?.[0]
-  input.value = ''
+async function file(selectedFile: File | File[] | null) {
+  if (Array.isArray(selectedFile)) selectedFile = selectedFile[0] ?? null
   candidate.value = undefined
   preparationReviewed.value = false
   if (!selectedFile) return
@@ -185,213 +198,264 @@ useSettingsFacts(() => {
 })
 </script>
 <template>
-  <section class="console-panel">
-    <header class="console-inline-actions">
-      <h2>{{ t('security.pki.trust') }}</h2>
-      <UiButton :disabled="busy || !canRead" @click="load">{{ t('devices.reload') }}</UiButton
-      ><UiButton :disabled="locked || !canWrite || !trust" @click="openPreparation">{{
-        t('security.pki.prepare')
-      }}</UiButton>
-    </header>
-    <p>{{ t('security.pki.publicHint') }}</p>
-    <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
-    <OperationNotice
-      :operation="pending"
-      :busy="busy"
-      :can-write="canWrite"
-      :query-supported="false"
-      :compared="compared"
-      @compare="compare"
-      @edit="resolveConflict"
-    />
-    <template v-if="trust">
-      <p>
-        {{ t('settings.connections.service') }} {{ trust.service_id }} ·
-        {{ t('security.pki.revision') }} {{ trust.revision }} · {{ t('security.pki.origin') }}
-        {{ trust.origin }}
-        <span v-if="readAt">· {{ t('security.pki.readAt') }} {{ auditTime(readAt) }}</span>
-      </p>
-      <UiTable
-        :label="t('security.pki.trust')"
-        :rows="trust.issuers"
-        :row-key="(v) => v.digest"
-        :columns="[
-          { key: 'digest', label: t('security.pki.issuer') },
-          { key: 'mode', label: t('security.pki.mode') },
-          { key: 'provisioner', label: t('security.pki.provider') },
-        ]"
+  <v-card :title="t('security.pki.trust')" class="mb-4"
+    ><v-card-text>
+      <div class="d-flex flex-wrap ga-3 mb-4">
+        <v-btn variant="tonal" :disabled="busy || !canRead" @click="load">{{
+          t('devices.reload')
+        }}</v-btn
+        ><v-btn :disabled="locked || !canWrite || !trust" @click="openPreparation">{{
+          t('security.pki.prepare')
+        }}</v-btn>
+      </div>
+      <v-alert type="info" variant="tonal" class="mb-3">{{ t('security.pki.publicHint') }}</v-alert
+      ><v-alert v-if="failure" type="error" variant="tonal" class="mb-3">{{
+        t('devices.' + failure)
+      }}</v-alert>
+      <OperationNotice
+        :operation="pending"
         :busy="busy"
-        :busy-label="t('devices.loading')"
-        :empty-label="t('devices.empty')"
-      >
-        <template #cell-digest="{ row }"
-          ><UiButton variant="ghost" @click="selected = row"
-            >{{ row.digest.slice(0, 16) }}…</UiButton
-          ></template
+        :can-write="canWrite"
+        :query-supported="false"
+        :compared="compared"
+        @compare="compare"
+        @edit="resolveConflict"
+      />
+      <template v-if="trust"
+        ><p class="my-3">
+          {{ t('settings.connections.service') }} {{ trust.service_id }} ·
+          {{ t('security.pki.revision') }} {{ trust.revision }} · {{ t('security.pki.origin') }}
+          {{ trust.origin }}
+          <span v-if="readAt">· {{ t('security.pki.readAt') }} {{ auditTime(readAt) }}</span>
+        </p>
+        <v-table :aria-label="t('security.pki.trust')"
+          ><thead>
+            <tr>
+              <th>{{ t('security.pki.issuer') }}</th>
+              <th>{{ t('security.pki.mode') }}</th>
+              <th>{{ t('security.pki.provider') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="issuer in trust.issuers" :key="issuer.digest">
+              <td>
+                <v-btn variant="text" @click="selected = issuer"
+                  >{{ issuer.digest.slice(0, 16) }}…</v-btn
+                >
+              </td>
+              <td>
+                <v-chip :color="issuer.mode === 'active' ? 'success' : undefined" size="small">{{
+                  t(`security.pki.${issuer.mode}`)
+                }}</v-chip>
+              </td>
+              <td>{{ issuer.provisioner }}</td>
+            </tr>
+          </tbody></v-table
         >
-        <template #cell-mode="{ row }"
-          ><UiBadge :tone="row.mode === 'active' ? 'success' : 'neutral'">{{
-            t(`security.pki.${row.mode}`)
-          }}</UiBadge></template
-        >
-      </UiTable>
-      <UiButton
-        variant="ghost"
-        @click="downloadPublic(purpose + '-trust.json', JSON.stringify(trust))"
-        >{{ t('security.pki.download') }}</UiButton
-      >
-    </template>
-    <p v-else-if="!busy && !failure">{{ t('security.pki.noTrust') }}</p>
-  </section>
-  <section class="console-panel">
-    <h2>{{ t('security.pki.lifecycle') }}</h2>
-    <p>{{ t('security.pki.noRotationRead') }}</p>
-    <p>{{ t('security.pki.rotationHint') }}</p>
-    <UiButton :disabled="busy" @click="openRotation">{{ t('security.pki.rotations') }}</UiButton>
-  </section>
+        <v-btn
+          variant="text"
+          class="mt-3"
+          @click="downloadPublic(purpose + '-trust.json', JSON.stringify(trust))"
+          >{{ t('security.pki.download') }}</v-btn
+        > </template
+      ><v-alert v-else-if="!busy && !failure" type="info" variant="tonal">{{
+        t('security.pki.noTrust')
+      }}</v-alert>
+    </v-card-text></v-card
+  >
+  <v-card :title="t('security.pki.lifecycle')" class="mb-4"
+    ><v-card-text
+      ><p class="mb-3">{{ t('security.pki.noRotationRead') }}</p>
+      <p class="mb-3">{{ t('security.pki.rotationHint') }}</p>
+      <v-btn :disabled="busy" @click="openRotation">{{
+        t('security.pki.rotations')
+      }}</v-btn></v-card-text
+    ></v-card
+  >
   <CrlPublisher :purpose="purpose" />
   <template v-if="purpose === 'agent'"
-    ><p>{{ t('security.pki.observationHint') }}</p>
+    ><p class="my-4">{{ t('security.pki.observationHint') }}</p>
     <ObservationPanel kind="pki"
   /></template>
-  <UiDialog
-    :open="!!selected"
-    placement="right"
-    :title="t('security.pki.details')"
-    :close-label="t('security.pki.close')"
-    @update:open="selected = undefined"
+  <v-dialog
+    :model-value="!!selected"
+    max-width="680"
+    :aria-label="t('security.pki.details')"
+    @update:model-value="!$event && (selected = undefined)"
+    ><v-card
+      ><v-card-title>{{ t('security.pki.details') }}</v-card-title
+      ><v-card-text
+        ><v-table v-if="selected"
+          ><tbody>
+            <tr>
+              <th>{{ t('security.pki.issuer') }}</th>
+              <td class="text-break">{{ selected.digest }}</td>
+            </tr>
+            <tr>
+              <th>{{ t('security.pki.mode') }}</th>
+              <td>{{ t(`security.pki.${selected.mode}`) }}</td>
+            </tr>
+            <tr>
+              <th>{{ t('security.pki.provisioner') }}</th>
+              <td>{{ selected.provisioner }}</td>
+            </tr>
+            <tr>
+              <th>{{ t('security.pki.kid') }}</th>
+              <td>{{ selected.kid || '—' }}</td>
+            </tr>
+          </tbody></v-table
+        ></v-card-text
+      ><v-card-actions
+        ><v-btn @click="selected = undefined">{{ t('security.pki.close') }}</v-btn></v-card-actions
+      ></v-card
+    ></v-dialog
   >
-    <dl v-if="selected" class="settings-facts">
-      <dt>{{ t('security.pki.issuer') }}</dt>
-      <dd class="console-locator">{{ selected.digest }}</dd>
-      <dt>{{ t('security.pki.mode') }}</dt>
-      <dd>{{ t(`security.pki.${selected.mode}`) }}</dd>
-      <dt>{{ t('security.pki.provisioner') }}</dt>
-      <dd>{{ selected.provisioner }}</dd>
-      <dt>{{ t('security.pki.kid') }}</dt>
-      <dd>{{ selected.kid || '—' }}</dd>
-    </dl>
-  </UiDialog>
-  <UiDialog
-    :open="preparing"
-    :dismissible="!busy"
-    placement="right"
-    :title="t('security.pki.material')"
-    :close-label="t('security.pki.close')"
-    @update:open="closePreparation"
+  <v-dialog
+    :model-value="preparing"
+    :persistent="busy"
+    max-width="860"
+    scrollable
+    :aria-label="t('security.pki.material')"
+    @update:model-value="!$event && closePreparation()"
+    ><v-card
+      ><v-card-title>{{ t('security.pki.material') }}</v-card-title
+      ><v-card-text
+        ><p class="mb-3">{{ t('security.pki.materialHint') }}</p>
+        <v-alert type="info" variant="tonal" class="mb-4">{{
+          t('security.pki.unavailableMaterial')
+        }}</v-alert
+        ><v-file-input
+          id="pki-trust-file"
+          :label="t('security.pki.upload')"
+          accept="application/json,.json"
+          :disabled="locked || !canWrite"
+          @update:model-value="file"
+        />
+        <v-table
+          ><tbody>
+            <tr>
+              <th>{{ t('security.pki.tenant') }}</th>
+              <td>{{ runtime.tenant }}</td>
+            </tr>
+            <tr>
+              <th>{{ t('security.pki.purpose') }}</th>
+              <td>{{ t(`security.pki.${purpose}`) }}</td>
+            </tr>
+            <tr>
+              <th>{{ t('security.pki.expected') }}</th>
+              <td>{{ trust?.revision ?? '—' }}</td>
+            </tr>
+            <tr>
+              <th>{{ t('security.pki.candidateRevision') }}</th>
+              <td>{{ candidate?.revision ?? '—' }}</td>
+            </tr>
+          </tbody></v-table
+        ><v-list v-if="candidate"
+          ><v-list-item
+            v-for="issuer in candidate.issuers"
+            :key="issuer.digest"
+            :title="issuer.digest"
+            :subtitle="t(`security.pki.${issuer.mode}`)"
+        /></v-list>
+        <v-alert v-if="failure" type="error" variant="tonal">{{ t('devices.' + failure) }}</v-alert
+        ><v-alert v-if="pending?.state === 'unknown'" type="warning" variant="tonal">{{
+          t('security.pki.unknown')
+        }}</v-alert> </v-card-text
+      ><v-card-actions
+        ><v-btn :disabled="busy" @click="closePreparation">{{ t('security.pki.close') }}</v-btn
+        ><v-btn
+          v-if="!preparationReviewed"
+          :disabled="locked || !canWrite || !candidate || !trust"
+          @click="reviewPreparation"
+          >{{ t('security.pki.review') }}</v-btn
+        ><v-btn v-else :disabled="locked || !canWrite || !candidate || !trust" @click="prepare">{{
+          t('security.pki.prepareConfirm')
+        }}</v-btn></v-card-actions
+      ></v-card
+    ></v-dialog
   >
-    <p>{{ t('security.pki.materialHint') }}</p>
-    <p class="ui-help">{{ t('security.pki.unavailableMaterial') }}</p>
-    <label for="pki-trust-file">{{ t('security.pki.upload') }}</label
-    ><input
-      id="pki-trust-file"
-      type="file"
-      accept="application/json,.json"
-      :disabled="locked || !canWrite"
-      @change="file"
-    />
-    <dl class="settings-facts">
-      <dt>{{ t('security.pki.tenant') }}</dt>
-      <dd>{{ runtime.tenant }}</dd>
-      <dt>{{ t('security.pki.purpose') }}</dt>
-      <dd>{{ t(`security.pki.${purpose}`) }}</dd>
-      <dt>{{ t('security.pki.expected') }}</dt>
-      <dd>{{ trust?.revision ?? '—' }}</dd>
-      <dt>{{ t('security.pki.candidateRevision') }}</dt>
-      <dd>{{ candidate?.revision ?? '—' }}</dd>
-    </dl>
-    <ul v-if="candidate">
-      <li v-for="issuer in candidate.issuers" :key="issuer.digest">
-        {{ issuer.digest }} · {{ t(`security.pki.${issuer.mode}`) }}
-      </li>
-    </ul>
-    <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
-    <p v-if="pending?.state === 'unknown'" role="alert">{{ t('security.pki.unknown') }}</p>
-    <template #footer>
-      <UiButton
-        v-if="!preparationReviewed"
-        :disabled="locked || !canWrite || !candidate || !trust"
-        @click="reviewPreparation"
-        >{{ t('security.pki.review') }}</UiButton
-      >
-      <UiButton v-else :disabled="locked || !canWrite || !candidate || !trust" @click="prepare">{{
-        t('security.pki.prepareConfirm')
-      }}</UiButton>
-    </template>
-  </UiDialog>
-  <UiDialog
-    :open="rotationOpen"
-    placement="right"
-    :dismissible="!busy"
-    :title="t('security.pki.rotations')"
-    :close-label="t('security.pki.close')"
-    @update:open="closeRotation"
+  <v-dialog
+    :model-value="rotationOpen"
+    :persistent="busy"
+    max-width="860"
+    scrollable
+    :aria-label="t('security.pki.rotations')"
+    @update:model-value="!$event && closeRotation()"
+    ><v-card
+      ><v-card-title>{{ t('security.pki.rotations') }}</v-card-title
+      ><v-card-text
+        ><p class="mb-4">{{ t('security.pki.stageHint') }}</p>
+        <v-text-field
+          id="pki-rotation"
+          v-model="rotation"
+          maxlength="36"
+          :disabled="locked"
+          :label="t('security.pki.operation')"
+        />
+        <p class="mb-3">{{ t('security.pki.expected') }} {{ trust?.revision ?? '—' }}</p>
+        <v-stepper
+          v-if="receipt"
+          :model-value="stage + 1"
+          :items="[
+            t('security.pki.prepare'),
+            t('security.pki.distributing'),
+            t('security.pki.activated'),
+            t('security.pki.retired'),
+          ]"
+          hide-actions
+          :alt-labels="true"
+        />
+        <v-table v-if="receipt" class="my-3"
+          ><tbody>
+            <tr>
+              <th>{{ t('security.pki.receipt') }}</th>
+              <td>{{ t(`security.pki.${receipt.state}`) }}</td>
+            </tr>
+            <tr>
+              <th>{{ t('security.pki.operation') }}</th>
+              <td>{{ receipt.operation }}</td>
+            </tr>
+            <tr>
+              <th>{{ t('security.pki.revision') }}</th>
+              <td>{{ receipt.revision }}</td>
+            </tr>
+          </tbody></v-table
+        >
+        <p class="mb-3">{{ t('security.pki.noRotationRead') }}</p>
+        <v-alert v-if="failure" type="error" variant="tonal" class="my-3">{{
+          t(failure === 'conflict' ? 'security.pki.blocked' : 'devices.' + failure)
+        }}</v-alert
+        ><v-alert v-if="pending?.state === 'unknown'" type="warning" variant="tonal" class="my-3"
+          >{{ t('security.pki.unknown') }} · {{ pending.id }}</v-alert
+        ><OperationNotice
+          :operation="pending"
+          :busy="busy"
+          :can-write="canWrite"
+          :query-supported="false"
+          :compared="compared"
+          @compare="compare"
+          @edit="resolveConflict"
+        /><v-alert v-if="confirmation" type="warning" variant="tonal" class="mt-4"
+          >{{ t(`security.pki.${confirmation}`) }} ·
+          {{ t('security.pki.transitionConfirm') }}</v-alert
+        > </v-card-text
+      ><v-card-actions class="flex-wrap"
+        ><v-btn :disabled="busy" @click="closeRotation">{{ t('security.pki.close') }}</v-btn
+        ><v-btn :disabled="busy || !canRead" @click="load">{{ t('devices.reload') }}</v-btn
+        ><template v-if="!confirmation"
+          ><v-btn
+            :disabled="locked || !canWrite || !trust || !rotation"
+            @click="confirmation = 'activate'"
+            >{{ t('security.pki.activate') }}</v-btn
+          ><v-btn
+            :disabled="locked || !canWrite || !trust || !rotation"
+            @click="confirmation = 'retire'"
+            >{{ t('security.pki.retire') }}</v-btn
+          ></template
+        ><v-btn v-else :disabled="locked || !canWrite || !trust || !rotation" @click="transition">{{
+          t('security.pki.transitionConfirm')
+        }}</v-btn></v-card-actions
+      ></v-card
+    ></v-dialog
   >
-    <p>{{ t('security.pki.stageHint') }}</p>
-    <label for="pki-rotation">{{ t('security.pki.operation') }}</label
-    ><input
-      id="pki-rotation"
-      v-model="rotation"
-      maxlength="36"
-      :disabled="locked"
-      class="ui-input"
-    />
-    <p>{{ t('security.pki.expected') }} {{ trust?.revision ?? '—' }}</p>
-    <UiStepIndicator
-      v-if="receipt"
-      :label="t('security.pki.receipt')"
-      :current="stage"
-      :steps="[
-        t('security.pki.prepare'),
-        t('security.pki.distributing'),
-        t('security.pki.activated'),
-        t('security.pki.retired'),
-      ]"
-    />
-    <dl v-if="receipt" class="settings-facts">
-      <dt>{{ t('security.pki.receipt') }}</dt>
-      <dd>{{ t(`security.pki.${receipt.state}`) }}</dd>
-      <dt>{{ t('security.pki.operation') }}</dt>
-      <dd>{{ receipt.operation }}</dd>
-      <dt>{{ t('security.pki.revision') }}</dt>
-      <dd>{{ receipt.revision }}</dd>
-    </dl>
-    <p class="ui-help">{{ t('security.pki.noRotationRead') }}</p>
-    <p v-if="failure" role="alert">
-      {{ t(failure === 'conflict' ? 'security.pki.blocked' : 'devices.' + failure) }}
-    </p>
-    <p v-if="pending?.state === 'unknown'" role="alert">
-      {{ t('security.pki.unknown') }} · {{ pending.id }}
-    </p>
-    <OperationNotice
-      :operation="pending"
-      :busy="busy"
-      :can-write="canWrite"
-      :query-supported="false"
-      :compared="compared"
-      @compare="compare"
-      @edit="resolveConflict"
-    />
-    <p v-if="confirmation">
-      <strong>{{ t(`security.pki.${confirmation}`) }}</strong> ·
-      {{ t('security.pki.transitionConfirm') }}
-    </p>
-    <template #footer>
-      <UiButton :disabled="busy || !canRead" @click="load">{{ t('devices.reload') }}</UiButton>
-      <template v-if="!confirmation"
-        ><UiButton
-          :disabled="locked || !canWrite || !trust || !rotation"
-          @click="confirmation = 'activate'"
-          >{{ t('security.pki.activate') }}</UiButton
-        ><UiButton
-          :disabled="locked || !canWrite || !trust || !rotation"
-          @click="confirmation = 'retire'"
-          >{{ t('security.pki.retire') }}</UiButton
-        ></template
-      >
-      <UiButton v-else :disabled="locked || !canWrite || !trust || !rotation" @click="transition">{{
-        t('security.pki.transitionConfirm')
-      }}</UiButton>
-    </template>
-  </UiDialog>
 </template>

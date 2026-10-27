@@ -35,7 +35,7 @@ export async function exercisePki({
   assert.equal(fixture.pki.candidateTrust.service_id, trusted.service_id)
   const candidateFile = join(temp, 'public-trust.json')
   writeFileSync(candidateFile, JSON.stringify(candidate), { mode: 0o600 })
-  await go(page, at('security/device-trust'))
+  await go(page, at('settings/device-trust'))
   await page.getByRole('button', { name: '准备轮换', exact: true }).click()
   await page.locator('#pki-trust-file').setInputFiles(candidateFile)
   await page.getByRole('button', { name: '核对并继续', exact: true }).click()
@@ -78,7 +78,7 @@ export async function exercisePki({
   )
   await page.keyboard.press('Escape')
   const observation = page
-    .locator('section.console-panel')
+    .locator('form')
     .filter({ has: page.getByRole('button', { name: '读取当前注册代次的安装观察', exact: true }) })
   await observation.locator('input').fill(fixture.collector.runtime.deviceId)
   const observedReply = reply(
@@ -109,11 +109,23 @@ export async function exercisePki({
   assert.equal((await published).status(), 204)
   coverage.push('pki-real-signed-crl-publication-204-without-device-delivery-claim')
   await page.keyboard.press('Escape')
-  await go(page, at('security/recovery'))
+  await go(page, at(`devices/${encodeURIComponent(fixture.collector.runtime.deviceId)}/management`))
+  await page.getByRole('heading', { name: '恢复管理', exact: true }).waitFor()
   const input = JSON.parse(readFileSync(fixture.pki.recoveryInputFile, 'utf8'))
-  await page.locator('#agent-registration').fill(fixture.collector.runtime.registrationId)
+  assert.equal(
+    await page.locator('#agent-registration').inputValue(),
+    fixture.collector.runtime.registrationId,
+  )
+  assert.equal(await page.locator('#agent-registration').isEditable(), false)
   await page.locator('#agent-recovery-operation').fill(input.operationId)
-  await page.locator('#agent-recovery-platform').selectOption(input.platform)
+  const registrationForm = page.locator('form').filter({ has: page.locator('#agent-registration') })
+  assert.equal(
+    await registrationForm.getByRole('combobox', { name: '平台', exact: true }).isDisabled(),
+    true,
+  )
+  await registrationForm
+    .getByText(input.platform === 'macos' ? 'macOS' : 'Windows', { exact: true })
+    .waitFor()
   await page.locator('#agent-recovery-secret').fill(input.secret)
   await page.locator('#agent-recovery-csr').fill(input.csr)
   await page.getByRole('button', { name: '核对并继续', exact: true }).click()
@@ -160,7 +172,7 @@ export async function exercisePki({
   await page.getByRole('alert').filter({ hasText: '提交结果未知' }).waitFor()
   assert.equal(
     await page
-      .locator('form.settings-form')
+      .locator('form')
       .filter({ has: page.locator('#agent-issuance') })
       .locator('button[type=submit]')
       .isDisabled(),
@@ -190,7 +202,8 @@ export async function exercisePki({
   const missing = reply('/api/v1/pki/signing/recover')
   await page.getByRole('button', { name: '核验并关联原结果', exact: true }).click()
   assert.equal((await missing).status(), 503)
-  assert.equal(await page.locator('dl').count(), 0)
+  const windowsRecovery = page.locator('.v-card').filter({ has: page.locator('#pki-attempt') })
+  assert.equal(await windowsRecovery.locator('table').count(), 0)
   coverage.push('windows-original-attempt-unavailable-does-not-imply-signing-or-installation')
   await context.clearCookies()
   await go(page, origin + '/login')

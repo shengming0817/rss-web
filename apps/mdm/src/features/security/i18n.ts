@@ -384,7 +384,12 @@ export const securityZh = {
   },
   navigation: '安全与支持导航',
   rules: '合规规则',
-  compliance: '设备合规',
+  compliance: '合规评估',
+  dashboardScope:
+    '看板统计当前设备目录页的服务端评估结果。每页最多 20 台；翻页读取下一页，不代表全租户统计。单台读取失败会单独标出。',
+  assessmentDirectory: '设备评估看板',
+  assessmentDetails: '评估明细',
+  assessmentUnavailable: '评估读取失败',
   empty: '没有合规规则。',
   ruleHint: '合规规则按版本评估。保存只创建评估任务；停用规则不会删除历史结论。',
   ruleId: '规则 ID',
@@ -871,7 +876,12 @@ export const securityEn: typeof securityZh = {
   },
   navigation: 'Security and support navigation',
   rules: 'Compliance rules',
-  compliance: 'Device compliance',
+  compliance: 'Compliance assessments',
+  dashboardScope:
+    'Counts cover server assessments for the current device-directory page, up to 20 devices. The next page replaces these counts; they are not tenant-wide totals. Failed device reads are identified separately.',
+  assessmentDirectory: 'Device assessment dashboard',
+  assessmentDetails: 'Assessment details',
+  assessmentUnavailable: 'Assessment unavailable',
   empty: 'No compliance rules.',
   ruleHint:
     'Rules are evaluated by revision. Saving creates an evaluation task. Disabling a rule preserves its assessment history.',

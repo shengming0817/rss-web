@@ -1,9 +1,66 @@
 export const onboardingZh = {
+  chooseSystem: '选择设备系统',
+  prepareSystem: '准备注册',
+  finishSystem: '系统确认与验证',
+  enterpriseChoice: '为当前组织接入这台企业设备。请选择这台设备实际运行的系统。',
+  windowsChoice: 'Windows 使用完整企业 MDM，管理设备与用户，并由系统请求你的管理批准。',
+  macChoice: 'macOS 使用签名 MDM 描述文件。下载后在系统设置中安装并批准。',
+  continuePreparation: '继续准备注册',
+  prepareWindows: '准备 Windows 注册凭据',
+  prepareMac: '准备 macOS 注册描述文件',
+  windowsPasswordGuide:
+    '口令已自动生成。复制后继续，Windows 注册时粘贴此一次性口令。它只授权当前组织中的这次注册。',
+  macPasswordGuide:
+    '我们会自动获取签名描述文件。请先复制这次注册的恢复口令，只有交付中断时才需要用它恢复原请求。',
+  copyAndContinue: '复制口令并继续',
+  manualCopy: '浏览器无法自动复制。请选择并复制上方口令，安全保存后再继续。',
+  savedAndContinue: '已安全保存口令，继续',
+  changeSystem: '返回选择系统',
+  prepareAgain: '重新准备注册',
+  unknownEnrollment:
+    '原注册请求的结果未知。请输入刚才已保存的原口令，明确重试同一原请求；不要创建替代注册。',
+  originalEnrollmentPassword: '已保存的原注册口令',
+  confirmedReadPending: '注册授权已确认。请重新读取系统引导，不会重复创建注册。',
+  quotaDetails: '我的注册额度与通道详情',
+  openWindowsGuide:
+    '打开 Windows 注册，将刚才复制的口令粘贴到系统提示中，并按系统提示批准组织管理。',
+  preparingProfile: '正在安全获取签名描述文件…',
+  recoverProfile: '使用已保存口令重新获取描述文件',
+  profileReadFailed:
+    '注册授权已确认，但描述文件交付未完成。可使用已保存的原口令重新获取，不会重新创建注册。',
+  verifyEnrollment: '我已完成系统操作，验证注册',
+  technicalDetails: '技术详情与手工设置',
+
+  enrollmentJourney: '为当前组织注册 Windows 或 macOS 企业设备，按系统引导完成管理授权。',
+  enterpriseMdm: '企业完整 MDM',
+  selfProgress: '我的设备注册进展',
+  selfRecovery: '无法继续？恢复原注册',
+  selfProgressNote:
+    '此处显示本次注册在设备端的实际进展。完成系统操作后重新验证；注册中断时可在下方恢复原注册。',
+  deviceAuthorization:
+    '为当前组织中的此设备创建或更新短时原生注册授权。管理员注册不占个人额度。安全保存注册密码，提交后页面会清除；原注册的进展、继续与取消仍由服务器校验。',
+  profileEnrollment: '配置描述文件注册',
+  authorizeDevice: '授权并开始注册',
+  enrollmentAuthorization:
+    '授权将设备绑定到当前组织与登录用户，并使用个人注册额度。注册密码用于短时验证这次原生注册，请安全保存；提交后页面会清除密码。系统仍需你确认允许组织管理此设备。',
+  openWindowsEnrollment: '打开 Windows 企业 MDM 注册',
+  protocolUsernameNote:
+    '此临时 UPN 由服务器为本次注册生成，用于把 Windows 请求关联到当前租户、用户和短时授权。它不是登录账号或邮箱；请保留原值，使用已保存的注册密码。链接不包含密码。',
+  macDownload: '1. 下载 MDM 描述文件',
+  profileAuthority:
+    '输入本次注册的短时密码。服务器核对原授权后交付描述文件；下载不会完成设备注册。',
+  macInstall: '2. 在系统设置中安装并批准',
+  macVerify: '3. 回到页面核对管理状态',
+  verifyFacts:
+    '完成系统操作后点击验证。页面会根据设备实际连接状态确认管理是否就绪，请勿重复创建注册。',
+  continueInDevice: '在设备详情查看进展与恢复',
+  renewAuthorization: '为此设备授权或恢复原注册',
+
   downloads: '下载 Agent 安装器',
   downloadNote:
-    '无需登录。下载和安装不代表注册；安装器只消费管理员交付的 JSON 配置。请选择与目标设备一致的系统和原生架构。',
+    '无需登录。直接下载与设备系统和原生架构一致的安装器。下载和安装不代表注册；安装器消费管理员安全交付的 JSON 配置。',
   architecture: '原生架构',
-  noInstaller: '当前选择没有已发布的安装器。',
+  noInstaller: '此系统与架构没有已发布的安装器。',
   fileSize: '文件大小（字节）',
   download: '下载',
   sameDirectory:
@@ -34,16 +91,16 @@ export const onboardingZh = {
   grantLifetime: '单设备授权有效期（秒）',
   nativeSteps: '系统原生注册步骤与当前事实',
   windowsSteps:
-    'Windows 11：设置 → 账户 → 访问工作或学校 → 注册到设备管理。按下列 UPN 与 discovery 地址继续；Full 包含用户与设备管理，Device 仅设备管理。',
+    '使用企业完整 MDM，包含设备与用户管理。打开 Windows 注册后，使用下列临时 UPN 与已保存的注册密码完成授权；系统可能要求本地管理员确认。',
   openSettings: '打开访问工作或学校',
   discovery: 'Discovery 地址',
   server: '注册服务器',
   username: 'UPN',
   localAdministrator: '此 Full 管理范围要求本地管理员确认。',
   macosSteps:
-    '企业 Mac（macOS 15+，优先 Apple Silicon；Intel 按产品验证范围使用）：输入已交付的注册口令下载签名 mobileconfig，在系统设置的设备管理中安装并确认。安装文件不代表管理已就绪。',
+    '打开已下载的 mobileconfig，然后进入系统设置 → 通用 → 设备管理，检查组织名称并安装描述文件。按系统提示使用本地管理员批准设备管理。',
   downloadProfile: '获取签名描述文件',
-  saveProfile: '保存 mobileconfig',
+  saveProfile: '下载注册描述文件',
   channelUnavailable: '原生通道未配置或不可用，请联系管理员。',
   accountSteps: '使用组织受管 Apple 账户在系统设置中继续账户驱动注册',
   adeSteps: '在已分配组织 ADE profile 的设备 Setup Assistant 中继续',
@@ -147,11 +204,74 @@ export const onboardingZh = {
   token_unverified: '尚未验证',
 }
 export const onboardingEn: typeof onboardingZh = {
+  chooseSystem: 'Choose your device system',
+  prepareSystem: 'Prepare enrollment',
+  finishSystem: 'System approval and verification',
+  enterpriseChoice:
+    'Connect this corporate device to the current organization. Choose the operating system running on this device.',
+  windowsChoice:
+    'Windows uses full enterprise MDM for device and user management, with approval in the operating system.',
+  macChoice:
+    'macOS uses a signed MDM profile. Download it, then install and approve it in System Settings.',
+  continuePreparation: 'Continue to enrollment preparation',
+  prepareWindows: 'Prepare Windows enrollment credentials',
+  prepareMac: 'Prepare the macOS enrollment profile',
+  windowsPasswordGuide:
+    'Your one-time password is ready. Copy it and continue, then paste it when Windows asks. It authorizes only this enrollment in the current organization.',
+  macPasswordGuide:
+    'We will retrieve the signed profile automatically. First copy this enrollment recovery password; it is needed only if delivery is interrupted.',
+  copyAndContinue: 'Copy password and continue',
+  manualCopy:
+    'The browser could not copy automatically. Select and copy the password above, save it securely, then continue.',
+  savedAndContinue: 'I saved the password; continue',
+  changeSystem: 'Back to system selection',
+  prepareAgain: 'Prepare enrollment again',
+  unknownEnrollment:
+    'The original enrollment result is unknown. Enter the password you saved to explicitly retry the same original request. Do not create a replacement enrollment.',
+  originalEnrollmentPassword: 'Saved original enrollment password',
+  confirmedReadPending:
+    'Enrollment authorization is confirmed. Refresh the system instructions without creating another enrollment.',
+  quotaDetails: 'My enrollment quota and channel details',
+  openWindowsGuide:
+    'Open Windows enrollment, paste the password you copied when prompted, and approve organization management in Windows.',
+  preparingProfile: 'Securely retrieving the signed profile…',
+  recoverProfile: 'Retrieve the profile with the saved password',
+  profileReadFailed:
+    'Enrollment authorization is confirmed, but profile delivery did not finish. Retrieve it with the saved original password without creating another enrollment.',
+  verifyEnrollment: 'I completed the system steps; verify enrollment',
+  technicalDetails: 'Technical details and manual setup',
+
+  enrollmentJourney:
+    'Enroll a corporate Windows or macOS device in the current organization and complete system management approval.',
+  enterpriseMdm: 'Full enterprise MDM',
+  selfProgress: 'My device enrollment progress',
+  selfRecovery: 'Cannot continue? Recover this enrollment',
+  selfProgressNote:
+    'This page shows actual device enrollment progress. Verify after completing the system steps. If enrollment is interrupted, recover the original enrollment below.',
+  deviceAuthorization:
+    'Create or refresh short-lived native enrollment authorization for this device in the current organization. Administrator enrollment uses no personal quota. Save the enrollment password securely; it is cleared on submission. The server continues to verify progress, resume and cancellation against the original enrollment.',
+  profileEnrollment: 'Profile-based enrollment',
+  authorizeDevice: 'Authorize and start enrollment',
+  enrollmentAuthorization:
+    'Authorization binds the device to the current organization and signed-in user and reserves personal quota. Save the short-lived enrollment password securely; the page clears it on submission. The operating system still requires your approval for device management.',
+  openWindowsEnrollment: 'Open Windows enterprise MDM enrollment',
+  protocolUsernameNote:
+    'The server generates this temporary UPN for this enrollment, binding Windows requests to the current tenant, user and short-lived authorization. Keep it unchanged and use the saved enrollment password. It is separate from your login or email. The link contains no password.',
+  macDownload: '1. Download the MDM profile',
+  profileAuthority:
+    'Enter the short-lived enrollment password. The server verifies the original authorization before delivering the profile. Downloading does not complete enrollment.',
+  macInstall: '2. Install and approve in System Settings',
+  macVerify: '3. Return to verify management status',
+  verifyFacts:
+    'After completing the system steps, verify enrollment. The page confirms readiness from the actual device connection. Do not create another enrollment.',
+  continueInDevice: 'View progress and recovery in device details',
+  renewAuthorization: 'Authorize this device or resume its enrollment',
+
   downloads: 'Download Agent installer',
   downloadNote:
     'No sign-in required. Downloading or installing does not prove enrollment. The installer consumes an administrator-delivered JSON configuration. Select the target OS and native architecture.',
   architecture: 'Native architecture',
-  noInstaller: 'No published installer matches this selection.',
+  noInstaller: 'No installer has been published for this operating system and architecture.',
   fileSize: 'Size (bytes)',
   download: 'Download',
   sameDirectory:
@@ -182,16 +302,16 @@ export const onboardingEn: typeof onboardingZh = {
   grantLifetime: 'Machine grant lifetime (seconds)',
   nativeSteps: 'Native enrollment steps and current facts',
   windowsSteps:
-    'Windows 11: Settings → Accounts → Access work or school → Enroll only in device management. Use the UPN and discovery address below. Full manages user and device; Device manages the device only.',
+    'Full enterprise MDM includes device and user management. Open Windows enrollment and use the temporary UPN below with your saved enrollment password. Windows may require local administrator approval.',
   openSettings: 'Open Access work or school',
   discovery: 'Discovery address',
   server: 'Enrollment server',
   username: 'UPN',
   localAdministrator: 'Full management requires local administrator confirmation.',
   macosSteps:
-    'Enterprise Mac (macOS 15+, Apple Silicon first; Intel within validated product scope): enter the delivered password to download the signed mobileconfig, then install and confirm in System Settings device management. The file does not prove management readiness.',
+    'Open the downloaded mobileconfig, then go to System Settings → General → Device Management. Verify the organization and install the profile. Approve device management with the local administrator when prompted.',
   downloadProfile: 'Get signed profile',
-  saveProfile: 'Save mobileconfig',
+  saveProfile: 'Download enrollment profile',
   channelUnavailable: 'Native channel is unconfigured or unavailable. Contact an administrator.',
   accountSteps:
     'Continue account-driven enrollment with the managed Apple account in System Settings',
