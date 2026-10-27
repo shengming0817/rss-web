@@ -11,6 +11,7 @@ it('binds only an authorized pending enrollment and keeps Agent binding separate
   const req = request('/api/v1/enrollments', {
     deviceId: 'device-05',
     source: 'mdm.windows',
+    windowsProfile: 'Device',
     password: Buffer.alloc(32, 1).toString('base64url'),
   })
   req.headers['idempotency-key'] = randomUUID()

@@ -7,6 +7,8 @@ import { decodeMdmError } from '@rss/api/mdm'
 import { networkErrorForTest } from '@rss/api/testing'
 import { createRegistrationChannelsClient } from '../../../services/registrationChannels'
 import { createRegistrationChannels } from '../../../services/registrationChannelState'
+import { createDeviceClients } from '../../devices/client'
+import SelfEnrollmentView from '../../devices/views/SelfEnrollmentView.vue'
 import { createDeviceDemo } from '../../../../demo/devices/state'
 import { generateEnrollmentPassword, decodeEnrollment } from '../../devices/clients/enrollment'
 import { mdmKey, type MdmRuntime } from '../../../context'
@@ -23,8 +25,11 @@ import AppleAccountView from './AppleAccountView.vue'
 import AppleAdeView from './AppleAdeView.vue'
 import WindowsEntraView from './WindowsEntraView.vue'
 const wrappers: VueWrapper[] = []
+const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
 afterEach(() => {
   wrappers.splice(0).forEach((w) => w.unmount())
+  if (originalClipboard) Object.defineProperty(navigator, 'clipboard', originalClipboard)
+  else Reflect.deleteProperty(navigator, 'clipboard')
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
   document.body.innerHTML = ''
@@ -84,6 +89,7 @@ async function setup(view: unknown, allow = true) {
     },
   } as HttpTransport
   const runtime = {
+    devices: createDeviceClients(transport, TENANT),
     onboarding: createOnboardingClients(transport, transport, TENANT, INSTANCE),
     session: { state },
     tenant: TENANT,
@@ -118,6 +124,11 @@ async function setup(view: unknown, allow = true) {
     history: createMemoryHistory(),
     routes: [
       { path: '/journey', component: view as never },
+      {
+        path: '/tenants/:tenant/devices/:device/management',
+        name: 'device-management',
+        component: defineComponent({ template: '<p>device</p>' }),
+      },
       { path: '/other', component: defineComponent({ template: '<p>other</p>' }) },
       { path: '/downloads/agent', name: 'agent-downloads', component: DownloadsView },
     ],
@@ -562,6 +573,8 @@ it('authorizes macOS profile delivery, clears the submitted secret and withdraws
     contentType: 'application/x-apple-aspen-config',
     contentDisposition: 'attachment',
   })
+  await wrapper.get('button').trigger('click')
+  await flushPromises()
   const password = wrapper.get('input[type=password]')
   await password.setValue('A'.repeat(43))
   await wrapper.get('form').trigger('submit')
@@ -575,4 +588,135 @@ it('authorizes macOS profile delivery, clears the submitted secret and withdraws
   await flushPromises()
   expect(wrapper.find('a[download]').exists()).toBe(false)
   expect(revoke).toHaveBeenCalledWith('blob:synthetic-delivery')
+})
+
+async function prepareGuide(
+  fixture: Awaited<ReturnType<typeof setup>>,
+  platform: 'Windows' | 'macOS' = 'Windows',
+) {
+  const copy = vi.fn().mockResolvedValue(undefined)
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: copy } })
+  if (platform === 'macOS') await fixture.click('macOS')
+  await fixture.click('继续准备注册')
+  const secret = fixture.wrapper.get('[data-enrollment-secret]').text()
+  expect(secret).toHaveLength(43)
+  expect(fixture.wrapper.find('input[autocomplete=off]').exists()).toBe(false)
+  return { secret, copy }
+}
+it('automatically delivers a macOS profile after its confirmed receipt without retaining or reentering the password', async () => {
+  const fixture = await setup(SelfEnrollmentView),
+    { wrapper, runtime, click, revoke, state } = fixture
+  const { secret, copy } = await prepareGuide(fixture, 'macOS')
+  const bytes = new Uint8Array([1, 2, 3])
+  const profile = vi
+    .spyOn(runtime.onboarding.native, 'profile')
+    .mockImplementation(async (_id, password) => {
+      expect(wrapper.find('[data-enrollment-secret]').exists()).toBe(false)
+      expect(password).toBe(secret)
+      return {
+        bytes: bytes.buffer,
+        contentType: 'application/x-apple-aspen-config',
+        contentDisposition: 'attachment',
+      }
+    })
+  const enroll = vi.spyOn(runtime.devices.registration, 'enroll')
+  await click('复制口令并继续')
+  expect(enroll).toHaveBeenCalledTimes(1)
+  expect(copy).toHaveBeenCalledWith(secret)
+  expect(profile).toHaveBeenCalledWith((await enroll.mock.results[0]!.value).enrollmentId, secret)
+  expect(wrapper.find('a[download="RSS-MDM.mobileconfig"]').exists()).toBe(true)
+  expect(wrapper.find('input[type=password]').exists()).toBe(false)
+  expect(bytes.every((byte) => byte === 0)).toBe(true)
+  state.value = { ...state.value, session: { id: crypto.randomUUID() } }
+  await flushPromises()
+  expect(wrapper.find('a[download]').exists()).toBe(false)
+  expect(revoke).toHaveBeenCalledWith('blob:synthetic-delivery')
+})
+it('keeps a confirmed macOS enrollment confirmed when profile delivery fails and retries only the profile explicitly', async () => {
+  const fixture = await setup(SelfEnrollmentView),
+    { wrapper, runtime, click } = fixture
+  const { secret } = await prepareGuide(fixture, 'macOS')
+  const enroll = vi.spyOn(runtime.devices.registration, 'enroll')
+  const profile = vi
+    .spyOn(runtime.onboarding.native, 'profile')
+    .mockRejectedValueOnce(networkErrorForTest())
+  await click('复制口令并继续')
+  expect(wrapper.text()).toContain('注册授权已确认，但描述文件交付未完成')
+  expect(wrapper.text()).not.toContain('原注册请求的结果未知')
+  expect(enroll).toHaveBeenCalledTimes(1)
+  expect(wrapper.find('[data-enrollment-secret]').exists()).toBe(false)
+  profile.mockResolvedValue({
+    bytes: new Uint8Array([1, 2]).buffer,
+    contentType: 'application/x-apple-aspen-config',
+    contentDisposition: 'attachment',
+  })
+  await wrapper.get('input[type=password]').setValue(secret)
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(enroll).toHaveBeenCalledTimes(1)
+  expect(profile.mock.calls[1]).toEqual(profile.mock.calls[0])
+  expect(wrapper.find('a[download="RSS-MDM.mobileconfig"]').exists()).toBe(true)
+  expect(wrapper.find('input[type=password]').exists()).toBe(false)
+})
+it('uses the saved original password for an explicit unknown create replay and never requests a profile before a confirmed receipt', async () => {
+  const fixture = await setup(SelfEnrollmentView),
+    { wrapper, runtime, click, lost } = fixture
+  const { secret } = await prepareGuide(fixture, 'macOS')
+  const enroll = vi.spyOn(runtime.devices.registration, 'enroll')
+  const profile = vi.spyOn(runtime.onboarding.native, 'profile').mockResolvedValue({
+    bytes: new Uint8Array([1]).buffer,
+    contentType: 'application/x-apple-aspen-config',
+    contentDisposition: 'attachment',
+  })
+  lost.path = '/api/v1/self-enrollments'
+  await click('复制口令并继续')
+  expect(wrapper.text()).toContain('原注册请求的结果未知')
+  expect(profile).not.toHaveBeenCalled()
+  expect(wrapper.find('[data-enrollment-secret]').exists()).toBe(false)
+  await wrapper.get('input[type=password]').setValue(secret)
+  await wrapper.get('input[type=checkbox]').setValue(true)
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(enroll.mock.calls[1]).toEqual(enroll.mock.calls[0])
+  expect(profile).toHaveBeenCalledTimes(1)
+  expect(wrapper.find('a[download="RSS-MDM.mobileconfig"]').exists()).toBe(true)
+})
+it('requires an explicit saved-password action when clipboard delivery is unavailable', async () => {
+  const fixture = await setup(SelfEnrollmentView),
+    { wrapper, runtime, click } = fixture
+  const { secret, copy } = await prepareGuide(fixture)
+  const enroll = vi.spyOn(runtime.devices.registration, 'enroll')
+  copy.mockRejectedValueOnce(new Error('Unavailable'))
+  await click('复制口令并继续')
+  expect(enroll).not.toHaveBeenCalled()
+  expect(wrapper.get('[data-enrollment-secret]').text()).toBe(secret)
+  await click('已安全保存口令，继续')
+  expect(enroll).toHaveBeenCalledTimes(1)
+  expect(wrapper.find('[data-enrollment-secret]').exists()).toBe(false)
+})
+it('withdraws a late automatic profile response after navigation and clears its bytes', async () => {
+  const fixture = await setup(SelfEnrollmentView),
+    { wrapper, runtime, click, router, create } = fixture
+  await prepareGuide(fixture, 'macOS')
+  const bytes = new Uint8Array([1, 2, 3])
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const profile = vi.spyOn(runtime.onboarding.native, 'profile').mockImplementation(async () => {
+    await gate
+    return {
+      bytes: bytes.buffer,
+      contentType: 'application/x-apple-aspen-config',
+      contentDisposition: 'attachment',
+    }
+  })
+  await click('复制口令并继续')
+  expect(profile).toHaveBeenCalledTimes(1)
+  expect(wrapper.find('[data-enrollment-secret]').exists()).toBe(false)
+  await router.push('/other')
+  release()
+  await flushPromises()
+  expect(create).not.toHaveBeenCalled()
+  expect(bytes.every((byte) => byte === 0)).toBe(true)
 })

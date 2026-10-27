@@ -34,6 +34,15 @@ import { createDeviceClients } from '../client'
 import { createOnboardingClients } from '../../enrollment/client'
 import { createSettingsOperations } from '../../settings/operations'
 const wrappers: VueWrapper[] = []
+const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+async function preparePersonal(wrapper: VueWrapper, click: (text: string) => Promise<void>) {
+  const copy = vi.fn().mockResolvedValue(undefined)
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: copy } })
+  await click('继续准备注册')
+  const secret = wrapper.get('[data-enrollment-secret]').text()
+  expect(secret).toHaveLength(43)
+  return { secret, copy }
+}
 
 async function nativeControls(wrapper: VueWrapper) {
   const panel = wrapper.findComponent(NativeEnrollmentPanel)
@@ -96,6 +105,8 @@ it('shows channel communication separately and clears the MDM receipt after regi
 })
 afterEach(() => {
   wrappers.splice(0).forEach((w) => w.unmount())
+  if (originalClipboard) Object.defineProperty(navigator, 'clipboard', originalClipboard)
+  else Reflect.deleteProperty(navigator, 'clipboard')
   document.body.innerHTML = ''
 })
 async function setup(
@@ -919,13 +930,11 @@ it('self enrollment authorizes Full MDM outside the management frame and clears 
   expect(wrapper.text()).toContain('注册我的设备')
   expect(wrapper.find('nav').exists()).toBe(false)
   const enroll = vi.spyOn(devices.registration, 'enroll')
-  await click('生成一次性交付口令')
-  await wrapper.get('form input[type=checkbox]').setValue(true)
-  const password = wrapper.get('input[autocomplete=off]')
-  expect((password.element as HTMLInputElement).value).toHaveLength(43)
-  await wrapper.get('form').trigger('submit')
-  await flushPromises()
-  expect((password.element as HTMLInputElement).value).toBe('')
+  const prepared = await preparePersonal(wrapper, click)
+  expect(wrapper.find('input[autocomplete=off]').exists()).toBe(false)
+  await click('复制口令并继续')
+  expect(prepared.copy).toHaveBeenCalledWith(prepared.secret)
+  expect(wrapper.find('[data-enrollment-secret]').exists()).toBe(false)
   expect(enroll.mock.calls[0]?.[3]).toBe('Full')
   const receipt = await enroll.mock.results[0]!.value
   const native = await devices.enrollment.status(receipt.enrollmentId)
@@ -1080,9 +1089,8 @@ it('discards device-detail native reads that arrive after a target edit', async 
 it('resumes the same bound registration from device details when new personal enrollment has no quota', async () => {
   const { wrapper, devices, domain, click, router } = await setup('self-enrollments')
   const enroll = vi.spyOn(devices.registration, 'enroll')
-  await click('生成一次性交付口令')
-  await wrapper.get('form input[type=checkbox]').setValue(true)
-  await wrapper.get('form').trigger('submit')
+  await preparePersonal(wrapper, click)
+  await click('复制口令并继续')
   await flushPromises()
   const receipt = await enroll.mock.results[0]!.value
   domain.tick({
@@ -1439,15 +1447,13 @@ it('refreshes stale self-enrollment admission and preserves device-detail cancel
     'Full',
   )
   await server.change('windows_mdm', crypto.randomUUID(), 0, 'paused')
-  await click('生成一次性交付口令')
-  await wrapper.get('form input[type=checkbox]').setValue(true)
+  await preparePersonal(wrapper, click)
   const enroll = vi.spyOn(devices.registration, 'enroll')
-  await wrapper.get('form').trigger('submit')
-  await flushPromises()
+  await click('复制口令并继续')
   expect(enroll).toHaveBeenCalledTimes(1)
   expect(wrapper.text()).toContain('已暂停新注册')
   expect(registrationChannels.allowed('windows_mdm')).toBe(false)
-  await wrapper.get('form').trigger('submit')
+  await click('重新准备注册')
   expect(enroll).toHaveBeenCalledTimes(1)
   await router.push({
     name: 'device-management',
@@ -1512,11 +1518,15 @@ it('allows a quota reader to select user queries while keeping edits and submiss
   expect(change).not.toHaveBeenCalled()
 })
 
-it('retains directory cursor and display columns when opening and returning from a detail', async () => {
-  const f = await setup()
+it('retains directory cursor, display columns and RSQL when opening and returning from a detail', async () => {
+  const filter = "search=icontains='device'"
+  const f = await setup('devices', {}, { filter, columns: 'platform' })
   await f.click('下一页')
   expect(f.wrapper.text()).toContain('device-21')
   const query = { ...f.router.currentRoute.value.query }
+  expect(query['filter']).toBe(filter)
+  expect(query['cursor']).toBeTruthy()
+  expect(query['columns']).toBe('platform')
   await f.wrapper.find('tbody a').trigger('click')
   await flushPromises()
   await vi.waitFor(() =>
@@ -2501,6 +2511,56 @@ it('does not restore manual inventory when detail authority is withdrawn during 
   expect(document.querySelector('[role=dialog][data-state=open]')).toBeNull()
 })
 
+it('reads and cancels personal progress without calling inventory clients and rejects a mismatched route device', async () => {
+  const { wrapper, devices, click, router } = await setup('self-enrollments')
+  const enroll = vi.spyOn(devices.registration, 'enroll')
+  await preparePersonal(wrapper, click)
+  await click('复制口令并继续')
+  await flushPromises()
+  const receipt = await enroll.mock.results[0]!.value
+  const views = vi
+    .spyOn(devices.views, 'detail')
+    .mockRejectedValue(decodeMdmError(403, { code: 'permission_denied' }))
+  const inventory = vi
+    .spyOn(devices.directory, 'detail')
+    .mockRejectedValue(decodeMdmError(403, { code: 'permission_denied' }))
+  await wrapper.get('a[href*=management]').trigger('click', { button: 0 })
+  await vi.waitFor(() => expect(router.currentRoute.value.query['mode']).toBe('self-enrollment'))
+  await flushPromises()
+  const progress = wrapper.get('[data-self-enrollment-progress]')
+  expect(progress.find('input[autocomplete=off]').exists()).toBe(false)
+  await progress
+    .findAll('button')
+    .find((button) => button.text() === '技术详情与手工设置')!
+    .trigger('click')
+  await flushPromises()
+  expect(progress.text()).toContain(receipt.deviceId)
+  expect(progress.text()).toContain(receipt.enrollmentId)
+  expect(views).not.toHaveBeenCalled()
+  expect(inventory).not.toHaveBeenCalled()
+  const cancel = vi.spyOn(devices.enrollment, 'cancel')
+  await progress
+    .findAll('button')
+    .find((button) => button.text() === '取消')!
+    .trigger('click')
+  await flushPromises()
+  expect(cancel.mock.calls[0]?.[0]).toBe(receipt.enrollmentId)
+  expect(progress.text()).toContain('已取消')
+  await router.push({
+    name: 'device-management',
+    params: { tenant: TENANT, device: 'different-device' },
+    query: { mode: 'self-enrollment', enrollment: receipt.enrollmentId },
+  })
+  await flushPromises()
+  const mismatch = wrapper.get('[data-self-enrollment-progress]')
+  expect(mismatch.text()).toContain('响应')
+  expect(
+    mismatch.findAll('button').some((button) => ['取消', '更新口令并继续'].includes(button.text())),
+  ).toBe(false)
+  expect(views).not.toHaveBeenCalled()
+  expect(inventory).not.toHaveBeenCalled()
+})
+
 function wrapperFor(target: { element: Element }) {
   const wrapper = wrappers.find((wrapper) =>
     wrapper.findAllComponents(VSelect).some((select) => target.element.contains(select.element)),
@@ -2591,48 +2651,4 @@ it('applies raw directory RSQL with basic filters and uses the same filter for c
       'filter'
     ],
   ).toBe(filter)
-})
-
-it('reads and cancels personal progress without calling inventory clients and rejects a mismatched route device', async () => {
-  const { wrapper, devices, click, router } = await setup('self-enrollments')
-  const enroll = vi.spyOn(devices.registration, 'enroll')
-  await click('生成一次性交付口令')
-  await wrapper.get('form input[type=checkbox]').setValue(true)
-  await wrapper.get('form').trigger('submit')
-  await flushPromises()
-  const receipt = await enroll.mock.results[0]!.value
-  const views = vi
-    .spyOn(devices.views, 'detail')
-    .mockRejectedValue(decodeMdmError(403, { code: 'permission_denied' }))
-  const inventory = vi
-    .spyOn(devices.directory, 'detail')
-    .mockRejectedValue(decodeMdmError(403, { code: 'permission_denied' }))
-  await wrapper.get('a[href*=management]').trigger('click', { button: 0 })
-  await vi.waitFor(() => expect(router.currentRoute.value.query['mode']).toBe('self-enrollment'))
-  await flushPromises()
-  const progress = wrapper.get('[data-self-enrollment-progress]')
-  expect(progress.text()).toContain(receipt.deviceId)
-  expect(views).not.toHaveBeenCalled()
-  expect(inventory).not.toHaveBeenCalled()
-  const cancel = vi.spyOn(devices.enrollment, 'cancel')
-  await progress
-    .findAll('button')
-    .find((button) => button.text() === '取消')!
-    .trigger('click')
-  await flushPromises()
-  expect(cancel.mock.calls[0]?.[0]).toBe(receipt.enrollmentId)
-  expect(progress.text()).toContain('已取消')
-  await router.push({
-    name: 'device-management',
-    params: { tenant: TENANT, device: 'different-device' },
-    query: { mode: 'self-enrollment', enrollment: receipt.enrollmentId },
-  })
-  await flushPromises()
-  const mismatch = wrapper.get('[data-self-enrollment-progress]')
-  expect(mismatch.text()).toContain('响应')
-  expect(
-    mismatch.findAll('button').some((button) => ['取消', '更新口令并继续'].includes(button.text())),
-  ).toBe(false)
-  expect(views).not.toHaveBeenCalled()
-  expect(inventory).not.toHaveBeenCalled()
 })

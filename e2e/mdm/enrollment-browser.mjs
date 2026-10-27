@@ -337,6 +337,7 @@ try {
     phase = 'admission-two-sessions'
     assert.ok(fixture.admin && fixture.reader && fixture.configurationReady)
     employeeContext = await browser.newContext({ ignoreHTTPSErrors: true, locale: 'zh-CN' })
+    await employeeContext.grantPermissions(['clipboard-write'], { origin })
     const employee = await employeeContext.newPage()
     observe(employee)
     employee.setDefaultTimeout(10000)
@@ -369,10 +370,14 @@ try {
       .getByRole('button', { name: '暂停新注册', exact: true })
       .waitFor()
     await go(employee, `${origin}/enroll`)
-    const create = employee.getByRole('button', { name: '授权并开始注册', exact: true })
+    const create = employee.getByRole('button', { name: '复制口令并继续', exact: true })
     async function prepare() {
-      await employee.getByRole('button', { name: '生成一次性交付口令', exact: true }).click()
-      await employee.locator('form').first().locator('input[type=checkbox]').check()
+      const first = employee.getByRole('button', { name: '继续准备注册', exact: true })
+      if (await first.isVisible()) await first.click()
+      else await employee.getByRole('button', { name: '重新准备注册', exact: true }).click()
+      await employee.locator('[data-enrollment-secret]').waitFor()
+      assert.equal(await employee.locator('input[autocomplete=off]').count(), 0)
+      await employee.bringToFront()
     }
     await prepare()
     await admission('暂停新注册')
@@ -381,16 +386,17 @@ try {
       (r) =>
         r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/v1/self-enrollments',
     )
+    await employee.bringToFront()
     await create.click()
     const rejection = await rejected
     assert.equal(rejection.status(), 409)
     assert.equal((await rejection.json()).code, 'enrollment_paused')
     await employee.getByText('此通道已暂停新注册，请刷新通道状态。', { exact: true }).waitFor()
-    await employee.waitForFunction(() =>
-      [...document.querySelectorAll('button')].some(
-        (b) => b.textContent.trim() === '授权并开始注册' && b.disabled,
-      ),
+    assert.equal(
+      await employee.getByRole('button', { name: '重新准备注册', exact: true }).isDisabled(),
+      true,
     )
+    assert.equal(await employee.locator('[data-enrollment-secret]').count(), 0)
     coverage.push('stale-page-real-admission-rejection-and-refresh')
     assert.ok(fixture.existingDevice)
     const existing = await context.request.get(
@@ -446,13 +452,14 @@ try {
       (r) =>
         r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/v1/self-enrollments',
     )
+    await employee.bringToFront()
     await create.click()
     const creation = await created
     assert.equal(creation.status(), 200)
     const receipt = await creation.json()
-    await employee
-      .getByRole('heading', { name: '系统原生注册步骤与当前事实', exact: true })
-      .waitFor()
+    assert.equal(await employee.locator('[data-enrollment-secret]').count(), 0)
+    assert.equal(await employee.locator('input[type=password]').count(), 0)
+    await employee.getByRole('heading', { name: '系统确认与验证', exact: true }).waitFor()
     await admission('暂停新注册')
     // Existing authorization stays readable/cancellable; pausing does not rewrite its expiry.
     const read = await employeeContext.request.get(
@@ -489,6 +496,7 @@ try {
         url.searchParams.get('mode') === 'self-enrollment',
     )
     await employee.locator('[data-self-enrollment-progress]').waitFor()
+    await employee.getByRole('button', { name: '技术详情与手工设置', exact: true }).click()
     await employee.getByText(receipt.deviceId, { exact: false }).first().waitFor()
     assert.deepEqual(inventoryReads, [])
     employee.removeListener('request', recordInventoryRead)

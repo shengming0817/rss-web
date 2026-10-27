@@ -9,8 +9,8 @@ import {
   VList,
   VListItem,
   VTextField,
-  VTimeline,
-  VTimelineItem,
+  VExpansionPanels,
+  VExpansionPanel,
 } from 'vuetify/components'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -18,7 +18,15 @@ import { useMdm } from '../../../context'
 import { windowsEnrollmentLink, type decodeEnrollment } from '../../devices/clients/enrollment'
 import { useAttachment } from '../useAttachment'
 import { useOperation } from '../../../services/useOperation'
-const props = defineProps<{ value: ReturnType<typeof decodeEnrollment> }>()
+const props = defineProps<{
+  value: ReturnType<typeof decodeEnrollment>
+  profileUrl?: string | undefined
+  profileFilename?: string | undefined
+  profileBusy?: boolean
+  profileFailure?: string | null | undefined
+  refreshable?: boolean
+}>()
+const emit = defineEmits<{ refresh: [] }>()
 const { t } = useI18n(),
   runtime = useMdm(),
   delivery = useAttachment(),
@@ -32,7 +40,14 @@ const { t } = useI18n(),
     ],
     () => props.value.enrollmentId,
   ),
-  password = ref('')
+  password = ref(''),
+  recoveryOpen = ref(false)
+const deliveredUrl = computed(() => props.profileUrl ?? url.value)
+const deliveredFilename = computed(() => props.profileFilename ?? filename.value)
+const profileFailure = computed(() =>
+  deliveredUrl.value ? null : (props.profileFailure ?? failure.value),
+)
+const recovering = computed(() => recoveryOpen.value || !!profileFailure.value)
 const windowsLink = computed(() => windowsEnrollmentLink(props.value.instructions))
 const progress = computed(() => [
   {
@@ -91,6 +106,7 @@ watch(
   ],
   () => {
     password.value = ''
+    recoveryOpen.value = false
     delivery.clear()
   },
   { flush: 'sync' },
@@ -100,14 +116,11 @@ onBeforeUnmount(() => {
 })
 </script>
 <template>
-  <v-card variant="outlined" :aria-busy="busy">
-    <v-card-title tag="h2">{{ t('onboarding.nativeSteps') }}</v-card-title>
+  <v-card variant="outlined" :aria-busy="busy || profileBusy">
+    <v-card-title tag="h2">{{ t('onboarding.finishSystem') }}</v-card-title>
     <v-card-text>
       <template v-if="value.instructions.platform === 'windows'">
-        <p>{{ t('onboarding.windowsSteps') }}</p>
-        <v-alert type="info" variant="tonal" class="my-4">{{
-          t('onboarding.protocolUsernameNote')
-        }}</v-alert>
+        <p class="mb-4">{{ t('onboarding.openWindowsGuide') }}</p>
         <v-btn
           v-if="windowsLink"
           color="primary"
@@ -116,68 +129,55 @@ onBeforeUnmount(() => {
           :disabled="!runtime.registrationChannels.canContinue(value)"
           >{{ t('onboarding.openWindowsEnrollment') }}</v-btn
         >
-        <v-btn variant="text" href="ms-settings:workplace">{{
-          t('onboarding.openSettings')
-        }}</v-btn>
-        <v-list density="compact">
-          <v-list-item :title="t('onboarding.username')" :subtitle="value.instructions.username" />
-          <v-list-item
-            :title="t('onboarding.discovery')"
-            :subtitle="value.instructions.discoveryUrl"
-          />
-          <v-list-item
-            :title="t('registration.profile')"
-            :subtitle="value.instructions.windowsProfile"
-          />
-        </v-list>
-        <v-alert
-          v-if="value.instructions.requiresLocalAdministrator"
-          type="warning"
-          variant="tonal"
-          >{{ t('onboarding.localAdministrator') }}</v-alert
-        >
+        <p v-if="value.instructions.requiresLocalAdministrator" class="text-body-2 mt-3">
+          {{ t('onboarding.localAdministrator') }}
+        </p>
       </template>
       <template v-else-if="value.instructions.platform === 'macos'">
-        <v-timeline side="end" align="start" density="compact">
-          <v-timeline-item dot-color="primary" :title="t('onboarding.macDownload')">
-            <h3>{{ t('onboarding.macDownload') }}</h3>
-            <p>{{ t('onboarding.profileAuthority') }}</p>
-            <v-form :novalidate="false" @submit.prevent="profile">
-              <v-text-field
-                v-model="password"
-                :label="t('devices.password')"
-                type="password"
-                autocomplete="off"
-                required
-                pattern="[A-Za-z0-9_\-]{43}"
-                :disabled="busy"
-              />
-              <v-btn
-                :disabled="busy || !password || !runtime.registrationChannels.canContinue(value)"
-                type="submit"
-                color="primary"
-                >{{ t('onboarding.downloadProfile') }}</v-btn
-              >
-              <v-btn
-                v-if="url"
-                :href="url"
-                :download="filename"
-                color="primary"
-                variant="outlined"
-                class="ms-2"
-                >{{ t('onboarding.saveProfile') }}</v-btn
-              >
-            </v-form>
-          </v-timeline-item>
-          <v-timeline-item dot-color="primary"
-            ><h3>{{ t('onboarding.macInstall') }}</h3>
-            <p>{{ t('onboarding.macosSteps') }}</p></v-timeline-item
+        <p class="mb-4">{{ t('onboarding.macosSteps') }}</p>
+        <v-btn
+          v-if="deliveredUrl"
+          color="primary"
+          :href="deliveredUrl"
+          :download="deliveredFilename"
+          >{{ t('onboarding.saveProfile') }}</v-btn
+        >
+        <v-alert v-else-if="profileBusy || busy" type="info" variant="tonal">{{
+          t('onboarding.preparingProfile')
+        }}</v-alert>
+        <v-btn
+          v-else-if="!recovering"
+          color="primary"
+          variant="outlined"
+          @click="recoveryOpen = true"
+          >{{ t('onboarding.recoverProfile') }}</v-btn
+        >
+        <v-alert v-if="profileFailure" type="warning" variant="tonal" class="mt-4" role="alert"
+          >{{ t('onboarding.profileReadFailed') }} {{ t(`devices.${profileFailure}`) }}</v-alert
+        >
+        <v-form
+          v-if="recovering && !deliveredUrl"
+          :novalidate="false"
+          class="mt-4"
+          @submit.prevent="profile"
+        >
+          <p class="mb-3">{{ t('onboarding.profileAuthority') }}</p>
+          <v-text-field
+            v-model="password"
+            :label="t('onboarding.originalEnrollmentPassword')"
+            type="password"
+            autocomplete="off"
+            required
+            pattern="[A-Za-z0-9_\-]{43}"
+            :disabled="busy"
+          />
+          <v-btn
+            :disabled="busy || !password || !runtime.registrationChannels.canContinue(value)"
+            type="submit"
+            color="primary"
+            >{{ t('onboarding.downloadProfile') }}</v-btn
           >
-          <v-timeline-item :dot-color="value.progress.managementReady ? 'success' : 'grey'"
-            ><h3>{{ t('onboarding.macVerify') }}</h3>
-            <p>{{ t('onboarding.verifyFacts') }}</p></v-timeline-item
-          >
-        </v-timeline>
+        </v-form>
       </template>
       <v-alert
         v-else-if="value.instructions.platform === 'unavailable'"
@@ -189,22 +189,57 @@ onBeforeUnmount(() => {
         {{ t('onboarding.accountSteps') }}: {{ value.instructions.managedAccount }}
       </p>
       <p v-else-if="value.instructions.platform === 'macos_ade'">{{ t('onboarding.adeSteps') }}</p>
-      <p v-else>{{ t('onboarding.entraSteps') }}: {{ value.instructions.discoveryUrl }}</p>
-      <v-alert v-if="failure" type="error" variant="tonal" role="alert">{{
-        t(`devices.${failure}`)
-      }}</v-alert>
-      <v-list density="compact" :aria-label="t('onboarding.nativeSteps')">
-        <v-list-item
-          v-for="fact in progress"
-          :key="fact.label"
-          :title="t(`onboarding.${fact.label}`)"
-          :subtitle="fact.value"
-          :prepend-icon="fact.complete ? '$complete' : '$info'"
-        />
-      </v-list>
-      <v-alert :type="value.progress.managementReady ? 'success' : 'info'" variant="tonal">{{
-        t(`onboarding.${value.progress.diagnostic}`)
-      }}</v-alert>
+      <p v-else>{{ t('onboarding.entraSteps') }}</p>
+      <v-alert
+        :type="value.progress.managementReady ? 'success' : 'info'"
+        variant="tonal"
+        class="my-4"
+        >{{ t(`onboarding.${value.progress.diagnostic}`) }}</v-alert
+      >
+      <p class="mb-3">{{ t('onboarding.verifyFacts') }}</p>
+      <v-btn v-if="refreshable" variant="outlined" @click="emit('refresh')">{{
+        t('onboarding.verifyEnrollment')
+      }}</v-btn>
+      <v-expansion-panels class="mt-5" variant="accordion"
+        ><v-expansion-panel :title="t('onboarding.technicalDetails')"
+          ><template #text>
+            <v-list density="compact">
+              <v-list-item :title="t('devices.enrollmentId')" :subtitle="value.enrollmentId" />
+              <v-list-item :title="t('devices.deviceId')" :subtitle="value.deviceId" />
+              <v-list-item :title="t('devices.status')" :subtitle="t(`devices.${value.status}`)" />
+              <v-list-item :title="t('devices.expires')" :subtitle="String(value.expiresAt)" />
+              <template v-if="value.instructions.platform === 'windows'">
+                <v-list-item
+                  :title="t('onboarding.username')"
+                  :subtitle="value.instructions.username"
+                />
+                <v-list-item
+                  :title="t('onboarding.discovery')"
+                  :subtitle="value.instructions.discoveryUrl"
+                />
+                <v-list-item
+                  :title="t('registration.profile')"
+                  :subtitle="value.instructions.windowsProfile"
+                />
+              </template>
+              <v-list-item
+                v-for="fact in progress"
+                :key="fact.label"
+                :title="t(`onboarding.${fact.label}`)"
+                :subtitle="fact.value"
+                :prepend-icon="fact.complete ? '$complete' : '$info'"
+              />
+            </v-list>
+            <template v-if="value.instructions.platform === 'windows'">
+              <p class="my-3">{{ t('onboarding.protocolUsernameNote') }}</p>
+              <v-btn variant="outlined" href="ms-settings:workplace">{{
+                t('onboarding.openSettings')
+              }}</v-btn>
+              <p class="mt-3">{{ t('onboarding.windowsSteps') }}</p>
+            </template>
+          </template></v-expansion-panel
+        ></v-expansion-panels
+      >
     </v-card-text>
   </v-card>
 </template>
