@@ -103,6 +103,7 @@ function submit(kind: Command['kind'], replay = false) {
   clearSecret()
   pending.value = command
   operationId.value = command.operation
+  result.value = undefined
   void runWrite(
     () =>
       command.kind === 'create'
