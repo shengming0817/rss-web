@@ -38,6 +38,12 @@ describe('useTheme', () => {
   })
 
   describe('initial theme resolution', () => {
+    it('uses the applied application theme before a stored preference', async () => {
+      document.documentElement.dataset['theme'] = 'dark'
+      localStorage.setItem('rss-theme', 'light')
+      const { useTheme } = await import('../useTheme')
+      expect(useTheme().theme.value).toBe('dark')
+    })
     it('reads theme from localStorage when set to light', async () => {
       localStorage.setItem('rss-theme', 'light')
       const mod = await import('../useTheme')
@@ -167,5 +173,20 @@ describe('useTheme', () => {
       a.setTheme('dark')
       expect(b.theme.value).toBe('dark')
     })
+  })
+  it('follows a system change without a stored preference and releases the listener on disposal', async () => {
+    const { useThemeStore } = await import('../../stores/useThemeStore')
+    const store = useThemeStore()
+    const media = vi.mocked(window.matchMedia).mock.results.at(-1)!.value
+    const handler = media.addEventListener.mock.calls[0][1]
+    localStorage.removeItem('rss-theme')
+    handler({ matches: true })
+    expect(store.theme).toBe('dark')
+    expect(document.documentElement.dataset['theme']).toBe('dark')
+    expect(localStorage.getItem('rss-theme')).toBe('dark')
+    handler({ matches: false })
+    expect(store.theme).toBe('dark')
+    store.$dispose()
+    expect(media.removeEventListener).toHaveBeenCalledWith('change', handler)
   })
 })

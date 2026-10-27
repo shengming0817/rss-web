@@ -15,10 +15,8 @@ import { ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useProviders } from '../useProviders'
 const dialogId = useId()
-const dialogActivator = ref<HTMLElement>()
-function rememberActivator(event: MouseEvent) {
-  dialogActivator.value = event.currentTarget as HTMLElement
-}
+const editorActivator = ref<HTMLElement>()
+const disableActivator = ref<HTMLElement>()
 const { t } = useI18n()
 const {
   session,
@@ -71,8 +69,10 @@ const {
           :disabled="!!(busy || blocked)"
           type="submit"
           @click="
-            rememberActivator($event)
-            newProvider()
+            ($event: MouseEvent) => {
+              editorActivator = $event.currentTarget as HTMLElement
+              newProvider()
+            }
           "
         >
           {{ t('identity.newProvider') }}
@@ -102,17 +102,22 @@ const {
                     :disabled="!!(busy || blocked)"
                     type="submit"
                     @click="
-                      rememberActivator($event)
-                      edit(p)
+                      ($event: MouseEvent) => {
+                        editorActivator = $event.currentTarget as HTMLElement
+                        edit(p)
+                      }
                     "
                   >
                     {{ t('identity.edit') }}</VBtn
                   ><VBtn
                     :disabled="!!(busy || blocked)"
                     type="submit"
+                    @keydown.esc="!busy && (pending = null)"
                     @click="
-                      rememberActivator($event)
-                      toggle(p)
+                      ($event: MouseEvent) => {
+                        disableActivator = $event.currentTarget as HTMLElement
+                        toggle(p)
+                      }
                     "
                   >
                     {{
@@ -129,7 +134,7 @@ const {
       </div>
       <VDialog
         :model-value="editorOpen"
-        :activator="dialogActivator"
+        :activator="editorActivator"
         :open-on-click="false"
         :persistent="busy"
         :aria-label="t(selected ? 'identity.editProvider' : 'identity.newProvider')"
@@ -205,7 +210,7 @@ const {
     </template>
     <VDialog
       :model-value="pending !== null"
-      :activator="dialogActivator"
+      :activator="disableActivator"
       :open-on-click="false"
       :persistent="true"
       :aria-label="t('identity.disableProvider')"

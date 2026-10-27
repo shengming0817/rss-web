@@ -19,9 +19,6 @@ import { useI18n } from 'vue-i18n'
 import { useAccountSecurity } from '../useAccountSecurity'
 const pageId = useId()
 const dialogActivator = ref<HTMLElement>()
-function rememberActivator(event: MouseEvent) {
-  dialogActivator.value = event.currentTarget as HTMLElement
-}
 const { t } = useI18n()
 const {
   session,
@@ -90,9 +87,12 @@ const {
           ><VBtn
             :disabled="!!(busy || !owner)"
             type="submit"
+            @keydown.esc="!busy && (confirmAll = false)"
             @click="
-              rememberActivator($event)
-              confirmAll = true
+              ($event: MouseEvent) => {
+                dialogActivator = $event.currentTarget as HTMLElement
+                confirmAll = true
+              }
             "
           >
             {{ t('identity.logoutAll') }}

@@ -1,7 +1,9 @@
 import { readFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { createVuetify } from 'vuetify'
 
 // ref: vuetify v4.3.0 packages/vuetify/src/composables/theme.ts
+const require = createRequire(import.meta.url)
 export const neutralThemes = {
   light: {
     dark: false,
@@ -42,7 +44,7 @@ export function vuetifyStyles(scope, themes = neutralThemes) {
     },
     async load(id) {
       if (id !== '\0' + virtual) return
-      const base = await readFile(new URL(import.meta.resolve('vuetify/styles')), 'utf8')
+      const base = await readFile(require.resolve('vuetify/styles'), 'utf8')
       const theme = createVuetify({
         theme: { defaultTheme: Object.keys(themes)[0], scope, themes },
       }).theme.styles.value

@@ -14,10 +14,10 @@ import { useI18n } from 'vue-i18n'
 import { useAccounts } from '../useAccounts'
 import LocalProfileEditor from './LocalProfileEditor.vue'
 const dialogId = useId()
-const dialogActivator = ref<HTMLElement>()
-function rememberActivator(event: MouseEvent) {
-  dialogActivator.value = event.currentTarget as HTMLElement
-}
+const createActivator = ref<HTMLElement>()
+const profileActivator = ref<HTMLElement>()
+const changeActivator = ref<HTMLElement>()
+const resetActivator = ref<HTMLElement>()
 const { t } = useI18n()
 const {
   session,
@@ -82,17 +82,22 @@ const {
                   <VBtn
                     :disabled="!!busy"
                     @click="
-                      rememberActivator($event)
-                      profileTarget = a
+                      ($event: MouseEvent) => {
+                        profileActivator = $event.currentTarget as HTMLElement
+                        profileTarget = a
+                      }
                     "
                     >{{ t('identity.localProfile') }}</VBtn
                   >
                   <VBtn
                     :disabled="!!busy"
                     type="submit"
+                    @keydown.esc="!busy && (pending = null)"
                     @click="
-                      rememberActivator($event)
-                      pending = { account: a, field: 'enabled', enabled: !a.enabled }
+                      ($event: MouseEvent) => {
+                        changeActivator = $event.currentTarget as HTMLElement
+                        pending = { account: a, field: 'enabled', enabled: !a.enabled }
+                      }
                     "
                   >
                     {{ t(a.enabled ? 'identity.disable' : 'identity.enable') }}
@@ -100,9 +105,12 @@ const {
                   <VBtn
                     :disabled="!!busy"
                     type="submit"
+                    @keydown.esc="!busy && (pending = null)"
                     @click="
-                      rememberActivator($event)
-                      pending = { account: a, field: 'membership', enabled: !a.memberActive }
+                      ($event: MouseEvent) => {
+                        changeActivator = $event.currentTarget as HTMLElement
+                        pending = { account: a, field: 'membership', enabled: !a.memberActive }
+                      }
                     "
                   >
                     {{ t(a.memberActive ? 'identity.disableMember' : 'identity.enableMember') }}
@@ -115,8 +123,10 @@ const {
                     :disabled="!!busy"
                     type="submit"
                     @click="
-                      rememberActivator($event)
-                      openReset(a)
+                      ($event: MouseEvent) => {
+                        resetActivator = $event.currentTarget as HTMLElement
+                        openReset(a)
+                      }
                     "
                   >
                     {{ t('identity.resetPassword') }}
@@ -139,14 +149,16 @@ const {
         type="button"
         :disabled="busy"
         @click="
-          rememberActivator($event)
-          creating = true
+          ($event: MouseEvent) => {
+            createActivator = $event.currentTarget as HTMLElement
+            creating = true
+          }
         "
         >{{ t('identity.createAccount') }}</VBtn
       >
       <VDialog
         :model-value="creating"
-        :activator="dialogActivator"
+        :activator="createActivator"
         :open-on-click="false"
         :persistent="busy"
         :aria-label="t('identity.createAccount')"
@@ -189,7 +201,7 @@ const {
     </template>
     <VDialog
       :model-value="profileTarget !== null"
-      :activator="dialogActivator"
+      :activator="profileActivator"
       :open-on-click="false"
       :persistent="busy"
       :aria-label="t('identity.localProfile')"
@@ -213,7 +225,7 @@ const {
     ></VDialog>
     <VDialog
       :model-value="pending !== null"
-      :activator="dialogActivator"
+      :activator="changeActivator"
       :open-on-click="false"
       :persistent="true"
       :aria-label="t('identity.confirmChange')"
@@ -247,7 +259,7 @@ const {
     >
     <VDialog
       :model-value="resetTarget !== null"
-      :activator="dialogActivator"
+      :activator="resetActivator"
       :open-on-click="false"
       :persistent="busy"
       :aria-label="t('identity.resetPassword')"

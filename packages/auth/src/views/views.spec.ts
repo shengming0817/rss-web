@@ -130,7 +130,7 @@ describe('Identity views use actual app session and decoder modules', () => {
     f.replies.push({ ...accountValue, principalId: ID })
     await wrapper.get('form').trigger('submit')
     await flushPromises()
-    expect(router.currentRoute.value.name).toBe('login')
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('login'))
     wrapper.unmount()
   })
   it('revokes current or all sessions explicitly', async () => {
@@ -153,7 +153,7 @@ describe('Identity views use actual app session and decoder modules', () => {
           .trigger('click')
       }
       await flushPromises()
-      expect(router.currentRoute.value.name).toBe('login')
+      await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('login'))
       wrapper.unmount()
     }
   })
@@ -227,6 +227,7 @@ describe('Identity views use actual app session and decoder modules', () => {
         await router.push({ name: 'sessions', params: { tenant: TENANT } })
         await router.isReady()
         const wrapper = mount(App, {
+          attachTo: document.body,
           global: {
             plugins: [createPinia(), identityI18n(), router],
             provide: { [runtimeKey as symbol]: f },
@@ -303,7 +304,9 @@ describe('Identity views use actual app session and decoder modules', () => {
     })
     await new DOMWrapper(document.body).get('[role=dialog] form').trigger('submit')
     await flushPromises()
-    expect(new DOMWrapper(document.body).find('#account-password').exists()).toBe(false)
+    await vi.waitFor(() =>
+      expect(new DOMWrapper(document.body).find('#account-password').exists()).toBe(false),
+    )
     for (const label of ['停用账户', '停用成员']) {
       await wrapper
         .findAll('button')
@@ -341,7 +344,9 @@ describe('Identity views use actual app session and decoder modules', () => {
     })
     await new DOMWrapper(document.body).get('[role=dialog] form').trigger('submit')
     await flushPromises()
-    expect(new DOMWrapper(document.body).find('#reset-password').exists()).toBe(false)
+    await vi.waitFor(() =>
+      expect(new DOMWrapper(document.body).find('#reset-password').exists()).toBe(false),
+    )
     wrapper.unmount()
   })
   it('edits, tests and enables IdPs through versioned writes', async () => {
@@ -796,7 +801,7 @@ it.each([
       })
       await f.session.login(OTHER, 'other-owner', 'Synthetic login secret')
       await flushPromises()
-      expect(body().find(entry.field).exists()).toBe(false)
+      await vi.waitFor(() => expect(body().find(entry.field).exists()).toBe(false))
       expect(wrapper.find('tbody').exists()).toBe(false)
     } finally {
       wrapper.unmount()
@@ -1005,7 +1010,7 @@ it('associates session tabs with retained panels and clears passwords when leavi
   await tabs[1]!.trigger('click')
   await flushPromises()
   expect(tabs[1]!.attributes('aria-selected')).toBe('true')
-  expect(panels[0]!.isVisible()).toBe(false)
+  await vi.waitFor(() => expect(panels[0]!.isVisible()).toBe(false))
   expect(panels[1]!.isVisible()).toBe(true)
   const password = wrapper.get('#new-password').element
   await wrapper.get('#new-password').setValue('sensitive draft')
@@ -1015,6 +1020,23 @@ it('associates session tabs with retained panels and clears passwords when leavi
   expect((password as HTMLInputElement).value).toBe('')
   expect(panels[0]!.text()).toContain(ID)
   expect(f.request).toHaveBeenCalledTimes(requests)
+  wrapper.unmount()
+  f.session.clear()
+})
+
+it('dismisses logout confirmation with Escape before focus has entered the overlay', async () => {
+  const f = fixture(false)
+  await f.login()
+  f.replies.push({ sessions: [], nextCursor: null })
+  const { wrapper } = await view(SessionsView, f)
+  const opener = wrapper.findAll('button').find((button) => button.text() === '退出全部会话')!
+  await opener.trigger('click')
+  await opener.trigger('keydown', { key: 'Escape' })
+  await vi.waitFor(() =>
+    expect(new DOMWrapper(document.body).find('[role=alertdialog]').exists()).toBe(false),
+  )
+  expect(f.session.state.value.status).toBe('authenticated')
+  expect(f.request.mock.calls.some(([request]) => request.path.endsWith('/logout-all'))).toBe(false)
   wrapper.unmount()
   f.session.clear()
 })

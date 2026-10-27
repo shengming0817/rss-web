@@ -1,12 +1,15 @@
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
+import { vuetifyStyles } from '../../build/vuetify-styles.mjs'
+import { accessThemes } from './themes'
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [vuetifyStyles('.access-surface', accessThemes), vue()],
   test: {
     name: 'device-access-app',
     root: fileURLToPath(new URL('.', import.meta.url)),
     environment: 'jsdom',
+    server: { deps: { inline: ['vuetify'] } },
     include: ['src/**/*.spec.ts', 'demo/**/*.spec.ts'],
     coverage: {
       provider: 'v8',
