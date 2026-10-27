@@ -1,4 +1,4 @@
-import { selectControl } from '../vuetify-test-controls'
+import { selectControl, hasChoice } from '../vuetify-test-controls'
 import { createFeatureRouter as createRouter } from '../../../../tests/feature-router'
 import { afterEach, expect, it, vi } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
@@ -215,8 +215,10 @@ it('selects available catalog fields and removes only the selected draft mapping
   })
   wrappers.push(wrapper)
   await flushPromises()
-  expect(wrapper.find('option[value="custom.secret"]').exists()).toBe(false)
-  await selectControl(wrapper, 'select').setValue('custom.extra')
+  const fields = selectControl(wrapper, 'select')
+  expect(hasChoice(fields, 'custom.extra')).toBe(true)
+  expect(hasChoice(fields, 'custom.secret')).toBe(false)
+  await fields.setValue('custom.extra')
   await wrapper
     .findAll('button')
     .find((b) => b.text() === '添加字段映射')!
