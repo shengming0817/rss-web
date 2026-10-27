@@ -1,3 +1,4 @@
+import { selectControl } from './features/policies/vuetify-test-controls'
 import { DOMWrapper, flushPromises } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions, NoContentRequest } from '@rss/api/mdm'
@@ -186,12 +187,12 @@ it('opens a software policy from the workspace through the supported software pa
     const link = new DOMWrapper(document.body).get('.console-deployment-list a')
     await link.trigger('click')
     await flushPromises()
-    await vi.waitFor(() => expect(app.router.currentRoute.value.name).toBe('software-deployments'))
+    await vi.waitFor(() => expect(app.router.currentRoute.value.name).toBe('policy-policies'))
     await flushPromises()
     expect(app.router.currentRoute.value.query['id']).toBe(id)
     expect(read).toHaveBeenCalledWith(id)
     expect(document.querySelector('main h1')?.textContent).toBe(
-      app.i18n.global.t('software.deployments'),
+      app.i18n.global.t('policies.software'),
     )
     expect(document.querySelector('main')?.textContent).toContain('workspace-software')
     expect(document.querySelector('main')?.textContent).not.toContain(
@@ -263,12 +264,13 @@ it('creates a formal Scope, changes the result channel explicitly, and deletes o
   const app = await start()
   try {
     await app.router.push({
-      name: 'policy-scopes',
+      name: 'policy-policies',
       params: { tenant: TENANT },
       query: { device: 'device-01' },
     })
     await flushPromises()
-    const form = new DOMWrapper(document.body).get('[role=dialog] form')
+    const scopeDialog = () => new DOMWrapper(document.body).get('[role=dialog]')
+    const form = scopeDialog().get('form')
     const scopeWrites = () =>
       app.calls.filter((c) => c.method === 'POST' && /^\/api\/v1\/scopes\/[^/]+$/.test(c.path))
     const before = scopeWrites().length
@@ -294,13 +296,11 @@ it('creates a formal Scope, changes the result channel explicitly, and deletes o
     })
     await press(app, 'policies.refresh')
     await press(app, 'policies.refresh')
-    await main()
+    await scopeDialog()
       .findAll('[role=tab]')
       .find((tab) => tab.text() === '判定说明')!
       .trigger('click')
-    const channel = main()
-      .findAll('select')
-      .find((s) => s.find('option[value=agent]').exists())!
+    const channel = selectControl(scopeDialog().get('.scope-results'))
     await channel.setValue('agent')
     await press(app, 'policies.open', true)
     expect(main().text()).toContain('device-01')

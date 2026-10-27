@@ -39,7 +39,7 @@ export const navigation: Navigation = [
       { name: 'policy-telemetry', label: 'telemetry.profiles' },
       { name: 'policy-executions', label: 'policies.executions' },
       { name: 'security-rules', label: 'security.rules' },
-      { name: 'settings-metrics', label: 'telemetry.metricsSettings' },
+      { name: 'policy-metrics', label: 'telemetry.metricsSettings' },
     ],
   },
   {

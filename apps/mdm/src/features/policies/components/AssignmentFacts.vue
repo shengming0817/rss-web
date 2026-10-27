@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { UiButton, UiBadge, UiDialog } from '@rss/core/components'
+import PolicyDialog from './PolicyDialog.vue'
+
+import { VChip, VBtn } from 'vuetify/components'
+
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ObjectLink from '../../devices/components/ObjectLink.vue'
@@ -27,18 +30,18 @@ const { t, te } = useI18n(),
     <ObjectLink :object="item.object" /><span v-if="item.channel" class="ui-help">{{
       item.channel === 'agent' ? 'Agent' : 'MDM'
     }}</span
-    ><UiBadge
+    ><VChip
       v-if="item.availability"
-      :tone="item.availability === 'ready' ? 'success' : 'warning'"
-      >{{ t(`policies.availability_${item.availability}`) }}</UiBadge
+      :color="item.availability === 'ready' ? 'success' : 'warning'"
+      >{{ t(`policies.availability_${item.availability}`) }}</VChip
     ><span v-if="item.reason">{{
       te(`policies.assignmentReason.${item.reason}`)
         ? t(`policies.assignmentReason.${item.reason}`)
         : item.reason
     }}</span
-    ><UiButton variant="ghost" @click="evidenceOpen = true">{{ t('devices.evidence') }}</UiButton>
+    ><VBtn variant="text" @click="evidenceOpen = true">{{ t('devices.evidence') }}</VBtn>
   </div>
-  <UiDialog
+  <PolicyDialog
     v-model:open="evidenceOpen"
     placement="right"
     :title="t('devices.evidence')"
@@ -66,5 +69,5 @@ const { t, te } = useI18n(),
         <dd class="coordinate">{{ member.registrationId }} / {{ member.generation }}</dd>
       </dl>
     </section>
-  </UiDialog>
+  </PolicyDialog>
 </template>

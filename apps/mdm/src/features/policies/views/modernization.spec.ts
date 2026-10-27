@@ -1,6 +1,8 @@
+import { selectControl } from '../vuetify-test-controls'
+import { createFeatureRouter as createRouter } from '../../../../tests/feature-router'
 import { ref } from 'vue'
 import { DOMWrapper, flushPromises, mount } from '@vue/test-utils'
-import { createMemoryHistory, createRouter } from 'vue-router'
+import { createMemoryHistory } from 'vue-router'
 import { expect, it, vi } from 'vitest'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
@@ -34,6 +36,7 @@ it('filters Resource kinds through the formal directory and opens software impor
   })
   await router.push('/')
   const wrapper = mount(ResourcesView, {
+    attachTo: document.body,
     global: {
       plugins: [router, mdmI18n()],
       provide: {
@@ -49,7 +52,7 @@ it('filters Resource kinds through the formal directory and opens software impor
   expect(wrapper.text()).toContain('Disk inventory')
   expect(wrapper.text()).toContain('unnamed')
   expect(wrapper.text()).toContain('尚无激活版本')
-  await wrapper.get('.task-filterbar select').setValue('configuration')
+  await selectControl(wrapper, '.task-filterbar select').setValue('configuration')
   await flushPromises()
   expect(list.mock.calls.at(-1)).toEqual([{ filter: "kind=='configuration'", cursor: undefined }])
   await wrapper
@@ -59,7 +62,7 @@ it('filters Resource kinds through the formal directory and opens software impor
   await flushPromises()
   expect(list.mock.calls.at(-1)).toEqual([{ filter: "kind=='configuration'", cursor: 'next' }])
   list.mockRejectedValueOnce(new Error('directory unavailable'))
-  await wrapper.get('.task-filterbar select').setValue('script')
+  await selectControl(wrapper, '.task-filterbar select').setValue('script')
   await flushPromises()
   expect(wrapper.findAll('button').some((button) => button.text() === '下一页')).toBe(false)
   expect(list.mock.lastCall).toEqual([{ filter: "kind=='script'", cursor: undefined }])
@@ -77,6 +80,7 @@ it('filters Resource kinds through the formal directory and opens software impor
 
 it('keeps accepted, queued, unknown device report and unverified effect as independent visible facts', () => {
   const wrapper = mount(OperationStages, {
+    attachTo: document.body,
     props: { kind: 'command', dispatch: 'queued', receipt: 'unknown', effect: 'unverified' },
     global: { plugins: [mdmI18n()] },
   })
@@ -107,6 +111,7 @@ it.each([
   },
 ] as const)('uses each formal status domain for $kind', ({ labels, ...props }) => {
   const wrapper = mount(OperationStages, {
+    attachTo: document.body,
     props: {
       kind: props.kind,
       dispatch: props.dispatch,
@@ -127,6 +132,7 @@ it('keeps Resource creation errors and exact original replay reachable inside th
   })
   await router.push('/')
   const wrapper = mount(ResourcesView, {
+    attachTo: document.body,
     global: {
       plugins: [router, mdmI18n()],
       provide: {

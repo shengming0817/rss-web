@@ -1,13 +1,17 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import PolicyFieldset from './PolicyFieldset.vue'
+import { VBtn, VSelect, VTextField, VTextarea, VCheckbox } from 'vuetify/components'
+import { controlEvent } from '../control-event'
+
 import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { decodeScriptSpec, type ScriptSpec } from '../clients/resources'
 import { defaultApplicability, identityMapping } from '../collection-draft'
 import CollectionMappings from './CollectionMappings.vue'
-const root = ref<HTMLFieldSetElement>()
+const root = ref<InstanceType<typeof PolicyFieldset>>()
 function valid() {
-  return Array.from(root.value?.querySelectorAll('input,select,textarea') ?? []).every((node) =>
+  const element = root.value?.$el as HTMLFieldSetElement | undefined
+  return Array.from(element?.querySelectorAll('input,select,textarea') ?? []).every((node) =>
     (node as HTMLInputElement).checkValidity(),
   )
 }
@@ -98,83 +102,107 @@ function collection(event: Event) {
 }
 </script>
 <template>
-  <fieldset ref="root">
+  <PolicyFieldset ref="root">
     <legend>{{ t('policies.scriptDefinition') }}</legend>
-    <UiButton type="button" @click="osqueryTemplate">{{ t('policies.osqueryTemplate') }}</UiButton>
+    <VBtn type="button" @click="osqueryTemplate">{{ t('policies.osqueryTemplate') }}</VBtn>
     <p v-if="model.profile === 'osquery'">{{ t('policies.osqueryHint') }}</p>
     <label :for="`${id}-profile`">{{ t('policies.profile') }}</label
-    ><select :id="`${id}-profile`" class="ui-input" :value="model.profile" @change="changeProfile">
-      <option
-        v-for="profile in ['power_shell7', 'posix_sh', 'bash', 'osquery']"
-        :key="profile"
-        :value="profile"
-      >
-        {{ profile }}
-      </option></select
-    ><label :for="`${id}-run-as`">{{ t('policies.runAs') }}</label
-    ><select :id="`${id}-run-as`" v-model="model.runAs" class="ui-input">
-      <option value="system">{{ t('policies.system') }}</option>
-      <option value="logged_in_user">{{ t('policies.loggedInUser') }}</option>
-    </select>
+    ><VSelect
+      :id="`${id}-profile`"
+      :model-value="model.profile"
+      :items="[
+        ...['power_shell7', 'posix_sh', 'bash', 'osquery'].map((profile) => ({
+          title: String(profile),
+          value: profile,
+        })),
+      ]"
+      variant="outlined"
+      density="comfortable"
+      hide-details="auto"
+      @update:model-value="changeProfile(controlEvent($event))"
+    /><label :for="`${id}-run-as`">{{ t('policies.runAs') }}</label
+    ><VSelect
+      :id="`${id}-run-as`"
+      v-model="model.runAs"
+      :items="[
+        { title: String(t('policies.system')), value: 'system' },
+        { title: String(t('policies.loggedInUser')), value: 'logged_in_user' },
+      ]"
+      variant="outlined"
+      density="comfortable"
+      hide-details="auto"
+    />
     <p>{{ t('policies.selfService.identityHint') }}</p>
     <label :for="`${id}-timeout`">{{ t('policies.timeout') }}</label
-    ><input
+    ><VTextField
       :id="`${id}-timeout`"
       v-model.number="model.timeoutSeconds"
-      class="ui-input"
       type="number"
       min="1"
       max="3600"
       required
+      variant="outlined"
+      density="comfortable"
+      hide-details="auto"
     /><label :for="`${id}-bytes`">{{ t('policies.outputBytes') }}</label
-    ><input
+    ><VTextField
       :id="`${id}-bytes`"
       v-model.number="model.outputBytes"
-      class="ui-input"
       type="number"
       min="1"
       max="1048576"
       required
+      variant="outlined"
+      density="comfortable"
+      hide-details="auto"
     /><label :for="`${id}-rows`">{{ t('policies.maxRows') }}</label
-    ><input
+    ><VTextField
       :id="`${id}-rows`"
       v-model.number="model.maxRows"
-      class="ui-input"
       type="number"
       min="1"
       max="1000"
       required
+      variant="outlined"
+      density="comfortable"
+      hide-details="auto"
     /><label :for="`${id}-parameters`">{{ t('policies.parameterSchema') }}</label
-    ><textarea
+    ><VTextarea
       :id="`${id}-parameters`"
-      class="ui-input"
-      :value="parameters"
       rows="5"
+      :model-value="parameters"
+      variant="outlined"
+      density="comfortable"
+      hide-details="auto"
       @input="json($event, 'parameters')"
     /><label :for="`${id}-output`">{{ t('policies.outputSchema') }}</label
-    ><textarea
+    ><VTextarea
       :id="`${id}-output`"
-      class="ui-input"
-      :value="output"
       rows="5"
+      :model-value="output"
+      variant="outlined"
+      density="comfortable"
+      hide-details="auto"
       @input="json($event, 'output')"
     /><label :for="`${id}-bindings`">{{ t('policies.bindings') }}</label
-    ><textarea
+    ><VTextarea
       :id="`${id}-bindings`"
-      class="ui-input"
-      :value="bindings"
       rows="3"
+      :model-value="bindings"
+      variant="outlined"
+      density="comfortable"
+      hide-details="auto"
       @input="json($event, 'bindings')"
     /><label
-      ><input
-        :checked="model.purpose.kind === 'collection'"
-        type="checkbox"
-        @change="collection"
+      ><VCheckbox
+        :model-value="model.purpose.kind === 'collection'"
+        hide-details="auto"
+        @update:model-value="collection(controlEvent($event))"
       />{{ t('policies.collection') }}</label
     ><CollectionMappings
       v-if="model.purpose.kind === 'collection'"
       v-model="mapped"
       :source="model.profile === 'osquery' ? 'agent.osquery' : 'agent.script'"
     />
-  </fieldset>
+  </PolicyFieldset>
 </template>

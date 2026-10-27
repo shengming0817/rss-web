@@ -1,7 +1,9 @@
+import { selectControl } from '../vuetify-test-controls'
+import { createFeatureRouter as createRouter } from '../../../../tests/feature-router'
 import { ref } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
-import { createRouter, createMemoryHistory } from 'vue-router'
+import { createMemoryHistory } from 'vue-router'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
 import { createAutomationDemo } from '../../../../demo/policies/state'
@@ -128,6 +130,7 @@ async function fixture(unknown = false, configuration = false) {
   })
   await router.push(`/?id=${old.id}`)
   const wrapper = mount(PoliciesView, {
+    attachTo: document.body,
     global: {
       plugins: [router, mdmI18n()],
       stubs: { RouterLink: true },
@@ -151,6 +154,7 @@ async function fixture(unknown = false, configuration = false) {
   })
   await flushPromises()
   const button = (text: string) => wrapper.findAll('button').find((b) => b.text() === text)!
+  await button('编辑').trigger('click')
   await button('加载资源版本').trigger('click')
   await flushPromises()
   return { wrapper, change, read, button, router, preview, devices, sessionState }
@@ -158,11 +162,13 @@ async function fixture(unknown = false, configuration = false) {
 it('reads a deep-linked formal Policy, retains false/1 and saves Resource parameter sources without schema copies', async () => {
   const f = await fixture()
   expect(f.read).toHaveBeenCalledTimes(1)
-  expect((f.wrapper.get('[data-field="allowAi"]').element as HTMLInputElement).checked).toBe(false)
-  expect((f.wrapper.get('[data-field="riskLevel"]').element as HTMLSelectElement).value).toBe('1')
+  expect((f.wrapper.get('[data-field="allowAi"] input').element as HTMLInputElement).checked).toBe(
+    false,
+  )
+  expect(String(selectControl(f.wrapper, '[data-field="riskLevel"]').props('modelValue'))).toBe('1')
   expect(f.wrapper.find('#value-label').exists()).toBe(false)
   expect(f.wrapper.find('#value-detail').exists()).toBe(true)
-  await f.wrapper.get('[data-field="published"]').setValue(false)
+  await f.wrapper.get('[data-field="published"] input').setValue(false)
   await f.wrapper.get('form').trigger('submit')
   await flushPromises()
   expect(f.change.mock.calls[0]?.[1]).toMatchObject({
@@ -196,7 +202,7 @@ it('keeps an Unknown operation fenced after a configuration read and never repla
 it('shows Resource bounds, starts numeric fixed values within bounds, and follows query locators', async () => {
   const f = await fixture()
   expect(f.wrapper.get('#value-detail').attributes()).toMatchObject({ min: '1', max: '3' })
-  await f.wrapper.get('#policy-variant').setValue('0')
+  await selectControl(f.wrapper, '#policy-variant').setValue('0')
   expect((f.wrapper.get('#value-detail').element as HTMLInputElement).value).toBe('1')
   expect(f.wrapper.get('#value-label').attributes()).toMatchObject({
     minlength: '1',
@@ -239,9 +245,10 @@ it.each(['not found', 'denied', 'network', 'invalid DTO'])(
     await f.wrapper.get('form').trigger('submit')
     expect(f.change).not.toHaveBeenCalled()
     f.router.back()
+    await vi.waitFor(() => expect(f.router.currentRoute.value.query['id']).toBe(old))
     await flushPromises()
     expect((f.wrapper.get('#policy-id').element as HTMLInputElement).value).toBe(old)
-    expect(f.wrapper.get('form > fieldset').attributes('disabled')).toBeUndefined()
+    expect(f.wrapper.get('form > fieldset').attributes('disabled')).toBeDefined()
     f.wrapper.unmount()
   },
 )
@@ -267,16 +274,18 @@ it('fences pending and late B reads when navigating to C', async () => {
   finish({ ...old, id: b })
   await flushPromises()
   expect((f.wrapper.get('#policy-id').element as HTMLInputElement).value).toBe(c)
-  expect(f.wrapper.get('form > fieldset').attributes('disabled')).toBeUndefined()
+  expect(f.wrapper.get('form > fieldset').attributes('disabled')).toBeDefined()
   f.wrapper.unmount()
 })
 
 it('authors continuous configuration with an exact Resource and exit behavior through the shared Policy client', async () => {
   const f = await fixture(false, true)
-  expect((f.wrapper.get('#policy-action').element as HTMLSelectElement).value).toBe('configuration')
-  expect(f.wrapper.find('[data-field="published"]').exists()).toBe(false)
+  expect(String(selectControl(f.wrapper, '#policy-action').props('modelValue'))).toBe(
+    'configuration',
+  )
+  expect(f.wrapper.find('[data-field="published"] input').exists()).toBe(false)
   expect(f.wrapper.find('#policy-frequency').exists()).toBe(false)
-  await f.wrapper.get('#policy-exit').setValue('remove')
+  await selectControl(f.wrapper, '#policy-exit').setValue('remove')
   await f.wrapper.get('form').trigger('submit')
   await flushPromises()
   expect(f.change.mock.calls[0]![1]).toMatchObject({
@@ -305,13 +314,14 @@ it('authors continuous configuration with an exact Resource and exit behavior th
 it('offers configuration creation in the Policy page and sends current exact bindings with revision zero', async () => {
   const f = await fixture(false, true)
   await f.button('新建').trigger('click')
+  await vi.waitFor(() => expect(f.router.currentRoute.value.query['id']).toBeUndefined())
   await flushPromises()
-  await f.wrapper.get('#policy-action').setValue('configuration')
+  await selectControl(f.wrapper, '#policy-action').setValue('configuration')
   await f.wrapper.get('#policy-resource').setValue('native-camera')
   await f.wrapper.get('#policy-scope').setValue(crypto.randomUUID())
   await f.button('加载资源版本').trigger('click')
   await flushPromises()
-  await f.wrapper.get('#policy-variant').setValue('0')
+  await selectControl(f.wrapper, '#policy-variant').setValue('0')
   await f.wrapper.get('form').trigger('submit')
   await flushPromises()
   expect(f.change.mock.calls[0]![1]).toMatchObject({
@@ -393,6 +403,7 @@ it('recovers a new draft by binding its confirmed locator and reading current co
   const f = await fixture(true)
   const old = await f.read.mock.results[0]!.value
   await f.button('新建').trigger('click')
+  await vi.waitFor(() => expect(f.router.currentRoute.value.query['id']).toBeUndefined())
   await flushPromises()
   const target = (f.wrapper.get('#policy-id').element as HTMLInputElement).value
   await f.wrapper.get('#policy-resource').setValue(old.definition.action.resource.id)
@@ -400,7 +411,7 @@ it('recovers a new draft by binding its confirmed locator and reading current co
   await f.wrapper.get('#policy-scope').setValue(old.definition.scope)
   await f.button('加载资源版本').trigger('click')
   await flushPromises()
-  await f.wrapper.get('#policy-variant').setValue('0')
+  await selectControl(f.wrapper, '#policy-variant').setValue('0')
   await f.wrapper.get('#value-label').setValue('diagnostics')
   await f.wrapper.get('form').trigger('submit')
   await flushPromises()
@@ -411,22 +422,22 @@ it('recovers a new draft by binding its confirmed locator and reading current co
   await f.button('核对／重试原提交').trigger('click')
   await flushPromises()
   expect(f.change.mock.calls[1]).toEqual(original)
-  expect(f.router.currentRoute.value.query['id']).toBe(target)
+  await vi.waitFor(() => expect(f.router.currentRoute.value.query['id']).toBe(target))
+  await flushPromises()
   expect(f.read).toHaveBeenLastCalledWith(target)
-  expect(f.wrapper.get('form > fieldset').attributes('disabled')).toBeUndefined()
+  expect(f.wrapper.get('form > fieldset').attributes('disabled')).toBeDefined()
   f.wrapper.unmount()
 })
 
 it('authors fixed parameter values and an explicit execution schedule before pausing the same Policy', async () => {
   const f = await fixture()
-  await f.button('编辑').trigger('click')
-  await f.wrapper.get('#source-label').setValue('fixed')
+  await selectControl(f.wrapper, '#source-label').setValue('fixed')
   await f.wrapper.get('#value-label').setValue('Bound diagnostic input')
-  await f.wrapper.get('#source-detail').setValue('input')
+  await selectControl(f.wrapper, '#source-detail').setValue('input')
   expect(f.wrapper.find('#value-detail').exists()).toBe(false)
-  await f.wrapper.get('#source-detail').setValue('fixed')
+  await selectControl(f.wrapper, '#source-detail').setValue('fixed')
   await f.wrapper.get('#value-detail').setValue(2)
-  await f.wrapper.get('#policy-frequency').setValue('every_trigger')
+  await selectControl(f.wrapper, '#policy-frequency').setValue('every_trigger')
   await f.wrapper.get('#policy-lifetime').setValue(5400)
   await f.wrapper.get('[id$="-trigger"]').setValue('check_in')
   await f.wrapper.get('[id$="-minimum"]').setValue(120)
@@ -477,4 +488,57 @@ it('keeps a preview body unchanged across opaque continuations and clears it on 
   await f.wrapper.get('#policy-scope').setValue(crypto.randomUUID())
   expect(f.wrapper.text()).not.toContain('下一页')
   f.wrapper.unmount()
+})
+
+it('opens the real Vuetify action menu after creating a draft and keeps the chosen form stable', async () => {
+  const f = await fixture(false, true)
+  await f.button('新建').trigger('click')
+  await vi.waitFor(() => expect(f.router.currentRoute.value.query['id']).toBeUndefined())
+  await flushPromises()
+  const control = selectControl(f.wrapper, '#policy-action')
+  await control.get('.v-field').trigger('mousedown')
+  await flushPromises()
+  const option = f.wrapper.findAll('[role=option]').find((item) => item.text() === '配置目录')
+  expect(option).toBeDefined()
+  await option!.trigger('click')
+  await f.wrapper.get('#policy-resource').setValue('native-camera')
+  await flushPromises()
+  expect(selectControl(f.wrapper, '#policy-action').props('modelValue')).toBe('configuration')
+  expect((f.wrapper.get('#policy-resource').element as HTMLInputElement).value).toBe(
+    'native-camera',
+  )
+  expect(f.wrapper.get('form').isVisible()).toBe(true)
+  f.wrapper.unmount()
+})
+
+it('shows an unsupported action explicitly without redirecting a Device Access policy back to itself', async () => {
+  const f = await fixture()
+  try {
+    const original = await f.read.mock.results[0]!.value
+    const target = crypto.randomUUID()
+    f.read.mockResolvedValueOnce({
+      ...original,
+      id: target,
+      definition: {
+        ...original.definition,
+        action: {
+          kind: 'device_access',
+          mac: null,
+          windows: { kind: 'disabled' },
+          selfEnrollment: false,
+          role: null,
+        },
+      },
+    })
+    const replace = vi.spyOn(f.router, 'replace')
+    await f.router.push({ path: '/', query: { id: target, action: 'device_access' } })
+    await flushPromises()
+    expect(f.read).toHaveBeenLastCalledWith(target)
+    expect(f.wrapper.text()).toContain('当前平台或服务不支持此操作')
+    expect(replace).not.toHaveBeenCalled()
+    expect(f.wrapper.get('[data-form=policy]').isVisible()).toBe(false)
+    expect(f.change).not.toHaveBeenCalled()
+  } finally {
+    f.wrapper.unmount()
+  }
 })

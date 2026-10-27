@@ -1,3 +1,4 @@
+import { selectControl, hasChoice } from '../policies/vuetify-test-controls'
 import { telemetryBytes } from '../../contracts/collection/canonical'
 import { afterEach, expect, it, vi } from 'vitest'
 import { mount, flushPromises, DOMWrapper, type VueWrapper } from '@vue/test-utils'
@@ -142,18 +143,18 @@ async function setup(name = 'perf', query: Record<string, string> = {}) {
 }
 it('consumes raw readings once for chart and table and clears them after device authorization is withdrawn', async () => {
   const h = await setup()
-  expect(h.wrapper.find('svg').exists()).toBe(true)
+  expect(h.wrapper.find('.telemetry-chart svg').exists()).toBe(true)
   expect(h.requests.filter((r) => r.path === '/api/v1/telemetry/history')).toHaveLength(1)
   await h.click('数据明细')
   expect(h.wrapper.findAll('tbody tr')).toHaveLength(60)
   expect(h.wrapper.findAll('path.telemetry-line')).toHaveLength(2)
   expect(h.wrapper.text()).toContain('缺失')
   expect(h.wrapper.text()).toContain('失败')
-  await h.wrapper.get('input[type=range]').setValue(22)
+  await h.wrapper.getComponent({ name: 'VSlider' }).setValue(22)
   expect(h.wrapper.get('figcaption').text()).toContain('—')
   h.scenario.set('forbidden')
   await h.click('重新读取')
-  expect(h.wrapper.find('svg').exists()).toBe(false)
+  expect(h.wrapper.find('.telemetry-chart svg').exists()).toBe(false)
   expect(h.wrapper.findAll('tbody tr')).toHaveLength(0)
 })
 it('uses server resolution and rate statistics, while raw counters and states remain observations', async () => {
@@ -177,7 +178,9 @@ it('uses server resolution and rate statistics, while raw counters and states re
   expect(
     h.requests.filter((r) => r.path === '/api/v1/telemetry/aggregate').at(-1)!.body,
   ).toMatchObject({ maxGapMicros: 60_000_000 })
-  const mode = h.wrapper.findAll('select').find((s) => s.find('option[value=total]').exists())!
+  const mode = h.wrapper
+    .findAllComponents({ name: 'VSelect' })
+    .find((s: VueWrapper) => hasChoice(s, 'total'))!
   await mode.setValue('total')
   await flushPromises()
   expect(h.wrapper.text()).toContain('原始计数')
@@ -186,13 +189,13 @@ it('uses server resolution and rate statistics, while raw counters and states re
     .find((b) => b.text().includes('service_state'))!
     .trigger('click')
   await flushPromises()
-  expect(h.wrapper.find('svg').attributes('aria-label')).toContain('离散状态')
+  expect(h.wrapper.find('.telemetry-chart svg').attributes('aria-label')).toContain('离散状态')
   expect(h.wrapper.findAll('circle')).toHaveLength(50)
   expect(h.wrapper.findAll('path.telemetry-line')).toHaveLength(0)
 })
 it('changes UTC horizons and granularity and preserves unavailable readings as blank buckets', async () => {
   const h = await setup()
-  await h.wrapper.findAll('select')[0]!.setValue('7d')
+  await h.wrapper.findAllComponents({ name: 'VSelect' })[0]!.setValue('7d')
   await flushPromises()
   const q = h.requests.filter((r) => r.path === '/api/v1/telemetry/aggregate').at(-1)!.body as {
     query: { startMicros: number; endMicros: number }
@@ -204,7 +207,7 @@ it('changes UTC horizons and granularity and preserves unavailable readings as b
   expect(
     h.wrapper.findAll('tbody tr').some((r) => r.text().includes('Gaps') && r.text().includes('—')),
   ).toBe(true)
-  await h.wrapper.findAll('select')[1]!.setValue('5m')
+  await h.wrapper.findAllComponents({ name: 'VSelect' })[1]!.setValue('5m')
   await flushPromises()
   expect(
     (
@@ -237,20 +240,27 @@ it('renders actual activity and queries action filters without fabricating event
   expect(h.wrapper.text()).toContain('暂无记录')
 })
 it('publishes retention revisions and canonical custom fields through the existing CAS contract', async () => {
-  const h = await setup('settings-metrics')
+  const h = await setup('policy-metrics')
   await h.click('保留策略')
   let dialog = h.body().get('[role=dialog][data-state=open]')
-  await dialog.findAll('input')[0]!.setValue('custom_retention')
+  await dialog
+    .findAll('input:not([type=hidden]):not([role=combobox])')[0]!
+    .setValue('custom_retention')
   await h.click('保存新版本')
   expect(
     h.requests.filter((r) => r.path === '/api/v1/asset-retention-policies').at(-1)!.body,
   ).toMatchObject({ expectedRevision: 0, input: { key: 'custom_retention', revision: 1 } })
+  await vi.waitFor(() =>
+    expect(h.body().find('[role=dialog][data-state=open]').exists()).toBe(false),
+  )
   await h.click('新建字段')
   dialog = h.body().get('[role=dialog][data-state=open]')
-  await dialog.findAll('input')[0]!.setValue('custom.telemetry_new')
+  await dialog
+    .findAll('input:not([type=hidden]):not([role=combobox])')[0]!
+    .setValue('custom.telemetry_new')
   const labels = dialog.findAll('label'),
     retention = labels.find((l) => l.text() === '保留策略标识')!
-  await retention.get('input').setValue('custom_retention')
+  await retention.get('input:not([type=hidden]):not([role=combobox])').setValue('custom_retention')
   await dialog.findAll('input[type=checkbox]').at(-1)!.setValue(true)
   await h.click('保存新版本')
   expect(
@@ -271,15 +281,17 @@ it.each([
   ['cumulative_counter', ['increase', 'rate']],
   ['delta_counter', ['sum', 'rate']],
 ] as const)('publishes a %s field with admitted counter operations', async (kind, aggregations) => {
-  const h = await setup('settings-metrics')
+  const h = await setup('policy-metrics')
   await h.click('新建字段')
   const dialog = h.body().get('[role=dialog][data-state=open]')
-  await dialog.findAll('input')[0]!.setValue('custom.' + kind)
-  await dialog.get('select[aria-label="指标种类"]').setValue(kind)
+  await dialog
+    .findAll('input:not([type=hidden]):not([role=combobox])')[0]!
+    .setValue('custom.' + kind)
+  await selectControl(dialog, 'select[aria-label="指标种类"]').setValue(kind)
   await dialog
     .findAll('label')
     .find((l) => l.text() === '保留策略标识')!
-    .get('input')
+    .get('input:not([type=hidden]):not([role=combobox])')
     .setValue('demo_standard')
   await dialog.findAll('input[type=checkbox]').at(-1)!.setValue(true)
   await h.click('保存新版本')
@@ -289,7 +301,7 @@ it.each([
   expect(h.body().find('[role=dialog][data-state=open]').exists()).toBe(false)
 })
 it('freezes unknown field writes, treats current state as comparison and replays exactly', async () => {
-  const h = await setup('settings-metrics')
+  const h = await setup('policy-metrics')
   await h.wrapper
     .findAll('button')
     .find((b) => b.text() === '配置')!
@@ -311,7 +323,7 @@ it('freezes unknown field writes, treats current state as comparison and replays
   ).toEqual([first, first])
 })
 it('keeps a bound field immutable and displays actual references before publishing a new retention binding', async () => {
-  const h = await setup('settings-metrics')
+  const h = await setup('policy-metrics')
   const row = h.wrapper
     .findAll('tbody tr')
     .find((r) => r.text().includes('custom.demo.cpu_busy_percent'))!
@@ -325,7 +337,7 @@ it('keeps a bound field immutable and displays actual references before publishi
 it.each([false, true])(
   'starts a fresh reference query on immediate reopen (same field: %s)',
   async (same) => {
-    const h = await setup('settings-metrics')
+    const h = await setup('policy-metrics')
     const original = h.runtime.devices.assets.fieldReferences
     let release!: (value: Awaited<ReturnType<typeof original>>) => void
     const pending = new Promise<Awaited<ReturnType<typeof original>>>((resolve) => {
@@ -356,7 +368,7 @@ it.each([false, true])(
   },
 )
 it('shows reference read failure and retries the current field explicitly', async () => {
-  const h = await setup('settings-metrics')
+  const h = await setup('policy-metrics')
   const read = vi
     .spyOn(h.runtime.devices.assets, 'fieldReferences')
     .mockRejectedValueOnce(networkErrorForTest())
@@ -372,7 +384,7 @@ it('shows reference read failure and retries the current field explicitly', asyn
   expect(read).toHaveBeenCalledTimes(2)
   expect(read.mock.calls[1]![0]).toBe(read.mock.calls[0]![0])
   expect(dialog.text()).toContain('引用影响')
-  expect(dialog.find('[role=alert]').exists()).toBe(false)
+  expect(dialog.findAll('[role=alert]').some((alert) => alert.text())).toBe(false)
 })
 it('freezes an immutable profile resource, uploads canonical bytes, previews actual targets and publishes an exact Policy', async () => {
   const h = await setup('policy-telemetry', { resource: DEMO_PROFILE })
@@ -380,8 +392,8 @@ it('freezes an immutable profile resource, uploads canonical bytes, previews act
   expect(dialog.text()).toContain('custom.demo.cpu_busy_percent')
   await h.click('下一步')
   const scope = dialog
-    .findAll('select')
-    .find((s) => s.find('option[value="88888888-8888-4888-8888-888888888888"]').exists())!
+    .findAllComponents({ name: 'VSelect' })
+    .find((s: VueWrapper) => hasChoice(s, '88888888-8888-4888-8888-888888888888'))!
   await scope.setValue('88888888-8888-4888-8888-888888888888')
   await h.click('下一步')
   await h.click('保存、上传并激活方案资源')
@@ -415,7 +427,9 @@ it('recovers a committed profile upload from its exact receipt without repeating
       throw networkErrorForTest()
     })
   await h.click('下一步')
-  await dialog.get('select[aria-label="目标范围"]').setValue('88888888-8888-4888-8888-888888888888')
+  await selectControl(dialog, 'select[aria-label="目标范围"]').setValue(
+    '88888888-8888-4888-8888-888888888888',
+  )
   await h.click('下一步')
   await h.click('保存、上传并激活方案资源')
   await vi.waitFor(() => expect(dialog.text()).toContain('上次提交结果尚未确认'))
@@ -662,7 +676,7 @@ it('rejects cross-tenant samples, changed selections, unsafe counts and readings
 })
 it('binds every aggregate response to the selected resolution and intersecting ordered bucket windows', async () => {
   const h = await setup()
-  await h.wrapper.findAll('select')[1]!.setValue('5m')
+  await h.wrapper.findAllComponents({ name: 'VSelect' })[1]!.setValue('5m')
   await flushPromises()
   const request = h.requests.find((r) => r.path === '/api/v1/telemetry/aggregate')!,
     query = request.body as { query: { startMicros: number }; resolutionMicros: number }
@@ -712,7 +726,7 @@ it.each(['resources', 'history', 'discovery', 'aggregate'] as const)(
         aggregate = vi
           .spyOn(client, 'aggregate')
           .mockImplementationOnce(async (q) => ({ ...(await original(q)), next: 'aggregate-page' }))
-      await h.wrapper.findAll('select')[1]!.setValue('5m')
+      await h.wrapper.findAllComponents({ name: 'VSelect' })[1]!.setValue('5m')
       await flushPromises()
       aggregate.mockRejectedValueOnce(denied)
     } else {
@@ -721,12 +735,16 @@ it.each(['resources', 'history', 'discovery', 'aggregate'] as const)(
           .spyOn(client, 'history')
           .mockImplementationOnce(async (q) => ({ ...(await original(q)), next: 'history-page' }))
       if (kind === 'discovery') {
-        await h.wrapper.findAll('select')[1]!.setValue('5m')
+        await h.wrapper.findAllComponents({ name: 'VSelect' })[1]!.setValue('5m')
         await flushPromises()
       } else await h.click('重新读取')
       history.mockRejectedValueOnce(denied)
     }
-    expect(h.wrapper.find('svg').exists()).toBe(true)
+    const locators = (): VueWrapper<{ $props: { items: unknown[] } }>[] =>
+      h.wrapper.get('.telemetry-series').findAllComponents({ name: 'VSelect' })
+    expect(locators()).toHaveLength(2)
+    for (const locator of locators()) expect(locator.props('items').length).toBeGreaterThan(0)
+    expect(h.wrapper.find('.telemetry-chart svg').exists()).toBe(true)
     await h.click('数据明细')
     const previous = h.requests.filter((r) => r.path === '/api/v1/telemetry/history').at(-1)!
       .body as {
@@ -753,9 +771,9 @@ it.each(['resources', 'history', 'discovery', 'aggregate'] as const)(
       expect(client.history).toHaveBeenLastCalledWith(
         expect.objectContaining({ ...previous, after: 'history-page' }),
       )
-    expect(h.wrapper.find('svg').exists()).toBe(false)
+    expect(h.wrapper.find('.telemetry-chart svg').exists()).toBe(false)
     expect(h.wrapper.findAll('tbody tr')).toHaveLength(0)
-    expect(h.wrapper.findAll('.telemetry-series select option')).toHaveLength(0)
+    expect(locators().flatMap((locator) => locator.props('items'))).toEqual([])
     expect(h.wrapper.findAll('button').some((b) => b.text() === '下一页')).toBe(false)
   },
 )
@@ -819,14 +837,14 @@ it('preserves the original boost expiration and the newly chosen scope when upda
   await h.click('下一步')
   let dialog = h.body().get('[role=dialog][data-state=open]')
   const scope = dialog
-    .findAll('select')
-    .find((s) => s.find(`option[value="${newScope}"]`).exists())!
+    .findAllComponents({ name: 'VSelect' })
+    .find((s: VueWrapper) => hasChoice(s, newScope))!
   await scope.setValue(newScope)
   await h.click('下一步')
   dialog = h.body().get('[role=dialog][data-state=open]')
   await dialog
-    .findAll('select')
-    .find((s) => s.find('option[value="99999999-9999-4999-8999-999999999999"]').exists())!
+    .findAllComponents({ name: 'VSelect' })
+    .find((s: VueWrapper) => hasChoice(s, '99999999-9999-4999-8999-999999999999'))!
     .setValue('99999999-9999-4999-8999-999999999999')
   await flushPromises()
   await h.click('保存、上传并激活方案资源')
@@ -864,8 +882,8 @@ it('does not publish a profile prepared under a session that changes during arti
   await h.click('下一步')
   const dialog = h.body().get('[role=dialog][data-state=open]')
   await dialog
-    .findAll('select')
-    .find((s) => s.find('option[value="88888888-8888-4888-8888-888888888888"]').exists())!
+    .findAllComponents({ name: 'VSelect' })
+    .find((s: VueWrapper) => hasChoice(s, '88888888-8888-4888-8888-888888888888'))!
     .setValue('88888888-8888-4888-8888-888888888888')
   await h.click('下一步')
   let release!: (value: ArrayBuffer) => void

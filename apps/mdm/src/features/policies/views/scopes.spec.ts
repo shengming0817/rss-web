@@ -1,10 +1,11 @@
+import { createFeatureRouter as createRouter } from '../../../../tests/feature-router'
 import { ref } from 'vue'
 import { flushPromises, mount, DOMWrapper } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
-import { createRouter, createMemoryHistory } from 'vue-router'
+import { createMemoryHistory } from 'vue-router'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
-import ScopesView from './ScopesView.vue'
+import ScopesView from '../components/PolicyScopeEditor.vue'
 it('locks the original Scope after an unknown write and replays its exact frozen operation', async () => {
   const change = vi
     .fn()
@@ -25,6 +26,7 @@ it('locks the original Scope after an unknown write and replays its exact frozen
   })
   await router.push('/')
   const wrapper = mount(ScopesView, {
+    attachTo: document.body,
     global: {
       plugins: [router, mdmI18n()],
       stubs: { RouterLink: true },
@@ -46,6 +48,10 @@ it('locks the original Scope after an unknown write and replays its exact frozen
       },
     },
   })
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text() === '配置设备组与目标范围')!
+    .trigger('click')
   await flushPromises()
   const button = (text: string) => wrapper.findAll('button').find((b) => b.text() === text)!
   await button('新建').trigger('click')
@@ -116,6 +122,7 @@ it.each([
     })
     await router.push('/')
     const wrapper = mount(ScopesView, {
+      attachTo: document.body,
       global: {
         plugins: [router, mdmI18n()],
         stubs: { RouterLink: true },
@@ -129,6 +136,10 @@ it.each([
         },
       },
     })
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '配置设备组与目标范围')!
+      .trigger('click')
     await flushPromises()
     expect(wrapper.text()).toContain('已有保存结果')
     expect(wrapper.text()).toContain('暂无保存结果')
@@ -150,3 +161,61 @@ it.each([
     wrapper.unmount()
   },
 )
+
+it('adopts the current calculated scope only after its completed task is read back', async () => {
+  const id = '11111111-1111-4111-8111-111111111111'
+  const scope = {
+    id,
+    revision: 2,
+    definition: { targets: [{ kind: 'group', id }], limitations: null, exclusions: [] },
+    resolution: id,
+    resolutionRevision: 1,
+  }
+  const read = vi
+    .fn()
+    .mockResolvedValueOnce(scope)
+    .mockResolvedValueOnce({ ...scope, resolutionRevision: 2 })
+  const status = vi.fn().mockResolvedValue({ status: 'completed' })
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/', component: ScopesView }],
+  })
+  await router.push('/')
+  const wrapper = mount(ScopesView, {
+    attachTo: document.body,
+    global: {
+      plugins: [router, mdmI18n()],
+      stubs: { RouterLink: true },
+      provide: {
+        [mdmKey as symbol]: {
+          tenant: 'tenant',
+          session: { state: ref({ status: 'authenticated' }) },
+          policies: {
+            scopes: {
+              list: async () => ({
+                items: [{ id, revision: 2, resolution: id }],
+                nextCursor: null,
+              }),
+              read,
+              status,
+            },
+          },
+        },
+      },
+    },
+  })
+  const button = (label: string) =>
+    wrapper.findAll('button').find((button) => button.text() === label)!
+  await button('配置设备组与目标范围').trigger('click')
+  await flushPromises()
+  await wrapper.get('tbody button').trigger('click')
+  await flushPromises()
+  expect(button('使用此范围').attributes('disabled')).toBeDefined()
+  await button('读取任务状态').trigger('click')
+  await flushPromises()
+  expect(read).toHaveBeenCalledTimes(2)
+  expect(button('使用此范围').attributes('disabled')).toBeUndefined()
+  await button('使用此范围').trigger('click')
+  expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([id])
+  wrapper.unmount()
+})

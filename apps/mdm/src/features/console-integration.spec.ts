@@ -3,6 +3,7 @@ import { decodeRunEvidence } from './policies/clients/runs'
 import { afterEach, expect, it, vi } from 'vitest'
 import { defineComponent, shallowRef } from 'vue'
 import { VTextField, VSelect } from 'vuetify/components'
+import { hasChoice } from './policies/vuetify-test-controls'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createMemoryHistory } from 'vue-router'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
@@ -991,15 +992,21 @@ it('creates and edits a credential Policy with the exact operation, then enables
     },
   }
   const w = await mountAt(LifecyclePoliciesView, runtime)
-  await w.find('select').setValue('credential')
+  await w
+    .findAllComponents(VSelect)
+    .find((control) => hasChoice(control, 'credential'))!
+    .setValue('credential')
   await flushPromises()
   await field(w, '策略 ID').setValue(a)
   await field(w, '设备范围 ID').setValue(a)
   await w
-    .findAll('select')
-    .find((s) => s.find('option[value="rotate_bitlocker"]').exists())!
+    .findAllComponents(VSelect)
+    .find((control) => hasChoice(control, 'rotate_bitlocker'))!
     .setValue('rotate_bitlocker')
-  await field(w, '处理器架构').setValue('aarch64')
+  await w
+    .findAllComponents(VSelect)
+    .find((control) => hasChoice(control, 'aarch64'))!
+    .setValue('aarch64')
   await field(w, '卷 DeviceID').setValue('volume')
   await field(w, '保护器 ID').setValue(b)
   await field(w, '账户 SID').setValue('S-1-5-21')
@@ -1396,10 +1403,10 @@ it('clears lifecycle alias and event on same-route principal and session replace
     .find((b) => b.text() === '读取')!
     .trigger('click')
   await flushPromises()
-  expect((w.get('[data-field=policy-alias]').element as HTMLInputElement).value).toBe(
+  expect((w.get('[data-field=policy-alias] input').element as HTMLInputElement).value).toBe(
     'previous.actor',
   )
-  expect((w.get('[data-field=policy-event]').element as HTMLInputElement).value).toBe(
+  expect((w.get('[data-field=policy-event] input').element as HTMLInputElement).value).toBe(
     'previous.event',
   )
   ;(actor.state as ReturnType<typeof shallowRef>).value = {
@@ -1409,8 +1416,8 @@ it('clears lifecycle alias and event on same-route principal and session replace
     session: { id: b },
   } as typeof actor.state.value
   await flushPromises()
-  expect((w.get('[data-field=policy-alias]').element as HTMLInputElement).value).toBe('')
-  expect((w.get('[data-field=policy-event]').element as HTMLInputElement).value).toBe('')
+  expect((w.get('[data-field=policy-alias] input').element as HTMLInputElement).value).toBe('')
+  expect((w.get('[data-field=policy-event] input').element as HTMLInputElement).value).toBe('')
   await field(w, '设备范围 ID').setValue(a)
   await confirm(w)
   await w.get('form').trigger('submit')

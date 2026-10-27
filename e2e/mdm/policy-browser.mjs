@@ -4,6 +4,13 @@ import { readFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import assert from 'node:assert/strict'
 import process from 'node:process'
+import {
+  chooseOption,
+  selectedValue,
+  pageAlert,
+  submitForm,
+  waitForPageIdle,
+} from './vuetify-policy-controls.mjs'
 let browser, context, page, fixture, origin
 let phase = 'environment',
   result = 'failed',
@@ -23,7 +30,9 @@ const deadline = setTimeout(stop, 180000)
 async function read(id) {
   const response = await context.request.get(`${origin}/api/v1/policies/${id}`)
   assert.equal(response.status(), 200)
-  return response.json()
+  const policy = await response.json()
+  assert.ok(['enabled', 'disabled', 'archived'].includes(policy.state), 'Current Policy wire state')
+  return { ...policy, enabled: policy.state === 'enabled' }
 }
 async function headers() {
   const response = await context.request.get(
@@ -46,14 +55,30 @@ async function put(policy, definition = policy.definition, expectedRevision = po
     },
   })
 }
+const accessLabels = {
+  device: '不需要企业登录：此设备可用',
+  authenticated_user: '需要企业登录：当前租户全部企业用户',
+  users: '需要企业登录：指定用户范围',
+}
+const selectorLabels = {
+  user: '企业用户',
+  user_group: '静态用户组',
+  department: '部门',
+  idp_group: 'IdP 组',
+}
+const access = () => page.locator('[data-field="access"]')
+const published = () => page.locator('[data-field="published"]').getByRole('checkbox')
 async function bindScript() {
-  if (!page.url().includes('/policies/assignments')) return
-  await page.getByRole('button', { name: '加载资源版本', exact: true }).click()
-  await page.waitForFunction(
-    () =>
-      document.querySelector('#policy-variant')?.options.length > 1 &&
-      !document.querySelector('[data-form="policy"] > fieldset')?.disabled,
+  if (new URL(page.url()).searchParams.get('action') === 'software') return
+  const response = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'GET' &&
+      /\/api\/v1\/resources\/[^/]+$/.test(new URL(r.url()).pathname),
   )
+  await page.getByRole('button', { name: '加载资源版本', exact: true }).click()
+  assert.equal((await response).status(), 200)
+  await waitForPageIdle(page)
+  assert.notEqual(await selectedValue(page.locator('#policy-variant')), '-1')
 }
 async function prepareSave(form) {
   if (!form.includes('deployment')) return
@@ -63,7 +88,7 @@ async function prepareSave(form) {
     await next.click()
   }
   await page.getByRole('button', { name: '预览目标准入', exact: true }).click()
-  await page.locator('.console-page:not([aria-busy="true"])').waitFor()
+  await waitForPageIdle(page)
 }
 async function save(id, form) {
   await bindScript()
@@ -79,21 +104,17 @@ async function save(id, form) {
     (r) => r.url() === `${origin}/api/v1/policies/${id}` && r.request().method() === 'POST',
   )
   await prepareSave(form)
-  await page.locator(form).evaluate((f) => f.requestSubmit())
+  await submitForm(page, form)
   assert.equal((await response).status(), 200)
-  await page.waitForFunction(
-    (selector) => !document.querySelector(`${selector} > fieldset`)?.disabled,
-    form,
-  )
+  await waitForPageIdle(page)
   return read(id)
 }
 async function open(id, software = false) {
-  await page.waitForTimeout(1200)
   await page.goto(
-    `${origin}/tenants/${fixture.tenant}/${software ? 'software/deployments' : 'policies/assignments'}?id=${id}`,
+    `${origin}/tenants/${fixture.tenant}/policies?id=${id}${software ? '&action=software' : ''}`,
   )
   await page.getByRole('button', { name: '编辑', exact: true }).click()
-  await page.locator('[data-field="access"]').waitFor()
+  await access().waitFor()
   await bindScript()
   await page
     .locator('[data-section="resource-identity"]')
@@ -101,18 +122,55 @@ async function open(id, software = false) {
     .waitFor()
 }
 async function refresh(kind) {
-  await page.waitForTimeout(1200)
   await page.reload()
   await page.getByRole('button', { name: '编辑', exact: true }).click()
-  await page.locator('[data-field="access"]').waitFor()
+  await access().waitFor()
   await bindScript()
-  assert.equal(await page.locator('[data-field="access"]').inputValue(), kind)
+  assert.equal(await selectedValue(access()), kind)
+}
+async function principalName(principal) {
+  let cursor
+  for (let directoryPage = 0; directoryPage < 64; directoryPage++) {
+    const response = await context.request.get(
+      `${origin}/api/v1/identity/tenants/${fixture.tenant}/accounts${cursor ? '?cursor=' + encodeURIComponent(cursor) : ''}`,
+      { headers: { 'X-Identity-Request': '1' } },
+    )
+    assert.equal(response.status(), 200)
+    const directory = await response.json()
+    const account = directory.accounts.find((account) => account.principalId === principal)
+    if (account) {
+      assert.equal(account.enabled, true)
+      assert.equal(account.memberActive, true)
+      return account.login ?? '已关联组织人员'
+    }
+    cursor = directory.nextCursor
+    if (!cursor) break
+  }
+  throw new Error('Fixed principal is unavailable in the authorized account directory')
+}
+async function userGroupName(id) {
+  const response = await context.request.get(`${origin}/api/v1/authorization/user-groups/${id}`)
+  assert.equal(response.status(), 200)
+  const group = await response.json()
+  assert.equal(group.id, id)
+  assert.equal(group.value?.enabled, true)
+  return group.value.name
+}
+async function departmentName(selection) {
+  const response = await context.request.get(`${origin}/api/v1/authorization/departments`)
+  assert.equal(response.status(), 200)
+  const directory = await response.json()
+  assert.equal(directory.status, 'available')
+  assert.deepEqual(directory.source, selection.source)
+  const node = directory.snapshot.nodes.find((node) => node.id === selection.id)
+  assert.ok(node, 'Fixed department must exist in the authoritative directory')
+  return node.displayName
 }
 async function login(account = fixture) {
   await page.goto(`${origin}/login`)
   await page.locator('#login-name').fill(account.login)
   await page.locator('#login-password').fill(readFileSync(account.passwordFile, 'utf8').trim())
-  await page.locator('form').evaluate((f) => f.requestSubmit())
+  await page.locator('form button[type=submit]').click()
   await page.waitForURL((url) => /\/(?:workspace|settings\/guide)$/.test(url.pathname))
 }
 try {
@@ -146,9 +204,9 @@ try {
       assert.equal(await page.locator('[data-field="access-required"]').count(), 1)
     }
     assert.equal(await page.locator('[data-field="riskLevel"]').count(), 1)
-    await page.locator('[data-field="riskLevel"]').selectOption('1')
-    await page.locator('[data-field="access"]').selectOption('device')
-    await page.locator('[data-field="published"]').check()
+    await chooseOption(page, page.locator('[data-field="riskLevel"]'), '1：规则内直接执行')
+    await chooseOption(page, access(), accessLabels.device)
+    await published().check()
     let saved = await save(id, form)
     assert.deepEqual(saved.definition.selfService.access, { kind: 'device' })
     assert.equal(saved.definition.selfService.allowAi, before.definition.selfService.allowAi)
@@ -159,17 +217,19 @@ try {
     await refresh('device')
     journeys.push(phase)
     phase = `${software ? 'software' : 'script'}-authenticated-user`
-    await page.locator('[data-field="access"]').selectOption('authenticated_user')
+    await chooseOption(page, access(), accessLabels.authenticated_user)
     saved = await save(id, form)
     assert.deepEqual(saved.definition.selfService.access, { kind: 'authenticated_user' })
     await refresh('authenticated_user')
     journeys.push(phase)
     phase = `${software ? 'software' : 'script'}-empty-users`
-    await page.locator('[data-field="access"]').selectOption('users')
+    await chooseOption(page, access(), accessLabels.users)
     const count = writes
     await prepareSave(form)
-    await page.locator(form).evaluate((f) => f.requestSubmit())
-    await page.locator('.console-page-error[role="alert"]').waitFor()
+    if (software)
+      assert.equal(await page.locator(form).locator('button[type=submit]').isDisabled(), true)
+    else await submitForm(page, form)
+    await pageAlert(page).waitFor()
     assert.equal(writes, count)
     assert.equal((await read(id)).revision, saved.revision)
     journeys.push(phase)
@@ -179,7 +239,10 @@ try {
       for (let step = 0; step < 3; step++)
         await page.getByRole('button', { name: '上一步', exact: true }).click()
       await page.locator('[data-field="access"]').waitFor({ state: 'visible' })
-      assert.equal(await page.locator('[data-field="access"]').isEnabled(), true)
+      assert.equal(
+        await page.locator('[data-field="access"] input[role=combobox]').isEnabled(),
+        true,
+      )
     }
     phase = `${software ? 'software' : 'script'}-users`
     // Seed fixed department references via the real API when this local login has no IdP directory.
@@ -198,15 +261,23 @@ try {
     }
     const selectors = page
       .locator('fieldset')
-      .filter({ has: page.locator('select[id$="-kind"]') })
+      .filter({ has: page.locator('input[role="combobox"][id$="-kind"]') })
       .last()
-    await selectors.getByRole('combobox', { name: '用户', exact: true }).click()
-    await page.getByRole('option', { name: fixture.login, exact: true }).click()
+    await chooseOption(
+      page,
+      selectors.getByRole('combobox', { name: '用户', exact: true }),
+      await principalName(fixture.principal),
+      { loadMore: selectors.getByRole('button', { name: '加载更多用户', exact: true }) },
+    )
     await selectors.getByRole('button', { name: '添加', exact: true }).click()
     for (const selection of fixture.selectors.filter(
       (s) => fixture.departmentDirectory || s.kind !== 'department',
     )) {
-      await selectors.locator('select[id$="-kind"]').selectOption(selection.kind)
+      await chooseOption(
+        page,
+        selectors.locator('input[id$="-kind"]'),
+        selectorLabels[selection.kind],
+      )
       if (selection.kind === 'idp_group') {
         for (const [suffix, value] of Object.entries({
           'group-id': selection.id,
@@ -216,15 +287,25 @@ try {
         }))
           await selectors.locator(`input[id$="-${suffix}"]`).fill(String(value))
       } else if (selection.kind === 'user_group') {
-        await selectors.locator('select[id$="-group"]:enabled').waitFor()
-        while (!(await selectors.locator(`option[value="${selection.id}"]`).count())) {
-          await selectors.getByRole('button', { name: '下一页', exact: true }).click()
-          await selectors.locator('select[id$="-group"]:enabled').waitFor()
-        }
-        await selectors.locator('select[id$="-group"]').selectOption(selection.id)
+        await chooseOption(
+          page,
+          selectors.locator('input[id$="-group"]'),
+          await userGroupName(selection.id),
+          {
+            loadMore: selectors.getByRole('button', { name: '下一页', exact: true }),
+          },
+        )
       } else {
-        await selectors.locator('select[id$="-department"]').selectOption(selection.id)
-        await selectors.locator('select[id$="-matching"]').selectOption(selection.matching)
+        await chooseOption(
+          page,
+          selectors.locator('input[id$="-department"]'),
+          await departmentName(selection),
+        )
+        await chooseOption(
+          page,
+          selectors.locator('input[id$="-matching"]'),
+          selection.matching === 'subtree' ? '此部门及子部门' : '仅此部门',
+        )
       }
       await selectors.getByRole('button', { name: '添加', exact: true }).click()
     }
@@ -249,7 +330,7 @@ try {
     )
     journeys.push(phase)
     phase = `${software ? 'software' : 'script'}-withdrawal`
-    await page.locator('[data-field="published"]').uncheck()
+    await published().uncheck()
     saved = await save(id, form)
     assert.equal(saved.definition.selfService.published, false)
     assert.equal(saved.enabled, before.enabled)
@@ -265,9 +346,9 @@ try {
     )
     const n = writes
     await prepareSave(form)
-    await page.locator(form).evaluate((f) => f.requestSubmit())
+    await submitForm(page, form)
     assert.equal((await conflict).status(), 409)
-    await page.locator('.console-page-error[role="alert"]').waitFor()
+    await pageAlert(page).waitFor()
     assert.equal(writes, n + 1)
     await refresh('users')
     journeys.push(phase)
@@ -299,8 +380,8 @@ try {
   journeys.push(phase)
   phase = 'explicit-intent-removal'
   await open(fixture.software, true)
-  await page.locator('#deployment-intent').selectOption('required_install')
-  assert.equal(await page.locator('#deployment-intent').inputValue(), 'available_install')
+  await chooseOption(page, page.locator('#deployment-intent'), '必须安装')
+  assert.equal(await selectedValue(page.locator('#deployment-intent')), 'available_install')
   journeys.push(phase)
   phase = 'unknown-no-auto-replay'
   const beforeUnknown = await read(fixture.software)
@@ -314,8 +395,8 @@ try {
   })
   const count = writes
   await prepareSave('[data-form="deployment"]')
-  await page.locator('[data-form="deployment"]').evaluate((f) => f.requestSubmit())
-  await page.locator('.console-page-error[role="alert"]').waitFor()
+  await submitForm(page, '[data-form="deployment"]')
+  await pageAlert(page).waitFor()
   await page.getByRole('status').filter({ hasText: '提交结果仍未知' }).waitFor()
   await page.locator('[data-action="read-policy"]').click()
   await page.waitForFunction(
@@ -342,7 +423,7 @@ try {
       r.url() === `${origin}/api/v1/policies/${fixture.script}` && r.request().method() === 'POST',
   )
   const n = writes
-  await page.locator('[data-form="policy"]').evaluate((f) => f.requestSubmit())
+  await submitForm(page, '[data-form="policy"]')
   assert.equal((await expired).status(), 401)
   await page.waitForURL(/login/)
   assert.equal(writes, n + 1)
@@ -355,9 +436,9 @@ try {
       r.url() === `${origin}/api/v1/policies/${fixture.script}` && r.request().method() === 'POST',
   )
   const m = writes
-  await page.locator('[data-form="policy"]').evaluate((f) => f.requestSubmit())
+  await submitForm(page, '[data-form="policy"]')
   assert.equal((await denied).status(), 403)
-  await page.locator('.console-page-error[role="alert"]').waitFor()
+  await pageAlert(page).waitFor()
   assert.equal(writes, m + 1)
   journeys.push(phase)
   result = 'passed'
@@ -376,7 +457,7 @@ try {
     alerts: page
       ? (
           await page
-            .locator('.console-page-error[role="alert"]')
+            .locator('.console-page > .v-alert[role="alert"]')
             .allTextContents()
             .catch(() => [])
         ).map((s) => (s.includes('请求') ? 'request' : s.includes('资源') ? 'resource' : 'other'))

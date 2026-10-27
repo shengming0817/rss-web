@@ -1,3 +1,4 @@
+import { chooseOption, escapePattern } from './vuetify-policy-controls.mjs'
 import { chooseGroupOption } from './vuetify-groups.mjs'
 // Production Vue + real MDM/Identity HTTPS/PG. Only a committed response is deliberately lost.
 import { acceptExperience } from './experience-browser.mjs'
@@ -726,10 +727,7 @@ try {
   await page.getByRole('button', { name: '读取任务状态', exact: true }).click()
   await loaded()
   await page.getByRole('tab', { name: '判定说明', exact: true }).click()
-  const channelSelect = page
-    .locator('select')
-    .filter({ has: page.locator('option[value="agent"]') })
-  await channelSelect.selectOption('agent')
+  await chooseOption(page, page.locator('.scope-results .v-select'), 'Agent')
   await page.getByRole('button', { name: '打开', exact: true }).last().click()
   await loaded()
   assert.ok((await page.locator('main').textContent()).includes(fixture.agent))
@@ -754,9 +752,13 @@ try {
     `/api/v1/scopes?limit=1&cursor=${encodeURIComponent(firstScopes.nextCursor)}`,
   )
   assert.ok(secondScopes.items[0].id > firstScopes.items[0].id)
-  await page.goto(path('policies'))
+  await page.goto(path('policies?device=' + encodeURIComponent(fixture.alone)))
   await loaded()
-  await page.getByRole('button', { name: '下一页', exact: true }).click()
+  const planningScopeDialog = page.getByRole('dialog', {
+    name: '配置设备组与目标范围',
+    exact: true,
+  })
+  await planningScopeDialog.getByRole('button', { name: '下一页', exact: true }).click()
   await loaded()
   assert.ok(await page.locator('main').textContent())
   // Selector denial must not suppress the independently authorized Scope directory.
@@ -766,8 +768,7 @@ try {
   assert.ok((await page.locator('main').textContent()).includes('目标范围'))
   assert.equal((await request('get', origin + '/api/v1/groups')).status(), 403)
   await writeRule(fixture.rule.grants)
-  await page.getByRole('button', { name: '新建', exact: true }).click()
-  const planningScopeDialog = page.getByRole('dialog')
+  await planningScopeDialog.getByRole('button', { name: '新建', exact: true }).click()
   await planningScopeDialog.locator('details:has(#scope-id) > summary').click()
   await planningScopeDialog.locator('#scope-id').fill(selectedScope)
   await planningScopeDialog.getByRole('button', { name: '打开', exact: true }).click()
@@ -1070,7 +1071,7 @@ try {
   assert.equal(missing.availability, 'unavailable')
   assert.equal(missing.reason, 'channel_unavailable')
   assert.equal(missing.target, null)
-  await page.goto(path(`policies/assignments?id=${scriptPolicy}`))
+  await page.goto(path(`policies?id=${scriptPolicy}`))
   await loaded()
   await page.getByRole('button', { name: '刷新进度（保留编辑）', exact: true }).click()
   await loaded()
@@ -1163,18 +1164,12 @@ try {
       catalog.items.some((item) => item.id === blueprintId),
       'required standard package is absent',
     )
-    const select = page.getByTestId('collection-blueprints').locator('select').nth(1)
-    await select
-      .locator('option')
-      .filter({ hasText: blueprintId + ' / ' })
-      .first()
-      .waitFor({ state: 'attached' })
-    const choice = await select
-      .locator('option')
-      .filter({ hasText: blueprintId + ' / ' })
-      .first()
-      .getAttribute('value')
-    await select.selectOption(choice)
+    const blueprint = catalog.items.find((item) => item.id === blueprintId)
+    await chooseOption(
+      page,
+      page.getByTestId('collection-blueprints').locator('.v-select').nth(1),
+      new RegExp('^' + escapePattern(`${blueprint.id}/${blueprint.version}`) + '·'),
+    )
     const instantiated = page.waitForResponse(
       (r) =>
         r.request().method() === 'POST' &&
@@ -1190,17 +1185,9 @@ try {
     const assign = page.getByRole('link', { name: '配置范围、周期与启停', exact: true })
     await assign.waitFor()
     await assign.click()
-    await page
-      .locator('#policy-variant option')
-      .filter({ hasText: 'macos / aarch64' })
-      .waitFor({ state: 'attached' })
-    const variant = await page
-      .locator('#policy-variant option')
-      .filter({ hasText: 'macos / aarch64' })
-      .getAttribute('value')
-    await page.locator('#policy-variant').selectOption(variant)
+    await chooseOption(page, page.locator('#policy-variant'), /macos \/ aarch64/)
     await page.locator('#policy-scope').fill(collectorScope)
-    const period = page.locator('[data-field=collection-period]')
+    const period = page.locator('[data-field=collection-period] input')
     assert.equal(await period.inputValue(), '3600')
     await period.fill('60')
     assert.equal(await page.locator('#policy-frequency').count(), 0)
@@ -1320,7 +1307,7 @@ try {
     ),
   )
   // Disable through the same Policy UI before starting the software package.
-  await page.goto(path(`policies/assignments?id=${memory.policy}`))
+  await page.goto(path(`policies?id=${memory.policy}`))
   await loaded()
   await page.getByRole('button', { name: '禁用整个 Policy', exact: true }).click()
   await loaded()
@@ -1368,7 +1355,7 @@ try {
   )
   coverage.push('real-owner-clear-current-user-readonly-and-user-scope-software-pagination')
 
-  await page.goto(path(`policies/assignments?id=${apps.policy}`))
+  await page.goto(path(`policies?id=${apps.policy}`))
   await loaded()
   await page.getByRole('button', { name: '禁用整个 Policy', exact: true }).click()
   await loaded()
@@ -1383,16 +1370,16 @@ try {
     localInventory.asset.device.lists['device.software.installations'].state.kind,
     'known',
   )
-  await page.goto(path(`policies/assignments?id=${localApps.policy}`))
+  await page.goto(path(`policies?id=${localApps.policy}`))
   await loaded()
   await page.getByRole('button', { name: '禁用整个 Policy', exact: true }).click()
   await loaded()
   // Adjust a disabled package, then restore it through the existing lifecycle owner.
-  await page.goto(path(`policies/assignments?id=${memory.policy}`))
+  await page.goto(path(`policies?id=${memory.policy}`))
   await loaded()
   await page.getByRole('button', { name: '编辑', exact: true }).click()
   await page.getByRole('button', { name: '加载资源版本', exact: true }).click()
-  await page.locator('[data-field=collection-period]').fill('120')
+  await page.locator('[data-field=collection-period] input').fill('120')
   await page
     .locator('[data-form=policy]')
     .getByRole('button', { name: '保存', exact: true })

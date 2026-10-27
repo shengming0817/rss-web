@@ -1,13 +1,17 @@
+import { selectControl } from '../vuetify-test-controls'
 import { reactive } from 'vue'
 import { mount } from '@vue/test-utils'
 import { expect, it } from 'vitest'
 import { mdmI18n } from '../../../i18n'
 import NativeScheduleEditor from '../../software/components/NativeScheduleEditor.vue'
 import SelfServiceEditor from './SelfServiceEditor.vue'
+import ScriptDefinitionEditor from './ScriptDefinitionEditor.vue'
+import type { ScriptSpec } from '../clients/resources'
 import { defaultSchedule, initialSelfService, nativeSchedule, selfService } from '../clients/model'
 it('edits a native schedule with explicit UTC bounds, weekly window and missed-trigger policy', async () => {
   const model = reactive(defaultSchedule()),
     w = mount(NativeScheduleEditor, {
+      attachTo: document.body,
       props: { modelValue: model },
       global: { plugins: [mdmI18n()] },
     })
@@ -50,21 +54,22 @@ it('edits a native schedule with explicit UTC bounds, weekly window and missed-t
 it('edits explicit self-service access, descriptions and human/AI confirmation policy without losing metadata', async () => {
   const model = reactive(initialSelfService()),
     w = mount(SelfServiceEditor, {
+      attachTo: document.body,
       props: { modelValue: model },
       global: { plugins: [mdmI18n()], stubs: { SelfServiceSelectors: true } },
     })
-  await w.get('[data-field=published]').setValue(true)
-  await w.get('[data-field=access]').setValue('users')
+  await w.get('[data-field=published] input').setValue(true)
+  await selectControl(w, '[data-field=access]').setValue('users')
   expect(model.access).toEqual({ kind: 'users', selectors: [] })
-  await w.get('[data-field=access]').setValue('authenticated_user')
-  await w.get('[data-field=displayName]').setValue('Diagnostic request')
+  await selectControl(w, '[data-field=access]').setValue('authenticated_user')
+  await w.get('[data-field=displayName] input').setValue('Diagnostic request')
   await w.get('[id$="-description"]').setValue('Investigate device health')
   await w.get('[id$="-prerequisites"]').setValue('Logged in')
   await w.get('[id$="-effects"]').setValue('Collects diagnostic output')
-  await w.get('[data-field=category]').setValue('Support')
+  await w.get('[data-field=category] input').setValue('Support')
   await w.get('[id$="-keywords"]').setValue(' health \n diagnostics \n')
-  await w.get('[data-field=allowAi]').setValue(false)
-  await w.get('[data-field=riskLevel]').setValue(1)
+  await w.get('[data-field=allowAi] input').setValue(false)
+  await selectControl(w, '[data-field=riskLevel]').setValue(1)
   expect(selfService(model)).toMatchObject({
     published: true,
     access: { kind: 'authenticated_user' },
@@ -79,7 +84,38 @@ it('edits explicit self-service access, descriptions and human/AI confirmation p
     allowAi: false,
     riskLevel: 1,
   })
-  await w.get('[data-field=published]').setValue(false)
+  await w.get('[data-field=published] input').setValue(false)
   expect(model.published).toBe(false)
   w.unmount()
+})
+
+it('validates native JSON fields through the script editor component root before a version is saved', async () => {
+  const model: ScriptSpec = {
+    profile: 'power_shell7',
+    sql: null,
+    runAs: 'system',
+    encoding: 'utf8',
+    parameters: { type: 'object', properties: {}, required: [], additionalProperties: false },
+    bindings: {},
+    output: { type: 'object', properties: {}, additionalProperties: false },
+    purpose: { kind: 'action' },
+    timeoutSeconds: 60,
+    outputBytes: 16384,
+    maxRows: 1,
+  }
+  const w = mount(ScriptDefinitionEditor, {
+    attachTo: document.body,
+    props: { modelValue: model },
+    global: { plugins: [mdmI18n()] },
+  })
+  try {
+    expect(w.vm.valid()).toBe(true)
+    const parameters = w.get('textarea[id$="-parameters"]')
+    await parameters.setValue('{')
+    expect(w.vm.valid()).toBe(false)
+    await parameters.setValue(JSON.stringify(model.parameters))
+    expect(w.vm.valid()).toBe(true)
+  } finally {
+    w.unmount()
+  }
 })
