@@ -1,6 +1,5 @@
 import { ref } from 'vue'
 import { VSwitch } from 'vuetify/components'
-import ConditionEditor from '../../devices/components/ConditionEditor.vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -8,6 +7,7 @@ import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
 import ComplianceRulesView from './ComplianceRulesView.vue'
 import ComplianceView from './ComplianceView.vue'
+import ConditionEditor from '../../devices/components/ConditionEditor.vue'
 const id = '11111111-1111-4111-8111-111111111111',
   nextId = '22222222-2222-4222-8222-222222222222'
 const definition = {

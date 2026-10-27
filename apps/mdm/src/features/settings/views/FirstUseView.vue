@@ -325,7 +325,7 @@ useSettingsFacts(() => {
             <MaterialPanel :material="material" />
           </section>
           <nav class="console-inline-actions">
-            <RouterLink :to="{ name: 'device-enroll', params: { tenant: runtime.tenant } }">{{
+            <RouterLink :to="{ name: 'devices', params: { tenant: runtime.tenant } }">{{
               t('settings.manualEnrollment')
             }}</RouterLink
             ><RouterLink

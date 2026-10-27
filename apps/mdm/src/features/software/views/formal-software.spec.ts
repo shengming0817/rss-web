@@ -52,6 +52,7 @@ async function fixture(component: Component, owners: object, props = {}, query =
   })
   await router.push({ path, query })
   const wrapper = mount(component, {
+    attachTo: document.body,
     props,
     global: {
       plugins: [router, mdmI18n()],

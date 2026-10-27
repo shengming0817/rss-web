@@ -740,6 +740,10 @@ it.each(['resources', 'history', 'discovery', 'aggregate'] as const)(
       } else await h.click('重新读取')
       history.mockRejectedValueOnce(denied)
     }
+    const locators = (): VueWrapper<{ $props: { items: unknown[] } }>[] =>
+      h.wrapper.get('.telemetry-series').findAllComponents({ name: 'VSelect' })
+    expect(locators()).toHaveLength(2)
+    for (const locator of locators()) expect(locator.props('items').length).toBeGreaterThan(0)
     expect(h.wrapper.find('.telemetry-chart svg').exists()).toBe(true)
     await h.click('数据明细')
     const previous = h.requests.filter((r) => r.path === '/api/v1/telemetry/history').at(-1)!
@@ -769,7 +773,7 @@ it.each(['resources', 'history', 'discovery', 'aggregate'] as const)(
       )
     expect(h.wrapper.find('.telemetry-chart svg').exists()).toBe(false)
     expect(h.wrapper.findAll('tbody tr')).toHaveLength(0)
-    expect(h.wrapper.findAll('.telemetry-series select option')).toHaveLength(0)
+    expect(locators().flatMap((locator) => locator.props('items'))).toEqual([])
     expect(h.wrapper.findAll('button').some((b) => b.text() === '下一页')).toBe(false)
   },
 )

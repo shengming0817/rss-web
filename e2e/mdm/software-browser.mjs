@@ -1,4 +1,5 @@
 // Real production Vue, HTTP/TLS, PG and publication worker. Synthetic fixture inputs only.
+import { chooseOption } from './vuetify-policy-controls.mjs'
 import { Buffer } from 'node:buffer'
 import { chromium } from 'playwright'
 import { readFileSync, statSync } from 'node:fs'

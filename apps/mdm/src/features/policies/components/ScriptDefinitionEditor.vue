@@ -8,9 +8,10 @@ import { useI18n } from 'vue-i18n'
 import { decodeScriptSpec, type ScriptSpec } from '../clients/resources'
 import { defaultApplicability, identityMapping } from '../collection-draft'
 import CollectionMappings from './CollectionMappings.vue'
-const root = ref<HTMLFieldSetElement>()
+const root = ref<InstanceType<typeof PolicyFieldset>>()
 function valid() {
-  return Array.from(root.value?.querySelectorAll('input,select,textarea') ?? []).every((node) =>
+  const element = root.value?.$el as HTMLFieldSetElement | undefined
+  return Array.from(element?.querySelectorAll('input,select,textarea') ?? []).every((node) =>
     (node as HTMLInputElement).checkValidity(),
   )
 }

@@ -153,14 +153,14 @@ try {
       page
         .locator('article')
         .filter({ has: page.getByRole('heading', { name: 'Windows MDM', exact: true }) })
-    await page.goto(`${origin}/tenants/${f.tenant}/registration-quotas`)
+    await page.goto(`${origin}/tenants/${f.tenant}/settings/registration-quotas`)
     await channel().getByRole('button', { name: '暂停新注册', exact: true }).click()
     await channel().getByRole('button', { name: '恢复新注册', exact: true }).waitFor()
     await page.goto(`${origin}/tenants/${f.tenant}/settings/guide`)
     await step('注册就绪检查')
     await page.locator('[data-first-use-step=windows_mdm]').waitFor()
     assert.equal(await page.getByRole('button', { name: '完成', exact: true }).isDisabled(), true)
-    await page.goto(`${origin}/tenants/${f.tenant}/registration-quotas`)
+    await page.goto(`${origin}/tenants/${f.tenant}/settings/registration-quotas`)
     await channel().getByRole('button', { name: '恢复新注册', exact: true }).click()
     await channel().getByRole('button', { name: '暂停新注册', exact: true }).waitFor()
     await page.goto(`${origin}/tenants/${f.tenant}/settings/guide`)
@@ -184,7 +184,7 @@ try {
         'backend-confirmed-completion',
       )
       phase = 'first-use-daily-reentry'
-      await page.goto(`${origin}/tenants/${f.tenant}/registration-quotas`)
+      await page.goto(`${origin}/tenants/${f.tenant}/settings/registration-quotas`)
       await channel().getByRole('button', { name: '暂停新注册', exact: true }).click()
       await channel().getByRole('button', { name: '恢复新注册', exact: true }).waitFor()
       await page.goto(`${origin}/tenants/${f.tenant}/sessions`)

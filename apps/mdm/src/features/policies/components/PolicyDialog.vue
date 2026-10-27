@@ -14,8 +14,8 @@ const props = withDefaults(
   }>(),
   { dismissible: true },
 )
-const titleId = useId()
 const emit = defineEmits<{ 'update:open': [open: boolean] }>()
+const titleId = useId()
 const restoreFocus = useDialogFocus(computed(() => props.open))
 watch(
   () => props.open,

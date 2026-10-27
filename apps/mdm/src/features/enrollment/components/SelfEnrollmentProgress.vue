@@ -21,8 +21,14 @@ import NativeFacts from './NativeFacts.vue'
 import RegistrationStatus from '../../../components/RegistrationStatus.vue'
 import { nativeChannel } from '../../../services/registrationChannels'
 import { enrollmentTargetKey } from '../target'
-const props = defineProps<{ deviceId?: string; enrollmentId: string; showInstructions?: boolean }>()
-const emit = defineEmits<{ updated: [value: ReturnType<typeof decodeEnrollment>] }>()
+const props = withDefaults(
+  defineProps<{ deviceId?: string; enrollmentId: string; showInstructions?: boolean }>(),
+  { showInstructions: true },
+)
+const emit = defineEmits<{
+  updated: [value: ReturnType<typeof decodeEnrollment>]
+  invalidated: []
+}>()
 const runtime = useMdm(),
   { t } = useI18n(),
   client = runtime.devices.enrollment,
@@ -90,6 +96,7 @@ function submit(kind: Command['kind'], replay = false) {
   const secret = password.value
   clearSecret()
   pending.value = command
+  emit('invalidated')
   void runWrite(
     () =>
       command.kind === 'resume'
@@ -138,53 +145,60 @@ onBeforeUnmount(clearSecret)
           refreshable
           @refresh="refresh"
         />
-        <v-expansion-panels
-          v-if="['pending', 'bound', 'expired'].includes(current.status)"
-          :model-value="needsRecovery ? [0] : undefined"
-          multiple
-          class="mt-4"
-          ><v-expansion-panel :title="t('onboarding.selfRecovery')"
-            ><template #text>
-              <RegistrationStatus :channel="nativeChannel(current.source)" class="mb-4" />
-              <v-form :novalidate="false" class="mt-4" @submit.prevent="submit('resume')">
-                <v-btn variant="outlined" :disabled="busy || uncertain" @click="generate">{{
-                  t('devices.generate')
-                }}</v-btn>
-                <v-text-field
-                  v-model="password"
-                  class="mt-4"
-                  :label="t('devices.password')"
-                  pattern="[A-Za-z0-9_\-]{43}"
-                  autocomplete="off"
-                  :disabled="busy"
-                  required
-                />
-                <v-checkbox
-                  v-model="handedOff"
-                  :label="t('devices.handoff')"
-                  :disabled="busy"
-                  required
-                />
-                <v-btn
-                  type="submit"
-                  color="primary"
-                  :disabled="busy || uncertain || !password || !handedOff || !canResume"
-                  >{{ t('devices.resume') }}</v-btn
-                >
-              </v-form>
-            </template></v-expansion-panel
-          ></v-expansion-panels
-        >
-        <v-btn
-          v-if="current.status === 'pending'"
-          variant="text"
-          color="error"
-          :disabled="busy || uncertain"
-          class="mt-3"
-          @click="submit('cancel')"
-          >{{ t('devices.cancel') }}</v-btn
-        >
       </template>
+      <v-expansion-panels
+        v-if="
+          (uncertain && pending?.kind === 'resume') ||
+          (current && ['pending', 'bound', 'expired'].includes(current.status))
+        "
+        :model-value="needsRecovery ? [0] : undefined"
+        multiple
+        class="mt-4"
+        ><v-expansion-panel :title="t('onboarding.selfRecovery')"
+          ><template #text>
+            <RegistrationStatus
+              v-if="current"
+              :channel="nativeChannel(current.source)"
+              class="mb-4"
+            />
+            <v-form :novalidate="false" class="mt-4" @submit.prevent="submit('resume')">
+              <v-btn variant="outlined" :disabled="busy || uncertain" @click="generate">{{
+                t('devices.generate')
+              }}</v-btn>
+              <v-text-field
+                v-model="password"
+                class="mt-4"
+                :label="t('devices.password')"
+                pattern="[A-Za-z0-9_\-]{43}"
+                autocomplete="off"
+                :disabled="busy"
+                required
+              />
+              <v-checkbox
+                v-model="handedOff"
+                :label="t('devices.handoff')"
+                :disabled="busy"
+                required
+              />
+              <v-btn
+                type="submit"
+                color="primary"
+                :disabled="busy || uncertain || !password || !handedOff || !canResume"
+                >{{ t('devices.resume') }}</v-btn
+              >
+            </v-form>
+          </template></v-expansion-panel
+        ></v-expansion-panels
+      >
+      <v-btn
+        v-if="current?.status === 'pending'"
+        variant="text"
+        color="error"
+        :disabled="busy || uncertain"
+        class="mt-3"
+        @click="submit('cancel')"
+        >{{ t('devices.cancel') }}</v-btn
+      >
       <template v-if="uncertain && pending">
         <v-alert type="warning" variant="tonal" class="my-4">{{
           t('devices.unknownWrite')
