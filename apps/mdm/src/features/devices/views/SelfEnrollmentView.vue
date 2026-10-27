@@ -14,18 +14,21 @@ import {
   VStepper,
   VTextField,
 } from 'vuetify/components'
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, inject, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import RegistrationStatus from '../../../components/RegistrationStatus.vue'
 import NativeFacts from '../../enrollment/components/NativeFacts.vue'
+import SelfEnrollmentProgress from '../../enrollment/components/SelfEnrollmentProgress.vue'
+import { enrollmentTargetKey } from '../../enrollment/target'
 import { useAttachment } from '../../enrollment/useAttachment'
 import { generateEnrollmentPassword } from '../clients/enrollment'
 import MdmPage from '../../../ui/MdmPage.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
-  client = runtime.devices.registration
+  client = runtime.devices.registration,
+  resolveTarget = inject(enrollmentTargetKey, undefined)
 const binding = () => [
   runtime.session.state.value.tenant ?? undefined,
   runtime.session.state.value.identity?.principalId,
@@ -33,6 +36,7 @@ const binding = () => [
 ]
 const write = useOperation([], binding),
   read = useOperation([], binding),
+  targetRead = useOperation([], binding),
   profileRead = useOperation([], binding)
 const delivery = useAttachment(),
   { url: profileUrl, filename: profileFilename } = delivery
@@ -45,14 +49,20 @@ const quota = computed(() => usage.value?.channels.find((c) => c.channel === cha
 const quotaAvailable = computed(() => !!quota.value && quota.value.used < quota.value.limit)
 const canCreate = computed(() => channelState.allowed(channel.value) && quotaAvailable.value)
 const busy = computed(
-  () => copying.value || write.busy.value || read.busy.value || profileRead.busy.value,
+  () =>
+    copying.value ||
+    write.busy.value ||
+    read.busy.value ||
+    targetRead.busy.value ||
+    profileRead.busy.value,
 )
 const password = ref(''),
   manualCopy = ref(false),
   recoveryPassword = ref(''),
   recoverySaved = ref(false)
 const enrollmentId = ref(''),
-  deviceId = ref('')
+  deviceId = ref(''),
+  targetVerified = ref(false)
 const native = ref<Awaited<ReturnType<typeof runtime.devices.enrollment.status>>>()
 type Command = { operation: string; channel: 'windows_mdm' | 'macos_mdm' }
 const pending = ref<Command>()
@@ -73,7 +83,8 @@ async function refresh(rejection?: string) {
   void channelState.refresh()
   const id = enrollmentId.value,
     device = deviceId.value
-  await read.run(
+  targetVerified.value = false
+  const ok = await read.run(
     async () => ({
       usage: await client.me(),
       native: id ? await runtime.devices.enrollment.status(id) : undefined,
@@ -82,11 +93,19 @@ async function refresh(rejection?: string) {
       usage.value = value.usage
       if (rejection) write.failure.value = rejection
       if (id === enrollmentId.value && value.native) {
-        if (value.native.deviceId !== device) read.failure.value = 'invalidResponse'
-        else native.value = value.native
+        native.value = value.native
       }
     },
   )
+  if (ok && id && resolveTarget && id === enrollmentId.value)
+    await targetRead.run(
+      () => resolveTarget(id),
+      (target) => {
+        if (target.enrollmentId !== id || target.deviceId !== device)
+          targetRead.failure.value = 'invalidResponse'
+        else targetVerified.value = true
+      },
+    )
 }
 async function submit(secret: string, replay = false) {
   if (busy.value || (!replay && (write.uncertain.value || !canCreate.value)) || !secret) return
@@ -126,7 +145,7 @@ async function submit(secret: string, replay = false) {
       own !== generation ||
       document.visibilityState === 'hidden' ||
       command.channel !== 'macos_mdm' ||
-      native.value?.deviceId !== deviceId.value ||
+      native.value?.enrollmentId !== enrollmentId.value ||
       native.value.instructions.platform !== 'macos'
     )
       return
@@ -192,6 +211,7 @@ watch(
     pending.value = undefined
     enrollmentId.value = ''
     deviceId.value = ''
+    targetVerified.value = false
     usage.value = undefined
     step.value = 1
     void refresh()
@@ -374,6 +394,7 @@ void refresh()
         <NativeFacts
           v-if="native"
           :value="native"
+          :device-id="deviceId"
           :profile-url="profileUrl"
           :profile-filename="profileFilename"
           :profile-busy="profileRead.busy.value"
@@ -388,7 +409,7 @@ void refresh()
           }}</v-btn></v-alert
         >
         <v-btn
-          v-if="deviceId"
+          v-if="deviceId && targetVerified"
           class="mt-4"
           variant="text"
           :to="{
@@ -398,6 +419,24 @@ void refresh()
           }"
           >{{ t('onboarding.continueInDevice') }}</v-btn
         >
+        <v-alert
+          v-if="deviceId && (!resolveTarget || targetRead.failure.value)"
+          type="info"
+          variant="tonal"
+          class="mt-4"
+          >{{ t('onboarding.targetUnavailable') }}</v-alert
+        >
+        <v-expansion-panels v-if="enrollmentId" class="mt-4">
+          <v-expansion-panel :title="t('onboarding.selfRecovery')">
+            <template #text>
+              <SelfEnrollmentProgress
+                :enrollment-id="enrollmentId"
+                :show-instructions="false"
+                @updated="native = $event"
+              />
+            </template>
+          </v-expansion-panel>
+        </v-expansion-panels>
       </template>
     </v-stepper>
     <v-expansion-panels class="mt-5" variant="accordion"

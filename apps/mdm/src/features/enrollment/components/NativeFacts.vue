@@ -20,6 +20,7 @@ import { useAttachment } from '../useAttachment'
 import { useOperation } from '../../../services/useOperation'
 const props = defineProps<{
   value: ReturnType<typeof decodeEnrollment>
+  deviceId?: string | undefined
   profileUrl?: string | undefined
   profileFilename?: string | undefined
   profileBusy?: boolean
@@ -205,7 +206,7 @@ onBeforeUnmount(() => {
           ><template #text>
             <v-list density="compact">
               <v-list-item :title="t('devices.enrollmentId')" :subtitle="value.enrollmentId" />
-              <v-list-item :title="t('devices.deviceId')" :subtitle="value.deviceId" />
+              <v-list-item v-if="deviceId" :title="t('devices.deviceId')" :subtitle="deviceId" />
               <v-list-item :title="t('devices.status')" :subtitle="t(`devices.${value.status}`)" />
               <v-list-item :title="t('devices.expires')" :subtitle="String(value.expiresAt)" />
               <template v-if="value.instructions.platform === 'windows'">

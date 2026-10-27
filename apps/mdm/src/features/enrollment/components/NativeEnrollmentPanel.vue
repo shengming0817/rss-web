@@ -70,10 +70,8 @@ function recover(value = id.value) {
     () => client.status(value),
     (v) => {
       if (id.value !== value) return
-      if (v.deviceId !== props.endpoint.id) {
-        failure.value = 'invalidResponse'
-        return
-      }
+      // The endpoint projection or this component's confirmed create command owns this locator.
+      // The current status contract does not independently return a device association.
       result.value = v
     },
   )
@@ -191,7 +189,7 @@ onBeforeUnmount(clearSecret)
         {{ t('devices.status') }}: {{ t(`devices.${result.status}`) }} · {{ t('devices.expires') }}:
         {{ result.expiresAt }}
       </p>
-      <NativeFacts v-if="result" :value="result" class="mt-4" />
+      <NativeFacts v-if="result" :value="result" :device-id="endpoint.id" class="mt-4" />
       <v-expansion-panels class="mt-4" variant="accordion"
         ><v-expansion-panel eager :title="t('onboarding.renewAuthorization')"
           ><template #text>

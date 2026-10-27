@@ -11,19 +11,23 @@ import {
   VExpansionPanel,
   VTextField,
 } from 'vuetify/components'
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, inject, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../../devices/useDeviceBinding'
-import { generateEnrollmentPassword } from '../../devices/clients/enrollment'
+import { generateEnrollmentPassword, type decodeEnrollment } from '../../devices/clients/enrollment'
 import NativeFacts from './NativeFacts.vue'
 import RegistrationStatus from '../../../components/RegistrationStatus.vue'
 import { nativeChannel } from '../../../services/registrationChannels'
-const props = defineProps<{ deviceId: string; enrollmentId: string }>()
+import { enrollmentTargetKey } from '../target'
+const props = defineProps<{ deviceId?: string; enrollmentId: string; showInstructions?: boolean }>()
+const emit = defineEmits<{ updated: [value: ReturnType<typeof decodeEnrollment>] }>()
 const runtime = useMdm(),
   { t } = useI18n(),
-  client = runtime.devices.enrollment
+  client = runtime.devices.enrollment,
+  resolveTarget = inject(enrollmentTargetKey, undefined)
+const missingTarget = computed(() => !!props.deviceId && !resolveTarget)
 const { run, runWrite, busy, failure, uncertain } = useOperation([], () => [
   ...deviceBinding(runtime),
   props.deviceId,
@@ -54,17 +58,21 @@ function generate() {
 }
 function refresh() {
   if (busy.value) return
-  void runtime.registrationChannels.refresh()
   current.value = undefined
+  if (missingTarget.value) return
+  void runtime.registrationChannels.refresh()
   void run(
-    () => client.status(props.enrollmentId),
-    (value) => {
-      // A locator grants no authority. The server checks ownership; its canonical device binding must also match this route.
-      if (value.deviceId !== props.deviceId) {
-        failure.value = 'invalidResponse'
-        return
+    async () => {
+      if (props.deviceId) {
+        const target = await resolveTarget!(props.enrollmentId)
+        if (target.enrollmentId !== props.enrollmentId || target.deviceId !== props.deviceId)
+          throw new Error('Unverified enrollment target')
       }
+      return client.status(props.enrollmentId)
+    },
+    (value) => {
       current.value = value
+      emit('updated', value)
     },
   )
 }
@@ -112,15 +120,24 @@ onBeforeUnmount(clearSecret)
     <v-card-title tag="h2">{{ t('onboarding.selfProgress') }}</v-card-title>
     <v-card-text>
       <v-alert type="info" variant="tonal">{{ t('onboarding.selfProgressNote') }}</v-alert>
+      <v-alert v-if="missingTarget" type="info" variant="tonal" class="mt-4" role="status">{{
+        t('onboarding.targetUnavailable')
+      }}</v-alert>
       <v-alert v-if="failure" type="error" variant="tonal" role="alert" class="mt-4">{{
         t(`devices.${failure}`)
       }}</v-alert>
-      <v-btn variant="text" :disabled="busy" class="my-3" @click="refresh">{{
+      <v-btn v-if="!missingTarget" variant="text" :disabled="busy" class="my-3" @click="refresh">{{
         t('devices.reload')
       }}</v-btn>
       <template v-if="current">
         <p>{{ t('devices.status') }}: {{ t(`devices.${current.status}`) }}</p>
-        <NativeFacts :value="current" refreshable @refresh="refresh" />
+        <NativeFacts
+          v-if="showInstructions !== false"
+          :value="current"
+          :device-id="deviceId"
+          refreshable
+          @refresh="refresh"
+        />
         <v-expansion-panels
           v-if="['pending', 'bound', 'expired'].includes(current.status)"
           :model-value="needsRecovery ? [0] : undefined"

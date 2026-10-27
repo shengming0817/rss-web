@@ -9,3 +9,11 @@ export { useSessionLifecycle } from './useSessionLifecycle'
 export { useLoginFlow } from './useLoginFlow'
 export { bindSession } from './bindSession'
 export type { IdentityRoutePresentation } from './router'
+
+export { useAccounts } from './useAccounts'
+export { useLocalProfile } from './useLocalProfile'
+
+export { useProviders } from './useProviders'
+
+export { useAccountSecurity } from './useAccountSecurity'
+export { useIdentityError } from './useIdentityError'

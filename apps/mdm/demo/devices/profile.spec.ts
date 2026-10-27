@@ -64,7 +64,6 @@ it('delivers an explicitly synthetic profile through the public password endpoin
   expect(text).not.toContain(password)
   const read = await scenario.handle('GET', `/api/v1/enrollments/${receipt.enrollmentId}`)
   expect(read.body).toMatchObject({
-    deviceId: receipt.deviceId,
     status: 'pending',
     progress: {
       profilePrepared: 'observed',
@@ -75,6 +74,7 @@ it('delivers an explicitly synthetic profile through the public password endpoin
     },
   })
   expect(JSON.stringify(read.body)).not.toContain('passwordDigest')
+  expect(read.body).not.toHaveProperty('deviceId')
   expect(automation.authorization.can(REVIEWER, 'enrollment', receipt.deviceId)).toBe(false)
 })
 it('fences wrong secrets, original authority, rotation, cancellation and expiry', async () => {

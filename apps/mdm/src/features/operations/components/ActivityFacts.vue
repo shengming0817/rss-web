@@ -1,4 +1,11 @@
 <script setup lang="ts">
+import {
+  VBtn,
+  VExpansionPanel,
+  VExpansionPanelText,
+  VExpansionPanelTitle,
+  VExpansionPanels,
+} from 'vuetify/components'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import type { ManagementActivity } from '../clients/activities'
@@ -39,49 +46,54 @@ const dimensions = [
         <dd>{{ label(fact[dimension]) }}</dd></template
       >
     </dl>
-    <RouterLink
+    <VBtn
       v-if="fact.links.policy"
+      variant="text"
       :to="{
         name: 'policy-tools',
         params: { tenant: runtime.tenant },
         query: { policy: fact.links.policy },
       }"
-      >{{ t('policies.policies') }}</RouterLink
+      >{{ t('policies.policies') }}</VBtn
     >
-    <RouterLink
+    <VBtn
       v-if="fact.links.batch"
+      variant="text"
       :to="{
         name: 'policy-event-batch',
         params: { tenant: runtime.tenant, device, batch: fact.links.batch },
       }"
-      >{{ t('policies.entry.batch') }}</RouterLink
+      >{{ t('policies.entry.batch') }}</VBtn
     >
-    <RouterLink
+    <VBtn
       v-if="fact.links.task && fact.links.policy"
+      variant="text"
       :to="{
         name: 'policy-execution',
         params: { tenant: runtime.tenant, execution: fact.links.task },
         query: { policy: fact.links.policy },
       }"
-      >{{ t('policies.executions') }}</RouterLink
+      >{{ t('policies.executions') }}</VBtn
     >
-    <RouterLink
+    <VBtn
       v-if="fact.links.operation"
+      variant="text"
       :to="{
         name: 'policy-execution',
         params: { tenant: runtime.tenant, execution: fact.links.operation },
         query: { device },
       }"
-      >{{ t('policies.executions') }}</RouterLink
+      >{{ t('policies.executions') }}</VBtn
     >
-    <RouterLink
+    <VBtn
       v-if="fact.links.request"
+      variant="text"
       :to="{
         name: 'operations-audit',
         params: { tenant: runtime.tenant },
         query: { device, operationId: fact.links.request },
       }"
-      >{{ t('operations.audit') }}</RouterLink
+      >{{ t('operations.audit') }}</VBtn
     >
     <CopyDeepLink
       v-if="fact.links.task"
@@ -109,30 +121,34 @@ const dimensions = [
           }"
         /></p
     ></template>
-    <details>
-      <summary>{{ t('policies.ux.technical') }}</summary>
-      <p>{{ fact.id }}</p>
-      <p v-if="fact.target">{{ fact.target.registration }} · {{ fact.target.generation }}</p>
-      <dl>
-        <template
-          v-for="key in [
-            'policy',
-            'version',
-            'batch',
-            'member',
-            'request',
-            'operation',
-            'retirement',
-            'task',
-            'attempt',
-          ] as const"
-          :key="key"
-          ><template v-if="fact.links[key]"
-            ><dt>{{ key }}</dt>
-            <dd>{{ fact.links[key] }}</dd></template
-          ></template
-        >
-      </dl>
-    </details>
+    <VExpansionPanels
+      ><VExpansionPanel>
+        <VExpansionPanelTitle>{{ t('policies.ux.technical') }}</VExpansionPanelTitle
+        ><VExpansionPanelText>
+          <p>{{ fact.id }}</p>
+          <p v-if="fact.target">{{ fact.target.registration }} · {{ fact.target.generation }}</p>
+          <dl>
+            <template
+              v-for="key in [
+                'policy',
+                'version',
+                'batch',
+                'member',
+                'request',
+                'operation',
+                'retirement',
+                'task',
+                'attempt',
+              ] as const"
+              :key="key"
+              ><template v-if="fact.links[key]"
+                ><dt>{{ key }}</dt>
+                <dd>{{ fact.links[key] }}</dd></template
+              ></template
+            >
+          </dl>
+        </VExpansionPanelText></VExpansionPanel
+      ></VExpansionPanels
+    >
   </article>
 </template>
