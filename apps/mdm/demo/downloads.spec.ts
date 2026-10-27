@@ -10,20 +10,29 @@ import { createPackagesClient, installer } from '../src/features/enrollment/clie
 import DownloadsView from '../src/features/enrollment/views/DownloadsView.vue'
 import { mdmKey, type MdmRuntime } from '../src/context'
 import { mdmI18n } from '../src/i18n'
-import { createScenario, TENANT } from './scenario'
+import { createDeviceDemo } from './devices/state'
+import { createAutomationDemo } from './policies/state'
+import { createScenario, TENANT, MANAGEMENT_TENANT } from './scenario'
 
 const targets = ['windows/x86_64', 'windows/aarch64', 'macos/x86_64', 'macos/aarch64']
 function composition(seedDownloads = false) {
-  const settings = createSettingsDemo({ seedDownloads }),
+  const devices = createDeviceDemo(),
+    automation = createAutomationDemo(devices),
+    settings = createSettingsDemo({ seedDownloads }),
     onboarding = createOnboardingDemo(
       () => false,
       () => false,
     )
   const downstream = vi.fn(onboarding.handle)
-  const scenario = createScenario([settings.handle, downstream], () => {
-    settings.reset()
-    onboarding.reset()
-  })
+  const scenario = createScenario(
+    [(request) => automation.authorization.guard(request), settings.handle, downstream],
+    () => {
+      devices.reset()
+      automation.reset()
+      settings.reset()
+      onboarding.reset()
+    },
+  )
   return { settings, scenario, downstream }
 }
 
@@ -64,6 +73,36 @@ it('keeps default publication empty and offers four seeded anonymous attachments
       )
     ).status,
   ).toBe(401)
+  const platformLogin = await scenario.handle(
+    'POST',
+    `/api/v1/identity/tenants/${MANAGEMENT_TENANT}/login`,
+    {
+      login: 'demo',
+      password: 'demo',
+    },
+  )
+  const paths = [
+    '/api/v1/agent/enroll/packages',
+    `/api/v1/agent/enroll/packages/${packages[0]!.releaseId}`,
+    `/api/v1/agent/enroll/packages/${packages[0]!.releaseId}/content`,
+  ]
+  for (const path of paths) expect((await get(path)).status).toBe(200)
+  expect((await get('/api/v1/agent-packages')).status).toBe(403)
+  expect(
+    (
+      await scenario.handle(
+        'POST',
+        `/api/v1/identity/tenants/${MANAGEMENT_TENANT}/session/logout`,
+        {},
+        {
+          'x-csrf-token': (platformLogin.body as { csrfToken: string }).csrfToken,
+          'x-identity-request': '1',
+        },
+      )
+    ).status,
+  ).toBe(204)
+  for (const path of paths) expect((await get(path)).status).toBe(200)
+  expect((await get('/api/v1/agent-packages')).status).toBe(401)
   const login = await scenario.handle('POST', `/api/v1/identity/tenants/${TENANT}/login`, {
     login: 'demo',
     password: 'demo',

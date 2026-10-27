@@ -31,7 +31,7 @@ import { securityFeature } from '../../security/routes'
 import { operationsFeature } from '../../operations/routes'
 import { settingsFeature } from '../../settings/routes'
 import { deviceFeature } from '../routes'
-import { createPolicyClients } from '../../../../demo/features/policies/client'
+import { createPolicyClients } from '../../policies/client'
 import { createDeviceClients } from '../client'
 import { createOnboardingClients } from '../../enrollment/client'
 import { createSettingsOperations } from '../../settings/operations'
@@ -224,7 +224,7 @@ async function setup(
           onboarding: createOnboardingClients(transport, transport, TENANT, 'demo-instance'),
           settings: { operations: settingsOperations },
           security: createFormalSecurityClients(transport, TENANT),
-          policies: createPolicyClients(transport, TENANT, true),
+          policies: createPolicyClients(transport),
           transport,
           operations,
           tenant: TENANT,

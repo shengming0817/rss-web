@@ -1,9 +1,8 @@
 import { expect, it } from 'vitest'
 import { makeDevices } from '../devices/fixtures'
-import { configurationApplicability, resourceApplicability } from './applicability'
-import type { Configuration } from '../features/policies/clients/configurations'
+import { resourceApplicability } from './applicability'
 import type { ResourceRead } from '../../src/features/policies/clients/resources'
-it('requires the exact Agent variant and keeps native configuration conflicts in the shared evaluator', () => {
+it('requires the exact active Agent resource variant for the current device', () => {
   const devices = makeDevices(),
     windows = devices.get('device-01')!,
     mac = devices.get('device-02')!
@@ -84,27 +83,4 @@ it('requires the exact Agent variant and keeps native configuration conflicts in
   expect(resourceApplicability(resource, '1', mac)).toBe('authorization')
   windows.architecture = 'aarch64'
   expect(resourceApplicability(resource, '1', windows)).toBe('unsupported')
-  const config: Configuration = {
-    id: 'one',
-    revision: 1,
-    name: 'Camera',
-    platform: 'windows',
-    format: 'windows_csp',
-    versions: [{ version: 1, status: 'published', settings: [{ key: 'Camera', value: false }] }],
-  }
-  expect(
-    configurationApplicability(config, 1, windows, [
-      { id: config.id, platform: config.platform, settings: config.versions[0]!.settings },
-    ]),
-  ).toBe('applicable')
-  expect(
-    configurationApplicability(config, 1, windows, [
-      { id: config.id, platform: config.platform, settings: config.versions[0]!.settings },
-      {
-        ...config,
-        id: 'two',
-        settings: [{ key: 'Camera', value: true }],
-      },
-    ]),
-  ).toBe('conflict')
 })

@@ -15,7 +15,7 @@ import { createDeviceDemo } from '../demo/devices/state'
 import { seedScriptPolicies } from '../demo/policies/seed'
 import { createOnboardingDemo } from '../demo/enrollment'
 import { createImportsDemo } from '../demo/software/imports'
-import { createPolicyClients } from '../demo/features/policies/client'
+import { createPolicyClients } from './features/policies/client'
 import { operation } from './services/useOperation'
 import { softwarePolicy } from './features/software/clients/assignment-model'
 import { navigation, navigationTarget, platformNavigation } from './components/navigation'
@@ -79,7 +79,7 @@ async function start(platform = false) {
   runtime.mount()
   await runtime.router.isReady()
   await runtime.session.login(TENANT, 'demo', 'demo')
-  const policies = createPolicyClients(runtime.transport, TENANT, true)
+  const policies = createPolicyClients(runtime.transport)
   const published = await policies.scopes.change(
     seed.scope,
     operation(

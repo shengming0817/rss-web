@@ -1,7 +1,6 @@
 import { createMdm } from '../src/bootstrap'
 import { createWorkspaceClient } from '../src/services/workspace'
 import { demoKey } from './context'
-import { createPolicyClients } from './features/policies/client'
 import { createSecurityClients } from './features/security/client'
 import { createOperationsClients } from './features/operations/client'
 import { enrollmentTargetKey } from '../src/features/enrollment/target'
@@ -35,7 +34,6 @@ export function createDemo(...args: Parameters<typeof createMdm>) {
   }
   app.provide(demoKey, {
     ...mdm,
-    policies: createPolicyClients(transport, mdm.tenant, true),
     security: createSecurityClients(transport, mdm.tenant, true),
     operations: createOperationsClients(transport, mdm.tenant, true, mdm.realm),
   })

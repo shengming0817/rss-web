@@ -294,7 +294,7 @@ export function createScenario(
             body,
             query: parsed.searchParams,
             headers: {},
-            actor: { principalId, sessionId, tenantId: sessionTenant },
+            actor: { principalId: 'anonymous', sessionId: 'anonymous' },
           },
           active,
         )

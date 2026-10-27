@@ -5,7 +5,6 @@ import { createAutomationDemo } from './state'
 import { createDeviceDemo } from '../devices/state'
 import { createUploadsClient } from '../../src/features/policies/clients/uploads'
 import { createPoliciesClient } from '../../src/features/policies/clients/policies'
-import { createConfigurationsClient } from '../features/policies/clients/configurations'
 import type { ConfigurationDefinition, PolicyRead } from '../../src/features/policies/clients/model'
 import type { DemoRequest } from '../scenario'
 function fixture() {
@@ -208,48 +207,6 @@ it('excludes disabled or other-scope claims and never self-conflicts when replac
     input: { action: 'disable' },
   })
   expect((await f.policies.assignments(a.id)).items[0]!.reason).toBeNull()
-})
-it('feeds effective native claims into the existing configuration catalog preview', async () => {
-  const f = fixture(),
-    scope = f.scope(),
-    a = await f.put(scope, f.resource(false)),
-    id: string = randomUUID(),
-    path = `/api/v1/mdm-candidate/policies/configurations/${id}`
-  expect(
-    f.send(
-      path,
-      f.op({ action: 'create', name: 'Camera', platform: 'windows', format: 'windows_csp' }),
-    ).status,
-  ).toBe(200)
-  expect(
-    f.send(path, f.op({ action: 'version', settings: [{ key: f.node, value: 1 }] }, 1)).status,
-  ).toBe(200)
-  expect(f.send(path, f.op({ action: 'publish', version: 1 }, 2)).status).toBe(200)
-  const client = createConfigurationsClient(
-    f.transport,
-    '11111111-1111-4111-8111-111111111111',
-    true,
-  )
-  const preview = await client.preview(id, {
-    ...f.op({ version: 1, scope }, 3),
-    input: { version: 1, scope },
-  })
-  await client.previewStatus(id, preview.task)
-  expect(
-    (await client.previewStatus(id, preview.task)).rows.find((r) => r.device === 'device-01'),
-  ).toMatchObject({ reason: 'conflict', support: 'blocked', drift: 'unknown', conflicts: [a.id] })
-  await f.policies.change(a.id, {
-    ...f.op({ action: 'disable' }, a.revision),
-    input: { action: 'disable' },
-  })
-  const next = await client.preview(id, {
-    ...f.op({ version: 1, scope }, 3),
-    input: { version: 1, scope },
-  })
-  expect(
-    (await client.previewStatus(id, next.task)).rows.find((r) => r.device === 'device-01')!
-      .conflicts,
-  ).toEqual([])
 })
 it.each(['retain', 'remove'] as const)(
   'honors %s when the last shared owner leaves, without claiming physical effects',
