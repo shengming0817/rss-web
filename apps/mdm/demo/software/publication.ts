@@ -13,6 +13,24 @@ export const publicationTargets = ['winget', 'brew'].map((protocol) => ({
   protocol,
   digest: hash(['target', protocol]),
 }))
+// Formal publication directories exclude the potentially large export document.
+// Detail reads retain it; operationId is a filter-only field in the backend catalog.
+const publicationOutput = [
+  'id',
+  'revision',
+  'target',
+  'resource',
+  'version',
+  'publication',
+  'contentDigest',
+  'manifestDigest',
+  'targetDigest',
+  'attempt',
+  'outcome',
+  'withdrawn',
+  'withdrawal',
+] satisfies (keyof Omit<Publication, 'document'>)[]
+const targetOutput = ['id', 'digest', 'protocol']
 export function createPublicationDemo(
   resources: ReturnType<typeof createResourceDemo>,
   lifecycle: ReturnType<typeof createLifecycleDemo>,
@@ -42,12 +60,16 @@ export function createPublicationDemo(
           const row = rows.get(identifier(decodeURIComponent(m[1]!)))
           return row ? ok(refresh(row)) : error('software_publication_not_found', 404)
         }
+        const output: string[] = targets ? targetOutput : publicationOutput
+        const fields = request.query.get('fields')?.split(',')
+        if (fields?.some((field) => !output.includes(field))) return error('malformed_request', 400)
         const values: Record<string, unknown>[] = targets
           ? publicationTargets
           : [...rows.values()].map(refresh)
         return ok(
           directoryPage(values, request, ['id'], {
             maxLimit: 100,
+            output,
             lookup: (row, field) =>
               field === 'operationId'
                 ? [...operations].filter(([, id]) => id === row.id).map(([op]) => op)

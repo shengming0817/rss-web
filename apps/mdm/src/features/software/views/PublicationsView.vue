@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { VBtn, VCheckbox, VDataTable, VSelect } from 'vuetify/components'
 import { comparison } from '../../../services/directory-query'
-import { UiButton, UiTable } from '@rss/core/components'
 import { onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -9,7 +9,7 @@ import { operation, useOperation, type Operation } from '../../../services/useOp
 import type { Publication, PublicationChange, Publish } from '../clients/publication'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import SoftwareResourceSelect from '../components/SoftwareResourceSelect.vue'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -166,45 +166,43 @@ watch(
 onMounted(() => load())
 </script>
 <template>
-  <PageFrame :title="t('software.publications')" :busy="busy" :failure="failure">
+  <MdmPage :title="t('software.publications')" :busy="busy" :failure="failure">
     <p>{{ t('software.directPublicationHint') }}</p>
-    <UiButton :disabled="busy || uncertain" @click="create">{{
-      t('software.newPublication')
-    }}</UiButton>
-    <UiButton :disabled="busy || uncertain" @click="load()">{{
+    <VBtn :disabled="busy || uncertain" @click="create">{{ t('software.newPublication') }}</VBtn>
+    <VBtn :disabled="busy || uncertain" @click="load()">{{
       t('software.publicationRecords')
-    }}</UiButton>
+    }}</VBtn>
     <section v-if="page" class="console-panel">
       <p v-if="!page.items.length">{{ t('policies.empty') }}</p>
-      <UiTable
-        :label="t('software.publicationRecords')"
-        :rows="page.items"
-        :row-key="(v) => v.id"
-        :busy-label="t('devices.loading')"
-        :empty-label="t('policies.empty')"
-        :columns="[
-          { key: 'resource', label: t('software.resource') },
-          { key: 'version', label: t('software.version') },
-          { key: 'target', label: t('software.binding') },
-          { key: 'outcome', label: t('policies.status') },
+      <VDataTable
+        :aria-label="t('software.publicationRecords')"
+        :items="page.items"
+        item-value="id"
+        :items-per-page="-1"
+        hide-default-footer
+        :loading="busy"
+        :loading-text="t('devices.loading')"
+        :no-data-text="t('policies.empty')"
+        :headers="[
+          { key: 'resource', title: t('software.resource') },
+          { key: 'version', title: t('software.version') },
+          { key: 'target', title: t('software.binding') },
+          { key: 'outcome', title: t('policies.status') },
         ]"
       >
-        <template #cell-resource="{ row }"
-          ><UiButton variant="ghost" :disabled="busy || uncertain" @click="open(row.id)"
-            >{{ row.resource }} / {{ row.version }}</UiButton
+        <template #[`item.resource`]="{ item }"
+          ><VBtn variant="text" :disabled="busy || uncertain" @click="open(item.id)"
+            >{{ item.resource }} / {{ item.version }}</VBtn
           ></template
         >
-        <template #cell-outcome="{ row }"
-          >{{ t(`software.publication_${row.outcome}`)
-          }}<span v-if="row.withdrawn"> · {{ t('software.lifecycle_withdrawn') }}</span></template
+        <template #[`item.outcome`]="{ item }"
+          >{{ t(`software.publication_${item.outcome}`)
+          }}<span v-if="item.withdrawn"> · {{ t('software.lifecycle_withdrawn') }}</span></template
         >
-      </UiTable>
-      <UiButton
-        v-if="page.nextCursor"
-        :disabled="busy || uncertain"
-        @click="load(page.nextCursor)"
-        >{{ t('devices.next') }}</UiButton
-      >
+      </VDataTable>
+      <VBtn v-if="page.nextCursor" :disabled="busy || uncertain" @click="load(page.nextCursor)">{{
+        t('devices.next')
+      }}</VBtn>
     </section>
     <form v-if="!current" data-testid="publication-create" @submit.prevent="save">
       <fieldset :disabled="busy || uncertain">
@@ -214,24 +212,27 @@ onMounted(() => load())
           v-model:version="version"
           :disabled="busy || uncertain"
         />
-        <UiButton type="button" @click="loadTargets()">{{ t('software.loadTargets') }}</UiButton>
-        <label for="publication-target">{{ t('software.binding') }}</label>
-        <select id="publication-target" v-model="target" class="ui-input" required>
-          <option value="">{{ t('devices.select') }}</option>
-          <option v-for="item in targets?.items" :key="item.id" :value="item.id">
-            {{ item.id }} · {{ item.protocol }}
-          </option>
-        </select>
+        <VBtn type="button" @click="loadTargets()">{{ t('software.loadTargets') }}</VBtn>
+        <VSelect
+          id="publication-target"
+          v-model="target"
+          :label="t('software.binding')"
+          :items="
+            (targets?.items ?? []).map((item) => ({
+              title: `${item.id} · ${item.protocol}`,
+              value: item.id,
+            }))
+          "
+          required
+          :disabled="busy || uncertain"
+        />
         <p v-if="targets && !targets.items.length">{{ t('software.noTargets') }}</p>
-        <UiButton
-          v-if="targets?.nextCursor"
-          type="button"
-          @click="loadTargets(targets.nextCursor)"
-          >{{ t('devices.next') }}</UiButton
-        >
-        <UiButton type="submit" :disabled="!resource || !version || !target">{{
+        <VBtn v-if="targets?.nextCursor" type="button" @click="loadTargets(targets.nextCursor)">{{
+          t('devices.next')
+        }}</VBtn>
+        <VBtn type="submit" :disabled="!resource || !version || !target">{{
           t('software.publish')
-        }}</UiButton>
+        }}</VBtn>
       </fieldset>
     </form>
     <section v-if="current" class="console-panel" data-testid="publication-detail">
@@ -242,8 +243,8 @@ onMounted(() => load())
         {{ t('software.lifecycle_withdrawn') }} ·
         {{ current.withdrawal ? t(`software.withdrawal_${current.withdrawal}`) : '' }}
       </p>
-      <UiButton :disabled="busy" @click="reconcile">{{ t('software.reconcile') }}</UiButton>
-      <UiButton
+      <VBtn :disabled="busy" @click="reconcile">{{ t('software.reconcile') }}</VBtn>
+      <VBtn
         v-if="
           ['pending', 'unknown'].includes(current.outcome) ||
           (current.withdrawal &&
@@ -252,20 +253,17 @@ onMounted(() => load())
         "
         :disabled="busy || uncertain"
         @click="change('recover')"
-        >{{ t('software.recoverPublication') }}</UiButton
+        >{{ t('software.recoverPublication') }}</VBtn
       >
-      <UiButton
+      <VBtn
         v-if="current.outcome === 'not_applied' && !current.withdrawn"
         :disabled="busy || uncertain"
         @click="change('retry')"
-        >{{ t('software.retry') }}</UiButton
+        >{{ t('software.retry') }}</VBtn
       >
-      <UiButton
-        v-if="!current.withdrawn"
-        :disabled="busy || uncertain"
-        @click="change('withdraw')"
-        >{{ t('software.withdraw') }}</UiButton
-      >
+      <VBtn v-if="!current.withdrawn" :disabled="busy || uncertain" @click="change('withdraw')">{{
+        t('software.withdraw')
+      }}</VBtn>
       <p>{{ t('software.withdrawHint') }}</p>
       <details v-if="current.document">
         <summary>{{ t('software.document') }}</summary>
@@ -275,15 +273,9 @@ onMounted(() => load())
     <section v-if="uncertain && pending" class="console-panel" data-testid="publication-unknown">
       <p>{{ t('software.publicationUnknown') }}</p>
       <p>{{ pending.body.operationId }}</p>
-      <UiButton :disabled="busy" @click="reconcile">{{ t('software.lookupOperation') }}</UiButton>
-      <label
-        ><input v-model="confirmedReplay" type="checkbox" :disabled="busy" />{{
-          t('policies.confirmReplay')
-        }}</label
-      >
-      <UiButton :disabled="busy || !confirmedReplay" @click="replay">{{
-        t('policies.replay')
-      }}</UiButton>
+      <VBtn :disabled="busy" @click="reconcile">{{ t('software.lookupOperation') }}</VBtn>
+      <VCheckbox v-model="confirmedReplay" :disabled="busy" :label="t('policies.confirmReplay')" />
+      <VBtn :disabled="busy || !confirmedReplay" @click="replay">{{ t('policies.replay') }}</VBtn>
     </section>
-  </PageFrame>
+  </MdmPage>
 </template>

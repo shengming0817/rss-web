@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { UiButton, UiStepIndicator } from '@rss/core/components'
+import { VBtn, VCheckbox, VSelect, VStepper, VTextField, VTextarea } from 'vuetify/components'
 import { computed, onMounted, ref, watch, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { operation, useOperation } from '../../../services/useOperation'
 import { importRequest } from '../clients/imports'
 import { deviceBinding } from '../../devices/useDeviceBinding'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 const { t } = useI18n(),
   runtime = useMdm(),
   { run, runWrite, busy, failure, uncertain } = useOperation([], () => deviceBinding(runtime))
@@ -177,7 +177,7 @@ watch(
 )
 </script>
 <template>
-  <PageFrame :title="t('software.imports')" :busy="busy" :failure="failure"
+  <MdmPage :title="t('software.imports')" :busy="busy" :failure="failure"
     ><p>{{ t('software.importDirectHint') }}</p>
     <p v-if="failure === 'unsupported'" role="alert">
       {{ t('software.ux.contentPrerequisite') }}
@@ -186,43 +186,41 @@ watch(
         >{{ t('settings.integrations') }}</RouterLink
       >
     </p>
-    <UiStepIndicator
-      :steps="['source', 'coordinates', 'verify', 'deliver'].map((v) => t(`software.ux.${v}`))"
-      :current="step"
-      :label="t('software.ux.journey')"
+    <VStepper
+      :model-value="step + 1"
+      :items="['source', 'coordinates', 'verify', 'deliver'].map((v) => t(`software.ux.${v}`))"
+      hide-actions
+      :aria-label="t('software.ux.journey')"
+      class="my-4"
     />
-    <UiButton v-if="step > 0 && !result" :disabled="busy || uncertain" @click="step--">{{
+    <VBtn v-if="step > 0 && !result" :disabled="busy || uncertain" @click="step--">{{
       t('console.back')
-    }}</UiButton>
+    }}</VBtn>
     <section v-if="!result && step === 0" class="console-panel">
       <h2>{{ t('software.ux.source') }}</h2>
       <p>{{ t('software.ux.sourceHint') }}</p>
-      <label for="import-source">{{ t('software.source') }}</label
-      ><select
+      <VSelect
         id="import-source"
         v-model="chosenSource"
-        class="ui-input"
+        :label="t('software.source')"
         :disabled="busy || uncertain"
-      >
-        <option value="">{{ t('devices.select') }}</option>
-        <option
-          v-for="item in sources?.items"
-          :key="`${item.source.id}/${item.source.revision}`"
-          :value="`${item.source.id}/${item.source.revision}`"
-          :disabled="item.source.protocol.kind === 'private' || item.lifecycle.state !== 'enabled'"
-        >
-          {{ item.source.id }} / {{ item.source.revision }} · {{ item.source.protocol.kind }} ·
-          {{ t(`software.lifecycle_${item.lifecycle.state}`) }}
-        </option>
-      </select>
-      <UiButton :disabled="busy || uncertain" @click="loadSources()">{{
-        t('policies.reload')
-      }}</UiButton>
-      <UiButton
+        :items="
+          (sources?.items ?? []).map((item) => ({
+            title: `${item.source.id} / ${item.source.revision} · ${item.source.protocol.kind} · ${t(`software.lifecycle_${item.lifecycle.state}`)}`,
+            value: `${item.source.id}/${item.source.revision}`,
+            props: {
+              disabled:
+                item.source.protocol.kind === 'private' || item.lifecycle.state !== 'enabled',
+            },
+          }))
+        "
+      />
+      <VBtn :disabled="busy || uncertain" @click="loadSources()">{{ t('policies.reload') }}</VBtn>
+      <VBtn
         v-if="sources?.nextCursor"
         :disabled="busy || uncertain"
         @click="loadSources(sources.nextCursor)"
-        >{{ t('devices.next') }}</UiButton
+        >{{ t('devices.next') }}</VBtn
       >
       <p v-if="sources && !sources.items.length">{{ t('policies.empty') }}</p>
       <div class="console-inline-actions">
@@ -237,9 +235,9 @@ watch(
           }"
           >{{ t('software.ux.enterprise') }}</RouterLink
         >
-        <UiButton :disabled="busy || uncertain || !chosen" @click="step = 1">{{
+        <VBtn :disabled="busy || uncertain || !chosen" @click="step = 1">{{
           t('software.ux.next')
-        }}</UiButton>
+        }}</VBtn>
       </div>
     </section>
     <form v-if="!result" v-show="step > 0" ref="editor" @submit.prevent="submit">
@@ -247,114 +245,156 @@ watch(
         <section v-show="step === 1" data-step="1" class="console-panel">
           <h2>{{ t('software.ux.coordinates') }}</h2>
           <p>{{ source }} / {{ sourceRevision }}</p>
-          <label
-            >{{ t('software.resource')
-            }}<input v-model="resource" class="ui-input" required /></label
-          ><label
-            >{{ t('software.version') }}<input v-model="version" class="ui-input" required /></label
-          ><label
-            >{{ t('policies.revision')
-            }}<input
-              v-model.number="expectedRevision"
-              type="number"
-              min="0"
-              class="ui-input"
-              required /></label
-          ><label
-            >{{ t('software.package')
-            }}<input v-model="packageId" class="ui-input" required /></label
-          ><label
-            >{{ t('software.packageVersion')
-            }}<input v-model="packageVersion" class="ui-input" required /></label
-          ><label
-            >{{ t('software.platform')
-            }}<select v-model="platform" class="ui-input">
-              <option value="windows">Windows</option>
-              <option value="macos">macOS</option>
-            </select></label
-          ><label
-            >{{ t('software.architecture')
-            }}<select v-model="architecture" class="ui-input">
-              <option value="x86_64">x86_64</option>
-              <option value="aarch64">aarch64</option>
-            </select></label
-          ><label
-            >{{ t('software.variant') }}<input v-model="variant" class="ui-input" required /></label
-          ><label
-            >{{ t('software.installerLength')
-            }}<input v-model.number="length" type="number" min="1" class="ui-input" required
-          /></label>
+          <VTextField
+            v-model="resource"
+            :label="t('software.resource')"
+            required
+            :disabled="busy || uncertain"
+          /><VTextField
+            v-model="version"
+            :label="t('software.version')"
+            required
+            :disabled="busy || uncertain"
+          /><VTextField
+            v-model.number="expectedRevision"
+            :label="t('policies.revision')"
+            type="number"
+            min="0"
+            required
+            :disabled="busy || uncertain"
+          /><VTextField
+            v-model="packageId"
+            :label="t('software.package')"
+            required
+            :disabled="busy || uncertain"
+          /><VTextField
+            v-model="packageVersion"
+            :label="t('software.packageVersion')"
+            required
+            :disabled="busy || uncertain"
+          /><VSelect
+            v-model="platform"
+            :label="t('software.platform')"
+            :items="[
+              { title: 'Windows', value: 'windows' },
+              { title: 'macOS', value: 'macos' },
+            ]"
+            :disabled="busy || uncertain"
+          /><VSelect
+            v-model="architecture"
+            :label="t('software.architecture')"
+            :items="['x86_64', 'aarch64']"
+            :disabled="busy || uncertain"
+          /><VTextField
+            v-model="variant"
+            :label="t('software.variant')"
+            required
+            :disabled="busy || uncertain"
+          /><VTextField
+            v-model.number="length"
+            :label="t('software.installerLength')"
+            type="number"
+            min="1"
+            required
+            :disabled="busy || uncertain"
+          />
           <template v-if="chosen?.source.protocol.kind === 'brew_tap'">
-            <label
-              >{{ t('software.ux.brewPath') }}<input v-model="brewPath" class="ui-input"
-            /></label>
-            <label
-              >{{ t('software.ux.bottleTag') }}<input v-model="bottleTag" class="ui-input"
-            /></label>
-            <label
-              >{{ t('software.ux.sourceLength')
-              }}<input v-model.number="sourceLength" type="number" min="1" class="ui-input"
-            /></label>
+            <VTextField
+              v-model="brewPath"
+              :label="t('software.ux.brewPath')"
+              :disabled="busy || uncertain"
+            />
+            <VTextField
+              v-model="bottleTag"
+              :label="t('software.ux.bottleTag')"
+              :disabled="busy || uncertain"
+            />
+            <VTextField
+              v-model.number="sourceLength"
+              :label="t('software.ux.sourceLength')"
+              type="number"
+              min="1"
+              :disabled="busy || uncertain"
+            />
           </template>
           <template v-else>
-            <label
-              >{{ t('software.ux.installerType') }}<input v-model="installerType" class="ui-input"
-            /></label>
-            <label
-              >{{ t('software.ux.installerScope')
-              }}<select v-model="installerScope" class="ui-input">
-                <option value="machine">machine</option>
-                <option value="user">user</option>
-              </select></label
-            >
-            <label
-              >{{ t('software.ux.installerId') }}<input v-model="installerId" class="ui-input"
-            /></label>
-            <label
-              >{{ t('software.ux.manifestFiles')
-              }}<textarea v-model="manifestFiles" class="ui-input" />
-            </label>
+            <VTextField
+              v-model="installerType"
+              :label="t('software.ux.installerType')"
+              :disabled="busy || uncertain"
+            />
+            <VSelect
+              v-model="installerScope"
+              :label="t('software.ux.installerScope')"
+              :items="['machine', 'user']"
+              :disabled="busy || uncertain"
+            />
+            <VTextField
+              v-model="installerId"
+              :label="t('software.ux.installerId')"
+              :disabled="busy || uncertain"
+            />
+            <VTextarea
+              v-model="manifestFiles"
+              :label="t('software.ux.manifestFiles')"
+              auto-grow
+              :disabled="busy || uncertain"
+            />
           </template>
-          <UiButton type="button" :disabled="!chosen" @click="next">{{
-            t('software.ux.next')
-          }}</UiButton>
+          <VBtn type="button" :disabled="!chosen" @click="next">{{ t('software.ux.next') }}</VBtn>
         </section>
         <section v-show="step === 2" class="console-panel">
           <h2>{{ t('software.ux.verify') }}</h2>
           <p>{{ t('software.ux.behaviorHint') }}</p>
-          <label
-            >{{ t('software.behavior')
-            }}<textarea v-model="behavior" class="ui-input" required /></label
-          ><label
-            >{{ t('software.artifacts')
-            }}<textarea v-model="artifacts" class="ui-input" required /></label
-          ><label
-            >{{ t('software.dependencies')
-            }}<textarea v-model="dependencies" class="ui-input" required /></label
-          ><label
-            >{{ t('software.signatures')
-            }}<textarea v-model="signatures" class="ui-input" required /></label
-          ><label
-            >{{ t('software.reboot')
-            }}<select v-model="reboot" class="ui-input">
-              <option value="forbid">{{ t('software.rebootForbid') }}</option>
-              <option value="report">{{ t('software.rebootReport') }}</option>
-            </select></label
-          ><label
-            ><input v-model="downgrade" type="checkbox" />{{ t('software.allowDowngrade') }}</label
-          ><label
-            ><input v-model="nativeExport" type="checkbox" />{{ t('software.nativeExport') }}</label
-          ><UiButton type="submit" :disabled="step !== 2 || !chosen">{{
-            t('software.import')
-          }}</UiButton>
+          <VTextarea
+            v-model="behavior"
+            :label="t('software.behavior')"
+            required
+            auto-grow
+            :disabled="busy || uncertain"
+          /><VTextarea
+            v-model="artifacts"
+            :label="t('software.artifacts')"
+            required
+            auto-grow
+            :disabled="busy || uncertain"
+          /><VTextarea
+            v-model="dependencies"
+            :label="t('software.dependencies')"
+            required
+            auto-grow
+            :disabled="busy || uncertain"
+          /><VTextarea
+            v-model="signatures"
+            :label="t('software.signatures')"
+            required
+            auto-grow
+            :disabled="busy || uncertain"
+          /><VSelect
+            v-model="reboot"
+            :label="t('software.reboot')"
+            :items="[
+              { title: t('software.rebootForbid'), value: 'forbid' },
+              { title: t('software.rebootReport'), value: 'report' },
+            ]"
+            :disabled="busy || uncertain"
+          /><VCheckbox
+            v-model="downgrade"
+            :label="t('software.allowDowngrade')"
+            :disabled="busy || uncertain"
+          /><VCheckbox
+            v-model="nativeExport"
+            :label="t('software.nativeExport')"
+            :disabled="busy || uncertain"
+          /><VBtn type="submit" :disabled="step !== 2 || !chosen">{{ t('software.import') }}</VBtn>
         </section>
       </fieldset>
     </form>
     <h2 v-if="result">{{ t('software.ux.imported') }}</h2>
     <p v-if="result">{{ result.resource }} / {{ result.version }} · {{ result.storageRevision }}</p>
-    <UiButton v-if="result || uncertain" :disabled="busy || !resource" @click="inspect">{{
+    <VBtn v-if="result || uncertain" :disabled="busy || !resource" @click="inspect">{{
       t('policies.verify')
-    }}</UiButton>
+    }}</VBtn>
     <p v-if="observed">{{ observed.id }} · {{ observed.revision }}</p>
     <section v-if="uncertain && pending" class="console-panel" role="status">
       <p>{{ t('software.importUnknownHint') }}</p>
@@ -363,14 +403,12 @@ watch(
         {{ pending.input.resourceVersion }} · {{ pending.input.source.id }} /
         {{ pending.input.source.revision }}
       </p>
-      <label
-        ><input v-model="confirmedReplay" type="checkbox" />{{
-          t('software.publicationUnknown')
-        }}</label
-      >
-      <UiButton :disabled="busy || !confirmedReplay" @click="replay">{{
-        t('policies.replay')
-      }}</UiButton>
+      <VCheckbox
+        v-model="confirmedReplay"
+        :label="t('software.publicationUnknown')"
+        :disabled="busy"
+      />
+      <VBtn :disabled="busy || !confirmedReplay" @click="replay">{{ t('policies.replay') }}</VBtn>
     </section>
     <RouterLink
       v-if="result"
@@ -380,6 +418,6 @@ watch(
         query: { resource: result.resource, version: result.version },
       }"
       >{{ t('software.catalog') }}</RouterLink
-    ></PageFrame
+    ></MdmPage
   >
 </template>

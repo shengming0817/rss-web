@@ -848,7 +848,7 @@ try {
   assert.equal(assignment.sources[0].verified, true)
   assert.deepEqual(assignment.sources[0].members, [assignment.target])
   assert.ok(Array.isArray(assignment.operationIds))
-  await page.goto(path(`software/bootstrap?id=${policy}`))
+  await page.goto(path(`policies?action=ensure_agent_installed&id=${policy}`))
   await loaded()
   await page.getByRole('button', { name: '刷新进度（保留编辑）', exact: true }).click()
   await loaded()
