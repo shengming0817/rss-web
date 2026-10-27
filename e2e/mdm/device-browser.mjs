@@ -702,7 +702,7 @@ try {
   await settled(`/api/v1/groups/${group}/tasks/${membership.task}`)
   const groupResult = await api(`/api/v1/groups/${group}/results/${membership.task}/members`)
   assert.deepEqual(groupResult.page.items, [{ kind: 'endpoint', id: fixture.agent }])
-  await page.goto(path('devices/groups'))
+  await page.goto(path('groups'))
   await loaded()
   await page.getByRole('button', { name: /Browser endpoint group/ }).click()
   await loaded()
@@ -877,7 +877,7 @@ try {
   phase = 'associated-group-scope-assignments'
   // Associated evaluation requires collected evidence bound to original registrations.
   advanceGeneration('seed-associated-inventory')
-  await page.goto(path('devices/groups'))
+  await page.goto(path('groups'))
   await loaded()
   await page.getByRole('button', { name: '创建', exact: true }).click()
   const editor = page.getByRole('dialog')

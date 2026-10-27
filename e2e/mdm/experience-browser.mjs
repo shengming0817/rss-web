@@ -82,7 +82,7 @@ export async function acceptExperience({
   await page.getByRole('button', { name: 'Browser shared fields', exact: true }).click()
   assert.ok((await page.locator('.asset-detail-layout').textContent()).includes(fixture.mdm))
   coverage.push('real-shared-field-layout-save-order-and-reload')
-  await page.goto(path('devices/groups'))
+  await page.goto(path('groups'))
   await page.getByRole('button', { name: '创建', exact: true }).click()
   dialog = page.getByRole('dialog')
   await dialog.getByTestId('group-name').fill('Browser nested group')

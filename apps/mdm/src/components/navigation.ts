@@ -15,20 +15,7 @@ export const navigation: Navigation = [
   {
     id: 'groups',
     label: 'console.groups',
-    items: [
-      {
-        name: 'device-groups',
-        label: 'console.deviceDynamic',
-        query: { category: 'device-dynamic' },
-      },
-      {
-        name: 'device-groups',
-        label: 'console.deviceStatic',
-        query: { category: 'device-static' },
-      },
-      { name: 'device-groups', label: 'console.userDynamic', query: { category: 'user-dynamic' } },
-      { name: 'device-groups', label: 'console.userStatic', query: { category: 'user-static' } },
-    ],
+    items: [{ name: 'device-groups', label: 'devices.groups' }],
   },
   {
     id: 'policies',
@@ -39,11 +26,7 @@ export const navigation: Navigation = [
       { name: 'policy-telemetry', label: 'telemetry.profiles' },
       { name: 'policy-executions', label: 'policies.executions' },
       { name: 'security-rules', label: 'security.rules' },
-      {
-        name: 'policy-metrics',
-        label: 'telemetry.metricsSettings',
-        path: '/tenants/:tenant/policies/metrics',
-      },
+      { name: 'settings-metrics', label: 'telemetry.metricsSettings' },
     ],
   },
   {
@@ -51,11 +34,6 @@ export const navigation: Navigation = [
     label: 'software.catalog',
     items: [
       { name: 'software-catalog', label: 'software.catalog' },
-      {
-        name: 'software-assets',
-        label: 'console.softwareAssets',
-        path: '/tenants/:tenant/software/assets',
-      },
       { name: 'software-publications', label: 'software.publications' },
       { name: 'software-imports', label: 'software.imports' },
     ],

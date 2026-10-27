@@ -128,7 +128,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', shortcut))
       >
         <v-list-item :to="destination('workspace')" title="RSS MDM" class="mdm-brand" />
         <ConsoleNavigation
-          :collapsed="collapsed"
+          :collapsed="!mobile && collapsed"
           :can-manage-agent="canManageAgent"
           @navigate="closeNavigation"
         />
