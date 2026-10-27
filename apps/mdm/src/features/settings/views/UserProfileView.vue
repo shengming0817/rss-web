@@ -1,8 +1,8 @@
 <script setup lang="ts">
+import { VBtn, VForm, VSelect, VTextField } from 'vuetify/components'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton } from '@rss/core/components'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 import ProfilePanel from '../components/ProfilePanel.vue'
 import { usePermission } from '../../enrollment/usePermission'
 import { useSettingsFacts } from '../useSettingsAction'
@@ -17,20 +17,25 @@ useSettingsFacts(() => {
 })
 </script>
 <template>
-  <PageFrame :title="t('profiles.mine')">
+  <MdmPage :title="t('profiles.mine')">
     <p>{{ t('profiles.latestHelp') }}</p>
-    <label for="profile-view">{{ t('profiles.source') }}</label
-    ><select id="profile-view" v-model="view" class="ui-input" :disabled="!!selected">
-      <option value="current">{{ t('profiles.current') }}</option>
-      <option value="latest">{{ t('profiles.latest') }}</option>
-    </select>
-    <form v-if="canRead" class="settings-actions" @submit.prevent="selected = principal.trim()">
-      <label for="profile-principal">{{ t('profiles.principal') }}</label
-      ><input id="profile-principal" v-model="principal" class="ui-input" /><UiButton
-        type="submit"
-        >{{ t('profiles.load') }}</UiButton
-      >
-    </form>
+    <VSelect
+      id="profile-view"
+      v-model="view"
+      :disabled="!!selected"
+      :items="[
+        { title: t('profiles.current'), value: 'current' },
+        { title: t('profiles.latest'), value: 'latest' },
+      ]"
+      :label="t('profiles.source')"
+    />
+    <VForm v-if="canRead" class="settings-actions" @submit.prevent="selected = principal.trim()">
+      <VTextField
+        id="profile-principal"
+        v-model="principal"
+        :label="t('profiles.principal')"
+      /><VBtn type="submit">{{ t('profiles.load') }}</VBtn>
+    </VForm>
     <ProfilePanel :key="selected + view" :principal="selected" :view="view" />
-  </PageFrame>
+  </MdmPage>
 </template>

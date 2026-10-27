@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import { VBtn, VChip, VDataTable } from 'vuetify/components'
+import OperationDialog from '../components/OperationDialog.vue'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiTable, UiBadge, UiDialog } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../../devices/useDeviceBinding'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 import ChannelFacts from '../../settings/components/ChannelFacts.vue'
 import { auditTime } from '../format'
 const runtime = useMdm(),
@@ -56,66 +57,69 @@ watch(
 )
 </script>
 <template>
-  <PageFrame :title="t('operations.diagnostics')" :busy="busy" :failure="failure">
+  <MdmPage :title="t('operations.diagnostics')" :busy="busy" :failure="failure">
     <template #actions
-      ><UiButton :disabled="busy" @click="load">{{ t('devices.reload') }}</UiButton></template
+      ><VBtn :disabled="busy" @click="load">{{ t('devices.reload') }}</VBtn></template
     >
     <p>{{ t('operations.diagnosticUi.hint') }}</p>
     <template v-if="snapshot">
       <div class="console-inline-actions">
-        <UiBadge>{{ t('operations.diagnosticUi.alive') }} · {{ bool(snapshot.alive) }}</UiBadge
-        ><UiBadge>{{ t('operations.diagnosticUi.ready') }} · {{ bool(snapshot.ready) }}</UiBadge
+        <VChip>{{ t('operations.diagnosticUi.alive') }} · {{ bool(snapshot.alive) }}</VChip
+        ><VChip>{{ t('operations.diagnosticUi.ready') }} · {{ bool(snapshot.ready) }}</VChip
         ><span v-if="readAt"
           >{{ t('operations.diagnosticUi.readAt') }} {{ auditTime(readAt) }}</span
         >
       </div>
       <ChannelFacts :channels="snapshot.channels" />
-      <UiTable
-        :label="t('operations.diagnostics')"
-        :rows="snapshot.components"
-        :row-key="(v) => v.name"
-        :busy="busy"
-        :busy-label="t('devices.loading')"
-        :empty-label="t('operations.empty')"
-        :columns="[
-          { key: 'name', label: t('operations.diagnosticUi.component') },
-          { key: 'readiness', label: t('operations.diagnosticUi.ready') },
-          { key: 'health', label: t('operations.diagnosticUi.health') },
-          { key: 'reasons', label: t('operations.diagnosticUi.reasons') },
+      <VDataTable
+        disable-sort
+        hide-default-footer
+        :items-per-page="-1"
+        :aria-label="t('operations.diagnostics')"
+        :items="snapshot.components"
+        :item-value="(v) => v.name"
+        :loading="busy"
+        :loading-text="t('devices.loading')"
+        :no-data-text="t('operations.empty')"
+        :headers="[
+          { key: 'name', title: t('operations.diagnosticUi.component') },
+          { key: 'readiness', title: t('operations.diagnosticUi.ready') },
+          { key: 'health', title: t('operations.diagnosticUi.health') },
+          { key: 'reasons', title: t('operations.diagnosticUi.reasons') },
         ]"
       >
-        <template #cell-name="{ row }"
-          ><UiButton variant="ghost" @click="selected = row">{{
+        <template #[`item.name`]="{ item: row }"
+          ><VBtn variant="text" @click="selected = row">{{
             t(`operations.diagnosticUi.componentName.${row.name}`)
-          }}</UiButton></template
+          }}</VBtn></template
         >
-        <template #cell-readiness="{ row }">{{
+        <template #[`item.readiness`]="{ item: row }">{{
           t(`operations.diagnosticUi.state.${row.readiness}`)
         }}</template>
-        <template #cell-health="{ row }"
-          ><UiBadge
-            :tone="
+        <template #[`item.health`]="{ item: row }"
+          ><VChip
+            :color="
               row.health === 'healthy'
                 ? 'success'
                 : row.health === 'degraded'
                   ? 'warning'
-                  : 'neutral'
+                  : 'secondary'
             "
-            >{{ t(`operations.diagnosticUi.state.${row.health}`) }}</UiBadge
+            >{{ t(`operations.diagnosticUi.state.${row.health}`) }}</VChip
           ></template
         >
-        <template #cell-reasons="{ row }"
+        <template #[`item.reasons`]="{ item: row }"
           ><span v-for="reason in row.reasons" :key="reason"
             >{{ t(`operations.diagnosticUi.reason.${reason}`) }} </span
           ><span v-if="!row.reasons.length">—</span></template
         >
-      </UiTable>
+      </VDataTable>
       <p v-if="missing.length" class="ui-help">
         {{ t('operations.diagnosticUi.omitted') }}:
         {{ missing.map((v) => t(`operations.diagnosticUi.componentName.${v}`)).join('、') }}
       </p>
     </template>
-    <UiDialog
+    <OperationDialog
       :open="!!selected"
       placement="right"
       :title="
@@ -240,6 +244,6 @@ watch(
           </dl>
         </section>
       </div>
-    </UiDialog>
-  </PageFrame>
+    </OperationDialog>
+  </MdmPage>
 </template>
