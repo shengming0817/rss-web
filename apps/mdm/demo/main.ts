@@ -3,6 +3,7 @@ import { createIdentityTransport } from '@rss/api/identity'
 import { createDemo } from './bootstrap'
 import { TENANT } from './scenario'
 import DemoControls from './DemoControls.vue'
+import { createMdmVuetify } from '../src/ui/vuetify'
 const controls = document.createElement('div')
 document.body.prepend(controls)
 const runtime = createDemo(
@@ -22,4 +23,5 @@ createApp(DemoControls, {
   authenticated: computed(() => runtime.session.state.value.status === 'authenticated'),
 })
   .use(runtime.i18n)
+  .use(createMdmVuetify())
   .mount(controls)

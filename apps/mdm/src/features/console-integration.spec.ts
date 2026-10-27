@@ -2,7 +2,7 @@ import { createFeatureRouter as createRouter } from '../../tests/feature-router'
 import { decodeRunEvidence } from './policies/clients/runs'
 import { afterEach, expect, it, vi } from 'vitest'
 import { defineComponent, shallowRef } from 'vue'
-import { VTextField } from 'vuetify/components'
+import { VTextField, VSelect } from 'vuetify/components'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createMemoryHistory } from 'vue-router'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
@@ -630,13 +630,14 @@ it('unlocks an asset conflict only after reading the current authoritative state
   await confirm(w)
   await button(w, '保存').trigger('click')
   await flushPromises()
-  expect(w.find('select').attributes('disabled')).toBeDefined()
+  expect(w.getComponent(VSelect).props('disabled')).toBe(true)
   await button(w, '冲突：重新读取并比较后编辑').trigger('click')
   await flushPromises()
   expect(detail).toHaveBeenCalledWith({ kind: 'endpoint', id: 'mac' })
   expect(w.text()).toContain('active')
-  expect(w.find('select').attributes('disabled')).toBeUndefined()
-  await w.find('select').setValue('archived')
+  expect(w.getComponent(VSelect).props('disabled')).toBe(false)
+  w.getComponent(VSelect).vm.$emit('update:modelValue', 'archived')
+  await flushPromises()
   await confirm(w)
   await button(w, '保存').trigger('click')
   await flushPromises()

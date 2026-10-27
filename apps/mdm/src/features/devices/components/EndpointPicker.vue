@@ -1,7 +1,15 @@
 <script setup lang="ts">
-import { VBtn, VTextField, VCheckbox, VAlert } from 'vuetify/components'
 import { comparison } from '../../../services/directory-query'
 import { computed, ref, watch } from 'vue'
+import {
+  VBtn,
+  VTextField,
+  VCheckbox,
+  VExpansionPanels,
+  VExpansionPanel,
+  VExpansionPanelTitle,
+  VExpansionPanelText,
+} from 'vuetify/components'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
@@ -56,23 +64,26 @@ watch(
   <section class="endpoint-picker">
     <v-text-field
       v-model="search"
-      type="search"
       :label="t('devices.directorySearch')"
+      type="search"
       @keydown.enter.prevent="load()"
-    />
-    <v-btn type="button" :disabled="busy" @click="load()">{{ t('devices.searchGroups') }}</v-btn>
+    /><v-btn type="button" :disabled="busy" @click="load()">{{ t('devices.searchGroups') }}</v-btn>
     <p>{{ t('devices.selectedDevices') }}: {{ model.length }}</p>
-    <v-checkbox
-      v-for="endpoint in choices"
-      :key="endpoint.id"
-      class="field-choice"
-      :model-value="model.includes(endpoint.id)"
-      :label="label(endpoint)"
-      :hint="endpoint.id"
-      persistent-hint
-      @update:model-value="toggle(endpoint.id)"
-    />
-    <v-alert v-if="failure" type="error" variant="tonal">{{ t('devices.' + failure) }}</v-alert>
+    <div v-for="endpoint in choices" :key="endpoint.id" class="field-choice">
+      <v-checkbox
+        :model-value="model.includes(endpoint.id)"
+        :label="label(endpoint)"
+        :disabled="busy"
+        @update:model-value="toggle(endpoint.id)"
+      />
+      <v-expansion-panels
+        ><v-expansion-panel>
+          <v-expansion-panel-title>{{ t('devices.evidence') }}</v-expansion-panel-title>
+          <v-expansion-panel-text>{{ endpoint.id }}</v-expansion-panel-text>
+        </v-expansion-panel></v-expansion-panels
+      >
+    </div>
+    <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
     <v-btn v-if="next" type="button" :disabled="busy" @click="load(true)">{{
       t('devices.next')
     }}</v-btn>

@@ -364,8 +364,8 @@ it('renders asset categories, edits manual fields and keeps ownership blocked', 
   expect(wrapper.text()).toContain('ThinkPad T14')
   await click('编辑人工资产信息')
   const manual = wrapper.findComponent({ name: 'ManualPanel' })
-  await manual.find('select').setValue('custom.is_loaner')
-  await manual.findAll('select')[1]!.setValue('delete')
+  await setSelect(wrapperFor(manual), manual.get('[data-testid=manual-field]'), 'custom.is_loaner')
+  await setSelect(wrapperFor(manual), manual.get('[data-testid=manual-action]'), 'delete')
   scenario.set('conflict')
   await manual.find('form').trigger('submit')
   await flushPromises()
@@ -374,7 +374,7 @@ it('renders asset categories, edits manual fields and keeps ownership blocked', 
   await manual.find('form').trigger('submit')
   await flushPromises()
   expect(manual.text()).toContain('已删除')
-  await manual.findAll('select')[1]!.setValue('null')
+  await setSelect(wrapperFor(manual), manual.get('[data-testid=manual-action]'), 'null')
   await manual.find('form').trigger('submit')
   await flushPromises()
   expect(manual.text()).toContain('显式空值')
@@ -666,8 +666,8 @@ it('does not call a confirmed manual write unknown when its follow-up read fails
   const { wrapper, devices, click } = await setup('device-detail', { device: 'device-01' })
   await click('编辑人工资产信息')
   const manual = wrapper.findComponent({ name: 'ManualPanel' })
-  await manual.find('select').setValue('custom.is_loaner')
-  await manual.findAll('select')[1]!.setValue('delete')
+  await setSelect(wrapperFor(manual), manual.get('[data-testid=manual-field]'), 'custom.is_loaner')
+  await setSelect(wrapperFor(manual), manual.get('[data-testid=manual-action]'), 'delete')
   const inventory = devices.assets.inventory
   devices.assets.inventory = async () => {
     throw decodeMdmError(503, { code: 'service_unavailable' })
@@ -761,8 +761,8 @@ it('keeps an uncertain manual operation across rereads and tabs and replays the 
   })
   await click('编辑人工资产信息')
   let manual = wrapper.findComponent({ name: 'ManualPanel' })
-  await manual.find('select').setValue('custom.is_loaner')
-  await manual.findAll('select')[1]!.setValue('delete')
+  await setSelect(wrapperFor(manual), manual.get('[data-testid=manual-field]'), 'custom.is_loaner')
+  await setSelect(wrapperFor(manual), manual.get('[data-testid=manual-action]'), 'delete')
   scenario.set('unknown')
   await manual.find('form').trigger('submit')
   await flushPromises()
@@ -831,8 +831,8 @@ it('retains an in-flight manual write when tabs change before its unknown result
   })
   await click('编辑人工资产信息')
   const manual = wrapper.findComponent({ name: 'ManualPanel' })
-  await manual.find('select').setValue('custom.is_loaner')
-  await manual.findAll('select')[1]!.setValue('delete')
+  await setSelect(wrapperFor(manual), manual.get('[data-testid=manual-field]'), 'custom.is_loaner')
+  await setSelect(wrapperFor(manual), manual.get('[data-testid=manual-action]'), 'delete')
   const assign = devices.assets.assign
   let release!: () => void
   const gate = new Promise<void>((resolve) => {
@@ -1508,7 +1508,7 @@ it('allows a quota reader to select user queries while keeping edits and submiss
   })
   await router.push({ name: 'registration-quotas', params: { tenant: TENANT } })
   await flushPromises()
-  const mode = wrapper.findComponent(VSelect)
+  const mode = wrapper.getComponent(VSelect)
   expect(mode.props('disabled')).toBe(false)
   mode.vm.$emit('update:modelValue', 'override')
   await flushPromises()
@@ -1764,10 +1764,12 @@ it.each([
     })
     await flushPromises()
     await h.click('用户与安装范围资产')
-    const scoped = h.wrapper.get('[data-testid=scope-inventory]')
-    await scoped.findAll('select')[1]!.setValue(JSON.stringify(scope))
+    const scoped = h.wrapper.getComponent({ name: 'ScopedInventory' })
+    await setSelect(h.wrapper, scoped.findAll('.v-select')[1]!, JSON.stringify(scope))
     await flushPromises()
     const value = scoped.get('.asset-value')
+    await value.get('.v-expansion-panel-title').trigger('click')
+    await flushPromises()
     expect(value.get('strong').text()).toBe('结果不确定')
     expect(value.text()).toContain('采集不完整')
     const historical = value.findAll('dt').find((dt) => dt.text().includes('最后已知值'))!
@@ -1775,10 +1777,7 @@ it.each([
     expect(historical.element.nextElementSibling?.textContent).toContain('10')
     const current = value.findAll('dt').find((dt) => dt.text() === '当前状态')!
     expect(current.element.nextElementSibling?.textContent).not.toContain('987654')
-    await scoped
-      .findAll('button')
-      .find((b) => b.text() === '来源与历史证据')!
-      .trigger('click')
+    await scoped.get('ul > li button').trigger('click')
     await flushPromises()
     const run = scoped.get('[data-collection-run]')
     expect(run.text()).toContain('部分结果')
@@ -1885,8 +1884,8 @@ it.each([
     })
     await flushPromises()
     await h.click('用户与安装范围资产')
-    const scoped = h.wrapper.get('[data-testid=scope-inventory]')
-    await scoped.findAll('select')[1]!.setValue(JSON.stringify(scope))
+    const scoped = h.wrapper.getComponent({ name: 'ScopedInventory' })
+    await setSelect(h.wrapper, scoped.findAll('.v-select')[1]!, JSON.stringify(scope))
     await flushPromises()
     await h.wrapper
       .findAll('button')
@@ -1909,6 +1908,8 @@ it.each([
         .find((b) => b.text() === '重新读取')!
         .trigger('click')
     } else {
+      await scoped.get('.v-expansion-panel-title').trigger('click')
+      await flushPromises()
       await scoped
         .findAll('button')
         .find((b) => b.text() === '展开此来源')!
@@ -1924,13 +1925,15 @@ it.each([
     await flushPromises()
     expect(h.wrapper.text()).not.toContain('987654')
     expect(h.wrapper.text()).not.toContain('scope-private-item')
-    expect(h.wrapper.get('[role=alert]').text()).toContain(
+    const rejectionMessage =
+      status === 409 ? scoped.get('p[role=alert]') : h.wrapper.get('[role=alert]')
+    expect(rejectionMessage.text()).toContain(
       status === 403 ? '请求被拒绝' : status === 404 ? '对象或操作不存在' : '旧分页失效',
     )
     if (status === 409) {
       expect(h.wrapper.find('[data-testid=scope-inventory]').exists()).toBe(true)
       expect(h.wrapper.text()).toContain('ThinkPad T14')
-      expect(scoped.findAll('select')[1]!.element.value).toBe('')
+      expect(scoped.findAllComponents(VSelect)[1]!.props('modelValue')).toBe('')
     } else {
       expect(h.wrapper.find('[data-testid=scope-inventory]').exists()).toBe(false)
       expect(h.wrapper.text()).not.toContain('ThinkPad T14')

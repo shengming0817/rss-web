@@ -1337,23 +1337,12 @@ try {
   await page.getByRole('tab', { name: '资产信息', exact: true }).click()
   await page.getByRole('button', { name: '用户与安装范围资产', exact: true }).click()
   const scopedInventory = page.locator('[data-testid=scope-inventory]')
-  await scopedInventory
-    .locator('select')
-    .nth(1)
-    .locator('option')
-    .filter({ hasText: '501' })
-    .waitFor({ state: 'attached' })
-  const namespace = await scopedInventory
-    .locator('select')
-    .nth(1)
-    .locator('option')
-    .filter({ hasText: '501' })
-    .getAttribute('value')
-  await scopedInventory.locator('select').nth(1).selectOption(namespace)
-  const softwareList = scopedInventory
-    .locator('details')
-    .filter({ has: page.locator('summary', { hasText: 'device.software.installations' }) })
-  await softwareList.locator('summary').click()
+  await scopedInventory.getByRole('combobox', { name: '资产范围', exact: true }).click()
+  await page.getByRole('option').filter({ hasText: '501' }).click()
+  const softwareList = scopedInventory.locator('.v-expansion-panel').filter({
+    has: page.locator('.v-expansion-panel-title', { hasText: 'device.software.installations' }),
+  })
+  await softwareList.locator('.v-expansion-panel-title').click()
   await softwareList.getByRole('button', { name: '展开此来源', exact: true }).click()
   await page.waitForFunction(
     () => document.querySelectorAll('[data-testid=scope-inventory] tbody tr').length === 20,
@@ -1484,7 +1473,7 @@ try {
           .count()
           .catch(() => 0),
         inventoryLists: await page
-          .locator('[data-testid=scope-inventory] details')
+          .locator('[data-testid=scope-inventory] .v-expansion-panel')
           .count()
           .catch(() => 0),
         scopeResults: await page
