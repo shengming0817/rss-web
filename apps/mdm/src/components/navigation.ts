@@ -143,7 +143,7 @@ export const pageLabels: Record<string, string> = {
   'operations-windowsEntra': 'onboarding.windowsEntra',
   'operations-audit': 'operations.audit',
   'operations-diagnostics': 'operations.diagnostics',
-  'settings-user-attributes': 'profiles.attributes',
+  'settings-user-attributes': 'profiles.title',
 }
 export type Navigation = readonly { id: string; label: string; items: readonly NavigationItem[] }[]
 export const navigationKey: InjectionKey<Navigation> = Symbol('mdm-navigation')
