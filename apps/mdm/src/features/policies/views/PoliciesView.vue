@@ -283,6 +283,11 @@ function numeric(schema: Record<string, Json>, name: string) {
   return typeof schema[name] === 'number' ? schema[name] : undefined
 }
 function apply(p: PolicyRead) {
+  if (p.definition.action.kind === 'device_access') {
+    editing.value = false
+    failure.value = 'unsupported'
+    return
+  }
   if (
     !['execution', 'configuration', 'native_collection', 'agent_collection'].includes(
       p.definition.action.kind,

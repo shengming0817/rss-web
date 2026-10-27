@@ -186,7 +186,7 @@ it('opens a software policy from the workspace through the supported software pa
     const link = new DOMWrapper(document.body).get('.console-deployment-list a')
     await link.trigger('click')
     await flushPromises()
-    await vi.waitFor(() => expect(app.router.currentRoute.value.name).toBe('software-deployments'))
+    await vi.waitFor(() => expect(app.router.currentRoute.value.name).toBe('policy-policies'))
     await flushPromises()
     expect(app.router.currentRoute.value.query['id']).toBe(id)
     expect(read).toHaveBeenCalledWith(id)
@@ -263,12 +263,13 @@ it('creates a formal Scope, changes the result channel explicitly, and deletes o
   const app = await start()
   try {
     await app.router.push({
-      name: 'policy-scopes',
+      name: 'policy-policies',
       params: { tenant: TENANT },
       query: { device: 'device-01' },
     })
     await flushPromises()
-    const form = new DOMWrapper(document.body).get('[role=dialog] form')
+    const scopeDialog = () => new DOMWrapper(document.body).get('[role=dialog]')
+    const form = scopeDialog().get('form')
     const scopeWrites = () =>
       app.calls.filter((c) => c.method === 'POST' && /^\/api\/v1\/scopes\/[^/]+$/.test(c.path))
     const before = scopeWrites().length
@@ -294,18 +295,25 @@ it('creates a formal Scope, changes the result channel explicitly, and deletes o
     })
     await press(app, 'policies.refresh')
     await press(app, 'policies.refresh')
-    await main()
+    await scopeDialog()
       .findAll('[role=tab]')
       .find((tab) => tab.text() === '判定说明')!
       .trigger('click')
-    const channel = main()
-      .findAll('select')
-      .find((s) => s.find('option[value=agent]').exists())!
-    await channel.setValue('agent')
+    const channel = scopeDialog().get('.scope-results input[role=combobox]')
+    async function chooseChannel(label: string) {
+      await channel.trigger('keydown', { key: 'ArrowDown' })
+      await flushPromises()
+      await new DOMWrapper(document.body)
+        .findAll('[role=option]')
+        .find((option) => option.isVisible() && option.text() === label)!
+        .trigger('click')
+      await flushPromises()
+    }
+    await chooseChannel('Agent')
     await press(app, 'policies.open', true)
     expect(main().text()).toContain('device-01')
     const reads = app.calls.filter((c) => c.path.includes('/results/')).length
-    await channel.setValue('mdm')
+    await chooseChannel('MDM')
     expect(app.calls.filter((c) => c.path.includes('/results/'))).toHaveLength(reads)
     await press(app, 'policies.open', true)
     expect(app.calls.filter((c) => c.path.includes('/results/'))).toHaveLength(reads + 1)

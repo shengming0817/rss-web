@@ -1,4 +1,5 @@
 // Real production Vue, HTTP/TLS, PG and publication worker. Synthetic fixture inputs only.
+import { chooseOption } from './vuetify-policy-controls.mjs'
 import { Buffer } from 'node:buffer'
 import { chromium } from 'playwright'
 import { readFileSync, statSync } from 'node:fs'
@@ -398,12 +399,12 @@ try {
   await page.locator('#deployment-version').fill('v1')
   await click('读取已准入版本与平台变体')
   await page.locator('#deployment-intent').selectOption('available_install')
-  await page.locator('[data-field=published]').check()
-  await page.locator('[data-field=access]').selectOption('device')
-  await page.locator('[data-field=displayName]').fill('Direct software')
-  await page.locator('[data-field=category]').fill('Apps')
-  await page.locator('[data-field=riskLevel]').selectOption('1')
-  await page.locator('[data-field=allowAi]').uncheck()
+  await page.locator('[data-field=published] input[type=checkbox]').check()
+  await chooseOption(page, page.locator('[data-field=access]'), '不需要企业登录：此设备可用')
+  await page.locator('[data-field=displayName] input').fill('Direct software')
+  await page.locator('[data-field=category] input').fill('Apps')
+  await chooseOption(page, page.locator('[data-field=riskLevel]'), '1')
+  await page.locator('[data-field=allowAi] input[type=checkbox]').uncheck()
   await click('下一步')
   await page.locator('#deployment-scope').fill(scopes[0])
   await click('下一步')

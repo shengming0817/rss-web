@@ -203,7 +203,6 @@ async function setup(
   const wrapper = mount(component, {
     attachTo: document.body,
     props,
-    attachTo: document.body,
     global: { plugins: [router, mdmI18n()], provide: { [mdmKey as symbol]: runtime } },
   })
   await flushPromises()

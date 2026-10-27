@@ -5,6 +5,8 @@ import { expect, it } from 'vitest'
 import { mdmI18n } from '../../../i18n'
 import NativeScheduleEditor from '../../software/components/NativeScheduleEditor.vue'
 import SelfServiceEditor from './SelfServiceEditor.vue'
+import ScriptDefinitionEditor from './ScriptDefinitionEditor.vue'
+import type { ScriptSpec } from '../clients/resources'
 import { defaultSchedule, initialSelfService, nativeSchedule, selfService } from '../clients/model'
 it('edits a native schedule with explicit UTC bounds, weekly window and missed-trigger policy', async () => {
   const model = reactive(defaultSchedule()),
@@ -85,4 +87,35 @@ it('edits explicit self-service access, descriptions and human/AI confirmation p
   await w.get('[data-field=published] input').setValue(false)
   expect(model.published).toBe(false)
   w.unmount()
+})
+
+it('validates native JSON fields through the script editor component root before a version is saved', async () => {
+  const model: ScriptSpec = {
+    profile: 'power_shell7',
+    sql: null,
+    runAs: 'system',
+    encoding: 'utf8',
+    parameters: { type: 'object', properties: {}, required: [], additionalProperties: false },
+    bindings: {},
+    output: { type: 'object', properties: {}, additionalProperties: false },
+    purpose: { kind: 'action' },
+    timeoutSeconds: 60,
+    outputBytes: 16384,
+    maxRows: 1,
+  }
+  const w = mount(ScriptDefinitionEditor, {
+    attachTo: document.body,
+    props: { modelValue: model },
+    global: { plugins: [mdmI18n()] },
+  })
+  try {
+    expect(w.vm.valid()).toBe(true)
+    const parameters = w.get('textarea[id$="-parameters"]')
+    await parameters.setValue('{')
+    expect(w.vm.valid()).toBe(false)
+    await parameters.setValue(JSON.stringify(model.parameters))
+    expect(w.vm.valid()).toBe(true)
+  } finally {
+    w.unmount()
+  }
 })
