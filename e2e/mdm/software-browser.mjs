@@ -403,7 +403,7 @@ try {
   await chooseOption(page, page.locator('[data-field=access]'), '不需要企业登录：此设备可用')
   await page.locator('[data-field=displayName] input').fill('Direct software')
   await page.locator('[data-field=category] input').fill('Apps')
-  await chooseOption(page, page.locator('[data-field=riskLevel]'), '1')
+  await chooseOption(page, page.locator('[data-field=riskLevel]'), '1：规则内直接执行')
   await page.locator('[data-field=allowAi] input[type=checkbox]').uncheck()
   await click('下一步')
   await page.locator('#deployment-scope').fill(scopes[0])

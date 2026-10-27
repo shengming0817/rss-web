@@ -1187,7 +1187,7 @@ try {
     await assign.click()
     await chooseOption(page, page.locator('#policy-variant'), /macos \/ aarch64/)
     await page.locator('#policy-scope').fill(collectorScope)
-    const period = page.locator('[data-field=collection-period]')
+    const period = page.locator('[data-field=collection-period] input')
     assert.equal(await period.inputValue(), '3600')
     await period.fill('60')
     assert.equal(await page.locator('#policy-frequency').count(), 0)
@@ -1379,7 +1379,7 @@ try {
   await loaded()
   await page.getByRole('button', { name: '编辑', exact: true }).click()
   await page.getByRole('button', { name: '加载资源版本', exact: true }).click()
-  await page.locator('[data-field=collection-period]').fill('120')
+  await page.locator('[data-field=collection-period] input').fill('120')
   await page
     .locator('[data-form=policy]')
     .getByRole('button', { name: '保存', exact: true })
