@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, toRaw, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   VAlert,
@@ -40,6 +40,8 @@ const { run, runWrite, busy, failure, uncertain } = useOperation([], binding)
 const formal = ref(false),
   formalLocked = ref(false)
 const blocked = computed(() => busy.value || uncertain.value || formalLocked.value)
+onBeforeRouteUpdate((to, from) => to.fullPath === from.fullPath || !blocked.value)
+onBeforeRouteLeave(() => !blocked.value)
 const category = computed<Category>({
   get: () => categories.find((v) => route.query['category'] === v) ?? 'device-dynamic',
   set: (value) => {
@@ -102,9 +104,15 @@ function filter() {
 }
 async function load(cursor?: string) {
   page.value = undefined
-  await run(
-    () => client.list({ filter: filter(), sort: ['name'], cursor }),
-    (v) => (page.value = v),
+  return run(
+    async () => ({
+      catalog: catalog.value ?? (await client.catalog()),
+      page: await client.list({ filter: filter(), sort: ['name'], cursor }),
+    }),
+    (v) => {
+      catalog.value = v.catalog
+      page.value = v.page
+    },
   )
 }
 async function applyFilter() {
@@ -168,11 +176,13 @@ async function accepted(receipt: Awaited<ReturnType<typeof client.save>>, remove
   deleting.value = false
   generateOpen.value = false
   if (remove) selected.value = undefined
-  else
-    await run(
+  else if (
+    !(await run(
       () => client.read(receipt.groupId),
       (v) => (selected.value = v),
-    )
+    ))
+  )
+    return
   await load()
 }
 function save(remove = false) {
@@ -245,18 +255,24 @@ function adopt() {
 }
 async function observeTask() {
   if (!taskId.value || busy.value || uncertain.value || disposed) return
-  await run(
-    () => client.task(taskId.value!),
-    (v) => (task.value = v),
+  if (
+    !(await run(
+      () => client.task(taskId.value!),
+      (v) => (task.value = v),
+    ))
   )
+    return
   if (task.value?.status === 'completed' && task.value.resultId) {
     resultId.value = task.value.resultId
-    if (selected.value)
-      await run(
+    if (
+      selected.value &&
+      !(await run(
         () => client.read(selected.value!.id),
         (v) => (selected.value = v),
-      )
-    await loadResult()
+      ))
+    )
+      return
+    if (!(await loadResult())) return
     await load()
   }
 }
@@ -280,7 +296,7 @@ onBeforeUnmount(() => {
 async function loadResult(cursor?: string) {
   if (!selected.value || !resultId.value) return
   result.value = undefined
-  await run(
+  return run(
     () => client.results(selected.value!.id, resultId.value!, projection.value, cursor),
     (v) => (result.value = v),
   )
@@ -355,11 +371,8 @@ watch(
     formalLocked.value = false
     appliedName.value = ''
     nameFilter.value = ''
-    await run(
-      () => client.catalog(),
-      (v) => (catalog.value = v),
-    )
-    await load()
+    catalog.value = undefined
+    if (!(await load())) return
     if (typeof route.query['id'] === 'string') await open(route.query['id'])
     if (typeof route.query['task'] === 'string') taskId.value = route.query['task']
   },
@@ -491,7 +504,7 @@ watch(
           >{{ t('demoGroups.' + task.status) }} · {{ task.id }}</v-alert
         >
         <v-btn
-          v-if="taskId && task?.status !== 'completed' && task?.status !== 'superseded'"
+          v-if="taskId && task?.status !== 'superseded'"
           :disabled="blocked"
           @click="observeTask"
           >{{ t('demoGroups.refreshTask') }}</v-btn
