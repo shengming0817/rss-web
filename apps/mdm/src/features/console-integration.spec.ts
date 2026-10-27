@@ -2,6 +2,7 @@ import { createFeatureRouter as createRouter } from '../../tests/feature-router'
 import { decodeRunEvidence } from './policies/clients/runs'
 import { afterEach, expect, it, vi } from 'vitest'
 import { defineComponent, shallowRef } from 'vue'
+import { VTextField, VSelect } from 'vuetify/components'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createMemoryHistory } from 'vue-router'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
@@ -629,13 +630,14 @@ it('unlocks an asset conflict only after reading the current authoritative state
   await confirm(w)
   await button(w, '保存').trigger('click')
   await flushPromises()
-  expect(w.find('select').attributes('disabled')).toBeDefined()
+  expect(w.getComponent(VSelect).props('disabled')).toBe(true)
   await button(w, '冲突：重新读取并比较后编辑').trigger('click')
   await flushPromises()
   expect(detail).toHaveBeenCalledWith({ kind: 'endpoint', id: 'mac' })
   expect(w.text()).toContain('active')
-  expect(w.find('select').attributes('disabled')).toBeUndefined()
-  await w.find('select').setValue('archived')
+  expect(w.getComponent(VSelect).props('disabled')).toBe(false)
+  w.getComponent(VSelect).vm.$emit('update:modelValue', 'archived')
+  await flushPromises()
   await confirm(w)
   await button(w, '保存').trigger('click')
   await flushPromises()
@@ -718,10 +720,13 @@ function authority(operations: string[]) {
   }
 }
 function field(w: VueWrapper, label: string) {
+  const textField = w.findAllComponents(VTextField).find((item) => item.props('label') === label)
+  if (textField) return textField.get('input')
   const container =
     w.findAll('label').find((l) => l.text() === label) ??
     w.findAll('label').find((l) => l.text().startsWith(label))!
-  return container.find('input, textarea, select')
+  const control = container.attributes('for')
+  return control ? w.find(`[id="${control}"]`) : container.find('input, textarea, select')
 }
 it('edits webhook metadata without losing extensions and consumes actual replay and redrive receipts', async () => {
   let record = { id: a, revision: 1, targetVersion: 1, enabled: false, deleted: false, settings }
@@ -1065,9 +1070,12 @@ it('compares current Apple registration and material facts before unlocking a re
     .fn()
     .mockRejectedValueOnce(decodeMdmError(503, { code: 'unavailable' }))
     .mockResolvedValue(current)
-  const list = vi.fn(async () => [
-    material({ ...entry, binding: { ...entry.binding, registration: c, generation: 3 } }, 'mac'),
-  ])
+  const list = vi.fn(async () => ({
+    items: [
+      material({ ...entry, binding: { ...entry.binding, registration: c, generation: 3 } }, 'mac'),
+    ],
+    nextCursor: null,
+  }))
   const create = vi
     .fn()
     .mockRejectedValueOnce(decodeMdmError(409, { code: 'operation_conflict' }))
@@ -1085,16 +1093,16 @@ it('compares current Apple registration and material facts before unlocking a re
   await confirm(w)
   await w.find('form').trigger('submit')
   await flushPromises()
-  expect(w.find('fieldset').attributes('disabled')).toBeDefined()
+  expect(field(w, '预期修订').attributes('disabled')).toBeDefined()
   await button(w, '冲突：重新读取并比较后编辑').trigger('click')
   await flushPromises()
-  expect(w.find('fieldset').attributes('disabled')).toBeDefined()
+  expect(field(w, '预期修订').attributes('disabled')).toBeDefined()
   await button(w, '冲突：重新读取并比较后编辑').trigger('click')
   await flushPromises()
   expect(detail).toHaveBeenLastCalledWith('mac')
   expect(list).toHaveBeenCalledWith('mac')
   expect(w.text()).toContain(c)
-  expect(w.find('fieldset').attributes('disabled')).toBeUndefined()
+  expect(field(w, '预期修订').attributes('disabled')).toBeUndefined()
   await field(w, '预期修订').setValue(3)
   await confirm(w)
   await w.find('form').trigger('submit')

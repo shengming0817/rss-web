@@ -56,7 +56,7 @@ function confirmComparison() {
 }
 async function refresh(cursor?: string) {
   if (!canRead.value) return
-  await run(
+  const ok = await run(
     () => client.organizations({ cursor }),
     (v) => {
       organizations.value = cursor ? [...organizations.value, ...v.items] : v.items
@@ -64,7 +64,7 @@ async function refresh(cursor?: string) {
       freshRead.value = true
     },
   )
-  if (selected.value) await loadAccounts()
+  if (ok && selected.value) await loadAccounts()
 }
 function load() {
   accounts.value = []

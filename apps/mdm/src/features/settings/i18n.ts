@@ -88,7 +88,7 @@ export const settingsZh = {
     '设备 CA 已由运维统一初始化或接入。此处核对用途信任与轮换；材料已保存与当前宿主已加载分别显示。网站 HTTPS 由运维维护。',
   windowsIdentityBoundary:
     'Windows 使用专用设备签发用途与信任，沿用运维自动接线；网站 HTTPS 证书独立维护。',
-  manualEnrollment: '手动注册',
+  manualEnrollment: '在设备管理中注册与恢复',
   adeEnrollment: 'ADE 自动设备注册',
   managedAppleEnrollment: 'Managed Apple Account',
   noPackage: '尚未发布此平台安装包',
@@ -462,7 +462,7 @@ export const settingsEn = {
     'Operations initializes or connects the device CA. Review purpose trust and rotation here; saved material and current host loading remain separate. Operations manages website HTTPS.',
   windowsIdentityBoundary:
     'Windows uses dedicated device issuance and trust connected by operations. Website HTTPS is maintained independently.',
-  manualEnrollment: 'Manual enrollment',
+  manualEnrollment: 'Enroll and recover from device management',
   adeEnrollment: 'ADE automated enrollment',
   managedAppleEnrollment: 'Managed Apple Account',
   noPackage: 'No published package for this platform',

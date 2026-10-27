@@ -100,9 +100,15 @@ useSettingsFacts(() => (catalog.value = undefined))
     <article v-if="section === 'overview' && runtime.realm === 'tenant'" class="console-panel">
       <h2>{{ t('telemetry.dataCollection') }}</h2>
       <p>{{ t('telemetry.metricsHint') }}</p>
-      <RouterLink :to="{ name: 'settings-metrics', params: { tenant: runtime.tenant } }">{{
+      <RouterLink :to="{ name: 'policy-metrics', params: { tenant: runtime.tenant } }">{{
         t('telemetry.metricsSettings')
       }}</RouterLink>
+    </article>
+    <article v-if="section === 'integrations' && runtime.realm === 'tenant'" class="console-panel">
+      <RouterLink
+        :to="{ name: 'security-certificate-archive', params: { tenant: runtime.tenant } }"
+        >{{ t('security.certificate-archive') }}</RouterLink
+      >
     </article>
     <div v-if="section === 'overview'" class="settings-overview-grid">
       <article class="console-panel">

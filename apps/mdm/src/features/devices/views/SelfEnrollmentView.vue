@@ -134,8 +134,10 @@ async function submit(secret: string, replay = false) {
         step.value = 3
       },
     )
+    if (own !== generation) return
     if (!ok) {
-      if (!write.uncertain.value) pending.value = undefined
+      if (!write.uncertain.value && pending.value?.operation === command.operation)
+        pending.value = undefined
       if (write.failure.value === 'enrollmentPaused' || write.failure.value === 'registrationLimit')
         await refresh(write.failure.value)
       return
@@ -166,6 +168,10 @@ async function submit(secret: string, replay = false) {
   } finally {
     secret = ''
   }
+}
+function invalidateProfile() {
+  delivery.clear()
+  native.value = undefined
 }
 function back() {
   clearSecret()
@@ -433,6 +439,7 @@ void refresh()
                 :enrollment-id="enrollmentId"
                 :show-instructions="false"
                 @updated="native = $event"
+                @invalidated="invalidateProfile"
               />
             </template>
           </v-expansion-panel>
