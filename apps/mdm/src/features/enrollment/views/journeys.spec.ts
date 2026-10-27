@@ -862,7 +862,7 @@ it.each(['resume', 'cancel'] as const)(
           endpoint.value ? h(NativeEnrollmentPanel, { endpoint: endpoint.value }) : null,
       }),
     )
-    const { wrapper, runtime, click, revoke } = fixture
+    const { wrapper, runtime, click, revoke, create } = fixture
     const receipt = await runtime.devices.enrollment.create(crypto.randomUUID(), {
       deviceId: 'device-02',
       source: 'mdm.apple',
@@ -874,10 +874,21 @@ it.each(['resume', 'cancel'] as const)(
     await panel.findAll('form')[0]!.get('input').setValue(receipt.enrollmentId)
     await panel.findAll('form')[0]!.trigger('submit')
     await flushPromises()
-    const profile = vi.spyOn(runtime.onboarding.native, 'profile').mockResolvedValue({
-      bytes: new Uint8Array([1]).buffer,
-      contentType: 'application/x-apple-aspen-config',
-      contentDisposition: 'attachment',
+    let releaseProfile!: () => void
+    const profileGate =
+      kind === 'cancel'
+        ? new Promise<void>((resolve) => {
+            releaseProfile = resolve
+          })
+        : Promise.resolve()
+    const bytes = new Uint8Array([1])
+    const profile = vi.spyOn(runtime.onboarding.native, 'profile').mockImplementation(async () => {
+      await profileGate
+      return {
+        bytes: bytes.buffer,
+        contentType: 'application/x-apple-aspen-config',
+        contentDisposition: 'attachment',
+      }
     })
     await click('使用已保存口令重新获取描述文件')
     const password = panel.get('input[type=password]')
@@ -886,7 +897,7 @@ it.each(['resume', 'cancel'] as const)(
       password.element.closest('form')!,
     ).trigger('submit')
     await flushPromises()
-    expect(panel.find('a[download]').exists()).toBe(true)
+    expect(panel.find('a[download]').exists()).toBe(kind === 'resume')
     const resume = runtime.devices.enrollment.resume.bind(runtime.devices.enrollment)
     const cancel = runtime.devices.enrollment.cancel.bind(runtime.devices.enrollment)
     const request =
@@ -909,7 +920,13 @@ it.each(['resume', 'cancel'] as const)(
     expect(request).toHaveBeenCalledTimes(1)
     expect(panel.findComponent(NativeFacts).exists()).toBe(false)
     expect(panel.find('a[download]').exists()).toBe(false)
-    expect(revoke).toHaveBeenCalledWith('blob:synthetic-delivery')
+    if (kind === 'resume') expect(revoke).toHaveBeenCalledWith('blob:synthetic-delivery')
+    else {
+      releaseProfile()
+      await flushPromises()
+      expect(create).not.toHaveBeenCalled()
+      expect(bytes.every((byte) => byte === 0)).toBe(true)
+    }
     if (kind === 'resume') {
       await panel.get('input[autocomplete=off]').setValue(secret)
       await panel.findAll('form')[1]!.get('input[type=checkbox]').setValue(true)
