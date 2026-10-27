@@ -15,7 +15,20 @@ export const navigation: Navigation = [
   {
     id: 'groups',
     label: 'console.groups',
-    items: [{ name: 'device-groups', label: 'devices.groups' }],
+    items: [
+      {
+        name: 'device-groups',
+        label: 'console.deviceDynamic',
+        query: { category: 'device-dynamic' },
+      },
+      {
+        name: 'device-groups',
+        label: 'console.deviceStatic',
+        query: { category: 'device-static' },
+      },
+      { name: 'device-groups', label: 'console.userDynamic', query: { category: 'user-dynamic' } },
+      { name: 'device-groups', label: 'console.userStatic', query: { category: 'user-static' } },
+    ],
   },
   {
     id: 'policies',
