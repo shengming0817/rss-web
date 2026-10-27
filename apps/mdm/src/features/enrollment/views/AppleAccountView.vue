@@ -1,12 +1,23 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import {
+  VForm,
+  VSelect,
+  VBtn,
+  VCheckbox,
+  VExpansionPanel,
+  VExpansionPanelText,
+  VExpansionPanelTitle,
+  VExpansionPanels,
+  VTable,
+  VTextField,
+} from 'vuetify/components'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { usePermission } from '../usePermission'
 import { useOperation } from '../../../services/useOperation'
 import RegistrationStatus from '../../../components/RegistrationStatus.vue'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 const id = ref('')
 const runtime = useMdm(),
   client = runtime.onboarding.apple,
@@ -127,44 +138,51 @@ watch(
 )
 </script>
 <template>
-  <PageFrame :title="t('onboarding.appleAccount')" :busy="busy" :failure="failure">
+  <MdmPage :title="t('onboarding.appleAccount')" :busy="busy" :failure="failure">
     <RegistrationStatus channel="macos_mdm" />
     <p>{{ t('onboarding.appleAccountGuide') }}</p>
-    <a v-if="runtime.registrationChannels.allowed('macos_mdm')" :href="client.bridge">{{
-      t('onboarding.appleBridge')
-    }}</a>
+    <v-btn
+      v-if="runtime.registrationChannels.allowed('macos_mdm')"
+      variant="text"
+      :href="client.bridge"
+      >{{ t('onboarding.appleBridge') }}</v-btn
+    >
     <p v-if="!canRead">{{ t('devices.denied') }}</p>
     <template v-else>
-      <UiButton type="button" :disabled="!!busy" @click="refresh()">{{
-        t('devices.reload')
-      }}</UiButton>
-      <UiButton v-if="organizationCursor" :disabled="busy" @click="refresh(organizationCursor)">{{
+      <v-btn type="button" :disabled="!!busy" @click="refresh()">{{ t('devices.reload') }}</v-btn>
+      <v-btn v-if="organizationCursor" :disabled="busy" @click="refresh(organizationCursor)">{{
         t('devices.next')
-      }}</UiButton>
-      <label
-        >{{ t('onboarding.organization')
-        }}<select v-model="id" class="ui-input" :disabled="busy || uncertain">
-          <option value="">{{ t('devices.select') }}</option>
-          <option v-for="o in organizations" :key="o.id" :value="o.id">
-            {{ o.accountEnrollment?.domain || o.ade?.orgId || o.id }} · {{ o.id }}
-          </option>
-        </select></label
-      >
-      <label v-if="canWrite"
-        >{{ t('onboarding.organizationId')
-        }}<input v-model="id" class="ui-input" :disabled="busy || uncertain"
-      /></label>
-      <UiButton
+      }}</v-btn>
+      <v-select
+        v-model="id"
+        :label="t('onboarding.organization')"
+        :disabled="busy || uncertain"
+        :items="[
+          { value: '', title: t('devices.select') },
+          ...organizations.map((o) => ({
+            value: o.id,
+            title: `${o.accountEnrollment?.domain || o.ade?.orgId || o.id} · ${o.id}`,
+          })),
+        ]"
+      />
+      <v-text-field
+        v-if="canWrite"
+        v-model="id"
+        data-testid="organization-id"
+        :disabled="busy || uncertain"
+        :label="t('onboarding.organizationId')"
+      />
+      <v-btn
         v-if="canWrite"
         type="button"
         :disabled="!!(busy || uncertain)"
         @click="newOrganization"
       >
         {{ t('onboarding.newOrganization') }}
-      </UiButton>
-      <UiButton v-if="accountCursor" :disabled="busy" @click="loadAccounts(accountCursor)">{{
+      </v-btn>
+      <v-btn v-if="accountCursor" :disabled="busy" @click="loadAccounts(accountCursor)">{{
         t('devices.next')
-      }}</UiButton>
+      }}</v-btn>
       <dl v-if="selected">
         <dt>{{ t('devices.revision') }}</dt>
         <dd>{{ selected.revision }}</dd>
@@ -181,89 +199,119 @@ watch(
         <dt>{{ t('onboarding.enabled') }}</dt>
         <dd>{{ t(`devices.${selected.enabled ? 'yes' : 'no'}`) }}</dd>
       </dl>
-      <details
+      <v-expansion-panels
         v-if="canWrite && id"
+        multiple
         class="console-panel console-task"
-        :open="uncertain || undefined"
+        :model-value="uncertain ? [0] : undefined"
+        ><v-expansion-panel eager
+          ><v-expansion-panel-title>{{
+            t('onboarding.organizationConfiguration')
+          }}</v-expansion-panel-title
+          ><v-expansion-panel-text>
+            <v-form :novalidate="false" @submit.prevent="saveOrganization">
+              <fieldset :disabled="busy || uncertain">
+                <legend>{{ t('onboarding.organizationConfiguration') }}</legend>
+                <v-text-field
+                  v-model="domain"
+                  required
+                  maxlength="253"
+                  :disabled="busy || uncertain"
+                  :label="t('onboarding.domain')"
+                /><v-text-field
+                  v-model="serverUuid"
+                  required
+                  :disabled="busy || uncertain"
+                  :label="t('onboarding.serverUuid')"
+                /><v-text-field
+                  v-model="signingKey"
+                  required
+                  maxlength="128"
+                  :disabled="busy || uncertain"
+                  :label="t('onboarding.signingKeyReference')"
+                /><v-checkbox
+                  v-model="enabled"
+                  :disabled="busy || uncertain"
+                  :label="t('onboarding.enabled')"
+                /><v-btn type="submit" :disabled="busy || uncertain">{{
+                  t('registration.save')
+                }}</v-btn>
+              </fieldset>
+            </v-form>
+          </v-expansion-panel-text></v-expansion-panel
+        ></v-expansion-panels
       >
-        <summary>{{ t('onboarding.organizationConfiguration') }}</summary>
-        <form @submit.prevent="saveOrganization">
-          <fieldset :disabled="busy || uncertain">
-            <legend>{{ t('onboarding.organizationConfiguration') }}</legend>
-            <label
-              >{{ t('onboarding.domain')
-              }}<input v-model="domain" class="ui-input" required maxlength="253" /></label
-            ><label
-              >{{ t('onboarding.serverUuid')
-              }}<input v-model="serverUuid" class="ui-input" required /></label
-            ><label
-              >{{ t('onboarding.signingKeyReference')
-              }}<input v-model="signingKey" class="ui-input" required maxlength="128" /></label
-            ><label><input v-model="enabled" type="checkbox" />{{ t('onboarding.enabled') }}</label
-            ><UiButton type="submit">{{ t('registration.save') }}</UiButton>
-          </fieldset>
-        </form>
-      </details>
-      <div v-if="selected" class="ui-table-scroll">
-        <table class="ui-table">
-          <thead>
-            <tr>
-              <th>{{ t('onboarding.managedAccount') }}</th>
-              <th>{{ t('onboarding.principal') }}</th>
-              <th>{{ t('onboarding.instance') }}</th>
-              <th>{{ t('devices.revision') }}</th>
-              <th>{{ t('devices.status') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="a in accounts" :key="a.account">
-              <td>
-                <UiButton
-                  type="button"
-                  :disabled="!!(busy || uncertain)"
-                  @click="chooseAccount(a.account)"
-                >
-                  {{ a.account }}
-                </UiButton>
-              </td>
-              <td>{{ a.principalId }}</td>
-              <td>{{ a.instanceId }}</td>
-              <td>{{ a.revision }}</td>
-              <td>{{ t(`devices.${a.enabled ? 'yes' : 'no'}`) }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <details
+      <v-table v-if="selected">
+        <thead>
+          <tr>
+            <th>{{ t('onboarding.managedAccount') }}</th>
+            <th>{{ t('onboarding.principal') }}</th>
+            <th>{{ t('onboarding.instance') }}</th>
+            <th>{{ t('devices.revision') }}</th>
+            <th>{{ t('devices.status') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="a in accounts" :key="a.account">
+            <td>
+              <v-btn
+                type="button"
+                :disabled="!!(busy || uncertain)"
+                @click="chooseAccount(a.account)"
+              >
+                {{ a.account }}
+              </v-btn>
+            </td>
+            <td>{{ a.principalId }}</td>
+            <td>{{ a.instanceId }}</td>
+            <td>{{ a.revision }}</td>
+            <td>{{ t(`devices.${a.enabled ? 'yes' : 'no'}`) }}</td>
+          </tr>
+        </tbody>
+      </v-table>
+      <v-expansion-panels
         v-if="canWrite && selected"
+        multiple
         class="console-panel console-task"
-        :open="uncertain || undefined"
+        :model-value="uncertain ? [0] : undefined"
+        ><v-expansion-panel eager
+          ><v-expansion-panel-title>{{ t('onboarding.accountMapping') }}</v-expansion-panel-title
+          ><v-expansion-panel-text>
+            <v-form :novalidate="false" @submit.prevent="saveMapping">
+              <fieldset :disabled="busy || uncertain">
+                <legend>{{ t('onboarding.accountMapping') }}</legend>
+                <v-text-field
+                  v-model="name"
+                  type="email"
+                  required
+                  :disabled="busy || uncertain"
+                  :label="t('onboarding.managedAccount')"
+                /><v-text-field
+                  v-model="principalId"
+                  required
+                  :disabled="busy || uncertain"
+                  :label="t('onboarding.principal')"
+                /><v-text-field
+                  v-model="instanceId"
+                  required
+                  :disabled="busy || uncertain"
+                  :label="t('onboarding.instance')"
+                /><v-checkbox
+                  v-model="accountEnabled"
+                  :disabled="busy || uncertain"
+                  :label="t('onboarding.enabled')"
+                /><v-btn type="submit" :disabled="busy || uncertain">{{
+                  t('registration.save')
+                }}</v-btn>
+              </fieldset>
+            </v-form>
+          </v-expansion-panel-text></v-expansion-panel
+        ></v-expansion-panels
       >
-        <summary>{{ t('onboarding.accountMapping') }}</summary>
-        <form @submit.prevent="saveMapping">
-          <fieldset :disabled="busy || uncertain">
-            <legend>{{ t('onboarding.accountMapping') }}</legend>
-            <label
-              >{{ t('onboarding.managedAccount')
-              }}<input v-model="name" class="ui-input" type="email" required /></label
-            ><label
-              >{{ t('onboarding.principal')
-              }}<input v-model="principalId" class="ui-input" required /></label
-            ><label
-              >{{ t('onboarding.instance')
-              }}<input v-model="instanceId" class="ui-input" required /></label
-            ><label
-              ><input v-model="accountEnabled" type="checkbox" />{{
-                t('onboarding.enabled')
-              }}</label
-            ><UiButton type="submit">{{ t('registration.save') }}</UiButton>
-          </fieldset>
-        </form>
-      </details>
       <p v-if="uncertain">{{ t('onboarding.compareUnknown') }}</p>
-      <UiButton v-if="uncertain && freshRead" type="button" @click="confirmComparison">
+      <v-btn v-if="uncertain && freshRead" type="button" @click="confirmComparison">
         {{ t('onboarding.confirmComparison') }}
-      </UiButton>
+      </v-btn>
     </template>
-  </PageFrame>
+  </MdmPage>
 </template>

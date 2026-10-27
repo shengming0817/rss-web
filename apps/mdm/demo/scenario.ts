@@ -298,7 +298,10 @@ export function createScenario(
         if (reply) return reply
       }
     }
-    if (!signedIn)
+    const nativeProfile =
+      method === 'POST' && /^\/api\/v1\/enrollments\/[0-9a-f-]{36}\/profile$/.test(path)
+    // Native profile delivery authenticates the original request password, not browser CSRF or management grants.
+    if (!signedIn && !nativeProfile)
       return {
         status: 401,
         body: {
@@ -319,7 +322,7 @@ export function createScenario(
       }
     if (path === `/api/v1/identity/tenants/${sessionTenant}/session` && method === 'GET')
       return { status: 200, body: session() }
-    if (method !== 'GET') {
+    if (method !== 'GET' && !nativeProfile) {
       if (headers['x-csrf-token'] !== token || headers['x-identity-request'] !== '1')
         return { status: 403, body: { code: 'csrf_rejected' } }
       if (
@@ -403,7 +406,7 @@ export function createScenario(
         path,
       )
     const securityPath =
-      /^\/api\/v1\/(?:pki(?:\/|$)|agent-registrations(?:\/|$)|agent-issuances(?:\/|$)|compliance-rules(?:\/|$)|devices\/[^/]+\/compliance(?:\/|$))/.test(
+      /^\/api\/v1\/(?:pki(?:\/|$)|certificate-archive(?:\/|$)|agent-registrations(?:\/|$)|agent-issuances(?:\/|$)|compliance-rules(?:\/|$)|devices\/[^/]+\/compliance(?:\/|$))/.test(
         path,
       )
     const operationsPath =
@@ -439,7 +442,11 @@ export function createScenario(
           body,
           query: parsed.searchParams,
           headers,
-          actor: { principalId, sessionId, tenantId: sessionTenant },
+          actor: {
+            principalId: nativeProfile && !signedIn ? '' : principalId,
+            sessionId: nativeProfile && !signedIn ? '' : sessionId,
+            tenantId: nativeProfile ? TENANT : sessionTenant,
+          },
         },
         active,
       )

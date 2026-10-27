@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { VBtn } from 'vuetify/components'
+import {
+  VBtn,
+  VSelect,
+  VExpansionPanels,
+  VExpansionPanel,
+  VExpansionPanelTitle,
+  VExpansionPanelText,
+} from 'vuetify/components'
 import { ref, watch, computed } from 'vue'
 
 import { useI18n } from 'vue-i18n'
@@ -126,23 +133,26 @@ watch(selected, () => {
     <h2>{{ t('devices.scopedInventory') }}</h2>
     <p>{{ t('devices.trustedAssetsNote') }}</p>
     <p>{{ t('devices.scopeDirectoryNote') }}</p>
-    <label
-      >{{ t('devices.originalEndpoint')
-      }}<select v-model="device" class="ui-input" :disabled="busy" @change="directory()">
-        <option value="">{{ t('devices.select') }}</option>
-        <option v-for="e in endpoints" :key="e.id" :value="e.id">{{ e.id }}</option>
-      </select></label
-    >
+    <v-select
+      v-model="device"
+      :label="t('devices.originalEndpoint')"
+      :disabled="busy"
+      :items="[
+        { title: t('devices.select'), value: '' },
+        ...endpoints.map((e) => ({ title: e.id, value: e.id })),
+      ]"
+      @update:model-value="directory()"
+    />
     <v-btn :disabled="busy || !device" @click="directory()">{{ t('devices.reloadScopes') }}</v-btn>
-    <label
-      >{{ t('devices.assetContext')
-      }}<select v-model="selected" class="ui-input" :disabled="busy">
-        <option value="">{{ t('devices.deviceScopeAbove') }}</option>
-        <option v-for="s in scopes" :key="JSON.stringify(s)" :value="JSON.stringify(s)">
-          {{ label(s) }}
-        </option>
-      </select></label
-    >
+    <v-select
+      v-model="selected"
+      :label="t('devices.assetContext')"
+      :disabled="busy"
+      :items="[
+        { title: t('devices.deviceScopeAbove'), value: '' },
+        ...scopes.map((s) => ({ title: label(s), value: JSON.stringify(s) })),
+      ]"
+    />
     <v-btn v-if="next" :disabled="busy" @click="directory(true)">{{
       t('devices.nextScopes')
     }}</v-btn>
@@ -156,21 +166,27 @@ watch(selected, () => {
           <dd><AssetValue :field="field" /></dd
         ></template>
       </dl>
-      <details v-for="(summary, field) in inventory.lists" :key="field">
-        <summary>{{ field }} · {{ t('devices.state.' + summary.state.kind) }}</summary>
-        <div v-for="source in summary.sources" :key="source.cursor">
-          <p>
-            {{ source.evidence.source }} / {{ source.evidence.dataset }} ·
-            {{ source.evidence.observedAt }} · {{ t('devices.state.' + source.state.kind) }}
-          </p>
-          <v-btn
-            v-if="source.state.kind === 'known'"
-            :disabled="busy"
-            @click="list(String(field), source.cursor)"
-            >{{ t('devices.expandSource') }}</v-btn
+      <v-expansion-panels multiple>
+        <v-expansion-panel v-for="(summary, field) in inventory.lists" :key="field">
+          <v-expansion-panel-title
+            >{{ field }} · {{ t('devices.state.' + summary.state.kind) }}</v-expansion-panel-title
           >
-        </div>
-      </details>
+          <v-expansion-panel-text>
+            <div v-for="source in summary.sources" :key="source.cursor">
+              <p>
+                {{ source.evidence.source }} / {{ source.evidence.dataset }} ·
+                {{ source.evidence.observedAt }} · {{ t('devices.state.' + source.state.kind) }}
+              </p>
+              <v-btn
+                v-if="source.state.kind === 'known'"
+                :disabled="busy"
+                @click="list(String(field), source.cursor)"
+                >{{ t('devices.expandSource') }}</v-btn
+              >
+            </div>
+          </v-expansion-panel-text>
+        </v-expansion-panel>
+      </v-expansion-panels>
       <div v-if="page">
         <h4>{{ activeList?.field }} · {{ page.total }}</h4>
         <AssetItems :items="page.items" :complete-empty="page.total === 0" /><v-btn

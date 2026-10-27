@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { VBtn } from 'vuetify/components'
+import {
+  VBtn,
+  VSelect,
+  VCheckbox,
+  VExpansionPanels,
+  VExpansionPanel,
+  VExpansionPanelTitle,
+  VExpansionPanelText,
+} from 'vuetify/components'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -84,10 +92,14 @@ function change(replay = false) {
     <article v-for="g in groups?.items" :key="g.id">
       <h3>{{ g.presentation.name ?? g.id }}</h3>
       <p>{{ g.kind }} · {{ g.evaluation }} · {{ g.revision }} / {{ g.memberVersion }}</p>
-      <details>
-        <summary>{{ t('devices.evidence') }}</summary>
-        <pre>{{ JSON.stringify(g, null, 2) }}</pre>
-      </details>
+      <v-expansion-panels
+        ><v-expansion-panel>
+          <v-expansion-panel-title>{{ t('devices.evidence') }}</v-expansion-panel-title>
+          <v-expansion-panel-text>
+            <pre>{{ JSON.stringify(g, null, 2) }}</pre>
+          </v-expansion-panel-text>
+        </v-expansion-panel></v-expansion-panels
+      >
     </article>
     <v-btn v-if="groups?.nextCursor" :disabled="busy" @click="load('groups', groups.nextCursor)">{{
       t('gap.next')
@@ -105,10 +117,14 @@ function change(replay = false) {
         }"
         >{{ entry.operationId }}</RouterLink
       >
-      <details>
-        <summary>{{ t('devices.evidence') }}</summary>
-        <pre>{{ JSON.stringify(entry.observation, null, 2) }}</pre>
-      </details>
+      <v-expansion-panels
+        ><v-expansion-panel>
+          <v-expansion-panel-title>{{ t('devices.evidence') }}</v-expansion-panel-title>
+          <v-expansion-panel-text>
+            <pre>{{ JSON.stringify(entry.observation, null, 2) }}</pre>
+          </v-expansion-panel-text>
+        </v-expansion-panel></v-expansion-panels
+      >
     </article>
     <v-btn v-if="ddm?.nextCursor" :disabled="busy" @click="load('ddm', ddm.nextCursor)">{{
       t('gap.next')
@@ -116,15 +132,23 @@ function change(replay = false) {
     <h2>{{ t('gap.assetState') }}</h2>
     <p v-if="asset.failure.value" role="alert">{{ t('devices.' + asset.failure.value) }}</p>
     <p v-if="currentAssetState">{{ t('gap.assetState') }}: {{ currentAssetState }}</p>
-    <label
-      >{{ t('gap.assetState')
-      }}<select v-model="state" :disabled="asset.locked.value">
-        <option v-for="s in ['active', 'archived', 'deleted'] as const" :key="s" :value="s">
-          {{ t('gap.' + s) }}
-        </option>
-      </select></label
-    ><label><input v-model="confirmation" type="checkbox" />{{ t('gap.confirmation') }}</label
-    ><v-btn :disabled="asset.locked.value || !confirmation" @click="change()">{{
+    <v-select
+      v-model="state"
+      :label="t('gap.assetState')"
+      :disabled="asset.locked.value"
+      :items="
+        (['active', 'archived', 'deleted'] as const).map((value) => ({
+          title: t('gap.' + value),
+          value,
+        }))
+      "
+    />
+    <v-checkbox
+      v-model="confirmation"
+      :label="t('gap.confirmation')"
+      :disabled="asset.busy.value"
+    />
+    <v-btn :disabled="asset.locked.value || !confirmation" @click="change()">{{
       t('gap.save')
     }}</v-btn>
     <template v-if="asset.pending.value"

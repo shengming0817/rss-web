@@ -31,6 +31,7 @@ it('reads current endpoint statistics and permits pending onboarding without cla
     deviceId: 'new-native-platform',
     password: generateEnrollmentPassword(),
     source: 'mdm.windows',
+    windowsProfile: 'Device',
   })
   expect((await directory.statistics()).statistics.total).toBe(first.statistics.total + 1)
   expect((await directory.statistics()).statistics.total).toBe(first.statistics.total + 1)

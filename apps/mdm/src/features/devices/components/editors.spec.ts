@@ -1,9 +1,12 @@
+import { VSelect, VAutocomplete, VTextField } from 'vuetify/components'
+import { nextTick } from 'vue'
 import { expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { mdmI18n } from '../../../i18n'
 import { catalog } from '../../../../demo/devices/fixtures'
 import type { Criteria } from '../clients/asset-model'
 import CriteriaEditor from './CriteriaEditor.vue'
+import ConditionContextEditor from './ConditionContextEditor.vue'
 import ScalarEditor from './ScalarEditor.vue'
 import PersonDisplay from './PersonDisplay.vue'
 it('keeps scalar types, false and zero and rejects unsafe integers', async () => {
@@ -16,7 +19,7 @@ it('keeps scalar types, false and zero and rejects unsafe integers', async () =>
   await wrapper.find('input').setValue('9007199254740993')
   expect(wrapper.emitted('update:modelValue')).toHaveLength(1)
   await wrapper.setProps({ modelValue: { kind: 'boolean', value: true } })
-  await wrapper.find('select').setValue('false')
+  await selectValue(wrapper.findComponent(VSelect), false)
   expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([{ kind: 'boolean', value: false }])
   await wrapper.setProps({ modelValue: { kind: 'string', value: 'old' } })
   await wrapper.find('input').setValue('new')
@@ -38,15 +41,15 @@ it('edits catalog-driven set predicates and nested AND/OR without flattening', a
     },
     global: { plugins: [mdmI18n()] },
   })
-  await wrapper.find('select').setValue('predicate')
-  await wrapper.findAll('select')[1]!.setValue('custom.is_loaner')
+  await selectValue(wrapper.findComponent(VSelect), 'predicate')
+  await selectValue(wrapper.findComponent(VAutocomplete), 'custom.is_loaner')
   expect(wrapper.props('modelValue')).toEqual({
     kind: 'predicate',
     field: 'custom.is_loaner',
     op: 'eq',
     value: { kind: 'boolean', value: false },
   })
-  await wrapper.findAll('select')[2]!.setValue('in')
+  await selectValue(wrapper.findAllComponents(VSelect)[1]!, 'in')
   await wrapper
     .findAll('button')
     .find((b) => b.text() === '添加')!
@@ -59,16 +62,16 @@ it('edits catalog-driven set predicates and nested AND/OR without flattening', a
   })
   await wrapper.find('button').trigger('click')
   expect(wrapper.props('modelValue')).toMatchObject({ values: [{ kind: 'boolean', value: false }] })
-  await wrapper.findAll('select')[2]!.setValue('is_null')
+  await selectValue(wrapper.findAllComponents(VSelect)[1]!, 'is_null')
   expect(wrapper.props('modelValue')).not.toHaveProperty('value')
-  await wrapper.find('select').setValue('or')
+  await selectValue(wrapper.findComponent(VSelect), 'or')
   await wrapper.find('button').trigger('click')
   expect(wrapper.props('modelValue')).toEqual({
     kind: 'or',
     children: [{ kind: 'and', children: [] }],
   })
   const child = wrapper.findAllComponents(CriteriaEditor).find((w) => w.props('depth') === 1)!
-  await child.find('select').setValue('predicate')
+  await selectValue(child.findComponent(VSelect), 'predicate')
   expect(wrapper.props('modelValue')).toMatchObject({
     kind: 'or',
     children: [{ kind: 'predicate' }],
@@ -78,7 +81,7 @@ it('edits catalog-driven set predicates and nested AND/OR without flattening', a
     .find((b) => b.text() === '移除')!
     .trigger('click')
   expect(wrapper.props('modelValue')).toEqual({ kind: 'or', children: [] })
-  await wrapper.find('select').setValue('all')
+  await selectValue(wrapper.findComponent(VSelect), 'all')
   expect(wrapper.props('modelValue')).toBeNull()
   wrapper.unmount()
 })
@@ -100,30 +103,38 @@ it('edits complete condition selectors without changing the predicate or retaini
     },
     global: { plugins: [mdmI18n()] },
   })
-  const select = () => wrapper.find('details select')
-  await select().setValue('all_authorized')
+  const context = () => wrapper.findComponent(ConditionContextEditor)
+  const select = () => context().findComponent(VSelect)
+  await selectValue(select(), 'all_authorized')
   expect(wrapper.props('modelValue')).toMatchObject({
     selector: { kind: 'all_authorized' },
     quantifier: 'any',
     criteria: model.criteria,
   })
-  await wrapper.findAll('details select').at(-1)!.setValue('all')
+  await selectValue(
+    wrapper.findComponent(ConditionContextEditor).findAllComponents(VSelect).at(-1)!,
+    'all',
+  )
   expect(wrapper.props('modelValue')?.quantifier).toBe('all')
-  await select().setValue('local_user')
-  await wrapper.findAll('details select')[1]!.setValue('macos')
-  await wrapper.find('details input').setValue('501')
+  await selectValue(select(), 'local_user')
+  await selectValue(wrapper.findAllComponents(VSelect)[1]!, 'macos')
+  await wrapper
+    .findAllComponents(VTextField)
+    .find((w) => w.props('label') === 'UID')!
+    .get('input')
+    .setValue('501')
   expect(wrapper.props('modelValue')?.selector).toEqual({
     kind: 'local_user',
     platform: 'macos',
     identity: '501',
   })
-  await select().setValue('exact')
+  await selectValue(select(), 'exact')
   expect(wrapper.props('modelValue')).toMatchObject({
     selector: { kind: 'exact', scope: { kind: 'device' } },
     quantifier: 'one',
     criteria: model.criteria,
   })
-  await select().setValue('unfiltered')
+  await selectValue(select(), 'unfiltered')
   expect(wrapper.props('modelValue')).toBeNull()
   wrapper.unmount()
 })
@@ -136,9 +147,9 @@ it('builds structured exact namespaces and bound account coordinates without JSO
     },
     global: { plugins: [mdmI18n()] },
   })
-  await wrapper.find('select').setValue('native_certificates')
-  await wrapper.findAll('select')[1]!.setValue('macos')
-  await wrapper.findAll('select')[2]!.setValue('login')
+  await selectValue(wrapper.findComponent(VSelect), 'native_certificates')
+  await selectValue(wrapper.findAllComponents(VSelect)[1]!, 'macos')
+  await selectValue(wrapper.findAllComponents(VSelect)[2]!, 'login')
   expect(wrapper.props('modelValue')).toMatchObject({
     kind: 'native_certificates',
     platform: 'macos',
@@ -146,12 +157,20 @@ it('builds structured exact namespaces and bound account coordinates without JSO
     owner: { kind: 'macos' },
   })
   await wrapper.findAll('input[type=number]')[0]!.setValue('501')
-  await wrapper.find('input:not([type])').setValue('11111111-1111-4111-8111-111111111111')
+  await wrapper
+    .findAllComponents(VTextField)
+    .find((w) => w.props('label') === 'GeneratedUID')!
+    .get('input')
+    .setValue('11111111-1111-4111-8111-111111111111')
   expect(wrapper.props('modelValue')).toMatchObject({
     owner: { kind: 'macos', uid: 501, generated_uid: '11111111-1111-4111-8111-111111111111' },
   })
-  await wrapper.find('select').setValue('macos_brew')
-  await wrapper.find('input:not([type])').setValue('homebrew/core, corp/tools')
+  await selectValue(wrapper.findComponent(VSelect), 'macos_brew')
+  await wrapper
+    .findAllComponents(VTextField)
+    .find((w) => String(w.props('label')).includes('Tap'))!
+    .get('input')
+    .setValue('homebrew/core, corp/tools')
   expect(wrapper.props('modelValue')).toMatchObject({
     kind: 'macos_brew',
     taps: ['homebrew/core', 'corp/tools'],
@@ -171,11 +190,18 @@ it('emits condition edits without mutating an already loaded server snapshot', a
     props: { modelValue: original, fields: catalog },
     global: { plugins: [mdmI18n()] },
   })
-  await wrapper.find('details input').setValue('S-1-5-22')
+  await wrapper
+    .findAllComponents(VTextField)
+    .find((w) => w.props('label') === 'SID')!
+    .get('input')
+    .setValue('S-1-5-22')
   expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toMatchObject({
     selector: { identity: 'S-1-5-22' },
   })
-  await wrapper.findAll('details select').at(-1)!.setValue('all')
+  await selectValue(
+    wrapper.findComponent(ConditionContextEditor).findAllComponents(VSelect).at(-1)!,
+    'all',
+  )
   expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toMatchObject({ quantifier: 'all' })
   expect(original).toEqual(before)
   wrapper.unmount()
@@ -197,7 +223,7 @@ it('switches an existing group combination without changing its children', async
     props: { modelValue, fields: catalog, assetContext: 'endpoint' },
     global: { plugins: [mdmI18n()] },
   })
-  await wrapper.find('select').setValue('or')
+  await selectValue(wrapper.findComponent(VSelect), 'or')
   expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([
     { kind: 'or', children: modelValue.children },
   ])
@@ -237,3 +263,11 @@ it('keeps local login distinct from each source name and shows unavailable sourc
   expect(wrapper.text()).toBe('未提供人员展示资料')
   wrapper.unmount()
 })
+
+async function selectValue(
+  target: { vm: { $emit: (event: string, value: never) => unknown } },
+  value: unknown,
+) {
+  target.vm.$emit('update:modelValue', value as never)
+  await nextTick()
+}
