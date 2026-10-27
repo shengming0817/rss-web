@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import { VBtn, VForm, VTable, VTextField } from 'vuetify/components'
+import OperationDialog from '../../operations/components/OperationDialog.vue'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiDialog } from '@rss/core/components'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 import { useMdm } from '../../../context'
 import { usePermission } from '../../enrollment/usePermission'
 import { useSettingsAction, useSettingsFacts } from '../useSettingsAction'
@@ -81,26 +82,26 @@ onMounted(() => {
 })
 </script>
 <template>
-  <PageFrame :title="t('profiles.title')" :busy="busy" :failure="failure">
+  <MdmPage :title="t('profiles.title')" :busy="busy" :failure="failure">
     <p>{{ t('profiles.help') }}</p>
     <div class="settings-actions">
-      <UiButton :disabled="busy || !canRead" @click="load()">{{ t('profiles.reload') }}</UiButton
-      ><UiButton :disabled="!canWrite || busy" @click="create">{{ t('profiles.new') }}</UiButton
-      ><UiButton v-if="profilePermission.canRead.value" @click="preview = !preview">{{
+      <VBtn :disabled="busy || !canRead" @click="load()">{{ t('profiles.reload') }}</VBtn
+      ><VBtn :disabled="!canWrite || busy" @click="create">{{ t('profiles.new') }}</VBtn
+      ><VBtn v-if="profilePermission.canRead.value" @click="preview = !preview">{{
         t('profiles.preview')
-      }}</UiButton>
+      }}</VBtn>
     </div>
     <section v-if="recoveries.length">
       <h2>{{ t('profiles.recovery') }}</h2>
-      <UiButton
+      <VBtn
         v-for="item in recoveries"
         :key="item.id"
         @click="recover(item.target.slice('user-attribute:'.length))"
-        >{{ item.id }}</UiButton
+        >{{ item.id }}</VBtn
       >
     </section>
     <div class="ui-table-scroll">
-      <table class="ui-table">
+      <VTable>
         <thead>
           <tr>
             <th>{{ t('profiles.name') }}</th>
@@ -117,28 +118,28 @@ onMounted(() => {
             <td>{{ row.value ? t('profiles.' + row.value.valueType) : '—' }}</td>
             <td>{{ t(row.value?.enabled ? 'profiles.true' : 'profiles.false') }}</td>
             <td>
-              <UiButton @click="selected = row">{{ t('profiles.edit') }}</UiButton>
+              <VBtn @click="selected = row">{{ t('profiles.edit') }}</VBtn>
             </td>
           </tr>
         </tbody>
-      </table>
+      </VTable>
     </div>
     <p v-if="!rows.length && !busy">{{ t('profiles.unconfigured') }}</p>
-    <UiButton v-if="next" :disabled="busy" @click="load(next ?? undefined)">{{
+    <VBtn v-if="next" :disabled="busy" @click="load(next ?? undefined)">{{
       t('profiles.next')
-    }}</UiButton>
+    }}</VBtn>
     <section v-if="preview && profilePermission.canRead.value">
       <h2>{{ t('profiles.preview') }}</h2>
-      <form class="settings-actions" @submit.prevent="sample = principal.trim()">
-        <label for="preview-principal">{{ t('profiles.principal') }}</label
-        ><input id="preview-principal" v-model="principal" class="ui-input" /><UiButton
-          type="submit"
-          >{{ t('profiles.load') }}</UiButton
-        >
-      </form>
+      <VForm class="settings-actions" @submit.prevent="sample = principal.trim()">
+        <VTextField
+          id="preview-principal"
+          v-model="principal"
+          :label="t('profiles.principal')"
+        /><VBtn type="submit">{{ t('profiles.load') }}</VBtn>
+      </VForm>
       <ProfilePanel :key="sample" :principal="sample" view="latest" preview />
     </section>
-    <UiDialog
+    <OperationDialog
       :open="!!selected"
       :title="t('profiles.edit')"
       :close-label="t('identity.cancel')"
@@ -150,6 +151,6 @@ onMounted(() => {
         :field="selected"
         :sources="sources"
         @changed="load()"
-    /></UiDialog>
-  </PageFrame>
+    /></OperationDialog>
+  </MdmPage>
 </template>

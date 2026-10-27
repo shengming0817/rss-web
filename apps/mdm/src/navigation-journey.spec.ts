@@ -268,7 +268,15 @@ it('creates a formal Scope, changes the result channel explicitly, and deletes o
       query: { device: 'device-01' },
     })
     await flushPromises()
-    await new DOMWrapper(document.body).get('[role=dialog] form').trigger('submit')
+    const form = new DOMWrapper(document.body).get('[role=dialog] form')
+    const scopeWrites = () =>
+      app.calls.filter((c) => c.method === 'POST' && /^\/api\/v1\/scopes\/[^/]+$/.test(c.path))
+    const before = scopeWrites().length
+    await vi.waitFor(() =>
+      expect(form.get('button[type=submit]').element.matches(':disabled')).toBe(false),
+    )
+    await form.trigger('submit')
+    await vi.waitFor(() => expect(scopeWrites()).toHaveLength(before + 1))
     await flushPromises()
     const write = app.calls.findLast(
       (c) => c.method === 'POST' && /^\/api\/v1\/scopes\/[^/]+$/.test(c.path),

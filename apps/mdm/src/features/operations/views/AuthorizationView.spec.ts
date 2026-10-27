@@ -196,13 +196,15 @@ async function click(label: string, scope = body()) {
     .findAll('button')
     .find((b) => b.text() === label || b.attributes('aria-label') === label)
   expect(b, label).toBeDefined()
+  await vi.waitFor(() => expect(b!.element.matches(':disabled'), label).toBe(false))
   await b!.trigger('click')
   await flushPromises()
 }
 async function newRule() {
   await click('添加授权规则')
+  await click('按主体 UUID 定位（高级）')
   await body().get('#authorization-principal-id').setValue(target)
-  await body().get('input[value=tenant_read]').setValue(true)
+  await body().get('input[aria-label="查看租户"]').setValue(true)
 }
 async function confirm() {
   await body().get('[data-testid=review-rule]').trigger('click')
@@ -217,10 +219,16 @@ it('selects an existing management account, reviews eight admitted permissions, 
   await click('添加授权规则')
   await click('读取已有管理账户')
   expect(f.accounts).toHaveBeenCalledTimes(1)
-  expect(body().get('#authorization-principal').text()).toContain('Existing manager')
-  await body().get('#authorization-principal').setValue(target)
+  await body().get('#authorization-principal').trigger('mousedown')
+  await flushPromises()
+  const choice = body()
+    .findAll('[role=option]')
+    .find((v) => v.text().includes('Existing manager'))
+  expect(choice).toBeDefined()
+  await choice!.trigger('click')
+  await flushPromises()
   expect(body().findAll('.authorization-permissions input[type=checkbox]')).toHaveLength(8)
-  await body().get('input[value=tenant_read]').setValue(true)
+  await body().get('input[aria-label="查看租户"]').setValue(true)
   await body().get('[data-testid=review-rule]').trigger('click')
   await flushPromises()
   expect(writes(f)).toHaveLength(0)
@@ -233,6 +241,21 @@ it('selects an existing management account, reviews eight admitted permissions, 
     body: { expectedRevision: 0, value: definition() },
   })
   expect(f.calls.some((o) => o.path.includes('/operations/'))).toBe(false)
+})
+it('preserves a rule draft for unchanged identity facts and clears it when the session owner changes', async () => {
+  const f = await fixture()
+  await newRule()
+  f.state.value = { ...f.state.value, session: { ...f.state.value.session } }
+  await flushPromises()
+  expect((body().get('#authorization-principal-id').element as HTMLInputElement).value).toBe(target)
+  expect((body().get('input[aria-label="查看租户"]').element as HTMLInputElement).checked).toBe(
+    true,
+  )
+  expect(writes(f)).toHaveLength(0)
+  f.state.value = { ...f.state.value, session: { id: ruleId } }
+  await flushPromises()
+  expect(body().find('#authorization-principal-id').exists()).toBe(false)
+  expect(writes(f)).toHaveLength(0)
 })
 it('keeps authorization maintenance usable when account listing returns 403', async () => {
   const f = await fixture()
@@ -297,7 +320,7 @@ it('retains a committed unknown request across remount, compares without confirm
 it('compares a conflict and retains local edits while adopting only the current server revision', async () => {
   const f = await fixture()
   await click(target)
-  await body().get('input[value=tenant_update]').setValue(true)
+  await body().get('input[aria-label="修改租户"]').setValue(true)
   f.rows.set(ruleId, {
     id: ruleId,
     revision: 2,
@@ -354,7 +377,7 @@ it('restores the complete basis of an unknown deletion larger than 4096 bytes an
   expect(body().text()).toContain('本次将撤销')
   expect(body().text()).toContain('device-0')
   await click('回读当前规则以核对')
-  expect(body().text()).toContain('服务端当前记录为已删除')
+  await vi.waitFor(() => expect(body().text()).toContain('服务端当前记录为已删除'))
   expect(writes(f)).toHaveLength(1)
   expect(f.operations.records.get('authorization:tenant')?.queried).toBe(true)
 })
@@ -454,11 +477,18 @@ it('preserves business department source, matching and exact-device grants throu
   const f = await fixture({ realm: 'tenant', rows: [{ id: ruleId, revision: 3, value }] })
   await click('engineering')
   expect(body().text()).toContain('device-absolute')
-  expect(
-    body()
-      .findAll('option')
-      .map((o) => o.text()),
-  ).not.toContain('tenant_create')
+  await body().get('#authorization-permission').trigger('mousedown')
+  await flushPromises()
+  const options = body()
+    .findAll('[role=option]')
+    .map((o) => o.text())
+  expect(options).toContain('inventory_read')
+  expect(options).not.toContain('tenant_create')
+  await body()
+    .findAll('[role=option]')
+    .find((o) => o.text() === 'inventory_read')!
+    .trigger('click')
+  await flushPromises()
   await confirm()
   expect(writes(f)[0]).toMatchObject({ body: { expectedRevision: 3, value } })
 })

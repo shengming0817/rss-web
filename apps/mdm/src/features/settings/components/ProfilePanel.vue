@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { VAlert, VBtn } from 'vuetify/components'
 import { ref, watch, computed, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiMessage } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { useSettingsAction, useSettingsFacts } from '../useSettingsAction'
 import { type Profile, sourceKey, jsonDisplay } from '../clients/profiles'
@@ -68,8 +68,8 @@ function date(value: number | null) {
 </script>
 <template>
   <section class="settings-stack">
-    <UiButton :disabled="busy" @click="load">{{ t('profiles.reload') }}</UiButton>
-    <UiMessage v-if="failure" tone="warning" :title="t('devices.' + failure)" />
+    <VBtn :disabled="busy" @click="load">{{ t('profiles.reload') }}</VBtn>
+    <VAlert v-if="failure" type="warning" :title="t('devices.' + failure)" />
     <p v-if="preview">{{ t('profiles.previewHelp') }}</p>
     <p>{{ t('profiles.noRefresh') }}</p>
     <template v-if="value">
