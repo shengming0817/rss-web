@@ -314,7 +314,8 @@ const sourceOptions = computed(() => [
     </form>
     <v-expansion-panels
       ><v-expansion-panel :title="t('groupModule.advanced')"
-        ><v-expansion-panel-text><InventoryQuery /></v-expansion-panel-text></v-expansion-panel
+        ><v-expansion-panel-text eager
+          ><InventoryQuery /></v-expansion-panel-text></v-expansion-panel
     ></v-expansion-panels>
     <p v-if="failure === 'cursorInvalidated'" class="device-notice">
       {{ t('devices.restartDirectory')

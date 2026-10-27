@@ -39,11 +39,7 @@ export const navigation: Navigation = [
       { name: 'policy-telemetry', label: 'telemetry.profiles' },
       { name: 'policy-executions', label: 'policies.executions' },
       { name: 'security-rules', label: 'security.rules' },
-      {
-        name: 'policy-metrics',
-        label: 'telemetry.metricsSettings',
-        path: '/tenants/:tenant/policies/metrics',
-      },
+      { name: 'settings-metrics', label: 'telemetry.metricsSettings' },
     ],
   },
   {
@@ -51,11 +47,6 @@ export const navigation: Navigation = [
     label: 'software.catalog',
     items: [
       { name: 'software-catalog', label: 'software.catalog' },
-      {
-        name: 'software-assets',
-        label: 'console.softwareAssets',
-        path: '/tenants/:tenant/software/assets',
-      },
       { name: 'software-publications', label: 'software.publications' },
       { name: 'software-imports', label: 'software.imports' },
     ],

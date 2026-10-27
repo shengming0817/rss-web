@@ -462,7 +462,7 @@ export const settingsEn = {
     'Operations initializes or connects the device CA. Review purpose trust and rotation here; saved material and current host loading remain separate. Operations manages website HTTPS.',
   windowsIdentityBoundary:
     'Windows uses dedicated device issuance and trust connected by operations. Website HTTPS is maintained independently.',
-  manualEnrollment: 'Manual enrollment',
+  manualEnrollment: 'Enroll and recover from device management',
   adeEnrollment: 'ADE automated enrollment',
   managedAppleEnrollment: 'Managed Apple Account',
   noPackage: 'No published package for this platform',

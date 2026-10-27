@@ -104,7 +104,8 @@ try {
   await ready()
   const materials = page.locator('[data-panel="recovery-credentials"]')
   phase = 'credential-action'
-  await materials.getByLabel('操作类型', { exact: true }).selectOption('set_recovery_lock')
+  await materials.getByRole('combobox', { name: '操作类型', exact: true }).click()
+  await page.getByRole('option', { name: '设置或清除 Recovery Lock', exact: true }).click()
   await materials.getByLabel('确认对当前目标执行此操作', { exact: true }).check()
   const accepted = page.waitForResponse(
     (r) => r.request().method() === 'POST' && r.url().endsWith('/recovery-credentials/operations'),

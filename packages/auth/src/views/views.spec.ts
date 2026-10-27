@@ -728,6 +728,80 @@ it.each([
   },
 )
 
+it.each([
+  {
+    component: AccountsView,
+    name: 'accounts',
+    response: { accounts: [accountValue], nextCursor: null },
+    row: accountValue.login,
+    open: '创建本地账户',
+    field: '#account-login',
+    secret: '#account-password',
+  },
+  {
+    component: ProvidersView,
+    name: 'providers',
+    response: { providers: [providerValue] },
+    row: providerValue.settings.issuer,
+    open: '编辑',
+    field: '#client-id',
+    secret: '#client-secret',
+  },
+])(
+  'preserves $name drafts during context reads and activity renewal, but clears a changed owner',
+  async (entry) => {
+    const f = fixture()
+    await f.login()
+    const nearExpiry = sessionValue()
+    nearExpiry.session.idleExpiresAt = Math.floor(Date.now() / 1000) + 60
+    f.replies.push(nearExpiry)
+    await f.session.check(TENANT)
+    f.replies.push(entry.response)
+    const { wrapper } = await view(entry.component, f, entry.name)
+    try {
+      await wrapper
+        .findAll('button')
+        .find((b) => b.text() === entry.open)!
+        .trigger('click')
+      await flushPromises()
+      const body = () => new DOMWrapper(document.body)
+      await body().get(entry.field).setValue('Unsubmitted draft')
+      await body().get(entry.secret).setValue('Synthetic unsubmitted secret')
+      const expectDraft = () => {
+        expect(wrapper.get('tbody').text()).toContain(entry.row)
+        expect((body().get(entry.field).element as HTMLInputElement).value).toBe(
+          'Unsubmitted draft',
+        )
+        expect((body().get(entry.secret).element as HTMLInputElement).value).toBe(
+          'Synthetic unsubmitted secret',
+        )
+      }
+      await f.session.loadContext()
+      await flushPromises()
+      expectDraft()
+      f.replies.push(sessionValue(true, 'b'.repeat(64)))
+      await f.session.activity()
+      await flushPromises()
+      expect(
+        f.request.mock.calls.filter(([o]) => o.path.endsWith('/session/refresh')),
+      ).toHaveLength(1)
+      expectDraft()
+      f.replies.push({
+        ...sessionValue(),
+        identity: { ...sessionValue().identity, principalId: OTHER },
+        session: { ...sessionValue().session, id: OTHER },
+      })
+      await f.session.login(OTHER, 'other-owner', 'Synthetic login secret')
+      await flushPromises()
+      expect(body().find(entry.field).exists()).toBe(false)
+      expect(wrapper.find('tbody').exists()).toBe(false)
+    } finally {
+      wrapper.unmount()
+      f.session.clear()
+    }
+  },
+)
+
 it.each(['login', 'continue', 'resume'])('uses the app landing route after %s', async (mode) => {
   const f = Object.assign(fixture(), {
     landingTarget: (tenant: string) => ({ name: 'workspace', params: { tenant } }),
@@ -788,6 +862,11 @@ it('recovers a lost local-profile write by receipt and clears values after permi
   }
   const { wrapper } = await view(component, f, 'accounts')
   await wrapper.get('#local-display').setValue('Changed')
+  const beforeContext = f.request.mock.calls.length
+  await f.session.loadContext()
+  await flushPromises()
+  expect((wrapper.get('#local-display').element as HTMLInputElement).value).toBe('Changed')
+  expect(f.request).toHaveBeenCalledTimes(beforeContext + 1)
   f.replies.push(new Error('response lost'))
   await wrapper.get('form').trigger('submit')
   await flushPromises()
