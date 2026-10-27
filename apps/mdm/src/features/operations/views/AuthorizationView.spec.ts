@@ -242,6 +242,21 @@ it('selects an existing management account, reviews eight admitted permissions, 
   })
   expect(f.calls.some((o) => o.path.includes('/operations/'))).toBe(false)
 })
+it('preserves a rule draft for unchanged identity facts and clears it when the session owner changes', async () => {
+  const f = await fixture()
+  await newRule()
+  f.state.value = { ...f.state.value, session: { ...f.state.value.session } }
+  await flushPromises()
+  expect((body().get('#authorization-principal-id').element as HTMLInputElement).value).toBe(target)
+  expect((body().get('input[aria-label="查看租户"]').element as HTMLInputElement).checked).toBe(
+    true,
+  )
+  expect(writes(f)).toHaveLength(0)
+  f.state.value = { ...f.state.value, session: { id: ruleId } }
+  await flushPromises()
+  expect(body().find('#authorization-principal-id').exists()).toBe(false)
+  expect(writes(f)).toHaveLength(0)
+})
 it('keeps authorization maintenance usable when account listing returns 403', async () => {
   const f = await fixture()
   f.accounts.mockRejectedValueOnce(decodeMdmError(403, { code: 'permission_denied' }))
