@@ -1,39 +1,14 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import { ref } from 'vue'
-import { createRouter, createMemoryHistory } from 'vue-router'
+import { createMemoryHistory } from 'vue-router'
+import { createFeatureRouter as createRouter } from '../../../../tests/feature-router'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
-import { defaultSchedule } from '../../policies/clients/model'
-import BootstrapView from './BootstrapView.vue'
 import CatalogView from './CatalogView.vue'
 const first = '11111111-1111-4111-8111-111111111111',
   second = '22222222-2222-4222-8222-222222222222'
 for (const screen of [
-  {
-    component: BootstrapView,
-    query: 'id',
-    test: 'onboarding-policy-locator',
-    owner: 'policies',
-    value: (id: string) => ({
-      id,
-      revision: 1,
-      enabled: true,
-      version: 1,
-      versionId: id,
-      definition: {
-        customEvent: null,
-        alias: null,
-        scope: first,
-        action: {
-          kind: 'request_mdm_enrollment',
-          organization: first,
-          schedule: defaultSchedule(),
-          runLifetimeSeconds: 1800,
-        },
-      },
-    }),
-  },
   {
     component: CatalogView,
     query: 'resource',

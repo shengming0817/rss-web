@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { VTable } from 'vuetify/components'
 import { useI18n } from 'vue-i18n'
 import type { ReadScalar } from '../clients/asset-model'
 const props = defineProps<{ items: ReadScalar[]; completeEmpty?: boolean }>()
@@ -21,27 +22,25 @@ function display(x: ReadScalar | undefined): string {
 </script>
 <template>
   <p v-if="!items.length">{{ t(completeEmpty ? 'devices.completeEmptyList' : 'devices.empty') }}</p>
-  <div v-else-if="records" class="ui-table-scroll">
-    <table class="ui-table">
-      <caption>
-        {{
-          t('devices.sourceLists')
-        }}
-      </caption>
-      <thead>
-        <tr>
-          <th v-for="key in columns" :key="key" scope="col">{{ key }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="(item, index) in items" :key="index">
-          <td v-for="key in columns" :key="key">
-            {{ item.kind === 'object' ? display(item.value[key]) : display(item) }}
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+  <v-table v-else-if="records" density="compact" hover>
+    <caption>
+      {{
+        t('devices.sourceLists')
+      }}
+    </caption>
+    <thead>
+      <tr>
+        <th v-for="key in columns" :key="key" scope="col">{{ key }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr v-for="(item, index) in items" :key="index">
+        <td v-for="key in columns" :key="key">
+          {{ item.kind === 'object' ? display(item.value[key]) : display(item) }}
+        </td>
+      </tr>
+    </tbody>
+  </v-table>
   <ol v-else>
     <li v-for="(item, index) in items" :key="index">{{ display(item) }}</li>
   </ol>

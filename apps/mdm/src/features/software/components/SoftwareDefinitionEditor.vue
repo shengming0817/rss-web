@@ -1,4 +1,6 @@
 <script setup lang="ts">
+const props = defineProps<{ disabled?: boolean }>()
+import { VCheckbox, VSelect, VTextField, VTextarea } from 'vuetify/components'
 import { ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Artifact } from '../../policies/clients/resources'
@@ -79,85 +81,117 @@ defineExpose({ read })
   <fieldset>
     <legend>{{ t('software.definition') }}</legend>
     <p>{{ t('software.budget') }}</p>
-    <label :for="`${id}-package`">{{ t('software.package') }}</label
-    ><input :id="`${id}-package`" v-model="packageId" class="ui-input" required />
-    <label :for="`${id}-version`">{{ t('software.version') }}</label
-    ><input :id="`${id}-version`" v-model="version" class="ui-input" required />
+    <VTextField
+      :id="`${id}-package`"
+      v-model="packageId"
+      :label="t('software.package')"
+      required
+      :disabled="props.disabled"
+    />
+    <VTextField
+      :id="`${id}-version`"
+      v-model="version"
+      :label="t('software.version')"
+      required
+      :disabled="props.disabled"
+    />
     <p>{{ t('software.sourceHint') }}</p>
-    <label :for="`${id}-source`">{{ t('software.source') }}</label
-    ><input :id="`${id}-source`" v-model="source" class="ui-input" required />
-    <label :for="`${id}-source-revision`">{{ t('software.sourceRevision') }}</label
-    ><input :id="`${id}-source-revision`" v-model="sourceRevision" class="ui-input" required />
-    <label :for="`${id}-source-digest`">{{ t('software.sourceDigest') }}</label
-    ><input
+    <VTextField
+      :id="`${id}-source`"
+      v-model="source"
+      :label="t('software.source')"
+      required
+      :disabled="props.disabled"
+    />
+    <VTextField
+      :id="`${id}-source-revision`"
+      v-model="sourceRevision"
+      :label="t('software.sourceRevision')"
+      required
+      :disabled="props.disabled"
+    />
+    <VTextField
       :id="`${id}-source-digest`"
       v-model="sourceDigest"
-      class="ui-input"
+      :label="t('software.sourceDigest')"
       pattern="[a-fA-F0-9]{64}"
       required
+      :disabled="props.disabled"
     />
-    <label :for="`${id}-behavior`">{{ t('software.behavior') }}</label
-    ><textarea
+    <VTextarea
       :id="`${id}-behavior`"
       v-model="behavior"
-      class="ui-input"
+      :label="t('software.behavior')"
       required
+      auto-grow
+      :disabled="props.disabled"
       @input="validateJson"
     />
     <p>{{ t('policies.selfService.identityHint') }}</p>
-    <label :for="`${id}-provenance`">{{ t('software.provenance') }}</label
-    ><textarea
+    <VTextarea
       :id="`${id}-provenance`"
       v-model="provenance"
-      class="ui-input"
+      :label="t('software.provenance')"
       required
+      auto-grow
+      :disabled="props.disabled"
       @input="validateJson"
     />
-    <label :for="`${id}-signatures`">{{ t('software.signatures') }}</label
-    ><textarea
+    <VTextarea
       :id="`${id}-signatures`"
       v-model="signatures"
-      class="ui-input"
+      :label="t('software.signatures')"
       required
+      auto-grow
+      :disabled="props.disabled"
       @input="validateJson"
     />
-    <label :for="`${id}-export`">{{ t('software.exportDefinition') }}</label
-    ><textarea
+    <VTextarea
       :id="`${id}-export`"
       v-model="exportDefinition"
-      class="ui-input"
+      :label="t('software.exportDefinition')"
       required
+      auto-grow
+      :disabled="props.disabled"
       @input="validateJson"
     />
-    <label :for="`${id}-artifacts`">{{ t('software.artifacts') }}</label
-    ><textarea
+    <VTextarea
       :id="`${id}-artifacts`"
       v-model="artifacts"
-      class="ui-input"
+      :label="t('software.artifacts')"
       required
+      auto-grow
+      :disabled="props.disabled"
       @input="validateJson"
     />
-    <label :for="`${id}-dependencies`">{{ t('software.dependencies') }}</label
-    ><textarea
+    <VTextarea
       :id="`${id}-dependencies`"
       v-model="dependencies"
-      class="ui-input"
+      :label="t('software.dependencies')"
       required
+      auto-grow
+      :disabled="props.disabled"
       @input="validateJson"
     />
-    <label :for="`${id}-material`">{{ t('software.material') }}</label
-    ><textarea
+    <VTextarea
       :id="`${id}-material`"
       v-model="material"
-      class="ui-input"
+      :label="t('software.material')"
       required
+      auto-grow
+      :disabled="props.disabled"
       @input="validateJson"
     />
-    <label :for="`${id}-reboot`">{{ t('software.reboot') }}</label
-    ><select :id="`${id}-reboot`" v-model="reboot" class="ui-input">
-      <option value="report">{{ t('software.report') }}</option>
-      <option value="forbid">{{ t('software.forbid') }}</option>
-    </select>
-    <label><input v-model="downgrade" type="checkbox" />{{ t('software.downgrade') }}</label>
+    <VSelect
+      :id="`${id}-reboot`"
+      v-model="reboot"
+      :label="t('software.reboot')"
+      :items="[
+        { title: t('software.report'), value: 'report' },
+        { title: t('software.forbid'), value: 'forbid' },
+      ]"
+      :disabled="props.disabled"
+    />
+    <VCheckbox v-model="downgrade" :label="t('software.downgrade')" :disabled="props.disabled" />
   </fieldset>
 </template>

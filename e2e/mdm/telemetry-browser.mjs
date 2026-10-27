@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import process from 'node:process'
 import assert from 'node:assert/strict'
+import { chooseOption, chooseOptionAt, escapePattern } from './vuetify-policy-controls.mjs'
 let browser,
   context,
   page,
@@ -178,21 +179,28 @@ try {
     const nativeBase = await api('GET', `/api/v1/resources/${resource}`)
     await page.goto(path(`policies/resources?resource=${resource}&tab=content`))
     const nativeEditor = page.getByTestId('collection-version')
-    await nativeEditor.getByLabel(/^基准版本/).selectOption(nativeBase.versions[0].id)
+    await chooseOption(
+      page,
+      nativeEditor.getByLabel(/^基准版本/),
+      new RegExp('^' + escapePattern(nativeBase.versions[0].id) + '(?: *·|$)'),
+    )
     await nativeEditor.getByLabel('新版本', { exact: true }).fill('browser-v2')
     const fieldPicker = nativeEditor.getByTestId('collection-mappings')
-    await fieldPicker.getByLabel(/^字段/).selectOption(fieldKey)
+    await chooseOption(
+      page,
+      fieldPicker.getByLabel(/^字段/),
+      new RegExp('^' + escapePattern(fieldKey) + '(?: |·|$)'),
+    )
     await fieldPicker.getByRole('button', { name: '添加字段映射', exact: true }).click()
     if (pointer) {
       const row = fieldPicker
         .locator('article')
         .filter({ has: page.getByText(fieldKey, { exact: true }) })
       await row.getByLabel('输出 JSON Pointer', { exact: true }).fill(pointer)
-      await row.getByLabel(/^类型转换/).selectOption('integer')
+      await chooseOption(page, row.getByLabel(/^类型转换/), 'integer')
     }
     const physical = nativeEditor.getByLabel(new RegExp(`^${fieldKey} · 物理读取来源`))
-    const sourceValue = await physical.locator('option').nth(1).getAttribute('value')
-    await physical.selectOption(sourceValue)
+    await chooseOptionAt(page, physical, 1)
     const versionResponse = page.waitForResponse(
       (r) =>
         r.request().method() === 'POST' &&
@@ -415,15 +423,27 @@ try {
   await page.goto(path('policies/resources/telemetry'))
   await page.getByRole('button', { name: '新建采集方案', exact: true }).click()
   const dialog = page.getByRole('dialog')
-  await dialog.getByLabel('模板来源', { exact: true }).selectOption('script')
-  await dialog.getByLabel('采集模板', { exact: true }).selectOption(template)
-  await dialog
-    .getByLabel('精确版本与变体', { exact: true })
-    .selectOption(JSON.stringify(['v1', 'macos', 'aarch64', 'default']))
+  await chooseOption(page, dialog.getByLabel('模板来源', { exact: true }), '脚本 / osquery')
+  await chooseOption(
+    page,
+    dialog.getByLabel('采集模板', { exact: true }),
+    new RegExp('^' + escapePattern(template) + '/'),
+    { loadMore: dialog.getByRole('button', { name: '下一页', exact: true }) },
+  )
+  await chooseOption(
+    page,
+    dialog.getByLabel('精确版本与变体', { exact: true }),
+    'v1/macos/aarch64/default',
+  )
   for (const key of ['gauge', 'counter', 'state'])
     await dialog.getByRole('checkbox', { name: new RegExp('custom.browser.' + key) }).check()
   await dialog.getByRole('button', { name: '下一步', exact: true }).click()
-  await dialog.getByLabel('目标范围', { exact: true }).selectOption(scope)
+  await chooseOption(
+    page,
+    dialog.getByLabel('目标范围', { exact: true }),
+    new RegExp('^' + escapePattern(scope) + '/'),
+    { loadMore: dialog.getByRole('button', { name: '下一页', exact: true }) },
+  )
   await dialog.getByLabel('采样周期（秒）', { exact: true }).fill('5')
   await dialog.getByLabel('上传周期（秒）', { exact: true }).fill('10')
   await dialog.getByText('执行与上传预算', { exact: true }).click()
@@ -490,9 +510,16 @@ try {
   await page.getByRole('button', { name: /custom.browser.gauge/ }).click()
   await page.locator('.telemetry-chart svg').waitFor()
   await page.getByRole('button', { name: '数据明细', exact: true }).click()
-  await page.locator('.telemetry-table tbody tr').nth(11).waitFor()
+  await page
+    .locator('.telemetry-table-wrap')
+    .getByRole('table')
+    .locator('tbody tr')
+    .nth(11)
+    .waitFor()
   assert.equal(await page.locator('.telemetry-line').count(), 2)
-  assert.ok((await page.locator('.telemetry-table').innerText()).includes('-12.5'))
+  assert.ok(
+    (await page.locator('.telemetry-table-wrap').getByRole('table').innerText()).includes('-12.5'),
+  )
   await page.reload()
   await page.getByRole('button', { name: /custom.browser.counter/ }).click()
   await page.locator('.telemetry-chart svg').waitFor()
@@ -501,7 +528,7 @@ try {
   await page.getByRole('img', { name: /离散状态/ }).waitFor()
   assert.equal(await page.locator('.telemetry-line').count(), 0)
   await page.getByRole('link', { name: '采集健康', exact: true }).click()
-  await page.getByLabel('指标', { exact: true }).selectOption('custom.browser.gauge')
+  await chooseOption(page, page.getByLabel('指标', { exact: true }), 'custom.browser.gauge')
   await page.getByText('历史已投递', { exact: true }).waitFor()
   await page.getByText(/容量丢弃/).waitFor()
   assert.ok(
@@ -513,7 +540,7 @@ try {
     'real-utc-raw-gaps-negative-gauge-server-counter-rate-state-health-and-assigned-summary',
   )
   phase = 'unknown-field-write-ui'
-  await page.goto(path('settings/data-collection/metrics'))
+  await page.goto(path('policies/metrics'))
   const row = page.locator('tr').filter({ hasText: 'custom.browser.gauge' })
   await row.getByRole('button', { name: '配置', exact: true }).click()
   await dialog
@@ -583,10 +610,10 @@ try {
   await deniedContinuation({ ...counterQuery, after: counterPage.next })
   await deniedContinuation({ ...gaugeQuery, after: gaugePage.next })
   await page.getByRole('button', { name: '重新读取', exact: true }).last().click()
-  await page.getByRole('alert').first().waitFor()
+  await page.locator('.v-alert[role=alert]').filter({ visible: true }).first().waitFor()
   assert.equal(await page.locator('.telemetry-chart').count(), 0)
   await page.reload()
-  await page.getByRole('alert').first().waitFor()
+  await page.locator('.v-alert[role=alert]').filter({ visible: true }).first().waitFor()
   assert.equal(await page.locator('.telemetry-chart').count(), 0)
   coverage.push(
     'device-authority-revocation-denies-continuations-and-fresh-queries-clears-returned-data',
@@ -605,15 +632,24 @@ try {
         ?.trim(),
       failures,
       pageErrors,
-      controls: await page.locator('select').evaluateAll((elements) =>
-        elements.map((element) => ({
-          name: element.getAttribute('aria-label'),
-          disabled: element.matches(':disabled'),
-          value: element.value,
-          options: [...element.options].map((option) => option.value),
-        })),
-      ),
-      alerts: await page.getByRole('alert').allTextContents(),
+      controls: page
+        ? await page
+            .locator('input[role=combobox]')
+            .evaluateAll((elements) =>
+              elements.map((element) => ({
+                name: element.getAttribute('aria-label'),
+                disabled: element.matches(':disabled'),
+                expanded: element.getAttribute('aria-expanded'),
+              })),
+            )
+            .catch(() => [])
+        : [],
+      alerts: page
+        ? await page
+            .locator('.v-alert[role=alert]')
+            .allTextContents()
+            .catch(() => [])
+        : [],
     }),
   )
 } finally {

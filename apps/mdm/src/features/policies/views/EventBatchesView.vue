@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import { VTextField, VBtn } from 'vuetify/components'
+
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { UiButton } from '@rss/core/components'
 import DeviceContext from '../../devices/components/DeviceContext.vue'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 import CopyDeepLink from '../../../components/CopyDeepLink.vue'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
@@ -103,7 +104,7 @@ watch(
 )
 </script>
 <template>
-  <PageFrame :title="t('policies.entry.batches')" :busy="op.busy.value" :failure="op.failure.value">
+  <MdmPage :title="t('policies.entry.batches')" :busy="op.busy.value" :failure="op.failure.value">
     <DeviceContext :device="device" />
     <RouterLink
       :to="{
@@ -115,10 +116,16 @@ watch(
     >
     <p>{{ t('policies.entry.batchHint') }}</p>
     <form v-if="!batch" class="console-toolbar" @submit.prevent="load()">
-      <label>{{ t('policies.entry.event') }}<input v-model="filter" class="ui-input" /></label
-      ><UiButton type="submit" :disabled="op.busy.value">{{ t('devices.reload') }}</UiButton>
+      <label
+        >{{ t('policies.entry.event')
+        }}<VTextField
+          v-model="filter"
+          variant="outlined"
+          density="comfortable"
+          hide-details="auto" /></label
+      ><VBtn type="submit" :disabled="op.busy.value">{{ t('devices.reload') }}</VBtn>
     </form>
-    <UiButton v-else :disabled="op.busy.value" @click="load()">{{ t('devices.reload') }}</UiButton>
+    <VBtn v-else :disabled="op.busy.value" @click="load()">{{ t('devices.reload') }}</VBtn>
     <template v-if="page"
       ><p>{{ t('console.pageNotTotal') }}</p>
       <p v-if="!page.items.length">{{ t('policies.empty') }}</p>
@@ -134,9 +141,9 @@ watch(
           >
         </li>
       </ol>
-      <UiButton v-if="page.nextCursor" :disabled="op.busy.value" @click="load(page.nextCursor)">{{
+      <VBtn v-if="page.nextCursor" :disabled="op.busy.value" @click="load(page.nextCursor)">{{
         t('devices.next')
-      }}</UiButton></template
+      }}</VBtn></template
     >
     <section v-if="detail" class="console-panel" data-section="event-batch">
       <h2>{{ detail.event }}</h2>
@@ -204,9 +211,9 @@ watch(
         :key="`${operation.reference.kind}/${operation.reference.id}`"
       >
         <template v-if="operation.reference.kind === 'retirement'"
-          ><UiButton type="button" @click="retirementId = operation.reference.id">{{
+          ><VBtn type="button" @click="retirementId = operation.reference.id">{{
             t('policies.entry.retirement')
-          }}</UiButton></template
+          }}</VBtn></template
         >
         <template v-else
           ><RouterLink
@@ -228,9 +235,9 @@ watch(
         /></template>
       </div>
     </article>
-    <UiButton v-if="members?.nextCursor" :disabled="op.busy.value" @click="more">{{
+    <VBtn v-if="members?.nextCursor" :disabled="op.busy.value" @click="more">{{
       t('devices.next')
-    }}</UiButton>
+    }}</VBtn>
     <RetirementDetails v-if="retirementId" :id="retirementId" />
-  </PageFrame>
+  </MdmPage>
 </template>

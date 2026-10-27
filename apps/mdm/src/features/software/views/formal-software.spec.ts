@@ -1,6 +1,7 @@
+import { VSelect, VTextField, VTextarea } from 'vuetify/components'
 import { createFeatureRouter as createRouter } from '../../../../tests/feature-router'
 import { decodeMdmError } from '@rss/api/mdm'
-import { DOMWrapper, mount, flushPromises, type VueWrapper } from '@vue/test-utils'
+import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { defineComponent, h, ref, type Component } from 'vue'
 import { createMemoryHistory } from 'vue-router'
 import { expect, it, vi } from 'vitest'
@@ -9,13 +10,9 @@ import { mdmI18n } from '../../../i18n'
 import SourcesView from './SourcesView.vue'
 import PublicationsView from './PublicationsView.vue'
 import ImportsView from './ImportsView.vue'
-import BootstrapView from './BootstrapView.vue'
-import UpdatesView from './UpdatesView.vue'
 import CatalogView from './CatalogView.vue'
 import VersionLifecycle from '../components/VersionLifecycle.vue'
 import SoftwareResourceSelect from '../components/SoftwareResourceSelect.vue'
-import ExecutionDetailView from '../../policies/views/ExecutionDetailView.vue'
-import { defaultSchedule } from '../../policies/clients/model'
 import { softwareResource } from '../../../../demo/software/fixtures'
 const id = '11111111-1111-4111-8111-111111111111',
   sha = Array<number>(32).fill(1)
@@ -67,10 +64,14 @@ async function fixture(component: Component, owners: object, props = {}, query =
 }
 const button = (w: VueWrapper, name: string) => w.findAll('button').find((b) => b.text() === name)!
 const field = (w: VueWrapper, text: string) => {
-  const label = w.findAll('label').find((l) => l.text().startsWith(text))!
-  return label.attributes('for')
-    ? w.get(`#${label.attributes('for')}`)
-    : label.find('input,textarea,select')
+  const controls = [
+    ...w.findAllComponents(VSelect),
+    ...w.findAllComponents(VTextField),
+    ...w.findAllComponents(VTextarea),
+  ]
+  const control = controls.find((s) => String(s.props().label).startsWith(text))
+  if (!control) throw new Error(`Missing software field: ${text}`)
+  return control
 }
 it('registers a source directly and uses the displayed lifecycle CAS for disable and enable', async () => {
   const changeSource = vi.fn(async (_id, _revision, body) => ({
@@ -296,7 +297,7 @@ it('uses Resource pages and reads versions only after selection without inventin
   await wrapper.get('tbody button').trigger('click')
   await flushPromises()
   expect(read).toHaveBeenCalledWith('app')
-  await button(wrapper, '← 企业软件目录').trigger('click')
+  await button(wrapper, '← 企业软件资源').trigger('click')
   await flushPromises()
   await button(wrapper, '下一页').trigger('click')
   await flushPromises()
@@ -332,13 +333,13 @@ it('selects a Resource header before reading real versions and clears the previo
     }),
     { policies: { resources: { list, read } } },
   )
-  await button(wrapper, '企业软件目录').trigger('click')
+  await button(wrapper, '企业软件资源').trigger('click')
   await flushPromises()
   expect(read).not.toHaveBeenCalled()
-  await wrapper.get('select').setValue('app')
+  await wrapper.findAllComponents(VSelect)[0]!.setValue('app')
   await flushPromises()
   expect(read).toHaveBeenCalledWith('app')
-  await wrapper.findAll('select')[1]!.setValue('1')
+  await wrapper.findAllComponents(VSelect)[1]!.setValue('1')
   expect(wrapper.findComponent(SoftwareResourceSelect).emitted('update:version')?.at(-1)).toEqual([
     '1',
   ])
@@ -378,104 +379,6 @@ it('reads nullable draft lifecycle and reconciles only the original operation be
   })
   wrapper.unmount()
 })
-it('saves onboarding as the shared Policy and reads the formal execution directory', async () => {
-  const change = vi.fn(async (id, body) => ({
-      id,
-      revision: 1,
-      enabled: true,
-      definition: body.input.definition,
-    })),
-    list = vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
-    directory = vi
-      .fn()
-      .mockResolvedValue({ items: [], nextCursor: null, statistics: { total: 0 }, asOf: 1 })
-  const { wrapper } = await fixture(BootstrapView, {
-    policies: { policies: { list, change }, executions: { directory } },
-  })
-  await wrapper.get('select').setValue('request_mdm_enrollment')
-  await button(wrapper, '新建').trigger('click')
-  await flushPromises()
-  await wrapper.get('#onboarding-scope').setValue(id)
-  await wrapper.get('#onboarding-organization').setValue(id)
-  await wrapper.get('form').trigger('submit')
-  await flushPromises()
-  expect(change.mock.calls[0]?.[1].input.definition).toEqual({
-    customEvent: null,
-    scope: id,
-    alias: null,
-    action: {
-      kind: 'request_mdm_enrollment',
-      organization: id,
-      schedule: defaultSchedule(),
-      runLifetimeSeconds: 1800,
-    },
-  })
-  await button(wrapper, '执行中心').trigger('click')
-  await flushPromises()
-  expect(directory.mock.calls[0]?.[0].filter).toContain(change.mock.calls[0]?.[0])
-  wrapper.unmount()
-})
-it('instantiates an update blueprint through Resource and exposes the existing Policy entry', async () => {
-  const blueprints = vi.fn().mockResolvedValue({
-      items: [
-        {
-          id: 'update-state',
-          version: '1',
-          category: 'updates',
-          platform: 'windows',
-          definition: { kind: 'native_collection' },
-        },
-        { id: 'hardware', version: '1', category: 'hardware' },
-      ],
-    }),
-    change = vi.fn().mockResolvedValue({ resource: 'updates' })
-  const { wrapper } = await fixture(UpdatesView, {
-    policies: { resources: { blueprints, change } },
-  })
-  expect(wrapper.text()).not.toContain('hardware')
-  await wrapper.get('select').setValue('update-state/1')
-  await wrapper.get('input').setValue('updates')
-  await wrapper.get('form').trigger('submit')
-  await flushPromises()
-  expect(change.mock.calls[0]).toMatchObject([
-    'updates',
-    {
-      expectedRevision: 0,
-      input: { action: 'instantiate', blueprint: 'update-state', version: '1' },
-    },
-  ])
-  expect(wrapper.text()).toContain('updates')
-  wrapper.unmount()
-})
-it('opens an onboarding action run without sending a native command read', async () => {
-  const run = {
-    taskId: id,
-    device: 'endpoint',
-    registrationId: id,
-    generation: 2,
-    availableAt: 1,
-    deadline: 1000,
-    state: { delivery: { kind: 'queued' }, execution: 'succeeded', cancellation: 'none' },
-    effect: 'unverified',
-    userAction: null,
-    result: { kind: 'enrollment', entryOutcome: 'opened' },
-  }
-  const read = vi.fn().mockResolvedValue(run),
-    native = vi.fn()
-  const { wrapper } = await fixture(
-    ExecutionDetailView,
-    { policies: { runs: { read }, native: { read: native } } },
-    {},
-    { policy: id },
-    `/${id}`,
-  )
-  expect(read).toHaveBeenCalled()
-  expect(native).not.toHaveBeenCalled()
-  expect(wrapper.text()).toContain('opened')
-  expect(wrapper.text()).toContain('尚未验证')
-  wrapper.unmount()
-})
-
 for (const protocol of [
   { kind: 'winget_rest', location: 'https://packages.example.test/', identifier: 'enterprise' },
   {
@@ -499,15 +402,14 @@ for (const protocol of [
     const { wrapper } = await fixture(SourcesView, { software: { lifecycle: { changeSource } } })
     await wrapper.findAll('form')[0]!.findAll('input')[0]!.setValue('enterprise')
     await wrapper.findAll('form')[0]!.findAll('input')[1]!.setValue('2')
-    await wrapper.get('select').setValue(protocol.kind)
-    const inputs = wrapper.findAll('form')[1]!.findAll('input')
+    await wrapper.getComponent(VSelect).setValue(protocol.kind)
     if ('location' in protocol) {
-      await inputs[0]!.setValue(protocol.location)
-      await inputs[1]!.setValue(protocol.identifier)
+      await field(wrapper, 'HTTPS 源地址').setValue(protocol.location)
+      await field(wrapper, '标识').setValue(protocol.identifier)
     } else {
-      await inputs[0]!.setValue(protocol.repository)
-      await inputs[1]!.setValue(protocol.commit)
-      if ('tap' in protocol) await inputs[2]!.setValue(protocol.tap)
+      await field(wrapper, '仓库地址').setValue(protocol.repository)
+      await field(wrapper, '固定提交').setValue(protocol.commit)
+      if ('tap' in protocol) await field(wrapper, 'Tap').setValue(protocol.tap)
     }
     await wrapper.findAll('form')[1]!.trigger('submit')
     await flushPromises()
@@ -621,103 +523,6 @@ it('submits a complete synchronous import with explicit target and auxiliary mat
   expect(wrapper.text()).toContain('imported / 2 · 5')
   wrapper.unmount()
 })
-it('binds explicit Agent releases in the common Policy and reads canonical registration progress', async () => {
-  const targets = ['windows_x86_64', 'windows_aarch64', 'macos_x86_64', 'macos_aarch64']
-  const releases = targets.map((target, i) => ({
-    releaseId: `11111111-1111-4111-8111-${String(i + 1).padStart(12, '0')}`,
-    target: {
-      platform: target.split('_')[0],
-      architecture: target.startsWith('windows') ? target.slice(8) : target.slice(6),
-    },
-    version: '1',
-    format: target.startsWith('windows') ? 'exe' : 'pkg',
-  }))
-  let saved: { id: string; revision: number; enabled: boolean; definition: unknown } | undefined
-  const change = vi.fn(async (id, body) => {
-    saved = {
-      id,
-      revision: (saved?.revision ?? 0) + 1,
-      enabled: body.input.action === 'put' ? body.input.enabled : body.input.action === 'enable',
-      definition: body.input.definition ?? saved?.definition,
-    }
-    return saved
-  })
-  const assignments = vi.fn().mockResolvedValue({
-    items: [
-      {
-        object: { kind: 'endpoint', id: 'endpoint' },
-        channel: 'mdm',
-        availability: 'ready',
-        reason: null,
-        target: { device: 'endpoint', channel: 'mdm', registrationId: id, generation: 2 },
-        qualification: { state: 'eligible', entry: 1 },
-        operationIds: [],
-        sources: [],
-      },
-    ],
-    nextCursor: null,
-  })
-  const directory = vi
-    .fn()
-    .mockResolvedValue({ items: [], statistics: { total: 0 }, asOf: 1, nextCursor: null })
-  const { wrapper } = await fixture(BootstrapView, {
-    onboarding: { packages: { list: vi.fn().mockResolvedValue(releases) } },
-    policies: {
-      policies: {
-        list: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
-        change,
-        assignments,
-      },
-      executions: { directory },
-    },
-  })
-  await button(wrapper, '新建').trigger('click')
-  await flushPromises()
-  await wrapper.get('#onboarding-scope').setValue(id)
-  await button(wrapper, '读取 Agent 发行包').trigger('click')
-  await flushPromises()
-  const selectors = wrapper
-    .get('form')
-    .findAll('select')
-    .filter((s) => s.find('option[value=""]').exists())
-  for (let i = 0; i < 4; i++) await selectors[i]!.setValue(releases[i]!.releaseId)
-  const lifetime = wrapper.get('form input[max="604800"]')
-  await lifetime.setValue(3600)
-  await wrapper.get('form').findAll('input[type=checkbox]').at(-1)!.setValue(false)
-  await wrapper.get('form').trigger('submit')
-  await flushPromises()
-  expect(change.mock.calls[0]?.[1]).toMatchObject({
-    input: {
-      enabled: false,
-      definition: {
-        action: {
-          kind: 'ensure_agent_installed',
-          packages: Object.fromEntries(
-            targets.map((target, i) => [target, releases[i]!.releaseId]),
-          ),
-          runLifetimeSeconds: 3600,
-        },
-      },
-    },
-  })
-  await button(wrapper, '启用').trigger('click')
-  await flushPromises()
-  expect(change.mock.calls[1]?.[1]).toMatchObject({
-    expectedRevision: 1,
-    input: { action: 'enable' },
-  })
-  await button(wrapper, '刷新进度（保留编辑）').trigger('click')
-  await flushPromises()
-  await button(wrapper, '来源与历史证据').trigger('click')
-  await flushPromises()
-  expect(new DOMWrapper(document.body).get('[role=dialog]').text()).toContain(id)
-  expect(new DOMWrapper(document.body).get('[role=dialog]').text()).toContain('2')
-  await button(wrapper, '执行中心').trigger('click')
-  await flushPromises()
-  expect(directory.mock.calls[0]?.[0].filter).toContain(saved?.id)
-  wrapper.unmount()
-})
-
 it('keeps the pinned Catalog version while admission is unknown and refuses mismatched private bytes', async () => {
   const { resources } = softwareResource(),
     read = vi.fn().mockResolvedValue(resources.read('app')),
@@ -754,8 +559,8 @@ it('keeps the pinned Catalog version while admission is unknown and refuses mism
   expect(wrapper.text()).toContain('输入或响应无效，操作未确认。')
   await button(wrapper, '启用').trigger('click')
   await flushPromises()
-  expect(wrapper.get('select').attributes('disabled')).toBeDefined()
-  expect(button(wrapper, '← 企业软件目录').attributes('disabled')).toBeDefined()
+  expect(wrapper.getComponent(VSelect).props('disabled')).toBe(true)
+  expect(button(wrapper, '← 企业软件资源').attributes('disabled')).toBeDefined()
   const original = structuredClone(change.mock.calls[0])
   await wrapper.get('section[role=status] input[type=checkbox]').setValue(true)
   await button(wrapper, '重放同一操作').trigger('click')

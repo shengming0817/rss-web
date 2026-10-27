@@ -1,6 +1,8 @@
 import { ref } from 'vue'
-import { mount, flushPromises, DOMWrapper } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
+import { VSelect, VTextField } from 'vuetify/components'
+import type { VueWrapper } from '@vue/test-utils'
 import {
   createMdmTransport,
   type HttpTransport,
@@ -24,6 +26,32 @@ vi.mock('@rss/api/mdm', () => ({
     }),
   }),
 }))
+function select(wrapper: VueWrapper, id: string) {
+  const control = wrapper.findAllComponents(VSelect).find((control) => control.props('id') === id)
+  if (!control) throw new Error(`Missing demo select: ${id}`)
+  return control
+}
+async function choose(wrapper: VueWrapper, id: string, value: string) {
+  select(wrapper, id).vm.$emit('update:modelValue', value)
+  await flushPromises()
+}
+function itemTitle(wrapper: VueWrapper, id: string, value: string) {
+  const items = select(wrapper, id).props('items') as { value: string; title: string }[]
+  return items.find((item) => item.value === value)?.title
+}
+async function openEvents(wrapper: VueWrapper) {
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text().includes('模拟自动化触发事件'))!
+    .trigger('click')
+  await flushPromises()
+}
+function taskLabel(wrapper: VueWrapper) {
+  return wrapper
+    .findAllComponents(VTextField)
+    .find((control) => control.props('id') === 'demo-event-task')!
+    .props('label')
+}
 it('translates all option labels while retaining their protocol values', async () => {
   const i18n = mdmI18n()
   i18n.global.locale.value = 'zh-CN'
@@ -33,15 +61,14 @@ it('translates all option labels while retaining their protocol values', async (
   })
   await wrapper.get('button').trigger('click')
   await flushPromises()
-  const body = new DOMWrapper(document.body)
-  expect(body.get('#demo-scenario option[value="normal"]').text()).toBe('正常')
-  expect(body.get('#demo-module option[value="devices"]').text()).toBe('设备与资产')
-  expect(body.get('#demo-source option[value="real"]').text()).toBe('真实接口')
-  await body.get('#demo-scenario').setValue('conflict')
+  expect(itemTitle(wrapper, 'demo-scenario', 'normal')).toBe('正常')
+  expect(itemTitle(wrapper, 'demo-module', 'devices')).toBe('设备与资产')
+  expect(itemTitle(wrapper, 'demo-source', 'real')).toBe('真实接口')
+  await choose(wrapper, 'demo-scenario', 'conflict')
   i18n.global.locale.value = 'en-US'
   await flushPromises()
-  expect(body.get('#demo-scenario option[value="normal"]').text()).toBe('Normal')
-  expect((body.get('#demo-scenario').element as HTMLSelectElement).value).toBe('conflict')
+  expect(itemTitle(wrapper, 'demo-scenario', 'normal')).toBe('Normal')
+  expect(select(wrapper, 'demo-scenario').props('modelValue')).toBe('conflict')
   wrapper.unmount()
 })
 it('labels consent targets as request IDs, refreshes automatic time on submit and reports rejected events', async () => {
@@ -69,12 +96,15 @@ it('labels consent targets as request IDs, refreshes automatic time on submit an
   })
   await wrapper.get('button').trigger('click')
   await flushPromises()
-  const body = new DOMWrapper(document.body)
-  await body.get('#demo-event-kind').setValue('remote_consent')
-  expect(body.get('label[for="demo-event-task"]').text()).toBe('申请 ID（远程支持申请）')
-  await body.get('#demo-event-task').setValue('33333333-3333-4333-8333-333333333333')
+  await openEvents(wrapper)
+  await choose(wrapper, 'demo-event-kind', 'remote_consent')
+  expect(taskLabel(wrapper)).toBe('申请 ID（远程支持申请）')
+  await wrapper.get('#demo-event-task').setValue('33333333-3333-4333-8333-333333333333')
   asOf += 3600
-  await body.get('details button').trigger('click')
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text() === '注入模拟事件')!
+    .trigger('click')
   await flushPromises()
   expect(request).toHaveBeenLastCalledWith(
     expect.objectContaining({
@@ -89,11 +119,14 @@ it('labels consent targets as request IDs, refreshes automatic time on submit an
       },
     }),
   )
-  expect(body.get('[role="alert"]').text()).toContain('未确认')
-  await body.get('#demo-event-kind').setValue('remote_revoke')
-  expect(body.get('label[for="demo-event-task"]').text()).toBe('申请 ID（远程支持申请）')
-  await body.get('#demo-event-at').setValue(1780000001)
-  await body.get('details button').trigger('click')
+  expect(wrapper.get('.v-alert[role="alert"]').text()).toContain('未确认')
+  await choose(wrapper, 'demo-event-kind', 'remote_revoke')
+  expect(taskLabel(wrapper)).toBe('申请 ID（远程支持申请）')
+  await wrapper.get('#demo-event-at').setValue(1780000001)
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text() === '注入模拟事件')!
+    .trigger('click')
   await flushPromises()
   expect(request).toHaveBeenLastCalledWith(
     expect.objectContaining({
@@ -107,7 +140,37 @@ it('labels consent targets as request IDs, refreshes automatic time on submit an
       },
     }),
   )
-  await body.get('#demo-event-kind').setValue('remote_ended')
-  expect(body.get('label[for="demo-event-task"]').text()).toBe('原任务 ID（运行详情）')
+  await choose(wrapper, 'demo-event-kind', 'remote_ended')
+  expect(taskLabel(wrapper)).toBe('原任务 ID（运行详情）')
   wrapper.unmount()
+})
+
+it('keeps dialog and selectable menus inside the demo theme surface', async () => {
+  const i18n = mdmI18n()
+  i18n.global.locale.value = 'en-US'
+  const host = document.createElement('div')
+  document.body.append(host)
+  const wrapper = mount(DemoControls, {
+    attachTo: host,
+    props: { transport: createMdmTransport(), authenticated: ref(true) },
+    global: { plugins: [i18n] },
+  })
+  try {
+    await wrapper.get('button').trigger('click')
+    await flushPromises()
+    const surface = wrapper.get('.mdm-device-surface')
+    expect(surface.find('.v-dialog').exists()).toBe(true)
+    await select(wrapper, 'demo-scenario').get('input').trigger('keydown', { key: 'ArrowDown' })
+    await flushPromises()
+    expect(surface.get('.v-dialog').find('[role="listbox"]').exists()).toBe(true)
+    const option = surface
+      .findAll('[role="option"]')
+      .find((option) => option.text() === itemTitle(wrapper, 'demo-scenario', 'conflict'))!
+    await option.trigger('click')
+    await flushPromises()
+    expect(select(wrapper, 'demo-scenario').props('modelValue')).toBe('conflict')
+  } finally {
+    wrapper.unmount()
+    host.remove()
+  }
 })

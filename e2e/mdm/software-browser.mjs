@@ -5,6 +5,11 @@ import { readFileSync, statSync } from 'node:fs'
 import { randomUUID, createHash } from 'node:crypto'
 import assert from 'node:assert/strict'
 import process from 'node:process'
+import {
+  chooseSoftwareOption,
+  assertSoftwareOption,
+  optionStartingWith,
+} from './vuetify-software-controls.mjs'
 let browser,
   backendRevision,
   phase = 'environment',
@@ -123,7 +128,11 @@ try {
   }
   await page.goto(route('software/imports'))
   await idle()
-  await page.locator('#import-source').selectOption('browser-rest/1')
+  await chooseSoftwareOption(
+    page,
+    page.getByRole('combobox', { name: '企业来源 ID', exact: true }),
+    optionStartingWith('browser-rest / 1'),
+  )
   await click('继续')
   await page.getByLabel('软件资源', { exact: true }).fill(importedResource)
   await page.getByLabel('包标识', { exact: true }).fill('Acme.App')
@@ -196,7 +205,7 @@ try {
     'production-resource-upload-lost-chunk-read-frontier-explicit-complete-and-content-receipt',
   )
   phase = 'version-admission-private-download'
-  await page.goto(route(`software/catalog?resource=${importedResource}&version=1`))
+  await page.goto(route(`software?resource=${importedResource}&version=1`))
   await idle()
   await page.getByRole('heading', { name: '版本准入 · 1', exact: true }).waitFor()
   await page.getByRole('button', { name: '启用', exact: true }).click()
@@ -334,11 +343,18 @@ try {
     scopes.push(id)
   }
   const pickVersion = async (version) => {
-    const picker = page.locator('.console-software-picker')
-    await picker.getByRole('button', { name: '企业软件目录', exact: true }).click()
-    await picker.locator('select').first().selectOption(resource)
-    await picker.locator('select').nth(1).waitFor()
-    await picker.locator('select').nth(1).selectOption(version)
+    const form = page.locator('[data-testid=publication-create]')
+    await form.getByRole('button', { name: '企业软件资源', exact: true }).click()
+    await chooseSoftwareOption(
+      page,
+      form.getByRole('combobox', { name: '企业软件资源', exact: true }),
+      optionStartingWith(resource),
+    )
+    await chooseSoftwareOption(
+      page,
+      form.getByRole('combobox', { name: '精确包版本', exact: true }),
+      optionStartingWith(version),
+    )
   }
   const published = []
   const publish = async (version, lose = false) => {
@@ -346,7 +362,11 @@ try {
     await idle()
     await pickVersion(version)
     await click('读取实际目标')
-    await page.locator('#publication-target').selectOption(f.target)
+    await chooseSoftwareOption(
+      page,
+      page.getByRole('combobox', { name: '发布目标 ID', exact: true }),
+      optionStartingWith(f.target),
+    )
     let id,
       originals = []
     const intercept = async (r) => {
@@ -386,28 +406,62 @@ try {
   phase = 'direct-publication'
   await publish('v1', true)
   coverage.push('one-target-publication-without-candidate-or-promotion')
-  await page.goto(route('software'))
+  phase = 'published-resource-library'
+  await page.goto(route('policies/resources'))
   await idle()
-  assert.ok((await page.textContent('body')).includes('browser-source'))
+  const publishedLibrary = page.locator('.v-expansion-panel').filter({
+    has: page.getByRole('button', { name: '已发布软件', exact: true }),
+  })
+  await publishedLibrary.getByRole('button', { name: '已发布软件', exact: true }).click()
+  await publishedLibrary.getByRole('button', { name: '重新读取', exact: true }).click()
+  await publishedLibrary
+    .getByRole('table')
+    .getByRole('link', { name: resource, exact: true })
+    .click()
+  await page.waitForURL(
+    (url) =>
+      url.pathname.endsWith('/policies/resources') && url.searchParams.get('resource') === resource,
+  )
+  await idle()
+  coverage.push('formal-published-software-directory-opens-canonical-resource-detail')
+  await page.goto(route('settings/software-sources'))
+  await idle()
+  assert.ok((await page.getByRole('table').textContent()).includes('browser-source'))
   coverage.push('formal-source-revision-and-publication-directories')
   phase = 'full-deployment'
-  await page.goto(route('software/deployments'))
+  await page.goto(route('policies?action=software'))
   await idle()
   await click('新建')
   await page.locator('#deployment-resource').fill(resource)
   await page.locator('#deployment-version').fill('v1')
   await click('读取已准入版本与平台变体')
-  await page.locator('#deployment-intent').selectOption('available_install')
-  await page.locator('[data-field=published]').check()
-  await page.locator('[data-field=access]').selectOption('device')
-  await page.locator('[data-field=displayName]').fill('Direct software')
-  await page.locator('[data-field=category]').fill('Apps')
-  await page.locator('[data-field=riskLevel]').selectOption('1')
-  await page.locator('[data-field=allowAi]').uncheck()
+  await chooseSoftwareOption(
+    page,
+    page.getByRole('combobox', { name: '安装意图', exact: true }),
+    '可选安装',
+  )
+  await page.getByRole('checkbox', { name: '发布到自助服务', exact: true }).check()
+  await chooseSoftwareOption(
+    page,
+    page.getByRole('combobox', { name: '自助访问对象', exact: true }),
+    '不需要企业登录：此设备可用',
+  )
+  await page.getByRole('textbox', { name: '自助展示名称', exact: true }).fill('Direct software')
+  await page.getByRole('textbox', { name: '分类', exact: true }).fill('Apps')
+  await chooseSoftwareOption(
+    page,
+    page.getByRole('combobox', { name: '脚本风险等级', exact: true }),
+    '1：规则内直接执行',
+  )
+  await page.getByRole('checkbox', { name: '允许 AI 调用', exact: true }).uncheck()
   await click('下一步')
   await page.locator('#deployment-scope').fill(scopes[0])
   await click('下一步')
-  assert.equal(await page.locator('#deployment-rollout-mode').inputValue(), 'full')
+  await assertSoftwareOption(
+    page,
+    page.getByRole('combobox', { name: '部署方式', exact: true }),
+    '全量部署',
+  )
   assert.equal(await page.locator('[data-field=stage-scope]').count(), 0)
   await click('下一步')
   const save = async () => {
@@ -447,6 +501,22 @@ try {
   coverage.push('software-self-service-administrator-selected-risk-one-and-ai-switch')
   coverage.push('default-full-deployment-selects-scope-once')
   assert.equal(current.definition.customEvent, null)
+  const stalePolicy = await api(
+    `/api/v1/policies/${policy}`,
+    'POST',
+    {
+      operationId: randomUUID(),
+      expectedRevision: current.revision - 1,
+      input: { action: 'disable' },
+    },
+    409,
+  )
+  assert.deepEqual(stalePolicy, { code: 'operation_conflict' })
+  const afterStale = await api(`/api/v1/policies/${policy}`)
+  assert.equal(afterStale.revision, current.revision)
+  assert.equal(afterStale.state, current.state)
+  assert.deepEqual(afterStale.definition, current.definition)
+  coverage.push('canonical-software-policy-stale-cas-409-does-not-change-policy')
   current = await write(
     `/api/v1/policies/${policy}`,
     {
@@ -462,18 +532,30 @@ try {
   assert.equal(current.definition.action.resource.version, 'v1')
   coverage.push('publishing-v2-does-not-change-v1-policy')
   phase = 'update-and-batches'
-  await page.goto(route(`software/deployments?id=${policy}`))
+  await page.goto(route(`policies?action=software&id=${policy}`))
   await idle()
   await click('编辑')
   await page.locator('#deployment-version').fill('v2')
   await click('读取已准入版本与平台变体')
-  assert.equal(await page.locator('#deployment-intent').inputValue(), 'available_install')
-  await page.locator('#deployment-delivery').selectOption('native')
+  await assertSoftwareOption(
+    page,
+    page.getByRole('combobox', { name: '安装意图', exact: true }),
+    '可选安装',
+  )
+  await chooseSoftwareOption(
+    page,
+    page.getByRole('combobox', { name: '分发方式', exact: true }),
+    '原生包管理器',
+  )
   await click('读取此版本的发布记录')
-  await page.locator('input[name=native-publication]').check()
+  await page.getByRole('radio', { name: `${f.target} · ${resource} / v2`, exact: true }).check()
   await click('下一步')
   await click('下一步')
-  await page.locator('#deployment-rollout-mode').selectOption('staged')
+  await chooseSoftwareOption(
+    page,
+    page.getByRole('combobox', { name: '部署方式', exact: true }),
+    '分批部署',
+  )
   await page.locator('#stage-0-scope').fill(scopes[1])
   const at = (offset) => new Date(Date.now() + offset).toISOString().slice(0, 19)
   await page.locator('#stage-0-at').fill(at(-3600000))

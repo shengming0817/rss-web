@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import PolicyFieldset from './PolicyFieldset.vue'
+import { VCheckbox, VSelect, VTextField, VTextarea } from 'vuetify/components'
+import { controlEvent } from '../control-event'
+
 import { computed, useId } from 'vue'
 import SelfServiceSelectors from './SelfServiceSelectors.vue'
 import type { SelfServiceAccess } from '../clients/self-service-access'
@@ -42,15 +46,15 @@ function publish(event: Event) {
 }
 </script>
 <template>
-  <fieldset>
+  <PolicyFieldset>
     <legend>{{ t('policies.selfService.title') }}</legend>
     <label :for="`${id}-published`"
-      ><input
+      ><VCheckbox
         :id="`${id}-published`"
         data-field="published"
-        type="checkbox"
-        :checked="model?.published ?? false"
-        @change="publish"
+        :model-value="model?.published ?? false"
+        hide-details="auto"
+        @update:model-value="publish(controlEvent($event))"
       />{{ t('policies.selfService.publish') }}</label
     >
     <p>{{ t('policies.selfService.publishHint') }}</p>
@@ -60,82 +64,106 @@ function publish(event: Event) {
         {{ t('policies.selfService.accessRequired') }}
       </p>
       <label :for="`${id}-access`">{{ t('policies.selfService.access') }}</label
-      ><select
+      ><VSelect
         :id="`${id}-access`"
         v-model="accessKind"
-        class="ui-input"
         data-field="access"
         :required="model.published"
-      >
-        <option value="">{{ t('policies.selfService.choose') }}</option>
-        <option value="device">{{ t('policies.selfService.device') }}</option>
-        <option value="authenticated_user">
-          {{ t('policies.selfService.authenticatedUser') }}
-        </option>
-        <option value="users">{{ t('policies.selfService.users') }}</option>
-      </select>
+        :items="[
+          { title: String(t('policies.selfService.choose')), value: '' },
+          { title: String(t('policies.selfService.device')), value: 'device' },
+          {
+            title: String(t('policies.selfService.authenticatedUser')),
+            value: 'authenticated_user',
+          },
+          { title: String(t('policies.selfService.users')), value: 'users' },
+        ]"
+        variant="outlined"
+        density="comfortable"
+        hide-details="auto"
+      />
       <SelfServiceSelectors v-if="model.access?.kind === 'users'" v-model="selectors" />
       <label :for="`${id}-name`">{{ t('policies.selfService.name') }}</label
-      ><input
+      ><VTextField
         :id="`${id}-name`"
         v-model="model.presentation.displayName"
-        class="ui-input"
         data-field="displayName"
         required
         maxlength="256"
+        variant="outlined"
+        density="comfortable"
+        hide-details="auto"
       />
       <label :for="`${id}-description`">{{ t('policies.selfService.description') }}</label
-      ><textarea
+      ><VTextarea
         :id="`${id}-description`"
         v-model="model.presentation.description"
-        class="ui-input"
         maxlength="4096"
+        variant="outlined"
+        density="comfortable"
+        hide-details="auto"
       />
       <label :for="`${id}-prerequisites`">{{ t('policies.selfService.prerequisites') }}</label
-      ><textarea
+      ><VTextarea
         :id="`${id}-prerequisites`"
         v-model="model.presentation.prerequisites"
-        class="ui-input"
         maxlength="4096"
+        variant="outlined"
+        density="comfortable"
+        hide-details="auto"
       />
       <label :for="`${id}-effects`">{{ t('policies.selfService.effects') }}</label
-      ><textarea
+      ><VTextarea
         :id="`${id}-effects`"
         v-model="model.presentation.sideEffects"
-        class="ui-input"
         maxlength="4096"
+        variant="outlined"
+        density="comfortable"
+        hide-details="auto"
       />
       <label :for="`${id}-category`">{{ t('policies.selfService.category') }}</label
-      ><input
+      ><VTextField
         :id="`${id}-category`"
         v-model="model.presentation.category"
-        class="ui-input"
         data-field="category"
         required
         maxlength="128"
+        variant="outlined"
+        density="comfortable"
+        hide-details="auto"
       />
       <label :for="`${id}-keywords`">{{ t('policies.selfService.keywords') }}</label
-      ><textarea :id="`${id}-keywords`" v-model="keywords" class="ui-input" />
-      <template>
-        <label :for="`${id}-ai`"
-          ><input :id="`${id}-ai`" v-model="model.allowAi" data-field="allowAi" type="checkbox" />{{
-            t('policies.selfService.allowAi')
-          }}</label
-        >
-        <p>
-          {{ t(model.allowAi ? 'policies.selfService.aiHint' : 'policies.selfService.manualHint') }}
-        </p>
-        <label :for="`${id}-risk`">{{ t('policies.selfService.risk') }}</label
-        ><select
-          :id="`${id}-risk`"
-          v-model.number="model.riskLevel"
-          class="ui-input"
-          data-field="riskLevel"
-        >
-          <option :value="1">{{ t('policies.selfService.risk1') }}</option>
-          <option :value="2">{{ t('policies.selfService.risk2') }}</option>
-        </select>
-      </template>
+      ><VTextarea
+        :id="`${id}-keywords`"
+        v-model="keywords"
+        variant="outlined"
+        density="comfortable"
+        hide-details="auto"
+      />
+      <label :for="`${id}-ai`"
+        ><VCheckbox
+          :id="`${id}-ai`"
+          v-model="model.allowAi"
+          data-field="allowAi"
+          hide-details="auto"
+        />{{ t('policies.selfService.allowAi') }}</label
+      >
+      <p>
+        {{ t(model.allowAi ? 'policies.selfService.aiHint' : 'policies.selfService.manualHint') }}
+      </p>
+      <label :for="`${id}-risk`">{{ t('policies.selfService.risk') }}</label
+      ><VSelect
+        :id="`${id}-risk`"
+        v-model.number="model.riskLevel"
+        data-field="riskLevel"
+        :items="[
+          { title: String(t('policies.selfService.risk1')), value: 1 },
+          { title: String(t('policies.selfService.risk2')), value: 2 },
+        ]"
+        variant="outlined"
+        density="comfortable"
+        hide-details="auto"
+      />
     </template>
-  </fieldset>
+  </PolicyFieldset>
 </template>

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { VSelect, VTextField } from 'vuetify/components'
 import { useI18n } from 'vue-i18n'
 import type { Scalar } from '../clients/asset-model'
-const props = defineProps<{ modelValue: Scalar }>()
+const props = defineProps<{ modelValue: Scalar; disabled?: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [value: Scalar] }>()
 const { t } = useI18n()
 const timeValue = computed(() =>
@@ -26,27 +27,31 @@ function input(event: Event) {
   } else {
     const value = Number(target.value)
     target.setCustomValidity(
-      target.value !== '' && Number.isSafeInteger(value) ? '' : t('devices.invalidResponse'),
+      target.value !== '' &&
+        (kind === 'number' ? Number.isFinite(value) : Number.isSafeInteger(value))
+        ? ''
+        : t('devices.invalidResponse'),
     )
     if (target.validity.valid) emit('update:modelValue', { kind, value })
   }
 }
 </script>
 <template>
-  <select
+  <v-select
     v-if="modelValue.kind === 'boolean'"
-    class="ui-input"
-    :aria-label="t('devices.value')"
-    :value="String(modelValue.value)"
-    @change="input"
-  >
-    <option value="false">{{ t('devices.no') }}</option>
-    <option value="true">{{ t('devices.yes') }}</option>
-  </select>
-  <input
+    :label="t('devices.value')"
+    :disabled="!!disabled"
+    :model-value="modelValue.value"
+    :items="[
+      { title: t('devices.no'), value: false },
+      { title: t('devices.yes'), value: true },
+    ]"
+    @update:model-value="emit('update:modelValue', { kind: 'boolean', value: $event })"
+  />
+  <v-text-field
     v-else
-    class="ui-input"
-    :aria-label="t('devices.value')"
+    :label="t('devices.value')"
+    :disabled="!!disabled"
     :type="
       modelValue.kind === 'time'
         ? 'datetime-local'
@@ -54,9 +59,9 @@ function input(event: Event) {
           ? 'text'
           : 'number'
     "
-    :value="modelValue.kind === 'time' ? timeValue : modelValue.value"
+    :model-value="modelValue.kind === 'time' ? timeValue : modelValue.value"
     :maxlength="modelValue.kind === 'string' ? 256 : undefined"
-    step="1"
+    :step="modelValue.kind === 'number' ? 'any' : '1'"
     required
     @input="input"
   />

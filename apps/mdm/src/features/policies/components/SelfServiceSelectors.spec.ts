@@ -1,7 +1,9 @@
+import { selectControl } from '../vuetify-test-controls'
+import { createFeatureRouter as createRouter } from '../../../../tests/feature-router'
 import { mount, flushPromises } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import { defineComponent, ref, toRaw } from 'vue'
-import { createMemoryHistory, createRouter } from 'vue-router'
+import { createMemoryHistory } from 'vue-router'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
 import SelfServiceSelectors from './SelfServiceSelectors.vue'
@@ -31,6 +33,7 @@ it('adds fixed user, department and active static group selections, rejects dupl
   })
   await router.push('/')
   const wrapper = mount(Host, {
+    attachTo: document.body,
     global: {
       plugins: [mdmI18n(), router],
       stubs: {
@@ -61,10 +64,10 @@ it('adds fixed user, department and active static group selections, rejects dupl
   await add()
   expect(selections.value).toHaveLength(1)
   expect(wrapper.find('[role="alert"]').exists()).toBe(true)
-  await wrapper.get('select[id$="-kind"]').setValue('department')
+  await selectControl(wrapper, 'select[id$="-kind"]').setValue('department')
   await flushPromises()
-  await wrapper.get('select[id$="-department"]').setValue('engineering')
-  await wrapper.get('select[id$="-matching"]').setValue('subtree')
+  await selectControl(wrapper, 'select[id$="-department"]').setValue('engineering')
+  await selectControl(wrapper, 'select[id$="-matching"]').setValue('subtree')
   await add()
   expect(selections.value[1]).toEqual({
     kind: 'department',
@@ -72,16 +75,16 @@ it('adds fixed user, department and active static group selections, rejects dupl
     id: 'engineering',
     matching: 'subtree',
   })
-  await wrapper.get('select[id$="-kind"]').setValue('user_group')
+  await selectControl(wrapper, 'select[id$="-kind"]').setValue('user_group')
   await flushPromises()
-  await wrapper.get('select[id$="-group"]').setValue(id)
+  await selectControl(wrapper, 'select[id$="-group"]').setValue(id)
   await add()
   expect(selections.value[2]).toEqual({ kind: 'user_group', id })
   expect(() => structuredClone(toRaw(selections.value))).not.toThrow()
   await wrapper.findAll('li')[0]!.get('button').trigger('click')
   expect(() => structuredClone(toRaw(selections.value))).not.toThrow()
   departments.mockRejectedValueOnce(new Error('not configured'))
-  await wrapper.get('select[id$="-kind"]').setValue('department')
+  await selectControl(wrapper, 'select[id$="-kind"]').setValue('department')
   await flushPromises()
   await add()
   expect(selections.value).toHaveLength(2)

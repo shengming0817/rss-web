@@ -31,6 +31,7 @@ it('keeps pending authorization separate from registration and rejects invented 
     },
   }
   expect(decodeEnrollment(response, id)).toEqual(response)
+  expect(() => decodeEnrollment({ ...response, deviceId: 'invented-target' }, id)).toThrow()
   expect(() =>
     decodeEnrollment(
       { ...response, instructions: { ...response.instructions, enrollmentMethod: 'password' } },

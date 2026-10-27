@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import { VAlert, VBtn } from 'vuetify/components'
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
+import MdmPage from '../../../ui/MdmPage.vue'
 const runtime = useMdm(),
   { t } = useI18n(),
   { run, busy, failure } = useOperation()
@@ -46,22 +47,25 @@ onBeforeUnmount(() => {
 refresh()
 </script>
 <template>
-  <section class="console-public-page" :aria-busy="busy">
-    <h1>{{ t('onboarding.termsTitle') }}</h1>
-    <p v-if="failure" role="alert">{{ t('onboarding.termsUnavailable') }}</p>
-    <p v-if="expired" role="alert">{{ t('onboarding.termsExpired') }}</p>
+  <MdmPage :title="t('onboarding.termsTitle')" :busy="busy">
+    <v-alert v-if="failure" type="error" variant="tonal" role="alert">{{
+      t('onboarding.termsUnavailable')
+    }}</v-alert>
+    <v-alert v-if="expired" type="error" variant="tonal" role="alert">{{
+      t('onboarding.termsExpired')
+    }}</v-alert>
     <template v-if="available && context">
       <p>{{ t('onboarding.termsVersion') }}: {{ context.termsVersion }}</p>
       <p v-if="context.mode === 'azureadjoin'">{{ t('onboarding.joinTerms') }}</p>
       <pre class="enrollment-terms">{{ context.termsText }}</pre>
       <form method="post" action="/api/v1/windows/entra/terms/finish">
         <input type="hidden" name="csrfToken" :value="context.csrfToken" />
-        <UiButton name="accepted" value="true" type="submit">{{ t('onboarding.accept') }}</UiButton>
-        <UiButton v-if="context.canDecline" name="accepted" value="false" type="submit">
+        <v-btn name="accepted" value="true" type="submit">{{ t('onboarding.accept') }}</v-btn>
+        <v-btn v-if="context.canDecline" name="accepted" value="false" type="submit">
           {{ t('onboarding.decline') }}
-        </UiButton>
+        </v-btn>
       </form>
     </template>
-    <UiButton type="button" :disabled="!!busy" @click="refresh">{{ t('devices.reload') }}</UiButton>
-  </section>
+    <v-btn type="button" :disabled="!!busy" @click="refresh">{{ t('devices.reload') }}</v-btn>
+  </MdmPage>
 </template>

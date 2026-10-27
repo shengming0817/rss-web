@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { VAlert, VBtn, VCard, VCardText, VSelect, VTextField } from 'vuetify/components'
 import { comparison as queryComparison } from '../../../services/directory-query'
 import { nextTick, ref, watch } from 'vue'
-import { UiButton } from '@rss/core/components'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
@@ -62,59 +62,56 @@ watch(
 )
 </script>
 <template>
-  <div class="console-panel console-software-picker">
-    <label
-      >{{ t('software.resource')
-      }}<input
+  <VCard class="my-3" variant="outlined"
+    ><VCardText>
+      <VTextField
         v-model="resource"
-        class="ui-input"
+        :label="t('software.resource')"
         :disabled="props.disabled || busy"
-        @change="choose" /></label
-    ><UiButton :disabled="props.disabled || busy || !resource" @click="open">{{
-      t('policies.open')
-    }}</UiButton
-    ><UiButton :disabled="props.disabled || busy" @click="load()">{{
-      t('software.catalog')
-    }}</UiButton
-    ><template v-if="page"
-      ><p>{{ t('console.pageNotTotal') }}</p>
-      <label
-        >{{ t('software.catalog')
-        }}<select
+        @change="choose"
+      />
+      <div class="d-flex flex-wrap ga-2 mb-3">
+        <VBtn :disabled="props.disabled || busy || !resource" @click="open">{{
+          t('policies.open')
+        }}</VBtn>
+        <VBtn :disabled="props.disabled || busy" @click="load()">{{ t('software.catalog') }}</VBtn>
+      </div>
+      <template v-if="page">
+        <p class="mb-3">{{ t('console.pageNotTotal') }}</p>
+        <VSelect
           v-model="resource"
-          class="ui-input"
+          :label="t('software.catalog')"
+          :items="
+            page.items.map((item) => ({
+              title: `${typeof item.presentation['name'] === 'string' ? item.presentation['name'] : item.id} · ${item.activeVersion ?? '—'}`,
+              value: item.id,
+            }))
+          "
           :disabled="props.disabled || busy"
-          @change="choose"
+          @update:model-value="choose"
+        />
+        <VBtn
+          v-if="page.nextCursor"
+          :disabled="props.disabled || busy"
+          @click="load(page.nextCursor)"
+          >{{ t('devices.next') }}</VBtn
         >
-          <option value="">{{ t('devices.select') }}</option>
-          <option v-for="item in page.items" :key="item.id" :value="item.id">
-            {{
-              typeof item.presentation['name'] === 'string' ? item.presentation['name'] : item.id
-            }}
-            · {{ item.activeVersion ?? '—' }}
-          </option>
-        </select></label
-      ><UiButton
-        v-if="page.nextCursor"
-        :disabled="props.disabled || busy"
-        @click="load(page.nextCursor)"
-        >{{ t('devices.next') }}</UiButton
-      ></template
-    ><label v-if="selected"
-      >{{ t('software.version')
-      }}<select
+      </template>
+      <VSelect
+        v-if="selected"
         v-model="version"
-        class="ui-input"
+        :label="t('software.version')"
+        :items="
+          selected.versions.map((item) => ({
+            title: `${item.id} · ${t(`policies.state.${item.state}`)}`,
+            value: item.id,
+          }))
+        "
         :disabled="props.disabled || busy"
-        @change="emit('change')"
-      >
-        <option value="">{{ t('devices.select') }}</option>
-        <option v-for="item in selected.versions" :key="item.id" :value="item.id">
-          {{ item.id }} · {{ t(`policies.state.${item.state}`) }}
-        </option>
-      </select></label
-    >
-    <p v-if="failure" role="alert">{{ t(`devices.${failure}`) }}</p>
-    <p>{{ t('console.selectionNotAdmission') }}</p>
-  </div>
+        @update:model-value="emit('change')"
+      />
+      <VAlert v-if="failure" type="error" class="my-3">{{ t(`devices.${failure}`) }}</VAlert>
+      <p>{{ t('console.selectionNotAdmission') }}</p>
+    </VCardText></VCard
+  >
 </template>

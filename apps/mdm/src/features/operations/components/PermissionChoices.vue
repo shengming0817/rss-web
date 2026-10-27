@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { VBtn, VCheckbox, VSelect, VTextField } from 'vuetify/components'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton } from '@rss/core/components'
 import {
   devicePermissions,
   permissions,
@@ -60,52 +60,51 @@ function changePermission() {
 <template>
   <fieldset v-if="props.realm === 'platform'" class="authorization-permissions">
     <legend>{{ t('operations.ruleUi.choosePermissions') }}</legend>
-    <label v-for="value in platformPermissions" :key="value" class="authorization-permission">
-      <input
-        type="checkbox"
-        :value="value"
-        :checked="model.some((g) => g.operation === value)"
-        @change="toggle(value, ($event.target as HTMLInputElement).checked)"
-      />
-      <span
-        ><strong>{{ t('operations.ruleUi.permissions.' + value) }}</strong
-        ><small>{{ t('operations.ruleUi.permissionHints.' + value) }}</small></span
-      >
-    </label>
+    <VCheckbox
+      v-for="value in platformPermissions"
+      :key="value"
+      :model-value="model.some((g) => g.operation === value)"
+      :label="t('operations.ruleUi.permissions.' + value)"
+      :hint="t('operations.ruleUi.permissionHints.' + value)"
+      persistent-hint
+      @update:model-value="toggle(value, !!$event)"
+    />
   </fieldset>
   <template v-else>
     <div class="settings-actions">
-      <label
-        >{{ t('operations.permission')
-        }}<select v-model="operation" @change="changePermission">
-          <option v-for="value in allowed" :key="value">{{ value }}</option>
-        </select></label
-      >
-      <label
-        >{{ t('operations.scope')
-        }}<select v-model="scope">
-          <option
-            v-for="value in (devicePermissions as readonly string[]).includes(operation)
-              ? ['all_devices', 'device']
-              : ['tenant']"
-            :key="value"
-          >
-            {{ value }}
-          </option>
-        </select></label
-      >
-      <label v-if="scope === 'device'"
-        >{{ t('policies.device') }}<input v-model="device" required maxlength="256"
-      /></label>
-      <UiButton :disabled="model.length >= 256 || (scope === 'device' && !device)" @click="add">{{
+      <VSelect
+        id="authorization-permission"
+        v-model="operation"
+        :items="[...allowed.map((value) => ({ title: value, value: value }))]"
+        :label="t('operations.permission')"
+        @update:model-value="changePermission"
+      />
+      <VSelect
+        v-model="scope"
+        :items="[
+          ...((devicePermissions as readonly string[]).includes(operation)
+            ? ['all_devices', 'device']
+            : ['tenant']
+          ).map((value) => ({ title: value, value: value })),
+        ]"
+        :label="t('operations.scope')"
+      />
+      <VTextField
+        v-if="scope === 'device'"
+        v-model="device"
+        required
+        maxlength="256"
+        :label="t('policies.device')"
+      />
+      <VBtn :disabled="model.length >= 256 || (scope === 'device' && !device)" @click="add">{{
         t('operations.addGrant')
-      }}</UiButton>
+      }}</VBtn>
     </div>
     <p v-if="invalid" role="alert">{{ t('devices.invalidRequest') }}</p>
     <div v-for="(g, index) in model" :key="JSON.stringify(g)" class="console-inline-actions">
-      <GrantFacts :grants="[g]" /><UiButton @click="model = model.filter((_, i) => i !== index)">{{
+      <GrantFacts :grants="[g]" /><VBtn @click="model = model.filter((_, i) => i !== index)">{{
         t('operations.ruleUi.removePermission')
-      }}</UiButton>
+      }}</VBtn>
     </div>
   </template>
 </template>

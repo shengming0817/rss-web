@@ -98,6 +98,12 @@
   background: var(--bg-sunken);
   box-shadow: inset 2px 0 var(--action-bg);
 }
+.telemetry-metrics .v-btn__content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  white-space: normal;
+}
 .telemetry-metrics small,
 .telemetry-pick small {
   display: block;

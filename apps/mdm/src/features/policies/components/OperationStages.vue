@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { UiBadge } from '@rss/core/components'
+import { VChip } from 'vuetify/components'
+
 import { useI18n } from 'vue-i18n'
 const props = defineProps<{
   kind: 'command' | 'action_run'
@@ -25,7 +26,7 @@ function label(stage: 'dispatch' | 'receipt' | 'effect', value: string) {
     <div>
       <dt><span>01</span>{{ t('policies.admission') }}</dt>
       <dd>
-        <UiBadge>{{ t('policies.ux.accepted') }}</UiBadge>
+        <VChip>{{ t('policies.ux.accepted') }}</VChip>
       </dd>
     </div>
     <div>
@@ -39,9 +40,9 @@ function label(stage: 'dispatch' | 'receipt' | 'effect', value: string) {
     <div>
       <dt><span>04</span>{{ t('policies.effect') }}</dt>
       <dd>
-        <UiBadge :tone="['unknown', 'unverified'].includes(effect) ? 'warning' : 'neutral'">{{
+        <VChip :color="['unknown', 'unverified'].includes(effect) ? 'warning' : undefined">{{
           label('effect', effect)
-        }}</UiBadge>
+        }}</VChip>
       </dd>
     </div>
   </dl>

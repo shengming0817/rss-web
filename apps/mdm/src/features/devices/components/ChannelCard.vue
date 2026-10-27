@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { VBtn, VCard, VCardText, VCardTitle, VList, VListItem } from 'vuetify/components'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import type { DeviceView } from '../clients/device-views'
@@ -49,65 +50,79 @@ function capabilities(channel: string) {
 }
 </script>
 <template>
-  <section class="console-panel" :data-endpoint="endpoint.id">
-    <h2>{{ endpoint.id }}</h2>
-    <RouterLink
-      :to="{ name: 'device-detail', params: { tenant: runtime.tenant, device: endpoint.id } }"
-      >{{ t('devices.originalEndpoint') }}</RouterLink
-    >
-    <p>{{ t('devices.endpointStatus') }}: {{ t(`devices.endpointState.${endpoint.status}`) }}</p>
-    <article v-for="channel in endpoint.channels" :key="channel.channel">
-      <h3>{{ channel.channel === 'mdm' ? 'MDM' : 'Agent' }}</h3>
-      <dl>
-        <dt>{{ t('devices.deviceId') }}</dt>
-        <dd>{{ endpoint.id }}</dd>
-        <dt>
-          {{
-            t(
-              channel.status === 'active'
-                ? 'devices.currentRegistration'
-                : 'devices.previousRegistration',
-            )
-          }}
-        </dt>
-        <dd>
-          {{ channel.registrationId }} ·
-          {{ t(`devices.endpointState.${channel.status}`) }}
-        </dd>
-        <dt>{{ t('devices.source') }}</dt>
-        <dd>{{ channel.source }}</dd>
-        <dt>{{ t('devices.lastCommunication') }}</dt>
-        <dd>
-          {{ communication(channel.lastCommunicationReceivedAt) }}
-        </dd>
-        <dt>{{ t('devices.received') }}</dt>
-        <dd>{{ received(channel.registrationId, channel.generation) }}</dd>
-      </dl>
-      <ul>
-        <li v-for="child in channel.children" :key="child.registrationId">
-          {{ child.purpose }} · {{ child.registrationId }} ·
-          {{ t(`devices.endpointState.${child.status}`) }} ·
-          {{ t(child.ready ? 'devices.ready' : 'devices.unknown') }}
-        </li>
-      </ul>
-      <p v-if="channel.userContext">
-        {{ t('devices.userContext') }} · {{ channel.userContext.id }} ·
-        {{ t(`devices.endpointState.${channel.userContext.registrationStatus}`) }}
-      </p>
-      <ul>
-        <li v-for="capability in capabilities(channel.channel)" :key="capability.action">
-          {{ capability.action }} · {{ t('devices.productSupport') }}:
-          {{ t(`devices.supportState.${capability.productSupport.state}`) }} ({{
-            capability.productSupport.reason ?? '—'
-          }}) · {{ t('devices.devicePrerequisite') }}:
-          {{ t(`devices.supportState.${capability.devicePrerequisite.state}`) }} ({{
-            capability.devicePrerequisite.reason ?? '—'
-          }}) · {{ t('devices.permission') }}:
-          {{ t(capability.permission.allowed ? 'devices.yes' : 'devices.no') }}
-        </li>
-      </ul>
-    </article>
-    <p v-if="!endpoint.channels.length">{{ t('devices.not_registered') }}</p>
-    <p>{{ t('devices.registrationAssetsSeparate') }}</p>
-  </section>
+  <v-card variant="outlined" :data-endpoint="endpoint.id"
+    ><v-card-title>{{ endpoint.id }}</v-card-title
+    ><v-card-text>
+      <v-btn
+        variant="text"
+        :to="{ name: 'device-detail', params: { tenant: runtime.tenant, device: endpoint.id } }"
+        >{{ t('devices.originalEndpoint') }}</v-btn
+      >
+      <p>{{ t('devices.endpointStatus') }}: {{ t(`devices.endpointState.${endpoint.status}`) }}</p>
+      <article v-for="channel in endpoint.channels" :key="channel.channel">
+        <h3>{{ channel.channel === 'mdm' ? 'MDM' : 'Agent' }}</h3>
+        <dl>
+          <dt>{{ t('devices.deviceId') }}</dt>
+          <dd>{{ endpoint.id }}</dd>
+          <dt>
+            {{
+              t(
+                channel.status === 'active'
+                  ? 'devices.currentRegistration'
+                  : 'devices.previousRegistration',
+              )
+            }}
+          </dt>
+          <dd>
+            {{ channel.registrationId }} ·
+            {{ t(`devices.endpointState.${channel.status}`) }}
+          </dd>
+          <dt>{{ t('devices.source') }}</dt>
+          <dd>{{ channel.source }}</dd>
+          <dt>{{ t('devices.lastCommunication') }}</dt>
+          <dd>
+            {{ communication(channel.lastCommunicationReceivedAt) }}
+          </dd>
+          <dt>{{ t('devices.received') }}</dt>
+          <dd>{{ received(channel.registrationId, channel.generation) }}</dd>
+        </dl>
+        <v-list density="compact">
+          <v-list-item v-for="child in channel.children" :key="child.registrationId">
+            {{ child.purpose }} · {{ child.registrationId }} ·
+            {{ t(`devices.endpointState.${child.status}`) }} ·
+            {{ t(child.ready ? 'devices.ready' : 'devices.unknown') }}
+          </v-list-item>
+        </v-list>
+        <p v-if="channel.userContext">
+          {{ t('devices.userContext') }} · {{ channel.userContext.id }} ·
+          {{ t(`devices.endpointState.${channel.userContext.registrationStatus}`) }}
+        </p>
+        <v-list density="compact">
+          <v-list-item v-for="capability in capabilities(channel.channel)" :key="capability.action">
+            {{ capability.action }} · {{ t('devices.productSupport') }}:
+            {{ t(`devices.supportState.${capability.productSupport.state}`) }} ({{
+              capability.productSupport.reason ?? '—'
+            }}) · {{ t('devices.devicePrerequisite') }}:
+            {{ t(`devices.supportState.${capability.devicePrerequisite.state}`) }} ({{
+              capability.devicePrerequisite.reason ?? '—'
+            }}) · {{ t('devices.permission') }}:
+            {{ t(capability.permission.allowed ? 'devices.yes' : 'devices.no') }}
+          </v-list-item>
+        </v-list>
+      </article>
+      <p v-if="!endpoint.channels.length">{{ t('devices.not_registered') }}</p>
+      <p>{{ t('devices.registrationAssetsSeparate') }}</p>
+      <v-btn
+        v-for="enrollment in endpoint.enrollments.filter((e) => e.source !== 'agent.builtin')"
+        :key="enrollment.enrollmentId"
+        variant="outlined"
+        :to="{
+          name: 'device-management',
+          params: { tenant: runtime.tenant, device: endpoint.id },
+          query: { enrollment: enrollment.enrollmentId },
+        }"
+        >{{ t('console.enrollmentProgress') }} · {{ t(`devices.${enrollment.status}`) }}</v-btn
+      >
+    </v-card-text></v-card
+  >
 </template>

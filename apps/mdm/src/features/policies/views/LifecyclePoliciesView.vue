@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import PolicyFieldset from '../components/PolicyFieldset.vue'
+import { VSelect, VBtn, VTextField, VCheckbox } from 'vuetify/components'
+
 import type { PreviewInput } from '../clients/policies'
 
 import { comparison as queryComparison, allOf } from '../../../services/directory-query'
@@ -7,7 +10,6 @@ import { useRoute } from 'vue-router'
 import PolicyIdentityEditor from '../components/PolicyIdentityEditor.vue'
 import PolicyEntry from '../components/PolicyEntry.vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import { useOriginalOperation } from '../../../services/useOriginalOperation'
@@ -22,7 +24,7 @@ import NativeScheduleEditor from '../../software/components/NativeScheduleEditor
 import AssignmentFacts from '../components/AssignmentFacts.vue'
 import CatalogLocator from '../components/CatalogLocator.vue'
 import RetirementDetails from '../../devices/components/RetirementDetails.vue'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 const route = useRoute(),
   runtime = useMdm(),
   client = runtime.policies.policies,
@@ -32,7 +34,9 @@ const alias = ref<string | null>(null),
 const id = ref(crypto.randomUUID() as string),
   current = ref<PolicyRead>(),
   scope = ref(''),
-  kind = ref<'unmanage_device' | 'credential'>('unmanage_device'),
+  kind = ref<'unmanage_device' | 'credential'>(
+    route.query['action'] === 'credential' ? 'credential' : 'unmanage_device',
+  ),
   enabled = ref(false),
   schedule = ref(defaultSchedule()),
   credential = ref('collect_bitlocker'),
@@ -304,118 +308,195 @@ watch(
 )
 </script>
 <template>
-  <PageFrame :title="t('gap.lifecycle')" :busy="busy" :failure="failure">
+  <MdmPage :title="t('gap.lifecycle')" :busy="busy" :failure="failure">
     <p>{{ t('gap.retirementHint') }}</p>
     <PolicyEntry v-if="current" :policy="current" />
-    <fieldset :disabled="locked || current?.state === 'archived'">
+    <PolicyFieldset :disabled="locked || current?.state === 'archived'">
       <PolicyIdentityEditor v-model:alias="alias" v-model:event="customEvent" />
-    </fieldset>
+    </PolicyFieldset>
     <RouterLink :to="{ name: 'policy-policies', params: { tenant: runtime.tenant } }">{{
       t('policies.policies')
     }}</RouterLink>
     <label
       >{{ t('gap.action')
-      }}<select v-model="kind" :disabled="locked || !!current">
-        <option value="unmanage_device">{{ t('gap.retire') }}</option>
-        <option value="credential">{{ t('gap.credential') }}</option>
-      </select></label
-    >
+      }}<VSelect
+        v-model="kind"
+        :disabled="locked || !!current"
+        :items="[
+          { title: String(t('gap.retire')), value: 'unmanage_device' },
+          { title: String(t('gap.credential')), value: 'credential' },
+        ]"
+        variant="outlined"
+        density="comfortable"
+        hide-details="auto"
+    /></label>
     <label
       >{{ t('gap.state')
-      }}<select v-model="state">
-        <option value="">{{ t('gap.allStates') }}</option>
-        <option v-for="s in ['enabled', 'disabled', 'archived']" :key="s">{{ s }}</option>
-      </select></label
-    >
-    <UiButton :disabled="locked" @click="fresh">{{ t('gap.newDraft') }}</UiButton
-    ><UiButton :disabled="busy" @click="load()">{{ t('gap.load') }}</UiButton>
+      }}<VSelect
+        v-model="state"
+        :items="[
+          { title: String(t('gap.allStates')), value: '' },
+          ...['enabled', 'disabled', 'archived'].map((s) => ({
+            title: String(s),
+            value: String(s),
+          })),
+        ]"
+        variant="outlined"
+        density="comfortable"
+        hide-details="auto"
+    /></label>
+    <VBtn :disabled="locked" @click="fresh">{{ t('gap.newDraft') }}</VBtn
+    ><VBtn :disabled="busy" @click="load()">{{ t('gap.load') }}</VBtn>
     <ul>
       <li v-for="p in rows?.items" :key="p.id">
-        <UiButton :disabled="locked" @click="read(p.id)">{{ p.id }} · {{ p.state }}</UiButton>
+        <VBtn :disabled="locked" @click="read(p.id)">{{ p.id }} · {{ p.state }}</VBtn>
       </li>
     </ul>
-    <UiButton v-if="rows?.nextCursor" @click="load(rows.nextCursor)">{{ t('gap.next') }}</UiButton>
+    <VBtn v-if="rows?.nextCursor" @click="load(rows.nextCursor)">{{ t('gap.next') }}</VBtn>
     <form @submit.prevent="save">
-      <fieldset :disabled="locked || current?.state === 'archived'">
-        <label>{{ t('gap.policy') }}<input v-model="id" :readonly="!!current" required /></label
-        ><UiButton type="button" @click="read()">{{ t('gap.load') }}</UiButton>
-        <label>{{ t('gap.scope') }}<input v-model="scope" required /></label
+      <PolicyFieldset :disabled="locked || current?.state === 'archived'">
+        <label
+          >{{ t('gap.policy')
+          }}<VTextField
+            v-model="id"
+            :readonly="!!current"
+            required
+            variant="outlined"
+            density="comfortable"
+            hide-details="auto" /></label
+        ><VBtn type="button" @click="read()">{{ t('gap.load') }}</VBtn>
+        <label
+          >{{ t('gap.scope')
+          }}<VTextField
+            v-model="scope"
+            required
+            variant="outlined"
+            density="comfortable"
+            hide-details="auto" /></label
         ><CatalogLocator v-model="scope" collection="scopes" :disabled="locked" />
         <template v-if="kind === 'credential'"
           ><label
             >{{ t('gap.action')
-            }}<select v-model="credential">
-              <option v-if="credential.endsWith('rss_login')" :value="credential" disabled>
-                {{ credential }}
-              </option>
-              <option v-for="op in choices" :key="op" :value="op">{{ t('gap.' + op) }}</option>
-            </select></label
-          >
+            }}<VSelect
+              v-model="credential"
+              :items="[
+                ...(credential.endsWith('rss_login')
+                  ? [{ title: String(credential), value: credential, props: { disabled: true } }]
+                  : []),
+                ...choices.map((op) => ({ title: String(t('gap.' + op)), value: op })),
+              ]"
+              variant="outlined"
+              density="comfortable"
+              hide-details="auto"
+          /></label>
           <label
             >{{ t('gap.architecture')
-            }}<select v-model="architecture">
-              <option>x86_64</option>
-              <option>aarch64</option>
-            </select></label
-          >
+            }}<VSelect
+              v-model="architecture"
+              :items="[
+                { title: 'x86_64', value: 'x86_64' },
+                { title: 'aarch64', value: 'aarch64' },
+              ]"
+              variant="outlined"
+              density="comfortable"
+              hide-details="auto"
+          /></label>
           <label
             >{{ t('policies.frequency')
-            }}<select v-model="frequency">
-              <option
-                v-for="f in ['once_per_version', 'once_per_entry', 'every_trigger'] as const"
-                :key="f"
-                :value="f"
-              >
-                {{ f }}
-              </option>
-            </select></label
-          ><label>{{ t('gap.volume') }}<input v-model="volume" /></label
-          ><label>{{ t('gap.protector') }}<input v-model="protector" /></label
-          ><label>{{ t('gap.sid') }}<input v-model="sid" /></label> </template
+            }}<VSelect
+              v-model="frequency"
+              :items="[
+                ...(['once_per_version', 'once_per_entry', 'every_trigger'] as const).map((f) => ({
+                  title: String(f),
+                  value: f,
+                })),
+              ]"
+              variant="outlined"
+              density="comfortable"
+              hide-details="auto" /></label
+          ><label
+            >{{ t('gap.volume')
+            }}<VTextField
+              v-model="volume"
+              variant="outlined"
+              density="comfortable"
+              hide-details="auto" /></label
+          ><label
+            >{{ t('gap.protector')
+            }}<VTextField
+              v-model="protector"
+              variant="outlined"
+              density="comfortable"
+              hide-details="auto" /></label
+          ><label
+            >{{ t('gap.sid')
+            }}<VTextField
+              v-model="sid"
+              variant="outlined"
+              density="comfortable"
+              hide-details="auto"
+          /></label> </template
         ><NativeScheduleEditor v-model="schedule" :disabled="locked" />
         <label
           >{{ t('software.taskLifetime')
-          }}<input v-model.number="duration" type="number" min="60" max="604800" required
+          }}<VTextField
+            v-model.number="duration"
+            type="number"
+            min="60"
+            max="604800"
+            required
+            variant="outlined"
+            density="comfortable"
+            hide-details="auto"
         /></label>
-        <label><input v-model="enabled" type="checkbox" />{{ t('gap.enabled') }}</label>
-        <label><input v-model="confirmation" type="checkbox" />{{ t('gap.confirmation') }}</label>
-        <UiButton type="submit" :disabled="!confirmation">{{ t('gap.save') }}</UiButton
-        ><UiButton type="button" @click="check()">{{ t('policies.preview') }}</UiButton>
+        <label><VCheckbox v-model="enabled" hide-details="auto" />{{ t('gap.enabled') }}</label>
+        <label
+          ><VCheckbox v-model="confirmation" hide-details="auto" />{{
+            t('gap.confirmation')
+          }}</label
+        >
+        <VBtn type="submit" :disabled="!confirmation">{{ t('gap.save') }}</VBtn
+        ><VBtn type="button" @click="check()">{{ t('policies.preview') }}</VBtn>
         <template v-if="current"
-          ><UiButton
+          ><VBtn
             type="button"
             :disabled="!confirmation"
             @click="change({ action: current.enabled ? 'disable' : 'enable' })"
             >{{
               t(current.enabled ? 'policies.selfService.disable' : 'policies.selfService.enable')
-            }}</UiButton
-          ><UiButton
+            }}</VBtn
+          ><VBtn
             type="button"
             :disabled="!confirmation || current.state !== 'disabled'"
             @click="change({ action: 'archive' })"
-            >{{ t('gap.archived') }}</UiButton
+            >{{ t('gap.archived') }}</VBtn
           >
-          <label>{{ t('gap.deadline') }}<input v-model.number="deadline" type="number" /></label
-          ><UiButton
-            type="button"
-            :disabled="!confirmation || !current.enabled"
-            @click="trigger()"
-            >{{ t('gap.trigger') }}</UiButton
-          ></template
+          <label
+            >{{ t('gap.deadline')
+            }}<VTextField
+              v-model.number="deadline"
+              type="number"
+              variant="outlined"
+              density="comfortable"
+              hide-details="auto" /></label
+          ><VBtn type="button" :disabled="!confirmation || !current.enabled" @click="trigger()">{{
+            t('gap.trigger')
+          }}</VBtn></template
         >
-      </fieldset>
+      </PolicyFieldset>
     </form>
     <template v-if="pending"
       ><p role="alert">
         {{ t(pending.state === 'conflict' ? 'gap.compare' : 'gap.unknown') }} {{ pending.id }}
       </p>
-      <label><input v-model="confirmation" type="checkbox" />{{ t('gap.confirmation') }}</label
-      ><UiButton
+      <label
+        ><VCheckbox v-model="confirmation" hide-details="auto" />{{ t('gap.confirmation') }}</label
+      ><VBtn
         v-if="pending.state === 'unknown'"
         :disabled="busy || !confirmation"
         @click="restore"
-        >{{ t('gap.replayOriginal') }}</UiButton
-      ><UiButton
+        >{{ t('gap.replayOriginal') }}</VBtn
+      ><VBtn
         v-if="pending.state === 'conflict'"
         :disabled="busy"
         @click="
@@ -424,18 +505,16 @@ watch(
             if (ok) resolvedConflict()
           }
         "
-        >{{ t('gap.compare') }}</UiButton
+        >{{ t('gap.compare') }}</VBtn
       ></template
     >
     <ul v-if="preview">
       <li v-for="(row, index) in preview.items" :key="index"><AssignmentFacts :item="row" /></li>
     </ul>
-    <UiButton v-if="preview?.nextCursor" @click="check(preview.nextCursor)">{{
-      t('gap.next')
-    }}</UiButton>
-    <UiButton v-if="current" :disabled="busy" @click="progress()">{{
+    <VBtn v-if="preview?.nextCursor" @click="check(preview.nextCursor)">{{ t('gap.next') }}</VBtn>
+    <VBtn v-if="current" :disabled="busy" @click="progress()">{{
       t('policies.refreshProgress')
-    }}</UiButton>
+    }}</VBtn>
     <article v-for="(row, index) in assignments?.items" :key="index">
       <AssignmentFacts :item="row" /><RouterLink
         v-for="op in kind === 'credential' ? row.operationIds : []"
@@ -448,16 +527,16 @@ watch(
         >{{ op }}</RouterLink
       >
       <p>{{ row.qualification.state }}</p>
-      <UiButton
+      <VBtn
         v-for="op in kind === 'unmanage_device' ? row.operationIds : []"
         :key="op"
         @click="retirementId = op"
-        >{{ op }}</UiButton
+        >{{ op }}</VBtn
       >
     </article>
-    <UiButton v-if="assignments?.nextCursor" @click="progress(assignments.nextCursor)">{{
+    <VBtn v-if="assignments?.nextCursor" @click="progress(assignments.nextCursor)">{{
       t('gap.next')
-    }}</UiButton>
+    }}</VBtn>
     <RetirementDetails v-if="retirementId && kind === 'unmanage_device'" :id="retirementId" />
-  </PageFrame>
+  </MdmPage>
 </template>
