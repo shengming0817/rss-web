@@ -21,6 +21,7 @@ import { ADMIN, INSTANCE } from '../../../../demo/operations/authorization'
 import { TENANT } from '../../../../demo/scenario'
 import ConfigurationsView from './ConfigurationsView.vue'
 import NativeFacts from '../components/NativeFacts.vue'
+import SelfEnrollmentProgress from '../components/SelfEnrollmentProgress.vue'
 import TermsView from './TermsView.vue'
 import DownloadsView from './DownloadsView.vue'
 import AppleAccountView from './AppleAccountView.vue'
@@ -320,6 +321,13 @@ it('reads MAA organizations and saves distinct account bindings without copying 
   await mapping.trigger('submit')
   await flushPromises()
   expect(wrapper.text()).toContain('managed@example.test')
+  vi.spyOn(runtime.onboarding.apple, 'organizations').mockRejectedValueOnce(
+    decodeMdmError(503, { code: 'unavailable' }),
+  )
+  const accounts = vi.spyOn(runtime.onboarding.apple, 'accounts')
+  await click('重新读取')
+  expect(wrapper.text()).toContain('服务暂不可用')
+  expect(accounts).not.toHaveBeenCalled()
 })
 it('shows ADE states independently and reads configuration operations', async () => {
   const { wrapper, click, runtime } = await setup(AppleAdeView),
@@ -759,4 +767,81 @@ it('keeps formal-status progress and cancellation in the guide without inventing
   expect(
     fixture.calls.some((call) => call.includes('mdm-candidate/devices/self-enrollments')),
   ).toBe(false)
+})
+
+it('keeps unknown resume inputs usable after a failed status refresh and explicitly replays the original request', async () => {
+  const id = shallowRef('')
+  const fixture = await setup(
+    defineComponent({
+      setup: () => () => (id.value ? h(SelfEnrollmentProgress, { enrollmentId: id.value }) : null),
+    }),
+  )
+  const { wrapper, runtime, click } = fixture
+  const receipt = await runtime.devices.registration.enroll(
+    crypto.randomUUID(),
+    'A'.repeat(43),
+    'mdm.windows',
+    'Full',
+  )
+  id.value = receipt.enrollmentId
+  await flushPromises()
+  await wrapper.get('.v-expansion-panel-title').trigger('click')
+  await flushPromises()
+  await click('生成一次性交付口令')
+  const secret = wrapper.get<HTMLInputElement>('input[autocomplete=off]').element.value
+  await wrapper.get('input[type=checkbox]').setValue(true)
+  const resume = vi
+    .spyOn(runtime.devices.enrollment, 'resume')
+    .mockRejectedValueOnce(networkErrorForTest())
+  await click('更新口令并继续')
+  expect(resume).toHaveBeenCalledTimes(1)
+  vi.spyOn(runtime.devices.enrollment, 'status').mockRejectedValueOnce(
+    decodeMdmError(503, { code: 'unavailable' }),
+  )
+  await click('重新读取')
+  expect(wrapper.text()).toContain('服务暂不可用')
+  expect(wrapper.find('input[autocomplete=off]').exists()).toBe(true)
+  await wrapper.get('input[autocomplete=off]').setValue(secret)
+  await wrapper.get('input[type=checkbox]').setValue(true)
+  await click('明确重放原操作')
+  expect(resume).toHaveBeenCalledTimes(2)
+  expect(resume.mock.calls[1]).toEqual(resume.mock.calls[0])
+  expect(wrapper.text()).not.toContain('提交结果未知')
+})
+
+it('revokes an automatically delivered macOS profile when its password is rotated and offers a new profile read', async () => {
+  const fixture = await setup(SelfEnrollmentView)
+  const { wrapper, runtime, click, revoke, create } = fixture
+  await prepareGuide(fixture, 'macOS')
+  const profile = vi.spyOn(runtime.onboarding.native, 'profile').mockImplementation(async () => ({
+    bytes: new Uint8Array([1, 2, 3]).buffer,
+    contentType: 'application/x-apple-aspen-config',
+  }))
+  await click('复制口令并继续')
+  expect(wrapper.find('a[download="RSS-MDM.mobileconfig"]').exists()).toBe(true)
+  await wrapper
+    .findAll('.v-expansion-panel-title')
+    .find((button) => button.text().includes('无法继续？恢复原注册'))!
+    .trigger('click')
+  await flushPromises()
+  const progress = wrapper.findComponent(SelfEnrollmentProgress)
+  await progress.get('.v-expansion-panel-title').trigger('click')
+  await flushPromises()
+  await click('生成一次性交付口令')
+  const secret = progress.get<HTMLInputElement>('input[autocomplete=off]').element.value
+  await progress.get('input[type=checkbox]').setValue(true)
+  await click('更新口令并继续')
+  expect(revoke).toHaveBeenCalledWith('blob:synthetic-delivery')
+  expect(wrapper.find('a[download="RSS-MDM.mobileconfig"]').exists()).toBe(false)
+  expect(profile).toHaveBeenCalledTimes(1)
+  await click('使用已保存口令重新获取描述文件')
+  const input = wrapper.get('input[type=password]')
+  await input.setValue(secret)
+  await new (await import('@vue/test-utils')).DOMWrapper(input.element.closest('form')!).trigger(
+    'submit',
+  )
+  await flushPromises()
+  expect(profile.mock.calls[1]?.[1]).toBe(secret)
+  expect(create).toHaveBeenCalledTimes(2)
+  expect(wrapper.find('a[download="RSS-MDM.mobileconfig"]').exists()).toBe(true)
 })

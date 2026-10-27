@@ -167,6 +167,10 @@ async function submit(secret: string, replay = false) {
     secret = ''
   }
 }
+function invalidateProfile() {
+  delivery.clear()
+  native.value = undefined
+}
 function back() {
   clearSecret()
   step.value = 1
@@ -433,6 +437,7 @@ void refresh()
                 :enrollment-id="enrollmentId"
                 :show-instructions="false"
                 @updated="native = $event"
+                @invalidated="invalidateProfile"
               />
             </template>
           </v-expansion-panel>
