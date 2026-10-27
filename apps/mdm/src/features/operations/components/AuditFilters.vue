@@ -1,89 +1,126 @@
 <script setup lang="ts">
-import { UiButton, UiUtcDateTimeInput } from '@rss/core/components'
+import {
+  VBtn,
+  VCheckbox,
+  VExpansionPanel,
+  VExpansionPanelText,
+  VExpansionPanelTitle,
+  VExpansionPanels,
+  VForm,
+  VSelect,
+  VTextField,
+} from 'vuetify/components'
 import { useI18n } from 'vue-i18n'
 import type { AuditDraft } from './audit-filter'
 defineProps<{ busy: boolean; deviceTimeline?: boolean }>()
 defineEmits<{ submit: [] }>()
+function dateInput(value: number) {
+  const date = new Date(value * 1000)
+  return Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 19) : ''
+}
+function parseDate(value: string | null) {
+  return value ? Date.parse(value + 'Z') / 1000 : Number.NaN
+}
 const draft = defineModel<AuditDraft>({ required: true }),
   { t } = useI18n()
 </script>
 <template>
-  <form class="audit-query" data-testid="audit-filter" @submit.prevent="$emit('submit')">
+  <VForm
+    :disabled="busy"
+    class="audit-query"
+    data-testid="audit-filter"
+    @submit.prevent="$emit('submit')"
+  >
     <fieldset :disabled="busy">
       <legend>{{ t('operations.auditUi.filters') }}</legend>
       <div class="audit-filter-grid">
         <div class="audit-field">
-          <label for="audit-actor">{{ t('operations.actor') }}</label
-          ><input id="audit-actor" v-model="draft.actor" class="ui-input" maxlength="256" />
+          <VTextField
+            id="audit-actor"
+            v-model="draft.actor"
+            maxlength="256"
+            :label="t('operations.actor')"
+          />
         </div>
         <div class="audit-field">
-          <label for="audit-action">{{ t('operations.action') }}</label
-          ><input id="audit-action" v-model="draft.action" class="ui-input" maxlength="256" />
+          <VTextField
+            id="audit-action"
+            v-model="draft.action"
+            maxlength="256"
+            :label="t('operations.action')"
+          />
         </div>
         <div class="audit-field">
-          <label for="audit-outcome">{{ t('operations.outcome') }}</label
-          ><select id="audit-outcome" v-model="draft.outcome" class="ui-input">
-            <option value="">{{ t('devices.all') }}</option>
-            <option
-              v-for="value in ['succeeded', 'denied', 'failed', 'unknown']"
-              :key="value"
-              :value="value"
-            >
-              {{ t(`operations.auditUi.${value}`) }}
-            </option>
-          </select>
+          <VSelect
+            id="audit-outcome"
+            v-model="draft.outcome"
+            :items="[
+              { title: t('devices.all'), value: '' },
+              ...['succeeded', 'denied', 'failed', 'unknown'].map((value) => ({
+                title: t(`operations.auditUi.${value}`),
+                value: value,
+              })),
+            ]"
+            :label="t('operations.outcome')"
+          />
         </div>
         <div class="audit-field">
-          <label v-if="!deviceTimeline" for="audit-device">{{ t('policies.device') }}</label
-          ><input
+          <VTextField
             v-if="!deviceTimeline"
             id="audit-device"
             v-model="draft.device"
-            class="ui-input"
             maxlength="256"
+            :label="t('policies.device')"
           />
         </div>
       </div>
-      <details>
-        <summary>{{ t('policies.ux.technical') }}</summary>
-        <label for="audit-target-id">{{ t('operations.auditUi.targetId') }}</label
-        ><input id="audit-target-id" v-model="draft.targetId" class="ui-input" maxlength="256" />
-        <label for="audit-target-type">{{ t('operations.auditUi.targetType') }}</label
-        ><input
-          id="audit-target-type"
-          v-model="draft.targetType"
-          class="ui-input"
-          maxlength="256"
-        />
-        <label for="audit-operation">{{ t('operations.operation') }}</label
-        ><input id="audit-operation" v-model="draft.operationId" class="ui-input" maxlength="36" />
-      </details>
-      <label
-        ><input v-model="draft.bounded" type="checkbox" />{{
-          t('operations.auditUi.bounded')
-        }}</label
-      >
+      <VExpansionPanels
+        ><VExpansionPanel>
+          <VExpansionPanelTitle>{{ t('policies.ux.technical') }}</VExpansionPanelTitle
+          ><VExpansionPanelText>
+            <VTextField
+              id="audit-target-id"
+              v-model="draft.targetId"
+              maxlength="256"
+              :label="t('operations.auditUi.targetId')"
+            />
+            <VTextField
+              id="audit-target-type"
+              v-model="draft.targetType"
+              maxlength="256"
+              :label="t('operations.auditUi.targetType')"
+            />
+            <VTextField
+              id="audit-operation"
+              v-model="draft.operationId"
+              maxlength="36"
+              :label="t('operations.operation')"
+            /> </VExpansionPanelText></VExpansionPanel
+      ></VExpansionPanels>
+      <VCheckbox v-model="draft.bounded" :label="t('operations.auditUi.bounded')" />
       <template v-if="draft.bounded">
-        <label for="audit-from">{{ t('security.from') }}</label
-        ><UiUtcDateTimeInput
+        <VTextField
           id="audit-from"
-          :model-value="draft.from"
+          :model-value="dateInput(draft.from)"
+          :label="t('security.from')"
+          type="datetime-local"
+          step="1"
           required
-          :invalid-label="t('policies.invalidDate')"
-          @update:model-value="draft.from = $event ?? Number.NaN"
+          @update:model-value="draft.from = parseDate($event)"
         />
-        <label for="audit-until">{{ t('security.until') }}</label
-        ><UiUtcDateTimeInput
+        <VTextField
           id="audit-until"
-          :model-value="draft.until"
+          :model-value="dateInput(draft.until)"
+          :label="t('security.until')"
+          type="datetime-local"
+          step="1"
           required
-          :invalid-label="t('policies.invalidDate')"
-          @update:model-value="draft.until = $event ?? Number.NaN"
+          @update:model-value="draft.until = parseDate($event)"
         />
       </template>
-      <UiButton type="submit">{{ t('operations.auditUi.query') }}</UiButton>
+      <VBtn type="submit">{{ t('operations.auditUi.query') }}</VBtn>
     </fieldset>
-  </form>
+  </VForm>
 </template>
 
 <style scoped>

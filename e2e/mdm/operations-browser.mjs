@@ -353,13 +353,8 @@ try {
   await page.getByRole('button', { name: '查看关联事实', exact: true }).first().click()
   assert.equal((await detailRead).status(), 200)
   const activityDialog = page.getByRole('dialog')
-  const activityCard = activityDialog
-    .locator('[data-section="management-activity"]')
-    .filter({
-      has: page.getByText(fact.id, { exact: true }),
-    })
-    .first()
-  await activityCard.locator('details > summary').click()
+  const activityCard = activityDialog.locator('[data-section="management-activity"]').first()
+  await activityCard.getByRole('button', { name: '原始标识与技术信息', exact: true }).click()
   await activityCard.getByText(fact.id, { exact: true }).waitFor()
   await page.keyboard.press('Escape')
   await changeRule(fixture.rule.grants.filter((g) => g.operation !== 'audit_read'))
@@ -414,7 +409,7 @@ try {
   )
   await page.goto(
     at(
-      `operations/audit?device=${fixture.mdm}&operationId=${original.operationId}&action=command_cancel`,
+      `settings/audit?device=${fixture.mdm}&operationId=${original.operationId}&action=command_cancel`,
     ),
   )
   await load()
@@ -450,7 +445,7 @@ try {
     'windows',
     'windows_push',
   ])
-  await page.goto(at('operations/diagnostics'))
+  await page.goto(at('settings/diagnostics'))
   await load()
   assert.equal(await page.locator('tbody tr').count(), diagnostics.components.length)
   assert.equal(

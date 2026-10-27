@@ -403,7 +403,7 @@ export function createScenario(
         path,
       )
     const securityPath =
-      /^\/api\/v1\/(?:pki(?:\/|$)|agent-registrations(?:\/|$)|agent-issuances(?:\/|$)|compliance-rules(?:\/|$)|devices\/[^/]+\/compliance(?:\/|$))/.test(
+      /^\/api\/v1\/(?:pki(?:\/|$)|certificate-archive(?:\/|$)|agent-registrations(?:\/|$)|agent-issuances(?:\/|$)|compliance-rules(?:\/|$)|devices\/[^/]+\/compliance(?:\/|$))/.test(
         path,
       )
     const operationsPath =
@@ -418,7 +418,7 @@ export function createScenario(
           ? 'software'
           : policyPath
             ? 'policies'
-            : /^\/api\/(?:v1\/(?:asset-fields|asset-field-layout|device-queries|devices|saved-queries|groups)|v1\/(?:enrollments|devices|self-enrollments|registration-quotas))(?:\/|$)/.test(
+            : /^\/api\/(?:v1\/(?:asset-fields|asset-retention-policies|asset-field-layout|device-queries|devices|saved-queries|groups)|v1\/(?:enrollments|devices|self-enrollments|registration-quotas))(?:\/|$)/.test(
                   path,
                 )
               ? 'devices'

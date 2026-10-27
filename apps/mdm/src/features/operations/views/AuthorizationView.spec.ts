@@ -201,8 +201,9 @@ async function click(label: string, scope = body()) {
 }
 async function newRule() {
   await click('添加授权规则')
+  await click('按主体 UUID 定位（高级）')
   await body().get('#authorization-principal-id').setValue(target)
-  await body().get('input[value=tenant_read]').setValue(true)
+  await body().get('input[aria-label="查看租户"]').setValue(true)
 }
 async function confirm() {
   await body().get('[data-testid=review-rule]').trigger('click')
@@ -217,10 +218,16 @@ it('selects an existing management account, reviews eight admitted permissions, 
   await click('添加授权规则')
   await click('读取已有管理账户')
   expect(f.accounts).toHaveBeenCalledTimes(1)
-  expect(body().get('#authorization-principal').text()).toContain('Existing manager')
-  await body().get('#authorization-principal').setValue(target)
+  await body().get('#authorization-principal').trigger('mousedown')
+  await flushPromises()
+  const choice = body()
+    .findAll('[role=option]')
+    .find((v) => v.text().includes('Existing manager'))
+  expect(choice).toBeDefined()
+  await choice!.trigger('click')
+  await flushPromises()
   expect(body().findAll('.authorization-permissions input[type=checkbox]')).toHaveLength(8)
-  await body().get('input[value=tenant_read]').setValue(true)
+  await body().get('input[aria-label="查看租户"]').setValue(true)
   await body().get('[data-testid=review-rule]').trigger('click')
   await flushPromises()
   expect(writes(f)).toHaveLength(0)
@@ -297,7 +304,7 @@ it('retains a committed unknown request across remount, compares without confirm
 it('compares a conflict and retains local edits while adopting only the current server revision', async () => {
   const f = await fixture()
   await click(target)
-  await body().get('input[value=tenant_update]').setValue(true)
+  await body().get('input[aria-label="修改租户"]').setValue(true)
   f.rows.set(ruleId, {
     id: ruleId,
     revision: 2,
@@ -454,11 +461,18 @@ it('preserves business department source, matching and exact-device grants throu
   const f = await fixture({ realm: 'tenant', rows: [{ id: ruleId, revision: 3, value }] })
   await click('engineering')
   expect(body().text()).toContain('device-absolute')
-  expect(
-    body()
-      .findAll('option')
-      .map((o) => o.text()),
-  ).not.toContain('tenant_create')
+  await body().get('#authorization-permission').trigger('mousedown')
+  await flushPromises()
+  const options = body()
+    .findAll('[role=option]')
+    .map((o) => o.text())
+  expect(options).toContain('inventory_read')
+  expect(options).not.toContain('tenant_create')
+  await body()
+    .findAll('[role=option]')
+    .find((o) => o.text() === 'inventory_read')!
+    .trigger('click')
+  await flushPromises()
   await confirm()
   expect(writes(f)[0]).toMatchObject({ body: { expectedRevision: 3, value } })
 })
