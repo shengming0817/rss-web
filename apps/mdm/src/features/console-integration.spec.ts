@@ -721,7 +721,12 @@ function authority(operations: string[]) {
   }
 }
 function field(w: VueWrapper, label: string) {
-  const textField = w.findAllComponents(VTextField).find((item) => item.props('label') === label)
+  const select = w.findAllComponents(VSelect).find((item) => item.props('label') === label)
+  if (select) return select
+  const textFields = w.findAllComponents(VTextField)
+  const textField =
+    textFields.find((item) => item.props('label') === label) ??
+    textFields.find((item) => String(item.props('label')).startsWith(label))
   if (textField) return textField.get('input')
   const container =
     w.findAll('label').find((l) => l.text() === label) ??

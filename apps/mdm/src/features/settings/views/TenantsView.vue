@@ -137,7 +137,10 @@ useSettingsFacts(() => {
         @query="lookup()"
         @retry="create(true)"
         @compare="compare"
-        @edit="resolveConflict" /><VForm class="settings-editor" @submit.prevent="create()"
+        @edit="resolveConflict" /><VForm
+        :novalidate="false"
+        class="settings-editor"
+        @submit.prevent="create()"
         ><fieldset :disabled="busy || !canWrite">
           <legend>{{ t('settings.createTenant') }}</legend>
           <p>{{ t('settings.createHint') }}</p>
@@ -177,7 +180,7 @@ useSettingsFacts(() => {
             t('settings.createTenant')
           }}</VBtn>
         </fieldset></VForm
-      ><VForm class="settings-editor" @submit.prevent="lookup(original)"
+      ><VForm :novalidate="false" class="settings-editor" @submit.prevent="lookup(original)"
         ><VTextField
           v-model="original"
           required

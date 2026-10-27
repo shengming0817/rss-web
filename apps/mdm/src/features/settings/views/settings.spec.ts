@@ -606,11 +606,22 @@ it('edits tenant metadata with explicit CAS and clears an added administrator pa
     name: 'Updated',
   })
   const admin = f.wrapper.findAll('form')[1]!
+  const nativeForm = admin.element as HTMLFormElement
+  expect(nativeForm.noValidate).toBe(false)
+  await admin.get('input[type=password]').setValue('private-password')
+  const writesBeforeInvalid = f.calls.filter((call) => call.method !== 'GET').length
+  expect(nativeForm.checkValidity()).toBe(false)
+  nativeForm.requestSubmit()
+  await flushPromises()
+  expect(f.calls.filter((call) => call.method !== 'GET')).toHaveLength(writesBeforeInvalid)
+  expect((admin.get('input[type=password]').element as HTMLInputElement).value).toBe(
+    'private-password',
+  )
   await admin
     .findAll('input:not([type=hidden]):not([role=combobox]):not([readonly])')[0]!
     .setValue('new-admin')
   await admin.get('input[type=password]').setValue('private-password')
-  await admin.trigger('submit')
+  nativeForm.requestSubmit()
   await flushPromises()
   expect((admin.get('input[type=password]').element as HTMLInputElement).value).toBe('')
   expect(JSON.stringify([...f.settings.operations.records.values()])).not.toContain(

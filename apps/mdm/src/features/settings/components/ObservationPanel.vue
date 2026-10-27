@@ -33,7 +33,7 @@ useSettingsFacts(() => {
   <VCard class="console-panel" variant="outlined">
     <VCardTitle tag="h2">{{ t('settings.deviceEffect') }}</VCardTitle>
     <VCardText>
-      <VForm class="settings-editor" @submit.prevent="load">
+      <VForm :novalidate="false" class="settings-editor" @submit.prevent="load">
         <VTextField
           v-model="device"
           :label="t('settings.device')"

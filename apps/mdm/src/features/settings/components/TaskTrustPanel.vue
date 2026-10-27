@@ -107,7 +107,7 @@ useSettingsFacts(() => {
     <VBtn @click="downloadPublic('task-trust.json', JSON.stringify(trust))">{{
       t('settings.publicTrustFile')
     }}</VBtn></VCard
-  ><VForm class="settings-editor" @submit.prevent="change('prepare')"
+  ><VForm :novalidate="false" class="settings-editor" @submit.prevent="change('prepare')"
     ><fieldset :disabled="busy || !canWrite">
       <legend>{{ t('settings.generate') }}</legend>
       <VTextField
@@ -122,7 +122,7 @@ useSettingsFacts(() => {
         t('settings.generate')
       }}</VBtn>
     </fieldset></VForm
-  ><VForm class="settings-editor" @submit.prevent="change('activate')"
+  ><VForm :novalidate="false" class="settings-editor" @submit.prevent="change('activate')"
     ><fieldset :disabled="busy || !canWrite || !trust">
       <legend>{{ t('settings.activate') }}</legend>
       <VSelect

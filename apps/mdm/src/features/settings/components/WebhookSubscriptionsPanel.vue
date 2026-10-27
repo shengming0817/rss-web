@@ -206,7 +206,7 @@ function restore() {
       </li>
     </ul>
     <VBtn v-if="nextCursor" :disabled="busy" @click="load(nextCursor!)">{{ t('gap.next') }}</VBtn
-    ><VForm @submit.prevent="save"
+    ><VForm :novalidate="false" @submit.prevent="save"
       ><fieldset :disabled="locked || !canWrite || !!selected?.deleted">
         <VTextField
           v-model="id"

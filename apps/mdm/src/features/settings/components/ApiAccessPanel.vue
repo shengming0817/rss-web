@@ -203,7 +203,7 @@ async function compare() {
         :readonly="!!current"
         :label="t('gap.apiKeys')"
       /><VBtn :disabled="busy || !canRead" @click="read">{{ t('gap.load') }}</VBtn
-      ><VForm @submit.prevent="change(current ? 'update' : 'create')"
+      ><VForm :novalidate="false" @submit.prevent="change(current ? 'update' : 'create')"
         ><fieldset :disabled="locked || !canWrite || !!current?.revoked">
           <VTextField
             v-model="name"
@@ -254,7 +254,7 @@ async function compare() {
       ></template
     ><template v-else
       ><VBtn :disabled="busy || !canRead" @click="readNetwork">{{ t('gap.load') }}</VBtn
-      ><VForm @submit.prevent="saveNetwork()"
+      ><VForm :novalidate="false" @submit.prevent="saveNetwork()"
         ><fieldset :disabled="locked || !canWrite || !network">
           <VTextarea
             v-model="networks"

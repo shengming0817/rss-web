@@ -157,7 +157,7 @@ useSettingsFacts(() => {
     {{ head?.activeRevision ?? '—' }} · {{ t('settings.runtimeVersion') }}
     {{ t('settings.notObserved') }}
   </p>
-  <VForm class="settings-editor" @submit.prevent="change('prepare')"
+  <VForm :novalidate="false" class="settings-editor" @submit.prevent="change('prepare')"
     ><fieldset :disabled="busy || !canWrite || !directory">
       <legend>{{ t('settings.generate') }}</legend>
       <VTextField
@@ -193,7 +193,7 @@ useSettingsFacts(() => {
         t('settings.generate')
       }}</VBtn>
     </fieldset></VForm
-  ><VForm class="settings-editor" @submit.prevent="change('activate')"
+  ><VForm :novalidate="false" class="settings-editor" @submit.prevent="change('activate')"
     ><fieldset :disabled="busy || !canWrite || !head">
       <legend>{{ t('settings.activate') }}</legend>
       <VSelect
