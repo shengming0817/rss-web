@@ -1621,7 +1621,21 @@ it('keeps display edits on the existing observation gate and resets it for mappi
   await f.wrapper.get('form').trigger('submit')
   await flushPromises()
   expect(written!.useExistingObservation).toBe(true)
-  await f.wrapper.get('#attribute-type').setValue('integer')
+  async function selectOption(selector: string, title: string) {
+    await new DOMWrapper(f.wrapper.get(selector).element.closest('.v-field')!).trigger('mousedown')
+    await flushPromises()
+    const option = body()
+      .findAll('[role=option]')
+      .find((item) => item.text().trim() === title)
+    expect(option, title).toBeDefined()
+    await option!.trigger('click')
+    await flushPromises()
+  }
+  function checkbox(title: string) {
+    const label = f.wrapper.findAll('label').find((item) => item.text().includes(title))!
+    return f.wrapper.get(`#${label.attributes('for')}`)
+  }
+  await selectOption('#attribute-type', '安全整数')
   await f.wrapper.get('#attribute-min').setValue('0')
   await f.wrapper.get('form').trigger('submit')
   await flushPromises()
@@ -1631,16 +1645,12 @@ it('keeps display edits on the existing observation gate and resets it for mappi
     minimum: 0,
     maxLength: null,
   })
-  const sensitive = f.wrapper
-    .findAll('label')
-    .find((l) => l.text() === '敏感字段')!
-    .get('input')
-  await sensitive.setValue(true)
-  expect((f.wrapper.get('#attribute-visibility').element as HTMLSelectElement).value).toBe(
-    'profiles_read',
+  await checkbox('敏感字段').setValue(true)
+  expect((f.wrapper.get('#attribute-visibility').element as HTMLInputElement).value).toBe(
+    '资料管理员',
   )
-  await f.wrapper.get('#attribute-visibility').setValue('both')
-  await f.wrapper.get('#attribute-type').setValue('object')
+  await selectOption('#attribute-visibility', '本人及资料管理员')
+  await selectOption('#attribute-type', '对象')
   await f.wrapper.get('form').trigger('submit')
   await flushPromises()
   expect(written!).toMatchObject({
@@ -1649,11 +1659,7 @@ it('keeps display edits on the existing observation gate and resets it for mappi
     sensitive: true,
     visibility: 'both',
   })
-  await f.wrapper
-    .findAll('label')
-    .find((l) => l.text().includes('确认删除此字段'))!
-    .get('input')
-    .setValue(true)
+  await checkbox('确认删除此字段').setValue(true)
   await button(f.wrapper, '删除字段').trigger('click')
   await flushPromises()
   expect(written!).toBe(null)

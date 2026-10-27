@@ -200,7 +200,8 @@ try {
       .locator('fieldset')
       .filter({ has: page.locator('select[id$="-kind"]') })
       .last()
-    await selectors.locator('select').nth(1).selectOption(fixture.principal)
+    await selectors.getByRole('combobox', { name: '用户', exact: true }).click()
+    await page.getByRole('option', { name: fixture.login, exact: true }).click()
     await selectors.getByRole('button', { name: '添加', exact: true }).click()
     for (const selection of fixture.selectors.filter(
       (s) => fixture.departmentDirectory || s.kind !== 'department',

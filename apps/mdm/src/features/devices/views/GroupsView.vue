@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { VTabs, VTab, VAlert } from 'vuetify/components'
 import MdmPage from '../../../ui/MdmPage.vue'
@@ -11,6 +11,8 @@ const { t } = useI18n({ useScope: 'local', messages: groupMessages })
 const route = useRoute(),
   router = useRouter()
 const locked = ref(false)
+onBeforeRouteUpdate((to, from) => to.fullPath === from.fullPath || !locked.value)
+onBeforeRouteLeave(() => !locked.value)
 const categories = ['device-dynamic', 'device-static', 'user-dynamic', 'user-static'] as const
 const category = computed({
   get: () => categories.find((value) => value === route.query['category']) ?? 'device-dynamic',
