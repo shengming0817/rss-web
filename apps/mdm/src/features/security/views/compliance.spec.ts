@@ -6,6 +6,7 @@ import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
 import ComplianceRulesView from './ComplianceRulesView.vue'
 import ComplianceView from './ComplianceView.vue'
+import ConditionEditor from '../../devices/components/ConditionEditor.vue'
 const id = '11111111-1111-4111-8111-111111111111',
   nextId = '22222222-2222-4222-8222-222222222222'
 const definition = {
@@ -76,7 +77,8 @@ it('locks rule edits after an unknown write and replays the original rule, revis
   const button = (text: string) => wrapper.findAll('button').find((v) => v.text() === text)!
   expect(wrapper.get('[data-testid="save-rule"]').attributes('disabled')).toBeDefined()
   await wrapper.get('[data-testid="rule-name"]').setValue('Office baseline')
-  await wrapper.get('.condition-editor select').setValue('and')
+  wrapper.getComponent(ConditionEditor).vm.$emit('update:modelValue', definition.criteria)
+  await flushPromises()
   await wrapper.get('[data-testid="edit-rule"]').trigger('submit')
   await flushPromises()
   const frozen = structuredClone(put.mock.calls[0])

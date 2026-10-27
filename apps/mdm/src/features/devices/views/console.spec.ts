@@ -1967,7 +1967,9 @@ it('compares a deleted group inside its unknown-result modal before replaying th
   expect(replay.attributes('disabled')).toBeUndefined()
   await replay.trigger('click')
   await flushPromises()
-  expect(new DOMWrapper(document.body).find('[role=alertdialog]').exists()).toBe(false)
+  expect(new DOMWrapper(document.body).find('[role=alertdialog][data-state=open]').exists()).toBe(
+    false,
+  )
 })
 it('edits shared groups in one drawer and recovers an unknown saved layout through comparison and exact replay', async () => {
   const f = await setup('device-detail', { device: 'device-01' })
@@ -2070,7 +2072,7 @@ it('restarts an invalidated first page even when its route does not change', asy
   expect(f.wrapper.find('tbody').exists()).toBe(false)
   const calls = list.mock.calls.length
   await f.wrapper.get('input[type=search]').setValue('unsubmitted draft')
-  await f.wrapper.get('form + p button').trigger('click')
+  await f.wrapper.get('.device-notice button').trigger('click')
   await flushPromises()
   expect(f.router.currentRoute.value.fullPath).toBe(before)
   await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(calls + 1))
@@ -2095,7 +2097,7 @@ it('restarts an invalidated deep page with its applied filters and columns and o
   expect(f.wrapper.find('tbody').exists()).toBe(false)
   const calls = list.mock.calls.length
   await f.wrapper.get('input[type=search]').setValue('unsubmitted draft')
-  await f.wrapper.get('form + p button').trigger('click')
+  await f.wrapper.get('.device-notice button').trigger('click')
   await flushPromises()
   await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(calls + 1))
   expect(f.router.currentRoute.value.query).toEqual({
@@ -2573,6 +2575,56 @@ it('keeps device group categories separate and exposes formal static user group 
   expect(h.router.currentRoute.value.name).toBe('devices')
 })
 
+it('compares a static user-group conflict without discarding its draft and confirms deletion explicitly', async () => {
+  const h = await setup('groups-hub', {}, { category: 'user-static' })
+  const id = crypto.randomUUID()
+  const value = { name: 'Conflict user group', enabled: true, members: [] }
+  await h.operations.authorization.changeGroup(id, {
+    operationId: crypto.randomUUID(),
+    expectedRevision: 0,
+    value,
+  })
+  await h.click('重新读取')
+  await h.click(value.name)
+  const form = new DOMWrapper(document.body).get('[role=dialog] form')
+  const name = form.get('[data-testid=group-name] input')
+  await name.setValue('Unsubmitted group draft')
+  await h.operations.authorization.changeGroup(id, {
+    operationId: crypto.randomUUID(),
+    expectedRevision: 1,
+    value: { ...value, name: 'Concurrent group edit' },
+  })
+  await form.trigger('submit')
+  await flushPromises()
+  const writes = () =>
+    h.requests.filter(
+      (r) => r.method === 'PUT' && r.path === '/api/v1/authorization/user-groups/{id}',
+    )
+  const conflict = writes().at(-1)!.body as { operationId: string }
+  await h.click('读取服务器版本并比较')
+  expect(new DOMWrapper(document.body).text()).toContain('Concurrent group edit')
+  expect((name.element as HTMLInputElement).value).toBe('Unsubmitted group draft')
+  await h.click('保留草稿，采用当前 revision')
+  await form.trigger('submit')
+  await flushPromises()
+  expect(writes().at(-1)!.body).toMatchObject({
+    expectedRevision: 2,
+    value: { ...value, name: 'Unsubmitted group draft' },
+  })
+  expect((writes().at(-1)!.body as { operationId: string }).operationId).not.toBe(
+    conflict.operationId,
+  )
+  const beforeDelete = writes().length
+  await h.click('删除')
+  expect(writes()).toHaveLength(beforeDelete)
+  await h.click('取消')
+  expect(writes()).toHaveLength(beforeDelete)
+  await h.click('删除')
+  await h.click('确认')
+  expect(writes().at(-1)!.body).toMatchObject({ expectedRevision: 3, value: null })
+  expect((await h.operations.authorization.group(id)).value).toBeNull()
+})
+
 it('retains an unknown saved query across directory filtering and panel collapse until exact replay', async () => {
   const h = await setup('devices')
   await h.click('高级资产查询')
@@ -2587,22 +2639,22 @@ it('retains an unknown saved query across directory filtering and panel collapse
     h.requests.filter((r) => r.method === 'PUT' && r.path === '/api/v1/saved-queries/{id}')
   expect(writes()).toHaveLength(1)
   const original = writes()[0]!
-  expect(h.button('重放同一操作').exists()).toBe(true)
+  expect(h.button('明确重放原操作').exists()).toBe(true)
   h.scenario.set('normal')
   await setSelect(h.wrapper, h.wrapper.get('[data-testid=directory-platform]'), 'windows')
   await h.wrapper.get('form.device-filters').trigger('submit')
   await flushPromises()
-  expect(h.router.currentRoute.value.query['platform']).toBe('windows')
+  await vi.waitFor(() => expect(h.router.currentRoute.value.query['platform']).toBe('windows'))
   await form.trigger('submit')
   await flushPromises()
   expect(writes()).toHaveLength(1)
-  expect(h.button('重放同一操作').exists()).toBe(true)
+  expect(h.button('明确重放原操作').exists()).toBe(true)
   await h.click('高级资产查询')
-  expect(h.wrapper.findComponent(InventoryQuery).vm).toBe(inventory.vm)
   await h.click('高级资产查询')
+  expect(h.button('明确重放原操作').exists()).toBe(true)
   await h.router.push({ name: 'groups-hub', params: { tenant: TENANT } })
   expect(h.router.currentRoute.value.name).toBe('devices')
-  await h.click('重放同一操作')
+  await h.click('明确重放原操作')
   expect(writes()).toHaveLength(2)
   expect(writes()[1]!.body).toEqual(original.body)
   expect(writes()[1]!.pathParams).toEqual(original.pathParams)

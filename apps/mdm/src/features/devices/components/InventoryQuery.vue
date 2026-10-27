@@ -31,7 +31,7 @@ const { t } = useI18n({ useScope: 'local', messages: groupMessages }),
     () => deviceBinding(runtime),
     () => route.path,
   )
-onBeforeRouteLeave(() => !busy.value && !uncertain.value)
+onBeforeRouteLeave(() => !uncertain.value && !(busy.value && pending))
 const fields = ref<FieldDefinition[]>([]),
   criteria = ref<InventoryCondition | null>(null),
   select = ref<string[]>([]),
@@ -72,7 +72,11 @@ const saved = ref<Awaited<ReturnType<typeof client.saved>>>(),
 let pending: (() => Promise<boolean>) | undefined
 function write<T>(request: () => Promise<T>, apply: (value: T) => void) {
   if (busy.value || uncertain.value) return
-  pending = () => runWrite(request, apply)
+  pending = () =>
+    runWrite(request, (value) => {
+      pending = undefined
+      apply(value)
+    })
   void pending()
 }
 function definition(): QueryInput | null {
