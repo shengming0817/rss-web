@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, watch } from 'vue'
+import { computed, nextTick, useId, watch } from 'vue'
 import { VBtn, VCard, VCardActions, VCardText, VCardTitle, VDialog } from 'vuetify/components'
 import { useDialogFocus } from '../../../ui/dialog-focus'
 const props = withDefaults(
@@ -14,6 +14,7 @@ const props = withDefaults(
   }>(),
   { dismissible: true },
 )
+const titleId = useId()
 const emit = defineEmits<{ 'update:open': [open: boolean] }>()
 const restoreFocus = useDialogFocus(computed(() => props.open))
 watch(
@@ -29,7 +30,9 @@ watch(
 <template>
   <VDialog
     v-if="open"
-    :content-props="{ 'data-state': open ? 'open' : 'closed', role: kind ?? 'dialog' }"
+    :data-state="open ? 'open' : 'closed'"
+    :role="kind ?? 'dialog'"
+    :aria-labelledby="titleId"
     :model-value="open"
     :persistent="!dismissible"
     max-width="1000"
@@ -37,9 +40,9 @@ watch(
     @update:model-value="emit('update:open', $event)"
     @after-leave="restoreFocus"
   >
-    <VCard :data-state="open ? 'open' : 'closed'">
+    <VCard>
       <VCardTitle class="d-flex align-center justify-space-between"
-        ><h2 class="text-h6">{{ title }}</h2>
+        ><h2 :id="titleId" class="text-h6">{{ title }}</h2>
         <VBtn
           variant="text"
           :aria-label="closeLabel"

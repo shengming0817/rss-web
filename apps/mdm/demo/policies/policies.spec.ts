@@ -1,3 +1,5 @@
+import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
+import { createPoliciesClient } from '../../src/features/policies/clients/policies'
 import { expect, it } from 'vitest'
 import { createAutomationDemo } from './state'
 import { createPolicyDemo } from './policies'
@@ -406,4 +408,29 @@ it('archives only disabled Policies, replays the exact DELETE, and retains read-
   deletion.body = { operationId: crypto.randomUUID(), expectedRevision: old.revision + 2 }
   expect(send().status).toBe(409)
   expect(f.automation.handle(deletion, 'denied')!.status).toBe(403)
+})
+
+it('routes the formal capability read before Policy UUID parsing without granting MDM software support', async () => {
+  const f = fixture()
+  const transport = {
+    async request<T>(options: RequestOptions<T>) {
+      const reply = f.automation.handle(f.request(options.path), 'normal')
+      expect(reply?.status).toBe(options.successStatus)
+      return options.decode(reply!.body)
+    },
+  } as HttpTransport
+  expect(await createPoliciesClient(transport).capabilities()).toEqual({
+    defaultSoftwareChannel: 'agent',
+    mdmSoftwareDistributionEnabled: false,
+  })
+  expect(f.automation.handle(f.request('/api/v1/policies/capabilities'), 'denied')?.status).toBe(
+    403,
+  )
+  const unauthorized = f.request('/api/v1/policies/capabilities')
+  unauthorized.actor = { ...unauthorized.actor, principalId: crypto.randomUUID() }
+  expect(f.automation.handle(unauthorized, 'normal')?.status).toBe(403)
+  expect(f.read(f.seed.ids[0]!)).toMatchObject({ id: f.seed.ids[0] })
+  expect(
+    f.automation.handle(f.request('/api/v1/policies/not-a-policy-uuid'), 'normal')?.status,
+  ).toBe(400)
 })
