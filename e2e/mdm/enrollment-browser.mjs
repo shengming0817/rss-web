@@ -140,7 +140,7 @@ try {
     phase = 'ordinary-user'
     await login(fixture.reader)
     assert.equal(await page.getByRole('link', { name: 'Agent 安装配置', exact: true }).count(), 0)
-    await go(page, `${origin}/tenants/${fixture.tenant}/agent-configurations`)
+    await go(page, `${origin}/tenants/${fixture.tenant}/settings/agent-configurations`)
     await page.getByText('请求被拒绝', { exact: false }).waitFor()
     assert.equal(await page.locator('form').count(), 0)
     coverage.push('ordinary-user-no-configuration-form')
@@ -223,7 +223,7 @@ try {
       assert.equal(agentFacts.availability, 'ready')
       assert.equal(agentFacts.admission, 'allowed')
       phase = 'configuration-lost-response'
-      await go(page, `${origin}/tenants/${fixture.tenant}/agent-configurations`)
+      await go(page, `${origin}/tenants/${fixture.tenant}/settings/agent-configurations`)
       await page.locator('summary').filter({ hasText: '生成完整 JSON' }).click()
       await page.getByRole('button', { name: '生成完整 JSON', exact: true }).waitFor()
       let commits = 0
@@ -322,7 +322,7 @@ try {
     observe(employee)
     employee.setDefaultTimeout(10000)
     await login(fixture.reader, employee)
-    await go(employee, `${origin}/tenants/${fixture.tenant}/registration-quotas`)
+    await go(employee, `${origin}/tenants/${fixture.tenant}/settings/registration-quotas`)
     await employee.getByRole('heading', { name: '注册通道与准入', exact: true }).waitFor()
     assert.equal(await employee.getByRole('button', { name: '暂停新注册', exact: true }).count(), 0)
     coverage.push('ordinary-user-readonly-channels')
@@ -345,11 +345,11 @@ try {
         })
         .waitFor()
     }
-    await go(page, `${origin}/tenants/${fixture.tenant}/registration-quotas`)
+    await go(page, `${origin}/tenants/${fixture.tenant}/settings/registration-quotas`)
     await adminChannel('Windows MDM')
       .getByRole('button', { name: '暂停新注册', exact: true })
       .waitFor()
-    await go(employee, `${origin}/tenants/${fixture.tenant}/my-enrollments`)
+    await go(employee, `${origin}/enroll`)
     const create = employee.getByRole('button', { name: '授权注册', exact: true })
     async function prepare() {
       await employee.getByRole('button', { name: '生成一次性交付口令', exact: true }).click()
@@ -382,7 +382,7 @@ try {
     coverage.push('established-device-management-reads-during-pause')
     // The Agent channel remains available while Windows admission is paused.
     const agent = page
-    await go(agent, `${origin}/tenants/${fixture.tenant}/agent-configurations`)
+    await go(agent, `${origin}/tenants/${fixture.tenant}/settings/agent-configurations`)
     await agent.locator('summary').filter({ hasText: '生成完整 JSON' }).click()
     const issued = agent.waitForResponse(
       (r) =>
@@ -402,7 +402,7 @@ try {
     assert.ok(json.configuration && json.secret && json.signature)
     rmSync(filename)
     coverage.push('other-channel-continues-and-complete-JSON-download')
-    await go(page, `${origin}/tenants/${fixture.tenant}/registration-quotas`)
+    await go(page, `${origin}/tenants/${fixture.tenant}/settings/registration-quotas`)
     await admission('恢复新注册')
     await employee.getByRole('button', { name: '刷新状态与额度', exact: true }).click()
     await prepare()

@@ -16,6 +16,7 @@ import { createOnboardingDemo } from '../demo/enrollment'
 import { createImportsDemo } from '../demo/software/imports'
 import { createPolicyClients } from '../demo/features/policies/client'
 import { operation } from './services/useOperation'
+import { softwarePolicy } from './features/software/clients/assignment-model'
 import { navigation, navigationTarget, platformNavigation } from './components/navigation'
 async function start(platform = false) {
   const devices = createDeviceDemo(),
@@ -132,6 +133,99 @@ it('navigates each product section through the real application router and its l
     expect(app.calls.some((c) => c.path === '/api/v1/resources')).toBe(true)
   } finally {
     app.cleanup()
+  }
+}, 20000)
+it('opens a software policy from the workspace through the supported software page', async () => {
+  const app = await start()
+  try {
+    const id = crypto.randomUUID()
+    const policy = softwarePolicy({
+      id,
+      revision: 1,
+      version: 1,
+      versionId: crypto.randomUUID(),
+      state: 'enabled',
+      definition: {
+        customEvent: null,
+        alias: null,
+        scope: app.seed.scope,
+        action: {
+          kind: 'software',
+          channel: 'agent',
+          delivery: { kind: 'direct' },
+          resource: {
+            kind: 'software',
+            id: 'workspace-software',
+            version: '1',
+            variants: { windows_x86_64: 'main' },
+          },
+          intent: 'required_install',
+          schedule: {
+            trigger: { kind: 'check_in', minimumSeconds: 60 },
+            misfire: { kind: 'coalesce_one' },
+            notBefore: 0,
+            until: null,
+            jitterSeconds: 0,
+            window: null,
+          },
+          runLifetimeSeconds: 3600,
+          rollout: {
+            stages: [{ scope: app.seed.scope, opensAt: 0, minimumVerifiedPercent: null }],
+          },
+        },
+      },
+    })
+    vi.spyOn(app.mdm.policies.policies, 'list').mockResolvedValue({
+      items: [policy],
+      nextCursor: null,
+    })
+    const read = vi.spyOn(app.mdm.policies.policies, 'read').mockResolvedValue(policy)
+    await app.router.push({ name: 'settings-overview', params: { tenant: TENANT } })
+    await app.router.push({ name: 'workspace', params: { tenant: TENANT } })
+    await flushPromises()
+    const link = new DOMWrapper(document.body).get('.console-deployment-list a')
+    await link.trigger('click')
+    await flushPromises()
+    expect(app.router.currentRoute.value.name).toBe('software-deployments')
+    expect(app.router.currentRoute.value.query['id']).toBe(id)
+    expect(read).toHaveBeenCalledWith(id)
+    expect(document.querySelector('main h1')?.textContent).toBe(
+      app.i18n.global.t('software.deployments'),
+    )
+    expect(document.querySelector('main')?.textContent).toContain('workspace-software')
+    expect(document.querySelector('main')?.textContent).not.toContain(
+      app.i18n.global.t('devices.invalidResponse'),
+    )
+  } finally {
+    vi.restoreAllMocks()
+    app.cleanup()
+  }
+}, 20000)
+it('expands mobile submenus after collapsing the desktop drawer', async () => {
+  const width = window.innerWidth
+  Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1440 })
+  const app = await start()
+  try {
+    await app.router.push({ name: 'settings-overview', params: { tenant: TENANT } })
+    await flushPromises()
+    await new DOMWrapper(document.body)
+      .get(`button[aria-label="${app.i18n.global.t('console.collapseNavigation')}"]`)
+      .trigger('click')
+    await flushPromises()
+    expect(document.querySelector('.mdm-navigation-children')).toBeNull()
+    window.innerWidth = 390
+    window.dispatchEvent(new Event('resize'))
+    await flushPromises()
+    await new DOMWrapper(document.body)
+      .get(`button[aria-label="${app.i18n.global.t('console.navigation')}"]`)
+      .trigger('click')
+    await flushPromises()
+    const target = app.router.resolve({ name: 'settings-access', params: { tenant: TENANT } }).href
+    expect(document.querySelector(`.mdm-navigation-children a[href="${target}"]`)).not.toBeNull()
+  } finally {
+    app.cleanup()
+    window.innerWidth = width
+    window.dispatchEvent(new Event('resize'))
   }
 }, 20000)
 it('renders platform navigation without resolving tenant-only device links', async () => {
