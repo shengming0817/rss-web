@@ -36,9 +36,8 @@ export function decodeEnrollmentReceipt(value: unknown, id: string) {
   return result
 }
 export function decodeEnrollment(value: unknown, id: string) {
-  const v = closed(value, [...statusKeys, 'deviceId', 'instructions', 'progress'])
+  const v = closed(value, [...statusKeys, 'instructions', 'progress'])
   const result = {
-    deviceId: identifier(v['deviceId']),
     enrollmentId: uuid(v['enrollmentId']),
     status: enumeration(v['status'], ['pending', 'bound', 'cancelled', 'expired'] as const),
     expiresAt: integer(v['expiresAt']),

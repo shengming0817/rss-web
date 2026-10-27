@@ -468,7 +468,7 @@ try {
     assert.equal(read.status(), 200)
     const current = await read.json()
     assert.equal(current.expiresAt, receipt.expiresAt)
-    assert.equal(current.deviceId, receipt.deviceId)
+    assert.equal(Object.hasOwn(current, 'deviceId'), false)
     assert.equal(current.instructions.platform, 'windows')
     assert.equal(current.instructions.windowsProfile, 'Full')
     const link = employee.getByRole('link', { name: '打开 Windows 企业 MDM 注册', exact: true })
@@ -488,19 +488,24 @@ try {
         inventoryReads.push(path)
     }
     employee.on('request', recordInventoryRead)
-    await employee.getByRole('link', { name: '在设备详情查看进展与恢复', exact: true }).click()
-    await employee.waitForURL(
-      (url) =>
-        url.pathname ===
-          `/tenants/${fixture.tenant}/devices/${encodeURIComponent(receipt.deviceId)}/management` &&
-        url.searchParams.get('mode') === 'self-enrollment',
+    // Current production status authenticates the original enrollment but has no device projection.
+    // Keep recovery in this guide; candidate target evidence is supplied only by the explicit Mock.
+    assert.equal(
+      await employee.getByRole('link', { name: '在设备详情查看进展与恢复', exact: true }).count(),
+      0,
     )
+    await employee
+      .getByText(
+        '设备详情关联暂未接通，无法确认原注册对应的设备。请在仍打开的注册引导中查看原请求进展并恢复。',
+        { exact: true },
+      )
+      .waitFor()
+    await employee.getByRole('button', { name: '无法继续？恢复原注册', exact: true }).click()
     await employee.locator('[data-self-enrollment-progress]').waitFor()
-    await employee.getByRole('button', { name: '技术详情与手工设置', exact: true }).click()
-    await employee.getByText(receipt.deviceId, { exact: false }).first().waitFor()
     assert.deepEqual(inventoryReads, [])
     employee.removeListener('request', recordInventoryRead)
-    coverage.push('ordinary-user-owned-device-detail-progress-without-inventory-grants')
+    coverage.push('ordinary-user-original-enrollment-progress-in-guide-without-inventory-grants')
+    gaps.push('production-self-enrollment-device-target-projection')
     const cancelled = employee.waitForResponse(
       (r) =>
         r.request().method() === 'POST' &&
@@ -522,16 +527,13 @@ try {
       `${origin}/tenants/${fixture.tenant}/devices/mismatched-self-device/management?${new URLSearchParams({ mode: 'self-enrollment', enrollment: receipt.enrollmentId })}`,
     )
     const mismatched = employee.locator('[data-self-enrollment-progress]')
-    await mismatched
-      .getByRole('alert')
-      .filter({ hasText: '输入或响应无效，操作未确认。' })
-      .waitFor()
+    await mismatched.getByRole('status').filter({ hasText: '设备详情关联暂未接通' }).waitFor()
     assert.equal(await mismatched.getByRole('button', { name: '取消', exact: true }).count(), 0)
     assert.equal(
       await mismatched.getByRole('button', { name: '更新口令并继续', exact: true }).count(),
       0,
     )
-    coverage.push('self-progress-rejects-server-device-binding-mismatch')
+    coverage.push('production-self-device-route-stays-disconnected-without-target-evidence')
     await admission('恢复新注册')
     coverage.push('admission-restored-create-original-expiry-and-confirmed-cancel-during-pause')
     gaps.push('established-device-native-protocol-contact')

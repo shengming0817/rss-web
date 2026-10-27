@@ -67,6 +67,20 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
   }
   const handle: DomainHandler = (request) => {
     const { path, method } = request
+    const targetPath =
+      /^\/api\/v1\/mdm-candidate\/devices\/self-enrollments\/([^/]+)\/target$/.exec(path)
+    if (targetPath) {
+      if (method !== 'GET') return error('malformed_request', 400)
+      const id = uuid(targetPath[1]),
+        enrollment = enrollments.get(id)
+      if (
+        !enrollment?.selfService ||
+        enrollment.actor !== request.actor.principalId ||
+        enrollment.tenantId !== (request.actor.tenantId ?? TENANT)
+      )
+        return error('permission_denied', 403)
+      return ok({ evidence: 'explicit_mock', enrollmentId: id, deviceId: enrollment.device })
+    }
     const profilePath = /^\/api\/v1\/enrollments\/([^/]+)\/profile$/.exec(path)
     if (profilePath) {
       if (method !== 'POST') return error('malformed_request', 400)
@@ -134,7 +148,6 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
         return e && (!e.selfService || e.actor === request.actor.principalId)
           ? ok({
               ...view(e),
-              deviceId: e.device,
               status:
                 e.status === 'pending' && e.expiresAt <= Math.floor(Date.now() / 1000)
                   ? 'expired'
