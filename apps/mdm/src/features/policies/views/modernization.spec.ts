@@ -16,7 +16,7 @@ it('queries authorized groups by name and type and keeps the applied query when 
     history: createMemoryHistory(),
     routes: [{ path: '/', component: GroupsView }],
   })
-  await router.push('/')
+  await router.push('/?category=device-dynamic')
   const wrapper = mount(GroupsView, {
     attachTo: document.body,
     global: {
@@ -33,7 +33,6 @@ it('queries authorized groups by name and type and keeps the applied query when 
   await flushPromises()
   const filter = wrapper.get('form.task-filterbar')
   await filter.get('input[type=search]').setValue('macOS')
-  await filter.get('select').setValue('dynamic')
   await filter.trigger('submit')
   await flushPromises()
   expect(list.mock.calls.at(-1)?.[0]).toEqual({
@@ -50,18 +49,26 @@ it('queries authorized groups by name and type and keeps the applied query when 
     filter: "(name=icontains='macOS');(kind=='dynamic')",
     cursor: 'next',
   })
-  await filter.get('input[type=search]').trigger('keydown', { key: 'Enter' })
+  await filter.get('button[type=submit]').trigger('click')
   await flushPromises()
   expect(list.mock.calls.at(-1)?.[0]).toEqual({
     filter: "(name=icontains='unsaved draft');(kind=='dynamic')",
     cursor: undefined,
   })
+  await wrapper
+    .findAll('[role=tab]')
+    .find((tab) => tab.text() === '设备静态组')!
+    .trigger('click')
+  await vi.waitFor(() => expect(router.currentRoute.value.query['category']).toBe('device-static'))
+  await flushPromises()
+  expect(list.mock.lastCall?.[0]).toEqual({ filter: "(kind=='static')" })
+  const staticFilter = wrapper.get('form.task-filterbar')
+  await staticFilter.get('input[type=search]').setValue('unsaved draft')
   list.mockRejectedValueOnce(new Error('directory unavailable'))
-  await filter.get('select').setValue('static')
-  await filter.trigger('submit')
+  await staticFilter.trigger('submit')
   await flushPromises()
   expect(wrapper.findAll('button').some((button) => button.text() === '下一页')).toBe(false)
-  await filter.trigger('submit')
+  await staticFilter.trigger('submit')
   await flushPromises()
   expect(list.mock.lastCall?.[0]).toEqual({
     filter: "(name=icontains='unsaved draft');(kind=='static')",
@@ -133,7 +140,7 @@ it('filters Resource kinds through the formal directory and opens software impor
     .trigger('click')
   await flushPromises()
   const dialog = new DOMWrapper(document.body).get('[role=dialog]')
-  await dialog.get('#resource-kind').setValue('software')
+  await selectControl(wrapper, '#resource-kind').setValue('software')
   expect(dialog.get('a').attributes('href')).toBe('/imports/tenant')
   expect(dialog.findAll('button').some((button) => button.text() === '保存')).toBe(false)
   wrapper.unmount()

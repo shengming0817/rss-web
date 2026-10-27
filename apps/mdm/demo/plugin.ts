@@ -17,7 +17,7 @@ export function demoPlugin(): Plugin {
       return html.replace('/src/main.ts', '/demo/main.ts')
     },
     configureServer(server) {
-      const settings = createSettingsDemo()
+      const settings = createSettingsDemo({ seedDownloads: true })
       const devices = createDeviceDemo()
       const automation = createAutomationDemo(devices)
       devices.bindAuthorization(automation.authorization.can)

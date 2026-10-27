@@ -26,8 +26,8 @@ import { moduleIds } from '../src/services/workspace'
 const props = defineProps<{ transport: HttpTransport; authenticated: Readonly<Ref<boolean>> }>()
 const { locale, t } = useI18n()
 const overlays = ref<HTMLElement>()
-// Keep menus inside the modal so its theme and accessible subtree include the options.
-const menuProps = { attach: true }
+// Keep menus in the theme surface, outside the select activator that handles mousedown.
+const menuProps = computed(() => ({ attach: overlays.value }))
 const controlsOpen = ref(false),
   resetOpen = ref(false)
 const active = ref('normal')

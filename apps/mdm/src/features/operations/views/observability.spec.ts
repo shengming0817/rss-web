@@ -206,8 +206,9 @@ it('renders diagnostic uncertainty and independent health, then clears the snaps
   expect(f.wrapper.text()).toContain('未知')
   expect(f.wrapper.get('[data-testid=channel-facts]').text()).toContain('所选与加载版本不一致')
   expect(f.wrapper.get('[data-testid=channel-facts]').text()).toContain('apns · 4')
-  expect(f.wrapper.findAll('tbody tr')).toHaveLength(1)
-  await f.wrapper.findAll('tbody button')[0]!.trigger('click')
+  const diagnostics = f.wrapper.get('table[aria-label="依赖与运行诊断"]')
+  expect(diagnostics.findAll('tbody tr')).toHaveLength(1)
+  await diagnostics.get('tbody button').trigger('click')
   await flushPromises()
   expect(f.body().get('[data-testid=diagnostic-detail]').text()).toContain('未观察')
   expect(f.body().get('[data-testid=diagnostic-detail]').text()).toContain('来源水位')
@@ -217,7 +218,7 @@ it('renders diagnostic uncertainty and independent health, then clears the snaps
     .find((b) => b.text() === '重新读取')!
     .trigger('click')
   await flushPromises()
-  expect(f.wrapper.find('tbody').exists()).toBe(false)
+  expect(f.wrapper.find('table[aria-label="依赖与运行诊断"]').exists()).toBe(false)
   expect(f.wrapper.find('[data-testid=channel-facts]').exists()).toBe(false)
   expect(f.body().find('[data-testid=diagnostic-detail]').exists()).toBe(false)
   expect(

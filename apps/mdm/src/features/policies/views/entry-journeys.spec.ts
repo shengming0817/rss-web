@@ -1,11 +1,10 @@
 import { selectControl } from '../vuetify-test-controls'
 import { createFeatureRouter as createRouter } from '../../../../tests/feature-router'
 import { ref, nextTick } from 'vue'
-import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createMemoryHistory } from 'vue-router'
 import { expect, it, vi } from 'vitest'
 import type { Component } from 'vue'
-import { UiDialog } from '@rss/core/components'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
 import ToolsView from './ToolsView.vue'
@@ -309,10 +308,14 @@ it('shows partial coverage and independent facts, then clears denied or stale re
   await button(wrapper, '查看关联事实').trigger('click')
   await flushPromises()
   expect(runtime.operations.activities.read).toHaveBeenCalledWith('endpoint', fact.id)
-  expect(document.body.textContent).toContain('policy_fact_unavailable')
-  // Dialog output is teleported; the associated page still owns its lifecycle.
-  await wrapper.findComponent(UiDialog).vm.$emit('update:open', false)
+  const dialog = new DOMWrapper(document.body).get('[role=dialog]')
+  expect(dialog.text()).toContain('policy_fact_unavailable')
+  await dialog
+    .findAll('button')
+    .find((control) => control.text() === '关闭')!
+    .trigger('click')
   await flushPromises()
+  expect(new DOMWrapper(document.body).find('[role=dialog]').exists()).toBe(false)
   runtime.operations.activities.list.mockRejectedValueOnce(new Error('offline'))
   await wrapper.get('form').trigger('submit')
   await flushPromises()

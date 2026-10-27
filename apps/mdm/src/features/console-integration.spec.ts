@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { defineComponent, shallowRef } from 'vue'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createMemoryHistory } from 'vue-router'
+import { VSelect, VTextField, VTextarea } from 'vuetify/components'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { decodeMdmError } from '@rss/api/mdm'
 import type { IdentitySession } from '@rss/auth'
@@ -629,13 +630,13 @@ it('unlocks an asset conflict only after reading the current authoritative state
   await confirm(w)
   await button(w, '保存').trigger('click')
   await flushPromises()
-  expect(w.find('select').attributes('disabled')).toBeDefined()
+  expect(select(w, '资产状态').props('disabled')).toBe(true)
   await button(w, '冲突：重新读取并比较后编辑').trigger('click')
   await flushPromises()
   expect(detail).toHaveBeenCalledWith({ kind: 'endpoint', id: 'mac' })
   expect(w.text()).toContain('active')
-  expect(w.find('select').attributes('disabled')).toBeUndefined()
-  await w.find('select').setValue('archived')
+  expect(select(w, '资产状态').props('disabled')).toBe(false)
+  await select(w, '资产状态').setValue('archived')
   await confirm(w)
   await button(w, '保存').trigger('click')
   await flushPromises()
@@ -718,10 +719,40 @@ function authority(operations: string[]) {
   }
 }
 function field(w: VueWrapper, label: string) {
+  const controls = [...w.findAllComponents(VTextField), ...w.findAllComponents(VTextarea)]
+  const control =
+    controls.find((control) => control.props().label === label) ??
+    controls.find((control) => String(control.props().label ?? '').startsWith(label))
+  if (control) return control.get('input:not([type="hidden"]), textarea')
   const container =
     w.findAll('label').find((l) => l.text() === label) ??
-    w.findAll('label').find((l) => l.text().startsWith(label))!
-  return container.find('input, textarea, select')
+    w.findAll('label').find((l) => l.text().startsWith(label))
+  if (!container) throw new Error(`Missing field label: ${label}`)
+  const nested = container.find('input, textarea')
+  if (nested.exists()) return nested
+  const id = container.attributes('for')
+  const input = w.findAll('input, textarea').find((input) => input.attributes('id') === id)
+  if (!id || !input) throw new Error(`Missing labelled input: ${label}`)
+  return input
+}
+function select(w: VueWrapper, label: string, index = 0) {
+  const direct = w.findAllComponents(VSelect).filter((control) => {
+    const value = control.props('label')
+    return typeof value === 'string' && value.startsWith(label)
+  })
+  const wrapped = w
+    .findAll('label')
+    .filter((candidate) => candidate.text().startsWith(label))
+    .map((candidate) => candidate.findComponent(VSelect))
+    .filter((control) => control.exists())
+  const control = [...direct, ...wrapped][index]
+  if (!control) throw new Error(`Missing labelled select: ${label} (${index})`)
+  return control
+}
+function expectCredentialEditorDisabled(w: VueWrapper, disabled: boolean) {
+  const inputs = w.get('form').findAll('input:not([type="hidden"])')
+  expect(inputs.length).toBeGreaterThan(0)
+  for (const input of inputs) expect(input.element).toHaveProperty('disabled', disabled)
 }
 it('edits webhook metadata without losing extensions and consumes actual replay and redrive receipts', async () => {
   let record = { id: a, revision: 1, targetVersion: 1, enabled: false, deleted: false, settings }
@@ -780,7 +811,7 @@ it('edits webhook metadata without losing extensions and consumes actual replay 
   await flushPromises()
   await field(w, '名称').setValue('Updated receiver')
   await field(w, 'HTTPS').setValue('https://receiver.test/new')
-  await field(w, '设备范围').setValue('groups')
+  await select(w, '设备范围').setValue('groups')
   await w.find('textarea').setValue(c)
   await w.find('input[value="device.retired"]').setValue(true)
   await field(w, '签名').setValue('signing-next')
@@ -986,15 +1017,12 @@ it('creates and edits a credential Policy with the exact operation, then enables
     },
   }
   const w = await mountAt(LifecyclePoliciesView, runtime)
-  await w.find('select').setValue('credential')
+  await select(w, '操作类型').setValue('credential')
   await flushPromises()
   await field(w, '策略 ID').setValue(a)
   await field(w, '设备范围 ID').setValue(a)
-  await w
-    .findAll('select')
-    .find((s) => s.find('option[value="rotate_bitlocker"]').exists())!
-    .setValue('rotate_bitlocker')
-  await field(w, '处理器架构').setValue('aarch64')
+  await select(w, '操作类型', 1).setValue('rotate_bitlocker')
+  await select(w, '处理器架构').setValue('aarch64')
   await field(w, '卷 DeviceID').setValue('volume')
   await field(w, '保护器 ID').setValue(b)
   await field(w, '账户 SID').setValue('S-1-5-21')
@@ -1085,16 +1113,16 @@ it('compares current Apple registration and material facts before unlocking a re
   await confirm(w)
   await w.find('form').trigger('submit')
   await flushPromises()
-  expect(w.find('fieldset').attributes('disabled')).toBeDefined()
+  expectCredentialEditorDisabled(w, true)
   await button(w, '冲突：重新读取并比较后编辑').trigger('click')
   await flushPromises()
-  expect(w.find('fieldset').attributes('disabled')).toBeDefined()
+  expectCredentialEditorDisabled(w, true)
   await button(w, '冲突：重新读取并比较后编辑').trigger('click')
   await flushPromises()
   expect(detail).toHaveBeenLastCalledWith('mac')
   expect(list).toHaveBeenCalledWith('mac')
   expect(w.text()).toContain(c)
-  expect(w.find('fieldset').attributes('disabled')).toBeUndefined()
+  expectCredentialEditorDisabled(w, false)
   await field(w, '预期修订').setValue(3)
   await confirm(w)
   await w.find('form').trigger('submit')
@@ -1388,10 +1416,10 @@ it('clears lifecycle alias and event on same-route principal and session replace
     .find((b) => b.text() === '读取')!
     .trigger('click')
   await flushPromises()
-  expect((w.get('[data-field=policy-alias]').element as HTMLInputElement).value).toBe(
+  expect((w.get('[data-field=policy-alias] input').element as HTMLInputElement).value).toBe(
     'previous.actor',
   )
-  expect((w.get('[data-field=policy-event]').element as HTMLInputElement).value).toBe(
+  expect((w.get('[data-field=policy-event] input').element as HTMLInputElement).value).toBe(
     'previous.event',
   )
   ;(actor.state as ReturnType<typeof shallowRef>).value = {
@@ -1401,8 +1429,8 @@ it('clears lifecycle alias and event on same-route principal and session replace
     session: { id: b },
   } as typeof actor.state.value
   await flushPromises()
-  expect((w.get('[data-field=policy-alias]').element as HTMLInputElement).value).toBe('')
-  expect((w.get('[data-field=policy-event]').element as HTMLInputElement).value).toBe('')
+  expect((w.get('[data-field=policy-alias] input').element as HTMLInputElement).value).toBe('')
+  expect((w.get('[data-field=policy-event] input').element as HTMLInputElement).value).toBe('')
   await field(w, '设备范围 ID').setValue(a)
   await confirm(w)
   await w.get('form').trigger('submit')

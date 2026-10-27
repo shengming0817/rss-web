@@ -6,7 +6,7 @@ import { TENANT, type DomainHandler } from './scenario'
 import { createReceipts, error, ok } from './http'
 import { closed, count, string, uuid } from '../src/services/decode'
 import { target } from '../src/features/enrollment/clients/packages'
-export function createPackageDemo() {
+export function createPackageDemo(options: { seedDownloads?: boolean } = {}) {
   const receipts = createReceipts()
   const uploads = new Map<
     string,
@@ -32,6 +32,41 @@ export function createPackageDemo() {
     architectures: [],
     bundleId: null,
   })
+  function seedDownloads() {
+    if (!options.seedDownloads) return
+    for (const [platformIndex, platform] of (['windows', 'macos'] as const).entries())
+      for (const [architectureIndex, architecture] of (['x86_64', 'aarch64'] as const).entries()) {
+        const index = platformIndex * 2 + architectureIndex,
+          releaseId = `77777777-7777-4777-8777-77777777777${index}`,
+          filename = `MOCK-NOT-AN-INSTALLER-${platform}-${architecture}.${platform === 'windows' ? 'exe' : 'pkg'}`,
+          bytes = new TextEncoder().encode(
+            `RSS MDM EXPLICIT MOCK DOWNLOAD\nTarget: ${platform}/${architecture}\nNOT AN INSTALLER. Synthetic text fixture only. Do not run or install.\nNo agent, signature, enrollment credential or device-management capability is included.\n`,
+          ),
+          sha256 = Array.from(createHash('sha256').update(bytes).digest())
+        // These explanatory text bytes use the existing publication/content owner. They are
+        // explicit demo seeds, never parsed uploads or evidence of installable Agent artifacts.
+        uploads.set(releaseId, {
+          filename,
+          length: bytes.byteLength,
+          sha256,
+          bytes,
+          complete: true,
+          parsed: false,
+          actor: `${INSTANCE}:mock-download-seed`,
+        })
+        published.set(releaseId, {
+          releaseId,
+          tenantId: TENANT,
+          target: { platform, architecture },
+          version: 'MOCK-NOT-INSTALLABLE',
+          format: platform === 'windows' ? 'windows_exe' : 'macos_pkg',
+          filename,
+          length: bytes.byteLength,
+          installerSha256: sha256,
+        })
+      }
+  }
+  seedDownloads()
   const handle: DomainHandler = (r) => {
     const resource = /^\/api\/v1\/resources\/([^/]+)\/uploads\/([^/]+)(\/complete)?$/.exec(r.path)
     if (
@@ -242,7 +277,18 @@ export function createPackageDemo() {
           const value = [...uploads.values()].find(
             (x) => JSON.stringify(x.sha256) === JSON.stringify(release['installerSha256']),
           )
-          if (value) return ok(value.bytes.buffer)
+          if (value)
+            return {
+              status: 200,
+              body: new Uint8Array(value.bytes).buffer,
+              headers: {
+                'Content-Type': 'application/octet-stream',
+                'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(String(release['filename']))}`,
+                'Content-Length': String(value.bytes.byteLength),
+                'Cache-Control': 'no-store',
+                'X-Content-Type-Options': 'nosniff',
+              },
+            }
         }
       }
       return published.has(id) ? ok(published.get(id)) : error('resource_not_found', 404)
@@ -257,6 +303,7 @@ export function createPackageDemo() {
       published.clear()
       withdrawn.clear()
       operations.clear()
+      seedDownloads()
     },
   }
 }

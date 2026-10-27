@@ -281,7 +281,10 @@ export function createScenario(
     }
     if (
       method === 'GET' &&
-      ['/api/v1/agent/enroll/packages', '/api/v1/windows/entra/terms/context'].includes(path)
+      (['/api/v1/agent/enroll/packages', '/api/v1/windows/entra/terms/context'].includes(path) ||
+        /^\/api\/v1\/agent\/enroll\/packages\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\/content)?$/.test(
+          path,
+        ))
     ) {
       for (const handler of handlers) {
         const reply = handler(
