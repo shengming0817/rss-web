@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import '../settings.css'
+import { VBtn, VCard, VForm, VSelect, VTextField } from 'vuetify/components'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { useSettingsFacts, useSettingsAction } from '../useSettingsAction'
 import { settingsDestination } from '../destinations'
@@ -93,36 +94,47 @@ useSettingsFacts(() => {
 })
 </script>
 <template>
-  <section class="console-panel">
-    <h2>{{ t('settings.queryOperation') }}</h2>
+  <VCard class="console-panel" tag="section" variant="outlined"
+    ><h2>{{ t('settings.queryOperation') }}</h2>
     <p>{{ t('settings.retryHint') }}</p>
-    <form class="settings-form" @submit.prevent="lookup">
-      <label
-        >{{ t('settings.domain')
-        }}<select v-model="domain" @change="result = undefined">
-          <option v-for="d in domains" :key="d" :value="d">{{ d }}</option>
-        </select></label
-      ><label>{{ t('settings.queryId') }}<input v-model="id" required maxlength="36" /></label
-      ><UiButton type="submit" :disabled="busy">{{ t('settings.queryOperation') }}</UiButton>
-    </form>
+    <VForm :novalidate="false" class="settings-editor" @submit.prevent="lookup"
+      ><VSelect
+        v-model="domain"
+        :label="t('settings.domain')"
+        :items="[
+          ...(domains ?? []).map((d) => ({ title: d, value: d, props: { disabled: false } })),
+        ]"
+        @update:model-value="result = undefined"
+      /><VTextField v-model="id" required maxlength="36" :label="t('settings.queryId')" /><VBtn
+        type="submit"
+        :disabled="busy"
+        >{{ t('settings.queryOperation') }}</VBtn
+      ></VForm
+    >
     <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
     <p v-if="result" role="status">
       {{ t('settings.revision') }} {{ result.revision }} · {{ result.state }} ·
       {{ t('settings.notObserved') }}
     </p>
-    <p v-if="result === null" role="status">{{ t('settings.connections.noReceipt') }}</p>
-  </section>
+    <p v-if="result === null" role="status">{{ t('settings.connections.noReceipt') }}</p></VCard
+  >
   <p v-if="!records.length">{{ t('settings.noOperations') }}</p>
-  <article v-for="operation in records" :key="operation.id" class="console-panel">
-    <h2>{{ operation.target }} · {{ operation.action }}</h2>
+  <VCard
+    v-for="operation in records"
+    :key="operation.id"
+    class="console-panel"
+    tag="article"
+    variant="outlined"
+    ><h2>{{ operation.target }} · {{ operation.action }}</h2>
     <p>
       {{ t('settings.operationId') }} <code>{{ operation.id }}</code> ·
       {{ t('settings.status.' + operation.state) }}
     </p>
-    <RouterLink
+    <VBtn
       v-if="settingsDestination(operation.target, runtime.tenant)"
       :to="settingsDestination(operation.target, runtime.tenant)!"
-      >{{ t('settings.open') }}</RouterLink
-    ><span v-else>{{ t('settings.notSupported') }}</span>
-  </article>
+      variant="text"
+      >{{ t('settings.open') }}</VBtn
+    ><span v-else>{{ t('settings.notSupported') }}</span></VCard
+  >
 </template>

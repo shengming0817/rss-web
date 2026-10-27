@@ -1,8 +1,8 @@
 <script setup lang="ts">
+import { VAlert, VBtn } from 'vuetify/components'
 import ChannelPanel from './ChannelPanel.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiMessage } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import ApplePanel from './ApplePanel.vue'
 import ProviderPanel from './ProviderPanel.vue'
@@ -29,14 +29,17 @@ const provider = computed(() =>
     ><ApplePanel v-if="apple" :purpose="apple" /><ProviderPanel
       v-else-if="provider"
       :kind="provider" /><TaskTrustPanel v-else-if="material === 'task'" /><WebhookPanel
-      v-else-if="material === 'webhook'" /><RouterLink
+      v-else-if="material === 'webhook'" /><VBtn
       v-else-if="material === 'pki'"
       :to="{ name: 'security-device-trust', params: { tenant: runtime.tenant } }"
-      >{{ t('security.pki.title') }}</RouterLink
-    ><PackagesPanel v-else-if="material === 'packages'" /><UiMessage
+      variant="text"
+      >{{ t('security.pki.title') }}</VBtn
+    ><PackagesPanel v-else-if="material === 'packages'" /><VAlert
       v-else
-      tone="warning"
-      :title="t('settings.notSupported')" /></template
-  ><UiMessage v-else tone="warning" :title="t('settings.scopeHint')" />
-  <ChannelPanel v-if="runtime.realm === 'tenant'" />
+      type="warning"
+      :title="t('settings.notSupported')"
+      variant="tonal" /></template
+  ><VAlert v-else type="warning" :title="t('settings.scopeHint')" variant="tonal" /><ChannelPanel
+    v-if="runtime.realm === 'tenant'"
+  />
 </template>

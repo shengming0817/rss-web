@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { VBtn, VCard, VCardActions, VCardText, VCardTitle, VDialog } from 'vuetify/components'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiDialog } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { usePermission } from '../../enrollment/usePermission'
 import { useSettingsFacts, useSettingsAction } from '../useSettingsAction'
@@ -27,7 +27,12 @@ const {
 const packages = ref<Awaited<ReturnType<typeof client.list>>['items']>([]),
   next = ref<string | null>(null),
   withdrawTarget = ref<string>(),
+  withdrawActivator = ref<HTMLElement>(),
   uploadTarget = ref<(typeof targets)[number]>()
+function openWithdrawal(release: string, event: MouseEvent) {
+  withdrawActivator.value = event.currentTarget as HTMLElement
+  withdrawTarget.value = release
+}
 const targets = [
   { platform: 'windows', architecture: 'x86_64', label: 'Windows x64' },
   { platform: 'windows', architecture: 'aarch64', label: 'Windows ARM64' },
@@ -115,9 +120,9 @@ useSettingsFacts(() => {
 </script>
 <template>
   <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
-  <UiButton :disabled="busy || !canRead" @click="load()">{{ t('settings.reload') }}</UiButton>
-  <UiButton v-if="next" :disabled="busy" @click="load(next)">{{ t('devices.next') }}</UiButton>
-  <OperationNotice
+  <VBtn :disabled="busy || !canRead" @click="load()">{{ t('settings.reload') }}</VBtn
+  ><VBtn v-if="next" :disabled="busy" @click="load(next)">{{ t('devices.next') }}</VBtn
+  ><OperationNotice
     v-if="!withdrawTarget"
     :operation="pending"
     :busy="busy"
@@ -128,14 +133,18 @@ useSettingsFacts(() => {
     @query="compare"
     @retry="withdraw(true)"
     @edit="resolveConflict"
-  />
-  <section v-for="slot in slots" :key="slot.label" class="console-panel package-platform-row">
-    <header class="package-platform-heading">
+  /><VCard
+    v-for="slot in slots"
+    :key="slot.label"
+    class="console-panel package-platform-row"
+    tag="section"
+    variant="outlined"
+    ><header class="package-platform-heading">
       <h2>{{ slot.label }}</h2>
-      <UiButton
+      <VBtn
         :disabled="!!uploadTarget || !allows('software_write') || !allows('resource_write')"
         @click="uploadTarget = slot"
-        >{{ t('settings.addInstaller') }}</UiButton
+        >{{ t('settings.addInstaller') }}</VBtn
       >
     </header>
     <p v-if="!slot.packages.length">{{ t('settings.noPackage') }}</p>
@@ -149,14 +158,13 @@ useSettingsFacts(() => {
           }}
         </p>
       </div>
-      <UiButton
+      <VBtn
         :disabled="locked || !canWrite || p.state !== 'published'"
-        @click="withdrawTarget = p.releaseId"
-        >{{ t('settings.withdrawPackage') }}</UiButton
+        @click="openWithdrawal(p.releaseId, $event)"
+        >{{ t('settings.withdrawPackage') }}</VBtn
       >
-    </article>
-  </section>
-  <PackageUpload
+    </article></VCard
+  ><PackageUpload
     v-if="uploadTarget"
     :target="uploadTarget"
     :can-upload="allows('software_write') && allows('resource_write')"
@@ -164,28 +172,32 @@ useSettingsFacts(() => {
     :can-query="allows('software_read')"
     @published="load"
     @close="uploadTarget = undefined"
-  />
-  <UiDialog
-    :open="!!withdrawTarget"
-    :title="t('settings.withdrawPackage')"
-    :close-label="t('console.cancel')"
-    kind="alertdialog"
-    @update:open="!$event && (withdrawTarget = undefined)"
-    ><p>{{ t('settings.withdrawPackageHint') }}</p>
-    <OperationNotice
-      :operation="pending"
-      :busy="busy"
-      :can-write="canWrite"
-      :compared="compared"
-      @compare="compare"
-      @query="compare"
-      @retry="withdraw(true)"
-      @edit="resolveConflict"
-    />
-    <template #footer
-      ><UiButton variant="danger" :disabled="locked || !canWrite" @click="withdraw()">{{
-        t('settings.confirmWithdrawal')
-      }}</UiButton></template
-    ></UiDialog
+  /><VDialog
+    :activator="withdrawActivator"
+    :open-on-click="false"
+    :model-value="!!withdrawTarget"
+    role="alertdialog"
+    :aria-label="t('settings.withdrawPackage')"
+    @update:model-value="!$event && (withdrawTarget = undefined)"
+    ><VCard
+      ><VCardTitle tag="h2">{{ t('settings.withdrawPackage') }}</VCardTitle
+      ><VCardText
+        ><p>{{ t('settings.withdrawPackageHint') }}</p>
+        <OperationNotice
+          :operation="pending"
+          :busy="busy"
+          :can-write="canWrite"
+          :compared="compared"
+          @compare="compare"
+          @query="compare"
+          @retry="withdraw(true)"
+          @edit="resolveConflict" /></VCardText
+      ><VCardActions
+        ><VBtn @click="withdrawTarget = undefined">{{ t('console.cancel') }}</VBtn
+        ><VBtn color="error" :disabled="locked || !canWrite" @click="withdraw()">{{
+          t('settings.confirmWithdrawal')
+        }}</VBtn></VCardActions
+      ></VCard
+    ></VDialog
   >
 </template>

@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import '../settings.css'
+import { VAlert, VBtn, VCard, VForm, VSelect, VTextField } from 'vuetify/components'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiMessage } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { usePermission } from '../../enrollment/usePermission'
 import { useSettingsFacts, useSettingsAction, useSettingsSecrets } from '../useSettingsAction'
@@ -217,14 +218,15 @@ useSettingsFacts(() => {
 })
 </script>
 <template>
-  <UiMessage
-    tone="info"
+  <VAlert
+    type="info"
     :title="t(kind === 'smtp' ? 'settings.mailHint' : 'settings.providerHint')"
-    >{{ t('settings.secretCleared') }}</UiMessage
+    variant="tonal"
+    >{{ t('settings.secretCleared') }}</VAlert
   >
   <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
-  <UiButton :disabled="busy || !canRead" @click="load">{{ t('settings.reload') }}</UiButton>
-  <OperationNotice
+  <VBtn :disabled="busy || !canRead" @click="load">{{ t('settings.reload') }}</VBtn
+  ><OperationNotice
     :operation="pending"
     :busy="busy"
     :can-write="canWrite"
@@ -233,112 +235,141 @@ useSettingsFacts(() => {
     @retry="pending?.action === 'revoke' ? revoke(true) : save(true)"
     @compare="compare"
     @edit="resolveConflict"
-  />
-  <MaterialVersions
+  /><MaterialVersions
     v-if="directory"
     :revision="directory.revision"
     :desired-revision="directory.activeRevision"
     :versions="currentVersions"
-  />
-  <section v-if="directory" class="console-panel">
-    <p>{{ t('settings.historyCount', { count: directory.versionCount }) }}</p>
-    <UiButton :disabled="busy" @click="loadHistory()">{{ t('settings.history') }}</UiButton>
-    <MaterialVersions
+  /><VCard v-if="directory" class="console-panel" tag="section" variant="outlined"
+    ><p>{{ t('settings.historyCount', { count: directory.versionCount }) }}</p>
+    <VBtn :disabled="busy" @click="loadHistory()">{{ t('settings.history') }}</VBtn
+    ><MaterialVersions
       v-if="history.length"
       :revision="directory.revision"
       :desired-revision="directory.activeRevision"
       :versions="history"
-    />
-    <UiButton v-if="historyCursor" :disabled="busy" @click="loadHistory(historyCursor)">{{
+    /><VBtn v-if="historyCursor" :disabled="busy" @click="loadHistory(historyCursor)">{{
       t('settings.next')
-    }}</UiButton>
-  </section>
-  <form class="settings-form" @submit.prevent="save()">
-    <fieldset :disabled="busy || !canWrite || !directory">
+    }}</VBtn></VCard
+  ><VForm :novalidate="false" class="settings-editor" @submit.prevent="save()"
+    ><fieldset :disabled="busy || !canWrite || !directory">
       <legend>{{ t('settings.save') }}</legend>
-      <label v-if="kind !== 'wns'"
-        >{{ t('settings.profile') }}<input v-model="profile" required maxlength="128"
-      /></label>
-      <template v-if="kind === 'smtp'"
-        ><label
-          >{{ t('settings.sender')
-          }}<input v-model="sender" type="email" required maxlength="320" /></label
-        ><label
-          >{{ t('settings.recipient')
-          }}<input v-model="recipient" type="email" required maxlength="320" /></label
-        ><label
-          >{{ t('settings.username')
-          }}<input v-model="username" autocomplete="off" required maxlength="256" /></label
-        ><label
-          >{{ t('settings.password')
-          }}<input
-            v-model="password"
+      <VTextField
+        v-if="kind !== 'wns'"
+        v-model="profile"
+        required
+        maxlength="128"
+        :label="t('settings.profile')"
+        :disabled="busy || !canWrite || !directory"
+      /><template v-if="kind === 'smtp'"
+        ><VTextField
+          v-model="sender"
+          type="email"
+          required
+          maxlength="320"
+          :label="t('settings.sender')"
+          :disabled="busy || !canWrite || !directory" /><VTextField
+          v-model="recipient"
+          type="email"
+          required
+          maxlength="320"
+          :label="t('settings.recipient')"
+          :disabled="busy || !canWrite || !directory" /><VTextField
+          v-model="username"
+          autocomplete="off"
+          required
+          maxlength="256"
+          :label="t('settings.username')"
+          :disabled="busy || !canWrite || !directory" /><VTextField
+          v-model="password"
+          type="password"
+          autocomplete="new-password"
+          required
+          maxlength="4096"
+          :label="t('settings.password')"
+          :disabled="busy || !canWrite || !directory" /></template
+      ><template v-if="kind === 'wns'"
+        ><VTextField
+          v-model="packageFamilyName"
+          required
+          maxlength="255"
+          :label="t('settings.packageFamilyName')"
+          :disabled="busy || !canWrite || !directory" /><VTextField
+          v-model="sid"
+          autocomplete="off"
+          required
+          maxlength="4096"
+          :label="t('settings.sid')"
+          :disabled="busy || !canWrite || !directory" /><VTextField
+          v-model="clientSecret"
+          type="password"
+          autocomplete="new-password"
+          required
+          maxlength="4096"
+          :label="t('settings.clientSecret')"
+          :disabled="busy || !canWrite || !directory" /></template
+      ><template v-if="kind === 'storage'"
+        ><VSelect
+          v-model="source"
+          :label="t('settings.source')"
+          :disabled="busy || !canWrite || !directory"
+          :items="[
+            { title: t('settings.imported'), value: 'import', props: { disabled: false } },
+            { title: t('settings.generated'), value: 'generate', props: { disabled: false } },
+          ]" /><template v-if="source === 'import'"
+          ><VTextField
+            v-model="accessKey"
+            autocomplete="off"
+            required
+            maxlength="4096"
+            :label="t('settings.accessKey')"
+            :disabled="busy || !canWrite || !directory" /><VTextField
+            v-model="secretKey"
             type="password"
             autocomplete="new-password"
             required
-            maxlength="4096" /></label
-      ></template>
-      <template v-if="kind === 'wns'"
-        ><label
-          >{{ t('settings.packageFamilyName')
-          }}<input v-model="packageFamilyName" required maxlength="255" /></label
-        ><label
-          >{{ t('settings.sid')
-          }}<input v-model="sid" autocomplete="off" required maxlength="4096" /></label
-        ><label
-          >{{ t('settings.clientSecret')
-          }}<input
-            v-model="clientSecret"
+            maxlength="4096"
+            :label="t('settings.secretKey')"
+            :disabled="busy || !canWrite || !directory" /><VTextField
+            v-model="sessionToken"
             type="password"
-            autocomplete="new-password"
-            required
-            maxlength="4096" /></label
-      ></template>
-      <template v-if="kind === 'storage'"
-        ><label
-          >{{ t('settings.source')
-          }}<select v-model="source">
-            <option value="import">{{ t('settings.imported') }}</option>
-            <option value="generate">{{ t('settings.generated') }}</option>
-          </select></label
-        ><template v-if="source === 'import'"
-          ><label
-            >{{ t('settings.accessKey')
-            }}<input v-model="accessKey" autocomplete="off" required maxlength="4096" /></label
-          ><label
-            >{{ t('settings.secretKey')
-            }}<input
-              v-model="secretKey"
-              type="password"
-              autocomplete="new-password"
-              required
-              maxlength="4096" /></label
-          ><label
-            >{{ t('settings.sessionToken')
-            }}<input
-              v-model="sessionToken"
-              type="password"
-              autocomplete="off"
-              maxlength="8192" /></label
-          ><label
-            >{{ t('settings.expiresInput')
-            }}<input v-model="expires" type="number" min="1" step="1" /></label></template
-      ></template>
-      <UiButton type="submit" :disabled="locked">{{ t('settings.save') }}</UiButton>
-    </fieldset>
-  </form>
-  <form v-if="kind === 'wns'" class="settings-form" @submit.prevent="revoke()">
-    <fieldset :disabled="busy || !canWrite || !directory">
+            autocomplete="off"
+            maxlength="8192"
+            :label="t('settings.sessionToken')"
+            :disabled="busy || !canWrite || !directory" /><VTextField
+            v-model="expires"
+            type="number"
+            min="1"
+            step="1"
+            :label="t('settings.expiresInput')"
+            :disabled="busy || !canWrite || !directory" /></template></template
+      ><VBtn type="submit" :disabled="busy || !canWrite || !directory || locked">{{
+        t('settings.save')
+      }}</VBtn>
+    </fieldset></VForm
+  ><VForm
+    v-if="kind === 'wns'"
+    :novalidate="false"
+    class="settings-editor"
+    @submit.prevent="revoke()"
+    ><fieldset :disabled="busy || !canWrite || !directory">
       <legend>{{ t('settings.revoke') }}</legend>
-      <label
-        >{{ t('settings.materialRevision')
-        }}<select v-model.number="materialRevision" required>
-          <option :value="0" disabled>{{ t('settings.select') }}</option>
-          <option v-for="v in revocableVersions" :key="v.revision" :value="v.revision">
-            {{ v.revision }}
-          </option>
-        </select></label
-      ><UiButton type="submit" :disabled="locked">{{ t('settings.revoke') }}</UiButton>
-    </fieldset>
-  </form>
+      <VSelect
+        v-model.number="materialRevision"
+        required
+        :label="t('settings.materialRevision')"
+        :disabled="busy || !canWrite || !directory"
+        :items="[
+          { title: t('settings.select'), value: 0, props: { disabled: true } },
+          ...(revocableVersions ?? []).map((v) => ({
+            title: v.revision,
+            value: v.revision,
+            props: { disabled: false },
+          })),
+        ]"
+      /><VBtn type="submit" :disabled="busy || !canWrite || !directory || locked">{{
+        t('settings.revoke')
+      }}</VBtn>
+    </fieldset></VForm
+  >
 </template>

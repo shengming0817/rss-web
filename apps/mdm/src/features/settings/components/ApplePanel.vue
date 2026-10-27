@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import '../settings.css'
+import { VAlert, VBtn, VCard, VForm, VSelect, VTextField, VTextarea } from 'vuetify/components'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton, UiMessage } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { usePermission } from '../../enrollment/usePermission'
 import { useSettingsFacts, useSettingsAction, useSettingsSecrets } from '../useSettingsAction'
@@ -147,8 +148,8 @@ useSettingsFacts(() => {
 })
 </script>
 <template>
-  <section v-if="purpose === 'apns'" class="console-panel">
-    <h2>{{ t('settings.apnsJourney') }}</h2>
+  <VCard v-if="purpose === 'apns'" class="console-panel" tag="section" variant="outlined"
+    ><h2>{{ t('settings.apnsJourney') }}</h2>
     <ol>
       <li>{{ t('settings.apnsCsrStep') }}</li>
       <li>{{ t('settings.apnsVendorStep') }}</li>
@@ -159,14 +160,13 @@ useSettingsFacts(() => {
       </li>
       <li>{{ t('settings.apnsImportStep') }}</li>
       <li>{{ t('settings.apnsApplyStep') }}</li>
-    </ol>
-  </section>
-  <UiMessage tone="info" :title="t('settings.csrHint')">{{
+    </ol></VCard
+  ><VAlert type="info" :title="t('settings.csrHint')" variant="tonal">{{
     t('settings.secretCleared')
-  }}</UiMessage>
+  }}</VAlert>
   <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
-  <UiButton :disabled="busy || !canRead" @click="load">{{ t('settings.reload') }}</UiButton>
-  <OperationNotice
+  <VBtn :disabled="busy || !canRead" @click="load">{{ t('settings.reload') }}</VBtn
+  ><OperationNotice
     :operation="pending"
     :busy="busy"
     :can-write="canWrite"
@@ -175,96 +175,107 @@ useSettingsFacts(() => {
     @retry="change(pending!.action, true)"
     @compare="compare"
     @edit="resolveConflict"
-  />
-  <MaterialVersions
+  /><MaterialVersions
     v-if="directory"
     :revision="directory.revision"
     :desired-revision="directory.desiredRevision"
     :versions="directory.versions"
-  />
-  <form class="settings-form" @submit.prevent="change('key')">
-    <fieldset :disabled="busy || !canWrite || !directory">
+  /><VForm :novalidate="false" class="settings-editor" @submit.prevent="change('key')"
+    ><fieldset :disabled="busy || !canWrite || !directory">
       <legend>{{ t('settings.generate') }}</legend>
-      <label
-        >{{ t('settings.source')
-        }}<select v-model="source">
-          <option value="generate">{{ t('settings.generated') }}</option>
-          <option value="import">{{ t('settings.imported') }}</option>
-        </select></label
-      >
-      <label v-if="source === 'import'"
-        >{{ t('settings.privateKey')
-        }}<textarea
-          v-model="privateKey"
-          autocomplete="off"
-          spellcheck="false"
-          required
-          maxlength="262144"
-        />
-      </label>
-      <UiButton type="submit" :disabled="locked">{{
+      <VSelect
+        v-model="source"
+        :label="t('settings.source')"
+        :disabled="busy || !canWrite || !directory"
+        :items="[
+          { title: t('settings.generated'), value: 'generate', props: { disabled: false } },
+          { title: t('settings.imported'), value: 'import', props: { disabled: false } },
+        ]"
+      /><VTextarea
+        v-if="source === 'import'"
+        v-model="privateKey"
+        autocomplete="off"
+        spellcheck="false"
+        required
+        maxlength="262144"
+        :label="t('settings.privateKey')"
+        :disabled="busy || !canWrite || !directory"
+      /><VBtn type="submit" :disabled="busy || !canWrite || !directory || locked">{{
         t(source === 'generate' ? 'settings.generate' : 'settings.import')
-      }}</UiButton>
-    </fieldset>
-  </form>
-  <form class="settings-form" @submit.prevent="change('certificate')">
-    <fieldset :disabled="busy || !canWrite || !directory">
+      }}</VBtn>
+    </fieldset></VForm
+  ><VForm :novalidate="false" class="settings-editor" @submit.prevent="change('certificate')"
+    ><fieldset :disabled="busy || !canWrite || !directory">
       <legend>{{ t('settings.import') }}</legend>
-      <label
-        >{{ t('settings.keyRevision')
-        }}<select v-model.number="keyRevision" required>
-          <option :value="0" disabled>{{ t('settings.select') }}</option>
-          <option
-            v-for="v in directory?.versions.filter((v) => !v.revoked)"
-            :key="v.revision"
-            :value="v.revision"
-          >
-            {{ v.revision }} · {{ v.publicKeyDigest }}
-          </option>
-        </select></label
-      >
-      <label
-        >{{ t('settings.certificate')
-        }}<textarea v-model="certificate" required maxlength="262144" spellcheck="false" /></label
-      ><UiButton type="submit" :disabled="locked">{{ t('settings.import') }}</UiButton>
-    </fieldset>
-  </form>
-  <form class="settings-form" @submit.prevent="change('apply')">
-    <fieldset :disabled="busy || !canWrite || !directory">
+      <VSelect
+        v-model.number="keyRevision"
+        required
+        :label="t('settings.keyRevision')"
+        :disabled="busy || !canWrite || !directory"
+        :items="[
+          { title: t('settings.select'), value: 0, props: { disabled: true } },
+          ...(directory?.versions.filter((v) => !v.revoked) ?? []).map((v) => ({
+            title: v.revision + ' · ' + v.publicKeyDigest,
+            value: v.revision,
+            props: { disabled: false },
+          })),
+        ]"
+      /><VTextarea
+        v-model="certificate"
+        required
+        maxlength="262144"
+        spellcheck="false"
+        :label="t('settings.certificate')"
+        :disabled="busy || !canWrite || !directory"
+      /><VBtn type="submit" :disabled="busy || !canWrite || !directory || locked">{{
+        t('settings.import')
+      }}</VBtn>
+    </fieldset></VForm
+  ><VForm :novalidate="false" class="settings-editor" @submit.prevent="change('apply')"
+    ><fieldset :disabled="busy || !canWrite || !directory">
       <legend>{{ t('settings.apply') }}</legend>
-      <label
-        >{{ t('settings.materialRevision')
-        }}<select v-model.number="materialRevision" required>
-          <option :value="0" disabled>{{ t('settings.select') }}</option>
-          <option
-            v-for="v in directory?.versions.filter((v) => !v.revoked)"
-            :key="v.revision"
-            :value="v.revision"
-          >
-            {{ v.revision }} · {{ v.certificateDigest ?? v.publicKeyDigest }}
-          </option>
-        </select></label
-      >
-      <label v-if="purpose === 'managed_account'"
-        >{{ t('settings.accountAlias') }}<input v-model="accountAlias" required maxlength="128"
-      /></label>
+      <VSelect
+        v-model.number="materialRevision"
+        required
+        :label="t('settings.materialRevision')"
+        :disabled="busy || !canWrite || !directory"
+        :items="[
+          { title: t('settings.select'), value: 0, props: { disabled: true } },
+          ...(directory?.versions.filter((v) => !v.revoked) ?? []).map((v) => ({
+            title: v.revision + ' · ' + (v.certificateDigest ?? v.publicKeyDigest),
+            value: v.revision,
+            props: { disabled: false },
+          })),
+        ]"
+      /><VTextField
+        v-if="purpose === 'managed_account'"
+        v-model="accountAlias"
+        required
+        maxlength="128"
+        :label="t('settings.accountAlias')"
+        :disabled="busy || !canWrite || !directory"
+      />
       <div class="settings-actions">
-        <UiButton type="submit" :disabled="locked">{{ t('settings.apply') }}</UiButton
-        ><UiButton :disabled="locked || !materialRevision" @click="change('revoke')">{{
-          t('settings.revoke')
-        }}</UiButton>
+        <VBtn type="submit" :disabled="busy || !canWrite || !directory || locked">{{
+          t('settings.apply')
+        }}</VBtn
+        ><VBtn
+          :disabled="busy || !canWrite || !directory || locked || !materialRevision"
+          @click="change('revoke')"
+          >{{ t('settings.revoke') }}</VBtn
+        >
       </div>
-    </fieldset>
-  </form>
+    </fieldset></VForm
+  >
   <div v-for="v in directory?.versions" :key="v.revision" class="settings-actions">
     <code>{{ v.revision }} · {{ v.keyId }}</code
-    ><UiButton @click="downloadPublic(purpose + '-' + v.revision + '.csr', v.csr)">{{
+    ><VBtn @click="downloadPublic(purpose + '-' + v.revision + '.csr', v.csr)">{{
       t('settings.csr')
-    }}</UiButton
-    ><UiButton
+    }}</VBtn
+    ><VBtn
       v-if="v.certificateChainPem"
       @click="downloadPublic(purpose + '-' + v.revision + '.pem', v.certificateChainPem)"
-      >{{ t('settings.publicCertificate') }}</UiButton
+      >{{ t('settings.publicCertificate') }}</VBtn
     >
   </div>
 </template>

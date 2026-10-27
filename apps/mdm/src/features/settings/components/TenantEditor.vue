@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import '../settings.css'
+import { VBtn, VCard, VCheckbox, VForm, VTextField, VTextarea } from 'vuetify/components'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { usePermission } from '../../enrollment/usePermission'
 import { useSettingsAction, useSettingsSecrets } from '../useSettingsAction'
@@ -92,8 +93,8 @@ async function change(action: string, replay = false) {
 }
 </script>
 <template>
-  <section v-if="!tenant.management" class="console-panel">
-    <h2>{{ tenant.name ?? tenant.tenantId }}</h2>
+  <VCard v-if="!tenant.management" class="console-panel" tag="section" variant="outlined"
+    ><h2>{{ tenant.name ?? tenant.tenantId }}</h2>
     <p>
       <code>{{ tenant.tenantId }}</code> · {{ t('settings.revision') }} {{ tenant.revision }}
     </p>
@@ -107,43 +108,63 @@ async function change(action: string, replay = false) {
       @retry="change(pending!.action, true)"
       @compare="compare"
       @edit="resolveConflict"
-    />
-    <form class="settings-form" @submit.prevent="change('update')">
-      <fieldset :disabled="busy || !canUpdate">
+    /><VForm :novalidate="false" class="settings-editor" @submit.prevent="change('update')"
+      ><fieldset :disabled="busy || !canUpdate">
         <legend>{{ t('settings.name') }}</legend>
-        <label>{{ t('settings.name') }}<input v-model="name" maxlength="256" /></label
-        ><label>{{ t('settings.notes') }}<textarea v-model="notes" maxlength="2048" /></label
-        ><UiButton type="submit" :disabled="locked">{{ t('settings.save') }}</UiButton>
-      </fieldset>
-    </form>
-    <form class="settings-form" @submit.prevent="change('administrator')">
-      <fieldset :disabled="busy || !canAdd">
+        <VTextField
+          v-model="name"
+          maxlength="256"
+          :label="t('settings.name')"
+          :disabled="busy || !canUpdate"
+        /><VTextarea
+          v-model="notes"
+          maxlength="2048"
+          :label="t('settings.notes')"
+          :disabled="busy || !canUpdate"
+        /><VBtn type="submit" :disabled="busy || !canUpdate || locked">{{
+          t('settings.save')
+        }}</VBtn>
+      </fieldset></VForm
+    ><VForm :novalidate="false" class="settings-editor" @submit.prevent="change('administrator')"
+      ><fieldset :disabled="busy || !canAdd">
         <legend>{{ t('settings.addAdministrator') }}</legend>
-        <label
-          >{{ t('settings.login')
-          }}<input v-model="login" autocomplete="off" required maxlength="256" /></label
-        ><label
-          >{{ t('settings.password')
-          }}<input
-            v-model="password"
-            type="password"
-            autocomplete="new-password"
-            required
-            maxlength="1024"
-        /></label>
+        <VTextField
+          v-model="login"
+          autocomplete="off"
+          required
+          maxlength="256"
+          :label="t('settings.login')"
+          :disabled="busy || !canAdd"
+        /><VTextField
+          v-model="password"
+          type="password"
+          autocomplete="new-password"
+          required
+          maxlength="1024"
+          :label="t('settings.password')"
+          :disabled="busy || !canAdd"
+        />
         <p>{{ t('settings.recentAuthentication') }}</p>
-        <UiButton type="submit" :disabled="locked">{{ t('settings.addAdministrator') }}</UiButton>
-      </fieldset>
-    </form>
-    <form v-if="tenant.deletable" class="settings-form" @submit.prevent="change('delete')">
-      <fieldset :disabled="busy || !canDelete">
+        <VBtn type="submit" :disabled="busy || !canAdd || locked">{{
+          t('settings.addAdministrator')
+        }}</VBtn>
+      </fieldset></VForm
+    ><VForm
+      v-if="tenant.deletable"
+      :novalidate="false"
+      class="settings-editor"
+      @submit.prevent="change('delete')"
+      ><fieldset :disabled="busy || !canDelete">
         <legend>{{ t('settings.deleteTenant') }}</legend>
-        <label
-          ><input v-model="deleteConfirmed" type="checkbox" required />{{
-            t('settings.deleteConfirmation')
-          }}</label
-        ><UiButton type="submit" :disabled="locked">{{ t('settings.deleteTenant') }}</UiButton>
-      </fieldset>
-    </form>
-  </section>
+        <VCheckbox
+          v-model="deleteConfirmed"
+          required
+          :label="t('settings.deleteConfirmation')"
+          :disabled="busy || !canDelete"
+        /><VBtn type="submit" :disabled="busy || !canDelete || locked">{{
+          t('settings.deleteTenant')
+        }}</VBtn>
+      </fieldset></VForm
+    ></VCard
+  >
 </template>

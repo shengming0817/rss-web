@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { VBtn, VCard, VCheckbox, VForm, VSelect, VTextField, VTextarea } from 'vuetify/components'
 import { ref, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { useOriginalOperation } from '../../../services/useOriginalOperation'
 import { usePermission } from '../../enrollment/usePermission'
@@ -180,15 +180,20 @@ function restore() {
 }
 </script>
 <template>
-  <section class="console-panel" data-panel="webhooks" :aria-busy="busy">
-    <h2>{{ t('gap.webhooks') }}</h2>
+  <VCard
+    class="console-panel"
+    data-panel="webhooks"
+    :aria-busy="busy"
+    tag="section"
+    variant="outlined"
+    ><h2>{{ t('gap.webhooks') }}</h2>
     <p>{{ t('gap.webhookHint') }}</p>
     <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
-    <UiButton :disabled="busy || !canRead" @click="load()">{{ t('gap.load') }}</UiButton
-    ><UiButton :disabled="locked || !canWrite" @click="fresh">{{ t('gap.create') }}</UiButton>
+    <VBtn :disabled="busy || !canRead" @click="load()">{{ t('gap.load') }}</VBtn
+    ><VBtn :disabled="locked || !canWrite" @click="fresh">{{ t('gap.create') }}</VBtn>
     <ul>
       <li v-for="s in rows" :key="s.id">
-        <UiButton
+        <VBtn
           :disabled="locked"
           @click="
             () => {
@@ -196,72 +201,126 @@ function restore() {
               read()
             }
           "
-          >{{ s.settings.presentation.name }} · {{ s.revision }} · {{ s.enabled }}</UiButton
+          >{{ s.settings.presentation.name }} · {{ s.revision }} · {{ s.enabled }}</VBtn
         >
       </li>
     </ul>
-    <UiButton v-if="nextCursor" :disabled="busy" @click="load(nextCursor!)">{{
-      t('gap.next')
-    }}</UiButton>
-    <form @submit.prevent="save">
-      <fieldset :disabled="locked || !canWrite || selected?.deleted">
-        <label
-          >{{ t('gap.subscriptions') }}<input v-model="id" :readonly="!!selected" required /></label
-        ><UiButton type="button" @click="read">{{ t('gap.load') }}</UiButton>
-        <label>{{ t('gap.name') }}<input v-model="name" maxlength="128" required /></label
-        ><label>{{ t('gap.endpoint') }}<input v-model="endpoint" type="url" required /></label>
+    <VBtn v-if="nextCursor" :disabled="busy" @click="load(nextCursor!)">{{ t('gap.next') }}</VBtn
+    ><VForm :novalidate="false" @submit.prevent="save"
+      ><fieldset :disabled="locked || !canWrite || !!selected?.deleted">
+        <VTextField
+          v-model="id"
+          :readonly="!!selected"
+          required
+          :label="t('gap.subscriptions')"
+          :disabled="locked || !canWrite || !!selected?.deleted"
+        /><VBtn
+          type="button"
+          :disabled="locked || !canWrite || !!selected?.deleted"
+          @click="read"
+          >{{ t('gap.load') }}</VBtn
+        ><VTextField
+          v-model="name"
+          maxlength="128"
+          required
+          :label="t('gap.name')"
+          :disabled="locked || !canWrite || !!selected?.deleted"
+        /><VTextField
+          v-model="endpoint"
+          type="url"
+          required
+          :label="t('gap.endpoint')"
+          :disabled="locked || !canWrite || !!selected?.deleted"
+        />
         <fieldset>
           <legend>{{ t('gap.events') }}</legend>
-          <label v-for="event in availableEvents" :key="event"
-            ><input v-model="events" :value="event" type="checkbox" />{{ event }}</label
-          >
+          <VCheckbox
+            v-for="event in availableEvents"
+            :key="event"
+            v-model="events"
+            :value="event"
+            :label="event"
+            :disabled="locked || !canWrite || !!selected?.deleted"
+          />
         </fieldset>
-        <label
-          >{{ t('gap.selection')
-          }}<select v-model="selection">
-            <option value="allDevices">{{ t('gap.allDevices') }}</option>
-            <option value="devices">{{ t('gap.devices') }}</option>
-            <option value="groups">{{ t('gap.groups') }}</option>
-          </select></label
-        >
-        <label v-if="selection !== 'allDevices'"
-          >{{ t('gap.ids') }}<textarea v-model="ids" required />
-        </label>
-        <label>{{ t('gap.keyReference') }}<input v-model="keyReference" required /></label
-        ><label>{{ t('gap.networkReference') }}<input v-model="networkReference" required /></label>
-        <label><input v-model="confirmation" type="checkbox" />{{ t('gap.confirmation') }}</label
-        ><UiButton type="submit" :disabled="!confirmation">{{ t('gap.save') }}</UiButton>
-        <template v-if="selected"
-          ><UiButton type="button" :disabled="!confirmation" @click="transition('enabled')">{{
-            t(selected.enabled ? 'gap.disable' : 'gap.enabled')
-          }}</UiButton
-          ><UiButton type="button" :disabled="!confirmation" @click="transition('delete')">{{
-            t('gap.deleted')
-          }}</UiButton>
-          <label>{{ t('policies.device') }}<input v-model="device" /></label
-          ><UiButton
+        <VSelect
+          v-model="selection"
+          :label="t('gap.selection')"
+          :disabled="locked || !canWrite || !!selected?.deleted"
+          :items="[
+            { title: t('gap.allDevices'), value: 'allDevices', props: { disabled: false } },
+            { title: t('gap.devices'), value: 'devices', props: { disabled: false } },
+            { title: t('gap.groups'), value: 'groups', props: { disabled: false } },
+          ]"
+        /><VTextarea
+          v-if="selection !== 'allDevices'"
+          v-model="ids"
+          required
+          :label="t('gap.ids')"
+          :disabled="locked || !canWrite || !!selected?.deleted"
+        /><VTextField
+          v-model="keyReference"
+          required
+          :label="t('gap.keyReference')"
+          :disabled="locked || !canWrite || !!selected?.deleted"
+        /><VTextField
+          v-model="networkReference"
+          required
+          :label="t('gap.networkReference')"
+          :disabled="locked || !canWrite || !!selected?.deleted"
+        /><VCheckbox
+          v-model="confirmation"
+          :label="t('gap.confirmation')"
+          :disabled="locked || !canWrite || !!selected?.deleted"
+        /><VBtn
+          type="submit"
+          :disabled="locked || !canWrite || !!selected?.deleted || !confirmation"
+          >{{ t('gap.save') }}</VBtn
+        ><template v-if="selected"
+          ><VBtn
             type="button"
-            :disabled="!confirmation || !device || !selected.enabled"
+            :disabled="locked || !canWrite || !!selected?.deleted || !confirmation"
+            @click="transition('enabled')"
+            >{{ t(selected.enabled ? 'gap.disable' : 'gap.enabled') }}</VBtn
+          ><VBtn
+            type="button"
+            :disabled="locked || !canWrite || !!selected?.deleted || !confirmation"
+            @click="transition('delete')"
+            >{{ t('gap.deleted') }}</VBtn
+          ><VTextField
+            v-model="device"
+            :label="t('policies.device')"
+            :disabled="locked || !canWrite || !!selected?.deleted"
+          /><VBtn
+            type="button"
+            :disabled="
+              locked ||
+              !canWrite ||
+              !!selected?.deleted ||
+              !confirmation ||
+              !device ||
+              !selected.enabled
+            "
             @click="execute({ kind: 'test', id: selected.id, deviceId: device })"
-            >{{ t('gap.test') }}</UiButton
+            >{{ t('gap.test') }}</VBtn
           ></template
         >
-      </fieldset>
-    </form>
+      </fieldset></VForm
+    >
     <h3>{{ t('gap.deliveries') }}</h3>
-    <UiButton :disabled="busy || !canRead" @click="loadDeliveries()">{{ t('gap.load') }}</UiButton>
+    <VBtn :disabled="busy || !canRead" @click="loadDeliveries()">{{ t('gap.load') }}</VBtn>
     <ul>
       <li v-for="d in deliveries?.items" :key="d.id">
-        <UiButton :disabled="busy" @click="readDelivery(d.id)"
-          >{{ d.id }} · {{ d.status }} · {{ d.transportObservation ?? '—' }}</UiButton
+        <VBtn :disabled="busy" @click="readDelivery(d.id)"
+          >{{ d.id }} · {{ d.status }} · {{ d.transportObservation ?? '—' }}</VBtn
         >
       </li>
     </ul>
-    <UiButton
+    <VBtn
       v-if="deliveries?.nextCursor"
       :disabled="busy"
       @click="loadDeliveries(deliveries.nextCursor)"
-      >{{ t('gap.next') }}</UiButton
+      >{{ t('gap.next') }}</VBtn
     >
     <article v-if="currentDelivery">
       <h4>{{ currentDelivery.id }} · {{ currentDelivery.status }}</h4>
@@ -270,8 +329,7 @@ function restore() {
         {{ currentDelivery.targetVersion }} · {{ currentDelivery.attempts }} ·
         {{ currentDelivery.failureStage }} / {{ currentDelivery.failureReason }}
       </p>
-      <label><input v-model="confirmation" type="checkbox" />{{ t('gap.confirmation') }}</label
-      ><UiButton
+      <VCheckbox v-model="confirmation" :label="t('gap.confirmation')" /><VBtn
         :disabled="
           locked ||
           !confirmation ||
@@ -279,8 +337,8 @@ function restore() {
           currentDelivery.status !== 'dead_letter'
         "
         @click="recover('replay')"
-        >{{ t('gap.replay') }}</UiButton
-      ><UiButton
+        >{{ t('gap.replay') }}</VBtn
+      ><VBtn
         :disabled="
           locked ||
           !confirmation ||
@@ -289,26 +347,25 @@ function restore() {
           !currentDelivery.redriveWindowOpen
         "
         @click="recover('redrive')"
-        >{{ t('gap.redrive') }}</UiButton
+        >{{ t('gap.redrive') }}</VBtn
       >
     </article>
     <template v-if="pending"
       ><p role="alert">
         {{ t(pending.state === 'conflict' ? 'gap.compare' : 'gap.unknown') }} {{ pending.id }}
       </p>
-      <label><input v-model="confirmation" type="checkbox" />{{ t('gap.confirmation') }}</label
-      ><UiButton
+      <VCheckbox v-model="confirmation" :label="t('gap.confirmation')" /><VBtn
         v-if="pending.state === 'unknown'"
         :disabled="busy || !confirmation"
         @click="restore"
-        >{{ t('gap.replayOriginal') }}</UiButton
-      ><UiButton v-if="pending.state === 'conflict'" :disabled="busy" @click="compare">{{
+        >{{ t('gap.replayOriginal') }}</VBtn
+      ><VBtn v-if="pending.state === 'conflict'" :disabled="busy" @click="compare">{{
         t('gap.compare')
-      }}</UiButton></template
+      }}</VBtn></template
     >
     <details v-if="receipt">
       <summary>{{ t('gap.result') }}</summary>
       <pre>{{ JSON.stringify(receipt, null, 2) }}</pre>
-    </details>
-  </section>
+    </details></VCard
+  >
 </template>

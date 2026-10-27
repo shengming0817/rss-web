@@ -16,6 +16,13 @@ export function settingsDestination(target: string, tenant: string): RouteLocati
     appleAccount: 'operations-appleAccount',
     registration: 'registration-quotas',
     organization: 'operations-organization',
+    agent: 'agent-configurations',
+    sources: 'software-sources',
+    archive: 'security-certificate-archive',
+    recovery: 'devices',
+    entra: 'operations-windowsEntra',
+    audit: 'operations-audit',
+    diagnostics: 'operations-diagnostics',
   }
   const name = routes[target]
   return name

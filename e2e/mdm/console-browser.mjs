@@ -746,13 +746,13 @@ try {
   await hooks.getByRole('button', { name: '重送原请求', exact: true }).waitFor()
   phase = 'webhook-spa-remount'
   await page
-    .locator('.settings-tabs')
-    .getByRole('link', { name: '组织与访问', exact: true })
+    .getByRole('tablist', { name: '设置', exact: true })
+    .getByRole('tab', { name: '组织与访问', exact: true })
     .click()
   await ready()
   await page
-    .locator('.settings-tabs')
-    .getByRole('link', { name: '集成与运行凭据', exact: true })
+    .getByRole('tablist', { name: '设置', exact: true })
+    .getByRole('tab', { name: '集成与运行凭据', exact: true })
     .click()
   await ready()
   await hooks.getByRole('button', { name: '重送原请求', exact: true }).waitFor()

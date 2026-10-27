@@ -1,0 +1,37 @@
+.settings-editor {
+  display: grid;
+  gap: 1rem;
+  margin-block: 1rem;
+  max-width: 64rem;
+}
+.settings-editor fieldset {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+.settings-editor .v-label {
+  white-space: normal;
+}
+.settings-catalog-table {
+  margin-block: 1rem;
+}
+.settings-catalog-table td,
+.settings-catalog-table th {
+  padding-block: 1rem;
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+.settings-catalog-table th[scope='row'] {
+  min-width: 12rem;
+}
+.first-use-steps .v-btn {
+  justify-content: start;
+  white-space: normal;
+  text-align: start;
+  height: auto;
+  min-height: 2.75rem;
+  padding-block: 0.75rem;
+}

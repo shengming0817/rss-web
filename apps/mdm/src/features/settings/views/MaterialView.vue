@@ -1,18 +1,19 @@
 <script setup lang="ts">
+import { VBtn } from 'vuetify/components'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 import MaterialPanel from '../components/MaterialPanel.vue'
 const route = useRoute(),
   runtime = useMdm(),
   { t } = useI18n()
 </script>
 <template>
-  <PageFrame :title="t('settings.title')"
-    ><RouterLink :to="{ name: 'settings-overview', params: { tenant: runtime.tenant } }">{{
+  <MdmPage :title="t('settings.title')"
+    ><VBtn :to="{ name: 'settings-overview', params: { tenant: runtime.tenant } }" variant="text">{{
       t('settings.overview')
-    }}</RouterLink
+    }}</VBtn
     ><MaterialPanel :material="String(route.params['material'])"
-  /></PageFrame>
+  /></MdmPage>
 </template>
