@@ -7,6 +7,8 @@ export default defineConfig({
     name: 'auth',
     root: fileURLToPath(new URL('.', import.meta.url)),
     environment: 'jsdom',
+    server: { deps: { inline: ['vuetify'] } },
+    setupFiles: ['./tests/setup.ts'],
     include: ['src/**/*.spec.ts'],
     coverage: {
       provider: 'v8',

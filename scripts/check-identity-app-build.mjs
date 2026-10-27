@@ -11,6 +11,8 @@ function scan(dir) {
     }
     if (entry.name.endsWith('.map')) throw new Error('Unexpected sourcemap')
     const content = readFileSync(path, 'utf8')
+    if (/(?:reka-ui|data-reka-|--reka-|UiDialog\.vue|UiTabs\.vue)/.test(content))
+      throw new Error('Retired UI in production build')
     if (
       /rss-ui-preview-only|RSS UI Components|Bearer |accessToken|refreshToken|\/api\/(?:v[234]\/|v1\/(?:tenants|oidc)\/|identity-host\/v1\/)|\/downstream\/|platform_administrator|\bhydra\b|csrf_token|principal_id|MOCK_SOURCE|mdm-candidate|mdm-host|Enterprise device management/.test(
         content,

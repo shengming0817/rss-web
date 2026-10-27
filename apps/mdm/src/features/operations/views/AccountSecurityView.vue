@@ -81,7 +81,7 @@ const {
           </VBtn>
         </div>
         <div class="auth-table">
-          <div class="ui-table-scroll">
+          <div class="device-table-scroll">
             <VTable>
               <thead>
                 <tr>

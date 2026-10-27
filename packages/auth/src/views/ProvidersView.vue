@@ -1,7 +1,24 @@
 <script setup lang="ts">
-import { UiButton, UiDialog } from '@rss/core/components'
+import {
+  VBtn,
+  VCard,
+  VCardActions,
+  VCardText,
+  VCardTitle,
+  VCheckbox,
+  VDialog,
+  VTable,
+  VTextField,
+  VTextarea,
+} from 'vuetify/components'
+import { ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useProviders } from '../useProviders'
+const dialogId = useId()
+const dialogActivator = ref<HTMLElement>()
+function rememberActivator(event: MouseEvent) {
+  dialogActivator.value = event.currentTarget as HTMLElement
+}
 const { t } = useI18n()
 const {
   session,
@@ -48,16 +65,23 @@ const {
     </p>
     <template v-else
       ><div class="auth-actions">
-        <UiButton :disabled="!!busy" type="submit" @click="run(load)">
-          {{ t(loaded ? 'identity.reload' : 'identity.loadList') }}</UiButton
-        ><UiButton :disabled="!!(busy || blocked)" type="submit" @click="newProvider">
+        <VBtn :disabled="!!busy" type="submit" @click="run(load)">
+          {{ t(loaded ? 'identity.reload' : 'identity.loadList') }}</VBtn
+        ><VBtn
+          :disabled="!!(busy || blocked)"
+          type="submit"
+          @click="
+            rememberActivator($event)
+            newProvider()
+          "
+        >
           {{ t('identity.newProvider') }}
-        </UiButton>
+        </VBtn>
       </div>
       <p v-if="!loaded" role="status">{{ t('identity.listNotLoaded') }}</p>
       <div v-if="loaded" class="auth-table">
-        <div class="ui-table-scroll">
-          <table class="ui-table">
+        <div class="auth-table-scroll">
+          <VTable>
             <thead>
               <tr>
                 <th>{{ t('identity.issuer') }}</th>
@@ -74,101 +98,142 @@ const {
                   {{ t(p.enabled ? 'identity.enabled' : 'identity.disabled') }} · v{{ p.version }}
                 </td>
                 <td class="auth-actions">
-                  <UiButton :disabled="!!(busy || blocked)" type="submit" @click="edit(p)">
-                    {{ t('identity.edit') }}</UiButton
-                  ><UiButton :disabled="!!(busy || blocked)" type="submit" @click="toggle(p)">
+                  <VBtn
+                    :disabled="!!(busy || blocked)"
+                    type="submit"
+                    @click="
+                      rememberActivator($event)
+                      edit(p)
+                    "
+                  >
+                    {{ t('identity.edit') }}</VBtn
+                  ><VBtn
+                    :disabled="!!(busy || blocked)"
+                    type="submit"
+                    @click="
+                      rememberActivator($event)
+                      toggle(p)
+                    "
+                  >
                     {{
                       t(p.enabled ? 'identity.disableProvider' : 'identity.enableProvider')
-                    }}</UiButton
-                  ><UiButton :disabled="!!(busy || blocked)" type="submit" @click="test(p)">
+                    }}</VBtn
+                  ><VBtn :disabled="!!(busy || blocked)" type="submit" @click="test(p)">
                     {{ t('identity.test') }}
-                  </UiButton>
+                  </VBtn>
                 </td>
               </tr>
             </tbody>
-          </table>
+          </VTable>
         </div>
       </div>
-      <UiDialog
-        :open="editorOpen"
-        :title="t(selected ? 'identity.editProvider' : 'identity.newProvider')"
-        :close-label="t('identity.cancel')"
-        placement="right"
-        :dismissible="!busy"
-        @update:open="!$event && closeEditor()"
+      <VDialog
+        :model-value="editorOpen"
+        :activator="dialogActivator"
+        :open-on-click="false"
+        :persistent="busy"
+        :aria-label="t(selected ? 'identity.editProvider' : 'identity.newProvider')"
+        content-class="auth-side-dialog"
+        @update:model-value="!$event && closeEditor()"
+        ><VCard
+          ><VCardTitle tag="h2" class="auth-dialog-heading"
+            ><span>{{ t(selected ? 'identity.editProvider' : 'identity.newProvider') }}</span
+            ><VBtn
+              variant="text"
+              :aria-label="t('identity.cancel')"
+              :disabled="busy"
+              @click="closeEditor()"
+              >{{ t('identity.cancel') }}</VBtn
+            ></VCardTitle
+          ><VCardText
+            ><p v-if="error" role="alert">{{ errorMessage }}</p>
+            <form class="auth-form" @submit.prevent="save">
+              <h2>{{ t(selected ? 'identity.editProvider' : 'identity.newProvider') }}</h2>
+              <p>{{ t('identity.providerHelp') }}</p>
+              <VTextField
+                id="issuer"
+                v-model="issuer"
+                type="url"
+                :readonly="selected !== null"
+                required
+                :label="t('identity.issuer')"
+              />
+              <VTextField id="client-id" v-model="client" required :label="t('identity.client')" />
+              <VTextField
+                id="client-secret"
+                v-model="clientSecret"
+                type="password"
+                autocomplete="new-password"
+                required
+                :label="t('identity.clientSecret')"
+              />
+
+              <VTextarea
+                id="ca-pem"
+                v-model="caPem"
+                autocomplete="off"
+                :label="t('identity.caPem')"
+                auto-grow
+              />
+              <VTextField id="scopes" v-model="scopes" required :label="t('identity.scopes')" />
+              <VTextField
+                id="profile-claim"
+                v-model="extensionsClaim"
+                :label="t('identity.profileClaim')"
+              />
+              <VTextField
+                id="profile-age"
+                v-model.number="profileMaxAge"
+                type="number"
+                min="60"
+                max="86400"
+                required
+                :label="t('identity.profileAge')"
+              />
+              <VTextField id="groups-claim" v-model="groups" :label="t('identity.groupsClaim')" />
+              <VCheckbox
+                v-if="session.providerHint.value"
+                id="jit"
+                v-model="jit"
+                :label="t('identity.jit')"
+              />
+              <VBtn type="submit" :disabled="!!(busy || blocked)">{{ t('identity.save') }}</VBtn>
+            </form></VCardText
+          ></VCard
+        ></VDialog
       >
-        <p v-if="error" role="alert">{{ errorMessage }}</p>
-        <form class="auth-form" @submit.prevent="save">
-          <h2>{{ t(selected ? 'identity.editProvider' : 'identity.newProvider') }}</h2>
-          <p>{{ t('identity.providerHelp') }}</p>
-          <label for="issuer">{{ t('identity.issuer') }}</label
-          ><input
-            id="issuer"
-            v-model="issuer"
-            class="ui-input"
-            type="url"
-            :readonly="selected !== null"
-            required
-          />
-          <label for="client-id">{{ t('identity.client') }}</label
-          ><input id="client-id" v-model="client" class="ui-input" required />
-          <label for="client-secret">{{ t('identity.clientSecret') }}</label
-          ><input
-            id="client-secret"
-            v-model="clientSecret"
-            class="ui-input"
-            type="password"
-            autocomplete="new-password"
-            required
-          />
-          <label for="ca-pem">{{ t('identity.caPem') }}</label>
-          <textarea id="ca-pem" v-model="caPem" class="ui-input" autocomplete="off"></textarea>
-          <label for="scopes">{{ t('identity.scopes') }}</label
-          ><input id="scopes" v-model="scopes" class="ui-input" required />
-          <label for="profile-claim">{{ t('identity.profileClaim') }}</label
-          ><input id="profile-claim" v-model="extensionsClaim" class="ui-input" />
-          <label for="profile-age">{{ t('identity.profileAge') }}</label
-          ><input
-            id="profile-age"
-            v-model.number="profileMaxAge"
-            class="ui-input"
-            type="number"
-            min="60"
-            max="86400"
-            required
-          />
-          <label for="groups-claim">{{ t('identity.groupsClaim') }}</label
-          ><input id="groups-claim" v-model="groups" class="ui-input" />
-          <label v-if="session.providerHint.value" class="auth-checkbox" for="jit"
-            ><input id="jit" v-model="jit" type="checkbox" />{{ t('identity.jit') }}</label
-          >
-          <UiButton type="submit" :disabled="!!(busy || blocked)">{{
-            t('identity.save')
-          }}</UiButton>
-        </form>
-      </UiDialog>
     </template>
-    <UiDialog
-      :open="pending !== null"
-      :title="t('identity.disableProvider')"
-      :description="`${pending?.settings.issuer ?? ''} · ${t('identity.disableProviderHelp')}`"
-      :close-label="t('identity.cancel')"
-      kind="alertdialog"
-      @update:open="!$event && (pending = null)"
+    <VDialog
+      :model-value="pending !== null"
+      :activator="dialogActivator"
+      :open-on-click="false"
+      :persistent="true"
+      :aria-label="t('identity.disableProvider')"
+      :aria-describedby="`${dialogId}-2`"
+      role="alertdialog"
+      @update:model-value="!$event && (pending = null)"
+      @keydown.esc.stop="!busy && (pending = null)"
+      ><VCard
+        ><VCardTitle tag="h2" class="auth-dialog-heading"
+          ><span>{{ t('identity.disableProvider') }}</span
+          ><VBtn
+            variant="text"
+            :aria-label="t('identity.cancel')"
+            :disabled="busy"
+            @click="pending = null"
+            >{{ t('identity.cancel') }}</VBtn
+          ></VCardTitle
+        ><VCardText
+          ><p :id="`${dialogId}-2`">
+            {{ `${pending?.settings.issuer ?? ''} · ${t('identity.disableProviderHelp')}` }}
+          </p></VCardText
+        ><VCardActions class="auth-actions">
+          <VBtn type="submit" @click="pending = null">{{ t('identity.cancel') }}</VBtn>
+          <VBtn color="primary" :disabled="!!busy" type="submit" @click="confirmDisable">
+            {{ t('identity.confirm') }}
+          </VBtn>
+        </VCardActions></VCard
+      ></VDialog
     >
-      <template #footer>
-        <UiButton class="ui-button" type="submit" @click="pending = null">{{
-          t('identity.cancel')
-        }}</UiButton>
-        <UiButton
-          class="ui-button ui-button--primary"
-          :disabled="!!busy"
-          type="submit"
-          @click="confirmDisable"
-        >
-          {{ t('identity.confirm') }}
-        </UiButton>
-      </template>
-    </UiDialog>
   </section>
 </template>

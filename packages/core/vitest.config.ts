@@ -17,7 +17,6 @@ export default defineConfig({
         'src/**/__tests__/**',
         // Barrel re-export files — no logic to test
         'src/index.ts',
-        'src/components/index.ts',
         'src/composables/index.ts',
       ],
       thresholds: {

@@ -1,6 +1,8 @@
 import '@rss/core/styles/tokens.css'
 import '@rss/auth/styles.css'
 import { createApp } from 'vue'
+import { createIdentityVuetify } from './vuetify'
+import 'virtual:vuetify-styles.css'
 import { createPinia } from 'pinia'
 import { createIdentityTransport } from '@rss/api/identity'
 import {
@@ -23,7 +25,12 @@ async function start() {
     api: createApi(session),
     flows: createFlows(window.sessionStorage),
   })
-  app.use(createPinia()).use(identityI18n()).use(identityRouter(session)).mount('#app')
+  app
+    .use(createIdentityVuetify())
+    .use(createPinia())
+    .use(identityI18n())
+    .use(identityRouter(session))
+    .mount('#app')
 }
 void start().catch(() => {
   const root = document.getElementById('app')

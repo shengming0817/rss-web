@@ -498,6 +498,8 @@ it('keeps the provider editor closed during initial read and opens it explicitly
   expect(new DOMWrapper(document.body).find('#issuer').exists()).toBe(false)
   finish({ providers: [] })
   await flushPromises()
+  ;(create().element as HTMLButtonElement).focus()
+  const opener = create().element
   await create().trigger('click')
   await flushPromises()
   const body = new DOMWrapper(document.body)
@@ -507,6 +509,7 @@ it('keeps the provider editor closed during initial read and opens it explicitly
   expect((body.get('#client-secret').element as HTMLInputElement).value).toBe('new-secret@1')
   await body.get('[role=dialog] button[aria-label="取消"]').trigger('click')
   await flushPromises()
+  await vi.waitFor(() => expect(document.activeElement).toBe(opener))
   await create().trigger('click')
   await flushPromises()
   expect((body.get('#client-secret').element as HTMLInputElement).value).toBe('')

@@ -3,8 +3,6 @@
 !package.json
 !pnpm-lock.yaml
 !pnpm-workspace.yaml
-!patches/
-!patches/*.patch
 !tsconfig.base.json
 !apps/
 !apps/identity/
@@ -60,3 +58,7 @@
 !deploy/
 !deploy/mdm/
 !deploy/mdm/static.conf
+
+!build/
+!build/*.mjs
+!build/*.mts

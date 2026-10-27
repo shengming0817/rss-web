@@ -16,6 +16,7 @@ async function failedLogout(all = false) {
   await router.push({ name: 'sessions', params: { tenant: TENANT } })
   await router.isReady()
   const wrapper = mount(App, {
+    attachTo: document.body,
     global: {
       plugins: [createPinia(), identityI18n(), router],
       provide: { [runtimeKey as symbol]: f },

@@ -114,7 +114,7 @@ watch(
           ><span v-if="!row.reasons.length">—</span></template
         >
       </VDataTable>
-      <p v-if="missing.length" class="ui-help">
+      <p v-if="missing.length" class="device-help">
         {{ t('operations.diagnosticUi.omitted') }}:
         {{ missing.map((v) => t(`operations.diagnosticUi.componentName.${v}`)).join('、') }}
       </p>
@@ -203,7 +203,7 @@ watch(
             <dt>{{ t('operations.diagnosticUi.applied') }}</dt>
             <dd>{{ number(selected.progress.applied) }}</dd>
           </dl>
-          <p class="ui-help">{{ t('operations.diagnosticUi.progressHint') }}</p>
+          <p class="device-help">{{ t('operations.diagnosticUi.progressHint') }}</p>
         </section>
         <section v-if="selected.bridge" class="console-panel">
           <h3>{{ t('operations.diagnosticUi.bridge') }}</h3>

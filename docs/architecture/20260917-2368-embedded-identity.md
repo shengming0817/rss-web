@@ -93,3 +93,7 @@ rm /tmp/rss-identity-web-dev.yaml
 会话签发时间为 issuedAt；security.authentication.source 显式区分 local_password/oidc/platform，authTime 只表示真实认证时间，可为 null。共享账户页面通过独立资料管理权限读取／编辑本地 authority，邮箱验证状态不开放本地编辑。编辑使用 expectedRevision、operationId 和显式 value:null 删除；响应丢失查询原回执，409 重新读取后编辑，不自动重放。修改资料不会更新会话认证时间或生成登录观察，下次成功登录才采集。
 
 固定身份、会话及资料包络严格解码。只有普通扩展和业务属性值允许动态 JSON，预算为 64 KiB、256 个成员、深度 8、单数组 128 项，数值有限且整数在浏览器安全范围内。
+
+## 展示与主题
+
+Identity 与共享认证视图直接使用 Vuetify 4.3.0，沿用 MDM 的表单、表格、按钮与弹窗视觉规范。各应用独立安装 Vuetify；`@rss/core` 只提供主题、语言及设计 token。浅深主题继续由既有 theme store 驱动，菜单和对话框附着于认证主题容器。构建通过 Vuetify 的公开主题 API 生成外部 CSS，运行时关闭主题样式注入，宿主继续使用现有 CSP，无需开放内联 style 元素。

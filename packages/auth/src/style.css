@@ -96,8 +96,8 @@
   gap: 12px;
   max-width: 640px;
 }
-.auth-page form > .ui-button,
-.auth-form > .ui-button {
+.auth-page form > .v-btn,
+.auth-form > .v-btn {
   justify-self: start;
 }
 .auth-page label {
@@ -115,7 +115,7 @@
 .auth-login form {
   max-width: none;
 }
-.auth-login form > .ui-button[type='submit'] {
+.auth-login form > .v-btn[type='submit'] {
   justify-self: stretch;
   background: var(--action-bg);
   color: var(--action-fg);
@@ -193,4 +193,31 @@
 }
 .auth-task form {
   margin-top: 16px;
+}
+
+.auth-host .v-btn {
+  text-transform: none;
+  letter-spacing: 0;
+}
+.auth-host .v-table {
+  background: transparent;
+}
+.auth-host .v-table td {
+  padding-block: 12px;
+}
+.auth-host .auth-dialog-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  white-space: normal;
+}
+.auth-host .auth-side-dialog {
+  align-self: stretch;
+  margin: 0 0 0 auto;
+  max-height: 100%;
+  border-radius: 0;
+}
+.auth-table-scroll {
+  overflow-x: auto;
 }

@@ -475,7 +475,7 @@ watch(
               >{{ t('telemetry.valuePath')
               }}<VTextField
                 v-model="valuePath"
-                class="ui-input telemetry-code"
+                class="telemetry-code"
                 variant="outlined"
                 density="comfortable"
                 hide-details="auto" /></label
@@ -483,7 +483,7 @@ watch(
               >{{ t('telemetry.intervalPath')
               }}<VTextField
                 v-model="intervalPath"
-                class="ui-input telemetry-code"
+                class="telemetry-code"
                 variant="outlined"
                 density="comfortable"
                 hide-details="auto" /></label
@@ -491,7 +491,7 @@ watch(
               >{{ t('telemetry.dimensions')
               }}<VTextarea
                 v-model="dimensions"
-                class="ui-input telemetry-code"
+                class="telemetry-code"
                 variant="outlined"
                 density="comfortable"
                 hide-details="auto" /></label

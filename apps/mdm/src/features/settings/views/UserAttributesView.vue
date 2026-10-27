@@ -100,7 +100,7 @@ onMounted(() => {
         >{{ item.id }}</VBtn
       >
     </section>
-    <div class="ui-table-scroll">
+    <div class="device-table-scroll">
       <VTable>
         <thead>
           <tr>

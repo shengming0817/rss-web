@@ -13,6 +13,8 @@ function scan(dir) {
     }
     if (entry.name.endsWith('.map')) throw new Error('Sourcemap in DA production')
     const text = readFileSync(file, 'utf8')
+    if (/(?:reka-ui|data-reka-|--reka-|UiDialog\.vue|UiTabs\.vue)/.test(text))
+      throw new Error('Retired UI in production build')
     if (
       /MOCK_SOURCE|rss-da-demo|\/api\/da-demo|device-access-http-demo|demo\/main|Bearer |accessToken|refreshToken/.test(
         text,

@@ -55,7 +55,7 @@ watch(
     :disabled="!!disabled || busy"
     @update:model-value="emit('update:modelValue', typeof $event === 'string' ? $event : '')"
   />
-  <p class="ui-help">{{ t('devices.loadedPeopleOnly') }}</p>
+  <p class="device-help">{{ t('devices.loadedPeopleOnly') }}</p>
   <v-alert v-if="failure" type="error" variant="tonal" role="alert">{{
     t('devices.' + failure)
   }}</v-alert>

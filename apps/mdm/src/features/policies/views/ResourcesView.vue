@@ -690,7 +690,7 @@ watch(
           @update:model-value="load()"
         />
       </div>
-      <p class="ui-help">{{ t('policies.ux.pageOnly') }}</p>
+      <p class="device-help">{{ t('policies.ux.pageOnly') }}</p>
       <VDataTable
         :aria-label="t('policies.resources')"
         :items-per-page="-1"
@@ -893,7 +893,7 @@ watch(
             </PolicyFieldset>
           </form> </template
         ><template #versions>
-          <div class="ui-table-scroll">
+          <div class="device-table-scroll">
             <VTable density="comfortable">
               <thead>
                 <tr>

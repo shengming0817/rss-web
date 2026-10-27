@@ -580,7 +580,7 @@ onMounted(initialize)
         ><VBtn :disabled="busy || locked" variant="text" @click="select(row)">{{
           row.value ? principalLabel(row.value.subject) : row.id
         }}</VBtn
-        ><small v-if="row.value" class="ui-help">{{ row.value.subject.kind }}</small></template
+        ><small v-if="row.value" class="device-help">{{ row.value.subject.kind }}</small></template
       >
       <template #[`item.grants`]="{ item: row }"
         ><GrantFacts v-if="row.value" :grants="row.value.grants" /><span v-else>—</span></template
