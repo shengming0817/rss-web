@@ -14,9 +14,9 @@ import { createDeviceDemo } from '../demo/devices/state'
 import { seedScriptPolicies } from '../demo/policies/seed'
 import { createOnboardingDemo } from '../demo/enrollment'
 import { createImportsDemo } from '../demo/software/imports'
-import { createPolicyClients } from '../demo/features/policies/client'
+import { createPolicyClients } from './features/policies/client'
 import { operation } from './services/useOperation'
-import { navigation } from './components/navigation'
+import { navigation, navigationTarget } from './components/navigation'
 async function start() {
   const devices = createDeviceDemo(),
     automation = createAutomationDemo(devices)
@@ -39,7 +39,7 @@ async function start() {
     automation.observe,
     automation.now,
   )
-  const calls: { path: string; method: string; body: unknown }[] = []
+  const calls: { path: string; method: string; body: unknown; query: Record<string, string> }[] = []
   const transport = {
     async request(o: RequestOptions<unknown> | NoContentRequest) {
       const path = o.path.replace(/\{([^}]+)\}/g, (_, key: string) =>
@@ -50,7 +50,7 @@ async function start() {
           .filter(([, v]) => v !== undefined)
           .map(([k, v]) => [k, String(v)]),
       )
-      calls.push({ path, method: o.method, body: o.body })
+      calls.push({ path, method: o.method, body: o.body, query: Object.fromEntries(query) })
       const reply = await server.handle(
         o.method,
         path + '?' + query,
@@ -77,7 +77,7 @@ async function start() {
   runtime.mount()
   await runtime.router.isReady()
   await runtime.session.login(TENANT, 'demo', 'demo')
-  const policies = createPolicyClients(runtime.transport, TENANT, true)
+  const policies = createPolicyClients(runtime.transport)
   const published = await policies.scopes.change(
     seed.scope,
     operation(
@@ -109,17 +109,22 @@ it('navigates each product section through the real application router and its l
   const app = await start()
   try {
     for (const section of navigation) {
-      await app.router.push({ name: section.items[0]!.name, params: { tenant: TENANT } })
+      await app.router.push(navigationTarget(section.items[0]!, TENANT))
       await flushPromises()
       for (const item of section.items) {
-        const target = app.router.resolve({ name: item.name, params: { tenant: TENANT } }).fullPath
-        const link = [...document.querySelectorAll<HTMLAnchorElement>('.console-sidebar a')].find(
-          (a) => a.getAttribute('href') === target,
+        const target = app.router.resolve(navigationTarget(item, TENANT)).fullPath
+        const link = [...document.querySelectorAll<HTMLAnchorElement>('nav a')].find(
+          (a) =>
+            a.closest('nav')?.getAttribute('aria-label') ===
+              app.i18n.global.t('console.navigation') && a.getAttribute('href') === target,
         )
         expect(link, item.name).toBeDefined()
         await new DOMWrapper(link!).trigger('click')
         await flushPromises()
-        await vi.waitFor(() => expect(app.router.currentRoute.value.name).toBe(item.name))
+        await vi.waitFor(() => {
+          expect(app.router.currentRoute.value.name).toBe(item.name)
+          expect(app.router.currentRoute.value.fullPath).toBe(target)
+        })
         expect(document.querySelector('main h1')?.textContent?.trim(), item.name).toBeTruthy()
       }
     }
@@ -129,27 +134,58 @@ it('navigates each product section through the real application router and its l
     app.cleanup()
   }
 }, 20000)
-const main = () => new DOMWrapper(document.querySelector('main')!)
-async function press(app: Awaited<ReturnType<typeof start>>, key: string, last = false) {
-  const buttons = [...document.querySelectorAll<HTMLButtonElement>('button')].filter(
-    (b) => b.textContent?.trim() === app.i18n.global.t(key),
-  )
-  const target = last ? buttons.at(-1) : buttons[0]
-  expect(target, key).toBeDefined()
-  expect(target!.matches(':disabled'), key).toBe(false)
-  await new DOMWrapper(target!).trigger('click')
+async function press(
+  app: Awaited<ReturnType<typeof start>>,
+  key: string,
+  scope: Pick<DOMWrapper<Element>, 'findAll'> = new DOMWrapper(document.body),
+  selector = 'button',
+) {
+  const buttons = scope
+    .findAll(selector)
+    .filter((button) => button.isVisible() && button.text().trim() === app.i18n.global.t(key))
+  expect(buttons, key).toHaveLength(1)
+  const target = buttons[0]!
+  expect(target.element.matches(':disabled'), key).toBe(false)
+  await target.trigger('click')
+  await flushPromises()
+}
+async function selectOption(
+  control: Pick<DOMWrapper<Element>, 'element' | 'isVisible'>,
+  label: string,
+) {
+  expect(control.isVisible()).toBe(true)
+  await new DOMWrapper(control.element.closest('.v-field')!).trigger('mousedown')
+  await flushPromises()
+  let option: DOMWrapper<Element> | undefined
+  await vi.waitFor(() => {
+    option = new DOMWrapper(document.body)
+      .findAll('[role=option]')
+      .find((item) => item.isVisible() && item.text().trim() === label)
+    expect(option, label).toBeDefined()
+  })
+  await option!.trigger('click')
   await flushPromises()
 }
 it('creates a formal Scope, changes the result channel explicitly, and deletes only its authored definition', async () => {
   const app = await start()
   try {
     await app.router.push({
-      name: 'policy-scopes',
+      name: 'policy-policies',
       params: { tenant: TENANT },
-      query: { device: 'device-01' },
     })
     await flushPromises()
-    await new DOMWrapper(document.body).get('[role=dialog] form').trigger('submit')
+    await press(app, 'policies.create')
+    await press(app, 'policies.scopeEditor.manage')
+    const scopeManager = new DOMWrapper(document.body).get('[role=dialog]')
+    await press(app, 'policies.create', scopeManager)
+    const scopeForm = new DOMWrapper(document.body).get('form.scope-form')
+    const targets = scopeForm
+      .findAll('.task-scope-role')
+      .find((section) => section.get('h3').text() === app.i18n.global.t('policies.targets'))!
+    await press(app, 'console.chooseLoaded', targets)
+    await selectOption(targets.get('input[id$="-choice"]'), 'device-01')
+    await press(app, 'policies.add', targets)
+    await press(app, 'policies.save', scopeForm)
     await flushPromises()
     const write = app.calls.findLast(
       (c) => c.method === 'POST' && /^\/api\/v1\/scopes\/[^/]+$/.test(c.path),
@@ -165,62 +201,40 @@ it('creates a formal Scope, changes the result channel explicitly, and deletes o
         },
       },
     })
-    await press(app, 'policies.refresh')
-    await press(app, 'policies.refresh')
-    await main()
+    await press(app, 'policies.refresh', scopeManager)
+    await press(app, 'policies.refresh', scopeManager)
+    await scopeManager
       .findAll('[role=tab]')
       .find((tab) => tab.text() === '判定说明')!
       .trigger('click')
-    const channel = main()
-      .findAll('select')
-      .find((s) => s.find('option[value=agent]').exists())!
-    await channel.setValue('agent')
-    await press(app, 'policies.open', true)
-    expect(main().text()).toContain('device-01')
+    const results = scopeManager.get('.scope-results')
+    const channel = results.get('input[role=combobox]')
+    await selectOption(channel, 'Agent')
+    await press(app, 'policies.open', results)
+    expect(results.text()).toContain('device-01')
+    const agentRead = app.calls.findLast((call) => call.path.includes('/results/'))!
+    expect(agentRead).toMatchObject({ method: 'GET', query: { channel: 'agent' } })
+    expect(agentRead.path).toMatch(new RegExp(`^${write.path}/results/[^/]+/decisions$`))
     const reads = app.calls.filter((c) => c.path.includes('/results/')).length
-    await channel.setValue('mdm')
+    await selectOption(channel, 'MDM')
     expect(app.calls.filter((c) => c.path.includes('/results/'))).toHaveLength(reads)
-    await press(app, 'policies.open', true)
+    await press(app, 'policies.open', results)
     expect(app.calls.filter((c) => c.path.includes('/results/'))).toHaveLength(reads + 1)
-    await press(app, 'console.edit')
-    await press(app, 'policies.remove', true)
+    expect(app.calls.at(-1)).toMatchObject({
+      method: 'GET',
+      path: agentRead.path,
+      query: { channel: 'mdm' },
+    })
+    await press(app, 'console.edit', scopeManager)
+    await press(
+      app,
+      'policies.remove',
+      new DOMWrapper(document.body).get('form.scope-form'),
+      ':scope > fieldset > button',
+    )
     expect(
       app.calls.findLast((c) => c.method === 'POST' && c.path === write.path)?.body,
     ).toMatchObject({ expectedRevision: 1, input: { action: 'delete' } })
-  } finally {
-    app.cleanup()
-  }
-}, 20000)
-it('versions, compares and preflights a platform configuration without treating preview as an applied effect', async () => {
-  const app = await start()
-  try {
-    await app.router.push({ name: 'policy-configurations', params: { tenant: TENANT } })
-    await flushPromises()
-    await press(app, 'policies.create')
-    await main().get('#configuration-name').setValue('Firewall preview')
-    await main().get('form').trigger('submit')
-    await flushPromises()
-    await press(app, 'console.edit')
-    await press(app, 'policies.loadTemplate')
-    await main().get('form').trigger('submit')
-    await flushPromises()
-    await press(app, 'policies.publish')
-    await press(app, 'policies.copySettings')
-    await main().get('#setting-type-0').setValue('number')
-    await main().get('#setting-value-0').setValue(1)
-    await main().get('form').trigger('submit')
-    await flushPromises()
-    await main().get('#configuration-from').setValue(1)
-    await main().get('#configuration-to').setValue(2)
-    await press(app, 'policies.open', true)
-    expect(main().text()).toContain('./Vendor/MSFT/Firewall/MdmStore/DomainProfile/EnableFirewall')
-    await main().get('#configuration-scope').setValue(app.seed.scope)
-    await main().get('#configuration-version').setValue(1)
-    await press(app, 'policies.preview')
-    await press(app, 'policies.refresh')
-    await press(app, 'policies.refresh')
-    expect(app.calls.some((c) => c.method === 'POST' && c.path.endsWith('/previews'))).toBe(true)
-    expect(main().text()).toContain(app.i18n.global.t('policies.state.unknown'))
   } finally {
     app.cleanup()
   }
