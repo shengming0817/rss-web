@@ -13,6 +13,7 @@ import {
   useNavigation,
   platformNavigation,
   detailParents,
+  pageLabels,
   navigationTarget,
   type NavigationItem,
 } from './components/navigation'
@@ -55,16 +56,19 @@ const destinations = computed<NavigationItem[]>(() => [
 const parentName = computed(() => detailParents[String(route.name)] ?? String(route.name))
 const title = computed(() =>
   t(
-    [
-      ...sections.value.flatMap<NavigationItem>((group) => [...group.items]),
-      ...authDestinations,
-      ...destinations.value,
-    ].find(
-      (item) =>
-        item.name === parentName.value &&
-        (!item.query ||
-          Object.entries(item.query).every(([key, value]) => route.query[key] === value)),
-    )?.label ?? 'console.overview',
+    pageLabels[String(route.name)] ??
+      [
+        ...sections.value.flatMap<NavigationItem>((group) => [...group.items]),
+        ...authDestinations,
+        ...destinations.value,
+      ].find(
+        (item) =>
+          item.name === parentName.value &&
+          (!item.query ||
+            Object.entries(item.query).every(([key, value]) => route.query[key] === value)),
+      )?.label ??
+      sections.value.find((s) => s.items.some((item) => item.name === parentName.value))?.label ??
+      'console.overview',
   ),
 )
 const matches = computed(() =>
@@ -214,11 +218,11 @@ onBeforeUnmount(() => document.removeEventListener('keydown', shortcut))
           ><v-card-text
             ><v-text-field
               :model-value="query"
-              @update:model-value="query = typeof $event === 'string' ? $event : ''"
               type="search"
               clearable
               :label="t('console.searchNavigation')"
               :placeholder="t('console.searchNavigation')"
+              @update:model-value="query = typeof $event === 'string' ? $event : ''"
               @click:clear="query = ''" /><v-list
               density="compact"
               :aria-label="t('console.navigation')"
