@@ -1339,11 +1339,9 @@ try {
   const scopedInventory = page.locator('[data-testid=scope-inventory]')
   await scopedInventory.getByRole('combobox', { name: '资产范围', exact: true }).click()
   await page.getByRole('option').filter({ hasText: '501' }).click()
-  const softwareList = scopedInventory
-    .locator('.v-expansion-panel')
-    .filter({
-      has: page.locator('.v-expansion-panel-title', { hasText: 'device.software.installations' }),
-    })
+  const softwareList = scopedInventory.locator('.v-expansion-panel').filter({
+    has: page.locator('.v-expansion-panel-title', { hasText: 'device.software.installations' }),
+  })
   await softwareList.locator('.v-expansion-panel-title').click()
   await softwareList.getByRole('button', { name: '展开此来源', exact: true }).click()
   await page.waitForFunction(
